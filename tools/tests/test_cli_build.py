@@ -74,8 +74,8 @@ def test_the_cli_builds_over_the_tests_steps_packages_in_its_profile() -> None:
 
 
 def test_cli_products_match_the_rust_test_features_on_both_sides() -> None:
-    if sys.platform != "darwin":
-        pytest.skip("the hack crate lists macOS's dependencies")
+    if sys.platform not in workspace_hack.NATIVE_TARGETS:
+        pytest.skip("the hack crate lists macOS and Windows dependencies")
     whole: workspace_hack.Features = workspace_hack.feature_tree(["--workspace"])
     found = {
         label: diff

@@ -24,9 +24,9 @@ When a package is used on both sides, its features are shared too, so Cargo can 
 single artifact when both sides use the same compiler settings.
 Cargo 1.98's `resolver.feature-unification = "workspace"` does the same, but needs nightly.
 
-Each list sits under a `cfg(target_os = "macos")` table: `cargo tree` resolves for the host
-platform, and a dependency such as objc2 does not build elsewhere. A build on Windows does without
-the unified features, and Ignite there builds the whole workspace for a subset, as before.
+macOS and Windows each have their own pair of tables because `cargo tree` resolves for the
+native platform. Regenerating the manifest replaces the native tables and preserves the other
+platform's tables. The feature checks use the tables for the platform they run on.
 
 Features of the workspace's own packages are not this crate's to fix: a package that the whole
 workspace builds with a feature its own build lacks names itself or that package with the
@@ -50,6 +50,7 @@ from . import paths
 
 HACK = "beryl_workspace_hack"
 MANIFEST: Path = paths.RUST / "crates" / HACK / "Cargo.toml"
+NATIVE_TARGETS = {"darwin": "macos", "win32": "windows"}
 
 HEADER = """# Written by `just workspace-hack` (tools/src/beryl_tools/workspace_hack.py), which says why
 # this crate exists. Do not edit.
@@ -82,7 +83,9 @@ PackageSide = tuple[str, str]
 Features = dict[PackageSide, str]
 
 
-def feature_tree(selection: list[str], *, tests: bool = True) -> Features:
+def feature_tree(
+    selection: list[str], *, tests: bool = True, update_lock: bool = False
+) -> Features:
     """Read Cargo's resolved features for each package on each side of a native build."""
     edges = "normal,build,dev" if tests else "normal,build"
     # Explicitly select the native target so Cargo does not fold identical host
@@ -91,7 +94,7 @@ def feature_tree(selection: list[str], *, tests: bool = True) -> Features:
         [
             "cargo",
             "tree",
-            "--locked",
+            "--offline" if update_lock else "--locked",
             "--target",
             "host-tuple",
             "-e",
@@ -166,11 +169,11 @@ def compare(build: Features, whole: Features) -> Difference:
     }
 
 
-def differences() -> dict[str, Difference]:
+def differences(*, update_lock: bool = False) -> dict[str, Difference]:
     """Compare the resolved features of the workspace, the check's scope, and single-package
     test builds. Include iroh in the reference without making it a regular build root.
     """
-    whole: Features = feature_tree(["--workspace"])
+    whole: Features = feature_tree(["--workspace"], update_lock=update_lock)
 
     def differ(package: str) -> tuple[str, Difference]:
         return package, compare(feature_tree(["-p", package]), whole)
@@ -201,8 +204,14 @@ def external(package: str) -> tuple[str, str] | None:
     return found[1], found[2]
 
 
-def manifest(unions: Mapping[tuple[str, str], set[str]]) -> str:
-    """The hack crate's manifest listing each package with its features, by name and version.
+def table_header(target_os: str, kind: str) -> str:
+    return f"\n[target.'cfg(target_os = \"{target_os}\")'.{kind}]\n"
+
+
+def dependency_tables(
+    target_os: str, unions: Mapping[tuple[str, str], set[str]]
+) -> str:
+    """List each package with its features, by name and version, for the host and target.
     Multiple versions of a package get keys that include their version.
     """
     names: dict[str, int] = {}
@@ -220,33 +229,38 @@ def manifest(unions: Mapping[tuple[str, str], set[str]]) -> str:
             f" features = [{listed}] }}"
         )
     body = "".join(f"{line}\n" for line in lines)
-    return (
-        HEADER
-        + "\n[target.'cfg(target_os = \"macos\")'.dependencies]\n"
-        + body
-        + "\n[target.'cfg(target_os = \"macos\")'.build-dependencies]\n"
-        + body
+    return "".join(
+        table_header(target_os, kind) + body
+        for kind in ("dependencies", "build-dependencies")
     )
 
 
-def write() -> dict[str, Difference]:
-    """Writes the manifest from nothing until no package's own tree resolves a crates.io
-    package differently from the whole workspace's, and returns the differences left, which
-    are in workspace packages' own features. Each round adds the packages that still differ,
-    with the union of their features, which can turn on features further down. Features only
-    grow, so the rounds end. Starting from nothing drops a package or version that no longer
-    differs."""
+def manifest(
+    previous: str, target_os: str, unions: Mapping[tuple[str, str], set[str]]
+) -> str:
+    """Replace the native tables and keep the other platform's generated text."""
+    macos_header = table_header("macos", "dependencies")
+    windows_header = table_header("windows", "dependencies")
+    macos, windows_heading, windows = previous.partition(windows_header)
+    _, macos_heading, macos_body = macos.partition(macos_header)
+    tables = {"macos": macos_heading + macos_body, "windows": windows_heading + windows}
+    tables[target_os] = dependency_tables(target_os, unions)
+    return HEADER + "".join(tables.values())
+
+
+def write(target_os: str) -> dict[str, Difference]:
+    """Start with empty native tables, then add differing crates.io features until they
+    agree. Features only grow in each round, so the rounds end. Starting with empty tables
+    drops packages and versions that no longer differ. Return any differences left."""
+    previous = MANIFEST.read_text(encoding="utf-8")
     unions: dict[tuple[str, str], set[str]] = {}
-    MANIFEST.write_text(manifest(unions))
     while True:
-        # Records the manifest's dependencies in Cargo.lock, at the versions it already holds.
-        subprocess.run(
-            ["cargo", "metadata", "--offline", "--format-version", "1"],
-            cwd=paths.RUST,
-            capture_output=True,
-            check=True,
+        MANIFEST.write_text(
+            manifest(previous, target_os, unions), encoding="utf-8", newline="\n"
         )
-        found = differences()
+        # Let the first native tree record the manifest's dependencies in Cargo.lock at
+        # the versions it already holds. The other trees use that lockfile unchanged.
+        found = differences(update_lock=True)
         grown = False
         for diff in found.values():
             for (_, package), (alone, whole) in diff.items():
@@ -261,7 +275,6 @@ def write() -> dict[str, Difference]:
                     grown = True
         if not grown:
             return found
-        MANIFEST.write_text(manifest(unions))
 
 
 def describe(found: Mapping[str, Difference]) -> list[str]:
@@ -275,7 +288,11 @@ def describe(found: Mapping[str, Difference]) -> list[str]:
 
 def run(args: argparse.Namespace) -> int:
     del args
-    left = write()
+    target_os = NATIVE_TARGETS.get(sys.platform)
+    if target_os is None:
+        print("run `just workspace-hack` on macOS or Windows", file=sys.stderr)
+        return 1
+    left = write(target_os)
     for line in describe(left):
         print(line)
     if left:

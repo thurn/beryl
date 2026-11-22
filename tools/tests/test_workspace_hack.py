@@ -30,9 +30,29 @@ def test_a_feature_moving_from_the_host_to_the_target_changes_the_resolution() -
     }
 
 
+@pytest.mark.parametrize("native, other", [("macos", "windows"), ("windows", "macos")])
+def test_regenerating_native_tables_preserves_the_other_platform(
+    native: str, other: str
+) -> None:
+    other_tables = workspace_hack.dependency_tables(
+        other, {("shared", "1.2.3"): {"other"}}
+    )
+    previous = workspace_hack.manifest(
+        workspace_hack.HEADER, other, {("shared", "1.2.3"): {"other"}}
+    )
+    previous = workspace_hack.manifest(previous, native, {("old", "1.0.0"): {"native"}})
+    updated = workspace_hack.manifest(previous, native, {("new", "2.0.0"): {"native"}})
+    assert other_tables in updated
+    assert (
+        workspace_hack.dependency_tables(native, {("new", "2.0.0"): {"native"}})
+        in updated
+    )
+    assert "old =" not in updated
+
+
 def test_every_package_alone_has_the_whole_workspaces_features() -> None:
-    if sys.platform != "darwin":
-        pytest.skip("the hack crate lists macOS's dependencies")
+    if sys.platform not in workspace_hack.NATIVE_TARGETS:
+        pytest.skip("the hack crate lists macOS and Windows dependencies")
     found = workspace_hack.differences()
     assert found == {}, (
         "these builds resolve host or target features differently from the whole workspace:"

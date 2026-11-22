@@ -824,5 +824,10 @@
     "label": "Ignite caps concurrent build tickets by shared scheduler cores to keep overlapping builds from backing up the command queue.",
     "metric": "machine.queued-core-hours-per-day",
     "expect": "down"
+  },
+  {
+    "label": "Windows Rust builds share dependency features across workspace tests, package tests, and the CLI and scenario products.",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]
