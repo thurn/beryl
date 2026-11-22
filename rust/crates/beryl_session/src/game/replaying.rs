@@ -62,6 +62,18 @@ impl<'a> Checks<'a> {
         }
     }
 
+    /// Checks the turn start that the latest advance recorded, if one began.
+    fn check_advance(&mut self, t: &GameTable, entries: &[Entry]) -> Result<bool, SessionError> {
+        let Some(board) = entries.iter().find_map(|entry| match entry {
+            Entry::Checkpoint(board) => Some(board),
+            _ => None,
+        }) else {
+            return Ok(false);
+        };
+        self.reached(t, board)?;
+        Ok(true)
+    }
+
     /// Checks `board`, the board a replay reached as a turn began, against the record's
     /// checkpoint of that turn, if it has one: where they differ, the replay has diverged.
     /// Checkpoints of earlier turns not reached are dropped; an undo past a turn's beginning
@@ -71,15 +83,26 @@ impl<'a> Checks<'a> {
         t: &GameTable,
         board: &Checkpoint,
     ) -> Result<(), SessionError> {
-        while let Some(missed) = self.ahead.pop_front_if(|c| c.turn < board.turn) {
+        let time = board.elapsed_turns();
+        while let Some(missed) = self.ahead.pop_front_if(|c| c.elapsed_turns() < time) {
             self.missed.push(missed.turn);
         }
-        let Some(recorded) = self.ahead.front().copied().filter(|c| c.turn == board.turn) else {
+        let Some(recorded) = self
+            .ahead
+            .front()
+            .copied()
+            .filter(|c| c.elapsed_turns() == time)
+        else {
             return Ok(());
         };
         self.ahead.pop_front();
-        self.reached.push(recorded);
-        match recorded.difference(t, board) {
+        let difference = recorded.difference(t, board);
+        // A standalone board can be rebuilt directly. A checkpoint with subgame history
+        // can be recovered only if replay matched the recorded position.
+        if difference.is_none() || (recorded.outer.is_none() && recorded.elapsed.is_none()) {
+            self.reached.push(recorded);
+        }
+        match difference {
             None => Ok(()),
             Some(difference) => Err(SessionError::BadReplay {
                 reason: format!(
@@ -99,10 +122,28 @@ impl<'a> Checks<'a> {
         file: &ReplayFile,
         turn: u16,
         reason: String,
-    ) -> Result<ReplayFile, SessionError> {
-        let Some(from) = self.reached.iter().rev().find(|c| c.turn <= turn) else {
+    ) -> Result<(ReplayFile, bool), SessionError> {
+        let Some(from) = self
+            .reached
+            .iter()
+            .rev()
+            .find(|c| c.elapsed_turns() <= turn)
+        else {
             return Err(SessionError::BadReplay { reason });
         };
+        if from.outer.is_some() || from.elapsed.is_some() {
+            let end = file.log.iter().position(|entry| {
+                matches!(entry, Entry::Checkpoint(checkpoint) if std::ptr::eq(checkpoint.as_ref(), *from))
+            }).ok_or_else(|| SessionError::BadReplay { reason: reason.clone() })?;
+            let mut prefix = file.clone();
+            prefix.log.truncate(end + 1);
+            journal::warn(
+                "replay",
+                "replayed to an earlier checkpoint",
+                json!({ "turn": from.turn, "reason": reason }),
+            );
+            return Ok((prefix, true));
+        }
         if let Some(lingering) = &from.lingering {
             return Err(SessionError::BadReplay {
                 reason: format!(
@@ -116,13 +157,16 @@ impl<'a> Checks<'a> {
             "rebuilt the game from a turn's beginning",
             json!({ "turn": from.turn, "reason": reason }),
         );
-        Ok(ReplayFile {
-            format_version: FORMAT_VERSION,
-            chooser: None,
-            from: Some(Box::new((*from).clone())),
-            log: Vec::new(),
-            ..file.clone()
-        })
+        Ok((
+            ReplayFile {
+                format_version: FORMAT_VERSION,
+                chooser: None,
+                from: Some(Box::new((*from).clone())),
+                log: Vec::new(),
+                ..file.clone()
+            },
+            false,
+        ))
     }
 }
 
@@ -175,12 +219,13 @@ impl Game {
     ) -> Result<(Game, PlayerView), SessionError> {
         let mut game = Game::begin(cards, file, session, budget)?;
         let mut checks = Checks::new(file);
-        match game.replay_log(file, &mut checks) {
+        match game.replay_log(file, &mut checks, false) {
             Ok(()) => {}
             Err(SessionError::BadReplay { reason }) => {
-                let rebuilt = checks.rebuild(file, game.board.turn().number(), reason)?;
+                let (rebuilt, stop_at_checkpoint) =
+                    checks.rebuild(file, game.board.elapsed_turns(), reason)?;
                 game = Game::begin(cards, &rebuilt, session, budget)?;
-                game.replay_log(&rebuilt, &mut Checks::new(&rebuilt))?;
+                game.replay_log(&rebuilt, &mut Checks::new(&rebuilt), stop_at_checkpoint)?;
             }
             Err(e) => return Err(e),
         }
@@ -199,7 +244,7 @@ impl Game {
     ) -> Result<(Game, PlayerView), SessionError> {
         let mut game = Game::begin(cards, file, session, Budget::DEFAULT)?;
         let mut checks = Checks::new(file);
-        game.replay_log(file, &mut checks)?;
+        game.replay_log(file, &mut checks, false)?;
         if let Some(turn) = checks
             .missed
             .first()
@@ -244,6 +289,7 @@ impl Game {
         &mut self,
         file: &ReplayFile,
         checks: &mut Checks,
+        stop_at_checkpoint: bool,
     ) -> Result<(), SessionError> {
         let chance = file.format_version >= 3;
         if chance {
@@ -286,13 +332,12 @@ impl Game {
                 let logged = self.replay.log.len();
                 self.play_on(true);
                 self.chance_reproduced()?;
-                if let Some(Entry::Checkpoint(reached)) = self
-                    .replay
-                    .log
-                    .get(logged..)
-                    .and_then(|new| new.iter().find(|e| matches!(e, Entry::Checkpoint(_))))
+                let entries = self.replay.log.get(logged..).unwrap_or_default();
+                if checks.check_advance(&self.table, entries)?
+                    && stop_at_checkpoint
+                    && checks.ahead.is_empty()
                 {
-                    checks.reached(&self.table, reached)?;
+                    break;
                 }
                 if matches!(self.at, At::Playing) {
                     // A step began, and live play went on after its view.
@@ -458,6 +503,7 @@ impl Game {
                 owner.get(),
                 self.table.def(card).name
             ),
+            Random::SubgameStarter(seat) => format!("player {} starts the subgame", seat.get()),
             Random::Flip { player, won } => format!(
                 "a coin flip player {} {}",
                 player.get(),

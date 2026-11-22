@@ -521,6 +521,8 @@ impl<L: Layout> Relayout for Zones<L> {
     }
 }
 
+use crate::subgame::{CompletedTurns, OuterGame};
+
 impl<L: Layout> Relayout for State<L> {
     type In<M: Layout> = State<M>;
 
@@ -561,7 +563,13 @@ impl<L: Layout> Relayout for State<L> {
             outcome,
             elsewhere,
             turn_plan,
+            outer,
+            subgame_turns,
         } = self;
+        let mut new_outer = M::Outer::default();
+        if let Some(outer) = outer.get() {
+            new_outer.put(outer.relayout());
+        }
         State {
             objects: self::objects::<L, M>(objects),
             battlefield: queue(battlefield.as_slice(), |&s| slot(s)),
@@ -601,6 +609,8 @@ impl<L: Layout> Relayout for State<L> {
             flags: *flags,
             outcome: *outcome,
             turn_plan: turn_plan.relayout(),
+            outer: new_outer,
+            subgame_turns: M::SubgameTurns::from_turns(subgame_turns.get()),
             elsewhere: queue(
                 elsewhere.as_slice(),
                 crate::query::zone_characteristics::Reach::relayout,

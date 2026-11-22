@@ -3,6 +3,8 @@
 //!
 //! Implements: none. Projects the game state using the viewer's recorded knowledge.
 
+mod subgames;
+
 use crate::bitboard::Bitboard;
 use crate::filter::{Evaluate, Filter};
 use crate::ids::{CardId, Seat, SlotId};
@@ -11,6 +13,7 @@ use crate::rng::SplitMix64;
 use crate::state::{
     Derived, Flag, Object, Pending, PendingTrigger, Player, StackEntry, State, Turn, Zone, ZoneKey,
 };
+use crate::subgame::OuterGame;
 use crate::table::GameTable;
 use beryl_card::{Ability, Behavior, FaceIx, Objects, Words};
 
@@ -217,7 +220,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// seed does not leak. A paused resolution keeps what it showed the viewer known in the
     /// committed state, so it replays from here to the same question.
     pub fn determinize(&self, t: &GameTable, rng: &mut SplitMix64) -> State<L> {
-        self.deal(t, rng, |_| false)
+        self.deal(t, rng, false)
     }
 
     /// [`Self::determinize`] with every hand shown: only the libraries' unknown cards, and
@@ -231,8 +234,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// must be kept in a single face-down pile. Players can't look at or change the order of
     /// cards in a library.").
     pub fn determinize_libraries(&self, t: &GameTable, rng: &mut SplitMix64) -> State<L> {
-        let root = self.root;
-        self.deal(t, rng, |slot| root.object(slot).zone == Zone::Hand)
+        self.deal(t, rng, true)
     }
 
     /// The root with each player's cards the viewer does not know, `shown` ones aside, dealt
@@ -247,19 +249,31 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// random, so which card that is is too.
     ///
     /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
-    fn deal(
-        &self,
-        t: &GameTable,
-        rng: &mut SplitMix64,
-        shown: impl Fn(L::Slot) -> bool,
-    ) -> State<L> {
+    fn deal(&self, t: &GameTable, rng: &mut SplitMix64, show_hands: bool) -> State<L> {
         let mut s = self.root.clone();
+        if !s.in_subgame() || !self.redeal_subgames(t, rng, show_hands, &mut s) {
+            self.redeal(t, rng, show_hands, &mut s);
+        }
+        s
+    }
+
+    fn redeal(&self, t: &GameTable, rng: &mut SplitMix64, show_hands: bool, s: &mut State<L>) {
         let picks = self.unseen_hidden_picks(t);
         for player in Seat::BOTH {
             let mut remainder: L::Deck<L::Card> = Default::default();
-            for card in t.deck(player) {
-                // A deck never holds more cards than the layout has slots for (State::deal).
-                remainder.push_bounded(card);
+            if self.root.in_subgame() {
+                // This deck contains only cards carried into the subgame.
+                for i in 0..t.deck_len(player) {
+                    let slot = L::Slot::deck(player, i);
+                    if self.root.object(slot).zone != Zone::Nowhere {
+                        remainder.push_bounded(self.root.card_really_is(slot));
+                    }
+                }
+            } else {
+                for card in t.deck(player) {
+                    // A deck never holds more cards than the layout has slots for (State::deal).
+                    remainder.push_bounded(card);
+                }
             }
             let mut unknown: L::Deck<L::Slot> = Default::default();
             // A copy can hide the card underneath while its copy effect stays in force.
@@ -268,7 +282,12 @@ impl<'a, L: Layout> Observation<'a, L> {
             let mut hidden_originals: L::Deck<L::Slot> = Default::default();
             for i in 0..t.deck_len(player) {
                 let slot = L::Slot::deck(player, i);
-                if shown(slot) || self.root.knows_card_really_is(self.viewer, slot) {
+                if self.root.in_subgame() && self.root.object(slot).zone == Zone::Nowhere {
+                    continue;
+                }
+                if (show_hands && self.root.object(slot).zone == Zone::Hand)
+                    || self.root.knows_card_really_is(self.viewer, slot)
+                {
                     let card = s.card_really_is(slot);
                     let at = remainder
                         .position(card)
@@ -291,11 +310,13 @@ impl<'a, L: Layout> Observation<'a, L> {
                 s.deal_card_really_is(slot, card);
             }
             if let Some(picks) = &picks {
-                picks.deal(&mut s, t, unknown.as_slice());
+                picks.deal(s, t, unknown.as_slice());
             }
         }
         s.reseed(rng.next_u64());
-        s
+        if let (Some(outer), Some(dealt)) = (self.root.outer.get(), s.outer.get_mut()) {
+            Observation::new(outer, self.viewer).redeal(t, rng, show_hands, dealt);
+        }
     }
 
     /// The slots the paused resolution's hidden picks have picked so far, known card or not

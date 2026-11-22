@@ -1181,7 +1181,7 @@ impl<L: Layout> Tree<L> {
             origin: 0,
             trace: None,
         };
-        tree.origin = tree.state.turn().number();
+        tree.origin = tree.state.elapsed_turns();
         if !resample {
             tree.state = tree.deal(t, &mut rng);
             tree.extra += WORLD_STEPS;
@@ -1361,7 +1361,7 @@ impl<L: Layout> Tree<L> {
         let mut depth = 0;
         let mut node = self.root;
         let mut d = self.decision.clone();
-        let root_turn = self.state.turn().number();
+        let root_turn = self.state.elapsed_turns();
         let mut plans = [combat::Plan::default(), combat::Plan::default()];
         let value = loop {
             let at_root = node == self.root;
@@ -1373,7 +1373,7 @@ impl<L: Layout> Tree<L> {
             let combat_only = !at_root
                 && self.family.options.combat
                 && combat::handles(d.kind)
-                && s.turn().number() == root_turn;
+                && s.elapsed_turns() == root_turn;
             let policy_only = !at_root && self.family.options.mid && answered_by_policy(&d);
             let (child, choice) = if combat_only {
                 let c = combat::Sim::<_, combat::General>::new(
@@ -1544,7 +1544,7 @@ impl<L: Layout> Tree<L> {
                 value(outcome, self.turns(s))
             }
             Leaf::Cutoff { turns } => {
-                let turn = s.turn().number().saturating_add(u16::from(turns));
+                let turn = s.elapsed_turns().saturating_add(u16::from(turns));
                 if let Some(outcome) = soft_rollout_to(s, t, &mut self.x, policy, &mut soft, turn) {
                     value(outcome, self.turns(s))
                 } else {
@@ -1564,7 +1564,7 @@ impl<L: Layout> Tree<L> {
 
     /// The turns from the tree's first root to `s`.
     fn turns(&self, s: &State<L>) -> u16 {
-        s.turn().number().saturating_sub(self.origin)
+        s.elapsed_turns().saturating_sub(self.origin)
     }
 }
 

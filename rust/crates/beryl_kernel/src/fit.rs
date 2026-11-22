@@ -16,6 +16,7 @@ use crate::player::Player;
 use crate::relayout::Relayout;
 use crate::stack::StackEntry;
 use crate::state::State;
+use crate::subgame::{CompletedTurns, OuterGame};
 use crate::table::GameTable;
 
 /// Why a game does not fit a layout.
@@ -43,11 +44,14 @@ pub enum Misfit {
     /// The layout cannot represent a recorded answer or option, or has no matching slot
     /// for a hidden pick.
     IndexTooWide { index: usize },
+    /// An active subgame or its completed turns require Large.
+    Subgame,
 }
 
 impl fmt::Display for Misfit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
+            Misfit::Subgame => f.write_str("subgames require the Large layout"),
             Misfit::DeckTooLarge {
                 player,
                 cards,
@@ -138,6 +142,12 @@ impl<L: Layout> State<L> {
     /// recorded index is one `M` can name. A game that came from an `M` game always fits.
     pub fn fits<M: Layout>(&self, t: &GameTable) -> Result<(), Misfit> {
         t.fits::<M>()?;
+        if !M::Outer::SUPPORTED && (self.in_subgame() || self.subgame_turns.get() != 0) {
+            return Err(Misfit::Subgame);
+        }
+        if let Some(outer) = self.suspended_game() {
+            outer.fits::<M>(t)?;
+        }
         self.fits_slots::<M>()?;
         room(
             "the battlefield",

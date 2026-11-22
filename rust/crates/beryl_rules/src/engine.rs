@@ -222,7 +222,7 @@ impl Limit {
             Self::Bounded { end, work_limit } => {
                 let reached = match end {
                     AdvanceUntil::WorkLimit => false,
-                    AdvanceUntil::Turn(turn) => s.turn().number() >= turn,
+                    AdvanceUntil::Turn(turn) => s.elapsed_turns() >= turn,
                     AdvanceUntil::EndOfCombat(combat) => s.reached_end_of_combat(combat),
                 };
                 // One loop can silently answer a decision and copy twice to resolve it.
@@ -251,6 +251,13 @@ fn advance<L: Layout>(
     loop {
         let unchanged = std::mem::take(&mut settled);
         if let Some(outcome) = layers::over_or_refreshed(s, t, &mut x.events) {
+            if s.in_subgame() {
+                crate::game::subgame::resume(s, t, x, a, outcome);
+                if matches!(limit, Limit::Seen(_)) && s.outcome().is_none() {
+                    return None;
+                }
+                continue;
+            }
             return Some(Step::Over(outcome));
         }
         if combat::in_combat(s.turn().step()) {

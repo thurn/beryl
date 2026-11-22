@@ -50,6 +50,7 @@ impl CustomBody for DestroyTarget {
     const SAYS: Says = Says {
         asks: false,
         changes_turn_structure: false,
+        starts_subgame: false,
         takes: &[Some(Takes::Removal)],
     };
 
@@ -97,6 +98,7 @@ impl CustomBody for Ponder {
 const ASKS: Says = Says {
     asks: true,
     changes_turn_structure: false,
+    starts_subgame: false,
     takes: &[],
 };
 

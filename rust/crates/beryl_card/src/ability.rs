@@ -88,6 +88,8 @@ pub struct Says {
     pub asks: bool,
     /// Whether the body can insert, skip or cut short a step or phase.
     pub changes_turn_structure: bool,
+    /// Whether the body can suspend the game to play a subgame.
+    pub starts_subgame: bool,
     /// How it takes what is chosen for each instance of the word "target" from its
     /// controller, in the order of the ability's targets, with none for one it leaves alone
     /// and for any past the list's end ([`Ability::takes_target`]).
@@ -99,6 +101,7 @@ impl Says {
     pub const NOTHING: Says = Says {
         asks: false,
         changes_turn_structure: false,
+        starts_subgame: false,
         takes: &[],
     };
 }
@@ -680,6 +683,14 @@ impl Ability {
         match self.body {
             Behavior::Data(effect) => effect.asks(),
             Behavior::Custom(custom) => custom.says().asks,
+        }
+    }
+
+    /// Whether this body can suspend resolution to play a new game.
+    pub const fn starts_subgame(&self) -> bool {
+        match self.body {
+            Behavior::Custom(custom) => custom.says().starts_subgame,
+            Behavior::Data(_) => false,
         }
     }
 

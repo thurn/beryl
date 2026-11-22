@@ -145,6 +145,7 @@ impl CustomBody for ManaWithChoice {
     const SAYS: Says = Says {
         asks: true,
         changes_turn_structure: false,
+        starts_subgame: false,
         takes: &[],
     };
 

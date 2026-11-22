@@ -26,8 +26,8 @@ pub(crate) struct GameSession {
     /// The game's stop flag ([`Game::stop_flag`]).
     stop: Arc<AtomicBool>,
     detached: Arc<AtomicBool>,
-    /// Set once the human concedes, so the thread concedes at the next decision even while
-    /// the game plays on without them.
+    /// Set when the human requests a concession, which the thread takes at the next
+    /// decision even while the game plays on without them.
     conceded: Arc<AtomicBool>,
 }
 
@@ -211,38 +211,8 @@ fn run(
     replay: Option<&Path>,
     mut emit: impl FnMut(PlayerView),
 ) -> &'static str {
-    // A stops change re-emits the open decision, which may already be answered, so it does
-    // not reopen it. Returns whether the session is over: the session was dropped.
-    let mut publish = |game: &mut Game, view: PlayerView, reopen: bool| {
-        let open = game.open();
-        let decides = open.is_some() || matches!(view.status, Status::Over { .. });
-        if let Some(path) = replay
-            && decides
-            && let Err(e) = game.replay().save(path)
-        {
-            journal::error("session", format!("replay not saved: {e}"), json!(null));
-        }
-        if let Some(latest) = &shared.latest
-            && decides
-        {
-            *latest.lock().unwrap_or_else(PoisonError::into_inner) = Some(game.replay().clone());
-        }
-        if let Some(ledger) = &shared.ledger {
-            ledger.record_end(game.replay(), &view);
-        }
-        journal::debug("view", view_kind(&view), view_summary(game, &view));
-        // A concession closes the human's decisions for good.
-        if reopen && open.is_some() && !shared.conceded.load(Ordering::Relaxed) {
-            *shared.open.lock().unwrap_or_else(PoisonError::into_inner) = open;
-        }
-        if shared.detached.load(Ordering::Relaxed) {
-            return !shared.conceded.load(Ordering::Relaxed);
-        }
-        game.publish_review(&view);
-        game.publish_across();
-        emit(view);
-        false
-    };
+    let mut publish =
+        |game: &mut Game, view, reopen| publish_view(game, view, reopen, shared, replay, &mut emit);
     if let Some(view) = first
         && publish(&mut game, view, true)
     {
@@ -255,11 +225,14 @@ fn run(
             }
             // The game plays on without the human: it takes their concession before the
             // agent's next decision.
-            if shared.conceded.load(Ordering::Relaxed)
-                && let Some(view) = game.concede()
-            {
-                publish(&mut game, view, false);
-                return "conceded";
+            if let Some(view) = take_concession(&mut game, shared) {
+                let over = matches!(view.status, Status::Over { .. });
+                if publish(&mut game, view, false) {
+                    return "replaced";
+                }
+                if over {
+                    return "conceded";
+                }
             }
         }
         if game.open().is_none() {
@@ -305,10 +278,16 @@ fn run(
                     Err(e) => refused(&e),
                 },
                 Command::Concede => {
-                    if let Some(view) = game.concede() {
-                        publish(&mut game, view, false);
+                    if let Some(view) = take_concession(&mut game, shared) {
+                        let over = matches!(view.status, Status::Over { .. });
+                        if publish(&mut game, view, false) {
+                            return "replaced";
+                        }
+                        if over {
+                            return "conceded";
+                        }
+                        break;
                     }
-                    return "conceded";
                 }
                 Command::SetStops(stops) => match game.set_stops(stops) {
                     Ok(view) => {
@@ -321,6 +300,59 @@ fn run(
             }
         }
     }
+}
+
+/// Sends the game's view and reports whether the session was replaced. A stops change can
+/// re-emit an already answered decision, so only play may reopen it.
+fn publish_view(
+    game: &mut Game,
+    view: PlayerView,
+    reopen: bool,
+    shared: &Shared,
+    replay: Option<&Path>,
+    emit: &mut impl FnMut(PlayerView),
+) -> bool {
+    let open = game.open();
+    let decides = open.is_some() || matches!(view.status, Status::Over { .. });
+    if let Some(path) = replay
+        && decides
+        && let Err(e) = game.replay().save(path)
+    {
+        journal::error("session", format!("replay not saved: {e}"), json!(null));
+    }
+    if let Some(latest) = &shared.latest
+        && decides
+    {
+        *latest.lock().unwrap_or_else(PoisonError::into_inner) = Some(game.replay().clone());
+    }
+    if let Some(ledger) = &shared.ledger {
+        ledger.record_end(game.replay(), &view);
+    }
+    journal::debug("view", view_kind(&view), view_summary(game, &view));
+    // A pending concession closes the current decision.
+    if reopen && open.is_some() && !shared.conceded.load(Ordering::Relaxed) {
+        *shared.open.lock().unwrap_or_else(PoisonError::into_inner) = open;
+    }
+    if shared.detached.load(Ordering::Relaxed) {
+        return !shared.conceded.load(Ordering::Relaxed);
+    }
+    game.publish_review(&view);
+    game.publish_across();
+    emit(view);
+    false
+}
+
+/// Applies a requested concession once. A subgame concession leaves the session running,
+/// and the queued wake-up can arrive after the thread has already handled the request.
+fn take_concession(game: &mut Game, shared: &Shared) -> Option<PlayerView> {
+    if !shared.conceded.load(Ordering::Relaxed) {
+        return None;
+    }
+    let view = game.concede()?;
+    if !matches!(view.status, Status::Over { .. }) {
+        shared.conceded.store(false, Ordering::Relaxed);
+    }
+    Some(view)
 }
 
 /// Takes a click on the game's open prompt and tells its sender what it did. Returns whether

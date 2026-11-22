@@ -46,6 +46,7 @@ impl Game {
     pub(super) fn play_on(&mut self, replaying: bool) {
         debug_assert!(matches!(self.at, At::Playing));
         loop {
+            let depth = self.board.subgame_depth();
             let step = self
                 .board
                 .next_in_step(&self.table, self.seen, &mut self.chance);
@@ -63,7 +64,9 @@ impl Game {
             self.at = match step {
                 None => {
                     let turn = self.board.turn();
-                    let began = turn.number() != self.seen.turn;
+                    let began = turn.number() != 0
+                        && turn.number() != self.seen.turn
+                        && self.board.subgame_depth() == depth;
                     self.seen = self.board.step_position();
                     self.answered = None;
                     if began {

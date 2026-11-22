@@ -29,6 +29,13 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[serde(rename_all = "camelCase")]
 pub struct Checkpoint {
     pub turn: u16,
+    /// Turns begun across every game in this playthrough, when different from `turn`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elapsed: Option<u16>,
+    /// The suspended board. Its pending resolution is restored by replaying the log
+    /// from the start of the game.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outer: Option<Box<Checkpoint>>,
     /// Where the checkpoint was taken in a turn with a planned step sequence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ordinal: Option<u32>,
@@ -287,6 +294,8 @@ impl Checkpoint {
         };
         Checkpoint {
             turn: s.turn().number(),
+            elapsed: (s.elapsed_turns() != s.turn().number()).then_some(s.elapsed_turns()),
+            outer: s.suspended_game().map(|outer| Box::new(Self::of(t, outer))),
             ordinal: crate::save::saved_ordinal(s),
             active: s.turn().active().get(),
             players: Seat::BOTH.map(|p| side(t, s, p, &place)),
@@ -298,12 +307,19 @@ impl Checkpoint {
         }
     }
 
+    pub(crate) fn elapsed_turns(&self) -> u16 {
+        self.elapsed.unwrap_or(self.turn)
+    }
+
     /// Arranges `s`, a new game's state, as this board stood just before its turn began, so
     /// the engine's next call begins the turn ([`State::begin_before_turn`]). The library's
     /// cards no player knows go in an order `seed` shuffles. Fails, saying why, where the
     /// game's decks cannot hold the board.
     #[allow(clippy::too_many_lines)] // A few lines per zone of the board, in order.
     pub fn arrange(&self, t: &GameTable, s: &mut State<Small>, seed: u64) -> Result<(), String> {
+        if self.outer.is_some() || self.elapsed.is_some() {
+            return Err("a checkpoint with subgame history needs its replay log".to_owned());
+        }
         let seat = |p: u8| Seat::try_new(p).ok_or_else(|| format!("no seat {p}"));
         let full = |_| "a zone is full".to_owned();
         s.board().begin_before_turn(self.turn, seat(self.active)?);
@@ -473,6 +489,9 @@ impl Checkpoint {
             lines
         };
         let mut value = to_value(self);
+        if let Some(outer) = &self.outer {
+            value["outer"] = outer.canonical(t);
+        }
         let battlefield = self
             .battlefield
             .iter()

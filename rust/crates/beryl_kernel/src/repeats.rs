@@ -19,7 +19,7 @@
 //! Implements: CR 104.4b
 
 use std::cell::{Cell, RefCell};
-use std::hash::{DefaultHasher, Hasher};
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::ids::SlotId;
 use crate::layout::{Large, Layout, PerLayout, Queue};
@@ -93,7 +93,7 @@ impl<L: Layout> State<L> {
     pub fn canonical_hash(&self) -> u64 {
         L::of::<CanonicalHash>(
             |state| state.widen().hash_for_repeats(),
-            State::<Large>::hash_for_repeats,
+            State::<Large>::hash_with_suspended_games,
         )(self)
     }
 }
@@ -113,7 +113,18 @@ impl State<Large> {
         live.dedup();
         let _canonical = Canonical::begin(Names { incarnations, live });
         let mut h = DefaultHasher::new();
-        self.hash_game(&mut h, false);
+        self.hash_position(&mut h, false);
+        h.finish()
+    }
+
+    fn hash_with_suspended_games(&self) -> u64 {
+        let current = self.hash_for_repeats();
+        let Some(outer) = self.suspended_game() else {
+            return current;
+        };
+        // The suspended game numbers object incarnations and timestamps in its own state.
+        let mut h = DefaultHasher::new();
+        (current, outer.hash_with_suspended_games()).hash(&mut h);
         h.finish()
     }
 }

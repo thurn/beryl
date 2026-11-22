@@ -42,6 +42,19 @@ impl<L: Layout> State<L> {
     /// permanent status, no player who has lost is still playing, and derived characteristics
     /// are up to date (§9: reads never recompute).
     pub fn check_invariants(&self, t: &GameTable) -> Result<(), Violation> {
+        if let Some(outer) = self.suspended_game() {
+            check(
+                matches!(outer.pending(), Pending::Resolving(r) if r.question.is_empty()),
+                "a subgame with no suspended resolution",
+                None,
+            )?;
+            check(
+                outer.outcome().is_none(),
+                "a suspended game with an outcome",
+                None,
+            )?;
+            outer.check_invariants(t)?;
+        }
         self.check_objects(t)?;
         self.check_zones()?;
         self.check_players(t.format())?;
@@ -63,7 +76,11 @@ impl<L: Layout> State<L> {
                 SlotPlace::Pool(_) => (None, false),
             };
             if o.zone == Zone::Nowhere {
-                check(!in_deck, "a deck card is nowhere", at)?;
+                check(
+                    !in_deck || self.suspended_game().is_some(),
+                    "a deck card is nowhere",
+                    at,
+                )?;
                 continue;
             }
             let token = o.flags.has(Flag::Token);

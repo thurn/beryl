@@ -6,6 +6,7 @@
 pub mod ending;
 pub mod life;
 pub(crate) mod start;
+pub(crate) mod subgame;
 
 use crate::fixed::Full;
 use crate::layout::{Layout, Small};

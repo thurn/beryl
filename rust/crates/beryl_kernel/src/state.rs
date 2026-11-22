@@ -46,6 +46,7 @@ use crate::repeats::Repeats;
 use crate::rng::Rng;
 pub use crate::rule_changes::{RuleId, RuleKind, Rules};
 use crate::static_ability::Inputs;
+use crate::subgame::CompletedTurns;
 
 /// Object slots: deck cards, tokens and spell copies.
 pub const SLOTS: usize = Slot::COUNT;
@@ -247,9 +248,16 @@ pub struct State<L: Layout = Small> {
     /// results, and empty in most games.
     pub(crate) elsewhere: crate::query::zone_characteristics::Reaching<L>,
     pub(crate) turn_plan: crate::turn::plan::TurnPlan<L>,
+    pub(crate) outer: L::Outer,
+    pub(crate) subgame_turns: L::SubgameTurns,
 }
 
-const _: () = assert!(size_of::<State<Small>>() <= 20 * 1024);
+// The two fields at the end of the C layout for subgames occupy no space in Small.
+const _: () = {
+    assert!(size_of::<State<Small>>() == 20_448);
+    assert!(size_of::<<Small as Layout>::Outer>() == 0);
+    assert!(size_of::<<Small as Layout>::SubgameTurns>() == 0);
+};
 
 /// The most sets of text changes the abilities on the stack keep in a [`Small`] game. One past
 /// it stalls the game into [`crate::Large`].
@@ -261,13 +269,20 @@ pub const CAPTURED_WORDS: usize = 4;
 /// (`beryl_bench` pins the hash of its corpus).
 impl<L: Layout> std::hash::Hash for State<L> {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
-        self.hash_game(h, true);
+        self.hash_position(h, true);
+        let subgame_turns = self.subgame_turns.get();
+        if subgame_turns != 0 {
+            subgame_turns.hash(h);
+        }
+        if let Some(outer) = self.suspended_game() {
+            outer.hash(h);
+        }
     }
 }
 
 impl<L: Layout> State<L> {
-    /// [`State`]'s `Hash`, with the budgets or without them ([`State::canonical_hash`]).
-    pub(crate) fn hash_game<H: std::hash::Hasher>(&self, h: &mut H, with_budgets: bool) {
+    /// Hashes this game's position, with the budgets or without them ([`State::canonical_hash`]).
+    pub(crate) fn hash_position<H: std::hash::Hasher>(&self, h: &mut H, with_budgets: bool) {
         use std::hash::Hash;
         let State {
             turn,
@@ -306,6 +321,8 @@ impl<L: Layout> State<L> {
             // Bookkeeping about the past that only the loop check reads ([`crate::repeats`]).
             repeats: _,
             turn_plan,
+            outer: _,
+            subgame_turns: _,
         } = self;
         objects.hash(h);
         battlefield.hash(h);
@@ -411,7 +428,7 @@ impl<L: Layout> State<L> {
     /// The budgets search plays under below this position ([`Limits::search`]): a player game
     /// lifts its own ([`Limits::PLAYER`]), which a runaway rollout must not inherit.
     pub fn search_limits(&self) -> Limits {
-        Limits::search(self.turn.number, self.budgets.decisions)
+        Limits::search(self.elapsed_turns(), self.budgets.decisions)
     }
 
     /// The game's random streams: a session compares them to tell whether anything random

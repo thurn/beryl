@@ -40,6 +40,7 @@ mod replay;
 mod rules;
 mod spell_costs;
 mod static_abilities;
+mod subgames;
 mod trackers;
 mod triggers;
 mod turn_plan;

@@ -359,7 +359,7 @@ fn rerecord(
     })?;
     let replayed = game.replay();
     let keep = |e: &&Entry| match e {
-        Entry::Reveal { .. } | Entry::Flip { .. } => chance,
+        Entry::Reveal { .. } | Entry::Flip { .. } | Entry::SubgameStarter(_) => chance,
         Entry::Checkpoint(_) => false,
         _ => true,
     };

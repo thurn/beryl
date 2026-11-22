@@ -119,7 +119,12 @@ impl Walk {
                 // The session passes for the human after it; each pass is logged. The replay
                 // plays from the seed on the build that wrote the file, which deals and flips
                 // as the game did.
-                Some(Entry::PassOn | Entry::Reveal { .. } | Entry::Flip { .. }) => {}
+                Some(
+                    Entry::PassOn
+                    | Entry::Reveal { .. }
+                    | Entry::Flip { .. }
+                    | Entry::SubgameStarter(_),
+                ) => {}
                 Some(Entry::Concede) => return Ok(Walked::Conceded),
                 entry => break entry,
             }

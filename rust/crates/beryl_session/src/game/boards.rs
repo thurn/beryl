@@ -219,6 +219,14 @@ impl Boards {
         on_board!(self, b => b.state.step_position())
     }
 
+    pub(super) fn subgame_depth(&self) -> usize {
+        on_board!(self, b => b.state.subgame_depth())
+    }
+
+    pub(super) fn elapsed_turns(&self) -> u16 {
+        on_board!(self, b => b.state.elapsed_turns())
+    }
+
     pub(super) fn turn(&self) -> &Turn {
         on_board!(self, b => b.state.turn())
     }

@@ -40,6 +40,8 @@ pub enum Random {
     Reveal { owner: Seat, card: LargeCardIx },
     /// `player` flipped a coin and won the flip, or lost it.
     Flip { player: Seat, won: bool },
+    /// The subgame starts with this randomly chosen player.
+    SubgameStarter(Seat),
 }
 
 /// Where a replay could not reproduce what the record says chance produced.
@@ -71,6 +73,7 @@ pub struct Chance {
 struct Recorded {
     reveals: VecDeque<(Seat, LargeCardIx)>,
     flips: VecDeque<(Seat, bool)>,
+    subgame_starters: VecDeque<Seat>,
 }
 
 impl Chance {
@@ -82,6 +85,7 @@ impl Chance {
             match outcome {
                 Random::Reveal { owner, card } => r.reveals.push_back((owner, card)),
                 Random::Flip { player, won } => r.flips.push_back((player, won)),
+                Random::SubgameStarter(seat) => r.subgame_starters.push_back(seat),
             }
         }
     }
@@ -92,7 +96,7 @@ impl Chance {
     }
 
     /// The first recorded outcome still to come while replaying, if any: a reveal before a
-    /// flip.
+    /// flip, and a flip before a subgame starter.
     pub fn next_recorded(&self) -> Option<Random> {
         let r = self.replaying.as_ref()?;
         r.reveals
@@ -102,6 +106,12 @@ impl Chance {
                 r.flips
                     .front()
                     .map(|&(player, won)| Random::Flip { player, won })
+            })
+            .or_else(|| {
+                r.subgame_starters
+                    .front()
+                    .copied()
+                    .map(Random::SubgameStarter)
             })
     }
 
@@ -280,6 +290,24 @@ pub fn flip<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, player: Seat) -> bo
     }
     chance.happened.push(Random::Flip { player, won });
     won
+}
+
+/// Chooses who starts a subgame, honoring the recorded choice during replay.
+pub fn subgame_starter<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, format: Format) -> Seat {
+    let drawn = starting_player_chooser(s, format);
+    let Some(chance) = sink.chance.as_deref_mut() else {
+        return drawn;
+    };
+    let mut starter = drawn;
+    if let Some(r) = &mut chance.replaying {
+        if let Some(recorded) = r.subgame_starters.pop_front() {
+            starter = recorded;
+        } else {
+            chance.mismatch(s, None, Random::SubgameStarter(drawn));
+        }
+    }
+    chance.happened.push(Random::SubgameStarter(starter));
+    starter
 }
 
 /// Whether the sink holds a chance that is replaying a record, which may have bound

@@ -55,7 +55,10 @@ pub(crate) fn resolve<L: Layout>(
     a: &mut dyn Answers<L>,
 ) -> Result<(), Full> {
     resolve_top(s, t, x, a)?;
-    if !matches!(s.pending(), Pending::Resolving(_)) && s.outcome().is_none() && s.note_resolution()
+    if !matches!(s.pending(), Pending::Resolving(_))
+        && (!State::<L>::SUPPORTS_SUBGAMES || s.turn().number() != 0)
+        && s.outcome().is_none()
+        && s.note_resolution()
     {
         s.end_game(Outcome::Draw);
     }
@@ -93,7 +96,9 @@ fn resolve_top<L: Layout>(
     let may_ask = replacement::resolution_may_ask(t);
     // The source is asked first: whether an ability written as data asks is read from its
     // effect, which a rollout's inline source never needs.
-    if !may_ask && (a.inline() || !ability.is_some_and(Ability::asks)) {
+    let may_play_subgame =
+        State::<L>::SUPPORTS_SUBGAMES && ability.is_some_and(Ability::starts_subgame);
+    if !may_ask && !may_play_subgame && (a.inline() || !ability.is_some_and(Ability::asks)) {
         // An inline source runs the body once on the committed state. A resolution that
         // paused under another source, as search's tree nodes do before a rollout takes over,
         // replays its record first, from what was known as it began.
@@ -160,6 +165,10 @@ fn resolve_on_copy<L: Layout>(
         };
         sink.truncate(mark);
         let hidden = sink.asking.take_hidden();
+        // Only an instruction that plays a subgame pauses with an engine-only question.
+        if State::<L>::SUPPORTS_SUBGAMES && question.is_empty() {
+            return crate::game::subgame::enter(s, spare, t, sink, record, question);
+        }
         if inline {
             match answer_inline(s, spare, a, &question) {
                 Some(c) => record.push(recorded(&question, c, hidden))?,

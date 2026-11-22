@@ -17,6 +17,7 @@ use crate::fixed::{Fixed, Full};
 use crate::ids::{CardId, CardIx, LargeCardIx, LargeSlot, Seat, Slot, SlotId};
 use crate::relayout::Relayout;
 use crate::state::State;
+use crate::subgame::{CompletedTurns, LargeOuter, OuterGame};
 
 /// What a layout's arrays and queues hold: in [`Small`], always `Copy` values; in [`Large`],
 /// values that may hold queues of their own.
@@ -179,6 +180,11 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
     /// ([`SlotId::pool`]).
     const TOKEN_POOL: Bitboard<Self::Slot>;
 
+    /// The suspended game, which only Large can hold.
+    type Outer: OuterGame<Self>;
+    /// Turns completed in subgames that have already ended.
+    type SubgameTurns: CompletedTurns;
+
     /// A copy of `state`: for [`Small`], one `memcpy`.
     fn clone_state(state: &State<Self>) -> State<Self>;
 
@@ -208,6 +214,8 @@ impl Layout for Small {
     type PerPlayer<T: Item> = PerSeat<T>;
     type AbilityMask = u16;
     type Additions = [Option<Addition<CardIx>>; 3];
+    type Outer = ();
+    type SubgameTurns = ();
 
     const TOKEN_POOL: Bitboard =
         Bitboard([0, !0 << (Slot::POOL - 64), !0, !0 >> (256 - Slot::COUNT)]);
@@ -250,6 +258,8 @@ impl Layout for Large {
     type PerPlayer<T: Item> = PerSeat<T>;
     type AbilityMask = u64;
     type Additions = [Option<Addition<LargeCardIx>>; 8];
+    type Outer = LargeOuter;
+    type SubgameTurns = u16;
 
     const TOKEN_POOL: Bitboard<LargeSlot> = {
         assert!(LargeSlot::POOL.is_multiple_of(64) && LargeSlot::COUNT == 16 * 64);
@@ -296,6 +306,8 @@ impl Layout for Large {
             outcome,
             elsewhere,
             turn_plan,
+            outer,
+            subgame_turns,
         } = state;
         State {
             objects: objects.clone(),
@@ -330,6 +342,8 @@ impl Layout for Large {
             outcome: *outcome,
             elsewhere: elsewhere.clone(),
             turn_plan: turn_plan.clone(),
+            outer: outer.clone(),
+            subgame_turns: *subgame_turns,
         }
     }
 
@@ -398,6 +412,8 @@ impl State<Large> {
             counters,
             elsewhere,
             turn_plan,
+            outer,
+            subgame_turns,
         );
         None
     }

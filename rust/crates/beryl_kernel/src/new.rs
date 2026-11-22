@@ -113,7 +113,7 @@ impl<L: Layout> State<L> {
         Self::empty_in(Format::CONSTRUCTED, profile)
     }
 
-    fn empty_in(format: Format, profile: Profile) -> State<L> {
+    pub(crate) fn empty_in(format: Format, profile: Profile) -> State<L> {
         State {
             objects: Table::filled(Object::EMPTY),
             battlefield: Default::default(),
@@ -164,6 +164,8 @@ impl<L: Layout> State<L> {
             budgets: Budgets::default(),
             flags: Flags::default(),
             outcome: None,
+            outer: Default::default(),
+            subgame_turns: Default::default(),
         }
     }
 }

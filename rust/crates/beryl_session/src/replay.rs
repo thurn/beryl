@@ -91,6 +91,8 @@ pub enum Entry {
     Reveal { player: u8, card: String },
     /// Player `player` flipped a coin as the entry before it played out, and won or lost.
     Flip { player: u8, won: bool },
+    /// The seat randomly selected to start a subgame.
+    SubgameStarter(u8),
     /// The board as a turn began, after the entry before it.
     Checkpoint(Box<Checkpoint>),
 }
@@ -103,6 +105,7 @@ impl Entry {
                 player: owner.get(),
                 card: t.def(card).name.to_owned(),
             },
+            Random::SubgameStarter(seat) => Entry::SubgameStarter(seat.get()),
             Random::Flip { player, won } => Entry::Flip {
                 player: player.get(),
                 won,
@@ -128,6 +131,7 @@ impl Entry {
                     })?;
                 Random::Reveal { owner, card }
             }
+            &Entry::SubgameStarter(player) => Random::SubgameStarter(seat(player)?),
             &Entry::Flip { player, won } => Random::Flip {
                 player: seat(player)?,
                 won,

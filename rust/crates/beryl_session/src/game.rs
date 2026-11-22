@@ -637,11 +637,10 @@ impl Game {
         Ok(self.draw())
     }
 
-    /// The human concedes, and the view of the game's end is returned. A concession is taken
-    /// where the game waits on a decision, the human's or the agent's (before the agent
-    /// thinks), which a replay finds again; elsewhere, and once the game is over, there is
-    /// none. A cast in progress is taken back first ([`Game::cancel`]), so the end shows the
-    /// table as it stood.
+    /// The human concedes the active game. A concession is taken where the game waits on a
+    /// decision, the human's or the agent's (before the agent thinks), which a replay finds
+    /// again. A cast in progress is taken back first ([`Game::cancel`]). After a subgame
+    /// concession, the next view resumes the suspended game.
     pub fn concede(&mut self) -> Option<PlayerView> {
         if !matches!(self.at, At::Agent(_) | At::Human(..)) {
             return None;
@@ -654,6 +653,10 @@ impl Game {
         self.before_cast = None;
         on_board!(&mut self.board, b => beryl_engine::concede(&mut b.state, &self.table, &mut b.scratch, self.human));
         self.replay.log.push(Entry::Concede);
+        if self.board.subgame_depth() > 0 {
+            self.at = At::Playing;
+            return Some(self.view());
+        }
         let outcome = self.board.outcome().expect("a concession ends the game");
         self.at = At::Over {
             outcome,
