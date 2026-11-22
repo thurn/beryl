@@ -19,6 +19,8 @@ import mage.MageItem;
 import mage.MageObject;
 import mage.ObjectColor;
 import mage.abilities.Ability;
+import mage.abilities.TriggeredAbility;
+import mage.abilities.common.SagaAbility;
 import mage.abilities.keyword.ChangelingAbility;
 import mage.abilities.keyword.DoubleStrikeAbility;
 import mage.abilities.keyword.DelveAbility;
@@ -101,6 +103,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
 
     private static final class BerylTestPlayer extends TestPlayer {
         private String castCost;
+        private final Map<String, Integer> startingLore = new HashMap<>();
 
         BerylTestPlayer(TestComputerPlayer computerPlayer) {
             super(computerPlayer);
@@ -314,6 +317,30 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
         }
 
         @Override
+        public void beginTurn(Game game) {
+            // XMage cheats setup cards onto the battlefield before the first beginTurn.
+            // Beryl starts with those permanents already there, so their entry chapters never trigger.
+            for (Map.Entry<String, Integer> setup : startingLore.entrySet()) {
+                String alias = setup.getKey();
+                Permanent permanent = game.getPermanent(getAliasByName(alias));
+                Assert.assertNotNull("no setup permanent with alias " + alias, permanent);
+                for (TriggeredAbility ability : game.getState().getTriggered(getId())) {
+                    if (permanent.getId().equals(ability.getSourceId()) && SagaAbility.isChapterAbility(ability)) {
+                        game.getState().removeTriggeredAbility(ability);
+                    }
+                }
+                Counters counters = permanent.getCounters(game);
+                counters.remove(CounterType.LORE.getName());
+                int count = setup.getValue();
+                if (count > 0) {
+                    counters.addCounter(CounterType.LORE.createInstance(count));
+                }
+            }
+            startingLore.clear();
+            super.beginTurn(game);
+        }
+
+        @Override
         public boolean priority(Game game) {
             // The optional choices of questions that never came.
             getChoices().removeIf(choice -> overdue(choice, game));
@@ -401,17 +428,9 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
         actions.set(last, new CastWithCost(actions.get(last), cost));
     }
 
-    /** Sets a setup permanent's lore before the first main phase, without triggering chapters. */
+    /** Sets a setup permanent's lore before the first turn begins. */
     protected void setLoreAtStart(TestPlayer player, String alias, int count) {
-        runCode("set starting lore", 1, PhaseStep.UPKEEP, playerA, (info, who, game) -> {
-            Permanent permanent = game.getPermanent(player.getAliasByName(alias));
-            Assert.assertNotNull("no setup permanent with alias " + alias, permanent);
-            Counters counters = permanent.getCounters(game);
-            counters.remove(CounterType.LORE.getName());
-            if (count > 0) {
-                counters.addCounter(CounterType.LORE.createInstance(count));
-            }
-        });
+        ((BerylTestPlayer) player).startingLore.put(alias, count);
     }
 
     /**

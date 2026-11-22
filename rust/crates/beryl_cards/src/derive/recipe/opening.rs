@@ -1,6 +1,9 @@
 //! Setup and legal game actions for each event recipe.
 
-use beryl_card::{Behavior, CardDef, CastingOption, Castings, Effect, FaceIx, Filter, Seat, Types};
+use beryl_card::{
+    Behavior, CardDef, CastingOption, Castings, CounterKind, Effect, FaceIx, Filter, Seat,
+    TargetKind, Types,
+};
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, P0, P1, Permanent, Scenario};
 
@@ -30,6 +33,40 @@ impl Opening {
         let setup = &mut self.start.setup.players[player.index()];
         if !setup.hand.contains(&card) {
             setup.hand = Vec::leak([setup.hand, &[card]].concat());
+        }
+    }
+
+    fn graveyard_target(&mut self, def: &CardDef, filter: Filter) {
+        let eligible = |name: &str, player| {
+            CARDS
+                .get(name)
+                .is_some_and(|card| matches(filter, card, player, Zone::Graveyard))
+        };
+        let players = &mut self.start.setup.players;
+        if Seat::BOTH.into_iter().any(|player| {
+            players[player.index()]
+                .graveyard
+                .iter()
+                .any(|card| eligible(card, player))
+        }) {
+            return;
+        }
+        let candidates = || {
+            props::ALL
+                .iter()
+                .filter_map(|prop| CARDS.get(prop.card))
+                .chain(CARDS.cards().iter().copied())
+        };
+        // Put the target across the table when the filter permits either graveyard.
+        for player in [P1, P0] {
+            if let Some(card) = candidates().find(|card| {
+                card.name != def.name && matches(filter, card, player, Zone::Graveyard)
+            }) {
+                let setup = &mut players[player.index()];
+                setup.graveyard = Vec::leak([setup.graveyard, &[card.name]].concat());
+                self.admit(def, card.name);
+                break;
+            }
         }
     }
 
@@ -111,6 +148,34 @@ fn source_name(def: &CardDef, place: Place) -> &'static str {
     }
 }
 
+/// Cross a single chapter threshold using the turn-based action at precombat main.
+fn chapter_opening(def: &'static CardDef, place: Place, chapter: u8) -> Option<Opening> {
+    let Place::Battlefield(face) = place else {
+        return None;
+    };
+    let mut out = Opening::new(def, place, format!("reach chapter {chapter}"));
+    out.start = out.start.at(TURN, P0, TurnStep::Draw);
+    let setup = &mut out.start.setup.players[P0.index()];
+    let mut permanents = setup.permanents.to_vec();
+    let saga = permanents.iter_mut().find(|p| p.card == def.name)?;
+    *saga = saga.counters(CounterKind::Lore, chapter - 1);
+    setup.permanents = Vec::leak(permanents);
+    out.stimuli = vec![Stimulus::PassUntil(TURN, TurnStep::PrecombatMain)];
+    for ability in def.face(face).abilities {
+        if ability
+            .chapter_numbers()
+            .is_some_and(|(first, last)| (first..=last).contains(&chapter))
+        {
+            for target in ability.targets() {
+                if target.kind == TargetKind::GraveyardCard {
+                    out.graveyard_target(def, target.filter);
+                }
+            }
+        }
+    }
+    Some(out)
+}
+
 #[allow(clippy::too_many_lines)]
 pub(super) fn open_recipe(def: &'static CardDef, place: Place, recipe: Recipe) -> Option<Opening> {
     let new = |label: &str| Opening::new(def, place, label);
@@ -118,6 +183,7 @@ pub(super) fn open_recipe(def: &'static CardDef, place: Place, recipe: Recipe) -
     let out = match recipe {
         // Existing openings already play the source from each zone where the engine offers it.
         Recipe::PlaySource => return None,
+        Recipe::Chapter(chapter) => return chapter_opening(def, place, chapter),
         Recipe::Attack(_) | Recipe::AttackWithout(_) => {
             let player = match recipe {
                 Recipe::Attack(player) => player,

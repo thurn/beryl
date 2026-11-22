@@ -21,6 +21,7 @@ enum Recipe {
     Attack(Seat),
     AttackWithout(Filter),
     Step(Seat, TurnStep),
+    Chapter(u8),
     Cast(Seat, Filter, Zone),
     PlayLand(Seat, Filter),
     Draw(Seat),
@@ -98,8 +99,8 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         TriggerEvent::BecomesTarget => vec![Recipe::TargetSource],
         TriggerEvent::Mutates => vec![Recipe::Mutate],
         TriggerEvent::DealsDamage => vec![Recipe::Attack(P0)],
-        // Chapter scenarios advance turns or add lore directly before making their observations.
-        TriggerEvent::TurnedFaceUp | TriggerEvent::Chapter { .. } => Vec::new(),
+        TriggerEvent::TurnedFaceUp => Vec::new(),
+        TriggerEvent::Chapter { first, .. } => vec![Recipe::Chapter(first)],
         TriggerEvent::State(condition) => vec![match *condition {
             Condition::Compare(Amount::Counters(Objects::This, kind), _, Amount::Fixed(0)) => {
                 Recipe::RemoveLastCounter(kind)
@@ -320,6 +321,7 @@ mod tests {
             TriggerEvent::BecomesTarget,
             TriggerEvent::Mutates,
             TriggerEvent::State(&Condition::Did),
+            TriggerEvent::Chapter { first: 1, last: 1 },
         ];
         for event in events {
             for subject in [Subject::This, Subject::A(Filter::Any)] {
