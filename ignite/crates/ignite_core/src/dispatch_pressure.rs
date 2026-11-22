@@ -161,7 +161,8 @@ impl<'a> Budget<'a> {
         }
     }
 
-    /// Claims with a slot are already reflected in the daemon's free count.
+    /// An occupied slot counts as build work even when the ticket was expected to be light.
+    /// The daemon's free slot count already accounts for it.
     pub fn hold(
         &mut self,
         ticket: &TicketId,
@@ -169,10 +170,11 @@ impl<'a> Budget<'a> {
         files: &[String],
         since: Option<Timestamp>,
     ) {
-        if needs_build_slot(cores, files) {
+        let occupies_slot = self.pressure.slot_holders.contains(ticket);
+        if occupies_slot || needs_build_slot(cores, files) {
             self.heavy += 1;
             self.latest_heavy = self.latest_heavy.max(since);
-            if !self.pressure.slot_holders.contains(ticket) {
+            if !occupies_slot {
                 self.pending_slots = self.pending_slots.saturating_add(1);
             }
         }

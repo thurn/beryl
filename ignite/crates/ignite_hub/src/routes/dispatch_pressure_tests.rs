@@ -313,6 +313,47 @@ fn six_shared_cores_admit_three_builds_even_after_the_ramp_wait() {
 }
 
 #[test]
+fn a_light_claim_that_acquires_a_build_slot_counts_against_the_core_limit() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    let ids = file(&mut conn, &[("tool", &[], &[]), ("build", &[], &[])]);
+    classify(&conn, &ids[0], 0.1, "Edit `tools/verify.py`");
+    classify(&conn, &ids[1], 1.0, "Edit `app/src/main.rs`");
+    assert_eq!(
+        post(
+            &mut conn,
+            "/claims",
+            &claim(ids[0].as_str(), "local_a"),
+            start()
+        )
+        .0,
+        200
+    );
+    let pressure = DispatchPressure {
+        build_slots: 9,
+        build_slots_free: 8,
+        slot_holders: [ids[0].clone()].into(),
+        ..DispatchPressure::default()
+    };
+    let wait = ask_with_cores(&mut conn, "local_b", &pressure, 120.0, Some(2.0));
+    assert!(
+        wait["nothing"]
+            .as_str()
+            .unwrap()
+            .contains("1 build tickets held, limit 1"),
+        "{wait}"
+    );
+    let mut gave_back = release(ids[0].as_str(), "local_a");
+    gave_back["needs"] = json!("person");
+    assert_eq!(post(&mut conn, "/release", &gave_back, at(121.0)).0, 200);
+    // A heartbeat can still list the previous holder immediately after release.
+    assert_eq!(
+        ask_with_cores(&mut conn, "local_b", &pressure, 122.0, Some(2.0))["ticket"],
+        ids[1].as_str()
+    );
+}
+
+#[test]
 fn a_lane_successor_can_use_the_build_capacity_its_predecessor_releases() {
     for first_uses_build_capacity in [false, true] {
         let mut conn = hub::open_in_memory().unwrap();

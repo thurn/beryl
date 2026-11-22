@@ -193,7 +193,7 @@ pub(crate) fn capacity_report(
         running_workers: Some(running_workers),
         worker_room: if accepts_work { sample.room.start } else { 0 },
         free_memory_mb: status.free_memory_mb,
-        memory_pressed: status.memory_pressed,
+        memory_pressed: sample.room.memory_pressed,
         free_disk_gb: sample.pressure.free_gb,
         disk_budget_gb: 0,
         disk_budget_source: None,

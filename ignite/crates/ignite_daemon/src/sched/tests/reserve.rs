@@ -1,7 +1,7 @@
 //! Tip and express reserve ownership, and loans to agents when those reserves are idle.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use ignite_core::capacity::Floor;
 use ignite_core::config::Os;
@@ -198,11 +198,7 @@ fn shrinking_agent_builds_give_their_shared_cores_back_to_a_tip_build() {
 #[test]
 fn an_adopted_tip_build_holds_the_reserve_until_released() {
     let clock = Arc::new(FakeClock::new(T0));
-    let host = Arc::new(FakeHost {
-        free_memory_mb: Mutex::new(None),
-        busy: Mutex::new(0.0),
-        trees: Mutex::new(BTreeMap::new()),
-    });
+    let host = Arc::new(FakeHost::default());
     let scheduler = Scheduler::new(with_reserve(), clock, host);
     let adopted = scheduler.adopt_all(vec![Adoption {
         class: Class::Tip,
@@ -225,11 +221,7 @@ fn an_adopted_tip_build_holds_the_reserve_until_released() {
 #[test]
 fn the_express_lane_borrows_the_idle_reserve_and_a_tip_build_still_gets_it() {
     let clock = Arc::new(FakeClock::new(T0));
-    let host = Arc::new(FakeHost {
-        free_memory_mb: Mutex::new(None),
-        busy: Mutex::new(0.0),
-        trees: Mutex::new(BTreeMap::new()),
-    });
+    let host = Arc::new(FakeHost::default());
     let scheduler = Scheduler::new(with_reserve(), clock, host);
     let agent = scheduler.acquire(&ask(Class::Agent, 16));
     let loan = scheduler.try_borrow(12).unwrap();
@@ -378,11 +370,7 @@ fn a_waiting_tip_build_keeps_its_reserve_until_it_can_start() {
 #[test]
 fn an_express_run_claims_its_cores_even_without_extra_cores() {
     let clock = Arc::new(FakeClock::new(T0));
-    let host = Arc::new(FakeHost {
-        free_memory_mb: Mutex::new(None),
-        busy: Mutex::new(0.0),
-        trees: Mutex::new(BTreeMap::new()),
-    });
+    let host = Arc::new(FakeHost::default());
     let scheduler = Scheduler::new(
         Limits {
             reserved: 3,
