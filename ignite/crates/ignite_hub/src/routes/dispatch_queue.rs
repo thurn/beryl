@@ -112,6 +112,7 @@ pub fn next(
         &landed,
         now,
         free.pressure.as_ref(),
+        free.admit_cores,
     )?;
     let fallback = (state == MachineState::ChecksOnly)
         .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, &free, now))
@@ -265,16 +266,25 @@ fn dispatch_groups(snapshot: &Snapshot, ready: &mut Vec<ReadyTicket>) -> Vec<Gro
 }
 
 /// Check live reservations and claims before deferring to a peer's heartbeat.
-pub(super) fn peer_free_build_slots(
+pub(super) fn peer_free_build_handoffs(
     conn: &Connection,
     machine: &str,
     now: Timestamp,
     pressure: &DispatchPressure,
+    admit_cores: f64,
 ) -> Result<u32> {
     let worked = history(conn, machine)?;
     let landed = landed_files(conn)?;
-    let held = capacity::read(conn, machine, &worked, &landed, now, Some(pressure))?;
-    Ok(held.budget.free_build_slots())
+    let held = capacity::read(
+        conn,
+        machine,
+        &worked,
+        &landed,
+        now,
+        Some(pressure),
+        Some(admit_cores),
+    )?;
+    Ok(held.budget.free_build_handoffs())
 }
 
 /// Lane hand-offs can start ordinary work, so only an Active machine can continue a chain.
@@ -322,10 +332,18 @@ pub fn chain_next(
     if mix::continuation_blocked(conn, machine.as_str(), &app, next, now)? {
         return Ok(None);
     }
-    if capacity::read(conn, machine.as_str(), &history, &landed, now, pressure)?
-        .budget
-        .blocked(next, &name)
-        .is_some()
+    if capacity::read(
+        conn,
+        machine.as_str(),
+        &history,
+        &landed,
+        now,
+        pressure,
+        None,
+    )?
+    .budget
+    .blocked(next, &name)
+    .is_some()
     {
         return Ok(None);
     }

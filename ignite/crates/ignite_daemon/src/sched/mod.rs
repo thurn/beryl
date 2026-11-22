@@ -656,6 +656,10 @@ impl Scheduler {
         self.lock().ledger.status()
     }
 
+    pub(crate) fn shared_cores(&self) -> u32 {
+        self.lock().ledger.limits().cores
+    }
+
     /// What `request` would wait for now, such as `8 cores for land work (2 land commands
     /// running, 3 waiting)`.
     pub fn describe(&self, request: &GrantRequest) -> String {

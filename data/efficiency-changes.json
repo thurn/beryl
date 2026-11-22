@@ -819,5 +819,10 @@
     "label": "Beryl 3D agents read a short workspace guide and the guide for the crate they change. Web comparison instructions load only when needed.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Ignite caps concurrent build tickets by shared scheduler cores to keep overlapping builds from backing up the command queue.",
+    "metric": "machine.queued-core-hours-per-day",
+    "expect": "down"
   }
 ]

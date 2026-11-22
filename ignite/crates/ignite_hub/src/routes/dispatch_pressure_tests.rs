@@ -1,4 +1,4 @@
-//! The same build slot and queue limits applies both to polling and to lane successors.
+//! Build limits apply both to polling and to lane successors.
 
 use rusqlite::Connection;
 use serde_json::{Value, json};
@@ -7,11 +7,24 @@ use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, DispatchPressure};
 use ignite_core::ids::TicketId;
 use ignite_store::hub;
 
-use super::tests::{at, claim, claim_reserved, file, free, landed, post, register, start};
+use super::tests::{at, claim, claim_reserved, file, free, landed, post, register, release, start};
 
 fn ask(conn: &mut Connection, session: &str, pressure: &DispatchPressure, seconds: f64) -> Value {
+    ask_with_cores(conn, session, pressure, seconds, None)
+}
+
+fn ask_with_cores(
+    conn: &mut Connection,
+    session: &str,
+    pressure: &DispatchPressure,
+    seconds: f64,
+    admit_cores: Option<f64>,
+) -> Value {
     let mut request = free("m-1", &[session]);
     request["pressure"] = json!(pressure);
+    if let Some(cores) = admit_cores {
+        request["admit_cores"] = json!(cores);
+    }
     request["explain"] = json!(true);
     let (status, reply) = post(conn, "/next", &request, at(seconds));
     assert_eq!(status, 200, "{reply}");
@@ -178,6 +191,12 @@ fn a_daemon_without_slot_fields_can_only_receive_light_work() {
 
 #[test]
 fn build_handoffs_start_in_threes_then_wait_for_recovery_and_ramp_one_at_a_time() {
+    for admit_cores in [None, Some(10.0)] {
+        check_ramp(admit_cores);
+    }
+}
+
+fn check_ramp(admit_cores: Option<f64>) {
     let mut conn = hub::open_in_memory().unwrap();
     let ids = file(
         &mut conn,
@@ -196,17 +215,17 @@ fn build_handoffs_start_in_threes_then_wait_for_recovery_and_ramp_one_at_a_time(
     };
     for (index, session) in ["local_a", "local_b", "local_c"].into_iter().enumerate() {
         assert_eq!(
-            ask(&mut conn, session, &pressure, 0.0)["ticket"],
+            ask_with_cores(&mut conn, session, &pressure, 0.0, admit_cores)["ticket"],
             ids[index].as_str()
         );
     }
-    let paced = ask(&mut conn, "local_d", &pressure, 89.0);
+    let paced = ask_with_cores(&mut conn, "local_d", &pressure, 89.0, admit_cores);
     assert!(
         paced["nothing"].as_str().unwrap().contains("in 1 s"),
         "{paced}"
     );
     pressure.recovery_seconds = 30;
-    let recovering = ask(&mut conn, "local_d", &pressure, 89.0);
+    let recovering = ask_with_cores(&mut conn, "local_d", &pressure, 89.0, admit_cores);
     let reason = recovering["nothing"].as_str().unwrap();
     assert!(reason.contains("healthy build queue"), "{reason}");
     assert!(
@@ -215,14 +234,152 @@ fn build_handoffs_start_in_threes_then_wait_for_recovery_and_ramp_one_at_a_time(
     );
     pressure.recovery_seconds = 0;
     assert_eq!(
-        ask(&mut conn, "local_d", &pressure, 120.0)["ticket"],
+        ask_with_cores(&mut conn, "local_d", &pressure, 120.0, admit_cores)["ticket"],
         ids[3].as_str()
     );
-    assert!(ask(&mut conn, "local_e", &pressure, 120.0)["nothing"].is_string());
+    assert!(
+        ask_with_cores(&mut conn, "local_e", &pressure, 120.0, admit_cores)["nothing"].is_string()
+    );
     assert_eq!(
-        ask(&mut conn, "local_e", &pressure, 210.0)["ticket"],
+        ask_with_cores(&mut conn, "local_e", &pressure, 210.0, admit_cores)["ticket"],
         ids[4].as_str()
     );
+}
+
+#[test]
+fn six_shared_cores_admit_three_builds_even_after_the_ramp_wait() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let ids = file(
+        &mut conn,
+        &[
+            ("one", &[], &[]),
+            ("two", &[], &[]),
+            ("three", &[], &[]),
+            ("four", &[], &[]),
+            ("docs", &[], &[]),
+        ],
+    );
+    for id in &ids[..4] {
+        classify(&conn, id, 0.25, "Edit `app/src/main.rs`");
+    }
+    classify(&conn, &ids[4], 0.1, "Edit `docs/guide.md`");
+    let mut pressure = DispatchPressure {
+        build_slots: 9,
+        build_slots_free: 9,
+        ..DispatchPressure::default()
+    };
+    let ask = |conn: &mut Connection, session: &str, pressure: &DispatchPressure, time| {
+        ask_with_cores(conn, session, pressure, time, Some(6.0))
+    };
+    let first = ask(&mut conn, "local_a", &pressure, 0.0);
+    assert_eq!(first["ticket"], ids[0].as_str());
+    assert_eq!(
+        post(
+            &mut conn,
+            "/claims",
+            &claim_reserved(&first, "local_a"),
+            at(1.0)
+        )
+        .0,
+        200
+    );
+    pressure.slot_holders.insert(ids[0].clone());
+    pressure.build_slots_free -= 1;
+    for (session, id) in [("local_b", &ids[1]), ("local_c", &ids[2])] {
+        assert_eq!(
+            ask(&mut conn, session, &pressure, 2.0)["ticket"],
+            id.as_str()
+        );
+    }
+    assert_eq!(
+        ask(&mut conn, "local_d", &pressure, 120.0)["ticket"],
+        ids[4].as_str()
+    );
+    let waiting = ask(&mut conn, "local_e", &pressure, 120.0);
+    assert!(
+        waiting["nothing"]
+            .as_str()
+            .unwrap()
+            .contains("3 build tickets held, limit 3"),
+        "{waiting}"
+    );
+    let mut gave_back = release(ids[0].as_str(), "local_a");
+    gave_back["needs"] = json!("person");
+    assert_eq!(post(&mut conn, "/release", &gave_back, at(121.0)).0, 200);
+    assert_eq!(
+        ask(&mut conn, "local_e", &pressure, 122.0)["ticket"],
+        ids[3].as_str()
+    );
+}
+
+#[test]
+fn a_lane_successor_can_use_the_build_capacity_its_predecessor_releases() {
+    for first_uses_build_capacity in [false, true] {
+        let mut conn = hub::open_in_memory().unwrap();
+        register(&mut conn);
+        let ids = file(
+            &mut conn,
+            &[
+                ("first", &["lane:x"], &[]),
+                ("second", &["lane:x"], &[0]),
+                ("one", &[], &[]),
+                ("two", &[], &[]),
+                ("three", &[], &[]),
+            ],
+        );
+        for id in &ids {
+            classify(&conn, id, 1.0, "Edit `app/src/main.rs`");
+        }
+        if !first_uses_build_capacity {
+            classify(&conn, &ids[0], 0.1, "Edit `docs/guide.md`");
+        }
+        let session = "local_a";
+        assert_eq!(
+            post(
+                &mut conn,
+                "/claims",
+                &claim(ids[0].as_str(), session),
+                start()
+            )
+            .0,
+            200
+        );
+        let pressure = DispatchPressure {
+            shared_cores: Some(6),
+            build_slots: 9,
+            build_slots_free: 9,
+            ..DispatchPressure::default()
+        };
+        let other_builds = if first_uses_build_capacity { 2 } else { 3 };
+        for (id, session) in ids
+            .iter()
+            .skip(2)
+            .take(other_builds)
+            .zip(["local_b", "local_c", "local_d"])
+        {
+            assert_eq!(
+                ask(&mut conn, session, &pressure, 0.0)["ticket"],
+                id.as_str()
+            );
+        }
+        let mut request = landed(ids[0].as_str(), session, "Landed");
+        request["pressure"] = json!(pressure);
+        let (status, reply) = post(&mut conn, "/landed", &request, at(120.0));
+        assert_eq!(status, 200, "{reply}");
+        if first_uses_build_capacity {
+            assert_eq!(reply["next"]["ticket"], ids[1].as_str());
+        } else {
+            assert!(reply["next"].is_null(), "{reply}");
+            let waiting = ask(&mut conn, "local_e", &pressure, 121.0);
+            assert!(
+                waiting["nothing"]
+                    .as_str()
+                    .unwrap()
+                    .contains("3 build tickets held, limit 3"),
+                "{waiting}"
+            );
+        }
+    }
 }
 
 #[test]

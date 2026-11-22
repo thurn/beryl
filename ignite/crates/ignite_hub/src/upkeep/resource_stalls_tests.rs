@@ -323,6 +323,47 @@ fn corroborated_pacing_and_memory_blocks_file_only_a_pressure_ticket() {
 }
 
 #[test]
+fn a_full_build_quota_explains_idle_workers_while_swap_can_still_escalate() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    machine(&conn, "m-capped", Os::Macos);
+    let capped = MachineSnapshot {
+        idle_workers: 5,
+        ready_tickets: 10,
+        start_block: Some(StartBlock::Pacing),
+        start_reason: Some(
+            "Tabcd waits for shared build cores on m-capped: 3 build tickets held, limit 3"
+                .to_owned(),
+        ),
+        ..healthy()
+    };
+    record(&conn, "m-capped", 0..=30, capped.clone());
+    assert!(
+        upkeep
+            .pass(&mut conn, at(30))
+            .unwrap()
+            .tickets_filed
+            .is_empty()
+    );
+
+    record(
+        &conn,
+        "m-capped",
+        31..=61,
+        MachineSnapshot {
+            swap_used_mb: Some(12_288),
+            ..capped
+        },
+    );
+    let filed = upkeep.pass(&mut conn, at(61)).unwrap().tickets_filed;
+    assert_eq!(filed.len(), 1);
+    assert_eq!(
+        ticket(&conn, &filed[0]).title,
+        "Oversubscription persisting on m-capped"
+    );
+}
+
+#[test]
 fn an_idle_escalation_needs_healthy_dispatch_samples_to_clear() {
     let mut conn = hub::open_in_memory().unwrap();
     let mut upkeep = Upkeep::new(None).unwrap();

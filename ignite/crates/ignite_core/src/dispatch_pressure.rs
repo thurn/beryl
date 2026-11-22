@@ -14,10 +14,15 @@ use crate::time::Timestamp;
 
 /// How long commands have to wait on a busy host before ordinary handoffs stop.
 pub const BACKLOG_SECONDS: u32 = 120;
+/// Identifies the build limit in machine snapshots that record the reason as text.
+pub const BUILD_LIMIT_WAIT: &str = "waits for shared build cores";
 /// At 90% CPU, an 18-core host has about two cores left. On that host the queue often
 /// reached two minutes with much more headroom, while grants were still counted in full.
 const BACKLOG_BUSY_PERCENT: u32 = 90;
-const INITIAL_BUILD_TICKETS: usize = 3;
+const INITIAL_BUILD_TICKETS: u32 = 3;
+// Build commands overlap in bursts. Their historical average use let seven build tickets
+// accumulate on a six-shared-core host while 51 cores of commands waited.
+const SHARED_CORES_PER_BUILD_TICKET: f64 = 2.0;
 const RAMP_SECONDS: u32 = 90;
 const BUILD_WAIT_SECONDS: f64 = 30.0;
 const RECOVERY_SECONDS: f64 = 90.0;
@@ -47,6 +52,10 @@ pub struct DispatchPressure {
     pub build_slots: u32,
     #[serde(default)]
     pub build_slots_free: u32,
+    /// Scheduler cores shared with agent work. Carries the reading on lane successor requests,
+    /// which do not include a `MachineFree`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shared_cores: Option<u32>,
     /// Actual free space on the filesystem holding the worktrees, in GiB.
     pub free_gb: Option<u64>,
     /// Tickets whose leased trees already occupy a slot, including builds in progress.
@@ -123,18 +132,28 @@ impl From<String> for HandoffWait {
 pub struct Budget<'a> {
     pressure: &'a DispatchPressure,
     pending_slots: u32,
-    heavy: usize,
+    heavy: u32,
+    build_limit: Option<u32>,
     latest_heavy: Option<Timestamp>,
     now: Timestamp,
 }
 
 impl<'a> Budget<'a> {
-    pub fn new(pressure: Option<&'a DispatchPressure>, now: Timestamp) -> Self {
+    pub fn new(
+        pressure: Option<&'a DispatchPressure>,
+        admit_cores: Option<f64>,
+        now: Timestamp,
+    ) -> Self {
         static UNREPORTED: LazyLock<DispatchPressure> = LazyLock::new(DispatchPressure::default);
+        let pressure = pressure.unwrap_or(&UNREPORTED);
+        let build_limit = admit_cores
+            .or_else(|| pressure.shared_cores.map(f64::from))
+            .map(|cores| ((cores / SHARED_CORES_PER_BUILD_TICKET).floor() as u32).max(1));
         Self {
-            pressure: pressure.unwrap_or(&UNREPORTED),
+            pressure,
             pending_slots: 0,
             heavy: 0,
+            build_limit,
             latest_heavy: None,
             now,
         }
@@ -157,10 +176,18 @@ impl<'a> Budget<'a> {
         }
     }
 
-    pub fn free_build_slots(&self) -> u32 {
+    fn free_build_slots(&self) -> u32 {
         self.pressure
             .build_slots_free
             .saturating_sub(self.pending_slots)
+    }
+
+    /// How many ordinary build handoffs disk and shared cores have room for.
+    pub fn free_build_handoffs(&self) -> u32 {
+        self.free_build_slots().min(
+            self.build_limit
+                .map_or(u32::MAX, |limit| limit.saturating_sub(self.heavy)),
+        )
     }
 
     /// All pressure conditions keeping a ticket ready, in admission order.
@@ -179,7 +206,7 @@ impl<'a> Budget<'a> {
             });
         }
         if ticket.kind != TicketKind::Regression {
-            self.pacing_waits(build, &mut waits);
+            self.pacing_waits(build, machine, &mut waits);
         }
 
         let mut waits = waits.into_iter();
@@ -192,7 +219,7 @@ impl<'a> Budget<'a> {
         Some(first)
     }
 
-    fn pacing_waits(&self, build: bool, waits: &mut Vec<HandoffWait>) {
+    fn pacing_waits(&self, build: bool, machine: &str, waits: &mut Vec<HandoffWait>) {
         if self.pressure.queue_backlogged() {
             let seconds = self.pressure.queue_seconds;
             waits.push(pacing(format!(
@@ -201,6 +228,14 @@ impl<'a> Budget<'a> {
         }
         if !build {
             return;
+        }
+        if let Some(limit) = self.build_limit
+            && self.heavy >= limit
+        {
+            waits.push(pacing(format!(
+                "{BUILD_LIMIT_WAIT} on {machine}: {} build tickets held, limit {limit}",
+                self.heavy
+            )));
         }
         if self.pressure.recovery_seconds > 0 {
             let seconds = self.pressure.recovery_seconds;

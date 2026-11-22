@@ -325,16 +325,19 @@ fn a_ticket_filed_with_an_estimated_saving_is_handed_off_as_an_improvement() {
 #[test]
 fn a_machine_whose_scheduler_is_full_is_offered_what_its_held_tickets_leave_room_for() {
     // A landing fills the scheduler, so it has no cores free at this moment, but the machine
-    // admits two cores and each ticket expects one, the default with no history.
+    // admits six cores and each ticket expects three. The expected use fills the core budget
+    // after two tickets, before the concurrent build limit of three.
     let mut conn = hub::open_in_memory().unwrap();
     let ids = file(
         &mut conn,
         &[("one", &[], &[]), ("two", &[], &[]), ("three", &[], &[])],
     );
+    conn.execute("UPDATE tickets SET cores = 3.0 WHERE type = 'task'", [])
+        .unwrap();
     let ask = |conn: &mut rusqlite::Connection, session: &str| {
         let mut body = free("m-1", &[session]);
         body["free_cores"] = json!(0.0);
-        body["admit_cores"] = json!(2.0);
+        body["admit_cores"] = json!(6.0);
         post(conn, "/next", &body, start()).1
     };
     let first = ask(&mut conn, "local_a");
@@ -348,7 +351,7 @@ fn a_machine_whose_scheduler_is_full_is_offered_what_its_held_tickets_leave_room
     );
     assert_eq!(status, 200);
     assert_eq!(ask(&mut conn, "local_b")["ticket"], ids[1].as_str());
-    // One in progress and one reserved fill the two cores.
+    // One in progress and one reserved account for all six cores.
     assert_eq!(ask(&mut conn, "local_c"), Value::Null);
 }
 

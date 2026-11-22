@@ -476,7 +476,20 @@ fn a_warm_peer_with_no_free_slot_cannot_defer_the_asker() {
 }
 
 #[test]
-fn a_warm_peer_cannot_defer_the_asker_after_reserving_its_last_free_slot() {
+fn a_warm_peer_cannot_defer_the_asker_after_reserving_its_last_build_handoff() {
+    let mut disk_limited = capacity(true);
+    disk_limited.build_space.as_mut().unwrap().free = 1;
+    let core_limited = CapacityReport {
+        admit_cores: 2.0,
+        free_cores: 2.0,
+        ..capacity(true)
+    };
+    for warm in [disk_limited, core_limited] {
+        check_full_peer(&warm);
+    }
+}
+
+fn check_full_peer(warm: &CapacityReport) {
     let mut conn = machines();
     let ids = file(&mut conn, &[("first", &[], &[]), ("second", &[], &[])]);
     conn.execute(
@@ -485,10 +498,8 @@ fn a_warm_peer_cannot_defer_the_asker_after_reserving_its_last_free_slot() {
     )
     .unwrap();
 
-    let mut warm = capacity(true);
-    warm.build_space.as_mut().unwrap().free = 1;
-    record(&conn, "m-2", &warm, start());
-    let reserved = ask(&mut conn, &request("m-2", &warm, 0), at(1.0));
+    record(&conn, "m-2", warm, start());
+    let reserved = ask(&mut conn, &request("m-2", warm, 0), at(1.0));
     assert_eq!(reserved["ticket"], ids[0].as_str(), "{reserved}");
 
     let second = ask(&mut conn, &request("m-1", &capacity(false), 0), at(2.0));

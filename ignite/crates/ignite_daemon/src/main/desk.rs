@@ -405,7 +405,7 @@ impl Host for DaemonHost {
     }
 
     fn admit_cores(&self) -> f64 {
-        f64::from(self.scheduler.status().cores)
+        f64::from(self.scheduler.shared_cores())
     }
 
     fn ticket_work_wait(&self) -> f64 {
@@ -428,11 +428,13 @@ impl Host for DaemonHost {
     fn pressure(&self, now: Timestamp) -> Option<DispatchPressure> {
         let waited = self.ticket_work_wait();
         let recovery_seconds = lock(&self.queue_recovery).observe(now, waited);
-        Some(self.trees.dispatch_pressure(
+        let mut pressure = self.trees.dispatch_pressure(
             waited.floor() as u32,
             recovery_seconds,
             self.scheduler.dispatch_cpu_percent(),
-        ))
+        );
+        pressure.shared_cores = Some(self.scheduler.shared_cores());
+        Some(pressure)
     }
 
     fn holders(&self) -> BTreeMap<SessionId, TicketId> {

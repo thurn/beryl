@@ -30,7 +30,7 @@ pub(super) struct Placement<'a> {
 
 struct Peer {
     id: String,
-    free_slots: Cell<Option<u32>>,
+    free_build_handoffs: Cell<Option<u32>>,
     name: String,
     os: Os,
     families: Vec<String>,
@@ -151,7 +151,7 @@ impl<'a> Placement<'a> {
                     .iter()
                     .find(|peer| peer.name == name)
                     .expect("placement selected a peer")
-                    .free_slots(conn, now)?
+                    .free_build_handoffs(conn, now)?
                     > 0
             {
                 break best;
@@ -199,7 +199,7 @@ impl Peer {
         let loads = dispatch_mix::peer_loads(&offers, settings, holds);
         Self {
             id,
-            free_slots: Cell::new(None),
+            free_build_handoffs: Cell::new(None),
             name,
             os,
             families,
@@ -209,8 +209,8 @@ impl Peer {
         }
     }
 
-    fn free_slots(&self, conn: &Connection, now: Timestamp) -> Result<u32> {
-        if let Some(free) = self.free_slots.get() {
+    fn free_build_handoffs(&self, conn: &Connection, now: Timestamp) -> Result<u32> {
+        if let Some(free) = self.free_build_handoffs.get() {
             return Ok(free);
         }
         let pressure = DispatchPressure {
@@ -218,8 +218,14 @@ impl Peer {
             slot_holders: self.capacity.slot_holders.clone(),
             ..DispatchPressure::default()
         };
-        let free = queue::peer_free_build_slots(conn, &self.id, now, &pressure)?;
-        self.free_slots.set(Some(free));
+        let free = queue::peer_free_build_handoffs(
+            conn,
+            &self.id,
+            now,
+            &pressure,
+            self.capacity.admit_cores,
+        )?;
+        self.free_build_handoffs.set(Some(free));
         Ok(free)
     }
 

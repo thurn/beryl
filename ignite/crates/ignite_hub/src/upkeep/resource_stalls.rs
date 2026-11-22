@@ -2,6 +2,7 @@
 
 use ignite_core::capacity::BYTES_PER_GIB;
 use ignite_core::config::Os;
+use ignite_core::dispatch_pressure::BUILD_LIMIT_WAIT;
 use ignite_core::protocol::machine_state::{MachineSnapshot, StartBlock};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
@@ -219,7 +220,13 @@ fn dispatch_observable(sample: &MachineSnapshot) -> bool {
         .next_ticket
         .as_ref()
         .is_some_and(|id| id.as_str().starts_with('J') || sample.next_ticket_disk_gib == Some(0));
-    !(intentionally_stopped(sample) || justiciar_next)
+    // Idle workers are expected when all eligible work is waiting for a build ticket to finish.
+    let at_build_limit = sample.start_block == Some(StartBlock::Pacing)
+        && sample
+            .start_reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains(BUILD_LIMIT_WAIT));
+    !(intentionally_stopped(sample) || justiciar_next || at_build_limit)
 }
 
 fn idle_with_work(sample: &MachineSnapshot) -> bool {

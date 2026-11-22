@@ -152,7 +152,7 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
         let pressure = free.pressure.as_ref();
         let worked = history(conn, id)?;
         let mut free = free.clone();
-        let held_now = capacity::read(conn, id, &worked, &landed, now, pressure)?;
+        let held_now = capacity::read(conn, id, &worked, &landed, now, pressure, free.admit_cores)?;
         free.free_cores = dispatch::room(&free, &held_now.cores);
         let state = settings.machine(name).state;
         let paused = held::paused(conn, &free, state)?;

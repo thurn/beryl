@@ -45,6 +45,7 @@ pub(super) fn read<'a>(
     landed: &[String],
     now: Timestamp,
     pressure: Option<&'a DispatchPressure>,
+    admit_cores: Option<f64>,
 ) -> Result<Capacity<'a>> {
     let mut statement = conn.prepare(
         "SELECT id, claimed_at, NULL FROM tickets WHERE status = 'in_progress' AND machine = ?1
@@ -61,7 +62,7 @@ pub(super) fn read<'a>(
     })?;
     let mut capacity = Capacity {
         cores: Vec::new(),
-        budget: Budget::new(pressure, now),
+        budget: Budget::new(pressure, admit_cores, now),
     };
     for row in held {
         let (id, claimed, expires) = row?;
