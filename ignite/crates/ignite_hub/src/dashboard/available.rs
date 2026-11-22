@@ -173,7 +173,7 @@ pub(crate) fn page(
                     let foot = format!(
                         "{place}{}{}",
                         stage_chip(waiting.stage),
-                        disclosure_chip(first_clause(&waiting.summary), tone, &key)
+                        summary_chips(&waiting.summary, tone, &key)
                     );
                     card(root, cards.get(id), id, "", &foot)
                 }),
@@ -224,8 +224,22 @@ pub(crate) fn page(
     )
 }
 
-/// The text up to its first comma or parenthesis, which fits on a chip; the card it opens
-/// holds the whole text.
+/// Keep each wait visible on the card and leave its measurements in the hovercard.
+fn summary_chips(text: &str, tone: Tone, template: &str) -> String {
+    if !text.contains(" · ") {
+        return disclosure_chip(first_clause(text), tone, template);
+    }
+    text.split(" · ")
+        .map(|wait| {
+            let label = wait
+                .split_once(": ")
+                .map_or_else(|| first_clause(wait), |(title, _)| title);
+            disclosure_chip(&capitalized(label), tone, template)
+        })
+        .collect()
+}
+
+/// The part before the first comma or parenthesis.
 fn first_clause(text: &str) -> &str {
     let end = [", ", " ("]
         .iter()

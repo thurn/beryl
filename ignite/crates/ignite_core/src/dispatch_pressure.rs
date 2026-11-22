@@ -103,7 +103,7 @@ pub fn needs_build_slot(cores: f64, files: &[String]) -> bool {
         })
 }
 
-/// The condition preventing a handoff.
+/// Reasons a handoff is waiting, with the first condition as the primary block.
 pub struct HandoffWait {
     pub reason: String,
     pub block: Option<StartBlock>,
@@ -163,46 +163,50 @@ impl<'a> Budget<'a> {
             .saturating_sub(self.pending_slots)
     }
 
-    fn slot_wait(&self, ticket: &ReadyTicket, machine: &str) -> Option<HandoffWait> {
-        let total = self.pressure.build_slots;
-        (needs_build_slot(ticket.expected_cores, &ticket.files) && self.free_build_slots() == 0)
-            .then(|| HandoffWait {
-                block: Some(StartBlock::Trees),
-                reason: format!(
-                    "{} waits for a build slot on {machine}: {total} of {total} held",
-                    ticket.id
-                ),
-            })
-    }
-
-    /// The first pressure condition keeping a ticket ready, for the pool status line.
+    /// All pressure conditions keeping a ticket ready, in admission order.
     pub fn blocked(&self, ticket: &ReadyTicket, machine: &str) -> Option<HandoffWait> {
         if ticket.labels.iter().any(|label| label == JUSTICIAR) {
             // Emergency work can restore space itself.
             return None;
         }
-        if let Some(wait) = self.slot_wait(ticket, machine) {
-            return Some(wait);
+        let mut waits = Vec::new();
+        let build = needs_build_slot(ticket.expected_cores, &ticket.files);
+        if build && self.free_build_slots() == 0 {
+            let total = self.pressure.build_slots;
+            waits.push(HandoffWait {
+                block: Some(StartBlock::Trees),
+                reason: format!("waits for a build slot on {machine}: {total} of {total} held"),
+            });
         }
-        if ticket.kind == TicketKind::Regression {
-            return None;
+        if ticket.kind != TicketKind::Regression {
+            self.pacing_waits(build, &mut waits);
         }
+
+        let mut waits = waits.into_iter();
+        let mut first = waits.next()?;
+        first.reason = format!("{} {}", ticket.id, first.reason);
+        for wait in waits {
+            first.reason.push_str(" · ");
+            first.reason.push_str(&wait.reason);
+        }
+        Some(first)
+    }
+
+    fn pacing_waits(&self, build: bool, waits: &mut Vec<HandoffWait>) {
         if self.pressure.queue_backlogged() {
             let seconds = self.pressure.queue_seconds;
-            return Some(pacing(format!(
-                "{} waits for the build queue: ticket commands have waited {seconds} s for cores",
-                ticket.id
+            waits.push(pacing(format!(
+                "waits for the build queue: ticket commands have waited {seconds} s for cores"
             )));
         }
-        if !needs_build_slot(ticket.expected_cores, &ticket.files) {
-            return None;
+        if !build {
+            return;
         }
         if self.pressure.recovery_seconds > 0 {
             let seconds = self.pressure.recovery_seconds;
-            return Some(pacing(format!(
-                "{} waits for a healthy build queue: rechecking each round, up to {seconds} s \
-                 of recovery left once waits subside",
-                ticket.id
+            waits.push(pacing(format!(
+                "waits for a healthy build queue: rechecking each round, up to {seconds} s \
+                 of recovery left once waits subside"
             )));
         }
         if self.heavy >= INITIAL_BUILD_TICKETS
@@ -210,13 +214,11 @@ impl<'a> Budget<'a> {
         {
             let remaining = f64::from(RAMP_SECONDS) - self.now.seconds_since(latest).max(0.0);
             if remaining > 0.0 {
-                return Some(pacing(format!(
-                    "{} waits for the next build-ticket handoff in {remaining:.0} s",
-                    ticket.id
+                waits.push(pacing(format!(
+                    "waits for the next build-ticket handoff in {remaining:.0} s"
                 )));
             }
         }
-        None
     }
 }
 

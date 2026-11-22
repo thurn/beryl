@@ -362,23 +362,33 @@ fn refusal(seat: &Seat, start: bool, ticket: &ReadyTicket) -> Option<String> {
     } else {
         dispatch::blocker(free, ticket).or_else(|| legacy_refusal(seat, free, ticket))
     };
-    blocker
-        .map(|reason| {
-            if reason == dispatch::MASTER_ONLY {
-                seat.master_reason.clone()
-            } else {
-                reason
-            }
-        })
-        .or_else(|| {
-            budget.blocked(ticket, &seat.name).map(|wait| {
-                let prefix = format!("{} ", ticket.id);
-                wait.reason
-                    .strip_prefix(&prefix)
-                    .unwrap_or(&wait.reason)
-                    .to_owned()
-            })
-        })
+    // A backed-up queue sets master-only mode before the budget is checked. Explain the
+    // ticket's slot and queue waits together on an active machine with a backlog.
+    let master_only = blocker.as_deref() == Some(dispatch::MASTER_ONLY);
+    let queue_restriction = master_only
+        && !seat.checks_only
+        && !seat.stopped
+        && dispatch::platform_fits(free, ticket)
+        && free
+            .pressure
+            .as_ref()
+            .is_some_and(DispatchPressure::queue_backlogged);
+    if (blocker.is_none() || queue_restriction)
+        && let Some(wait) = budget.blocked(ticket, &seat.name)
+    {
+        let prefix = format!("{} ", ticket.id);
+        return Some(
+            wait.reason
+                .strip_prefix(&prefix)
+                .unwrap_or(&wait.reason)
+                .to_owned(),
+        );
+    }
+    if master_only {
+        Some(seat.master_reason.clone())
+    } else {
+        blocker
+    }
 }
 
 /// A provider blocker shared by the suited idle workers, or `None` if one is available.

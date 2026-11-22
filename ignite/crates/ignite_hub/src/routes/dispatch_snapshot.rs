@@ -197,9 +197,19 @@ fn ticket_block(
     let master_blocker = held::holds_master(ticket);
     let backlog = sample.pressure.queue_backlogged();
     let fallback = state == MachineState::ChecksOnly;
+    let pressure_block = || {
+        budget
+            .blocked(
+                ticket,
+                free.name.as_deref().unwrap_or(free.machine.as_str()),
+            )
+            .and_then(|HandoffWait { block, reason }| block.map(|block| (block, reason)))
+    };
     if (backlog || fallback || sample.shared_failure.is_some()) && (holds_one || !master_blocker) {
         return if let Some(reason) = &sample.shared_failure {
             Some((StartBlock::SharedFailure, reason.clone()))
+        } else if backlog && !master_blocker {
+            pressure_block()
         } else if backlog {
             Some((
                 StartBlock::Pacing,
@@ -240,10 +250,5 @@ fn ticket_block(
             ),
         ));
     }
-    budget
-        .blocked(
-            ticket,
-            free.name.as_deref().unwrap_or(free.machine.as_str()),
-        )
-        .and_then(|HandoffWait { block, reason, .. }| block.map(|block| (block, reason)))
+    pressure_block()
 }

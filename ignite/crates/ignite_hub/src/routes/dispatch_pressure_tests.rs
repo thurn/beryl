@@ -46,6 +46,43 @@ fn polling_reserves_an_ordinary_ticket_when_the_queue_is_long_and_the_host_has_r
 }
 
 #[test]
+fn polling_explains_slot_and_queue_waits_together() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    let ids = file(&mut conn, &[("build", &[], &[])]);
+    classify(&conn, &ids[0], 1.0, "Edit `app/src/main.rs`");
+    let pressure = DispatchPressure {
+        build_slots: 6,
+        queue_seconds: 340,
+        recovery_seconds: 90,
+        cpu_percent: Some(90),
+        ..DispatchPressure::default()
+    };
+    for master_only in [false, true] {
+        let mut request = free("m-1", &[]);
+        request["room"] = json!({
+            "start": 1,
+            "providers": [{"name": "claude", "tiers": ["sonnet"]}]
+        });
+        request["master_only"] = json!(master_only);
+        request["pressure"] = json!(pressure);
+        request["explain"] = json!(true);
+        let (status, reply) = post(&mut conn, "/next", &request, at(0.0));
+        assert_eq!(status, 200, "{reply}");
+        let reason = reply["nothing"].as_str().unwrap();
+        assert!(
+            reason.starts_with(&format!("{} waits for a build slot on jarvis", ids[0])),
+            "{reason}"
+        );
+        assert!(
+            reason.contains("ticket commands have waited 340 s for cores"),
+            "{reason}"
+        );
+        assert!(reason.contains("90 s of recovery left"), "{reason}");
+    }
+}
+
+#[test]
 fn a_build_ticket_waits_for_a_slot_but_a_light_ticket_can_start() {
     let mut conn = hub::open_in_memory().unwrap();
     register(&mut conn);
@@ -169,13 +206,12 @@ fn build_handoffs_start_in_threes_then_wait_for_recovery_and_ramp_one_at_a_time(
         "{paced}"
     );
     pressure.recovery_seconds = 30;
-    let recovering = ask(&mut conn, "local_d", &pressure, 90.0);
+    let recovering = ask(&mut conn, "local_d", &pressure, 89.0);
+    let reason = recovering["nothing"].as_str().unwrap();
+    assert!(reason.contains("healthy build queue"), "{reason}");
     assert!(
-        recovering["nothing"]
-            .as_str()
-            .unwrap()
-            .contains("healthy build queue"),
-        "{recovering}"
+        reason.contains("next build-ticket handoff in 1 s"),
+        "{reason}"
     );
     pressure.recovery_seconds = 0;
     assert_eq!(

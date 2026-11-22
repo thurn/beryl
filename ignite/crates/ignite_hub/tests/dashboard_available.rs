@@ -186,9 +186,11 @@ fn a_machine_whose_build_queue_is_backed_up_says_only_master_tickets_start() {
     let conn = seeded();
     let mut backed_up = free("m-j", &["local_idle"], 3);
     backed_up.master_only = true;
-    backed_up.pressure = Some(ignite_core::dispatch_pressure::DispatchPressure {
+    backed_up.pressure = Some(DispatchPressure {
+        build_slots: 6,
+        build_slots_free: 3,
         queue_seconds: 217,
-        ..Default::default()
+        ..DispatchPressure::default()
     });
     let asked = Timestamp::parse("2026-11-17T11:59:00.000Z").unwrap();
     machine_asks::record(&conn, &backed_up, Err("nothing"), asked).unwrap();
@@ -196,12 +198,55 @@ fn a_machine_whose_build_queue_is_backed_up_says_only_master_tickets_start() {
     let card = &body[body.find("<template id=\"why-e1.2\"").unwrap()..];
     let card = &card[..card.find("</template>").unwrap()];
     assert!(
-        card.contains(
-            "commands have waited 217 s for cores, so only tickets that hold master back start"
-        ),
+        card.contains("ticket commands have waited 217 s for cores"),
         "{card}"
     );
+    assert!(body.contains(
+        "commands have waited 217 s for cores, so only tickets that hold master back start"
+    ));
     assert!(!section(&body, "waiting").contains("Next on jarvis"));
+}
+
+#[test]
+fn a_waiting_ticket_shows_both_the_build_slot_and_build_queue_waits() {
+    let conn = seeded();
+    conn.execute(
+        "UPDATE tickets SET labels = '[\"machine:jarvis\"]' WHERE id = 'e1.2'",
+        [],
+    )
+    .unwrap();
+    let mut machine = free("m-j", &["local_idle"], 3);
+    machine.master_only = true;
+    machine.pressure = Some(DispatchPressure {
+        build_slots: 6,
+        queue_seconds: 340,
+        cpu_percent: Some(90),
+        ..DispatchPressure::default()
+    });
+    let asked = Timestamp::parse("2026-11-17T11:59:00.000Z").unwrap();
+    machine_asks::record(&conn, &machine, Err("nothing"), asked).unwrap();
+
+    let body = page(&conn, "/available");
+    let waiting = section(&body, "waiting");
+    for label in [
+        "Waits for a build slot on jarvis",
+        "Waits for the build queue",
+    ] {
+        assert!(
+            waiting.contains(&format!("data-hovercard=\"why-e1.2\">{label}</span>")),
+            "{waiting}"
+        );
+    }
+    let card = &body[body.find("<template id=\"why-e1.2\"").unwrap()..];
+    let card = &card[..card.find("</template>").unwrap()];
+    assert!(
+        card.contains("waits for a build slot on jarvis: 6 of 6 held"),
+        "{card}"
+    );
+    assert!(
+        card.contains("ticket commands have waited 340 s for cores"),
+        "{card}"
+    );
 }
 
 #[test]

@@ -117,8 +117,18 @@ pub fn next(
         .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, &free, now))
         .transpose()?;
     let mut ready = snapshot.ready_tickets(conn, &history, &landed, now, fallback.as_ref())?;
+    let mut waiting_for_queue = Vec::new();
     if paused == Paused::MasterOnly {
-        ready.retain(held::holds_master);
+        if state == MachineState::Active
+            && free
+                .pressure
+                .as_ref()
+                .is_some_and(DispatchPressure::queue_backlogged)
+        {
+            waiting_for_queue.extend(ready.extract_if(.., |ticket| !held::holds_master(ticket)));
+        } else {
+            ready.retain(held::holds_master);
+        }
     }
     if state == MachineState::ChecksOnly && ready.is_empty() {
         return Ok(Err(
@@ -127,7 +137,15 @@ pub fn next(
                 .into(),
         ));
     }
-    dispatch_ready(conn, &free, now, &settings, &snapshot, &capacity, ready)
+    dispatch_ready(
+        conn,
+        &free,
+        now,
+        &settings,
+        &snapshot,
+        &capacity,
+        (ready, waiting_for_queue),
+    )
 }
 
 fn dispatch_ready(
@@ -137,7 +155,7 @@ fn dispatch_ready(
     settings: &FleetSettings,
     snapshot: &Snapshot,
     capacity: &capacity::Capacity<'_>,
-    mut ready: Vec<ReadyTicket>,
+    (mut ready, mut waiting_for_queue): (Vec<ReadyTicket>, Vec<ReadyTicket>),
 ) -> Result<std::result::Result<Reservation, HandoffWait>> {
     let machine = free.machine.as_str();
     let epic_order = dispatch_groups(snapshot, &mut ready);
@@ -162,48 +180,57 @@ fn dispatch_ready(
     } else {
         Vec::new()
     };
+    let candidate_for = |ticket: &ReadyTicket| {
+        let (session, provider) = if let Some((room, loads, pending)) = &room {
+            if !ticket
+                .pins
+                .admits_machine(free.name.as_deref().unwrap_or(machine))
+            {
+                return None;
+            }
+            (
+                None,
+                mix::choose(loads, room, *pending, ticket).ok()?.to_owned(),
+            )
+        } else {
+            let session = dispatch::pick_worker(free, ticket, &last_files, |worker| {
+                usage::legacy_blocker(settings, &holds, worker, ticket).is_none()
+            })?;
+            let provider = free
+                .idle_workers
+                .iter()
+                .find(|worker| worker.session == session)?;
+            (Some(session), provider.app.clone())
+        };
+        Some(Candidate {
+            ticket: ticket.id.clone(),
+            kind: ticket.kind,
+            session,
+            provider: Some(provider),
+            master_blocker: held::holds_master(ticket),
+        })
+    };
     let candidates = dispatch::eligible_tickets(free, &ready, &epic_order, improvements)
-        .filter_map(|ticket| {
-            let (session, provider) = if let Some((room, loads, pending)) = &room {
-                if !ticket
-                    .pins
-                    .admits_machine(free.name.as_deref().unwrap_or(machine))
-                {
-                    return None;
-                }
-                (
-                    None,
-                    mix::choose(loads, room, *pending, ticket).ok()?.to_owned(),
-                )
-            } else {
-                let session = dispatch::pick_worker(free, ticket, &last_files, |worker| {
-                    usage::legacy_blocker(settings, &holds, worker, ticket).is_none()
-                })?;
-                let provider = free
-                    .idle_workers
-                    .iter()
-                    .find(|worker| worker.session == session)?;
-                (Some(session), provider.app.clone())
-            };
-            Some((
-                ticket,
-                Candidate {
-                    ticket: ticket.id.clone(),
-                    kind: ticket.kind,
-                    session,
-                    provider: Some(provider),
-                    master_blocker: held::holds_master(ticket),
-                },
-            ))
-        });
-    match capacity.choose(
-        free.name.as_deref().unwrap_or(machine),
-        candidates,
-        |ticket, candidate| placement.defer(conn, ticket, candidate.provider.as_deref(), now),
-    )? {
+        .filter_map(|ticket| candidate_for(ticket).map(|candidate| (ticket, candidate)));
+    let name = free.name.as_deref().unwrap_or(machine);
+    match capacity.choose(name, candidates, |ticket, candidate| {
+        placement.defer(conn, ticket, candidate.provider.as_deref(), now)
+    })? {
         Some(Ok(handoff)) => reserve(conn, &free.machine, handoff, now).map(Ok),
         Some(Err(reason)) => Ok(Err(reason)),
         None => {
+            // Only master blockers enter admission during a backlog. If none can be offered,
+            // explain the pressure on the next ordinary ticket the machine could otherwise take.
+            if !waiting_for_queue.is_empty() {
+                let order = dispatch_groups(snapshot, &mut waiting_for_queue);
+                let wait =
+                    dispatch::eligible_tickets(free, &waiting_for_queue, &order, improvements)
+                        .filter(|ticket| candidate_for(ticket).is_some())
+                        .find_map(|ticket| capacity.budget.blocked(ticket, name));
+                if let Some(wait) = wait {
+                    return Ok(Err(wait));
+                }
+            }
             let reason = if let Some((room, loads, pending)) = &room {
                 dispatch::why_nothing_with_room(free, &ready, &epic_order, improvements, |ticket| {
                     mix::choose(loads, room, *pending, ticket).err()
