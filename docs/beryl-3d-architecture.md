@@ -498,8 +498,13 @@ say only what a program cannot.
   the commit. `just b3d trend record` measures the current checkout,
   `just b3d trend check` checks the saved counts, and `just b3d trend` shows
   recent measurements from `$BERYL_CACHE/b3d/trend/frames.jsonl`.
-- **Compile cost** is recorded by Ignite's rebuild counts, for an edit to one
-  feature, one toolkit crate and one data file. It is a measurement, not a gate.
+- **Compile cost** is measured outside the landing gate by Ignite's rebuild
+  counts for edits to the prompt bar, button widget, battlefield rows and
+  bundled flat-layer tuning. `ignite rebuild b3d-flat-tuning` appends a newline
+  to `data/beryl3d/flat.json`, which `kit_base` and `beryl_3d` embed at compile
+  time. The extra newline leaves the parsed tuning values intact and lets Ignite
+  measure the work of rebuilding the bundled data. Ignite restores the file
+  after the measurement.
 
 ## Hosts and assets
 

@@ -294,6 +294,13 @@ file = "rust/beryl3d/crates/game_table/src/table/rows.rs"
 append = "\nconst _: () = ();\n"
 products = ["b3d"]
 
+[[rebuild]]
+name = "b3d-flat-tuning"
+edit = "append JSON whitespace to the bundled Beryl 3D flat-layer tuning"
+file = "data/beryl3d/flat.json"
+append = "\n"
+products = ["b3d"]
+
 # The efficiency dashboard's commands. Each daemon runs them when the session transcripts grow and
 # posts the export to the hub (docs/ignite.md, "Records and metrics").
 [metrics]
