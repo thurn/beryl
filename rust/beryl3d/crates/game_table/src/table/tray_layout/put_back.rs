@@ -70,7 +70,7 @@ pub(super) fn put_back(held: &Held, space: &TraySpace, span: (f32, f32)) -> Laid
         deck_end.min(bottom(deck)) + space.gap,
     );
     let fan_band = (fan.y - space.heading - space.gap, bottom(fan) + space.gap);
-    let bind = |(top, end): (f32, f32), region: Rect| {
+    let clamp_to_region = |(top, end): (f32, f32), region: Rect| {
         (
             top.clamp(region.y, bottom(region)),
             end.clamp(region.y, bottom(region)),
@@ -79,8 +79,8 @@ pub(super) fn put_back(held: &Held, space: &TraySpace, span: (f32, f32)) -> Laid
     let mut laid = Laid::of(Vec::with_capacity(onto + hand), Vec::with_capacity(2));
     laid.boxes = drop_areas(
         span,
-        bind(deck_band, band),
-        bind(fan_band, second.unwrap_or(band)),
+        clamp_to_region(deck_band, band),
+        clamp_to_region(fan_band, second.unwrap_or(band)),
         second
             .is_none()
             .then_some((base.x + base.width + fan.x) / 2.0),
