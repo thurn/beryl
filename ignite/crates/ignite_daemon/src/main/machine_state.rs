@@ -442,11 +442,14 @@ mod tests {
             memory_mb: 32_000,
             admit_cores: 16.0,
             free_cores: 7.0,
+            outside_cores: Some(3),
+            running_workers: Some(5),
             worker_room: 3,
             free_memory_mb: Some(9_000),
             memory_pressed: false,
             free_disk_gb: Some(47),
             disk_budget_gb: 300,
+            disk_budget_source: Some(ignite_core::capacity::DiskLimitSource::Cap),
             queue_seconds: 14.25,
             outputs: vec![output.clone()],
             free_trees: vec![vec![output.clone()], vec![]],
@@ -463,8 +466,10 @@ mod tests {
                 now,
                 beat(&machine),
                 || {
+                    use ignite_core::capacity::{BYTES_PER_GB, DiskLimitSource};
+                    let budget = Some((300 * BYTES_PER_GB, DiskLimitSource::Cap));
                     let report =
-                        capacity_report(&facts, &status, &sample, 300, 14.25, vec![provider]);
+                        capacity_report(&facts, &status, &sample, 5, budget, 14.25, vec![provider]);
                     (sample, report)
                 },
                 |beat| {

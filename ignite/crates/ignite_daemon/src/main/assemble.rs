@@ -613,7 +613,16 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
         let scheduler = parts.scheduler.clone();
         Arc::new(move || scheduler.status())
     };
+    let trees = parts.trees.clone();
+    let dispatcher = parts.dispatcher.clone();
+    let fleet_trees = trees.clone();
     vec![
+        Box::new(doctor::CapacitySection {
+            derived: base.derived.clone(),
+            disk_budget: move || trees.disk_budget(),
+            worker_room: move || dispatcher.worker_room(),
+        }),
+        Box::new(doctor::FleetSection(move || fleet_trees.fleet_notice())),
         Box::new(super::machine_state::SnapshotSection(parts.client.clone())),
         Box::new(CoresSection(status.clone())),
         Box::new(AdmissionSection(status)),

@@ -269,6 +269,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: "ALTER TABLE machine_snapshots ADD COLUMN capacity TEXT;",
         code: None,
     },
+    Migration {
+        version: 44,
+        sql: "ALTER TABLE machine_asks ADD COLUMN no_ticket_reason TEXT;",
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

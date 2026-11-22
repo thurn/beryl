@@ -1,6 +1,8 @@
 //! Active CLI workers as shown in the pool list and hub heartbeat.
 
-use ignite_core::capacity::{CapacityReport, MachineFacts, ProviderCapacity, start_room};
+use ignite_core::capacity::{
+    BYTES_PER_GB, CapacityReport, DiskLimitSource, MachineFacts, ProviderCapacity, start_room,
+};
 use ignite_core::dispatch_pressure::BACKLOG_SECONDS;
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::hub::{ProviderOffer, Room};
@@ -86,7 +88,7 @@ impl Dispatcher {
         &self,
         state: &State,
         providers: Vec<ProviderOffer>,
-    ) -> (Room, u32) {
+    ) -> (Room, u32, u32) {
         let running = state
             .held
             .keys()
@@ -113,6 +115,7 @@ impl Dispatcher {
                 memory_pressed: inputs.memory_pressed,
             },
             idle,
+            inputs.running,
         )
     }
 
@@ -128,12 +131,14 @@ impl Dispatcher {
         let (cpu_percent, queued_cores, swap_used_mb) = scheduler.machine_readings();
         let reclaimable = trees.reclaimable_disk();
         let status = scheduler.status();
-        let (room, idle_workers, reserved, draining, shared_failure) = {
+        let (room, idle_workers, running_workers, reserved, draining, shared_failure) = {
             let state = self.state();
-            let (room, idle_workers) = self.reported_room(&state, self.provider_offers(&state));
+            let (room, idle_workers, running_workers) =
+                self.reported_room(&state, self.provider_offers(&state));
             (
                 room,
                 idle_workers,
+                running_workers,
                 u32::try_from(state.reserved.len()).unwrap_or(u32::MAX),
                 state.draining,
                 state
@@ -160,7 +165,8 @@ impl Dispatcher {
             facts,
             &status,
             &sample,
-            trees.disk_budget_gb(),
+            running_workers,
+            trees.disk_budget(),
             self.host.ticket_work_wait(),
             self.provider_capacity(),
         );
@@ -172,7 +178,8 @@ pub(crate) fn capacity_report(
     facts: &MachineFacts,
     status: &Status,
     sample: &MachineSample,
-    disk_budget_gb: u64,
+    running_workers: u32,
+    disk_budget: Option<(u64, DiskLimitSource)>,
     queue_seconds: f64,
     providers: Vec<ProviderCapacity>,
 ) -> CapacityReport {
@@ -186,11 +193,14 @@ pub(crate) fn capacity_report(
         memory_mb: facts.memory_mb,
         admit_cores: f64::from(sample.admit_cores),
         free_cores: f64::from(status.free_cores()),
+        outside_cores: Some(status.outside),
+        running_workers: Some(running_workers),
         worker_room: if accepts_work { sample.room.start } else { 0 },
         free_memory_mb: status.free_memory_mb,
         memory_pressed: status.memory_pressed,
         free_disk_gb: sample.pressure.free_gb,
-        disk_budget_gb,
+        disk_budget_gb: disk_budget.map_or(0, |(bytes, _)| bytes / BYTES_PER_GB),
+        disk_budget_source: disk_budget.map(|(_, source)| source),
         queue_seconds,
         outputs: sample.pressure.outputs.clone(),
         free_trees: sample.pressure.free_trees.clone(),

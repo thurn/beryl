@@ -30,7 +30,7 @@ use ignite_os::system::{DiskSpace, disk_space};
 use ignite_store::local::{rows, trees as store};
 use serde::Serialize;
 
-use super::{Kind, TreeConfig, Trees, store_error};
+use super::{DiskLimitSource, Kind, TreeConfig, Trees, store_error};
 pub use floor::{BusyTree, FloorStuck};
 use space::{Space, Stop};
 
@@ -86,24 +86,6 @@ pub struct DiskReport {
     pub stuck: Option<FloorStuck>,
 }
 
-/// The term that set the limit for a sweep.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-pub enum DiskLimitSource {
-    Cap,
-    Disk,
-    FreeSpaceFloor,
-}
-
-impl std::fmt::Display for DiskLimitSource {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::Cap => "cap",
-            Self::Disk => "disk",
-            Self::FreeSpaceFloor => "free-space floor",
-        })
-    }
-}
-
 impl TreeConfig {
     /// The same budget is used by the disk loop and doctor. The volume includes every block
     /// it holds only once, so subtract the clone-aware tree total to find the bytes outside.
@@ -157,19 +139,23 @@ impl Trees {
     /// Reuse a completed walk for both the total disk cap and machine history.
     fn measure_usage(&self, stop: &Stop) -> Option<(Space, u64)> {
         let space = self.measure_until(stop)?;
-        let finished = self.free_rows().ok().map(|rows| {
-            rows.into_iter()
-                .filter(|row| row.kind == Kind::Ticket.as_str())
-                .filter_map(|row| id_of(&row).ok())
+        let rows = store::all(&self.lock().db).ok();
+        let tickets_in = |state: store::State| {
+            rows.iter()
+                .flatten()
+                .filter(|row| row.kind == Kind::Ticket.as_str() && row.state == state.as_str())
+                .filter_map(|row| id_of(row).ok())
                 .collect()
-        });
-        let empty = HashSet::new();
-        let (total, bytes) = space.totals(finished.as_ref().unwrap_or(&empty));
-        let reclaimable = finished.map(|_| ReclaimableDisk {
+        };
+        let (total, bytes) = space.totals(&tickets_in(store::State::Free));
+        let reclaimable = rows.as_ref().map(|_| ReclaimableDisk {
             bytes,
             measured_at: self.inner.clock.now(),
         });
-        usage::record(&self.inner.config.dir, total, reclaimable);
+        let leased = rows
+            .as_ref()
+            .map(|_| space.bytes_held_by(&tickets_in(store::State::Leased)));
+        usage::record(&self.inner.config.dir, total, reclaimable, leased);
         Some((space, total))
     }
 

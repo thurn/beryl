@@ -156,7 +156,7 @@ crate::tables! {
     }
 
     /// A machine's latest `POST /next`: the `MachineFree` it sent as JSON, and the answer.
-    MachineAsk = "machine_asks" { machine: String, at: String, free: String, answer: String }
+    MachineAsk = "machine_asks" { machine: String, at: String, free: String, answer: String, no_ticket_reason: Option<String> }
 
     Handoff = "handoffs" { seq: i64, machine: String, ticket: String, kind: String, at: String }
 

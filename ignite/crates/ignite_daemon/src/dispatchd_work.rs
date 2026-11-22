@@ -208,7 +208,7 @@ impl Dispatcher {
                 (!providers.is_empty()).then(|| (0, "no ticket tree is free".to_owned()));
             return None;
         }
-        let (room, _) = self.reported_room(state, providers);
+        let (room, _, _) = self.reported_room(state, providers);
         let waited = self.host.ticket_work_wait();
         state.asking_hub = true;
         Some(Asking {

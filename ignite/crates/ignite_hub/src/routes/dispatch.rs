@@ -239,11 +239,11 @@ fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
     {
         reservation.provider = None;
     }
-    let said = answer.as_ref().map_or_else(
-        |wait| wait.reason.clone(),
-        |reservation| reservation.ticket.to_string(),
-    );
-    machine_asks::record(&tx, &free, &said, now).map_err(|e| store_failure(&e))?;
+    let said = answer
+        .as_ref()
+        .map(|reservation| reservation.ticket.as_str())
+        .map_err(|wait| wait.reason.as_str());
+    machine_asks::record(&tx, &free, said, now).map_err(|e| store_failure(&e))?;
     let reply = match answer {
         Ok(reservation) => NextReply::Reserved(reservation),
         // Only a daemon that asked for the reason gets it; an older one reads `null`.

@@ -130,6 +130,7 @@ fn diagnose_with(host: &FakeHost, hub: &FakeHub, trees: &FakeTrees) -> Vec<Findi
         version: Commit::new("abc1234").ok(),
         fleet: None,
         used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
+        leased_tree_bytes: None,
     })
 }
 
@@ -164,6 +165,7 @@ fn diagnose_with_probe(probe: &dyn listener::WriteProbe) -> Vec<Finding> {
         version: Commit::new("abc1234").ok(),
         fleet: None,
         used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
+        leased_tree_bytes: None,
     })
 }
 
@@ -227,6 +229,7 @@ fn doctor_does_not_probe_a_hub_it_cannot_reach() {
         version: Commit::new("abc1234").ok(),
         fleet: None,
         used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
+        leased_tree_bytes: None,
     });
     let hub_line = findings.iter().find(|f| f.label == "hub").unwrap().line();
     assert!(hub_line.contains("cannot reach the hub"), "{hub_line}");
@@ -280,6 +283,7 @@ fn doctor_warns_when_a_configured_provider_has_no_model_tiers() {
         version: Commit::new("abc1234").ok(),
         fleet: None,
         used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
+        leased_tree_bytes: None,
     });
     let lines: Vec<String> = findings
         .iter()
@@ -313,6 +317,7 @@ fn doctor_warns_when_a_configured_cli_program_is_missing_from_the_path() {
         version: Commit::new("abc1234").ok(),
         fleet: None,
         used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
+        leased_tree_bytes: None,
     });
     let lines: Vec<String> = findings
         .iter()
@@ -393,6 +398,7 @@ fn doctor_counts_present_trees() {
         version: Commit::new("abc1234").ok(),
         fleet: None,
         used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
+        leased_tree_bytes: None,
     });
     assert!(
         findings
@@ -592,6 +598,7 @@ fn doctor_warns_about_directories_under_the_trees_folder_it_does_not_own() {
         version: Commit::new("abc1234").ok(),
         fleet: None,
         used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
+        leased_tree_bytes: None,
     });
     let warning = findings.iter().find(|f| f.warning).expect("a warning");
     let line = warning.line();

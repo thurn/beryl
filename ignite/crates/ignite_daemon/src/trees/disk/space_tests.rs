@@ -118,6 +118,7 @@ fn reclaimable_bytes_count_clones_only_when_all_their_trees_are_finished() {
             ),
         ]),
     };
+    assert_eq!(space.bytes_held_by(&HashSet::from([id("a"), id("b")])), 333);
     assert_eq!(space.totals(&HashSet::from([id("a")])).1, 11);
     assert_eq!(space.totals(&HashSet::from([id("a"), id("b")])).1, 133);
     assert_eq!(

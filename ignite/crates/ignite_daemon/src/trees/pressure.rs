@@ -9,7 +9,7 @@ use ignite_core::dispatch_pressure::{DispatchPressure, TreeCap};
 use ignite_core::ids::TicketId;
 use ignite_core::traits::Result;
 
-use super::{Kind, TreeConfig, Trees, choice, disk::usage};
+use super::{DiskLimitSource, Kind, TreeConfig, Trees, choice, disk::usage};
 use crate::doctor::{Host as _, NativeHost};
 use crate::trees::DiskReport;
 
@@ -58,12 +58,10 @@ impl Trees {
         Ok(report)
     }
 
-    /// Use the sweep's budget formula with the cached usage estimate. Zero means neither a
-    /// measured budget nor a configured cap was available.
-    pub(crate) fn disk_budget_gb(&self) -> u64 {
+    /// Use the sweep's budget formula with the cached usage estimate.
+    pub(crate) fn disk_budget(&self) -> Option<(u64, DiskLimitSource)> {
         let disk = NativeHost.disk_space(&self.inner.config.dir);
         TreeConfig::disk_budget(disk, usage::estimate(self, disk), self.disk_cap_gb())
-            .map_or(0, |(bytes, _)| bytes / BYTES_PER_GB)
     }
 
     pub(crate) fn dispatch_pressure(

@@ -92,8 +92,8 @@ fn seeded() -> Connection {
     )
     .unwrap();
     let asked = Timestamp::parse("2026-11-17T11:58:00.000Z").unwrap();
-    machine_asks::record(&conn, &free("m-j", &["local_idle"], 3), "e1.1", asked).unwrap();
-    machine_asks::record(&conn, &free("m-c", &[], 2), "nothing", asked).unwrap();
+    machine_asks::record(&conn, &free("m-j", &["local_idle"], 3), Ok("e1.1"), asked).unwrap();
+    machine_asks::record(&conn, &free("m-c", &[], 2), Err("nothing"), asked).unwrap();
     conn
 }
 
@@ -186,7 +186,7 @@ fn a_machine_whose_build_queue_is_backed_up_says_only_master_tickets_start() {
         ..Default::default()
     });
     let asked = Timestamp::parse("2026-11-17T11:59:00.000Z").unwrap();
-    machine_asks::record(&conn, &backed_up, "nothing", asked).unwrap();
+    machine_asks::record(&conn, &backed_up, Err("nothing"), asked).unwrap();
     let body = page(&conn, "/available");
     let card = &body[body.find("<template id=\"why-e1.2\"").unwrap()..];
     let card = &card[..card.find("</template>").unwrap()];
@@ -222,7 +222,7 @@ fn the_available_page_shows_a_fleet_cap_and_accounts_for_earlier_tickets() {
             }),
             ..DispatchPressure::default()
         });
-        machine_asks::record(&conn, &machine, "nothing", asked).unwrap();
+        machine_asks::record(&conn, &machine, Err("nothing"), asked).unwrap();
         let body = page(&conn, "/available");
         assert!(body.contains(expected), "{expected}");
     }
@@ -239,7 +239,7 @@ fn a_checks_only_machine_says_it_takes_only_tickets_that_hold_master_back() {
     machine_asks::record(
         &conn,
         &free("m-c", &["local_c2"], 2),
-        "nothing",
+        Err("nothing"),
         Timestamp::parse("2026-11-17T11:59:00.000Z").unwrap(),
     )
     .unwrap();
@@ -270,7 +270,7 @@ fn the_available_page_uses_worker_room_and_explains_provider_constraints() {
         .unwrap(),
     );
     let now = Timestamp::parse(NOW).unwrap();
-    machine_asks::record(&conn, &free, "nothing", now).unwrap();
+    machine_asks::record(&conn, &free, Err("nothing"), now).unwrap();
     let body = page(&conn, "/available");
     assert!(section(&body, "waiting").contains("Next on jarvis"));
     assert!(body.contains("room to start 1"));

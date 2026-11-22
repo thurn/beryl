@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ignite_core::capacity::{BYTES_PER_GB, BYTES_PER_GIB};
+use ignite_core::capacity::{BYTES_PER_GB, BYTES_PER_GIB, DiskLimitSource};
 use ignite_core::ids::Commit;
 use ignite_core::traits::Result;
 use ignite_os::system::DiskSpace;
@@ -198,14 +198,40 @@ pub(super) fn findings(input: &DoctorInput, landing_trees: u32, findings: &mut V
     let probe = std::iter::successors(Some(dir.as_path()), |p| p.parent())
         .find(|p| input.host.path_exists(p))
         .unwrap_or(&dir);
+    let disk = input.host.disk_space(probe);
+    let cap = input.fleet.as_ref().and_then(|notice| notice.disk_cap_gb);
     findings.push(disk_finding(
-        input.host.disk_space(probe),
+        disk,
         input.used_tree_bytes,
-        input.fleet.as_ref().and_then(|notice| notice.disk_cap_gb),
+        input.leased_tree_bytes,
+        cap,
     ));
 }
 
-fn disk_finding(disk: Option<DiskSpace>, used: Option<u64>, cap_gb: Option<u32>) -> Finding {
+fn leased_disk_finding(
+    budget: Option<(u64, DiskLimitSource)>,
+    leased: Option<u64>,
+) -> Option<Finding> {
+    let ((budget, source), leased) = budget.zip(leased)?;
+    let gb = |bytes: u64| bytes as f64 / BYTES_PER_GB as f64;
+    (leased > budget).then(|| {
+        Finding::warning(
+            "disk",
+            format!(
+                "leased ticket trees hold {:.1} GB, over the {:.1} GB tree budget (set by the {source}).",
+                gb(leased), gb(budget)
+            ),
+            "wait for leases to end so the disk loop can reclaim their builds",
+        )
+    })
+}
+
+fn disk_finding(
+    disk: Option<DiskSpace>,
+    used: Option<u64>,
+    leased: Option<u64>,
+    cap_gb: Option<u32>,
+) -> Finding {
     let Some(disk) = disk else {
         return Finding::problem(
             "disk",
@@ -225,18 +251,24 @@ fn disk_finding(disk: Option<DiskSpace>, used: Option<u64>, cap_gb: Option<u32>)
             None => "tree budget pending a measurement".to_owned(),
         },
     };
+    let leased_warning = leased_disk_finding(budget, leased);
     let floor_bytes = crate::idle::FLOOR_GB * BYTES_PER_GIB;
     if disk.available < floor_bytes {
+        let leased_text =
+            leased_warning.map_or_else(String::new, |finding| format!(" {}", finding.text));
         return Finding::problem(
             "disk",
             format!(
                 "{free} GB free, under the {:.1} GB free-space floor; builds may wait for \
-                 space. {budget_text}.",
+                 space. {budget_text}.{leased_text}",
                 gb(floor_bytes)
             ),
             "free disk space; the disk loop clears free trees' builds first, then the \
              incremental caches and builds of leased trees that run nothing",
         );
+    }
+    if let Some(warning) = leased_warning {
+        return warning;
     }
     match (used, budget) {
         (Some(used), Some((bytes, _))) => {
@@ -272,9 +304,27 @@ mod tests {
     }
 
     #[test]
+    fn doctor_warns_when_leased_trees_alone_exceed_the_budget() {
+        let used = Some(400 * BYTES_PER_GB);
+        let disk = Some(disk(1000, 500));
+        for leased in [None, Some(250 * BYTES_PER_GB)] {
+            assert!(
+                !disk_finding(disk, used, leased, Some(250))
+                    .text
+                    .contains("leased ticket trees")
+            );
+        }
+        let finding = disk_finding(disk, used, Some(300 * BYTES_PER_GB), Some(250));
+        assert!(finding.warning);
+        assert!(finding.text.contains(
+            "leased ticket trees hold 300.0 GB, over the 250.0 GB tree budget (set by the cap)"
+        ));
+    }
+
+    #[test]
     fn doctor_names_the_term_that_sets_the_budget() {
         let used = Some(200 * BYTES_PER_GB);
-        let capped = disk_finding(Some(disk(1000, 277)), used, Some(300));
+        let capped = disk_finding(Some(disk(1000, 277)), used, None, Some(300));
         assert!(capped.ok && !capped.warning, "{capped:?}");
         assert!(
             capped
@@ -282,7 +332,7 @@ mod tests {
                 .contains("300.0 GB tree budget (set by the cap)")
         );
 
-        let derived = disk_finding(Some(disk(1000, 150)), used, Some(400));
+        let derived = disk_finding(Some(disk(1000, 150)), used, None, Some(400));
         assert!(derived.ok && !derived.warning, "{derived:?}");
         assert!(
             derived
@@ -290,12 +340,12 @@ mod tests {
                 .contains("250.0 GB tree budget (set by the disk)")
         );
 
-        let full = disk_finding(Some(disk(1858, 4)), used, None);
+        let full = disk_finding(Some(disk(1858, 4)), used, None, None);
         assert!(!full.ok, "{full:?}");
         assert!(full.text.starts_with("4 GB free, under the"));
         assert!(full.text.contains("18.2 GB tree budget (set by the disk)"));
 
-        let unmeasured = disk_finding(Some(disk(1000, 500)), None, Some(400));
+        let unmeasured = disk_finding(Some(disk(1000, 500)), None, None, Some(400));
         assert!(unmeasured.ok && unmeasured.warning, "{unmeasured:?}");
         assert!(
             unmeasured
@@ -303,7 +353,12 @@ mod tests {
                 .contains("tree budget pending a measurement (400 GB cap)")
         );
 
-        let over = disk_finding(Some(disk(1000, 400)), Some(600 * BYTES_PER_GB), Some(250));
+        let over = disk_finding(
+            Some(disk(1000, 400)),
+            Some(600 * BYTES_PER_GB),
+            None,
+            Some(250),
+        );
         assert!(over.ok && over.warning, "{over:?}");
         assert!(
             over.text

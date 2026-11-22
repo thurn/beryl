@@ -171,3 +171,42 @@ fn a_remote_report_replaces_the_state_and_keeps_the_ages_of_what_stayed() {
         ["running the gate", "waiting for 8 cores", "pushing"]
     );
 }
+
+#[test]
+fn status_shows_derived_capacity_and_the_current_fleet_state() {
+    use crate::doctor::{CapacitySection, FleetSection, StatusVerb};
+    use ignite_core::capacity::{BYTES_PER_GB, DiskLimitSource, MachineFacts, derive};
+    use ignite_core::config::Os;
+    use ignite_core::fleet::{FleetNotice, MachineState};
+
+    let derived = derive(&MachineFacts {
+        os: Os::Macos,
+        logical_cores: 20,
+        physical_cores: 12,
+        memory_mb: 32_000,
+        disk_total_gb: 930,
+    });
+    let status = StatusVerb::new(vec![
+        Box::new(CapacitySection {
+            derived,
+            disk_budget: || Some((300 * BYTES_PER_GB, DiskLimitSource::Cap)),
+            worker_room: || 2,
+        }),
+        Box::new(FleetSection(|| {
+            Some(FleetNotice {
+                state: MachineState::ChecksOnly,
+                state_actor: Some("operator".to_owned()),
+                ..FleetNotice::default()
+            })
+        })),
+    ]);
+    let reply = status.render("machine", None, &[]);
+    let data = reply.json.unwrap();
+    let capacity = "2 express cores, 2 kept for tip builds, core floors 2 tip and 4 batch, \
+                    2 landing trees, 300 GB tree budget (set by the cap), worker ceiling 40, room to start 2";
+    let fleet = "machine is checks-only (set by operator)";
+    assert_eq!(data["capacity"], serde_json::json!([capacity]));
+    assert_eq!(data["fleet"], serde_json::json!([fleet]));
+    assert!(reply.text.contains(capacity));
+    assert!(reply.text.contains(fleet));
+}

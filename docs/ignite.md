@@ -4379,6 +4379,13 @@ the stop percentage and the window's reset time. The page also shows active
 holds, where affected work goes, and each machine's CLI probe status when
 capacity reports are available.
 
+Each machine's Capacity section shows the number of workers running and room to
+start more, admitted and free cores, cores busy outside Ignite, free memory and
+disk, the tree budget and what set it, free and leased ticket trees, and the
+longest wait for cores. It shows the hub's reason if the last request for work
+came back without a ticket. Reports older than 60 seconds are greyed and show
+when they were sampled.
+
 On the private dashboard through Tailscale, change a machine's state or disk
 cap, or change a provider's on/off switch, share or stop percentage. Leave a
 machine's cap empty for automatic. The public dashboard shows the saved
@@ -4454,7 +4461,11 @@ Reserves and counts are fractions of the machine. `P` is its physical cores and
 The daemon derives the reserves, floors and landing-tree count at startup.
 Cygnus has no browser page slots because its checks do not request them. A
 resource declared with `per_core` uses the derived count on every machine that
-runs checks requiring it.
+runs checks requiring it. The `capacity` line in `ignite status` shows the
+reserves, floors, landing tree count, disk budget and its source, worker ceiling
+and room to start. The `fleet` line shows the machine's state from its last
+fleet notice. `ignite doctor` warns if leased ticket trees alone hold more build
+data than the disk budget permits, based on the latest clone-aware measurement.
 
 - **Ticket trees have no count.** A lease that finds no free tree creates one. A
   tree that has been free for 24 hours is removed, except the newest two free

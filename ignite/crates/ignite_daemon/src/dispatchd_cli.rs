@@ -194,8 +194,7 @@ impl Dispatcher {
         }
     }
 
-    /// Why the machine can or cannot start more workers.
-    pub(crate) fn worker_room_line(&self) -> Option<String> {
+    fn current_room_inputs(&self) -> Option<RoomInputs> {
         self.cli.get()?;
         let holders = self.host.holders();
         let state = self.state();
@@ -208,7 +207,16 @@ impl Dispatcher {
             .keys()
             .filter(|session| !holders.contains_key(*session))
             .count();
-        let inputs = self.room_inputs(running, reserved);
+        Some(self.room_inputs(running, reserved))
+    }
+
+    pub(crate) fn worker_room(&self) -> u32 {
+        self.current_room_inputs().as_ref().map_or(0, start_room)
+    }
+
+    /// Why the machine can or cannot start more workers.
+    pub(crate) fn worker_room_line(&self) -> Option<String> {
+        let inputs = self.current_room_inputs()?;
         let start = start_room(&inputs);
         let memory_room = worker_memory_room(&inputs);
         let ceiling_room = inputs

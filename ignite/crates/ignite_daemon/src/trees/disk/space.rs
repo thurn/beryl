@@ -120,10 +120,23 @@ impl Space {
     /// Total allocated bytes, and the bytes released by deleting the finished trees together.
     /// A shared block counts once and is reclaimed only when no retained tree holds it.
     pub(super) fn totals(&self, finished: &HashSet<TreeId>) -> (u64, u64) {
+        Self::totals_for(self.trees.iter(), finished)
+    }
+
+    /// Bytes in the selected trees, including blocks they share with other trees.
+    pub(super) fn bytes_held_by(&self, trees: &HashSet<TreeId>) -> u64 {
+        let selected = trees.iter().filter_map(|id| self.trees.get_key_value(id));
+        Self::totals_for(selected, &HashSet::new()).0
+    }
+
+    fn totals_for<'a>(
+        trees: impl Iterator<Item = (&'a TreeId, &'a Held)>,
+        finished: &HashSet<TreeId>,
+    ) -> (u64, u64) {
         let mut shared = HashMap::<u64, (u64, bool)>::new();
         let mut total = 0;
         let mut reclaimable = 0;
-        for (id, held) in &self.trees {
+        for (id, held) in trees {
             let finished = finished.contains(id);
             total += held.private;
             if finished {

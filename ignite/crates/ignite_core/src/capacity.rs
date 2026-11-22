@@ -50,6 +50,10 @@ pub struct CapacityReport {
     pub memory_mb: u64,
     pub admit_cores: f64,
     pub free_cores: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outside_cores: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub running_workers: Option<u32>,
     pub worker_room: u32,
     pub free_memory_mb: Option<u64>,
     pub memory_pressed: bool,
@@ -57,6 +61,8 @@ pub struct CapacityReport {
     pub free_disk_gb: Option<u64>,
     /// The trees' budget in decimal GB, matching the configured disk cap.
     pub disk_budget_gb: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_budget_source: Option<DiskLimitSource>,
     pub queue_seconds: f64,
     /// Configured build output directories, whether or not any tree holds them.
     pub outputs: Vec<String>,
@@ -75,6 +81,24 @@ pub struct ProviderCapacity {
     pub model_ids: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_model: Option<String>,
+}
+
+/// The term that set the limit for a sweep.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DiskLimitSource {
+    Cap,
+    Disk,
+    FreeSpaceFloor,
+}
+
+impl std::fmt::Display for DiskLimitSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Cap => "cap",
+            Self::Disk => "disk",
+            Self::FreeSpaceFloor => "free-space floor",
+        })
+    }
 }
 
 pub fn derive(facts: &MachineFacts) -> Derived {

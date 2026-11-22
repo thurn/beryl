@@ -5,10 +5,12 @@
 
 use rusqlite::Connection;
 
+use ignite_core::capacity::CapacityReport;
 use ignite_core::fleet::{FleetChange, FleetSettings, MachineSetting, MachineState};
+use ignite_core::placement::REPORT_MAX_AGE_S;
 use ignite_core::protocol::machine_state::MachineSnapshot;
 use ignite_core::time::Timestamp;
-use ignite_store::hub::{fleet, rows::Machine};
+use ignite_store::hub::{capacity, fleet, machine_asks, rows::Machine};
 
 use crate::routes::fleet::view_in_snapshot;
 
@@ -125,6 +127,91 @@ fn snapshot_section(snapshot: Option<&MachineSnapshot>, now: Timestamp) -> Strin
     c::subsection("Latest machine snapshot", &readings, None, 3)
 }
 
+fn capacity_readings(report: &CapacityReport) -> [(&'static str, String); 6] {
+    let unknown = || "unknown".to_owned();
+    let workers = report
+        .running_workers
+        .map_or_else(unknown, |count| count.to_string());
+    let outside = report
+        .outside_cores
+        .map_or_else(unknown, |count| count.to_string());
+    let memory = report
+        .free_memory_mb
+        .map_or_else(unknown, |mb| format!("{mb} MB"));
+    let disk = report.free_disk_gb.map_or_else(
+        || "free space unknown".to_owned(),
+        |gib| format!("{gib} GiB free"),
+    );
+    let budget = match report.disk_budget_source {
+        Some(source) => format!("{} GB budget (set by the {source})", report.disk_budget_gb),
+        None if report.disk_budget_gb > 0 => format!("{} GB budget", report.disk_budget_gb),
+        None => "tree budget unknown".to_owned(),
+    };
+    [
+        (
+            "Workers",
+            format!("{workers} running, room to start {}", report.worker_room),
+        ),
+        (
+            "Cores",
+            format!(
+                "{} admitted, {} free, {outside} busy outside Ignite",
+                report.admit_cores, report.free_cores
+            ),
+        ),
+        ("Free memory", memory),
+        ("Disk", format!("{disk}, {budget}")),
+        (
+            "Ticket trees",
+            format!(
+                "{} leased, {} free",
+                report.leased_trees.len(),
+                report.free_trees.len()
+            ),
+        ),
+        (
+            "Longest wait for cores",
+            format!("{:.1} s", report.queue_seconds),
+        ),
+    ]
+}
+
+fn capacity_section(
+    conn: &Connection,
+    id: &str,
+    now: Timestamp,
+    snapshot: Option<&MachineSnapshot>,
+) -> Result<String, ReadError> {
+    let report = capacity::for_machine(conn, id, now)?;
+    let readings = report.map_or_else(
+        || c::muted("No capacity report"),
+        |(at, report)| {
+            let stale = now.seconds_since(at) > REPORT_MAX_AGE_S;
+            let items = capacity_readings(&report).map(|(label, value)| {
+                let value = esc(&value);
+                (
+                    label.to_owned(),
+                    if stale { c::muted(&value) } else { value },
+                )
+            });
+            let age = age(now, Some(&at.to_string()));
+            let freshness = if stale { "Stale · sampled" } else { "Sampled" };
+            c::meta(&items) + &c::muted(&format!("{freshness} {age} ago"))
+        },
+    );
+    let ask = machine_asks::latest(conn, id)?;
+    let limit = if let Some((at, reason)) = ask.and_then(|ask| Some((ask.at, ask.nothing?))) {
+        let age = age(now, Some(&at.to_string()));
+        format!("{} (asked {age} ago)", esc(&reason))
+    } else if let Some(reason) = snapshot.and_then(|sample| sample.start_reason.as_deref()) {
+        format!("{} (machine snapshot)", esc(reason))
+    } else {
+        c::muted("No limit reported")
+    };
+    let reason = c::meta(&[("Latest dispatch limit".to_owned(), limit)]);
+    Ok(c::subsection("Capacity", &(readings + &reason), None, 3))
+}
+
 /// One machine's section: its state, its work in the last day by class, and its trees.
 fn machine_section(
     conn: &Connection,
@@ -228,6 +315,7 @@ fn machine_section(
         name,
         &(machine_settings(machine, setting, editable)
             + &c::meta(&items)
+            + &capacity_section(conn, id, now, snapshot)?
             + &snapshot_section(snapshot, now)
             + &c::subsection("Trees", &tree_rows, Some(trees.len()), 3)),
         None,

@@ -23,6 +23,7 @@ static MEASURING: AtomicBool = AtomicBool::new(false);
 struct Usage {
     at: SystemTime,
     tree_bytes: u64,
+    leased_bytes: Option<u64>,
     volume_bytes: Option<u64>,
     reclaimable: Option<ReclaimableDisk>,
 }
@@ -41,7 +42,7 @@ fn last_usage(trees: &Trees) -> Option<Usage> {
         .filter(|(measured, _)| measured == dir)
         .or_else(|| saved(dir));
     let fresh = last.as_ref().is_some_and(|(_, usage)| {
-        usage.reclaimable.is_some() && usage.at.elapsed().is_ok_and(|age| age < USED_FRESH)
+        usage.leased_bytes.is_some() && usage.at.elapsed().is_ok_and(|age| age < USED_FRESH)
     });
     if !fresh && !MEASURING.swap(true, Ordering::SeqCst) {
         let trees = trees.clone();
@@ -53,8 +54,10 @@ fn last_usage(trees: &Trees) -> Option<Usage> {
     last.map(|(_, usage)| usage)
 }
 
-pub(crate) fn used_bytes(trees: &Trees) -> Option<u64> {
-    last_usage(trees).map(|usage| usage.tree_bytes)
+pub(crate) fn used_bytes(trees: &Trees) -> (Option<u64>, Option<u64>) {
+    last_usage(trees).map_or((None, None), |usage| {
+        (Some(usage.tree_bytes), usage.leased_bytes)
+    })
 }
 
 pub(super) fn reclaimable(trees: &Trees) -> Option<ReclaimableDisk> {
@@ -79,10 +82,16 @@ fn estimate_from(last: Option<Usage>, used_now: Option<u64>) -> Option<u64> {
 }
 
 /// Reuse a sweep's measurement so diagnostics do not have to walk the trees again.
-pub(super) fn record(dir: &Path, bytes: u64, reclaimable: Option<ReclaimableDisk>) {
+pub(super) fn record(
+    dir: &Path,
+    bytes: u64,
+    reclaimable: Option<ReclaimableDisk>,
+    leased_bytes: Option<u64>,
+) {
     let usage = Usage {
         at: SystemTime::now(),
         tree_bytes: bytes,
+        leased_bytes,
         volume_bytes: disk_space(dir).ok().map(occupied),
         reclaimable,
     };
@@ -124,6 +133,7 @@ fn saved(dir: &Path) -> Option<(PathBuf, Usage)> {
         Usage {
             at,
             tree_bytes,
+            leased_bytes: fields.next().and_then(|bytes| bytes.parse().ok()),
             volume_bytes,
             reclaimable,
         },
@@ -142,10 +152,13 @@ fn save(dir: &Path, usage: Usage) {
     let reclaimable = usage.reclaimable.map_or_else(String::new, |disk| {
         format!(" {} {}", disk.bytes, disk.measured_at.millis())
     });
+    let leased = usage
+        .leased_bytes
+        .map_or_else(String::new, |bytes| format!(" {bytes}"));
     // A measurement that cannot be saved is only measured again by the next daemon.
     let _ = std::fs::write(
         saved_path(dir),
-        format!("{secs} {bytes} {volume}{reclaimable}\n"),
+        format!("{secs} {bytes} {volume}{reclaimable}{leased}\n"),
     );
 }
 
@@ -164,6 +177,7 @@ mod tests {
             Usage {
                 at,
                 tree_bytes: 287,
+                leased_bytes: Some(203),
                 volume_bytes: Some(411),
                 reclaimable: Some(ReclaimableDisk {
                     bytes: 84,
@@ -173,6 +187,7 @@ mod tests {
         );
         let (_, read) = saved(&dir).unwrap();
         assert_eq!(read.tree_bytes, 287);
+        assert_eq!(read.leased_bytes, Some(203));
         assert_eq!(read.volume_bytes, Some(411));
         assert_eq!(read.reclaimable.unwrap().bytes, 84);
         assert!(at.duration_since(read.at).unwrap() < Duration::from_secs(1));
@@ -184,6 +199,7 @@ mod tests {
         let measured = Usage {
             at: SystemTime::UNIX_EPOCH,
             tree_bytes: 200,
+            leased_bytes: None,
             volume_bytes: Some(500),
             reclaimable: None,
         };
