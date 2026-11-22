@@ -38,6 +38,8 @@ const VIEWS: usize = 20;
 pub struct Bugs {
     /// Where reports are written: the web app's bugs folder.
     folder: PathBuf,
+    /// Every report from this launch carries the same run ID.
+    environment: Environment,
     /// Whether the report has asked for a picture the host has not been asked to read back.
     wanted: bool,
     /// Whether the frame just drawn is the report's picture, whose tree the next `after`
@@ -62,6 +64,7 @@ impl Bugs {
     pub fn new(folder: PathBuf) -> Self {
         Self {
             folder,
+            environment: Environment::for_beryl3d_run(),
             wanted: false,
             tree_due: false,
             takers: VecDeque::new(),
@@ -166,6 +169,7 @@ impl Bugs {
                 window: *window,
             },
             folder: self.folder.clone(),
+            environment: self.environment.clone(),
             picture: self.picture.take(),
             tree: self.tree.take(),
             frame_log: frame_log.map(Path::to_owned),
@@ -218,6 +222,7 @@ struct Saving {
 pub struct Job {
     saving: Saving,
     folder: PathBuf,
+    environment: Environment,
     picture: Option<Picture>,
     tree: Option<String>,
     frame_log: Option<PathBuf>,
@@ -312,14 +317,13 @@ impl Job {
             none = Sessions::new(&beryl_cards::CARDS, None, |_| {});
             &none
         };
-        let environment = Environment::current();
         let saved = bugs::write_attached(
             &self.folder,
             &report,
             &images,
             &attached,
             sessions,
-            &environment,
+            &self.environment,
         )
         .map_err(|error| format!("Not saved: {error:?}"))?;
         #[cfg(not(any(target_os = "ios", target_os = "android")))]

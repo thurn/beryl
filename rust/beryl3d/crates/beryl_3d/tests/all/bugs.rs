@@ -20,14 +20,17 @@ impl Drop for App {
     }
 }
 
-/// Opens the report once the replay is under way, takes the whole window, types and submits.
-/// The last line only keeps the run going while the report is written, since a drive script
-/// ends the run after its last action.
+/// Submits two reports after the replay starts. The last line keeps the run going while
+/// they are written, since a drive script ends the run after its last action.
 const SCRIPT: &str = "\
 at 1000ms key Cmd+B
 at 1500ms key space
 at 2000ms type field \"description\" \"the pay bar never filled\"
 at 2500ms press button \"Submit\"
+at 5000ms key Cmd+B
+at 5500ms key space
+at 6000ms type field \"description\" \"another report in this run\"
+at 6500ms press button \"Submit\"
 at 30000ms move 10,10
 ";
 
@@ -59,7 +62,6 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
         // so the test runs the app as one and the report must hold the build's commit.
         .env_remove("CARGO_MANIFEST_DIR")
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
         .spawn()
         .expect("the app starts");
     let stdout = child.stdout.take().expect("the app's output is a pipe");
@@ -95,6 +97,11 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
     let report = read("report.md");
     assert!(report.contains("status: open\n"), "{report}");
     assert!(report.contains("the pay bar never filled"), "{report}");
+    let run = report
+        .lines()
+        .find_map(|line| line.strip_prefix("beryl3d_run: "))
+        .expect("the report records a run ID");
+    assert_eq!(run.len(), 32, "{run}");
     // The commit is the one the binary was built from, not the `unknown` of a program that never
     // recorded it.
     let commit = report
@@ -109,7 +116,32 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
         "the picture shows nothing of the report: {tree}"
     );
     // The report records where the replay was, so `just b3d tree` can reopen it with no game.
-    let ui: serde_json::Value = serde_json::from_str(&read("ui.json")).expect("ui.json is JSON");
+    assert_replay_moment(&read("ui.json"));
+    // The window is the app's 1600 by 900 points at the scale of a run with no window.
+    let window = std::fs::read(folder.join("window.png")).expect("the picture");
+    let scale = u32::from(beryl_3d::options::WINDOWLESS_SCALE);
+    let size = [1600 * scale, 900 * scale].map(u32::to_be_bytes).concat();
+    assert_eq!(&window[16..24], size.as_slice(), "a 1600 by 900 point PNG");
+    #[cfg(unix)]
+    assert_filing(&temp, folder);
+
+    let second = lines
+        .map_while(Result::ok)
+        .find_map(|line| line.strip_prefix(&format!("{SAVED} ")).map(str::to_owned))
+        .expect("the second report is saved");
+    let second = Path::new(&second);
+    let second_report =
+        std::fs::read_to_string(second.join("report.md")).expect("the second report");
+    assert!(second_report.contains("another report in this run"));
+    assert!(second_report.contains(&format!("beryl3d_run: {run}\n")));
+    #[cfg(unix)]
+    assert_filing(&temp, second);
+    let _ = std::fs::remove_dir_all(&temp);
+}
+
+/// Checks that opening the report froze the replay at the captured moment.
+fn assert_replay_moment(saved_ui: &str) {
+    let ui: serde_json::Value = serde_json::from_str(saved_ui).expect("ui.json is JSON");
     let log = &ui["log"];
     assert_eq!(log["client"], "Beryl 3D", "{ui}");
     assert_eq!(log["recording"], "pay-default", "{ui}");
@@ -125,14 +157,6 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
         (1000..1100).contains(&at),
         "frozen when the script pressed Cmd+B at 1000 ms: {ui}"
     );
-    // The window is the app's 1600 by 900 points at the scale of a run with no window.
-    let window = std::fs::read(folder.join("window.png")).expect("the picture");
-    let scale = u32::from(beryl_3d::options::WINDOWLESS_SCALE);
-    let size = [1600 * scale, 900 * scale].map(u32::to_be_bytes).concat();
-    assert_eq!(&window[16..24], size.as_slice(), "a 1600 by 900 point PNG");
-    #[cfg(unix)]
-    assert_filing(&temp.join("filed"), folder.file_name().unwrap());
-    let _ = std::fs::remove_dir_all(&temp);
 }
 
 /// Stands in for `uv`, checking that the app's report is already on disk when filing starts.
@@ -145,10 +169,11 @@ fn stub_filing(command: &mut Command, checkout: &Path) {
         &uv,
         r#"#!/bin/sh
 set -eu
-test -f "$BERYL_BUGS/${10}/report.md"
-test -f "$BERYL_BUGS/${10}/window.png"
-printf '%s\n' "$@" > filed.tmp
-mv filed.tmp filed
+report="$BERYL_BUGS/${10}"
+test -f "$report/report.md"
+test -f "$report/window.png"
+printf '%s\n' "$@" > "$report/filed.tmp"
+mv "$report/filed.tmp" "filed-${10}"
 "#,
     )
     .expect("write the filing stub");
@@ -165,16 +190,20 @@ mv filed.tmp filed
 }
 
 #[cfg(unix)]
-fn assert_filing(marker: &Path, report_id: &std::ffi::OsStr) {
+fn assert_filing(checkout: &Path, report: &Path) {
     use std::time::{Duration, Instant};
 
+    let report_id = report
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .expect("a UTF-8 report ID");
+    let marker = checkout.join(format!("filed-{report_id}"));
     // Filing happens on a background thread. Wait for its output, bounding a missing invocation.
     let deadline = Instant::now() + Duration::from_secs(10);
     while !marker.exists() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(10));
     }
     let invocation = std::fs::read_to_string(marker).expect("the app asks to file the report");
-    let report_id = report_id.to_str().expect("a UTF-8 report ID");
     assert_eq!(
         invocation,
         format!("run\n--quiet\n--no-sync\n--project\ntools\nby\nbugs\nfile\n--\n{report_id}\n")

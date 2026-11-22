@@ -95,8 +95,18 @@ class Ignite:
         assert argv[:3] == ["ignite", "--json", "ticket"]
         verb, rest = argv[3], argv[4:]
         if verb == "list":
-            assert rest[-2:] == ["--label", "bug-report"]
-            out: object = self.issues
+            assert rest[-2] == "--label"
+            out: object = [
+                issue for issue in self.issues if rest[-1] in issue["labels"]
+            ]
+        elif verb == "batch":
+            [operation] = json.loads(Path(rest[0]).read_text())["ops"]
+            epic = operation["fields"]
+            assert operation["op"] == "create"
+            assert operation["request_key"] == epic["labels"][0]
+            epic["id"] = f"E{len(self.issues) + 1}"
+            self.issues.append(epic)
+            out = {"results": [{"id": epic["id"]}]}
         elif verb == "attachment":
             assert rest[0] == "list"
             out = {"attachments": self.attached.get(rest[1], [])}
@@ -116,6 +126,7 @@ class Ignite:
                     "attach": [
                         rest[i + 1] for i, a in enumerate(rest) if a == "--attach"
                     ],
+                    "parent": option("--parent") if "--parent" in rest else None,
                 }
             )
             out = {"results": [{"id": self.created}]}
@@ -147,6 +158,7 @@ def test_file_and_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls[0]["type"] == "bug"
     assert calls[0]["labels"] == ["bug-report", f"bug-report:{folder.name}"]
     assert calls[0]["allocation"] == 0, "a report waits for the planner's review"
+    assert calls[0]["parent"] is None
     filed = bugs.load(folder)
     assert filed is not None and filed.status == "filed" and filed.bead == "by-x1"
     # Filed once only.
@@ -158,6 +170,31 @@ def test_file_and_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert moved.fields["fix"] == "deadbeef"
     assert bugs.reports(tmp_path) == []
     assert len(bugs.reports(tmp_path, done=True)) == 1
+
+
+def test_beryl3d_reports_from_a_run_share_one_epic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
+    ignite = fake_ignite(monkeypatch)
+
+    for index, run in enumerate(("a" * 32, "a" * 32, "b" * 32)):
+        folder = report(tmp_path, f"20261108-14301{index}-report")
+        saved = bugs.load(folder)
+        assert saved is not None
+        bugs.update(saved, beryl3d_run=run)
+        assert cli.main(["bugs", "file", folder.name]) == 0
+        epic = ignite.issues[-1]
+        assert epic["type"] == "epic" and epic["allocation"] == 0
+        assert epic["labels"] == [f"bug-report-run:{run}"]
+        assert ignite.tickets[-1]["parent"] == epic["id"]
+
+        # Later reports must still find this epic after the first report is archived.
+        assert cli.main(["bugs", "done", folder.name]) == 0
+
+    assert len(ignite.issues) == 2
+    assert [ticket["parent"] for ticket in ignite.tickets] == ["E1", "E1", "E2"]
+    assert all(ticket["allocation"] == 0 for ticket in ignite.tickets)
 
 
 def test_file_attaches_and_embeds_the_images(

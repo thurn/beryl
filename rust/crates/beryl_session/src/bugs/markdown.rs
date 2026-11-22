@@ -114,6 +114,9 @@ pub(super) fn front_matter(out: &mut String, m: &Markdown<'_>, viewport: &str) {
     )
     .expect("a String takes writes");
     writeln!(out, "platform: {}", m.environment.platform.as_str()).expect("a String takes writes");
+    if let Some(run) = m.environment.beryl3d_run {
+        writeln!(out, "beryl3d_run: {}", run.simple()).expect("a String takes writes");
+    }
     if let Some(device) = &m.environment.device {
         writeln!(
             out,

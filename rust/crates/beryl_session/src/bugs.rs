@@ -17,8 +17,9 @@
 //! matter's `spec`, and the commands that show it again under Reproduce. [`open_by_card`]
 //! counts the open ones by card, for the spec index.
 //!
-//! `by bugs` (`tools/src/beryl_tools/bugs.py`) lists the open reports, files a bead for each and
-//! marks them done; the `bugfix` skill (`.agents/skills/bugfix`) works them.
+//! Beryl 3D reports carry a `beryl3d_run` field so their tickets can share an epic even when
+//! filed after the app exits. `by bugs` lists the reports, files their tickets and marks them
+//! done. The `bugfix` skill describes how workers handle filed reports.
 
 pub mod archive;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -229,10 +230,13 @@ pub fn dir() -> PathBuf {
     home.join("Library/Application Support/ca.thurn.beryl/bugs")
 }
 
-/// The operating system and, for a phone report, the device that filed it.
+/// The operating system and optional device and app launch that a report came from.
+#[derive(Clone)]
 pub struct Environment {
     pub platform: Platform,
     pub device: Option<Device>,
+    /// Identifies a launch of Beryl 3D across games and reports.
+    pub beryl3d_run: Option<uuid::Uuid>,
 }
 
 impl Environment {
@@ -240,10 +244,20 @@ impl Environment {
         Self {
             platform: Platform::current(),
             device: None,
+            beryl3d_run: None,
+        }
+    }
+
+    /// Starts a report environment for one launch of Beryl 3D.
+    pub fn for_beryl3d_run() -> Self {
+        Self {
+            beryl3d_run: Some(uuid::Uuid::new_v4()),
+            ..Self::current()
         }
     }
 }
 
+#[derive(Clone)]
 pub struct Device {
     pub os: String,
     pub model: String,
@@ -596,6 +610,7 @@ mod tests {
                 model: "iPhone18,3".to_owned(),
                 simulator: true,
             }),
+            beryl3d_run: None,
         };
         let tree = Attached {
             name: "tree.txt".to_owned(),

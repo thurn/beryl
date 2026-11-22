@@ -47,6 +47,8 @@ BUNDLE_FILES: frozenset[str] = frozenset(
 # Every ticket filed from a report carries it, so `ignite ticket list --label bug-report` finds
 # them. A ticket also carries `bug-report:<report id>`, which says which report it came from.
 LABEL = "bug-report"
+# The epic's label lets later filings find it even after the app exits or the epic closes.
+RUN_LABEL = "bug-report-run"
 # And a report of a questionable play of the AI's (`kind: ai`) carries this one too.
 AI_LABEL = "ai-play"
 SPEC_VIEWER_LABEL = "spec-viewer"
@@ -285,6 +287,45 @@ def ignite_ticket(*args: str) -> Any:
         raise TicketError(f"ignite ticket {args[0]}: not JSON: {error}") from error
 
 
+def beryl3d_epic(report: Report, scratch: Path) -> str | None:
+    """Find or create the epic for a Beryl 3D launch."""
+    run = report.fields.get("beryl3d_run", "")
+    if not re.fullmatch(r"[0-9a-f]{32}", run):
+        return None
+    label = f"{RUN_LABEL}:{run}"
+    epics = ignite_ticket("list", "--all", "--label", label)
+    if epics:
+        return str(epics[0]["id"])
+
+    date = report.fields.get("created", "")[:16].replace("T", " ")
+    title = f"Beryl 3D bug reports ({date} UTC)" if date else "Beryl 3D bug reports"
+    batch = scratch / "epic.json"
+    # Filings from different report folders can reach Ignite at the same time. The
+    # request key makes both creates return the same epic if neither saw it in the list.
+    batch.write_text(
+        json.dumps(
+            {
+                "ops": [
+                    {
+                        "op": "create",
+                        "request_key": label,
+                        "fields": {
+                            "title": title,
+                            "type": "epic",
+                            "labels": [label],
+                            "allocation": 0,
+                            "body": "Bug reports submitted during one launch of Beryl 3D.",
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    created = ignite_ticket("batch", str(batch))
+    return str(created["results"][0]["id"])
+
+
 def file_bead(report: Report) -> str:
     """Files a ticket for `report` and returns its ID, or the ID of the one already filed for
     it, such as by an earlier attempt that failed before the report recorded the ID."""
@@ -297,8 +338,10 @@ def file_bead(report: Report) -> str:
     elif report.kind == "spec-viewer":
         labels.append(SPEC_VIEWER_LABEL)
     with tempfile.TemporaryDirectory(prefix="beryl-bug-") as folder:
-        body = Path(folder) / "body.md"
+        scratch = Path(folder)
+        body = scratch / "body.md"
         body.write_text(bead_description(report), encoding="utf-8")
+        epic = beryl3d_epic(report, scratch)
         created = ignite_ticket(
             "create",
             report.title or report.id,
@@ -311,6 +354,7 @@ def file_bead(report: Report) -> str:
             # The `bugfix` planner deduplicates and groups reports before workers start.
             "--allocation",
             "0",
+            *(["--parent", epic, "--independent"] if epic else []),
             *[arg for path, _ in images(report) for arg in ("--attach", str(path))],
         )
     return str(created["results"][0]["id"])

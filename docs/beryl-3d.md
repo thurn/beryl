@@ -550,6 +550,11 @@ to. `just b3d bug <report>` prints the report and applicable reproduction
 commands. A replay supplied with `just b3d app --replay` can resume at a saved
 decision without putting the reproduction among the player's saved games.
 
+The first report from a desktop launch with local filing configured creates a
+parked Ignite epic. Each report from that launch files as a child of the same
+epic. The report folder keeps the launch ID, so `just bugs file` can group
+reports saved while Ignite was unavailable and reports pulled from phones.
+
 ## Migration and compatibility
 
 ### What the two clients share

@@ -76,8 +76,10 @@ reproduces it.
 1. **File them.** `just bugs` lists open and filed reports. `just bugs file`
    files a ticket for each open one (type bug, label `bug-report`, allocation zero)
    holding the report's path and the player's words, and saves the issue ID in
-   the report's front matter. Zero keeps the report parked until this run has
-   deduplicated and grouped it. For closed history and work left in progress, use
+   the report's front matter. Beryl 3D reports from one launch are already
+   filed under a shared epic, identified by its `bug-report-run:<run id>`
+   label. Zero keeps each report parked until this run has deduplicated and
+   grouped it. For closed history and work left in progress, use
    `ignite ticket list --label bug-report --all --json`. Reconcile the local reports with
    the tickets and establish the reports in scope for this run; do not silently
    omit blocked, deferred, or interrupted work. Leave out tickets labeled
@@ -120,18 +122,21 @@ reproduces it.
    Never use `tier:fable` unless the user asked for it.
 
 4. **File the epic.** Follow the `/ignite` skill's Plan mode for filing: one
-   epic titled `Bug reports <date>` at allocation zero. List the reports in
-   scope and the tier policy above. Leave reports under the open epic of an
-   earlier `/bugfix` run when that epic already has claimed children.
-   Move the other reports into the new epic and note any old parent on the
-   ticket. Using the IDs returned by the move, clear each report's local zero
-   by setting `allocation` to `null` in an `ignite ticket batch` update. The epic's zero
-   keeps the reports parked until the operator sets its Allocation. Once the
-   tickets share the epic, make the other tickets in each group depend on its
-   lead (`ignite ticket dep add <dependent> <prerequisite>`). Add any other
-   edge only where one fix changes how another report must be judged. Run
-   `ignite plan check` on the epic. File no review tickets unless the
-   invocation asks. Each worker's verification below is the review.
+   epic titled `Bug reports <date>` at allocation zero for reports that still
+   need a parent. List the reports in scope and the tier policy above. Keep
+   Beryl 3D reports in their launch epic. Also leave reports under the open
+   epic of an earlier `/bugfix` run when that epic already has claimed
+   children. Move the remaining reports into the new epic and note any old
+   parent on the ticket. Clear the local zero of each triaged report under
+   an epic by setting `allocation` to `null` in an `ignite ticket batch`
+   update. Use the new IDs for reports that moved. The epic's zero keeps its
+   reports parked until the operator sets its Allocation. Make the other
+   tickets in each group depend on its lead
+   (`ignite ticket dep add <dependent> <prerequisite>`). Add any other edge
+   only where one fix changes how another report must be judged. Run
+   `ignite plan check` on each epic you prepared. File no review tickets
+   unless the invocation asks. Each worker's verification below is the
+   review.
 
 5. **Report.** List each report in scope with its ticket and group, and each
    report left out with the reason. End the planning session. The operator
