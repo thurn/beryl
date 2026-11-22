@@ -156,7 +156,7 @@ fn after_restart_a_landing_keeps_its_old_path_until_retired() {
 }
 
 #[test]
-fn doctor_reports_cargo_targets_only_in_registered_worktrees_outside_the_tree_root() {
+fn doctor_reports_cargo_targets_only_in_registered_worktrees_outside_the_tree_root_and_ignite() {
     use crate::doctor::{GitTrees, TreeSource};
 
     let f = Fixture::new(1, 1);
@@ -171,9 +171,14 @@ fn doctor_reports_cargo_targets_only_in_registered_worktrees_outside_the_tree_ro
         "{}",
     );
     write(&f.scratch.0, "unregistered/target/.rustc_info.json", "{}");
+    // The daemon keeps its update tree's build between releases.
+    let update = f.scratch.0.join("update-tree");
+    worktree::add(&f.repo, &update, "ignite-update", &f.tip()).unwrap();
+    write(&update, "ignite/target/.rustc_info.json", "{}");
     let source = GitTrees {
         repo: f.repo.clone(),
         dir: f.trees.root(),
+        own: vec![update],
     };
     assert_eq!(source.stray_builds().unwrap(), [stray.join("other/target")]);
 }

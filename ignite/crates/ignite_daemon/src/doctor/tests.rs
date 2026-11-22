@@ -648,6 +648,7 @@ fn git_trees_lists_the_visible_directories_under_the_trees_folder() {
     let source = GitTrees {
         repo: dir.clone(),
         dir: dir.clone(),
+        own: Vec::new(),
     };
     let mut names = source.directories();
     names.sort();

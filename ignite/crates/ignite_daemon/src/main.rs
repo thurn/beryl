@@ -198,7 +198,7 @@ fn self_update(
     trees: &crate::trees::Trees,
 ) -> selfupdate::SelfUpdate {
     let options = &base.options;
-    let update = options.home.root.join("update");
+    let update = options.home.update_dir();
     let express = |log: &str| -> Arc<dyn ignite_core::traits::Launcher> {
         Arc::new(crate::update::direct::ExpressLauncher {
             cores: base.derived.express_cores,
@@ -214,7 +214,7 @@ fn self_update(
         builder: Arc::new(ReleaseBuilder {
             tree: TreeBuilder {
                 repo: options.repo.clone(),
-                work: options.home.root.join("update"),
+                work: options.home.update_dir(),
             },
             launcher: express("build.log"),
         }),

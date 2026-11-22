@@ -48,6 +48,9 @@ pub trait TreeSource: Send + Sync {
 pub struct GitTrees {
     pub repo: PathBuf,
     pub dir: PathBuf,
+    /// Worktrees that Ignite itself keeps builds in, such as the daemon's update tree, which
+    /// `stray_builds` leaves out.
+    pub own: Vec<PathBuf>,
 }
 
 impl TreeSource for GitTrees {
@@ -71,13 +74,14 @@ impl TreeSource for GitTrees {
             |path: &Path| ignite_os::paths::canonicalize(path).unwrap_or_else(|_| path.to_owned());
         let main = path_on_disk(&self.repo);
         let root = path_on_disk(&self.dir);
+        let own: BTreeSet<_> = self.own.iter().map(|path| path_on_disk(path)).collect();
         let worktrees: BTreeSet<_> = ignite_git::worktree::list(&self.repo)?
             .iter()
             .map(|tree| path_on_disk(&tree.path))
             .collect();
         let mut builds = Vec::new();
         for tree in &worktrees {
-            if tree != &main && !tree.starts_with(&root) {
+            if tree != &main && !tree.starts_with(&root) && !own.contains(tree) {
                 cargo_targets(tree, &root, &worktrees, &mut builds);
             }
         }
@@ -167,6 +171,7 @@ impl LiveGitTrees {
         GitTrees {
             repo: self.0.config().repo.clone(),
             dir: self.0.root(),
+            own: Vec::new(),
         }
     }
 }

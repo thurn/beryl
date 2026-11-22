@@ -492,6 +492,7 @@ pub fn server(
         mirror: Some(parts.home.root.join(crate::mirror::FILE)),
         emergency: Some(parts.emergencies.clone()),
         managed_trees: Some(parts.trees.clone()),
+        update_tree: Some(parts.home.update_tree()),
     }));
     registry.register(Box::new(
         StatusVerb::new(status_sections(base, parts)).running_under(executable_of(base)?),

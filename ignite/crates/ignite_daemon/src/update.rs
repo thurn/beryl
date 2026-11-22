@@ -91,6 +91,17 @@ impl Home {
         create_private_dir(&self.root)
     }
 
+    /// The folder that holds the update tree and its build logs (see [`TreeBuilder`]).
+    pub fn update_dir(&self) -> PathBuf {
+        self.root.join("update")
+    }
+
+    /// The update tree, where the daemon builds its own releases. Its build directory is kept
+    /// between updates, so `doctor` does not report it as a stray build.
+    pub fn update_tree(&self) -> PathBuf {
+        self.update_dir().join(TreeBuilder::TREE)
+    }
+
     pub fn store(&self) -> ExecutableStore {
         ExecutableStore {
             root: self.root.join("bin"),
@@ -332,9 +343,11 @@ pub struct TreeBuilder {
 impl TreeBuilder {
     const BRANCH: &'static str = "ignite-update";
     const KEEP: &'static [&'static str] = &["ignite/target"];
+    /// The update tree's directory name under [`TreeBuilder::work`].
+    pub const TREE: &'static str = "update-tree";
 
     fn tree(&self) -> PathBuf {
-        self.work.join("update-tree")
+        self.work.join(Self::TREE)
     }
 
     /// The file that names the commit whose build was started and has not been seen to end. A

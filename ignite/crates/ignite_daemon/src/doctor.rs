@@ -699,6 +699,8 @@ pub struct DoctorVerb {
     pub emergency: Option<Arc<crate::emergency::Emergencies>>,
     /// The daemon's live tree configuration and last fleet notice.
     pub managed_trees: Option<crate::trees::Trees>,
+    /// The daemon's update tree (see [`crate::update::Home::update_tree`]); `None` in a test.
+    pub update_tree: Option<PathBuf>,
 }
 
 impl Verb for DoctorVerb {
@@ -722,6 +724,7 @@ impl Verb for DoctorVerb {
         let trees = GitTrees {
             repo: ctx.repo.clone(),
             dir,
+            own: self.update_tree.iter().cloned().collect(),
         };
         let input = DoctorInput {
             config: &ctx.config,
