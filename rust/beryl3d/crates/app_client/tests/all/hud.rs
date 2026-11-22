@@ -225,7 +225,6 @@ fn the_recording_driver_reports_a_features_live_state() {
         crate::test_data::data(),
         recording.into(),
         Side::You,
-        crate::REGULAR,
         Size {
             width: 1440.0,
             height: 900.0,

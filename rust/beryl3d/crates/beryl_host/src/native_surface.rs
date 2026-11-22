@@ -27,9 +27,9 @@ use crate::inbox::Inbox;
 /// soon, hopping to its main thread itself. Called from any thread.
 pub type Wakeup = Arc<dyn Fn() + Send + Sync>;
 
-/// A phone host: the client and its feed, and once the platform has passed a surface, the
-/// renderer and the frame loop.
-pub struct Phone {
+/// The client and its feed for iOS and Android. When the platform supplies a surface, the
+/// host starts its renderer and frame loop.
+pub struct NativeSurface {
     state: State,
     receiver: Receiver<Input>,
     /// Where the glyph and face workers wake the host when they finish something.
@@ -52,10 +52,10 @@ enum State {
     Moving,
 }
 
-impl Phone {
-    /// A phone host for `client`, on a display whose highest rate is `display_hz`. `feed` is
-    /// made with the inbox other threads (the session's) send inputs to; each one sent also
-    /// calls `wake`, if the platform gave one, since it may have paused its ticks.
+impl NativeSurface {
+    /// Hosts `client` on a display whose highest rate is `display_hz`. The `feed` receives the
+    /// inbox that other threads send inputs to. Sending an input also calls `wake` when the
+    /// platform supplied a callback, so the platform can resume its ticks.
     #[must_use]
     pub fn new(
         client: Client,
@@ -108,7 +108,7 @@ impl Phone {
     /// # Safety
     ///
     /// `native` must point to a live layer or window of its kind, and stay valid until
-    /// [`Phone::surface_lost`] is called or the phone host is dropped.
+    /// [`NativeSurface::surface_lost`] is called or the host is dropped.
     #[allow(unsafe_code)]
     pub unsafe fn surface(
         &mut self,
@@ -228,7 +228,7 @@ impl Phone {
 
     /// The platform took the surface away (Android destroys it in the background) or forbids
     /// drawing in it (iOS in the background). The renderer drops it, and draws nothing until
-    /// the next [`Phone::surface`].
+    /// the next [`NativeSurface::surface`].
     pub fn surface_lost(&mut self) {
         if let State::Running(running) = &mut self.state
             && let Output::Surface(surface) = &mut running.screen.output

@@ -70,7 +70,7 @@ pub enum UserEvent {
 }
 
 /// The desktop host before it runs.
-pub struct Desktop {
+pub struct WinitHost {
     event_loop: EventLoop<UserEvent>,
     options: Options,
     sender: Sender<Input>,
@@ -79,7 +79,7 @@ pub struct Desktop {
     drive: Option<crate::drive::Drive>,
 }
 
-impl Desktop {
+impl WinitHost {
     pub fn new(options: Options) -> Result<Self, String> {
         let mut builder = EventLoop::<UserEvent>::with_user_event();
         #[cfg(target_os = "macos")]

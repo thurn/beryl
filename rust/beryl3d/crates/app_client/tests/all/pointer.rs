@@ -35,7 +35,6 @@ fn page(views: &[ViewBuilder]) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::REGULAR,
         WINDOW,
     )
     .unwrap();
@@ -258,9 +257,12 @@ fn the_viewers_cards_at_rest_are_interactive_and_judged_reachable() {
     assert_eq!(cards.len(), 3 + 5 * 2 + 1, "{cards:?}");
     assert!(!cards.contains(&"Brainstorm"), "a graveyard is a pile");
     let context = Context {
-        layout: crate::REGULAR,
+        size_class: crate::REGULAR,
         audit: crate::test_data::data().audit,
-        checks: crate::REGULAR.checks(&crate::test_data::data().profiles, WINDOW),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(crate::REGULAR)
+            .checks,
         size: WINDOW,
         safe_area: Insets::default(),
         at: 0,
@@ -274,9 +276,12 @@ fn a_raised_hand_card_leaves_its_neighbours_reachable() {
     let card = "card \"Memory Lapse\"";
     let mut page = page(&[sample()]);
     let context = Context {
-        layout: crate::REGULAR,
+        size_class: crate::REGULAR,
         audit: crate::test_data::data().audit,
-        checks: crate::REGULAR.checks(&crate::test_data::data().profiles, WINDOW),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(crate::REGULAR)
+            .checks,
         size: WINDOW,
         safe_area: Insets::default(),
         at: 0,

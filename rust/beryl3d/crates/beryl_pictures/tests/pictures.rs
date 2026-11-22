@@ -14,9 +14,9 @@ use beryl_host::{Headless, Scans, match_faces};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
 use game_probe::driver::Moment;
+use kit_base::data::profiles::SizeClass;
 use kit_base::tokens::shadow;
 use kit_frame::frame::{StateBits, box_shadow_reach};
-use kit_probe::agent::Layout;
 use kit_scene::hit::{self, uncovered};
 use kit_ui::input::Size;
 
@@ -186,7 +186,7 @@ fn crossing_cards(
 
 #[test]
 fn the_picture_shows_the_card_the_tree_says_is_in_flight() {
-    let page = pages::page("verbs-zones", Side::You, Layout::Desktop, WINDOW).expect("a page");
+    let page = pages::page("verbs-zones", Side::You, SizeClass::Regular, WINDOW).expect("a page");
     let mut head = Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
     head.seek(&"1500ms".parse::<Moment>().expect("a moment"))
         .expect("a moment of the recording");
@@ -252,7 +252,7 @@ fn cards_show_the_scans_in_the_cache_prepared_on_other_threads() {
         art: scratch.0.join("art"),
         faces: scratch.0.join("faces"),
     };
-    let page = pages::page("verbs-zones", Side::You, Layout::Desktop, WINDOW).expect("a page");
+    let page = pages::page("verbs-zones", Side::You, SizeClass::Regular, WINDOW).expect("a page");
     // Every face's scan, the card back's included, is one flat magenta picture.
     let magenta = [230, 20, 200];
     let (width, height) = (672, 936);
@@ -299,7 +299,7 @@ fn cards_show_the_scans_in_the_cache_prepared_on_other_threads() {
 
 #[test]
 fn the_prompt_bar_draws_text_rasterized_on_another_thread() {
-    let page = pages::page("pay-default", Side::You, Layout::Desktop, WINDOW).expect("a page");
+    let page = pages::page("pay-default", Side::You, SizeClass::Regular, WINDOW).expect("a page");
     let mut head = Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
     head.seek(&"prompt:1".parse::<Moment>().expect("a moment"))
         .expect("a moment of the recording");
@@ -331,7 +331,7 @@ fn the_prompt_bar_draws_text_rasterized_on_another_thread() {
 
 #[test]
 fn an_element_drawn_alone_leaves_the_rest_of_the_window_black() {
-    let page = pages::page("pay-default", Side::You, Layout::Desktop, WINDOW).expect("a page");
+    let page = pages::page("pay-default", Side::You, SizeClass::Regular, WINDOW).expect("a page");
     let mut head = Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
     // Only a looking frame knows which element each record belongs to.
     head.page().set_looking(true);
@@ -441,7 +441,7 @@ impl SpawnOutput for Command {
 #[test]
 fn a_picture_at_scale_2_draws_what_its_clips_hold() {
     let scale = 2.0;
-    let page = pages::page("screen/start", Side::You, Layout::Desktop, WINDOW)
+    let page = pages::page("screen/start", Side::You, SizeClass::Regular, WINDOW)
         .expect("a page")
         .with_scale(scale);
     let mut head = Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");

@@ -131,8 +131,11 @@ fn an_icon_button_is_44_points_square_and_passes_the_minimum_sizes_check() {
     let (left, top, right, bottom) = edges(&frame, gear);
     assert!((right - left - 44.0).abs() < 0.01 && (bottom - top - 44.0).abs() < 0.01);
     let compact = kit_probe::agent::Context {
-        layout: crate::COMPACT,
-        checks: crate::COMPACT.checks(&crate::test_data::data().profiles, context().size),
+        size_class: crate::COMPACT,
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(crate::COMPACT)
+            .checks,
         ..context()
     };
     assert_eq!(minimum_sizes(&frame, &compact), Vec::new());
@@ -173,8 +176,11 @@ fn an_icon_button_in_an_inset_compact_window_stays_inside_the_safe_area() {
         height: 647.0,
     };
     let compact = kit_probe::agent::Context {
-        layout: crate::COMPACT,
-        checks: crate::COMPACT.checks(&crate::test_data::data().profiles, size),
+        size_class: crate::COMPACT,
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(crate::COMPACT)
+            .checks,
         size,
         safe_area,
         ..context()

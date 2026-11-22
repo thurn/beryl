@@ -306,7 +306,7 @@ const COMMANDS: &[Command] = &[
                 test::EVERY_TICK,
                 test::UPDATE,
                 test::RAISE,
-                test::PHONE_ONLY,
+                test::COMPACT_ONLY,
                 test::LIST,
                 test::ALL,
             ],
@@ -552,7 +552,7 @@ pub fn open(options: &Options) -> Result<Scene, Usage> {
         Scene::open(
             options.name(),
             options.seat,
-            options.layout_override,
+            options.size_class_override,
             options.size,
             options.scale,
         )
@@ -582,7 +582,7 @@ fn open_recording(options: &Options) -> Result<Page, Usage> {
         options.seat,
         options.size,
         options.scale,
-        options.layout_override,
+        options.size_class_override,
         profile,
     )
     .map_err(Usage)?;

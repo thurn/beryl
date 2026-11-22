@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use beryl_inspect::stress::{Board, stress};
 use beryl_protocol::script::{Table, failure};
 use game_table::table::labels::ABILITY_ROLE;
+use kit_base::data::profiles::SizeClass;
 
 const BOARDS: [(&str, usize); 2] = [("stress-255", 255), ("stress-1024", 1024)];
 
@@ -133,8 +134,8 @@ fn verbs_play_in_one_beat_with_live_timings() {
     let mut page = beryl_inspect::pages::page(
         "stress-verbs",
         beryl_protocol::protocol::Side::You,
-        kit_probe::agent::Layout::Desktop,
-        beryl_inspect::pages::Windows::Desktop.windows()[0].size,
+        SizeClass::Regular,
+        beryl_inspect::pages::Windows::Class(SizeClass::Regular).windows()[0].size,
     )
     .unwrap();
     let steps = page.timeline();
@@ -247,8 +248,8 @@ fn a_frame_of_every_verb_is_the_same_however_many_frames_came_before() {
         beryl_inspect::pages::page(
             "stress-verbs",
             beryl_protocol::protocol::Side::You,
-            kit_probe::agent::Layout::Desktop,
-            beryl_inspect::pages::Windows::Desktop.windows()[0].size,
+            SizeClass::Regular,
+            beryl_inspect::pages::Windows::Class(SizeClass::Regular).windows()[0].size,
         )
         .unwrap()
     };

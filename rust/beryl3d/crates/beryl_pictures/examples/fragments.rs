@@ -25,8 +25,8 @@ use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
 use beryl_render::{Limits, Renderer, Target};
 use game_table::table::{Camera, CameraData, Window};
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::{Frame, FrameBuilder};
-use kit_probe::agent::Layout;
 use kit_probe::driver::Duration;
 use kit_ui::element::{Element, Filter, Position, holder, row};
 use kit_ui::input::{Insets, Size, Tier};
@@ -151,7 +151,7 @@ fn all_blended(frame: &Frame) -> Frame {
 
 /// One frame of the recording `name`, `at_ms` after its start, counted both ways, in Baseline.
 fn recorded(renderer: &mut Renderer, name: &str, at_ms: u64) -> Result<Value, String> {
-    let mut page = pages::page(name, Side::You, Layout::Desktop, RECORDED_WINDOW)?;
+    let mut page = pages::page(name, Side::You, SizeClass::Regular, RECORDED_WINDOW)?;
     page.step(Duration::from_millis(at_ms));
     let frame = page.frame().clone();
     let (width, height) = (RECORDED_WINDOW.width as u32, RECORDED_WINDOW.height as u32);

@@ -19,7 +19,7 @@ use kit_base::data::Audit;
 use kit_frame::frame::Frame;
 use kit_probe::agent::checks::{KeptArrow, arrows_held, keep_arrows, lines_hold};
 use kit_probe::agent::tree::locator_of;
-use kit_probe::agent::{self, Checked, Context, Fault, Layout, Rule, Subject};
+use kit_probe::agent::{self, Checked, Context, Fault, Rule, Subject};
 use kit_scene::hit::bounds;
 use kit_ui::input::Rect;
 
@@ -99,7 +99,7 @@ impl Page {
         let data = self.client.data();
         let profile = data.profiles.for_size(self.size);
         Context {
-            layout: Layout::for_size_class(profile.size_class),
+            size_class: profile.size_class,
             audit: data.audit,
             checks: profile.checks,
             size: self.size,
@@ -163,7 +163,7 @@ impl Page {
             let frame = page.frame();
             if checked.contains(&t) {
                 faults.extend(game_probe::agent::check(frame, &context));
-                tally.frame(frame, context.layout);
+                tally.frame(frame, &context);
                 game_probe::agent::count_frame(&mut tally, frame);
                 tally.lines(&kept, frame);
                 if arrows_held(&kept, frame) > 0 {

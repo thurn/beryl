@@ -11,7 +11,7 @@ use app_client::driver::{Duration, Moment, Page};
 use beryl_inspect::pages::page;
 use beryl_protocol::protocol::Side;
 use glam::Vec2;
-use kit_probe::agent::Layout;
+use kit_base::data::profiles::SizeClass;
 use kit_ui::input::{Rect, Size};
 
 const SIZE: Size = Size {
@@ -24,7 +24,7 @@ const SIZE: Size = Size {
 /// to that prompt is held back, so that the test answers it.
 fn at_prompt(name: &str, view: usize) -> Page {
     let mut page =
-        page(name, Side::You, Layout::Desktop, SIZE).unwrap_or_else(|why| panic!("{why}"));
+        page(name, Side::You, SizeClass::Regular, SIZE).unwrap_or_else(|why| panic!("{why}"));
     page.set_reply_delay(view, Duration::from_millis(60_000));
     let at = format!("prompt:{view}");
     let moment = Moment::from_str(&at).unwrap_or_else(|why| panic!("{at}: {why:?}"));

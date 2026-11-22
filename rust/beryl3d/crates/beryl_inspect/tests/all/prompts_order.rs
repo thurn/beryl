@@ -12,8 +12,8 @@ use app_client::driver::{Duration, Moment, Page};
 use beryl_inspect::pages::page;
 use beryl_protocol::protocol::Side;
 use glam::Vec2;
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::StateBits;
-use kit_probe::agent::Layout;
 use kit_ui::input::{Button, KeyCode, Modifiers, Pointer, PointerKind, PointerPhase, Rect, Size};
 
 const SIZE: Size = Size {
@@ -30,8 +30,8 @@ const ORDER: usize = 4;
 /// `shape-order` played from the viewer's seat to the order prompt, when the table has come to
 /// rest under it. The recorded answer to that prompt is held back, so that the test answers it.
 fn at_prompt() -> Page {
-    let mut page =
-        page("shape-order", Side::You, Layout::Desktop, SIZE).unwrap_or_else(|why| panic!("{why}"));
+    let mut page = page("shape-order", Side::You, SizeClass::Regular, SIZE)
+        .unwrap_or_else(|why| panic!("{why}"));
     page.set_reply_delay(ORDER, Duration::from_millis(60_000));
     let at = format!("prompt:{ORDER}");
     let moment = Moment::from_str(&at).unwrap_or_else(|why| panic!("{at}: {why:?}"));

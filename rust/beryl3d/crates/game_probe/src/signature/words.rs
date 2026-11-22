@@ -10,7 +10,7 @@ use kit_text::text::{Text, TypeStyle};
 
 struct Widths {
     inspector: Vec<f32>,
-    desktop_prompt: Vec<f32>,
+    dock_prompt: Vec<f32>,
     banded_prompt: Vec<(f32, f32)>,
     log: Vec<f32>,
 }
@@ -27,7 +27,7 @@ impl Words {
     pub(super) fn new(profiles: &Profiles, windows: &[Window], name_style: TypeStyle) -> Self {
         let mut widths = Widths {
             inspector: Vec::new(),
-            desktop_prompt: Vec::new(),
+            dock_prompt: Vec::new(),
             banded_prompt: Vec::new(),
             log: Vec::new(),
         };
@@ -47,7 +47,7 @@ impl Words {
                 }
             } else {
                 widths
-                    .desktop_prompt
+                    .dock_prompt
                     .extend([size::BUTTON_WIDTH, size::DOCK_MAX_WIDTH]);
             }
             if let Some(log) = Layout::for_profile(profile, true) {
@@ -74,7 +74,7 @@ impl Words {
         }
         for values in [
             &mut widths.inspector,
-            &mut widths.desktop_prompt,
+            &mut widths.dock_prompt,
             &mut widths.log,
         ] {
             values.sort_by(f32::total_cmp);
@@ -117,7 +117,7 @@ impl Words {
             &mut self.text,
             words,
             type_style::TITLE,
-            &self.widths.desktop_prompt,
+            &self.widths.dock_prompt,
         )
         .collect();
         counts.extend(self.widths.banded_prompt.iter().map(|&(width, size)| {

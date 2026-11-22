@@ -43,7 +43,6 @@ fn page(view: &ViewBuilder) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::REGULAR,
         WINDOW,
     )
     .expect("the view can be read");
@@ -290,7 +289,6 @@ fn the_revealed_pill_stands_over_the_revealed_pile_and_its_cross_puts_it_away() 
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::REGULAR,
         WINDOW,
     )
     .expect("the view can be read");

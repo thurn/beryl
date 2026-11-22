@@ -11,9 +11,9 @@ use std::sync::Arc;
 use app_client::Input;
 use app_client::command::Request;
 use app_client::{Client, Config};
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
-use beryl_host::{Desktop, WindowMode};
 use beryl_host::{Feed, Inbox, Opened, Ticked, Windowless, WindowlessOptions};
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+use beryl_host::{WindowMode, WinitHost};
 #[cfg(feature = "tools")]
 use beryl_session::protocol::Side;
 use beryl_session::protocol::Status;
@@ -395,13 +395,13 @@ impl Feed for AppFeed {
 /// `name`, writes its frame log in `log_dir`, and summarizes it when the replay ends. The
 /// log counts frames against `display_hz`, the display's highest rate, where the host's rate
 /// rule starts.
-pub(crate) fn phone_feed(
+pub(crate) fn surface_fixture_feed(
     name: &str,
     fixture: Fixture,
     log_dir: PathBuf,
     display_hz: f32,
 ) -> Box<dyn Feed> {
-    phone_app(
+    surface_app_feed(
         Source::Fixture(Box::new(fixture)),
         Some(name.to_owned()),
         log_dir,
@@ -414,8 +414,8 @@ pub(crate) fn phone_feed(
 /// its ledger of games in `data_dir`, as the web app keeps them in its data folder on a phone,
 /// where the frame log is written too, and sends its views to `inbox`. With `stand_in`, that
 /// agent answers the person's decisions in a fresh game. The log names `display_hz`, as
-/// `phone_feed`'s does.
-pub(crate) fn phone_live_feed(
+/// `surface_fixture_feed`'s does.
+pub(crate) fn surface_live_feed(
     data_dir: PathBuf,
     stand_in: Option<String>,
     display_hz: f32,
@@ -442,7 +442,7 @@ pub(crate) fn phone_live_feed(
         },
         inbox,
     );
-    phone_app(
+    surface_app_feed(
         Source::Live(commands),
         None,
         data_dir,
@@ -453,7 +453,7 @@ pub(crate) fn phone_live_feed(
 
 /// A phone's app feed of `source`, writing its frame log in `log_dir` against `display_hz`,
 /// finishing it as `finish` says and writing bug reports with `bugs`.
-fn phone_app(
+fn surface_app_feed(
     source: Source,
     fixture: Option<String>,
     log_dir: PathBuf,
@@ -537,7 +537,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         shown_first: false,
         audio: Some(audio),
         saver,
-        bugs: Bugs::desktop(),
+        bugs: Bugs::for_installed_app(),
         clock: 0,
         tier,
         #[cfg(all(feature = "tools", unix))]
@@ -581,7 +581,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
                 Window::Foreground => WindowMode::Foreground,
                 _ => WindowMode::Fullscreen,
             };
-            let host = Desktop::new(beryl_host::Options {
+            let host = WinitHost::new(beryl_host::Options {
                 mode,
                 title: "Beryl 3D".to_owned(),
                 size: (f64::from(SIZE.width), f64::from(SIZE.height)),
@@ -738,7 +738,7 @@ fn saved_settings(options: &Options) -> (Option<app_client::settings::Settings>,
         return (None, None);
     }
     let Some(dir) =
-        beryl_shell::Dirs::desktop(beryl_shell::Profile::current()).map(|dirs| dirs.data)
+        beryl_shell::Dirs::for_installed_app(beryl_shell::Profile::current()).map(|dirs| dirs.data)
     else {
         return (None, None);
     };
@@ -753,7 +753,7 @@ fn saved_settings(options: &Options) -> (Option<app_client::settings::Settings>,
 /// replays, the games ledger and bug reports, and a game saved by either resumes in the
 /// other. Prints the data folder.
 fn data_dirs() -> Option<beryl_shell::Dirs> {
-    let dirs = beryl_shell::Dirs::desktop(beryl_shell::Profile::current());
+    let dirs = beryl_shell::Dirs::for_installed_app(beryl_shell::Profile::current());
     match &dirs {
         Some(dirs) => eprintln!("beryl3d: data in {}", dirs.data.display()),
         None => eprintln!("beryl3d: no home folder, so no game is saved"),

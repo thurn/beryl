@@ -16,8 +16,8 @@ use beryl_protocol::DecisionId;
 use beryl_protocol::protocol::{ObjectView, RefusalView, Side, Status};
 use game_play::sound;
 use glam::Vec2;
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::{Frame, Role, Wake};
-use kit_probe::agent::Layout;
 use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
 };
@@ -222,7 +222,7 @@ fn page_shows(page: &mut Page, name: &str) -> bool {
 fn a_refused_click_shows_the_reason_under_the_inspector_and_a_word_under_the_permanent() {
     // Played through the recording driver, which gives the client the faces the inspector
     // waits for.
-    let mut page = page("teferi-timing", Side::You, Layout::Desktop, SIZE)
+    let mut page = page("teferi-timing", Side::You, SizeClass::Regular, SIZE)
         .unwrap_or_else(|why| panic!("{why}"));
     let moment = Moment::from_str("prompt:4").unwrap_or_else(|why| panic!("{why:?}"));
     page.seek(&moment).unwrap_or_else(|why| panic!("{why}"));

@@ -28,14 +28,7 @@ fn bug_report() -> Page {
         width: 1600.0,
         height: 900.0,
     };
-    let mut page = Page::new(
-        crate::test_data::data(),
-        recording.into(),
-        Side::You,
-        crate::REGULAR,
-        size,
-    )
-    .unwrap();
+    let mut page = Page::new(crate::test_data::data(), recording.into(), Side::You, size).unwrap();
     page.still();
     page.chord("Cmd+B");
     // The table freezes for its picture, then Space takes the whole window and the sheet

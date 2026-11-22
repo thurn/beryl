@@ -26,7 +26,6 @@ fn over(outcome: OutcomeView) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::REGULAR,
         WINDOW,
     )
     .expect("the view can be read");

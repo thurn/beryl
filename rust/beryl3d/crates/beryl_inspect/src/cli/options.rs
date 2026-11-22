@@ -13,7 +13,7 @@ use std::fmt::Write;
 use app_client::driver::{Action, Moment};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
-use kit_probe::agent::Layout;
+use kit_base::data::profiles::SizeClass;
 use kit_ui::input::Size;
 
 use crate::{recordings, stories};
@@ -55,11 +55,10 @@ pub struct Options {
     /// The arguments that are not options, after the recording.
     pub rest: Vec<String>,
     pub seat: Side,
-    pub layout: Layout,
+    pub size_class: SizeClass,
     /// A shipped profile explicitly requested by the command or saved in a story.
-    pub(super) layout_override: Option<Layout>,
-    /// The window in logical points: 1600 by 900 unless `--size` or a test's name says
-    /// otherwise, or 393 by 759 on the phone layout.
+    pub(super) size_class_override: Option<SizeClass>,
+    /// The logical size of the recording window. A story or profile supplies the default.
     pub size: Size,
     pub scale: f32,
     pub tier: Tier,
@@ -103,15 +102,6 @@ const COMMON: [(&str, &str); 10] = [
     ("--no-catch-up", ""),
 ];
 
-const DESKTOP: Size = Size {
-    width: 1600.0,
-    height: 900.0,
-};
-const PHONE: Size = Size {
-    width: 393.0,
-    height: 759.0,
-};
-
 impl Options {
     /// Reads `args`, the arguments after the command's name.
     ///
@@ -125,9 +115,9 @@ impl Options {
             recording: None,
             rest: Vec::new(),
             seat: Side::You,
-            layout: Layout::Desktop,
-            layout_override: None,
-            size: DESKTOP,
+            size_class: SizeClass::Regular,
+            size_class_override: None,
+            size: Size::default(),
             scale: 1.0,
             tier: Tier::Baseline,
             at: Moment::Named {
@@ -194,25 +184,28 @@ impl Options {
                 )));
             };
             let scene = options.test_name(&name)?;
+            if !options.sized {
+                options.size = crate::pages::usual_size(options.size_class).map_err(Usage)?;
+            }
             if stories::is_story(&scene) && !name.starts_with("b3d:") {
                 let story = stories::open(&scene).map_err(Usage)?;
                 let header = story.header();
-                if options.layout_override.is_none() {
+                if options.size_class_override.is_none() {
                     if !options.sized {
                         options.size = header.window;
                     }
-                    options.layout_override = Some(header.layout);
+                    options.size_class_override = Some(header.size_class);
                 }
                 if !scale_given {
                     options.scale = story.scale();
                 }
             }
             options.recording = Some(scene);
-            options.layout = if let Some(layout) = options.layout_override {
-                layout
+            options.size_class = if let Some(class) = options.size_class_override {
+                class
             } else {
                 let data = crate::data::checkout_ref().map_err(Usage)?;
-                Layout::for_size(&data.profiles, options.size)
+                data.profiles.for_size(options.size).size_class
             };
             options.apply_profile(&name, scale_given)?;
         }
@@ -230,7 +223,7 @@ impl Options {
         let definition = crate::pages::inspection_profile(name)
             .map_err(Usage)?
             .definition();
-        self.layout = Layout::for_size_class(definition.size_class);
+        self.size_class = definition.size_class;
         if !recording.starts_with("b3d:") {
             let window = definition.usual_window();
             if !self.sized {
@@ -311,10 +304,11 @@ impl Options {
         let profile = self.value(PROFILE);
         if let Some(profile) = profile {
             let _ = write!(out, " --profile {}", quote(profile));
-        } else if self.layout == Layout::Phone {
-            out.push_str(" --layout phone");
-        } else if self.layout_override.is_some() || stories::is_story(name) {
-            out.push_str(" --layout desktop");
+        } else if self.size_class == SizeClass::Compact
+            || self.size_class_override.is_some()
+            || stories::is_story(name)
+        {
+            let _ = write!(out, " --layout {}", self.size_class.legacy_layout());
         }
         let _ = write!(out, " --size {}", size_text(self.size));
         if profile.is_some() || (self.scale - 1.0).abs() > f32::EPSILON {
@@ -334,18 +328,9 @@ impl Options {
         match flag {
             "--seat" => self.seat = parse_seat(&value).ok_or_else(|| bad("not a seat"))?,
             "--layout" => {
-                self.layout = match value.as_str() {
-                    "desktop" => Layout::Desktop,
-                    "phone" => Layout::Phone,
-                    _ => return Err(bad("not a layout")),
-                };
-                self.layout_override = Some(self.layout);
-                if !self.sized {
-                    self.size = match self.layout {
-                        Layout::Desktop => DESKTOP,
-                        Layout::Phone => PHONE,
-                    };
-                }
+                self.size_class =
+                    SizeClass::from_legacy_layout(&value).ok_or_else(|| bad("not a layout"))?;
+                self.size_class_override = Some(self.size_class);
             }
             "--size" => {
                 self.size = parse_size(&value).ok_or_else(|| bad("not a size"))?;

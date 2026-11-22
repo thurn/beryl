@@ -66,7 +66,5 @@ mod verbs_count;
 mod verbs_fly;
 mod widgets;
 
-const REGULAR: kit_probe::agent::Layout =
-    kit_probe::agent::Layout::for_size_class(kit_base::data::profiles::SizeClass::Regular);
-const COMPACT: kit_probe::agent::Layout =
-    kit_probe::agent::Layout::for_size_class(kit_base::data::profiles::SizeClass::Compact);
+const REGULAR: kit_base::data::profiles::SizeClass = kit_base::data::profiles::SizeClass::Regular;
+const COMPACT: kit_base::data::profiles::SizeClass = kit_base::data::profiles::SizeClass::Compact;

@@ -8,6 +8,7 @@ use app_client::driver::{Checked, Mode, StepMoment, TICK};
 use beryl_inspect::pages::Windows;
 use beryl_inspect::runner::{self, Test};
 use game_play::play::record::Planted;
+use kit_base::data::profiles::SizeClass;
 use kit_probe::agent::{Fault, Rule};
 
 /// How many tests the sample holds.
@@ -74,7 +75,7 @@ fn key(fault: &Fault) -> (Rule, Vec<String>) {
 fn plantings() -> Vec<Planting> {
     // The stress boards are left out: they exist to count a frame's work at the engine's
     // capacity, and checking one on every tick takes hours.
-    let tests: Vec<Test> = runner::tests("", Windows::Desktop)
+    let tests: Vec<Test> = runner::tests("", Windows::Class(SizeClass::Regular))
         .expect("the recordings pack opens")
         .into_iter()
         .filter(|test| {

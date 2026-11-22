@@ -13,8 +13,8 @@ use beryl_inspect::pages::{page, recording};
 use beryl_protocol::prompt::{Click, ClickRequest};
 use beryl_protocol::protocol::{ObjectId, Side, Status};
 use beryl_protocol::script::Subject;
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::{Role, Wake};
-use kit_probe::agent::Layout;
 use kit_probe::agent::fault::Rule;
 use kit_ui::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size};
 
@@ -27,7 +27,7 @@ const MILLISECOND: u64 = 1_000_000;
 /// `name` played to the moment `at`, settled.
 fn at(name: &str, at: &str) -> Page {
     let mut page =
-        page(name, Side::You, Layout::Desktop, SIZE).unwrap_or_else(|why| panic!("{why}"));
+        page(name, Side::You, SizeClass::Regular, SIZE).unwrap_or_else(|why| panic!("{why}"));
     let moment = Moment::from_str(at).unwrap_or_else(|why| panic!("{at}: {why:?}"));
     page.seek(&moment).unwrap_or_else(|why| panic!("{why}"));
     page.still();
@@ -37,7 +37,7 @@ fn at(name: &str, at: &str) -> Page {
 /// The faults of "rest equals placement" over the whole of `name`.
 fn rest_faults(name: &str) -> Vec<String> {
     let mut page =
-        page(name, Side::You, Layout::Desktop, SIZE).unwrap_or_else(|why| panic!("{why}"));
+        page(name, Side::You, SizeClass::Regular, SIZE).unwrap_or_else(|why| panic!("{why}"));
     (page.check_all(Mode::AtCheckTimes).faults.into_iter())
         .filter(|fault| fault.rule == Rule::RestPlacement)
         .map(|fault| fault.message)
@@ -174,7 +174,7 @@ fn a_card_clicked_in_the_row_while_putting_on_the_bottom_clicks_the_prompt_on_it
 fn the_opening_shows_the_flip_while_the_coin_spins_and_then_the_hand() {
     // `opening-bottom`'s opponent won the flip. Its views reach the client at once, and the
     // coin spins for a second and a half from then, while the hand is dealt.
-    let mut page = page("opening-bottom", Side::You, Layout::Desktop, SIZE)
+    let mut page = page("opening-bottom", Side::You, SizeClass::Regular, SIZE)
         .unwrap_or_else(|why| panic!("{why}"));
     let moment = Moment::from_str("899ms").unwrap_or_else(|why| panic!("{why:?}"));
     page.seek(&moment).unwrap_or_else(|why| panic!("{why}"));

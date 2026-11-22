@@ -2,13 +2,13 @@
 //! docs/beryl-3d.md's "What is printed" gives it.
 
 use kit_base::data::Audit;
-use kit_base::data::profiles::{Checks, Profiles, SizeClass};
+use kit_base::data::profiles::{Checks, SizeClass};
 use kit_ui::input::{Insets, Rect, Size};
 
 /// The window, audit settings and time for a frame check.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Context {
-    pub layout: Layout,
+    pub size_class: SizeClass,
     pub checks: Checks,
     pub audit: Audit,
     /// The window's size in logical points.
@@ -17,54 +17,6 @@ pub struct Context {
     pub safe_area: Insets,
     /// The moment the frame shows, in nanoseconds since the recording's start.
     pub at: u64,
-}
-
-/// The two layouts of the table and the flat layer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Layout {
-    Desktop,
-    Phone,
-}
-
-impl Layout {
-    /// The size class used by this legacy layout label.
-    #[must_use]
-    pub fn size_class(self) -> SizeClass {
-        match self {
-            Self::Desktop => SizeClass::Regular,
-            Self::Phone => SizeClass::Compact,
-        }
-    }
-
-    /// The checks for this layout as played at `size`.
-    #[must_use]
-    pub fn checks(self, profiles: &Profiles, size: Size) -> Checks {
-        let selected = profiles.for_size(size);
-        if selected.size_class == self.size_class() {
-            return selected.checks;
-        }
-        // The inspection command can ask explicitly for a different layout label.
-        profiles
-            .iter()
-            .find(|profile| profile.size_class == self.size_class())
-            .unwrap_or(selected)
-            .checks
-    }
-
-    /// The legacy layout label for the profile that applies to this logical size.
-    #[must_use]
-    pub fn for_size(profiles: &Profiles, size: Size) -> Self {
-        Self::for_size_class(profiles.for_size(size).size_class)
-    }
-
-    /// The legacy layout label for a test size class.
-    #[must_use]
-    pub const fn for_size_class(class: SizeClass) -> Self {
-        match class {
-            SizeClass::Compact => Self::Phone,
-            SizeClass::Regular => Self::Desktop,
-        }
-    }
 }
 
 /// One rule of docs/beryl-3d.md's "Interface checks".

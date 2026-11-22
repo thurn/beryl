@@ -97,7 +97,7 @@ impl Feed for Screens {
 }
 
 #[test]
-fn the_desktop_frame_loop_draws_start_game_and_result_with_real_assets() {
+fn the_windowless_frame_loop_draws_start_game_and_result_with_real_assets() {
     let dir = Scratch::new("host");
     let scans = Scans::in_dir(&dir.0);
     let records = card_records(

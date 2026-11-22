@@ -32,7 +32,7 @@ pub(super) fn from(options: &Options) -> Result<Printed, Usage> {
         unreachable!("the command opens a recording");
     };
     let header = Header {
-        layout: options.layout,
+        size_class: options.size_class,
         window: options.size,
     };
     let feature = options.value("--feature");

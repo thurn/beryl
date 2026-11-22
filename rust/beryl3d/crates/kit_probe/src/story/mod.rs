@@ -10,16 +10,16 @@ pub use player::Player;
 
 use std::fmt;
 
+use kit_base::data::profiles::SizeClass;
 use kit_base::geometry::{Rect, Size};
 use kit_frame::frame::{ElementId, Role, StateBits};
 
-use crate::agent::Layout;
 use style::Property;
 
-/// The authored layout and logical window of a toolkit story.
+/// The authored size class and logical window of a toolkit story.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Header {
-    pub layout: Layout,
+    pub size_class: SizeClass,
     pub window: Size,
 }
 
@@ -28,11 +28,8 @@ impl Header {
     #[must_use]
     pub fn line(self, kind: &str) -> String {
         let Size { width, height } = self.window;
-        let profile = match self.layout {
-            Layout::Desktop => "desktop",
-            Layout::Phone => "phone",
-        };
-        format!("story {kind} {width}x{height} {profile}\n")
+        let layout = self.size_class.legacy_layout();
+        format!("story {kind} {width}x{height} {layout}\n")
     }
 }
 

@@ -14,8 +14,8 @@ pub fn print_fault(fault: &Fault, recording: &str, seat: Side, context: &Context
     };
     let size = format!("{}x{}", context.size.width, context.size.height);
     let mut command = format!("just b3d tree {recording} --seat {seat}");
-    if context.layout.size_class() == SizeClass::Compact {
-        command.push_str(" --layout phone");
+    if context.size_class == SizeClass::Compact {
+        let _ = write!(command, " --layout {}", context.size_class.legacy_layout());
     }
     let _ = write!(command, " --size {size}");
     fault.print_repro(&format!("b3d:{recording}/{seat}/{size}"), &command)

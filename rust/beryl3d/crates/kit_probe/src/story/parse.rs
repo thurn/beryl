@@ -28,10 +28,10 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::str::FromStr;
 
+use kit_base::data::profiles::SizeClass;
 use kit_base::geometry::{Rect, Size};
 use kit_frame::frame::{ElementId, Role};
 
-use crate::agent::Layout;
 use crate::agent::line::{Line, quoted_name};
 
 use super::style::Property;
@@ -117,15 +117,11 @@ pub fn parse_header(line: &str) -> Option<(&str, Header)> {
     ) else {
         return None;
     };
-    let layout = match profile {
-        "desktop" => Layout::Desktop,
-        "phone" => Layout::Phone,
-        _ => return None,
-    };
+    let size_class = SizeClass::from_legacy_layout(profile)?;
     Some((
         kind,
         Header {
-            layout,
+            size_class,
             window: size(window)?,
         },
     ))

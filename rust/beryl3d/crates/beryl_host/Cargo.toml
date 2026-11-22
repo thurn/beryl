@@ -53,7 +53,7 @@ image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
 beryl_protocol = { workspace = true, features = ["testing"] }
 
 # The desktop window and its events, in place of hand-written platform windowing. The phones
-# have native Swift and Kotlin hosts instead (decision C7), which call `phone::Phone`.
+# have native Swift and Kotlin hosts instead (decision C7), which call `native_surface::NativeSurface`.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 winit = "0.30.13"
 # The system clipboard that a text field copies to and pastes from (src/clipboard.rs), in place of

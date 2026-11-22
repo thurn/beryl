@@ -6,8 +6,8 @@
 
 use app_client::Input;
 use app_client::{Client, Config};
-use beryl_host::phone::{Platform, due};
-use beryl_host::{Draw, FrameLoop, NoFeed, Phone, Shown};
+use beryl_host::native_surface::{Platform, due};
+use beryl_host::{Draw, FrameLoop, NativeSurface, NoFeed, Shown};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Wake};
 use kit_ui::input::Input as DeviceInput;
@@ -60,7 +60,7 @@ fn moved(x: f32) -> Input {
 }
 
 #[test]
-fn frames_that_keep_missing_120_hz_step_the_phone_to_60_hz() {
+fn frames_that_keep_missing_120_hz_step_the_display_to_60_hz() {
     let client = Client::new(
         crate::test_data::data(),
         Config {
@@ -86,13 +86,13 @@ fn frames_that_keep_missing_120_hz_step_the_phone_to_60_hz() {
 
 #[test]
 fn low_memory_before_a_surface_is_ignored() {
-    let mut phone = Phone::new(
+    let mut host = NativeSurface::new(
         Client::new(crate::test_data::data(), Config::LARGEST),
         60.0,
         None,
         |_| Box::new(NoFeed),
     );
-    phone.lifecycle(Lifecycle::LowMemory);
-    phone.surface_lost();
-    assert_eq!(phone.frame(0), Wake::Never);
+    host.lifecycle(Lifecycle::LowMemory);
+    host.surface_lost();
+    assert_eq!(host.frame(0), Wake::Never);
 }

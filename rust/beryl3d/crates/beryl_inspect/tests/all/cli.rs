@@ -10,7 +10,7 @@ use beryl_inspect::pages;
 use beryl_inspect::scene::Scene;
 use beryl_protocol::protocol::Side;
 use game_hud::labels::GAME_LABELS;
-use kit_probe::agent::Layout;
+use kit_base::data::profiles::SizeClass;
 use kit_ui::input::{Insets, Size};
 use serde_json::Value;
 
@@ -93,7 +93,7 @@ fn every_moment_info_prints_is_accepted_by_at() {
         width: 1600.0,
         height: 900.0,
     };
-    let mut page = pages::page(RECORDING, Side::You, Layout::Desktop, size).unwrap();
+    let mut page = pages::page(RECORDING, Side::You, SizeClass::Regular, size).unwrap();
     let end = page.moments().last().unwrap().1.0;
     for moment in &moments {
         let parsed: Moment = moment.parse().unwrap_or_else(|e| panic!("{moment}: {e}"));

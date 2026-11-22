@@ -15,7 +15,7 @@ impl Player {
             context.at = time;
             let frame = self.frame();
             checked.frames += 1;
-            checked.judged.frame(frame, context.layout);
+            checked.judged.frame(frame, &context);
             checked.judged.lines(&kept, frame);
             for fault in checks::check(frame, &context)
                 .into_iter()

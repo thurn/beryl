@@ -2,7 +2,7 @@
 
 use beryl_inspect::pages::page;
 use beryl_protocol::protocol::Side;
-use kit_probe::agent::Layout;
+use kit_base::data::profiles::SizeClass;
 use kit_ui::input::Size;
 
 #[test]
@@ -11,7 +11,7 @@ fn the_phone_target_prompt_is_clear_of_both_creatures_and_the_stack() {
         let mut page = page(
             "shape-pick",
             Side::You,
-            Layout::Phone,
+            SizeClass::Compact,
             Size { width, height },
         )
         .unwrap();
@@ -37,7 +37,7 @@ fn the_phone_waiting_button_leaves_room_for_a_permanent_and_a_stack_ability() {
         width: 375.0,
         height: 647.0,
     };
-    let mut page = page("shape-mode", Side::Opponent, Layout::Phone, size).unwrap();
+    let mut page = page("shape-mode", Side::Opponent, SizeClass::Compact, size).unwrap();
     page.seek(&"end".parse().unwrap()).unwrap();
     let button = page.find("button \"Opponent's Turn\"").rect();
     for locator in [

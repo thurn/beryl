@@ -19,7 +19,6 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::protocol::Side;
 use kit_frame::frame::{Frame, Wake, Work};
-use kit_probe::agent::Layout;
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{AssetReady, Insets, Pointer, Size, Tier};
 
@@ -156,8 +155,8 @@ impl Playback {
         let drive = Board::parse(name).map(Board::drive).unwrap_or_default();
         let mut moves = if drive.pointer_over_hand {
             let recording = recording(name, Side::You).expect("hand recording");
-            let mut page = Page::new(data, recording.into(), Side::You, Layout::Desktop, window)
-                .expect("the hand plays");
+            let mut page =
+                Page::new(data, recording.into(), Side::You, window).expect("the hand plays");
             pointer_moves(page.frame())
         } else {
             Vec::new()

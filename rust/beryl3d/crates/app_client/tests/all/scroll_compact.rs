@@ -44,7 +44,6 @@ fn page(view: &ViewBuilder, size: Size) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::COMPACT,
         size,
     )
     .expect("the page opens");

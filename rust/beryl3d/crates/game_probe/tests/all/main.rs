@@ -20,7 +20,7 @@ mod relay;
 mod signature;
 mod sound;
 mod stories;
-mod table_phone;
+mod table_compact;
 mod verbs_fly_draw;
 mod verbs_leaving;
 mod verbs_lift;

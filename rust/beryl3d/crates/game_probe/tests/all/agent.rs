@@ -5,6 +5,7 @@ use game_probe::agent::blank_cards;
 use game_table::table::Place;
 use game_table::table::labels::TAPPED;
 use glam::Vec2;
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Resolved, Role, StateBits};
 use kit_probe::agent::checks::check;
 use kit_probe::agent::checks::{
@@ -14,7 +15,7 @@ use kit_probe::agent::checks::{
 use kit_probe::agent::locate::LocateError;
 use kit_probe::agent::text_overlap::text_overlap;
 use kit_probe::agent::tree::line;
-use kit_probe::agent::{Context, Fault, Layout, Rule, TreeOptions, locate, tree};
+use kit_probe::agent::{Context, Fault, Rule, TreeOptions, locate, tree};
 use kit_scene::hit::{self, hit, uncovered};
 use kit_ui::input::{Insets, Rect, Size, Tier};
 
@@ -108,29 +109,32 @@ fn frame(specs: Vec<Spec>) -> Frame {
     frame
 }
 
-fn context(layout: Layout) -> Context {
-    let size = match layout {
-        Layout::Desktop => Size {
+fn context(size_class: SizeClass) -> Context {
+    let size = match size_class {
+        SizeClass::Regular => Size {
             width: 1600.0,
             height: 900.0,
         },
-        Layout::Phone => Size {
+        SizeClass::Compact => Size {
             width: 375.0,
             height: 647.0,
         },
     };
     Context {
-        layout,
+        size_class,
         audit: crate::test_data::data().audit,
-        checks: layout.checks(&crate::test_data::data().profiles, size),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(size_class)
+            .checks,
         size,
         safe_area: Insets::default(),
         at: 850_000_000,
     }
 }
 
-fn desktop() -> Context {
-    context(Layout::Desktop)
+fn regular_context() -> Context {
+    context(SizeClass::Regular)
 }
 
 /// The rule and the locators of each fault.
@@ -390,7 +394,7 @@ fn the_flat_layer_covers_the_table() {
 #[test]
 fn a_clean_frame_has_no_faults() {
     let frame = prompt_frame();
-    assert_eq!(summary(&check(&frame, &desktop())), vec![]);
+    assert_eq!(summary(&check(&frame, &regular_context())), vec![]);
 }
 
 #[test]
@@ -399,7 +403,7 @@ fn two_overlapping_cards_in_a_row_are_not_a_fault() {
         card("Island", 1, LANDS, 0.0, 600.0, 10.0),
         card("Island", 2, LANDS, 40.0, 600.0, 9.0),
     ]);
-    assert_eq!(summary(&check(&frame, &desktop())), vec![]);
+    assert_eq!(summary(&check(&frame, &regular_context())), vec![]);
 }
 
 #[test]
@@ -411,10 +415,10 @@ fn an_element_off_screen_is_a_fault() {
         rect(1550.0, 10.0, 80.0, 40.0),
     )]);
     assert_eq!(
-        summary(&on_screen(&frame, &desktop())),
+        summary(&on_screen(&frame, &regular_context())),
         one(Rule::OnScreen, &["button \"Done\" #1"])
     );
-    let mut inset = desktop();
+    let mut inset = regular_context();
     inset.size.width = 1700.0;
     inset.safe_area.right = 100.0;
     assert_eq!(summary(&on_screen(&frame, &inset)).len(), 1);
@@ -422,8 +426,8 @@ fn an_element_off_screen_is_a_fault() {
 
 /// A 375 by 647 phone window whose safe area is a different distance in from every edge, so
 /// that a check reading one inset for another fails: x from 12 to 355, y from 44 to 613.
-fn inset_phone() -> Context {
-    let mut context = context(Layout::Phone);
+fn inset_compact() -> Context {
+    let mut context = context(SizeClass::Compact);
     context.safe_area = Insets {
         top: 44.0,
         right: 20.0,
@@ -435,7 +439,7 @@ fn inset_phone() -> Context {
 
 #[test]
 fn an_enabled_button_one_point_into_any_inset_is_off_screen() {
-    let context = inset_phone();
+    let context = inset_compact();
     let button =
         |x: f32, y: f32| frame(vec![layer(Role::Button, "Done", 1, rect(x, y, 44.0, 44.0))]);
     let fault = one(Rule::OnScreen, &["button \"Done\" #1"]);
@@ -482,7 +486,7 @@ fn sized(width: f32, height: f32, text: f32) -> Frame {
 
 #[test]
 fn a_44_point_button_and_11_point_text_pass_the_minimum_sizes_and_one_point_less_fails() {
-    let context = inset_phone();
+    let context = inset_compact();
     let safe = sized(44.0, 44.0, 11.0);
     assert_eq!(summary(&on_screen(&safe, &context)), vec![]);
     assert_eq!(summary(&minimum_sizes(&safe, &context)), vec![]);
@@ -497,7 +501,7 @@ fn a_44_point_button_and_11_point_text_pass_the_minimum_sizes_and_one_point_less
     }
     // The desktop layout has no such limits.
     assert_eq!(
-        summary(&minimum_sizes(&sized(30.0, 30.0, 9.0), &desktop())),
+        summary(&minimum_sizes(&sized(30.0, 30.0, 9.0), &regular_context())),
         vec![]
     );
 }
@@ -508,7 +512,7 @@ fn overlapping_buttons_are_a_fault() {
         layer(Role::Button, "Auto Pay", 1, rect(188.0, 598.0, 96.0, 44.0)),
         layer(Role::Button, "Cancel", 2, rect(270.0, 598.0, 80.0, 44.0)),
     ]);
-    let faults = overlap(&frame, &context(Layout::Phone));
+    let faults = overlap(&frame, &context(SizeClass::Compact));
     assert_eq!(
         summary(&faults),
         one(
@@ -521,7 +525,7 @@ fn overlapping_buttons_are_a_fault() {
             &faults[0],
             "pay-default",
             Side::You,
-            &context(Layout::Phone)
+            &context(SizeClass::Compact)
         ),
         "FAULT overlap  b3d:pay-default/you/375x647 t=850ms\n  \
          button \"Auto Pay\" #1 (188,598 96x44) overlaps button \"Cancel\" #2 (270,598 80x44)\n  \
@@ -536,7 +540,7 @@ fn a_covered_button_is_a_fault() {
         layer(Role::Region, "tooltip", 2, rect(20.0, 0.0, 100.0, 100.0)),
     ]);
     assert_eq!(
-        summary(&reachable(&frame, &desktop())),
+        summary(&reachable(&frame, &regular_context())),
         one(
             Rule::Reachable,
             &["button \"Done\" #1", "region \"tooltip\" #2"]
@@ -556,7 +560,7 @@ fn a_row_scrolled_partly_out_of_its_list_is_pressed_where_it_shows() {
             .parent(1)
             .with(|e| e.clip = Some(list)),
     ]);
-    assert_eq!(summary(&reachable(&frame, &desktop())), vec![]);
+    assert_eq!(summary(&reachable(&frame, &regular_context())), vec![]);
 }
 
 #[test]
@@ -569,12 +573,15 @@ fn a_card_with_too_small_an_uncovered_strip_is_a_fault() {
         ])
     };
     assert_eq!(
-        summary(&reachable(&strip_of(20.0), &desktop())),
+        summary(&reachable(&strip_of(20.0), &regular_context())),
         one(Rule::Reachable, &["card \"Island\" #1"])
     );
-    assert_eq!(summary(&reachable(&strip_of(30.0), &desktop())), vec![]);
     assert_eq!(
-        summary(&reachable(&strip_of(30.0), &context(Layout::Phone))),
+        summary(&reachable(&strip_of(30.0), &regular_context())),
+        vec![]
+    );
+    assert_eq!(
+        summary(&reachable(&strip_of(30.0), &context(SizeClass::Compact))),
         one(Rule::Reachable, &["card \"Island\" #1"])
     );
     // A card in flight is not held to it.
@@ -582,7 +589,7 @@ fn a_card_with_too_small_an_uncovered_strip_is_a_fault() {
         card("Island", 1, LANDS, 0.0, 0.0, 10.0).with(|e| e.state.0 |= StateBits::MOVING),
         card("Plains", 2, LANDS, 20.0, 0.0, 5.0),
     ]);
-    assert_eq!(summary(&reachable(&moving, &desktop())), vec![]);
+    assert_eq!(summary(&reachable(&moving, &regular_context())), vec![]);
 }
 
 #[test]
@@ -594,7 +601,7 @@ fn duplicate_ids_and_siblings_are_faults() {
         layer(Role::Button, "Done", 4, rect(400.0, 0.0, 80.0, 40.0)),
     ]);
     assert_eq!(
-        summary(&duplicates(&cards, &desktop())),
+        summary(&duplicates(&cards, &regular_context())),
         one(
             Rule::Duplicate,
             &["card \"Island\" #4", "card \"Island\" #4"]
@@ -606,7 +613,7 @@ fn duplicate_ids_and_siblings_are_faults() {
         layer(Role::Button, "Cancel", 3, rect(100.0, 10.0, 80.0, 40.0)).parent(0),
     ]);
     assert_eq!(
-        summary(&duplicates(&siblings, &desktop())),
+        summary(&duplicates(&siblings, &regular_context())),
         one(
             Rule::Duplicate,
             &["button \"Cancel\" #2", "button \"Cancel\" #3"]
@@ -627,14 +634,14 @@ fn duplicate_ids_and_siblings_are_faults() {
             rect(0.0, 100.0, 300.0, 60.0),
         ),
     ]);
-    assert_eq!(summary(&duplicates(&arrows, &desktop())), vec![]);
+    assert_eq!(summary(&duplicates(&arrows, &regular_context())), vec![]);
 }
 
 #[test]
 fn an_unnamed_interactive_element_is_a_fault() {
     let frame = frame(vec![layer(Role::Button, "", 9, rect(0.0, 0.0, 80.0, 40.0))]);
     assert_eq!(
-        summary(&named(&frame, &desktop())),
+        summary(&named(&frame, &regular_context())),
         one(Rule::Named, &["button #9"])
     );
 }
@@ -651,7 +658,7 @@ fn a_known_face_up_card_without_a_face_is_a_fault() {
         card("", 4, LANDS, 600.0, 0.0, 10.0).with(|e| e.face = None),
     ]);
     assert_eq!(
-        summary(&blank_cards(&frame, &desktop())),
+        summary(&blank_cards(&frame, &regular_context())),
         one(Rule::BlankCard, &["card \"Island\" #1"])
     );
 }
@@ -671,11 +678,19 @@ fn an_arrow_that_changes_shape_with_its_ends_at_rest_is_a_fault() {
     let mut before: Vec<KeptArrow> = Vec::new();
     keep_arrows(&arrow(start, -50.0, end), &mut before);
     assert_eq!(
-        summary(&lines_hold(&before, &arrow(start, -80.0, end), &desktop())),
+        summary(&lines_hold(
+            &before,
+            &arrow(start, -80.0, end),
+            &regular_context()
+        )),
         one(Rule::LinesHold, &["arrow \"target\" #5"])
     );
     assert_eq!(
-        summary(&lines_hold(&before, &arrow(start, -51.0, end), &desktop())),
+        summary(&lines_hold(
+            &before,
+            &arrow(start, -51.0, end),
+            &regular_context()
+        )),
         vec![]
     );
     // An end moved, so the arrow is redrawn.
@@ -684,7 +699,7 @@ fn an_arrow_that_changes_shape_with_its_ends_at_rest_is_a_fault() {
         summary(&lines_hold(
             &before,
             &arrow(start, -80.0, moved),
-            &desktop()
+            &regular_context()
         )),
         vec![]
     );
@@ -708,7 +723,10 @@ fn a_card_drawn_in_perspective_is_not_covered_by_its_own_slant() {
     );
     let rect = uncovered(&frame, 0).unwrap();
     assert!(rect.width >= 80.0 && rect.height >= 120.0, "{rect:?}");
-    assert_eq!(summary(&check(&frame, &context(Layout::Phone))), vec![]);
+    assert_eq!(
+        summary(&check(&frame, &context(SizeClass::Compact))),
+        vec![]
+    );
 }
 
 #[test]
@@ -742,7 +760,7 @@ fn reachable_finds_the_same_cards_as_the_largest_free_rectangle_in_a_crowded_row
         .filter(|&index| kit_scene::hit::free_rect(&frame, index, side).is_none())
         .map(|index| kit_probe::agent::tree::locator_of(&frame, index))
         .collect();
-    let found: Vec<String> = reachable(&frame, &desktop())
+    let found: Vec<String> = reachable(&frame, &regular_context())
         .iter()
         .map(|fault| fault.elements[0].locator.clone())
         .collect();
@@ -773,12 +791,12 @@ fn a_narrow_leaning_card_is_reachable_but_not_when_another_covers_half_of_it() {
     };
     let alone = frame(vec![leaning(1, 0.0, 40.0)]);
     assert!(hit::free_rect(&alone, 0, side).is_none());
-    assert!(reachable(&alone, &desktop()).is_empty());
+    assert!(reachable(&alone, &regular_context()).is_empty());
 
     // A nearer card leaning the same way covers all but 16 points of its width.
     let covered = frame(vec![leaning(1, 0.0, 40.0), leaning(2, 16.0, 30.0)]);
     assert_eq!(
-        summary(&reachable(&covered, &desktop())),
+        summary(&reachable(&covered, &regular_context())),
         one(Rule::Reachable, &["card \"Island\" #1"])
     );
 }
@@ -789,30 +807,30 @@ fn the_layout_follows_the_shorter_side_of_the_window() {
     let size = |width, height| Size { width, height };
     for (width, height) in [(393.0, 759.0), (375.0, 647.0), (430.0, 932.0)] {
         assert_eq!(
-            Layout::for_size(&data.profiles, size(width, height)),
-            Layout::Phone
+            data.profiles.for_size(size(width, height)).size_class,
+            SizeClass::Compact
         );
         // Rotated, the same phone is still a phone.
         assert_eq!(
-            Layout::for_size(&data.profiles, size(height, width)),
-            Layout::Phone
+            data.profiles.for_size(size(height, width)).size_class,
+            SizeClass::Compact
         );
     }
     assert_eq!(
-        Layout::for_size(&data.profiles, size(499.9, 1200.0)),
-        Layout::Phone
+        data.profiles.for_size(size(499.9, 1200.0)).size_class,
+        SizeClass::Compact
     );
     assert_eq!(
-        Layout::for_size(&data.profiles, size(500.0, 500.0)),
-        Layout::Desktop
+        data.profiles.for_size(size(500.0, 500.0)).size_class,
+        SizeClass::Regular
     );
     assert_eq!(
-        Layout::for_size(&data.profiles, size(500.0, 1200.0)),
-        Layout::Desktop
+        data.profiles.for_size(size(500.0, 1200.0)).size_class,
+        SizeClass::Regular
     );
     assert_eq!(
-        Layout::for_size(&data.profiles, size(1280.0, 800.0)),
-        Layout::Desktop
+        data.profiles.for_size(size(1280.0, 800.0)).size_class,
+        SizeClass::Regular
     );
 }
 
@@ -852,10 +870,13 @@ fn life_beside_text(life: Rect) -> Frame {
 #[test]
 fn a_life_total_over_a_line_of_text_overlaps_it_and_a_label_inside_its_toggle_does_not() {
     let clear = life_beside_text(rect(600.0, 640.0, 60.0, 48.0));
-    assert_eq!(summary(&text_overlap(&clear, &desktop())), Vec::new());
+    assert_eq!(
+        summary(&text_overlap(&clear, &regular_context())),
+        Vec::new()
+    );
     let over = life_beside_text(rect(620.0, 680.0, 60.0, 48.0));
     assert_eq!(
-        summary(&text_overlap(&over, &desktop())),
+        summary(&text_overlap(&over, &regular_context())),
         one(
             Rule::TextOverlap,
             &[r#"player "You 20" #1"#, r#"text "On the play" #2"#]
@@ -863,7 +884,7 @@ fn a_life_total_over_a_line_of_text_overlaps_it_and_a_label_inside_its_toggle_do
     );
     let on_toggle = life_beside_text(rect(780.0, 690.0, 40.0, 30.0));
     assert_eq!(
-        summary(&text_overlap(&on_toggle, &desktop())),
+        summary(&text_overlap(&on_toggle, &regular_context())),
         vec![
             (
                 Rule::TextOverlap,

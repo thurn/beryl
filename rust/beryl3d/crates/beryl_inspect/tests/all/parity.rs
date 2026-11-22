@@ -8,7 +8,7 @@ use app_client::driver::TimelineStep;
 use beryl_inspect::{pages, recordings};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
-use kit_probe::agent::Layout;
+use kit_base::data::profiles::SizeClass;
 use kit_ui::input::Size;
 
 fn parity() -> serde_json::Value {
@@ -42,7 +42,7 @@ fn steps(recording: &str, seats: &[Side]) -> Vec<TimelineStep> {
     seats
         .iter()
         .flat_map(|&seat| {
-            pages::page(recording, seat, Layout::Desktop, size)
+            pages::page(recording, seat, SizeClass::Regular, size)
                 .unwrap_or_else(|why| panic!("{recording}: {why}"))
                 .timeline()
         })

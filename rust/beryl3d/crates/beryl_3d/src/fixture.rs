@@ -25,7 +25,7 @@ use kit_frame::frame::Wake;
 #[cfg(feature = "tools")]
 use {
     beryl_inspect::pages, beryl_session::protocol::Side, game_probe::driver::Moment,
-    kit_probe::agent::Layout, kit_ui::input::Size,
+    kit_base::data::profiles::SizeClass, kit_ui::input::Size,
 };
 
 /// A moment of a replayed recording, which a bug report saved at it records in its `ui.json`.
@@ -224,7 +224,7 @@ pub fn moment(text: &str, name: Option<&str>, size: Size) -> Result<u64, String>
             "--pause-at {text}: a named moment needs --fixture; a game takes a duration"
         ));
     };
-    let mut page = pages::page(name, Side::You, Layout::Desktop, size)?;
+    let mut page = pages::page(name, Side::You, SizeClass::Regular, size)?;
     page.time_of(&moment)
         .map_err(|error| format!("--pause-at {text}: {error}"))
 }

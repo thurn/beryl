@@ -169,7 +169,6 @@ fn the_hosts_flight_arc_moves_the_card_in_the_frame() {
             data,
             Arc::clone(&recording),
             Side::You,
-            crate::REGULAR,
             window(1440.0, 900.0).size,
         )
         .unwrap();
@@ -706,7 +705,6 @@ fn unseen_steps(before: &GameUpdate, after: &GameUpdate, seat: Side, size: Size)
         crate::test_data::data(),
         Recording(messages).into(),
         seat,
-        crate::REGULAR,
         size,
     )
     .expect("the views can be read");

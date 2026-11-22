@@ -116,7 +116,7 @@ mod playback {
             let context = self.context();
             let frame = self.frame();
             let mut judged = Judged::default();
-            judged.frame(frame, context.layout);
+            judged.frame(frame, &context);
             game_probe::agent::count_frame(&mut judged, frame);
             Some(Checked {
                 faults: game_probe::agent::check(frame, &context),

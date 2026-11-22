@@ -16,7 +16,8 @@ use std::time::Instant;
 use app_client::driver::{Mode, Page};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
-use kit_probe::agent::{Count, Fault, Judged, Layout, Rule};
+use kit_base::data::profiles::SizeClass;
+use kit_probe::agent::{Count, Fault, Judged, Rule};
 use kit_ui::input::Size;
 
 use crate::cli::options::side_of;
@@ -130,12 +131,12 @@ pub fn tests(filter: &str, windows: Windows) -> Result<Vec<Test>, String> {
             continue;
         }
         let story_windows = recording.starts_with(crate::stories::PREFIX).then(|| {
-            let layout = crate::stories::open(&recording)
-                .map_or(Layout::Desktop, |story| story.header().layout);
-            match (layout, windows) {
-                (Layout::Desktop, Windows::Phone) => Vec::new(),
-                (Layout::Desktop, _) => Windows::Desktop.windows(),
-                (Layout::Phone, _) => Windows::Phone.windows(),
+            let class = crate::stories::open(&recording)
+                .map_or(SizeClass::Regular, |story| story.header().size_class);
+            if class == SizeClass::Regular && windows == Windows::Class(SizeClass::Compact) {
+                Vec::new()
+            } else {
+                Windows::Class(class).windows()
             }
         });
         for window in story_windows.as_deref().unwrap_or(&recording_windows) {
@@ -506,6 +507,7 @@ mod tests {
 
     use super::{Side, Test, Windows, grant_file_in, read_grant, run_until, spread_by};
     use app_client::driver::Mode;
+    use kit_base::data::profiles::SizeClass;
 
     /// Under Ignite a command reads its grant from the file `IGNITE_CORES_FILE` names, which
     /// wins over the token pool's file when both are set.
@@ -573,7 +575,7 @@ mod tests {
                 recording: format!("no-such-recording-{n}"),
                 seat: Side::You,
                 profile: None,
-                size: Windows::Desktop.windows()[0].size,
+                size: Windows::Class(SizeClass::Regular).windows()[0].size,
                 scale: 1.0,
             })
             .collect();

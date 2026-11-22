@@ -11,7 +11,7 @@ pub mod motion;
 pub mod text_overlap;
 pub mod tree;
 
-pub use fault::{Context, Fault, Layout, Rule, Subject};
+pub use fault::{Context, Fault, Rule, Subject};
 pub use judged::{Checked, Count, Judged};
 pub use locate::{LocateError, locate};
 pub use tree::{TreeOptions, tree};

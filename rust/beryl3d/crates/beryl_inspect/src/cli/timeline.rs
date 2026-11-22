@@ -12,6 +12,7 @@ use beryl_protocol::ipc::{FixtureMessage, STAGE_TIMINGS};
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::{Edge, own_timings};
 use game_play::sound;
+use kit_base::data::profiles::SizeClass;
 use serde_json::Value;
 
 use super::options::{self, Options, Usage, seat_word, side_of};
@@ -93,27 +94,14 @@ fn line(name: &str, seat: Side, step: &TimelineStep) -> String {
 }
 
 /// The lines of the recording `name` as `seat` sees it.
-fn lines(name: &str, seat: Side, layout: kit_probe::agent::Layout) -> Result<Vec<String>, Usage> {
-    let size = options_window(layout);
-    let mut page = pages::page(name, seat, layout, size).map_err(Usage)?;
+fn lines(name: &str, seat: Side, size_class: SizeClass) -> Result<Vec<String>, Usage> {
+    let size = pages::usual_size(size_class).map_err(Usage)?;
+    let mut page = pages::page(name, seat, size_class, size).map_err(Usage)?;
     Ok(page
         .timeline()
         .iter()
         .map(|step| line(name, seat, step))
         .collect())
-}
-
-fn options_window(layout: kit_probe::agent::Layout) -> kit_ui::input::Size {
-    match layout {
-        kit_probe::agent::Layout::Desktop => kit_ui::input::Size {
-            width: 1600.0,
-            height: 900.0,
-        },
-        kit_probe::agent::Layout::Phone => kit_ui::input::Size {
-            width: 393.0,
-            height: 759.0,
-        },
-    }
 }
 
 pub(super) fn timeline(options: &Options) -> Result<Printed, Usage> {
@@ -138,7 +126,7 @@ fn all(options: &Options) -> Result<Printed, Usage> {
     let mut previous: Option<&str> = None;
     for (name, seat) in &names {
         let seat = side_of(*seat);
-        for line in lines(name, seat, options.layout)? {
+        for line in lines(name, seat, options.size_class)? {
             text.push_str(&line);
             text.push('\n');
             count += 1;

@@ -36,7 +36,6 @@ fn page(updates: &[GameUpdate]) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::REGULAR,
         SIZE,
     )
     .expect("the recording plays")

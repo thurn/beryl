@@ -5,7 +5,8 @@
 use app_client::driver::{Duration, Moment, Page};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
-use kit_probe::agent::{Layout, Rule};
+use kit_base::data::profiles::SizeClass;
+use kit_probe::agent::Rule;
 use kit_ui::input::Size;
 
 /// These moments used to draw life changes, pile counts, row counts or the log through
@@ -50,9 +51,9 @@ fn life_changes_and_pile_counts_leave_other_text_readable() {
         ),
     ];
     for (recording, side, moment) in moments {
-        for window in pages::Windows::Desktop.windows() {
+        for window in pages::Windows::Class(SizeClass::Regular).windows() {
             let Size { width, height } = window.size;
-            let mut page = pages::page(recording, side, Layout::Desktop, window.size)
+            let mut page = pages::page(recording, side, SizeClass::Regular, window.size)
                 .unwrap()
                 .with_scale(window.scale);
             page.seek(&moment.parse::<Moment>().unwrap()).unwrap();
@@ -74,7 +75,7 @@ fn pay_default(width: f32, height: f32) -> Page {
     let mut page = pages::page(
         "pay-default",
         Side::You,
-        Layout::Desktop,
+        SizeClass::Regular,
         Size { width, height },
     )
     .unwrap_or_else(|why| panic!("{why}"));
@@ -132,7 +133,7 @@ fn the_step_banner_reads_blockers_declared_and_is_gone_two_and_a_half_seconds_la
     let mut page = pages::page(
         "combat-blockers",
         Side::You,
-        Layout::Desktop,
+        SizeClass::Regular,
         Size {
             width: 1600.0,
             height: 900.0,

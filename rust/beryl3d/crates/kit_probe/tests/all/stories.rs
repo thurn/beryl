@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use kit_base::data::effect::Effects;
 use kit_base::geometry::{Insets, Window};
-use kit_probe::agent::{Context, Layout, Rule, TreeOptions, tree};
+use kit_probe::agent::{Context, Rule, TreeOptions, tree};
 use kit_probe::story::{Player, Story};
 
 const ELEMENT: &str = concat!(
@@ -31,7 +31,7 @@ fn standalone_rectangles_are_checked_without_a_game() {
     let data = crate::test_data::data();
     let profile = data.profiles.for_size(window.size);
     let context = Context {
-        layout: Layout::for_size_class(profile.size_class),
+        size_class: profile.size_class,
         checks: profile.checks,
         audit: data.audit,
         size: window.size,

@@ -1,6 +1,6 @@
-//! The C functions the phone hosts call (docs/beryl-3d.md, "Hosts"), declared for Swift in
+//! The C functions the iOS and Android hosts call (docs/beryl-3d.md, "Hosts"), declared for Swift in
 //! `include/beryl3d.h` and wrapped for Kotlin by `android`'s JNI functions. A `Beryl3d` is the
-//! whole app: the client, its feed and the phone host (`beryl_host::Phone`). Each function is
+//! whole app, including the client, its feed and the native surface host. Each function is
 //! called on the platform's main thread, which owns the view and the display's ticks. Only the
 //! wake callback the host gives `beryl3d_new` is called from other threads.
 //!
@@ -18,14 +18,14 @@ use std::ptr::NonNull;
 use std::sync::{Arc, OnceLock};
 
 use app_client::{Client, Config};
-use beryl_host::{Phone, Wakeup};
+use beryl_host::{NativeSurface, Wakeup};
 use beryl_render::Native;
 use kit_frame::frame::Wake;
 use kit_ui::input::Lifecycle;
 
 pub use types::*;
 
-use crate::app::{phone_feed, phone_live_feed};
+use crate::app::{surface_fixture_feed, surface_live_feed};
 use crate::fixture::Fixture;
 
 /// The app's error log, `beryl3d.log` in its data folder: an Android app's standard error goes
@@ -96,7 +96,7 @@ fn log_errors_in(data_dir: &Path) {
 
 /// The app, as the hosts hold it: an opaque pointer.
 pub struct Beryl3d {
-    phone: Phone,
+    surface_host: NativeSurface,
     /// The text of the last request `beryl3d_next_request` returned, which its struct points
     /// into until the next call.
     request_text: CString,
@@ -157,18 +157,18 @@ impl Beryl3d {
         let stand_in: Option<String> = stand_in.and(None);
         let mut client = Client::new(crate::data::embedded()?, Config::LARGEST);
         client.handle(app_client::Input::Stories(app_client::stories::embedded()));
-        let phone = match fixture {
+        let surface_host = match fixture {
             Some(name) => {
                 let replay = Fixture::read(&data_dir, &name)?;
-                let feed = phone_feed(&name, replay, data_dir, display_hz);
-                Phone::new(client, display_hz, wake, |_| feed)
+                let feed = surface_fixture_feed(&name, replay, data_dir, display_hz);
+                NativeSurface::new(client, display_hz, wake, |_| feed)
             }
-            None => Phone::new(client, display_hz, wake, |inbox| {
-                phone_live_feed(data_dir, stand_in, display_hz, inbox)
+            None => NativeSurface::new(client, display_hz, wake, |inbox| {
+                surface_live_feed(data_dir, stand_in, display_hz, inbox)
             }),
         };
         Ok(Self {
-            phone,
+            surface_host,
             request_text: CString::default(),
             #[cfg(target_os = "android")]
             request_has_text: false,
@@ -182,14 +182,17 @@ impl Beryl3d {
     fn surface(&mut self, native: Native, width: u32, height: u32, scale: f32, safe: BerylInsets) {
         let (scale, safe_area) = surface_from_c(scale, safe);
         // SAFETY: each caller passes a surface the host keeps valid until `surface_lost`.
-        let attached = unsafe { self.phone.surface(native, width, height, scale, safe_area) };
+        let attached = unsafe {
+            self.surface_host
+                .surface(native, width, height, scale, safe_area)
+        };
         if let Err(error) = attached {
             report(&error);
         }
     }
 
     fn frame(&mut self, now: u64) -> BerylWake {
-        let (kind, at) = match self.phone.frame(now) {
+        let (kind, at) = match self.surface_host.frame(now) {
             Wake::Now => (BERYL_WAKE_NOW, 0),
             Wake::At(at) => (BERYL_WAKE_AT, at),
             Wake::Never => (BERYL_WAKE_NEVER, 0),
@@ -197,7 +200,7 @@ impl Beryl3d {
         BerylWake {
             kind,
             at,
-            hz: self.phone.hz(),
+            hz: self.surface_host.hz(),
         }
     }
 
@@ -208,12 +211,12 @@ impl Beryl3d {
             BERYL_LOW_MEMORY => Lifecycle::LowMemory,
             _ => return,
         };
-        self.phone.lifecycle(lifecycle);
+        self.surface_host.lifecycle(lifecycle);
     }
 
     /// The next request the platform carries out, skipping those the app keeps.
     fn next_request(&mut self) -> Option<BerylRequest> {
-        while let Some(request) = self.phone.next_request() {
+        while let Some(request) = self.surface_host.next_request() {
             if let Some(out) = request_to_c(&request, &mut self.request_text) {
                 return Some(out);
             }
@@ -320,7 +323,7 @@ pub unsafe extern "C" fn beryl3d_surface(
 pub unsafe extern "C" fn beryl3d_surface_lost(app: *mut Beryl3d) {
     // SAFETY: `app` is the host's pointer from `beryl3d_new`, used on one thread.
     let app = unsafe { &mut *app };
-    app.phone.surface_lost();
+    app.surface_host.surface_lost();
     #[cfg(target_os = "android")]
     {
         app.window = None;
@@ -365,7 +368,7 @@ pub unsafe extern "C" fn beryl3d_pointer(app: *mut Beryl3d, event: BerylPointer)
     // SAFETY: `app` is the host's pointer from `beryl3d_new`, used on one thread.
     let app = unsafe { &mut *app };
     if let Some(pointer) = pointer_from_c(event) {
-        app.phone.pointer(pointer);
+        app.surface_host.pointer(pointer);
     }
 }
 
@@ -381,7 +384,7 @@ pub unsafe extern "C" fn beryl3d_key(app: *mut Beryl3d, event: BerylKey) {
     // SAFETY: `app` is the host's pointer from `beryl3d_new`, used on one thread.
     let app = unsafe { &mut *app };
     if let Some(key) = key_from_c(event) {
-        app.phone.key(key);
+        app.surface_host.key(key);
     }
 }
 
@@ -398,7 +401,7 @@ pub unsafe extern "C" fn beryl3d_text(app: *mut Beryl3d, utf8: *const c_char) {
     // the host's string, as documented.
     let (app, text) = unsafe { (&mut *app, optional(utf8)) };
     if let Some(text) = text {
-        app.phone.text(text);
+        app.surface_host.text(text);
     }
 }
 
@@ -435,7 +438,7 @@ pub unsafe extern "C" fn beryl3d_next_request(app: *mut Beryl3d, out: *mut Beryl
 pub unsafe extern "C" fn beryl3d_offscreen(app: *mut Beryl3d, width: u32, height: u32) {
     // SAFETY: `app` is the host's pointer from `beryl3d_new`, used on one thread.
     let app = unsafe { &mut *app };
-    if let Err(error) = app.phone.offscreen(width, height) {
+    if let Err(error) = app.surface_host.offscreen(width, height) {
         report(&error);
     }
 }

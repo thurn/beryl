@@ -19,8 +19,8 @@ use beryl_inspect::{pages, recordings, runner};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
 use game_probe::driver::{Duration, Moment};
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::{Draw, Frame, Material, Role, Sprite, sprites};
-use kit_probe::agent::Layout;
 use kit_ui::input::Size;
 
 const WINDOW: Size = Size {
@@ -116,7 +116,7 @@ fn lights(frame: &Frame) -> Vec<Light> {
 /// The recording `name` from `side` in the window, its frames `looking` so that each record
 /// names its element.
 fn page(name: &str, side: Side) -> Result<app_client::driver::Page, String> {
-    let mut page = pages::page(name, side, Layout::Desktop, WINDOW)?;
+    let mut page = pages::page(name, side, SizeClass::Regular, WINDOW)?;
     page.set_looking(true);
     Ok(page)
 }

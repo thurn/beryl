@@ -50,7 +50,6 @@ fn page_at(messages: Vec<FixtureMessage>, size: Size) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::REGULAR,
         size,
     )
     .unwrap();

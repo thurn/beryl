@@ -60,7 +60,6 @@ impl Playback {
                 Arc::clone(&data),
                 Arc::new(Recording(messages)),
                 seat,
-                header.layout,
                 window.size,
             )
             .map(|page| {
@@ -188,13 +187,9 @@ fn story_window(
         }
     } else {
         let current = original.profiles.for_size(header.window);
-        let size_class = header.layout.size_class();
+        let size_class = header.size_class;
         if current.size_class != size_class || original.profiles.preview().is_some() {
-            let profile = original
-                .profiles
-                .iter()
-                .find(|candidate| candidate.size_class == size_class)
-                .ok_or("no profile for the story's layout")?;
+            let profile = original.profiles.for_size_class(size_class);
             Arc::make_mut(&mut data).profiles = original
                 .profiles
                 .selecting(&profile.name)

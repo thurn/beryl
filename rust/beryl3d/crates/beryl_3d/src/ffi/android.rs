@@ -439,7 +439,7 @@ pub unsafe extern "C" fn Java_ca_thurn_beryl3d_Native_text(
     // SAFETY: the JVM's call, as documented.
     unsafe {
         let text = utf16(env, text);
-        (*(app as *mut Beryl3d)).phone.text(text);
+        (*(app as *mut Beryl3d)).surface_host.text(text);
     }
 }
 

@@ -21,16 +21,10 @@ fn table(scale: f32, host: bool) -> Page {
     let mut view = ViewBuilder::sample();
     view.script(ScriptBuilder::reset().build());
     let recording = Recording(vec![FixtureMessage::game_update(&view.update())]);
-    let mut page = Page::new(
-        crate::test_data::data(),
-        recording.into(),
-        Side::You,
-        crate::REGULAR,
-        SIZE,
-    )
-    .expect("the sample view opens")
-    .named("sample")
-    .with_scale(scale);
+    let mut page = Page::new(crate::test_data::data(), recording.into(), Side::You, SIZE)
+        .expect("the sample view opens")
+        .named("sample")
+        .with_scale(scale);
     if host {
         page = page.with_host_atlas();
     }

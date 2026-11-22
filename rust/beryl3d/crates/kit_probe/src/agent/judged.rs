@@ -7,7 +7,7 @@
 use std::ops::AddAssign;
 
 use super::checks::{KeptArrow, arrows_held};
-use super::fault::{Fault, Layout, Rule};
+use super::fault::{Context, Fault, Rule};
 use kit_frame::frame::{Frame, Material, Place, Role, StateBits};
 
 /// The result of checking a scene.
@@ -53,9 +53,9 @@ impl Judged {
         }
     }
 
-    /// Counts what the frame checks (`checks::check`) judge in `frame`, shown in `layout`. Each
-    /// count follows the filter its check applies before it judges an element.
-    pub fn frame(&mut self, frame: &Frame, layout: Layout) {
+    /// Counts what the frame checks judge in `frame` using `context`. Each count follows
+    /// the same filter as its check.
+    pub fn frame(&mut self, frame: &Frame, context: &Context) {
         let mut interactive = 0;
         let mut layer = 0;
         let mut cards = 0;
@@ -106,8 +106,7 @@ impl Judged {
             Rule::RelationsHold,
             frame.decorations.len() + frame.anchors.len() + frame.clearances.len(),
         );
-        // "Phone sizes" judges only the phone layout.
-        if layout == Layout::Phone {
+        if context.checks.text_points.is_some() {
             self.add(Rule::MinimumSizes, targets + frame.lines.len());
         }
         // "Clips fit" judges every frame's list of clip rectangles, entry 0 of which is no clip;

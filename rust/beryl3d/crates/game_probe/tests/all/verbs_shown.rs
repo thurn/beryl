@@ -12,10 +12,11 @@ use game_play::verbs;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use game_table::table::Place;
 use glam::Vec2;
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::{Frame, REVEALED_FACE, Role, StateBits};
+use kit_probe::agent::Context;
 use kit_probe::agent::checks::duplicates;
 use kit_probe::agent::tree;
-use kit_probe::agent::{Context, Layout};
 use kit_ui::input::{Insets, Size};
 
 use crate::common::{MS, empty_frame, frame, show};
@@ -130,12 +131,12 @@ fn card(frame: &Frame, id: u32) -> Option<&kit_frame::frame::Resolved> {
 
 fn context() -> Context {
     Context {
-        layout: Layout::Desktop,
+        size_class: SizeClass::Regular,
         audit: crate::test_data::data().audit,
-        checks: Layout::Desktop.checks(
-            &crate::test_data::data().profiles,
-            kit_base::geometry::Size::default(),
-        ),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(SizeClass::Regular)
+            .checks,
         size: Size {
             width: 1440.0,
             height: 900.0,

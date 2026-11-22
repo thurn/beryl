@@ -8,7 +8,8 @@ use std::str::FromStr;
 use app_client::driver::{Duration, Moment, Page};
 use beryl_inspect::pages::page;
 use beryl_protocol::protocol::Side;
-use kit_probe::agent::{Fault, Layout, Rule};
+use kit_base::data::profiles::SizeClass;
+use kit_probe::agent::{Fault, Rule};
 use kit_ui::input::{Rect, Size};
 
 const SIZE: Size = Size {
@@ -24,7 +25,7 @@ const RECIPIENTS: [u16; 3] = [0, 259, 263];
 /// `shape-divide` played from the viewer's seat to its prompt, at rest, with the recorded
 /// answer held back, so that the test answers it.
 fn at_divide() -> Page {
-    let mut page = page("shape-divide", Side::You, Layout::Desktop, SIZE)
+    let mut page = page("shape-divide", Side::You, SizeClass::Regular, SIZE)
         .unwrap_or_else(|why| panic!("{why}"));
     page.set_reply_delay(1, Duration::from_millis(60_000));
     let moment = Moment::from_str("prompt:1").unwrap_or_else(|why| panic!("{why:?}"));

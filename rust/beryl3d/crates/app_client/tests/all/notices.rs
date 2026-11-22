@@ -139,7 +139,6 @@ fn a_fault_can_be_planted_while_a_banner_outlasts_its_script() {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::REGULAR,
         size,
     )
     .unwrap();
@@ -300,12 +299,12 @@ fn two_notices_at_once_do_not_overlap() {
         || pill.1.y <= banner.0.y;
     assert!(apart, "the banner {banner:?} and the pill {pill:?} overlap");
     let context = Context {
-        layout: crate::REGULAR,
+        size_class: crate::REGULAR,
         audit: crate::test_data::data().audit,
-        checks: crate::REGULAR.checks(
-            &crate::test_data::data().profiles,
-            kit_base::geometry::Size::default(),
-        ),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(crate::REGULAR)
+            .checks,
         size: Size {
             width: WIDTH,
             height: HEIGHT,

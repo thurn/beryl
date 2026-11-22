@@ -9,8 +9,9 @@ use app_client::driver::{
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
 use game_probe::story::Body;
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::Frame;
-use kit_probe::agent::{Context, Layout, locate};
+use kit_probe::agent::{Context, locate};
 use kit_probe::story::Player;
 use kit_scene::hit::bounds;
 use kit_ui::element::Element as Widget;
@@ -71,12 +72,12 @@ impl Scene {
     pub fn open(
         name: &str,
         seat: Side,
-        layout: Option<Layout>,
+        size_class: Option<SizeClass>,
         size: Size,
         scale: f32,
     ) -> Result<Self, String> {
         if !stories::is_story(name) {
-            return pages::page_with_profile(name, seat, size, scale, layout, None)
+            return pages::page_with_profile(name, seat, size, scale, size_class, None)
                 .map(|page| Self::Recording(Box::new(page)));
         }
         if seat != Side::You {
@@ -87,10 +88,10 @@ impl Scene {
             .profile()
             .map(pages::inspection_profile)
             .transpose()?;
-        let (data, window) = pages::scene_window(size, scale, layout, profile)?;
+        let (data, window) = pages::scene_window(size, scale, size_class, profile)?;
         let selected = data.profiles.for_size(size);
         let checks = selected.checks;
-        let layout = Layout::for_size_class(selected.size_class);
+        let size_class = selected.size_class;
         let source = match source.as_ref() {
             stories::Story::Toolkit(_) => Preview::Toolkit(source),
             stories::Story::Game(story) => match &story.body {
@@ -155,7 +156,7 @@ impl Scene {
             source,
             player,
             context: Context {
-                layout,
+                size_class,
                 audit,
                 checks,
                 size,

@@ -71,9 +71,12 @@ fn layers(frame: &Frame, name: &str, layer: u16) -> (Vec<Option<u16>>, usize) {
 
 fn blank(frame: &Frame) -> Vec<String> {
     let context = Context {
-        layout: crate::REGULAR,
+        size_class: crate::REGULAR,
         audit: crate::test_data::data().audit,
-        checks: crate::REGULAR.checks(&crate::test_data::data().profiles, SIZE),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(crate::REGULAR)
+            .checks,
         size: SIZE,
         safe_area: Insets::default(),
         at: 0,

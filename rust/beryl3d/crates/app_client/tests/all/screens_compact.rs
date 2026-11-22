@@ -73,7 +73,6 @@ fn page_in(messages: Vec<FixtureMessage>, size: Size, safe: Insets) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::COMPACT,
         size,
     )
     .expect("the recording plays")

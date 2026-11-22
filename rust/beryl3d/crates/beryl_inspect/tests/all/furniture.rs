@@ -14,8 +14,8 @@ use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
 use game_hud::art::orb::Shape;
 use glam::{Vec2, Vec3};
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::{Draw, Frame, Material, RADIAL, Role};
-use kit_probe::agent::Layout;
 use kit_scene::hit;
 use kit_ui::input::{AssetReady, GlyphCell, Rect, Size};
 
@@ -337,8 +337,8 @@ fn assert_button_drawn(page: &mut Page, name: &str, look: &ButtonLook, what: &st
 /// `name` from the viewer's seat at `moment`, with a made-up atlas cell for every glyph its
 /// text wants, so that labels are drawn: the test driver rasterizes none itself.
 fn page_at(name: &str, moment: &str) -> Page {
-    let mut page =
-        pages::page(name, Side::You, Layout::Desktop, WINDOW).unwrap_or_else(|why| panic!("{why}"));
+    let mut page = pages::page(name, Side::You, SizeClass::Regular, WINDOW)
+        .unwrap_or_else(|why| panic!("{why}"));
     page.seek(&moment.parse::<Moment>().expect("a moment"))
         .unwrap_or_else(|why| panic!("{why}"));
     let glyphs = (page.wanted_glyphs().into_iter())

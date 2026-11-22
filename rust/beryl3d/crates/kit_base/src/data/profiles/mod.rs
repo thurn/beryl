@@ -30,6 +30,27 @@ pub enum SizeClass {
     Regular,
 }
 
+impl SizeClass {
+    /// The layout spelling used by existing inspection commands and story headers.
+    #[must_use]
+    pub const fn legacy_layout(self) -> &'static str {
+        match self {
+            Self::Regular => "desktop",
+            Self::Compact => "phone",
+        }
+    }
+
+    /// Reads the layout spelling used by existing inspection commands and story headers.
+    #[must_use]
+    pub fn from_legacy_layout(label: &str) -> Option<Self> {
+        match label {
+            "desktop" => Some(Self::Regular),
+            "phone" => Some(Self::Compact),
+            _ => None,
+        }
+    }
+}
+
 /// A layout's camera, as data.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -672,6 +693,18 @@ impl Profiles {
                 })
             })
             .expect("validated profiles have a fallback")
+    }
+
+    /// The first automatic profile for a size class, used when a caller chooses only a class.
+    ///
+    /// # Panics
+    ///
+    /// If the class has no automatic profile. Loading profiles requires one for each class.
+    #[must_use]
+    pub fn for_size_class(&self, class: SizeClass) -> &ProfileData {
+        self.iter()
+            .find(|profile| profile.size_class == class)
+            .expect("validated profiles cover every size class")
     }
 
     /// Selects a size class for the window passed to existing layout consumers.

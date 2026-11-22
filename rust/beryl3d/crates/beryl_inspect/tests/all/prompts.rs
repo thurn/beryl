@@ -10,7 +10,7 @@ use beryl_protocol::protocol::{Side, Status};
 use app_client::driver::{Duration, Moment, Page, Recording};
 use beryl_protocol::script::{Mark, Subject};
 use game_play::light::{MarkSpan, Span};
-use kit_probe::agent::Layout;
+use kit_base::data::profiles::SizeClass;
 use kit_ui::input::Size;
 
 /// Long enough for the marks a prompt begins to have come up, or those it ends to have gone.
@@ -18,7 +18,7 @@ const SETTLE_MS: u64 = 500;
 
 /// The recording `name` from the viewer's seat, as `hold` leaves it.
 fn at(name: &str, view: usize, after: u64) -> Page {
-    let mut page = Page::fixture(name, Side::You, Layout::Desktop);
+    let mut page = Page::fixture(name, Side::You, SizeClass::Regular);
     hold(&mut page, view, after);
     page
 }
@@ -125,7 +125,6 @@ fn waterbend() -> Page {
         crate::test_data::data(),
         Arc::new(Recording(messages)),
         Side::You,
-        Layout::Desktop,
         Size {
             width: 1600.0,
             height: 900.0,

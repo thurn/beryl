@@ -6,7 +6,7 @@ use beryl_inspect::runner::{caught, each};
 use beryl_inspect::{recordings, stress};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
-use kit_probe::agent::Layout;
+use kit_base::data::profiles::SizeClass;
 
 /// Card spec moments that the recorder (`beryl_cli`) cannot record, each with the start of the
 /// reason the pack gives. A moment listed here that now records fails the test, so that the
@@ -36,8 +36,8 @@ fn play(name: &str, seat: Seat) -> Result<(), String> {
         let mut page = pages::page(
             name,
             side,
-            Layout::Desktop,
-            Windows::Desktop.windows()[1].size,
+            SizeClass::Regular,
+            Windows::Class(SizeClass::Regular).windows()[1].size,
         )?;
         for _ in 0..MOST_TICKS {
             if page.ended() {

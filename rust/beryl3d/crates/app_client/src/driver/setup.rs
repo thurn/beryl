@@ -4,14 +4,13 @@ use std::sync::Arc;
 
 use beryl_protocol::protocol::Side;
 use kit_base::data::Data;
-use kit_probe::agent::Layout;
 use kit_ui::input::{Size, Tier, Window};
 
 use super::{Capture, Client, Config, Cues, DriverError, Page, Recording, Responses, TICK};
 
 impl Page {
     /// The recording at its start, as `seat` sees it in a window of `size` logical points.
-    /// The client data selects the profile. The layout argument is retained for existing callers.
+    /// The client data selects the profile.
     ///
     /// # Errors
     ///
@@ -20,7 +19,6 @@ impl Page {
         data: Arc<Data>,
         recording: Arc<Recording>,
         seat: Side,
-        _layout: Layout,
         size: Size,
     ) -> Result<Self, DriverError> {
         Self::in_window(

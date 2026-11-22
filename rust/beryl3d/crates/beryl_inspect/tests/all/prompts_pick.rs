@@ -10,8 +10,8 @@ use beryl_inspect::pages::page;
 use beryl_protocol::protocol::{Side, ZoneName};
 use game_play::light::arrows::AIM_ID;
 use glam::Vec2;
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::{Role, StateBits};
-use kit_probe::agent::Layout;
 use kit_ui::input::Size;
 
 const SIZE: Size = Size {
@@ -24,7 +24,7 @@ const SIZE: Size = Size {
 /// recorded answer to that prompt is held back, so that the test answers it.
 fn at_prompt(name: &str, at: &str, view: usize) -> Page {
     let mut page =
-        page(name, Side::You, Layout::Desktop, SIZE).unwrap_or_else(|why| panic!("{why}"));
+        page(name, Side::You, SizeClass::Regular, SIZE).unwrap_or_else(|why| panic!("{why}"));
     page.set_reply_delay(view, Duration::from_millis(60_000));
     let moment = Moment::from_str(at).unwrap_or_else(|why| panic!("{at}: {why:?}"));
     page.seek(&moment).unwrap_or_else(|why| panic!("{why}"));

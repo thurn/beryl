@@ -11,8 +11,8 @@ use beryl_inspect::pages;
 use beryl_protocol::protocol::{Side, ZoneName};
 use game_table::table::Place;
 use glam::Vec2;
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::{Resolved, Role, StateBits};
-use kit_probe::agent::Layout;
 use kit_ui::input::Size;
 
 /// A sweep from the empty table above your Serra Angel to below your Pacifism, which touches
@@ -25,7 +25,7 @@ fn table() -> Page {
         width: 1600.0,
         height: 900.0,
     };
-    let mut page = pages::page("screen/table", Side::You, Layout::Desktop, size)
+    let mut page = pages::page("screen/table", Side::You, SizeClass::Regular, size)
         .unwrap_or_else(|why| panic!("{why}"));
     page.seek(&"end".parse().expect("end is a moment"))
         .unwrap_or_else(|why| panic!("{why}"));

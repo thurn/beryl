@@ -18,12 +18,13 @@ use game_play::play::record::ScriptRecord;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use glam::Vec3;
 use kit_base::data::light::Light;
+use kit_base::data::profiles::SizeClass;
 use kit_base::pose::Pose;
 use kit_frame::frame::{
     Band, Draw, ElementId, Frame, Material, Resolved, Role, ShapeAnchor, StateBits, sprites,
 };
 use kit_probe::agent::checks::relations_hold;
-use kit_probe::agent::{Context, Layout, Rule};
+use kit_probe::agent::{Context, Rule};
 use kit_ui::input::Insets;
 
 const fn card(slot: ObjectId) -> Subject {
@@ -376,12 +377,12 @@ fn the_marks_check_faults_an_outline_moved_off_its_card_or_narrower_than_it() {
     let (flown, _) = discard(&begun, cards);
     let (show, frames) = play(&[start, begun, flown]);
     let context = Context {
-        layout: Layout::Desktop,
+        size_class: SizeClass::Regular,
         audit: crate::test_data::data().audit,
-        checks: Layout::Desktop.checks(
-            &crate::test_data::data().profiles,
-            show.table().camera().window.size,
-        ),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(SizeClass::Regular)
+            .checks,
         size: show.table().camera().window.size,
         safe_area: Insets::default(),
         at: 0,

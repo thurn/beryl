@@ -10,7 +10,8 @@ use beryl_protocol::Seat;
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
 use game_probe::story::{Body, Source};
-use kit_probe::agent::Layout;
+use kit_base::data::Data;
+use kit_base::data::profiles::{ProfileData, Profiles, SizeClass};
 use kit_ui::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size};
 
 use crate::faults::Listed;
@@ -18,27 +19,18 @@ use crate::runner::Test;
 use crate::stress::{Board, pointer_moves};
 use crate::{recordings, stories};
 
-use kit_base::data::Data;
-use kit_base::data::profiles::ProfileData;
 pub use kit_base::geometry::Window;
 
-fn profiles() -> &'static kit_base::data::profiles::Profiles {
+fn profiles() -> &'static Profiles {
     &crate::data::checkout_ref()
         .expect("layout profiles")
         .profiles
 }
 
-fn by_layout(layout: Layout) -> &'static ProfileData {
-    profiles()
-        .iter()
-        .find(|profile| profile.size_class == layout.size_class())
-        .expect("the inspector's layouts have profiles")
-}
-
-/// The safe insets the recordings use for this layout.
+/// The safe insets the recordings use for this size class.
 #[must_use]
-pub fn safe_area(layout: Layout) -> Insets {
-    by_layout(layout).test_safe_area()
+pub fn safe_area(size_class: SizeClass) -> Insets {
+    profiles().for_size_class(size_class).test_safe_area()
 }
 
 /// An explicitly selected profile and its isolated inspection data.
@@ -116,11 +108,11 @@ pub(crate) fn inspection_profile(name: &str) -> Result<&'static InspectionProfil
 /// Which windows of the test matrix a run of the interface tests plays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Windows {
-    Desktop,
-    Phone,
+    /// Run the automatic profiles of this size class.
+    Class(SizeClass),
     /// Run fixtures in the explicitly selected profile.
     Profile(&'static InspectionProfile),
-    /// Both, in the usual order.
+    /// All automatic profiles, in the usual test order.
     All,
 }
 
@@ -128,18 +120,17 @@ impl Windows {
     /// The windows, in the order tests are named in.
     #[must_use]
     pub fn windows(self) -> Vec<Window> {
-        let classes: &[Layout] = match self {
-            Self::Desktop => &[Layout::Desktop],
-            Self::Phone => &[Layout::Phone],
-            Self::All => &[Layout::Desktop, Layout::Phone],
+        let classes: &[SizeClass] = match &self {
+            Self::Class(class) => std::slice::from_ref(class),
+            Self::All => &[SizeClass::Regular, SizeClass::Compact],
             Self::Profile(profile) => return profile.definition().test_windows().collect(),
         };
         classes
             .iter()
-            .flat_map(|&layout| {
+            .flat_map(|&class| {
                 profiles()
                     .iter()
-                    .filter(move |profile| profile.size_class == layout.size_class())
+                    .filter(move |profile| profile.size_class == class)
             })
             .flat_map(ProfileData::test_windows)
             .collect()
@@ -154,7 +145,7 @@ pub trait Recorded: Sized {
     /// # Panics
     ///
     /// When there is no such recording for `seat`, or it cannot be read; each says why.
-    fn fixture(name: &str, seat: Side, layout: Layout) -> Self;
+    fn fixture(name: &str, seat: Side, size_class: SizeClass) -> Self;
 
     /// The spec moment `moment` of the card whose spec is `card` (its slug), as
     /// [`Recorded::fixture`] plays a fixture.
@@ -162,16 +153,18 @@ pub trait Recorded: Sized {
     /// # Panics
     ///
     /// As [`Recorded::fixture`].
-    fn spec(card: &str, moment: &str, seat: Side, layout: Layout) -> Self;
+    fn spec(card: &str, moment: &str, seat: Side, size_class: SizeClass) -> Self;
 }
 
 impl Recorded for Page {
-    fn fixture(name: &str, seat: Side, layout: Layout) -> Self {
-        page(name, seat, layout, usual_window(layout)).unwrap_or_else(|why| panic!("{why}"))
+    fn fixture(name: &str, seat: Side, size_class: SizeClass) -> Self {
+        usual_size(size_class)
+            .and_then(|size| page(name, seat, size_class, size))
+            .unwrap_or_else(|why| panic!("{why}"))
     }
 
-    fn spec(card: &str, moment: &str, seat: Side, layout: Layout) -> Self {
-        Self::fixture(&format!("{card}/{moment}"), seat, layout)
+    fn spec(card: &str, moment: &str, seat: Side, size_class: SizeClass) -> Self {
+        Self::fixture(&format!("{card}/{moment}"), seat, size_class)
     }
 }
 
@@ -181,8 +174,8 @@ impl Recorded for Page {
 /// # Errors
 ///
 /// When there is no such recording for `seat`, or it cannot be read.
-pub fn page(name: &str, seat: Side, layout: Layout, size: Size) -> Result<Page, String> {
-    page_with_profile(name, seat, size, 1.0, Some(layout), None)
+pub fn page(name: &str, seat: Side, size_class: SizeClass, size: Size) -> Result<Page, String> {
+    page_with_profile(name, seat, size, 1.0, Some(size_class), None)
 }
 
 pub(crate) fn page_with_profile(
@@ -190,17 +183,17 @@ pub(crate) fn page_with_profile(
     seat: Side,
     size: Size,
     scale: f32,
-    layout: Option<Layout>,
+    size_class: Option<SizeClass>,
     profile: Option<&InspectionProfile>,
 ) -> Result<Page, String> {
-    let (data, window) = scene_window(size, scale, layout, profile)?;
+    let (data, window) = scene_window(size, scale, size_class, profile)?;
     page_with_messages(name, recording(name, seat)?, seat, data, window, None)
 }
 
 pub(crate) fn scene_window(
     size: Size,
     scale: f32,
-    layout: Option<Layout>,
+    size_class: Option<SizeClass>,
     profile: Option<&InspectionProfile>,
 ) -> Result<(Arc<Data>, Window), String> {
     let data = if let Some(profile) = profile {
@@ -208,7 +201,7 @@ pub(crate) fn scene_window(
     } else {
         let data = crate::data::checkout()?;
         let selected = data.profiles.for_size(size);
-        if let Some(requested) = layout.map(by_layout)
+        if let Some(requested) = size_class.map(|class| data.profiles.for_size_class(class))
             && requested.name != selected.name
         {
             let mut data = data.as_ref().clone();
@@ -392,7 +385,7 @@ pub fn check_recording(name: &str) -> Checked {
         line_pairs: 0,
     };
     for &seat in &seats {
-        for window in by_layout(Layout::Desktop).test_windows() {
+        for window in profiles().for_size_class(SizeClass::Regular).test_windows() {
             let test = Test {
                 recording: name.to_owned(),
                 seat,
@@ -420,7 +413,11 @@ pub fn check_recording(name: &str) -> Checked {
     checked
 }
 
-/// The window a layout is usually shown in.
-fn usual_window(layout: Layout) -> Size {
-    by_layout(layout).usual_window().size
+/// The default logical size when explicitly inspecting a size class.
+pub(crate) fn usual_size(size_class: SizeClass) -> Result<Size, String> {
+    Ok(crate::data::checkout_ref()?
+        .profiles
+        .for_size_class(size_class)
+        .usual_window()
+        .size)
 }

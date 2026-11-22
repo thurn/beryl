@@ -12,8 +12,8 @@ use beryl_inspect::pages::page;
 use beryl_protocol::protocol::Side;
 use game_play::light::arrows::AIM_ID;
 use glam::Vec2;
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::Role;
-use kit_probe::agent::Layout;
 use kit_probe::agent::checks::KeptArrow;
 use kit_probe::agent::{Fault, Rule};
 use kit_ui::input::Size;
@@ -34,7 +34,7 @@ const ATTACK: &str = "prompt:6";
 /// did, so that nothing is declared. The recorded answer is held back, so that the test
 /// answers it.
 fn at_attack() -> Page {
-    let mut page = page("shape-declare", Side::You, Layout::Desktop, SIZE)
+    let mut page = page("shape-declare", Side::You, SizeClass::Regular, SIZE)
         .unwrap_or_else(|why| panic!("{why}"));
     page.set_reply_delay(25, Duration::from_millis(60_000));
     let moment = Moment::from_str(ATTACK).unwrap_or_else(|why| panic!("{ATTACK}: {why:?}"));

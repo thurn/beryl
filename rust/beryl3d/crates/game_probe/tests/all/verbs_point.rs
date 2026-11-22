@@ -11,9 +11,10 @@ use game_play::light::arrows::RIBBON;
 use game_play::play::Show;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use glam::Vec2;
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::{ElementId, Endpoint, Frame, Material, Role, ShapeAnchor};
 use kit_probe::agent::checks::{KeptArrow, keep_arrows, lines_hold, relations_hold};
-use kit_probe::agent::{Context, Layout, TreeOptions};
+use kit_probe::agent::{Context, TreeOptions};
 use kit_ui::input::{Insets, Size};
 
 use crate::common::{Cards, MS, before, discard, draw, empty_frame, frame, show};
@@ -160,14 +161,14 @@ fn on_edge(point: Vec2, (low, high): (Vec2, Vec2)) -> bool {
     inside && side
 }
 
-fn desktop() -> Context {
+fn regular_context() -> Context {
     Context {
-        layout: Layout::Desktop,
+        size_class: SizeClass::Regular,
         audit: crate::test_data::data().audit,
-        checks: Layout::Desktop.checks(
-            &crate::test_data::data().profiles,
-            kit_base::geometry::Size::default(),
-        ),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(SizeClass::Regular)
+            .checks,
         size: Size {
             width: 1440.0,
             height: 900.0,
@@ -288,7 +289,7 @@ fn an_arrows_ends_stay_on_its_cards_edges_while_one_flies() {
     let mut kept: Vec<KeptArrow> = Vec::new();
     let mut held = Vec::new();
     played.play(discard(&begun, cards), |frame, now| {
-        let mut context = desktop();
+        let mut context = regular_context();
         context.at = now;
         held.extend(lines_hold(&kept, frame, &context));
         keep_arrows(frame, &mut kept);
@@ -329,7 +330,7 @@ fn lines_hold_finds_a_planted_reshape() {
         pointed(&start, vec![(arrow, point_timing("target arrow"))]),
         |_, _| {},
     );
-    let context = desktop();
+    let context = regular_context();
     let before = played.last_frame();
     let mut kept = Vec::new();
     keep_arrows(&before, &mut kept);

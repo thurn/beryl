@@ -2,7 +2,7 @@ use app_client::driver::Page;
 use beryl_inspect::pages::Recorded;
 use beryl_inspect::recordings;
 use beryl_protocol::protocol::Side;
-use kit_probe::agent::Layout;
+use kit_base::data::profiles::SizeClass;
 
 /// The recordings `data/beryl3d/screens.json` names, in its order.
 fn listed_recordings() -> Vec<String> {
@@ -144,15 +144,15 @@ pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
     let (recording, at, shows) = (field("recording"), field("at"), field("shows"));
     let (layout, size) = match entry["layout"].as_str() {
         None | Some("desktop") => (
-            Layout::Desktop,
+            SizeClass::Regular,
             Size {
                 width: 1600.0,
                 height: 900.0,
             },
         ),
         Some("phone") => (
-            Layout::Phone,
-            beryl_inspect::pages::Windows::Phone.windows()[0].size,
+            SizeClass::Compact,
+            beryl_inspect::pages::Windows::Class(SizeClass::Compact).windows()[0].size,
         ),
         Some(other) => panic!("{name}: `layout` is \"desktop\" or \"phone\", not {other:?}"),
     };
@@ -235,6 +235,6 @@ fn is_number(text: &str) -> bool {
 
 #[test]
 fn the_lobby_recording_shows_the_loaded_deck() {
-    let tree = Page::fixture("screen/lobby", Side::You, Layout::Desktop).tree();
+    let tree = Page::fixture("screen/lobby", Side::You, SizeClass::Regular).tree();
     assert!(tree.contains("Deck loaded"), "{tree}");
 }

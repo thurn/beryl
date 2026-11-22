@@ -164,12 +164,12 @@ fn a_picked_card_lies_apart_from_its_hand_face_up_only_for_its_player() {
 fn the_board_passes_the_interface_checks() {
     let (frame, _) = frame();
     let context = Context {
-        layout: crate::REGULAR,
+        size_class: crate::REGULAR,
         audit: crate::test_data::data().audit,
-        checks: crate::REGULAR.checks(
-            &crate::test_data::data().profiles,
-            kit_base::geometry::Size::default(),
-        ),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(crate::REGULAR)
+            .checks,
         size: Size {
             width: 1440.0,
             height: 900.0,

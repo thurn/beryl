@@ -16,10 +16,11 @@ use beryl_protocol::script::Verb;
 use game_play::play::Show;
 use game_table::table::Place;
 use game_table::table::{Rest, Table, Window};
+use kit_base::data::profiles::SizeClass;
 use kit_base::pose::Pose;
 use kit_frame::frame::{Frame, FrameBuilder, Wake};
+use kit_probe::agent::locate;
 use kit_probe::agent::tree::line;
-use kit_probe::agent::{Layout, locate};
 use kit_ui::input::{Insets, Size, Tier};
 
 const SEATS: [Side; 2] = [Side::You, Side::Opponent];
@@ -41,7 +42,7 @@ const BUILT: [Verb; 7] = [
 #[test]
 fn verbs_zones_plays_to_its_end_from_both_seats() {
     for seat in SEATS {
-        let mut page = Page::fixture("verbs-zones", seat, Layout::Desktop);
+        let mut page = Page::fixture("verbs-zones", seat, SizeClass::Regular);
         page.seek(&"end".parse().expect("a moment"))
             .expect("the recording has an end");
         page.still();
@@ -78,7 +79,7 @@ fn verbs_zones_plays_to_its_end_from_both_seats() {
 #[test]
 fn verbs_zones_sounds_as_its_steps_begin_and_end() {
     for seat in SEATS {
-        let mut page = Page::fixture("verbs-zones", seat, Layout::Desktop);
+        let mut page = Page::fixture("verbs-zones", seat, SizeClass::Regular);
         let steps = page.steps();
         let sounds = page.sounds();
         assert!(!sounds.is_empty(), "{seat:?}: the recording has sounds");
@@ -258,7 +259,7 @@ fn verbs_zones_passes_every_check_on_every_tick() {
 #[test]
 fn pay_default_plays_to_its_end_from_both_seats_by_pressing_its_buttons() {
     for seat in SEATS {
-        let mut page = Page::fixture("pay-default", seat, Layout::Desktop);
+        let mut page = Page::fixture("pay-default", seat, SizeClass::Regular);
         let mut pressed = Vec::new();
         // How many views had been given when a button was last pressed: each view's prompt is
         // answered once, as soon as the table rests in it.
@@ -297,7 +298,7 @@ fn pay_default_plays_to_its_end_from_both_seats_by_pressing_its_buttons() {
 
 #[test]
 fn pay_default_shows_each_prompt_in_the_prompt_bar() {
-    let mut page = Page::fixture("pay-default", Side::You, Layout::Desktop);
+    let mut page = Page::fixture("pay-default", Side::You, SizeClass::Regular);
     for (moment, lines) in [
         // The primary button stands over its caption: where passing leads.
         (
@@ -406,7 +407,7 @@ fn first_button(tree: &str) -> Option<String> {
 #[test]
 fn the_stress_boards_play_to_their_end() {
     for name in stress::Board::ALL.map(stress::Board::name) {
-        let mut page = Page::fixture(name, Side::You, Layout::Desktop);
+        let mut page = Page::fixture(name, Side::You, SizeClass::Regular);
         page.seek(&"end".parse().expect("a moment"))
             .expect("the board has an end");
         page.still();
@@ -437,7 +438,7 @@ fn timings(update: &beryl_protocol::GameUpdate) -> Vec<beryl_protocol::script::S
 fn every_tree_line_locates_its_own_element_at_every_check_time() {
     for name in ["verbs-zones", "pay-default"] {
         for seat in SEATS {
-            let mut page = Page::fixture(name, seat, Layout::Desktop);
+            let mut page = Page::fixture(name, seat, SizeClass::Regular);
             for t in page.check_times() {
                 page.seek(&Moment::At(Duration(t)))
                     .expect("a time is a moment");
@@ -464,7 +465,7 @@ fn trigger_order_tree(step: u64, at: u64) -> String {
         height: 900.0,
     };
     let mut page =
-        beryl_inspect::pages::page("choice-trigger-order", Side::You, Layout::Desktop, size)
+        beryl_inspect::pages::page("choice-trigger-order", Side::You, SizeClass::Regular, size)
             .expect("the recording can be read");
     if step > 0 {
         while page.now() + step < at {
@@ -497,7 +498,7 @@ fn a_trigger_that_resolves_in_its_own_script_rises_onto_the_stack() {
         width: 1440.0,
         height: 900.0,
     };
-    let mut page = beryl_inspect::pages::page("verbs-piles", Side::You, Layout::Desktop, size)
+    let mut page = beryl_inspect::pages::page("verbs-piles", Side::You, SizeClass::Regular, size)
         .expect("the recording can be read");
     page.step(Duration(2_450 * MS));
     let rising = page.tree();

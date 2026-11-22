@@ -2,7 +2,7 @@ use app_client::driver::Moment;
 use app_client::stories::Source;
 use beryl_inspect::{cli, data, pages};
 use beryl_protocol::protocol::Side;
-use kit_probe::agent::{Layout, TreeOptions, tree};
+use kit_probe::agent::{TreeOptions, tree};
 use kit_probe::story::Header;
 use kit_ui::input::Size;
 
@@ -79,12 +79,12 @@ fn test_lists_and_reopens_each_story_in_its_profile_windows() {
         );
     }
 
-    let phone_list = command(&["test", "story/", "--list", "--phone-only"]);
-    assert!(!phone_list.stdout.contains("button-states"));
-    let phone = "b3d:story/kit_ui/phone-actions/you/375x647";
-    assert!(list.stdout.lines().any(|name| name == phone));
-    assert!(phone_list.stdout.lines().any(|name| name == phone));
-    let tree = command(&["tree", phone]);
+    let compact_list = command(&["test", "story/", "--list", "--phone-only"]);
+    assert!(!compact_list.stdout.contains("button-states"));
+    let compact_test = "b3d:story/kit_ui/phone-actions/you/375x647";
+    assert!(list.stdout.lines().any(|name| name == compact_test));
+    assert!(compact_list.stdout.lines().any(|name| name == compact_test));
+    let tree = command(&["tree", compact_test]);
     assert!(tree.stdout.contains("--layout phone --size 375x647"));
     assert!(tree.stdout.contains("button \"Continue\" #1"));
 }
@@ -171,7 +171,11 @@ fn screen_captures_replay_their_saved_story_catalog() {
         height: 900.0,
     };
     let header = Header {
-        layout: Layout::for_size(&data::checkout().unwrap().profiles, window),
+        size_class: data::checkout()
+            .unwrap()
+            .profiles
+            .for_size(window)
+            .size_class,
         window,
     };
     let saved = Source::owned(
@@ -189,7 +193,7 @@ fn screen_captures_replay_their_saved_story_catalog() {
 
         // Give the driver a catalog that differs from the inspector's checkout.
         for sources in [vec![saved.clone()], Vec::new()] {
-            let mut page = pages::page(screen, Side::You, header.layout, header.window)
+            let mut page = pages::page(screen, Side::You, header.size_class, header.window)
                 .unwrap()
                 .with_stories(sources.clone().into());
             page.seek(&"end".parse::<Moment>().unwrap()).unwrap();

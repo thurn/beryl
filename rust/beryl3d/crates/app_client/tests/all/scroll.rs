@@ -42,16 +42,15 @@ fn lands(count: usize) -> ViewBuilder {
 }
 
 fn page(view: &ViewBuilder) -> Page {
-    page_in(view, crate::REGULAR, WINDOW)
+    page_in(view, WINDOW)
 }
 
-fn page_in(view: &ViewBuilder, layout: kit_probe::agent::Layout, size: Size) -> Page {
+fn page_in(view: &ViewBuilder, size: Size) -> Page {
     let messages = vec![FixtureMessage::game_update(&view.update())];
     let mut page = Page::new(
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        layout,
         size,
     )
     .expect("the page opens");
@@ -340,16 +339,13 @@ fn a_row_that_fits_ignores_the_wheel() {
     assert_eq!(row(page.frame()), before);
 }
 
-fn row_windows() -> [(kit_probe::agent::Layout, Size); 2] {
+fn row_windows() -> [Size; 2] {
     [
-        (crate::REGULAR, WINDOW),
-        (
-            crate::COMPACT,
-            Size {
-                width: 393.0,
-                height: 759.0,
-            },
-        ),
+        WINDOW,
+        Size {
+            width: 393.0,
+            height: 759.0,
+        },
     ]
 }
 
@@ -375,8 +371,8 @@ fn an_oversized_pile_stays_out_of_the_battlefield_window() {
     view.card(ZoneName::Battlefield, Side::You, "Land 0").types = vec![CardType::Land];
     view.script(ScriptBuilder::reset().build());
 
-    for (layout, size) in row_windows() {
-        let mut page = page_in(&view, layout, size);
+    for size in row_windows() {
+        let mut page = page_in(&view, size);
         let frame = page.frame();
         assert!(
             !frame.resolved.iter().any(|element| {
@@ -401,8 +397,8 @@ fn an_unpressable_pack_does_not_hide_following_lands() {
             .exiled_with = Some(host);
     }
 
-    for (layout, size) in row_windows() {
-        let mut page = page_in(&view, layout, size);
+    for size in row_windows() {
+        let mut page = page_in(&view, size);
         assert_eq!(first(&mut page), 1, "{size:?}");
         assert_eq!(count(&mut page, "left"), Some(1), "{size:?}");
         assert!(
@@ -436,8 +432,8 @@ fn a_crowded_host_keeps_both_attachments_in_reach() {
     }
     view.script(ScriptBuilder::reset().build());
 
-    for (layout, size) in row_windows() {
-        let mut page = page_in(&view, layout, size);
+    for size in row_windows() {
+        let mut page = page_in(&view, size);
         let faults: Vec<_> = page
             .faults()
             .into_iter()
@@ -549,7 +545,6 @@ fn a_card_flying_to_the_hidden_end_of_a_compact_row_is_seen() {
         crate::test_data::data(),
         Recording(vec![FixtureMessage::game_update(&before)]).into(),
         Side::You,
-        crate::COMPACT,
         size,
     )
     .expect("the page opens");
@@ -597,7 +592,6 @@ fn a_card_flying_to_the_hidden_end_of_a_compact_row_is_seen() {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::COMPACT,
         size,
     )
     .expect("the views can be read");
@@ -674,7 +668,6 @@ fn a_card_waiting_at_a_crowded_rows_hidden_end_is_not_drawn() {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::COMPACT,
         size,
     )
     .expect("the views can be read");

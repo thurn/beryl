@@ -159,12 +159,12 @@ pub(super) fn centre(frame: &Frame, index: usize) -> Vec2 {
 
 pub(super) fn context() -> Context {
     Context {
-        layout: crate::REGULAR,
+        size_class: crate::REGULAR,
         audit: crate::test_data::data().audit,
-        checks: crate::REGULAR.checks(
-            &crate::test_data::data().profiles,
-            kit_base::geometry::Size::default(),
-        ),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(crate::REGULAR)
+            .checks,
         size: Size {
             width: WIDTH,
             height: HEIGHT,

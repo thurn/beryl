@@ -81,8 +81,8 @@ impl Bugs {
     /// The desktop's bugs folder for the profile `BERYL_PROFILE` names (`beryl_shell::Dirs`),
     /// or `$BERYL_BUGS`.
     #[must_use]
-    pub fn desktop() -> Self {
-        let dirs = beryl_shell::Dirs::desktop(beryl_shell::Profile::current());
+    pub fn for_installed_app() -> Self {
+        let dirs = beryl_shell::Dirs::for_installed_app(beryl_shell::Profile::current());
         Self::new(dirs.map_or_else(bugs::dir, |dirs| dirs.bugs))
     }
 

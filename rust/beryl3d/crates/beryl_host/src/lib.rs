@@ -1,17 +1,15 @@
 //! Beryl 3D's host: the window and event loop that drive the client and render its frames
 //! (docs/beryl-3d.md, "Hosts"). `frames` is the loop every host runs, apart from any window;
-//! `desktop` is the winit host for macOS and Windows, and `windowless` draws into an offscreen
+//! `winit_host` uses winit for macOS and Windows, and `windowless` draws into an offscreen
 //! target on a timer, for runs with no window, and `headless` (behind its feature) draws the
 //! frames of a recording at moments an agent asks for. `drive` (behind its feature) plays a
-//! script of actions on the display's clock. `phone` is the part of the iOS and Android hosts
-//! that is Rust: their Swift and Kotlin apps call it through `beryl_3d`'s C functions.
+//! script of actions on the display's clock. The Swift and Kotlin apps use `native_surface`
+//! through `beryl_3d`'s C functions.
 
 mod assets;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod clipboard;
 mod data_watch;
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
-mod desktop;
 #[cfg(feature = "drive")]
 mod drive;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -22,15 +20,15 @@ mod headless;
 mod inbox;
 #[cfg(target_os = "macos")]
 mod macos;
-pub mod phone;
+pub mod native_surface;
 pub mod rate;
 mod threads;
 mod windowless;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+mod winit_host;
 
 pub use assets::{Assets, Scans, match_faces, spawn_glyph_worker};
 pub use data_watch::{DataWatch, WatchingData};
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
-pub use desktop::{Desktop, Options, WindowMode, is_fullscreen_key};
 #[cfg(feature = "drive")]
 pub use drive::Drive;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -41,8 +39,10 @@ pub use frames::{
 #[cfg(feature = "headless")]
 pub use headless::{Headless, HeadlessPage};
 pub use inbox::Inbox;
-pub use phone::{Phone, Wakeup};
+pub use native_surface::{NativeSurface, Wakeup};
 pub use threads::{
     Class, asset_thread, current_class, interactive_thread, set_class, utility_thread,
 };
 pub use windowless::{Windowless, WindowlessOptions};
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub use winit_host::{Options, WindowMode, WinitHost, is_fullscreen_key};

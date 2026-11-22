@@ -68,18 +68,7 @@
   "cap_lines": 12000,
   "cap_allowances": {},
   "protocol_literals": {},
-  "profile_words": {
-    "beryl_3d": 35,
-    "beryl_host": 21,
-    "beryl_inspect": 104,
-    "beryl_pictures": 7,
-    "beryl_render": 0,
-    "game_probe": 111,
-    "kit_base": 0,
-    "kit_probe": 11,
-    "kit_space": 0,
-    "kit_ui": 0
-  },
+  "profile_words": {},
   "web_citations": {
     "app_client": 26,
     "app_screens": 13,

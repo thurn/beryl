@@ -14,7 +14,7 @@ use winit::event_loop::EventLoopProxy;
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::Window;
 
-use crate::desktop::UserEvent;
+use crate::winit_host::UserEvent;
 
 /// What the display link's target holds: where to send each tick.
 struct Ivars {

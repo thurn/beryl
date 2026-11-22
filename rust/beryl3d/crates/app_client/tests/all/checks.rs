@@ -40,15 +40,9 @@ fn page() -> Page {
     ];
     messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
     let recording = Recording(messages);
-    Page::new(
-        crate::test_data::data(),
-        recording.into(),
-        Side::You,
-        crate::REGULAR,
-        SIZE,
-    )
-    .expect("the views can be read")
-    .named("three-beats")
+    Page::new(crate::test_data::data(), recording.into(), Side::You, SIZE)
+        .expect("the views can be read")
+        .named("three-beats")
 }
 
 /// When the Plains is in the middle of its flight: 210 ms into the script.
@@ -69,9 +63,12 @@ fn printed(fault: &Fault) -> String {
         "three-beats",
         Side::You,
         &Context {
-            layout: crate::REGULAR,
+            size_class: crate::REGULAR,
             audit: crate::test_data::data().audit,
-            checks: crate::REGULAR.checks(&crate::test_data::data().profiles, SIZE),
+            checks: crate::test_data::data()
+                .profiles
+                .for_size_class(crate::REGULAR)
+                .checks,
             size: SIZE,
             safe_area: Insets::default(),
             at: fault.at,
@@ -373,7 +370,6 @@ fn an_ability_that_goes_on_the_stack_and_resolves_has_no_fault() {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::REGULAR,
         SIZE,
     )
     .expect("the views can be read")

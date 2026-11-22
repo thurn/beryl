@@ -7,6 +7,7 @@ use std::io::Write as _;
 use std::time::{Duration, Instant};
 
 use app_client::driver::Mode;
+use kit_base::data::profiles::SizeClass;
 use kit_probe::agent::{Judged, Rule};
 use serde_json::{Value, json};
 
@@ -40,7 +41,7 @@ pub(super) const RAISE: &str = "--raise";
 pub(super) const STOP_AFTER: &str = "--stop-after";
 
 /// The switch that plays the phone windows of the matrix instead of the desktop ones.
-pub(super) const PHONE_ONLY: &str = "--phone-only";
+pub(super) const COMPACT_ONLY: &str = "--phone-only";
 
 /// The switch that prints the names of the tests the rest of the command line would play, one
 /// a line, and plays none (`just b3d match boxes --all` reads it).
@@ -76,7 +77,7 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
         }
     };
     let (mode, windows) = switches(options)?;
-    let desktop = windows == Windows::Desktop;
+    let default_matrix = windows == Windows::Class(SizeClass::Regular);
     let stop = stop(options)?;
     let all = options.switch(ALL);
     let tests = selected_tests(prefix, windows, all)?;
@@ -101,7 +102,7 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
     let deferred = tests.len() - outcomes.len();
     // Check the median for a complete desktop matrix. Only the full pack may drop
     // allowlist entries for recordings that were not played.
-    let complete = prefix.is_empty() && deferred == 0 && desktop;
+    let complete = prefix.is_empty() && deferred == 0 && default_matrix;
     let every_test = all && complete;
     let over = limits.map_or_else(Vec::new, |limits| limits.over(&outcomes, complete));
     let mut changes = None;
@@ -223,15 +224,15 @@ fn switches(options: &Options) -> Result<(Mode, Windows), Usage> {
     }
     // The phone layout is still being built, and its faults are fixed rather than listed, so a
     // phone run never writes the list: it could only add phone entries or drop desktop ones.
-    if options.switch(PHONE_ONLY) && options.switch(UPDATE) {
+    if options.switch(COMPACT_ONLY) && options.switch(UPDATE) {
         return Err(Usage(format!(
-            "{UPDATE} lists the desktop tests' faults, so it does not go with {PHONE_ONLY}"
+            "{UPDATE} lists the desktop tests' faults, so it does not go with {COMPACT_ONLY}"
         )));
     }
-    let compact_only = options.switch(PHONE_ONLY);
+    let compact_only = options.switch(COMPACT_ONLY);
     let windows = if let Some(name) = options.value(options::PROFILE) {
         if compact_only {
-            return Err(Usage(format!("--profile does not go with {PHONE_ONLY}")));
+            return Err(Usage(format!("--profile does not go with {COMPACT_ONLY}")));
         }
         for flag in [ALL, UPDATE] {
             if options.switch(flag) {
@@ -240,9 +241,9 @@ fn switches(options: &Options) -> Result<(Mode, Windows), Usage> {
         }
         Windows::Profile(pages::inspection_profile(name).map_err(Usage)?)
     } else if compact_only {
-        Windows::Phone
+        Windows::Class(SizeClass::Compact)
     } else {
-        Windows::Desktop
+        Windows::Class(SizeClass::Regular)
     };
     let mode = if options.switch(EVERY_TICK) {
         Mode::EveryTick

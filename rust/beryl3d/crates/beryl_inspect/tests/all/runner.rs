@@ -6,7 +6,7 @@ use beryl_inspect::faults::PATH_VARIABLE;
 use beryl_inspect::pages::{self, Windows};
 use beryl_inspect::runner::{self, Limits, Outcome, Test};
 use beryl_protocol::protocol::Side;
-use kit_probe::agent::Layout;
+use kit_base::data::profiles::SizeClass;
 use kit_ui::input::{Insets, Size};
 use serde_json::Value;
 
@@ -48,7 +48,8 @@ fn one_test_runs_and_closes_with_one_line() {
 /// given to `tree`, shows that test's recording from its seat in its window.
 #[test]
 fn a_tests_name_opens_its_recording_in_tree() {
-    let tests = runner::tests("verbs-zones/", Windows::Desktop).expect("the pack opens");
+    let tests =
+        runner::tests("verbs-zones/", Windows::Class(SizeClass::Regular)).expect("the pack opens");
     let names: Vec<String> = tests.iter().map(Test::name).collect();
     assert_eq!(
         names,
@@ -95,11 +96,11 @@ fn the_window_matrix_has_seven_sizes_from_each_recorded_seat() {
         .flat_map(|seat| sizes.map(|size| format!("b3d:pay-default/{seat}/{size}")))
         .collect();
     assert_eq!(names(Windows::All), every);
-    let phone = |name: &String| sizes[4..].iter().any(|size| name.ends_with(size));
-    let desktop: Vec<String> = every.iter().filter(|n| !phone(n)).cloned().collect();
-    let phones: Vec<String> = every.iter().filter(|n| phone(n)).cloned().collect();
-    assert_eq!(names(Windows::Desktop), desktop);
-    assert_eq!(names(Windows::Phone), phones);
+    let is_compact = |name: &String| sizes[4..].iter().any(|size| name.ends_with(size));
+    let regular: Vec<String> = every.iter().filter(|n| !is_compact(n)).cloned().collect();
+    let compact: Vec<String> = every.iter().filter(|n| is_compact(n)).cloned().collect();
+    assert_eq!(names(Windows::Class(SizeClass::Regular)), regular);
+    assert_eq!(names(Windows::Class(SizeClass::Compact)), compact);
 }
 
 #[test]
@@ -148,7 +149,7 @@ fn the_explicit_profile_plays_only_fixtures_in_its_own_window() {
 /// `check`, given the test's name, open the same layout and insets: the client draws what the
 /// test checked, and a fault is reported against the same safe area.
 #[test]
-fn a_phone_tests_name_opens_the_same_layout_and_insets_in_test_tree_and_check() {
+fn a_compact_tests_name_opens_the_same_profile_and_insets_in_test_tree_and_check() {
     let name = "b3d:pay-default/you/375x647";
     let size = Size {
         width: 375.0,
@@ -162,7 +163,7 @@ fn a_phone_tests_name_opens_the_same_layout_and_insets_in_test_tree_and_check() 
         scale: 1.0,
     };
     assert_eq!(test.name(), name);
-    let insets = pages::safe_area(Layout::Phone);
+    let insets = pages::safe_area(SizeClass::Compact);
     assert!(insets.top > 0.0 && insets.bottom > 0.0, "{insets:?}");
     for command in ["tree", "check"] {
         let spec = Spec {
@@ -171,23 +172,22 @@ fn a_phone_tests_name_opens_the_same_layout_and_insets_in_test_tree_and_check() 
         };
         let options = Options::parse(command, &[name.to_owned()], spec).expect("a test's name");
         assert_eq!(
-            (options.name(), options.seat, options.layout, options.size),
-            ("pay-default", Side::You, Layout::Phone, size)
+            (
+                options.name(),
+                options.seat,
+                options.size_class,
+                options.size
+            ),
+            ("pay-default", Side::You, SizeClass::Compact, size)
         );
     }
     // The insets reach the client: the test's page lays out differently from the same page with
     // none, and `tree` prints the test's page.
     let tested = test.page().expect("the page opens").tree();
     let recording = pages::recording("pay-default", Side::You).expect("the recording");
-    let bare = Page::new(
-        crate::test_data::data(),
-        recording.into(),
-        Side::You,
-        Layout::Phone,
-        size,
-    )
-    .expect("the page opens")
-    .tree();
+    let bare = Page::new(crate::test_data::data(), recording.into(), Side::You, size)
+        .expect("the page opens")
+        .tree();
     assert_ne!(tested, bare, "the safe area changed nothing on the phone");
     let inset = Page::new(
         crate::test_data::data(),
@@ -195,11 +195,10 @@ fn a_phone_tests_name_opens_the_same_layout_and_insets_in_test_tree_and_check() 
             .expect("the recording")
             .into(),
         Side::You,
-        Layout::Phone,
         size,
     )
     .expect("the page opens")
-    .with_safe_area(pages::safe_area(Layout::Phone))
+    .with_safe_area(pages::safe_area(SizeClass::Compact))
     .tree();
     assert_eq!(tested, inset);
     let ran = run(&["tree", name]);
@@ -219,14 +218,14 @@ fn a_phone_tests_name_opens_the_same_layout_and_insets_in_test_tree_and_check() 
         },
     )
     .expect("a test's name");
-    assert_eq!(options.layout, Layout::Desktop);
-    assert_eq!(pages::safe_area(options.layout), Insets::default());
+    assert_eq!(options.size_class, SizeClass::Regular);
+    assert_eq!(pages::safe_area(options.size_class), Insets::default());
 }
 
 /// `--phone-only` plays only the phone windows, names each fault by the phone test that
 /// reproduces it, and never writes the list of allowed faults.
 #[test]
-fn phone_only_plays_the_phone_windows_and_never_updates_the_list() {
+fn the_compact_matrix_never_updates_the_fault_list() {
     let ran = run(&["test", "pay-default/", "--phone-only", "--json"]);
     assert!(ran.code <= 1, "{}{}", ran.stdout, ran.stderr);
     let value: Value = serde_json::from_str(&ran.stdout).expect("JSON");
@@ -399,7 +398,8 @@ fn the_run_log_agrees_with_the_allowance_comparison() {
 /// out and the faults it is checked for are those of the desktop app on a Retina Mac.
 #[test]
 fn a_retina_tests_name_opens_the_same_scale_in_test_tree_and_check() {
-    let tests = runner::tests("pay-default/you/", Windows::Desktop).expect("the tests");
+    let tests =
+        runner::tests("pay-default/you/", Windows::Class(SizeClass::Regular)).expect("the tests");
     let retina: Vec<&Test> = tests.iter().filter(|test| test.scale > 1.0).collect();
     assert_eq!(retina.len(), 1, "{tests:?}");
     let test = retina[0];

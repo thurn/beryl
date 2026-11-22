@@ -33,7 +33,7 @@ impl Dirs {
 
     /// The desktop folders of `profile`: [`desktop_base`] and [`desktop_logs`], the folders
     /// the Tauri app uses. None when the environment names no home folder.
-    pub fn desktop(profile: &Profile) -> Option<Dirs> {
+    pub fn for_installed_app(profile: &Profile) -> Option<Dirs> {
         Some(Self::new(&desktop_base()?, desktop_logs()?, profile))
     }
 

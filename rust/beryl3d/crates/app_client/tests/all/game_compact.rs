@@ -85,9 +85,12 @@ fn press(client: &mut Client, now: u64, role: Role, name: &str) {
 /// places are the table's.
 fn layer_faults(frame: &Frame, window: Window) -> Vec<String> {
     let context = Context {
-        layout: crate::COMPACT,
+        size_class: crate::COMPACT,
         audit: crate::test_data::data().audit,
-        checks: crate::COMPACT.checks(&crate::test_data::data().profiles, window.size),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(crate::COMPACT)
+            .checks,
         size: window.size,
         safe_area: window.safe_area,
         at: 0,
@@ -202,9 +205,12 @@ fn stacked_buttons_stand_in_the_middle_band_when_a_permanent_lies_under_them() {
     );
     let window = window(size.0, size.1);
     let context = Context {
-        layout: crate::COMPACT,
+        size_class: crate::COMPACT,
         audit: crate::test_data::data().audit,
-        checks: crate::COMPACT.checks(&crate::test_data::data().profiles, window.size),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(crate::COMPACT)
+            .checks,
         size: window.size,
         safe_area: window.safe_area,
         at: 0,
@@ -292,7 +298,6 @@ fn a_pile_opens_its_viewer_and_closes_again() {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::COMPACT,
         size,
     )
     .expect("the view can be read");

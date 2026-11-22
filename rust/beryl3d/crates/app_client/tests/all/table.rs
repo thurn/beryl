@@ -515,12 +515,12 @@ fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
     let lines = printed.lines().filter(|line| line.contains("ability"));
     assert_eq!(lines.count(), 2, "{printed}");
     let context = Context {
-        layout: crate::REGULAR,
+        size_class: crate::REGULAR,
         audit: crate::test_data::data().audit,
-        checks: crate::REGULAR.checks(
-            &crate::test_data::data().profiles,
-            kit_base::geometry::Size::default(),
-        ),
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(crate::REGULAR)
+            .checks,
         size: Size {
             width: 1440.0,
             height: 900.0,
@@ -635,9 +635,12 @@ fn every_card_of_a_hand_of_any_size_can_be_pressed() {
             client.handle(Input::Update(Box::new(view.update())));
             let frame = client.frame(0).clone();
             let context = Context {
-                layout: crate::REGULAR,
+                size_class: crate::REGULAR,
                 audit: crate::test_data::data().audit,
-                checks: crate::REGULAR.checks(&crate::test_data::data().profiles, size),
+                checks: crate::test_data::data()
+                    .profiles
+                    .for_size_class(crate::REGULAR)
+                    .checks,
                 size,
                 safe_area: Insets::default(),
                 at: 0,
@@ -778,9 +781,12 @@ fn every_item_of_a_stack_of_any_size_can_be_pressed() {
             }));
             client.handle(Input::Update(Box::new(builder.update())));
             let context = Context {
-                layout: crate::REGULAR,
+                size_class: crate::REGULAR,
                 audit: crate::test_data::data().audit,
-                checks: crate::REGULAR.checks(&crate::test_data::data().profiles, size),
+                checks: crate::test_data::data()
+                    .profiles
+                    .for_size_class(crate::REGULAR)
+                    .checks,
                 size,
                 safe_area: Insets::default(),
                 at: 0,

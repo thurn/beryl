@@ -15,7 +15,7 @@ use app_client::driver::{Page, Recording};
 use beryl_protocol::Seat;
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
-use kit_probe::agent::Layout;
+use kit_base::data::profiles::SizeClass;
 use kit_ui::input::Size;
 
 use crate::pack::{self, Entry, Recorder};
@@ -177,7 +177,7 @@ pub fn list(prefix: &str) -> Result<Vec<Listed>, String> {
 
 /// The stress board or screen recording `name`, which is seen from the first seat only.
 pub(crate) fn listed_made(name: &str) -> Listed {
-    let playing = pages::page(name, Side::You, Layout::Desktop, LENGTH_WINDOW);
+    let playing = pages::page(name, Side::You, SizeClass::Regular, LENGTH_WINDOW);
     let (views, length_ms, failure) = match playing {
         Ok(mut page) => {
             let moments = page.moments();
@@ -215,7 +215,6 @@ fn length(entry: &Entry) -> Option<u64> {
             crate::data::checkout().ok()?,
             recording.into(),
             Side::You,
-            Layout::Desktop,
             LENGTH_WINDOW,
         )
         .ok()?;
