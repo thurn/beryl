@@ -26,7 +26,7 @@ use ignite_store::hub::{fleet, fleet_settings, rows, tickets, tip_rounds};
 
 use super::filing::{CHECKS_KEY, FAULT_KEY, SIGHTED_KEY, strings};
 use super::stuck::{self, StuckNow, TIP_WAIT_SECONDS};
-use super::{justiciar, parse_time, regression_stalls};
+use super::{justiciar, parse_time, regression_stalls, resource_stalls};
 use crate::routes::tip_rounds as rounds_route;
 
 /// How many tip rounds in a row, all after the last sighting, must be quick before a slow-round
@@ -56,6 +56,8 @@ pub enum Verdict {
     Present,
     /// The fault cleared; the text completes "Ignite closed this ticket because ...".
     Cleared(String),
+    /// Snapshot history already proves the fault stayed clear for the full waiting period.
+    ConfirmedClear(String),
 }
 
 /// The parts of a ticket's signature, from its [`FAULT_KEY`] metadata.
@@ -88,6 +90,7 @@ impl Fault {
 
 /// What one upkeep pass reads once for every ticket it looks at.
 pub struct World {
+    now: Timestamp,
     stuck: StuckNow,
     machines: Vec<rows::Machine>,
     settings: FleetSettings,
@@ -122,6 +125,7 @@ impl World {
             BTreeSet::new()
         };
         Ok(World {
+            now,
             stuck: stuck::stuck_now(conn, now)?,
             machines: fleet::machines(conn)?,
             settings: fleet_settings::settings(conn)?,
@@ -193,6 +197,21 @@ pub fn verdict(
             })
         }
         category if category == justiciar::LABEL => {
+            if let Some((invariant, id)) = resource_stalls::Invariant::from_subject(subject) {
+                let Some(machine) = world.machines.iter().find(|machine| machine.id == id) else {
+                    return Ok(Verdict::Present);
+                };
+                return Ok(
+                    if resource_stalls::recovered(conn, machine, invariant, world.now)? {
+                        Verdict::ConfirmedClear(format!(
+                            "machine {} reported an hour of recovery.",
+                            machine.name
+                        ))
+                    } else {
+                        Verdict::Present
+                    },
+                );
+            }
             let Some(regression) = subject.strip_prefix(justiciar::REGRESSION_STALL_SUBJECT) else {
                 return Ok(Verdict::Unwatched);
             };

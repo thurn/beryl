@@ -145,6 +145,7 @@ impl HeadlessDispatch {
         let sample = MachineSample {
             pressure,
             reclaimable: None,
+            last_disk_cleanup_at: None,
             cpu_percent,
             queued_cores,
             swap_used_mb,

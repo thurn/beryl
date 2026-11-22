@@ -289,6 +289,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: "",
         code: Some(fleet_settings::migrate_disk_cap),
     },
+    Migration {
+        version: 48,
+        sql: "ALTER TABLE machine_snapshots ADD COLUMN last_disk_cleanup_at TEXT;",
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

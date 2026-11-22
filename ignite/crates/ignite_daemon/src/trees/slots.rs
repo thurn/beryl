@@ -10,6 +10,7 @@ use std::thread;
 use ignite_core::capacity::BYTES_PER_GB;
 use ignite_core::fleet::{FleetNotice, TreeSettings, TreeSpace};
 use ignite_core::ids::{TicketId, TreeId};
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 use ignite_os::Native;
 use ignite_os::occupants::Occupants as _;
@@ -38,7 +39,7 @@ pub(super) struct BuildSpace {
     active: BTreeMap<TreeId, usize>,
     measuring: BTreeMap<TreeId, mpsc::Receiver<disk::Measurement>>,
     reclaiming: bool,
-    last_cleanup: Option<String>,
+    last_cleanup: Option<(Timestamp, String)>,
     legacy_commands: Vec<(PathBuf, Run)>,
 }
 
@@ -282,7 +283,19 @@ impl Trees {
     }
 
     pub(crate) fn last_build_cleanup(&self) -> Option<String> {
-        self.lock().build_space.last_cleanup.clone()
+        self.lock()
+            .build_space
+            .last_cleanup
+            .as_ref()
+            .map(|(_, text)| text.clone())
+    }
+
+    pub(crate) fn last_disk_cleanup_at(&self) -> Option<Timestamp> {
+        self.lock()
+            .build_space
+            .last_cleanup
+            .as_ref()
+            .map(|&(at, _)| at)
     }
 
     fn reclaimable(locked: &Locked, row: &rows::Tree) -> bool {
@@ -505,6 +518,6 @@ impl Trees {
 
     fn report_cleanup(&self, text: String) {
         eprintln!("ignite: {text}");
-        self.lock().build_space.last_cleanup = Some(text);
+        self.lock().build_space.last_cleanup = Some((self.inner.clock.now(), text));
     }
 }

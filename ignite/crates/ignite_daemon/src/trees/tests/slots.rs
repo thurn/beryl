@@ -159,6 +159,7 @@ fn an_over_ceiling_tree_keeps_its_outputs_while_a_command_is_using_them() {
     });
     task.unwrap();
     assert!(!output.exists());
+    assert!(f.trees.last_disk_cleanup_at().is_some());
     assert!(
         f.trees
             .last_build_cleanup()

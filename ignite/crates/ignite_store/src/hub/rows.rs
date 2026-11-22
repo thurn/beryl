@@ -91,6 +91,7 @@ crate::tables! {
         down_workers: i64,
         ready_tickets: i64,
         capacity: Option<String>,
+        last_disk_cleanup_at: Option<String>,
     }
 
     MachineTreeVolumes = "machine_tree_volumes" {

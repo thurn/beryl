@@ -19,6 +19,7 @@ fn fleet_shows_the_latest_machine_snapshot() {
             bytes: 40 << 30,
             measured_at: now.plus_seconds(-60.0),
         }),
+        last_disk_cleanup_at: None,
         next_ticket: Some("work".parse().unwrap()),
         next_ticket_disk_gib: Some(129),
         start_block: Some(StartBlock::Disk),

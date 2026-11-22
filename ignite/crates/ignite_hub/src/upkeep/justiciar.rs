@@ -3,7 +3,7 @@
 //! `justiciar` label first. They use `tier:opus` because the session has to diagnose the problem
 //! and may change anything to end it (`ignite guide justiciar`).
 //!
-//! Three sources:
+//! Sources:
 //!
 //! - A report (`POST /justiciar`) from a daemon that saw Ignite crash or one of its loops keep
 //!   failing, or from a session that ran `ignite justiciar "<reason>"` ([`report`]).
@@ -14,6 +14,7 @@
 //!   `master` has waited, and files a justiciar ticket for each whose work has stalled.
 //!   A stuck landing whose justiciar ticket was closed less than [`MASTER_LAG_SECONDS`] ago
 //!   gives that worker's fix time to reach the verified branch.
+//! - Upkeep, when a machine stays stuck on a resource ([`super::resource_stalls`]).
 //! - The dispatch routes, when different sessions have released one ticket
 //!   ([`ignite_store::hub::releases::HOLD_AFTER_SESSIONS`] of them) and the hub stops offering
 //!   it ([`released_repeatedly`]). Each worker met an obstacle in the ticket itself, so a
@@ -120,6 +121,25 @@ pub fn report(
         released: true,
     };
     filing::file(conn, author, &filing, now)
+}
+
+/// Files a machine resource stall or adds the latest sighting to its open ticket.
+pub(super) fn file_resource_stall(
+    conn: &mut Connection,
+    subject: &str,
+    evidence: String,
+    title: String,
+    body: String,
+    now: Timestamp,
+) -> Result<Filed> {
+    let filing = Filing {
+        signature: Signature::of_subject(subject, LABEL),
+        evidence,
+        fields: fields(title, body),
+        deps: Vec::new(),
+        released: true,
+    };
+    filing::file(conn, UPKEEP, &filing, now)
 }
 
 /// The oldest landing in the last week that came after the last verified tip, as its landing

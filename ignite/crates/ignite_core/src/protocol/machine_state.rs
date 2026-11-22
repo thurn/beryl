@@ -21,6 +21,9 @@ pub struct MachineSample {
     /// Capacity for build slots, along with the inputs to handoff pacing.
     pub pressure: DispatchPressure,
     pub reclaimable: Option<ReclaimableDisk>,
+    /// When the daemon last completed a build-output cleanup step.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_disk_cleanup_at: Option<Timestamp>,
     pub cpu_percent: Option<u32>,
     pub queued_cores: u64,
     pub swap_used_mb: Option<u64>,
@@ -74,8 +77,10 @@ pub struct MachineSnapshot {
     pub at: Timestamp,
     pub free_disk_gib: Option<u64>,
     pub reclaimable: Option<ReclaimableDisk>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_disk_cleanup_at: Option<Timestamp>,
     pub next_ticket: Option<TicketId>,
-    /// Required free space, including the volume reserve and growth reserved by held tickets.
+    /// Required free space from hubs that admitted starts by projected disk growth.
     pub next_ticket_disk_gib: Option<u64>,
     pub start_block: Option<StartBlock>,
     pub start_reason: Option<String>,

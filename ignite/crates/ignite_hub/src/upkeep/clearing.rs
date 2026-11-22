@@ -66,7 +66,8 @@ pub fn close_cleared(conn: &mut Connection, now: Timestamp) -> Result<Vec<String
             None => Verdict::Unwatched,
         };
         // A worker in the middle of the ticket is told, whoever else touched it.
-        let working = ticket.status == Status::InProgress && matches!(verdict, Verdict::Cleared(_));
+        let working = ticket.status == Status::InProgress
+            && matches!(verdict, Verdict::Cleared(_) | Verdict::ConfirmedClear(_));
         if verdict == Verdict::Unwatched || (!working && touched(conn, &ticket)?) {
             continue;
         }
@@ -129,8 +130,9 @@ fn act(conn: &mut Connection, ticket: &Ticket, verdict: Verdict, now: Timestamp)
         .get(CLEARED_SINCE_KEY)
         .and_then(Value::as_str)
         .and_then(|at| Timestamp::parse(at).ok());
-    let reason = match verdict {
-        Verdict::Cleared(reason) => reason,
+    let (reason, confirmed) = match verdict {
+        Verdict::Cleared(reason) => (reason, false),
+        Verdict::ConfirmedClear(reason) => (reason, true),
         Verdict::Present | Verdict::Unwatched => {
             if since.is_some() {
                 apply(
@@ -166,23 +168,25 @@ fn act(conn: &mut Connection, ticket: &Ticket, verdict: Verdict, now: Timestamp)
             Ok(false)
         }
         Status::Open | Status::PendingApproval => {
-            let Some(since) = since else {
-                let set = BTreeMap::from([(CLEARED_SINCE_KEY, json!(now.to_string()))]);
-                apply(conn, ticket, vec![meta(&id, set, &[])], now)?;
-                return Ok(false);
-            };
-            let returned = ticket
-                .metadata
-                .get(RETURNS_KEY)
-                .and_then(Value::as_u64)
-                .is_some_and(|returns| returns > 0);
-            let hold = if returned {
-                RETURNED_HOLD_SECONDS
-            } else {
-                HOLD_SECONDS
-            };
-            if now.seconds_since(since) < hold {
-                return Ok(false);
+            if !confirmed {
+                let Some(since) = since else {
+                    let set = BTreeMap::from([(CLEARED_SINCE_KEY, json!(now.to_string()))]);
+                    apply(conn, ticket, vec![meta(&id, set, &[])], now)?;
+                    return Ok(false);
+                };
+                let returned = ticket
+                    .metadata
+                    .get(RETURNS_KEY)
+                    .and_then(Value::as_u64)
+                    .is_some_and(|returns| returns > 0);
+                let hold = if returned {
+                    RETURNED_HOLD_SECONDS
+                } else {
+                    HOLD_SECONDS
+                };
+                if now.seconds_since(since) < hold {
+                    return Ok(false);
+                }
             }
             let set = BTreeMap::from([
                 (AUTO_CLOSED_KEY, json!(now.to_string())),

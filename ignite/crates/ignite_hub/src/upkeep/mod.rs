@@ -10,6 +10,7 @@
 //!   checks that fail for those reasons ([`invalid_checks`], [`flaky`]);
 //! - files a P1 ticket for a tip that has waited an hour on a machine that has not reported,
 //!   and one for an epic in which nothing can start ([`stuck`]);
+//! - files justiciar tickets for sustained machine resource stalls ([`resource_stalls`]);
 //! - files the copy of each meta-ticket whose schedule says one is due ([`schedules`]);
 //! - closes tickets whose fault has stayed clear for an hour, unless a person touched them or
 //!   a worker holds them, and settles regressions as soon as verification confirms the fix
@@ -48,6 +49,7 @@ pub mod missed;
 pub mod offline;
 mod regression_stalls;
 pub mod regressions;
+mod resource_stalls;
 pub mod reverted;
 pub mod schedules;
 pub mod signature;
@@ -65,6 +67,8 @@ mod justiciar_tests;
 mod missed_tests;
 #[cfg(test)]
 mod regression_stalls_replay;
+#[cfg(test)]
+mod resource_stalls_tests;
 #[cfg(test)]
 mod reverted_tests;
 #[cfg(test)]
@@ -192,6 +196,7 @@ impl Upkeep {
         keep(stuck::tips_waiting(conn, now).map(|filed| note(&mut report, filed)));
         keep(stuck::stuck_epics(conn, now).map(|filed| note(&mut report, filed)));
         keep(justiciar::master_lag(conn, now).map(|filed| note(&mut report, filed)));
+        keep(resource_stalls::file(conn, now).map(|filed| note(&mut report, filed)));
         keep(schedules::file_due(conn, now).map(|copies| report.tickets_filed.extend(copies)));
         if let Some(files) = self.attachments.clone()
             && self

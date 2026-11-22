@@ -140,8 +140,9 @@ impl Parts {
                         families: current_families(&ctx.repo, &hostname),
                     },
                     || {
-                        let (sample, mut capacity) =
+                        let (mut sample, mut capacity) =
                             headless_dispatch.machine_sample(now, &scheduler, &facts);
+                        sample.last_disk_cleanup_at = trees.last_disk_cleanup_at();
                         let (_, settings) = trees.build_volume();
                         capacity.build_space = Some(BuildSpaceReport {
                             slots: sample.pressure.build_slots,
@@ -257,6 +258,7 @@ mod tests {
                 measured_at: start,
             }),
             cpu_percent: Some(79),
+            last_disk_cleanup_at: Some(start),
             queued_cores: 12,
             swap_used_mb: Some(256),
             idle_workers: 4,
@@ -407,6 +409,7 @@ mod tests {
             assert_eq!(snapshot.at, start.plus_seconds(most_recent));
             assert_eq!(snapshot.free_disk_gib, Some(free));
             assert_eq!(snapshot.reclaimable, sample.reclaimable);
+            assert_eq!(snapshot.last_disk_cleanup_at, sample.last_disk_cleanup_at);
             assert_eq!(snapshot.next_ticket.unwrap().as_str(), "work");
             assert_eq!(snapshot.next_ticket_disk_gib, None);
             assert_eq!(snapshot.start_block, Some(block));

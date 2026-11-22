@@ -25,6 +25,7 @@ pub(in crate::routes::dispatch) fn record(
         at: now,
         free_disk_gib: sample.pressure.free_gb,
         reclaimable: sample.reclaimable,
+        last_disk_cleanup_at: sample.last_disk_cleanup_at,
         next_ticket: None,
         next_ticket_disk_gib: None,
         start_block: None,

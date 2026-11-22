@@ -4,7 +4,7 @@ use ignite_core::capacity::CapacityReport;
 use ignite_core::ids::TicketId;
 use ignite_core::protocol::machine_state::{MachineSnapshot, ReclaimableDisk, StartBlock};
 use ignite_core::time::Timestamp;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::{Result, StoreError};
 
@@ -25,8 +25,8 @@ pub fn record(
             machine, at, free_disk_gib, reclaimable_bytes, reclaimable_measured_at,
             next_ticket, next_ticket_disk_gib, start_block, start_reason, cpu_percent,
             queued_cores, swap_used_mb, idle_workers, working_workers, stalled_workers,
-            down_workers, ready_tickets, capacity
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+            down_workers, ready_tickets, capacity, last_disk_cleanup_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
          ON CONFLICT (machine, at) DO UPDATE SET capacity = excluded.capacity
          WHERE machine_snapshots.capacity IS NULL AND excluded.capacity IS NOT NULL",
         params![
@@ -53,64 +53,90 @@ pub fn record(
             snapshot.down_workers,
             snapshot.ready_tickets,
             capacity,
+            snapshot.last_disk_cleanup_at.map(|at| at.to_string()),
         ],
     )?;
     Ok(())
 }
 
+const SELECT: &str =
+    "SELECT at, free_disk_gib, reclaimable_bytes, reclaimable_measured_at, next_ticket,
+            next_ticket_disk_gib, start_block, start_reason, cpu_percent, queued_cores,
+            swap_used_mb, idle_workers, working_workers, stalled_workers, down_workers,
+            ready_tickets, last_disk_cleanup_at
+     FROM machine_snapshots";
+
 pub fn latest(conn: &Connection, machine: &str) -> Result<Option<MachineSnapshot>> {
-    let snapshot = conn
+    Ok(conn
         .query_row(
-            "SELECT at, free_disk_gib, reclaimable_bytes, reclaimable_measured_at, next_ticket,
-                    next_ticket_disk_gib, start_block, start_reason, cpu_percent, queued_cores,
-                    swap_used_mb, idle_workers, working_workers, stalled_workers, down_workers,
-                    ready_tickets
-             FROM machine_snapshots WHERE machine = ?1 ORDER BY at DESC LIMIT 1",
+            &format!("{SELECT} WHERE machine = ?1 ORDER BY at DESC LIMIT 1"),
             [machine],
-            |row| {
-                let measured: Option<String> = row.get(3)?;
-                let ticket: Option<String> = row.get(4)?;
-                let block: Option<String> = row.get(6)?;
-                Ok(MachineSnapshot {
-                    at: parse(&row.get::<_, String>(0)?, 0)?,
-                    free_disk_gib: row
-                        .get::<_, Option<i64>>(1)?
-                        .map(|value| unsigned(value, 1))
-                        .transpose()?,
-                    reclaimable: measured
-                        .map(|at| {
-                            Ok::<_, rusqlite::Error>(ReclaimableDisk {
-                                bytes: unsigned(row.get(2)?, 2)?,
-                                measured_at: parse(&at, 3)?,
-                            })
-                        })
-                        .transpose()?,
-                    next_ticket: ticket.map(|id| parse(&id, 4)).transpose()?,
-                    next_ticket_disk_gib: row
-                        .get::<_, Option<i64>>(5)?
-                        .map(|value| unsigned(value, 5))
-                        .transpose()?,
-                    start_block: block
-                        .map(|block| serde_json::from_value(serde_json::Value::String(block)))
-                        .transpose()
-                        .map_err(|error| conversion(6, error))?,
-                    start_reason: row.get(7)?,
-                    cpu_percent: row.get(8)?,
-                    queued_cores: unsigned(row.get(9)?, 9)?,
-                    swap_used_mb: row
-                        .get::<_, Option<i64>>(10)?
-                        .map(|value| unsigned(value, 10))
-                        .transpose()?,
-                    idle_workers: row.get(11)?,
-                    working_workers: row.get(12)?,
-                    stalled_workers: row.get(13)?,
-                    down_workers: row.get(14)?,
-                    ready_tickets: row.get(15)?,
-                })
-            },
+            read,
         )
-        .optional()?;
-    Ok(snapshot)
+        .optional()?)
+}
+
+/// Samples for one machine in the inclusive time range, oldest first.
+pub fn between(
+    conn: &Connection,
+    machine: &str,
+    from: Timestamp,
+    through: Timestamp,
+) -> Result<Vec<MachineSnapshot>> {
+    let mut statement = conn.prepare_cached(&format!(
+        "{SELECT} WHERE machine = ?1 AND at BETWEEN ?2 AND ?3 ORDER BY at"
+    ))?;
+    let snapshots = statement
+        .query_map(
+            params![machine, from.to_string(), through.to_string()],
+            read,
+        )?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(snapshots)
+}
+
+fn read(row: &Row<'_>) -> rusqlite::Result<MachineSnapshot> {
+    let measured: Option<String> = row.get(3)?;
+    let ticket: Option<String> = row.get(4)?;
+    let block: Option<String> = row.get(6)?;
+    let cleanup: Option<String> = row.get(16)?;
+    Ok(MachineSnapshot {
+        at: parse(&row.get::<_, String>(0)?, 0)?,
+        free_disk_gib: row
+            .get::<_, Option<i64>>(1)?
+            .map(|value| unsigned(value, 1))
+            .transpose()?,
+        reclaimable: measured
+            .map(|at| {
+                Ok::<_, rusqlite::Error>(ReclaimableDisk {
+                    bytes: unsigned(row.get(2)?, 2)?,
+                    measured_at: parse(&at, 3)?,
+                })
+            })
+            .transpose()?,
+        last_disk_cleanup_at: cleanup.map(|at| parse(&at, 16)).transpose()?,
+        next_ticket: ticket.map(|id| parse(&id, 4)).transpose()?,
+        next_ticket_disk_gib: row
+            .get::<_, Option<i64>>(5)?
+            .map(|value| unsigned(value, 5))
+            .transpose()?,
+        start_block: block
+            .map(|block| serde_json::from_value(serde_json::Value::String(block)))
+            .transpose()
+            .map_err(|error| conversion(6, error))?,
+        start_reason: row.get(7)?,
+        cpu_percent: row.get(8)?,
+        queued_cores: unsigned(row.get(9)?, 9)?,
+        swap_used_mb: row
+            .get::<_, Option<i64>>(10)?
+            .map(|value| unsigned(value, 10))
+            .transpose()?,
+        idle_workers: row.get(11)?,
+        working_workers: row.get(12)?,
+        stalled_workers: row.get(13)?,
+        down_workers: row.get(14)?,
+        ready_tickets: row.get(15)?,
+    })
 }
 
 fn signed(value: u64) -> rusqlite::Result<i64> {
@@ -154,6 +180,7 @@ mod tests {
                 bytes: 321,
                 measured_at: at,
             }),
+            last_disk_cleanup_at: Some(at),
             next_ticket: Some("Tabcd".parse().unwrap()),
             next_ticket_disk_gib: Some(140),
             start_block: Some(StartBlock::Disk),
