@@ -92,6 +92,7 @@ impl Layer {
         for float in (self.floats.iter()).filter(|float| !float.id.under_screen()) {
             self.write_float(float, builder, drawing, open, faces);
         }
+        let mut modal = None;
         if let Some((node, index)) = screen {
             for (child, departing) in children(node, false)
                 .filter(|(child, _)| above_floats(child) && (open || !child.element.waits))
@@ -99,7 +100,8 @@ impl Layer {
                 let Some(point) = child.corner() else {
                     continue;
                 };
-                if !departing && child.element.modal && child.accepts_input(open) {
+                let takes_input = !departing && child.element.modal && child.accepts_input(open);
+                if takes_input {
                     tip.set(None);
                 }
                 if !departing && over_floats(child) {
@@ -117,11 +119,17 @@ impl Layer {
                     zoom: Zoom::IDENTITY,
                     departing,
                 };
-                self.write_node(child, index, false, look, builder, drawing);
+                let written = self.write_node(child, index, false, look, builder, drawing);
+                if takes_input {
+                    modal = written;
+                }
             }
         }
         if let Some(tip) = tip.take() {
             self.write_tip(tip, builder, drawing);
+        }
+        if let Some(root) = modal {
+            builder.restrict_input(root);
         }
     }
 

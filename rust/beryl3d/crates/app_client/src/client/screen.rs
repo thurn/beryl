@@ -428,8 +428,7 @@ impl Client {
 
     /// Shows the corner's buttons at the window's top right (`screens::corner`): the gear that
     /// opens the settings, the bug button and undo while the open decision has an answer to
-    /// take back. They show while the game screen is shown with no sheet over it, or while the
-    /// bug report takes its picture, and go otherwise.
+    /// take back. Settings and undo stay visible under the bug report.
     pub(super) fn show_gear(&mut self) {
         // The phone's menu button, part of its game screen, opens the settings instead.
         // The game screen's undo takes back an engine decision; the manual table's runs its

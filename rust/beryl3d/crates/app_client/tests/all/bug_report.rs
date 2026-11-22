@@ -14,7 +14,7 @@ use beryl_protocol::script::{Act, Table as Played, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits, Wake};
-use kit_probe::agent::{TreeOptions, tree};
+use kit_probe::agent::{Rule, TreeOptions, locate, tree};
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Rect,
@@ -80,6 +80,54 @@ fn open(page: &mut Page) {
     requests(page);
     page.chord("Cmd+B");
     page.still();
+}
+
+#[test]
+fn the_report_shades_both_life_totals_without_hiding_them() {
+    let mut page = sample();
+    page.set_looking(true);
+    let totals = ["player \"You 20\"", "player \"Opponent 20\""];
+    let before = totals.map(|total| page.find(total).rect());
+
+    let check = |page: &mut Page, shade| {
+        for (total, rect) in totals.into_iter().zip(before) {
+            assert_eq!(page.find(total).rect(), rect);
+        }
+        let frame = page.frame();
+        let shade = locate(frame, shade).expect("the report draws its shade");
+        let shade_draw = frame
+            .owners
+            .iter()
+            .position(|&owner| owner == shade)
+            .expect("the shade is painted");
+        for total in totals {
+            let total = locate(frame, total).expect("the frozen life total is present");
+            let last_glyph = frame
+                .owners
+                .iter()
+                .rposition(|&owner| owner == total)
+                .expect("the life total is painted");
+            assert!(last_glyph < shade_draw, "the shade paints over the total");
+        }
+    };
+    open(&mut page);
+    check(&mut page, "region \"shade\"");
+    let input_faults: Vec<_> = page
+        .faults()
+        .into_iter()
+        .filter(|fault| matches!(fault.rule, Rule::Overlap | Rule::Reachable))
+        .collect();
+    assert!(input_faults.is_empty(), "{input_faults:#?}");
+
+    let [local, _] = before;
+    let start = Vec2::new(local.x - 12.0, local.y - 12.0);
+    let end = Vec2::new(local.x + local.width + 12.0, local.y + local.height + 12.0);
+    mouse(&mut page, PointerPhase::Down, start);
+    mouse(&mut page, PointerPhase::Move, end);
+    mouse(&mut page, PointerPhase::Up, end);
+    page.still();
+    page.find(FIELD);
+    check(&mut page, "region \"shade above\"");
 }
 
 /// The whole window.

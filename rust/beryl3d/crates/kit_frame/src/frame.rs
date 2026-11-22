@@ -578,6 +578,23 @@ impl<'a> FrameBuilder<'a> {
         at
     }
 
+    /// Records that only the modal at `root` and its descendants accept input.
+    /// Resolved screen elements are written in tree order, after the table.
+    ///
+    /// # Panics
+    ///
+    /// If `root` is not an index of a resolved element.
+    pub fn restrict_input(&mut self, root: u32) {
+        let (before, modal) = self.frame.resolved.split_at_mut(root as usize);
+        let after = modal[1..]
+            .iter()
+            .position(|node| node.parent < root || node.parent == u32::MAX)
+            .map_or(modal.len(), |position| position + 1);
+        for node in before.iter_mut().chain(&mut modal[after..]) {
+            node.interactive = false;
+        }
+    }
+
     /// Ends the last element's draw records before emitting light or effects with no node.
     pub fn clear_owner(&mut self) {
         self.owner = u32::MAX;

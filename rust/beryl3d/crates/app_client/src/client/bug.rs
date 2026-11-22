@@ -14,13 +14,10 @@ impl Client {
         self.features.sheet == Some(Sheet::BugReport)
     }
 
-    /// Whether the table's floats (life totals, pile counts, notices and the gear) show: with
-    /// no sheet over the screen, or while the bug report takes its picture, which shows them.
-    /// Floats are drawn over the screen, so once the picture is taken they would be drawn over
-    /// the report.
+    /// Whether the table's floats (life totals, pile counts, notices and the gear) show.
+    /// The report keeps drawing the frozen table, and its modal overlay paints over the floats.
     pub(super) fn table_shown(&self) -> bool {
-        self.features.sheet.is_none()
-            || (self.bug_open() && matches!(self.features.bug().stage, BugStage::Capturing { .. }))
+        self.features.sheet.is_none() || self.bug_open()
     }
 
     /// Whether the prompt's marks and the screen show as the table stands: as they stood when

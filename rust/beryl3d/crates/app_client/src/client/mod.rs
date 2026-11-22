@@ -322,8 +322,7 @@ impl Client {
     }
 
     /// Whether the hud's floats (the life totals, pools, pile counts and notices) show: on the
-    /// game screen and the manual table, with no sheet over them but a bug report capturing the
-    /// table (`table_shown`).
+    /// game screen and the manual table, including under the bug report (`table_shown`).
     fn hud_shown(&self) -> bool {
         matches!(self.features.screen, Screen::Game | Screen::Table) && self.table_shown()
     }
