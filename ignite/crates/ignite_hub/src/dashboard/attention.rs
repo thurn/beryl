@@ -1,5 +1,4 @@
-//! What every fleet page shares: the page frame, the links between the pages, and the line at
-//! the top of the dashboard that says what needs a person.
+//! The shared fleet page frame and links, and the cards that say what needs a person.
 // Pages are built from many small fragments; building them with `format!` reads better than
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
@@ -92,9 +91,8 @@ pub fn seconds_since(now: Timestamp, iso: Option<&str>) -> Option<f64> {
     Some(now.seconds_since(then))
 }
 
-/// Tickets marked `needs:person`, with their notes.
-fn person_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, ReadError> {
-    let mut found = Vec::new();
+/// Cards linking to tickets marked `needs:person`, with their notes.
+fn person_cards(conn: &Connection, root: &str) -> Result<Vec<String>, ReadError> {
     let mut person = conn.prepare(
         "SELECT id, title, notes FROM tickets
          WHERE status != 'closed' AND EXISTS
@@ -110,19 +108,27 @@ fn person_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, Re
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    for (id, title, notes) in waiting {
-        let mut text = format!(
-            "{} needs a person: {}",
-            c::link(&ticket_url(root, &id), &esc(&display_id(&id)), None, ""),
-            esc(&title)
-        );
-        if !notes.trim().is_empty() {
-            text += &c::muted(&format!(" — {}", esc(notes.trim())));
-        }
-        found.push((Tone::Red, text));
-    }
-
-    Ok(found)
+    Ok(waiting
+        .into_iter()
+        .map(|(id, title, notes)| {
+            let notes = notes.trim();
+            let foot = if notes.is_empty() {
+                String::new()
+            } else {
+                format!("<div class=\"c-card-foot\">{}</div>", esc(notes))
+            };
+            c::card(
+                &ticket_url(root, &id),
+                &format!(
+                    "<div class=\"c-card-top\">{}{}</div><h3 class=\"c-card-title\">{}</h3>{foot}",
+                    c::mono(&display_id(&id)),
+                    c::dot(Tone::Red, "", None),
+                    esc(&title)
+                ),
+                None,
+            )
+        })
+        .collect())
 }
 
 pub(super) fn machine_state(
@@ -306,19 +312,17 @@ fn stranded_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, 
         .collect())
 }
 
-/// The things that need a person, each with the tone it is shown in.
-pub fn items(
+/// Warnings that need a person, each with the tone it is shown in.
+fn warning_items(
     conn: &Connection,
     root: &str,
     now: Timestamp,
 ) -> Result<Vec<(Tone, String)>, ReadError> {
-    let mut found = person_items(conn, root)?;
     let settings = fleet_settings::settings(conn)?;
-    found.extend(
-        tip_coverage::get(conn)?
-            .warnings()
-            .map(|line| (Tone::Amber, esc(&line))),
-    );
+    let mut found: Vec<_> = tip_coverage::get(conn)?
+        .warnings()
+        .map(|line| (Tone::Amber, esc(&line)))
+        .collect();
     found.extend(machine_items(conn, &settings, now)?);
     found.extend(usage_items(conn, now)?);
     found.extend(regression_items(conn, &settings, root, now)?);
@@ -327,22 +331,18 @@ pub fn items(
     Ok(found)
 }
 
-/// The dashboard navigation, preceded by any items that need a person.
-pub fn line(conn: &Connection, root: &str, now: Timestamp) -> Result<String, ReadError> {
-    let items = items(conn, root, now)?;
-    if items.is_empty() {
-        return Ok(nav(root));
-    }
-    let body = c::rows(
-        items
-            .iter()
-            .map(|(tone, text)| c::row(&(c::dot(*tone, "", None) + text), "", None)),
-    );
-    Ok(c::section(
-        "Needs a person",
-        &body,
-        Some(items.len()),
-        Some("attention"),
-        3,
-    ) + &nav(root))
+/// The ticket and warning cards for the home page's attention section.
+pub(super) fn cards(
+    conn: &Connection,
+    root: &str,
+    now: Timestamp,
+) -> Result<Vec<String>, ReadError> {
+    let mut cards = person_cards(conn, root)?;
+    cards.extend(warning_items(conn, root, now)?.into_iter().map(|(tone, text)| {
+        format!(
+            "<div class=\"c-card c-card-static\"><div class=\"c-card-top\">{}</div><div>{text}</div></div>",
+            c::dot(tone, "", None)
+        )
+    }));
+    Ok(cards)
 }

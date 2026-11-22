@@ -1,5 +1,5 @@
-//! The dashboard pages (fleet, pool, epics, landings, tips and finds) and the line at the top of
-//! the home page, rendered from a seeded hub database at a fixed time.
+//! The fleet pages and the home page's attention section, rendered from a seeded hub database
+//! at a fixed time.
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
@@ -196,6 +196,7 @@ fn pages_render_when_the_hub_is_empty() {
     }
     let home = page(&conn, "/");
     assert!(!home.contains("id=\"attention\""));
+    assert!(!home.contains("href=\"#attention\""));
     assert!(home.contains("href=\"/pool\""));
 }
 
@@ -507,17 +508,27 @@ fn the_pool_links_cli_transcripts_on_the_private_listener() {
 }
 
 #[test]
-fn the_first_line_lists_what_needs_a_person() {
+fn the_home_page_shows_attention_cards_above_active() {
     let conn = seeded();
-    assert!(page(&conn, "/").contains("cygnus is checks-only (set by operator)"));
     let body = page(&conn, "/");
-    let first = &body[body.find("id=\"attention\"").expect("an attention section")..];
-    let first = &first[..first.find("</section>").unwrap()];
-    assert!(first.contains("needs a person: Choose a vendor"), "{first}");
-    assert!(first.contains("Pick one by Friday"));
-    assert!(first.contains("The regression in kernel-test"));
-    assert!(first.contains("No machine can run"));
-    assert!(first.contains("pinned to plan9"));
+    let start = body.find("id=\"attention\"").expect("an attention section");
+    assert!(start < body.find("id=\"active\"").unwrap());
+    assert!(body.find("href=\"#attention\"").unwrap() < body.find("href=\"#active\"").unwrap());
+    let section = body[start..].split("</section>").next().unwrap();
+    assert!(section.contains("<h2 class=\"c-part-title\">Needs a person"));
+    assert!(section.contains("<div class=\"c-grid\">"));
+    let (_, ticket) = section
+        .split_once("<a class=\"c-card\" href=\"/p1\"")
+        .expect("a linked attention ticket card");
+    let ticket = ticket.split("</a>").next().unwrap();
+    assert!(ticket.contains("<h3 class=\"c-card-title\">Choose a vendor</h3>"));
+    assert!(ticket.contains("Pick one by Friday"));
+    assert!(section.contains("class=\"c-card c-card-static\""));
+    assert!(section.contains("cygnus is checks-only (set by operator)"));
+    assert!(section.contains("The regression in kernel-test"));
+    assert!(section.contains("href=\"/r1\""));
+    assert!(section.contains("No machine can run"));
+    assert!(section.contains("pinned to plan9"));
 }
 
 #[test]

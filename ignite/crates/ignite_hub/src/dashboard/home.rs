@@ -1,5 +1,5 @@
-//! The home page: what is in progress, then every open ticket grouped by kind, then the
-//! project status, which the page loads as a fragment.
+//! The home page shows what needs a person, what is in progress, every open ticket grouped by
+//! kind, and the project status, which the page loads as a fragment.
 // Pages are built from many small fragments; building them with `format!` reads better than
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
@@ -58,7 +58,13 @@ fn machine_label(hostname: &str) -> String {
 
 /// Builds the home page for the project at `root`, at feed position `seq`.
 #[allow(clippy::too_many_lines)]
-pub fn page(root: &str, cards: &[HomeCard], forecasts: &Forecasts, seq: &str) -> PageOptions {
+fn page(
+    root: &str,
+    cards: &[HomeCard],
+    forecasts: &Forecasts,
+    attention_cards: Vec<String>,
+    seq: &str,
+) -> PageOptions {
     let mut active: Vec<&HomeCard> = Vec::new();
     let mut epics: Vec<&HomeCard> = Vec::new();
     let mut scheduled: Vec<&HomeCard> = Vec::new();
@@ -165,10 +171,23 @@ pub fn page(root: &str, cards: &[HomeCard], forecasts: &Forecasts, seq: &str) ->
         .filter(|(_, _, count, _)| *count > 0)
         .collect();
     let total: usize = shown.iter().map(|(_, _, count, _)| count).sum();
-    let mut entries: Vec<c::TocEntry> = vec![
+    let mut entries: Vec<c::TocEntry> = Vec::new();
+    let attention_part = if attention_cards.is_empty() {
+        String::new()
+    } else {
+        let count = Some(attention_cards.len());
+        entries.push(("Needs a person".into(), "attention".into(), count, 0));
+        c::part(
+            "Needs a person",
+            &c::grid(attention_cards),
+            "attention",
+            count,
+        )
+    };
+    entries.extend([
         ("Active".into(), "active".into(), Some(active.len()), 0),
         ("All".into(), "all".into(), Some(total), 0),
-    ];
+    ]);
     entries.extend(
         shown.iter().map(|(heading, anchor, count, _)| {
             ((*heading).into(), (*anchor).into(), Some(*count), 1)
@@ -208,8 +227,9 @@ pub fn page(root: &str, cards: &[HomeCard], forecasts: &Forecasts, seq: &str) ->
     let name = brand();
     PageOptions {
         title: format!("Tickets · {name}"),
-        body: c::title("Tickets", "", "What is in progress, and everything open.")
-            + &c::with_toc(&nav, &(active_part + &all_part + &status)),
+        body: attention::nav(root)
+            + &c::title("Tickets", "", "What is in progress, and everything open.")
+            + &c::with_toc(&nav, &(attention_part + &active_part + &all_part + &status)),
         feed: Some(Feed {
             seq: seq.to_owned(),
             tickets: None,
@@ -232,10 +252,8 @@ pub(crate) fn options(
     now: Timestamp,
 ) -> Result<PageOptions, ReadError> {
     let (cards, forecasts) = home_data(conn)?;
-    let mut options = page(root, &cards, &forecasts, seq);
-    let attention = attention::line(conn, root, now)?;
-    options.body = attention + &options.body;
-    Ok(options)
+    let attention_cards = attention::cards(conn, root, now)?;
+    Ok(page(root, &cards, &forecasts, attention_cards, seq))
 }
 
 #[cfg(test)]
