@@ -113,7 +113,7 @@ fn priority_button(label: &str, caption: &str, enabled: bool) -> Input {
         }
     };
     let mut primary = button(ButtonId::Decline, label, true, enabled);
-    primary.caption = caption.to_owned();
+    caption.clone_into(&mut primary.caption);
     let prompt = prompt(Purpose::Priority, "", vec![primary], ShapeBody::Candidates);
     let Input::Update(mut update) = deciding(&board, prompt, Vec::new()) else {
         unreachable!("deciding is a view update");
