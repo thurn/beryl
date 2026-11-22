@@ -69,13 +69,13 @@ def cargo(arguments: list[str], env: dict[str, str] | None = None) -> int:
     ).returncode
 
 
-def build(arguments: list[str]) -> int:
+def build(arguments: list[str], env: dict[str, str] | None = None) -> int:
     """Runs `cargo <arguments>`, a build in the workspace's own target directory, one at a time
     across every process of this checkout. Cargo's lock on the directory already makes a second
     build wait while another runs. Taking a file lock first (`paths.build_lock`) makes the
     waiting explicit and means a second build usually finds nothing left to do."""
     with system.file_lock(paths.build_lock()):
-        return cargo(arguments)
+        return cargo(arguments, env)
 
 
 def quick_build(arguments: list[str]) -> int:

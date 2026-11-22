@@ -322,9 +322,21 @@ impl Job {
             &environment,
         )
         .map_err(|error| format!("Not saved: {error:?}"))?;
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        bugs::filing::enqueue(&self.folder, &saved.id, bundled_filing());
         println!("{SAVED} {}", saved.path);
         Ok(())
     }
+}
+
+/// Finder launches the app without the shell's tool paths. A locally built bundle records them.
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+fn bundled_filing() -> Option<(&'static str, &'static str, &'static str)> {
+    Some((
+        option_env!("BERYL_BUNDLE_BUGS_REPO")?,
+        option_env!("BERYL_BUNDLE_BUGS_UV")?,
+        option_env!("BERYL_BUNDLE_BUGS_PATH")?,
+    ))
 }
 
 /// The Downloads folder in the home folder.

@@ -6,13 +6,12 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-from . import deps, paths, system
+from . import bugs, deps, paths, system
 
 BINARY: Path = system.exe(paths.TAURI_TARGET / "debug" / "beryl")
 
@@ -23,18 +22,7 @@ def tauri(*args: str) -> int:
     if args and args[0] == "dev":
         env["BERYL_FILE_BUGS"] = str(paths.REPO)
     if args[:2] == ("build", "--bundles"):
-        # Launching the packaged app from Finder drops the terminal's environment.
-        uv = shutil.which("uv")
-        if uv:
-            tools = (shutil.which(tool) for tool in ("uv", "git", "cargo"))
-            tool_dirs = dict.fromkeys(
-                str(Path(tool).absolute().parent) for tool in tools if tool
-            )
-            env.update(
-                BERYL_BUNDLE_BUGS_REPO=str(paths.REPO),
-                BERYL_BUNDLE_BUGS_UV=str(Path(uv).absolute()),
-                BERYL_BUNDLE_BUGS_PATH=os.pathsep.join([*tool_dirs, os.defpath]),
-            )
+        env.update(bugs.bundle_filing_env())
     return subprocess.run(
         [system.which("npx"), "--no-install", "tauri", *args],
         cwd=paths.UI,

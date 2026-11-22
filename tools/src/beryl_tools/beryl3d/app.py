@@ -25,7 +25,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from .. import deps, paths as repo_paths, system
+from .. import bugs, deps, paths as repo_paths, system
 from . import live, paths
 from .command import Command
 
@@ -80,7 +80,8 @@ def build_release() -> int:
             "beryl_3d",
             "--bin",
             "beryl3d",
-        ]
+        ],
+        env={**os.environ, **bugs.bundle_filing_env()},
     )
 
 
@@ -271,10 +272,13 @@ def run_app(args: argparse.Namespace) -> int:
         command.append("--watch")
     for name in args.offer:
         command += ["--offer", name]
+    env = os.environ.copy()
+    if window != "none":
+        env.setdefault("BERYL_FILE_BUGS", str(repo_paths.REPO))
     started_ms = int(time.time() * 1000)
-    code = subprocess.run(command, check=False).returncode
+    code = subprocess.run(command, env=env, check=False).returncode
     if code == MISSING_PACK and record() == 0:
-        code = subprocess.run(command, check=False).returncode
+        code = subprocess.run(command, env=env, check=False).returncode
     if code != 0 or args.run_for is None:
         return code
     path = newest_log(frames_dir(), repo_paths.REPO.resolve())

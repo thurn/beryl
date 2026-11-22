@@ -58,6 +58,23 @@ IMAGES: tuple[tuple[str, str], ...] = (
 )
 
 
+def bundle_filing_env() -> dict[str, str]:
+    """Records the local filing tools for a desktop bundle launched without a shell."""
+    uv = shutil.which("uv")
+    ignite = shutil.which("ignite")
+    if uv is None or ignite is None:
+        return {}
+    tools = (uv, ignite, shutil.which("git"), shutil.which("cargo"))
+    directories = dict.fromkeys(
+        str(Path(tool).absolute().parent) for tool in tools if tool
+    )
+    return {
+        "BERYL_BUNDLE_BUGS_REPO": str(paths.REPO),
+        "BERYL_BUNDLE_BUGS_UV": str(Path(uv).absolute()),
+        "BERYL_BUNDLE_BUGS_PATH": os.pathsep.join([*directories, os.defpath]),
+    }
+
+
 def app_data_dir() -> Path:
     appdata = os.environ.get("APPDATA")
     if sys.platform == "win32" and appdata:

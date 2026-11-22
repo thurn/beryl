@@ -74,6 +74,34 @@ def test_release_replaces_the_macos_app_with_a_signed_bundle(
     assert not (bundle / "old").exists()
 
 
+def test_release_build_records_the_local_filing_tools(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tools = {
+        "uv": str(tmp_path / "package-manager" / "uv"),
+        "ignite": str(tmp_path / "local-tools" / "ignite"),
+    }
+    monkeypatch.setattr(app.bugs.shutil, "which", tools.get)
+    monkeypatch.setattr(app.paths, "build_lock", lambda: tmp_path / "build.lock")
+    envs: list[dict[str, str]] = []
+
+    def cargo(arguments: list[str], env: dict[str, str] | None = None) -> int:
+        assert "--release" in arguments
+        assert env is not None
+        envs.append(env)
+        return 0
+
+    monkeypatch.setattr(cli, "cargo", cargo)
+
+    assert app.build_release() == 0
+    (env,) = envs
+    assert env["BERYL_BUNDLE_BUGS_REPO"] == str(paths.REPO)
+    assert env["BERYL_BUNDLE_BUGS_UV"] == tools["uv"]
+    assert str(Path(tools["ignite"]).parent) in env["BERYL_BUNDLE_BUGS_PATH"].split(
+        os.pathsep
+    )
+
+
 def test_tests_run_the_workspace_or_the_named_crates() -> None:
     assert cli.test_command([], [], nextest=False) == ["test", "-q", "--workspace"]
     assert cli.test_command([], ["pose", "turn"], nextest=False) == [
@@ -308,7 +336,8 @@ def test_a_build_runs_under_the_checkouts_build_lock(
 ) -> None:
     held: list[bool] = []
 
-    def cargo(arguments: list[str]) -> int:
+    def cargo(arguments: list[str], env: dict[str, str] | None = None) -> int:
+        assert env is None
         # Another build of this checkout would wait here, before it starts cargo.
         try:
             with cli.system.file_lock(cli.paths.build_lock(), timeout=0):
@@ -332,7 +361,8 @@ from beryl_tools.beryl3d import cli
 root = Path(sys.argv[1])
 cli.paths.build_lock = lambda: root / 'build.lock'
 
-def cargo(arguments):
+def cargo(arguments, env=None):
+    assert env is None
     assert arguments == cli.SHARED_BUILD
     try:
         with cli.system.file_lock(cli.paths.build_lock(), timeout=0):

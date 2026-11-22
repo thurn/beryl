@@ -1,7 +1,8 @@
 //! Bug reports: an app replaying `pay-default` with no window, driven to press Cmd+B, take the
 //! whole window, describe the bug and submit it, writes a report folder into `$BERYL_BUGS` with
 //! the picture of the frozen frame, its element tree, the frame log, the latest views, the
-//! recording's moment in `ui.json` and the files every report holds.
+//! recording's moment in `ui.json` and the files every report holds. With local filing enabled,
+//! it also hands that report's ID to the filing command.
 
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -38,7 +39,11 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
     let bugs = temp.join("bugs");
     let script = temp.join("report.drive");
     std::fs::write(&script, SCRIPT).expect("the script is written");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_beryl3d"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_beryl3d"));
+    command.env_remove("BERYL_FILE_BUGS");
+    #[cfg(unix)]
+    stub_filing(&mut command, &temp);
+    let mut child = command
         .args([
             "--fixture",
             "pay-default",
@@ -125,5 +130,53 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
     let scale = u32::from(beryl_3d::options::WINDOWLESS_SCALE);
     let size = [1600 * scale, 900 * scale].map(u32::to_be_bytes).concat();
     assert_eq!(&window[16..24], size.as_slice(), "a 1600 by 900 point PNG");
+    #[cfg(unix)]
+    assert_filing(&temp.join("filed"), folder.file_name().unwrap());
     let _ = std::fs::remove_dir_all(&temp);
+}
+
+/// Stands in for `uv`, checking that the app's report is already on disk when filing starts.
+#[cfg(unix)]
+fn stub_filing(command: &mut Command, checkout: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let uv = checkout.join("uv");
+    std::fs::write(
+        &uv,
+        r#"#!/bin/sh
+set -eu
+test -f "$BERYL_BUGS/${10}/report.md"
+test -f "$BERYL_BUGS/${10}/window.png"
+printf '%s\n' "$@" > filed.tmp
+mv filed.tmp filed
+"#,
+    )
+    .expect("write the filing stub");
+    std::fs::set_permissions(uv, std::fs::Permissions::from_mode(0o755))
+        .expect("make the stub executable");
+    let paths = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(
+        [checkout.to_owned()]
+            .into_iter()
+            .chain(std::env::split_paths(&paths)),
+    )
+    .expect("the stub's PATH");
+    command.env("PATH", path).env("BERYL_FILE_BUGS", checkout);
+}
+
+#[cfg(unix)]
+fn assert_filing(marker: &Path, report_id: &std::ffi::OsStr) {
+    use std::time::{Duration, Instant};
+
+    // Filing happens on a background thread. Wait for its output, bounding a missing invocation.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !marker.exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let invocation = std::fs::read_to_string(marker).expect("the app asks to file the report");
+    let report_id = report_id.to_str().expect("a UTF-8 report ID");
+    assert_eq!(
+        invocation,
+        format!("run\n--quiet\n--no-sync\n--project\ntools\nby\nbugs\nfile\n--\n{report_id}\n")
+    );
 }
