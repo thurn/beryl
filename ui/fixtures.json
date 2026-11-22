@@ -1389,6 +1389,12 @@
       ]
     },
     {
+      "name": "shape-activation",
+      "board": "shape-order",
+      "until": "first priority decision for seat 0",
+      "clicks": ["Currency Converter"]
+    },
+    {
       "name": "shape-mode-theirs",
       "board": "shape-mode-theirs",
       "until": "first priority decision for seat 1",

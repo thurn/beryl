@@ -1,7 +1,9 @@
 //! Beryl's drawn card frame: the picture of a face whose scan has not been downloaded, at both
 //! face sizes.
 
-use beryl_assets::{FaceText, MatchFace, Plate, dimensions, frame, frames_drawn_on_this_thread};
+use beryl_assets::{
+    FaceText, MatchFace, Plate, dimensions, frame, frames_drawn_on_this_thread, plate_over,
+};
 use kit_base::atlas::{FaceId, FaceSize};
 
 const SIZES: [FaceSize; 2] = [FaceSize::Board, FaceSize::Full];
@@ -136,6 +138,7 @@ fn a_token_a_planeswalker_and_an_ability_plate_draw() {
     plate.plate = Some(Plate {
         source: FaceId(1),
         triggered: false,
+        choice: false,
         rules: "+1: Draw a card.".to_owned(),
     });
     for size in SIZES {
@@ -153,4 +156,26 @@ fn a_token_a_planeswalker_and_an_ability_plate_draw() {
         );
     }
     assert!(frames_drawn_on_this_thread() >= 6);
+}
+
+#[test]
+fn a_scanned_ability_choice_preserves_the_art_and_covers_the_printed_text() {
+    let size = FaceSize::Full;
+    let (width, height) = dimensions(size);
+    let scan = [80, 90, 100, 255];
+    let plate = Plate {
+        source: FaceId(1),
+        triggered: false,
+        choice: true,
+        rules: "{T}: Draw a card.".to_owned(),
+    };
+    let pixels = plate_over(scan.repeat((width * height) as usize), &plate, size);
+    let pixel = |x: u32, y: u32| {
+        let at = ((y * width + x) * 4) as usize;
+        &pixels[at..at + 4]
+    };
+    assert_eq!(pixel(width / 2, height / 4), scan);
+    assert_ne!(pixel(width / 2, height * 9 / 10), scan);
+    assert_eq!(pixel(width / 8, height - 1)[3], 0);
+    assert_eq!(pixel(width / 2, height - 2)[3], 255);
 }

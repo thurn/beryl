@@ -58,6 +58,8 @@ pub struct Plate {
     pub source: FaceId,
     /// A triggered ability rather than an activated one, which the plate's label says.
     pub triggered: bool,
+    /// Whether this plate is read inside an ability choice button.
+    pub choice: bool,
     /// The paragraph of the source's rules text that says the ability.
     pub rules: String,
 }
@@ -96,6 +98,7 @@ pub struct FaceList {
     /// The plate face of each ability, by its source's face, whether it is triggered, and how
     /// many paragraphs of that kind come before it (`StackItem::Ability`'s `nth`).
     plates: BTreeMap<(FaceId, bool, u8), FaceId>,
+    choice_plates: BTreeMap<(FaceId, u8), FaceId>,
     /// Each card's faces in its record's order, by the card's name and the name it was asked
     /// for.
     cards: BTreeMap<String, Vec<FaceId>>,
@@ -147,7 +150,7 @@ impl FaceList {
                         u16::try_from(self.faces.len()).expect("a match has under 2^16 faces"),
                     );
                     let face = &self.faces[at];
-                    self.faces.push(ListedFace {
+                    let ability = ListedFace {
                         image: face.image.clone(),
                         names: Vec::new(),
                         colors: face.colors.clone(),
@@ -156,9 +159,24 @@ impl FaceList {
                         plate: Some(Plate {
                             source,
                             triggered,
+                            choice: false,
                             rules: paragraph.to_owned(),
                         }),
-                    });
+                    };
+                    if triggered {
+                        self.faces.push(ability);
+                    } else {
+                        let mut choice = ability.clone();
+                        choice
+                            .plate
+                            .as_mut()
+                            .expect("the ability has a plate")
+                            .choice = true;
+                        let choice_id =
+                            FaceId(id.0.checked_add(1).expect("a match has under 2^16 faces"));
+                        self.choice_plates.insert((source, nth), choice_id);
+                        self.faces.extend([ability, choice]);
+                    }
                     self.plates.insert((source, triggered, nth), id);
                 }
             }
@@ -172,6 +190,12 @@ impl FaceList {
     pub fn plate(&self, name: &str, triggered: bool, nth: u8) -> Option<FaceId> {
         let source = self.find(name)?;
         self.plates.get(&(source, triggered, nth)).copied()
+    }
+
+    /// The centered plate of an activated ability read in the mode chooser.
+    #[must_use]
+    pub fn choice_plate(&self, name: &str, nth: u8) -> Option<FaceId> {
+        self.choice_plates.get(&(self.find(name)?, nth)).copied()
     }
 
     /// The faces of the cards `view` shows where the web interface draws a card's full frame

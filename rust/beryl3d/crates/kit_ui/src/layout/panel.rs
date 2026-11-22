@@ -188,6 +188,10 @@ pub(super) fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> O
     };
     let icon = matches!(node.element.shows, Some(Shown::Icon(..)));
     let (mut gradients, mut lifted) = (painted, false);
+    // The panel of a transparent control is absent in every state.
+    if tint[3] == 0 && !gradients && !visible(&border) {
+        return None;
+    }
     if state.has(StateBits::DISABLED) && node.element.role == Role::Button && !icon {
         (tint, gradients) = (color::DISABLED, false);
         border = recolor(border, color::DISABLED_RIM);
@@ -205,11 +209,6 @@ pub(super) fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> O
         tint = brighter(tint);
         border = border.map_colors(brighter);
         lifted = true;
-    }
-    // A panel with a clear face, no gradient and no visible edge draws nothing
-    // (`element::holder`).
-    if tint[3] == 0 && !gradients && !visible(&border) {
-        return None;
     }
     Some(Panel {
         tint,
@@ -248,8 +247,13 @@ pub(super) fn padding_box(rect: Rect, radius: f32, border: [f32; 4]) -> (Rect, f
 /// change them: a disabled button with words has a faint dark ring whatever its style says, and
 /// an icon button's rim brightens under the pointer or with the focus. Any other element has
 /// its style's.
-pub(super) fn box_shadows(node: &Node, state: StateBits) -> &[Shadow] {
+pub(super) fn box_shadows(node: &Node, state: StateBits, parent_control: StateBits) -> &[Shadow] {
     let element = &node.element;
+    if (parent_control.has(StateBits::HOVERED) || parent_control.has(StateBits::FOCUSED))
+        && !element.style.parent_highlight_shadow.is_empty()
+    {
+        return element.style.parent_highlight_shadow;
+    }
     let icon = matches!(element.shows, Some(Shown::Icon(..)));
     if element.role != Role::Button || element.style.box_shadow.is_empty() {
         return &element.style.box_shadow;
@@ -321,7 +325,7 @@ fn write_backdrop(
 /// a gradient of one stop, whose record can blur its edges.
 pub(super) fn write_box(
     node: &Node,
-    state: StateBits,
+    shadows: &[Shadow],
     panel: Option<&Panel>,
     rect: Rect,
     look: &Look,
@@ -329,7 +333,6 @@ pub(super) fn write_box(
     camera: &ScreenPlane,
 ) {
     let style = &node.element.style;
-    let shadows = box_shadows(node, state);
     let rect = panel.map_or(rect, |panel| panel.drawn(rect));
     let cast = ShadowBox {
         rect,
@@ -569,6 +572,7 @@ pub(super) fn look_of(
     node: &Node,
     (index, state): (u32, StateBits),
     (panel, mask): (Option<&Panel>, Option<&Gradient>),
+    shadows: &[Shadow],
     ink: [u8; 4],
     builder: &mut FrameBuilder,
 ) {
@@ -583,11 +587,11 @@ pub(super) fn look_of(
         border: panel
             .filter(|panel| panel.border.width.iter().any(|width| *width > 0.0))
             .map(|panel| panel.border),
-        radius: panel.map_or(0.0, |panel| panel.radius),
+        radius: panel.map_or(style.radius, |panel| panel.radius),
         color: ink,
         text,
     };
-    builder.look(look, box_shadows(node, state), &style.drop_shadow);
+    builder.look(look, shadows, &style.drop_shadow);
     let lifted = [Filter::Brightness(ratio::BUTTON_HOVER_BRIGHTNESS)];
     let filter: &[Filter] = if panel.is_some_and(|panel| panel.lifted) {
         &lifted

@@ -11,7 +11,7 @@ use std::cell::Cell;
 use glam::{Affine3A, Vec2};
 
 use super::edit::Marks;
-use super::panel::{Chain, look_of, panel, write_box};
+use super::panel::{Chain, box_shadows, look_of, panel, write_box};
 use super::shadows::write_icon_shadows;
 use super::{Layer, Node, text_top};
 use crate::element::{Anchor, Display, Element, Overflow, Property, Shown, TextAlign};
@@ -54,6 +54,22 @@ pub(super) struct Look<'a> {
     pub(super) zoom: Zoom,
     departing: bool,
     icon_progress: f32,
+    parent_control: StateBits,
+}
+
+impl Look<'_> {
+    /// The paint context for a node's children, with the parent's hover or focus state.
+    fn inside(self, point: Vec2, node: &Node, state: StateBits) -> Self {
+        Self {
+            point,
+            parent_control: if pressable(node) && !self.departing {
+                state
+            } else {
+                StateBits(0)
+            },
+            ..self
+        }
+    }
 }
 
 /// Paint outgoing children under their replacements; neither uses the other's layout slot.
@@ -167,6 +183,7 @@ impl Layer {
         let active = element.role == Role::MenuItem
             && (state.has(StateBits::FOCUSED) || self.submenu == Some(node.id));
         let panel = panel(node, top, state, active);
+        let shadows = box_shadows(node, state, look.parent_control);
         if panel.is_some() || !element.style.backdrop_filter.is_empty() {
             state.0 |= StateBits::PAINTED;
         }
@@ -201,18 +218,18 @@ impl Layer {
                 node,
                 (index, state),
                 (panel.as_ref(), mask.as_ref()),
+                shadows,
                 ink,
                 builder,
             );
         }
-        write_box(node, state, panel.as_ref(), rect, &look, builder, camera);
+        write_box(node, shadows, panel.as_ref(), rect, &look, builder, camera);
         let shown = Look {
             point: look.point + node.offset() + geometry.sink,
             ..look
         };
         self.write_content(node, (index, state), shown, builder, camera);
-        let mut inside = look;
-        inside.point = geometry.inside(node);
+        let mut inside = look.inside(geometry.inside(node), node, state);
         if masked.is_none() && element.style.overflow != Overflow::Visible {
             inside.clip = geometry.inside_clip(node, masked, inherited).map(|clip| {
                 (
@@ -374,7 +391,11 @@ impl Layer {
                 );
                 Draw::icon(camera.layer_transform(at), tint, sprite)
             }
-            Some(Shown::Face(face, size) | Shown::TappedFace(face, size)) => {
+            Some(
+                Shown::Face(face, size)
+                | Shown::CutoutFace(face, size)
+                | Shown::TappedFace(face, size),
+            ) => {
                 let Some(faces) = look.faces else {
                     return;
                 };
@@ -393,6 +414,9 @@ impl Layer {
                 draw.tint = faded(tint, look.opacity);
                 if desaturate > 0.0 {
                     draw = draw.desaturated(desaturate);
+                }
+                if matches!(node.element.shows, Some(Shown::CutoutFace(..))) {
+                    draw = draw.with_face_cutout();
                 }
                 draw
             }
@@ -492,8 +516,8 @@ impl Layer {
             + Vec2::new(
                 node.content.x
                     + match element.style.text_align {
-                        TextAlign::Start => 0.0,
-                        TextAlign::Center => free.x / 2.0,
+                        TextAlign::Center if !block.centered => free.x / 2.0,
+                        TextAlign::Start | TextAlign::Center => 0.0,
                     },
                 node.content.y + text_top(node, block.height),
             );

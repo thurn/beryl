@@ -31,4 +31,6 @@ pub struct HudIn<'a> {
     pub carried: Option<Subject>,
     pub spinning: bool,
     pub placement_scene: Option<&'a PlacementScene>,
+    /// The mode chooser's tray and scale when the app fits it to another stage.
+    pub ways_tray: Option<(kit_base::geometry::Rect, f32)>,
 }

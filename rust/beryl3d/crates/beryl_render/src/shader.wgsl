@@ -263,14 +263,15 @@ const LUMINANCE: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
 fn shade_card(face: vec4<f32>, mesh_uv: vec2<f32>, tint: vec4<f32>, params: vec4<f32>) -> vec4<f32> {
     let tinted = face.rgb * tint.rgb;
     let gray = mix(tinted, vec3<f32>(dot(tinted, LUMINANCE)), params.z);
-    let color = mix(gray, vec3<f32>(1.0), params.y);
+    let coverage = select(1.0, face.a, params.w > 0.0);
+    let color = mix(gray, vec3<f32>(coverage), params.y);
     let cell = floor(mesh_uv * DISSOLVE_GRID);
     let scatter = fract(sin(dot(cell, vec2<f32>(12.9898, 78.233))) * 43758.547);
     let stipple = mix(mesh_uv.y, scatter, DISSOLVE_SCATTER);
     // At `dissolve` 0 every stipple, from 0 up, is kept; at 1 none is.
     let threshold = params.x * (1.0 + DISSOLVE_EDGE);
     let a = tint.a * smoothstep(threshold - DISSOLVE_EDGE, threshold, stipple);
-    return vec4<f32>(color * a, a);
+    return vec4<f32>(color * a, coverage * a);
 }
 
 // The soft shadow under a raised card: the card's rounded rectangle, blurred by `params.x`

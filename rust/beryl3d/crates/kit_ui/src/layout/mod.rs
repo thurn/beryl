@@ -541,14 +541,20 @@ impl Layer {
             // A little room past the measured width, so that breaking at exactly that width
             // never wraps the last word for a rounding error.
             let limit = Some(node.content.width + 0.01);
+            let centered = node.element.style.text_align == crate::element::TextAlign::Center
+                && node.element.style.truncate.is_none();
             if node
                 .block
                 .as_ref()
-                .is_none_or(|block| block.max_width != limit)
+                .is_none_or(|block| block.max_width != limit || block.centered != centered)
             {
                 let (style, spans) = (node.element.style.text, &node.element.spans);
                 node.block = Some(match node.element.style.truncate {
                     Some(truncate) => self.text.truncated(words, style, spans, limit, truncate),
+                    None if centered => self
+                        .text
+                        .centered(words, style, spans, node.content.width + 0.01)
+                        .clone(),
                     None => self.text.block(words, style, spans, limit).clone(),
                 });
             }

@@ -22,6 +22,7 @@
 mod back;
 mod layout;
 mod paint;
+mod plate;
 
 use std::cell::{Cell, RefCell};
 
@@ -35,6 +36,7 @@ use crate::encode::dimensions;
 use crate::faces::{FaceText, MatchFace, Plate};
 use layout::{Box2, Geometry, LOYALTY_SHIELD, TextStyle, Typesetter, Variant};
 use paint::{Canvas, Rgb, color, hsl, linear, mix, radial, stops, vertical};
+use plate::draw_plate;
 
 thread_local! {
     static FRAMES_DRAWN: Cell<u64> = const { Cell::new(0) };
@@ -199,7 +201,7 @@ pub fn frame(face: &MatchFace, size: FaceSize) -> Vec<u8> {
             size,
         );
         if let Some(plate) = &face.plate {
-            draw_plate(&mut canvas, text, plate, size);
+            draw_plate(&mut canvas, text, plate, size, false);
         }
         canvas.pixmap.take()
     })
@@ -219,7 +221,7 @@ pub fn plate_over(pixels: Vec<u8>, plate: &Plate, size: FaceSize) -> Vec<u8> {
     };
     with_typesetter(|text| {
         let mut canvas = Canvas::new(pixmap);
-        draw_plate(&mut canvas, text, plate, size);
+        draw_plate(&mut canvas, text, plate, size, true);
         canvas.pixmap.take()
     })
 }
@@ -562,7 +564,7 @@ fn draw_rules(
         line_height: 1.2,
         color: INK,
     };
-    let set = text.set_block_to_fit(words, style, (room.width, room.height));
+    let set = text.set_block_to_fit(words, style, (room.width, room.height), false);
     let top = room.y + ((room.height - set.height) / 2.0).max(0.0);
     canvas.text(&set, (room.x, top));
 }
@@ -686,104 +688,4 @@ fn draw_loyalty(canvas: &mut Canvas, text: &mut Typesetter, g: &Geometry, loyalt
     let x = area.x + (area.width - number.width) / 2.0;
     let y = area.y + (area.height - number.height) / 2.0 + 0.16 * 1.8 * l;
     canvas.text(&number, (x, y));
-}
-
-/// The plate over the lower half of a face that says one ability, as `AbilityPlate` in
-/// `Card.tsx` draws it: parchment in a dark rim, its label on a tab across its top, and the
-/// ability's words in its middle, shrunk to fit.
-fn draw_plate(canvas: &mut Canvas, text: &mut Typesetter, plate: &Plate, size: FaceSize) {
-    let g = Geometry::new(size);
-    let em = g.em;
-    let card = g.card;
-    let area = Box2 {
-        x: card.x + 0.05 * card.width,
-        y: card.y + 0.56 * card.height,
-        width: 0.9 * card.width,
-        height: (1.0 - 0.56 - 0.045) * card.height,
-    };
-    let radius = 0.35 * em;
-    canvas.fill_box(
-        area,
-        radius,
-        Shader::SolidColor(color([0x1b, 0x17, 0x12], 1.0)),
-    );
-    let paper = area.inset(0.08 * em, 0.08 * em, 0.08 * em, 0.08 * em);
-    let fill = vertical(
-        paper,
-        stops(&[
-            (0.0, [0xf8, 0xf2, 0xe2], 1.0),
-            (1.0, [0xe6, 0xdc, 0xc4], 1.0),
-        ]),
-    );
-    canvas.fill_box(paper, radius - 0.08 * em, fill);
-    canvas.edge_inside(
-        paper,
-        radius - 0.08 * em,
-        0.1 * em,
-        color([150, 120, 70], 0.45),
-    );
-    // The label: `.ability-plate-label`, 0.62em capitals on a dark tab edged in gold.
-    let label_em = 0.62 * em;
-    let label = if plate.triggered {
-        "TRIGGERED ABILITY"
-    } else {
-        "ACTIVATED ABILITY"
-    };
-    let label = text.set(
-        label,
-        TextStyle {
-            font: Font::CrimsonPro,
-            weight: 650.0,
-            size: label_em,
-            line_height: 1.1,
-            color: [0xf2, 0xea, 0xd8],
-        },
-        None,
-        false,
-    );
-    let tab = Box2 {
-        x: area.x + (area.width - label.width) / 2.0 - 0.6 * label_em,
-        y: area.y + 0.45 * label_em,
-        width: label.width + 1.2 * label_em,
-        height: label.height + 0.2 * label_em,
-    };
-    canvas.fill_box(
-        tab,
-        tab.height / 2.0,
-        Shader::SolidColor(color([0xc9, 0xa3, 0x5c], 1.0)),
-    );
-    let inner = tab.inset(
-        0.08 * label_em,
-        0.08 * label_em,
-        0.08 * label_em,
-        0.08 * label_em,
-    );
-    let dark = vertical(
-        inner,
-        stops(&[
-            (0.0, [0x3a, 0x36, 0x31], 1.0),
-            (1.0, [0x1c, 0x1a, 0x17], 1.0),
-        ]),
-    );
-    canvas.fill_box(inner, inner.height / 2.0, dark);
-    canvas.text(&label, (tab.x + 0.6 * label_em, tab.y + 0.1 * label_em));
-    // The words: `.ability-plate-text`, 0.74em, padded 0.3em by 0.55em in that em.
-    let size = 0.74 * em;
-    let room = Box2 {
-        x: area.x,
-        y: tab.bottom(),
-        width: area.width,
-        height: area.bottom() - tab.bottom(),
-    }
-    .inset(0.3 * size, 0.55 * size, 0.3 * size, 0.55 * size);
-    let style = TextStyle {
-        font: Font::CrimsonPro,
-        weight: 560.0,
-        size,
-        line_height: 1.22,
-        color: INK,
-    };
-    let set = text.set_block_to_fit(&plate.rules, style, (room.width, room.height));
-    let top = room.y + ((room.height - set.height) / 2.0).max(0.0);
-    canvas.text(&set, (room.x, top));
 }

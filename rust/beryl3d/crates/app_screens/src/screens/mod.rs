@@ -100,6 +100,7 @@ impl<'a> ScreenIn<'a> {
             carried: self.carried,
             spinning: self.spinning,
             placement_scene: self.placement_scene,
+            ways_tray: None,
         }
     }
 }

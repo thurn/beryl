@@ -299,6 +299,7 @@ impl Client {
             carried: self.carried_item(),
             spinning: self.features.opening.spinning(self.now),
             placement_scene,
+            ways_tray: None,
         };
         let menu_face = context_menu::sheet_face(self.features.menu(), &hud);
         let feature_inputs = ViewInputs {

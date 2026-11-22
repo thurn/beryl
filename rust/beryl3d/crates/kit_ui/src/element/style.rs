@@ -198,6 +198,9 @@ pub struct Style {
     /// under the element's panel and only outside its border box; an inset one over the panel's
     /// fill, inside its padding box. An element with shadows and no panel still casts them.
     pub box_shadow: Vec<Shadow>,
+    /// Box shadows added in place of the ordinary ones while the enabled parent control is
+    /// hovered or focused. The child keeps its own bounds and does not take the pointer.
+    pub parent_highlight_shadow: &'static [Shadow],
     /// The shadows of its text and icon, CSS's `filter: drop-shadow(...)`, each a blurred copy
     /// of the glyphs' and icon's coverage drawn under them in the shadow's color.
     pub drop_shadow: Vec<Shadow>,
@@ -280,6 +283,7 @@ impl Default for Style {
             radius: 0.0,
             legend: false,
             box_shadow: Vec::new(),
+            parent_highlight_shadow: &[],
             drop_shadow: Vec::new(),
             text: type_style::BODY,
             text_align: TextAlign::Start,
@@ -327,6 +331,7 @@ setters! {
     radius: f32,
     legend: bool,
     box_shadow: Vec<Shadow>,
+    parent_highlight_shadow: &'static [Shadow],
     drop_shadow: Vec<Shadow>,
     background_image: Vec<Gradient>,
     background_boxes: Vec<BackgroundBox>,

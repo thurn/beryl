@@ -324,6 +324,7 @@ fn a_number_at_its_highest_value_cannot_step_up() {
 #[test]
 fn the_ways_to_use_a_card_draw_one_face_each_and_a_disabled_way_sends_nothing() {
     const NAME: &str = "Teferi, Time Raveler";
+    const LONG: &str = "Teferi, Time Raveler: Use an ability with a caption that wraps.";
     let mut builder = ViewBuilder::sample();
     builder.script(ScriptBuilder::reset().build());
     let teferi = builder.card(ZoneName::Battlefield, Side::You, NAME).slot;
@@ -331,7 +332,7 @@ fn the_ways_to_use_a_card_draw_one_face_each_and_a_disabled_way_sends_nothing() 
         Purpose::Act,
         "",
         vec![
-            button(ButtonId::Option { index: 0 }, "+1", false, true),
+            button(ButtonId::Option { index: 0 }, LONG, false, true),
             button(ButtonId::Ability { nth: 1 }, "−3", false, false),
             button(ButtonId::Decline, "Cancel", false, true),
         ],
@@ -367,14 +368,34 @@ fn the_ways_to_use_a_card_draw_one_face_each_and_a_disabled_way_sends_nothing() 
     ))));
     client.handle(deciding(&builder, ways, candidates));
     let frame = client.frame(0);
-    let faces = (frame.resolved.iter())
+    let faces: Vec<_> = (frame.resolved.iter())
         .filter(|element| element.role == Role::Region && frame.name(element.name) == "face")
-        .count();
-    assert_eq!(faces, 2, "one face for each way");
+        .map(|element| element.corners)
+        .collect();
+    assert_eq!(faces.len(), 2, "one face for each way");
+    let long = &frame.resolved[find(frame, Role::Text, LONG)];
+    let short = &frame.resolved[find(frame, Role::Text, "−3")];
+    assert!(long.corners[0].y - long.corners[3].y > short.corners[0].y - short.corners[3].y);
+    assert!((faces[0][3].y - faces[1][3].y).abs() < 0.5);
+    assert!((long.corners[3].y - short.corners[3].y).abs() < 0.5);
     // The ways stand over the table, not in the prompt bar, which keeps its other buttons.
     find(frame, Role::Button, "Cancel");
     let disabled = centre(frame, find(frame, Role::Button, "−3"));
-    let enabled = centre(frame, find(frame, Role::Button, "+1"));
+    let enabled = centre(frame, find(frame, Role::Button, LONG));
+    client.handle(pointer(PointerPhase::Move, enabled));
+    let hovered = client.frame(0);
+    let first = &hovered.resolved[find(hovered, Role::Button, LONG)];
+    assert!(first.state.has(StateBits::HOVERED));
+    let disabled_way = &hovered.resolved[find(hovered, Role::Button, "−3")];
+    assert!(!first.state.has(StateBits::PAINTED) && !disabled_way.state.has(StateBits::PAINTED));
+    assert!(
+        hovered
+            .resolved
+            .iter()
+            .filter(|element| element.role == Role::Region && hovered.name(element.name) == "face")
+            .map(|element| element.corners)
+            .eq(faces)
+    );
     assert_eq!(press(&mut client, disabled), None);
     assert_eq!(
         press(&mut client, enabled),

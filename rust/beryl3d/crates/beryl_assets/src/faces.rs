@@ -44,6 +44,9 @@ impl MatchFace {
             // A plate face shares its source's scan but is a picture of its own.
             let kind = if plate.triggered { 't' } else { 'a' };
             key = format!("{key}-plate-{kind}-{:08x}", fnv(&plate.rules));
+            if plate.choice {
+                key.push_str("-choice-cutout");
+            }
         }
         Self {
             scan,
@@ -78,6 +81,8 @@ pub struct Plate {
     pub source: FaceId,
     /// Whether the plate labels the ability as triggered.
     pub triggered: bool,
+    /// Whether the choice button's centered layout is used.
+    pub choice: bool,
     /// The paragraph of rules text that says the ability.
     pub rules: String,
 }

@@ -334,6 +334,14 @@ impl Draw {
         self
     }
 
+    /// Uses the premultiplied face texture's coverage (`params.w`) instead of an opaque face.
+    #[must_use]
+    pub fn with_face_cutout(mut self) -> Self {
+        debug_assert_eq!(self.material, Material::Card as u8);
+        self.params[3] = 1.0;
+        self
+    }
+
     /// The soft shadow under a card above the table, blurred by `blur` millimetres.
     #[must_use]
     pub fn contact_shadow(transform: Affine3A, tint: [u8; 4], blur: f32) -> Self {

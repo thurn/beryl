@@ -71,6 +71,8 @@ type TextKey = (String, StyleKey, Vec<SpanKey>);
 pub struct Block {
     /// The width it was broken at, or `None` for no limit.
     pub max_width: Option<f32>,
+    /// Whether each line is already centered inside `max_width`.
+    pub centered: bool,
     /// The width of its widest line and the height of all its lines.
     pub width: f32,
     pub height: f32,
@@ -266,6 +268,22 @@ impl Text {
         spans: &[Span],
         max_width: Option<f32>,
     ) -> &Block {
+        self.block_aligned(text, style, spans, max_width, false)
+    }
+
+    /// Like `block`, with each line centered inside `width`.
+    pub fn centered(&mut self, text: &str, style: TypeStyle, spans: &[Span], width: f32) -> &Block {
+        self.block_aligned(text, style, spans, Some(width), true)
+    }
+
+    fn block_aligned(
+        &mut self,
+        text: &str,
+        style: TypeStyle,
+        spans: &[Span],
+        max_width: Option<f32>,
+        centered: bool,
+    ) -> &Block {
         let key = (
             text.to_owned(),
             style.into(),
@@ -287,10 +305,19 @@ impl Text {
         let found = shaped
             .breaks
             .iter()
-            .position(|block| block.max_width == max_width);
+            .position(|block| block.max_width == max_width && block.centered == centered);
         let at = found.unwrap_or_else(|| {
+            use parley::{Alignment, AlignmentOptions};
+            let alignment = if centered {
+                Alignment::Center
+            } else {
+                Alignment::Start
+            };
+            shaped
+                .layout
+                .set_alignment(alignment, AlignmentOptions::default());
             shaped.layout.break_all_lines(max_width);
-            let block = block_of(shaped, max_width);
+            let block = block_of(shaped, max_width, centered);
             shaped.breaks.push(block);
             shaped.breaks.len() - 1
         });
@@ -548,6 +575,7 @@ fn for_each_glyph(layout: &Layout<u16>, mut each: impl FnMut(u16, u16, f32, f32)
 pub fn plain_block(layout: &Layout<u16>, base: Run, max_width: Option<f32>) -> Block {
     let mut block = Block {
         max_width,
+        centered: false,
         width: 0.0,
         height: layout.height(),
         lines: Vec::new(),
@@ -587,10 +615,11 @@ fn add_line(block: &mut Block, line: &parley::Line<'_, u16>) {
 }
 
 /// The lines, glyphs and symbols of a shaped text already broken at `max_width`.
-fn block_of(shaped: &Shaped, max_width: Option<f32>) -> Block {
+fn block_of(shaped: &Shaped, max_width: Option<f32>, centered: bool) -> Block {
     let layout = &shaped.layout;
     let mut block = Block {
         max_width,
+        centered,
         width: 0.0,
         height: layout.height(),
         lines: Vec::new(),

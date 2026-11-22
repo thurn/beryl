@@ -142,6 +142,24 @@ pub fn decode(bytes: &[u8], size: FaceSize) -> Result<Vec<u8>, EncodeError> {
 /// Builds the mipmap chain of `pixels`, RGBA at `size`, and compresses every level into
 /// `format`. Card faces are opaque, so the alpha channel is marked as carrying nothing.
 pub fn encode(pixels: &[u8], size: FaceSize, format: Format) -> Result<Layer, EncodeError> {
+    encode_surface(pixels, size, format, AlphaMode::Opaque)
+}
+
+/// Encodes a face with an alpha channel, as drawn by the premultiplied card painter.
+pub(crate) fn encode_cutout(
+    pixels: &[u8],
+    size: FaceSize,
+    format: Format,
+) -> Result<Layer, EncodeError> {
+    encode_surface(pixels, size, format, AlphaMode::Premultiplied)
+}
+
+fn encode_surface(
+    pixels: &[u8],
+    size: FaceSize,
+    format: Format,
+    alpha: AlphaMode,
+) -> Result<Layer, EncodeError> {
     let (width, height) = dimensions(size);
     let surface = SurfaceRef {
         data: pixels,
@@ -157,7 +175,7 @@ pub fn encode(pixels: &[u8], size: FaceSize, format: Format) -> Result<Layer, En
         desc: FormatDesc {
             format: ctt::Format::R8G8B8A8_SRGB,
             color_space: ColorSpace::Srgb,
-            alpha: AlphaMode::Opaque,
+            alpha,
         },
     };
     let target = match format {

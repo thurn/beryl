@@ -878,6 +878,7 @@ rest-in-peace/the-legend-rules-creature-is-exiled-and-doesnt-die
 rest-in-peace/two-rest-in-peace-exile-a-creature-once
 seachrome-coast/with-three-other-lands-enters-tapped
 seachrome-coast/with-two-other-lands-enters-untapped
+shape-activation
 shape-catalog
 shape-catalog-theirs
 shape-declare

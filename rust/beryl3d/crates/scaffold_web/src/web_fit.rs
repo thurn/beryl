@@ -24,13 +24,14 @@
 use glam::{Vec2, Vec3};
 
 use crate::tuning::{Perspective, StageSize, WebFit};
+use game_table::profiles::Profile;
 use game_table::table::{
     Camera, FittedPiles, FittedRegions, FittedRow, Layout, RowArea, RowProjection, RowZoom,
     ScreenProjection, TabletopShade, Window,
 };
 use kit_base::data::Card;
 use kit_base::data::profiles::ProfileData;
-use kit_base::geometry::Size;
+use kit_base::geometry::{Rect, Size};
 use kit_base::pose::Pose;
 use kit_space::arrange::{Pile, row::ScaleLimit};
 
@@ -69,6 +70,26 @@ pub(crate) fn regions(
             radii: Vec2::from_array(data.tabletop_shade.radii) * physical,
         }),
     })
+}
+
+pub(crate) fn ways_tray(profile: Profile<'_>, window: Window) -> Option<(Rect, f32)> {
+    profile.data().table.anchored.as_ref()?;
+    let data = WebFit::shipped();
+    let stage = Stage::of(window, data.stage, data.perspective);
+    let (tray, _) = profile.tray().on_window(Size {
+        width: stage.width,
+        height: data.stage.height,
+    });
+    let point = stage.on_window(Vec2::new(tray.x, tray.y));
+    Some((
+        Rect {
+            x: point.x,
+            y: point.y,
+            width: tray.width * stage.scale,
+            height: tray.height * stage.scale,
+        },
+        stage.scale,
+    ))
 }
 
 /// A card's width over its height, as the web interface's `CARD_ASPECT` is.

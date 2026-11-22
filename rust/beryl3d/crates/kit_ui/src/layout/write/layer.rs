@@ -83,6 +83,7 @@ impl Layer {
                     zoom: Zoom::IDENTITY,
                     departing,
                     icon_progress: 0.0,
+                    parent_control: StateBits(0),
                 };
                 let written = self.write_node(node, u32::MAX, true, look, builder, drawing);
                 if !departing {
@@ -121,6 +122,7 @@ impl Layer {
                     zoom: Zoom::IDENTITY,
                     departing,
                     icon_progress: 0.0,
+                    parent_control: StateBits(0),
                 };
                 let written = self.write_node(child, index, false, look, builder, drawing);
                 if takes_input {
@@ -165,6 +167,7 @@ impl Layer {
             zoom,
             departing: false,
             icon_progress: float.look.icon_progress,
+            parent_control: StateBits(0),
         };
         let element = self.write_node(
             &float.node,

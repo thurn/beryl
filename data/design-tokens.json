@@ -407,6 +407,13 @@
         "line_height": 1,
         "note": "A catalog entry's words: `.stage-entry` in `ui/src/stage/choose.css`, 600 at 22 points."
       },
+      "WAY_CAPTION": {
+        "font": "OpenSans",
+        "weight": 600,
+        "size": 18,
+        "line_height": 1.2,
+        "note": "The caption under a mode choice, measured on the stage in `.stage-way-says`."
+      },
       "LOG": {
         "font": "OpenSans",
         "weight": 400,
@@ -1615,6 +1622,10 @@
         "value": "rgb(6 9 12 / 62%)",
         "note": "What darkens the table while a prompt covers it: `.stage-tray`'s `background` in `ui/src/stage/stage.css`."
       },
+      "WAY_DISABLED_INK": {
+        "value": "#9a948d",
+        "note": "The caption of a mode choice the player cannot use."
+      },
       "ENTRY": {
         "value": "rgb(33 31 28 / 88%)",
         "note": "A catalog entry's face: `.stage-entry`'s `background`."
@@ -1799,6 +1810,10 @@
         "value": 1.1,
         "note": "The brightness multiplier for an action button under the pointer, including the pass-on button's face in `ui/src/screens/styles/controls.css`."
       },
+      "WAY_FACE_RADIUS": {
+        "value": 0.0475,
+        "note": "The mode chooser's hover ring rounds by this share of its card's width."
+      },
       "PASS_ON_GLYPH_ASPECT": {
         "value": 0.6667,
         "note": "The pass-on glyph's height over its width: its artwork's view box is 24 by 16, so the web's 22-point-wide `svg` is 14.7 points tall."
@@ -1816,6 +1831,14 @@
       "DISABLED": {
         "value": "0 0 0 1px rgb(14 11 10 / 50%)",
         "note": "Any disabled action button, whatever its style says: `.button.button:disabled` in `buttons.css`, a faint dark ring and no light or lift."
+      },
+      "WAY_HIGHLIGHT": {
+        "value": "0 0 0 3px #e4a242, 0 0 26px rgb(233 173 74 / 55%)",
+        "note": "The gold ring and glow around a mode choice the pointer is over or the keyboard has focused."
+      },
+      "WAY_CAPTION": {
+        "value": "0 1px 3px rgb(0 0 0 / 80%)",
+        "note": "The shadow under a mode choice caption, measured in stage pixels."
       },
       "ICON_BUTTON": {
         "value": "inset 0 0 0 1px rgb(214 192 150 / 16%), 0 2px 6px rgb(0 0 0 / 30%)",

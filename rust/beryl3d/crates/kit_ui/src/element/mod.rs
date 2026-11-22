@@ -86,6 +86,8 @@ pub enum TipSide {
 pub enum Shown {
     /// A card face, drawn flat.
     Face(FaceId, FaceSize),
+    /// A flat face whose texture also gives its outline.
+    CutoutFace(FaceId, FaceSize),
     /// A tapped card face, drawn flat with its long side horizontal.
     TappedFace(FaceId, FaceSize),
     /// An icon `size` logical points on a side, centred in the element's content box and

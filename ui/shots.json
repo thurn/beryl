@@ -1249,6 +1249,30 @@
       "height": 900
     },
     {
+      "name": "stage-mode-activation",
+      "route": "/?fixture=shape-activation&at=1#/game",
+      "click": "[data-stage=\"0\"]",
+      "expect": ".stage-way",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "phone-stage-mode-activation",
+      "route": "/?phone&fixture=shape-activation&at=1#/game",
+      "click": "[data-stage=\"0\"]",
+      "expect": ".stage-way",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "phone-stage-mode-activation-se",
+      "route": "/?phone&fixture=shape-activation&at=1#/game",
+      "click": "[data-stage=\"0\"]",
+      "expect": ".stage-way",
+      "width": 375,
+      "height": 647
+    },
+    {
       "name": "stage-mode-overload",
       "route": "/?fixture=choice-overload&at=1#/game",
       "click": "[data-stage=\"3\"]",

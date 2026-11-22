@@ -27,7 +27,7 @@ use beryl_art::{ArtCache, ArtError, Fetch};
 use kit_base::atlas::{AssetReady, FaceId, FaceSize};
 
 use crate::cache::{self, CacheKey};
-use crate::encode::{ENCODER_VERSION, Format, Layer, decode, encode};
+use crate::encode::{ENCODER_VERSION, Format, Layer, decode, encode, encode_cutout};
 use crate::faces::{MatchFace, MatchFaces};
 use crate::frame::{card_back, frame, plate_over};
 use crate::{Prepared, Upload};
@@ -421,7 +421,12 @@ fn from_scan(bytes: &[u8], face: &MatchFace, size: FaceSize) -> Option<Vec<u8>> 
 /// The face's pixels compressed with their mipmaps and, when `file` is given, written to the
 /// compressed cache. `None`, with a log line, when the encoder fails.
 fn compress(pixels: &[u8], job: &Job, face: &MatchFace, file: Option<&PathBuf>) -> Option<Layer> {
-    let layer = encode(pixels, job.size, job.game.format)
+    let encode_face = if face.plate.as_ref().is_some_and(|plate| plate.choice) {
+        encode_cutout
+    } else {
+        encode
+    };
+    let layer = encode_face(pixels, job.size, job.game.format)
         .inspect_err(|e| eprintln!("beryl_assets: could not compress {}: {e}", face.key))
         .ok()?;
     if let Some(file) = file

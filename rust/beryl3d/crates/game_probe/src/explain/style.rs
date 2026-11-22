@@ -122,7 +122,7 @@ pub fn styles(
         translation, scale, transition, opacity_transition, enter, leave, layout_slide,
         background, background_image => &format!("flat.gradient.{variant}"), background_boxes,
         mask, scroll_fade, filter, hover_filter, border, radius, legend,
-        box_shadow => &format!("flat.shadow.{variant}"), drop_shadow,
+        box_shadow => &format!("flat.shadow.{variant}"), parent_highlight_shadow, drop_shadow,
         text => "flat.type_style.BUTTON", text_align,
         color => &format!("flat.color.{variant}_INK"), fit, truncate, passes, backdrop,
         backdrop_filter,

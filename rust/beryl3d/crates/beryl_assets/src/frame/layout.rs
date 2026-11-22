@@ -16,8 +16,8 @@ use kit_base::atlas::FaceSize;
 use kit_text::text::fonts::{ALL, Font, register_all};
 use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache};
 use parley::{
-    FontContext, FontFamily, FontFamilyName, FontWeight, Layout, LayoutContext, LineHeight,
-    PositionedLayoutItem, StyleProperty,
+    Alignment, AlignmentOptions, FontContext, FontFamily, FontFamilyName, FontWeight, Layout,
+    LayoutContext, LineHeight, PositionedLayoutItem, StyleProperty,
 };
 
 use crate::encode::dimensions;
@@ -354,6 +354,23 @@ impl Typesetter {
         max_width: Option<f32>,
         ringed: bool,
     ) -> SetText {
+        self.set_styled(text, style, max_width, ringed, Alignment::Start, 0.0)
+    }
+
+    /// Sets the capitals on an ability plate's tab, with its CSS letter spacing.
+    pub(crate) fn set_tab(&mut self, text: &str, style: TextStyle, spacing: f32) -> SetText {
+        self.set_styled(text, style, None, false, Alignment::Start, spacing)
+    }
+
+    fn set_styled(
+        &mut self,
+        text: &str,
+        style: TextStyle,
+        max_width: Option<f32>,
+        ringed: bool,
+        alignment: Alignment,
+        spacing: f32,
+    ) -> SetText {
         let (text, symbols) = with_symbols(text);
         let families = self.families.clone();
         let mut builder = self
@@ -362,6 +379,7 @@ impl Typesetter {
         builder.push_default(StyleProperty::FontFamily(family(style.font, &families)));
         builder.push_default(StyleProperty::FontSize(style.size));
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(style.weight)));
+        builder.push_default(StyleProperty::LetterSpacing(spacing));
         builder.push_default(StyleProperty::LineHeight(LineHeight::FontSizeRelative(
             style.line_height,
         )));
@@ -394,6 +412,7 @@ impl Typesetter {
             );
         }
         let mut layout: Layout<Ink> = builder.build(&text);
+        layout.set_alignment(alignment, AlignmentOptions::default());
         layout.break_all_lines(max_width);
         set_text(&layout, symbol_size * (DISC_SCALE - 1.0) / 2.0)
     }
@@ -425,16 +444,22 @@ impl Typesetter {
         text: &str,
         style: TextStyle,
         room: (f32, f32),
+        centered: bool,
     ) -> SetText {
         let (width, height) = room;
         let mut scale = 1.0;
-        let mut set = self.set(text, style, Some(width), false);
+        let alignment = if centered {
+            Alignment::Center
+        } else {
+            Alignment::Start
+        };
+        let mut set = self.set_styled(text, style, Some(width), false, alignment, 0.0);
         for _ in 0..8 {
             if height <= 0.0 || set.height <= height + 0.5 {
                 break;
             }
             scale *= (height / set.height).sqrt() * 0.98;
-            set = self.set(
+            set = self.set_styled(
                 text,
                 TextStyle {
                     size: style.size * scale,
@@ -442,6 +467,8 @@ impl Typesetter {
                 },
                 Some(width),
                 false,
+                alignment,
+                0.0,
             );
         }
         set

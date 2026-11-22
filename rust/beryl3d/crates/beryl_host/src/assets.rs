@@ -80,6 +80,7 @@ pub fn match_faces(list: &FaceList) -> MatchFaces {
                 face.plate.as_ref().map(|plate| Plate {
                     source: plate.source,
                     triggered: plate.triggered,
+                    choice: plate.choice,
                     rules: plate.rules.clone(),
                 }),
             )

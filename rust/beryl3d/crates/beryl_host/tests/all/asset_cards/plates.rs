@@ -23,7 +23,7 @@ fn each_triggered_and_activated_paragraph_of_a_card_has_a_plate_face() {
             .faces
             .iter()
             .filter_map(|f| f.plate.as_ref())
-            .filter(|plate| plate.source == source)
+            .filter(|plate| plate.source == source && !plate.choice)
             .map(|plate| (plate.triggered, plate.rules.clone()))
             .collect()
     };
@@ -37,6 +37,11 @@ fn each_triggered_and_activated_paragraph_of_a_card_has_a_plate_face() {
     assert_eq!(teferi.len(), 2, "{teferi:?}");
     assert!(teferi.iter().all(|(triggered, _)| !triggered));
     assert!(teferi[0].1.starts_with("+1:"));
+    let choice = list.choice_plate("Teferi, Time Raveler", 0).unwrap();
+    let choice = faces.get(choice).unwrap();
+    let plate = choice.plate.as_ref().unwrap();
+    assert_eq!(plate.rules, teferi[0].1);
+    assert!(plate.choice);
     // Each plate face is a picture of its own in the compressed cache.
     let mut keys: Vec<&str> = faces.faces.iter().map(|f| f.key.as_str()).collect();
     keys.sort_unstable();
