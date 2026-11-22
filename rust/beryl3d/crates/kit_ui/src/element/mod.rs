@@ -31,8 +31,10 @@ use kit_frame::frame::{ElementId, Role, Show};
 /// What supplies the projected box for a floating element.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AnchorTarget {
+    /// A drawn object whose current corners may change during motion.
     Node(ElementId),
-    Slot(u8),
+    /// A box registered by layout, including nodes with no draw records.
+    Layout(ElementId),
 }
 
 /// Where an element stands when it is placed at a point of the window rather than in its

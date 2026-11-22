@@ -28,7 +28,7 @@ use super::orb;
 use crate::hud::HudIn;
 use game_table::profiles::Profile;
 use kit_base::data::hud::IncomingStyle;
-use kit_base::data::profiles::{Incoming, SizeClass};
+use kit_base::data::profiles::Incoming;
 use kit_text::text::TypeStyle;
 use kit_text::text::fonts::Font;
 use kit_ui::element::{Anchor, Element, Position, Shadow, Shown, TextAlign, holder, text};
@@ -62,7 +62,6 @@ fn orb(view: &PlayerView, side: Side, input: &HudIn) -> Element {
         Side::You => view.players.you.life,
         Side::Opponent => view.players.opponent.life,
     };
-    let compact = profile.size_class() == SizeClass::Compact;
     let units = profile.data().play.life.orb_scale;
     let [_, _, width, height] = orb::ART;
     let mut element = Element::new(kit_frame::frame::Role::Region)
@@ -81,14 +80,12 @@ fn orb(view: &PlayerView, side: Side, input: &HudIn) -> Element {
             )
         }));
     element.shows = Some(Shown::Layers(orb::artwork(side, active, units)));
-    // On a phone the table raises the viewer's total over a hand of several rows
-    // (`table::phone::your_life`), so the orb follows the player's anchor on every frame.
+    // The registered life anchor also moves when the phone layout raises the viewer's orb.
     let middle = Vec2::new(0.5, 0.5);
-    element.anchor = Some(if compact {
-        Anchor::Object(anchor_target(Subject::Player { player: side }), middle)
-    } else {
-        Anchor::Point(orb_point(side, profile), middle)
-    });
+    element.anchor = Some(Anchor::Object(
+        anchor_target(Subject::Player { player: side }),
+        middle,
+    ));
     element
 }
 

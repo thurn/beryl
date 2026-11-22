@@ -9,6 +9,8 @@
 
 pub mod badges;
 mod clearance;
+mod drop_regions;
+pub use drop_regions::DropZone;
 mod hands;
 pub use hands::HandFits;
 mod hud_anchors;

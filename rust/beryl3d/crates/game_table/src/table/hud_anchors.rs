@@ -25,7 +25,9 @@ pub enum HudAnchor {
 }
 
 impl HudAnchor {
-    fn id(self) -> ElementId {
+    /// The stable scene id of this layout node.
+    #[must_use]
+    pub fn id(self) -> ElementId {
         let index = match self {
             Self::Life(side) => side_index(side),
             Self::Pool(side) => 2 + side_index(side),
@@ -57,15 +59,20 @@ impl Table {
             .screen(self.layout().players[side_index(side)].life)
     }
 
-    /// Registers the stationary layout boxes read by the HUD anchor pass. Only rows
-    /// with hidden cards need a count position.
-    pub fn write_hud_anchors(&self, builder: &mut FrameBuilder<'_>) {
+    /// Registers the life positions for the screen layer and, while HUD floats are visible,
+    /// the rest of their stationary anchors. Only rows with hidden cards need a count position.
+    pub fn write_hud_anchors(&self, builder: &mut FrameBuilder<'_>, floats_visible: bool) {
         let layout = self.layout();
         let window = self.camera().window.size;
         let mut register = |node: HudAnchor, bounds| builder.anchor_node(node.id(), bounds);
         for side in [Side::You, Side::Opponent] {
-            let player = layout.players[side_index(side)];
             register(HudAnchor::Life(side), point(self.life_centre(side)));
+        }
+        if !floats_visible {
+            return;
+        }
+        for side in [Side::You, Side::Opponent] {
+            let player = layout.players[side_index(side)];
             register(HudAnchor::Pool(side), point(window.screen(player.pool)));
         }
         let middle = if let Some(bands) = layout.bands {

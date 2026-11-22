@@ -585,7 +585,9 @@ fn an_anchored_element_allocates_nothing() {
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, card());
         show.frame(now, &mut builder);
-        layer.follow(|subject| spot_of(&builder, show.table(), subject));
+        show.table().write_hud_anchors(&mut builder, true);
+        show.table().write_drop_regions(&mut builder);
+        layer.follow(|subject| spot_of(&builder, subject));
         layer.write(&mut builder, &show.table().camera().screen_plane(), true);
         builder.finish();
         let after = ALLOCATIONS.load(Ordering::Relaxed);

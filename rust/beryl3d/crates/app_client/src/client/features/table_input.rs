@@ -219,15 +219,8 @@ impl Client {
         let slot = ObjectId(u16::try_from(slot).ok()?);
         let view = &self.show.latest()?.view;
         let cards = self.carried_cards(slot);
-        let table = self.show.table();
         let hit = point.hit.map(|index| &self.frame.resolved[index as usize]);
-        let to = drop::destination(
-            hit,
-            (table.layout(), table.camera()),
-            point.pointer.position,
-            view,
-            table.data().flat.manual.drop,
-        );
+        let to = drop::destination(hit, &self.frame, point.pointer.position, view)?;
         drop::available(view, &to, &cards).then_some(to)
     }
 

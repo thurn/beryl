@@ -357,6 +357,7 @@ impl Client {
         // The guided start's opening covers the table's life totals and pile counts, not notices.
         let counted = visible && !self.guided_start();
         let rows_counted = self.rows_counted(visible, covers);
+        let manual = self.features.screen == Screen::Table;
         let card = self.data().card.size();
         let mut builder = FrameBuilder::new(&mut self.frame, self.tier, card);
         // The flat layer is placed for the table's camera, so the frame takes it even when no
@@ -366,11 +367,12 @@ impl Client {
         self.show.frame(table_now, &mut builder);
         // Elements anchored to a card, an ability or a player stand where the table drew it.
         let table = self.show.table();
-        if visible {
-            table.write_hud_anchors(&mut builder);
+        table.write_hud_anchors(&mut builder, visible);
+        if manual {
+            table.write_drop_regions(&mut builder);
         }
         self.layer
-            .follow(|subject| game_hud::hud::anchors::spot_of(&builder, table, subject));
+            .follow(|subject| game_hud::hud::anchors::spot_of(&builder, subject));
         // Each total shows what `prepare` laid out, over the opening too, as the web's does.
         let opening = self.features.opening.shown;
         self.features.totals(counts::Draw {

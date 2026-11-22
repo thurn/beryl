@@ -5,9 +5,35 @@ use std::cmp::Reverse;
 use glam::Vec2;
 use kit_base::geometry::Rect;
 
-use super::{Band, Frame, PaintBand, Resolved, order::ordered};
+use super::{Band, ElementId, Frame, FrameBuilder, PaintBand, Resolved, order::ordered};
+
+/// A layout region reached by a drop on otherwise empty space.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DropRegion {
+    pub id: ElementId,
+    /// The outline to show when the pointer reaches this region.
+    pub bounds: Rect,
+    /// The hit area may extend beyond the outline, for example to the window's edge.
+    pub area: Area,
+}
+
+impl FrameBuilder<'_> {
+    /// Registers an empty-space drop region. The first registered region wins at a shared edge.
+    pub fn drop_region(&mut self, region: DropRegion) {
+        self.frame.drop_regions.push(region);
+    }
+}
 
 impl Frame {
+    /// The declared drop region at `point`, after the caller has checked for an object hit.
+    #[must_use]
+    pub fn drop_region_at(&self, point: Vec2) -> Option<DropRegion> {
+        self.drop_regions
+            .iter()
+            .find(|region| region.area.contains(point))
+            .copied()
+    }
+
     /// The frontmost eligible element at `point` in logical points, before any input
     /// redirection such as a shown card's screen host.
     pub fn pick(&self, point: Vec2, accepts: impl Fn(&Resolved) -> bool) -> Option<u32> {
@@ -114,7 +140,7 @@ impl Frame {
 }
 
 /// A projected or laid-out region and the clip that limits it, in logical points.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Area {
     Quad([Vec2; 4], Option<Rect>),
     Rect(Rect, Option<Rect>),

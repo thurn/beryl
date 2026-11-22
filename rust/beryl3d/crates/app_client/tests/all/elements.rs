@@ -3,10 +3,12 @@
 use app_client::Input;
 use app_client::command::{Request, SessionCommand};
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest};
+use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Subject;
 use game_hud::hud::anchors::{anchor_target, spot_of};
-use game_table::table::Table;
+use game_table::table::{HudAnchor, Table};
 use glam::Vec2;
+use kit_base::geometry::Rect;
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, Role, StateBits};
 use kit_ui::element::{Anchor, Chord, row, text};
 use kit_ui::input::Input as DeviceInput;
@@ -54,7 +56,7 @@ fn an_element_anchored_to_a_card_stays_on_it_while_it_flies() {
         );
         show.frame(now, &mut builder);
         let card = builder.centre(ElementId(u32::from(cards.land.0)));
-        layer.follow(|subject| spot_of(&builder, show.table(), subject));
+        layer.follow(|subject| spot_of(&builder, subject));
         let (layout_nodes, text_runs) = layer.take_work();
         assert_eq!((layout_nodes, text_runs), (0, 0), "no layout at {now}");
         layer.write(&mut builder, &show.table().camera().screen_plane(), true);
@@ -85,7 +87,6 @@ fn an_element_anchored_to_a_card_the_table_does_not_show_is_not_drawn() {
         ));
         badge
     })));
-    layer.follow(|_| None);
     let mut frame = Frame::with_capacity(64, 256, 4096);
     let mut builder = FrameBuilder::new(
         &mut frame,
@@ -96,6 +97,9 @@ fn an_element_anchored_to_a_card_the_table_does_not_show_is_not_drawn() {
         crate::test_data::data(),
         game_table::table::Window::default(),
     );
+    // A line can register a hidden card's last box. A badge still needs a drawn card.
+    builder.anchor_node(ElementId(40), Rect::default());
+    layer.follow(|target| spot_of(&builder, target));
     layer.write(&mut builder, &table.camera().screen_plane(), true);
     let frame = builder.finish();
     assert!(
@@ -103,6 +107,41 @@ fn an_element_anchored_to_a_card_the_table_does_not_show_is_not_drawn() {
         "no element for a card that is not shown"
     );
     assert_eq!(layer.press_at(Vec2::ZERO, true), None);
+}
+
+#[test]
+fn a_player_follower_moves_with_the_registered_life_node() {
+    let mut layer = Layer::new();
+    let mut badge = text("Life marker");
+    let target = anchor_target(Subject::Player { player: Side::You });
+    badge.anchor = Some(Anchor::Object(target, Vec2::splat(0.5)));
+    layer.show(Some(row().child(badge)));
+    layer.take_work();
+    let table = Table::new(
+        crate::test_data::data(),
+        game_table::table::Window::default(),
+    );
+    let mut frame = empty_frame();
+    for point in [Vec2::new(150.0, 260.0), Vec2::new(100.0, 180.0)] {
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, table.data().card.size());
+        builder.anchor_node(
+            HudAnchor::Life(Side::You).id(),
+            Rect {
+                x: point.x,
+                y: point.y,
+                ..Rect::default()
+            },
+        );
+        layer.follow(|target| spot_of(&builder, target));
+        assert_eq!(layer.take_work(), (0, 0));
+        layer.write(&mut builder, &table.camera().screen_plane(), true);
+        let [x, y, width, height] = find(builder.finish(), Role::Text, "Life marker").1;
+        let badge = Vec2::new(x + width / 2.0, y + height / 2.0);
+        assert!(
+            badge.distance(point) < 0.01,
+            "{badge} off the life anchor at {point}"
+        );
+    }
 }
 
 /// A key pressed with `modifiers`.

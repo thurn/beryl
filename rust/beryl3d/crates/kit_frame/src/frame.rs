@@ -340,6 +340,7 @@ pub struct Frame {
     pub anchors: Vec<Anchored>,
     /// The boxes of layout nodes that paint nothing, such as an empty row's container.
     anchor_nodes: Vec<(ElementId, Rect)>,
+    drop_regions: Vec<picking::DropRegion>,
     /// Every resolved element's name, end to end.
     pub names: String,
     /// In drawing order.
@@ -441,6 +442,7 @@ impl Frame {
             shows: Vec::with_capacity(elements),
             anchors: Vec::with_capacity(elements),
             anchor_nodes: Vec::with_capacity(elements.max(32)),
+            drop_regions: Vec::with_capacity(8),
             names: String::with_capacity(name_bytes),
             draws: Vec::with_capacity(draws),
             opaque: 0,
@@ -510,6 +512,7 @@ impl<'a> FrameBuilder<'a> {
         frame.shows.clear();
         frame.anchors.clear();
         frame.anchor_nodes.clear();
+        frame.drop_regions.clear();
         frame.names.clear();
         frame.draws.clear();
         frame.opaque = 0;

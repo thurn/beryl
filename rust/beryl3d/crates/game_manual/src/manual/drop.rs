@@ -10,12 +10,11 @@
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ObjectId, ObjectView, RowName, Side, TableAction, ZoneName};
 use beryl_protocol::script::Subject;
-use glam::{Vec2, Vec3};
+use glam::Vec2;
 use serde_json::Value;
 
 use super::commands::seat_of;
-use game_table::table::Place;
-use game_table::table::{Camera, Layout};
+use game_table::table::{DropZone, Place};
 use kit_base::data::flat::DropTarget;
 use kit_base::tokens::{color, ratio, type_style};
 use kit_frame::frame::{Frame, Resolved, Role, StateBits};
@@ -53,18 +52,29 @@ pub struct Destination {
 /// The name of the outline of the place a held card would land.
 pub const TARGET: &str = "drop-target";
 
-/// Turns the scene's drop target into a manual destination. Open table space uses the
-/// geometric table regions, even if there is no object at the release point.
+/// Turns a drawn object or a registered empty-space region into a manual destination.
 #[must_use]
 pub fn destination(
     hit: Option<&Resolved>,
-    (layout, camera): (&Layout, &Camera),
+    frame: &Frame,
     at: Vec2,
     view: &PlayerView,
-    metrics: DropTarget,
-) -> Destination {
+) -> Option<Destination> {
     hit.and_then(|element| on_element(element, at, view))
-        .unwrap_or_else(|| area_at(layout, camera, at, metrics))
+        .or_else(|| {
+            let region = frame.drop_region_at(at)?;
+            let (side, area) = match DropZone::from_id(region.id)? {
+                DropZone::Hand(side) => (side, Area::Hand),
+                DropZone::Row(side, row) => (side, Area::Row(row)),
+            };
+            Some(Destination {
+                area,
+                side,
+                rect: region.bounds,
+                end: None,
+                on: None,
+            })
+        })
 }
 
 fn on_element(element: &Resolved, at: Vec2, view: &PlayerView) -> Option<Destination> {
@@ -103,76 +113,6 @@ fn on_element(element: &Resolved, at: Vec2, view: &PlayerView) -> Option<Destina
         },
         at,
     ))
-}
-
-/// The area of the table under `at`: each side's hand along its edge of the window, and on the
-/// table each side's creatures' row toward the middle and its back row beyond, the lands on the
-/// left and the other permanents on the right, as `desktopDropAreas` divides the stage.
-fn area_at(layout: &Layout, camera: &Camera, at: Vec2, metrics: DropTarget) -> Destination {
-    let window = camera.window.size;
-    let hand_top = f32::midpoint(1.0, -layout.hand.edge) * window.height;
-    let strip = metrics.opponent_hand * window.height;
-    let whole = |top: f32, bottom: f32| Rect {
-        x: 0.0,
-        y: top,
-        width: window.width,
-        height: bottom - top,
-    };
-    let hand = |side, rect| Destination {
-        area: Area::Hand,
-        side,
-        rect,
-        end: None,
-        on: None,
-    };
-    if at.y >= hand_top {
-        return hand(Side::You, whole(hand_top, window.height));
-    }
-    if at.y <= strip {
-        return hand(Side::Opponent, whole(0.0, strip));
-    }
-    let point = camera.on_plane(at, 0.0);
-    let side = if point.y < 0.0 {
-        Side::You
-    } else {
-        Side::Opponent
-    };
-    // The creatures' row runs from the middle of the table to half way to the back row, and
-    // the back row as far again beyond it. The lands' and the others' halves meet half way
-    // between them.
-    let (near, back) = (layout.creatures.y.abs(), layout.lands.y.abs());
-    let split = f32::midpoint(near, back);
-    let far = 2.0 * back - split;
-    let middle = f32::midpoint(layout.lands.right, layout.others.left);
-    let (left, right) = (layout.creatures.left, layout.creatures.right);
-    let (row, band, across) = if point.y.abs() < split {
-        (RowName::Creatures, (0.0, split), (left, right))
-    } else if point.x < middle {
-        (RowName::Lands, (split, far), (left, middle))
-    } else {
-        (RowName::Others, (split, far), (middle, right))
-    };
-    let sign = if side == Side::You { -1.0 } else { 1.0 };
-    let corners = [
-        (across.0, band.0),
-        (across.1, band.0),
-        (across.1, band.1),
-        (across.0, band.1),
-    ]
-    .map(|(x, y)| camera.to_screen(Vec3::new(x, sign * y, 0.0)));
-    let mut rect = bounds(&corners);
-    // A row's box stops at the hands' edges of the window.
-    let top = rect.y.max(strip);
-    let bottom = (rect.y + rect.height).min(hand_top);
-    rect.y = top;
-    rect.height = (bottom - top).max(0.0);
-    Destination {
-        area: Area::Row(row),
-        side,
-        rect,
-        end: None,
-        on: None,
-    }
 }
 
 /// A library's destination with the end of it that `at` is over.
