@@ -4,12 +4,13 @@ use glam::Vec2;
 use serde::de::{DeserializeOwned, Error};
 use serde::{Deserialize, Deserializer};
 
+use super::effect::{Effect, Effects};
 use super::light::{Light, Own};
 use super::lighting::Lighting;
 use super::playback::{CatchUp, FrameRate, Slide, TierProbe};
 use super::pointer::PointerTuning;
 use super::presentation::{Gallery, Notices, Revealed, Shown};
-use super::{BadgeTuning, Card, effect::Effects, profiles::Profiles, verbs::Verbs};
+use super::{BadgeTuning, Card, profiles::Profiles, verbs::Verbs};
 
 /// The tuning data supplied by a host. The client uses the typed values directly.
 #[derive(Clone, Debug, PartialEq)]
@@ -50,7 +51,7 @@ impl Data {
         validate(&verbs).map_err(|(key, why)| format!("verbs.json: verbs.{key}: {why}"))?;
         let light = Light::parse(&load("light.json")?)?;
         let effects = Effects::parse(effects)?.with_lift(light.lift);
-        for required in ["glow", "dissolve", "loss"] {
+        for required in Effect::ALL.map(Effect::name) {
             if effects.get(required).is_none() {
                 return Err(format!("effects/{required}.json: missing definition"));
             }

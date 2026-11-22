@@ -8,13 +8,14 @@ mod player;
 pub mod preview;
 pub mod shake;
 
+pub use kit_base::data::effect::Effect;
 pub use player::{NumberLook, TextLook, text};
 
 use beryl_protocol::{protocol::ObjectId, script::Subject};
 use glam::{Vec2, Vec3};
 use kit_frame::frame::FrameBuilder;
 
-use kit_base::data::effect::{Effects, Primitive, Surface};
+use kit_base::data::effect::Effects;
 use kit_base::pose::{Curve, Pose};
 
 /// Where something is and how large, for the light drawn to or on it.
@@ -37,83 +38,6 @@ pub fn write(
     light::write(effects, runs, now, &reach, eye, builder);
     particles::write(effects, runs, now, |subject| reach(subject, 0), builder);
     shake::write(effects, runs, now, scale, builder);
-}
-
-/// One effect, by its name in `data/ui-conventions.json`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Effect {
-    Glow,
-    Settle,
-    Dissolve,
-    Dim,
-    Blanch,
-    Cover,
-    Impact,
-    Shake,
-    Trail,
-    Flash,
-    Beam,
-    Pulse,
-    Loss,
-    Gain,
-}
-
-impl Effect {
-    /// Every effect, in the order of the data file's list.
-    pub const ALL: [Self; 14] = [
-        Self::Glow,
-        Self::Settle,
-        Self::Dissolve,
-        Self::Dim,
-        Self::Blanch,
-        Self::Cover,
-        Self::Impact,
-        Self::Shake,
-        Self::Trail,
-        Self::Flash,
-        Self::Beam,
-        Self::Pulse,
-        Self::Loss,
-        Self::Gain,
-    ];
-
-    /// Its name in `data/ui-conventions.json`.
-    #[must_use]
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::Glow => "glow",
-            Self::Settle => "settle",
-            Self::Dissolve => "dissolve",
-            Self::Dim => "dim",
-            Self::Blanch => "blanch",
-            Self::Cover => "cover",
-            Self::Impact => "impact",
-            Self::Shake => "shake",
-            Self::Trail => "trail",
-            Self::Flash => "flash",
-            Self::Beam => "beam",
-            Self::Pulse => "pulse",
-            Self::Loss => "loss",
-            Self::Gain => "gain",
-        }
-    }
-
-    /// Whether this has layers drawn with a surface, using its resolved pose.
-    pub fn on_card(self, effects: &Effects) -> bool {
-        effects.get(self.name()).is_some_and(|definition| {
-            definition.layers.iter().any(|layer| match layer.primitive {
-                Primitive::Surface { surface, .. } => !matches!(surface, Surface::TextTint { .. }),
-                Primitive::Burst { on_surface, .. } => on_surface,
-                _ => false,
-            })
-        })
-    }
-
-    /// The effect named `name` in `data/ui-conventions.json`.
-    #[must_use]
-    pub fn from_name(name: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|effect| effect.name() == name)
-    }
 }
 
 /// One effect played on `on`, from `start` for `duration` along `curve`, in nanoseconds since

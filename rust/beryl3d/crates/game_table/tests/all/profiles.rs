@@ -7,6 +7,7 @@ use test_profiles::SHIPPED;
 
 use game_table::profiles::Profile;
 use game_table::table::Window;
+use kit_base::data::effect::Effect;
 use kit_base::data::profiles::Region;
 use kit_base::geometry::{Rect, Size};
 use kit_scene::{SizeClass, Slot};
@@ -90,7 +91,7 @@ fn the_windows_use_the_supplied_table_and_screen_tuning() {
             "\"inset\": [0, 22, 16, 22]",
             1,
         );
-    let names = ["glow", "dissolve", "loss"];
+    let names = Effect::ALL.map(Effect::name);
     let definitions = names.map(|name| {
         beryl_test_files::read_to_string(format!("data/beryl3d/effects/{name}.json")).unwrap()
     });

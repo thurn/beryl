@@ -9,7 +9,7 @@ use kit_base::data::{Card, Data, profiles};
 use serde_json::Value;
 
 const VERBS: &str = include_str!("../../../../../../data/beryl3d/verbs.json");
-const EFFECTS: [(&str, &str); 3] = [
+const EFFECTS: [(&str, &str); 14] = [
     (
         "glow",
         include_str!("../../../../../../data/beryl3d/effects/glow.json"),
@@ -22,6 +22,50 @@ const EFFECTS: [(&str, &str); 3] = [
         "loss",
         include_str!("../../../../../../data/beryl3d/effects/loss.json"),
     ),
+    (
+        "settle",
+        include_str!("../../../../../../data/beryl3d/effects/settle.json"),
+    ),
+    (
+        "dim",
+        include_str!("../../../../../../data/beryl3d/effects/dim.json"),
+    ),
+    (
+        "blanch",
+        include_str!("../../../../../../data/beryl3d/effects/blanch.json"),
+    ),
+    (
+        "cover",
+        include_str!("../../../../../../data/beryl3d/effects/cover.json"),
+    ),
+    (
+        "impact",
+        include_str!("../../../../../../data/beryl3d/effects/impact.json"),
+    ),
+    (
+        "shake",
+        include_str!("../../../../../../data/beryl3d/effects/shake.json"),
+    ),
+    (
+        "trail",
+        include_str!("../../../../../../data/beryl3d/effects/trail.json"),
+    ),
+    (
+        "flash",
+        include_str!("../../../../../../data/beryl3d/effects/flash.json"),
+    ),
+    (
+        "beam",
+        include_str!("../../../../../../data/beryl3d/effects/beam.json"),
+    ),
+    (
+        "pulse",
+        include_str!("../../../../../../data/beryl3d/effects/pulse.json"),
+    ),
+    (
+        "gain",
+        include_str!("../../../../../../data/beryl3d/effects/gain.json"),
+    ),
 ];
 const AUDIT: &str = include_str!("../../../../../../data/beryl3d/audit.json");
 const CARD: &str = include_str!("../../../../../../data/beryl3d/card.json");
@@ -32,6 +76,13 @@ fn card() -> Card {
 }
 
 fn parse(changed: Option<(&str, &str)>) -> Result<Data, String> {
+    parse_with_effects(changed, EFFECTS)
+}
+
+fn parse_with_effects(
+    changed: Option<(&str, &str)>,
+    effects: impl IntoIterator<Item = (&'static str, &'static str)>,
+) -> Result<Data, String> {
     Data::parse(
         |name| {
             if let Some((file, text)) = changed
@@ -63,7 +114,7 @@ fn parse(changed: Option<(&str, &str)>) -> Result<Data, String> {
             Ok(text.to_owned())
         },
         &SHIPPED,
-        EFFECTS,
+        effects,
     )
 }
 
@@ -148,6 +199,19 @@ fn an_out_of_range_value_names_its_file_and_path() {
     let why = parse(Some(("verbs.json", &space.to_string()))).unwrap_err();
     assert!(why.contains("verbs.json: verbs.fly.arc"), "{why}");
     assert!(why.contains("nonnegative"), "{why}");
+}
+
+#[test]
+fn every_shipped_effect_is_required() {
+    for (missing, _) in EFFECTS {
+        let effects = EFFECTS.into_iter().filter(|&(name, _)| name != missing);
+        let error = parse_with_effects(None, effects)
+            .expect_err("missing shipped effects must fail tuning validation");
+        assert!(
+            error.starts_with(&format!("effects/{missing}.json:")),
+            "{error}"
+        );
+    }
 }
 
 #[test]

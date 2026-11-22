@@ -10,6 +10,83 @@ use serde::Deserialize;
 
 use super::tuning::read;
 
+/// One effect, by its name in `data/ui-conventions.json`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Effect {
+    Glow,
+    Settle,
+    Dissolve,
+    Dim,
+    Blanch,
+    Cover,
+    Impact,
+    Shake,
+    Trail,
+    Flash,
+    Beam,
+    Pulse,
+    Loss,
+    Gain,
+}
+
+impl Effect {
+    /// Every effect, in the order of the data file's list.
+    pub const ALL: [Self; 14] = [
+        Self::Glow,
+        Self::Settle,
+        Self::Dissolve,
+        Self::Dim,
+        Self::Blanch,
+        Self::Cover,
+        Self::Impact,
+        Self::Shake,
+        Self::Trail,
+        Self::Flash,
+        Self::Beam,
+        Self::Pulse,
+        Self::Loss,
+        Self::Gain,
+    ];
+
+    /// Its name in `data/ui-conventions.json`.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Glow => "glow",
+            Self::Settle => "settle",
+            Self::Dissolve => "dissolve",
+            Self::Dim => "dim",
+            Self::Blanch => "blanch",
+            Self::Cover => "cover",
+            Self::Impact => "impact",
+            Self::Shake => "shake",
+            Self::Trail => "trail",
+            Self::Flash => "flash",
+            Self::Beam => "beam",
+            Self::Pulse => "pulse",
+            Self::Loss => "loss",
+            Self::Gain => "gain",
+        }
+    }
+
+    /// Whether this has layers drawn with a surface, using its resolved pose.
+    pub fn on_card(self, effects: &Effects) -> bool {
+        effects.get(self.name()).is_some_and(|definition| {
+            definition.layers.iter().any(|layer| match layer.primitive {
+                Primitive::Surface { surface, .. } => !matches!(surface, Surface::TextTint { .. }),
+                Primitive::Burst { on_surface, .. } => on_surface,
+                _ => false,
+            })
+        })
+    }
+
+    /// The effect named `name` in `data/ui-conventions.json`.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|effect| effect.name() == name)
+    }
+}
+
 /// Definitions indexed by the names used in script timing. Hosts parse these before playback.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Effects {
