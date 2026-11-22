@@ -829,5 +829,11 @@
     "label": "Windows Rust builds share dependency features across workspace tests, package tests, and the CLI and scenario products.",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Ignite batches ordinary flaky-check reports so one investigation can use repeated evidence from failures that share a cause.",
+    "metric": "bead.agent-minutes",
+    "expect": "down",
+    "commit": "4144a2771e1dad781041ee94a933a85b9ebb9629"
   }
 ]
