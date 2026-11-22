@@ -2,8 +2,8 @@ use crate::common::TEST;
 use beryl_cli::blunders::*;
 use beryl_cli::game::mirror;
 use beryl_cli::transcript::labels;
-use beryl_engine::{Decision, GameTable, Scratch, observe, view};
-use beryl_search::{Agent, AgentDecision, DEEP_SEARCHER};
+use beryl_engine::{Choice, Decision, GameTable, Scratch, observe, view};
+use beryl_search::{Agent, AgentDecision, DEEP_SEARCHER, guarded};
 
 /// Detects any search, including one that ultimately plays the policy's answer.
 struct PolicyOnly(beryl_search::LongSearch);
@@ -79,10 +79,48 @@ fn sure_still_searches_other_decisions() {
     assert_eq!(run(true), baseline);
 }
 
+/// Compare the recorded mistake with the policy's choice using the work reserved for
+/// pairing. This exercises the guard and the comparison even when the tree agrees with
+/// the policy or spends its budget before finding the challenger.
+fn check_recorded_challenger(
+    entry: &Entry,
+    at: &Reached,
+    default: &mut dyn Agent,
+    mut settings: beryl_search::Settings,
+    seed: u64,
+) {
+    let mut scratch = Scratch::new();
+    let shown = labels(&at.t, view(&at.s, &at.t, &mut scratch), &at.d);
+    let index = shown
+        .iter()
+        .position(|label| *label == entry.played)
+        .unwrap();
+    let challenger = Choice(u16::try_from(index).unwrap());
+    let obs = observe(&at.s, &at.t, &mut scratch, at.d.decider);
+    let policy = settings.family.rollout_policy(&at.t);
+    let expected = default.choose(obs, &at.d, AgentDecision(0));
+    assert!(
+        guarded(
+            &at.t,
+            &policy,
+            obs,
+            &at.d,
+            expected,
+            challenger,
+            settings.family.options,
+        ),
+        "{}",
+        entry.name
+    );
+    settings.work /= 4;
+    let agent = beryl_search::LongSearch::new(&at.t, settings, seed);
+    let check = agent.duel(obs, &at.d, challenger, expected);
+    assert!(check.pairs.is_some_and(|count| count >= 2), "{check:?}");
+    assert_eq!([check.search, check.greedy], [challenger, expected]);
+}
+
 #[test]
 fn first_keeps_teferis_plus_one_when_search_prefers_to_pass() {
-    use beryl_engine::Opt;
-
     let name = "skip-teferi-plus-one";
     let e = entry(name);
     let at = reach(&TEST, &e).unwrap();
@@ -95,13 +133,11 @@ fn first_keeps_teferis_plus_one_when_search_prefers_to_pass() {
         threads: 1,
     };
     let seed = run_seed(name, 14);
+    let mut default = build(&at.t, "greedy", seed).unwrap();
+    check_recorded_challenger(&e, &at, default.as_mut(), settings, seed);
+
     let mut agent = beryl_search::LongSearch::new(&at.t, settings, seed);
-    let choice = play(&e, &at, &mut agent);
-    let search = agent.last_search().unwrap();
-    let check = search.anchor.expect("paired override check");
-    assert_eq!(at.d.candidates.option(check.search), Some(Opt::Pass));
-    assert!(check.pairs.is_some_and(|count| count >= 2));
-    assert_eq!(choice, ["Teferi, Hero of Dominaria +1"]);
+    assert_eq!(play(&e, &at, &mut agent), ["Teferi, Hero of Dominaria +1"]);
 }
 
 #[test]
@@ -125,11 +161,10 @@ fn paired_search_keeps_the_default_at_reported_blunders() {
         let seed = run_seed(name, index);
         let mut agent = beryl_search::LongSearch::new(&at.t, settings, seed);
         let choice = play(&e, &at, &mut agent);
-        if name == "subtlety-main-phase-empty-stack" {
-            let check = agent.last_search().unwrap().anchor.unwrap();
-            assert!(check.pairs.is_some_and(|count| count >= 2));
-        }
         let mut default = build(&at.t, &format!("greedy+{rules}"), seed).unwrap();
+        if name == "subtlety-main-phase-empty-stack" {
+            check_recorded_challenger(&e, &at, default.as_mut(), settings, seed);
+        }
         assert_eq!(choice, play(&e, &at, default.as_mut()), "{name}");
         assert!(passes(&e, &choice), "{name}: {choice:?}");
     }
