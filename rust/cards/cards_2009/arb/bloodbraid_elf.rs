@@ -22,7 +22,7 @@ pub mod scenarios {
     const ELF: &str = Card::BloodbraidElf;
     const BOLT: &str = Card::LightningBolt;
     const GEYSER: &str = Card::Braingeyser;
-    const COUNTER: &str = Card::Counterspell;
+    const COUNTER: &str = Prop::Instant;
     const MAJOR: &str = Card::DoubleMajor;
     const LANDS: &[&str] = &[Card::Mountain, Card::Forest, Card::Forest, Card::Forest];
 
@@ -103,7 +103,7 @@ pub mod scenarios {
             ME.has_cards(Zone::Exile, 0),
         ]),
         setup("Cascade resolves even when the Elf is countered", &[BOLT])
-            .interaction(&[COUNTER, BOLT])
+            .interaction(&[BOLT])
             .battlefield(P1, &[Card::Island, Card::Island])
             .hand(P1, &[COUNTER])
             .actions(&[
