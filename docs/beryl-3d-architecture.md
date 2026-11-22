@@ -342,13 +342,13 @@ The 14 effects become 14 entries that draw what the code drew. A new effect is a
 data entry and a story, with no Rust and no shader change unless it needs a new
 primitive.
 
-Each definition in `data/beryl3d/effects/` names its default anchor. The
-shared step timing supplies the effect's duration from `data/ui-conventions.json`
-and can name an explicit target. When the timing has no effect duration, the
-effect lasts as long as the step. Each layer's interval
-defaults to 0 through 1, with the run's end excluded. It samples the run's eased
-clock by default. An elapsed clock lets a layer, such as a floating number,
-advance uniformly while light follows the run's easing.
+Each definition in `data/beryl3d/effects/` names its default anchor. The shared
+step timing supplies the effect's duration from `data/ui-conventions.json` and
+can name an explicit target. When the timing has no effect duration, the effect
+lasts as long as the step. Each layer's interval defaults to 0 through 1, with
+the run's end excluded. It samples the run's eased clock by default. An elapsed
+clock lets a layer, such as a floating number, advance uniformly while light
+follows the run's easing.
 
 A layer parameter can be a constant, a ramp, a two-ramp envelope, a power of the
 remaining time, or a wave. A ramp adds `by` to `from` over the interval from

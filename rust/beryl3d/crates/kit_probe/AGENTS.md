@@ -63,9 +63,9 @@ story effect 360x240 desktop
 effect glow 114,60 132x120
 ```
 
-Use the name of a loaded effect definition and a rectangle in window points.
-The effect plays for 600 ms. A trail moves its rectangle so it can draw.
-On a solid rectangle, dissolve fades the paint and cover uses the wash.
+Use the name of a loaded effect definition and a rectangle in window points. The
+effect plays for 600 ms. A trail moves its rectangle so it can draw. On a solid
+rectangle, dissolve fades the paint and cover uses the wash.
 
 Use one LF after every line, including the last, and write numbers without extra
 zeroes. Coordinates are finite. Widths and heights are positive and numbers are
