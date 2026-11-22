@@ -3,6 +3,9 @@ INCIDENT: command the fleet during an operator-declared emergency
 The operator appoints one incident commander for the emergency. Use your
 session ID in the ticket and in every order so recipients can verify it.
 Keep a timeline and record it on the ticket when the hub can accept it.
+Record each mitigation and exactly one outcome on this ticket. Link a filed
+root-cause ticket with evidence of why the normal handler failed, or write
+one sentence explaining why nothing needs fixing.
 
 1. File and claim a root incident ticket. Its ID starts with I.
    ignite ticket create "<fault>" --labels incident --pending --independent
@@ -40,8 +43,7 @@ Keep a timeline and record it on the ticket when the hub can accept it.
    gets through the failing step of tip verification. Withdraw any orders
    that still apply. End the pause at once if the operator directs it.
 
-6. Run the skipped verification. Land remaining fixes normally, record
-   results and follow-ups on the ticket, and close it with the outcome.
-   If you must stop before recovery, record the remaining failure and leave
-   the pause on only when resuming would cause harm. The operator can appoint
-   another session to take over.
+6. Run skipped checks, land fixes normally, and record results and follow-ups.
+   Verify each recorded mitigation has exactly one outcome before closing.
+   If stopping before recovery, record what still fails. Keep the pause only
+   if resuming would cause harm. The operator can appoint a replacement.

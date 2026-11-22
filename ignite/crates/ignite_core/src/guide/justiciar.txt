@@ -1,11 +1,9 @@
 JUSTICIAR: automatic escalation for a fault or impossible ticket
 
-The hub files a J ticket when it detects a fault or receives an ignite
-justiciar "<reason>" report. The pool gives it priority. Work the issue in
-that ticket. Decide and act, and put your session and ticket IDs in orders.
+The hub files a J ticket on a fault or an ignite justiciar "<reason>"
+report. The pool prioritizes it. Put your session and ticket IDs in orders.
 First look: ignite status, ignite doctor, the daemon log, the crash folder
 in the Ignite home, ignite ticket children <epic> --open.
-
 You may, to end it:
 - release, close, reopen, re-parent or re-wire any ticket; remove an
   impossible edge; file tickets; ignite tell any session; pool pause/resume
@@ -20,6 +18,9 @@ You may, to end it:
 Before any destructive step, take a backup you can restore. A fleet-wide
 pause is enforced (ignite emergency declare <ticket>; exit 6); ignite tell
 --all only what it cannot enforce. End it with ignite pool resume --all.
+Record each mitigation and exactly one outcome on this ticket. Link a filed
+root-cause ticket with evidence of why the normal handler failed, or write
+one sentence explaining why nothing needs fixing.
 
 One ticket: hard work (failing tests, confusing code) goes back to its
 worker. A ticket that cannot be completed as written is yours: relax the
@@ -31,14 +32,12 @@ Only the person can unblock it (credentials, access, a decision): do both.
 2. Rewrite the blocked work to continue now with fake data, a stub, a
    fixture or a local substitute, and file the step that swaps in the real
    thing as a ticket that depends on the person's ticket.
-Nothing in the pool waits on the person. Title ⛔ only if no interim path
-exists at all.
+Nothing in the pool waits on the person. Title ⛔ only if no interim path exists.
 
 A ticket that waits (on a clock, logs, a machine) never holds other work.
 Rewrite it to do now what can be done now. Work only another machine can
 do: label it machine:<machine>, release it, remove every edge waiting on it.
 A waiting worker: ignite tell it what to do; release its ticket once gone.
-
 A deadlock: trace the blocking edges (an unowned, closed or cancelled
 prerequisite, a cycle, a ticket held by a gone session) and repair the graph.
 An Ignite crash or dead loop: read the crash record and log, fix the cause
@@ -46,4 +45,5 @@ with a regression test, deploy as above. The monitor rolls a crash-looping
 build back; record the bad commit on your ticket.
 
 Finish: verify the queue moves and a landing passes tip verification.
-Record changes and bypasses, file follow-ups and run ignite close.
+Record changes and bypasses and file follow-ups. Before ignite close, check
+that every recorded mitigation has exactly one outcome.
