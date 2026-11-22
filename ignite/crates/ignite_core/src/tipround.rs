@@ -33,6 +33,21 @@ use crate::config::Os;
 use crate::ids::{CheckName, Commit, MachineId};
 use crate::time::Timestamp;
 
+/// The commit that automatic verification rounds share across machines.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TipCandidate {
+    pub commit: Commit,
+    /// A round found a failure or a blocker that a new landing might fix.
+    pub retry_on_new_tip: bool,
+}
+
+/// Replace the candidate only if it still matches the read.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TipCandidateUpdate {
+    pub expected: Option<TipCandidate>,
+    pub replacement: TipCandidate,
+}
+
 /// The commits that bound a platform's unverified changes.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeferredPlatform {

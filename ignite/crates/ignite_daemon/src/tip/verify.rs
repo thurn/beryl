@@ -11,8 +11,8 @@ use ignite_core::traits::{Push, Result};
 use super::coverage::{Required, Scope};
 use super::round::require_running;
 use super::{
-    Listed, TipCheck, TipOutcome, TipRun, TipSet, TipVerifier, covered, green, meter, names_of,
-    settle_runs, split, verdict,
+    Listed, TipCheck, TipOutcome, TipRun, TipSet, TipVerifier, candidate, covered, green, meter,
+    names_of, settle_runs, split, verdict,
 };
 use crate::server::Context;
 
@@ -180,6 +180,8 @@ impl TipVerifier {
 
         let mut failed: Vec<&TipCheck> = Vec::new();
         let mut waiting: Vec<CheckName> = Vec::new();
+        let mut blocked_here = unlisted.iter().any(|missing| missing.reportable);
+        let now = ctx.clock.now();
         // The checks only another platform's machines can run, with their families.
         let mut elsewhere: BTreeMap<Os, Vec<(CheckName, String)>> = BTreeMap::new();
         for check in checks.iter().filter(|c| !split.is_after(c)) {
@@ -188,6 +190,14 @@ impl TipVerifier {
                 Some(Outcome::Fail) => failed.push(check),
                 Some(Outcome::Incomplete) | None => {
                     waiting.push(check.check.clone());
+                    blocked_here |= check.runnable
+                        && (self
+                            .held_off
+                            .get(&check.key)
+                            .is_some_and(|until| now < *until)
+                            || verdicts
+                                .get(&check.key)
+                                .is_some_and(|run| run.reason.is_some() || run.build.is_some()));
                     if let (false, Some(os)) = (check.runnable, check.key.platform) {
                         elsewhere
                             .entry(os)
@@ -242,6 +252,7 @@ impl TipVerifier {
                         unverified_commits,
                     }),
                 })?;
+                candidate::allow_newer(ctx, tip)?;
             }
             return Ok(TipOutcome::Failed { checks });
         }
@@ -249,6 +260,9 @@ impl TipVerifier {
             let flagged = self.flag_missing_machines(ctx, tip, elsewhere);
             self.save(ctx);
             let unrunnable = flagged?;
+            if last != tip && (blocked_here || !unrunnable.is_empty()) {
+                candidate::allow_newer(ctx, tip)?;
+            }
             waiting.sort();
             waiting.dedup();
             return Ok(TipOutcome::Waiting {

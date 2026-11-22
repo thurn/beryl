@@ -6,7 +6,7 @@
 //! the hub lapsed, and the next daemon started the round over. Now:
 //!
 //! - The loop ([`TipLoop`]) waits on the hub's change feed in the daemon, asks the verifier's
-//!   saved memory whether the newest `staging` tip needs a round ([`TipVerifier::due`]), and
+//!   saved memory whether the shared candidate needs a round, and
 //!   starts the round with [`Server::start_internal`], which gives it a handle and starts
 //!   `ignite internal verb <handle>` (see `server/process.rs`). It then waits on the handle.
 //! - The round ([`TipRoundVerb`]) loads the verifier's memory from the local database
@@ -174,8 +174,8 @@ impl TipLoop {
     }
 
     /// One turn of the loop: waits for a round still running from before a restart, or else
-    /// waits up to `wait_s` for the feed to show a change and runs a round at the newest
-    /// `staging` tip if it needs one. Returns the tip a round verified and how it ended, or
+    /// waits up to `wait_s` for the feed to show a change and runs a round at the shared
+    /// candidate if it needs one. Returns the tip a round verified and how it ended, or
     /// `None` when there was nothing to verify.
     pub fn turn(&mut self, ctx: &Context, wait_s: u32) -> Result<Option<(Commit, TipOutcome)>> {
         if let Some((handle, request)) = self.server.running_internal(ROUND_VERB) {
@@ -185,13 +185,12 @@ impl TipLoop {
                 .wait(ctx, &handle, target.as_ref().map(|(tip, _)| tip), 0)
                 .map(Some);
         }
-        crate::steps::step("waiting for a new tip, then verifying it");
+        crate::steps::step("waiting for a tip to verify");
         let batch = ctx.hub.feed(self.since, wait_s)?;
         self.since = self.since.max(batch.seq);
-        let tip = ctx.git.tip(&ctx.config.repository.staging)?;
-        if !self.verb.verifier().due(ctx, &tip) {
+        let Some(tip) = self.verb.verifier().next_target(ctx)? else {
             return Ok(None);
-        }
+        };
         let request = TipRoundVerb::request(&tip, self.since, &ctx.repo);
         let handle = self.server.start_internal(self.verb.clone(), request);
         crate::steps::step(format!("verifying tip {tip} in {handle}"));

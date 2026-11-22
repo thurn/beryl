@@ -2,8 +2,10 @@
 //! `master` forward when they all pass, and on a failure find the landing that caused it and
 //! report a regression (see "Tip verification" and "Finding the culprit" in `docs/ignite.md`).
 //!
-//! - A round starts when the hub's change feed shows something new. It verifies the newest
-//!   `staging` commit; tips in between are never verified one by one.
+//! - A round starts when the hub's change feed shows something new. The first machine selects
+//!   the newest `staging` commit at the hub. Peers verify the same candidate while its required
+//!   checks are pending. After it verifies, fails, or has a blocker a new landing could fix, the
+//!   next round can select the newest tip.
 //! - The set: every regression check of every regression family that the hub has not switched
 //!   off, with no cached result for the tip. A check whose inputs did not change since the last
 //!   verified commit has the same input hash, so the result cache answers it. A check this
@@ -31,8 +33,8 @@
 //!   round.
 //! - A round that has run a batch, or is building or listing a family, is finished even when a
 //!   newer tip arrives, so landings that keep arriving cannot keep every tip from being
-//!   verified. Only a round with nothing under way (another machine holds the batches) starts
-//!   over at the newer tip.
+//!   verified. An idle round leaves for a newer tip only after its target is no longer the
+//!   shared candidate.
 //! - A failure's candidates are the landings since the last verified commit that changed one
 //!   of the check's inputs. One candidate is the culprit with nothing run; several are searched
 //!   by running that check between them, at most [`MAX_RUNS`] times. A landing is one
@@ -48,6 +50,7 @@
 //!   once, and the round's outcome names the family.
 
 mod cache;
+mod candidate;
 mod coverage;
 mod covered;
 mod culprit;
@@ -396,18 +399,17 @@ impl TipVerifier {
         self
     }
 
-    /// Waits up to `wait_s` for the hub's feed to show a change, then verifies the newest
-    /// `staging` commit unless it was already settled. Returns that tip and how it ended, or
-    /// `None` when there was nothing to verify. The daemon splits this in two: its tip loop
-    /// waits on the feed and asks [`TipVerifier::due`], and a verb process runs
+    /// Waits up to `wait_s` for the hub's feed to show a change, then verifies the shared
+    /// candidate if it is due. Returns the candidate and how it ended, or `None` when there was
+    /// nothing to verify. The daemon splits this in two: its tip loop waits on the feed and
+    /// selects the target, and a verb process runs
     /// [`TipVerifier::round_at`] (see `round`).
     pub fn round(&mut self, ctx: &Context, wait_s: u32) -> Result<Option<(Commit, TipOutcome)>> {
         let batch = ctx.hub.feed(self.since, wait_s)?;
         self.since = self.since.max(batch.seq);
-        let tip = ctx.git.tip(&ctx.config.repository.staging)?;
-        if !self.due(ctx, &tip) {
+        let Some(tip) = self.next_target(ctx)? else {
             return Ok(None);
-        }
+        };
         let outcome = self.round_at(ctx, &tip, self.since)?;
         Ok(Some((tip, outcome)))
     }

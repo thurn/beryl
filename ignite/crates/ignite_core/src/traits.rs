@@ -28,7 +28,8 @@ use crate::protocol::tickets::{
 };
 use crate::time::Timestamp;
 use crate::tipround::{
-    TipCosts, TipCostsRequest, TipCoverage, TipCoverageUpdate, TipRound, TipRoundFiled,
+    TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage, TipCoverageUpdate,
+    TipRound, TipRoundFiled,
 };
 
 /// Why an operation behind one of these traits failed.
@@ -413,6 +414,10 @@ pub trait Hub: Send + Sync {
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply>;
     /// Sets a tip's verification state (`POST /tips/verified`).
     fn tip_verified(&self, verified: &TipVerified) -> Result<()>;
+    /// The candidate automatic tip rounds share (`GET /tips/candidate`).
+    fn tip_candidate(&self) -> Result<Option<TipCandidate>>;
+    /// Replaces the candidate if it still matches (`POST /tips/candidate/update`).
+    fn update_tip_candidate(&self, update: &TipCandidateUpdate) -> Result<bool>;
     /// The platforms' verification coverage (`GET /tips/coverage`).
     fn tip_coverage(&self) -> Result<TipCoverage> {
         Ok(TipCoverage::default())

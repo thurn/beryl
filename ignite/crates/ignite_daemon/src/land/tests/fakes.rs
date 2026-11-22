@@ -20,6 +20,7 @@ use ignite_core::protocol::tickets::{
     FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply, TicketDetail,
 };
 use ignite_core::time::Timestamp;
+use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
 use ignite_core::traits::{Clock, Error, Git, Hub, Push, Rebase, Result};
 
 use crate::checks::{Carried, CheckRun, Excused, Failure, GateRun, RunOptions};
@@ -387,6 +388,12 @@ impl Hub for LeaseHub {
     }
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply> {
         self.hub.tip_claim(claim)
+    }
+    fn tip_candidate(&self) -> Result<Option<TipCandidate>> {
+        self.hub.tip_candidate()
+    }
+    fn update_tip_candidate(&self, update: &TipCandidateUpdate) -> Result<bool> {
+        self.hub.update_tip_candidate(update)
     }
     fn tip_verified(&self, verified: &TipVerified) -> Result<()> {
         self.hub.tip_verified(verified)

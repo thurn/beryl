@@ -97,11 +97,19 @@ impl Round<'_> {
         Some(next)
     }
 
-    /// Whether `staging` has moved past the round's tip, or cannot be read; either ends the
-    /// round, recorded in `ended`.
+    /// A newer staging tip stops after-budget work immediately at the next batch. Before
+    /// promotion it stops idle work only when the hub no longer names this candidate.
     fn superseded(&self) -> bool {
         match self.ctx.git.tip(&self.ctx.config.repository.staging) {
             Ok(newest) if newest == *self.tip => false,
+            Ok(_)
+                if !self.after_master
+                    && self.ctx.hub.tip_candidate().is_ok_and(|candidate| {
+                        candidate.is_some_and(|candidate| candidate.commit == *self.tip)
+                    }) =>
+            {
+                false
+            }
             other => {
                 *lock(&self.ended) = Some(other);
                 true
@@ -182,8 +190,8 @@ impl Round<'_> {
 impl TipVerifier {
     /// Runs `to_run`, some of the tip's checks, at `tip` and returns the runs, in batches cut
     /// over the round's listing. While nothing is under way (another machine holds every batch
-    /// so far, say), a newer `staging` tip ends the round and is returned instead, so the next
-    /// round verifies it. A round that has run a batch, or is building or listing a family,
+    /// so far, say), an uncoordinated round yields to a newer `staging` tip. A round that has
+    /// run a batch, or is building or listing a family,
     /// finishes, so landings that keep arriving cannot keep every tip from being verified.
     /// With `after_master`, `master` is already at `tip`, and a newer tip ends the round at the
     /// next family or batch whatever is under way.

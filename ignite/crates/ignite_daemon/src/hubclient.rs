@@ -38,8 +38,8 @@ use ignite_core::protocol::tickets::{
     LeaseReply, Ticket, TicketDetail, TicketQuery, WholeTicket,
 };
 use ignite_core::tipround::{
-    LastTipRound, TipCosts, TipCostsRequest, TipCoverage, TipCoverageUpdate, TipRound,
-    TipRoundFiled,
+    LastTipRound, TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage,
+    TipCoverageUpdate, TipRound, TipRoundFiled,
 };
 use ignite_core::traits::{Error, Hub, Result};
 
@@ -543,6 +543,21 @@ impl Hub for HubClient {
 
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply> {
         self.post("/tips/claim", claim)
+    }
+
+    fn tip_candidate(&self) -> Result<Option<TipCandidate>> {
+        match self.get("/tips/candidate", &[]) {
+            Err(Error::NotFound(_)) => Ok(None),
+            reply => reply,
+        }
+    }
+
+    fn update_tip_candidate(&self, update: &TipCandidateUpdate) -> Result<bool> {
+        match self.post("/tips/candidate/update", update) {
+            // An older hub has no candidate slot. Keep verifying during a rolling upgrade.
+            Err(Error::NotFound(_)) => Ok(true),
+            reply => reply,
+        }
     }
 
     fn tip_coverage(&self) -> Result<TipCoverage> {

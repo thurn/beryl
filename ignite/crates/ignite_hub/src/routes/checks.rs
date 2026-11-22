@@ -43,9 +43,11 @@ const BILLION: f64 = 1e9;
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
     let (method, writes) = match request.path.as_str() {
         "/results/lookup" | "/landings/lookup" => ("POST", false),
-        "/checks/stats" | "/checks/fix-outcomes" | "/regressions/open" | "/tips/coverage" => {
-            ("GET", false)
-        }
+        "/checks/stats"
+        | "/checks/fix-outcomes"
+        | "/regressions/open"
+        | "/tips/candidate"
+        | "/tips/coverage" => ("GET", false),
         "/results/store"
         | "/flaky"
         | "/flaky/batch"
@@ -60,6 +62,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/finds"
         | "/justiciar"
         | "/tips/waiting"
+        | "/tips/candidate/update"
         | "/tips/coverage/update" => ("POST", true),
         _ => return None,
     };
@@ -81,6 +84,15 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
         "/checks/stats" => stats(conn, request),
         "/checks/fix-outcomes" => fixes(conn, request, now),
         "/regressions/open" => open_regressions(conn),
+        "/tips/candidate" => {
+            let candidate = tips::candidate(conn).map_err(|e| store_failure(&e))?;
+            Ok(Response::json(200, &json!(candidate)))
+        }
+        "/tips/candidate/update" => {
+            let updated = tips::update_candidate(conn, &body(request)?, now)
+                .map_err(|e| store_failure(&e))?;
+            Ok(Response::json(200, &json!(updated)))
+        }
         "/tips/coverage" => {
             let coverage = tip_coverage::get(conn).map_err(|e| store_failure(&e))?;
             Ok(Response::json(200, &json!(coverage)))

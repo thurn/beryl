@@ -14,6 +14,7 @@ use ignite_core::protocol::hub::{
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, LeaseOp, LeaseReply, Ticket, TicketDetail, TicketQuery,
 };
+use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
 use ignite_core::traits::{Error, Hub, Result};
 
 type Spy = Box<dyn Fn(&str) + Send + Sync>;
@@ -105,6 +106,14 @@ impl Hub for SpyHub {
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply> {
         self.gate("tip_claim")?;
         self.inner.tip_claim(claim)
+    }
+    fn tip_candidate(&self) -> Result<Option<TipCandidate>> {
+        self.gate("tip_candidate")?;
+        self.inner.tip_candidate()
+    }
+    fn update_tip_candidate(&self, update: &TipCandidateUpdate) -> Result<bool> {
+        self.gate("update_tip_candidate")?;
+        self.inner.update_tip_candidate(update)
     }
     fn tip_verified(&self, verified: &TipVerified) -> Result<()> {
         self.gate("tip_verified")?;

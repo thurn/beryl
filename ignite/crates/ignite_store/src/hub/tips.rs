@@ -4,7 +4,7 @@
 //! A claim names one batch of one family's checks at one tip. It expires, so a machine that
 //! stops (or is shut down) does not hold a batch forever, and another machine can take it.
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use ignite_core::config::Os;
 use ignite_core::ids::{Commit, TicketId};
@@ -12,9 +12,12 @@ use ignite_core::protocol::hub::{
     LandedCommit, RegressionReport, TipClaim, TipClaimReply, TipState, TipVerified,
 };
 use ignite_core::time::Timestamp;
+use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
 
-use crate::hub::results::parse;
+use crate::hub::{meta, results::parse};
 use crate::{Result, StoreError};
+
+const CANDIDATE_KEY: &str = "tip_candidate";
 
 /// How long a claim holds its batch.
 pub const CLAIM_SECONDS: f64 = 900.0;
@@ -41,6 +44,26 @@ pub fn seen(conn: &Connection, commit: &str, now: Timestamp) -> Result<()> {
         params![commit, now.to_string()],
     )?;
     Ok(())
+}
+
+pub fn candidate(conn: &Connection) -> Result<Option<TipCandidate>> {
+    meta::get(conn, CANDIDATE_KEY)
+}
+
+/// One machine's selection wins even when two machines fetch different staging tips.
+pub fn update_candidate(
+    conn: &mut Connection,
+    update: &TipCandidateUpdate,
+    now: Timestamp,
+) -> Result<bool> {
+    let transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    if candidate(&transaction)? != update.expected {
+        return Ok(false);
+    }
+    seen(&transaction, update.replacement.commit.as_str(), now)?;
+    meta::put(&transaction, CANDIDATE_KEY, &update.replacement)?;
+    transaction.commit()?;
+    Ok(true)
 }
 
 /// Grants the claim if no unexpired claim by another machine holds the same batch. A machine
@@ -372,6 +395,48 @@ mod tests {
         let renewed = claim(&conn, &claim_by("m-1", 0), at(100.0)).unwrap();
         assert!(renewed.granted);
         assert_eq!(renewed.expires_at, Some(at(100.0 + CLAIM_SECONDS)));
+    }
+
+    #[test]
+    fn a_stale_round_cannot_replace_the_current_candidate() {
+        let mut conn = hub::open_in_memory().unwrap();
+        let first = TipCandidate {
+            commit: Commit::new("aaaa").unwrap(),
+            retry_on_new_tip: false,
+        };
+        let newer = TipCandidate {
+            commit: Commit::new("bbbb").unwrap(),
+            retry_on_new_tip: false,
+        };
+        let select = |expected, replacement| TipCandidateUpdate {
+            expected,
+            replacement,
+        };
+        assert!(update_candidate(&mut conn, &select(None, first.clone()), at(1.0)).unwrap());
+        assert!(!update_candidate(&mut conn, &select(None, newer.clone()), at(2.0)).unwrap());
+        assert!(
+            update_candidate(
+                &mut conn,
+                &select(Some(first.clone()), newer.clone()),
+                at(3.0)
+            )
+            .unwrap()
+        );
+        assert!(
+            !update_candidate(
+                &mut conn,
+                &select(
+                    Some(first.clone()),
+                    TipCandidate {
+                        retry_on_new_tip: true,
+                        ..first
+                    }
+                ),
+                at(4.0),
+            )
+            .unwrap()
+        );
+        assert_eq!(candidate(&conn).unwrap(), Some(newer));
     }
 
     /// Tips 49a3e3b and 77fe5b6 stayed `verifying` for hours after a newer tip reached

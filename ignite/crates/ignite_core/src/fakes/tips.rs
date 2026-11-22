@@ -5,7 +5,8 @@ use std::sync::Mutex;
 
 use crate::ids::Commit;
 use crate::tipround::{
-    TipCosts, TipCostsRequest, TipCoverage, TipCoverageUpdate, TipRound, TipRoundFiled,
+    TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage, TipCoverageUpdate,
+    TipRound, TipRoundFiled,
 };
 use crate::traits::Result;
 
@@ -20,12 +21,28 @@ pub(super) struct FakeTips {
     frozen: Mutex<HashMap<(Commit, String), TipCosts>>,
     rounds: Mutex<Vec<TipRound>>,
     coverage: Mutex<TipCoverage>,
+    candidate: Mutex<Option<TipCandidate>>,
     /// The open improvement ticket a slow round filed, if any.
     open_ticket: Mutex<Option<String>>,
     filed: Mutex<u32>,
 }
 
 impl FakeHub {
+    pub(super) fn fake_tip_candidate(&self) -> Result<Option<TipCandidate>> {
+        self.reachable()?;
+        Ok(lock(&self.tips.candidate).clone())
+    }
+
+    pub(super) fn fake_update_tip_candidate(&self, update: &TipCandidateUpdate) -> Result<bool> {
+        self.reachable()?;
+        let mut candidate = lock(&self.tips.candidate);
+        if *candidate != update.expected {
+            return Ok(false);
+        }
+        *candidate = Some(update.replacement.clone());
+        Ok(true)
+    }
+
     pub fn set_tip_coverage(&self, coverage: TipCoverage) {
         *lock(&self.tips.coverage) = coverage;
     }
