@@ -4648,8 +4648,7 @@ Rules for filing:
 - A rule measures what the work costs now, never how much a number grew. Code
   that gets larger as features are added files nothing unless agents pay for it
   often enough to clear the minimum.
-- A session that has measured a source of waste can file an improvement itself,
-  as a patrol's round does:
+- A session that has measured a source of waste can file an improvement itself:
   `ignite ticket create --saving agent-hours:12 --labels improvement` files the
   ticket with the session's own estimate of the saving a week, in `dollars`,
   `agent-hours` or `core-hours`. The estimate is recorded under the rule
@@ -4691,68 +4690,28 @@ before and after, which does not depend on load.
 ## Patrols
 
 A patrol is a scheduled ticket (see [Scheduled tickets](#scheduled-tickets))
-whose copies, called rounds, study the records for one kind of waste and file
-tickets for what they find. A rule can only report what its query counts. A
-round can ask why: why one stage of delivery got slower, which instruction
-agents keep misreading, why a fault cost a day before anything noticed it.
+whose copies, called rounds, study one kind of recurring workflow problem. The
+scheduled ticket defines what each round does. The parent ticket's notes carry
+evidence and results to the next round.
 
-A round analyzes and files, and implements nothing. A meta-ticket has one live
-copy at a time, so a round that stayed open to land a fix would hold back the
-rounds after it.
+The **velocity patrol** fixes the issue that most directly prolongs the time
+from a worker's first claim to a commit landing on `staging`. Time spent on
+releases, handoffs and retries after the first claim counts toward the duration.
+Report the median and p90 from ticket history, and investigate long-running
+claims that have no landing.
 
-- **What a round files.** A few tickets at most, each filed `open` under no
-  epic, with the labels `improvement` and `patrol:<name>`. Each states the
-  problem as measured, its cause with the evidence, the change, and one named
-  metric from `just efficiency metrics` with its value now and the direction it
-  should move. The change lands with an entry in `data/efficiency-changes.json`
-  that names the same metric, so `just efficiency changes` can compare the
-  metric before and after.
-- **What a round estimates.** Each ticket is filed with the round's estimate of
-  what the change would save a week (`--saving`, see
-  [Improvement tickets](#improvement-tickets)), worked out in the ticket's body
-  from the measurements. The estimate makes the ticket an improvement, so it
-  takes the improvement share of hand-offs and does not wait behind the epics. A
-  cause whose estimate is under the minimum for filing is recorded in the notes
-  and not filed.
-- **What a round remembers.** A patrol's memory is in the ticket system, in two
-  places.
-  - The tickets it filed. `ignite ticket list --label patrol:<name> --all` lists
-    them. When one has landed and enough tickets have landed since to compare, a
-    later round records the result on it as a label, `verdict:worked`,
-    `verdict:no-effect` or `verdict:worse`, with a comment that gives the metric
-    before and after. A ticket closed without landing gets `verdict:dropped`.
-  - The meta-ticket's notes, which each round rewrites: the metrics at each
-    recent round, the tickets not yet judged, what worked, what did not and the
-    best explanation why, and the causes that were looked at and not filed. The
-    notes are a summary of fixed length. The labelled tickets are the full
-    history.
-- **A patrol is not how a fault gets noticed.** `master` falling behind,
-  oversubscribed cores, a full disk and a failing check are for the justiciar
-  (see [The justiciar](#the-justiciar)), the regression tickets and the daemon's
-  own repairs. A round does not fix, report or watch a fault that is happening
-  now. Such faults are a patrol's subject only as a pattern: when the records
-  show that one kind of fault keeps costing throughput, the round asks why the
-  mechanism that should have caught it did not, or caught it late, and files a
-  ticket that changes that mechanism.
-- **What a patrol leaves to people.** The size of the pool, the model tier of a
-  kind of work and the pauses for plan usage are set by a person. A round
-  reports in the notes when one of them limits throughput and files no ticket to
-  change it.
+Each round fixes one issue and files zero tickets. If a ready, unclaimed ticket
+already covers the most urgent issue, record the choice, close the round, then
+claim and execute the existing ticket. Leave work in progress with its current
+owner and move on to the next actionable issue. If the selected issue has no
+ticket, fix it in the round's leased tree and land it through the normal Ignite
+workflow.
 
-The **velocity patrol** is the first. Its measure is the time from a ticket
-being opened to its change being verified on `master`, and how often landed work
-had to be repaired:
-
-| Stage                  | Metric                                                 |
-| ---------------------- | ------------------------------------------------------ |
-| Opened to verified     | `bead.lead-minutes`                                    |
-| Opened to claimed      | `ignite.worker-wait-percent`                           |
-| Claimed to landed      | `ignite.cycle-minutes`                                 |
-| The landing gate       | `ignite.gate-seconds`, `ignite.gate-wait-seconds`      |
-| Landed to verified     | `ignite.master-lag-minutes`                            |
-| Repairs to landed work | `ignite.escapes-per-100-landings`, `bead.rework-share` |
-
-What a ticket costs in tokens is not the velocity patrol's subject.
+Use session records and the landing gate's execution and wait times to find the
+cause. Preserve validation coverage and check that the change still detects
+defects. Use later verification, regressions, reverts and rework to assess
+quality after landing. Record the evidence, the fix and its validation in the
+parent notes so the next round can check whether it helped.
 
 ## Rebuild counts
 
