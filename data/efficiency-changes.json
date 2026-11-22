@@ -799,5 +799,10 @@
     "label": "Ignite admits ordinary tickets when the build queue is backed up and measured CPU use allows more work.",
     "metric": "bead.lead-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Ignite lends idle tip and express cores to agent commands and recalls the loans when work arrives for either reserve.",
+    "metric": "machine.queued-core-hours-per-day",
+    "expect": "down"
   }
 ]

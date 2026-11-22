@@ -331,7 +331,7 @@ impl CoreLender for RemoteLender {
         let reply = self.0.link.borrow_cores(&call).ok()?;
         Some(Loan {
             grant: reply.grant?,
-            cores: reply.cores,
+            cores: reply.cores.min(wanted),
         })
     }
 

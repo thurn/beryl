@@ -1,6 +1,5 @@
-//! Express landings: a landing that changes only Ignite runs a few fixed commands on cores the
-//! scheduler never hands out, instead of the gate (see `[express]` in `ignite.toml` and
-//! "Express landings" in the design document).
+//! Express landings run a few fixed commands on dedicated cores instead of the gate
+//! (see `[express]` in `ignite.toml` and "Express landings" in the design document).
 //!
 //! On 2026-11-18 every fix to Ignite's own scheduling waited 10 to 30 minutes in the queue it
 //! was fixing: the gate's checks and builds asked the scheduler for cores, the scheduler had
@@ -10,11 +9,9 @@
 //! worktree, `[express] tree`, whose ignored files (Ignite's Cargo target directory) survive
 //! from one landing to the next, and runs `[express] commands` there in order. They run as the
 //! daemon's own child processes, never through a supervisor or the scheduler, with the
-//! machine's `express_cores` as their thread count. The scheduler leaves those cores out of
-//! what it hands out (see `crate::sched::Limits::for_machine`), so a saturated or broken
-//! scheduler cannot hold them. One express run goes at a time on a machine: each holds an
-//! exclusive lock on a file beside the tree, because each landing runs in a verb process of its
-//! own.
+//! machine's `express_cores` as their baseline thread count. They claim the reserve without
+//! waiting for scheduler admission. Agents can borrow those cores between express runs. Each
+//! landing holds an exclusive lock beside the express tree because it has its own verb process.
 //!
 //! `ignite test` and `ignite check` use the same commands, cores and lock for a tree that changes
 //! only Ignite (see `crate::checks::express`), but run them in the agent's own tree with no
@@ -61,12 +58,10 @@ use ignite_git::{committed, worktree};
 use ignite_os::proc::Processes;
 use ignite_store::local::express_passes;
 
-use ignite_core::protocol::Class;
-
 use super::env::GateTree;
 use super::{Landing, line};
 use crate::checks::verbs::render;
-use crate::sched::{GrantRequest, Scheduler};
+use crate::sched::Scheduler;
 use crate::server::Context;
 use crate::steps;
 
@@ -92,7 +87,7 @@ const LOOK_EVERY: Duration = Duration::from_millis(100);
 /// How many lines from the end of the output a failure shows.
 const TAIL_LINES: usize = 40;
 
-/// Cores borrowed from the scheduler for one express run.
+/// An express reservation and any extra cores it borrowed from the scheduler.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Loan {
     /// What [`CoreLender::give_back`] needs to return the cores.
@@ -104,8 +99,8 @@ pub struct Loan {
 /// ([`SchedulerLender`]), or the daemon over the host protocol in a verb process, where
 /// landings run.
 pub trait CoreLender: Send + Sync {
-    /// Takes up to `wanted` of the cores that are free now without waiting; `None` when none
-    /// are, or when the daemon cannot be asked.
+    /// Claims the express reserve and takes up to `wanted` extra cores without waiting.
+    /// A loan with zero extra cores still claims the reserve.
     fn borrow(&self, wanted: u32) -> Option<Loan>;
     /// Returns the cores of a loan.
     fn give_back(&self, loan: &Loan);
@@ -116,17 +111,7 @@ pub struct SchedulerLender(pub Arc<Scheduler>);
 
 impl CoreLender for SchedulerLender {
     fn borrow(&self, wanted: u32) -> Option<Loan> {
-        let grant = self.0.try_borrow(&GrantRequest {
-            class: Class::Land,
-            cores: wanted,
-            resources: Vec::new(),
-            memory_mb: None,
-            shrinks: false,
-            grows: false,
-            cores_file: None,
-            reserve: None,
-            priority_ticket: None,
-        })?;
+        let grant = self.0.try_borrow(wanted)?;
         Some(Loan {
             grant: grant.id,
             cores: grant.cores,
@@ -508,14 +493,10 @@ impl MachineExpress {
         }))
     }
 
-    /// Asks the lender, without waiting, for the cores that are free now, up to [`MOST_CORES`]
-    /// less the reserved ones. `None` when it has none or the lane has no lender: the reserved
-    /// cores are the floor, so a saturated or broken scheduler cannot hold the run.
+    /// Claims the reserve without waiting, and borrows free cores up to [`MOST_CORES`] in all.
+    /// The run starts on its reserved cores even if the lender is unavailable.
     fn borrow(&self) -> Option<Loan> {
         let wanted = MOST_CORES.saturating_sub(self.cores);
-        if wanted == 0 {
-            return None;
-        }
         self.lender.as_ref()?.borrow(wanted)
     }
 

@@ -4,7 +4,7 @@
 //! and [`Ledger::step`], and the machine's CPU and memory to [`Ledger::observe`], so every rule
 //! can be tested by setting those values.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ignite_core::ids::TicketId;
 use ignite_core::protocol::Class;
@@ -65,8 +65,10 @@ struct Held {
     /// the shared cores do not count (see `ledger/reserve.rs`).
     reserved: u32,
     /// Of `cores`, idle cores of the tip reserve lent to an express run or release build
-    /// ([`Ledger::lend_reserve`]), which the shared cores do not count either.
+    /// ([`Ledger::finish_express`]), which the shared cores do not count either.
     lent: u32,
+    /// Of `cores`, those borrowed by an agent from the idle tip and express reserves.
+    agent_lent: u32,
     /// The reserve the request was made for. A `Reserve::TipBuild` grant is scheduled ahead of
     /// every class ([`Held::rank`]) and never gives cores back for another request.
     reserve: Option<Reserve>,
@@ -85,7 +87,7 @@ impl Held {
         } else {
             self.usage.lendable(self.cores)
         };
-        counted.saturating_sub(self.reserved + self.lent)
+        counted.saturating_sub(self.reserved + self.lent + self.agent_lent)
     }
 }
 
@@ -110,8 +112,10 @@ pub struct Step {
 #[derive(Clone, Debug)]
 pub struct Ledger {
     limits: Limits,
-    /// Cores busy with processes outside Ignite at the last reading.
-    outside: u32,
+    /// CPU use at the last sample, before accounting for the space left on the reserves.
+    outside: f64,
+    /// Ignite's CPU use outside its grants, including the express lane's own cores.
+    untracked: f64,
     cpu_percent: Option<u32>,
     /// Free memory at the last reading; `None` until one succeeds.
     free_memory_mb: Option<u64>,
@@ -121,6 +125,8 @@ pub struct Ledger {
     /// In the order the requests were first asked for (see [`Ledger::enqueue`]).
     waiting: Vec<Waiter>,
     held: BTreeMap<u64, Held>,
+    /// Grants for runs on the express reserve, including runs that needed no extra cores.
+    express_runs: BTreeSet<u64>,
     /// An update waits for the daemon's commands to finish: no `idle` work starts, and what
     /// runs is stopped.
     draining: bool,
@@ -138,13 +144,15 @@ impl Ledger {
     pub fn new(limits: Limits) -> Self {
         Self {
             limits,
-            outside: 0,
+            outside: 0.0,
+            untracked: 0.0,
             cpu_percent: None,
             free_memory_mb: None,
             pressure: Pressure::default(),
             next_id: 1,
             waiting: Vec::new(),
             held: BTreeMap::new(),
+            express_runs: BTreeSet::new(),
             draining: false,
             trees: BTreeMap::new(),
         }
@@ -160,8 +168,7 @@ impl Ledger {
     /// moment it first asked (see `crate::host`), so it keeps its place ahead of requests asked
     /// for later. A request enqueued now goes behind every request already waiting.
     pub fn enqueue(&mut self, request: GrantRequest, since: Timestamp) -> u64 {
-        let id = self.next_id;
-        self.next_id += 1;
+        let id = self.next_id();
         let at = self
             .waiting
             .iter()
@@ -174,6 +181,7 @@ impl Ledger {
     /// Frees a grant's cores and resources, or withdraws a request still waiting. Returns
     /// whether `id` was known.
     pub fn release(&mut self, id: u64) -> bool {
+        self.express_runs.remove(&id);
         if self.held.remove(&id).is_some() {
             return true;
         }
@@ -200,8 +208,7 @@ impl Ledger {
         grows_to: Option<u32>,
         shrinks: bool,
     ) -> u64 {
-        let id = self.next_id;
-        self.next_id += 1;
+        let id = self.next_id();
         self.held.insert(
             id,
             Held {
@@ -218,6 +225,7 @@ impl Ledger {
                 usage: GrantUse::default(),
                 reserved: 0,
                 lent: 0,
+                agent_lent: 0,
                 reserve: None,
                 priority_ticket: None,
             },
@@ -251,7 +259,10 @@ impl Ledger {
     /// small or has waited long ([`Ledger::ranks_ahead_of_grants`]) also makes each shrinking
     /// grant of its own class that holds more than its share give back one core.
     pub fn step(&mut self, now: Timestamp) -> Step {
-        let mut step = Step::default();
+        let mut step = Step {
+            resized: self.recall_agent_loans(),
+            ..Step::default()
+        };
         let mut reserve: BTreeMap<Class, u32> = Class::ALL
             .iter()
             .map(|&c| (c, self.floor_reserve(c)))
@@ -259,7 +270,7 @@ impl Ledger {
         let mut free = self
             .limits
             .cores
-            .saturating_sub(self.outside)
+            .saturating_sub(self.outside_cores())
             .saturating_sub(self.committed_cores());
         // While the machine pages or runs out of memory, nothing new starts and no grant grows,
         // unless Ignite holds nothing, so that a reading that never recovers cannot stop all
@@ -277,39 +288,15 @@ impl Ledger {
         // that hold more than their share give a core back too.
         let mut highest_waiting = None;
         for class in Class::ALL {
-            let below: u32 = reserve
-                .iter()
-                .filter(|(c, _)| **c > class)
-                .map(|(_, r)| r)
-                .sum();
-            let mut usable = if blocked {
-                reserve[&class].min(free)
+            let mut usable = self.class_room(class, &reserve, free, blocked, pressed);
+            let mut agent_room = if class == Class::Agent && !blocked && !pressed {
+                self.agent_loan_room()
             } else {
-                free.saturating_sub(below)
+                0
             };
-            if class == Class::Idle {
-                usable = if self.draining {
-                    0
-                } else {
-                    usable.min(self.idle_room())
-                };
-            }
-            // Outside load that fills the machine must not starve the classes whose work has
-            // to make progress: each of them takes one core, beyond what is free, while it
-            // holds none.
-            // Only outside load counts: when Ignite's own grants fill the machine, the class
-            // waits for them, and `idle` work is stopped for it.
-            if usable == 0
-                && self.committed_cores() < self.limits.cores
-                && self.guarantees_a_core(class)
-            {
-                usable = 1;
-            }
-            if pressed {
-                usable = 0;
-            }
-            let (picked, mut left) = self.pick(class, usable, now, &from_reserve);
-            let grants = self.fill(&picked, usable, &from_reserve);
+            let available = usable + agent_room;
+            let (picked, mut left) = self.pick(class, available, now, &from_reserve);
+            let grants = self.fill(&picked, available, &from_reserve);
             let reclaimable = self.reclaimable(class);
             for (id, (cores, reserved)) in picked.into_iter().zip(grants) {
                 // The requests ahead of it in the order took every usable core.
@@ -323,15 +310,19 @@ impl Ledger {
                     continue;
                 }
                 let waiter = self.waiting.remove(index_of(&self.waiting, id));
-                free = free.saturating_sub(cores);
-                usable -= cores;
+                let shared = cores.min(usable);
+                let borrowed = cores - shared;
+                free = free.saturating_sub(shared);
+                usable -= shared;
+                agent_room -= borrowed;
                 if let Some(left) = reserve.get_mut(&class) {
-                    *left = left.saturating_sub(cores);
+                    *left = left.saturating_sub(shared);
                 }
-                step.granted.push(self.hold(waiter, cores, reserved, now));
+                step.granted
+                    .push(self.hold(waiter, cores, reserved, borrowed, now));
             }
             let room = if pressed { 0 } else { usable.min(free) };
-            for (id, cores, extra) in self.grow(class, room) {
+            for (id, cores, extra) in self.grow(class, room, agent_room) {
                 free = free.saturating_sub(extra);
                 if let Some(left) = reserve.get_mut(&class) {
                     *left = left.saturating_sub(extra);
@@ -362,13 +353,54 @@ impl Ledger {
         }
         // When grants that lent cores use them again, the machine is over: `idle` work gives
         // them back first.
-        let over = (self.outside + self.committed_cores()).saturating_sub(self.limits.cores);
+        let over =
+            (self.outside_cores() + self.committed_cores()).saturating_sub(self.limits.cores);
         step.stop = self.stop_idle(wanted_by_blocked.saturating_sub(free).max(over));
         step.stop.extend(self.stop_idle_holding_wanted_resources());
         if self.draining {
             step.stop.extend(self.stop_all_idle());
         }
         step
+    }
+
+    /// Shared cores a class can use after respecting other classes' floors and waiters.
+    fn class_room(
+        &self,
+        class: Class,
+        reserve: &BTreeMap<Class, u32>,
+        free: u32,
+        blocked: bool,
+        pressed: bool,
+    ) -> u32 {
+        if pressed {
+            return 0;
+        }
+        let mut usable = if blocked {
+            reserve[&class].min(free)
+        } else {
+            let below: u32 = reserve
+                .iter()
+                .filter(|(c, _)| **c > class)
+                .map(|(_, r)| r)
+                .sum();
+            free.saturating_sub(below)
+        };
+        if class == Class::Idle {
+            usable = if self.draining {
+                0
+            } else {
+                usable.min(self.idle_room())
+            };
+        }
+        // A class that must make progress can take one core of outside load while it holds
+        // none. If Ignite's own grants fill the shared pool, the class waits for those grants.
+        if usable == 0
+            && self.committed_cores() < self.limits.cores
+            && self.guarantees_a_core(class)
+        {
+            usable = 1;
+        }
+        usable
     }
 
     /// The waiters of `class` that can start now, by ID in the order they are served
@@ -477,8 +509,8 @@ impl Ledger {
 
     /// Shares `room` cores among `class`'s growing grants that hold less than they want, evenly
     /// and earliest first ([`share`]). Returns each grant that grew with its new size and the
-    /// cores it gained.
-    fn grow(&mut self, class: Class, room: u32) -> Vec<(u64, u32, u32)> {
+    /// shared cores it gained.
+    fn grow(&mut self, class: Class, mut room: u32, agent_room: u32) -> Vec<(u64, u32, u32)> {
         let short: Vec<(u64, u32)> = self
             .held
             .iter()
@@ -486,20 +518,23 @@ impl Ledger {
             .filter_map(|(&id, h)| Some((id, h.grows_to?.checked_sub(h.cores)?)))
             .filter(|&(_, missing)| missing > 0)
             .collect();
-        if short.is_empty() || room == 0 {
+        if short.is_empty() || room + agent_room == 0 {
             return Vec::new();
         }
         let wants: Vec<u32> = short.iter().map(|&(_, missing)| missing).collect();
         let mut grown = Vec::new();
-        for ((id, _), extra) in short.into_iter().zip(share(&wants, room)) {
+        for ((id, _), extra) in short.into_iter().zip(share(&wants, room + agent_room)) {
             if extra == 0 {
                 continue;
             }
             let held = self.held.get_mut(&id).expect("a short grant is held");
+            let shared = extra.min(room);
+            room -= shared;
             held.cores += extra;
+            held.agent_lent += extra - shared;
             // A grant that grew counts all its cores until its use at the new size is known.
             held.usage.reset();
-            grown.push((id, held.cores, extra));
+            grown.push((id, held.cores, shared));
         }
         grown
     }
@@ -527,6 +562,8 @@ impl Ledger {
         for (&id, held) in &mut self.held {
             if held.rank() > class && !held.stopping && gives_back(held) > 0 {
                 held.cores -= 1;
+                // A higher class wants shared capacity. Keep any loan that still fits.
+                held.agent_lent = held.agent_lent.min(held.cores);
                 shrunk.push((id, held.cores));
             }
         }
@@ -561,6 +598,8 @@ impl Ledger {
                 && gives_back(held) > 0
             {
                 held.cores -= 1;
+                // A peer can take the same borrowed core.
+                held.agent_lent = held.agent_lent.saturating_sub(1);
                 shrunk.push((id, held.cores));
             }
         }
@@ -570,48 +609,6 @@ impl Ledger {
     /// The cores waiter `id` would take with nothing else waiting.
     fn want(&self, id: u64) -> u32 {
         self.want_of(&self.waiting[index_of(&self.waiting, id)])
-    }
-
-    /// Records `waiter` as held on `cores` of the shared cores and `reserved` of the tip
-    /// reserve, and returns its grant of both.
-    fn hold(&mut self, waiter: Waiter, cores: u32, reserved: u32, now: Timestamp) -> Grant {
-        let cores = cores + reserved;
-        let queued_s = now.seconds_since(waiter.since).max(0.0) as u64;
-        // A grant with a cores file grows: its command follows the file through its jobserver,
-        // and a command that rereads the file starts more threads.
-        let grows_to = waiter
-            .request
-            .cores_file
-            .is_some()
-            .then(|| waiter.request.cores.clamp(1, self.limits.max_per_command()));
-        self.held.insert(
-            waiter.id,
-            Held {
-                class: waiter.request.class,
-                cores,
-                first: cores,
-                resources: waiter.request.resources.clone(),
-                memory_mb: waiter.request.memory_mb,
-                grows_to,
-                shrinks: waiter.request.shrinks,
-                unseen_memory: true,
-                stopping: false,
-                origin: Origin::Granted,
-                usage: GrantUse::default(),
-                reserved,
-                lent: 0,
-                reserve: waiter.request.reserve,
-                priority_ticket: waiter.request.priority_ticket.clone(),
-            },
-        );
-        Grant {
-            id: waiter.id,
-            cores,
-            resources: waiter.request.resources,
-            queued_s,
-            cores_file: waiter.request.cores_file,
-            priority_ticket: waiter.request.priority_ticket,
-        }
     }
 
     /// Marks the newest `idle` grants as stopping until they, with those already stopping,
@@ -722,14 +719,14 @@ impl Ledger {
     /// The cores `idle` work may take before the machine reaches the idle busy limit.
     fn idle_room(&self) -> u32 {
         let limit = (f64::from(self.limits.cores) * IDLE_BUSY_LIMIT).floor() as u32;
-        limit.saturating_sub(self.outside + self.committed_cores())
+        limit.saturating_sub(self.outside_cores() + self.committed_cores() + self.agent_borrowed())
     }
 
-    /// The shared cores held: every grant's cores less those of the tip reserve.
+    /// The shared cores held, excluding cores from either reserve.
     fn granted_cores(&self) -> u32 {
         self.held
             .values()
-            .map(|h| h.cores.saturating_sub(h.reserved + h.lent))
+            .map(|h| h.cores.saturating_sub(h.reserved + h.lent + h.agent_lent))
             .sum()
     }
 
@@ -744,6 +741,12 @@ impl Ledger {
             .filter(|h| h.class == class)
             .map(|h| h.cores)
             .sum()
+    }
+
+    fn next_id(&mut self) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
     }
 
     fn resource_held(&self, name: &str) -> u32 {

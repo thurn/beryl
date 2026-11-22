@@ -471,6 +471,7 @@ fn status_shows_the_sections_its_flags_ask_for() {
         free_memory_mb: Some(2048),
         tip_build: 0,
         tip_build_used: 0,
+        agent_borrowed: 0,
         priority_grants: BTreeMap::new(),
         classes: vec![],
         resources: vec![],
@@ -543,6 +544,7 @@ fn status_shows_the_tip_reserve_and_grants_with_ticket_priority() {
         free_memory_mb: None,
         tip_build: 4,
         tip_build_used: 3,
+        agent_borrowed: 2,
         priority_grants: BTreeMap::from([(ignite_core::ids::TicketId::new("FIX").unwrap(), 1)]),
         classes: vec![],
         resources: vec![],
@@ -554,6 +556,7 @@ fn status_shows_the_tip_reserve_and_grants_with_ticket_priority() {
         "{}",
         plain.text
     );
+    assert!(plain.text.contains("agents borrowed 2 from the reserves"));
     assert!(plain.text.contains(
         "1 command for FIX granted cores with priority because the ticket holds master back"
     ));

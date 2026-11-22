@@ -38,19 +38,8 @@ impl Ledger {
             let ours = self
                 .trees_latest()
                 .map_or(grants, |trees| (trees + counted(true)).max(grants));
-            // The express cores are kept out of the cores handed out, but while the express
-            // lane leaves them idle, processes outside Ignite run on them first. Subtracting
-            // that load from the cores handed out as well left them idle twice over: on
-            // 2026-11-20 jarvis read 7 cores busy outside Ignite, granted 9 of 15, kept 20 agent
-            // commands waiting and stood 43% idle. Ignite's use beyond its grants is the express
-            // lane, the verb processes and the daemon, and counts against the express cores.
-            // The tip reserve's cores that grants hold are busy with those grants, whose use
-            // `grants` already counts, so they leave no room for outside load.
-            let in_reserve: u32 = self.held.values().map(|h| h.reserved + h.lent).sum();
-            let spare = (f64::from(self.limits.reserved.saturating_sub(in_reserve))
-                - (ours - grants).max(0.0))
-            .max(0.0);
-            self.outside = (busy_cores - ours - spare).max(0.0).round() as u32;
+            self.outside = (busy_cores - ours).max(0.0);
+            self.untracked = (ours - grants).max(0.0);
         }
         if free_memory_mb.is_some() {
             self.free_memory_mb = free_memory_mb;

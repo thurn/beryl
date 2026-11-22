@@ -8,10 +8,9 @@
 //! up to 155 s more for one core.
 //!
 //! A release is the fix every session on the machine waits for, so [`ExpressLauncher`] runs
-//! both commands right away as child process groups on the `express_cores` the scheduler never
-//! hands out, as express landings do (see `crate::land::express`), and borrows whatever cores
-//! are free when it starts, up to [`MOST_CORES`] in all. A machine with no express cores keeps
-//! the scheduler's launcher.
+//! both commands right away on the `express_cores`, as express landings do (see
+//! `crate::land::express`), and borrows free cores up to [`MOST_CORES`] in all. A machine with
+//! no express cores keeps the scheduler's launcher.
 
 use std::fs::File;
 use std::path::PathBuf;
@@ -44,9 +43,7 @@ impl ExpressLauncher {
     fn cores_for(&self, wanted: u32) -> (u32, Option<Loan>) {
         let own = wanted.min(self.cores).max(1);
         let more = wanted.min(MOST_CORES).saturating_sub(own);
-        let loan = (more > 0)
-            .then(|| self.lender.as_ref().and_then(|lender| lender.borrow(more)))
-            .flatten();
+        let loan = self.lender.as_ref().and_then(|lender| lender.borrow(more));
         (own + loan.as_ref().map_or(0, |loan| loan.cores), loan)
     }
 }
@@ -149,7 +146,7 @@ mod tests {
     impl CoreLender for Lender {
         fn borrow(&self, wanted: u32) -> Option<Loan> {
             self.asked.lock().unwrap().push(wanted);
-            (self.free > 0).then(|| Loan {
+            Some(Loan {
                 grant: 7,
                 cores: wanted.min(self.free),
             })
@@ -185,12 +182,12 @@ mod tests {
     }
 
     #[test]
-    fn a_one_core_command_borrows_nothing() {
+    fn a_one_core_command_claims_the_reserve_without_borrowing() {
         let (launcher, lender) = launcher(4);
         let (cores, loan) = launcher.cores_for(1);
         assert_eq!(cores, 1);
-        assert!(loan.is_none());
-        assert!(lender.asked.lock().unwrap().is_empty());
+        assert_eq!(loan.unwrap().cores, 0);
+        assert_eq!(*lender.asked.lock().unwrap(), vec![0]);
     }
 
     #[test]

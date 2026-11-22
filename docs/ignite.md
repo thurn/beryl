@@ -1504,14 +1504,17 @@ Rules for cores:
     gives none back. On 2026-11-20 tip rounds took 35 to 90 minutes, most of it
     building in `tip` behind up to 15 agent sessions, so each round tested a tip
     that predated the fixes for what the round before had found.
-  - No other request is ever granted the reserve's cores. Cores of the reserve
-    that no grant holds are lent to the express lane and the release build when
-    they borrow free cores (see [Express landings](#express-landings)); a tip
-    build that arrives during the loan still takes them.
+  - Express runs and release builds can borrow idle tip cores. Agents can borrow
+    from either reserve while its owner has no running or waiting work for it. A
+    tip build gets its cores in the same scheduling step, and express work
+    starts on its reserve without waiting. The scheduler shrinks elastic agent
+    grants where possible. Fixed-size and minimum-size grants can overlap the
+    reserve owner and count against the shared pool until they finish.
   - The reserve's cores come back when the grant is released, also for a grant a
     restarted daemon took over, whose `spec.json` grant names the reserve.
-  - The `cores` line of `ignite status` says how many cores are kept for tip
-    builds and how many of them are in use.
+  - The `cores` line of `ignite status` shows how many cores are kept for tip
+    builds, how many of those the builds hold, and how many cores agents have
+    borrowed from the reserves.
 
   The `reserve` field is left out of `spec.json` and of the host protocol when
   it is unset, so daemons of older and newer releases still read each other's
@@ -2557,10 +2560,8 @@ inert = ["docs/ignite.md", "data/efficiency-changes.json"]
 - The commands run as the daemon's own processes, never through a supervisor or
   the scheduler, with `CARGO_BUILD_JOBS`, `RUST_TEST_THREADS`,
   `NEXTEST_TEST_THREADS` and `IGNITE_CORES` set to the machine's express
-  reserve. The scheduler leaves those cores out of what it hands out, so a
-  saturated or broken scheduler cannot hold them. While an express run goes, the
-  scheduler also sees its CPU as load outside Ignite and hands out that much
-  less.
+  reserve. An express run claims those cores before it starts, which recalls
+  loans to agents. The run can still start when the scheduler is unreachable.
 - When a run starts it also asks the scheduler, without waiting, for the cores
   that are free at that moment, as a `land` grant of up to 12 cores in all
   counting the express reserve, and sets the four variables to the total. Cores
@@ -2568,12 +2569,11 @@ inert = ["docs/ignite.md", "data/efficiency-changes.json"]
   landings queued behind a lane of 3 cores while the scheduler had granted none
   of its 15 cores; a run took about 164 s on 3 cores under load and about 65 s
   on 12. The reserved cores stay the floor: when nothing is free, or the daemon
-  cannot be asked, the run uses its reserve and does not wait. The extra grant
-  is released when the run ends, and the scheduler may reclaim it for a higher
-  class like any other grant. A landing runs in a verb process, so it borrows
-  through the host protocol (`host-borrow-cores` and `host-return-cores`,
-  version 2), and the daemon releases a grant its handle still holds when the
-  handle ends. The `express` line names the cores used.
+  cannot be asked, the run uses its reserve and does not wait. A landing runs in
+  a verb process and claims the reserve with `host-borrow-cores` (host protocol
+  version 2), even when it gets no extra cores. The claim and any extra cores
+  are returned with `host-return-cores` or released when the handle ends. The
+  `express` line names the cores used.
 - The build commands still compile on every core of the machine
   (`--jobs default`, `--build-jobs default`), and the tests run on as many
   threads (`--test-threads=num-cpus`), whatever the four variables say. Every

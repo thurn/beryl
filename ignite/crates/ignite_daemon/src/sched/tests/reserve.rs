@@ -1,5 +1,4 @@
-//! The tip reserve: cores only requests with `Reserve::TipBuild` are granted, so the build
-//! checks of a tip round start at once however full the machine is.
+//! Tip and express reserve ownership, and loans to agents when those reserves are idle.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -51,7 +50,7 @@ fn the_tip_reserve_is_left_out_of_the_cores_handed_out() {
 fn a_tip_build_starts_at_once_on_the_reserve_when_nothing_else_is_free() {
     let mut ledger = Ledger::new(with_reserve());
     ledger.enqueue(ask(Class::Agent, 16), T0);
-    ledger.enqueue(ask(Class::Agent, 16), T0);
+    ledger.enqueue(ask(Class::Agent, 8), T0);
     ledger.step(T0);
     assert_eq!(ledger.status().granted, 24);
     ledger.observe(Some(1.0), None);
@@ -78,7 +77,7 @@ fn a_tip_build_takes_the_rest_of_what_it_wants_from_the_shared_cores() {
 }
 
 #[test]
-fn no_other_request_is_granted_the_reserve() {
+fn ordinary_land_and_tip_requests_cannot_borrow_the_reserve() {
     let mut ledger = Ledger::new(Limits {
         floor: Floor::default(),
         ..with_reserve()
@@ -154,22 +153,18 @@ fn a_tip_build_is_granted_cores_before_waiting_agent_and_landing_builds() {
     let step = ledger.step(at(3.0));
     let granted: Vec<(u64, u32)> = step.granted.iter().map(|g| (g.id, g.cores)).collect();
     assert_eq!(granted, [(build, 12)]);
-    // The landing goes next, then the agent build.
+    // The landing takes the shared cores next. The agent can start on the idle tip reserve.
     assert!(ledger.release(build));
     let step = ledger.step(at(4.0));
     let granted: Vec<(u64, u32)> = step.granted.iter().map(|g| (g.id, g.cores)).collect();
-    assert_eq!(granted, [(land, 8)]);
-    assert_eq!(
-        ledger.status().classes[1].waiting,
-        1,
-        "agent request {agent} waits"
-    );
+    assert_eq!(granted, [(land, 8), (agent, 4)]);
+    assert_eq!(ledger.status().agent_borrowed, 4);
 }
 
 /// Shrinking agent builds hold every shared core; a growing tip build starts on the reserve,
 /// and the agent builds give their cores back to it one a step until it has what it asked for.
 #[test]
-fn shrinking_agent_builds_give_their_cores_back_to_a_tip_build() {
+fn shrinking_agent_builds_give_their_shared_cores_back_to_a_tip_build() {
     let mut ledger = Ledger::new(with_reserve());
     for _ in 0..2 {
         ledger.enqueue(
@@ -237,27 +232,27 @@ fn the_express_lane_borrows_the_idle_reserve_and_a_tip_build_still_gets_it() {
     });
     let scheduler = Scheduler::new(with_reserve(), clock, host);
     let agent = scheduler.acquire(&ask(Class::Agent, 16));
-    let loan = scheduler.try_borrow(&ask(Class::Land, 12)).unwrap();
+    let loan = scheduler.try_borrow(12).unwrap();
     assert_eq!(
         loan.cores, 12,
         "8 shared cores and the 4 idle reserved ones"
     );
     // A second loan finds the reserve already lent.
     scheduler.release(&agent);
-    let second = scheduler.try_borrow(&ask(Class::Land, 12)).unwrap();
+    let second = scheduler.try_borrow(12).unwrap();
     assert_eq!(second.cores, 12);
     scheduler.release(&second);
     // Nothing shared is free, yet a loan gets the idle reserve alone.
     let filler = scheduler.acquire(&ask(Class::Agent, 16));
     scheduler.release_id(loan.id);
     let filler2 = scheduler.acquire(&ask(Class::Agent, 8));
-    let reserve_only = scheduler.try_borrow(&ask(Class::Land, 12)).unwrap();
+    let reserve_only = scheduler.try_borrow(12).unwrap();
     assert_eq!(reserve_only.cores, 4);
     let build = scheduler.try_acquire(&tip_build(4)).unwrap();
     assert_eq!(build.cores, 4, "the loan does not hold the reserve back");
     scheduler.release(&reserve_only);
     // With no idle reserve and nothing shared free, nothing is lent.
-    assert!(scheduler.try_borrow(&ask(Class::Land, 12)).is_none());
+    assert!(scheduler.try_borrow(12).is_none());
     for grant in [&filler, &filler2, &build] {
         scheduler.release(grant);
     }
@@ -278,7 +273,8 @@ fn without_a_reserve_a_tip_build_is_served_first_from_the_shared_cores() {
     let granted: Vec<(u64, u32)> = step.granted.iter().map(|g| (g.id, g.cores)).collect();
     assert_eq!(granted[0], (build, 4));
     assert_eq!(ledger.status().tip_build_used, 0);
-    assert!(ledger.lend_reserve(None, Class::Land, 4).is_none());
+    let express = ledger.begin_express(None, T0);
+    assert!(ledger.finish_express(express, 4).is_none());
 }
 
 #[test]
@@ -290,6 +286,8 @@ fn master_blocking_work_follows_tip_builds_and_goes_ahead_of_older_agent_work() 
     let running = ledger.enqueue(ask(Class::Agent, 16), T0);
     let finishing = ledger.enqueue(ask(Class::Agent, 8), T0);
     assert_eq!(ledger.step(T0).granted.len(), 2);
+    let express = ledger.begin_express(None, T0);
+    assert_eq!(ledger.finish_express(express, 4), Some(4));
 
     let feature = ledger.enqueue(ask(Class::Agent, 1), T0);
     let now = at(super::super::AGED_SECONDS + 1.0);
@@ -328,4 +326,131 @@ fn master_blocking_work_follows_tip_builds_and_goes_ahead_of_older_agent_work() 
     assert!(ledger.release(regression));
     assert_eq!(ledger.step(now).granted[0].id, feature);
     assert!(ledger.status().priority_grants.is_empty());
+}
+
+#[test]
+fn an_agent_borrows_the_idle_tip_reserve_and_a_tip_build_reclaims_it_in_one_step() {
+    let mut ledger = Ledger::new(with_reserve());
+    for _ in 0..2 {
+        ledger.enqueue(ask(Class::Agent, 12), T0);
+    }
+    ledger.step(T0);
+    let borrower = ledger.enqueue(ask(Class::Agent, 4), at(1.0));
+    let loan = &ledger.step(at(1.0)).granted[0];
+    assert_eq!((loan.id, loan.cores), (borrower, 4));
+    assert_eq!(ledger.status().agent_borrowed, 4);
+
+    let build = ledger.enqueue(tip_build(4), at(2.0));
+    let agent = ledger.enqueue(ask(Class::Agent, 1), at(2.0));
+    let step = ledger.step(at(2.0));
+    assert_eq!(step.granted.len(), 1);
+    assert_eq!((step.granted[0].id, step.granted[0].cores), (build, 4));
+    assert_eq!(ledger.status().agent_borrowed, 0);
+    assert_eq!(ledger.status().tip_build_used, 4);
+    assert_eq!(ledger.status().granted, 28);
+    assert!(ledger.holds(borrower));
+    assert!(step.stop.is_empty());
+
+    ledger.release(build);
+    assert!(ledger.step(at(3.0)).granted.is_empty());
+    ledger.release(borrower);
+    assert_eq!(ledger.step(at(4.0)).granted[0].id, agent);
+}
+
+#[test]
+fn a_waiting_tip_build_keeps_its_reserve_until_it_can_start() {
+    let mut ledger = Ledger::new(with_reserve());
+    let mut holder = ask(Class::Agent, 12);
+    holder.resources.push("oracle".to_owned());
+    ledger.enqueue(holder, T0);
+    ledger.enqueue(ask(Class::Agent, 12), T0);
+    ledger.step(T0);
+
+    let mut build = tip_build(4);
+    build.resources.push("oracle".to_owned());
+    let build = ledger.enqueue(build, at(1.0));
+    let agent = ledger.enqueue(ask(Class::Agent, 4), at(1.0));
+    assert!(ledger.step(at(1.0)).granted.is_empty());
+    assert!(ledger.release(build));
+    assert_eq!(ledger.step(at(2.0)).granted[0].id, agent);
+}
+
+#[test]
+fn an_express_run_claims_its_cores_even_without_extra_cores() {
+    let clock = Arc::new(FakeClock::new(T0));
+    let host = Arc::new(FakeHost {
+        free_memory_mb: Mutex::new(None),
+        busy: Mutex::new(0.0),
+        trees: Mutex::new(BTreeMap::new()),
+    });
+    let scheduler = Scheduler::new(
+        Limits {
+            reserved: 3,
+            ..limits()
+        },
+        clock,
+        host,
+    );
+    let first = scheduler.acquire(&ask(Class::Agent, 16));
+    let full = scheduler.acquire(&ask(Class::Agent, 11));
+    assert_eq!(full.cores, 11);
+    assert_eq!(scheduler.status().agent_borrowed, 3);
+
+    let express = scheduler.try_borrow(1).unwrap();
+    assert_eq!(express.cores, 0);
+    assert_eq!(scheduler.status().agent_borrowed, 0);
+    scheduler.release(&full);
+    let while_active = scheduler.acquire(&ask(Class::Agent, 11));
+    assert_eq!(while_active.cores, 8);
+
+    let other_express = scheduler.try_borrow(0).unwrap();
+    scheduler.release(&express);
+    assert!(scheduler.try_acquire(&ask(Class::Agent, 1)).is_none());
+    scheduler.release(&other_express);
+    assert_eq!(scheduler.acquire(&ask(Class::Agent, 3)).cores, 3);
+    assert_eq!(scheduler.status().agent_borrowed, 3);
+    scheduler.release(&first);
+}
+
+#[test]
+fn a_tip_build_takes_back_cores_that_an_agent_grew_into() {
+    let mut ledger = Ledger::new(with_reserve());
+    ledger.enqueue(ask(Class::Land, 16), T0);
+    let first_build = ledger.enqueue(tip_build(4), T0);
+    ledger.step(T0);
+    let agent = ledger.enqueue(
+        GrantRequest {
+            grows: true,
+            cores_file: Some("cores".into()),
+            ..ask(Class::Agent, 16)
+        },
+        T0,
+    );
+    assert_eq!(ledger.step(T0).granted[0].cores, 8);
+    ledger.release(first_build);
+    assert_eq!(ledger.step(at(1.0)).resized, [(agent, 12)]);
+    assert_eq!(ledger.status().agent_borrowed, 4);
+
+    let build = ledger.enqueue(tip_build(4), at(2.0));
+    let step = ledger.step(at(2.0));
+    assert_eq!(step.granted[0].id, build);
+    assert_eq!(step.resized, [(agent, 8)]);
+    assert!(step.stop.is_empty());
+    assert_eq!(ledger.status().agent_borrowed, 0);
+}
+
+#[test]
+fn an_agent_only_borrows_reserve_cores_that_outside_work_leaves_idle() {
+    let mut ledger = Ledger::new(with_reserve());
+    ledger.enqueue(ask(Class::Agent, 12), T0);
+    ledger.enqueue(ask(Class::Agent, 12), T0);
+    ledger.step(T0);
+
+    // Two of the four spare cores are busy outside Ignite.
+    ledger.observe(Some(26.0 / 28.0), None);
+    ledger.enqueue(ask(Class::Agent, 4), at(1.0));
+    assert_eq!(ledger.step(at(1.0)).granted[0].cores, 2);
+    assert_eq!(ledger.status().agent_borrowed, 2);
+    ledger.enqueue(ask(Class::Agent, 1), at(2.0));
+    assert!(ledger.step(at(2.0)).granted.is_empty());
 }

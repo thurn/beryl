@@ -489,10 +489,8 @@ impl HostCall for ReleaseLanding {
     }
 }
 
-/// `host-borrow-cores`: asks for the scheduler cores that are free now, without waiting, for a
-/// command the verb process runs itself on cores of its own (an express run). The daemon grants
-/// at most `cores`, none when nothing is free, and holds the grant until the verb process
-/// returns it or the handle ends.
+/// `host-borrow-cores`: claims the express reserve for a verb process without waiting.
+/// The daemon grants up to `cores` extra, and keeps the claim until returned or the handle ends.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BorrowCores {
     pub handle: Handle,
@@ -503,7 +501,7 @@ pub struct BorrowCores {
 /// The answer to `host-borrow-cores`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BorrowCoresReply {
-    /// The grant to return with `host-return-cores`; `None` when no core was free.
+    /// The claim to return with `host-return-cores`, even if it gave zero extra cores.
     pub grant: Option<u64>,
     /// The cores granted; zero when `grant` is `None`.
     pub cores: u32,

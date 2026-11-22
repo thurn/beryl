@@ -6,7 +6,7 @@
 //! held the scheduler's cores: the test build got 1 to 4 cores and queued behind builds costing
 //! 1,000 CPU-seconds or more, against about a minute on 12 cores. So when every changed file of
 //! the tree matches `[express] paths`, the verbs run the express commands in the agent's own
-//! tree, on the machine's `express_cores`, which the scheduler never hands out. They take the
+//! tree, on the machine's `express_cores`, claimed directly from the reserve. They take the
 //! express lane's lock, so a test waits for an express landing that holds it rather than going
 //! back to the scheduler. `ignite test` does so when every name it is given is in one of
 //! those families (`ignite:...`, `ignite-lint:...`, or the bare family name), or is a bare word

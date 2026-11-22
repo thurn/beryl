@@ -207,8 +207,8 @@ impl StatusSection for CoresSection {
         let tip = tip.unwrap_or_default();
         let mut lines = vec![format!(
             "{} of {} granted to Ignite (using {}, {} counted), {} busy outside it, \
-             at most {} per command{tip}{memory}{swap}{pressed}",
-            s.granted, s.cores, s.used, s.committed, s.outside, s.max_per_command
+             at most {} per command{tip}, agents borrowed {} from the reserves{memory}{swap}{pressed}",
+            s.granted, s.cores, s.used, s.committed, s.outside, s.max_per_command, s.agent_borrowed
         )];
         lines.extend(s.priority_grants.iter().map(|(ticket, count)| {
             let commands = if *count == 1 { "command" } else { "commands" };

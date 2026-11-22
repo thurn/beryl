@@ -19,7 +19,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use ignite_core::ids::Handle;
-use ignite_core::protocol::Class;
 use ignite_core::protocol::host::{REQUEST_VARIABLE, RequestId, Run, RunReply};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{CommandSpec, Error, Result};
@@ -227,17 +226,7 @@ impl RunStarter for SupervisedStarter {
     }
 
     fn borrow_cores(&self, cores: u32) -> Option<(u64, u32)> {
-        let grant = self.scheduler.as_ref()?.try_borrow(&GrantRequest {
-            class: Class::Land,
-            cores,
-            resources: Vec::new(),
-            memory_mb: None,
-            shrinks: false,
-            grows: false,
-            cores_file: None,
-            reserve: None,
-            priority_ticket: None,
-        })?;
+        let grant = self.scheduler.as_ref()?.try_borrow(cores)?;
         Some((grant.id, grant.cores))
     }
 

@@ -70,7 +70,7 @@ impl Ledger {
         }
         Status {
             cores: self.limits.cores,
-            outside: self.outside,
+            outside: self.outside_cores(),
             granted: self.granted_cores(),
             committed: self.committed_cores(),
             used: self
@@ -85,6 +85,7 @@ impl Ledger {
             free_memory_mb: self.free_memory_mb,
             tip_build: self.limits.tip_build,
             tip_build_used: self.tip_reserve_used(),
+            agent_borrowed: self.agent_borrowed(),
             priority_grants,
             classes,
             resources,

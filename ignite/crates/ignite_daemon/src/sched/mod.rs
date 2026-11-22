@@ -42,14 +42,13 @@
 //!   shrink, waits up to [`RECLAIM_SECONDS`] for them before it takes what is free. A short
 //!   growing grant of `land` counts as a waiter, so freed cores go to it first.
 //! - A machine's `tip_build_cores` are kept for requests with `Reserve::TipBuild`, the build
-//!   checks of a tip round, which start on them at once however full the machine is. Idle ones
-//!   are lent to the express lane and the release build ([`Scheduler::try_borrow`]; see
-//!   `ledger/reserve.rs`). For the rest of what they ask for, such requests are scheduled ahead
-//!   of every class, `land` included, and their grants never shrink for another request (see
-//!   `rank` in `ledger/order.rs`).
+//!   checks of a tip round. Agents borrow idle tip and express cores until an owner asks.
+//!   Owners still start on their reserve immediately. Tip builds take shared cores before
+//!   every class, including `land`, and never shrink for another request.
 //! - Classes are enforced by grants only. Nothing here changes a process's priority: work run
 //!   at low priority on a loaded machine once got almost no CPU for hours.
 
+mod express;
 mod ledger;
 mod measured;
 pub mod roots;
@@ -109,9 +108,7 @@ pub struct GrantRequest {
     /// as cores free up, to what it asked for: the command's jobserver follows the file.
     pub cores_file: Option<PathBuf>,
     /// Cores set aside for this kind of command (see [`ignite_core::traits::Reserve`]). A
-    /// request with `Reserve::TipBuild` starts at once on up to [`Limits::tip_build`] cores that
-    /// no other request is granted, and takes the rest of what it wants from the shared cores in
-    /// its class.
+    /// tip build starts on up to [`Limits::tip_build`] cores, then takes shared cores.
     pub reserve: Option<ignite_core::traits::Reserve>,
     /// The ticket that holds master back, giving this request priority within the agent queue.
     pub priority_ticket: Option<TicketId>,
@@ -180,7 +177,7 @@ impl Grant {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// The logical cores the scheduler hands out to ordinary requests.
+    /// The shared cores available to all request classes.
     pub cores: u32,
     /// Express and tip reserve cores, counted in [`Limits::machine_cores`] for CPU load.
     pub reserved: u32,
@@ -192,12 +189,8 @@ pub struct Limits {
 }
 
 impl Limits {
-    /// The limits of a machine with measured logical and physical core counts. The
-    /// machine's `express_cores` are left out: the express lane runs its commands on them
-    /// itself, so a saturated or broken scheduler can never hold them (see
-    /// `crate::land::express`). The machine's `tip_build_cores` are left out too: only
-    /// requests with `Reserve::TipBuild` are granted them. At least one core is always left to
-    /// hand out, and the express lane's cores come before the tip reserve's on a small machine.
+    /// Derives the shared pool and both reserves. At least one core stays shared. On small
+    /// machines the express lane gets its reserve before tip builds do.
     pub fn for_machine(
         config: &Config,
         machine: &Machine,
@@ -247,6 +240,10 @@ impl Limits {
         self.cores + self.reserved
     }
 
+    fn express(&self) -> u32 {
+        self.reserved - self.tip_build
+    }
+
     /// The most cores one command may hold: two thirds of the machine, and at least one.
     pub fn max_per_command(&self) -> u32 {
         (self.cores * 2 / 3).max(1)
@@ -281,6 +278,8 @@ pub struct Status {
     pub tip_build: u32,
     /// Of those, the cores that grants with `Reserve::TipBuild` hold.
     pub tip_build_used: u32,
+    /// How many cores agents have borrowed from the reserves.
+    pub agent_borrowed: u32,
     /// Running commands granted with agent queue priority, by ticket.
     pub priority_grants: BTreeMap<TicketId, u32>,
     pub classes: Vec<ClassStatus>,
@@ -439,42 +438,6 @@ impl Scheduler {
             self.advance(&mut state);
         }
         grant
-    }
-
-    /// [`Self::try_acquire`] for the express lane and the release build, which borrow what is
-    /// free when they start: cores of the tip reserve that no `Reserve::TipBuild` grant holds
-    /// count as free too, so keeping cores for the tip round never slows an update of Ignite. A
-    /// request with `Reserve::TipBuild` is still granted those cores while the loan runs: the
-    /// loan only borrows them while they are idle.
-    pub fn try_borrow(&self, request: &GrantRequest) -> Option<Grant> {
-        let mut state = self.lock();
-        let id = state.ledger.enqueue(request.clone(), self.clock.now());
-        self.advance(&mut state);
-        let grant = state.ready.remove(&id);
-        if grant.is_none() {
-            state.ledger.release(id);
-        }
-        let wanted = request
-            .cores
-            .max(1)
-            .saturating_sub(grant.as_ref().map_or(0, |g| g.cores));
-        let lent = state
-            .ledger
-            .lend_reserve(grant.as_ref().map(|g| g.id), request.class, wanted);
-        self.advance(&mut state);
-        match (grant, lent) {
-            (Some(grant), Some((_, cores))) => Some(Grant { cores, ..grant }),
-            (Some(grant), None) => Some(grant),
-            (None, Some((id, cores))) => Some(Grant {
-                id,
-                cores,
-                resources: Vec::new(),
-                queued_s: 0,
-                cores_file: None,
-                priority_ticket: None,
-            }),
-            (None, None) => None,
-        }
     }
 
     /// Frees a grant's cores and resources, and starts whatever can start now.

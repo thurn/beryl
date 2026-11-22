@@ -427,6 +427,7 @@ mod tests {
             free_memory_mb: Some(9_000),
             tip_build: 4,
             tip_build_used: 0,
+            agent_borrowed: 0,
             priority_grants: std::collections::BTreeMap::new(),
             classes: vec![],
             resources: vec![],

@@ -375,7 +375,7 @@ impl CoreLender for FakeLender {
     fn borrow(&self, wanted: u32) -> Option<Loan> {
         let cores = wanted.min(self.free);
         self.log.lock().unwrap().push(format!("borrow {wanted}"));
-        (cores > 0).then_some(Loan { grant: 7, cores })
+        Some(Loan { grant: 7, cores })
     }
 
     fn give_back(&self, loan: &Loan) {
@@ -415,7 +415,7 @@ fn free_cores_are_borrowed_for_the_run_and_returned_after_it() {
 }
 
 #[test]
-fn with_no_free_cores_the_run_keeps_its_reserved_cores_and_returns_nothing() {
+fn a_run_releases_its_reserve_even_when_it_borrows_no_extra_cores() {
     let (root, mut lane, commit) = lane("no-borrow", &["true"]);
     let lender = Arc::new(FakeLender {
         free: 0,
@@ -426,9 +426,8 @@ fn with_no_free_cores_the_run_keeps_its_reserved_cores_and_returns_nothing() {
     assert!(run.passed(), "{run:?}");
     assert_eq!(run.cores, 2);
     assert_eq!(
-        lender.log.lock().unwrap().len(),
-        1,
-        "asked once, nothing to return"
+        *lender.log.lock().unwrap(),
+        [format!("borrow {}", MOST_CORES - 2), "return 7".to_owned()]
     );
     let _ = fs::remove_dir_all(root);
 }
