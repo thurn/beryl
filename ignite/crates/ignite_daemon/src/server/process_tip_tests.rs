@@ -303,34 +303,11 @@ impl TipMachine {
 
 type Turn = Result<Option<(Commit, TipOutcome)>>;
 
-fn turn_on_a_thread(
-    mut tips: TipLoop,
-    ctx: Context,
-    before_start: impl FnOnce() + Send + 'static,
-) -> JoinHandle<(TipLoop, Turn)> {
+fn turn_on_a_thread(mut tips: TipLoop, ctx: Context) -> JoinHandle<(TipLoop, Turn)> {
     std::thread::spawn(move || {
-        let turn = tips.turn(&ctx, 0, before_start);
+        let turn = tips.turn(&ctx, 0);
         (tips, turn)
     })
-}
-
-#[test]
-fn a_new_tip_round_makes_room_before_starting_its_verb() {
-    let machine = TipMachine::new("tip-round-disk");
-    let (server, tips) = machine.daemon();
-    machine.switch.set(Some(server));
-    let rounds = machine.threads.clone();
-    let sweeps = Arc::new(AtomicUsize::new(0));
-    let counted = sweeps.clone();
-    let checking = turn_on_a_thread(tips, machine.threads.ctx.clone(), move || {
-        assert_eq!(rounds.started.load(Ordering::SeqCst), 0);
-        counted.fetch_add(1, Ordering::SeqCst);
-    });
-    assert!(until(|| machine.commands.begun() == 1));
-    assert_eq!(sweeps.load(Ordering::SeqCst), 1);
-    machine.commands.finish_all();
-    let (_, turn) = checking.join().unwrap();
-    assert_eq!(turn.unwrap().unwrap().1, TipOutcome::Verified);
 }
 
 /// The acceptance test: a round cut by a restart of the daemon finishes in its verb process,
@@ -343,7 +320,7 @@ fn a_tip_round_survives_a_restart_and_the_new_loop_waits_for_it() {
     let tip = Commit::new("bbbb000").unwrap();
     let (first, first_loop) = machine.daemon();
     machine.switch.set(Some(first.clone()));
-    let cut = turn_on_a_thread(first_loop, ctx.clone(), || {});
+    let cut = turn_on_a_thread(first_loop, ctx.clone());
     assert!(
         until(|| machine.commands.begun() == 1),
         "the batch's command started"
@@ -360,9 +337,7 @@ fn a_tip_round_survives_a_restart_and_the_new_loop_waits_for_it() {
         .set_tip("staging", Commit::new("cccc000").unwrap());
     let (second, second_loop) = machine.daemon();
     machine.switch.set(Some(second.clone()));
-    let waiting = turn_on_a_thread(second_loop, ctx.clone(), || {
-        panic!("a round in progress does not ask for a disk sweep")
-    });
+    let waiting = turn_on_a_thread(second_loop, ctx.clone());
     std::thread::sleep(Duration::from_millis(300));
     assert_eq!(machine.threads.started.load(Ordering::SeqCst), 1);
     assert_eq!(machine.commands.begun(), 1, "no second round started");
@@ -379,12 +354,7 @@ fn a_tip_round_survives_a_restart_and_the_new_loop_waits_for_it() {
 
     // The tip is settled: the next turn starts nothing.
     machine.git.set_tip("staging", tip.clone());
-    assert_eq!(
-        second_loop
-            .turn(&ctx, 0, || panic!("no round is due"))
-            .unwrap(),
-        None
-    );
+    assert_eq!(second_loop.turn(&ctx, 0).unwrap(), None);
     assert_eq!(machine.threads.started.load(Ordering::SeqCst), 1);
     let (_, cut_turn) = cut.join().unwrap();
     assert_eq!(cut_turn.unwrap(), Some((tip, TipOutcome::Verified)));
@@ -438,9 +408,7 @@ fn a_round_blocked_in_listing_yields_to_master_and_the_latest_tip_runs() {
 
     // The loop adopts the blocked round from its saved request. The supervisor fake then
     // finishes the listing after the stop has reached the verb.
-    let stopping = turn_on_a_thread(tips, ctx.clone(), || {
-        panic!("the old round is still active")
-    });
+    let stopping = turn_on_a_thread(tips, ctx.clone());
     assert!(until(|| machine.switch.stops.load(Ordering::SeqCst) > 0));
     machine.commands.finish_all();
     let (tips, turn) = stopping.join().unwrap();
@@ -451,13 +419,7 @@ fn a_round_blocked_in_listing_yields_to_master_and_the_latest_tip_runs() {
     assert!(lock(&machine.landing.owner).is_none());
     assert_eq!(machine.threads.work.runs.load(Ordering::SeqCst), 0);
 
-    let landing = machine.landing.clone();
-    let checking = turn_on_a_thread(tips, ctx, move || {
-        assert!(
-            lock(&landing.owner).is_none(),
-            "the disk sweep can use the tree"
-        );
-    });
+    let checking = turn_on_a_thread(tips, ctx);
     assert!(until(|| machine.commands.begun() == 2));
     machine.commands.finish_all();
     assert!(until(|| machine.commands.begun() == 3));

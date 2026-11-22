@@ -20,7 +20,7 @@ use ignite_git::GitCli;
 
 use super::{DaemonOptions, TreeSetup, desk, loops};
 use crate::adopt::AdoptingLauncher;
-use crate::build::{BuildManager, BuildSettings, DirectoryTrees, NativeRoom};
+use crate::build::{BuildManager, BuildSettings, DirectoryTrees};
 use crate::cache::ResultCache;
 use crate::checks::sources::HubHistory;
 use crate::checks::verbs::{CheckVerb, TestVerb, WhyVerb};
@@ -206,14 +206,8 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
         )
         // What each tree holds and which builds failed survive the restart, and builds a previous
         // daemon left running are waited for instead of run again (see `crate::build`).
-        .with_store(base.open()?)
-        // A build waits while the disk is nearly full instead of failing partway through it,
-        // and the disk loop reads the free space at the repository too.
-        .with_room(Arc::new(NativeRoom {
-            path: base.options.repo.clone(),
-        })),
+        .with_store(base.open()?),
     );
-    builds.rejoin(unfinished, &reset);
     let repo = &base.options.repo;
     let tree_config = TreeConfig::new(repo, &base.config, &base.derived, &base.manifest);
     let trees = Trees::new(
@@ -222,6 +216,10 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
         base.clock.clone(),
         builds.clone(),
     );
+    builds.attach_trees(&trees);
+    supervised.attach_trees(&trees);
+    trees.remember_legacy_commands(&unfinished);
+    builds.rejoin(unfinished, &reset);
     let unfinished = trees.mark_unfinished()?;
     // Before the socket is served, so a build asked for after a restart waits for the copy.
     if let Err(error) = trees.resume_seeds() {
@@ -309,6 +307,7 @@ pub fn checking_with(
             Some(Arc::new(Mutex::new(base.open()?))),
             &base.clock,
             Some(lender),
+            trees.build_service(),
         ),
         format: MachineFormat::for_config(&base.config),
         pause: Arc::new(|seconds| std::thread::sleep(std::time::Duration::from_secs_f64(seconds))),
@@ -617,7 +616,7 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
     vec![
         Box::new(doctor::CapacitySection {
             derived: base.derived.clone(),
-            disk_budget: move || trees.disk_budget(),
+            build_space: move || (trees.build_slots(), trees.last_build_cleanup()),
             worker_room: move || headless_dispatch.worker_room(),
         }),
         Box::new(doctor::FleetSection(move || fleet_trees.fleet_notice())),

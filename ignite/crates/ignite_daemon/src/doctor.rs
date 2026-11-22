@@ -441,10 +441,7 @@ pub struct DoctorInput<'a> {
     pub manifest: std::result::Result<Manifest, String>,
     pub version: Option<Commit>,
     pub fleet: Option<ignite_core::fleet::FleetNotice>,
-    /// The recent clone-aware measurement of the managed build directories, if available.
-    pub used_tree_bytes: Option<u64>,
-    /// The part of the measured usage held by leased ticket trees.
-    pub leased_tree_bytes: Option<u64>,
+    pub(crate) build_slots: Option<crate::trees::BuildSlots>,
 }
 
 /// The first word of each command that a family the machine can run, or a product such a family
@@ -725,10 +722,6 @@ impl Verb for DoctorVerb {
             repo: ctx.repo.clone(),
             dir,
         };
-        let (used_tree_bytes, leased_tree_bytes) = self
-            .managed_trees
-            .as_ref()
-            .map_or((None, None), crate::trees::used_bytes);
         let input = DoctorInput {
             config: &ctx.config,
             repo: &ctx.repo,
@@ -742,8 +735,10 @@ impl Verb for DoctorVerb {
                 .managed_trees
                 .as_ref()
                 .and_then(crate::trees::Trees::fleet_notice),
-            used_tree_bytes,
-            leased_tree_bytes,
+            build_slots: self
+                .managed_trees
+                .as_ref()
+                .map(crate::trees::Trees::build_slots),
         };
         let mut findings = diagnose(&input);
         if let Some(health) = &self.loops {

@@ -208,3 +208,89 @@ fn a_fingerprint_folder_that_cannot_be_deleted_keeps_its_outputs() {
     assert_eq!(swept, Vec::<String>::new());
     assert!(t.profile().join("deps/libapp-aaaa.rlib").exists());
 }
+
+#[test]
+fn ceiling_cleanup_stops_after_the_first_stage_that_makes_room() {
+    let write_bytes = |file: &Path, count| {
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(file, vec![b'x'; count]).unwrap();
+    };
+    for (ceiling, expected) in [
+        (770, vec!["replaced objects and builds"]),
+        (
+            650,
+            vec![
+                "replaced objects and builds",
+                "unused Cargo fingerprints and outputs",
+            ],
+        ),
+        (
+            520,
+            vec![
+                "replaced objects and builds",
+                "unused Cargo fingerprints and outputs",
+                "incremental caches",
+            ],
+        ),
+        (
+            420,
+            vec![
+                "replaced objects and builds",
+                "unused Cargo fingerprints and outputs",
+                "incremental caches",
+                "build directories",
+            ],
+        ),
+    ] {
+        let target = Target::new();
+        let profile = target.profile();
+        // Different features keep these both in the replaced-unit pass. The previous build
+        // used only the second, as shown by its Cargo fingerprint trace.
+        let current = profile.join(".fingerprint/pkg-bbbb/lib-pkg");
+        let unused = profile.join(".fingerprint/pkg-aaaa/lib-pkg");
+        for (fingerprint, unit, age) in [(&current, "bbbb", 2), (&unused, "aaaa", 1)] {
+            write_bytes(fingerprint, 10);
+            write_bytes(&profile.join(format!("deps/libpkg-{unit}.rlib")), 100);
+            let object = profile.join(format!("deps/pkg-bbbb.cgu.abc{age}.rcgu.o"));
+            write_bytes(&object, if age == 1 { 240 } else { 120 });
+            fs::File::options()
+                .write(true)
+                .open(&object)
+                .unwrap()
+                .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(age))
+                .unwrap();
+        }
+        // Keep the units distinct in the replaced-unit pass.
+        fs::write(unused.with_extension("json"), "{\"features\":\"legacy\"}").unwrap();
+        write_bytes(&profile.join("incremental/cache"), 100);
+        write_bytes(&target.0.join("other-output"), 130);
+        let log = target.0.with_extension("log");
+        let canonical = ignite_os::paths::canonicalize(&current).unwrap();
+        fs::write(
+            &log,
+            format!(
+                "DEBUG cargo::core::compiler::fingerprint: fingerprint at: {}\n",
+                canonical.display()
+            ),
+        )
+        .unwrap();
+        let build = super::Measurement::read(std::slice::from_ref(&target.0), Some(&log));
+        fs::remove_file(log).unwrap();
+        assert!(build.bytes.unwrap() > ceiling);
+        let mut stages = Vec::new();
+        super::clean(
+            std::slice::from_ref(&target.0),
+            ceiling,
+            &build.fingerprints,
+            |stage| {
+                stages.push(stage.to_owned());
+            },
+        )
+        .unwrap();
+        assert_eq!(stages, expected);
+        assert_eq!(current.is_file(), stages.len() < 4);
+        assert_eq!(unused.is_file(), stages.len() < 2);
+        assert_eq!(profile.join("incremental").exists(), stages.len() < 3);
+        assert_eq!(target.0.exists(), stages.len() < 4);
+    }
+}

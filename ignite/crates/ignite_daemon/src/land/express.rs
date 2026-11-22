@@ -41,11 +41,10 @@
 //! `express_cores` is zero has no express lane, and its landings all go through the gate.
 
 use std::fs::{self, File, OpenOptions, TryLockError};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use rusqlite::Connection;
 use serde_json::json;
@@ -53,9 +52,8 @@ use serde_json::json;
 use ignite_core::config::Config;
 use ignite_core::ids::{Commit, TreeId};
 use ignite_core::protocol::client::{Exit, Reply};
-use ignite_core::traits::{Clock, Git};
+use ignite_core::traits::{Builds, Clock, Git};
 use ignite_git::{committed, worktree};
-use ignite_os::proc::Processes;
 use ignite_store::local::express_passes;
 
 use super::env::GateTree;
@@ -465,6 +463,7 @@ pub struct MachineExpress {
     pub memory: Option<PassMemory>,
     /// Where to ask for extra cores when a run starts, if anywhere.
     pub lender: Option<Arc<dyn CoreLender>>,
+    pub builds: Option<Arc<dyn Builds>>,
 }
 
 impl MachineExpress {
@@ -477,6 +476,7 @@ impl MachineExpress {
         db: Option<Arc<Mutex<Connection>>>,
         clock: &Arc<dyn Clock>,
         lender: Option<Arc<dyn CoreLender>>,
+        builds: Arc<dyn Builds>,
     ) -> Option<Arc<dyn ExpressLane>> {
         let express = config.express.as_ref()?;
         if cores == 0 || express.commands.is_empty() {
@@ -490,6 +490,7 @@ impl MachineExpress {
             cores,
             memory: db.map(|db| PassMemory::new(db, clock.clone())),
             lender,
+            builds: Some(builds),
         }))
     }
 
@@ -542,115 +543,6 @@ impl MachineExpress {
             worktree::add(&self.repo, &self.tree, BRANCH, commit)
         };
         done.map_err(|error| error.to_string())
-    }
-
-    /// Runs the commands in order in `tree`'s commands directory, logging to `express.log` in
-    /// its `target` directory, and records each in `run`; stops at the first failure.
-    fn run_commands(&self, tree: &Path, dir: &str, commands: &[String], run: &mut ExpressRun) {
-        // A seed swaps the target directory in once no build holds Cargo's lock, which
-        // cargo-nextest gives up while the tests run (see `trees::wait_for_seed_on_disk`).
-        if let Err(why) = crate::trees::wait_for_seed_on_disk(tree, HANG_LIMIT) {
-            run.failure = Some(("waiting for the tree's seed".to_owned(), why));
-            return;
-        }
-        let dir = tree.join(dir);
-        let target = dir.join("target");
-        let log = target.join("express.log");
-        if let Err(error) = fs::create_dir_all(&target).and_then(|()| File::create(&log)) {
-            run.failure = Some((
-                "writing the express log".to_owned(),
-                format!("{}: {error}", log.display()),
-            ));
-            return;
-        }
-        // The grant is held for the whole run and released when it ends, however it ends.
-        let borrowed = self.borrow();
-        let cores = self.cores + borrowed.as_ref().map_or(0, |loan| loan.cores);
-        run.cores = cores;
-        let _release = borrowed.map(|loan| Release {
-            lender: self.lender.clone().expect("a loan came from a lender"),
-            loan,
-        });
-        for command in commands {
-            steps::step(format!("running `{command}` on {cores} cores"));
-            let began = Instant::now();
-            let result = Self::run_one(command, &dir, &log, cores);
-            run.ran
-                .push((command.clone(), began.elapsed().as_secs_f64()));
-            if let Err(why) = result {
-                run.failure = Some((command.clone(), why));
-                return;
-            }
-        }
-    }
-
-    /// Runs one command in `dir`, its output appended to `log`; `Err` holds why it failed.
-    fn run_one(command: &str, dir: &Path, log: &Path, cores: u32) -> Result<(), String> {
-        let mut words = command.split_whitespace();
-        let program = words.next().ok_or("an empty command")?;
-        let mut out = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(log)
-            .map_err(|e| format!("cannot open {}: {e}", log.display()))?;
-        let start = out.metadata().map_or(0, |m| m.len());
-        let _ = writeln!(out, "$ {command}");
-        let err = out.try_clone().map_err(|e| e.to_string())?;
-        // Read back through this handle, not the path: a log moved away meanwhile, as a seed
-        // once swapped a whole target directory, still holds what the command wrote.
-        let written = File::open(log).map_err(|e| format!("cannot open {}: {e}", log.display()))?;
-        let cores = cores.to_string();
-        let mut process = Command::new(program);
-        process
-            .args(words)
-            .current_dir(dir)
-            .stdin(Stdio::null())
-            .stdout(out)
-            .stderr(err)
-            // The tree's own target directory is the one kept warm, whatever the daemon's
-            // environment says, and no jobserver of the daemon's is inherited.
-            .env_remove("CARGO_TARGET_DIR")
-            .env_remove("CARGO_MAKEFLAGS")
-            .env_remove("MAKEFLAGS")
-            .env_remove("MFLAGS");
-        for name in [
-            "CARGO_BUILD_JOBS",
-            "RUST_TEST_THREADS",
-            "NEXTEST_TEST_THREADS",
-            "IGNITE_CORES",
-        ] {
-            process.env(name, &cores);
-        }
-        let native = ignite_os::Native;
-        let mut group = native
-            .spawn_group(&mut process)
-            .map_err(|e| format!("cannot start `{command}`: {e}"))?;
-        let began = Instant::now();
-        let status = loop {
-            match group.child.try_wait() {
-                Ok(Some(status)) => break status,
-                Ok(None) => {}
-                Err(error) => return Err(format!("cannot wait for `{command}`: {error}")),
-            }
-            let why = if steps::stop_requested() {
-                Some("the run was stopped".to_owned())
-            } else if began.elapsed() > HANG_LIMIT {
-                Some(format!("it ran past {} s", HANG_LIMIT.as_secs()))
-            } else {
-                None
-            };
-            if let Some(why) = why {
-                let _ = native.end_group(&mut group);
-                let _ = group.child.wait();
-                return Err(why);
-            }
-            std::thread::sleep(LOOK_EVERY);
-        };
-        if status.success() {
-            Ok(())
-        } else {
-            Err(tail(written, start))
-        }
     }
 }
 
@@ -758,6 +650,9 @@ fn tail(mut file: File, start: u64) -> String {
         shown
     }
 }
+
+#[path = "express_commands.rs"]
+mod commands;
 
 #[path = "express_memory.rs"]
 mod memory;

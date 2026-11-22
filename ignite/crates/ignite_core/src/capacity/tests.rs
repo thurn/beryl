@@ -56,14 +56,3 @@ fn capacity_rounding_and_bounds() {
     assert_eq!(resource_slots(1, 0.5), 1);
     assert_eq!(resource_slots(11, 0.5), 5);
 }
-
-#[test]
-fn reserves_a_tenth_on_large_disks_and_fifty_gigabytes_on_small_ones() {
-    assert_eq!(disk_budget_gb(1858, 1200, None), 472);
-    assert_eq!(disk_budget_gb(926, 400, None), 433);
-    assert_eq!(disk_budget_gb(128, 60, None), 18);
-    assert_eq!(disk_budget_gb(1858, 1200, Some(400)), 400);
-    assert_eq!(disk_budget_gb(926, 400, Some(500)), 433);
-    assert_eq!(disk_budget_gb(128, 100, None), 0);
-    assert_eq!(disk_budget_gb(128, 130, None), 0);
-}

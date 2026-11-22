@@ -1,6 +1,5 @@
 //! Ending a ticket tree's lease: stop its processes and reset it to a clean checkout.
 
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -46,20 +45,20 @@ impl Trees {
     ) -> Result<Vec<Ended>> {
         let config = &self.inner.config;
         let path = PathBuf::from(&row.path);
-        let had_build = {
+        {
             let locked = self.wait_for_ticket_tree_work(self.lock(), tree);
             // Read again after waiting. The sweep may have cleared the build, or another
             // release may have reached the tree first.
             let current = store::get(&locked.db, tree.as_str()).map_err(|e| store_error(&e))?;
-            let Some(current) = current.filter(|current| {
-                current.leased_at == row.leased_at
-                    && current.ticket == row.ticket
-                    && current.session == row.session
-            }) else {
+            if current.is_none_or(|current| {
+                current.leased_at != row.leased_at
+                    || current.ticket != row.ticket
+                    || current.session != row.session
+            }) {
                 return Err(Error::Conflict(format!(
                     "tree {tree} is no longer held by this lease"
                 )));
-            };
+            }
             let claimed = store::transition(
                 &locked.db,
                 tree.as_str(),
@@ -73,8 +72,7 @@ impl Trees {
                     "tree {tree} is no longer leased; another release has it"
                 )));
             }
-            current.built_commit.is_some()
-        };
+        }
         // A release that fails after the tree is marked `resetting` goes back to `leased`, so
         // the caller can retry it; nothing else would move a `resetting` tree until the daemon
         // restarts.
@@ -83,11 +81,12 @@ impl Trees {
         let reset = (|| {
             let head = refs::head(&path)?;
             self.stop_work(tree)?;
+            let had_build = self.row(tree)?.built_commit.is_some();
             let ended = Self::end_processes(&path, caller)?;
             worktree::reset(&path, &park_branch(tree), park_at, &config.keep.get())?;
-            Ok((ended, head))
+            Ok((ended, head, had_build))
         })();
-        let (ended, head) = match reset {
+        let (ended, head, had_build) = match reset {
             Ok(reset) => reset,
             Err(error) => {
                 self.back_to_leased(tree);
@@ -110,10 +109,10 @@ impl Trees {
         Ok(ended)
     }
 
-    /// Asks every verb still running from `tree` to stop, except the caller's own, and waits for
+    /// Asks each verb or prebuild still running from `tree` to stop, except the caller's own, and waits for
     /// each to end. A verb that refuses, or that has not ended within the wait, is an error, and
     /// the tree must not be freed: the next ticket would share it with that verb.
-    fn stop_work(&self, tree: &TreeId) -> Result<()> {
+    pub(super) fn stop_work(&self, tree: &TreeId) -> Result<()> {
         let own = crate::steps::current();
         let running: Vec<_> = self
             .inner
@@ -210,13 +209,7 @@ impl Trees {
     /// `ignite close -m ... 2>&1 | tail -4` from a shell inside the tree: `tail` is neither the
     /// client nor its ancestor, and ending it ended the command line with exit 143.
     pub(super) fn end_processes(path: &Path, caller: Option<u32>) -> Result<Vec<Ended>> {
-        let mut spared = BTreeSet::new();
-        for start in [Some(std::process::id()), caller].into_iter().flatten() {
-            let mut pid = Some(start);
-            while let Some(current) = pid.filter(|&p| p > 1 && spared.insert(p)) {
-                pid = Native.parent(current);
-            }
-        }
+        let spared = super::caller_processes(caller);
         // A caller in the daemon's own group would spare everything the daemon started.
         let caller_group = caller
             .and_then(|pid| Native.group(pid))

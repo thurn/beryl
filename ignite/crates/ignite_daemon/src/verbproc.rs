@@ -261,7 +261,7 @@ impl Process {
         assembled: Assembled,
     ) -> (Reply, bool) {
         let Assembled { verb, ctx } = assembled;
-        let activity = steps::global().begin(Kind::Verb(name.to_owned()), self.work(&ctx));
+        let activity = steps::global().begin(Kind::Verb(name.to_owned()), self.work(&ctx, req.pid));
         activity.attach_handle(&self.handle);
         activity.keep_stop_with(Arc::new(HostStop(link.clone())));
         link.attach(&activity);
@@ -287,7 +287,7 @@ impl Process {
     }
 
     /// Whom the verb works for, as the server records it for a verb on one of its threads.
-    fn work(&self, ctx: &Context) -> Work {
+    fn work(&self, ctx: &Context, caller: Option<u32>) -> Work {
         let ticket = ctx.tree.as_ref().and_then(|tree| {
             let row = tree_store::get(&lock(&self.db), tree.as_str()).ok()??;
             (row.state != tree_store::State::Free.as_str())
@@ -295,6 +295,7 @@ impl Process {
                 .and_then(|ticket| TicketId::new(ticket).ok())
         });
         Work {
+            caller_processes: crate::trees::caller_processes(caller),
             class: None,
             ticket,
             session: ctx.session.clone(),

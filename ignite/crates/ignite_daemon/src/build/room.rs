@@ -1,61 +1,34 @@
-//! Waiting for free disk space before a build starts.
-//!
-//! On 2026-11-15 the disk of the machine running the pool filled to 100% and builds failed with
-//! `ENOSPC` while writing their target directories. A backup had taken an APFS snapshot of the
-//! volume and held it for hours. While a snapshot exists, every block a build rewrites or deletes
-//! stays allocated, so the disk loop's sweeps of free trees (`trees/disk.rs`) freed almost
-//! nothing. A build started then fails partway, and so does every other command writing to the
-//! disk at the time.
-//!
-//! So before a build runs, the manager reads the free space on the disk that holds the trees.
-//! Below [`START_GB`] it waits, reading again every [`RECHECK`], until there is room or the work
-//! that asked for the build is stopped. The disk loop goes on sweeping free trees meanwhile
-//! (every round, once a minute, while the disk is below its floor), and the space a snapshot pins comes
-//! back once the snapshot is deleted. A disk whose free space cannot be read never holds a build.
+//! Waiting for a build slot and for free space on the volume holding the trees.
 
-use std::path::PathBuf;
+use std::path::Path;
+#[cfg(test)]
 use std::sync::Arc;
 use std::time::Duration;
 
-use ignite_core::traits::BuildResult;
+use ignite_core::capacity::BYTES_PER_GB;
+use ignite_core::fleet::DEFAULT_TREE_CEILING_GB;
+use ignite_core::ids::TreeId;
+use ignite_core::protocol::host::ExpressBuildStage;
+use ignite_core::traits::{BuildResult, Error, Result};
 
 use super::flight::STOP_RECHECK;
-use super::{BuildManager, Plan};
-use crate::doctor::Host as _;
+use super::{BuildManager, NOT_STARTED, Plan};
+use crate::trees::{BuildSlot, Trees, ceiling_bytes, volume_space};
 
-/// Free disk space below which a build waits instead of starting. The disk loop sweeps free trees
-/// whenever the disk has less than 50 GB free, so builds normally start with more than this; the
-/// disk falls under it only when sweeping cannot help, as when a snapshot pins what was deleted
-/// or every tree runs a command. The disk loop then names those trees and what runs in them
-/// (`trees/disk/floor.rs`). A tree's build directories hold 15 to 50 GB once built, a build from
-/// scratch writes most of that, and several trees build at once, so starting one with less than
-/// this risks filling the disk.
-pub const START_GB: u64 = 30;
+const DISK_WAIT: &str = "disk space:";
+pub(super) const RECHECK: Duration = Duration::from_secs(10);
 
-/// How a build's wait for disk space begins in its work's list of waits. The disk loop looks for
-/// it to tell a leased tree whose command only waits for space, which nothing but the disk loop
-/// can give, from one whose command is working (`trees/disk/leased.rs`).
-pub const DISK_WAIT: &str = "disk space:";
-
-/// How often a build waiting for disk space reads the free space again.
-pub const RECHECK: Duration = Duration::from_secs(10);
-
-/// The free space on the disk that holds the trees, and a way to wait.
+/// The available bytes on the tree volume and a way to wait.
 pub trait DiskRoom: Send + Sync {
-    /// Gigabytes free, or `None` when they cannot be read.
-    fn free_gb(&self) -> Option<u64>;
-    /// Blocks for `how_long`. Tests give a fake that returns at once.
+    fn available(&self, root: &Path) -> Option<u64>;
     fn pause(&self, how_long: Duration);
 }
 
-/// The disk that holds `path`, read with `df`.
-pub struct NativeRoom {
-    pub path: PathBuf,
-}
+pub(super) struct NativeRoom;
 
 impl DiskRoom for NativeRoom {
-    fn free_gb(&self) -> Option<u64> {
-        crate::doctor::NativeHost.disk_free_gb(&self.path)
+    fn available(&self, root: &Path) -> Option<u64> {
+        volume_space(root).map(|disk| disk.available)
     }
 
     fn pause(&self, how_long: Duration) {
@@ -64,62 +37,176 @@ impl DiskRoom for NativeRoom {
 }
 
 impl BuildManager {
-    /// Makes builds wait while `room` has less than [`START_GB`] free. Without it builds never
-    /// wait for disk space.
+    /// A room probe for tests. The live manager reads the tree root from the fleet notice.
+    #[cfg(test)]
     #[must_use]
     pub fn with_room(mut self, room: Arc<dyn DiskRoom>) -> Self {
         self.room = Some(room);
         self
     }
 
-    /// The result of a request whose work was asked to stop while it waited for another build.
     pub(super) fn stopped_waiting(&self, plan: &Plan) -> BuildResult {
         self.failure(
             &plan.request.product,
             &format!(
-                "stopped waiting for a build of {} in {}: its work was asked to stop",
+                "{NOT_STARTED}stopped waiting for a build of {} in {}: its work was asked to stop",
                 plan.request.product, plan.request.tree
             ),
         )
     }
 
-    /// Returns once the disk has [`START_GB`] free, or with a failure once `stop_requested`
-    /// answers true while it waits.
-    pub(super) fn wait_for_room(
+    pub(super) fn tracks_compiled_outputs(&self, plan: &Plan) -> bool {
+        plan.product.uses_build_slot()
+            || self
+                .tree_control
+                .get()
+                .and_then(crate::trees::TreeBuildControl::trees)
+                .is_some_and(|trees| {
+                    plan.product
+                        .outputs
+                        .iter()
+                        .any(|dir| trees.is_compiled_output(Path::new(dir)))
+                })
+    }
+
+    /// Disk and slot waits happen before the launcher asks for cores.
+    pub(super) fn prepare_space(
         &self,
         plan: &Plan,
-        stop_requested: &dyn Fn() -> bool,
-    ) -> Option<BuildResult> {
-        let room = self.room.as_ref()?;
+        stopped: &dyn Fn() -> bool,
+    ) -> std::result::Result<Option<BuildSlot>, BuildResult> {
+        let trees = self
+            .tree_control
+            .get()
+            .and_then(crate::trees::TreeBuildControl::trees);
+        let result = match trees.as_ref() {
+            Some(trees) if self.tracks_compiled_outputs(plan) => self
+                .prepare_compiled(trees, &plan.request.tree, &plan.product.outputs, stopped)
+                .map(Some),
+            _ if self.room.is_some() => self
+                .wait_for_room(
+                    &plan.request.tree,
+                    || {
+                        (
+                            plan.path.clone(),
+                            u64::from(DEFAULT_TREE_CEILING_GB) * BYTES_PER_GB / 2,
+                        )
+                    },
+                    stopped,
+                )
+                .map(|()| None),
+            _ => Ok(None),
+        };
+        result
+            .map_err(|error| self.failure(&plan.request.product, &format!("{NOT_STARTED}{error}")))
+    }
+
+    fn prepare_compiled(
+        &self,
+        trees: &Trees,
+        tree: &TreeId,
+        outputs: &[String],
+        stopped: &dyn Fn() -> bool,
+    ) -> Result<BuildSlot> {
+        let slot = Self::wait_for_slot(trees, tree, outputs, stopped)?;
+        let (_, settings) = trees.build_volume();
+        trees.prepare_build(tree, ceiling_bytes(&settings), stopped)?;
+        self.wait_for_room(
+            tree,
+            || {
+                let (root, settings) = trees.build_volume();
+                (root, ceiling_bytes(&settings) / 2)
+            },
+            stopped,
+        )?;
+        Ok(slot)
+    }
+
+    fn wait_for_slot(
+        trees: &Trees,
+        tree: &TreeId,
+        outputs: &[String],
+        stopped: &dyn Fn() -> bool,
+    ) -> Result<BuildSlot> {
+        let mut waiting = None;
+        while !stopped() {
+            if let Some(slot) = trees.take_build_slot(tree, outputs, true)? {
+                return Ok(slot);
+            }
+            waiting
+                .get_or_insert_with(|| crate::steps::waiting(format!("a build slot for {tree}")));
+            std::thread::sleep(STOP_RECHECK);
+        }
+        Err(Error::Conflict(format!(
+            "stopped waiting for a build slot in {tree}"
+        )))
+    }
+
+    pub(super) fn express_space(
+        &self,
+        path: &Path,
+        output: &Path,
+        stage: ExpressBuildStage,
+    ) -> Result<()> {
+        let Some(trees) = self
+            .tree_control
+            .get()
+            .and_then(crate::trees::TreeBuildControl::trees)
+        else {
+            return Ok(());
+        };
+        let Some(tree) = trees.tree_at(path) else {
+            return Ok(());
+        };
+        if trees.path(&tree).as_deref() != Some(path) || !trees.is_compiled_output(output) {
+            return Ok(());
+        }
+        match stage {
+            ExpressBuildStage::Prepare => {
+                let _slot =
+                    self.prepare_compiled(&trees, &tree, &[], &crate::steps::stop_requested)?;
+                // The runner is in the verb process. An output directory keeps its slot
+                // between this reply and the runner starting Cargo.
+                Trees::create_build_output(&tree, path, output)?;
+            }
+            ExpressBuildStage::Passed => {
+                trees.measure_build(&tree, Some(path.join(output).join("express.log")));
+            }
+            ExpressBuildStage::Failed => trees.measure_build(&tree, None),
+        }
+        Ok(())
+    }
+
+    fn wait_for_room(
+        &self,
+        tree: &TreeId,
+        volume: impl Fn() -> (std::path::PathBuf, u64),
+        stopped: &dyn Fn() -> bool,
+    ) -> Result<()> {
+        let probe = self.room.as_deref().unwrap_or(&NativeRoom);
         let mut waiting = None;
         loop {
-            let free = room.free_gb()?;
-            if free >= START_GB {
-                return None;
-            }
+            let (root, minimum) = volume();
+            let Some(free) = probe.available(&root).filter(|free| *free < minimum) else {
+                return Ok(());
+            };
             if waiting.is_none() {
-                eprintln!(
-                    "ignite: the build of {} in {} waits for disk space: {free} GB free, under \
-                     the {START_GB} GB a build needs to start",
-                    plan.request.product, plan.request.tree
+                let reason = format!(
+                    "{DISK_WAIT} {} GB free, under half the tree ceiling ({} GB)",
+                    free / BYTES_PER_GB,
+                    minimum / BYTES_PER_GB
                 );
-                waiting = Some(crate::steps::waiting(format!(
-                    "{DISK_WAIT} {free} GB free, under the {START_GB} GB a build needs"
-                )));
+                eprintln!("ignite: {tree} waits to build: {reason}");
+                waiting = Some(crate::steps::waiting(reason));
             }
             let mut paused = Duration::ZERO;
             while paused < RECHECK {
-                if stop_requested() {
-                    return Some(self.failure(
-                        &plan.request.product,
-                        &format!(
-                            "stopped waiting for disk space to build {} in {}: its work was \
-                             asked to stop",
-                            plan.request.product, plan.request.tree
-                        ),
-                    ));
+                if stopped() {
+                    return Err(Error::Conflict(format!(
+                        "stopped waiting for disk space to build in {tree}"
+                    )));
                 }
-                room.pause(STOP_RECHECK);
+                probe.pause(STOP_RECHECK);
                 paused += STOP_RECHECK;
             }
         }

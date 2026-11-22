@@ -10,10 +10,10 @@ use ignite_core::host::HostClient;
 use ignite_core::ids::Handle;
 use ignite_core::protocol::client::Exit;
 use ignite_core::protocol::host::{
-    Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, Finished, Hello, HelloReply,
-    HostCall, LeaseLanding, LeaseLandingReply, Poll, ReadDispatchPressure, RefuseStop,
-    RefuseStopReply, ReleaseLanding, ReturnCores, Run, RunReply, Selected, SelectedReply,
-    StepUpdate, StopState, decode_reply, encode_request,
+    Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, ExpressBuild, Finished,
+    Hello, HelloReply, HostCall, LeaseLanding, LeaseLandingReply, Poll, ReadDispatchPressure,
+    RefuseStop, RefuseStopReply, ReleaseLanding, ReturnCores, Run, RunReply, Selected,
+    SelectedReply, StepUpdate, StopState, decode_reply, encode_request,
 };
 use ignite_core::traits::{Error, Result};
 
@@ -50,6 +50,9 @@ impl HostClient for SocketHost {
         self.call(call)
     }
     fn build(&self, call: &Build) -> Result<BuildReply> {
+        self.call(call)
+    }
+    fn express_build(&self, call: &ExpressBuild) -> Result<BuildReply> {
         self.call(call)
     }
     fn lease_landing(&self, call: &LeaseLanding) -> Result<LeaseLandingReply> {
@@ -230,6 +233,10 @@ impl Link {
 
     pub fn build(&self, call: &Build) -> Result<BuildReply> {
         self.call(|host| host.build(call))
+    }
+
+    pub fn express_build(&self, call: &ExpressBuild) -> Result<BuildReply> {
+        self.call(|host| host.express_build(call))
     }
 
     pub fn lease_landing(&self, call: &LeaseLanding) -> Result<LeaseLandingReply> {

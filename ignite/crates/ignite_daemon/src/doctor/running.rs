@@ -80,6 +80,7 @@ mod tests {
                 session: None,
                 tree: Some(TreeId::new("tree-04").unwrap()),
                 tree_path: None,
+                caller_processes: std::collections::BTreeSet::new(),
             },
         );
         landing.attach_handle(&Handle::new("L-2").unwrap());

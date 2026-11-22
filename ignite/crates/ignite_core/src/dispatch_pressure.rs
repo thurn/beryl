@@ -50,6 +50,11 @@ impl QueueRecovery {
 /// Capacity observed by the machine just before asking for another handoff.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DispatchPressure {
+    /// Total build slots and slots that are empty or can be reclaimed from free trees.
+    #[serde(default)]
+    pub build_slots: u32,
+    #[serde(default)]
+    pub build_slots_free: u32,
     /// Actual free space on the filesystem holding the worktrees, in GiB.
     pub free_gb: Option<u64>,
     /// Free space the automatic tree budget leaves outside the trees, rounded up to GiB.

@@ -115,10 +115,10 @@ impl<'a> FlightGuard<'a> {
             }
             BuildResult::Current => None,
         };
-        drop(state);
         if let Some(change) = change {
             self.manager.store_change(request, &self.hash, &change);
         }
+        drop(state);
         self.flight.finish(result.clone());
         self.manager.ended.notify_all();
     }

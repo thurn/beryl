@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use ignite_core::protocol::client::{Reply, Request};
 use ignite_core::protocol::host::{
-    Ack, AllowStop, BorrowCores, Build, CALLS, Finished, Hello, HostCall, LeaseLanding, Poll,
-    ReadDispatchPressure, RefuseStop, ReleaseLanding, ReturnCores, Run, Selected, StepUpdate,
-    decode_request, encode_reply,
+    Ack, AllowStop, BorrowCores, Build, CALLS, ExpressBuild, Finished, Hello, HostCall,
+    LeaseLanding, Poll, ReadDispatchPressure, RefuseStop, ReleaseLanding, ReturnCores, Run,
+    Selected, StepUpdate, decode_request, encode_reply,
 };
 use ignite_core::traits::Result;
 
@@ -64,6 +64,7 @@ pub(super) fn register(host: &Arc<Host>, registry: &mut Registry) {
     add::<Hello>(host, registry, |host, ctx, call| Ok(host.hello(ctx, call)));
     add::<Run>(host, registry, |host, ctx, call| host.run(ctx, &call));
     add::<Build>(host, registry, Host::build);
+    add::<ExpressBuild>(host, registry, Host::express_build);
     add::<LeaseLanding>(host, registry, |host, ctx, call| {
         host.lease_landing(ctx, &call)
     });

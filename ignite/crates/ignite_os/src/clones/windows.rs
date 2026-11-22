@@ -3,26 +3,17 @@
 //! `CopyFile` (which `std::fs::copy` calls) clones a file's blocks instead of writing them
 //! again when source and target are on one such volume: a 984 MB copy on a Dev Drive took
 //! 23 MB of free space on 2026-11-19.
-//!
-//! `ReFS` reports no per-file count of the blocks a file shares, as APFS does. So a file on a
-//! block-cloning volume is reported as all shared, under an ID made from its name, length and
-//! modification time. A seeded tree's copy keeps its donor file's name, length and time
-//! (`trees/seed.rs` sets the time), and so gets the donor's ID until a build replaces it, which
-//! gives it a new time and a new ID. The trees' measure then counts each copy's blocks once, and
-//! a file no other tree holds counts once under an ID of its own.
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use std::time::UNIX_EPOCH;
 
 use windows_sys::Win32::Storage::FileSystem::{GetVolumeInformationW, GetVolumePathNameW};
 
-use super::{Clones, Sharing};
+use super::Clones;
 use crate::Native;
 
 /// The file system flag that says a volume counts references to its blocks, from
@@ -30,27 +21,8 @@ use crate::Native;
 const FILE_SUPPORTS_BLOCK_REFCOUNTING: u32 = 0x0800_0000;
 
 impl Clones for Native {
-    fn sharing(&self, path: &Path) -> io::Result<Option<Sharing>> {
-        if !self.copies_are_clones(path) {
-            return Ok(None);
-        }
-        let meta = std::fs::symlink_metadata(path)?;
-        let mut hasher = DefaultHasher::new();
-        path.file_name().hash(&mut hasher);
-        meta.len().hash(&mut hasher);
-        meta.modified()?
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-            .hash(&mut hasher);
-        Ok(Some(Sharing {
-            private: 0,
-            clone_id: Some(hasher.finish()),
-        }))
-    }
-
     fn copies_are_clones(&self, path: &Path) -> bool {
-        // A measure asks once for every file, so each volume's answer is kept.
+        // Keep the filesystem capabilities for each volume that holds a tree.
         static VOLUMES: OnceLock<Mutex<HashMap<PathBuf, bool>>> = OnceLock::new();
         let Some(volume) = volume_of(path) else {
             return false;

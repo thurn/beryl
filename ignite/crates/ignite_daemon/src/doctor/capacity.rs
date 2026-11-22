@@ -1,6 +1,6 @@
 //! Derived machine limits and fleet state as shown by `status` and `doctor`.
 
-use ignite_core::capacity::{BYTES_PER_GB, Derived, DiskLimitSource, MachineFacts};
+use ignite_core::capacity::{Derived, MachineFacts};
 use ignite_core::config::Os;
 use ignite_core::fleet::FleetNotice;
 
@@ -16,15 +16,15 @@ pub(crate) fn machine_facts(host: &dyn Host, os: Os) -> MachineFacts {
     }
 }
 
-pub(crate) struct CapacitySection<Budget, Room> {
+pub(crate) struct CapacitySection<Slots, Room> {
     pub derived: Derived,
-    pub disk_budget: Budget,
+    pub build_space: Slots,
     pub worker_room: Room,
 }
 
-impl<Budget, Room> StatusSection for CapacitySection<Budget, Room>
+impl<Slots, Room> StatusSection for CapacitySection<Slots, Room>
 where
-    Budget: Fn() -> Option<(u64, DiskLimitSource)> + Send + Sync,
+    Slots: Fn() -> (crate::trees::BuildSlots, Option<String>) + Send + Sync,
     Room: Fn() -> u32 + Send + Sync,
 {
     fn title(&self) -> &'static str {
@@ -33,26 +33,20 @@ where
 
     fn lines(&self) -> Vec<String> {
         let derived = &self.derived;
-        let budget = (self.disk_budget)().map_or_else(
-            || "tree budget unknown".to_owned(),
-            |(bytes, source)| {
-                format!(
-                    "{} GB tree budget (set by the {source})",
-                    bytes / BYTES_PER_GB
-                )
-            },
-        );
+        let (slots, cleanup) = (self.build_space)();
         let room = (self.worker_room)();
-        vec![format!(
+        let mut lines = vec![format!(
             "{} express cores, {} kept for tip builds, core floors {} tip and {} batch, \
-             {} landing trees, {budget}, worker ceiling {}, room to start {room}",
+             {} landing trees, {slots}, worker ceiling {}, room to start {room}",
             derived.express_cores,
             derived.tip_build_cores,
             derived.floor.tip,
             derived.floor.batch,
             derived.landing_trees,
             derived.worker_ceiling,
-        )]
+        )];
+        lines.extend(cleanup);
+        lines
     }
 }
 

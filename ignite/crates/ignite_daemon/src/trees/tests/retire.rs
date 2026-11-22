@@ -1,4 +1,4 @@
-//! The disk loop retires old free trees and sweeps builds when free disk drops below its floor.
+//! Tree maintenance retires unused and superseded worktrees.
 
 use super::*;
 

@@ -769,6 +769,7 @@ fn begin_activity(
     steps.begin(
         Kind::Verb(req.verb.clone()),
         Work {
+            caller_processes: crate::trees::caller_processes(req.pid),
             class: None,
             ticket: leased_tree_in(db, ctx)
                 .and_then(|tree| tree.ticket)

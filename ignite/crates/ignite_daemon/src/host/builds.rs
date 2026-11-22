@@ -13,8 +13,10 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use ignite_core::protocol::host::{Build, BuildReply, Selected, SelectedReply};
-use ignite_core::traits::{BuildFor, Error, Result};
+use ignite_core::protocol::host::{
+    Build, BuildReply, ExpressBuild, RequestId, Selected, SelectedReply,
+};
+use ignite_core::traits::{BuildFor, Builds, Error, Result};
 
 use super::{Host, Pending};
 use crate::handles::lock;
@@ -22,17 +24,34 @@ use crate::server::Context;
 
 impl Host {
     pub(super) fn build(self: &Arc<Self>, ctx: &Context, call: Build) -> Result<BuildReply> {
-        if call.request_id.handle() != &call.handle {
-            return Err(Error::Invalid(format!(
-                "request {} is not one of {}",
-                call.request_id, call.handle
-            )));
-        }
+        let handle = call.handle.clone();
+        let id = call.request_id.clone();
         let what = format!("building {} in {}", call.product, call.tree);
-        let pending = self.pending_build(ctx, call)?;
-        Ok(pending
-            .wait(self.timing.block)
-            .unwrap_or(BuildReply::Waiting { what }))
+        self.build_call(ctx, &handle, &id, what, move |builds| {
+            let who = BuildFor::from(call.who);
+            Ok(builds
+                .ensure_for(&call.tree, &call.product, &call.packages, &who)
+                .into())
+        })
+    }
+
+    pub(super) fn express_build(
+        self: &Arc<Self>,
+        ctx: &Context,
+        call: ExpressBuild,
+    ) -> Result<BuildReply> {
+        let handle = call.handle.clone();
+        let id = call.request_id.clone();
+        self.build_call(
+            ctx,
+            &handle,
+            &id,
+            "preparing express build outputs".to_owned(),
+            move |builds| {
+                builds.express_build(&call.tree, &call.output, call.stage)?;
+                Ok(BuildReply::Current)
+            },
+        )
     }
 
     /// `host-selected`: what the build manager selects for the packages asked
@@ -45,32 +64,50 @@ impl Host {
         }
     }
 
-    /// The thread working on `call`'s request ID: the one already started, or a new one.
+    /// A request ID belongs to one operation whether the caller retries or the reply is delayed.
+    fn build_call(
+        self: &Arc<Self>,
+        ctx: &Context,
+        handle: &ignite_core::ids::Handle,
+        id: &RequestId,
+        what: String,
+        work: impl FnOnce(&dyn Builds) -> Result<BuildReply> + Send + 'static,
+    ) -> Result<BuildReply> {
+        if id.handle() != handle {
+            return Err(Error::Invalid(format!(
+                "request {id} is not one of {handle}"
+            )));
+        }
+        let pending = self.pending_build(ctx, handle, id, work)?;
+        pending
+            .wait(self.timing.block)
+            .unwrap_or(Ok(BuildReply::Waiting { what }))
+    }
+
     fn pending_build(
         self: &Arc<Self>,
         ctx: &Context,
-        call: Build,
-    ) -> Result<Arc<Pending<BuildReply>>> {
+        handle: &ignite_core::ids::Handle,
+        id: &RequestId,
+        work: impl FnOnce(&dyn Builds) -> Result<BuildReply> + Send + 'static,
+    ) -> Result<Arc<Pending<Result<BuildReply>>>> {
         let mut built = lock(&self.built);
         built.retain(|_, pending| !pending.stale());
-        if let Some(pending) = built.get(&call.request_id) {
+        if let Some(pending) = built.get(id) {
             return Ok(pending.clone());
         }
-        let activity = self.running(ctx, &call.handle)?;
+        let activity = self.running(ctx, handle)?;
         let pending = Pending::new(Instant::now());
-        let id = call.request_id.clone();
         built.insert(id.clone(), pending.clone());
         let builds = self.builds.clone();
         let settled = pending.clone();
         let thread = format!("ignite-host-build-{id}");
         let spawned = std::thread::Builder::new().name(thread).spawn(move || {
             let _entered = activity.enter();
-            let who = BuildFor::from(call.who);
-            let result = builds.ensure_for(&call.tree, &call.product, &call.packages, &who);
-            settled.settle(BuildReply::from(result));
+            settled.settle(work(builds.as_ref()));
         });
         if let Err(error) = spawned {
-            built.remove(&id);
+            built.remove(id);
             return Err(Error::Io(format!("cannot start a build thread: {error}")));
         }
         Ok(pending)

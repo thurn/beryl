@@ -76,6 +76,7 @@ mod tests {
     fn spec(env: Vec<(String, String)>) -> SpecFile {
         SpecFile {
             args: vec!["true".to_owned()],
+            tree_path: None,
             cwd: PathBuf::from("/trees/tree-01"),
             env,
             queued_s: 0.0,

@@ -91,6 +91,8 @@ pub struct Work {
     /// The tree's directory. Two daemons in one process (as in tests) can each have a tree of
     /// the same name; the directory tells them apart.
     pub tree_path: Option<PathBuf>,
+    /// The client and its ancestors can be parked in the tree while its verb waits.
+    pub caller_processes: std::collections::BTreeSet<u32>,
 }
 
 /// Whether an activity may still be stopped.
@@ -668,11 +670,10 @@ impl Steps {
             .find(|activity| activity.handle().as_ref() == Some(handle))
     }
 
-    /// The running verbs asked from inside `tree`, whose directory is `path`.
+    /// The activities running in `tree`, whose directory is `path`.
     pub fn in_tree(&self, tree: &TreeId, path: &Path) -> Vec<Arc<Activity>> {
         self.live()
             .into_iter()
-            .filter(|activity| matches!(activity.kind, Kind::Verb(_)))
             .filter(|activity| {
                 let work = activity.work();
                 work.tree.as_ref() == Some(tree)

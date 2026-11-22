@@ -1030,8 +1030,8 @@ Each machine uses its Fleet `trees_root`, or the main checkout's
 `repository.trees` directory when the setting is unset. A root change takes
 effect when the daemon receives the new settings. New ticket and landing trees
 are created under that root. A tree under a previous root keeps its path until
-its lease ends, then the disk loop retires it. The first build at the new path
-is cold or seeded from a tree already there.
+its lease ends, then the tree maintenance loop retires it. The first build at
+the new path is cold or seeded from a tree already there.
 
 On a Mac, run `ignite trees volume --size-gb <n>` on the machine that will use
 the volume. It creates `BerylTrees` in the APFS container that holds the
@@ -1135,85 +1135,34 @@ Rules for trees:
   commands take 32 to 37 s after a one-file edit under the same load.
 - While cores are idle, the daemon keeps one free ticket tree built at the tip,
   so the next lease starts with nothing to compile.
-- A tree keeps the directories that its build products declare as their output,
-  each created when a command first needs it. Today those are `rust/target`,
-  `rust/beryl3d/target` and `ui/node_modules`, and none of them is named in
-  Ignite's code. A tree that has only held documentation or Python tickets uses
-  little disk. On 2026-11-19, `du` measured 49 to 118 GB per built tree across
-  the Rust and Ignite targets, including 6 to 21 GB of incremental caches. Those
-  measurements counted shared clone blocks in each tree.
-- Every round, before measuring, the daemon deletes the object files that newer
-  compiles of the same codegen unit replaced. rustc names each object
-  `<crate>-<hash>.<codegen unit>.<invocation>.rcgu.o` with a new invocation part
-  at every compile and leaves it in `deps` for the binary's debug info, so a
-  test binary rebuilt in place gained a full set at each compile: they were half
-  of a 113 GB tree. Each codegen unit keeps its newest object.
-- The automatic budget for the build directories is the volume's size minus the
-  space used outside those directories and a reserve of 50 GB or a tenth of the
-  volume, whichever is larger. The reserve is calculated in bytes and rounds a
-  tenth up to the next byte. The optional Fleet cap lowers that budget. Both the
-  cap and the 50 GB minimum reserve use decimal gigabytes. The disk loop and
-  `ignite doctor` name the term that set the budget.
-- To stay within the budget, the daemon deletes builds that a newer build of the
-  same unit replaced, then the build directories of the free trees used longest
-  ago. A replaced build is a top-level unit (a test binary or program) with a
-  newer unit of the same crate and settings, together with every unit only it
-  depends on, followed through the dependency fingerprints that Cargo records. A
-  unit that a kept build depends on is never deleted, however alike it looks to
-  another. If leased outputs alone exceed the budget, the daemon keeps them
-  available for existing sessions to finish and handoffs wait for headroom.
-- The trees' size counts each file's blocks once. A seeded tree's files are APFS
-  clones of its donor's and share their blocks, so each file counts its private
-  bytes (macOS `getattrlist`, `ATTR_CMNEXT_PRIVATESIZE`) in its own tree and its
-  shared bytes once for all trees with the same clone ID. Counting every tree's
-  blocks in full had measured hundreds of gigabytes the disk did not hold, and
-  cleared every free tree, the donors the next leases would have copied from.
-  Free trees are cleared in two passes, each oldest first: first those whose
-  deletion alone frees at least 1 GB, so a donor whose blocks a leased tree's
-  clones share is kept, then any whose bytes no tree outside the free ones
-  shares. When a sweep gives a tree back, any lease that had to wait for it can
-  proceed, even when the sweep found no builds to clear.
-- A build waits to start while the disk has less than 30 GB free, reading the
-  free space again every 10 seconds, until there is room or its work is stopped.
-  A backup's APFS snapshot keeps every block that builds rewrite or delete
-  allocated, so sweeping free trees can free almost nothing for hours, and a
-  build started on a nearly full disk fails with `ENOSPC` partway through.
-- A tree's recorded builds are forgotten before its build directories are
-  deleted, by the disk loop or by seeding, so a daemon restart partway through a
-  deletion cannot leave records of builds whose files are gone.
-- The daemon's disk loop checks this every minute, in a loop of its own so that
-  idle work waiting for cores cannot hold it up. It measures the trees at most
-  once every 30 minutes. While the disk has under 50 GiB free, it clears builds
-  without measuring at every round, before anything else it does and again
-  between its other steps. A measurement reads the free space before each
-  directory and stops once the disk is below 50 GiB, so the clearing pass runs
-  at once instead of after a walk that can take many minutes. It skips the walk
-  when the disk has at least 150 GiB free, the reserve is covered, and the cap
-  cannot bind. Free trees are swept, and so are leased trees while nothing runs
-  in them: no verb was asked from the tree, no process has its working directory
-  or executable inside it, and the build manager holds back any build there
-  until the sweep ends. A tree running a command keeps its build directories.
-  When the emergency floor pass has no free tree left to clear, it can delete
-  idle leased trees' incremental caches (`<target>/<profile>/incremental`) and
-  then their whole build directories. The daemon logs what it deleted and how
-  much it freed.
-- When the clearing pass leaves the disk under 50 GiB free with nothing more it
-  may delete, the disk loop's round fails with the reason, which `ignite status`
-  and `ignite doctor` show. The reason names each tree that still holds builds
-  and what runs in it, such as a verb, a build, a process or a seed, and marks a
-  verb that only waits for disk space to start its build. With no tree holding
-  builds, it says the space is held outside the trees or by a snapshot. The pass
-  runs again at every round, so the first tree whose command ends is cleared
-  within a minute. Meanwhile builds wait to start and handoffs wait for room,
-  and stopping one of the named commands with `ignite stop` frees its tree
-  sooner. On 2026-11-18 files outside the trees filled the disk, and on
-  2026-11-20 every tree was busy, and both times the log said only what had been
-  deleted.
-- The disk loop retires ticket trees after they have been free for 24 hours,
-  keeping the two most recently used free trees as warm donors. It removes the
-  worktree, its build directories and its local database row. A restart resumes
-  unfinished creations and retirements. Surplus landing trees are retired as
-  soon as they are free.
+- A machine's build slots are its configured tree space divided by its per-tree
+  build ceiling, rounded down to at least one. Both settings use decimal
+  gigabytes. A lease alone uses no slot. A ticket or landing tree takes a slot
+  when it builds compiled output or copies one from a donor, and holds that slot
+  while its build directories exist. Documentation and Python work can use a
+  tree without taking a build slot. A build product with only path inputs can
+  declare `compiles = true` to take a slot for its output directories.
+- A build first uses its tree's slot or takes an empty one. If all slots have
+  outputs, it clears the build directories of the free tree used longest ago.
+  This keeps the two most recent donors while other slots are available. When no
+  slot can be reclaimed, the build waits and `ignite status` shows the wait.
+- After a build command ends, the daemon measures that tree's build directories
+  in logical bytes. Before its next build, a tree over its ceiling is cleaned
+  until its outputs are below 80% of the ceiling. Cleanup removes replaced
+  objects and Cargo units first, then fingerprint variants and outputs unused by
+  the last traced Cargo build, then incremental caches, and finally whole build
+  directories. The daemon logs what it deleted and shows the latest cleanup in
+  `ignite status`. It forgets recorded builds before deletion and holds off
+  cleanup while a command is using the tree.
+- Before starting a build, the daemon checks free space on the volume holding
+  the configured tree root. A build waits while the volume has less than half a
+  tree ceiling available, checking again every ten seconds until there is room
+  or the work is stopped.
+- The tree maintenance loop retires ticket trees after they have been free for
+  24 hours, keeping the two most recently used free trees as warm donors. It
+  removes the worktree, its build directories and its local database row. A
+  restart resumes unfinished creations and retirements. Surplus landing trees
+  are retired as soon as they are free.
 - Releasing a tree first saves what it holds, then resets it to a clean checkout
   and keeps its build directories. See [Releasing work](#releasing-work).
 - Releasing also ends every process whose working directory or executable is
@@ -3892,26 +3841,13 @@ expected cost of each ticket, so cheap tickets can run beside expensive ones.
   says
   `commands have waited 150 s for cores, so only tickets that hold master back start`.
 
-The machine also sends its current disk space, which build outputs are present
-in each worktree, and how long its queue has been healthy. A ticket is charged 1
-GiB of projected growth for light work, 12 GiB if its named build outputs are
-already present, and 40 GiB for a cold build. A ticket that names Rust source or
-a Cargo manifest counts as build work, as does one expected to use half a core
-or more. Unfamiliar paths are treated as cold. The hub subtracts the growth
-allowances for existing claims and reservations from the room above the 50 GiB
-cleanup floor and the automatic volume reserve, and from the remaining Fleet cap
-when one is set. To estimate cap usage between sweeps, the daemon adds net
-growth on the volume to its last clone-aware measurement of the trees. A warm
-tree can count for only one reservation. Short tickets can still fit in the
-remaining space while a build waits. The build runner also checks disk space
-immediately before launching a build.
-
-When unused outputs could provide headroom for a handoff, the hub sends a
-free-space target that includes projected growth for held tickets and the one
-waiting. The disk loop clears build outputs in free ticket trees, oldest first
-among trees that can release space, and favors clearing trees whose blocks are
-their own over shared donors. It refreshes its usage measurement after
-reclamation when a Fleet cap is set.
+The machine sends free space on its tree volume, which build outputs each ticket
+tree holds, and its total and free build slots. The legacy hub handoff uses
+projected disk growth. It counts 1 GiB for light work, 12 GiB for a warm build,
+and 40 GiB for a cold build, and subtracts existing claims and reservations from
+the room above 50 GiB. It also uses a reserve and cap when reported by an older
+daemon. A warm tree can count for only one reservation. Daemon build admission
+uses [build slots](#build-trees).
 
 The machine can start up to three build tickets at once when the rest of its
 budget permits. With three or more active, the newest must have been held for 90
@@ -4426,7 +4362,7 @@ A shared resource configured with `per_core` uses the same formula as browser
 pages with its own multiplier. Ticket trees are created on demand, up to the
 worker ceiling plus four. The daemon keeps the two most recently used free trees
 and can retire the rest after 24 hours free. See [Build trees](#build-trees) for
-disk budgets and reclamation.
+build slots and reclamation.
 
 For ordinary tickets, worker room is the smallest of three limits:
 
@@ -4445,10 +4381,11 @@ and gives it back if pressure has developed. The hub also checks expected CPU
 use, disk growth and queue pressure. See
 [Light and heavy tickets](#light-and-heavy-tickets).
 
-The `capacity` line in `ignite status` shows derived reserves, floors and tree
-count, the disk budget and its source, and worker room and ceiling. The `fleet`
-line shows the machine's last reported state. `ignite doctor` warns when the
-measured footprint of the leased trees alone exceeds the budget.
+The `capacity` line in `ignite status` shows the core reserves and floors,
+landing tree count, total and free build slots, and worker room and ceiling. The
+`fleet` line shows the machine's last reported state. `ignite doctor` shows the
+build slots and the tree ceiling and reports when the tree volume has too little
+free space to start a build.
 
 ### The provider mix
 

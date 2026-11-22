@@ -103,7 +103,6 @@ pub trait Host: Send + Sync {
     /// Observe the core queue even when the machine has no room for another worker.
     fn observe_queue(&self, _now: Timestamp) {}
     /// Ask the disk loop to make room for a queued ticket by clearing unused outputs.
-    fn reclaim_for_handoff(&self, _target_gb: u64) {}
     /// The disk and queue conditions local to this machine.
     fn pressure(
         &self,

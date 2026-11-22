@@ -15,7 +15,8 @@ use std::sync::Arc;
 use ignite_core::ids::{InputHash, TreeId};
 use serde::{Deserialize, Serialize};
 
-use super::{BuildManager, Flight, FlightGuard, Plan, Request, UNITS_ENV, lock};
+use super::flight::FlightGuard;
+use super::{BuildManager, Flight, Plan, Request, UNITS_ENV, lock};
 use crate::supervise::{Run, SpecFile};
 
 /// The environment variable that names the build a build command makes, as a JSON
@@ -118,8 +119,20 @@ impl BuildManager {
             );
             let spawned = std::thread::Builder::new().name(thread).spawn(move || {
                 // The guard frees the directories and wakes the joiners however this ends.
+                let tree = request.tree.clone();
                 let guard = FlightGuard::new(&manager, request, hash, dirs, flight);
-                let (result, remember) = BuildManager::outcome(run.wait(), Path::new(&units));
+                let ended = run.wait();
+                if let Some(trees) = manager
+                    .tree_control
+                    .get()
+                    .and_then(crate::trees::TreeBuildControl::trees)
+                {
+                    trees.measure_build(
+                        &tree,
+                        (ended.exit == Some(0)).then(|| ended.output.clone()),
+                    );
+                }
+                let (result, remember) = BuildManager::outcome(ended, Path::new(&units));
                 guard.finish(&result, remember);
             });
             match spawned {

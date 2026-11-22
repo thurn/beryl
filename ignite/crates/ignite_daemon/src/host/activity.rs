@@ -45,7 +45,12 @@ impl Host {
         }
         let row = self.row(handle).filter(|row| row.state == "running")?;
         let tree = row.tree.as_deref().and_then(|t| TreeId::new(t).ok());
+        let caller = crate::handles::running_request(&lock(&self.db), handle)
+            .ok()
+            .flatten()
+            .and_then(|(_, request)| request.pid);
         let work = Work {
+            caller_processes: crate::trees::caller_processes(caller),
             class: None,
             ticket: None,
             session: row.session.as_deref().and_then(|s| SessionId::new(s).ok()),

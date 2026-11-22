@@ -71,20 +71,25 @@ fn staging_metadata(name: &str) -> bool {
     name.strip_prefix('.').is_some_and(|rest| {
         rest.strip_suffix(".seeding")
             .is_some_and(|id| ticket_tree_number(id).is_some())
+            || rest
+                .strip_suffix(".commands.lock")
+                .is_some_and(is_tree_name)
             || name.starts_with(".discarded.")
     })
 }
 
+fn is_tree_name(name: &str) -> bool {
+    ticket_tree_number(name).is_some()
+        || name.strip_prefix("landing-").is_some_and(|number| {
+            number
+                .parse::<u32>()
+                .is_ok_and(|id| id > 0 && number == id.to_string())
+        })
+}
+
 fn is_tree(entry: &DirEntry) -> bool {
-    let name = entry.file_name();
-    name.to_str().is_some_and(|name| {
-        ticket_tree_number(name).is_some()
-            || name.strip_prefix("landing-").is_some_and(|number| {
-                number
-                    .parse::<u32>()
-                    .is_ok_and(|id| id > 0 && number == id.to_string())
-            })
-    }) && entry.file_type().is_ok_and(|kind| kind.is_dir())
+    entry.file_name().to_str().is_some_and(is_tree_name)
+        && entry.file_type().is_ok_and(|kind| kind.is_dir())
         && entry.path().join(".git").is_file()
 }
 
@@ -118,4 +123,25 @@ fn canonical_with_missing_suffix(path: &Path) -> PathBuf {
             Some(resolved.join(path.strip_prefix(ancestor).ok()?))
         })
         .unwrap_or_else(|| path.to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_locks_do_not_make_a_tree_volume_shared() {
+        let mount = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-tree-volume-{}", std::process::id()));
+        let root = mount.join("trees");
+        let tree = root.join("tree-01");
+        fs::create_dir_all(&tree).unwrap();
+        fs::write(tree.join(".git"), "gitdir: fixture").unwrap();
+        let command = super::super::command_lock(&tree).unwrap();
+        assert_eq!(inspect(&mount).unwrap().root.as_deref(), root.to_str());
+        fs::write(root.join(".other.commands.lock"), "other data").unwrap();
+        assert!(inspect(&mount).is_none());
+        drop(command);
+        fs::remove_dir_all(mount).unwrap();
+    }
 }

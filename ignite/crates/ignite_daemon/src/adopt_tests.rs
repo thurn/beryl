@@ -237,6 +237,7 @@ fn ending_a_compiling_run_in_a_reset_tree_marks_its_target_directory() {
         std::fs::create_dir_all(&run).unwrap();
         let spec = SpecFile {
             args: args.iter().map(|a| (*a).to_owned()).collect(),
+            tree_path: None,
             cwd: cwd.to_path_buf(),
             env: Vec::new(),
             queued_s: 0.0,

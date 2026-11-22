@@ -68,7 +68,7 @@ use crate::time::Timestamp;
 use crate::traits::{BuildFor, BuildResult, CommandSpec, Error, Reserve, Result};
 
 /// The newest version of the host protocol this build speaks.
-pub const PROTOCOL_VERSION: u32 = 3;
+pub const PROTOCOL_VERSION: u32 = 4;
 
 /// The longest a call that waits holds its connection before it answers `waiting`.
 pub const MAX_BLOCK_S: u32 = 30;
@@ -89,10 +89,11 @@ pub trait HostCall: Serialize + DeserializeOwned {
 }
 
 /// Every call, with the version that introduced it. A daemon registers a verb for each.
-pub const CALLS: [(&str, u32); 14] = [
+pub const CALLS: [(&str, u32); 15] = [
     (Hello::VERB, Hello::SINCE),
     (Run::VERB, Run::SINCE),
     (Build::VERB, Build::SINCE),
+    (ExpressBuild::VERB, ExpressBuild::SINCE),
     (LeaseLanding::VERB, LeaseLanding::SINCE),
     (ReleaseLanding::VERB, ReleaseLanding::SINCE),
     (StepUpdate::VERB, StepUpdate::SINCE),
@@ -424,6 +425,34 @@ impl HostCall for Build {
     const VERB: &'static str = "host-build";
     const SINCE: u32 = 1;
     type Reply = BuildReply;
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+/// The express runner owns its reserved cores and command. The daemon owns its build slot.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExpressBuild {
+    pub handle: Handle,
+    pub request_id: RequestId,
+    pub tree: PathBuf,
+    pub output: PathBuf,
+    pub stage: ExpressBuildStage,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExpressBuildStage {
+    Prepare,
+    Passed,
+    Failed,
+}
+
+impl HostCall for ExpressBuild {
+    const VERB: &'static str = "host-express-build";
+    const SINCE: u32 = 4;
+    type Reply = BuildReply;
+
     fn handle(&self) -> &Handle {
         &self.handle
     }

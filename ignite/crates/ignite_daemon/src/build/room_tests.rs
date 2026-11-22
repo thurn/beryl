@@ -1,11 +1,13 @@
-//! A build waits while the disk has less than [`START_GB`] free, instead of starting and failing
+//! A build waits while the disk has less than [`START_BYTES`] free, instead of starting and failing
 //! with `ENOSPC` partway through.
 
 use std::collections::VecDeque;
 
 use super::*;
+use crate::build::DiskRoom;
 use crate::build::room::RECHECK;
-use crate::build::{DiskRoom, START_GB};
+
+const START_BYTES: u64 = 30 * ignite_core::capacity::BYTES_PER_GB;
 
 /// A disk whose free space reads from a script, the last reading repeating once it runs out,
 /// and whose pauses return at once.
@@ -38,7 +40,7 @@ impl FakeRoom {
 }
 
 impl DiskRoom for FakeRoom {
-    fn free_gb(&self) -> Option<u64> {
+    fn available(&self, _: &Path) -> Option<u64> {
         *lock(&self.reads) += 1;
         let mut readings = lock(&self.readings);
         if readings.len() > 1 {
@@ -69,7 +71,7 @@ fn pauses_per_reading() -> usize {
 
 #[test]
 fn a_build_waits_while_the_disk_is_short_and_starts_once_it_has_room() {
-    let room = FakeRoom::new(&[Some(2), Some(START_GB - 1), Some(START_GB)]);
+    let room = FakeRoom::new(&[Some(2), Some(START_BYTES - 1), Some(START_BYTES)]);
     let f = with_room("room-waits", false, &room);
     let result = f.manager.ensure(&tree(), "tests", &[]);
     assert!(matches!(result, BuildResult::Built { .. }), "{result:?}");
@@ -81,7 +83,7 @@ fn a_build_waits_while_the_disk_is_short_and_starts_once_it_has_room() {
 
 #[test]
 fn a_tree_that_holds_the_product_answers_without_reading_the_disk() {
-    let room = FakeRoom::new(&[Some(START_GB * 2)]);
+    let room = FakeRoom::new(&[Some(START_BYTES * 2)]);
     let f = with_room("room-current", false, &room);
     assert!(matches!(
         f.manager.ensure(&tree(), "tests", &[]),
@@ -134,28 +136,7 @@ fn a_stopped_request_stops_waiting_for_disk_space_and_builds_nothing() {
     assert!(text.contains("stopped waiting for disk space"), "{text}");
     assert!(f.launcher.builds().is_empty());
     // Nothing was remembered as failing, so the next request with room builds.
-    room.set(&[Some(START_GB)]);
+    room.set(&[Some(START_BYTES)]);
     let next = f.manager.ensure(&tree(), "tests", &[]);
     assert!(matches!(next, BuildResult::Built { .. }), "{next:?}");
-}
-
-/// The disk loop pauses a leased tree's builds while it deletes build files there. A request
-/// made meanwhile waits and builds once the tree is resumed, and a tree with a build running
-/// cannot be paused.
-#[test]
-fn a_paused_tree_starts_no_build_until_it_is_resumed() {
-    let f = fixture("paused", true);
-    assert!(f.manager.pause(&tree()));
-    let request = {
-        let manager = Arc::clone(&f.manager);
-        thread::spawn(move || manager.ensure(&tree(), "tests", &[]))
-    };
-    until_waiting(&f.manager, (0, 1));
-    assert!(f.launcher.builds().is_empty());
-    f.manager.resume(&tree());
-    f.launcher.wait_for(|s| s.active == 1);
-    assert!(!f.manager.pause(&tree()));
-    f.launcher.release_one();
-    assert!(matches!(request.join().unwrap(), BuildResult::Built { .. }));
-    assert!(f.manager.pause(&tree()));
 }

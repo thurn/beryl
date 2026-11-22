@@ -1,6 +1,6 @@
-//! The disk loop removes surplus ticket trees and landing trees that are no longer configured.
+//! Remove surplus ticket trees and landing trees that are no longer configured.
 
-use std::fs;
+use std::fs::{self, File};
 use std::path::Path;
 
 use ignite_core::ids::TreeId;
@@ -9,6 +9,7 @@ use ignite_git::worktree;
 use ignite_store::local::{rows, trees as store};
 
 use super::disk::id_of;
+use super::slots::try_exclusive;
 use super::{Kind, Seeding, Trees, store_error};
 
 /// Keep warm donors available when work arrives after a quiet period.
@@ -21,7 +22,7 @@ impl Trees {
     /// unconfigured landing trees as soon as they are free.
     pub fn retire_surplus(&self) -> Result<Vec<TreeId>> {
         let mut retired = Vec::new();
-        while let Some(tree) = self.next_to_retire()? {
+        while let Some((tree, _guard)) = self.next_to_retire()? {
             self.remove_retiring(&tree)?;
             retired.push(tree);
         }
@@ -31,20 +32,28 @@ impl Trees {
         Ok(retired)
     }
 
-    fn next_to_retire(&self) -> Result<Option<TreeId>> {
+    fn next_to_retire(&self) -> Result<Option<(TreeId, Option<File>)>> {
         let locked = self.lock();
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
         if let Some(row) = rows
             .iter()
             .find(|row| row.state == store::State::Retiring.as_str())
         {
-            return id_of(row).map(Some);
+            let path = Path::new(&row.path);
+            return if path.exists() {
+                let tree = id_of(row)?;
+                Ok(try_exclusive(path)?.map(|guard| (tree, Some(guard))))
+            } else {
+                id_of(row).map(|id| Some((id, None)))
+            };
         }
         let root = self.root_in(&locked.db);
         let mut free: Vec<&rows::Tree> = rows
             .iter()
             .filter(|row| {
-                row.state == store::State::Free.as_str() && !Seeding::involves(Path::new(&row.path))
+                row.state == store::State::Free.as_str()
+                    && !Seeding::involves(Path::new(&row.path))
+                    && !Self::legacy_command_in(&locked, Path::new(&row.path))
             })
             .collect();
         let surplus_tree = free
@@ -66,7 +75,19 @@ impl Trees {
         let Some(row) = surplus_tree.or(old_ticket) else {
             return Ok(None);
         };
+        let path = Path::new(&row.path);
+        let guard = if path.exists() {
+            let Some(guard) = try_exclusive(path)? else {
+                return Ok(None);
+            };
+            Some(guard)
+        } else {
+            None
+        };
         let id = id_of(row)?;
+        if !self.tree_processes_clear(&id, path)? {
+            return Ok(None);
+        }
         store::transition(
             &locked.db,
             id.as_str(),
@@ -75,7 +96,7 @@ impl Trees {
             &now.to_string(),
         )
         .map_err(|e| store_error(&e))?;
-        Ok(Some(id))
+        Ok(Some((id, guard)))
     }
 
     fn remove_retiring(&self, id: &TreeId) -> Result<()> {

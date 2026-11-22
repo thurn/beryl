@@ -110,6 +110,8 @@ const SAMPLE_EVERY: Duration = Duration::from_millis(250);
 pub struct SpecFile {
     pub args: Vec<String>,
     pub cwd: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tree_path: Option<PathBuf>,
     /// Variables added to the supervisor's environment, the grant's thread counts included.
     pub env: Vec<(String, String)>,
     /// Seconds the command waited for its grant, copied into its usage.
@@ -181,6 +183,7 @@ pub struct SupervisedLauncher {
     cpu: Peaks,
     /// Seconds an `idle` command has to exit after the scheduler stops it, before it is killed.
     stop_grace_s: f64,
+    tree_control: std::sync::OnceLock<crate::trees::TreeBuildControl>,
 }
 
 impl SupervisedLauncher {
@@ -205,7 +208,12 @@ impl SupervisedLauncher {
             next: AtomicU64::new(0),
             pruned: AtomicU64::new(0),
             stop_grace_s: STOP_GRACE_S,
+            tree_control: std::sync::OnceLock::new(),
         }
+    }
+
+    pub(crate) fn attach_trees(&self, trees: &crate::trees::Trees) {
+        assert!(self.tree_control.set(trees.build_control()).is_ok());
     }
 
     /// Gives a stopped `idle` command `seconds` (of the scheduler's clock) to exit instead of
@@ -261,6 +269,11 @@ impl SupervisedLauncher {
         let file = SpecFile {
             args: spec.args.clone(),
             cwd: spec.cwd.clone(),
+            tree_path: self
+                .tree_control
+                .get()
+                .and_then(crate::trees::TreeBuildControl::trees)
+                .and_then(|trees| trees.tree_at(&spec.cwd).and_then(|tree| trees.path(&tree))),
             env: all_env,
             queued_s,
             jobserver: jobserver.as_ref().map(|(file, _)| file.clone()),
@@ -428,6 +441,17 @@ impl Run {
         &self.dir
     }
 
+    /// A pre-upgrade supervisor that never acquired the tree command lock.
+    pub(crate) fn legacy_cwd(&self) -> Option<PathBuf> {
+        let spec: SpecFile = serde_json::from_slice(&fs::read(self.dir.join(SPEC)).ok()?).ok()?;
+        (spec.tree_path.is_none() && self.is_running()).then_some(spec.cwd)
+    }
+
+    pub(crate) fn is_running(&self) -> bool {
+        File::open(self.dir.join(LOCK))
+            .is_ok_and(|guard| matches!(guard.try_lock_shared(), Err(fs::TryLockError::WouldBlock)))
+    }
+
     /// Ends the command and every process in its group, with `SIGTERM` (on Windows, by ending
     /// its job object, which stops its processes at once). Its supervisor then writes a result
     /// with no exit code, or with the code of a command that caught the signal. Either way the
@@ -528,6 +552,14 @@ fn supervise_run(spec_file: &Path) -> io::Result<()> {
         .map_err(|_| io::Error::other("another supervisor holds this run's lock"))?;
     let output_path = dir.join(OUTPUT);
     let output = File::create(&output_path)?;
+    let tree_lock = spec
+        .tree_path
+        .as_deref()
+        .map(crate::trees::command_lock)
+        .transpose()?;
+    if let Some(lock) = &tree_lock {
+        lock.lock_shared()?;
+    }
     let started = Instant::now();
     let jobserver = spec
         .jobserver

@@ -404,8 +404,15 @@ impl Checks {
         let scoped = !packages.is_empty();
         let key = key.filter(|_| !scoped);
         let who = execute::build_for(options);
-        self.build_products(ctx, tree, needs, &packages, &who, run)
-            .map_err(|(product, _)| ListError::Build(product))?;
+        let _products = super::products::hold_build_products(
+            &tree.path,
+            needs,
+            || {
+                self.build_products(ctx, tree, needs, &packages, &who, run)
+                    .map_err(|(product, _)| ListError::Build(product))
+            },
+            |error| ListError::Build(format!("cannot prepare build outputs: {error}")),
+        )?;
         let (args, cwd) = match family.adapter {
             Adapter::Jsonl => (
                 adapters::words(family.list.as_deref().unwrap_or_default()),

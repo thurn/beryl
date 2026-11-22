@@ -175,16 +175,9 @@ impl TipLoop {
 
     /// One turn of the loop: waits for a round still running from before a restart, or else
     /// waits up to `wait_s` for the feed to show a change and runs a round at the newest
-    /// `staging` tip if it needs one. Runs `before_start` only before starting a new round.
-    /// That gives the floor sweep a chance to reclaim released build outputs before the new
-    /// round leases their tree again. Returns the tip a round verified and how it ended, or
+    /// `staging` tip if it needs one. Returns the tip a round verified and how it ended, or
     /// `None` when there was nothing to verify.
-    pub fn turn(
-        &mut self,
-        ctx: &Context,
-        wait_s: u32,
-        before_start: impl FnOnce(),
-    ) -> Result<Option<(Commit, TipOutcome)>> {
+    pub fn turn(&mut self, ctx: &Context, wait_s: u32) -> Result<Option<(Commit, TipOutcome)>> {
         if let Some((handle, request)) = self.server.running_internal(ROUND_VERB) {
             crate::steps::step(format!("waiting for tip round {handle}"));
             let target = request.and_then(|request| TipRoundVerb::parse(&request).ok());
@@ -199,7 +192,6 @@ impl TipLoop {
         if !self.verb.verifier().due(ctx, &tip) {
             return Ok(None);
         }
-        before_start();
         let request = TipRoundVerb::request(&tip, self.since, &ctx.repo);
         let handle = self.server.start_internal(self.verb.clone(), request);
         crate::steps::step(format!("verifying tip {tip} in {handle}"));

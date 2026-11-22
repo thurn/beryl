@@ -135,7 +135,7 @@ impl Parts {
                         cli_apps: headless_dispatch.cli_apps().map(str::to_owned).collect(),
                         families: current_families(&ctx.repo, &hostname),
                     },
-                    || headless_dispatch.machine_sample(now, &scheduler, &trees, &facts),
+                    || headless_dispatch.machine_sample(now, &scheduler, &facts),
                     |beat| {
                         if beat.sample.is_none() {
                             return client.heartbeat(beat);
@@ -232,6 +232,8 @@ mod tests {
     fn fixture_sample(start: Timestamp) -> MachineSample {
         MachineSample {
             pressure: DispatchPressure {
+                build_slots: 6,
+                build_slots_free: 2,
                 free_gb: Some(47),
                 disk_reserve_gib: Some(60),
                 ..DispatchPressure::default()
@@ -461,8 +463,8 @@ mod tests {
             free_memory_mb: Some(9_000),
             memory_pressed: false,
             free_disk_gb: Some(47),
-            disk_budget_gb: 300,
-            disk_budget_source: Some(ignite_core::capacity::DiskLimitSource::Cap),
+            disk_budget_gb: 0,
+            disk_budget_source: None,
             queue_seconds: 14.25,
             outputs: vec![output.clone()],
             free_trees: vec![vec![output.clone()], vec![]],
@@ -479,10 +481,8 @@ mod tests {
                 now,
                 beat(&machine),
                 || {
-                    use ignite_core::capacity::{BYTES_PER_GB, DiskLimitSource};
-                    let budget = Some((300 * BYTES_PER_GB, DiskLimitSource::Cap));
                     let report =
-                        capacity_report(&facts, &status, &sample, 5, budget, 14.25, vec![provider]);
+                        capacity_report(&facts, &status, &sample, 5, 14.25, vec![provider]);
                     (sample, report)
                 },
                 |beat| {

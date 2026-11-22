@@ -121,6 +121,7 @@ fn a_build_running_across_a_restart_is_joined_and_stored_once() {
     fs::create_dir_all(&run).unwrap();
     let spec = SpecFile {
         args: started.args.clone(),
+        tree_path: None,
         cwd: started.cwd.clone(),
         env: started.env.clone(),
         queued_s: 0.0,

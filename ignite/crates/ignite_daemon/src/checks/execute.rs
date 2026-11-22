@@ -139,21 +139,29 @@ impl Checks {
             .collect();
         packages.sort();
         packages.dedup();
-        if self
-            .build(ctx, tree, family, &packages, &build_for(options), run)
-            .is_err()
-        {
-            for keyed in &pending {
-                let check = &keyed.listed.check;
-                let error = Error::Io(super::BUILD_FAILED.to_owned());
-                let failure = Failure {
-                    reason: Some(IncompleteReason::BuildFailed),
-                    ..incomplete(check, &error)
-                };
-                run.finish(check, Outcome::Incomplete, Some(failure));
+        let products = super::products::hold_build_products(
+            &tree.path,
+            &family.needs,
+            || {
+                self.build(ctx, tree, family, &packages, &build_for(options), run)
+                    .map_err(|_| Error::Io(super::BUILD_FAILED.to_owned()))
+            },
+            Error::from,
+        );
+        let _products = match products {
+            Ok(guard) => guard,
+            Err(error) => {
+                for keyed in &pending {
+                    let check = &keyed.listed.check;
+                    let failure = Failure {
+                        reason: Some(IncompleteReason::BuildFailed),
+                        ..incomplete(check, &error)
+                    };
+                    run.finish(check, Outcome::Incomplete, Some(failure));
+                }
+                return;
             }
-            return;
-        }
+        };
         run.ran += u32::try_from(pending.len()).unwrap_or(u32::MAX);
         let finals = self.attempts(ctx, tree, name, family, pending, options, run, stop);
         self.settle(ctx, tree, family, finals, run);

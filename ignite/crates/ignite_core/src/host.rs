@@ -8,9 +8,10 @@
 //! again, with the same body, for up to five minutes.
 
 use crate::protocol::host::{
-    Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, Finished, Hello, HelloReply,
-    LeaseLanding, LeaseLandingReply, Poll, ReadDispatchPressure, RefuseStop, RefuseStopReply,
-    ReleaseLanding, ReturnCores, Run, RunReply, Selected, SelectedReply, StepUpdate, StopState,
+    Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, ExpressBuild, Finished,
+    Hello, HelloReply, LeaseLanding, LeaseLandingReply, Poll, ReadDispatchPressure, RefuseStop,
+    RefuseStopReply, ReleaseLanding, ReturnCores, Run, RunReply, Selected, SelectedReply,
+    StepUpdate, StopState,
 };
 use crate::traits::Result;
 
@@ -21,6 +22,10 @@ pub trait HostClient: Send + Sync {
     fn run(&self, call: &Run) -> Result<RunReply>;
     /// `host-build`; answers `waiting` after at most 30 s.
     fn build(&self, call: &Build) -> Result<BuildReply>;
+    /// `host-express-build`; an older host does not manage the express runner's outputs.
+    fn express_build(&self, _call: &ExpressBuild) -> Result<BuildReply> {
+        Ok(BuildReply::Current)
+    }
     /// `host-lease-landing`.
     fn lease_landing(&self, call: &LeaseLanding) -> Result<LeaseLandingReply>;
     /// `host-release-landing`.

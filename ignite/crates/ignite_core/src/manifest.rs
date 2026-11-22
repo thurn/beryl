@@ -206,6 +206,9 @@ pub struct Product {
     pub inputs: Vec<InputPattern>,
     /// The directories the command writes, which a build tree keeps between tickets.
     pub outputs: Vec<String>,
+    /// A product with only path inputs that still writes compiled build outputs.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub compiles: bool,
     /// The build command rereads the file `IGNITE_CORES_FILE` names while it runs and starts
     /// more threads as its grant grows, as `grows` on a family.
     #[serde(default)]
@@ -216,6 +219,16 @@ pub struct Product {
     /// each other's compiled crates instead of rebuilding them.
     #[serde(default)]
     pub exclude: Vec<String>,
+}
+
+impl Product {
+    pub fn uses_build_slot(&self) -> bool {
+        !self.outputs.is_empty()
+            && (self.compiles
+                || self.inputs.iter().any(|input| {
+                    matches!(input, InputPattern::Crate(_) | InputPattern::CrateClosure)
+                }))
+    }
 }
 
 /// An `[[rebuild]]` entry of `ignite.toml`: an edit whose rebuild cost is measured.

@@ -276,14 +276,6 @@ impl Builds for MeteredBuilds {
         self.inner.forget(tree);
     }
 
-    fn pause(&self, tree: &TreeId) -> bool {
-        self.inner.pause(tree)
-    }
-
-    fn resume(&self, tree: &TreeId) {
-        self.inner.resume(tree);
-    }
-
     fn held_in(&self, tree: &TreeId, dirs: &[String]) -> std::collections::BTreeSet<String> {
         self.inner.held_in(tree, dirs)
     }

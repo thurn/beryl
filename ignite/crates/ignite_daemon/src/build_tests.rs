@@ -199,6 +199,7 @@ fn product(build: &str, inputs: &[&str]) -> Product {
             .map(|i| InputPattern::from((*i).to_owned()))
             .collect(),
         outputs: vec!["target".to_owned()],
+        compiles: false,
         grows: false,
         exclude: Vec::new(),
     }
@@ -234,6 +235,13 @@ fn manager_in(dir: PathBuf, git: Arc<FakeGit>, gated: bool) -> Fixture {
     manifest.products.insert(
         "lint".to_owned(),
         product("cargo clippy {packages}", &["crate-closure"]),
+    );
+    manifest.products.insert(
+        "scripted-compile".to_owned(),
+        Product {
+            compiles: true,
+            ..product("script build", &["docs/**"])
+        },
     );
     let mut less_b = product("cargo test --no-run {packages}", &["crate-closure"]);
     less_b.exclude = names(&["b"]);
@@ -799,3 +807,11 @@ mod room;
 
 #[path = "build/cargo_tests.rs"]
 mod cargo;
+
+#[test]
+fn a_script_that_compiles_takes_a_slot_even_with_path_only_inputs() {
+    let f = fixture("script-uses-slot", false);
+    let plan = f.manager.plan(&tree(), "scripted-compile", &[]).unwrap();
+    assert!(f.manager.tracks_compiled_outputs(&plan));
+    assert!(!plan.reads_crates);
+}

@@ -475,6 +475,10 @@ impl BuildManager {
             plan.request.tree,
             failure.crates.join(", ")
         );
+        let _retry_slot = match self.prepare_space(plan, &crate::steps::stop_requested) {
+            Ok(slot) => slot,
+            Err(failed) => return (failed, false),
+        };
         let (second, units_file) = match self.run_once(plan) {
             Ok(ran) => ran,
             Err(failed) => return (failed, false),

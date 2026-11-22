@@ -19,23 +19,14 @@ use ignite_store::local::open_in_memory;
 
 use super::*;
 
-mod disk_budget;
 mod elastic;
-mod free;
 mod landing;
-mod leased;
 mod owners;
 mod releases;
 mod retire;
 mod seed;
 mod setup;
-
-/// Exercise the existing sweep order with an exact byte limit, using small fixture files.
-fn sweep_to(trees: &Trees, limit: Option<u64>) -> DiskReport {
-    trees
-        .hold_disk_under(|_| limit.map(|bytes| (bytes, DiskLimitSource::Cap)))
-        .unwrap()
-}
+mod slots;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
@@ -145,6 +136,7 @@ impl Fixture {
             landing_trees,
             keep: vec!["out".to_owned()].into(),
             prebuild: vec!["bin".to_owned()].into(),
+            compiled_outputs: BTreeSet::from(["out".to_owned()]).into(),
             prebuild_outputs: BTreeMap::from([("bin".to_owned(), vec!["out".to_owned()])]).into(),
         };
         let clock = Arc::new(FakeClock::new(
@@ -656,103 +648,6 @@ fn a_branch_the_remote_lacks_is_skipped_and_the_others_still_move() {
             ("green".to_owned(), Branch::NotOnRemote),
         ]
     );
-}
-
-#[test]
-fn replaced_builds_are_swept_and_then_the_free_trees_used_longest_ago_are_cleared() {
-    let f = Fixture::new(2, 1);
-    let profile = f.repo.join(".worktrees/tree-01/out/debug");
-    for (unit, text) in [
-        ("foo-0a0a", "old"),
-        ("foo-0b0b", "new"),
-        ("bar-0c0c", "only"),
-    ] {
-        write(
-            &profile,
-            &format!(".fingerprint/{unit}/lib-{}", &unit[..3]),
-            "",
-        );
-        write(
-            &profile,
-            &format!(".fingerprint/{unit}/lib-{}.json", &unit[..3]),
-            "{}",
-        );
-        write(&profile, &format!("deps/lib{unit}.rlib"), text);
-        write(&profile, &format!("deps/{unit}.d"), text);
-    }
-    // The old build of foo was written first.
-    let old = fs::File::options()
-        .write(true)
-        .open(profile.join(".fingerprint/foo-0a0a/lib-foo"))
-        .unwrap();
-    old.set_modified(std::time::SystemTime::UNIX_EPOCH).unwrap();
-    let old = fs::File::options()
-        .write(true)
-        .open(profile.join(".fingerprint/foo-0a0a/lib-foo.json"))
-        .unwrap();
-    old.set_modified(std::time::SystemTime::UNIX_EPOCH).unwrap();
-
-    let swept = disk::sweep_superseded(&f.repo.join(".worktrees/tree-01/out"));
-    assert_eq!(swept, [profile.join(".fingerprint/foo-0a0a")]);
-    assert!(!profile.join("deps/libfoo-0a0a.rlib").exists());
-    assert!(!profile.join("deps/foo-0a0a.d").exists());
-    assert!(profile.join("deps/libfoo-0b0b.rlib").exists());
-    assert!(profile.join("deps/libbar-0c0c.rlib").exists());
-
-    write(
-        &f.repo.join(".worktrees/tree-02"),
-        "out/big",
-        &"x".repeat(100_000),
-    );
-    let report = sweep_to(&f.trees, Some(1));
-    assert!(report.before > report.after);
-    assert_eq!(report.cleared, [id("tree-01"), id("tree-02")]);
-    assert!(!f.repo.join(".worktrees/tree-02/out").exists());
-}
-
-#[test]
-fn trees_over_the_limit_are_brought_under_it_and_a_leased_tree_is_left_alone() {
-    let f = Fixture::new(3, 1);
-    for tree in ["tree-01", "tree-02", "tree-03"] {
-        write(
-            &f.repo.join(".worktrees").join(tree),
-            "out/big",
-            &"x".repeat(200_000),
-        );
-    }
-    let one_tree = f
-        .trees
-        .disk_usage()
-        .into_iter()
-        .map(|(_, b)| b)
-        .max()
-        .unwrap();
-
-    let leased = match f.trees.lease(f.request("T.1", false)).unwrap() {
-        Lease::Ready(lease) => lease,
-        Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
-    };
-
-    // Room for two and a half trees' builds, with three holding them.
-    let report = sweep_to(&f.trees, Some(one_tree * 2 + one_tree / 2));
-
-    assert!(report.before > report.limit.unwrap());
-    assert!(report.after <= report.limit.unwrap(), "{report:?}");
-    assert!(!report.cleared.is_empty());
-    assert!(!report.cleared.contains(&leased.tree));
-    // The build manager is told, or it would still answer that the cleared trees hold their
-    // products.
-    assert_eq!(f.builds.forgotten(), report.cleared);
-    assert!(leased.path.join("out/big").exists());
-    let states: Vec<String> = f
-        .trees
-        .status()
-        .unwrap()
-        .trees
-        .into_iter()
-        .map(|t| t.state)
-        .collect();
-    assert!(!states.iter().any(|s| s == "resetting"), "{states:?}");
 }
 
 #[test]

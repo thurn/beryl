@@ -31,16 +31,15 @@ use crate::sched::Scheduler;
 use crate::server::{Context, Server};
 use crate::supervise::SupervisedLauncher;
 use crate::tip::{CheckTipWork, TipLoop, TipOutcome, TipRoundVerb};
-use crate::trees::{DiskReport, Trees};
+use crate::trees::Trees;
 use crate::update::Home;
 
 /// How often the stall check looks at held tickets.
 const TICK_EVERY: Duration = Duration::from_secs(60);
 /// How often idle work looks for cores nobody uses.
 const IDLE_EVERY: Duration = Duration::from_secs(30);
-/// How often the disk loop looks at free space and at trees `ignite.toml` no longer declares.
-/// A round measures the trees only as often as `Idle::hold_disk` allows.
-const DISK_EVERY: Duration = Duration::from_secs(60);
+/// How often to prepare missing trees and retire surplus trees.
+const TREES_EVERY: Duration = Duration::from_secs(60);
 /// How often the loop that ends verb processes that ignored their stop looks for them.
 const OVERDUE_EVERY: Duration = Duration::from_secs(10);
 /// How often fleet metrics look for new session transcripts.
@@ -57,8 +56,7 @@ const MAIN_EVERY: Duration = Duration::from_secs(30);
 const TIP_STALLS_AFTER: Duration = Duration::from_hours(3);
 const CLAIMS_STALL_AFTER: Duration = Duration::from_mins(10);
 const IDLE_STALLS_AFTER: Duration = Duration::from_mins(10);
-/// A measurement walked about 290 GB of build directories for over ten minutes on jarvis.
-const DISK_STALLS_AFTER: Duration = Duration::from_hours(1);
+const TREES_STALLS_AFTER: Duration = Duration::from_hours(1);
 const OVERDUE_STALLS_AFTER: Duration = Duration::from_mins(10);
 const METRICS_STALL_AFTER: Duration = Duration::from_hours(1);
 const MAIN_STALLS_AFTER: Duration = Duration::from_mins(10);
@@ -122,7 +120,7 @@ impl Parts {
         self.spawn_main();
         self.spawn_claims();
         self.spawn_idle(server.clone());
-        self.spawn_disk();
+        self.spawn_tree_maintenance();
         self.spawn_metrics();
         self.spawn_mirror();
         self.spawn_overdue_stops(server.clone());
@@ -197,15 +195,9 @@ impl Parts {
         let mut tips = TipLoop::new(server, Arc::new(self.round_verb()));
         let (ctx, wait_s) = (self.ctx.clone(), self.feed_wait_s);
         let update = self.update.clone();
-        let idle = self.idle.clone();
-        let reclaim = move || {
-            if let Err(error) = idle.hold_floor() {
-                eprintln!("ignite: disk sweep before tip verification: {error}");
-            }
-        };
         self.start_loop("ignite-tip", TIP_STALLS_AFTER, move |ticker| {
             loop {
-                let round = ticker.round(|| match tips.turn(&ctx, wait_s, &reclaim) {
+                let round = ticker.round(|| match tips.turn(&ctx, wait_s) {
                     Ok(Some((
                         _,
                         TipOutcome::Verified | TipOutcome::VerifiedWithDeferrals { .. },
@@ -307,7 +299,7 @@ impl Parts {
                     let status = scheduler.status();
                     if status.granted > 0
                         || status.outside * 2 >= status.cores
-                        || idle.below_floor()
+                        || !trees.build_disk_has_room()
                     {
                         return Ok(());
                     }
@@ -344,88 +336,31 @@ impl Parts {
         });
     }
 
-    /// Holds the trees under their disk limit and the disk above its floor of free space, and
-    /// retires surplus free trees. This is a loop of its own because the machine is the most
-    /// likely to fill its disk while it is busy, when the idle loop starts no work.
-    ///
-    /// The pass that gets the disk back above its floor runs first and again before each other
-    /// step, and the long walks give way to it (see `idle/disk.rs`). It once ran only at the end
-    /// of a round, after retiring trees, a handoff's cleanup and a measurement that could take
-    /// many minutes. A floor pass that can delete nothing more fails the round with what holds
-    /// the space, so `ignite status` and `ignite doctor` show it.
-    fn spawn_disk(&self) {
-        let (idle, trees) = (self.idle.clone(), self.trees.clone());
+    /// Prepares missing landing trees and retires trees that are no longer needed.
+    fn spawn_tree_maintenance(&self) {
+        let trees = self.trees.clone();
         let git = self.ctx.git.clone();
         let staging = self.ctx.config.repository.staging.clone();
-        self.start_loop("ignite-disk", DISK_STALLS_AFTER, move |ticker| {
+        self.start_loop("ignite-trees", TREES_STALLS_AFTER, move |ticker| {
             loop {
                 ticker.round(|| {
-                    let mut failure = None;
-                    let floor = |failure: &mut Option<String>| match idle.hold_floor() {
-                        Ok(Some(report)) => {
-                            if let Some(stuck) = report.stuck {
-                                *failure = Some(stuck.to_string());
-                            }
-                        }
-                        Ok(None) => {}
-                        Err(error) => {
-                            eprintln!("ignite: disk not cleared back above its floor: {error}");
-                            *failure = Some(format!("disk not cleared above its floor: {error}"));
-                        }
-                    };
-                    floor(&mut failure);
                     crate::steps::step("retiring surplus trees");
-                    match trees.retire_surplus() {
-                        Ok(retired) if !retired.is_empty() => {
-                            let names: Vec<String> =
-                                retired.iter().map(ToString::to_string).collect();
-                            eprintln!("ignite: retired surplus trees: {}", names.join(", "));
-                        }
-                        Ok(_) => {}
-                        Err(error) => {
-                            eprintln!("ignite: surplus trees not retired: {error}");
-                            failure = Some(format!("surplus trees not retired: {error}"));
-                        }
+                    let retired = trees
+                        .retire_surplus()
+                        .map_err(|error| format!("surplus trees not retired: {error}"));
+                    if let Ok(retired) = &retired
+                        && !retired.is_empty()
+                    {
+                        let names: Vec<String> = retired.iter().map(ToString::to_string).collect();
+                        eprintln!("ignite: retired surplus trees: {}", names.join(", "));
                     }
-                    match trees.mark_missing_landings() {
-                        Ok(pending) => {
-                            trees.finish_in_background(git.clone(), staging.clone(), pending);
-                        }
-                        Err(error) => {
-                            failure = Some(format!("landing trees not prepared: {error}"));
-                        }
-                    }
-                    if idle.below_floor() {
-                        floor(&mut failure);
-                    }
-                    if let Err(error) = trees.reclaim_disk_for_handoff(&idle.floor_reader()) {
-                        eprintln!(
-                            "ignite: cannot reclaim unused build outputs for a handoff: {error}"
-                        );
-                        failure = Some(format!(
-                            "cannot reclaim build outputs for a handoff: {error}"
-                        ));
-                    }
-                    if idle.below_floor() {
-                        floor(&mut failure);
-                        return failure.map_or(Ok(()), Err);
-                    }
-                    match idle.hold_disk() {
-                        Ok(Some(DiskReport {
-                            stuck: Some(stuck), ..
-                        })) => {
-                            failure = Some(stuck.to_string());
-                        }
-                        Ok(_) => {}
-                        Err(error) => {
-                            eprintln!("ignite: trees not held under their disk limit: {error}");
-                            failure =
-                                Some(format!("trees not held under their disk limit: {error}"));
-                        }
-                    }
-                    failure.map_or(Ok(()), Err)
+                    let pending = trees
+                        .mark_missing_landings()
+                        .map_err(|error| format!("landing trees not prepared: {error}"))?;
+                    trees.finish_in_background(git.clone(), staging.clone(), pending);
+                    retired.map(|_| ())
                 });
-                thread::sleep(DISK_EVERY);
+                thread::sleep(TREES_EVERY);
             }
         });
     }

@@ -79,12 +79,6 @@ fn copies_are_clones_here() -> bool {
     here
 }
 
-/// Copies `from` to `to` as a seed does: a clone that keeps the source's modification time.
-fn clone_file(from: &Path, to: &Path) {
-    fs::copy(from, to).unwrap();
-    set_time(to, modified(from));
-}
-
 /// tree-01 last built a commit behind the tip; tree-02, leased to another ticket, holds a build
 /// at the tip. Returns the fixture and tree-02's path.
 fn donor_at_the_tip() -> (Fixture, PathBuf) {
@@ -315,120 +309,6 @@ fn watching(f: &Fixture) -> Arc<Watching> {
         root: f.repo.join(".worktrees"),
         forgotten: std::sync::Mutex::default(),
     })
-}
-
-/// A free tree whose files are clones of a leased tree's frees almost nothing when deleted, so
-/// the disk loop keeps it, as a donor for the next lease, and clears a free tree whose bytes are
-/// its own, although that one was used more recently.
-#[test]
-fn a_free_tree_whose_blocks_a_clone_shares_is_kept_and_one_with_its_own_is_cleared() {
-    if !copies_are_clones_here() {
-        return;
-    }
-    let f = Fixture::new(3, 1);
-    let builds = watching(&f);
-    let probe = trees_with(&f, builds.clone());
-    let leased = match probe.lease(f.request("T.1", false)).unwrap() {
-        Lease::Ready(lease) => lease,
-        Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
-    };
-    // The free trees are cleared in the order of their ids, since neither was used.
-    let mut free: Vec<String> = ["tree-01", "tree-02", "tree-03"]
-        .into_iter()
-        .filter(|t| *t != leased.tree.as_str())
-        .map(str::to_owned)
-        .collect();
-    free.sort();
-    let (donor, own) = (
-        f.repo.join(".worktrees").join(&free[0]),
-        f.repo.join(".worktrees").join(&free[1]),
-    );
-    write(&donor, "out/big", &"x".repeat(4_000_000));
-    fs::create_dir_all(leased.path.join("out")).unwrap();
-    clone_file(&donor.join("out/big"), &leased.path.join("out/big"));
-    write(&own, "out/own", &"y".repeat(2_000_000));
-    let total = sweep_to(&probe, None).before;
-    assert!(total < 7_000_000, "the clone counts once: {total}");
-
-    probe.release_unsaved(&leased.tree, &f.tip(), None).unwrap();
-    let limited = trees_with(&f, builds.clone());
-    let held = match limited.lease(f.request("T.1", false)).unwrap() {
-        Lease::Ready(lease) => lease,
-        Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
-    };
-    assert_eq!(held.tree, leased.tree);
-    let report = sweep_to(&limited, Some(total - 1_000_000));
-
-    assert_eq!(report.cleared, [id(&free[1])], "{report:?}");
-    assert!(report.after <= report.limit.unwrap(), "{report:?}");
-    assert!(donor.join("out/big").exists());
-    assert!(!own.join("out").exists());
-    assert_eq!(
-        *builds.forgotten.lock().unwrap(),
-        [(id(&free[1]), true)],
-        "forgotten before the deletion"
-    );
-}
-
-/// The older free tree shares its build with a lease, so deleting the other tree frees room.
-#[test]
-fn a_handoff_sweep_prefers_reclaimable_builds_to_an_older_shared_donor() {
-    if !copies_are_clones_here() {
-        return;
-    }
-    let f = Fixture::new(3, 1);
-    let leased = f.lease("T.1", false);
-    let mut free = ["tree-01", "tree-02", "tree-03"]
-        .into_iter()
-        .filter(|name| *name != leased.tree.as_str());
-    let donor = f.trees.config().path(&id(free.next().unwrap()));
-    let reclaimable = id(free.next().unwrap());
-    let path = f.trees.config().path(&reclaimable);
-    write(&donor, "out/big", &"x".repeat(4_000_000));
-    fs::create_dir_all(leased.path.join("out")).unwrap();
-    clone_file(&donor.join("out/big"), &leased.path.join("out/big"));
-    write(&path, "out/own", &"y".repeat(2_000_000));
-    f.trees.request_disk_for_handoff(75);
-
-    let report = f
-        .trees
-        .reclaim_disk_for_handoff_with(
-            || Some(if path.join("out").exists() { 65 } else { 75 }),
-            &|| false,
-        )
-        .unwrap();
-
-    assert_eq!(report.cleared, [reclaimable]);
-    assert!(donor.join("out/big").exists());
-    assert!(leased.path.join("out/big").exists());
-
-    f.trees.request_disk_for_handoff(75);
-    let report = f
-        .trees
-        .reclaim_disk_for_handoff_with(|| Some(65), &|| false)
-        .unwrap();
-
-    assert!(report.cleared.is_empty(), "{report:?}");
-    assert!(donor.join("out/big").exists());
-}
-
-/// The disk loop forgets a cleared tree's builds before it deletes its build directories.
-#[test]
-fn a_cleared_tree_is_forgotten_before_its_directories_are_deleted() {
-    let f = Fixture::new(1, 1);
-    write(
-        &f.repo.join(".worktrees/tree-01"),
-        "out/big",
-        &"x".repeat(100_000),
-    );
-    let builds = watching(&f);
-    let trees = trees_with(&f, builds.clone());
-
-    let report = sweep_to(&trees, Some(1));
-
-    assert_eq!(report.cleared, [id("tree-01")]);
-    assert_eq!(*builds.forgotten.lock().unwrap(), [(id("tree-01"), true)]);
-    assert!(!f.repo.join(".worktrees/tree-01/out").exists());
 }
 
 /// Seeding forgets the leased tree's builds before it replaces the tree's target directories,

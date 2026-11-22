@@ -255,6 +255,7 @@ fn an_ended_command_marks_the_target_directories_it_may_have_compiled_in() {
     let key = r#"{"tree":"tree-01","product":"p","packages":[],"hash":"h","outputs":["out"]}"#;
     let spec = |args: &[&str], cwd: &str, env: Vec<(String, String)>| SpecFile {
         args: args.iter().map(|a| (*a).to_owned()).collect(),
+        tree_path: None,
         cwd: dir.join(cwd),
         env,
         queued_s: 0.0,

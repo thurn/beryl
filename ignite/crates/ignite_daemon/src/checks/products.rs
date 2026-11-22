@@ -1,7 +1,9 @@
 //! Making the build products a family's checks need current, and recording each build (see
 //! "Checks" in `docs/ignite.md`).
 
-use std::path::PathBuf;
+use std::fs::File;
+use std::io;
+use std::path::{Path, PathBuf};
 
 use ignite_core::manifest::Family;
 use ignite_core::protocol::Usage;
@@ -125,4 +127,33 @@ impl Checks {
             compile_units,
         );
     }
+}
+
+// A check obtains its products before taking a shared tree lock. If a cleanup
+// invalidated that promise in the meantime, ask again while the check can still build.
+pub(super) fn hold_build_products<E>(
+    tree: &Path,
+    needs: &[String],
+    mut prepare: impl FnMut() -> std::result::Result<(), E>,
+    failure: impl Fn(io::Error) -> E,
+) -> std::result::Result<Option<File>, E> {
+    if needs.is_empty() || !tree.is_dir() {
+        prepare()?;
+        return Ok(None);
+    }
+    let lock = crate::trees::command_lock(tree).map_err(&failure)?;
+    let mut generation = lock.metadata().map_err(&failure)?.len();
+    for _ in 0..3 {
+        prepare()?;
+        lock.lock_shared().map_err(&failure)?;
+        let current = lock.metadata().map_err(&failure)?.len();
+        if current == generation {
+            return Ok(Some(lock));
+        }
+        generation = current;
+        lock.unlock().map_err(&failure)?;
+    }
+    Err(failure(io::Error::other(
+        "build outputs were cleared during each attempt to prepare this check",
+    )))
 }

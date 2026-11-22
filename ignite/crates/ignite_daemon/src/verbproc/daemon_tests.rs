@@ -44,6 +44,7 @@ impl RunStarter for Finisher {
         fs::create_dir_all(&dir)?;
         let file = SpecFile {
             args: spec.args.clone(),
+            tree_path: None,
             cwd: spec.cwd.clone(),
             env: spec.env.clone(),
             queued_s: 0.0,

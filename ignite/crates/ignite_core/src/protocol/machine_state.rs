@@ -18,6 +18,7 @@ pub struct ReclaimableDisk {
 /// A heartbeat's machine readings. The hub uses its queue and claims to evaluate starts.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MachineSample {
+    /// Capacity for build slots, along with the inputs to handoff pacing.
     pub pressure: DispatchPressure,
     pub reclaimable: Option<ReclaimableDisk>,
     pub cpu_percent: Option<u32>,

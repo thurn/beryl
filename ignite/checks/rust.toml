@@ -250,6 +250,7 @@ outputs = ["rust/target"]
 # runs while it printed "Blocking waiting for file lock on build directory". Lints are capped at warnings so that
 # every unit's result is kept and the `clippy` family's run replays them (rust.py, `CLIPPY`).
 [product.clippy]
+compiles = true
 build = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy build"
 inputs = [
   "rust/crates/**",

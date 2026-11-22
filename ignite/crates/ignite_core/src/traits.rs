@@ -152,6 +152,16 @@ pub trait Builds: Send + Sync {
     /// Makes `product` current in `tree`, joining a build already running.
     fn ensure(&self, tree: &TreeId, product: &str, packages: &[String]) -> BuildResult;
 
+    /// Admit an express build or report its end. Express commands run on reserved cores.
+    fn express_build(
+        &self,
+        _tree: &Path,
+        _output: &Path,
+        _stage: crate::protocol::host::ExpressBuildStage,
+    ) -> Result<()> {
+        Ok(())
+    }
+
     /// [`Builds::ensure`] for a command: the build runs in the command's class and is charged
     /// to its ticket and session, so that a landing's builds count as the landing's. An
     /// implementation that cannot tell builds apart ignores `who`.
@@ -188,20 +198,6 @@ pub trait Builds: Send + Sync {
     /// Forgets what `tree` holds, after its build directories were deleted, so the next
     /// request builds instead of answering that the product is current.
     fn forget(&self, tree: &TreeId) {
-        let _ = tree;
-    }
-
-    /// Stops new builds in `tree` from starting until [`Builds::resume`], so that the disk loop
-    /// can delete build files in a leased tree without a build reading them meanwhile. A request
-    /// made while the tree is paused waits. Returns false, and pauses nothing, while a build is
-    /// running in the tree. An implementation that runs no builds of its own always pauses.
-    fn pause(&self, tree: &TreeId) -> bool {
-        let _ = tree;
-        true
-    }
-
-    /// Lets builds in `tree` start again after [`Builds::pause`].
-    fn resume(&self, tree: &TreeId) {
         let _ = tree;
     }
 

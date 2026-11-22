@@ -11,8 +11,9 @@ use ignite_core::ids::{Commit, TicketId, TreeId};
 use ignite_core::protocol::Class;
 use ignite_core::protocol::Usage;
 use ignite_core::protocol::host::{
-    BorrowCores, Build, BuildReply, Command, LeaseLanding, LeaseLandingReply, ReleaseLanding,
-    RequestIds, ReturnCores, Run, RunReply, Selected,
+    BorrowCores, Build, BuildReply, Command, ExpressBuild, ExpressBuildStage, HostCall as _,
+    LeaseLanding, LeaseLandingReply, ReleaseLanding, RequestIds, ReturnCores, Run, RunReply,
+    Selected,
 };
 use ignite_core::traits::{
     BuildFor, BuildResult, Builds, Clock, CommandSpec, Error, Launcher, Result, RunResult,
@@ -158,6 +159,28 @@ pub struct RemoteBuilds {
 }
 
 impl Builds for RemoteBuilds {
+    fn express_build(&self, tree: &Path, output: &Path, stage: ExpressBuildStage) -> Result<()> {
+        let remote = &self.remote;
+        if remote.link.hello()?.protocol < ExpressBuild::SINCE {
+            // A verb process can outlive a daemon rollback.
+            return Ok(());
+        }
+        let request = ExpressBuild {
+            handle: remote.link.handle().clone(),
+            request_id: remote.ids.next(),
+            tree: tree.to_owned(),
+            output: output.to_owned(),
+            stage,
+        };
+        let mut wait = ShownWait::default();
+        loop {
+            match remote.link.express_build(&request)? {
+                BuildReply::Waiting { what } => wait.show(what),
+                _ => return Ok(()),
+            }
+        }
+    }
+
     fn ensure(&self, tree: &TreeId, product: &str, packages: &[String]) -> BuildResult {
         let who = BuildFor {
             class: steps::class().unwrap_or(Class::Agent),

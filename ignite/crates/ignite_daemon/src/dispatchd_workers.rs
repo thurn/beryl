@@ -1,8 +1,6 @@
 //! Active CLI workers as shown in the pool list and hub heartbeat.
 
-use ignite_core::capacity::{
-    BYTES_PER_GB, CapacityReport, DiskLimitSource, MachineFacts, ProviderCapacity, start_room,
-};
+use ignite_core::capacity::{CapacityReport, MachineFacts, ProviderCapacity, start_room};
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::hub::{ProviderOffer, Room};
 use ignite_core::protocol::hub::{WorkerRole, WorkerState};
@@ -13,7 +11,6 @@ use ignite_core::traits::Result;
 use super::{HeadlessDispatch, State, cli, shared};
 use crate::pool::Member;
 use crate::sched::{Scheduler, Status};
-use crate::trees::Trees;
 
 impl HeadlessDispatch {
     /// Removes from the pool every chat whose ticket ended: it holds no tree and no reservation,
@@ -122,13 +119,11 @@ impl HeadlessDispatch {
         &self,
         now: Timestamp,
         scheduler: &Scheduler,
-        trees: &Trees,
         facts: &MachineFacts,
     ) -> (MachineSample, CapacityReport) {
         let pressure = self.pressure(now).unwrap_or_default();
         let free_trees = self.host.free_ticket_trees();
         let (cpu_percent, queued_cores, swap_used_mb) = scheduler.machine_readings();
-        let reclaimable = trees.reclaimable_disk();
         let status = scheduler.status();
         let (room, idle_workers, running_workers, reserved, draining, shared_failure) = {
             let state = self.state();
@@ -149,7 +144,7 @@ impl HeadlessDispatch {
         };
         let sample = MachineSample {
             pressure,
-            reclaimable,
+            reclaimable: None,
             cpu_percent,
             queued_cores,
             swap_used_mb,
@@ -165,7 +160,6 @@ impl HeadlessDispatch {
             &status,
             &sample,
             running_workers,
-            trees.disk_budget(),
             self.host.ticket_work_wait(),
             self.provider_capacity(),
         );
@@ -178,7 +172,6 @@ pub(crate) fn capacity_report(
     status: &Status,
     sample: &MachineSample,
     running_workers: u32,
-    disk_budget: Option<(u64, DiskLimitSource)>,
     queue_seconds: f64,
     providers: Vec<ProviderCapacity>,
 ) -> CapacityReport {
@@ -198,8 +191,8 @@ pub(crate) fn capacity_report(
         free_memory_mb: status.free_memory_mb,
         memory_pressed: status.memory_pressed,
         free_disk_gb: sample.pressure.free_gb,
-        disk_budget_gb: disk_budget.map_or(0, |(bytes, _)| bytes / BYTES_PER_GB),
-        disk_budget_source: disk_budget.map(|(_, source)| source),
+        disk_budget_gb: 0,
+        disk_budget_source: None,
         queue_seconds,
         outputs: sample.pressure.outputs.clone(),
         free_trees: sample.pressure.free_trees.clone(),

@@ -127,43 +127,10 @@ pub fn resource_slots(logical_cores: u32, per_core: f64) -> u32 {
     (f64::from(logical_cores) * per_core).floor().max(1.0) as u32
 }
 
-/// Disk caps are decimal gigabytes, as in the legacy tree limit.
+/// Fleet tree sizes use decimal gigabytes.
 pub const BYTES_PER_GB: u64 = 1_000_000_000;
-/// Build admission and the disk loop share their existing free-space thresholds in GiB.
+/// Legacy handoff reports express disk space in gibibytes.
 pub const BYTES_PER_GIB: u64 = 1 << 30;
-/// Keep at least this much space for the OS and work outside the trees.
-const DISK_RESERVE_GB: u64 = 50;
-/// On larger disks reserve a tenth of the volume.
-const DISK_RESERVE_DIVISOR: u64 = 10;
-
-fn disk_reserve(total: u64, minimum: u64) -> u64 {
-    total.div_ceil(DISK_RESERVE_DIVISOR).max(minimum)
-}
-
-/// The budget rounded down to a whole GB.
-pub fn disk_budget_gb(disk_total_gb: u64, outside_gb: u64, cap_gb: Option<u32>) -> u64 {
-    disk_budget(
-        disk_total_gb,
-        outside_gb,
-        disk_reserve(disk_total_gb, DISK_RESERVE_GB),
-    )
-    .min(cap_gb.map_or(u64::MAX, u64::from))
-}
-
-pub fn disk_reserve_bytes(total: u64) -> u64 {
-    disk_reserve(total, DISK_RESERVE_GB * BYTES_PER_GB)
-}
-
-/// The budget before applying any cap. Calculate in bytes so rounding cannot erase either
-/// the reserve or the space a sweep needs to recover.
-pub fn disk_budget_bytes(total: u64, outside: u64) -> u64 {
-    disk_budget(total, outside, disk_reserve_bytes(total))
-}
-
-fn disk_budget(total: u64, outside: u64, reserve: u64) -> u64 {
-    total.saturating_sub(outside).saturating_sub(reserve)
-}
-
 /// Memory left for other processes after starting a worker, in megabytes.
 const WORKER_MEMORY_RESERVE_MB: u64 = 1_024;
 

@@ -183,7 +183,7 @@ pub struct Host {
     /// commands.
     handed_back: Mutex<HashSet<Handle>>,
     runs: Mutex<HashMap<RequestId, Arc<Pending<RunReply>>>>,
-    built: Mutex<HashMap<RequestId, Arc<Pending<BuildReply>>>>,
+    built: Mutex<HashMap<RequestId, Arc<Pending<Result<BuildReply>>>>>,
     /// The cores granted to each verb process by `host-borrow-cores` and not yet returned.
     borrowed: Mutex<HashMap<Handle, Vec<u64>>>,
 }

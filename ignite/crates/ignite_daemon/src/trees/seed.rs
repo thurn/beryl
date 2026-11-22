@@ -121,14 +121,11 @@ impl Seeding {
         seeding().iter().any(|m| m.path == path)
     }
 
-    /// Whether the tree at `path` is being seeded or is the donor of a seed now. The disk loop
+    /// Whether the tree at `path` is being seeded or is the donor of a seed now. Slot reclamation
     /// leaves such a tree alone even while no command runs in it: deleting its build
     /// directories would delete the copy, or what is being copied.
     ///
-    /// A donor is a sibling of the tree it seeds, and is matched by its path. Matching the
-    /// donor's ID alone took any tree of that name in another tree directory for a donor, which
-    /// made the disk-loop tests fail now and then while another test seeded from its own tree of
-    /// the same name.
+    /// Match the donor's path because different roots can reuse the same tree ID.
     pub(in crate::trees) fn involves(path: &Path) -> bool {
         seeding().iter().any(|m| {
             m.path == path
@@ -136,6 +133,14 @@ impl Seeding {
                     .as_ref()
                     .is_some_and(|donor| m.path.with_file_name(donor.as_str()) == path)
         })
+    }
+}
+
+struct FinishPrebuild(std::sync::Arc<crate::steps::Activity>);
+
+impl Drop for FinishPrebuild {
+    fn drop(&mut self) {
+        self.0.finish();
     }
 }
 
@@ -274,10 +279,35 @@ impl Trees {
         }
         let trees = self.clone();
         let tree = tree.clone();
+        let Ok(row) = self.row(&tree) else { return };
+        let activity = self.inner.steps.begin(
+            crate::steps::Kind::Loop("ignite-lease-prebuild".to_owned()),
+            crate::steps::Work {
+                tree: Some(tree.clone()),
+                tree_path: Some(PathBuf::from(row.path)),
+                caller_processes: crate::steps::current()
+                    .map_or_else(Default::default, |activity| {
+                        activity.work().caller_processes
+                    }),
+                ..Default::default()
+            },
+        );
         std::thread::spawn(move || {
+            let _finished = FinishPrebuild(activity.clone());
+            let _entered = activity.enter();
             if let Some(seeding) = seeding {
                 let started = trees.inner.clock.now();
-                let seeded = trees.seed(&seeding, &tree, &tip);
+                let seeded = trees.take_build_slot(&tree, &[], false).and_then(|slot| {
+                    if let Some(_slot) = slot {
+                        let seeded = trees.seed(&seeding, &tree, &tip)?;
+                        if seeded.is_some() {
+                            trees.measure_build(&tree, None);
+                        }
+                        Ok(seeded)
+                    } else {
+                        Ok(None)
+                    }
+                });
                 // Set aside before the mark is dropped, so a build that starts once it is gone
                 // finds no seed directory, and deleted after, so no build waits for that.
                 let left = set_aside(&staging(&seeding.0));
@@ -309,7 +339,7 @@ impl Trees {
                     }
                 }
             }
-            if !trees.inner.config.prebuild.get().is_empty() {
+            if !crate::steps::stop_requested() && !trees.inner.config.prebuild.get().is_empty() {
                 trees.build(&tree, &at, &files);
             }
         });
@@ -319,10 +349,7 @@ impl Trees {
     /// less than `tree`'s own ([`Trees::take_donor`]). Returns what was copied, or `None` when
     /// nothing was.
     /// `seeding` marks `tree` for as long as the copy runs.
-    ///
-    /// A donor in which a build holds Cargo's lock when its turn comes is passed over for the
-    /// next. The seed used to end there instead, and under load, when most leased trees were
-    /// building, a lease of a tree whose build the disk loop had deleted got no copy at all.
+    /// A donor whose Cargo lock is already held is passed over for the next.
     fn seed(&self, seeding: &Seeding, tree: &TreeId, tip: &Commit) -> Result<Option<Seeded>> {
         for ranked in self.donors(tree, tip)? {
             let row = if ranked.free {
@@ -335,7 +362,13 @@ impl Trees {
             };
             let donor = id_of(&row)?;
             seeding.set_donor(&donor);
-            let result = self.copy_from(&row, tree);
+            let result = super::command_lock(Path::new(&row.path))
+                .and_then(|lock| {
+                    lock.lock_shared()?;
+                    Ok(lock)
+                })
+                .map_err(ignite_core::traits::Error::from)
+                .and_then(|_lock| self.copy_from(&row, tree));
             if ranked.free {
                 self.put_back(&row)?;
             }

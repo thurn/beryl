@@ -37,6 +37,7 @@
 # and `beryl_scene` three times after an edit to `beryl_scene`. The pack goes to
 # $BERYL_CACHE/b3d, named for a hash of what a recording reads, and is built only when missing.
 [product.b3d]
+compiles = true
 build = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d build"
 grows = true
 inputs = [

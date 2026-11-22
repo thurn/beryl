@@ -59,6 +59,9 @@ pub(super) fn sweep_objects(target: &Path) -> Swept {
 
 fn sweep_folder(folder: &Path) -> Swept {
     let mut swept = Swept::default();
+    if !fs::symlink_metadata(folder).is_ok_and(|meta| meta.is_dir()) {
+        return swept;
+    }
     let Ok(entries) = fs::read_dir(folder) else {
         return swept;
     };

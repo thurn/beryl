@@ -425,10 +425,6 @@ impl Host for DaemonHost {
         lock(&self.queue_recovery).observe(now, waited);
     }
 
-    fn reclaim_for_handoff(&self, target_gb: u64) {
-        self.trees.request_disk_for_handoff(target_gb);
-    }
-
     fn pressure(&self, now: Timestamp) -> Option<DispatchPressure> {
         let waited = self.ticket_work_wait();
         let recovery_seconds = lock(&self.queue_recovery).observe(now, waited);

@@ -20,7 +20,7 @@
 //!   inputs fail the same way. A build that a signal ended, or that hung, is not remembered,
 //!   so the next request tries it again.
 //! - Otherwise it waits until no build is writing any of the product's output directories in
-//!   that tree and, while the disk has less than [`START_GB`] free, for disk space (see `room`),
+//!   that tree, then waits for a build slot and free space on the tree volume (see `room`),
 //!   then runs the build command through the [`Launcher`]. A failure that looks
 //!   like damage to the tree's own build products is cleared and run once more (see `repair`).
 //!
@@ -53,6 +53,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 
 mod cargo;
+mod execute;
 mod flight;
 mod rejoin;
 pub mod repair;
@@ -60,9 +61,9 @@ mod room;
 mod store;
 pub(crate) use cargo::command;
 use cargo::{WholeKey, feature_differences, package_args};
-use flight::{Flight, FlightGuard, STOP_RECHECK};
+use flight::Flight;
 pub use rejoin::BUILD_KEY_ENV;
-pub use room::{DISK_WAIT, DiskRoom, NativeRoom, START_GB};
+pub use room::DiskRoom;
 
 use ignite_core::hash::{HashParts, input_hash};
 use ignite_core::ids::{InputHash, TreeId};
@@ -189,6 +190,7 @@ pub struct BuildManager {
     trees: Arc<dyn TreeFacts>,
     /// The disk whose free space a build waits for (see `room`); `None` never waits.
     room: Option<Arc<dyn DiskRoom>>,
+    tree_control: std::sync::OnceLock<crate::trees::TreeBuildControl>,
     state: Mutex<State>,
     /// The local database that keeps `held` and `failed` across restarts; `None` keeps them in
     /// memory only.
@@ -216,9 +218,6 @@ struct State {
     flights: HashMap<(Request, InputHash), Arc<Flight>>,
     /// The (tree, output directory) pairs a running build writes.
     busy: HashSet<(TreeId, String)>,
-    /// Trees where no build may start while the disk loop deletes their build files
-    /// ([`Builds::pause`]).
-    paused: HashSet<TreeId>,
     /// Crate graphs by the state of the Cargo files they were read from.
     graphs: HashMap<InputHash, CrateGraph>,
     /// Feature comparisons already made, by directory, Cargo file state and packages: the
@@ -266,6 +265,7 @@ impl BuildManager {
             git,
             trees,
             room: None,
+            tree_control: std::sync::OnceLock::new(),
             state: Mutex::default(),
             store: Mutex::new(None),
             ended: Condvar::new(),
@@ -273,14 +273,16 @@ impl BuildManager {
         }
     }
 
+    pub(crate) fn attach_trees(&self, trees: &crate::trees::Trees) {
+        assert!(self.tree_control.set(trees.build_control()).is_ok());
+    }
+
     /// Drops what the manager believes `tree` holds and the failures it remembers there, for
     /// when its build directories are deleted, so the next request builds.
     pub fn forget(&self, tree: &TreeId) {
-        {
-            let mut state = lock(&self.state);
-            state.held.retain(|request, _| request.tree != *tree);
-            state.failed.retain(|request, _| request.tree != *tree);
-        }
+        let mut state = lock(&self.state);
+        state.held.retain(|request, _| request.tree != *tree);
+        state.failed.retain(|request, _| request.tree != *tree);
         self.forget_stored(tree);
     }
 
@@ -514,102 +516,6 @@ impl BuildManager {
         })
     }
 
-    /// Runs the build, or joins or skips it, holding each output directory for one build.
-    fn build(&self, plan: &Plan) -> BuildResult {
-        let _step = crate::steps::during(format!(
-            "building {} in {}",
-            plan.request.product, plan.request.tree
-        ));
-        let flight_key = (plan.request.clone(), plan.hash.clone());
-        let dirs: Vec<(TreeId, String)> = plan
-            .product
-            .outputs
-            .iter()
-            .map(|dir| (plan.request.tree.clone(), dir.clone()))
-            .collect();
-        // The work that asked for the build. Once it is asked to stop, a wait for another build
-        // gives up instead of lasting until that build ends.
-        let activity = crate::steps::current();
-        let stop_requested = || activity.as_ref().is_some_and(|a| a.stop_requested());
-        let mut state = lock(&self.state);
-        let mut room_checked = false;
-        loop {
-            if state.held.get(&plan.request) == Some(&plan.hash) {
-                return BuildResult::Current;
-            }
-            if let Some((hash, output)) = state.failed.get(&plan.request)
-                && *hash == plan.hash
-            {
-                // Nothing ran for this request, so it reports no usage.
-                return BuildResult::Failed {
-                    output: output.clone(),
-                    usage: Usage::default(),
-                };
-            }
-            if let Some(flight) = state.flights.get(&flight_key).cloned() {
-                state.joined += 1;
-                drop(state);
-                let _waiting = crate::steps::waiting(format!(
-                    "the build of {} in {} that another command started",
-                    plan.request.product, plan.request.tree
-                ));
-                let result = flight.wait(&stop_requested);
-                lock(&self.state).joined -= 1;
-                return result.unwrap_or_else(|| self.stopped_waiting(plan));
-            }
-            let paused = state.paused.contains(&plan.request.tree);
-            if !paused && dirs.iter().all(|dir| !state.busy.contains(dir)) {
-                if room_checked {
-                    break;
-                }
-                drop(state);
-                if let Some(stopped) = self.wait_for_room(plan, &stop_requested) {
-                    return stopped;
-                }
-                room_checked = true;
-                state = lock(&self.state);
-                continue;
-            }
-            if stop_requested() {
-                drop(state);
-                return self.stopped_waiting(plan);
-            }
-            state.queued += 1;
-            let waiting = crate::steps::waiting(if paused {
-                format!(
-                    "the disk loop deleting old build files in {}",
-                    plan.request.tree
-                )
-            } else {
-                format!(
-                    "another build writing the outputs of {} in {}",
-                    plan.request.product, plan.request.tree
-                )
-            });
-            // Woken when a build ends, and every `STOP_RECHECK` to see whether the work that
-            // asked for this build was stopped, as `ignite stop` does.
-            state = self
-                .ended
-                .wait_timeout(state, STOP_RECHECK)
-                .unwrap_or_else(PoisonError::into_inner)
-                .0;
-            drop(waiting);
-            state.queued -= 1;
-        }
-        let flight = Arc::new(Flight::default());
-        state
-            .flights
-            .insert(flight_key.clone(), Arc::clone(&flight));
-        state.busy.extend(dirs.iter().cloned());
-        drop(state);
-
-        // The guard frees the directories and wakes the joiners even if `run` panics.
-        let guard = FlightGuard::new(self, plan.request.clone(), plan.hash.clone(), dirs, flight);
-        let (result, remember) = self.run(plan);
-        guard.finish(&result, remember);
-        result
-    }
-
     /// Runs the build command once, and returns how it ended with the file its compile units
     /// are in. `Err` is the failure of the daemon's own files, before anything ran. A build
     /// result's flag says whether a failure came from the command exiting with a code, which
@@ -626,8 +532,26 @@ impl BuildManager {
             .wrapper_env(&units_file)
             .map_err(|message| self.failure(&plan.request.product, &message))?;
         env.push(rejoin::BuildKey::of(plan).variable());
+        let trees = self
+            .tree_control
+            .get()
+            .and_then(crate::trees::TreeBuildControl::trees)
+            .filter(|_| self.tracks_compiled_outputs(plan));
+        if trees.is_some() {
+            env.push((
+                "CARGO_LOG".to_owned(),
+                "cargo::core::compiler::fingerprint=debug".to_owned(),
+            ));
+        }
         let spec = self.spec(plan, plan.args.clone(), self.settings.cores, env);
-        Ok((self.launcher.run(&spec), units_file))
+        let result = self.launcher.run(&spec);
+        if let Some(trees) = trees {
+            trees.measure_build(
+                &plan.request.tree,
+                (result.exit == Some(0)).then(|| result.output.clone()),
+            );
+        }
+        Ok((result, units_file))
     }
 
     /// The result of a build command that ended with `run`, whose compile units are in
@@ -653,22 +577,17 @@ impl BuildManager {
 }
 
 impl Builds for BuildManager {
+    fn express_build(
+        &self,
+        tree: &Path,
+        output: &Path,
+        stage: ignite_core::protocol::host::ExpressBuildStage,
+    ) -> Result<()> {
+        self.express_space(tree, output, stage)
+    }
+
     fn forget(&self, tree: &TreeId) {
         BuildManager::forget(self, tree);
-    }
-
-    fn pause(&self, tree: &TreeId) -> bool {
-        let mut state = lock(&self.state);
-        if state.busy.iter().any(|(busy, _)| busy == tree) {
-            return false;
-        }
-        state.paused.insert(tree.clone());
-        true
-    }
-
-    fn resume(&self, tree: &TreeId) {
-        lock(&self.state).paused.remove(tree);
-        self.ended.notify_all();
     }
 
     fn ensure(&self, tree: &TreeId, product: &str, packages: &[String]) -> BuildResult {

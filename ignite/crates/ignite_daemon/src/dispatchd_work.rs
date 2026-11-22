@@ -266,8 +266,7 @@ impl HeadlessDispatch {
             };
             let reservation = match ctx.hub.next_explained(&free) {
                 Ok(NextReply::Reserved(reservation)) => reservation,
-                Ok(NextReply::ReclaimDisk { reason, target_gb }) => {
-                    self.host.reclaim_for_handoff(target_gb);
+                Ok(NextReply::ReclaimDisk { reason, .. }) => {
                     why = reason;
                     break;
                 }

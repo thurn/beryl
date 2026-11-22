@@ -25,12 +25,9 @@ use super::{AuditVerb, Idle, IdleHost, IdleJob, IdleSettings, RebuildVerb, Reran
 use crate::checks::HitSink;
 use crate::server::{Context, Verb};
 use crate::testhub::SpyHub;
-use crate::trees::DiskReport;
 
 #[path = "backoff_tests.rs"]
 mod backoff;
-#[path = "disk_tests.rs"]
-mod disk;
 #[path = "launch_tests.rs"]
 mod launch;
 
@@ -94,22 +91,6 @@ struct Host {
     dir: PathBuf,
     busy: AtomicBool,
     between: AtomicUsize,
-    /// How many times the disk was held.
-    held: AtomicUsize,
-    /// How many times free trees were cleared to bring the disk back to its floor.
-    freed: AtomicUsize,
-    /// The disk falls to 2 GiB free while the trees are measured, as a build filling it would.
-    falls_during_walk: AtomicBool,
-    /// The measurements and floor passes, in order, and whether each measurement finished or
-    /// stopped when asked partway.
-    events: Mutex<Vec<&'static str>>,
-    /// What each floor pass reports it could not delete.
-    stuck: Mutex<Option<crate::trees::FloorStuck>>,
-    /// The floor in gigabytes, as the last clearing was told.
-    floor: AtomicU64,
-    /// Gigabytes free on the trees' disk; `None` reads as unknown.
-    free_gib: Mutex<Option<u64>>,
-    cap_gb: Mutex<Option<u32>>,
     leased: Mutex<Vec<Commit>>,
     released: Mutex<Vec<(TreeId, Option<Commit>)>>,
 }
@@ -133,49 +114,6 @@ impl IdleHost for Arc<Host> {
 
     fn commits_between(&self, _from: &Commit, _to: &Commit) -> Result<usize> {
         Ok(self.between.load(Ordering::SeqCst))
-    }
-
-    fn hold_disk(&self, stop: &dyn Fn() -> bool) -> Result<DiskReport> {
-        self.held.fetch_add(1, Ordering::SeqCst);
-        self.events.lock().unwrap().push("walk started");
-        if self.falls_during_walk.load(Ordering::SeqCst) {
-            *self.free_gib.lock().unwrap() = Some(2);
-        }
-        let interrupted = stop();
-        self.events.lock().unwrap().push(if interrupted {
-            "walk stopped"
-        } else {
-            "walk finished"
-        });
-        Ok(DiskReport {
-            interrupted,
-            ..DiskReport::default()
-        })
-    }
-
-    fn free_disk(&self, floor_gb: u64) -> Result<DiskReport> {
-        self.freed.fetch_add(1, Ordering::SeqCst);
-        self.floor.store(floor_gb, Ordering::SeqCst);
-        self.events.lock().unwrap().push("floor pass");
-        Ok(DiskReport {
-            stuck: self.stuck.lock().unwrap().clone(),
-            ..DiskReport::default()
-        })
-    }
-
-    fn disk_space(&self) -> Option<ignite_os::system::DiskSpace> {
-        let gib = ignite_core::capacity::BYTES_PER_GIB;
-        self.free_gib
-            .lock()
-            .unwrap()
-            .map(|free| ignite_os::system::DiskSpace {
-                total: 1000 * gib,
-                available: free * gib,
-            })
-    }
-
-    fn disk_cap_gb(&self) -> Option<u32> {
-        *self.cap_gb.lock().unwrap()
     }
 }
 
@@ -318,14 +256,7 @@ impl Fixture {
             dir: tree.clone(),
             busy: AtomicBool::new(false),
             between: AtomicUsize::new(0),
-            held: AtomicUsize::new(0),
-            freed: AtomicUsize::new(0),
-            falls_during_walk: AtomicBool::new(false),
-            events: Mutex::new(Vec::new()),
-            stuck: Mutex::new(None),
-            floor: AtomicU64::new(0),
-            free_gib: Mutex::new(None),
-            cap_gb: Mutex::new(None),
+
             leased: Mutex::new(Vec::new()),
             released: Mutex::new(Vec::new()),
         });

@@ -58,12 +58,22 @@ impl TreeConfig {
         (keep.into_iter().collect(), prebuild, outputs)
     }
 
+    pub(super) fn compiled_outputs(manifest: &Manifest) -> BTreeSet<String> {
+        manifest
+            .products
+            .values()
+            .filter(|product| product.uses_build_slot())
+            .flat_map(|product| product.outputs.iter().cloned())
+            .collect()
+    }
+
     /// Takes what a reset keeps and which products are prebuilt from `manifest`, for every clone.
     pub fn reload(&self, manifest: &Manifest) {
         let (keep, prebuild, outputs) = Self::products(manifest);
         self.keep.set(keep);
         self.prebuild.set(prebuild);
         self.prebuild_outputs.set(outputs);
+        self.compiled_outputs.set(Self::compiled_outputs(manifest));
     }
 
     /// The prebuild products in the order a lease for a ticket naming `files` builds them: first
@@ -173,6 +183,7 @@ mod tests {
             landing_trees: 0,
             keep: keep.into_iter().collect::<Vec<_>>().into(),
             prebuild: outputs.keys().cloned().collect::<Vec<_>>().into(),
+            compiled_outputs: BTreeSet::from(["out".to_owned()]).into(),
             prebuild_outputs: outputs.into(),
         }
     }

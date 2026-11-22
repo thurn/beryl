@@ -37,6 +37,7 @@ fn lane(name: &str, commands: &[&str]) -> (PathBuf, MachineExpress, Commit) {
         cores: 2,
         memory: None,
         lender: None,
+        builds: None,
     };
     (root, lane, commit)
 }
@@ -546,4 +547,33 @@ fn a_failure_shows_what_the_command_wrote_after_its_log_was_moved_away() {
     assert!(output.contains("the real failure"), "{output}");
     assert!(!output.contains("1747 passed"), "{output}");
     let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn express_prepares_and_measures_each_command() {
+    use ignite_core::protocol::host::ExpressBuildStage::{self, Passed, Prepare};
+    use ignite_core::traits::{BuildResult, Result};
+
+    #[derive(Default)]
+    struct BuildSpace(Mutex<Vec<ExpressBuildStage>>);
+
+    impl Builds for BuildSpace {
+        fn ensure(&self, _: &TreeId, _: &str, _: &[String]) -> BuildResult {
+            panic!("express commands run in their own lane")
+        }
+
+        fn express_build(&self, _: &Path, output: &Path, stage: ExpressBuildStage) -> Result<()> {
+            assert_eq!(output, Path::new("tool/target"));
+            self.0.lock().unwrap().push(stage);
+            Ok(())
+        }
+    }
+
+    let (root, mut lane, _) = lane("build-space", &["true", "true"]);
+    let space = Arc::new(BuildSpace::default());
+    lane.builds = Some(space.clone());
+    let run = lane.run_in(&lane.repo, &section(&lane), &[]);
+    assert!(run.passed(), "{run:?}");
+    assert_eq!(*space.0.lock().unwrap(), [Prepare, Passed, Prepare, Passed]);
+    fs::remove_dir_all(root).unwrap();
 }

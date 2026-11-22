@@ -124,6 +124,7 @@ fn spec_file(grant: Option<GrantFile>) -> SpecFile {
     SpecFile {
         args: vec!["/bin/true".to_owned()],
         cwd: PathBuf::from("/"),
+        tree_path: None,
         env: Vec::new(),
         queued_s: 0.0,
         jobserver: None,

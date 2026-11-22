@@ -23,15 +23,9 @@
 //! every change to it reads the file again under a file lock (see `share`), and a job holds a
 //! second file lock for its whole run, so `ignite rebuild`, `ignite audit` and the idle job
 //! never edit one tree at once.
-//!
-//! Holding the trees under their disk limit is not a job: the daemon's disk loop calls
-//! [`Idle::hold_floor`] and [`Idle::hold_disk`] every round. The first clears builds whenever the
-//! disk is below its floor of free space; the second measures the trees at most every 30
-//! minutes, and gives way to the first if the disk falls below the floor during the walk.
 
 mod audit;
 mod backoff;
-mod disk;
 mod explore;
 mod launch;
 mod rebuild;
@@ -49,15 +43,13 @@ use ignite_core::ids::{CheckName, Commit, RecordId, TreeId};
 use ignite_core::manifest::{Kind, Platforms};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::{Class, Outcome};
-use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Result};
 
 use crate::checks::{Checks, RunOptions};
 use crate::server::{Context, Verb};
-use crate::trees::{DiskReport, Trees};
+use crate::trees::Trees;
 
 pub use audit::AuditSummary;
-pub use disk::{DISK_EVERY, FLOOR_GB, ROOM_GB};
 pub use launch::{IdleJobVerb, JobRunner, JobWait, ServerJobs};
 pub use rebuild::RebuildCount;
 pub use remote::RemoteIdleHost;
@@ -106,20 +98,6 @@ pub trait IdleHost: Send + Sync {
     fn release(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()>;
     /// How many commits `to` has that `from` does not.
     fn commits_between(&self, from: &Commit, to: &Commit) -> Result<usize>;
-    /// Deletes build directories while the trees are above the measured budget, giving up
-    /// partway once `stop` says yes ([`Trees::hold_disk`]).
-    fn hold_disk(&self, stop: &dyn Fn() -> bool) -> Result<DiskReport>;
-    /// Deletes the build directories of free trees, used longest ago first, until the disk has
-    /// `floor_gib` gibibytes free, without measuring the trees ([`Trees::free_disk`]).
-    fn free_disk(&self, floor_gib: u64) -> Result<DiskReport>;
-    /// Size and available bytes of the disk that holds the trees.
-    fn disk_space(&self) -> Option<ignite_os::system::DiskSpace> {
-        None
-    }
-    /// The effective cap, if the hub or legacy configuration sets one.
-    fn disk_cap_gb(&self) -> Option<u32> {
-        None
-    }
 }
 
 /// Runs one check again in a tree without asking the cache. [`Checks`] is the real one.
@@ -184,25 +162,6 @@ impl IdleHost for LiveHost {
     fn commits_between(&self, from: &Commit, to: &Commit) -> Result<usize> {
         Ok(ignite_git::refs::commits_between(&self.repo, from, to)?.len())
     }
-
-    fn hold_disk(&self, stop: &dyn Fn() -> bool) -> Result<DiskReport> {
-        self.trees.hold_disk(stop)
-    }
-
-    fn free_disk(&self, floor_gib: u64) -> Result<DiskReport> {
-        let dir = &self.trees.config().dir;
-        let floor = floor_gib * ignite_core::capacity::BYTES_PER_GIB;
-        self.trees
-            .free_disk(floor, || ignite_os::system::disk_free_bytes(dir).ok())
-    }
-
-    fn disk_space(&self) -> Option<ignite_os::system::DiskSpace> {
-        ignite_os::system::disk_space(&self.trees.config().dir).ok()
-    }
-
-    fn disk_cap_gb(&self) -> Option<u32> {
-        self.trees.disk_cap_gb()
-    }
 }
 
 /// What the idle work is configured with.
@@ -238,11 +197,6 @@ pub struct Idle {
     shares: Mutex<Vec<(String, f64)>>,
     /// Held while a job runs in this process (see [`Idle::work`]).
     work: Mutex<()>,
-    /// When the trees' disk use was last measured, which [`Idle::hold_disk`] limits.
-    disk_held: Mutex<Option<Timestamp>>,
-    /// What the last pass to get the disk above its floor could not delete, which the disk
-    /// loop reports until a pass succeeds ([`Idle::hold_floor`]).
-    floor_stuck: Mutex<Option<crate::trees::FloorStuck>>,
 }
 
 /// The number of commits the verified commit moves before each rebuild edit is measured again.
@@ -274,8 +228,6 @@ impl Idle {
             state: Mutex::new(state),
             shares: Mutex::new(Vec::new()),
             work: Mutex::new(()),
-            disk_held: Mutex::new(None),
-            floor_stuck: Mutex::new(None),
         })
     }
 

@@ -10,7 +10,7 @@ use ignite_core::ids::{Commit, TreeId};
 use ignite_core::protocol::host::{LeaseLanding, LeaseLandingReply, ReleaseLanding};
 use ignite_core::traits::Result;
 
-use super::{DiskReport, IdleHost};
+use super::IdleHost;
 use crate::verbproc::Remote;
 
 /// How many landing trees idle work leaves free for landings and tip verification.
@@ -48,21 +48,5 @@ impl IdleHost for RemoteIdleHost {
 
     fn commits_between(&self, from: &Commit, to: &Commit) -> Result<usize> {
         self.local.commits_between(from, to)
-    }
-
-    fn hold_disk(&self, stop: &dyn Fn() -> bool) -> Result<DiskReport> {
-        self.local.hold_disk(stop)
-    }
-
-    fn free_disk(&self, floor_gib: u64) -> Result<DiskReport> {
-        self.local.free_disk(floor_gib)
-    }
-
-    fn disk_space(&self) -> Option<ignite_os::system::DiskSpace> {
-        self.local.disk_space()
-    }
-
-    fn disk_cap_gb(&self) -> Option<u32> {
-        self.local.disk_cap_gb()
     }
 }

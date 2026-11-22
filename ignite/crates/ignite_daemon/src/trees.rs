@@ -1,11 +1,11 @@
 //! Build trees: the machine's ticket trees and landing trees, leased by ticket,
-//! kept built near the tip and held under the machine's disk limit.
+//! kept built near the tip within the machine's build slots.
 //!
 //! Cargo's incremental builds are only reused at the path they were made at, so each tree keeps
 //! its build directories between tickets, and a compiling lease starts from a copy of the build
 //! of the tree nearest the tip when that is nearer than its own ([`seed`]). The check manifests
 //! name the build output directories. A lease creates a ticket tree when none is free, up to
-//! the worker ceiling plus four. At the ceiling a caller gets a [`Waiter`]. The disk loop
+//! the worker ceiling plus four. At the ceiling a caller gets a [`Waiter`]. The tree maintenance loop
 //! retires surplus trees after a day of disuse.
 //!
 //! A tree's state lives in the daemon's local store (`ignite_store::local::trees`): `free`,
@@ -38,6 +38,7 @@ mod retire;
 pub(crate) mod root;
 mod seed;
 mod setup;
+mod slots;
 mod status;
 #[cfg(test)]
 mod tests;
@@ -46,7 +47,6 @@ mod wait;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -64,12 +64,13 @@ use ignite_store::local::{handles as handle_store, rows, trees as store};
 use rusqlite::Connection;
 use serde::Serialize;
 
-pub(crate) use disk::usage::used_bytes;
-pub use disk::{BusyTree, DiskReport, FloorStuck};
 pub(crate) use elastic::ticket_tree_number;
-pub use ignite_core::capacity::DiskLimitSource;
 pub use seed::{Seeding, wait_for_seed_on_disk, wait_until_seeded};
 pub use setup::Unfinished;
+pub(crate) use slots::{
+    BuildSlot, BuildSlots, TreeBuildControl, caller_processes, ceiling_bytes, command_lock,
+    slot_count, volume_space,
+};
 use wait::Slot;
 pub use wait::Waiter;
 
@@ -111,6 +112,7 @@ pub struct TreeConfig {
     /// Each prebuild product's output directories, which order a lease's prebuild by the
     /// ticket's files ([`TreeConfig::prebuild_order`]).
     pub prebuild_outputs: Live<BTreeMap<String, Vec<String>>>,
+    pub compiled_outputs: Live<BTreeSet<String>>,
 }
 
 impl TreeConfig {
@@ -141,6 +143,7 @@ impl TreeConfig {
             keep: keep.into(),
             prebuild: prebuild.into(),
             prebuild_outputs: prebuild_outputs.into(),
+            compiled_outputs: Self::compiled_outputs(manifest).into(),
         }
     }
 
@@ -256,8 +259,6 @@ struct Inner {
     steps: Arc<crate::steps::Steps>,
     /// How long freeing a tree waits for its running verbs to end once asked to stop.
     stop_wait: Duration,
-    /// Free disk requested by a blocked handoff, in GB as reported by the disk loop.
-    handoff_disk_target: AtomicU64,
     /// The store and the waiters, under one lock so a release cannot slip between a lease
     /// finding no free tree and its waiter joining the queue.
     locked: Mutex<Locked>,
@@ -270,6 +271,7 @@ struct Locked {
     /// Leased trees being checked out or swept. Neither operation may overlap the other or
     /// let the tree become free while it still accesses the checkout.
     ticket_tree_work: BTreeSet<TreeId>,
+    build_space: slots::BuildSpace,
 }
 
 impl std::fmt::Debug for Trees {
@@ -371,11 +373,11 @@ impl Trees {
                 builds,
                 steps: crate::steps::global(),
                 stop_wait: crate::stop::STOP_WAIT,
-                handoff_disk_target: AtomicU64::new(0),
                 locked: Mutex::new(Locked {
                     db,
                     waiters: VecDeque::new(),
                     ticket_tree_work: BTreeSet::new(),
+                    build_space: slots::BuildSpace::default(),
                 }),
                 ticket_tree_work_done: Condvar::new(),
             }),
@@ -558,12 +560,13 @@ impl Trees {
             .prebuild_order(files)
             .iter()
             .all(|product| {
-                !matches!(
-                    self.inner.builds.ensure(tree, product, &[]),
-                    BuildResult::Failed { .. }
-                )
+                !crate::steps::stop_requested()
+                    && !matches!(
+                        self.inner.builds.ensure(tree, product, &[]),
+                        BuildResult::Failed { .. }
+                    )
             });
-        if built {
+        if built && !crate::steps::stop_requested() {
             let _ = self.record_build(tree, at);
         }
         built
@@ -674,6 +677,10 @@ impl Trees {
     fn give_back(&self, tree: &TreeId) {
         if let Ok(row) = self.row(tree) {
             let _ = seed::wait_until_seeded(Path::new(&row.path));
+        }
+        if let Err(error) = self.stop_work(tree) {
+            eprintln!("ignite: cannot return unused {tree}: {error}");
+            return;
         }
         {
             let locked = self.wait_for_ticket_tree_work(self.lock(), tree);
