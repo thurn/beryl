@@ -323,8 +323,7 @@ fn what_the_port_entries_cannot_mean_is_refused() {
     assert_eq!(checked(A_ROUND), Err(Malformed::Permitted));
 }
 
-/// A card offered as the effect finishes is the effect's last word, and an ability names one
-/// rule change to the game.
+/// A cast may appear anywhere in an effect that names at most one rule change.
 #[test]
 fn what_an_effect_as_a_whole_cannot_mean_is_refused() {
     use crate::continuous::{Governed, RuleChange, When};
@@ -339,14 +338,19 @@ fn what_an_effect_as_a_whole_cannot_mean_is_refused() {
         &[Ability::spell().effect(&sequence(&[CAST, draw(you(), 1)]))];
     const DRAW_THEN_CAST: &[Ability] =
         &[Ability::spell().effect(&sequence(&[draw(you(), 1), if_then(Condition::Did, &CAST)]))];
-    const EACH_CASTS: &[Ability] =
-        &[Ability::spell().effect(&for_each_player(Players::EachPlayer, &CAST))];
+    const EACH_CASTS: &[Ability] = &[Ability::spell().effect(&for_each_player(
+        Players::EachPlayer,
+        &may_cast_free(Players::ThatPlayer, those()),
+    ))];
+    const MULTIPLE_PLAYERS: &[Ability] =
+        &[Ability::spell().effect(&may_cast_free(Players::EachPlayer, those()))];
     const RULE: Effect = change_rule(&AS_INSTANT, Duration::EndOfTurn);
     const ONE_RULE: &[Ability] = &[Ability::spell().effect(&sequence(&[draw(you(), 1), RULE]))];
     const TWO_RULES: &[Ability] = &[Ability::spell().effect(&sequence(&[RULE, RULE]))];
-    assert_eq!(checked(CAST_THEN_DRAW), Err(Malformed::Cast));
+    assert_eq!(checked(CAST_THEN_DRAW), Ok(()));
     assert_eq!(checked(DRAW_THEN_CAST), Ok(()));
-    assert_eq!(checked(EACH_CASTS), Err(Malformed::Cast));
+    assert_eq!(checked(EACH_CASTS), Ok(()));
+    assert_eq!(checked(MULTIPLE_PLAYERS), Err(Malformed::CastPlayer));
     assert_eq!(checked(ONE_RULE), Ok(()));
     assert_eq!(checked(TWO_RULES), Err(Malformed::Rules));
 }

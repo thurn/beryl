@@ -126,7 +126,7 @@ pub(crate) fn mana_ability<L: Layout>(
         sink.note_from(source, added);
         return layers::refresh(s, t, sink);
     }
-    // A mana ability never asks a question, and has no targets (see CR 605.1a).
+    // A mana ability has no targets (see CR 605.1a). Its body may ask a choice.
     let activation = activation();
     let mut resolution = Resolution::of_trigger(&activation, ability);
     resolution.mana = color;
@@ -135,7 +135,13 @@ pub(crate) fn mana_ability<L: Layout>(
     }
     let mut game = Game::new(s, t, sink);
     let flow = resolve(&mut game, &mut resolution);
-    let done = finish(&mut game, flow).map(|_| ());
+    let done = if let Some(question) = resolution.question.take() {
+        // An answer is needed by the enclosing transaction, which shares the sink's record
+        // with this ability. Unwind back to it the same way a replacement choice does.
+        Err(game.sink.asking.stop(question))
+    } else {
+        finish(&mut game, flow).map(|_| ())
+    };
     if activation.of.source.is_some() {
         sink.leave();
     }

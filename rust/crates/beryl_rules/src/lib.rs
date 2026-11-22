@@ -62,17 +62,18 @@
 //!
 //! A [`Resolution`] is one spell or ability resolving: its source, controller, card and
 //! ability, its targets and which of them were legal as it began (see CR 608.2b), the costs paid
-//! for it, X, what triggered it, and the record its questions are answered from. It also
-//! carries what a resolution leaves for the engine: the question it paused at, and a card it
-//! lets a player cast as it finishes (see CR 608.2g).
+//! for it, X, what triggered it, and the record its questions are answered from. It carries
+//! the question it paused at, including casting steps when an effect allows a spell to be
+//! cast during resolution (see CR 608.2g).
 //!
 //! A library function takes a resolution beside the game only when what it does makes sense
 //! only while something resolves: it reads the source or the controller, or it asks. Destroy
 //! takes none; scry takes one.
 //!
 //! A choice made while resolving (see CR 608.2d) is asked through [`interpret::choices`],
-//! which has the functions for each shape of prompt and is the one module that makes a resolution's
-//! question into a decision. A question the record cannot answer pauses the resolution,
+//! which has the functions for each shape of prompt. A cast during a resolution uses the
+//! casting machine to build its decisions and reads from the same answer record.
+//! A question the record cannot answer pauses the resolution,
 //! which is run again from the top with the answers so far (§7.3). So a function asks the
 //! same questions, in the same order, with the same options, every time it runs: a save and
 //! a rollout replay the answers, and a change to any of the three breaks them.

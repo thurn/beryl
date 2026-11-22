@@ -1,6 +1,6 @@
 //! The engine's open decision and the legal actions it can offer.
 //!
-//! Implements: CR 608.2g, CR 712.9, CR 724.5
+//! Implements: CR 712.9, CR 724.5
 
 use crate::bitboard::Bitboard;
 use crate::card::{ChosenKind, FaceIx, Prompt, Purpose, Types};
@@ -113,18 +113,6 @@ pub(crate) fn decision<L: Layout>(
             face_down::decision(s, t, sink, slot, remaining)
         }
         Pending::Resolving(ref r) | Pending::StepActions(ref r) => Ok(r.question.clone()),
-        Pending::CastOffer {
-            object,
-            player,
-            free,
-        } => Ok(Decision::options(
-            player,
-            DecisionKind::CastOffer,
-            casting::offer_options(s, t, object, player, free)?,
-            Prompt::new(Purpose::CastOffer),
-        )
-        // The question is about the card offered.
-        .about(Bitboard::single(object.slot))),
     }
 }
 
@@ -274,8 +262,7 @@ pub(crate) fn controlled<L: Layout>(s: &State<L>, mut d: Decision<L>) -> Decisio
     d
 }
 
-/// Answers a question of the casting machine, a paused resolution or a resolution's offer
-/// to cast, if one is open, or one of the rules' own questions that a general kind asks: the
+/// Answers a question of the casting machine, a paused resolution, if one is open, or one of the rules' own questions that a general kind asks: the
 /// pending state says which question it is, where the kind says only the form of its answer.
 pub(super) fn perform_machine<L: Layout>(
     s: &mut State<L>,
@@ -307,10 +294,6 @@ pub(super) fn perform_machine<L: Layout>(
             let done = face_down::perform(s, t, &mut x.events, slot, remaining, option);
             x.events.leave();
             done
-        }
-        Pending::CastOffer { player, free, .. } => {
-            let option = d.candidates.option(c).expect("an option choice");
-            offered_cast(s, t, &mut x.events, player, free, option)
         }
         Pending::EnterPayingLife { slot, .. } => {
             s.settle_question();
@@ -366,50 +349,4 @@ pub(super) fn perform_machine<L: Layout>(
         | Pending::DeclareBlockers { .. }
         | Pending::CombatDamage { .. } => return None,
     })
-}
-
-/// The answer to an offer to cast during a resolution ([CR 608.2g]): "no player receives
-/// priority after it's cast." This applies the answer before the engine resumes priority.
-///
-/// [CR 608.2g]: https://yawgatog.com/resources/magic-rules/#R6082g
-fn offered_cast<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    player: Seat,
-    free: bool,
-    option: Opt<L>,
-) -> Result<(), Full> {
-    s.settle_question();
-    match option {
-        Opt::Pass => Ok(()),
-        cast_option @ (Opt::PlayLand(_)
-        | Opt::Play
-        | Opt::Draw
-        | Opt::Keep
-        | Opt::Mulligan
-        | Opt::Trigger(_)
-        | Opt::Yes
-        | Opt::No
-        | Opt::Done
-        | Opt::Attack(_)
-        | Opt::Defender(_)
-        | Opt::Block(_)
-        | Opt::Lethal(_)
-        | Opt::Cast { .. }
-        | Opt::Activate { .. }
-        | Opt::Mana { .. }
-        | Opt::Pool(_)
-        | Opt::Number(_)
-        | Opt::Plan(_)
-        | Opt::Player(_)
-        | Opt::Ability(_)
-        | Opt::Object(_)
-        | Opt::TurnFaceUp(_)) => {
-            act(s, sink, player, Some(cast_option));
-            let done = casting::begin_cast(s, t, sink, player, cast_option, Some(free));
-            sink.leave();
-            done
-        }
-    }
 }

@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A resolution that ran out of capacity could leave events from its scratch
+  run.** The engine now truncates those events and restores the event scopes
+  when it discards the run. This applies to costs paid while casting a spell
+  during the resolution, including a mana ability that asks before the cast
+  finishes. The replay tests check that only a completed run publishes its
+  events.
+
 - **Removing the final phase could still start its cleanup step.** An empty turn
   plan used cleanup as a fallback. It now advances to the next turn.
   `skipping_the_ending_phase_advances_to_the_next_turn` checks the turn number

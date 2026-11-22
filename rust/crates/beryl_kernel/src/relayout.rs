@@ -400,15 +400,6 @@ impl<L: Layout> Relayout for Pending<L> {
             }),
             Pending::Resolving(r) => Pending::Resolving(r.relayout()),
             Pending::StepActions(r) => Pending::StepActions(r.relayout()),
-            &Pending::CastOffer {
-                object,
-                player,
-                free,
-            } => Pending::CastOffer {
-                object: object.relayout(),
-                player,
-                free,
-            },
             &Pending::TurningFaceUp { slot: s, remaining } => Pending::TurningFaceUp {
                 slot: slot(s),
                 remaining,

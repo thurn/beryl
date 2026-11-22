@@ -692,11 +692,12 @@ pub(crate) fn may_ask(t: &GameTable) -> bool {
 /// Whether a resolution may meet a choice it did not declare it asks: a replacement effect's
 /// ([`may_ask`]), or a value a permanent chooses as it enters, which any resolution may put
 /// onto the battlefield in a game with a card that chooses one
-/// ([`Capability::ChoosesAsEnters`]). A game with none of them pays the ANDs [`may_ask`]
-/// does and one more.
+/// ([`Capability::ChoosesAsEnters`]), or a mana ability's choice while a spell is being
+/// cast in the resolution ([`Capability::ManaAbilityChoices`]). A game with none of them
+/// pays the ANDs [`may_ask`] does and one more.
 #[inline]
 pub(crate) fn resolution_may_ask(t: &GameTable) -> bool {
-    may_ask(t) || t.can(Capability::ChoosesAsEnters)
+    may_ask(t) || t.can_either(Capability::ChoosesAsEnters, Capability::ManaAbilityChoices)
 }
 
 /// The value of `kind` that the permanent in `slot` chooses as it enters under `player`'s

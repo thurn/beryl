@@ -661,10 +661,17 @@ primitive is the bug class that broke DeepScry's rewind.
 ### 7.4 Casting
 
 Casting follows CR 601.2 as an explicit machine: announce, choose face and
-alternative cost, choose modes, choose targets, choose X, determine total cost
-with modifiers, choose a payment plan, pay, then emit the cast event. Spells
-whose cost cannot be paid or that have no legal target are never offered, so the
-machine never has to rewind.
+alternative cost, choose modes and X, choose targets, determine total cost with
+modifiers, choose a payment plan, pay, then emit the cast event. Spells whose
+cost cannot be paid or that have no legal target are never offered, so the
+machine never has to rewind an illegal cast.
+
+An effect can offer one cast from a set of cards during its resolution. The
+casting steps ask through the enclosing resolution's answer record. The cast and
+its costs commit when the enclosing resolution finishes. Its cast event can make
+triggers wait, and the next instruction runs before anyone gets priority. A
+payment during that cast uses the mana solver and can pause for a payment plan
+or for a choice made by a mana ability.
 
 ## 8. Events, replacement effects, triggers, state-based actions (D10)
 

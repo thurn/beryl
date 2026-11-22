@@ -214,7 +214,6 @@ impl<L: Layout> State<L> {
             | Pending::DeclareBlockers { .. }
             | Pending::CombatDamage { .. }
             | Pending::Casting(_)
-            | Pending::CastOffer { .. }
             | Pending::TurningFaceUp { .. }
             | Pending::OrderEntered { .. }
             | Pending::EnterChoosing { .. }

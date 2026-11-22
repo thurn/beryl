@@ -5,20 +5,29 @@
 //! draw step, where the end of the step pauses ([`Pending::StepActions`]); so is a value a
 //! permanent chooses as it enters.
 
-use beryl_card::{CardDef, Face, ManaCost, Replacement, Types};
+use beryl_card::effect::build::{cards_in, gain_life, scry, sequence, you};
+use beryl_card::{
+    Amount, CardDef, Cost, Effect, Face, Filter, ManaColor, ManaCost, ManaSet, Players, Prompt,
+    Purpose, Replacement, Says, SpecIx, TargetKind, TargetSpec, Trigger, Types,
+};
 
 use super::cast::*;
 use super::events::find;
 use super::{DUAL, LAND, fingerprint};
-use crate::card::Ability;
-use crate::game::Game;
+use crate::bitboard::Bitboard;
+use crate::card::{Ability, Flow};
+use crate::game::{self, Game};
 use crate::ids::{Seat, Slot, SlotId};
+use crate::interpret::choices;
+use crate::replacement::event::{Cause, Event, StackIx};
+use crate::resolution::Resolution;
 use crate::rng::SplitMix64;
 use crate::state::{Pending, Zone};
 use crate::zone::Place;
 use crate::{
-    Answers, CardTable, Choice, Decision, Decklist, GameTable, Observation, Outcome, Payment,
-    Profile, Replay, Scratch, State, Step, apply, next,
+    Answers, CardTable, Choice, CustomBody, Decision, DecisionKind, Decklist, GameTable, Layout,
+    Observation, Opt, Outcome, Payment, Profile, Replay, Scratch, State, Step, apply, custom_body,
+    next,
 };
 use beryl_kernel::format::Format;
 
@@ -58,6 +67,120 @@ const DREDGE_DECK: &Decklist = &[
     (1, "Test Rummage"),
     (1, "Test Stinger"),
     (1, "Test Sage"),
+];
+
+const CAST_A_SORCERY: Effect = Effect::MayCast {
+    player: you(),
+    card: cards_in(Zone::Hand, &you(), Filter::Types(Types::SORCERY)),
+    free: false,
+};
+
+/// "You may cast a sorcery card from your hand. Scry 1."
+static CAST_THEN_SCRY: CardDef = CardDef {
+    name: "Test Cast and Scry",
+    tokens: &[],
+    faces: &[Face {
+        types: Types::INSTANT,
+        abilities: &[Ability::spell().effect(&sequence(&[CAST_A_SORCERY, scry(you(), 1)]))],
+        ..Face::EMPTY
+    }],
+};
+
+static CAST_THEN_SCRY_REPEATEDLY: CardDef = CardDef {
+    name: "Test Cast and Scry Repeatedly",
+    tokens: &[],
+    faces: &[Face {
+        types: Types::INSTANT,
+        abilities: &[Ability::spell().effect(&sequence(&[
+            CAST_A_SORCERY,
+            sequence(&[scry(you(), 1); 33]),
+        ]))],
+        ..Face::EMPTY
+    }],
+};
+
+/// A spell with X and a target, and a trigger the cast leaves waiting.
+static TARGETED_X: CardDef = CardDef {
+    name: "Test Targeted X",
+    tokens: &[],
+    faces: &[Face {
+        cost: ManaCost {
+            x: 1,
+            ..ManaCost::new(0, [1, 0, 0, 0, 0, 0])
+        },
+        types: Types::SORCERY,
+        abilities: &[
+            Ability::spell()
+                .target(&TargetSpec::one(TargetKind::Player, Filter::Any))
+                .effect(&Effect::LoseLife {
+                    player: Players::Target(SpecIx::new(0)),
+                    amount: Amount::X,
+                }),
+            Ability::triggered(&Trigger::CAST)
+                .on_the_stack()
+                .effect(&gain_life(you(), 1)),
+        ],
+        ..Face::EMPTY
+    }],
+};
+
+static CAST_AND_SCRY_CARDS: CardTable =
+    CardTable::new(&[&LAND, &DUAL, &CAST_THEN_SCRY, &TARGETED_X, &BINDER]);
+const CAST_AND_SCRY_DECK: &Decklist = &[
+    (16, "Test Land"),
+    (4, "Test Dual"),
+    (9, "Test Cast and Scry"),
+    (9, "Test Targeted X"),
+    (2, "Test Binder"),
+];
+
+/// "You may gain 1 life. Add {W}." The mana produced is the same either way.
+struct ManaWithChoice;
+
+impl CustomBody for ManaWithChoice {
+    const SAYS: Says = Says {
+        asks: true,
+        changes_turn_structure: false,
+        takes: &[],
+    };
+
+    fn resolve<L: Layout>(game: &mut Game<'_, L>, resolution: &mut Resolution<'_, L>) -> Flow {
+        let player = resolution.controller();
+        let source = resolution.source();
+        if choices::yes_no(
+            game,
+            resolution,
+            player,
+            Prompt::new(Purpose::May),
+            Bitboard::EMPTY,
+        )? {
+            game::life::gain(game, player, 1)?;
+        }
+        let added = game
+            .state
+            .add_mana(player, Some(source), ManaColor::White, 1);
+        game.sink.note_from(Some(source), added);
+        Ok(())
+    }
+}
+
+static CHOICE_MANA: CardDef = CardDef {
+    name: "Test Choice Mana",
+    tokens: &[],
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::mana(Cost::TAP, ManaSet::one(ManaColor::White))
+            .custom(custom_body::<ManaWithChoice>())],
+        ..Face::EMPTY
+    }],
+};
+static CHOICE_MANA_CARDS: CardTable =
+    CardTable::new(&[&LAND, &CAST_THEN_SCRY, &TARGETED_X, &CHOICE_MANA]);
+const CHOICE_MANA_DECK: &Decklist = &[
+    (20, "Test Land"),
+    (1, "Test Choice Mana"),
+    (1, "Test Cast and Scry"),
+    (1, "Test Targeted X"),
 ];
 
 /// The cards and the deck both players play.
@@ -128,6 +251,7 @@ fn inline_game(decks: Decks, seed: u64, profile: Profile) -> (Vec<Logged>, Outco
 struct Paused {
     resolving: usize,
     step_actions: usize,
+    after_cast: usize,
 }
 
 /// Replays an inline game's answers through `Replay`, checking the state hash at each of
@@ -151,7 +275,18 @@ fn replay(
                 assert_eq!(log.next(), None, "seed {seed}: answers left over");
                 return paused;
             }
-            Step::Decide(_) => {
+            Step::Decide(d) => {
+                if matches!(s.pending(), Pending::Resolving(_)) && d.prompt.purpose == Purpose::Scry
+                {
+                    let shown = crate::view(&s, &t, &mut x);
+                    if shown.stack().last().is_some_and(|entry| {
+                        t.def(entry.card()).name == TARGETED_X.name
+                            && entry.x > 0
+                            && !entry.targets.is_empty()
+                    }) {
+                        paused.after_cast += 1;
+                    }
+                }
                 let pause = match s.pending() {
                     Pending::Resolving(_) => Some(&mut paused.resolving),
                     Pending::StepActions(_) => Some(&mut paused.step_actions),
@@ -208,6 +343,180 @@ fn inline_and_replayed_answers_reach_the_same_state_at_every_decision() {
     assert!(
         paused > 20,
         "only {paused} paused questions: the test exercises too little"
+    );
+}
+
+/// Inline and replayed answers give identical positions after a paid cast with a target
+/// and a nonzero X, followed by a question in the enclosing resolution.
+#[test]
+fn a_cast_inside_a_resolution_replays_with_its_later_question() {
+    let decks = (&CAST_AND_SCRY_CARDS, CAST_AND_SCRY_DECK);
+    let mut after_cast = 0;
+    for seed in 0..4 {
+        for profile in [
+            Profile::EXACT,
+            Profile::SMART,
+            Profile {
+                payment: Payment::Manual,
+                ..Profile::EXACT
+            },
+        ] {
+            let (logged, outcome) = inline_game(decks, seed, profile);
+            assert!(
+                !matches!(outcome, Outcome::Stalled(_)),
+                "seed {seed}: {outcome:?}"
+            );
+            after_cast += replay(decks, seed, profile, &logged, outcome).after_cast;
+        }
+    }
+    assert!(
+        after_cast > 0,
+        "no replay exercised a cast with nonzero X before scrying"
+    );
+}
+
+#[test]
+fn a_cast_offer_includes_each_castable_card_and_can_be_declined() {
+    let mut g = super::cast::Game::with(&CAST_AND_SCRY_CARDS, CAST_AND_SCRY_DECK, Profile::EXACT);
+    let outer = g.give(g.me, CAST_THEN_SCRY.name, Zone::Hand);
+    let variable = g.give(g.me, TARGETED_X.name, Zone::Hand);
+    let binder = g.give(g.me, BINDER.name, Zone::Hand);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    g.pick(cast(outer));
+    g.pass_both();
+    let offer = g.current();
+    assert_eq!(offer.kind, DecisionKind::CastOffer);
+    assert_eq!(offer.len(), 3);
+    assert_eq!(offer.candidates.option(Choice(0)), Some(Opt::Pass));
+    assert!(index_of(&offer, cast(variable)).is_some());
+    assert!(index_of(&offer, cast(binder)).is_some());
+
+    g.pick(Opt::Pass);
+    assert_eq!(g.current().prompt.purpose, Purpose::Scry);
+    g.pick(Opt::Done);
+    assert_eq!(g.s.object(variable).zone(), Zone::Hand);
+    assert_eq!(g.s.object(binder).zone(), Zone::Hand);
+    assert!(g.s.stack().is_empty());
+}
+
+#[test]
+fn payment_and_cast_triggers_commit_when_the_enclosing_resolution_finishes() {
+    let mut g = super::cast::Game::with(&CHOICE_MANA_CARDS, CHOICE_MANA_DECK, Profile::EXACT);
+    g.x = Scratch::recording();
+    let outer = g.give(g.me, CAST_THEN_SCRY.name, Zone::Hand);
+    let child = g.give(g.me, TARGETED_X.name, Zone::Hand);
+    let land = g.give(g.me, CHOICE_MANA.name, Zone::Battlefield);
+    g.pick(cast(outer));
+    g.pass_both();
+
+    assert_eq!(g.current().kind, DecisionKind::CastOffer);
+    g.pick(cast(child));
+    assert_eq!(g.current().kind, DecisionKind::Target);
+    g.pick(Opt::Player(g.them));
+    assert_eq!(g.current().kind, DecisionKind::YesNo);
+    assert!(!g.s.object(land).is_tapped());
+    assert_eq!(g.s.object(child).zone(), Zone::Hand);
+    g.pick(Opt::Yes);
+
+    assert_eq!(g.current().prompt.purpose, Purpose::Scry);
+    assert!(g.is_paused());
+    assert_eq!(g.s.player(g.me).life(), 20);
+    assert!(g.s.triggers().is_empty());
+    assert_eq!(g.s.stack().len(), 1);
+    assert_eq!(g.s.stack()[0].object().unwrap().slot, outer);
+    assert!(
+        !g.x.events
+            .drain()
+            .any(|e| matches!(e, Event::Cast { spell, .. } if spell.slot == child))
+    );
+    let shown = crate::view(&g.s, &g.t, &mut g.x);
+    assert_eq!(shown.player(g.me).life(), 21);
+    assert!(shown.object(land).is_tapped());
+    assert_eq!(shown.stack()[0].object().unwrap().slot, child);
+    assert_eq!(
+        shown.triggers().len(),
+        1,
+        "the trigger waits while the body scries"
+    );
+
+    g.pick(Opt::Done);
+    assert!(!g.is_paused());
+    assert_eq!(g.s.object(outer).zone(), Zone::Graveyard);
+    assert_eq!(g.s.object(child).zone(), Zone::Stack);
+    assert_eq!(g.s.player(g.me).life(), 21);
+    assert!(g.s.object(land).is_tapped());
+    let cast_events: Vec<_> =
+        g.x.events
+            .drain_tagged()
+            .filter(|tag| matches!(tag.event, Event::Cast { spell, .. } if spell.slot == child))
+            .collect();
+    assert_eq!(cast_events.len(), 1);
+    assert_eq!(
+        cast_events[0].tag.cause,
+        Cause::Player {
+            player: g.me,
+            entry: Some(StackIx::at(1)),
+        }
+    );
+}
+
+/// The cast stays speculative when the answer record fills. The same position widens
+/// and finishes with the cast and its payment made once.
+#[test]
+fn a_cast_waits_for_the_resolution_that_fills_the_small_answer_record() {
+    static CARDS: CardTable = CardTable::new(&[&LAND, &CAST_THEN_SCRY_REPEATEDLY, &TARGETED_X]);
+    const DECK: &Decklist = &[
+        (20, "Test Land"),
+        (1, "Test Cast and Scry Repeatedly"),
+        (1, "Test Targeted X"),
+    ];
+    let mut g = super::cast::Game::with(&CARDS, DECK, Profile::EXACT);
+    g.x = Scratch::recording();
+    let outer = g.give(g.me, CAST_THEN_SCRY_REPEATEDLY.name, Zone::Hand);
+    let child = g.give(g.me, TARGETED_X.name, Zone::Hand);
+    let land = g.give(g.me, "Test Land", Zone::Battlefield);
+    g.pick(cast(outer));
+    g.pass_both();
+    g.pick(cast(child));
+    g.pick(Opt::Player(g.them));
+    // The offer and target used two entries, and 30 scries fill the rest of the record.
+    for _ in 0..30 {
+        g.pick(Opt::Done);
+    }
+    assert!(matches!(g.s.pending(), Pending::Resolving(r) if r.record.len() == 32));
+    let mut large = g.s.widen();
+    g.pick(Opt::Done);
+    assert_eq!(
+        g.s.outcome(),
+        Some(Outcome::Stalled(crate::StallReason::Capacity))
+    );
+    assert_eq!(g.s.object(child).zone(), Zone::Hand);
+    assert!(!g.s.object(land).is_tapped());
+    assert!(
+        !g.x.events
+            .drain()
+            .any(|e| matches!(e, Event::Cast { spell, .. } if spell.slot == child))
+    );
+
+    let mut scratch = Scratch::recording();
+    for _ in 0..3 {
+        let Step::Decide(d) = next(&mut large, &g.t, &mut scratch, &mut Replay) else {
+            panic!("the widened game offers the remaining scries");
+        };
+        assert_eq!(d.prompt.purpose, Purpose::Scry);
+        assert_eq!(d.candidates.option(Choice(0)), Some(Opt::Done));
+        apply(&mut large, &g.t, &mut scratch, &mut Replay, Choice(0));
+    }
+    assert_eq!(large.stack().len(), 1);
+    assert_eq!(g.t.def(large.stack()[0].card()).name, TARGETED_X.name);
+    assert_eq!(large.triggers().len(), 1);
+    assert_eq!(
+        scratch
+            .events
+            .drain()
+            .filter(|e| matches!(e, Event::Cast { .. }))
+            .count(),
+        1
     );
 }
 

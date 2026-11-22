@@ -85,7 +85,6 @@ fn resolve_top<L: Layout>(
         | Pending::CombatDamage { .. }
         | Pending::Casting(_)
         | Pending::StepActions(_)
-        | Pending::CastOffer { .. }
         | Pending::TurningFaceUp { .. }
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }
@@ -147,10 +146,17 @@ fn resolve_on_copy<L: Layout>(
         };
         let paused = run(spare, t, sink, answers, open, entry, ability);
         unwind(sink);
-        let Some(question) = paused? else {
-            s.clone_from(spare);
-            x.counts.copied();
-            return Ok(());
+        let question = match paused {
+            Ok(None) => {
+                s.clone_from(spare);
+                x.counts.copied();
+                return Ok(());
+            }
+            Ok(Some(question)) => question,
+            Err(full) => {
+                sink.truncate(mark);
+                return Err(full);
+            }
         };
         sink.truncate(mark);
         let hidden = sink.asking.take_hidden();
@@ -296,7 +302,10 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
     };
     let paused = run(spare, t, sink, None, open, &entry, ability);
     unwind(sink);
-    paused?;
+    if let Err(full) = paused {
+        sink.truncate(mark);
+        return Err(full);
+    }
     match seen {
         Some(seen) => seen.extend(sink.take_from(mark)),
         None => sink.truncate(mark),
@@ -390,13 +399,13 @@ fn run_answered<L: Layout>(
     let ran = body(s, t, sink, answers, entry, ability);
     let stopped = sink.asking.end();
     match ran {
-        Err(Full) if stopped.is_some() => {
+        Err(Full) => {
             sink.restore_scopes(scopes);
             // Values and copies chosen for permanents of a batch that stopped before they
             // moved.
             sink.chosen.clear();
             sink.copies.clear();
-            Ok(stopped)
+            stopped.map_or(Err(Full), |question| Ok(Some(question)))
         }
         ran => ran,
     }
@@ -439,7 +448,6 @@ fn body<L: Layout>(
     } else if ability.is_some_and(|b| condition_fails(s, t, entry, b)) {
         // Removed from the stack; it does nothing.
     } else {
-        let mut offer = None;
         // An instant or sorcery without a spell ability does nothing.
         if let Some(ability) = ability {
             let answers = answers.as_mut().map(|a| &mut **a as &mut dyn Answers<L>);
@@ -448,7 +456,6 @@ fn body<L: Layout>(
             crate::coverage::hit(ability);
             let flow = interpret::resolve(&mut game, &mut resolution);
             let question = resolution.question.take();
-            offer = resolution.offer;
             let paused = interpret::finish(&mut game, flow)?;
             if s.outcome().is_some() {
                 return Ok(None);
@@ -463,13 +470,6 @@ fn body<L: Layout>(
         // it already, as Time Spiral exiles itself.
         if spell.is_some_and(|r| s.is_current(r)) {
             casting::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
-        }
-        if let Some((object, player, free)) = offer {
-            s.ask(Pending::CastOffer {
-                object,
-                player,
-                free,
-            });
         }
     }
     if spell.is_none() {

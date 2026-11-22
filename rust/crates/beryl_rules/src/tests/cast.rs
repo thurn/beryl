@@ -158,8 +158,7 @@ impl CustomBody for LootAndCast {
         let card = choices::pick(game, resolution, you, hand, CHOOSE)?;
         let card = game.state().object_ref(card);
         zones::move_to(game, card, Zone::Graveyard, Reason::Discard)?;
-        let discarded = game.state().object_ref(card.slot);
-        casting::offer(resolution, discarded, you, true);
+        casting::offer(game, resolution, Bitboard::single(card.slot), you, true)?;
         Ok(())
     }
 }

@@ -63,6 +63,10 @@ impl Scope<'_> {
             {
                 Err(Malformed::Chosen)
             }
+            Effect::MayCast {
+                player: Players::EachPlayer | Players::EachOpponent | Players::EachOther(_),
+                ..
+            } => Err(Malformed::CastPlayer),
             Effect::PermitCast {
                 duration: Duration::UntilYourNextTurn,
                 ..

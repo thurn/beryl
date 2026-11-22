@@ -34,7 +34,10 @@ pub(crate) fn asks_lone<L: Layout>(profile: Profile, s: &State<L>, d: &Decision<
     (d.prompt.purpose == Purpose::Waterbend && profile.taps_mana == Some(d.player))
         || d.kind == DecisionKind::Target
             && profile.asks_targets == Some(d.player)
-            && matches!(s.pending(), Pending::Casting(c) if !c.triggered())
+            && (matches!(s.pending(), Pending::Casting(c) if !c.triggered())
+                // A lone retarget is already answered inside the resolution. A paused
+                // lone target here belongs to a cast asking under this stop setting.
+                || matches!(s.pending(), Pending::Resolving(_)))
 }
 
 /// The smart stops (§15): "their own main phases, after attackers and after blockers are

@@ -561,9 +561,8 @@ pub enum Effect {
     /// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)): "If an effect
     /// specifically instructs or allows a player to cast a spell during resolution, they do
     /// so by following the steps in rules 601.2a-i, except no player receives priority after
-    /// it's cast." The player decides as the effect finishes, so this is the effect's last
-    /// instruction ([`crate::Malformed::Cast`]), and it offers one card. Without its mana
-    /// cost the card is cast for an alternative cost
+    /// it's cast." The player may choose one cast from the cards the expression names.
+    /// Without its mana cost the card is cast for an alternative cost
     /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)).
     MayCast {
         player: Players,

@@ -11,30 +11,26 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::replacement::event::{self, Reason, Sink};
-use crate::state::{ObjectRef, StackEntry, State, Zone};
+use crate::state::{StackEntry, State, Zone};
 use crate::table::GameTable;
 
 use super::costs::From;
 use super::legal::{Situation, cast_options};
 
-/// The options of a resolution's offer to cast a card (see CR 608.2g): not casting it, then each
-/// way of casting it.
-pub(crate) fn offer_options<L: Layout>(
+/// The options of a resolution's offer to cast a card (see CR 608.2g): not casting, then
+/// each way of casting one of the cards.
+pub(super) fn offer_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    object: ObjectRef<L>,
+    cards: Bitboard<L::Slot>,
     player: Seat,
     free: bool,
 ) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
     let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
     out.push(Opt::Pass)?;
-    if s.is_current(object) {
-        let mut cards = Bitboard::EMPTY;
-        cards.insert(object.slot);
-        let now = Situation::of(player);
-        cast_options(s, t, &now, cards, From::Resolution { free }, &mut out)?;
-        now.complete()?;
-    }
+    let now = Situation::of(player);
+    cast_options(s, t, &now, cards, From::Resolution { free }, &mut out)?;
+    now.complete()?;
     Ok(out)
 }
 

@@ -71,16 +71,14 @@ pub enum Malformed {
     /// [`Effect::PermitCast`] for a duration other than this turn or for as long as the card
     /// stays where it is, which are the two a permission lasts.
     Permitted,
+    /// A cast offer names multiple players. Use [`Effect::ForEachPlayer`] to give each
+    /// player a separate offer in turn order.
+    CastPlayer,
     /// [`Effect::Unless`] of a cost the engine cannot take as an effect resolves: one other
     /// than mana alone or the discard of one card from a hand.
     Cost,
     /// [`Effect::Fateseal`] of a number of cards other than one, which is all the engine fateseals.
     Fateseal,
-    /// [`Effect::MayCast`] that is not the last thing its effect does, or that is said for
-    /// each of several players: the card is cast as the effect finishes, so an instruction
-    /// after it would be carried out before the spell is cast, and a second offer would
-    /// take the first one's place.
-    Cast,
     /// More than one [`Effect::ChangeRule`] in an ability, which names one rule change to
     /// the game ([`Ability::rule`]): the others would have no number.
     Rules,
@@ -132,7 +130,6 @@ impl Malformed {
             Malformed::Countered => "a countered spell is put somewhere other than exile",
             Malformed::Cost => "an effect names a cost the engine cannot take as it resolves",
             Malformed::Fateseal => "an effect fateseals a number of cards other than one",
-            Malformed::Cast => "an effect lets a player cast a card before its last instruction",
             Malformed::Rules => "an ability's effect starts more than one rule change",
             Malformed::LastKnown => {
                 "an expression asks what an object was after its effect moved it, which is not kept"
@@ -154,6 +151,7 @@ impl Malformed {
             Malformed::Permitted => {
                 "a permission to cast lasts neither this turn nor while the card stays put"
             }
+            Malformed::CastPlayer => "a cast offer names more than one player",
             Malformed::ChosenColor => {
                 "a resolving effect adds a chosen color, which only a permanent has"
             }

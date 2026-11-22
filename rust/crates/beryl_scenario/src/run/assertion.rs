@@ -1,7 +1,7 @@
 //! Checks the facts a scenario asserts at an open decision or at the end of the game.
 
 use beryl_engine::card::{FaceIx, Types};
-use beryl_engine::{Layout, Outcome, Step, Zone, ZoneKey};
+use beryl_engine::{Layout, Outcome, Step, Zone, ZoneKey, view};
 
 use super::Runner;
 use crate::{Assertion, Ending, StackItem};
@@ -173,7 +173,7 @@ impl<L: Layout> Runner<L> {
         }
     }
 
-    pub(super) fn check(&self, position: &Step<L>, assertion: Assertion) -> Result<(), String> {
+    pub(super) fn check(&mut self, position: &Step<L>, assertion: Assertion) -> Result<(), String> {
         let s = &self.s;
         let (actual, expected) = match assertion {
             Assertion::Life { player, life } => {
@@ -188,9 +188,12 @@ impl<L: Layout> Runner<L> {
                 if matches!(zone, Zone::Stack | Zone::Nowhere) {
                     return Err(format!("no owned {zone:?} to count"));
                 }
-                let n = s
+                // A cast offer can follow a move inside the enclosing resolution.
+                // Count cards where they are at the question the script will answer.
+                let shown = view(s, &self.t, &mut self.x);
+                let n = shown
                     .zone(ZoneKey::Of(player, zone))
-                    .filter(|slot| card.is_none_or(|c| self.name(slot) == c))
+                    .filter(|slot| card.is_none_or(|c| shown.name(&self.t, slot) == c))
                     .count();
                 (n.to_string(), count.to_string())
             }

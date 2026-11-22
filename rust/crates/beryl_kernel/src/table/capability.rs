@@ -104,10 +104,13 @@ pub enum Capability {
     ActivatesFromGraveyardOrExile,
     /// A custom body can change the sequence of steps or phases in a turn.
     TurnStructure,
+    /// A mana ability can ask a question while a spell's costs are paid. Resolutions run
+    /// on a copy so that such a question can pause from inside a payment.
+    ManaAbilityChoices,
 }
 
 // The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::TurnStructure as u32) < u32::BITS);
+const _: () = assert!((Capability::ManaAbilityChoices as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities a face gives a game that can contain it.
@@ -183,6 +186,9 @@ impl Capability {
             }
             if a.cost().is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();
+            }
+            if a.kind() == AbilityKind::Mana && a.asks() {
+                found |= Capability::ManaAbilityChoices.bit();
             }
             if crate::table::is_instant_mana(a) {
                 found |= Capability::InstantMana.bit();

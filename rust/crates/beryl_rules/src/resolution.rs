@@ -4,7 +4,7 @@
 //!
 //! Implements: none. Stores a resolution and manages replay of its answers.
 
-use crate::card::{Ability, CastingIx, ManaColor, Stop, Words};
+use crate::card::{Ability, AbilityKind, CastingIx, ManaColor, Stop, Words};
 use crate::casting;
 use crate::decision::{Answers, Choice, Decision, Opt, Outcome, StallReason};
 use crate::game::Game;
@@ -40,8 +40,6 @@ pub struct Resolution<'a, L: Layout = Small> {
     /// For a mana ability that can produce more than one kind of mana, the kind its
     /// activator chose.
     pub(crate) mana: ManaColor,
-    /// A card the effect lets a player cast as it finishes resolving (see CR 608.2g).
-    pub(crate) offer: Option<(ObjectRef<L>, Seat, bool)>,
 }
 
 impl<'a, L: Layout> Resolution<'a, L> {
@@ -60,7 +58,6 @@ impl<'a, L: Layout> Resolution<'a, L> {
             answers,
             question: None,
             mana: ManaColor::Colorless,
-            offer: None,
         }
     }
 
@@ -155,6 +152,16 @@ impl<'a, L: Layout> Resolution<'a, L> {
         game: &mut Game<'_, L>,
         d: &Decision<L>,
     ) -> Result<Choice, Stop> {
+        self.answer_with_stop(game, d, false)
+    }
+
+    #[inline]
+    fn answer_with_stop(
+        &mut self,
+        game: &mut Game<'_, L>,
+        d: &Decision<L>,
+        ask_lone: bool,
+    ) -> Result<Choice, Stop> {
         debug_assert!(
             self.ability.asks(),
             "a body asked a question without declaring that it pauses"
@@ -163,13 +170,27 @@ impl<'a, L: Layout> Resolution<'a, L> {
         if game.state.outcome().is_some() {
             return Err(Stop::Pause);
         }
-        if d.len() == 1 && game.state.profile().stops != Stops::Forced {
+        if d.len() == 1 && !ask_lone && game.state.profile().stops != Stops::Forced {
             return Ok(Choice(0));
         }
         if let Some(c) = game.sink.asking.recorded() {
             return Ok(c);
         }
         self.ask(game, d)
+    }
+
+    /// Answers one casting step, using the same stop settings as a cast at priority.
+    pub(crate) fn answer_cast_step(
+        &mut self,
+        game: &mut Game<'_, L>,
+        d: &Decision<L>,
+    ) -> Result<Choice, Stop> {
+        let ask_lone = crate::profile::asks_lone(game.state.profile(), game.state, d);
+        let answer = self.answer_with_stop(game, d, ask_lone)?;
+        if d.len() > 1 {
+            game.state.note_choice();
+        }
+        Ok(answer)
     }
 
     /// The answer to `d`, a hidden pick of one of its object options or of none
@@ -227,6 +248,11 @@ impl<'a, L: Layout> Resolution<'a, L> {
             if let Some(c) = answer {
                 return Ok(c);
             }
+        }
+        // The priority payment machine has no transaction to replay for a question
+        // inside a mana ability. Payments inside a resolution have a shared record.
+        if self.ability.kind() == AbilityKind::Mana && !game.sink.asking.is_open() {
+            return Ok(Choice(0));
         }
         self.question = Some(d.clone());
         Err(Stop::Pause)

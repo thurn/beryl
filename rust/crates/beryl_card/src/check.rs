@@ -137,44 +137,10 @@ const fn no_mana(cost: &Cost) -> bool {
 
 /// What the check asks of an ability's effect as a whole.
 const fn whole(effect: &Effect) -> Checked {
-    if !casts_last(effect, true) {
-        Err(Malformed::Cast)
-    } else if rule_changes(effect) > 1 {
+    if rule_changes(effect) > 1 {
         Err(Malformed::Rules)
     } else {
         Ok(())
-    }
-}
-
-/// Whether every [`Effect::MayCast`] of `effect` is the last thing a resolution that comes to
-/// it does, `last` saying whether `effect` itself is
-/// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)): the engine has the
-/// player cast the card as the effect finishes.
-const fn casts_last(effect: &Effect, last: bool) -> bool {
-    match effect.branches() {
-        Branches::Sequence(effects) => {
-            let mut i = 0;
-            while i < effects.len() {
-                if !casts_last(&effects[i], last && i + 1 == effects.len()) {
-                    return false;
-                }
-                i += 1;
-            }
-            true
-        }
-        Branches::If {
-            then, otherwise, ..
-        } => {
-            casts_last(then, last)
-                && match otherwise {
-                    Some(otherwise) => casts_last(otherwise, last),
-                    None => true,
-                }
-        }
-        Branches::May(effect) | Branches::Unless(effect, _) => casts_last(effect, last),
-        // The next player's turn at it comes after.
-        Branches::ForEachPlayer(effect) => casts_last(effect, false),
-        Branches::Single => last || !matches!(effect, Effect::MayCast { .. }),
     }
 }
 

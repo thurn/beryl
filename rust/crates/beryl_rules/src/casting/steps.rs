@@ -49,9 +49,14 @@ pub(crate) fn begin_cast<L: Layout>(
     let Opt::Cast { slot, face, costs } = option else {
         unreachable!("a cast option");
     };
-    // A cast for escape is under no permission's terms (see CR 118.9a): only one alternative
-    // cost is paid, so a flashback permission the card also has does nothing to it.
-    let permission = start::permission(s, player, slot).filter(|_| !costs.escapes());
+    // An immediate cast uses the resolving effect's permission (see CR 608.2g).
+    // A cast for escape uses its own alternative cost (see CR 118.9a), so a flashback
+    // permission the card also has does nothing to it.
+    let permission = if resolving.is_none() && !costs.escapes() {
+        start::permission(s, player, slot)
+    } else {
+        None
+    };
     if cfg!(debug_assertions) && costs.escapes() {
         hit_escape(s, t, slot);
     }
@@ -223,7 +228,9 @@ fn begin_payment<L: Layout>(
     pay_mana(s, t, sink, c)
 }
 
-/// Pays the mana of the total cost: by plan, or one source at a time under manual payment.
+/// Pays the mana of the total cost by plan. At priority, the manual profile instead pays
+/// one source at a time. A cast during resolution uses the solver even under that profile,
+/// so it can pay within the enclosing transaction.
 pub(super) fn pay_mana<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -233,7 +240,7 @@ pub(super) fn pay_mana<L: Layout>(
     let entry = top(s);
     let cost = total_cost(s, t, entry, &c);
     match s.profile().payment {
-        Payment::Manual => {
+        Payment::Manual if !c.resolving() => {
             if cost.is_zero() {
                 return after_mana(s, t, sink, c);
             }
@@ -241,7 +248,7 @@ pub(super) fn pay_mana<L: Layout>(
             s.ask(Pending::Casting(c));
             Ok(())
         }
-        payment @ (Payment::KeepMostPayable | Payment::Greedy) => {
+        payment @ (Payment::Manual | Payment::KeepMostPayable | Payment::Greedy) => {
             let plans = mana::plans(
                 s,
                 t,
@@ -290,8 +297,8 @@ fn after_mana<L: Layout>(
 /// [CR 601.2i](https://yawgatog.com/resources/magic-rules/#R6012i): "Any abilities that
 /// trigger when a spell is cast or put onto the stack trigger at this time. If the spell's
 /// controller had priority before casting it, they get priority." see CR 608.2g: after a spell
-/// cast during a resolution, "no player receives priority"; the resolution it was cast in is
-/// over by now, so the active player receives priority (see CR 117.3b).
+/// cast during a resolution, "no player receives priority". The enclosing resolution
+/// continues and gives priority when it finishes (see CR 117.3b).
 pub(super) fn finish<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -299,8 +306,9 @@ pub(super) fn finish<L: Layout>(
     c: Casting<L>,
 ) -> Result<(), Full> {
     s.settle_question();
-    let active = s.turn().active();
-    s.give_priority(if c.resolving() { active } else { c.player });
+    if !c.resolving() {
+        s.give_priority(c.player);
+    }
     // The spell is counted as it becomes cast, before its cast triggers anything (CR 601.2i),
     // so an ability that triggers on the cast and counts the spells cast this turn counts it.
     if let StackItem::Spell { controller, .. } = top(s).item {

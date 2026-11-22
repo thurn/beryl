@@ -24,9 +24,8 @@
 //! | [`Shape::Catalog`] | [`catalog`] | A color, a creature type, a card name or a word. |
 //! | | [`catalog_among`] | One of some of a catalog's values. |
 //!
-//! No resolution asks in the other shapes yet (an order, a number, a mode, a division): the
-//! first that does adds its function here. The cast a resolution offers is a
-//! mode, but the engine asks it once the resolution has ended ([`crate::casting::start::offer`]).
+//! Casting during a resolution asks the casting machine's questions through the same answer
+//! record ([`crate::casting::start::offer`]).
 //!
 //! In debug builds each function checks that the prompt it is given is one its question can
 //! answer, so a purpose asked through the wrong function fails where it is written.

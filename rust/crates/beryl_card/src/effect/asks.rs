@@ -9,9 +9,7 @@ impl Effect {
     /// spell or ability offers any choices other than choices already made as part of
     /// casting the spell, activating the ability, or otherwise putting the spell or ability
     /// on the stack, the player announces these while applying the effect." The kind of mana
-    /// a mana ability adds is chosen as it is activated, so [`Effect::AddMana`] asks nothing, and
-    /// whether to cast a card an [`Effect::MayCast`] offers is the engine's to ask once the
-    /// effect has finished.
+    /// a mana ability adds is chosen as it is activated, so [`Effect::AddMana`] asks nothing.
     pub const fn asks(&self) -> bool {
         match *self {
             Effect::May { .. }
@@ -31,6 +29,7 @@ impl Effect {
             | Effect::Dig { .. }
             | Effect::Fateseal { .. }
             | Effect::Search { .. }
+            | Effect::MayCast { .. }
             | Effect::PutIntoLibrary {
                 position: LibraryPosition::TopOrBottom,
                 ..
@@ -95,7 +94,6 @@ impl Effect {
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::ChangeRule { .. }
-            | Effect::MayCast { .. }
             | Effect::Delay { .. }
             | Effect::GetEmblem { .. }
             | Effect::WinGame(_)

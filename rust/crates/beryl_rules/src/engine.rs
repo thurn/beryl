@@ -96,7 +96,6 @@ fn replay_paused<'a, L: Layout>(
         | Pending::DeclareBlockers { .. }
         | Pending::CombatDamage { .. }
         | Pending::Casting(_)
-        | Pending::CastOffer { .. }
         | Pending::TurningFaceUp { .. }
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }

@@ -29,7 +29,7 @@ pub use announced::target_takes;
 pub use costs::cost_being_cast;
 pub use legal::{payable_responses, pointless};
 pub(crate) use legal::{priority_options, refusal};
-pub(crate) use stack::{leave_stack, offer_options, unstack};
+pub(crate) use stack::{leave_stack, unstack};
 pub(crate) use steps::{begin_activate, begin_cast, decision, perform};
 pub(crate) use targets::{TargetSet, new_targets, spells, still_legal, target_trigger};
 pub(crate) use timing::{entry_ability, sorcery_timing};

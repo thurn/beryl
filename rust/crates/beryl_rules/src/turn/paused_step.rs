@@ -64,7 +64,6 @@ pub(crate) fn step_actions<L: Layout>(
         | Pending::CombatDamage { .. }
         | Pending::Casting(_)
         | Pending::Resolving(_)
-        | Pending::CastOffer { .. }
         | Pending::TurningFaceUp { .. }
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }

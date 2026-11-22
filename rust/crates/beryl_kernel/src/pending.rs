@@ -11,7 +11,6 @@ use crate::decision::Decision;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
-use crate::object::ObjectRef;
 use crate::state::State;
 
 /// The step a spell's casting or an ability's activation has reached
@@ -235,6 +234,7 @@ pub fn hidden_pick_of<L: Layout>(answer: L::Index) -> Option<L::Slot> {
 /// The open question when it belongs to a machine step rather than to priority. Flat, like
 /// the rest of the state.
 #[allow(clippy::large_enum_variant)]
+#[repr(u8)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Pending<L: Layout = Small> {
     /// Priority, or nothing to ask.
@@ -275,16 +275,11 @@ pub enum Pending<L: Layout = Small> {
     ///
     /// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
     StepActions(Resolving<L>),
-    /// A resolving spell or ability lets `player` cast this card now (see CR 608.2g).
-    CastOffer {
-        object: ObjectRef<L>,
-        player: Seat,
-        free: bool,
-    },
     /// The controller of the face-down permanent in `slot` turns it face up, a special action
     /// (see CR 116.2b), and chooses how to pay its mana cost: among payment plans, or under manual
     /// payment one source at a time, `remaining` being what is left to pay.
-    TurningFaceUp { slot: L::Slot, remaining: ManaCost },
+    // Keep the hash discriminants after the former post-resolution cast offer.
+    TurningFaceUp { slot: L::Slot, remaining: ManaCost } = 13,
     /// Permanents that entered the battlefield together, whose controllers choose the order
     /// of their timestamps (see [CR 613.7m]): "Objects controlled by the active player ... have an
     /// earlier relative timestamp in the order of that player's choice, followed by each
@@ -365,7 +360,6 @@ impl<L: Layout> State<L> {
             | Pending::CombatDamage { .. }
             | Pending::Casting(_)
             | Pending::StepActions(_)
-            | Pending::CastOffer { .. }
             | Pending::TurningFaceUp { .. }
             | Pending::OrderEntered { .. }
             | Pending::EnterChoosing { .. }
@@ -399,7 +393,6 @@ impl<L: Layout> State<L> {
             | Pending::CombatDamage { .. }
             | Pending::Casting(_)
             | Pending::Resolving(_)
-            | Pending::CastOffer { .. }
             | Pending::TurningFaceUp { .. }
             | Pending::OrderEntered { .. }
             | Pending::EnterChoosing { .. }
@@ -437,7 +430,6 @@ impl<L: Layout> State<L> {
             | Pending::DeclareBlockers { .. }
             | Pending::CombatDamage { .. }
             | Pending::Casting(_)
-            | Pending::CastOffer { .. }
             | Pending::TurningFaceUp { .. }
             | Pending::OrderEntered { .. }
             | Pending::EnterChoosing { .. }

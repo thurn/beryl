@@ -1,42 +1,132 @@
 //! Casting spells ([CR 601](https://yawgatog.com/resources/magic-rules/#R601)) as an effect
-//! allows: at once, as the effect finishes resolving, or later, by a permission
+//! allows: at once, while the effect resolves, or later, by a permission
 //! ([CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013): "A player can begin to
 //! cast a spell only if a rule or effect allows that player to cast it and no rule or effect
 //! prohibits that player from casting it."). A permission is an entry of the Effects store
 //! on the card (`beryl_kernel`'s contract, "Stores"), and its terms become entries on the
 //! spell as it is cast.
 //!
-//! Implements: none. Uses the parent module's casting rule for permissions granted by effects.
+//! Implements: CR 608.2g
 
 use beryl_card::{CastTerms, Filter, Objects, Players, Types, Words};
 
 use crate::bitboard::Bitboard;
+use crate::card::{Prompt, Purpose, Stop};
+use crate::decision::{Decision, DecisionKind, Opt};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run, no_primitive};
 use crate::layout::{Layout, Queue};
+use crate::replacement::event::{Cause, StackIx};
 use crate::resolution::Resolution;
 use crate::state::{
-    Continuous, CostChange, Duration, MoveReplacement, ObjectRef, Permission, Permitted, State,
+    Continuous, CostChange, Duration, MoveReplacement, ObjectRef, Pending, Permission, Permitted,
+    State,
 };
 
-/// Lets `player` cast the card `object` as an effect of what is resolving, without paying
-/// its mana cost when `free`
-/// ([CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013)): "A player can begin to
-/// cast a spell only if a rule or effect allows that player to cast it". The effect's last
-/// action: the card is offered as the resolution finishes, which is when a spell cast
-/// during it would otherwise have mattered, since "no player receives priority after it's
-/// cast" (see [CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)). The engine asks
-/// then whether, and how, the player casts it.
+use super::{stack, steps};
+
+/// Offers `player` one cast from `cards` during the resolution, with the option to decline.
+/// Returns the slot of the spell cast, if any.
+///
+/// Under [CR 608.2g], "If an effect specifically instructs or allows a player to cast a
+/// spell during resolution, they do so by following the steps in rules 601.2a-i, except no
+/// player receives priority after it's cast."
+///
+/// [CR 608.2g]: https://yawgatog.com/resources/magic-rules/#R6082g
+///
+/// # Errors
+///
+/// Returns [`Stop::Pause`] for an unanswered choice and [`Stop::Full`] at a capacity limit.
 pub fn offer<L: Layout>(
+    game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,
-    object: ObjectRef<L>,
+    cards: Bitboard<L::Slot>,
     player: Seat,
     free: bool,
-) {
-    resolution.offer = Some((object, player, free));
+) -> Result<Option<L::Slot>, Stop> {
+    if cards.is_empty() {
+        return Ok(None);
+    }
+    let options = stack::offer_options(game.state, game.table, cards, player, free)?;
+    let question = Decision::options(
+        player,
+        DecisionKind::CastOffer,
+        options,
+        Prompt::new(Purpose::CastOffer),
+    )
+    .about(cards);
+    let choice = resolution.answer_cast_step(game, &question)?;
+    let Some(option @ Opt::Cast { slot, .. }) = question.candidates.option(choice) else {
+        return Ok(None);
+    };
+    cast_during_resolution(game, resolution, player, option, free)?;
+    Ok(Some(slot))
+}
+
+/// Performs a cast already chosen by the player during a resolution. At priority, the engine
+/// commits the steps one at a time and the next step waits in [`Pending::Casting`]. Here that
+/// same machine runs on the resolution's state, and every answer comes from its answer source.
+/// A pause leaves the cast at its question in the replayed view. The committed state still
+/// holds the original resolution and its record.
+///
+/// # Errors
+///
+/// Returns [`Stop::Pause`] for an unanswered choice and [`Stop::Full`] at a capacity limit.
+///
+/// # Panics
+///
+/// If `option` is not a legal cast.
+pub fn cast_during_resolution<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &mut Resolution<'_, L>,
+    player: Seat,
+    option: Opt<L>,
+    free: bool,
+) -> Result<(), Stop> {
+    // The resolving entry still occupies its original place in the event stream. The
+    // spell goes above it; all of its casting steps belong to that new entry.
+    game.sink.enter(|entry| Cause::Player {
+        player,
+        entry: Some(StackIx::at(
+            game.state.stack().len() + usize::from(entry.is_some()),
+        )),
+    });
+    let cast = answer_steps(game, resolution, player, option, free);
+    game.sink.leave();
+    cast
+}
+
+fn answer_steps<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &mut Resolution<'_, L>,
+    player: Seat,
+    option: Opt<L>,
+    free: bool,
+) -> Result<(), Stop> {
+    steps::begin_cast(
+        game.state,
+        game.table,
+        game.sink,
+        player,
+        option,
+        Some(free),
+    )?;
+    while let Pending::Casting(casting) = *game.state.pending() {
+        let question = steps::decision(game.state, game.table, game.sink, &casting)?;
+        let choice = resolution.answer_cast_step(game, &question)?;
+        steps::perform(
+            game.state,
+            game.table,
+            game.sink,
+            casting,
+            question.candidates.option(choice),
+            question.candidates.object(choice),
+        )?;
+    }
+    Ok(())
 }
 
 /// Lets `player` cast the card in `object`'s slot from the zone it is in, for as long as
@@ -121,28 +211,24 @@ pub(crate) fn begin_on_spell<L: Layout>(
     Ok(())
 }
 
-/// [`Effect::MayCast`](beryl_card::Effect::MayCast): "[Player] may cast [card]", without
-/// paying its mana cost when `free` (see CR 608.2g): the card is offered as the effect finishes
-/// ([`offer`]). It offers one card, the first of several in the order the game lists them.
-/// The outcome is the card offered.
+/// [`Effect::MayCast`](beryl_card::Effect::MayCast) offers one cast. Its outcome is the
+/// spell the player cast, if any.
 pub(crate) fn may_cast_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     player: Players,
     card: Objects,
     free: bool,
-) -> Result<Outcome<L>, Full> {
+) -> Result<Outcome<L>, Stop> {
     let cards = run.scene().objects(card);
     let Some(player) = run.one(player) else {
         return Ok(Outcome::NOTHING);
     };
-    let ordered = run.in_game_order(cards)?;
-    let Some(&slot) = ordered.as_slice().first() else {
-        return Ok(Outcome::NOTHING);
-    };
-    let card = run.state().object_ref(slot);
-    let (_, resolution) = run.resolving();
-    offer(resolution, card, player, free);
-    Ok(Outcome::acted_on(Bitboard::single(slot)))
+    let (game, resolution) = run.resolving();
+    Ok(
+        offer(game, resolution, cards, player, free)?.map_or(Outcome::NOTHING, |slot| {
+            Outcome::acted_on(Bitboard::single(slot))
+        }),
+    )
 }
 
 /// [`Effect::PermitCast`](beryl_card::Effect::PermitCast): "[Player] may cast [cards]
