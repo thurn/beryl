@@ -68,6 +68,7 @@ pub const fn nth_target(n: u8) -> Objects {
 }
 
 /// The cards in `zone` that `players` own and that pass `filter`: [`Objects::InZoneOf`].
+/// On the battlefield, this selects by controller.
 pub const fn cards_in(zone: Zone, players: &'static Players, filter: Filter) -> Objects {
     Objects::InZoneOf {
         zone,
@@ -78,11 +79,7 @@ pub const fn cards_in(zone: Zone, players: &'static Players, filter: Filter) -> 
 
 /// Permanents these players control that pass `filter`.
 pub const fn permanents_controlled_by(players: &'static Players, filter: Filter) -> Objects {
-    Objects::InZoneOf {
-        zone: Zone::Battlefield,
-        players,
-        filter,
-    }
+    cards_in(Zone::Battlefield, players, filter)
 }
 
 /// "[Players]'s hand": every card in it.
