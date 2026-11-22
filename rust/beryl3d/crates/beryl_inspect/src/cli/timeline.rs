@@ -199,6 +199,9 @@ pub(super) fn export(options: &Options) -> Result<Printed, Usage> {
     let mut names = recordings::names().map_err(Usage)?;
     if let Some(only) = options.value("--only") {
         names.retain(|(name, _)| name == only);
+        if crate::stories::is_recording_story(only) {
+            names.push((only.to_owned(), beryl_protocol::Seat::P0));
+        }
         if names.is_empty() {
             return Err(Usage(format!(
                 "--only {only}: no recording has that name; `just b3d list` names them"

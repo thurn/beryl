@@ -17,14 +17,14 @@ use app_client::driver::{Page, plays_on};
 use app_client::{Client, Config};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
-use beryl_protocol::protocol::{SessionId, Side};
+use beryl_protocol::protocol::Side;
 use kit_frame::frame::{Frame, Wake, Work};
 use kit_probe::agent::Layout;
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{AssetReady, Insets, Pointer, Size, Tier};
 
 use crate::pages::recording;
-use crate::stress::{Board, Drive, card_records, pointer_moves, stress};
+use crate::stress::{Board, Drive, pointer_moves};
 
 /// The boards the frame gates hold, in the order they are played: the five stress boards, and
 /// two recorded games from the first seat. `verbs-zones` moves cards between every zone, and
@@ -136,23 +136,7 @@ impl Playback {
         if !BOARDS.contains(&name) {
             return None;
         }
-        let (mut views, records) = match stress(name) {
-            Some(board) => {
-                let records = card_records(&board);
-                let views = board
-                    .views
-                    .into_iter()
-                    .map(|view| {
-                        vec![GameUpdate {
-                            session: SessionId(1),
-                            view,
-                        }]
-                    })
-                    .collect();
-                (views, records)
-            }
-            None => recorded(name),
-        };
+        let (mut views, records) = recorded(name);
         // Handed over from the back, so that taking one never moves the rest.
         views.reverse();
         let data = crate::data::checkout().expect("gate tuning");

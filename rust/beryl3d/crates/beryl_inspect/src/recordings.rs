@@ -20,7 +20,7 @@ use kit_ui::input::Size;
 
 use crate::pack::{self, Entry, Recorder};
 use crate::stress::Board;
-use crate::{pages, screens, stress};
+use crate::{pages, screens, stories};
 
 /// One recording, as `just b3d list` shows it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -94,7 +94,7 @@ pub fn names() -> Result<Vec<(String, Seat)>, String> {
         .iter()
         .map(|entry| (entry.name.to_owned(), entry.seat()))
         .chain(Board::ALL.map(|board| (board.name().to_owned(), Seat::P0)))
-        .chain(screens::NAMES.map(|name| (name.to_owned(), Seat::P0)))
+        .chain(screens::ALIASES.map(|(name, _)| (name.to_owned(), Seat::P0)))
         .collect();
     names.sort_by(|a, b| (&a.0, a.1.get()).cmp(&(&b.0, b.1.get())));
     Ok(names)
@@ -114,7 +114,7 @@ pub fn listed() -> Result<Vec<String>, String> {
 
 /// Whether a named scene is built by the inspector and has no entry in the recordings pack.
 pub(crate) fn standalone(name: &str) -> bool {
-    Board::parse(name).is_some() || screens::NAMES.contains(&name) || name.starts_with("story/")
+    stories::recording_story(name).is_some() || name.starts_with(stories::PREFIX)
 }
 
 /// A guess at how long the recording `name` takes to play for `seat`, for running the longest
@@ -167,7 +167,7 @@ pub fn list(prefix: &str) -> Result<Vec<Listed>, String> {
         .collect();
     listed.extend(
         (Board::ALL.map(Board::name).into_iter())
-            .chain(screens::NAMES)
+            .chain(screens::ALIASES.map(|(name, _)| name))
             .filter(|name| name.starts_with(prefix))
             .map(listed_made),
     );
@@ -176,19 +176,26 @@ pub fn list(prefix: &str) -> Result<Vec<Listed>, String> {
 }
 
 /// The stress board or screen recording `name`, which is seen from the first seat only.
-fn listed_made(name: &str) -> Listed {
-    let views = (stress::stress(name).map(|board| board.views.len()))
-        .or_else(|| screens::messages(name).map(|_| 1))
-        .unwrap_or(0);
-    let length_ms = pages::page(name, Side::You, Layout::Desktop, LENGTH_WINDOW)
-        .ok()
-        .and_then(|mut page| page.moments().last().map(|(_, at)| at.0 / 1_000_000));
+pub(crate) fn listed_made(name: &str) -> Listed {
+    let playing = pages::page(name, Side::You, Layout::Desktop, LENGTH_WINDOW);
+    let (views, length_ms, failure) = match playing {
+        Ok(mut page) => {
+            let moments = page.moments();
+            let views = moments
+                .iter()
+                .filter(|(moment, _)| matches!(moment, app_client::driver::Name::View(_)))
+                .count();
+            let length = moments.last().map(|(_, at)| at.0 / 1_000_000);
+            (u32::try_from(views).unwrap_or(u32::MAX), length, None)
+        }
+        Err(why) => (0, None, Some(why)),
+    };
     Listed {
         name: name.to_owned(),
         seat: Seat::P0,
         length_ms,
-        views: u32::try_from(views).unwrap_or(u32::MAX),
-        failure: None,
+        views,
+        failure,
     }
 }
 

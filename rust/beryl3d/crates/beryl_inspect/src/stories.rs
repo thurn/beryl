@@ -7,7 +7,7 @@ use std::sync::{Arc, OnceLock};
 
 use kit_probe::story::{self, Header, parse_header};
 
-use crate::recordings;
+use crate::{recordings, screens, stress::Board};
 
 pub(crate) const PREFIX: &str = "story/";
 
@@ -44,6 +44,19 @@ impl Story {
             _ => 1.0,
         }
     }
+}
+
+/// Finds the story behind a legacy recording name. Either spelling opens the same replay.
+pub(crate) fn recording_story(name: &str) -> Option<&'static str> {
+    Board::parse(name).map(Board::story).or_else(|| {
+        screens::ALIASES
+            .into_iter()
+            .find_map(|(legacy, story)| (name == legacy || name == story).then_some(story))
+    })
+}
+
+pub(crate) fn is_recording_story(name: &str) -> bool {
+    name.starts_with(PREFIX) && recording_story(name).is_some()
 }
 
 pub(crate) fn is_story(name: &str) -> bool {

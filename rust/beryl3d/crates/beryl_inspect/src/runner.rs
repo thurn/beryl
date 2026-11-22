@@ -131,6 +131,10 @@ pub fn tests(filter: &str, windows: Windows) -> Result<Vec<Test>, String> {
     };
     let mut tests = Vec::new();
     for (recording, seat) in names {
+        // The default matrix already covers these replays under their legacy names.
+        if prefix.is_empty() && crate::stories::is_recording_story(&recording) {
+            continue;
+        }
         let story_windows = recording.starts_with(crate::stories::PREFIX).then(|| {
             let layout = crate::stories::open(&recording)
                 .map_or(Layout::Desktop, |story| story.header().layout);

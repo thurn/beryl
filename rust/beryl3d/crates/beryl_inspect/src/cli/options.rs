@@ -217,7 +217,7 @@ impl Options {
         let Some(name) = self.value(PROFILE) else {
             return Ok(());
         };
-        if stories::is_story(self.name()) {
+        if stories::is_story(self.name()) && !stories::is_recording_story(self.name()) {
             return Err(Usage("--profile takes a recording".to_owned()));
         }
         let definition = crate::pages::inspection_profile(name)

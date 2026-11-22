@@ -38,11 +38,13 @@ pub struct Capture {
     pub messages: Vec<FixtureMessage>,
 }
 
-/// The game and app story forms. Only captured stories use the recording format.
+/// The game and app story forms.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Body {
     Table(TableStory),
     Settings(SettingsStory),
+    /// A feature exercised through the full client over a sequence of recorded inputs.
+    Replay(Vec<FixtureMessage>),
     Capture {
         feature: Option<String>,
         capture: Capture,
@@ -101,6 +103,9 @@ impl Story {
         } else {
             match feature {
                 None => Body::Table(TableStory::parse(inputs)?),
+                Some(_) if inputs.first().is_some_and(|(_, line)| *line == "replay") => {
+                    Body::Replay(capture::read_replay(&inputs[1..])?)
+                }
                 Some("settings") => Body::Settings(SettingsStory::parse(inputs)?),
                 Some(id) => return Err(format!("no authored inputs for feature {id:?}")),
             }

@@ -500,7 +500,7 @@ fn help(command: &Command) -> String {
 
 /// The recording `options` names, in the window, seat and scale they give, at its start.
 pub fn open(options: &Options) -> Result<Scene, Usage> {
-    if stories::is_story(options.name()) {
+    if stories::is_story(options.name()) && !stories::is_recording_story(options.name()) {
         Scene::open(
             options.name(),
             options.seat,
@@ -515,13 +515,15 @@ pub fn open(options: &Options) -> Result<Scene, Usage> {
 }
 
 fn open_recording(options: &Options) -> Result<Page, Usage> {
-    if stories::is_story(options.name()) {
+    if stories::is_story(options.name()) && !stories::is_recording_story(options.name()) {
         return Err(Usage(format!(
             "{} reads a recording; use tree, check, png or film with a story",
             options.command
         )));
     }
-    options::known(options.name(), options.seat)?;
+    if !stories::is_recording_story(options.name()) {
+        options::known(options.name(), options.seat)?;
+    }
     let profile = options
         .value(options::PROFILE)
         .map(pages::inspection_profile)

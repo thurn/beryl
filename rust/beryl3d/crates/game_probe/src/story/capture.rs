@@ -3,13 +3,38 @@
 
 use std::fmt::Write;
 
-use beryl_protocol::ipc::{FixtureMessage, GAME_UPDATE};
+use beryl_protocol::GameUpdate;
+use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage, GAME_UPDATE};
 use beryl_protocol::protocol::{ObjectView, Side, ZoneName};
 use kit_frame::frame::Place;
 use kit_probe::agent::tree::place_word;
 use serde_json::Value;
 
-use super::table::read_capture_card;
+use super::table::{placeholder_records, read_capture_card};
+
+pub(super) fn read_replay(lines: &[(usize, &str)]) -> Result<Vec<FixtureMessage>, String> {
+    let placeholders = lines
+        .first()
+        .is_some_and(|(_, line)| *line == "placeholder-faces");
+    let mut messages = read(&lines[usize::from(placeholders)..])?;
+    if placeholders {
+        let mut views = Vec::new();
+        for message in &messages {
+            if let FixtureMessage::Event { event, payload } = message
+                && event == GAME_UPDATE
+            {
+                let update: GameUpdate =
+                    serde_json::from_value(payload.clone()).map_err(|error| error.to_string())?;
+                views.push(update.view);
+            }
+        }
+        messages.insert(
+            0,
+            FixtureMessage::response(CARD_RECORDS, &placeholder_records(&views)),
+        );
+    }
+    Ok(messages)
+}
 
 pub(super) fn read(lines: &[(usize, &str)]) -> Result<Vec<FixtureMessage>, String> {
     let mut messages = Vec::new();

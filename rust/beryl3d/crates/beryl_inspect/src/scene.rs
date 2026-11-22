@@ -94,16 +94,11 @@ impl Scene {
         let source = match source.as_ref() {
             stories::Story::Toolkit(_) => Preview::Toolkit(source),
             stories::Story::Game(story) => match &story.body {
-                Body::Table(table) => {
-                    return pages::page_with_messages(
-                        name,
-                        Recording(table.messages()),
-                        seat,
-                        layout,
-                        size,
-                        profile,
-                    )
-                    .map(|page| Self::Recording(Box::new(page.with_scale(scale))));
+                Body::Table(_) | Body::Replay(_) => {
+                    let recording = pages::story_recording(&story.body)
+                        .expect("table and feature stories have replay inputs");
+                    return pages::page_with_messages(name, recording, seat, layout, size, profile)
+                        .map(|page| Self::Recording(Box::new(page.with_scale(scale))));
                 }
                 Body::Settings(settings) => {
                     Preview::Feature(Box::new(settings_element(settings, window, &data)))
@@ -509,6 +504,10 @@ pub(crate) fn list(prefix: &str) -> Result<Vec<Listed>, String> {
     };
     if story_prefix(prefix) || stories::PREFIX.starts_with(prefix) {
         for name in stories::names()?.filter(|name| name.starts_with(prefix)) {
+            if stories::is_recording_story(name) {
+                listed.push(recordings::listed_made(name));
+                continue;
+            }
             let parsed = stories::open(name);
             listed.push(Listed {
                 name: name.to_owned(),

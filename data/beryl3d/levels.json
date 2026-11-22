@@ -77,10 +77,7 @@
     "kit_scene": 0,
     "kit_probe": 2
   },
-  "protocol_literals": {
-    "rust/beryl3d/crates/beryl_inspect/src/screens.rs": 2,
-    "rust/beryl3d/crates/beryl_inspect/src/stress.rs": 1
-  },
+  "protocol_literals": {},
   "profile_words": {
     "beryl_3d": 35,
     "beryl_host": 21,

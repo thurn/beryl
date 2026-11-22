@@ -122,7 +122,7 @@ struct Listed {
 }
 
 pub(super) fn info(options: &Options) -> Result<Printed, Usage> {
-    if stories::is_story(options.name()) {
+    if stories::is_story(options.name()) && !stories::is_recording_story(options.name()) {
         return story_info(options);
     }
     let mut page = open_recording(options)?;

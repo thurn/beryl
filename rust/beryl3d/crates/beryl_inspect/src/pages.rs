@@ -1,22 +1,22 @@
 //! Recordings by name, played through the test driver (docs/beryl-3d.md, "The test driver"):
 //! `Page::fixture` and `Page::spec`, and `check_recording`, which runs every interface check
 //! on every tick of a recording. A name is a fixture's, a card spec moment's as
-//! `<card>/<moment>`, a stress board's ([`crate::stress`]) or a screen's ([`crate::screens`]).
+//! `<card>/<moment>`, or the name of a stress board or screen story.
 
 use std::sync::{Arc, OnceLock};
 
-use app_client::driver::{Duration, Page, Recording, TICK};
-use beryl_protocol::ipc::CARD_RECORDS;
+use app_client::driver::{Duration, Page, RECORDINGS, Recording, TICK};
+use beryl_protocol::Seat;
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
-use beryl_protocol::{GameUpdate, Seat, SessionId};
+use game_probe::story::Body;
 use kit_probe::agent::Layout;
 use kit_ui::input::{Insets, Size};
 
 use crate::faults::Listed;
 use crate::runner::Test;
-use crate::stress::{Board, card_records, pointer_moves, stress};
-use crate::{recordings, screens};
+use crate::stress::{Board, pointer_moves};
+use crate::{recordings, stories};
 
 use kit_base::data::Data;
 use kit_base::data::profiles::{Checks, ProfileData};
@@ -240,6 +240,14 @@ pub(crate) fn page_with_messages(
     profile: Option<&InspectionProfile>,
 ) -> Result<Page, String> {
     let (data, safe_area) = scene_data(layout, profile)?;
+    let drive = Board::parse(name).map(Board::drive).unwrap_or_default();
+    let delay = drive
+        .rest_before_last
+        .map(|frames| {
+            let released = recording.views()?.len().saturating_sub(1);
+            Ok::<_, String>((released, Duration(frames as u64 * TICK.0)))
+        })
+        .transpose()?;
     let mut page = Page::new(data, recording.into(), seat, layout, size)
         .map_err(|error| format!("{name}: {error}"))?
         .named(name);
@@ -247,17 +255,13 @@ pub(crate) fn page_with_messages(
         // Giving a page its safe area sets its client up again.
         page = page.with_safe_area(safe_area);
     }
-    if let Some(board) = Board::parse(name) {
-        let drive = board.drive();
-        if drive.pointer_over_hand {
-            let moves = pointer_moves(page.frame());
-            page.set_pointer_moves(moves);
-        }
-        if let Some(frames) = drive.rest_before_last {
-            // The reply delay applies once every view but the last has been released.
-            let released = board.build().views.len() - 1;
-            page.set_reply_delay(released, Duration(frames as u64 * TICK.0));
-        }
+    if drive.pointer_over_hand {
+        let moves = pointer_moves(page.frame());
+        page.set_pointer_moves(moves);
+    }
+    if let Some((released, delay)) = delay {
+        // The reply delay applies once every view but the last has been released.
+        page.set_reply_delay(released, delay);
     }
     Ok(page)
 }
@@ -273,31 +277,46 @@ pub fn recording(name: &str, seat: Side) -> Result<Recording, String> {
         Side::You => Seat::P0,
         Side::Opponent => Seat::P1,
     };
-    if let Some(board) = stress(name) {
+    if let Some(story_name) = stories::recording_story(name) {
         if seat != Seat::P0 {
             return Err(format!(
-                "the stress board {name:?} is seen from P0 only, not {seat:?}"
+                "the recording {name:?} has one seat; use --seat you"
             ));
         }
-        let records = card_records(&board);
-        let session = SessionId(1);
-        let mut messages: Vec<FixtureMessage> = board
-            .views
-            .into_iter()
-            .map(|view| FixtureMessage::game_update(&GameUpdate { session, view }))
-            .collect();
-        messages.insert(0, FixtureMessage::response(CARD_RECORDS, &records));
-        return Ok(Recording(messages));
-    }
-    if let Some(messages) = screens::messages(name) {
-        if seat != Seat::P0 {
-            return Err(format!(
-                "the screen recording {name:?} is seen from P0 only, not {seat:?}"
-            ));
+        let story = stories::open(story_name)?;
+        if let stories::Story::Game(story) = story.as_ref()
+            && let Some(recording) = story_recording(&story.body)
+        {
+            return Ok(recording);
         }
-        return Ok(Recording(messages));
+        return Err(format!("{story_name} must hold a table or feature replay"));
     }
     recordings::find(name, seat).map(|messages| Recording(messages.to_vec()))
+}
+
+/// The driver inputs of a story that plays over time.
+pub(crate) fn story_recording(body: &Body) -> Option<Recording> {
+    let messages = match body {
+        Body::Table(table) => table.messages(),
+        Body::Replay(messages) => messages
+            .iter()
+            .map(|message| {
+                // The testing screen lists the current pack. A capture can carry its own list.
+                if let FixtureMessage::Event { event, payload } = message
+                    && event == RECORDINGS
+                    && payload.is_null()
+                {
+                    return FixtureMessage::Event {
+                        event: event.clone(),
+                        payload: recordings::listed().unwrap_or_default().into(),
+                    };
+                }
+                message.clone()
+            })
+            .collect(),
+        _ => return None,
+    };
+    Some(Recording(messages))
 }
 
 /// What [`check_recording`] played.

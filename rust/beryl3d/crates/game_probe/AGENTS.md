@@ -61,16 +61,25 @@ card "Spell" stack
 
 Paste a card line from `just b3d tree` or leave out its screen coordinates. A
 missing ID is assigned the next free slot. `x40` repeats a card forty times. If
-the name uses `{n}`, the names differ from 1 through 40. An explicit ID on a
-repeat starts the run of IDs. Zones contain cards in line order, from the bottom
-of a pile when the zone is ordered that way. Use `stack.theirs` for an
-opponent's spell, and leave out the name for an unknown card. An `ability` line
-takes an ID followed by a stack ability as protocol JSON.
+the name uses `{n}`, the names differ from 1 through 40. Use `{id:03}` for the
+slot padded to three digits. An explicit ID on an `x40` repeat starts the run of
+IDs. `first-slot 1` makes the first implicit ID 1. A `repeat 20` block repeats
+its card lines in order until `end-repeat`. Use implicit IDs within a repeating
+block. A card can put `stats(2/2)` and then `token` before its tree states.
+Zones contain cards in line order, from the bottom of a pile when the zone is
+ordered that way. Use `stack.theirs` for an opponent's spell, and leave out the
+name for an unknown card. An `ability` line takes an ID followed by a stack
+ability as protocol JSON. An optional `spell` line supplies the targets and
+other fields for a stack card as protocol JSON.
 
-An optional `prompt` line takes a protocol `DecisionView` as JSON. An optional
-`script` line takes a protocol `Script` as JSON and plays it from the table
-defined by the card lines. Leave its timing empty to use the session's timing.
-When both are present, the prompt opens after the script.
+A `script` line takes a protocol `Script` as JSON. For multiline JSON, put
+`script` and `end-script` on their own lines. Each script plays from the
+previous view. Omit timing to use the session's timing. Use `script together` to
+keep each step's duration and effects while starting the steps together. A
+`prompt` line takes a `DecisionView` and a `handling` line takes a
+`CardHandling`, both as JSON for the final view. Add `neutral` for a table
+outside a game with no turn number or step stops. Add `battlefield-order` to
+send the cards in battlefield order after each script.
 
 A settings story uses key and value lines for the sheet's transient state and
 the inputs its view reads. Omitted controls use the app defaults.
@@ -97,3 +106,8 @@ Add `--feature settings` to capture the settings sheet as editable values. Other
 registered features with standalone views can reuse the capture's recording to
 rebuild their own view at that instant. The feature preview draws the feature
 alone.
+
+A feature story can use `replay` after its `feature` line to play a sequence of
+`message`, `view` and `card` lines through the full client. Use this when the
+screen depends on a host reply, another feature underneath it, or a script. Put
+`placeholder-faces` after `replay` to generate card records from the views.
