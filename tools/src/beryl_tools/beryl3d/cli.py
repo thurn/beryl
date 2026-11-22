@@ -274,16 +274,15 @@ def pack_selection(arguments: list[str]) -> tuple[str, ...]:
 def linked(name: str) -> Path:
     """The binary `name` as the linker wrote it, in `target/debug/deps`. Cargo copies it to
     `target/debug/<name>` as a new file on every build, even one that changed nothing, and
-    macOS checks each new executable before its first run: 1 to 9 s for `b3d` under the
-    machine's usual load. The linker's own file keeps its inode until the next link, so
-    running it pays that check once per link rather than once per command. The linker's file
-    is named for the crate's form of `name`, with `_` for each `-`."""
+    macOS checks each new executable before its first run. Reusing the linker's own file
+    pays that check once per link. Its name uses `_` for each `-` in the crate name."""
     debug = paths.WORKSPACE / "target" / "debug"
     stem = name.replace("-", "_")
-    pattern = re.compile(rf"{re.escape(stem)}-[0-9a-f]{{16}}")
+    suffix = r"\.exe" if system.WINDOWS else ""
+    pattern = re.compile(rf"{re.escape(stem)}-[0-9a-f]{{16}}{suffix}")
     found = [p for p in (debug / "deps").glob(f"{stem}-*") if pattern.fullmatch(p.name)]
     if not found:
-        return debug / name
+        return system.exe(debug / name)
     # A test harness built for the same crate (`cargo test`) has the same file name pattern
     # and may be newer. Cargo records the program's build as `bin-<name>` in its
     # fingerprint directory and a harness's as `test-bin-<name>`.
@@ -291,7 +290,7 @@ def linked(name: str) -> Path:
     program = [
         p
         for p in found
-        if any(fingerprints.glob(f"*-{p.name.rsplit('-', 1)[1]}/bin-{name}"))
+        if any(fingerprints.glob(f"*-{p.stem.rsplit('-', 1)[1]}/bin-{name}"))
     ]
     return max(program or found, key=lambda p: p.stat().st_mtime)
 

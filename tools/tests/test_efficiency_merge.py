@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -64,7 +65,8 @@ def test_two_branches_rebase_with_both_appends(tmp_path: Path) -> None:
         repo,
         "config",
         "merge.efficiency-changes.driver",
-        f"{sys.executable} {script} %O %A %B %P",
+        shlex.join([Path(sys.executable).as_posix(), script.as_posix()])
+        + " %O %A %B %P",
     )
     target = repo / "log.json"
     target.write_text(text("a"))

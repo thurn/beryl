@@ -1,7 +1,7 @@
 import argparse
+import base64
 import json
 import subprocess
-import sys
 import tarfile
 from collections.abc import Callable
 from pathlib import Path
@@ -127,40 +127,45 @@ def test_counting_holds_the_vm_lock_and_dirs_of_its_own() -> None:
     )
 
 
-def run_count(home: Path, name: str, checkout: str, live: list[str]) -> list[str]:
+def run_count(
+    home: Path, bash: str, name: str, checkout: str, live: list[str]
+) -> list[str]:
     """Runs the VM script on this machine with stub `flock` and `cargo` that log their
     arguments, returning the cargo calls."""
-    bin = home / "bin"
-    bin.mkdir(exist_ok=True)
-    for tool in ("flock", "cargo"):
-        (bin / tool).write_text(f'#!/bin/sh\necho "$*" >>"$HOME/{tool}.log"\n')
-        (bin / tool).chmod(0o755)
     (home / "cargo.log").write_text("")
     script = bench.count_script("", ["cargo", "bench"], name, checkout, live)
-    env = {"HOME": str(home), "PATH": f"{bin}:/usr/bin:/bin"}
-    subprocess.run(["bash", "-c", script], env=env, check=True)
+    stub = """\
+export HOME="$PWD"
+flock() { return 0; }
+cargo() { echo "$*" >>"$HOME/cargo.log"; }
+"""
+    subprocess.run([bash, "-c", stub + script], cwd=home, check=True)
     return (home / "cargo.log").read_text().splitlines()
 
 
 def test_target_dirs_rebuild_for_a_new_checkout_and_go_with_their_worktree(
-    tmp_path: Path,
+    tmp_path: Path, bash_executable: str
 ) -> None:
     gate = bench.GATE_NAME
     (tmp_path / "targets" / gate / "release").mkdir(parents=True)
     (tmp_path / "targets" / "gone").mkdir()
     (tmp_path / "gungraun" / "gone").mkdir(parents=True)
 
-    calls = run_count(tmp_path, gate, "/repo/a", ["a"])
+    calls = run_count(tmp_path, bash_executable, gate, "/repo/a", ["a"])
     assert calls[0].startswith("clean ") and "--profile bench" in calls[0]
-    assert run_count(tmp_path, gate, "/repo/a", ["a"]) == ["bench"]  # same owner: warm
-    assert run_count(tmp_path, gate, "/repo/b", ["a", "b"])[0].startswith("clean ")
+    assert run_count(tmp_path, bash_executable, gate, "/repo/a", ["a"]) == ["bench"]
+    assert run_count(tmp_path, bash_executable, gate, "/repo/b", ["a", "b"])[
+        0
+    ].startswith("clean ")
     assert not (tmp_path / "targets" / "gone").exists()
     assert not (tmp_path / "gungraun" / "gone").exists()
 
     # A worktree's first run copies the gate's warm dir, then rebuilds its own code.
-    assert run_count(tmp_path, "a", "/repo/a", ["a"])[0].startswith("clean ")
+    assert run_count(tmp_path, bash_executable, "a", "/repo/a", ["a"])[0].startswith(
+        "clean "
+    )
     assert (tmp_path / "targets" / "a" / "release").is_dir()
-    assert run_count(tmp_path, "a", "/repo/a", ["a"]) == ["bench"]
+    assert run_count(tmp_path, bash_executable, "a", "/repo/a", ["a"]) == ["bench"]
     assert sorted(p.name for p in (tmp_path / "targets").iterdir()) == ["a", gate]
 
 
@@ -361,7 +366,7 @@ def test_a_run_someone_waits_for_goes_before_a_background_run() -> None:
 
 
 def test_the_gate_drops_last_runs_callgrind_outputs_but_a_worktree_keeps_them(
-    tmp_path: Path,
+    tmp_path: Path, bash_executable: str
 ) -> None:
     # An unclean VM stop once left the gate's last outputs starting with zero bytes, and
     # Gungraun failed to parse them on every later run.
@@ -370,8 +375,8 @@ def test_the_gate_drops_last_runs_callgrind_outputs_but_a_worktree_keeps_them(
     for out in (gate, mine):
         out.parent.mkdir(parents=True)
         out.write_bytes(b"\0" * 8)
-    run_count(tmp_path, bench.GATE_NAME, "/repo", ["a"])
-    run_count(tmp_path, "a", "/repo/a", ["a"])
+    run_count(tmp_path, bash_executable, bench.GATE_NAME, "/repo", ["a"])
+    run_count(tmp_path, bash_executable, "a", "/repo/a", ["a"])
     assert not gate.exists()
     assert mine.exists()
 
@@ -407,8 +412,6 @@ def test_the_vm_sees_only_checkouts_under_its_mounts(
 def test_the_gate_counts_the_current_files_of_an_unmounted_worktree(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    if sys.platform == "win32":
-        pytest.skip("Windows counts use WSL")
     main, lease = tmp_path / "main", tmp_path / "trees" / "lease"
     (main / "rust").mkdir(parents=True)
     (main / ".gitignore").write_text("/rust/target/\n")
@@ -511,6 +514,45 @@ def test_lima_starts_outside_the_worktree(
     monkeypatch.setattr(subprocess, "run", start)
     assert bench.vm_ensure() == 0
     assert [cmd[:2] for cmd in starts] == [["limactl", "start"]]
+
+
+def test_the_windows_gate_counts_from_the_mounted_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lease = tmp_path / "lease"
+    rust: Path = lease / "rust"
+    rust.mkdir(parents=True)
+    (rust / "Cargo.lock").write_text(
+        '[[package]]\nname = "gungraun"\nversion = "0.20.0"\n'
+    )
+    (lease / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "beta"\n')
+    monkeypatch.setattr(bench.paths, "REPO", lease)
+    monkeypatch.setattr(bench.paths, "RUST", rust)
+    monkeypatch.setattr(bench.paths, "worktree_names", lambda: ["lease"])
+    monkeypatch.setattr(bench.system, "WINDOWS", True)
+    profile = calibration.Profile("windows", "a" * 40, "fixture", {}, {})
+    monkeypatch.setattr(
+        count_gate, "load_gate", lambda _: count_gate.CalibratedGate(profile, GATE, {})
+    )
+
+    def count(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        assert cmd[:7] == ["wsl", "-d", bench.VM, "--cd", str(rust), "--exec", "bash"]
+        script = base64.b64decode(cmd[-1].split("echo ")[1].split()[0]).decode()
+        assert "rustup toolchain install beta" in script
+        assert "cargo bench" in script
+        assert "tar -xf" not in script
+        assert "stdin" not in kwargs
+        return subprocess.CompletedProcess(
+            cmd, 0, summary(GATE.benchmark.rsplit("::", 1)[0], GATE.instructions)
+        )
+
+    monkeypatch.setattr(subprocess, "run", count)
+    assert (
+        count_gate.count_gate(
+            argparse.Namespace(family=None, measure=None, environment=False)
+        )
+        == 0
+    )
 
 
 def test_a_vm_that_stopped_mid_count_cannot_run(

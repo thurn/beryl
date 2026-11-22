@@ -14,10 +14,11 @@ import os
 import re
 import socket
 import sys
+import tempfile
 from pathlib import Path
 from typing import Callable
 
-from .. import deps
+from .. import deps, system
 
 # How long a request may take before it gives up, in seconds.
 LIMIT_S = 10.0
@@ -32,21 +33,14 @@ SOCKET_NAME: re.Pattern[bytes] = re.compile(rb"beryl3d-.{0,16}?\.sock", re.DOTAL
 
 
 def socket_dir() -> Path:
+    if system.WINDOWS:
+        return Path(tempfile.gettempdir())
     return Path(os.environ.get("TMPDIR") or "/tmp")
 
 
-def alive(pid: int) -> bool:
-    """Whether a process with id `pid` is running."""
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def sockets(folder: Path, running: Callable[[int], bool] = alive) -> dict[int, Path]:
+def sockets(
+    folder: Path, running: Callable[[int], bool] = system.alive
+) -> dict[int, Path]:
     """The live sockets in `folder`, by the process id in their names. A socket whose process
     has ended is left by an app that was killed before it could remove it (`just b3d smoke`
     ends the app with a signal): it is deleted and not listed."""
@@ -64,7 +58,7 @@ def sockets(folder: Path, running: Callable[[int], bool] = alive) -> dict[int, P
 
 
 def choose(
-    folder: Path, app: int | None, running: Callable[[int], bool] = alive
+    folder: Path, app: int | None, running: Callable[[int], bool] = system.alive
 ) -> Path:
     """The socket to speak to: the one with process id `app`, or the only one. Raises
     ValueError, naming what exists, when there is none, several or no such process."""
@@ -93,13 +87,20 @@ def request(path: Path, line: str, limit: float = LIMIT_S) -> tuple[bool, str]:
     """Sends `line` to the socket at `path`. Gives whether the app said `ok` and the rest of
     its answer. Raises OSError, including TimeoutError, when the app does not answer in time.
     """
+    if not hasattr(socket, "AF_UNIX"):
+        raise OSError("this Python build cannot connect to the app's Unix socket")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.settimeout(limit)
         connection.connect(str(path))
-        connection.sendall(f"{line}\n".encode())
-        chunks = []
-        while chunk := connection.recv(65536):
-            chunks.append(chunk)
+        return exchange(connection, line)
+
+
+def exchange(connection: socket.socket, line: str) -> tuple[bool, str]:
+    """Send one request on a connected stream and read its response through EOF."""
+    connection.sendall(f"{line}\n".encode())
+    chunks = []
+    while chunk := connection.recv(65536):
+        chunks.append(chunk)
     status, _, body = b"".join(chunks).decode(errors="replace").partition("\n")
     return status == "ok", body
 

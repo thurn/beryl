@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_efficiency import scope
+from beryl_efficiency import changes, scope
 
 
 @pytest.fixture
@@ -29,3 +29,9 @@ def cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "cache"
     monkeypatch.setenv("BERYL_CACHE", str(path))
     return path
+
+
+@pytest.fixture(autouse=True)
+def synthetic_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep synthetic reports independent of the checkout's staging history."""
+    monkeypatch.setattr(changes, "file_versions", lambda checkout, ref="staging": [])

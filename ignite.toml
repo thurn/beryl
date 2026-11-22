@@ -249,15 +249,14 @@ oracle = 1
 # Oracle checks use the pinned JDK and Maven builds from `just oracle-setup`.
 # Rollout counts use the `beryl-bench` WSL distribution from `just bench-count`.
 #
-# `families` holds those verified on cygnus. `pytest` is left
-# out: 29 of its 1,021 checks assume Unix paths or Unix sockets. `ignite-platform` declares
-# Windows as a platform it must pass on, and cygnus is the only Windows machine, so it must be
+# `families` holds those verified on cygnus. Pytest runs natively, and Pyre uses WSL.
+# `ignite-platform` must pass on Windows. Cygnus is the only Windows machine, so it must be
 # listed here: without it every tip waits on its Windows checks and `master` never moves.
 [machine.cygnus]
 os = "windows"
 families = [
   "rust", "doctests", "clippy", "rust-format", "ignite", "ignite-lint", "source", "markdown",
-  "repository", "commit", "black", "b3d-format", "b3d-source", "ignite-platform",
+  "repository", "commit", "black", "pytest", "pyre", "b3d-format", "b3d-source", "ignite-platform",
   "counts", "oracle", "oracle-generated",
 ]
 

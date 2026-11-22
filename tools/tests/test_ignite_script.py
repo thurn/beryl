@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import stat
+import subprocess
+import sys
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -65,22 +68,21 @@ def card(name: str, cost: str = "") -> str:
 
 
 CHECKER = """\
-#!/bin/sh
-case "$1" in
-specs-check)
-  shift
-  for c in "${@:-alpha beta}"; do
-    for card in $c; do echo "ok    $card / start  (Start)"; done
-  done
-  echo "2 moments, 0 candidates skipped" ;;
-script-check)
-  [ -n "$BERYL_CHECK_RESULTS" ] || exit 9
-  echo '{"check":"script:alpha/start/yours","outcome":"pass","seconds":0.1}' >> "$BERYL_CHECK_RESULTS"
-  echo '{"check":"script:beta/start/yours","outcome":"fail","seconds":0.2}' >> "$BERYL_CHECK_RESULTS"
-  echo "FAILED: script:beta/start/yours"
-  echo "    thread panicked: boom"
-  exit 1 ;;
-esac
+import os
+import sys
+from pathlib import Path
+
+if sys.argv[1] == 'specs-check':
+    for card in sys.argv[2:] or ['alpha', 'beta']:
+        print(f'ok    {card} / start  (Start)')
+    print('2 moments, 0 candidates skipped')
+elif sys.argv[1] == 'script-check':
+    with Path(os.environ['BERYL_CHECK_RESULTS']).open('a') as out:
+        print('{"check":"script:alpha/start/yours","outcome":"pass","seconds":0.1}', file=out)
+        print('{"check":"script:beta/start/yours","outcome":"fail","seconds":0.2}', file=out)
+    print('FAILED: script:beta/start/yours')
+    print('    thread panicked: boom')
+    sys.exit(1)
 """
 
 
@@ -100,16 +102,24 @@ def repository(root: Path) -> None:
             }
         )
     )
-    binary = root / "rust" / "target" / "debug" / "beryl_cli"
+    binary = adapter.binary(root)
     binary.parent.mkdir(parents=True)
     binary.write_text(CHECKER)
-    binary.chmod(binary.stat().st_mode | stat.S_IEXEC)
 
 
 @pytest.fixture
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.delenv("CARGO_TARGET_DIR", raising=False)
     repository(tmp_path)
+    binary: str = str(adapter.binary(tmp_path))
+    run: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run
+
+    def launch(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+        if command[0] == binary:
+            command = [sys.executable, *command]
+        return run(command, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", launch)
     return tmp_path
 
 

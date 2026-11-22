@@ -1,8 +1,9 @@
 """The disk report counts the live paths and physical extents once."""
 
-from pathlib import Path
+import argparse
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -33,9 +34,12 @@ def test_git_worktree_list_does_not_repeat_the_main_checkout(tmp_path: Path) -> 
 
 def test_edited_clones_share_blocks_and_hard_links_share_an_inode(
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     if sys.platform != "darwin":
-        pytest.skip("needs APFS physical block maps")
+        assert disk.run(argparse.Namespace()) == 2
+        assert "disk-usage requires macOS and APFS" in capsys.readouterr().err
+        return
     original = tmp_path / "original"
     clone = tmp_path / "clone"
     link = tmp_path / "hard-link"

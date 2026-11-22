@@ -2,11 +2,14 @@
 
 import argparse
 import socket
+import tempfile
 import threading
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
+from beryl_tools import system
 from beryl_tools.beryl3d import live, play, stand_in
 
 
@@ -52,44 +55,61 @@ def test_a_socket_whose_app_has_ended_is_removed_and_not_chosen(
     assert not ended.exists()
 
 
-def serve(path: Path, answer: bytes, asked: list[str]) -> threading.Thread:
-    listener: socket.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    listener.bind(str(path))
-    listener.listen(1)
+def ask(path: Path, line: str, answer: bytes, asked: list[str]) -> tuple[bool, str]:
+    # The app uses Unix sockets. Windows Python exercises the same framing
+    # over a local TCP stream since its socket module has no AF_UNIX.
+    family = socket.AF_INET if system.WINDOWS else socket.AF_UNIX
+    listener: socket.socket = socket.socket(family, socket.SOCK_STREAM)
+    with listener:
+        listener.settimeout(live.LIMIT_S)
+        listener.bind(("127.0.0.1", 0) if system.WINDOWS else str(path))
+        listener.listen(1)
 
-    def run() -> None:
-        connection, _ = listener.accept()
-        with connection, listener:
-            asked.append(connection.makefile().readline().strip())
-            connection.sendall(answer)
+        def run() -> None:
+            connection, _ = listener.accept()
+            with connection, connection.makefile() as incoming:
+                asked.append(incoming.readline().strip())
+                connection.sendall(answer)
 
-    thread = threading.Thread(target=run)
-    thread.start()
-    return thread
+        thread = threading.Thread(target=run)
+        thread.start()
+        try:
+            if system.WINDOWS:
+                with socket.create_connection(
+                    listener.getsockname(), timeout=live.LIMIT_S
+                ) as connection:
+                    return live.exchange(connection, line)
+            return live.request(path, line)
+        finally:
+            thread.join()
+
+
+@pytest.fixture
+def socket_path() -> Iterator[Path]:
+    # The native sockaddr has a fixed-length path. Keep the name short even when pytest's
+    # directory is deep.
+    with tempfile.TemporaryDirectory(dir=live.socket_dir(), prefix="b3d-") as directory:
+        path = Path(directory) / "s"
+        yield path
+        path.unlink(missing_ok=True)
 
 
 def test_a_request_is_one_line_and_the_answer_is_read_to_the_end(
-    tmp_path: Path,
+    socket_path: Path,
 ) -> None:
-    path = Path("/tmp") / f"b3dlive-{tmp_path.name[-8:]}.sock"
     asked: list[str] = []
-    thread = serve(path, b"ok\ngame\n  table\n", asked)
-    try:
-        assert live.request(path, "tree") == (True, "game\n  table\n")
-    finally:
-        thread.join()
-        path.unlink()
+    assert ask(socket_path, "tree", b"ok\ngame\n  table\n", asked) == (
+        True,
+        "game\n  table\n",
+    )
     assert asked == ["tree"]
 
 
-def test_an_error_answer_is_not_accepted(tmp_path: Path) -> None:
-    path = Path("/tmp") / f"b3dlive-{tmp_path.name[-8:]}.sock"
-    thread = serve(path, b"error\nno button", [])
-    try:
-        assert live.request(path, "do press button") == (False, "no button")
-    finally:
-        thread.join()
-        path.unlink()
+def test_an_error_answer_is_not_accepted(socket_path: Path) -> None:
+    assert ask(socket_path, "do press button", b"error\nno button", []) == (
+        False,
+        "no button",
+    )
 
 
 def test_a_binary_with_the_socket_name_is_found(tmp_path: Path) -> None:
@@ -129,8 +149,9 @@ def test_without_for_play_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_the_follow_up_names_the_pid_the_socket_and_each_live_command() -> None:
-    text = play.follow_up(4242, Path("/tmp/beryl3d-4242.sock"))
-    assert "process id 4242, socket /tmp/beryl3d-4242.sock" in text
+    path = live.socket_dir() / "beryl3d-4242.sock"
+    text = play.follow_up(4242, path)
+    assert f"process id 4242, socket {path}" in text
     for what in ("tree", "png", "do", "quit"):
         assert f"just b3d live {what} --app 4242" in text
 

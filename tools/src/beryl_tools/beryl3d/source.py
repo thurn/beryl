@@ -83,10 +83,10 @@ def run_with_sources(script: str) -> subprocess.CompletedProcess[str] | None:
     # archive while it is still reading names, and nothing reads the archive until the machine's
     # shell starts below. With a list longer than a pipe's buffer, tar would block on its full
     # stdout and this process on tar's full stdin, for ever.
-    with tempfile.NamedTemporaryFile(suffix=".list") as listing:
-        listing.write("\0".join(sources()).encode() + b"\0")
-        listing.flush()
-        return stream_sources(script, listing.name)
+    with tempfile.TemporaryDirectory() as scratch:
+        listing = Path(scratch) / "sources.list"
+        listing.write_bytes("\0".join(sources()).encode() + b"\0")
+        return stream_sources(script, str(listing))
 
 
 def stream_sources(

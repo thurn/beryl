@@ -345,7 +345,7 @@ def scene_literals(root: Path) -> list[str]:
                         and float(match[0].replace("_", "")) not in PLAIN_FLOATS
                     ):
                         found.append(
-                            f"{path.relative_to(root)}:{number}: the literal {match[0]} belongs "
+                            f"{path.relative_to(root).as_posix()}:{number}: the literal {match[0]} belongs "
                             f"in {TOKEN_FILE} under `flat` for a design token, or in "
                             "the corresponding data/beryl3d/ tuning file for a layout setting"
                         )
@@ -615,18 +615,15 @@ def check_cap(config: Levels, name: str, lines: int, update: bool) -> str | None
 def toolkit_words(root: Path, path: Path, source: str) -> list[str]:
     """Report names the toolkit source or story obtains from game concepts."""
     found: list[str] = []
+    relative = path.relative_to(root).as_posix()
     for number, line in enumerate(source.splitlines(), 1):
         # This is the standard macOS location for supplemental system fonts.
         line = line.replace("/System/Library/Fonts/Supplemental", "")
         words = {word.lower() for word in IDENTIFIER_PART.findall(line)}
         for word in sorted(words & MAGIC_WORDS):
-            found.append(
-                f"{path.relative_to(root)}:{number}: toolkit source names {word}"
-            )
+            found.append(f"{relative}:{number}: toolkit source names {word}")
         if re.search(r"\bberyl_protocol\b", line):
-            found.append(
-                f"{path.relative_to(root)}:{number}: toolkit source names {PROTOCOL}"
-            )
+            found.append(f"{relative}:{number}: toolkit source names {PROTOCOL}")
     return found
 
 
@@ -647,12 +644,12 @@ def crate_levels(root: Path, config: Levels, found: list[str], update: bool) -> 
     for name in order:
         if not (base / name / "Cargo.toml").is_file():
             found.append(
-                f"{LEVELS_FILE}: {name} has no Cargo.toml in {base.relative_to(root)}"
+                f"{LEVELS_FILE}: {name} has no Cargo.toml in {base.relative_to(root).as_posix()}"
             )
     for manifest in sorted(base.glob("*/Cargo.toml")):
         name = manifest.parent.name
         dependencies = dependency_names(tomllib.loads(manifest.read_text()), inherited)
-        relative = manifest.relative_to(root)
+        relative = manifest.relative_to(root).as_posix()
         for dependency in sorted(dependencies):
             if upwards(config, name, dependency):
                 found.append(f"{relative}: {name} depends upward on {dependency}")
@@ -678,7 +675,7 @@ def crate_levels(root: Path, config: Levels, found: list[str], update: bool) -> 
             for path in sorted((manifest.parent / "stories").rglob("*.story")):
                 found.extend(toolkit_words(root, path, path.read_text()))
         if problem := check_cap(config, name, lines, update):
-            found.append(f"{src.relative_to(root)}: {problem}")
+            found.append(f"{src.relative_to(root).as_posix()}: {problem}")
 
 
 def compare_levels(

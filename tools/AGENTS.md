@@ -15,6 +15,12 @@ scheduling or reporting, so that its input hashes cover what it runs.
 `tools/tests/test_ignite_inputs.py` holds each family's declared inputs to the
 modules its adapter imports.
 
+On Windows, Ignite lists and runs pytest in the native Python environment. Pyre
+uses the default WSL distribution, which needs Linux `uv` on its path or in
+`~/.local/bin` and access to the drive holding the leased worktrees. The adapter
+installs the locked dependencies in a separate Linux environment and runs Pyre
+from each project's directory in the lease.
+
 A pytest check's inputs are its test file, the modules it imports and the files
 `data/pytest-reads.json` says those modules read at run time. A test whose code
 opens a tracked file that the record does not list fails with the entry to add,

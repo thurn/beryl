@@ -1,6 +1,6 @@
 """`beryl3d-bench`, Beryl 3D's count machine."""
 
-from beryl_tools import bench
+from beryl_tools import bench, system
 from beryl_tools.beryl3d import vm
 
 
@@ -27,4 +27,5 @@ def test_provisioning_runs_from_the_machine_s_root() -> None:
     # The sweep's worktree is outside the main checkout, the only directory the machine
     # mounts, so a command run from the checkout's own path fails to start there.
     command = bench.vm_command("true", vm.NAME, "/")
-    assert command[command.index("--workdir") + 1] == "/"
+    directory_flag = "--cd" if system.WINDOWS else "--workdir"
+    assert command[command.index(directory_flag) + 1] == "/"

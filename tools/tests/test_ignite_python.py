@@ -225,3 +225,30 @@ def test_a_name_without_spaces_or_percent_signs_is_unchanged() -> None:
         assert adapter.check_part(name) == name
     odd = "test_x.py::t[a b\t100%]"
     assert adapter.decode_part(adapter.check_part(odd)) == odd
+
+
+def test_pyre_only_reports_a_failure_for_type_diagnostics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = adapter.PROJECTS[0]
+    checked: Path = tmp_path / project.folder
+    monkeypatch.setattr(adapter.sys, "platform", "win32")
+
+    def setup_failed(root: Path, cwd: Path) -> tuple[int, str, str]:
+        assert (root, cwd) == (tmp_path, checked)
+        return 1, "", "the WSL distribution was not found"
+
+    monkeypatch.setattr(adapter, "wsl_pyre", setup_failed)
+    assert adapter.run_pyre(project, tmp_path) is None
+    assert "the WSL distribution was not found" in capsys.readouterr().err
+
+    monkeypatch.setattr(adapter, "wsl_pyre", lambda *_: (0, "[]", ""))
+    assert adapter.run_pyre(project, tmp_path) == {"outcome": "pass"}
+
+    errors = [{"path": "src/a file.py", "line": 3, "description": "bad type"}]
+    monkeypatch.setattr(adapter, "wsl_pyre", lambda *_: (1, json.dumps(errors), ""))
+    assert adapter.run_pyre(project, tmp_path) == {
+        "outcome": "fail",
+        "at": "tools/src/a file.py:3",
+        "message": "bad type",
+    }

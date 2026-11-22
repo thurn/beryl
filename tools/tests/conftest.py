@@ -1,6 +1,20 @@
+import shutil
+import sys
 from pathlib import Path
 
 import pytest
+
+
+@pytest.fixture
+def bash_executable() -> str:
+    """Run guest scripts under a local Bash, using the Bash that ships with Windows Git."""
+    if sys.platform != "win32":
+        return "bash"
+    git = shutil.which("git")
+    assert git is not None, "Git for Windows is required"
+    bash = Path(git).parent.parent / "bin" / "bash.exe"
+    assert bash.is_file(), f"Git for Windows Bash was not found at {bash}"
+    return str(bash)
 
 
 @pytest.fixture(autouse=True)

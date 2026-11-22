@@ -33,9 +33,9 @@ whose message says why. This module is also the pytest plugin that writes those 
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import os
-import re
 import subprocess
 import sys
 from collections.abc import Iterable, Mapping, Sequence
@@ -343,23 +343,67 @@ def run_black(project: Project, root: Path) -> dict[str, Any] | None:
     return {"outcome": "fail", "message": clip(output) or "would reformat files"}
 
 
-PYRE_ERROR: re.Pattern[str] = re.compile(r"^(?P<path>\S+?):(?P<line>\d+):\d+ ")
+PYRE_COMMAND = ["pyre", "--noninteractive", "--output=json", "check"]
+
+
+def wsl_pyre(root: Path, cwd: Path) -> tuple[int, str, str]:
+    """Run the locked Linux Pyre from the mounted lease, using a Linux virtualenv."""
+    lock = hashlib.sha256((root / "tools" / "uv.lock").read_bytes()).hexdigest()
+    # Keep the Linux environment off the Windows volume and independent of the
+    # native project's .venv. Leases with the same lock use the same dependencies.
+    script = f"""\
+export PATH="$HOME/.local/bin:$PATH"
+export UV_PROJECT_ENVIRONMENT="$HOME/.cache/beryl/pyre/{lock}"
+uv sync --quiet --locked --project ../tools --no-install-project >&2 || exit 2
+exec "$UV_PROJECT_ENVIRONMENT/bin/pyre" {' '.join(PYRE_COMMAND[1:])}
+"""
+    # Feed the script as bytes. wsl.exe receives no shell quoting or CRLF commands.
+    done = subprocess.run(
+        ["wsl.exe", "--cd", str(cwd), "--exec", "sh", "-s"],
+        input=script.encode(),
+        capture_output=True,
+        cwd=cwd,
+        env={**os.environ, "WSL_UTF8": "1"},
+    )
+    return (
+        done.returncode,
+        done.stdout.decode("utf-8", errors="replace"),
+        done.stderr.decode("utf-8", errors="replace"),
+    )
 
 
 def run_pyre(project: Project, root: Path) -> dict[str, Any] | None:
-    code, output = tool(["pyre", "--noninteractive", "check"], root / project.folder)
-    if code == 0:
-        return {"outcome": "pass"}
-    # Pyre exits 1 when it found type errors; any other code is a failure to run.
-    if code != 1:
+    cwd = root / project.folder
+    try:
+        if sys.platform == "win32":
+            code, output, log = wsl_pyre(root, cwd)
+        else:
+            done = subprocess.run(
+                PYRE_COMMAND, cwd=cwd, capture_output=True, text=True, encoding="utf-8"
+            )
+            code, output, log = done.returncode, done.stdout, done.stderr
+    except OSError as error:
+        print(f"could not start Pyre in {cwd}: {error}", file=sys.stderr)
         return None
-    first = next(
-        (m for line in output.splitlines() if (m := PYRE_ERROR.match(line))), None
-    )
-    result: dict[str, Any] = {"outcome": "fail", "message": clip(output)}
-    if first:
-        result["at"] = f"{project.folder}/{first['path']}:{first['line']}"
-    return result
+    try:
+        errors = json.loads(output) if code in (0, 1) else None
+    except ValueError:
+        errors = None
+    if code == 0 and errors == []:
+        return {"outcome": "pass"}
+    if code != 1 or not isinstance(errors, list) or not errors:
+        print(
+            f"Pyre did not check {cwd} (exit {code}):\n{log}{output}", file=sys.stderr
+        )
+        return None
+    first = errors[0]
+    for error in errors:
+        print(f"{error['path']}:{error['line']}: {error['description']}")
+    return {
+        "outcome": "fail",
+        "at": f"{project.folder}/{first['path']}:{first['line']}",
+        "message": clip(first["description"]),
+    }
 
 
 def run_pytest(project: Project, nodes: list[str], root: Path, results: Path) -> None:

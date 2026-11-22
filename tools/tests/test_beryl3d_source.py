@@ -1,9 +1,11 @@
 """Sending sources into the `beryl3d-bench` machine, shared by the count and GPU gates."""
 
-import os
 import subprocess
+import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -27,7 +29,9 @@ def test_both_gates_build_from_the_machines_copy_of_the_sources() -> None:
         assert take_in in script.split(f"cd {source.SOURCE}")[0]
 
 
-def test_only_the_take_in_lines_read_the_stream(tmp_path: Path) -> None:
+def test_only_the_take_in_lines_read_the_stream(
+    tmp_path: Path, bash_executable: str
+) -> None:
     """A command before the take-in lines that reads stdin gets nothing, and the files arrive
     although more bytes than a pipe holds follow the archive."""
     sent = tmp_path / "sent"
@@ -40,6 +44,11 @@ def test_only_the_take_in_lines_read_the_stream(tmp_path: Path) -> None:
     ).stdout
     # More than a pipe holds after the archive, as padding a reader may leave unread.
     trailing = b"\0" * (1 << 17)
+    shell = 'export HOME="$PWD"\n'
+    if sys.platform == "win32":
+        # Git for Windows supplies Bash, tar and cp. The test exercises the stream;
+        # the real guest supplies rsync.
+        shell += 'rsync() { cp -R "$4/." "$5"; }\n'
     script = (
         'eaten=$(cat | wc -c | tr -d " ")\n'
         + source.take_in_script()
@@ -48,9 +57,9 @@ def test_only_the_take_in_lines_read_the_stream(tmp_path: Path) -> None:
     home = tmp_path / "home"
     home.mkdir()
     done = subprocess.run(
-        ["bash", "-c", source.stream_script(script)],
+        [bash_executable, "-c", shell + source.stream_script(script)],
         input=archive + trailing,
-        env={**os.environ, "HOME": str(home)},
+        cwd=home,
         capture_output=True,
         check=True,
         timeout=60,
@@ -74,14 +83,19 @@ def test_a_file_list_longer_than_a_pipe_holds_is_sent(
         path.write_text("fn main() {}\n")
         names.append(str(path))
     assert len("\0".join(names)) > 1 << 16
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    limactl = bin_dir / "limactl"
-    limactl.write_text(
-        '#!/bin/sh\n[ "$PWD" = / ] || exit 1\necho "read $(wc -c | tr -d " ")"\n'
-    )
-    limactl.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    launch: Callable[..., subprocess.Popen[Any]] = subprocess.Popen
+
+    def popen(command: list[str], **kwargs: Any) -> subprocess.Popen[Any]:
+        if command[0] == "limactl":
+            assert kwargs["cwd"] == "/"
+            command = [
+                sys.executable,
+                "-c",
+                "import sys; print('read', len(sys.stdin.buffer.read()))",
+            ]
+        return launch(command, **kwargs)
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
     monkeypatch.setattr(source, "sources", lambda: names)
 
     result: list[subprocess.CompletedProcess[str] | None] = []

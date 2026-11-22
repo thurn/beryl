@@ -26,11 +26,11 @@ inputs = [
   "tools/src/beryl_tools/ignite/names.py",
 ]
 
-# Types: one check per project. Pyre has no Windows build, so only macOS runs it.
+# Types: one check per project. Windows runs the locked Linux tool through WSL.
 [family.pyre]
 kind = "regression"
 adapter = "jsonl"
-platforms = ["macos"]
+platforms = ["macos", "windows"]
 needs = ["python-env"]
 always = true
 # A build check: a failure means the code does not type-check, so `green` does not move.

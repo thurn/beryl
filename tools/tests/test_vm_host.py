@@ -2,21 +2,29 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from beryl_tools import vm_host
-
-pytestmark: pytest.MarkDecorator = pytest.mark.skipif(
-    os.name == "nt", reason="Windows' machines are WSL distributions, left alone"
-)
+from beryl_tools import system, vm_host
 
 
 @pytest.fixture(autouse=True)
 def cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
     return tmp_path / "cache"
+
+
+@pytest.fixture
+def lima(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Exercise the Lima policy with a fake Lima process and native host locks and PID checks.
+    monkeypatch.setattr(
+        vm_host,
+        "system",
+        SimpleNamespace(WINDOWS=False, alive=system.alive, file_lock=system.file_lock),
+    )
 
 
 class Limactl:
@@ -42,12 +50,14 @@ class Limactl:
 
 
 def dead_pid() -> int:
-    proc = subprocess.Popen(["true"])
-    proc.wait()
-    return proc.pid
+    with subprocess.Popen([sys.executable, "-c", "pass"]) as proc:
+        proc.wait()
+        return proc.pid
 
 
-def test_an_idle_machine_stops_after_the_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_idle_machine_stops_after_the_wait(
+    lima: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     limactl = Limactl({"beryl-bench"})
     monkeypatch.setattr(subprocess, "run", limactl)
     vm_host.folder("beryl-bench")
@@ -63,6 +73,7 @@ def test_an_idle_machine_stops_after_the_wait(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_a_machine_with_a_live_user_keeps_running(
+    lima: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     limactl = Limactl({"beryl-bench"})
@@ -81,6 +92,7 @@ def test_a_machine_with_a_live_user_keeps_running(
 
 
 def test_joining_records_the_process_as_a_user(
+    lima: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(subprocess, "run", Limactl(set()))
@@ -89,6 +101,7 @@ def test_joining_records_the_process_as_a_user(
 
 
 def test_low_priority_work_runs_its_machine_in_the_background(
+    lima: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     limactl = Limactl(set())
@@ -110,3 +123,16 @@ def test_low_priority_work_is_background_work(
     assert not vm_host.background()
     monkeypatch.setenv("BERYL_LOW_PRIORITY", "1")
     assert vm_host.background()
+
+
+def test_windows_leaves_wsl_lifecycle_to_the_host(
+    monkeypatch: pytest.MonkeyPatch, cache: Path
+) -> None:
+    limactl = Limactl(set())
+    monkeypatch.setattr(subprocess, "run", limactl)
+    monkeypatch.setattr(system, "WINDOWS", True)
+    vm_host.join("beryl-bench")
+    vm_host.prioritize("beryl-bench")
+    assert vm_host.stop_idle() == []
+    assert limactl.calls == []
+    assert not cache.exists()

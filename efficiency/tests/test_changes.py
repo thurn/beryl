@@ -12,7 +12,13 @@ import pytest
 # `ignite_metrics` registers the Ignite series in `METRICS`, as the command line does, so an
 # entry may name `ignite.master-lag-minutes`.
 from beryl_efficiency import changes, facts, ignite_metrics, store
-from beryl_efficiency.changes import Change, compare, problems, split_metric
+from beryl_efficiency.changes import (
+    Change,
+    compare,
+    file_versions,
+    problems,
+    split_metric,
+)
 from beryl_efficiency.metrics import METRICS
 
 AT = "2026-11-10T12:00:00Z"
@@ -117,6 +123,31 @@ def test_an_entry_is_dated_by_the_commit_that_added_it() -> None:
         ]
     )
     assert found == {"One change": "first", "Another change": "second"}
+
+
+def test_git_returns_each_version_of_the_changes_file_in_order(tmp_path: Path) -> None:
+    git = [
+        "git",
+        "-C",
+        str(tmp_path),
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+    ]
+    subprocess.run([*git, "init", "-q", "-b", "staging"], check=True)
+    path = tmp_path / changes.PATH
+    path.parent.mkdir()
+    expected: list[tuple[str, bytes]] = []
+    for version in (b"[]\n", b'[{"label":"Second version"}]\n'):
+        path.write_bytes(version)
+        subprocess.run([*git, "add", changes.PATH], check=True)
+        subprocess.run(
+            [*git, "-c", "commit.gpgsign=false", "commit", "-qm", "change"], check=True
+        )
+        sha = subprocess.check_output([*git, "rev-parse", "HEAD"], text=True).strip()
+        expected.append((sha, version))
+    assert file_versions(tmp_path) == expected
 
 
 def points(day: int, values: list[float]) -> list[tuple[str, float]]:

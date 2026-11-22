@@ -840,5 +840,10 @@
     "label": "The engine and Beryl 3D benchmark listings run while the benchmark virtual machine is busy, so reading the list of checks no longer holds up landing checks.",
     "metric": "ignite.gate-wait-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Synthetic efficiency reports use fixture history, avoiding repeated Git queries during pytest.",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]

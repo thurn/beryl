@@ -17,9 +17,9 @@ from beryl_tools.beryl3d import app, cli
 def test_release_replaces_the_macos_app_with_a_signed_bundle(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    if sys.platform != "darwin":
-        pytest.skip("macOS app release")
     binary = tmp_path / "release" / "beryl3d"
+    if sys.platform == "win32":
+        binary = binary.with_suffix(".exe")
     binary.parent.mkdir()
     binary.write_bytes(b"release executable")
     binary.chmod(0o755)
@@ -56,6 +56,11 @@ def test_release_replaces_the_macos_app_with_a_signed_bundle(
     monkeypatch.setattr(subprocess, "run", sign)
 
     assert cli.main(["release"]) == 0
+    if sys.platform != "darwin":
+        assert f"release: {binary}" in capsys.readouterr().out
+        assert binary.read_bytes() == b"release executable"
+        assert (bundle / "old").exists()
+        return
     assert f"release: {bundle}" in capsys.readouterr().out
     contents = bundle / "Contents"
     info = plistlib.loads((contents / "Info.plist").read_bytes())
@@ -254,14 +259,15 @@ def test_the_linkers_newest_binary_is_run(
     debug = tmp_path / "target" / "debug"
     deps = debug / "deps"
     deps.mkdir(parents=True)
-    assert cli.linked("b3d") == debug / "b3d"
-    old, new = deps / "b3d-0000000000000000", deps / "b3d-1111111111111111"
+    assert cli.linked("b3d") == cli.system.exe(debug / "b3d")
+    old = cli.system.exe(deps / "b3d-0000000000000000")
+    new = cli.system.exe(deps / "b3d-1111111111111111")
     for path in (old, new, deps / "b3d-1111111111111111.d"):
         path.write_text("")
     os.utime(old, (1, 1))
     os.utime(new, (2, 2))
     assert cli.linked("b3d") == new
-    render = deps / "b3d_render-2222222222222222"
+    render = cli.system.exe(deps / "b3d_render-2222222222222222")
     render.write_text("")
     assert cli.linked("b3d-render") == render
 
@@ -273,7 +279,8 @@ def test_a_newer_test_harness_of_the_crate_is_not_run_as_the_program(
     debug = tmp_path / "target" / "debug"
     deps = debug / "deps"
     deps.mkdir(parents=True)
-    program, harness = deps / "b3d-0000000000000000", deps / "b3d-1111111111111111"
+    program = cli.system.exe(deps / "b3d-0000000000000000")
+    harness = cli.system.exe(deps / "b3d-1111111111111111")
     for path in (program, harness):
         path.write_text("")
     os.utime(program, (1, 1))

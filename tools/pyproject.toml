@@ -18,7 +18,7 @@ where = ["src"]
 [dependency-groups]
 dev = [
     "black",
-    # No Windows build: the python lane skips pyre there.
+    # Windows runs the Linux package from this project's lock in WSL.
     "pyre-check; sys_platform != 'win32'",
     "pytest",
     "mdformat",
