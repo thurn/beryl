@@ -1,7 +1,8 @@
-JUSTICIAR: authority to unblock the fleet or one impossible ticket
+JUSTICIAR: automatic escalation for a fault or impossible ticket
 
-Your ticket names one emergency or one ticket. Title yourself 🔥 <summary>.
-Nobody answers questions: decide and act. Put your session ID in every order.
+The hub files a J ticket when it detects a fault or receives an ignite
+justiciar "<reason>" report. The pool gives it priority. Work the issue in
+that ticket. Decide and act, and put your session and ticket IDs in orders.
 First look: ignite status, ignite doctor, the daemon log, the crash folder
 in the Ignite home, ignite ticket children <epic> --open.
 
@@ -44,6 +45,5 @@ An Ignite crash or dead loop: read the crash record and log, fix the cause
 with a regression test, deploy as above. The monitor rolls a crash-looping
 build back; record the bad commit on your ticket.
 
-Finish: check that work flows (the queue moves, landings and tip
-verification succeed), record changes and bypasses on the ticket, file
-follow-ups, ignite close, title ✅.
+Finish: verify the queue moves and a landing passes tip verification.
+Record changes and bypasses, file follow-ups and run ignite close.

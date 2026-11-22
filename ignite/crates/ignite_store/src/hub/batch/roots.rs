@@ -1,6 +1,6 @@
 //! New root ticket IDs. A root ID is a letter, `T` for a ticket, `E` for an epic, `M` for a
 //! meta-ticket, `A` for a ticket Ignite filed on its own, `B` for a player's bug report or
-//! `J` for a justiciar ticket, followed by a root of at least four characters.
+//! `J` for a justiciar ticket or `I` for an incident, followed by a root of at least four characters.
 //! Children add dotted numbers to their parent's ID, so a whole epic's tree shares its `E`.
 //!
 //! Four characters give 720,896 roots. As they fill, a random four-character root is more
@@ -13,7 +13,7 @@
 use rusqlite::{Connection, OptionalExtension};
 
 pub(crate) use ignite_core::ids::TICKET_ROOT_PREFIXES as PREFIXES;
-use ignite_core::protocol::tickets::{JUSTICIAR_LABEL, TicketFields, TicketType};
+use ignite_core::protocol::tickets::{INCIDENT_LABEL, JUSTICIAR_LABEL, TicketFields, TicketType};
 
 use crate::{Result, StoreError};
 
@@ -36,7 +36,8 @@ const MAX_ROOT_LENGTH: usize = 8;
 /// The label that marks a ticket filed from a player's bug report (`by bugs file`).
 pub(crate) const BUG_REPORT_LABEL: &str = "bug-report";
 
-/// Who filed a batch's new root tickets. A justiciar ticket gets `J` from either filer.
+/// Who filed a batch's new root tickets. Incidents and justiciar tickets use the same letters
+/// for either filer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Filer {
     /// A person or a session, whose tickets use [`prefix_for`].
@@ -49,20 +50,23 @@ pub(super) enum Filer {
 impl Filer {
     /// The letter of a new root ticket with `fields` filed by `self`.
     pub(super) fn letter(self, fields: &TicketFields) -> char {
+        if has_label(fields, INCIDENT_LABEL) {
+            return 'I';
+        }
+        if has_label(fields, JUSTICIAR_LABEL) {
+            return 'J';
+        }
         match self {
             Filer::Person => prefix_for(fields),
-            Filer::Ignite if has_label(fields, JUSTICIAR_LABEL) => 'J',
             Filer::Ignite => 'A',
         }
     }
 }
 
-/// The letter for a root filed by a person or session. The [`JUSTICIAR_LABEL`] takes precedence.
-/// Other roots use `E` for an epic, `M` for a meta-ticket, `B` for a bug report and `T` for
-/// anything else. The letter records the fields at creation. Children inherit their parent's ID.
-pub(super) fn prefix_for(fields: &TicketFields) -> char {
+/// Ordinary roots filed by a person use `E` for an epic, `M` for a meta-ticket, `B` for a bug
+/// report and `T` for anything else. Children inherit their parent's ID.
+fn prefix_for(fields: &TicketFields) -> char {
     match fields.ticket_type {
-        _ if has_label(fields, JUSTICIAR_LABEL) => 'J',
         Some(TicketType::Epic) => 'E',
         Some(TicketType::Meta) => 'M',
         _ if has_label(fields, BUG_REPORT_LABEL) => 'B',
@@ -120,12 +124,13 @@ fn taken(conn: &Connection, root: &str) -> Result<bool> {
     let ids = PREFIXES.map(|letter| format!("{letter}{root}"));
     let found: Option<i64> = conn
         .query_row(
-            "SELECT 1 FROM tickets WHERE id IN (?1, ?2, ?3, ?4, ?5, ?6) UNION ALL \
+            "SELECT 1 FROM tickets WHERE id IN (?1, ?2, ?3, ?4, ?5, ?6, ?7) UNION ALL \
              SELECT 1 FROM aliases WHERE alias IN \
-             (lower(?1), lower(?2), lower(?3), lower(?4), lower(?5), lower(?6)) \
+             (lower(?1), lower(?2), lower(?3), lower(?4), lower(?5), lower(?6), lower(?7)) \
              OR alias LIKE '%-' || lower(?1) OR alias LIKE '%-' || lower(?2) \
              OR alias LIKE '%-' || lower(?3) OR alias LIKE '%-' || lower(?4) \
              OR alias LIKE '%-' || lower(?5) OR alias LIKE '%-' || lower(?6) \
+             OR alias LIKE '%-' || lower(?7) \
              LIMIT 1",
             ids,
             |row| row.get(0),
@@ -145,12 +150,14 @@ mod tests {
             "INSERT INTO tickets (id, title, created_at, created_by, updated_at, version)
                VALUES ('TQ44S', 'Task', 'x', 'x', 'x', 1), ('EM4K2', 'Epic', 'x', 'x', 'x', 1),
                       ('MAB12', 'Meta', 'x', 'x', 'x', 1), ('AXY34', 'Auto', 'x', 'x', 'x', 1),
-                      ('BZ8Z8', 'Bug', 'x', 'x', 'x', 1), ('JX8K2', 'Justiciar', 'x', 'x', 'x', 1);
-             INSERT INTO aliases VALUES ('by-er2d2', 'TQ44S'), ('by-jh2k4', 'JX8K2');",
+                      ('BZ8Z8', 'Bug', 'x', 'x', 'x', 1), ('JX8K2', 'Justiciar', 'x', 'x', 'x', 1),
+                      ('IP4R7', 'Incident', 'x', 'x', 'x', 1);
+             INSERT INTO aliases VALUES ('by-er2d2', 'TQ44S'), ('by-jh2k4', 'JX8K2'),
+                                        ('by-ig7w2', 'IP4R7');",
         )
         .unwrap();
         for root in [
-            "Q44S", "M4K2", "AB12", "XY34", "Z8Z8", "X8K2", "R2D2", "H2K4",
+            "Q44S", "M4K2", "AB12", "XY34", "Z8Z8", "X8K2", "P4R7", "R2D2", "H2K4", "G7W2",
         ] {
             assert!(taken(&conn, root).unwrap(), "{root}");
         }
@@ -186,7 +193,7 @@ mod tests {
     }
 
     #[test]
-    fn the_justiciar_label_takes_precedence_for_either_filer() {
+    fn emergency_labels_take_precedence_for_either_filer() {
         let fields = TicketFields {
             ticket_type: Some(TicketType::Epic),
             labels: Some(vec![
@@ -197,6 +204,14 @@ mod tests {
         };
         assert_eq!(Filer::Person.letter(&fields), 'J');
         assert_eq!(Filer::Ignite.letter(&fields), 'J');
+        let mut incident = fields;
+        incident
+            .labels
+            .as_mut()
+            .unwrap()
+            .push(INCIDENT_LABEL.to_owned());
+        assert_eq!(Filer::Person.letter(&incident), 'I');
+        assert_eq!(Filer::Ignite.letter(&incident), 'I');
     }
 
     /// Inserts a ticket for every four-character root, so `allocate` can only find a longer one.

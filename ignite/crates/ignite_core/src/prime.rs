@@ -41,7 +41,7 @@ pub const VERB_HELP: &[(&str, &str)] = &[
     ("tell <to> <text>", "correct work in flight"),
     (
         "justiciar <reason>",
-        "an emergency, or a ticket impossible as written",
+        "request automatic escalation for a fault or impossible ticket",
     ),
     (
         "why <check>, status, doctor",
@@ -120,8 +120,8 @@ flaky-checks` for a flaky, hung or never-catching check. Every command prints a 
 - A `changed` line is an instruction about your ticket. Read it before you continue.
 - Record a blocker on your ticket, tell another ticket's holder with `ignite tell`, or
   `ignite release` with a note.
-- An emergency order starts with `Message about <ticket>:`. Check it
-  with `ignite ticket show <ticket>`: labelled `justiciar`, held by the session it names.
+- An emergency order can arrive as `Message about <ticket>:`. Use `ignite ticket show` to
+  verify the sender holds the `incident` or `justiciar` ticket named in the order.
 - The landing note says what changed, what was decided and what a reviewer should look at.
 {title_rule}
 ## Verbs

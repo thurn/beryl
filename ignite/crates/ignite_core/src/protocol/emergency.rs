@@ -1,18 +1,30 @@
-//! The emergency pause: a flag the justiciar sets at the hub (`POST /emergency`) that makes every
-//! machine refuse the verbs that start heavy work until the emergency ends.
+//! The emergency pause makes every machine refuse verbs that start heavy work. The hub keeps
+//! the flag, and a session holding an `incident` or `justiciar` ticket can declare it.
 //!
-//! The justiciar's session declares it with `ignite emergency declare <ticket>`. Daemons hear it
+//! The holder runs `ignite emergency declare <ticket>`. Daemons hear it
 //! in each heartbeat's reply ([`super::hub::HeartbeatReply::emergency`]) and refuse `start`,
 //! `test`, `check`, `land` and the other verbs that build, from every session except the
-//! justiciar's and the tickets it allows. Commands already running are not stopped.
+//! declaring session and sessions working the emergency ticket or tickets it allows. Running
+//! commands continue.
 //!
-//! A flag nobody renews lapses [`EMERGENCY_LASTS_S`] after it was last declared, so a justiciar
-//! that dies cannot leave the fleet stopped. `ignite pool resume --all` ends it at once.
+//! The flag lapses [`EMERGENCY_LASTS_S`] after the last declaration.
+//! `ignite pool resume --all` ends it at once.
 
 use serde::{Deserialize, Serialize};
 
+use super::tickets::{INCIDENT_LABEL, JUSTICIAR_LABEL};
 use crate::ids::{MachineId, SessionId, TicketId};
 use crate::time::Timestamp;
+
+/// The ticket labels that grant emergency powers to the holder.
+pub const EMERGENCY_LABELS: [&str; 2] = [INCIDENT_LABEL, JUSTICIAR_LABEL];
+
+/// Whether these ticket labels grant emergency powers to the holder.
+pub fn has_emergency_label(labels: &[String]) -> bool {
+    labels
+        .iter()
+        .any(|label| EMERGENCY_LABELS.contains(&label.as_str()))
+}
 
 /// How long an emergency lasts after it was declared or last renewed: two hours.
 pub const EMERGENCY_LASTS_S: f64 = 2.0 * 60.0 * 60.0;
@@ -20,22 +32,22 @@ pub const EMERGENCY_LASTS_S: f64 = 2.0 * 60.0 * 60.0;
 /// An emergency in force at the hub.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Emergency {
-    /// The justiciar ticket the emergency is worked on.
+    /// The incident or justiciar ticket where the emergency is tracked.
     pub ticket: TicketId,
-    /// The justiciar's session, which is never refused.
+    /// The declaring session, which can still run heavy verbs.
     pub session: SessionId,
-    /// The machine the justiciar declared it from.
+    /// The machine the session declared it from.
     pub machine: MachineId,
     pub declared_at: Timestamp,
     /// When it was last declared again, which starts its two hours over.
     pub renewed_at: Timestamp,
-    /// The tickets whose sessions the justiciar lets run heavy verbs.
+    /// The tickets whose sessions the declaring session lets run heavy verbs.
     #[serde(default)]
     pub allowed: Vec<Allowance>,
 }
 
-/// One exception the justiciar named: `ticket` may run `verb`, or any heavy verb when `verb` is
-/// `None`.
+/// One exception named by the declaring session. The ticket may run `verb`, or any heavy verb
+/// when `verb` is `None`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Allowance {
     pub ticket: TicketId,
@@ -54,7 +66,7 @@ impl Emergency {
         now < self.expires_at()
     }
 
-    /// Whether the justiciar's ticket or one of its allowances lets `ticket` run `verb`.
+    /// Whether the emergency ticket or one of its allowances lets `ticket` run `verb`.
     pub fn allows(&self, ticket: &TicketId, verb: &str) -> bool {
         &self.ticket == ticket
             || self
@@ -69,8 +81,8 @@ impl Emergency {
 #[serde(tag = "change", rename_all = "snake_case")]
 pub enum EmergencyChange {
     /// Declares an emergency from `session` on `machine`, or renews the one in force. A
-    /// declaration from another session takes the emergency over, as when the operator hands it
-    /// to a new justiciar; its allowances start empty.
+    /// declaration from another session takes the emergency over, as when the operator appoints
+    /// a new incident commander. The new declaration starts with empty allowances.
     Declare {
         ticket: TicketId,
         session: SessionId,
@@ -122,7 +134,7 @@ pub fn apply(
             };
             if &emergency.session != session {
                 return Err(format!(
-                    "only the justiciar's session {} may allow tickets",
+                    "only the declaring session {} may allow tickets",
                     emergency.session
                 ));
             }
@@ -169,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_justiciar_allows_and_an_allowance_names_a_verb_or_every_verb() {
+    fn only_the_declaring_session_grants_allowances_for_one_or_every_verb() {
         let now = Timestamp::EPOCH;
         let emergency = apply(None, &declare("local_j", "TJUS1"), now).unwrap();
         let refused = apply(

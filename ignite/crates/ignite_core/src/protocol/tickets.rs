@@ -11,8 +11,11 @@ use crate::config::Os;
 use crate::ids::{Commit, MachineId, Seq, SessionId, TicketId, TreeId};
 use crate::time::Timestamp;
 
-/// The label that marks a ticket for a justiciar.
+/// The label that marks an automatic escalation to a justiciar.
 pub const JUSTICIAR_LABEL: &str = "justiciar";
+
+/// The label on the ticket held by an operator-appointed incident commander.
+pub const INCIDENT_LABEL: &str = "incident";
 
 /// A ticket's type.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

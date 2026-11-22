@@ -5,10 +5,9 @@
 //! - [`CliDaemon::queue_message`] queues one. A session inside `ignite wait` has the wait ended
 //!   with a reply that says a message is waiting, as a desktop session's is: the reply is tool
 //!   output, which agents treat as data, so it does not carry the text.
-//! - An urgent message (`ignite tell --now`, or any `tell` from the session that holds a
-//!   justiciar ticket) also ends the running turn's process group, so the next turn starts with
-//!   it at once. While a `land` of the session is under way, ending the turn could leave the
-//!   landing half done, so the message waits for the turn's own end.
+//! - An urgent message (`ignite tell --now`, or any tell from the holder of an incident or
+//!   justiciar ticket) ends the running turn's process group so the next turn starts with it.
+//!   While the session is landing, the message waits for the turn to end.
 //! - The turn that carries a message is recorded with `cli_slots::record_turn_start`, which
 //!   marks the message delivered in the same transaction. A turn that printed no line never
 //!   showed its prompt to the worker, so its messages are put back when it ends (see `end`).

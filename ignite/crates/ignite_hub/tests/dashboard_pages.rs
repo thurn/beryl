@@ -207,25 +207,28 @@ fn a_ticket_page_shows_its_sections_links_and_changelog() {
 }
 
 #[test]
-fn a_justiciar_id_in_a_ticket_description_links_to_its_page() {
+fn emergency_ticket_ids_in_a_description_link_to_their_pages() {
     let hub = seeded();
     hub.conn
         .execute(
-            "INSERT INTO tickets (id, title, labels, created_at, updated_at, created_by, version)
-             VALUES ('JX8K2', 'Emergency', ?1, ?2, ?2, 'Sim actor', 4992)",
-            [r#"["justiciar"]"#, NOW],
+            r#"INSERT INTO tickets (id, title, labels, created_at, updated_at, created_by, version)
+               VALUES ('JX8K2', 'Escalation', '["justiciar"]', ?1, ?1, 'Sim actor', 4992),
+                      ('IP4R7', 'Incident', '["incident"]', ?1, ?1, 'Sim actor', 4993)"#,
+            [NOW],
         )
         .unwrap();
     hub.conn
         .execute(
-            "UPDATE tickets SET body = 'See JX8K2 for details.' WHERE id = 'TQ44S.7.24'",
+            "UPDATE tickets SET body = 'See JX8K2 and IP4R7 for details.' WHERE id = 'TQ44S.7.24'",
             [],
         )
         .unwrap();
 
     let page = hub.text("/TQ44S.7.24");
-    assert!(page.contains("href=\"/JX8K2\" data-hovercard="));
-    assert!(page.contains("<span class=\"c-mono\">JX8K2</span></a>"));
+    for id in ["JX8K2", "IP4R7"] {
+        assert!(page.contains(&format!("href=\"/{id}\" data-hovercard=")));
+        assert!(page.contains(&format!("<span class=\"c-mono\">{id}</span></a>")));
+    }
 }
 
 #[test]

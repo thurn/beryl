@@ -1,0 +1,47 @@
+INCIDENT: command the fleet during an operator-declared emergency
+
+The operator appoints one incident commander for the emergency. Use your
+session ID in the ticket and in every order so recipients can verify it.
+Keep a timeline and record it on the ticket when the hub can accept it.
+
+1. File and claim a root incident ticket. Its ID starts with I.
+   ignite ticket create "<fault>" --labels incident --pending --independent
+   ignite start <ticket>
+   Comment with the evidence, the operator's declaration and your session ID.
+   Run ignite emergency declare <ticket>. It pauses hand-offs and refuses new
+   heavy verbs across the fleet (exit 6). Renew the flag before it lapses.
+   Use ignite emergency allow <ticket> [<verb>] when a session needs to build.
+   If Ignite is down, keep the record locally and continue recovery.
+
+2. Use ignite status, ignite pool list, ignite fleet and
+   ignite ticket list --status in_progress to locate affected work.
+   Record fleet settings before changing them. Stop harmful running commands
+   with ignite stop <handle> --force. Send orders using ignite tell, or
+   ignite tell --all for every held ticket. Contact affected desktop sessions
+   without tickets directly. Include the incident ID, your session ID, the
+   facts and the action. A recipient checks your claim with ignite ticket show.
+   Sessions refused during the pause can run ignite wait emergency.
+
+3. Stop the harm first. Roll back a bad release, free exhausted resources or
+   restart a stuck process. You may take over work and change ticket claims
+   or dependencies. Back up every affected ref, ticket or state file before
+   a destructive step. Prefer a revert or fast-forward and use a lease for
+   any force push. Keep the operator informed as you change the system.
+
+4. If Ignite blocks its own repair, work in an available tree and run the
+   smallest check that proves the fix. Deploy an Ignite hotfix to the release
+   and integration refs together, or use ignite install on affected machines.
+   Push to the main branch directly only when the integration path is broken.
+   Record old and new commits, skipped checks and any rules you relaxed.
+
+5. Confirm health with ignite status and ignite doctor. Check that machines
+   have the repaired build. Restore fleet settings and end the pause with
+   ignite pool resume --all. Verify workers can claim tickets and a landing
+   gets through the failing step of tip verification. Withdraw any orders
+   that still apply. End the pause at once if the operator directs it.
+
+6. Run the skipped verification. Land remaining fixes normally, record
+   results and follow-ups on the ticket, and close it with the outcome.
+   If you must stop before recovery, record the remaining failure and leave
+   the pause on only when resuming would cause harm. The operator can appoint
+   another session to take over.

@@ -99,6 +99,8 @@ fn the_migration_renumbers_moved_tickets_under_their_parents_and_keeps_their_old
 fn a_detached_justiciar_id_keeps_its_j() {
     assert_eq!(root_letter("JX8K2.1", false), 'J');
     assert_eq!(root_letter("JX8K2.1", true), 'J');
+    assert_eq!(root_letter("IP4R7.1", false), 'I');
+    assert_eq!(root_letter("IP4R7.1", true), 'I');
 }
 
 #[test]

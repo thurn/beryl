@@ -93,13 +93,13 @@ fn collect(chars: &[char]) -> String {
     chars.iter().collect()
 }
 
-/// Whether `name` has the shape of a meta-ticket, automatic, bug-report or justiciar root:
-/// `M`, `A`, `B` or `J` and four capitals or digits, which ordinary words written in capitals
-/// rarely are. Roots can grow longer as the four-character space fills. To avoid matching
-/// words such as `ACTIVE`, this check requires a digit in a longer root (`AQ7XK2`).
+/// Whether `name` has the shape of a meta-ticket, automatic, bug-report, justiciar or incident
+/// root. These start with `M`, `A`, `B`, `J` or `I` and four capitals or digits. Roots can
+/// grow longer as the four-character space fills. To avoid matching words such as `ACTIVE`,
+/// this check requires a digit in a longer root (`AQ7XK2`).
 fn lettered_root(name: &str) -> bool {
     (5..=9).contains(&name.len())
-        && name.starts_with(['M', 'A', 'B', 'J'])
+        && name.starts_with(['M', 'A', 'B', 'J', 'I'])
         && name
             .chars()
             .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())

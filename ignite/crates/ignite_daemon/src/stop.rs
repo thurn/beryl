@@ -23,8 +23,8 @@
 //! `--force` is for an emergency, such as a tip round started by a daemon of an older release
 //! that hangs and holds `master` back. It stops a command of any session's, or of none, such as
 //! an internal verb a loop of the daemon started, and only the operator (a request that names no
-//! session, from a terminal) or a session holding an `in_progress` ticket labelled `justiciar`
-//! may give it. It asks the command to stop as above, refused or not, and a verb process that
+//! session, from a terminal) or the holder of an in-progress incident or justiciar ticket may
+//! give it. It asks the command to stop as above, refused or not, and a verb process that
 //! has not finished within [`FORCE_WAIT`] is ended with its whole process group, `SIGTERM` and
 //! then `SIGKILL` ([`EndVerbProcess`]). The daemon then finds the process dead, ends its
 //! leftover commands and its handle, and frees its landing trees only once the process has
@@ -36,9 +36,9 @@ use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 
-use ignite_core::dispatch::JUSTICIAR;
 use ignite_core::ids::Handle;
 use ignite_core::protocol::client::{Exit, Reply, Request};
+use ignite_core::protocol::emergency::{EMERGENCY_LABELS, has_emergency_label};
 use ignite_core::protocol::tickets::{Status, TicketQuery};
 use ignite_store::local::handles as handle_store;
 
@@ -104,7 +104,7 @@ impl StopVerb {
     }
 
     /// Whether the asker may give `--force`: the operator, whose request names no session, or a
-    /// session that holds an `in_progress` ticket labelled `justiciar`. `Err` says why not.
+    /// session that holds an in-progress incident or justiciar ticket.
     fn may_force(ctx: &Context) -> Result<(), String> {
         let Some(session) = &ctx.session else {
             return Ok(());
@@ -112,16 +112,22 @@ impl StopVerb {
         let query = TicketQuery {
             status: Some(Status::InProgress),
             assignee: Some(session.to_string()),
-            label_any: vec![JUSTICIAR.to_owned()],
+            label_any: EMERGENCY_LABELS.map(str::to_owned).to_vec(),
             ..TicketQuery::default()
         };
         match ctx.hub.tickets(&query) {
-            Ok(held) if !held.is_empty() => Ok(()),
+            Ok(held)
+                if held.iter().any(|ticket| {
+                    ticket.session.as_ref() == Some(session) && has_emergency_label(&ticket.labels)
+                }) =>
+            {
+                Ok(())
+            }
             Ok(_) => Err(format!(
-                "session {session} holds no in_progress ticket labelled `{JUSTICIAR}`"
+                "session {session} holds no in-progress incident or justiciar ticket"
             )),
             Err(error) => Err(format!(
-                "the hub could not say whether session {session} is a justiciar: {error}"
+                "the hub could not check the tickets held by {session}: {error}"
             )),
         }
     }
@@ -176,7 +182,7 @@ impl Verb for StopVerb {
                 format!(
                     "conflict {handle} belongs to {holder}; a session stops only its own \
                      commands\nnext     ignite tell that session to stop it; in an emergency \
-                     a justiciar or the operator runs `ignite stop {handle} --force`"
+                     an incident commander, a justiciar or the operator can run `ignite stop {handle} --force`"
                 ),
             );
         }
@@ -184,7 +190,7 @@ impl Verb for StopVerb {
             return Reply::text(
                 Exit::Conflict,
                 format!(
-                    "refused  `ignite stop --force` is for a justiciar or the operator: \
+                    "refused  `ignite stop --force` is for incident commanders, justiciars and the operator: \
                      {reason}\nnext     ignite justiciar asks for one"
                 ),
             );

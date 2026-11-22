@@ -5,8 +5,9 @@ use clap::Subcommand;
 
 #[derive(Debug, Subcommand)]
 pub enum EmergencyCommand {
-    /// Declare an emergency for the justiciar ticket, or renew it: heavy verbs refuse on every
-    /// machine for every session but yours, for two hours.
+    /// Declare or renew an emergency for an incident or justiciar ticket you hold. Heavy verbs
+    /// refuse across the fleet for two hours, with exceptions for the declaring session, its
+    /// ticket and any allowances it grants.
     Declare { ticket: String },
     /// Let one ticket's session run a heavy verb, or every heavy verb, during the emergency.
     Allow {
@@ -14,8 +15,7 @@ pub enum EmergencyCommand {
         /// `start`, `test`, `check`, `land`, `run`, `rebuild` or `audit`; every one if left out.
         verb: Option<String>,
     },
-    /// Lift the emergency on this machine alone, when its justiciar is gone and nobody can end
-    /// it.
+    /// Lift the emergency on this machine alone when the declaring session is gone.
     Clear {
         /// Required: other machines go on enforcing it.
         #[arg(long, required = true)]

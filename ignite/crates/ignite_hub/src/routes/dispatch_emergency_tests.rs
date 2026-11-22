@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use ignite_core::protocol::emergency::EMERGENCY_LASTS_S;
 use ignite_store::hub;
 
-use super::tests::{at, file, post, register};
+use super::tests::{Parent, at, claim, file_under, post, register};
 
 fn declare(ticket: &str, session: &str) -> Value {
     json!({"change": "declare", "ticket": ticket, "session": session, "machine": "m-1"})
@@ -20,20 +20,28 @@ fn beat() -> Value {
 fn a_declared_emergency_rides_every_heartbeat_until_every_machine_resumes() {
     let mut conn = hub::open_in_memory().unwrap();
     register(&mut conn);
-    let ticket = file(&mut conn, &[("justiciar", &[], &[])]).remove(0);
+    let (_, ids) = file_under(
+        &mut conn,
+        Parent::Loose,
+        &[("Incident", &["incident"], &[])],
+    );
+    let ticket = ids[0].as_str();
+    assert!(ticket.starts_with('I'));
     let (_, quiet) = post(&mut conn, "/machines/heartbeat", &beat(), at(1.0));
     assert!(quiet.get("emergency").is_none(), "{quiet}");
 
+    let (status, reply) = post(&mut conn, "/claims", &claim(ticket, "local_i"), at(1.0));
+    assert_eq!(status, 200, "{reply}");
     let (status, reply) = post(
         &mut conn,
         "/emergency",
-        &declare(ticket.as_str(), "local_j"),
+        &declare(&ticket[1..], "local_i"),
         at(2.0),
     );
     assert_eq!(status, 200, "{reply}");
-    assert_eq!(reply["emergency"]["session"], "local_j");
+    assert_eq!(reply["emergency"]["session"], "local_i");
     let (_, during) = post(&mut conn, "/machines/heartbeat", &beat(), at(3.0));
-    assert_eq!(during["emergency"]["ticket"], ticket.as_str(), "{during}");
+    assert_eq!(during["emergency"]["ticket"], ticket, "{during}");
 
     let pause = |paused: bool| json!({"machine": Value::Null, "paused": paused});
     post(&mut conn, "/pause", &pause(true), at(4.0));
@@ -46,13 +54,25 @@ fn a_declared_emergency_rides_every_heartbeat_until_every_machine_resumes() {
 fn an_emergency_nobody_renews_lapses_and_only_its_justiciar_allows_tickets() {
     let mut conn = hub::open_in_memory().unwrap();
     register(&mut conn);
-    let ids = file(&mut conn, &[("justiciar", &[], &[]), ("work", &[], &[])]);
-    post(
+    let (_, ids) = file_under(
+        &mut conn,
+        Parent::Loose,
+        &[("Justiciar", &["justiciar"], &[]), ("Work", &[], &[])],
+    );
+    let (status, reply) = post(
+        &mut conn,
+        "/claims",
+        &claim(ids[0].as_str(), "local_j"),
+        at(0.0),
+    );
+    assert_eq!(status, 200, "{reply}");
+    let (status, reply) = post(
         &mut conn,
         "/emergency",
         &declare(ids[0].as_str(), "local_j"),
         at(0.0),
     );
+    assert_eq!(status, 200, "{reply}");
     let allow = |session: &str| {
         json!({"change": "allow", "session": session,
                "allowance": {"ticket": ids[1].as_str(), "verb": "land"}})
@@ -68,4 +88,40 @@ fn an_emergency_nobody_renews_lapses_and_only_its_justiciar_allows_tickets() {
     let lapsed = at(EMERGENCY_LASTS_S + 1.0);
     let (_, after) = post(&mut conn, "/machines/heartbeat", &beat(), lapsed);
     assert!(after.get("emergency").is_none(), "{after}");
+}
+
+#[test]
+fn only_the_holder_of_a_labelled_ticket_can_declare_an_emergency() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    let (_, ids) = file_under(
+        &mut conn,
+        Parent::Loose,
+        &[("Incident", &["incident"], &[]), ("Work", &[], &[])],
+    );
+    let incident = ids[0].as_str();
+    let work = ids[1].as_str();
+    assert_eq!(
+        post(
+            &mut conn,
+            "/emergency",
+            &declare(incident, "local_i"),
+            at(0.0)
+        )
+        .0,
+        409
+    );
+    assert_eq!(
+        post(&mut conn, "/claims", &claim(incident, "local_i"), at(1.0)).0,
+        200
+    );
+    assert_eq!(
+        post(&mut conn, "/claims", &claim(work, "local_w"), at(2.0)).0,
+        200
+    );
+    for (ticket, session) in [(incident, "local_w"), (work, "local_w")] {
+        let (status, reply) = post(&mut conn, "/emergency", &declare(ticket, session), at(3.0));
+        assert_eq!(status, 409, "{reply}");
+    }
+    assert!(hub::emergency::in_force(&conn, at(3.0)).unwrap().is_none());
 }

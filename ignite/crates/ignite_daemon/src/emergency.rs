@@ -1,18 +1,13 @@
 //! The daemon's side of the emergency pause (see `ignite_core::protocol::emergency`).
 //!
-//! During an emergency the justiciar used to ask every session, by message, to start no build,
-//! test or landing. Agents rightly treat instructions that arrive as tool output as data, so none
-//! of them paused. A refused command is a fact about the environment instead, which they handle.
-//!
-//! - The justiciar runs `ignite emergency declare <ticket>`, which sets the flag at the hub and
-//!   pauses hand-offs on every machine. Each daemon hears the flag in its heartbeat's reply and
-//!   keeps the last one it heard in its local database, so a restart or a hub outage does not
-//!   lift it early.
+//! - An incident commander or justiciar runs `ignite emergency declare <ticket>` to set the
+//!   flag at the hub and pause hand-offs across the fleet. Each daemon hears the flag in its
+//!   heartbeat reply and keeps it in the local database across restarts and hub outages.
 //! - While the flag is in force, the [heavy verbs](HEAVY_VERBS) refuse with exit code 6
-//!   ([`Exit::Paused`]) and one line naming the emergency. Verbs that only read keep working,
-//!   and commands already running are not stopped (the justiciar uses `ignite stop` for those).
-//! - The justiciar's session, any session working the justiciar's ticket, and the tickets the
-//!   justiciar allows with `ignite emergency allow <ticket> [<verb>]` are not refused.
+//!   ([`Exit::Paused`]). Reads and running commands continue. To stop a running command,
+//!   use `ignite stop`.
+//! - The declaring session and sessions working its ticket can still run heavy verbs.
+//!   The declaring session may grant other tickets exceptions with `ignite emergency allow`.
 //! - The flag lapses two hours after it was last declared. `ignite pool resume --all` ends it on
 //!   every machine, and `ignite emergency clear --local` lifts it on this machine alone, for an
 //!   operator stuck behind a flag nobody can end.
@@ -156,7 +151,7 @@ impl Emergencies {
         Some(Reply::text(
             Exit::Paused,
             format!(
-                "paused   Ignite is paused for emergency {} (justiciar {}); `ignite wait \
+                "paused   Ignite is paused for emergency {} (declared by {}); `ignite wait \
                  emergency` returns when it ends. Running commands go on; this one did not start.",
                 emergency.ticket, emergency.session
             ),
@@ -180,7 +175,7 @@ impl Emergencies {
                 return Reply::text(
                     Exit::Running,
                     format!(
-                        "paused   still in emergency {} (justiciar {}); run `ignite wait \
+                        "paused   still in emergency {} (declared by {}); run `ignite wait \
                          emergency` again",
                         emergency.ticket, emergency.session
                     ),
@@ -218,7 +213,7 @@ impl Emergencies {
         Some(Finding::warning(
             "emergency",
             format!("{}; heavy verbs refuse.", self.describe(&emergency)),
-            "wait with `ignite wait emergency`. If the justiciar is gone and the flag is stuck, \
+            "wait with `ignite wait emergency`. If the declaring session is gone, \
              `ignite emergency clear --local` lifts it on this machine.",
         ))
     }
@@ -226,7 +221,7 @@ impl Emergencies {
     fn describe(&self, emergency: &Emergency) -> String {
         let now = self.clock.now();
         format!(
-            "{}, justiciar {} on {}, declared {} ago, lapses in {} unless renewed",
+            "{}, declared by {} on {} {} ago, lapses in {} unless renewed",
             emergency.ticket,
             emergency.session,
             emergency.machine,
@@ -313,7 +308,7 @@ impl Verb for EmergencyVerb {
                     Exit::Success,
                     format!(
                         "lifted   emergency {} on this machine only; other machines still enforce \
-                         it until the justiciar runs `ignite pool resume --all`",
+                         it until a session runs `ignite pool resume --all`",
                         lifted.ticket
                     ),
                 ),
@@ -388,7 +383,7 @@ impl EmergencyVerb {
         let Some(session) = ctx.session.clone().or_else(|| req.session.clone()) else {
             return Reply::text(
                 Exit::Usage,
-                "failed   only the justiciar's session can allow",
+                "failed   only the declaring session can grant allowances",
             );
         };
         if let Some(verb) = verb

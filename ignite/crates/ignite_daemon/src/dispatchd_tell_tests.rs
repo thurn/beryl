@@ -151,6 +151,29 @@ fn every_tell_from_a_justiciar_is_urgent_for_a_cli_worker() {
 }
 
 #[test]
+fn a_broadcast_from_the_incident_commander_is_urgent_for_cli_workers() {
+    let rig = rig(&[]);
+    let (fake, _) = cli_holder(&rig);
+    rig.hub.insert_ticket(detail(
+        "IP4R7",
+        "in_progress",
+        Some("local_i1"),
+        &["incident"],
+        "",
+    ));
+    let reply = rig.tell_as("local_i1", &["--all", "Incident IP4R7. Stop the build."]);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
+    let sent = fake.sent();
+    assert_eq!(sent.len(), 1);
+    assert_eq!(
+        sent[0].text,
+        "Message about T.1: from local_i1: Incident IP4R7. Stop the build."
+    );
+    assert!(sent[0].urgent);
+}
+
+#[test]
 fn tell_now_to_a_desktop_session_is_refused() {
     let rig = rig(&["local_w1"]);
     rig.hub

@@ -294,12 +294,12 @@ impl EndVerbProcess for FakeEnder {
     }
 }
 
-/// An `in_progress` ticket labelled `justiciar` that `holder` holds.
-fn justiciar_ticket(holder: &str) -> ignite_core::protocol::tickets::TicketDetail {
+/// A ticket carrying an emergency label that `holder` holds.
+fn emergency_ticket(holder: &str, label: &str) -> ignite_core::protocol::tickets::TicketDetail {
     serde_json::from_value(serde_json::json!({
         "id": "T.1", "parent": null, "next_child": 1, "title": "Master is stuck",
         "body": "", "type": "task", "status": "in_progress", "priority": 0, "assignee": holder,
-        "labels": ["justiciar"], "defer_until": null, "close_reason": null,
+        "labels": [label], "defer_until": null, "close_reason": null,
         "created_at": "2027-01-01T00:00:00.000Z", "created_by": "test",
         "updated_at": "2027-01-01T00:00:00.000Z", "closed_at": null, "version": 1,
         "session": holder, "edges": [], "children": [], "ready": false, "blocked_by": [],
@@ -351,7 +351,7 @@ fn a_justiciar_or_the_operator_stops_a_hung_internal_verb_by_force() {
     let worker = stop.run(&as_session(Some("local_w")), &force);
     assert_eq!(worker.exit, Exit::Conflict, "{}", worker.text);
     assert!(
-        worker.text.contains("holds no in_progress ticket"),
+        worker.text.contains("holds no in-progress"),
         "{}",
         worker.text
     );
@@ -359,7 +359,7 @@ fn a_justiciar_or_the_operator_stops_a_hung_internal_verb_by_force() {
 
     let justiciar = as_session(Some("local_j"));
     let hub = FakeHub::default();
-    hub.insert_ticket(justiciar_ticket("local_j"));
+    hub.insert_ticket(emergency_ticket("local_j", "justiciar"));
     let justiciar = Context {
         hub: Arc::new(hub),
         ..justiciar
@@ -381,6 +381,17 @@ fn a_justiciar_or_the_operator_stops_a_hung_internal_verb_by_force() {
 
     // The operator names no session and needs no ticket.
     assert!(StopVerb::may_force(&as_session(None)).is_ok());
+}
+
+#[test]
+fn the_incident_commander_can_stop_commands_by_force() {
+    let hub = FakeHub::default();
+    hub.insert_ticket(emergency_ticket("local_i", "incident"));
+    let commander = Context {
+        hub: Arc::new(hub),
+        ..as_session(Some("local_i"))
+    };
+    assert!(StopVerb::may_force(&commander).is_ok());
 }
 
 /// A session's own verb that agreed to stop and is still running after the stop wait, as a

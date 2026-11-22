@@ -140,8 +140,9 @@ mod tests {
     }
 
     #[test]
-    fn justiciar_ticket_ids_keep_their_j() {
+    fn emergency_ticket_ids_keep_their_prefix() {
         assert_eq!(spelled("JX8K2"), "JX8K2");
+        assert_eq!(spelled("IP4R7"), "IP4R7");
     }
 
     #[test]

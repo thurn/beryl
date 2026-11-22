@@ -5,7 +5,7 @@
 //!
 //! An ordinary tell reaches the session when its turn ends. For a CLI worker (a session the
 //! daemon runs as headless CLI turns, `cli-<app>-<id>`) a tell can also be urgent: `--now`, and
-//! every tell from the session that holds an in-progress justiciar ticket, sets the metadata key
+//! every tell from the holder of an in-progress incident or justiciar ticket, sets the metadata key
 //! `tell_now` to the same comment number, and the holder's daemon then ends the running turn and
 //! starts the next one with the text. A desktop session's turn cannot be ended from outside, so
 //! `--now` to one is refused.
@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
+use ignite_core::protocol::emergency::has_emergency_label;
 use ignite_core::protocol::tickets::{
     BatchRequest, Operation, Precondition, Status, Ticket, TicketQuery,
 };
@@ -21,7 +22,6 @@ use ignite_core::traits::{Error, Result};
 
 use super::cli::is_cli_session;
 use super::hub_exit;
-use super::turn::JUSTICIAR_LABEL;
 use crate::server::{Context, Verb};
 
 /// Attempts at a batch whose tickets changed between reading and writing.
@@ -82,18 +82,17 @@ fn deliverable(ticket: &Ticket) -> bool {
 }
 
 /// Whether the tell is urgent for `ticket`'s holder: it is held by a CLI worker, and the sender
-/// asked for `--now` or holds a justiciar ticket (`justiciar`).
-fn urgent(ticket: &Ticket, now: bool, justiciar: bool) -> bool {
-    deliverable(ticket) && (now || justiciar)
+/// asked for `--now` or holds an incident or justiciar ticket.
+fn urgent(ticket: &Ticket, now: bool, emergency_sender: bool) -> bool {
+    deliverable(ticket) && (now || emergency_sender)
 }
 
-/// Whether the sending session holds an in-progress ticket labelled `justiciar`, among
-/// `tickets`.
-fn from_justiciar(req: &Request, tickets: &[Ticket]) -> bool {
+/// Whether the sender holds an incident or justiciar ticket among the in-progress tickets.
+fn from_emergency_holder(req: &Request, tickets: &[Ticket]) -> bool {
     req.session.as_ref().is_some_and(|sender| {
-        tickets.iter().any(|t| {
-            t.session.as_ref() == Some(sender) && t.labels.iter().any(|l| l == JUSTICIAR_LABEL)
-        })
+        tickets
+            .iter()
+            .any(|t| t.session.as_ref() == Some(sender) && has_emergency_label(&t.labels))
     })
 }
 
@@ -128,7 +127,7 @@ fn tell_one(ctx: &Context, req: &Request, target: &str, text: &str, now: bool) -
             ),
         ));
     }
-    let urgent = urgent(&ticket, now, from_justiciar(req, &tickets));
+    let urgent = urgent(&ticket, now, from_emergency_holder(req, &tickets));
     write(ctx, &[(ticket.id.clone(), mark, urgent)], text)?;
     let text = match (&ticket.session, mark) {
         (Some(session), true) if urgent => format!(
@@ -149,10 +148,16 @@ fn tell_one(ctx: &Context, req: &Request, target: &str, text: &str, now: bool) -
 
 fn tell_all(ctx: &Context, req: &Request, text: &str) -> Result<Reply> {
     let in_progress = in_progress(ctx)?;
-    let justiciar = from_justiciar(req, &in_progress);
+    let emergency_sender = from_emergency_holder(req, &in_progress);
     let tickets: Vec<(TicketId, bool, bool)> = in_progress
         .iter()
-        .map(|t| (t.id.clone(), deliverable(t), urgent(t, false, justiciar)))
+        .map(|t| {
+            (
+                t.id.clone(),
+                deliverable(t),
+                urgent(t, false, emergency_sender),
+            )
+        })
         .collect();
     if tickets.is_empty() {
         return Ok(Reply::text(Exit::Success, "no ticket is in progress"));

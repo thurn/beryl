@@ -96,7 +96,7 @@ pub enum Command {
     Stop {
         handle: String,
         /// End a command of any session's, or a daemon's internal verb, and its verb process if
-        /// it does not stop when asked. Only for a justiciar or the operator.
+        /// it does not stop when asked. Only for incident commanders, justiciars and the operator.
         #[arg(long)]
         force: bool,
     },

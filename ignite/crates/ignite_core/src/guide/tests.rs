@@ -95,7 +95,23 @@ fn justiciar_relaxes_constraints_or_files_a_person_ticket_with_an_interim_path()
     ] {
         assert!(flat.contains(phrase), "missing {phrase}: {justiciar}");
     }
-    assert!(!flat.contains("one hard ticket are no emergency"));
+    assert!(flat.contains("The hub files a J ticket"));
+}
+
+#[test]
+fn the_incident_guide_connects_operator_authority_to_the_pause_and_orders() {
+    let incident = reply(Some("incident"));
+    assert_eq!(incident.exit, Exit::Success);
+    for phrase in [
+        "The operator appoints one incident commander",
+        "--labels incident",
+        "ignite emergency declare <ticket>",
+        "ignite tell --all",
+        "ignite pool resume --all",
+    ] {
+        assert!(incident.text.contains(phrase), "missing {phrase}");
+    }
+    assert!(list().lines().any(|line| line.starts_with("incident ")));
 }
 
 #[test]

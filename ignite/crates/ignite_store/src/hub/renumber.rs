@@ -255,12 +255,14 @@ pub fn renumber_all(transaction: &Transaction<'_>) -> Result<()> {
     Ok(())
 }
 
-/// The letter of a new root ID for a ticket detached from its tree. A ticket from a justiciar
-/// tree keeps `J`. Otherwise epics get `E`, tickets from `A` and `B` trees keep those letters,
-/// and other tickets get `T`.
+/// The letter of a new root ID for a ticket detached from its tree. Incident and justiciar
+/// trees keep `I` and `J`. Otherwise epics get `E`, tickets from `A` and `B` trees keep those
+/// letters, and other tickets get `T`.
 #[must_use]
 pub fn root_letter(old: &str, epic: bool) -> char {
-    if old.starts_with('J') {
+    if old.starts_with('I') {
+        'I'
+    } else if old.starts_with('J') {
         'J'
     } else if epic {
         'E'

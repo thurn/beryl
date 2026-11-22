@@ -7,7 +7,7 @@
 //!
 //! - `pass`: the session may stop. It is not a worker of this machine's pool (a person's own
 //!   session, even one running `/ignite`, ends turns to talk to the person), it holds no ticket,
-//!   it holds a justiciar ticket, or a `land`, `release` or `close` of the session is still
+//!   it holds an incident or justiciar ticket, or a `land`, `release` or `close` is still
 //!   running. Those verbs end the ticket, so a `land` waiting in the background holds the work
 //!   legitimately.
 //! - `pass`, too, when anything the session started is still running, since the worker is
@@ -65,15 +65,13 @@ use std::sync::Arc;
 use ignite_core::cli::decide::{block_text, cut, quoting};
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
+use ignite_core::protocol::emergency::has_emergency_label;
 use ignite_core::protocol::hub::JusticiarReport;
 use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::traits::{Error, Result};
 
 use super::HeadlessDispatch;
 use crate::server::{Context, Verb};
-
-/// The label that marks a justiciar's ticket, whose session is never blocked or released.
-pub(super) const JUSTICIAR_LABEL: &str = "justiciar";
 
 /// The label of a ticket that waits on the person, which a ⛔ title does not release.
 const NEEDS_PERSON_LABEL: &str = "needs:person";
@@ -229,8 +227,8 @@ impl HeadlessDispatch {
         }
         // A lookup that fails proves nothing, so the session is let go rather than blocked.
         let needs_person = match ctx.hub.ticket(&ticket) {
-            Ok(detail) if detail.ticket.labels.iter().any(|l| l == JUSTICIAR_LABEL) => {
-                return pass("a justiciar's session");
+            Ok(detail) if has_emergency_label(&detail.ticket.labels) => {
+                return pass("holds an incident or justiciar ticket");
             }
             Ok(detail) => detail.ticket.labels.iter().any(|l| l == NEEDS_PERSON_LABEL),
             Err(error) => return pass(&format!("could not read {ticket}: {error}")),

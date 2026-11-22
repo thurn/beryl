@@ -79,14 +79,16 @@ fn a_persons_session_is_never_blocked_or_released() {
 }
 
 #[test]
-fn a_justiciars_session_is_never_blocked_or_released() {
-    let rig = holding(&["justiciar"]);
-    assert_eq!(verdict(&ended(&rig, &["--session", "local_w1"])), "pass");
-    assert_eq!(
-        verdict(&ended(&rig, &["--session", "local_w1", "--again"])),
-        "pass"
-    );
-    assert!(lock(&rig.host.releases).is_empty());
+fn an_emergency_ticket_survives_a_turn_end() {
+    for label in ["incident", "justiciar"] {
+        let rig = holding(&[label]);
+        assert_eq!(verdict(&ended(&rig, &["--session", "local_w1"])), "pass");
+        assert_eq!(
+            verdict(&ended(&rig, &["--session", "local_w1", "--again"])),
+            "pass"
+        );
+        assert!(lock(&rig.host.releases).is_empty());
+    }
 }
 
 #[test]

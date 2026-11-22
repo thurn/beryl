@@ -5,7 +5,7 @@
 //! - [`hub`]: the hub's other routes: machines, hand-offs, the result cache, tips and records.
 //! - [`host`]: the calls a verb process makes to its machine's daemon.
 //! - [`fleet`]: the Ignite version the hub and each machine runs.
-//! - [`emergency`]: the justiciar's emergency pause, which every daemon enforces.
+//! - [`emergency`]: the fleet-wide pause declared by an incident commander or justiciar.
 //! - [`cli`]: CLI mode's verbs and the hub's transcript routes.
 //! - [`attachments`]: image attachments on tickets.
 //!

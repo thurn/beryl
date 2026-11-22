@@ -3,10 +3,13 @@
 
 use rusqlite::{Connection, OptionalExtension, params};
 
-use ignite_core::protocol::emergency::{self, Emergency, EmergencyChange};
+use ignite_core::protocol::emergency::{self, Emergency, EmergencyChange, has_emergency_label};
+use ignite_core::protocol::tickets::Status;
 use ignite_core::time::Timestamp;
 
 use crate::{Result, StoreError};
+
+use super::tickets;
 
 /// The `meta` key that holds the emergency.
 const KEY: &str = "emergency";
@@ -31,18 +34,36 @@ pub fn in_force(conn: &Connection, now: Timestamp) -> Result<Option<Emergency>> 
     Ok(stored(conn)?.filter(|e| e.active(now)))
 }
 
-/// Applies `change` at `now` and returns the emergency it leaves. A change the rules refuse,
-/// such as an allowance from a session that is not the justiciar's, is
-/// [`StoreError::Rejected`].
+/// Applies `change` at `now` and returns the emergency it leaves. Only the session holding an
+/// incident or justiciar ticket may declare. A change the rules refuse is [`StoreError::Rejected`].
 pub fn change(conn: &Connection, change: &EmergencyChange, now: Timestamp) -> Result<Emergency> {
-    let next = emergency::apply(stored(conn)?, change, now).map_err(StoreError::Rejected)?;
+    let tx = conn.unchecked_transaction()?;
+    if let EmergencyChange::Declare {
+        ticket,
+        session,
+        machine,
+    } = change
+        && !tickets::load(&tx, ticket.as_str())?.is_some_and(|held| {
+            held.status == Status::InProgress
+                && held.session.as_ref() == Some(session)
+                && held.machine.as_ref() == Some(machine)
+                && has_emergency_label(&held.labels)
+        })
+    {
+        return Err(StoreError::Rejected(format!(
+            "only a session holding an in-progress incident or justiciar ticket may declare \
+             an emergency for it. {session} does not hold such a claim on {ticket} from {machine}"
+        )));
+    }
+    let next = emergency::apply(stored(&tx)?, change, now).map_err(StoreError::Rejected)?;
     let json =
         serde_json::to_string(&next).map_err(|e| StoreError::Invalid(format!("emergency: {e}")))?;
-    conn.execute(
+    tx.execute(
         "INSERT INTO meta (key, value) VALUES (?1, ?2) \
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         params![KEY, json],
     )?;
+    tx.commit()?;
     Ok(next)
 }
 
@@ -64,9 +85,16 @@ mod tests {
         let conn = open_in_memory().unwrap();
         let now = Timestamp::EPOCH;
         assert_eq!(in_force(&conn, now).unwrap(), None);
+        conn.execute(
+            "INSERT INTO tickets
+                (id, title, status, labels, session, machine, created_at, created_by, updated_at, version)
+             VALUES ('IP4R7', 'Incident', 'in_progress', '[\"incident\"]', 'local_i', 'm-1',
+                     '1970-01-01T00:00:00Z', 'test', '1970-01-01T00:00:00Z', 1)",
+            [],
+        ).unwrap();
         let declare = EmergencyChange::Declare {
-            ticket: TicketId::new("TJUS1").unwrap(),
-            session: SessionId::new("local_j").unwrap(),
+            ticket: TicketId::new("IP4R7").unwrap(),
+            session: SessionId::new("local_i").unwrap(),
             machine: MachineId::new("m-1").unwrap(),
         };
         let declared = change(&conn, &declare, now).unwrap();

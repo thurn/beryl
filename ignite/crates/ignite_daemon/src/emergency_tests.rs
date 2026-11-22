@@ -61,7 +61,7 @@ fn heavy_verbs_refuse_with_their_own_exit_code_and_reading_verbs_do_not() {
 }
 
 #[test]
-fn the_justiciar_its_ticket_and_the_tickets_it_allows_are_not_refused() {
+fn the_declaring_session_its_ticket_and_allowed_tickets_can_run_heavy_verbs() {
     let emergencies = Emergencies::new(clock(), None);
     emergencies.heard(Some(emergency(Timestamp::EPOCH)));
     let worker = session("local_w");
@@ -70,7 +70,7 @@ fn the_justiciar_its_ticket_and_the_tickets_it_allows_are_not_refused() {
             .refusal("land", Some(&session("local_j")), None)
             .is_none()
     );
-    // A justiciar with no session, such as a Codex chat, works in the justiciar ticket's tree.
+    // A caller without a session can work in the emergency ticket's tree.
     assert!(
         emergencies
             .refusal("land", None, Some(&ticket("TJUS1")))
@@ -154,10 +154,9 @@ fn status_and_doctor_show_the_emergency_with_its_age_and_owner() {
     clock.set(Timestamp::EPOCH.plus_seconds(25.0 * 60.0));
     let lines = EmergencySection(emergencies.clone()).lines();
     assert!(
-        lines[0].starts_with("TJUS1, justiciar local_j on m-2"),
+        lines[0].starts_with("TJUS1, declared by local_j on m-2 25 min ago"),
         "{lines:?}"
     );
-    assert!(lines[0].contains("declared 25 min ago"), "{lines:?}");
     assert!(lines[0].contains("lapses in 1 h 35 min"), "{lines:?}");
     assert_eq!(lines[1], "allowed TWORK (land)");
     let finding = emergencies.finding().unwrap();
