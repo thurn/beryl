@@ -98,9 +98,8 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         TriggerEvent::BecomesTarget => vec![Recipe::TargetSource],
         TriggerEvent::Mutates => vec![Recipe::Mutate],
         TriggerEvent::DealsDamage => vec![Recipe::Attack(P0)],
-        TriggerEvent::TurnedFaceUp => Vec::new(),
         // Chapter scenarios advance turns or add lore directly before making their observations.
-        TriggerEvent::Chapter { .. } => Vec::new(),
+        TriggerEvent::TurnedFaceUp | TriggerEvent::Chapter { .. } => Vec::new(),
         TriggerEvent::State(condition) => vec![match *condition {
             Condition::Compare(Amount::Counters(Objects::This, kind), _, Amount::Fixed(0)) => {
                 Recipe::RemoveLastCounter(kind)

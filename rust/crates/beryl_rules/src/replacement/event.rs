@@ -372,10 +372,7 @@ fn move_ordered<L: Layout, const N: usize>(
         trigger::match_event(s, t, &changed(slot, s.object_ref(slot), from, dest))?;
     }
     if !arrived.is_empty() && t.can(Capability::Saga) {
-        for &slot in arrived.as_slice() {
-            // See CR 122.6: "counters being put on an object" includes counters it enters with.
-            crate::saga::match_lore(s, t, slot, 0)?;
-        }
+        crate::saga::match_arrivals(s, t, arrived.as_slice())?;
     }
     if !returning.is_empty() {
         // see CR 610.3c: "An object returned to the battlefield this way returns under its

@@ -3,12 +3,12 @@
 use super::Ability;
 use crate::trigger::{Trigger, TriggerEvent};
 
-const CHAPTERS: [Trigger; 255] = {
-    let mut chapters = [Trigger::chapters(1, 1); 255];
-    let mut index = 0;
-    while index < chapters.len() {
-        let number = index as u8 + 1;
-        chapters[index] = Trigger::chapters(number, number);
+static CHAPTERS: [Trigger; u8::MAX as usize] = {
+    let mut chapters = [Trigger::chapters(1, 1); u8::MAX as usize];
+    let mut index = 0u8;
+    while index < u8::MAX {
+        let number = index + 1;
+        chapters[index as usize] = Trigger::chapters(number, number);
         index += 1;
     }
     chapters

@@ -170,7 +170,22 @@ impl std::hash::Hash for TriggerEvent {
         match self {
             TriggerEvent::Step(step) => step.hash(h),
             TriggerEvent::Chapter { first, last } => (first, last).hash(h),
-            _ => {}
+            TriggerEvent::Enters
+            | TriggerEvent::Dies
+            | TriggerEvent::Leaves
+            | TriggerEvent::Attacks
+            | TriggerEvent::PlayerAttacks
+            | TriggerEvent::DealsCombatDamageToPlayer
+            | TriggerEvent::MainPhase
+            | TriggerEvent::CreatesTokens
+            | TriggerEvent::Casts
+            | TriggerEvent::Discards
+            | TriggerEvent::Draws
+            | TriggerEvent::BecomesTarget
+            | TriggerEvent::Mutates
+            | TriggerEvent::DealsDamage
+            | TriggerEvent::TurnedFaceUp
+            | TriggerEvent::State(_) => {}
         }
     }
 }

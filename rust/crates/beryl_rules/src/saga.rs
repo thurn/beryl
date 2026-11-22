@@ -96,6 +96,22 @@ pub(crate) fn match_lore<L: Layout>(
     Ok(())
 }
 
+/// Matches chapters from the lore permanents enter with (see [CR 122.6]):
+/// "an object that's given counters as it enters the battlefield."
+///
+/// [CR 122.6]: https://yawgatog.com/resources/magic-rules/#R1226
+#[cold]
+pub(crate) fn match_arrivals<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    arrived: &[L::Slot],
+) -> Result<(), Full> {
+    for &slot in arrived {
+        match_lore(s, t, slot, 0)?;
+    }
+    Ok(())
+}
+
 /// Adds lore to the active player's Sagas as one event. Match the triggers after all of
 /// the counters are present, so every chapter sees the same battlefield.
 ///

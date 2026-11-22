@@ -271,34 +271,13 @@ impl<L: Layout> Scene<'_, L> {
                 zone: zone @ (Zone::Library | Zone::Hand | Zone::Graveyard),
                 filter: Filter::Whose(&Players::You),
             } => s.zone(ZoneKey::Of(self.you(), zone)),
-            // See CR 110.2: "Every permanent has a controller." The controller can differ
-            // from the owner, so a battlefield choice by controller cannot read the zone's
-            // membership by owner.
-            Objects::InZoneOf {
-                zone: Zone::Battlefield,
-                players,
-                filter,
-            } => {
-                let players = self.players(*players);
-                let within = s
-                    .permanents_with_derived()
-                    .filter_map(|(slot, derived)| {
-                        players.contains(derived.controller).then_some(slot)
-                    })
-                    .collect();
-                filter.select_x(s, self.t, within, self.you(), &self.words(), self.x)
-            }
             // See CR 400.1: "Each player has their own library, hand, and graveyard."
             Objects::InZoneOf {
                 zone,
                 players,
                 filter,
             } => {
-                let mut within = Bitboard::EMPTY;
-                // A set is built, whose order is nothing.
-                for player in self.players(*players).in_seat_order() {
-                    within |= s.zone(ZoneKey::Of(player, zone));
-                }
+                let within = self.zone_of(*players, zone);
                 filter.select_x(s, self.t, within, self.you(), &self.words(), self.x)
             }
             // See CR 400.1: "Each player has their own library, hand, and graveyard."
@@ -343,6 +322,29 @@ impl<L: Layout> Scene<'_, L> {
                 others
             }
         }
+    }
+
+    /// The permanents these players control, or the cards in their own zones.
+    ///
+    /// See [CR 110.2]: "Every permanent has a controller." The controller can differ
+    /// from the owner, so battlefield membership is read by controller.
+    ///
+    /// [CR 110.2]: https://yawgatog.com/resources/magic-rules/#R1102
+    #[inline]
+    fn zone_of(&self, players: Players, zone: Zone) -> Bitboard<L::Slot> {
+        let players = self.players(players);
+        if zone == Zone::Battlefield {
+            return self
+                .s
+                .permanents_with_derived()
+                .filter_map(|(slot, derived)| players.contains(derived.controller).then_some(slot))
+                .collect();
+        }
+        let mut within = Bitboard::EMPTY;
+        for player in players.in_seat_order() {
+            within |= self.s.zone(ZoneKey::Of(player, zone));
+        }
+        within
     }
 
     /// The players `players` names.
