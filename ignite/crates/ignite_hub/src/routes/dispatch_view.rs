@@ -152,7 +152,15 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
         let pressure = free.pressure.as_ref();
         let worked = history(conn, id)?;
         let mut free = free.clone();
-        let held_now = capacity::read(conn, id, &worked, &landed, now, pressure, free.admit_cores)?;
+        let held_now = capacity::read(
+            conn,
+            id,
+            &worked,
+            &landed,
+            now,
+            &snapshot.requirements,
+            Budget::new(pressure, free.admit_cores, now),
+        )?;
         free.free_cores = dispatch::room(&free, &held_now.cores);
         let state = settings.machine(name).state;
         let paused = held::paused(conn, &free, state)?;
@@ -421,7 +429,7 @@ fn take(seat: &mut Seat, ticket: &ReadyTicket, now: Timestamp) {
         seat.free.free_cores -= ticket.expected_cores;
     }
     seat.budget
-        .hold(&ticket.id, ticket.expected_cores, &ticket.files, Some(now));
+        .hold(&ticket.id, ticket.needs_build_slot, Some(now));
     seat.taken += 1;
 }
 

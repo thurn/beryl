@@ -24,7 +24,7 @@ use rusqlite::Connection;
 use ignite_core::admission::{self, Worked};
 use ignite_core::config::Improvement;
 use ignite_core::dispatch::{self, ReadyTicket, TicketKind};
-use ignite_core::dispatch_pressure::{DispatchPressure, HandoffWait};
+use ignite_core::dispatch_pressure::{Budget, DispatchPressure, HandoffWait};
 use ignite_core::fleet::{Allocations, FleetSettings, MachineState};
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::pins::Pins;
@@ -54,7 +54,7 @@ mod capacity;
 
 #[path = "dispatch_named_files.rs"]
 mod files;
-use files::areas;
+use files::{areas, resolved_files};
 pub use files::{named_files, resolve_named_file};
 
 #[path = "dispatch_view.rs"]
@@ -111,8 +111,8 @@ pub fn next(
         &history,
         &landed,
         now,
-        free.pressure.as_ref(),
-        free.admit_cores,
+        &snapshot.requirements,
+        Budget::new(free.pressure.as_ref(), free.admit_cores, now),
     )?;
     let fallback = (state == MachineState::ChecksOnly)
         .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, &free, now))
@@ -215,7 +215,13 @@ fn dispatch_ready(
         .filter_map(|ticket| candidate_for(ticket).map(|candidate| (ticket, candidate)));
     let name = free.name.as_deref().unwrap_or(machine);
     match capacity.choose(name, candidates, |ticket, candidate| {
-        placement.defer(conn, ticket, candidate.provider.as_deref(), now)
+        placement.defer(
+            conn,
+            ticket,
+            candidate.provider.as_deref(),
+            now,
+            &snapshot.requirements,
+        )
     })? {
         Some(Ok(handoff)) => reserve(conn, &free.machine, handoff, now).map(Ok),
         Some(Err(reason)) => Ok(Err(reason)),
@@ -272,6 +278,7 @@ pub(super) fn peer_free_build_handoffs(
     now: Timestamp,
     pressure: &DispatchPressure,
     admit_cores: f64,
+    requirements: &Requirements,
 ) -> Result<u32> {
     let worked = history(conn, machine)?;
     let landed = landed_files(conn)?;
@@ -281,8 +288,8 @@ pub(super) fn peer_free_build_handoffs(
         &worked,
         &landed,
         now,
-        Some(pressure),
-        Some(admit_cores),
+        requirements,
+        Budget::new(Some(pressure), Some(admit_cores), now),
     )?;
     Ok(held.budget.free_build_handoffs())
 }
@@ -338,8 +345,8 @@ pub fn chain_next(
         &history,
         &landed,
         now,
-        pressure,
-        None,
+        &snapshot.requirements,
+        Budget::new(pressure, None, now),
     )?
     .budget
     .blocked(next, &name)
@@ -600,10 +607,17 @@ impl Snapshot {
         now: Timestamp,
     ) -> ReadyTicket {
         let files = named_files(&format!("{}\n{}", ticket.body, ticket.acceptance));
-        let families =
-            self.requirements
-                .for_ticket(ticket.id.as_str(), ticket.needs_os, &files, landed);
-        let expected_cores = expected_cores(&ticket, &files, history, landed, now);
+        let resolved = resolved_files(&files, landed);
+        let families = self
+            .requirements
+            .for_ticket(ticket.id.as_str(), ticket.needs_os, &resolved);
+        let expected_cores = expected_cores(&ticket, &resolved, history, now);
+        let needs_build_slot = self.requirements.needs_build_slot(
+            ticket.id.as_str(),
+            ticket.needs_os,
+            expected_cores,
+            &resolved,
+        );
         let saving = ticket
             .saving
             .as_ref()
@@ -627,6 +641,7 @@ impl Snapshot {
             chain: self.chain(ticket.id.as_str(), memo, &mut HashSet::new()),
             created_at: ticket.created_at,
             expected_cores,
+            needs_build_slot,
             families,
             files,
             saving,
@@ -638,14 +653,8 @@ impl Snapshot {
 
 /// A ticket's expected cores ([`admission::expected_cores`]) from the planner's figure, the
 /// areas of `files`, the files it names, and the machine's `history`.
-fn expected_cores(
-    ticket: &Ticket,
-    files: &[String],
-    history: &[Worked],
-    landed: &[String],
-    now: Timestamp,
-) -> f64 {
-    admission::expected_cores(ticket.cores, &areas(files, landed), history, now)
+fn expected_cores(ticket: &Ticket, files: &[String], history: &[Worked], now: Timestamp) -> f64 {
+    admission::expected_cores(ticket.cores, &areas(files), history, now)
 }
 
 /// The repository paths that every landed ticket touched, without repeats, standing in for the
@@ -691,7 +700,7 @@ fn history(conn: &Connection, machine: &str) -> Result<Vec<Worked>> {
         };
         history.push(Worked {
             landed_at,
-            areas: areas(&work.map(|w| w.files).unwrap_or_default(), &[]),
+            areas: areas(&work.map(|w| w.files).unwrap_or_default()),
             core_minutes: cpu_s / 60.0,
             minutes: landed_at.seconds_since(claimed_at) / 60.0,
         });

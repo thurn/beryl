@@ -1,11 +1,11 @@
-use super::{areas, named_files, resolve_named_file};
+use super::{areas, named_files, resolve_named_file, resolved_files};
 
 #[test]
 fn a_short_path_gets_the_area_of_the_file_it_resolves_to() {
     let known = ["rust/crates/scene/src/a.rs".to_owned()];
-    let full = areas(&["rust/crates/scene/src/a.rs".to_owned()], &[]);
-    assert_eq!(areas(&["scene/src/a.rs".to_owned()], &known), full);
-    assert_ne!(areas(&["scene/src/a.rs".to_owned()], &[]), full);
+    let short = ["scene/src/a.rs".to_owned()];
+    assert_eq!(areas(&resolved_files(&short, &known)), areas(&known));
+    assert_ne!(areas(&short), areas(&known));
 }
 
 #[test]
@@ -47,4 +47,21 @@ fn a_short_path_resolves_to_the_one_tracked_file_it_ends() {
     assert_eq!(resolve("src/lib.rs"), None);
     assert_eq!(resolve("scene/src/style.rs"), None);
     assert_eq!(resolve("docs/missing.md"), None);
+}
+
+#[test]
+fn grouped_paths_expand_with_their_shared_prefix_and_suffix() {
+    assert_eq!(
+        named_files(
+            "Start with `src/{first.rs, nested/second.rs}`.
+             Files: `tools/{first, second}.py`, src/first.rs, docs/guide.md"
+        ),
+        [
+            "src/first.rs",
+            "src/nested/second.rs",
+            "tools/first.py",
+            "tools/second.py",
+            "docs/guide.md",
+        ]
+    );
 }

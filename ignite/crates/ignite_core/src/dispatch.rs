@@ -60,6 +60,8 @@ pub struct ReadyTicket {
     pub labels: Vec<String>,
     /// Expected cores while in progress ([`admission::expected_cores`]).
     pub expected_cores: f64,
+    /// Whether this ticket is expected to occupy a managed build slot.
+    pub needs_build_slot: bool,
     /// The check families the worker must be able to run.
     pub families: Vec<RequiredFamily>,
     /// The files it names.

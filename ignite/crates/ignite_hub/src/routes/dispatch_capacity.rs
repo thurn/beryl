@@ -4,12 +4,12 @@ use rusqlite::Connection;
 
 use ignite_core::admission::Worked;
 use ignite_core::dispatch::ReadyTicket;
-use ignite_core::dispatch_pressure::{Budget, DispatchPressure, HandoffWait};
+use ignite_core::dispatch_pressure::{Budget, HandoffWait};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
 use ignite_store::hub::{fleet, tickets};
 
-use super::{Candidate, expected_cores, named_files};
+use super::{Candidate, Requirements, expected_cores, named_files, resolved_files};
 
 pub(super) struct Capacity<'a> {
     pub cores: Vec<f64>,
@@ -44,8 +44,8 @@ pub(super) fn read<'a>(
     history: &[Worked],
     landed: &[String],
     now: Timestamp,
-    pressure: Option<&'a DispatchPressure>,
-    admit_cores: Option<f64>,
+    requirements: &Requirements,
+    budget: Budget<'a>,
 ) -> Result<Capacity<'a>> {
     let mut statement = conn.prepare(
         "SELECT id, claimed_at, NULL FROM tickets WHERE status = 'in_progress' AND machine = ?1
@@ -62,13 +62,14 @@ pub(super) fn read<'a>(
     })?;
     let mut capacity = Capacity {
         cores: Vec::new(),
-        budget: Budget::new(pressure, admit_cores, now),
+        budget,
     };
     for row in held {
         let (id, claimed, expires) = row?;
         if let Some(ticket) = tickets::load(conn, &id)? {
             let files = named_files(&format!("{}\n{}", ticket.body, ticket.acceptance));
-            let cores = expected_cores(&ticket, &files, history, landed, now);
+            let files = resolved_files(&files, landed);
+            let cores = expected_cores(&ticket, &files, history, now);
             capacity.cores.push(cores);
             let since = claimed
                 .as_deref()
@@ -79,7 +80,9 @@ pub(super) fn read<'a>(
                         .and_then(|text| Timestamp::parse(text).ok())
                         .map(|expiry| expiry.plus_seconds(-fleet::RESERVATION_SECONDS))
                 });
-            capacity.budget.hold(&ticket.id, cores, &files, since);
+            let build =
+                requirements.needs_build_slot(ticket.id.as_str(), ticket.needs_os, cores, &files);
+            capacity.budget.hold(&ticket.id, build, since);
         }
     }
     Ok(capacity)

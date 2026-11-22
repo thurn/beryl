@@ -42,6 +42,7 @@ fn ticket(name: &str, cores: f64) -> ReadyTicket {
         created_at: Timestamp::from_millis(1_000),
         labels: Vec::new(),
         expected_cores: cores,
+        needs_build_slot: false,
         families: Vec::new(),
         files: Vec::new(),
         saving: None,

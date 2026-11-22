@@ -7,12 +7,13 @@ use serde::{Deserialize, Serialize};
 
 use ignite_core::config::Os;
 use ignite_core::dispatch::RequiredFamily;
+use ignite_core::dispatch_pressure::likely_compiles;
 use ignite_core::ids::CheckName;
 use ignite_core::inputs::path_matches;
-use ignite_core::manifest::{AnyPlatform, InputPattern, Kind, Manifest, Platforms};
+use ignite_core::manifest::{AnyPlatform, InputPattern, Kind, Manifest, Platforms, Product};
 use ignite_store::{Result, StoreError};
 
-use super::{queue::held, resolve_named_file};
+use super::queue::held;
 
 const KEY: &str = "dispatch_check_families";
 
@@ -20,6 +21,24 @@ const KEY: &str = "dispatch_check_families";
 struct Declaration {
     platforms: Platforms,
     paths: BTreeSet<String>,
+    /// Present for families that list or run with a product that uses a build slot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    build_paths: Option<BTreeSet<String>>,
+}
+
+fn paths<'a>(patterns: impl Iterator<Item = &'a InputPattern>) -> BTreeSet<String> {
+    patterns
+        .filter_map(|pattern| match pattern {
+            InputPattern::Path(path) => Some(path.clone()),
+            InputPattern::Crate(_) | InputPattern::CrateClosure => None,
+        })
+        .collect()
+}
+
+fn matches_files(patterns: &BTreeSet<String>, files: &[String]) -> bool {
+    files
+        .iter()
+        .any(|file| patterns.iter().any(|pattern| path_matches(pattern, file)))
 }
 
 /// Publishes the path and platform declarations from a reviewed manifest as one snapshot.
@@ -31,21 +50,29 @@ pub fn publish(conn: &Connection, manifest: &Manifest) -> Result<()> {
         .filter(|(_, declared)| declared.family.kind == Kind::Regression)
         .map(|(name, declared)| {
             let family = &declared.family;
-            let paths = family
+            let inputs = family
                 .inputs
                 .iter()
                 .chain(family.package_inputs.values().flatten())
-                .chain(&family.digest_inputs)
-                .filter_map(|pattern| match pattern {
-                    InputPattern::Path(path) => Some(path.clone()),
-                    InputPattern::Crate(_) | InputPattern::CrateClosure => None,
-                })
-                .collect();
+                .chain(&family.digest_inputs);
+            let products = family
+                .needs
+                .iter()
+                .chain(family.list_needs.iter().flatten())
+                .filter_map(|name| manifest.products.get(name));
+            let build_paths = products.clone().any(Product::uses_build_slot).then(|| {
+                paths(
+                    inputs
+                        .clone()
+                        .chain(products.flat_map(|product| &product.inputs)),
+                )
+            });
             (
                 name,
                 Declaration {
                     platforms: family.platforms.clone(),
-                    paths,
+                    paths: paths(inputs),
+                    build_paths,
                 },
             )
         })
@@ -100,12 +127,37 @@ impl Requirements {
         self.regressions.contains_key(ticket)
     }
 
+    /// Estimate from the reviewed landing checks before the ticket has a tree or a build record.
+    /// Use declared path patterns because per-check inputs are known only after listing checks.
+    pub(super) fn needs_build_slot(
+        &self,
+        ticket: &str,
+        os: Option<Os>,
+        cores: f64,
+        files: &[String],
+    ) -> bool {
+        likely_compiles(cores, files)
+            || self.regressions.get(ticket).is_some_and(|checks| {
+                checks.iter().any(|check| {
+                    self.declarations
+                        .get(check.family())
+                        .is_some_and(|family| family.build_paths.is_some())
+                })
+            })
+            || self.declarations.values().any(|family| {
+                os.is_none_or(|os| family.platforms.supports(os))
+                    && family
+                        .build_paths
+                        .as_ref()
+                        .is_some_and(|paths| matches_files(paths, files))
+            })
+    }
+
     pub(super) fn for_ticket(
         &self,
         ticket: &str,
         os: Option<Os>,
         files: &[String],
-        known: &[String],
     ) -> Vec<RequiredFamily> {
         if let Some(checks) = self.regressions.get(ticket) {
             return checks
@@ -124,26 +176,11 @@ impl Requirements {
                 })
                 .collect();
         }
-        if files.is_empty() || self.declarations.is_empty() {
-            return Vec::new();
-        }
-        let files: Vec<_> = files
-            .iter()
-            .map(|file| {
-                resolve_named_file(file, known)
-                    .unwrap_or_else(|| file.trim_start_matches("./").to_owned())
-            })
-            .collect();
         self.declarations
             .iter()
             .filter(|(_, declared)| {
                 os.is_none_or(|os| declared.platforms.supports(os))
-                    && files.iter().any(|file| {
-                        declared
-                            .paths
-                            .iter()
-                            .any(|pattern| path_matches(pattern, file))
-                    })
+                    && matches_files(&declared.paths, files)
             })
             .map(|(name, declared)| RequiredFamily {
                 name: name.clone(),

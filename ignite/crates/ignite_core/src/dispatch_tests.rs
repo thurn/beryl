@@ -53,6 +53,7 @@ fn ticket(name: &str, epic: Option<&str>) -> ReadyTicket {
         created_at: Timestamp::from_millis(1_000),
         labels: Vec::new(),
         expected_cores: 0.5,
+        needs_build_slot: false,
         families: Vec::new(),
         files: Vec::new(),
         saving: None,

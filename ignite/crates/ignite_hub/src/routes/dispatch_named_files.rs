@@ -4,7 +4,8 @@ use ignite_core::admission;
 
 /// The paths a ticket names, in order and without repeats:
 ///
-/// - backquoted words that contain a `/` and end in a file name with an extension;
+/// - backquoted paths with a `/` and a file extension, including a group such as
+///   `src/{first.rs, nested/second.rs}`.
 /// - on a line that starts with `Files:` (after any list marker or emphasis), each word that
 ///   contains a `/` and ends in such a file name, backquoted or not, such as
 ///   `Files: game_scene/src/a.rs, tools/b.py (the parser)`. Tickets imported from the old
@@ -20,7 +21,19 @@ pub fn named_files(text: &str) -> Vec<String> {
         }
     };
     for word in text.split('`').skip(1).step_by(2) {
-        add(word);
+        if let Some((prefix, group)) = word.split_once('{')
+            && let Some((choices, suffix)) = group.split_once('}')
+        {
+            for choice in choices
+                .split(',')
+                .map(str::trim)
+                .filter(|part| !part.is_empty())
+            {
+                add(&format!("{prefix}{choice}{suffix}"));
+            }
+        } else {
+            add(word);
+        }
     }
     for line in text.lines() {
         let line = line.trim_start_matches(|c: char| c.is_whitespace() || "-*+>_".contains(c));
@@ -32,7 +45,11 @@ pub fn named_files(text: &str) -> Vec<String> {
             continue;
         };
         let rest = rest.trim_start_matches(['*', '_']);
-        for word in rest.split(|c: char| c.is_whitespace() || c == ',' || c == ';') {
+        for word in rest
+            .split('`')
+            .step_by(2)
+            .flat_map(|part| part.split(|c: char| c.is_whitespace() || c == ',' || c == ';'))
+        {
             let word = word.trim_start_matches(|c: char| "`'\"([*_".contains(c));
             add(word.trim_end_matches(|c: char| "`'\")]*_.:".contains(c)));
         }
@@ -47,6 +64,7 @@ fn is_named_path(word: &str) -> bool {
     word.contains('/')
         && !word.contains(char::is_whitespace)
         && !word.contains("://")
+        && !word.contains(['{', '}'])
         && name.contains('.')
         && !name.starts_with('.')
         && !name.ends_with('.')
@@ -67,16 +85,22 @@ pub fn resolve_named_file(path: &str, tracked: &[String]) -> Option<String> {
     matching.next().is_none().then(|| first.clone())
 }
 
-/// The areas of the files a ticket names. A short path (see [`resolve_named_file`]) is resolved
-/// against `known`, the repository paths that landed tickets touched, because the hub has no
-/// checkout to list; a path that resolves to nothing is used as written.
-pub(super) fn areas(files: &[String], known: &[String]) -> Vec<String> {
+/// Resolve short paths against the files named by past landings, keeping new files as written.
+pub(super) fn resolved_files(files: &[String], known: &[String]) -> Vec<String> {
+    files
+        .iter()
+        .map(|file| {
+            resolve_named_file(file, known)
+                .unwrap_or_else(|| file.trim_start_matches("./").to_owned())
+        })
+        .collect()
+}
+
+/// The areas of the resolved paths a ticket names.
+pub(super) fn areas(files: &[String]) -> Vec<String> {
     let mut areas: Vec<String> = files
         .iter()
-        .map(|f| {
-            let file = resolve_named_file(f, known).unwrap_or_else(|| f.clone());
-            admission::area_of(&file, &[])
-        })
+        .map(|file| admission::area_of(file, &[]))
         .collect();
     areas.sort();
     areas.dedup();

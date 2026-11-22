@@ -8,7 +8,7 @@ use rusqlite::Connection;
 use ignite_core::capacity::CapacityReport;
 use ignite_core::config::Os;
 use ignite_core::dispatch::{self, ReadyTicket};
-use ignite_core::dispatch_pressure::{DispatchPressure, needs_build_slot};
+use ignite_core::dispatch_pressure::DispatchPressure;
 use ignite_core::fleet::{FleetSettings, MachineState};
 use ignite_core::ids::IdError;
 use ignite_core::mix::{self, ProviderLoad};
@@ -19,6 +19,7 @@ use ignite_core::time::Timestamp;
 use ignite_store::hub::{capacity, fleet, placement_deferrals};
 use ignite_store::{Result, StoreError};
 
+use super::families::Requirements;
 use super::mix as dispatch_mix;
 use super::queue::{self, held};
 
@@ -107,6 +108,7 @@ impl<'a> Placement<'a> {
         ready: &ReadyTicket,
         provider: Option<&str>,
         now: Timestamp,
+        requirements: &Requirements,
     ) -> Result<Option<String>> {
         let Some(capacity) = &self.current else {
             return Ok(None);
@@ -145,13 +147,13 @@ impl<'a> Placement<'a> {
                 return Ok(None);
             };
             let name = best.name;
-            if !needs_build_slot(ready.expected_cores, &ready.files)
+            if !ready.needs_build_slot
                 || self
                     .peers
                     .iter()
                     .find(|peer| peer.name == name)
                     .expect("placement selected a peer")
-                    .free_build_handoffs(conn, now)?
+                    .free_build_handoffs(conn, now, requirements)?
                     > 0
             {
                 break best;
@@ -209,7 +211,12 @@ impl Peer {
         }
     }
 
-    fn free_build_handoffs(&self, conn: &Connection, now: Timestamp) -> Result<u32> {
+    fn free_build_handoffs(
+        &self,
+        conn: &Connection,
+        now: Timestamp,
+        requirements: &Requirements,
+    ) -> Result<u32> {
         if let Some(free) = self.free_build_handoffs.get() {
             return Ok(free);
         }
@@ -224,6 +231,7 @@ impl Peer {
             now,
             &pressure,
             self.capacity.admit_cores,
+            requirements,
         )?;
         self.free_build_handoffs.set(Some(free));
         Ok(free)
@@ -234,7 +242,7 @@ impl Peer {
             .capacity
             .build_space
             .is_none_or(|space| space.free == 0)
-            && needs_build_slot(ticket.expected_cores, &ticket.files)
+            && ticket.needs_build_slot
         {
             return None;
         }

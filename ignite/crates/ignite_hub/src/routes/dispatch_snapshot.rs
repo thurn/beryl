@@ -107,8 +107,8 @@ fn project_next_start(
         &history,
         &landed,
         now,
-        Some(&sample.pressure),
-        free.admit_cores,
+        &queue.requirements,
+        Budget::new(Some(&sample.pressure), free.admit_cores, now),
     )?;
     free.free_cores = dispatch::room(&free, &capacity.cores);
     let fallback = (state == MachineState::ChecksOnly)

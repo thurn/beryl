@@ -12,6 +12,7 @@ fn ready() -> ReadyTicket {
         created_at: Timestamp::EPOCH,
         labels: Vec::new(),
         expected_cores: 2.0,
+        needs_build_slot: false,
         families: vec![crate::dispatch::RequiredFamily {
             name: "native".into(),
             platforms: crate::manifest::Platforms::Any(crate::manifest::AnyPlatform::Any),

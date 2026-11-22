@@ -103,8 +103,8 @@ pub fn wants_output(output: &str, files: &[String]) -> bool {
         .any(|file| within(file, parent) && !within(file, output))
 }
 
-/// Classifies build work for handoff and core-queue pacing.
-pub fn needs_build_slot(cores: f64, files: &[String]) -> bool {
+/// Estimates build work from expected cores and Rust paths.
+pub fn likely_compiles(cores: f64, files: &[String]) -> bool {
     cores >= COMPILES_FROM_CORES
         || files.iter().any(|file| {
             let path = std::path::Path::new(file);
@@ -163,15 +163,9 @@ impl<'a> Budget<'a> {
 
     /// An occupied slot counts as build work even when the ticket was expected to be light.
     /// The daemon's free slot count already accounts for it.
-    pub fn hold(
-        &mut self,
-        ticket: &TicketId,
-        cores: f64,
-        files: &[String],
-        since: Option<Timestamp>,
-    ) {
+    pub fn hold(&mut self, ticket: &TicketId, needs_build_slot: bool, since: Option<Timestamp>) {
         let occupies_slot = self.pressure.slot_holders.contains(ticket);
-        if occupies_slot || needs_build_slot(cores, files) {
+        if occupies_slot || needs_build_slot {
             self.heavy += 1;
             self.latest_heavy = self.latest_heavy.max(since);
             if !occupies_slot {
@@ -201,7 +195,7 @@ impl<'a> Budget<'a> {
             return None;
         }
         let mut waits = Vec::new();
-        let build = needs_build_slot(ticket.expected_cores, &ticket.files);
+        let build = ticket.needs_build_slot;
         if build && self.free_build_slots() == 0 {
             let total = self.pressure.build_slots;
             waits.push(HandoffWait {
