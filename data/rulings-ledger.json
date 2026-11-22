@@ -47,7 +47,7 @@
     {
       "published_at": "2026-03-20",
       "hash": "3e8408ae4785",
-      "untestable": "Croaking Counterpart is not implemented. Fractured Identity makes an unmodified token copy."
+      "covered": "Effect::SetPrepared"
     },
     {
       "published_at": "2026-03-20",

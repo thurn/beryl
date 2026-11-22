@@ -5,6 +5,7 @@ use beryl_card::prelude::*;
 
 use super::LAND;
 use super::cast::{BEAR, Game, cast, index_of};
+use crate::additions::Addition;
 use crate::state::Zone;
 use crate::{CardTable, Opt, Profile};
 
@@ -15,6 +16,7 @@ static PREPARATION: CardDef = card_with_shape(
         Face::EMPTY
             .types(Types::CREATURE)
             .power_toughness(2, 2)
+            .excepts(&[CopyException::RED])
             .abilities(&[Ability::replacing(&Replacement::ENTERS_PREPARED)]),
         Face::EMPTY
             .named("Test Instant Inset")
@@ -154,8 +156,11 @@ fn becoming_a_copy_keeps_the_prepare_spell_without_the_designation() {
 
     let preparation = game.s.copiable(original);
     let source = preparation.record(&game.t).0;
+    let red = Addition::new(source, FaceIx::FRONT, ExceptIx::new(0));
+    let preparation = preparation.with_addition(red).unwrap();
     let bear_ref = game.s.object_ref(bear);
     game.s.become_copy(source, bear_ref, preparation).unwrap();
+    assert_eq!(game.s.copiable(bear).colors(&game.t), Colors::RED);
     assert!(!game.s.is_prepared(bear));
     assert_eq!(game.s.in_zone(Zone::Exile).count(), 1);
 
@@ -164,5 +169,9 @@ fn becoming_a_copy_keeps_the_prepare_spell_without_the_designation() {
     game.pick_object(bear);
     game.pass_both();
     assert!(game.s.is_prepared(bear));
-    assert_eq!(game.s.in_zone(Zone::Exile).count(), 2);
+    let copies = game.s.in_zone(Zone::Exile);
+    assert_eq!(copies.count(), 2);
+    for copy in super::fixture_slots(copies) {
+        assert_eq!(game.s.copiable(copy).colors(&game.t), Colors::NONE);
+    }
 }
