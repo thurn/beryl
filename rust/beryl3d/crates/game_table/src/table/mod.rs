@@ -9,7 +9,6 @@
 
 pub mod badges;
 mod clearance;
-pub mod far_shade;
 mod hands;
 pub use hands::HandFits;
 mod hud_anchors;
@@ -51,7 +50,7 @@ pub use place::{
 pub use place::{names_host, prepare_row, row_of, stack_slots, zone_members};
 pub use region_fit::{
     FittedPiles, FittedRegions, FittedRow, FittedRows, RegionFit, RegionPolicy, RowProjection,
-    RowZoom,
+    RowZoom, TabletopShade,
 };
 pub use rows::{Beneath, Groups, NameIds, RowChange, SameName, grouped, reposed};
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};
@@ -230,6 +229,7 @@ pub struct Layout {
     pub fitted: Option<FittedRows>,
     /// Piles anchored at the projected centre of the top card.
     pub fitted_piles: Option<FittedPiles>,
+    pub(crate) tabletop_shade: Option<TabletopShade>,
 }
 
 /// Space for raising the life total over a hand that spills out of its band.

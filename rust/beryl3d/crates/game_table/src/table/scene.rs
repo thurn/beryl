@@ -334,8 +334,8 @@ impl Table {
 
     /// Writes a resolved element and a draw record for every visible card, with a contact
     /// shadow for each card above what lies under it, and one draw record for the cloth, which
-    /// comes last among the opaque records and carries the shade along the table's far edge
-    /// (`far_shade`). `view` is the view the table shows. While a script
+    /// comes last among the opaque records and carries any shade supplied by the region fit.
+    /// `view` is the view the table shows. While a script
     /// plays, `motion` gives the objects that move their poses, and the records of the view the
     /// script leads to. A permanent wears the marks its record calls for (`own`). Each card is
     /// drawn from the board-size layer of its face in `faces`, or layer 0 while that face has
@@ -418,9 +418,8 @@ impl Table {
             Vec3::new(0.0, 0.0, CLOTH_HEIGHT),
         );
         let mut tabletop = Draw::tabletop(cloth, [255; 4]);
-        if self.layout.style.far_shade {
-            let (centre, radius) = super::far_shade::place(self.camera.window);
-            tabletop = tabletop.with_far_shade(centre, radius);
+        if let Some(shade) = self.layout.tabletop_shade {
+            tabletop = tabletop.with_tabletop_shade(shade.centre, shade.radii);
         }
         builder.draw(Band::Opaque, tabletop);
         self.write_tray_grids(builder);

@@ -414,5 +414,6 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
         row_zoom: None,
         fitted: None,
         fitted_piles: None,
+        tabletop_shade: None,
     }
 }

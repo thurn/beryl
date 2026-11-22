@@ -1,4 +1,4 @@
-//! Fitting rows and piles to the web interface's positions; deleted at the switch.
+//! Fitting table regions and the tabletop shade to the web interface until the switch to Beryl 3D.
 
 mod tuning;
 mod web_fit;

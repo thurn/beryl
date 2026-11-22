@@ -1,8 +1,7 @@
 //! The draw record: one fixed-size record per shape, which the renderer reads in order
 //! (docs/beryl-3d.md, "The frame"). What `uv`, `layer` and `params` mean depends on the
-//! material, so records are made only by the constructors here, one per material, and each
-//! fills only the fields the doc's table gives that material. No code outside this file writes
-//! `uv` or `params`.
+//! material. The constructors describe and fill the fields each material uses. No code outside
+//! this file writes `uv` or `params`.
 
 use glam::{Affine3A, Vec2};
 
@@ -33,9 +32,8 @@ pub struct Draw {
 
 const _: () = assert!(size_of::<Draw>() == 80);
 
-/// One way of shading a shape. Closed: a record's material selects a branch of one shader, and
-/// every pipeline is made at startup. A new material is added to the doc's table in the same
-/// change.
+/// One way of shading a shape. A record's material selects a branch of one shader, and
+/// every pipeline is made at startup.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Material {
@@ -275,26 +273,25 @@ impl Draw {
     /// spanning the window, from warm brown in the middle to near black in the corners, darkened
     /// by its grain. The gradient lies on the screen, not on the cloth, as the web's lies on its
     /// page, so the cloth's place and size do not move it. The gradient is multiplied by `tint`,
-    /// so white draws it as the web does. `params.x` is 1.
+    /// so white draws it as the web does. `params.z` is -1 for an unshaded tabletop.
     #[must_use]
     pub fn tabletop(transform: Affine3A, tint: [u8; 4]) -> Self {
         let mut draw = Self::table(transform, tint);
-        draw.params = [1.0, 0.0, 0.0, 0.0];
+        draw.params = [0.0, 0.0, -1.0, 0.0];
         draw
     }
 
-    /// The same tabletop record, darkened along the table's far edge as the web's `.far-shade`
-    /// darkens it: a radial gradient of near black, from 80% opaque at `centre` to nothing at
-    /// the ellipse `radius` across, both in physical pixels of the target (`table::far_shade`).
-    /// The shader holds the gradient's stops and the ratio of its radii. `params` becomes
-    /// `[1, centre.x, centre.y, radius]`; a radius of 0 draws no shade.
+    /// Darkens a tabletop with an ellipse given by its centre and radii in physical pixels
+    /// of the target. The shade is 80% opaque at the centre and fades out at the edge.
+    /// `params` becomes `[centre.x, centre.y, radii.x, radii.y]`.
     #[must_use]
-    pub fn with_far_shade(mut self, centre: Vec2, radius: f32) -> Self {
+    pub fn with_tabletop_shade(mut self, centre: Vec2, radii: Vec2) -> Self {
         debug_assert!(
-            self.material == Material::Table as u8 && self.params[0] > 0.5,
-            "only the tabletop carries the far shade"
+            self.material == Material::Table as u8 && self.params[2] != 0.0,
+            "only the tabletop carries a shade"
         );
-        self.params = [1.0, centre.x, centre.y, radius];
+        debug_assert!(radii.x > 0.0 && radii.y > 0.0, "positive shade radii");
+        self.params = [centre.x, centre.y, radii.x, radii.y];
         self
     }
 

@@ -31,8 +31,8 @@ fn transform() -> Affine3A {
     Affine3A::from_translation(Vec3::new(1.0, 2.0, 3.0))
 }
 
-/// Each constructor writes the given material, the transform and the tint, and the `uv`,
-/// `layer` and `params` the doc's table gives that material, with every other field at zero.
+/// Each constructor writes the given material, transform and tint. It fills `uv`, `layer`
+/// and `params` as its documentation specifies, with every other field at zero.
 #[test]
 fn each_constructor_fills_only_its_materials_fields() {
     let cases = [
@@ -48,7 +48,7 @@ fn each_constructor_fills_only_its_materials_fields() {
             Material::Table,
             [0; 4],
             0,
-            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, -1.0, 0.0],
         ),
         (
             Draw::card(transform(), TINT, FaceSize::Board, 7, 9, 0.25, 0.5),

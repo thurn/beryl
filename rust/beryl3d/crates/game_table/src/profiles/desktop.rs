@@ -46,6 +46,7 @@ pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
         bands: None,
         fitted: None,
         fitted_piles: None,
+        tabletop_shade: None,
     }
 }
 

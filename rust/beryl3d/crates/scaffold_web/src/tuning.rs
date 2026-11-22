@@ -7,6 +7,7 @@ use serde::Deserialize;
 #[serde(deny_unknown_fields)]
 pub struct WebFit {
     pub stage: StageSize,
+    pub tabletop_shade: Shade,
     pub perspective: Perspective,
     pub room: Room,
     #[serde(deserialize_with = "positive")]
@@ -40,6 +41,18 @@ impl WebFit {
             (fit.stage.least..=fit.stage.most).contains(&fit.stage.base),
             "invalid web-fit.json stage width range"
         );
+        assert!(
+            fit.tabletop_shade
+                .centre
+                .iter()
+                .all(|value| value.is_finite())
+                && fit
+                    .tabletop_shade
+                    .radii
+                    .iter()
+                    .all(|value| value.is_finite() && *value > 0.0),
+            "invalid web-fit.json tabletop shade"
+        );
         fit
     }
 }
@@ -55,6 +68,13 @@ pub struct StageSize {
     pub least: f32,
     #[serde(deserialize_with = "positive")]
     pub most: f32,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Shade {
+    pub centre: [f32; 2],
+    pub radii: [f32; 2],
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

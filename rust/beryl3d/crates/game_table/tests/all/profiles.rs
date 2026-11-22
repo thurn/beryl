@@ -113,10 +113,8 @@ fn the_windows_use_the_supplied_table_and_screen_tuning() {
     let narrow = data.profiles.iter().next().unwrap().usual_window();
     let mut table = Table::new(Arc::new(data), Window::default());
 
-    assert!(table.layout().style.far_shade);
     table.resize(narrow, None);
     assert_eq!(table.profile().data().name, "narrow test");
-    assert!(!table.layout().style.far_shade);
     assert_eq!(table.layout().target.to_bits(), 46.0_f32.to_bits());
     assert_eq!(table.camera().area.x.to_bits(), 14.0_f32.to_bits());
     let HeldDraw::OverRest { size, .. } = table.layout().play.held_draw else {

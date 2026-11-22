@@ -5,6 +5,10 @@
     "least": 1440,
     "most": 2134
   },
+  "tabletop_shade": {
+    "centre": [800, 48],
+    "radii": [300, 85]
+  },
   "perspective": {
     "distance": 1400,
     "near_y": 760,

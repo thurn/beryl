@@ -142,7 +142,6 @@
     "show_copy_labels": true,
     "full_card_faces": true,
     "hand_away": 420,
-    "far_shade": true,
     "tuck_rise": true
   },
   "play": {

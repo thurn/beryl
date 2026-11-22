@@ -1,4 +1,4 @@
-//! Optional fitting of a profile's table regions and card poses to a screen projection.
+//! Optional adjustments to a profile's table geometry for a screen projection.
 
 use glam::Vec2;
 use kit_base::data::{Card, profiles::ProfileData};
@@ -34,6 +34,7 @@ impl RegionFit {
             layout.row_zoom = Some(fit.zoom);
             layout.fitted_piles = Some(fit.piles);
             layout.pile_scale = fit.piles.scale;
+            layout.tabletop_shade = fit.tabletop_shade;
         }
     }
 
@@ -63,11 +64,19 @@ impl PartialEq for RegionFit {
     }
 }
 
-/// Projected regions that override the profile's row and pile placement.
+/// Screen-projected overrides for a profile's rows, piles and cloth shade.
 pub struct FittedRegions {
     pub rows: FittedRows,
     pub zoom: RowZoom,
     pub piles: FittedPiles,
+    pub tabletop_shade: Option<TabletopShade>,
+}
+
+/// An elliptical shade painted into the cloth, in physical pixels from the target's top left.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TabletopShade {
+    pub centre: Vec2,
+    pub radii: Vec2,
 }
 
 /// Each side's creatures, lands and other permanents rows, the viewer's first.

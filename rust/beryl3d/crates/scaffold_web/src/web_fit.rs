@@ -25,7 +25,8 @@ use glam::{Vec2, Vec3};
 
 use crate::tuning::{Perspective, StageSize, WebFit};
 use game_table::table::{
-    Camera, FittedPiles, FittedRegions, FittedRow, Layout, RowArea, RowProjection, RowZoom, Window,
+    Camera, FittedPiles, FittedRegions, FittedRow, Layout, RowArea, RowProjection, RowZoom,
+    TabletopShade, Window,
 };
 use kit_base::data::Card;
 use kit_base::data::profiles::ProfileData;
@@ -41,6 +42,8 @@ pub(crate) fn regions(
     let camera = &layout.fit(window);
     let data = &WebFit::shipped();
     let stage = Stage::of(window, data.stage, data.perspective);
+    // The CSS `.far-shade` is anchored to a fixed stage point, even past the width limits.
+    let physical = stage.scale * window.scale;
     Some(FittedRegions {
         rows: [false, true].map(|opponent| side_rows(&stage, camera, data, opponent)),
         zoom: RowZoom {
@@ -51,6 +54,10 @@ pub(crate) fn regions(
             },
         },
         piles: piles(&stage, camera, data),
+        tabletop_shade: Some(TabletopShade {
+            centre: (Vec2::from_array(data.tabletop_shade.centre) + stage.offset) * physical,
+            radii: Vec2::from_array(data.tabletop_shade.radii) * physical,
+        }),
     })
 }
 

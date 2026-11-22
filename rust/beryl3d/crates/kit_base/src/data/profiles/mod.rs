@@ -201,7 +201,6 @@ pub struct TableStyle {
     /// The distance below the opening hand's usual position, in points on the reference stage.
     #[serde(deserialize_with = "nonnegative")]
     pub hand_away: f32,
-    pub far_shade: bool,
     /// Whether overlaps lift successive nonland permanents away from the viewer.
     pub tuck_rise: bool,
 }

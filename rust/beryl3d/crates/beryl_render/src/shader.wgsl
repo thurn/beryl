@@ -218,32 +218,27 @@ fn tabletop_at(t: f32) -> vec3<f32> {
     return color;
 }
 
-// The shade along the table's far edge (`Draw::with_far_shade`), as the web's `.far-shade`
-// (`ui/src/screens/styles/table.css`) paints it over the cloth: near black, its opacity running
-// from 80% at the centre through 64% half way and 32% at 80% out to nothing at the edge of an
-// ellipse whose height is `FAR_SHADE_ASPECT` of its width (`ellipse 300px 85px`).
-const FAR_SHADE: vec3<f32> = vec3<f32>(10.0, 7.0, 5.0) / 255.0;
-const FAR_SHADE_ASPECT: f32 = 85.0 / 300.0;
+// The elliptical shade over the tabletop fades from near black at its centre to transparent
+// at its edge. Its color and stops match `.far-shade` in `ui/src/screens/styles/table.css`.
+const TABLETOP_SHADE: vec3<f32> = vec3<f32>(10.0, 7.0, 5.0) / 255.0;
 
-// The far shade's opacity at `t`, how far a pixel is from its centre, 1 at the ellipse's edge.
-fn far_shade_at(t: f32) -> f32 {
+// The shade's opacity at `t`, the distance from its centre in units of the ellipse's radius.
+fn tabletop_shade_at(t: f32) -> f32 {
     var a = mix(0.8, 0.64, clamp(t / 0.5, 0.0, 1.0));
     a = select(a, mix(0.64, 0.32, clamp((t - 0.5) / 0.3, 0.0, 1.0)), t > 0.5);
     return select(a, mix(0.32, 0.0, clamp((t - 0.8) / 0.2, 0.0, 1.0)), t > 0.8);
 }
 
-// The table: its tint, or where `params.x` is 1 (`Draw::tabletop`), the web's tabletop times the
-// tint, under the far shade centred at `params.yz` with the radius across `params.w` (none at
-// 0). The tabletop lies on the screen rather than on the table: its gradient spans the target,
-// and it moves only with the shake, as the web's cloth fills its page and moves only with
-// its stage. `fragment` is the pixel's position in physical pixels.
+// The table's color is its tint at `params.z == 0` and its tinted cloth otherwise. Positive
+// `params.zw` give the radii of a shade centred at `params.xy`. The cloth spans the target and
+// moves with the table's shake. `fragment`, the shade centre and its radii use physical pixels.
 fn shade_table(tint: vec4<f32>, params: vec4<f32>, fragment: vec2<f32>) -> vec4<f32> {
     let at = fragment - u.shake;
     let from_middle = at / u.target_size * 2.0 - vec2<f32>(1.0);
-    let radii = vec2<f32>(1.0, FAR_SHADE_ASPECT) * max(params.w, 1e-3);
-    let shade = select(0.0, far_shade_at(length((at - params.yz) / radii)), params.w > 0.0);
-    let painted = mix(tabletop_at(length(from_middle)) * GRAIN, FAR_SHADE, shade);
-    let color = tint.rgb * select(vec3<f32>(1.0), painted, params.x > 0.5);
+    let radii = max(params.zw, vec2<f32>(1e-3));
+    let shade = select(0.0, tabletop_shade_at(length((at - params.xy) / radii)), params.z > 0.0);
+    let painted = mix(tabletop_at(length(from_middle)) * GRAIN, TABLETOP_SHADE, shade);
+    let color = tint.rgb * select(vec3<f32>(1.0), painted, params.z != 0.0);
     return vec4<f32>(color * tint.a, tint.a);
 }
 
