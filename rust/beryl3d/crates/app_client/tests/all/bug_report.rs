@@ -225,6 +225,20 @@ fn the_opening_header_stays_clear_in_the_bug_report_picture() {
         assert!(printed.contains("text \"Opening hand\""), "{printed}");
         assert!(printed.contains("player \"You 20\""), "{printed}");
         assert!(!printed.contains("player \"Opponent 20\""), "{printed}");
+        let coin = &frame.resolved[find(frame, Role::Region, "opening coin")];
+        let label = &frame.resolved[find(frame, Role::Text, "On the draw")];
+        let coin_right = coin
+            .corners
+            .iter()
+            .map(|corner| corner.x)
+            .fold(f32::MIN, f32::max);
+        let label_left = label
+            .corners
+            .iter()
+            .map(|corner| corner.x)
+            .fold(f32::MAX, f32::min);
+        assert!(coin_right < label_left, "{printed}");
+        assert!(!printed.contains("text \"1\""), "{printed}");
         let orb = &frame.resolved[find(frame, Role::Region, "opponent's orb")];
         let total = &frame.resolved[find(frame, Role::Player, "You 20")];
         assert!((orb.opacity - OPENING_HUD_OPACITY).abs() < f32::EPSILON);

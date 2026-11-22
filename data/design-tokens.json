@@ -561,6 +561,13 @@
         "size": 22,
         "line_height": 1.2
       },
+      "OPENING_COIN_NUMBER": {
+        "font": "Serif",
+        "weight": 700,
+        "size": 24.64,
+        "line_height": 1,
+        "note": "The first player's mark on the 44-point desktop coin, at 56 percent of its diameter."
+      },
       "TURN_CAPTION": {
         "font": "Serif",
         "weight": 400,
@@ -1122,6 +1129,14 @@
         "value": 80,
         "note": "The step banner's shade: `.step-banner`'s `height`."
       },
+      "OPENING_COIN_DIAMETER": {
+        "value": 44,
+        "note": "The default size of the web's desktop `Coin`."
+      },
+      "OPENING_COIN_LABEL_GAP": {
+        "value": 12,
+        "note": "The gap from the coin to the play or draw label in `.opening-coin`."
+      },
       "START_PANEL_WIDTH": {
         "value": 620
       },
@@ -1644,6 +1659,14 @@
         "value": "#e2a75a",
         "note": "The step banner's gold title: the middle stop of `.step-banner-title`'s gradient."
       },
+      "OPENING_TITLE": {
+        "value": "#fbf8f4",
+        "note": "The desktop opening heading's ink in `.opening-title`."
+      },
+      "OPENING_COIN_NUMBER": {
+        "value": "#5a3a12",
+        "note": "The number on the opening coin, from `.coin`."
+      },
       "BANNER_DETAIL": {
         "value": "#f3ece0",
         "note": "The step banner's detail: `.step-banner-detail`'s `color`."
@@ -1822,6 +1845,18 @@
         "value": "0 1px 1px rgb(0 0 0 / 85%), 0 2px 5px rgb(0 0 0 / 50%)",
         "note": "The step banner title's drop shadows: `.step-banner-title`'s `filter` in `ui/src/screens/styles/step-banner.css`, a tight dark one under a soft one."
       },
+      "OPENING_TITLE": {
+        "value": "1px 3px 2px rgb(0 0 0 / 80%)",
+        "note": "The near text shadow in `.opening-title`. A second, broader drop shadow would use extra blurred glyphs at Retina scale."
+      },
+      "OPENING_COIN_LABEL": {
+        "value": "0 1px 3px rgb(0 0 0 / 80%)",
+        "note": "The play or draw label's text shadow in `.opening-coin`."
+      },
+      "OPENING_COIN": {
+        "value": "inset 0 0 0 2.2176px #7a5320, inset 0 0 0 3.9424px #f3cf86, 0 2px 5px rgb(0 0 0 / 55%)",
+        "note": "The opening coin's brass rims and drop shadow in `.coin`. Its rims are 0.09 and 0.16 times the 24.64-point coin type size."
+      },
       "STEP_ICON": {
         "value": "0 1px 1px rgb(0 0 0 / 75%)",
         "note": "A step icon's drop shadow: `.step-icon`'s `filter` in `ui/src/design/components/phase-tracker.css`."
@@ -1923,6 +1958,10 @@
       "OPENING_BACKDROP": {
         "value": "linear-gradient(180deg, transparent 12%, rgb(14 13 12 / 65%) 28%)",
         "note": "The opening hand's backdrop, which leaves the opponent's side of the table clear: `.opening > .overlay-backdrop` in `ui/src/screens/styles/table.css`."
+      },
+      "OPENING_COIN": {
+        "value": "radial-gradient(circle at 35% 30%, #fbe4a8, #e4a242 55%, #9a6a2a)",
+        "note": "The lit face of the opening coin in `.coin`."
       },
       "LOG_MASK": {
         "value": "linear-gradient(to bottom, transparent, #000 40px)",

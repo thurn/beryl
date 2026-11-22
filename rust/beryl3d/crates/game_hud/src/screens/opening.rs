@@ -12,8 +12,8 @@
 //! shown. A put-on-bottom pick clicks the cards in the row (`Click::On`); the session marks each
 //! one picked as selected, and the row shows it in a slot.
 //!
-//! The coin is the `announce` notice's float (`hud::notices`), which the client draws over
-//! every screen.
+//! Once the starting player is known, the desktop shows the opening coin beside the
+//! play-or-draw label. In-game coin flips use the separate `announce` notice.
 //!
 //! When the opponent won the flip, the opening first shows the flip for `FLIP_MS` however soon
 //! they chose, as the web's coin spins (`HudIn::spinning`): the title says who won, the hand
@@ -39,7 +39,8 @@ use kit_base::data::Card;
 use kit_base::data::hud::OpeningStyle;
 use kit_base::data::profiles::{ScreenMetrics, SingleRow, WrappedHand};
 use kit_base::geometry::Rect;
-use kit_base::tokens::{color, size, type_style};
+use kit_base::paint::Shadow;
+use kit_base::tokens::{color, gradient, shadow, size, type_style};
 use kit_frame::frame::{ElementId, Role};
 use kit_scene::{Show, grid::grid_element};
 use kit_space::arrange::Grid;
@@ -229,17 +230,27 @@ pub fn present(shown: &Presentation, profile: Profile, style: OpeningStyle) -> E
         } else {
             "On the draw"
         };
-        coin = coin.align_items(sizes.coin_align).child(
-            text(words)
-                .style(sizes.coin)
-                .color(color::GOLD)
-                .passes(true),
-        );
+        let mut label = text(words)
+            .style(sizes.coin)
+            .color(color::GOLD)
+            .passes(true);
+        if let Some(scale) = sizes.header_scale {
+            label = label.drop_shadow(scaled_shadows(&shadow::OPENING_COIN_LABEL, scale));
+            coin = coin
+                .gap(size::OPENING_COIN_LABEL_GAP * scale)
+                .child(starting_coin(starting, scale));
+        }
+        coin = coin.align_items(sizes.coin_align).child(label);
     }
     let mut heading = text(shown.title)
         .style(sizes.title)
         .color(color::TEXT)
         .passes(true);
+    if let Some(scale) = sizes.header_scale {
+        heading = heading
+            .color(color::OPENING_TITLE)
+            .drop_shadow(scaled_shadows(&shadow::OPENING_TITLE, scale));
+    }
     heading.style.margin = [0.0, 0.0, sizes.title_gap, 0.0];
     let hand_row = hand_grid(shown, &sizes, profile.card(), card);
     let dots = (shown.waiting && profile.data().hud.opening.waiting_dots).then(|| waiting(style));
@@ -283,6 +294,45 @@ pub fn present(shown: &Presentation, profile: Profile, style: OpeningStyle) -> E
                 .background_image(vec![kit_base::tokens::gradient::OPENING_BACKDROP]),
         )
         .child(screen)
+}
+
+/// The web's 44-point `.coin` after the flip. Its face bears a 1 when the viewer plays first.
+fn starting_coin(starting: Side, scale: f32) -> Element {
+    let diameter = size::OPENING_COIN_DIAMETER * scale;
+    let numeral = type_style::OPENING_COIN_NUMBER;
+    let mark = (starting == Side::You).then(|| {
+        text("1")
+            .style(TypeStyle {
+                size: numeral.size * scale,
+                ..numeral
+            })
+            .color(color::OPENING_COIN_NUMBER)
+    });
+    row()
+        .name("opening coin")
+        .width(diameter)
+        .height(diameter)
+        .radius(diameter / 2.0)
+        .align_items(Align::Center)
+        .justify_content(Justify::Center)
+        .background_image(vec![gradient::OPENING_COIN])
+        .box_shadow(scaled_shadows(&shadow::OPENING_COIN, scale))
+        .passes(true)
+        .children(mark)
+}
+
+/// Converts a desktop opening shadow's stage lengths to window points.
+fn scaled_shadows(shadows: &[Shadow], scale: f32) -> Vec<Shadow> {
+    shadows
+        .iter()
+        .map(|shadow| Shadow {
+            x: shadow.x * scale,
+            y: shadow.y * scale,
+            blur: shadow.blur * scale,
+            spread: shadow.spread * scale,
+            ..*shadow
+        })
+        .collect()
 }
 
 /// Shows the hand's scene objects in the opening grid, keeping their boxes while
@@ -452,6 +502,8 @@ fn empty_slot(at: usize, (width, card): (f32, Card)) -> Element {
 
 /// How large the opening's pieces are and where it stands, on one layout.
 struct Sizes {
+    /// Window points per stage point when the desktop opening is projected.
+    header_scale: Option<f32>,
     fan: Option<Fan>,
     /// How far the group's top stands below the window's top.
     top: f32,
@@ -507,6 +559,7 @@ impl Sizes {
             ..style
         };
         Self {
+            header_scale: Some(scale),
             fan: Some(Fan {
                 turn: metrics.fan_turn.to_radians(),
                 drop: metrics.fan_drop * scale,
@@ -589,6 +642,7 @@ impl Sizes {
             card
         };
         Self {
+            header_scale: None,
             fan: None,
             top: room.y - coin / 2.0,
             coin_height: coin + wrapped.coin_line,
