@@ -32,6 +32,7 @@ fn fleet_shows_the_latest_machine_snapshot() {
         stalled_workers: 2,
         down_workers: 1,
         ready_tickets: 8,
+        active_memory_pressure: None,
     };
     hub::machine_snapshots::record(&conn, "m-j", &snapshot, None).unwrap();
     snapshot.at = now.plus_seconds(-30.0);

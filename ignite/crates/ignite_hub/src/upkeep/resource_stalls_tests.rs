@@ -40,6 +40,7 @@ fn healthy() -> MachineSnapshot {
         stalled_workers: 0,
         down_workers: 0,
         ready_tickets: 1,
+        active_memory_pressure: Some(false),
     }
 }
 
@@ -299,6 +300,7 @@ fn corroborated_pacing_and_memory_blocks_file_only_a_pressure_ticket() {
     let memory = MachineSnapshot {
         start_block: Some(StartBlock::Memory),
         swap_used_mb: Some(12_288),
+        active_memory_pressure: Some(true),
         ..idle
     };
     record(&conn, "m-pressure", 15..=29, memory.clone());
@@ -323,13 +325,14 @@ fn corroborated_pacing_and_memory_blocks_file_only_a_pressure_ticket() {
 }
 
 #[test]
-fn a_full_build_quota_explains_idle_workers_while_swap_can_still_escalate() {
+fn active_memory_pressure_still_escalates_when_a_full_build_quota_explains_idle_workers() {
     let mut conn = hub::open_in_memory().unwrap();
     let mut upkeep = Upkeep::new(None).unwrap();
     machine(&conn, "m-capped", Os::Macos);
     let capped = MachineSnapshot {
         idle_workers: 5,
         ready_tickets: 10,
+        swap_used_mb: Some(12_288),
         start_block: Some(StartBlock::Pacing),
         start_reason: Some(
             "Tabcd waits for shared build cores on m-capped: 3 build tickets held, limit 3"
@@ -351,7 +354,7 @@ fn a_full_build_quota_explains_idle_workers_while_swap_can_still_escalate() {
         "m-capped",
         31..=61,
         MachineSnapshot {
-            swap_used_mb: Some(12_288),
+            active_memory_pressure: Some(true),
             ..capped
         },
     );
@@ -407,57 +410,55 @@ fn an_idle_escalation_needs_healthy_dispatch_samples_to_clear() {
 }
 
 #[test]
-fn queue_and_swap_pressure_escalate_only_when_sustained_and_need_observed_recovery() {
+fn sustained_active_memory_pressure_clears_after_observed_recovery_with_retained_swap() {
     let mut conn = hub::open_in_memory().unwrap();
     let mut upkeep = Upkeep::new(None).unwrap();
     machine(&conn, "m-pressure", Os::Macos);
-    record(
-        &conn,
-        "m-pressure",
-        0..=14,
-        MachineSnapshot {
-            queued_cores: 9,
-            ..healthy()
-        },
-    );
-    let swapping = MachineSnapshot {
-        swap_used_mb: Some(4_097),
+    let retained_swap = MachineSnapshot {
+        queued_cores: 8,
+        swap_used_mb: Some(13_535),
         ..healthy()
     };
-    record(&conn, "m-pressure", 15..=29, swapping.clone());
-    assert!(
-        upkeep
-            .pass(&mut conn, at(29))
-            .unwrap()
-            .tickets_filed
-            .is_empty()
-    );
-    record(&conn, "m-pressure", 30..=30, swapping);
-    let filed = upkeep.pass(&mut conn, at(30)).unwrap().tickets_filed;
+    record(&conn, "m-pressure", 0..=30, retained_swap.clone());
+    let pressed = MachineSnapshot {
+        active_memory_pressure: Some(true),
+        ..healthy()
+    };
+    record(&conn, "m-pressure", 31..=60, pressed.clone());
+    for minute in [30, 60] {
+        assert!(
+            upkeep
+                .pass(&mut conn, at(minute))
+                .unwrap()
+                .tickets_filed
+                .is_empty()
+        );
+    }
+    record(&conn, "m-pressure", 61..=61, pressed);
+    let filed = upkeep.pass(&mut conn, at(61)).unwrap().tickets_filed;
     assert_eq!(filed.len(), 1);
-    assert!(ticket(&conn, &filed[0]).body.contains("4097 MB swap"));
+    let incident = ticket(&conn, &filed[0]);
+    assert!(incident.body.contains("OS memory pressure: active"));
+    assert!(incident.body.contains("0 MB swap"));
 
     record(
         &conn,
         "m-pressure",
-        31..=91,
+        62..=122,
         MachineSnapshot {
-            swap_used_mb: None,
+            active_memory_pressure: None,
             ..healthy()
         },
     );
-    assert!(
-        upkeep
-            .pass(&mut conn, at(91))
-            .unwrap()
-            .tickets_closed
-            .is_empty()
-    );
-    record(&conn, "m-pressure", 92..=152, healthy());
+    let unknown = upkeep.pass(&mut conn, at(122)).unwrap();
+    assert!(unknown.tickets_closed.is_empty());
+    assert!(unknown.tickets_filed.is_empty());
+    record(&conn, "m-pressure", 123..=183, retained_swap);
     assert_eq!(
-        upkeep.pass(&mut conn, at(152)).unwrap().tickets_closed,
+        upkeep.pass(&mut conn, at(183)).unwrap().tickets_closed,
         filed
     );
+    assert_eq!(ticket(&conn, &filed[0]).status, Status::Closed);
 }
 
 #[test]
@@ -467,6 +468,7 @@ fn queue_pressure_clears_on_hosts_that_do_not_report_swap() {
     machine(&conn, "m-windows", Os::Windows);
     let normal = MachineSnapshot {
         swap_used_mb: None,
+        active_memory_pressure: None,
         ..healthy()
     };
     record(

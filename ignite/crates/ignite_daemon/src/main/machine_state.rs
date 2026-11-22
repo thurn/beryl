@@ -276,6 +276,7 @@ mod tests {
             admit_cores: 16,
             draining: false,
             shared_failure: None,
+            active_memory_pressure: Some(false),
         }
     }
 
@@ -343,6 +344,16 @@ mod tests {
             at,
         )
         .unwrap();
+    }
+
+    #[test]
+    fn an_older_machine_sample_leaves_memory_pressure_unknown() {
+        let mut sample = fixture_sample(Timestamp::EPOCH);
+        sample.active_memory_pressure = None;
+        let wire = serde_json::to_value(&sample).unwrap();
+        assert!(wire.get("active_memory_pressure").is_none());
+        let decoded = serde_json::from_value::<MachineSample>(wire).unwrap();
+        assert_eq!(decoded, sample);
     }
 
     #[test]
@@ -417,6 +428,7 @@ mod tests {
             assert_eq!(snapshot.cpu_percent, Some(79));
             assert_eq!(snapshot.queued_cores, 12);
             assert_eq!(snapshot.swap_used_mb, Some(256));
+            assert_eq!(snapshot.active_memory_pressure, Some(false));
             assert_eq!(snapshot.idle_workers, 4);
             assert_eq!(snapshot.working_workers, 1);
             assert_eq!(snapshot.stalled_workers, 1);

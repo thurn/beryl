@@ -124,6 +124,7 @@ impl HeadlessDispatch {
         let pressure = self.pressure(now).unwrap_or_default();
         let free_trees = self.host.free_ticket_trees();
         let (cpu_percent, queued_cores, swap_used_mb) = scheduler.machine_readings();
+        let active_memory_pressure = scheduler.active_memory_pressure();
         let status = scheduler.status();
         let (room, idle_workers, running_workers, reserved, draining, shared_failure) = {
             let state = self.state();
@@ -149,6 +150,7 @@ impl HeadlessDispatch {
             cpu_percent,
             queued_cores,
             swap_used_mb,
+            active_memory_pressure,
             idle_workers,
             room,
             free_ticket_trees: free_trees.saturating_sub(reserved),

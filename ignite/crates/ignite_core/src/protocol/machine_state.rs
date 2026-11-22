@@ -34,6 +34,9 @@ pub struct MachineSample {
     pub admit_cores: u32,
     pub draining: bool,
     pub shared_failure: Option<String>,
+    /// Current OS memory pressure, absent on older daemons or when the reading fails.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_memory_pressure: Option<bool>,
 }
 
 /// What keeps an otherwise eligible ticket from starting.
@@ -95,6 +98,9 @@ pub struct MachineSnapshot {
     /// Unclaimed, unreserved work eligible for the machine and its providers before checking
     /// transient start limits. This count can remain positive while starts are blocked.
     pub ready_tickets: u32,
+    /// Current OS memory pressure, absent when the reading is unsupported or unavailable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_memory_pressure: Option<bool>,
 }
 
 impl MachineSnapshot {

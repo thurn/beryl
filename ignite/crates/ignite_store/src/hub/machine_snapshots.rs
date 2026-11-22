@@ -25,8 +25,9 @@ pub fn record(
             machine, at, free_disk_gib, reclaimable_bytes, reclaimable_measured_at,
             next_ticket, next_ticket_disk_gib, start_block, start_reason, cpu_percent,
             queued_cores, swap_used_mb, idle_workers, working_workers, stalled_workers,
-            down_workers, ready_tickets, capacity, last_disk_cleanup_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+            down_workers, ready_tickets, capacity, last_disk_cleanup_at, active_memory_pressure
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+                   ?17, ?18, ?19, ?20)
          ON CONFLICT (machine, at) DO UPDATE SET capacity = excluded.capacity
          WHERE machine_snapshots.capacity IS NULL AND excluded.capacity IS NOT NULL",
         params![
@@ -54,6 +55,7 @@ pub fn record(
             snapshot.ready_tickets,
             capacity,
             snapshot.last_disk_cleanup_at.map(|at| at.to_string()),
+            snapshot.active_memory_pressure,
         ],
     )?;
     Ok(())
@@ -63,7 +65,7 @@ const SELECT: &str =
     "SELECT at, free_disk_gib, reclaimable_bytes, reclaimable_measured_at, next_ticket,
             next_ticket_disk_gib, start_block, start_reason, cpu_percent, queued_cores,
             swap_used_mb, idle_workers, working_workers, stalled_workers, down_workers,
-            ready_tickets, last_disk_cleanup_at
+            ready_tickets, last_disk_cleanup_at, active_memory_pressure
      FROM machine_snapshots";
 
 pub fn latest(conn: &Connection, machine: &str) -> Result<Option<MachineSnapshot>> {
@@ -136,6 +138,7 @@ fn read(row: &Row<'_>) -> rusqlite::Result<MachineSnapshot> {
         stalled_workers: row.get(13)?,
         down_workers: row.get(14)?,
         ready_tickets: row.get(15)?,
+        active_memory_pressure: row.get(17)?,
     })
 }
 
@@ -193,6 +196,7 @@ mod tests {
             stalled_workers: 1,
             down_workers: 1,
             ready_tickets: 4,
+            active_memory_pressure: Some(true),
         }
     }
 

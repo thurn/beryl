@@ -294,6 +294,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: "ALTER TABLE machine_snapshots ADD COLUMN last_disk_cleanup_at TEXT;",
         code: None,
     },
+    Migration {
+        version: 49,
+        sql: "ALTER TABLE machine_snapshots ADD COLUMN active_memory_pressure INTEGER;",
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

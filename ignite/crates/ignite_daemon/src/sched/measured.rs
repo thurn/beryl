@@ -152,6 +152,11 @@ impl Pressure {
 }
 
 impl Scheduler {
+    /// Reads current OS pressure for the heartbeat. A failed read stays unknown.
+    pub(crate) fn active_memory_pressure(&self) -> Option<bool> {
+        self.host.active_memory_pressure().ok()
+    }
+
     /// Reads memory for a worker admission decision without waiting for the next sample.
     /// A failed read leaves available memory unknown. The periodic swap history still applies.
     pub fn worker_memory(&self) -> (bool, Option<u64>) {

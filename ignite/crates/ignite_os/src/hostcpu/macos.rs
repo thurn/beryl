@@ -56,6 +56,10 @@ impl HostCpu for HostMeter {
         Native.free_memory_mb()
     }
 
+    fn active_memory_pressure(&self) -> io::Result<bool> {
+        Native.active_memory_pressure()
+    }
+
     fn swap_used_mb(&self) -> io::Result<u64> {
         Native.swap_used_mb()
     }
@@ -147,6 +151,39 @@ impl HostCpu for Native {
             + u64::from(info.inactive_count)
             + u64::from(info.purgeable_count);
         Ok(pages * page.max(0) as u64 / (1024 * 1024))
+    }
+
+    fn active_memory_pressure(&self) -> io::Result<bool> {
+        let mut level = 0u32;
+        let mut size = size_of::<u32>();
+        // SAFETY: the name is NUL-terminated and level holds the supplied number of bytes.
+        let result = unsafe {
+            libc::sysctlbyname(
+                c"kern.memorystatus_vm_pressure_level".as_ptr(),
+                (&raw mut level).cast(),
+                &raw mut size,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        if result != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if size != size_of::<u32>() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid memory pressure size",
+            ));
+        }
+        // The sysctl returns XNU's NOTE_MEMORYSTATUS_PRESSURE_{NORMAL,WARN,CRITICAL} flags.
+        match level {
+            1 => Ok(false),
+            2 | 4 => Ok(true),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "unknown memory pressure level",
+            )),
+        }
     }
 
     /// The `vm.swapusage` sysctl, which `sysctl vm.swapusage` prints.
@@ -272,6 +309,7 @@ mod tests {
         assert!(Native.free_memory_mb().unwrap() > 0);
         // Swap may be zero, but it can be read.
         Native.swap_used_mb().unwrap();
+        Native.active_memory_pressure().unwrap();
     }
 
     /// Free memory counts the inactive pages that `vm_stat` reports. Leaving them out once made

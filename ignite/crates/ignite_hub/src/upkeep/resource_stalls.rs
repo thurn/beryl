@@ -21,8 +21,6 @@ const PRESSURE_SECONDS: f64 = 30.0 * 60.0;
 const SAMPLE_GAP_SECONDS: f64 = 120.0;
 /// Older daemons measured reclaimable disk hourly. Allow one late measurement.
 const RECLAIMABLE_MAX_AGE_SECONDS: f64 = 2.0 * 3_600.0;
-/// Allow modest swap use and queues smaller than one host's worth of cores.
-const SWAP_LIMIT_MB: u64 = 4_096;
 /// With slot-based admission there is no byte target. Watch for cleanup that leaves
 /// the worktree volume critically low while work is waiting.
 const LOW_DISK_GIB: u64 = 10;
@@ -164,12 +162,11 @@ pub(super) fn recovered(
         Invariant::Pressure => {
             !intentionally_stopped(sample)
                 && sample.queued_cores <= cores(machine)
-                // Windows daemons do not measure swap. Where it is supported, a
-                // missing reading cannot confirm that swap has returned to normal.
-                && sample.swap_used_mb.map_or_else(
-                    || machine.os == Os::Windows.as_str(),
-                    |swap| swap <= SWAP_LIMIT_MB,
-                )
+                // Windows only reports queue pressure. On macOS, old daemons
+                // and failed readings both leave memory recovery unconfirmed.
+                && sample
+                    .active_memory_pressure
+                    .map_or(machine.os == Os::Windows.as_str(), |active| !active)
         }
     };
     Ok(tail_since(&samples, healthy)
@@ -270,8 +267,7 @@ fn cores(machine: &rows::Machine) -> u64 {
 
 fn over_limit(sample: &MachineSnapshot, machine: &rows::Machine) -> bool {
     !intentionally_stopped(sample)
-        && (sample.queued_cores > cores(machine)
-            || sample.swap_used_mb.is_some_and(|swap| swap > SWAP_LIMIT_MB))
+        && (sample.queued_cores > cores(machine) || sample.active_memory_pressure == Some(true))
 }
 
 fn report(
@@ -296,7 +292,7 @@ fn report(
             (None, _) => "Disk blocked starts while enough disk could be reclaimed".to_owned(),
         },
         Invariant::Pressure => format!(
-            "Queued cores exceeded the host's {} cores or swap exceeded {SWAP_LIMIT_MB} MB",
+            "Queued cores exceeded the host's {} cores or macOS reported active memory pressure",
             cores(machine)
         ),
     };
@@ -314,6 +310,14 @@ fn report(
     }
     for (label, value) in sample.readings() {
         let _ = writeln!(body, "- {label}: {value}");
+    }
+    if matches!(invariant, Invariant::Pressure) {
+        let pressure = match sample.active_memory_pressure {
+            Some(true) => "active",
+            Some(false) => "normal",
+            None => "unknown",
+        };
+        let _ = writeln!(body, "- OS memory pressure: {pressure}");
     }
     let _ = write!(
         body,

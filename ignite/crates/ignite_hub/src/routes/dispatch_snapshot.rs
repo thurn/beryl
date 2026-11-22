@@ -38,6 +38,7 @@ pub(in crate::routes::dispatch) fn record(
         stalled_workers: 0,
         down_workers: 0,
         ready_tickets: 0,
+        active_memory_pressure: sample.active_memory_pressure,
     };
     // Keep the queue and capacity reads consistent. Release the read snapshot before writing
     // so a dispatch on another connection cannot prevent upgrading this transaction.

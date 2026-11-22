@@ -92,6 +92,7 @@ crate::tables! {
         ready_tickets: i64,
         capacity: Option<String>,
         last_disk_cleanup_at: Option<String>,
+        active_memory_pressure: Option<i64>,
     }
 
     MachineTreeVolumes = "machine_tree_volumes" {

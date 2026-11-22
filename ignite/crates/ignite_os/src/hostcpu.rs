@@ -43,6 +43,10 @@ pub trait HostCpu {
     fn busy(&self) -> io::Result<f64>;
     /// Memory not in use, in megabytes.
     fn free_memory_mb(&self) -> io::Result<u64>;
+    /// Whether the OS currently reports warning or critical memory pressure.
+    fn active_memory_pressure(&self) -> io::Result<bool> {
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
     /// Swap in use, in megabytes. Unsupported unless an implementation reads it.
     fn swap_used_mb(&self) -> io::Result<u64> {
         Err(io::Error::from(io::ErrorKind::Unsupported))
