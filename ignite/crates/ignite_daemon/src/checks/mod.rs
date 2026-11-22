@@ -197,6 +197,8 @@ pub struct CheckRun {
     pub builds: Vec<Built>,
     /// Products whose build failed, with the build's output; their checks are incomplete.
     pub build_failures: Vec<(String, PathBuf)>,
+    /// Families whose listing was blocked by a failed build, with the product that failed.
+    pub(crate) listing_build_failures: Vec<(String, String)>,
     /// Families whose `list` failed every try, with the last output.
     pub incomplete_families: Vec<(String, PathBuf)>,
     /// Families the landing gate left out, because the change touches none of their inputs.
@@ -264,8 +266,8 @@ type Final = (
 /// Why a family's `list` gave no checks.
 #[derive(Clone)]
 enum ListError {
-    /// A product it needs failed to build, which `CheckRun::build_failures` records.
-    Build,
+    /// A product it needs failed to build. Holds the product's name.
+    Build(String),
     /// The command failed every try; holds the last output.
     Output(PathBuf),
 }
@@ -306,7 +308,7 @@ pub(crate) const BUILD_FAILED: &str = "a build it needs failed";
 pub(crate) const UNRESOLVED: &str = " cannot be resolved: ";
 
 /// The words in an unlisted family's message (`a product the listing of <family> needs failed
-/// to build: <products>`) before the products, separated by `, `.
+/// to build: <product>`) before the failed product's name.
 pub(crate) const LISTING_BUILD_FAILED: &str = " needs failed to build: ";
 
 /// One family's checks, keyed.

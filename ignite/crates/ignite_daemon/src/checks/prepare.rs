@@ -481,9 +481,10 @@ impl Checks {
     ) -> Option<Listing> {
         match listed {
             Ok(listing) => Some(listing),
-            // The build is already in `run.build_failures`; the family's list never ran, so it
-            // is not an incomplete family.
-            Err(ListError::Build) => None,
+            Err(ListError::Build(product)) => {
+                run.listing_build_failures.push((name.to_owned(), product));
+                None
+            }
             Err(ListError::Output(output)) => {
                 run.incomplete_families.push((name.to_owned(), output));
                 None

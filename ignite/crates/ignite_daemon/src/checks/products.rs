@@ -23,12 +23,13 @@ impl Checks {
         run: &mut CheckRun,
     ) -> std::result::Result<(), PathBuf> {
         self.build_products(ctx, tree, &family.needs, packages, who, run)
+            .map_err(|(_, output)| output)
     }
 
     /// Makes each of `products` current, in the class of the command `who` names and charged
     /// to its ticket and session. Each product built is sent to the hub as a record of verb
     /// `build` with its compile units, so which crates a build recompiled can be read later.
-    /// `Err` holds a failed build's output.
+    /// `Err` holds the failed product's name and build output.
     ///
     /// Families on threads of their own may ask for one product at once, and the build manager
     /// answers each with the one build's result; only the first reports and records it. A
@@ -41,7 +42,7 @@ impl Checks {
         packages: &[String],
         who: &BuildFor,
         run: &mut CheckRun,
-    ) -> std::result::Result<(), PathBuf> {
+    ) -> std::result::Result<(), (String, PathBuf)> {
         for product in products {
             let asked = super::time_lines::Stopwatch::start(ctx);
             let result = ctx.builds.ensure_for(&tree.id, product, packages, who);
@@ -87,7 +88,7 @@ impl Checks {
                     if !run.build_failures.iter().any(|(p, _)| p == product) {
                         run.build_failures.push((product.clone(), output.clone()));
                     }
-                    return Err(output);
+                    return Err((product.clone(), output));
                 }
             }
         }

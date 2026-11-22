@@ -63,6 +63,7 @@ impl CheckRun {
             failures,
             builds,
             build_failures,
+            listing_build_failures,
             incomplete_families,
             out_of_scope,
             skipped,
@@ -85,6 +86,7 @@ impl CheckRun {
                 self.build_failures.push((product, output));
             }
         }
+        self.listing_build_failures.extend(listing_build_failures);
         self.incomplete_families.extend(incomplete_families);
         self.out_of_scope.extend(out_of_scope);
         self.skipped += skipped;

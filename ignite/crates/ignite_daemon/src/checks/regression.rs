@@ -283,13 +283,12 @@ fn missing_listing(name: &str, os: Os, run: Option<&CheckRun>) -> String {
             output.display()
         );
     }
-    let products: Vec<_> = run
-        .build_failures
+    if let Some((_, product)) = run
+        .listing_build_failures
         .iter()
-        .map(|(product, _)| product.as_str())
-        .collect();
-    format!(
-        "a product the listing of {name}{LISTING_BUILD_FAILED}{}",
-        products.join(", ")
-    )
+        .find(|(family, _)| family == name)
+    {
+        return format!("a product the listing of {name}{LISTING_BUILD_FAILED}{product}");
+    }
+    format!("the family {name} could not be listed")
 }

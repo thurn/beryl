@@ -84,6 +84,51 @@ fn a_family_that_cannot_be_listed_leaves_the_others_and_is_named() {
 }
 
 #[test]
+fn a_missing_tip_listing_names_only_its_failed_product() {
+    let manifest = [
+        family("unit", "\"any\"", "lister", "needs = [\"unit-build\"]"),
+        family(
+            "shots",
+            "\"any\"",
+            "lister",
+            "needs = [\"unit-build\"]\nlist_needs = [\"shots-build\"]",
+        ),
+        r#"
+[product.unit-build]
+build = "builder"
+inputs = ["src"]
+outputs = ["unit-out"]
+
+[product.shots-build]
+build = "builder"
+inputs = ["src"]
+outputs = ["shots-out"]
+"#
+        .to_owned(),
+    ]
+    .join("\n");
+    let world = world(&manifest, &[], FakeHistory::default());
+    for product in ["unit-build", "shots-build"] {
+        world.builds.script(
+            &tree(),
+            product,
+            ignite_core::traits::BuildResult::Failed {
+                output: world.dir.join(format!("{product}.log")),
+                usage: Usage::default(),
+            },
+        );
+    }
+
+    let set = world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+
+    assert_eq!(set.unlisted.len(), 2);
+    for missing in &set.unlisted {
+        let (_, product) = missing.message.split_once(LISTING_BUILD_FAILED).unwrap();
+        assert_eq!(product, format!("{}-build", missing.family));
+    }
+}
+
+#[test]
 fn a_foreign_family_that_cannot_be_listed_is_not_reported_and_names_its_platforms() {
     let manifest = family("win", "[\"windows\"]", "broken", "");
     let world = world(&manifest, &[], FakeHistory::default());

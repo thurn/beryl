@@ -405,7 +405,7 @@ impl Checks {
         let key = key.filter(|_| !scoped);
         let who = execute::build_for(options);
         self.build_products(ctx, tree, needs, &packages, &who, run)
-            .map_err(|_| ListError::Build)?;
+            .map_err(|(product, _)| ListError::Build(product))?;
         let (args, cwd) = match family.adapter {
             Adapter::Jsonl => (
                 adapters::words(family.list.as_deref().unwrap_or_default()),

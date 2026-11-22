@@ -172,23 +172,21 @@ impl TipVerifier {
                     entries.len() - 1
                 };
                 entries[at].add(missing.name.clone(), &missing.name);
-            } else if let Some(products) = missing.message.split_once(LISTING_BUILD_FAILED) {
-                for product in products.1.split(", ").filter(|p| !p.is_empty()) {
-                    let mut report = incomplete_report(
-                        ctx,
-                        tip,
-                        &missing.name,
-                        None,
-                        IncompleteReason::BuildFailed,
-                        1,
-                        &format!(
-                            "The build of {product} failed, so {} could not be listed.",
-                            missing.family
-                        ),
-                    );
-                    report.product = Some(product.to_owned());
-                    self.send_once(ctx, tip, &report);
-                }
+            } else if let Some((_, product)) = missing.message.split_once(LISTING_BUILD_FAILED) {
+                let mut report = incomplete_report(
+                    ctx,
+                    tip,
+                    &missing.name,
+                    None,
+                    IncompleteReason::BuildFailed,
+                    1,
+                    &format!(
+                        "The build of {product} failed, so {} could not be listed.",
+                        missing.family
+                    ),
+                );
+                report.product = Some(product.to_owned());
+                self.send_once(ctx, tip, &report);
             } else {
                 self.report_stuck(ctx, tip, &missing.name, None, &missing.message);
             }
