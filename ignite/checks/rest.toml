@@ -33,6 +33,9 @@ kind = "regression"
 adapter = "jsonl"
 platforms = ["macos", "windows"]
 needs = ["python-env"]
+# The list reads the same gate file on both platforms. Either verifier can list the checks
+# before it has the other platform's results.
+list_needs = []
 resources = ["bench-vm"]
 # The adapter waits while Callgrind runs in the Linux guest. The guest's CPU shows as load
 # outside Ignite.

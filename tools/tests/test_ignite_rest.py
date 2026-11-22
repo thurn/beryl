@@ -54,8 +54,8 @@ def test_the_manifest_declares_the_families_and_products() -> None:
             assert f"rest list {name}" in str(family["list"])
             assert "{checks}" in str(family["run"])
     counts = declared["family"]["counts"]
-    platforms = counts["platforms"]
-    assert isinstance(platforms, list) and "macos" in platforms
+    assert counts["platforms"] == ["macos", "windows"]
+    assert counts["list_needs"] == []
     assert counts["resources"] == ["bench-vm"]
     for name in ("fuzz", "exhaust"):
         family = declared["family"][name]
