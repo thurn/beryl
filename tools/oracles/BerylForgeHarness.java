@@ -696,6 +696,28 @@ public final class BerylForgeHarness {
             throw new StepFailed("Forge offers no land play for " + card);
         }
 
+        /** Forge puts each spell on its own card state, with separate abilities for these casting modes. */
+        static String spellMode(SpellAbility ability) {
+            if (ability.isCastFaceDown()) {
+                return "Morph";
+            }
+            if (ability.isKeyword(Keyword.FUSE)) {
+                return "Fuse";
+            }
+            return ability.hasParam("Prototype") ? "Prototype" : null;
+        }
+
+        static boolean matchesSpell(SpellAbility ability, JsonObject step) {
+            if (!ability.isSpell()) {
+                return false;
+            }
+            CardStateName state = ability.getCardStateName();
+            if (step.has("spell")) {
+                return state != null && ability.getCardState().getName().equals(step.get("spell").getAsString());
+            }
+            return state == null || state == CardStateName.Original;
+        }
+
         SpellAbility cast(Player player, JsonObject step) {
             String name = step.get("card").getAsString();
             String cost = step.has("cost") ? step.get("cost").getAsString() : null;
@@ -705,7 +727,15 @@ public final class BerylForgeHarness {
             SpellAbility chosen = null;
             SpellAbility plain = null;
             for (SpellAbility sa : card.getAllPossibleAbilities(player, true)) {
-                if (!sa.isSpell()) {
+                String mode = spellMode(sa);
+                if (!matchesSpell(sa, step)) {
+                    continue;
+                }
+                if (mode != null) {
+                    if (mode.equals(cost)) {
+                        chosen = sa;
+                        break;
+                    }
                     continue;
                 }
                 // An alternative cost no keyword names, as Force of Will's, is a spell Forge
@@ -722,13 +752,13 @@ public final class BerylForgeHarness {
                     chosen = sa;
                 }
             }
-            if (chosen == null && !escape) {
+            if (chosen == null && !escape && !"Morph".equals(cost) && !"Fuse".equals(cost) && !"Prototype".equals(cost)) {
                 chosen = plain; // with an optional cost, chosen on the spell itself below
             }
             if (chosen == null) {
                 throw new StepFailed("Forge offers no castable spell for " + name + (cost == null ? "" : " with " + cost));
             }
-            if (cost != null && chosen.getAlternativeCost() == null) {
+            if (cost != null && spellMode(chosen) == null && chosen.getAlternativeCost() == null) {
                 List<OptionalCostValue> picked = optionalCosts(chosen, cost);
                 if (picked.isEmpty()) {
                     keywordCost = cost; // a keyword cost, chosen as Forge casts
@@ -934,7 +964,9 @@ public final class BerylForgeHarness {
         /** Whether `card` goes by `name` in a scenario: its own name, or for a face-down card, which has none (CR 708.2a), its card's. */
         static boolean named(Card card, String name) {
             return card.getName().equals(name)
-                    || (card.isFaceDown() && card.getState(CardStateName.Original).getName().equals(name));
+                    || (card.isFaceDown() && card.getState(CardStateName.Original).getName().equals(name))
+                    || (card.isSplitCard() && card.getCurrentStateName() == CardStateName.Original
+                        && card.getState(CardStateName.LeftSplit).getName().equals(name));
         }
 
         List<Card> controlled(Player player, String name) {

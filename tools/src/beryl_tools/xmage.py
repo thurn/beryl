@@ -55,6 +55,7 @@ from .xmage_java import (
     cast_choices,
     java_string,
     offered_cast_choices,
+    spell_cast,
     outcome_lines,
     trample_amount,
 )
@@ -267,17 +268,19 @@ class Exporter:
             life = cast(int, setup["life"])
             if life != 20:
                 self.emit(f"setLife({who}, {life});")
-            for name in cast(list[str], setup["hand"]):
-                self.emit(f"addCard(Zone.HAND, {who}, {java_string(name)});")
-            for permanent in cast(list[Json], setup["battlefield"]):
-                self.permanent(who, permanent, start)
-            for name in reversed(cast(list[str], setup["graveyard"])):
-                self.emit(f"addCard(Zone.GRAVEYARD, {who}, {java_string(name)});")
-            for name in cast(list[str], setup["exile"]):
-                self.emit(f"addCard(Zone.EXILED, {who}, {java_string(name)});")
-            # The last card added is the top one.
-            for name in reversed(cast(list[str], setup["library"])):
-                self.emit(f"addCard(Zone.LIBRARY, {who}, {java_string(name)});")
+            for key in ("hand", "battlefield", "graveyard", "exile", "library"):
+                if key == "battlefield":
+                    for permanent in cast(list[Json], setup[key]):
+                        self.permanent(who, permanent, start)
+                    continue
+                zone = "EXILED" if key == "exile" else key.upper()
+                names = cast(list[str], setup[key])
+                # XMage adds these cards to the top, so enter them bottom first.
+                for name in (
+                    reversed(names) if key in ("graveyard", "library") else names
+                ):
+                    printed = java_string(self.cards.printed_name(name))
+                    self.emit(f"addCard(Zone.{zone}, {who}, {printed});")
             # XMage plays its turn 1 from the untap step, where Beryl's setup starts at its step
             # with the earlier ones done: a permanent that flips a coin at the upkeep flips one
             # XMage would lose half the time. Beryl's setup skipped that flip, so XMage wins it.
@@ -377,35 +380,25 @@ class Exporter:
     def cast(self, action: Json, p: Position) -> None:
         who = self.player(action["player"])
         card = cast(str, action["card"])
-        if action["face"]:
-            raise Unsupported(f"casting {card}'s back face")
+        face = cast(int, action["face"])
+        chosen = spell_cast(self.cards, card, face, p.supported_castings(action))
+        name = chosen.command
         if Position.delves_next(self.trace, self.index):
             payment = self.payment()
             paid = None if payment is None else list(payment.taps)
             self.cards.delve_reachable(self.setup, action["player"], paid)
-        name, costs = self.cards.escape_spell(card, p.supported_castings(action))
-        if name == card and card in p.flashback:
+        if face == 0 and name == card and card in p.flashback:
             self.flashback(action, p)
             return
-        overload = self.cards.overload_bit(card)
-        if overload is not None and costs >> overload & 1:
-            if costs != 1 << overload:
-                raise Unsupported(f"casting option {costs:#b} of {card}")
-            name, costs = f"{card} with overload", 0
-        mutate = self.cards.mutate_bit(card)
-        if mutate is not None and costs >> mutate & 1:
-            if costs != 1 << mutate:
-                raise Unsupported(f"casting option {costs:#b} of {card}")
-            name, costs = f"{card} using Mutate", 0
         self.prepare(who, p, starts=True)
         self.pay(who, p, None)
         # XMage's stack clause asks for a spell anywhere on the stack, so a cast in response to
         # an ability above a spell (a storm trigger above its spell) waits for that spell too.
         spell = p.topmost_spell()
         targets = "TestPlayer.NO_TARGET"
-        if self.cards.targets_in_cast(card):
+        if self.cards.targets_in_cast(card, chosen.face):
             targets = java_string("^".join(self.take_targets(action["player"])))
-        elif self.cards.targets_abilities(card):
+        elif self.cards.targets_abilities(card, chosen.face):
             names = self.take_targets(action["player"])
             targets = java_string("^".join(p.stack_ability(n) for n in names))
         if p.stack and not any(cast(bool, item["spell"]) for item in p.stack):
@@ -425,11 +418,14 @@ class Exporter:
                 f"castSpell({self.at(p)}, {who}, {java_string(name)}, {targets}, "
                 f"{java_string(spell)});"
             )
-        self.lines.extend(cast_choices(self.cards, who, card, costs))
-        if self.cards.unless_pays(card):
-            self.unless_pays[card] = self.target_controller(action["player"], card)
-        if self.cards.takes(card) is not None:
-            self.take_pending = card
+        cost_face = face if chosen.face is None else chosen.face
+        self.lines.extend(cast_choices(self.cards, who, card, chosen.costs, cost_face))
+        if self.cards.unless_pays(card, chosen.face):
+            self.unless_pays[chosen.name] = self.target_controller(
+                action["player"], card
+            )
+        if self.cards.takes(card, chosen.face) is not None:
+            self.take_pending = chosen.name
 
     def flashback(self, action: Json, p: Position) -> None:
         """Casts a card with flashback for its mana cost (Snapcaster Mage) from its owner's
@@ -780,7 +776,7 @@ class Exporter:
             # so which permanents are tapped and how much they floated can differ.
             self.export.skipped.append(f"{what}: after XMage chose a payment's sources")
             return
-        code = assertion_code(assertion, self.player)
+        code = assertion_code(assertion, self.player, self.cards)
         who = self.retargeted or self.player(p.decider)
         self.prepare(who, p)
         self.emit(

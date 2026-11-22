@@ -60,11 +60,15 @@ TRIGGER_START: re.Pattern[str] = re.compile(r"^(When|Whenever|At) (this \w+|.+?)
 # graveyard: Beryl's `Castings::ESCAPE`, the last of the eight.
 ESCAPE = 1 << 7
 
+# The scenario wire value of Beryl's FaceIx::DOWN.
+FACE_DOWN = 255
+
 
 class Cards:
     """The descriptions of the cards one scenario names, looked up by card or face name."""
 
     def __init__(self, described: Json, oracle: dict[str, str] | None = None) -> None:
+        self.shapes: dict[str, str] = {}
         # Each face by its own name, and every face of a card by the card's name.
         self.faces: dict[str, list[Json]] = {}
         # The card each face belongs to, and whether it is a modal card's back face: one
@@ -73,12 +77,17 @@ class Cards:
         # The abilities each card that grants any grants, with the card's name.
         self.grants: list[tuple[str, list[Json]]] = []
         for name, card in sorted(described.items()):
-            faces = cast(list[Json], cast(Json, card)["faces"])
+            facts = cast(Json, card)
+            shape = cast(str, facts.get("shape", ""))
+            self.shapes[name] = shape
+            faces = cast(list[Json], facts["faces"])
             self.faces[name] = faces
             for i, face in enumerate(faces):
                 face_name = cast(str, face["name"])
                 self.faces.setdefault(face_name, [face])
-                if i > 0 and not face.get("transformed"):
+                if i > 0 and (
+                    shape == "Modal" or not shape and not face.get("transformed")
+                ):
                     self.modal_back.add(face_name)
             granted = [g for f in faces for g in cast(list[Json], f.get("grants", []))]
             if granted:
@@ -102,7 +111,7 @@ class Cards:
             kind = action.get("action")
             if kind == "Cast":
                 card = cast(str, action["card"])
-                bit = self.mutate_bit(card)
+                bit = self.casting_bit(card, "Mutate", cast(int, action["face"]))
                 mutates = bit is not None and cast(int, action["costs"]) >> bit & 1
                 caster, target = (card, None) if mutates else (None, None)
             elif caster is not None and kind == "Answer":
@@ -130,24 +139,28 @@ class Cards:
             raise Unsupported(f"no card {place} under {card}")
         return pile[place], "Own", i
 
-    def abilities(self, name: str) -> list[Json]:
+    def abilities(self, name: str, face: int | None = None) -> list[Json]:
+        faces = self.faces.get(name, [])
+        selected = faces if face is None else faces[face : face + 1]
         return [
             a
-            for f in self.faces.get(name, [])
+            for f in selected
             # A face with keywords alone, as Gurmag Angler's delve, lists no abilities.
             for a in cast(list[Json], f.get("abilities", []))
         ]
 
-    def instructions(self, name: str) -> list[Json]:
+    def instructions(self, name: str, face: int | None = None) -> list[Json]:
         return [
             i
-            for a in self.abilities(name)
+            for a in self.abilities(name, face)
             for i in cast(list[Json], a.get("instructions", []))
         ]
 
-    def instruction(self, name: str, kind: str) -> Json | None:
+    def instruction(self, name: str, kind: str, face: int | None = None) -> Json | None:
         """The first instruction of `kind` among what `name`'s abilities do."""
-        return next((i for i in self.instructions(name) if i["kind"] == kind), None)
+        return next(
+            (i for i in self.instructions(name, face) if i["kind"] == kind), None
+        )
 
     def ability(self, card: str, how: str, index: int) -> Json | None:
         """The ability a scenario activates as `{how: index}`: its own by index, or the
@@ -354,37 +367,53 @@ class Cards:
                 return "{T}: Add one mana of any color"
         return None
 
-    def casting(self, card: str) -> list[Json]:
-        """The casting options of a card's front face, in the order of Beryl's `costs` bits."""
+    def printed_name(self, card: str) -> str:
+        """The name used to load a card, including both halves of a split card."""
+        if self.shapes.get(card) == "Split":
+            return " // ".join(cast(str, face["name"]) for face in self.faces[card])
+        return card
+
+    def cast_face(self, card: str, face: int) -> str:
+        """The name of the chosen spell face, or the source card of a face-down cast."""
         faces = self.faces.get(card, [])
-        options = cast(list[Json], faces[0].get("casting", [])) if faces else []
+        if face == FACE_DOWN or (face == 0 and not faces):
+            return card
+        if 0 <= face < len(faces) and not faces[face].get("transformed"):
+            return cast(str, faces[face]["name"])
+        raise Unsupported(f"no castable face {face} of {card}")
+
+    def casting(self, card: str, face: int = 0) -> list[Json]:
+        """The chosen face's casting options, in the order of Beryl's `costs` bits.
+        A morph spell uses the option its printed front face grants."""
+        faces = self.faces.get(card, [])
+        index = 0 if face == FACE_DOWN else face
+        options = (
+            cast(list[Json], faces[index].get("casting", []))
+            if 0 <= index < len(faces)
+            else []
+        )
         return sorted(options, key=lambda c: cast(int, c["bit"]))
 
-    def overload_bit(self, card: str) -> int | None:
-        """The `costs` bit of overload, which XMage casts as a spell of its own, "<name> with
-        overload"."""
-        for option in self.casting(card):
-            if option["keyword"] == "Overload":
-                return cast(int, option["bit"])
-        return None
+    def casting_bit(self, card: str, keyword: str, face: int = 0) -> int | None:
+        return next(
+            (
+                cast(int, o["bit"])
+                for o in self.casting(card, face)
+                if o["keyword"] == keyword
+            ),
+            None,
+        )
 
-    def mutate_bit(self, card: str) -> int | None:
-        """The `costs` bit of mutate, which XMage casts as a spell ability of its own, "Cast
-        <name> using Mutate"."""
-        for option in self.casting(card):
-            if option["keyword"] == "Mutate":
-                return cast(int, option["bit"])
-        return None
-
-    def cast_answers(self, card: str) -> list[tuple[str, str | None]]:
+    def cast_answers(self, card: str, face: int = 0) -> list[tuple[str, str | None]]:
         """For each casting option XMage asks about when the spell is cast, by `costs` bit,
         XMage's answer for paying it and for not paying it. Alternative costs share one menu,
         which XMage may omit if none is available. Additional costs such as kicker and
-        offspring are yes or no. Overload and mutate have separate cast commands."""
+        offspring are yes or no. Keywords with their own cast commands need no answer.
+        """
         answers: list[tuple[str, str | None]] = []
-        for option in self.casting(card):
+        for option in self.casting(card, face):
             keyword = cast(str, option["keyword"])
-            if keyword in ("Overload", "Mutate"):
+            if keyword in ("Overload", "Mutate", "Fuse", "Prototype", "Morph"):
                 answers.append(("", None))
             elif not option["alternative"]:
                 answers.append(("Yes", "No"))
@@ -396,33 +425,33 @@ class Cards:
                 answers.append((f"Cast with {keyword}", "Cast with no"))
         return answers
 
-    def targets_in_cast(self, card: str) -> bool:
+    def targets_in_cast(self, card: str, face: int | None = None) -> bool:
         """Whether a spell's targets go in the cast command rather than the target queue:
         TestPlayer's addTarget cannot choose a permanent for a "spell or permanent" target.
         """
         return any(
             t["kind"] == "SpellOrPermanent"
-            for a in self.abilities(card)
+            for a in self.abilities(card, face)
             if a["kind"] == "Spell"
             for t in cast(list[Json], a.get("targets", []))
         )
 
-    def targets_abilities(self, card: str) -> bool:
+    def targets_abilities(self, card: str, face: int | None = None) -> bool:
         """Whether a spell targets an activated or triggered ability on the stack, which
         XMage names by its name's prefix, "stack ability (", in the cast command."""
         return any(
             t["kind"] in ("Ability", "ActivatedAbility", "TriggeredAbility")
-            for a in self.abilities(card)
+            for a in self.abilities(card, face)
             if a["kind"] == "Spell"
             for t in cast(list[Json], a.get("targets", []))
         )
 
-    def unless_pays(self, card: str) -> bool:
+    def unless_pays(self, card: str, face: int | None = None) -> bool:
         """Whether resolving `card` asks a target's controller to pay a mana cost or have it
         countered. XMage asks even a controller who cannot pay, where Beryl asks nothing
         (CR 118.3): its mana costs can always be paid as far as its question is concerned.
         """
-        unless = self.instruction(card, "Unless")
+        unless = self.instruction(card, "Unless", face)
         return unless is not None and "mana" in cast(Json, unless.get("cost", {}))
 
     def untaps_up_to(self, card: str) -> bool:
@@ -516,13 +545,13 @@ class Cards:
         target list."""
         return self.instruction(card, "Scry") is not None
 
-    def takes(self, card: str) -> int | None:
+    def takes(self, card: str, face: int | None = None) -> int | None:
         """How many cards resolving `card` puts into a hand from a look at the top of a
         library, the rest going to the bottom in any order. Beryl chooses those one at a time,
         then the rest for the bottom one at a time, each under the one before; XMage takes the
         cards for the hand as one target list and the bottom order, in the same sense, from
         the choice queue."""
-        dig = self.instruction(card, "Dig")
+        dig = self.instruction(card, "Dig", face)
         take = dig.get("take") if dig is not None else None
         return take if isinstance(take, int) else None
 

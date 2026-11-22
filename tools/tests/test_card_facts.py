@@ -180,9 +180,9 @@ def test_casting_options_are_asked_by_their_kind_and_cost() -> None:
         ("Cast with Evoke", "Cast with no"),
         ("Yes", "No"),
     ]
-    assert cards.overload_bit("Gadget") is None
+    assert cards.casting_bit("Gadget", "Overload") is None
     overload = {"bit": 0, "alternative": True, "keyword": "Overload", "cost": {}}
-    assert gadget(casting=[overload]).overload_bit("Gadget") == 0
+    assert gadget(casting=[overload]).casting_bit("Gadget", "Overload") == 0
 
 
 def test_what_resolving_a_card_does_picks_the_questions_xmage_asks() -> None:

@@ -225,7 +225,7 @@ def test_scenarios_outside_the_vocabulary_are_unsupported() -> None:
         {
             "card": entry["card"],
             "name": entry["name"],
-            "reason": "casting face 1 of Oust",
+            "reason": "no castable face 1 of Oust",
         }
     ]
 

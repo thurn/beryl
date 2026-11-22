@@ -7,6 +7,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Debug, Write};
 
+use beryl_card::definition::Shape as CardShape;
 use beryl_card::{
     Ability, AbilityKind, Amount, BasicLandTypes, Behavior, CardDef, CastingOption, Cost,
     CostAction, CostPart, Effect, Face, FaceIx, ManaColor, ManaCost, ManaSet, Measure,
@@ -21,6 +22,9 @@ use crate::{Action, Pick, Scenario};
 /// One card: its faces, front first.
 #[derive(Debug, Serialize)]
 pub struct CardFacts {
+    pub shape: String,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub fuse: bool,
     pub faces: Vec<FaceFacts>,
 }
 
@@ -265,6 +269,8 @@ fn known(table: &'static CardTable) -> HashMap<&'static str, &'static CardDef> {
 /// The facts of one card.
 pub fn card_facts(def: &'static CardDef) -> CardFacts {
     CardFacts {
+        shape: variant(&def.shape),
+        fuse: matches!(def.shape, CardShape::Split { fuse: true }),
         faces: def
             .face_ixs()
             .map(|ix| {

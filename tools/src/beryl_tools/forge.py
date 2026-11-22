@@ -25,6 +25,7 @@ from .card_facts import (
     as_their_own,
     Cards,
     ESCAPE,
+    FACE_DOWN,
     Unsupported,
     SYMBOLS,
     cost_text,
@@ -147,7 +148,9 @@ def face_name(card: str, face: int, faces: Mapping[str, Card], store: Path) -> s
     raise Unsupported(f"no face {face} of {card}")
 
 
-def state_text(setup: JsonObject, faces: Mapping[str, Card], store: Path) -> str:
+def state_text(
+    setup: JsonObject, faces: Mapping[str, Card], store: Path, cards: Cards
+) -> str:
     """The scenario's setup as a GameState text: one `key=value` line each."""
     players = cast(list[JsonObject], setup["players"])
     lines = [
@@ -162,7 +165,8 @@ def state_text(setup: JsonObject, faces: Mapping[str, Card], store: Path) -> str
         for zone in ("hand", "graveyard", "exile", "library"):
             # GameState lists every zone top first, as the dump does.
             names = cast(list[str], player[zone])
-            lines.append(f"p{seat}{zone}={';'.join(names)}")
+            printed = ";".join(cards.printed_name(name) for name in names)
+            lines.append(f"p{seat}{zone}={printed}")
         permanents = []
         for permanent in cast(list[JsonObject], player["battlefield"]):
             permanents.append(permanent_text(permanent, faces, store))
@@ -195,13 +199,15 @@ def permanent_text(
     return "|".join(parts)
 
 
-def casting_option(cards: Cards, card: str, costs: int) -> str:
+def casting_option(cards: Cards, card: str, costs: int, face: int = 0) -> str:
     """The casting option a Cast's `costs` pays, as the text that names it in Forge: its
     keyword, which is an alternative cost's name and an optional cost's type there. The harness
     takes one option."""
     if costs == ESCAPE:
         return "Escape"
-    options = [o for o in cards.casting(card) if costs == 1 << cast(int, o["bit"])]
+    options = [
+        o for o in cards.casting(card, face) if costs == 1 << cast(int, o["bit"])
+    ]
     if not options:
         raise Unsupported("paying more than one casting option, or one not described")
     return cast(str, options[0]["keyword"])
@@ -268,16 +274,22 @@ def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject
     if kind == "PlayLand":
         return {"op": "play_land", "player": action["player"], "card": action["card"]}
     if kind == "Cast":
-        if action["face"] != 0:
-            raise Unsupported(f"casting face {action['face']} of {action['card']}")
-        out: JsonObject = {
-            "op": "cast",
-            "player": action["player"],
-            "card": action["card"],
-        }
+        card = cast(str, action["card"])
+        face = cast(int, action["face"])
+        spell = cards.cast_face(card, face)
+        out: JsonObject = {"op": "cast", "player": action["player"], "card": card}
         costs = cast(int, action["costs"])
-        if costs:
-            out["cost"] = casting_option(cards, cast(str, action["card"]), costs)
+        cost = casting_option(cards, card, costs, face) if costs else None
+        if face == FACE_DOWN:
+            if cost not in (None, "Morph"):
+                raise Unsupported(f"casting option {costs:#b} of face-down {card}")
+            cost = "Morph"
+        elif face or cards.printed_name(card) != card:
+            out["spell"] = spell
+        if cost == "Fuse":
+            out.pop("spell", None)  # The fused ability belongs to the whole card.
+        if cost is not None:
+            out["cost"] = cost
         return out
     if kind == "Activate":
         card = cast(str, action["card"])
@@ -623,7 +635,7 @@ def export(
                 "card": entry["card"],
                 "name": entry["name"],
                 "seed": setup["seed"],
-                "state": state_text(setup, faces, store),
+                "state": state_text(setup, faces, store, described),
                 "steps": steps,
                 "unchecked": unchecked,
             }

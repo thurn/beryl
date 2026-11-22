@@ -25,14 +25,16 @@ def _export_one(entry: Json, index: int, faces: Faces, known: set[str]) -> Expor
     if "failure" in entry:
         export.unsupported = f"Beryl fails it: {entry['failure']}"
         return export
-    missing = sorted(
-        c for c in set(setup_cards(entry)) if xmage_spelling(c) not in known
-    )
-    if missing:
-        export.unsupported = f"XMage lacks {', '.join(missing)}"
-        return export
     try:
-        Exporter(entry, faces, export).run()
+        writer = Exporter(entry, faces, export)
+        missing = sorted(
+            c
+            for c in {writer.cards.printed_name(n) for n in setup_cards(entry)}
+            if xmage_spelling(c) not in known
+        )
+        if missing:
+            raise Unsupported(f"XMage lacks {', '.join(missing)}")
+        writer.run()
     except Unsupported as e:
         export.unsupported = str(e)
         export.body.clear()

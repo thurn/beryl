@@ -14,7 +14,7 @@ from typing import cast
 
 from . import xmage_classes
 from .cards import listed
-from .card_facts import Cards, Json, Unsupported
+from .card_facts import FACE_DOWN, Cards, Json, Unsupported
 
 PACKAGE = "org.mage.test.beryl"
 BASE: Path = Path(__file__).parent / "BerylScenarioTest.java"
@@ -257,11 +257,17 @@ def permanent_assertion(a: Json, player: Callable[[object], str]) -> str:
     )
 
 
-def assertion_code(a: Json, player: Callable[[object], str]) -> str:
+def assertion_code(a: Json, player: Callable[[object], str], cards: Cards) -> str:
     """A Beryl assertion as the XMage assertion of the same fact, about the player `who`."""
     what = cast(str, a["assert"])
     who = player(a.get("player"))
     card = cast("str | None", a.get("card"))
+    if (
+        what == "Count"
+        and card is not None
+        and a["zone"] not in ("Battlefield", "Stack")
+    ):
+        card = cards.printed_name(card)
     name = java_string(card) if card is not None else "null"
     count = a.get("count")
     if what == "Life":
@@ -427,10 +433,55 @@ def counters_to_add(faces: Faces, name: str, counters: Json | None) -> tuple[str
     return kind, count - entered
 
 
-def cast_choices(cards: Cards, who: str, card: str, costs: int) -> list[str]:
+# XMage selects these abilities in the cast command instead of asking which
+# alternative cost to pay after the command starts.
+SPELL_SUFFIX = {
+    "Overload": " with overload",
+    "Mutate": " using Mutate",
+    "Prototype": " using Prototype",
+    "Morph": " using Morph",
+}
+
+
+@dataclass(frozen=True)
+class SpellCast:
+    command: str
+    name: str
+    # The face whose abilities the spell has. A fused spell has both faces' abilities.
+    face: int | None
+    costs: int
+
+
+def spell_cast(cards: Cards, card: str, face: int, costs: int) -> SpellCast:
+    """Select the XMage spell ability and leave the remaining costs to its choice queue."""
+    name = cards.cast_face(card, face)
+    if face == FACE_DOWN:
+        morph = cards.casting_bit(card, "Morph", face)
+        if costs and (morph is None or costs != 1 << morph):
+            raise Unsupported(f"casting option {costs:#b} of face-down {card}")
+        return SpellCast(name + SPELL_SUFFIX["Morph"], name, FACE_DOWN, 0)
+    command, costs = cards.escape_spell(name, costs)
+    for option in cards.casting(card, face):
+        keyword = cast(str, option["keyword"])
+        mask = 1 << cast(int, option["bit"])
+        if not costs & mask or (keyword != "Fuse" and keyword not in SPELL_SUFFIX):
+            continue
+        if costs != mask:
+            raise Unsupported(f"casting option {costs:#b} of {card}")
+        if keyword == "Fuse":
+            printed = cards.printed_name(card)
+            return SpellCast(f"fused {printed}", printed, None, 0)
+        selected = FACE_DOWN if keyword == "Morph" else face
+        return SpellCast(name + SPELL_SUFFIX[keyword], name, selected, 0)
+    return SpellCast(command, name, face, costs)
+
+
+def cast_choices(cards: Cards, who: str, card: str, costs: int, face: int) -> list[str]:
     """The questions XMage asks about casting options during a priority cast."""
     lines: list[str] = []
-    questions = cards.cast_answers(card)
+    if face == FACE_DOWN:
+        return []
+    questions = cards.cast_answers(card, face)
     if costs >> len(questions):
         raise Unsupported(f"casting option {costs:#b} of {card}")
     alternative = None
