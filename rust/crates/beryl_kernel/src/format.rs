@@ -167,6 +167,13 @@ impl Format {
         &[DeckRole::Library, DeckRole::Sideboard]
     }
 
+    /// See [CR 100.4a]: "In constructed play, a sideboard may contain no more than fifteen cards."
+    ///
+    /// [CR 100.4a]: https://yawgatog.com/resources/magic-rules/#R1004a
+    pub const fn maximum_sideboard(self) -> usize {
+        15
+    }
+
     /// See [CR 704.5a]: "If a player has 0 or less life, that player loses the game."
     /// See [CR 704.5b]: "If a player attempted to draw a card from a library with no cards
     /// in it since the last time state-based actions were checked, that player loses the game."

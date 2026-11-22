@@ -168,6 +168,10 @@ def state_text(
             names = cast(list[str], player[zone])
             printed = ";".join(cards.printed_name(name) for name in names)
             lines.append(f"p{seat}{zone}={printed}")
+        sideboard = cast(list[str], player.get("sideboard", []))
+        if sideboard:
+            printed = ";".join(cards.printed_name(name) for name in sideboard)
+            lines.append(f"p{seat}sideboard={printed}")
         permanents = []
         for permanent in cast(list[JsonObject], player["battlefield"]):
             permanents.append(permanent_text(permanent, faces, store))

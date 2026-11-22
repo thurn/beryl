@@ -55,6 +55,7 @@ impl<L: Layout> State<L> {
             )?;
             outer.check_invariants(t)?;
         }
+        self.check_sideboard(t)?;
         self.check_objects(t)?;
         self.check_zones()?;
         self.check_players(t.format())?;
@@ -84,16 +85,9 @@ impl<L: Layout> State<L> {
                 continue;
             }
             let token = o.flags.has(Flag::Token);
-            if deck_owner.is_none() {
-                // The shared pool holds tokens.
-                check(token, "a non-token in the token pool", at)?;
-            } else {
+            if let Some(deck_owner) = deck_owner {
                 check(in_deck && !token, "an object outside the deck slots", at)?;
-                check(
-                    Some(o.owner) == deck_owner,
-                    "a deck card with another owner",
-                    at,
-                )?;
+                check(o.owner == deck_owner, "a deck card with another owner", at)?;
             }
             check(o.card.index() < t.len(), "no such card", at)?;
             for link in o.names() {

@@ -246,6 +246,7 @@ impl Effect {
                 others: Some(library),
                 ..Operands::of_players(player).amount(count)
             },
+            Effect::Wish { filter } => Operands::of_players(&Players::You).filter(Some(filter)),
             Effect::Search {
                 player,
                 filter,

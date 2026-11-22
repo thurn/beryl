@@ -197,6 +197,12 @@ impl ReplayFile {
                 TableError::UnknownCard(name) => SessionError::UnknownCard {
                     name: name.to_owned(),
                 },
+                TableError::SideboardTooLarge { player, count } => SessionError::Deck {
+                    reason: format!(
+                        "player {} has {count} cards in their sideboard",
+                        player.get()
+                    ),
+                },
                 TableError::Cost { card, unpayable } => SessionError::Deck {
                     reason: format!("{card} has a cost the engine cannot pay: {unpayable:?}"),
                 },

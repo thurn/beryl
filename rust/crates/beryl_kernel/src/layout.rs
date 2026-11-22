@@ -142,7 +142,7 @@ pub type PerPlayer<L, T> = <L as Layout>::PerPlayer<T>;
 ///   [`Layout::PerPlayer`]);
 /// - how many cards a deck may have, and so a library and a graveyard
 ///   ([`SlotId::DECK_SLOTS`], the capacity of its [`Layout::Deck`]);
-/// - how many tokens and spell copies exist at once (its [`Layout::TOKEN_POOL`]);
+/// - how many objects occupy the shared pool at once (its [`Layout::TOKEN_POOL`]);
 /// - how many objects a game holds ([`SlotId::COUNT`]) and how long each queue grows;
 /// - how many distinct cards a game contains, tokens and emblems among them
 ///   ([`CardId::COUNT`] of its [`Layout::Card`]).
@@ -179,7 +179,7 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
     /// how many copies of copies, each made with an exception, a game can hold.
     type Additions: AdditionList<Self::Card>;
 
-    /// The slots of the shared pool for tokens and spell copies, after every deck's
+    /// The slots of the shared pool, after every deck's
     /// ([`SlotId::pool`]).
     const TOKEN_POOL: Bitboard<Self::Slot>;
 
@@ -204,7 +204,7 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
 ///
 /// It is two players with 60 slots a deck, which is the least a constructed deck may have
 /// (see [CR 100.2a](https://yawgatog.com/resources/magic-rules/#R1002a): "each deck has a minimum
-/// deck size of 60 cards"), and 135 slots for tokens and spell copies. A game between larger
+/// deck size of 60 cards"), and 135 slots in the shared pool. A game between larger
 /// decks is refused here and dealt in [`Large`] ([`State::deal`]), and so is one whose table
 /// has more than the 255 distinct cards a one-byte [`CardIx`] numbers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -253,7 +253,7 @@ impl Layout for Small {
 /// A deck may have 256 cards. No rule sets that
 /// (see [CR 100.5](https://yawgatog.com/resources/magic-rules/#R1005): "There is no maximum deck
 /// size for non-Commander decks."); it is the share of the 1,024 slots each deck is given,
-/// which leaves 512 for the pool of tokens and spell copies, nearly four times `Small`'s
+/// which leaves 512 for the shared pool, nearly four times `Small`'s
 /// 135. Its game table may hold 65,535 distinct cards, tokens and emblems: what the two
 /// bytes of a [`LargeCardIx`] number, which is room for a table over a whole card pool and
 /// not only two decks.
@@ -318,6 +318,7 @@ impl Layout for Large {
             flags,
             outcome,
             elsewhere,
+            sideboard_taken,
             turn_plan,
             outer,
             subgame_turns,
@@ -354,6 +355,7 @@ impl Layout for Large {
             flags: *flags,
             outcome: *outcome,
             elsewhere: elsewhere.clone(),
+            sideboard_taken: *sideboard_taken,
             turn_plan: turn_plan.clone(),
             outer: outer.clone(),
             subgame_turns: *subgame_turns,
@@ -432,6 +434,7 @@ impl State<Large> {
             memos,
             counters,
             elsewhere,
+            sideboard_taken,
             turn_plan,
             outer,
             subgame_turns,

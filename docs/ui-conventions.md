@@ -396,6 +396,9 @@ recordings do not show them.
   for the other. On the phone it lies beside its owner's library, toward the
   table, as the cards the opponent looks at do. Arena's recordings show no such
   pick.
+- **Choosing a sideboard card during a game.** The catalog shows eligible card
+  names to the player making the choice. Done leaves every card in the
+  sideboard. The chosen card is revealed and appears in its owner's hand.
 - **Inspecting a face-down manual card.** The table shows a card back. Pointing
   at the card opens a face preview only if the viewer knows the card's identity.
 - **Paying with permanents.** Waterbend, convoke, crew. Start with no payment

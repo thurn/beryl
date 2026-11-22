@@ -351,6 +351,8 @@ purposes! {
     ///
     /// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
     Replace = "replace" => Pick,
+    /// A card to bring into the game from its owner's sideboard, or pass.
+    Wish = "wish" => Catalog,
 }
 
 /// Which part of its prompt's shape one pick answers. Before this said so, the kind of the

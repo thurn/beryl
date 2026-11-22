@@ -4,11 +4,11 @@ without asking."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import cast
 
-from .card_facts import ESCAPE, Json, Unsupported, as_their_own
+from .card_facts import ESCAPE, Cards, Json, Unsupported, as_their_own
 from .xmage_java import java_string
 
 # Questions with one answer, which Beryl answers silently, that XMage asks anyway: by kind,
@@ -157,3 +157,33 @@ class Position:
             enter_as_copy=cast(bool, t.get("enter_as_copy", False)),
             morphed=cast(list[str], t.get("morphed", [])),
         )
+
+
+def resolution_skips(
+    cards: Cards,
+    before: Position,
+    following: Sequence[Position],
+    actions: Sequence[Json],
+    at: str,
+    player: Callable[[object], str],
+) -> Iterable[str]:
+    """Supply declines that XMage can ask for even when Beryl has no choice to offer."""
+    if not before.stack:
+        return
+    top = before.stack[-1]
+    name = cast(str, top["name"])
+    if cards.instruction(name, "Wish") is not None and (
+        not following or following[0].purpose != "wish"
+    ):
+        yield f'setOptionalChoice({player(top["controller"])}, {at}, "No");'
+    if not cards.search_by_each_player(name):
+        return
+    if actions and actions[0].get("kind") == "ChooseUpTo":
+        return
+    if not following:
+        raise Unsupported("a search by each player who lost objects, at the end")
+    for seat, (old_count, count) in enumerate(
+        zip(before.creatures, following[0].creatures)
+    ):
+        if count < old_count:
+            yield f"addTarget({player(seat)}, TestPlayer.TARGET_SKIP);"

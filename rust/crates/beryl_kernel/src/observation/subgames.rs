@@ -5,7 +5,6 @@
 
 use std::collections::BTreeMap;
 
-use crate::ids::SlotId;
 use crate::layout::Layout;
 use crate::rng::SplitMix64;
 use crate::state::{Flag, State, Zone};
@@ -49,14 +48,17 @@ impl<L: Layout> Observation<'_, L> {
 
         let mut plans = vec![Vec::new(); games.len()];
         for seat in self.root.players().in_seat_order() {
-            let slots: Vec<_> = (0..table.deck_len(seat))
-                .map(|i| L::Slot::deck(seat, i))
-                .collect();
             let decks: Vec<_> = games
                 .iter()
                 .enumerate()
                 .map(|(level, &game)| {
-                    self.deck_slots(game, games.get(level + 1).copied(), &slots, show_hands)
+                    let child = games.get(level + 1).copied();
+                    self.deck_slots(
+                        game,
+                        child,
+                        game.in_game_card_slots(table, seat),
+                        show_hands,
+                    )
                 })
                 .collect();
             let mut minimum = BTreeMap::new();
@@ -65,7 +67,8 @@ impl<L: Layout> Observation<'_, L> {
                 requirements.push(minimum.clone());
                 minimum = minimum_deck(deck, minimum);
             }
-            let mut cards: Vec<L::Card> = table.deck(seat).collect();
+            let admitted = games[0].admitted(table, seat).map(|(_, card)| card);
+            let mut cards: Vec<L::Card> = table.deck(seat).chain(admitted).collect();
             for ((deck, child_needs), plan) in decks
                 .iter()
                 .zip(requirements.into_iter().rev())
@@ -100,24 +103,23 @@ impl<L: Layout> Observation<'_, L> {
         &self,
         game: &State<L>,
         child: Option<&State<L>>,
-        slots: &[L::Slot],
+        slots: impl Iterator<Item = L::Slot>,
         show_hands: bool,
     ) -> Vec<DeckSlot<L>> {
         slots
-            .iter()
-            .copied()
-            .filter_map(|slot| {
+            .map(|slot| {
                 let zone = game.object(slot).zone;
-                if zone == Zone::Nowhere {
-                    return None;
-                }
                 let known = (show_hands && zone == Zone::Hand)
                     || game.knows_card_really_is(self.viewer, slot);
-                Some(DeckSlot {
+                let in_child = child.is_some_and(|child| {
+                    let object = child.object(slot);
+                    object.zone != Zone::Nowhere && !object.is_token()
+                });
+                DeckSlot {
                     slot,
                     known: known.then(|| game.card_really_is(slot)),
-                    in_child: child.is_some_and(|child| child.object(slot).zone != Zone::Nowhere),
-                })
+                    in_child,
+                }
             })
             .collect()
     }

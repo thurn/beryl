@@ -193,6 +193,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::Dig { .. }
             | Effect::ExileUntil { .. }
             | Effect::Fateseal { .. }
+            | Effect::Wish { .. }
             | Effect::Search { .. }
             | Effect::Draw { .. }
             | Effect::Discard { .. }
@@ -331,6 +332,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 count,
                 found,
             } => search::instruction(self, player, filter, count, found)?,
+            Effect::Wish { filter } => zones::outside::wish(self, filter)?,
             Effect::Draw { player, count } => drawing::instruction(self, player, count)?,
             Effect::Discard { player, count } => discard::instruction(self, player, count)?,
             Effect::Mill { player, count } => mill::instruction(self, player, count)?,

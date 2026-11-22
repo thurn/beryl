@@ -11,12 +11,16 @@ use crate::common::widening::{compares_layouts, play_widening};
 use crate::common::{games, seeds};
 use beryl_cards::CARDS;
 use beryl_cards::decks::{fuzz_deck_from, keystone_family};
-use beryl_engine::{Format, GameTable, Outcome, Profile, StallReason, State};
+use beryl_engine::{Decklist, Format, GameTable, Outcome, Profile, StallReason, State};
 
 /// Plays a family's games: two fuzz decks per game from its cards, a quarter as many games as
 /// the whole fuzzer plays. No game may panic, break an invariant or stall for a reason other
 /// than a budget; a game that leaves `Small` is reported, with the list that filled.
 fn family(name: &str) {
+    family_with_sideboard(name, &[]);
+}
+
+fn family_with_sideboard(name: &str, sideboard: &Decklist) {
     let cards = keystone_family(name).expect("a keystone family");
     let n = games(8).div_ceil(4).max(2);
     let mut stalls: BTreeMap<String, u64> = BTreeMap::new();
@@ -28,10 +32,11 @@ fn family(name: &str) {
             fuzz_deck_from(seed, &cards),
             fuzz_deck_from(seed.wrapping_add(1 << 32), &cards),
         ];
-        let t = GameTable::new(
+        let t = GameTable::with_sideboards(
             Format::CONSTRUCTED,
             &CARDS,
-            [decks[0].as_slice(), decks[1].as_slice()],
+            decks.each_ref().map(Vec::as_slice),
+            [sideboard; 2],
         )
         .unwrap();
         let profile = if seed.is_multiple_of(2) {
@@ -117,6 +122,12 @@ fn decisions() {
 #[ignore = "random games of one family: `just fuzz` plays them"]
 fn turn_structure() {
     family("turn");
+}
+
+#[test]
+#[ignore = "random games of one family: `just fuzz` plays them"]
+fn outside_the_game() {
+    family_with_sideboard("outside-the-game", &[(1, beryl_cards::names::BURNING_WISH)]);
 }
 
 /// Worldgorger Dragon's enters ability exiles 33 Mountains, linking each to the Dragon with a

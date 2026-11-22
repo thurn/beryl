@@ -312,3 +312,48 @@ fn get_returns_the_first_definition_of_a_name() {
     assert!(std::ptr::eq(TABLE.get("Alpha").unwrap(), &raw const ALPHA));
     assert_eq!(TABLE.cards().len(), 3);
 }
+
+#[test]
+fn determinization_preserves_sideboard_admissions_when_the_cards_are_shuffled() {
+    use crate::State;
+    use crate::observation::Observation;
+    use crate::profile::Profile;
+    use crate::rng::SplitMix64;
+
+    let player = Seat::P0;
+    let t = GameTable::with_sideboards(
+        Format::CONSTRUCTED,
+        &TABLE,
+        [&[(2, "Alpha")], &[]],
+        [&[(2, "Beta")], &[]],
+    )
+    .unwrap();
+    let mut state = State::new(&t, 0, Profile::EXACT).unwrap();
+    assert_eq!(state.sideboard(&t, player).count(), 2);
+    assert_eq!(state.library(player).len(), 2);
+    let slot = state
+        .prepare_sideboard_card(&t, player, 0)
+        .unwrap()
+        .unwrap();
+    assert_eq!(state.prepare_sideboard_card(&t, player, 0).unwrap(), None);
+    state.board().place(slot, Zone::Hand).unwrap();
+    state.board().place(slot, Zone::Library).unwrap();
+    state.shuffle_library(player).unwrap();
+
+    let beta = t.index_named::<CardIx>("Beta").unwrap();
+    let mut rng = SplitMix64::new(17);
+    let mut places = std::collections::BTreeSet::new();
+    for _ in 0..12 {
+        let dealt = Observation::new(&state, Seat::P1).determinize(&t, &mut rng);
+        assert_eq!(dealt.sideboard(&t, player).collect::<Vec<_>>(), [(1, beta)]);
+        let cards = dealt.library(player);
+        assert_eq!(cards.len(), 3);
+        let mut matches = cards
+            .iter()
+            .filter(|&&slot| dealt.object(slot).card == beta);
+        places.insert(*matches.next().unwrap());
+        assert_eq!(matches.count(), 0);
+        assert_eq!(dealt.widen().sideboard(&t, player).count(), 1);
+    }
+    assert_eq!(places.len(), 3);
+}

@@ -151,6 +151,10 @@ impl Builder<'_> {
             return;
         }
         let Some(was) = self.table.objects.get(&slot) else {
+            // A card revealed by an effect bringing it in first appears in the final view.
+            if let Some(object) = self.after.objects.get(&slot).cloned() {
+                self.showcase(object, cause);
+            }
             return;
         };
         let mut zone = was.zone;

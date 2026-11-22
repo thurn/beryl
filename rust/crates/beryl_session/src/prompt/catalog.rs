@@ -27,9 +27,11 @@ impl Catalog {
     pub(crate) fn open(purpose: Purpose, decision: &DecisionView) -> Option<Catalog> {
         let entries: Vec<(String, u16)> = (decision.candidates.iter().enumerate())
             .filter_map(|(i, candidate)| {
-                let Candidate::Number { .. } = candidate.option else {
+                let is_entry = matches!(candidate.option, Candidate::Number { .. })
+                    || (purpose == Purpose::Wish && candidate.option == Candidate::Done);
+                if !is_entry {
                     return None;
-                };
+                }
                 Some((candidate.label.clone(), u16::try_from(i).ok()?))
             })
             .collect();

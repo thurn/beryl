@@ -98,6 +98,12 @@ impl<L: Layout> State<L> {
             let name = t.def(self.object(slot).card).name;
             return Some(format!("{name} merged with other cards"));
         }
+        if Seat::BOTH
+            .into_iter()
+            .any(|player| t.sideboard::<L::Card>(player).len() > 0)
+        {
+            return Some("a sideboard outside the game".to_owned());
+        }
         self.stores_lingering(t)
     }
 }

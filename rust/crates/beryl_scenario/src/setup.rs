@@ -95,10 +95,17 @@ fn setup_failure(scenario: &Scenario, message: String) -> Failure {
 
 fn table(cards: &'static CardTable, scenario: &Scenario) -> Result<GameTable, Failure> {
     let decks = decks(scenario);
-    GameTable::new(
+    let sideboards = scenario.setup.players.map(|p| {
+        p.sideboard
+            .iter()
+            .map(|&name| (1, name))
+            .collect::<Vec<_>>()
+    });
+    GameTable::with_sideboards(
         Format::CONSTRUCTED,
         cards,
-        [decks[0].as_slice(), decks[1].as_slice()],
+        decks.each_ref().map(Vec::as_slice),
+        sideboards.each_ref().map(Vec::as_slice),
     )
     .map_err(|error| setup_failure(scenario, format!("{error:?}")))
 }

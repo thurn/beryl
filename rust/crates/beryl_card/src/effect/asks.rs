@@ -28,6 +28,7 @@ impl Effect {
             | Effect::PutBack { .. }
             | Effect::Dig { .. }
             | Effect::Fateseal { .. }
+            | Effect::Wish { .. }
             | Effect::Search { .. }
             | Effect::MayCast { .. }
             // State-based actions can ask which legendary permanent to keep.
@@ -166,6 +167,7 @@ impl Effect {
             | Effect::Dig { .. }
             | Effect::ExileUntil { .. }
             | Effect::Fateseal { .. }
+            | Effect::Wish { .. }
             | Effect::Search { .. }
             | Effect::Draw { .. }
             | Effect::Discard { .. }

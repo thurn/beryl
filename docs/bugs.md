@@ -6,6 +6,12 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A subgame could offer the suspended game's sideboard.** Both games use the
+  same card table. Sideboard choices now require the main game, while cards
+  already in its library can enter a subgame from their pool slots.
+  `a_subgame_carries_library_cards_from_the_pool_and_offers_no_wish` checks
+  library transfer, determinization and wish resolution in the subgame.
+
 - **A split card in a library reported only the mana value of its first half.**
   Cascade could stop at a split card whose combined mana value was too high. The
   mana-value query now reads both halves outside the stack.

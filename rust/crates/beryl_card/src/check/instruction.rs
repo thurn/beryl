@@ -158,6 +158,7 @@ impl Scope<'_> {
             | Effect::ShuffleInto { .. }
             | Effect::Dig { .. }
             | Effect::ExileUntil { .. }
+            | Effect::Wish { .. }
             | Effect::Search { .. }
             | Effect::Draw { .. }
             | Effect::Discard { .. }

@@ -252,5 +252,20 @@ pub mod scenarios {
                 ME.passes(),
                 ME.deciding(DecisionKind::ChooseObject, 2),
             ]),
+        slaving("the controller cannot wish from the opponent's sideboard")
+            .interaction(&[Card::BurningWish])
+            .battlefield(P1, &[Card::Mountain, Card::Mountain])
+            .hand(P1, &[Card::BurningWish])
+            .sideboard(P1, &[Prop::Sorcery])
+            .actions(&[
+                ME.activates(MINDSLAVER, 0),
+                ME.targets_player(THEM),
+                Resolve,
+                advance_to(2, TurnStep::PrecombatMain),
+                ME.casts(Card::BurningWish),
+                Resolve,
+                THEM.has(Zone::Exile, Card::BurningWish, 1),
+                THEM.has(Zone::Hand, Prop::Sorcery, 0),
+            ]),
     ];
 }

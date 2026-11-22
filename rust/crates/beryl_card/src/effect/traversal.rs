@@ -60,6 +60,7 @@ impl Effect {
             | Effect::ShuffleInto { .. }
             | Effect::Dig { .. }
             | Effect::Fateseal { .. }
+            | Effect::Wish { .. }
             | Effect::Search { .. }
             | Effect::Draw { .. }
             | Effect::Discard { .. }
@@ -132,6 +133,7 @@ impl Effect {
             | Effect::Dig { .. }
             | Effect::ExileUntil { .. }
             | Effect::Fateseal { .. }
+            | Effect::Wish { .. }
             | Effect::Search { .. }
             | Effect::Draw { .. }
             | Effect::Discard { .. }
@@ -264,6 +266,7 @@ impl Effect {
             | Effect::Dig { .. }
             | Effect::ExileUntil { .. }
             | Effect::Fateseal { .. }
+            | Effect::Wish { .. }
             | Effect::Search { .. }
             | Effect::Draw { .. }
             | Effect::Discard { .. }

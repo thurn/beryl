@@ -1,6 +1,6 @@
 //! Neighbouring values shared by definitions and effects.
-use super::{Neighbours, leak};
-use beryl_card::{Amount, Filter, Objects, Players, Zone};
+use super::{Kind, Neighbours, leak};
+use beryl_card::{Amount, Effect, Filter, Objects, Players, Zone};
 
 /// The other players a card could have named: "you", "each opponent" and "each player" for
 /// one another, and an object's owner for its controller and the reverse.
@@ -128,4 +128,19 @@ pub(super) fn zones(zone: Zone) -> Neighbours<Zone> {
         .filter(|&z| z != zone)
         .map(|z| (format!("Zone::{z:?}"), z))
         .collect()
+}
+
+/// The neighbours of an instruction of a player and an amount.
+pub(super) fn player_count(
+    player: Players,
+    count: Amount,
+    build: impl Fn(Players, Amount) -> Effect,
+    add: &mut impl FnMut(Kind, String, Effect),
+) {
+    for (name, player) in players(player) {
+        add(Kind::EffectPlayers, name, build(player, count));
+    }
+    for (name, count) in amounts(count) {
+        add(Kind::Amount, name, build(player, count));
+    }
 }

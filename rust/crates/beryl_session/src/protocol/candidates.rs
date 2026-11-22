@@ -40,6 +40,13 @@ pub(crate) fn catalog_label<L: Layout>(
     d: &Decision<L>,
     o: Opt<L>,
 ) -> Option<String> {
+    if d.prompt.purpose == beryl_engine::card::Purpose::Wish
+        && let Opt::Number(index) = o
+    {
+        return t
+            .sideboard_card::<L::Card>(d.player, index)
+            .map(|card| t.def(card).name.to_owned());
+    }
     let (Some(kind), Opt::Number(n)) = (ChosenKind::of_purpose(d.prompt.purpose), o) else {
         return None;
     };

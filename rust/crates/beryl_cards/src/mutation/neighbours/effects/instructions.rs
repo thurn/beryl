@@ -1,11 +1,9 @@
 //! The neighbouring values of a single effect instruction, with its children left alone.
 
-use beryl_card::{
-    Amount, Condition, Duration, Effect, Filter, Objects, Players, PutOnto, Regeneration,
-};
+use beryl_card::{Condition, Duration, Effect, Filter, Objects, Players, PutOnto, Regeneration};
 
 use super::super::continuous::rules;
-use super::super::operands::{amounts, chooser, objects, players, zones};
+use super::super::operands::{amounts, chooser, objects, player_count, players, zones};
 use super::super::{Kind, LINKED, Neighbours, leak, leak_slice};
 
 mod damage;
@@ -293,6 +291,15 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                 },
                 &mut add,
             );
+        }
+        Effect::Wish { filter } => {
+            if filter != Filter::Any {
+                add(
+                    Kind::SearchFilter,
+                    "filter Filter::Any".to_owned(),
+                    beryl_card::prelude::wish(Filter::Any),
+                );
+            }
         }
         Effect::Search {
             player,
@@ -778,20 +785,5 @@ fn objects_of(
 ) {
     for (name, which) in objects(which) {
         add(Kind::EffectObjects, name, build(which));
-    }
-}
-
-/// The neighbours of an instruction of a player and an amount.
-fn player_count(
-    player: Players,
-    count: Amount,
-    build: impl Fn(Players, Amount) -> Effect,
-    add: &mut impl FnMut(Kind, String, Effect),
-) {
-    for (name, player) in players(player) {
-        add(Kind::EffectPlayers, name, build(player, count));
-    }
-    for (name, count) in amounts(count) {
-        add(Kind::Amount, name, build(player, count));
     }
 }

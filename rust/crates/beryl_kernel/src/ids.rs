@@ -17,7 +17,7 @@ pub use beryl_card::Seat;
 pub enum SlotPlace {
     /// The `usize`th slot of a player's deck.
     Deck(Seat, usize),
-    /// The `usize`th slot of the shared pool for tokens and spell copies.
+    /// The `usize`th slot of the shared pool for tokens, spell copies and cards brought into the game.
     Pool(usize),
 }
 
@@ -25,7 +25,7 @@ pub enum SlotPlace {
 /// [`crate::Small`], [`LargeSlot`] for [`crate::Large`].
 ///
 /// Every numbering deals its slots out the same way: `DECK_SLOTS` in a row for each of
-/// `PLAYERS` players' decks, by seat, then the shared pool for tokens and spell copies. How
+/// `PLAYERS` players' decks, by seat, then the shared pool for tokens, spell copies and cards brought into the game. How
 /// many of each is the numbering's own, so a slot's number differs from one to another and
 /// its [`SlotPlace`] does not: a game is taken to another layout place by place
 /// ([`SlotId::to`]). Two layouts that deal their slots differently have different slot types,
@@ -41,7 +41,7 @@ pub trait SlotId:
     /// graveyard holds: player `p`'s cards sit in `p * DECK_SLOTS .. p * DECK_SLOTS + deck
     /// size`.
     const DECK_SLOTS: usize;
-    /// The first slot of the shared pool for tokens and spell copies, after every deck's:
+    /// The first slot of the shared pool, after every deck's:
     /// the pool is `POOL .. COUNT`.
     const POOL: usize = Self::PLAYERS * Self::DECK_SLOTS;
     /// The words of a [`crate::Bitboard`] over these slots, at least `COUNT` bits.
@@ -67,7 +67,7 @@ pub trait SlotId:
         Self::from_index(player.index() * Self::DECK_SLOTS + i)
     }
 
-    /// The slots of the shared pool for tokens and spell copies, in ascending order
+    /// The slots of the shared pool, in ascending order
     /// ([`crate::Layout::TOKEN_POOL`]).
     #[inline]
     fn pool() -> impl Iterator<Item = Self> {

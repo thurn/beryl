@@ -85,6 +85,12 @@ pub(super) fn pick_in<L: Layout>(
                     .is_some_and(|value| value.name(t) == card))
             });
         }
+        Pick::Card { card } if d.prompt.purpose == Purpose::Wish => {
+            return option_index(d, |o| {
+                matches!(o, Opt::Number(index) if t.sideboard_card::<L::Card>(d.player, index)
+                    .is_some_and(|found| t.def(found).name == card))
+            });
+        }
         Pick::Card { card } => {
             return (0..d.len() as u16).map(Choice).find(|&c| {
                 d.candidates
@@ -128,6 +134,12 @@ pub fn describe<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>) -> Stri
             let c = Choice(i);
             match (d.candidates.object(c), d.candidates.option(c)) {
                 (Some(slot), _) => s.name(t, slot).to_string(),
+                (_, Some(Opt::Number(index))) if d.prompt.purpose == Purpose::Wish => {
+                    t.sideboard_card::<L::Card>(d.player, index).map_or_else(
+                        || format!("Number({index})"),
+                        |card| t.def(card).name.to_owned(),
+                    )
+                }
                 (_, Some(o)) => match o.object_named(s) {
                     Some(slot) => format!("{o:?} ({})", s.name(t, slot)),
                     None => format!("{o:?}"),

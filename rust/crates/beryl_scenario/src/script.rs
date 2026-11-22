@@ -3,7 +3,7 @@
 //! played (a shrunk fuzz failure, an exhaustive search's failure) can be pasted into a card's
 //! scenarios.
 
-use beryl_card::ChosenKind;
+use beryl_card::{ChosenKind, Purpose};
 use beryl_engine::card::{Castings, FaceIx, ObjectAbility};
 use beryl_engine::chosen::ChosenValue;
 use beryl_engine::{Choice, Decision, DecisionKind, GameTable, Layout, Opt, Seat, State};
@@ -81,6 +81,9 @@ pub(crate) fn pick<L: Layout>(
         Opt::Yes => Pick::Yes,
         Opt::No => Pick::No,
         Opt::Done => Pick::Done,
+        Opt::Number(n) if d.prompt.purpose == Purpose::Wish => Pick::Card {
+            card: t.def(t.sideboard_card::<L::Card>(d.player, n)?).name,
+        },
         Opt::Number(n) => {
             value_name(t, d, n).map_or(Pick::Number { n }, |name| Pick::Named { name })
         }
@@ -253,6 +256,7 @@ pub fn setup_source(scenario: &Scenario) -> String {
             ("graveyard", player.graveyard),
             ("exile", player.exile),
             ("library", player.library),
+            ("sideboard", player.sideboard),
         ] {
             if !cards.is_empty() {
                 let _ = writeln!(text, "    .{zone}(P{p}, &{cards:?})");

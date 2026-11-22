@@ -7,6 +7,7 @@ pub mod counters;
 pub mod drawing;
 pub mod emblems;
 pub mod library;
+pub mod outside;
 pub mod tokens;
 
 use beryl_card::{Objects, Players, PutOnto, Types};

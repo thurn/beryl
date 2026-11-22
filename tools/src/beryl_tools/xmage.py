@@ -38,6 +38,7 @@ from .xmage_trace import (
     FORCED_COSTS,
     FORCED_TARGETS,
     Position,
+    resolution_skips,
 )
 from .xmage_java import (
     ANOTHER_CARD,
@@ -59,6 +60,7 @@ from .xmage_java import (
     offered_cast_choices,
     spell_cast,
     outcome_lines,
+    sideboard_setup_cards,
     trample_amount,
     turn_face_up_rule,
 )
@@ -292,6 +294,7 @@ class Exporter:
                 ):
                     printed = java_string(self.cards.printed_name(name))
                     self.emit(f"addCard(Zone.{zone}, {who}, {printed});")
+            self.lines.extend(sideboard_setup_cards(who, setup, self.cards))
             # XMage plays its turn 1 from the untap step, where Beryl's setup starts at its step
             # with the earlier ones done: a permanent that flips a coin at the upkeep flips one
             # XMage would lose half the time. Beryl's setup skipped that flip, so XMage wins it.
@@ -341,7 +344,16 @@ class Exporter:
             self.prepare(who, p)
             self.payments.resolve_at = (p.turn, p.step, len(self.lines))
             self.emit(f"resolveTop({self.at(p)}, {who});")
-            self.empty_search(p)
+            self.lines.extend(
+                resolution_skips(
+                    self.cards,
+                    p,
+                    self.trace[self.index + 1 : self.index + 2],
+                    self.actions[self.index + 1 : self.index + 2],
+                    self.at(p),
+                    self.player,
+                )
+            )
         elif kind == "PlayLand":
             who = self.player(action["player"])
             card = cast(str, action["card"])
@@ -368,25 +380,6 @@ class Exporter:
             self.cards, card, self.faces.mana_cost[card], card in p.morphed
         )
         self.emit(activate_on_stack(self.at(p), who, text, p.topmost_spell()))
-
-    def empty_search(self, p: Position) -> None:
-        """After a spell or ability resolves whose search by each player who lost objects to it
-        Beryl did not ask (`Cards.search_by_each_player`), the skip XMage's search with nothing
-        to find asks of each of them: the players whose creatures the next position has fewer
-        of. One who lost none searches for no cards, which XMage does not ask either."""
-        if not p.stack:
-            return
-        if not self.cards.search_by_each_player(cast(str, p.stack[-1]["name"])):
-            return
-        following = self.actions[self.index + 1 : self.index + 2]
-        if following and following[0].get("kind") == "ChooseUpTo":
-            return
-        if self.index + 1 >= len(self.trace):
-            raise Unsupported("a search by each player who lost objects, at the end")
-        after = self.trace[self.index + 1].creatures
-        for seat, (before, now) in enumerate(zip(p.creatures, after)):
-            if now < before:
-                self.emit(f"addTarget({self.player(seat)}, TestPlayer.TARGET_SKIP);")
 
     def cast(self, action: Json, p: Position) -> None:
         who = self.player(action["player"])
@@ -691,6 +684,10 @@ class Exporter:
             # XMage asks "UNDER or OVER" (`PermanentImpl.mutate`), yes for under; Beryl's yes
             # is over.
             self.emit(f"setChoice({who}, {'true' if what == 'No' else 'false'});")
+        elif action.get("purpose", p.purpose) == "wish":
+            self.emit(f"setChoice({who}, {'false' if card is None else 'true'});")
+            if card is not None:
+                self.emit(f"setChoice({who}, {java_string(card)});")
         elif action.get("purpose", p.purpose) == "replace":
             # Dredge's yes or no (`chooseUse`); mandatory effects' order by source name.
             yes = "false" if card is None else "true"

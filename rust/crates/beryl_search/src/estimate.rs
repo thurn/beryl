@@ -205,7 +205,7 @@ impl Effects {
                     Taken::MayReveal(_) => 1,
                 };
             }
-            Effect::ManifestDread(Players::You) => e.cards = 1,
+            Effect::ManifestDread(Players::You) | Effect::Wish { .. } => e.cards = 1,
             Effect::CreateTokens {
                 player: Players::You,
                 token,

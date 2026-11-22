@@ -344,7 +344,8 @@ impl ChosenKind {
             | Purpose::Attack
             | Purpose::Block
             | Purpose::EnterOrder
-            | Purpose::Replace => None,
+            | Purpose::Replace
+            | Purpose::Wish => None,
         }
     }
 }

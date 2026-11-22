@@ -75,6 +75,8 @@ pub struct PlayerSetup {
     /// Top first.
     pub graveyard: &'static [&'static str],
     pub exile: &'static [&'static str],
+    /// The cards available to bring in from outside the game.
+    pub sideboard: &'static [&'static str],
     /// Top first: the whole library, in order. A scenario that doesn't set it gets
     /// [`FILLER_LIBRARY`].
     pub library: &'static [&'static str],
@@ -539,6 +541,7 @@ const NEW_PLAYER: PlayerSetup = PlayerSetup {
     permanents: &[],
     graveyard: &[],
     exile: &[],
+    sideboard: &[],
     library: FILLER_LIBRARY,
 };
 
@@ -646,6 +649,13 @@ impl Scenario {
     #[must_use]
     pub const fn library(mut self, player: Seat, cards: &'static [&'static str]) -> Scenario {
         self.setup.players[player.index()].library = cards;
+        self
+    }
+
+    /// Gives this player a sideboard, with one name per copy.
+    #[must_use]
+    pub const fn sideboard(mut self, player: Seat, cards: &'static [&'static str]) -> Scenario {
+        self.setup.players[player.index()].sideboard = cards;
         self
     }
 

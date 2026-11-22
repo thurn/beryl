@@ -39,6 +39,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::Dig { .. }
         | Effect::ExileUntil { .. }
         | Effect::Fateseal { .. }
+        | Effect::Wish { .. }
         | Effect::Search { .. }
         | Effect::Draw { .. }
         | Effect::Discard { .. }

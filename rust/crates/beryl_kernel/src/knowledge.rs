@@ -87,7 +87,10 @@ impl<L: Layout> State<L> {
             let gained = run.knowledge[p.index()] & !self.knowledge[p.index()];
             for slot in gained.iter() {
                 let (now, then) = (self.object(slot), run.object(slot));
-                if now.card == then.card && (!random || now.incarnation == then.incarnation) {
+                if now.zone != crate::state::Zone::Nowhere
+                    && now.card == then.card
+                    && (!random || now.incarnation == then.incarnation)
+                {
                     self.knowledge[p.index()].insert(slot);
                 }
             }

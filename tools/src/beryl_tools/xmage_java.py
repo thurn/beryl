@@ -405,11 +405,27 @@ def xmage_cards(checkout: Path) -> set[str]:
     return names
 
 
+def sideboard_setup_cards(who: str, setup: Json, cards: Cards) -> Iterable[str]:
+    """Place the scenario's sideboard cards outside the game."""
+    for name in cast(list[str], setup.get("sideboard", [])):
+        # XMage's test API cannot add to OUTSIDE, so seed its sideboard directly.
+        yield "{"
+        yield (
+            "    mage.cards.Card outsideCard = mage.cards.repository.CardRepository.instance"
+            f".findCard({java_string(cards.printed_name(name))}, true).createCard();"
+        )
+        yield f"    currentGame.loadCards(java.util.Collections.singleton(outsideCard), {who}.getId());"
+        yield "    outsideCard.setZone(Zone.OUTSIDE, currentGame);"
+        yield f"    {who}.getSideboard().add(outsideCard);"
+        yield "}"
+
+
 def setup_cards(entry: Json) -> Iterable[str]:
-    """Every card in a scenario's setup, in any zone, by name."""
+    """Every card in a scenario's setup, including the sideboards, by name."""
     for setup in cast(list[Json], cast(Json, entry["setup"])["players"]):
         for zone in ("hand", "graveyard", "exile", "library"):
             yield from cast(list[str], setup[zone])
+        yield from cast(list[str], setup.get("sideboard", []))
         for permanent in cast(list[Json], setup["battlefield"]):
             yield cast(str, permanent["card"])
 

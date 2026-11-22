@@ -59,6 +59,10 @@ fn list<T: Mirrored, S: Serializer>(values: &&'static [T], s: S) -> Result<S::Ok
     s.collect_seq(values.iter().map(Json))
 }
 
+fn slice_is_empty<T>(slice: &&[T]) -> bool {
+    slice.is_empty()
+}
+
 /// A player's permanents, plain and otherwise, in battlefield order.
 fn all_permanents(player: &PlayerSetup) -> Vec<Permanent> {
     player.all_permanents().collect()
@@ -116,6 +120,8 @@ struct PlayerSetupDef {
     battlefield: Vec<Permanent>,
     graveyard: &'static [&'static str],
     exile: &'static [&'static str],
+    #[serde(skip_serializing_if = "slice_is_empty")]
+    sideboard: &'static [&'static str],
     library: &'static [&'static str],
 }
 

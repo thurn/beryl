@@ -2,7 +2,8 @@
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use beryl_card::{Ability, CardDef, Face, Says, Types};
+use beryl_card::effect::build::wish;
+use beryl_card::{Ability, CardDef, Face, Filter, Says, Types};
 use beryl_kernel::{Misfit, format::Format, relayout::Relayout, rng::SplitMix64};
 
 use crate::card::Flow;
@@ -10,7 +11,7 @@ use crate::decision::{
     Answers, Choice, Decision, DecisionKind, Opt, Outcome, Replay, StallReason, Step,
 };
 use crate::game::{Game, life};
-use crate::ids::Seat;
+use crate::ids::{LargeSlot, Seat, SlotId};
 use crate::layout::{Large, Layout, Small};
 use crate::resolution::Resolution;
 use crate::state::{State, TurnStep, Zone};
@@ -339,4 +340,89 @@ fn determinization_samples_both_games_from_the_same_cards() {
         assert_eq!(carried, active);
     }
     assert_eq!(seen_outside.len(), 2);
+}
+
+#[test]
+fn a_subgame_carries_library_cards_from_the_pool_and_offers_no_wish() {
+    static WISH: CardDef = CardDef {
+        name: "Test Wish",
+        shape: beryl_card::definition::Shape::Single,
+        tokens: &[],
+        faces: &[Face {
+            types: Types::SORCERY,
+            abilities: &[Ability::spell().effect(&wish(Filter::Types(Types::SORCERY)))],
+            ..Face::EMPTY
+        }],
+    };
+    static CARDS: CardTable = CardTable::new(&[&SUBGAME, &LAND, &DUAL, &WISH]);
+    let table = GameTable::with_sideboards(
+        Format::CONSTRUCTED,
+        &CARDS,
+        [&[(1, SUBGAME.name), (7, LAND.name)], &[(14, LAND.name)]],
+        [&[(1, WISH.name), (1, SUBGAME.name)], &[]],
+    )
+    .unwrap();
+    let player = Seat::P0;
+    let mut state = position(&table, Profile::EXACT).widen();
+    let admitted = state
+        .prepare_sideboard_card(&table, player, 0)
+        .unwrap()
+        .unwrap();
+    state.board().place(admitted, Zone::Library).unwrap();
+    let mut scratch = Scratch::new();
+    cast_from_position(&mut state, &table, &mut scratch);
+    play_until_depth(&mut state, &table, &mut scratch, 1);
+
+    let parent = state.suspended_game().unwrap();
+    assert_eq!(parent.sideboard(&table, player).count(), 1);
+    assert_eq!(state.sideboard(&table, player).count(), 0);
+    assert_ne!(state.object(admitted).zone(), Zone::Nowhere);
+    assert_eq!(state.check_invariants(&table), Ok(()));
+    let sampled = crate::observe(&state, &table, &mut scratch, Seat::P1)
+        .determinize(&table, &mut SplitMix64::new(1));
+    let parent = sampled.suspended_game().unwrap();
+    assert!(
+        parent
+            .library(player)
+            .iter()
+            .any(|&slot| { parent.definition_name(&table, slot) == WISH.name })
+    );
+    assert!(LargeSlot::all().any(|slot| {
+        let object = sampled.object(slot);
+        object.owner() == player
+            && matches!(object.zone(), Zone::Library | Zone::Hand)
+            && sampled.definition_name(&table, slot) == WISH.name
+    }));
+
+    let mut wish_slot = None;
+    for _ in 0..48 {
+        let Step::Decide(decision) = next(&mut state, &table, &mut scratch, &mut Replay) else {
+            panic!("the subgame should still be playing");
+        };
+        if let Some(slot) = wish_slot {
+            assert_ne!(decision.kind, DecisionKind::ChooseUpTo);
+            if state.object(slot).zone() == Zone::Graveyard {
+                return;
+            }
+        }
+        let mut answer = Choice(0);
+        for choice in (0..decision.len() as u16).map(Choice) {
+            if let Some(Opt::Cast { slot, .. }) = decision.candidates.option(choice)
+                && state.definition_name(&table, slot) == WISH.name
+            {
+                wish_slot = Some(slot);
+                answer = choice;
+                break;
+            }
+        }
+        apply_decided(
+            &mut state,
+            &table,
+            &mut scratch,
+            &mut Replay,
+            &decision,
+            answer,
+        );
+    }
+    panic!("the wish should have resolved");
 }

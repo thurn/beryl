@@ -248,6 +248,8 @@ pub struct State<L: Layout = Small> {
     /// results, and empty in most games.
     pub(crate) elsewhere: crate::query::zone_characteristics::Reaching<L>,
     pub(crate) turn_plan: crate::turn::plan::TurnPlan<L>,
+    /// Sideboard occurrences that have already entered the game.
+    pub(crate) sideboard_taken: crate::sideboard::Taken,
     pub(crate) outer: L::Outer,
     pub(crate) subgame_turns: L::SubgameTurns,
 }
@@ -320,6 +322,9 @@ impl<L: Layout> State<L> {
             elsewhere: _,
             // Bookkeeping about the past that only the loop check reads ([`crate::repeats`]).
             repeats: _,
+            // Admitted cards stay in the game. The objects and their original identities
+            // determine which cards are left in the sideboard.
+            sideboard_taken: _,
             turn_plan,
             outer: _,
             subgame_turns: _,

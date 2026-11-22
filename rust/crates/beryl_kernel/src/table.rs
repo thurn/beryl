@@ -1,15 +1,15 @@
-//! The static card table and the per-game table built from two decklists (architecture §6.4,
+//! The static card table and the per-game table built from decks and sideboards (architecture §6.4,
 //! decision D20).
 //!
 //! Implements: none. Builds card and deck indexes for a game.
 
 use beryl_card::{
     Ability, AbilityIx, AbilityKind, BasicLandTypes, CardDef, Condition, CostAction, CostPart,
-    FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, ManaRestriction, RuleChange, Words, Zone, ZoneSet,
+    FACE_DOWN, Face, FaceIx, ManaRestriction, RuleChange, Words, Zone, ZoneSet,
 };
 
 use crate::event::{Listens, Replaces};
-use crate::format::Format;
+use crate::format::{DeckRole, Format};
 use crate::ids::{CardId, CardIx, LargeCardIx, Seat};
 use crate::layout::{Layout, PerLayout, PerSeat};
 use crate::listener::{self, Listener, Unmatched};
@@ -20,10 +20,12 @@ use crate::rule_changes::{self, RuleChanges, RuleId, RuleKind, Rules, Unchecked}
 use crate::static_ability::{self, Inputs, Unapplied};
 use crate::subtypes::{GameSubtypes, SubtypeNumbers};
 use listeners::{Indexed, found_where_they_work};
+use lists::{card_names, gather_extra, gather_role};
 
 mod capability;
 mod cards;
 mod listeners;
+mod lists;
 
 pub use crate::payable::{ANY_COLOR, is_instant_mana};
 pub use capability::Capability;
@@ -37,6 +39,8 @@ pub type Decklist = [(u8, &'static str)];
 pub enum TableError {
     /// A decklist names a card the [`CardTable`] does not have.
     UnknownCard(&'static str),
+    /// A constructed sideboard has more cards than the format allows.
+    SideboardTooLarge { player: Seat, count: usize },
     /// A card of the game, or a token or emblem one makes, has a triggered ability the engine
     /// has no code to match ([`listener::listens_to`]): it would never trigger, so no game
     /// is played with it.
@@ -108,6 +112,7 @@ pub struct GameTable {
     defs: Vec<&'static CardDef>,
     /// Each deck as game indices, in decklist order.
     decks: PerSeat<Vec<usize>>,
+    sideboards: PerSeat<Vec<usize>>,
     /// Per game index, the event kinds its triggered abilities listen to.
     listens: Vec<Listens>,
     /// Every kind any card of the game listens to.
@@ -149,7 +154,7 @@ pub struct GameTable {
     face_rules: Vec<[Rules; 2]>,
     /// Per game index, the rule changes the static abilities of any of its faces make.
     rules: Vec<Rules>,
-    /// The game index of [`FACE_DOWN_COPY`], in the width of each layout's
+    /// The game index of [`beryl_card::FACE_DOWN_COPY`], in the width of each layout's
     /// ([`GameTable::face_down_copy`]); index 0, never read, in a width that does not number
     /// it.
     face_down_copy: (CardIx, LargeCardIx),
@@ -187,66 +192,6 @@ fn replaced(def: &CardDef, rule_changes: &mut RuleChanges) -> Result<Replaces, T
     Ok(replaces | changes)
 }
 
-/// The cards a game can contain, each once, and each deck as indices into them: the decks'
-/// cards in decklist order, then the tokens they make, then `extra`, then [`FACE_DOWN_COPY`]
-/// last.
-fn gather(
-    cards: &'static CardTable,
-    decks: PerSeat<&Decklist>,
-    extra: &[&'static CardDef],
-) -> Result<(Vec<&'static CardDef>, PerSeat<Vec<usize>>), TableError> {
-    let mut defs: Vec<&'static CardDef> = Vec::new();
-    let mut indices: PerSeat<Vec<usize>> = Default::default();
-    for (player, list) in Seat::BOTH.into_iter().zip(decks) {
-        for &(count, name) in list {
-            let def = cards.get(name).ok_or(TableError::UnknownCard(name))?;
-            let index = if let Some(i) = defs.iter().position(|d| std::ptr::eq(*d, def)) {
-                i
-            } else {
-                defs.push(def);
-                defs.len() - 1
-            };
-            for _ in 0..count {
-                indices[player.index()].push(index);
-            }
-        }
-    }
-    let mut i = 0;
-    while i < defs.len() {
-        for &token in defs[i].tokens {
-            if !defs.iter().any(|d| std::ptr::eq(*d, token)) {
-                defs.push(token);
-            }
-        }
-        i += 1;
-    }
-    for &def in extra {
-        if !defs.iter().any(|d| std::ptr::eq(*d, def)) {
-            defs.push(def);
-        }
-    }
-    defs.push(&FACE_DOWN_COPY);
-    Ok((defs, indices))
-}
-
-/// The game index of each distinct name among `defs` that a card has ([`GameTable::names`]):
-/// not a token's or an emblem's, which some card of `defs` lists among what it creates, and
-/// not [`FACE_DOWN_COPY`]'s, which is no card's.
-fn card_names(defs: &[&'static CardDef]) -> Vec<usize> {
-    let made = |def: &CardDef| {
-        defs.iter()
-            .any(|d| d.tokens.iter().any(|&token| std::ptr::eq(token, def)))
-    };
-    let mut names: Vec<usize> = Vec::new();
-    for (i, &def) in defs.iter().enumerate() {
-        let card = !std::ptr::eq(def, &raw const FACE_DOWN_COPY) && !made(def);
-        if card && !names.iter().any(|&n| defs[n].name == def.name) {
-            names.push(i);
-        }
-    }
-    names
-}
-
 /// Whether every token and emblem `def`'s effects create is one of `defs`, the cards of a
 /// game: those its decks name and those they list among what they create.
 fn listed(def: &CardDef, defs: &[&'static CardDef]) -> Result<(), TableError> {
@@ -267,7 +212,7 @@ fn listed(def: &CardDef, defs: &[&'static CardDef]) -> Result<(), TableError> {
 
 impl GameTable {
     /// Assigns indices in order of first appearance across the decks, then to the tokens
-    /// and emblems they can create, and finally to [`FACE_DOWN_COPY`].
+    /// and emblems they can create, and finally to [`beryl_card::FACE_DOWN_COPY`].
     /// [`crate::State::deal`] checks whether the decks fit the layout.
     pub fn new(
         format: Format,
@@ -278,7 +223,7 @@ impl GameTable {
     }
 
     /// [`GameTable::new`], with `extra` given game indices after the tokens and before
-    /// [`FACE_DOWN_COPY`]: cards no deck holds that a tool puts into a game through the board
+    /// [`beryl_card::FACE_DOWN_COPY`]: cards no deck holds that a tool puts into a game through the board
     /// door ([`crate::board::Board::set_card`]), as the present-cost benchmark puts a stand-in
     /// for each card it takes out of a position. A card already in the table keeps its index.
     pub fn with_extra(
@@ -287,7 +232,46 @@ impl GameTable {
         decks: PerSeat<&Decklist>,
         extra: &[&'static CardDef],
     ) -> Result<Self, TableError> {
-        let (defs, indices) = gather(cards, decks, extra)?;
+        Self::from_lists(format, cards, decks, [&[], &[]], extra)
+    }
+
+    /// Creates a game with separate main decks and sideboards. The cards of both lists,
+    /// and every token or emblem they create, share the same game indices.
+    pub fn with_sideboards(
+        format: Format,
+        cards: &'static CardTable,
+        decks: PerSeat<&Decklist>,
+        sideboards: PerSeat<&Decklist>,
+    ) -> Result<Self, TableError> {
+        Self::from_lists(format, cards, decks, sideboards, &[])
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn from_lists(
+        format: Format,
+        cards: &'static CardTable,
+        decks: PerSeat<&Decklist>,
+        sideboards: PerSeat<&Decklist>,
+        extra: &[&'static CardDef],
+    ) -> Result<Self, TableError> {
+        let mut defs = Vec::new();
+        let mut indices = Default::default();
+        let mut outside = Default::default();
+        for &role in format.decks() {
+            match role {
+                DeckRole::Library => indices = gather_role(cards, decks, &mut defs)?,
+                DeckRole::Sideboard => {
+                    for (player, list) in Seat::BOTH.into_iter().zip(sideboards) {
+                        let count = list.iter().map(|&(n, _)| usize::from(n)).sum();
+                        if count > format.maximum_sideboard() {
+                            return Err(TableError::SideboardTooLarge { player, count });
+                        }
+                    }
+                    outside = gather_role(cards, sideboards, &mut defs)?;
+                }
+            }
+        }
+        gather_extra(&mut defs, extra);
         let last = defs.len() - 1;
         let face_down_copy = (
             CardIx::try_from_index(last).unwrap_or_default(),
@@ -363,6 +347,7 @@ impl GameTable {
             cards,
             defs,
             decks: indices,
+            sideboards: outside,
             listens: here.kinds,
             listens_any,
             replaces,
@@ -430,7 +415,7 @@ impl GameTable {
         }
     }
 
-    /// The game index of [`FACE_DOWN_COPY`], the card a copy of a face-down permanent copies,
+    /// The game index of [`beryl_card::FACE_DOWN_COPY`], the card a copy of a face-down permanent copies,
     /// as a state of layout `L` stores it.
     ///
     /// It is kept in each layout's width and read with one load, not converted: it is asked
@@ -593,6 +578,20 @@ impl GameTable {
     #[inline]
     pub fn deck<C: CardId>(&self, player: Seat) -> impl ExactSizeIterator<Item = C> + '_ {
         self.decks[player.index()].iter().map(|&i| C::from_index(i))
+    }
+
+    /// A player's original sideboard as game indices, with one entry per copy.
+    pub fn sideboard<C: CardId>(&self, player: Seat) -> impl ExactSizeIterator<Item = C> + '_ {
+        self.sideboards[player.index()]
+            .iter()
+            .map(|&i| C::from_index(i))
+    }
+
+    /// A sideboard occurrence by its position in the original list.
+    pub fn sideboard_card<C: CardId>(&self, player: Seat, index: u8) -> Option<C> {
+        self.sideboards[player.index()]
+            .get(usize::from(index))
+            .map(|&i| C::from_index(i))
     }
 
     /// How many cards a player's deck has.

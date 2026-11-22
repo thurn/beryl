@@ -260,6 +260,16 @@ impl Ctx {
                     format!("{library} library for {cards}, {found}, then {shuffle}")
                 })]
             }
+            Effect::Wish { filter } => {
+                self.may = true;
+                vec![self.clause(Players::You, ("reveal", "reveals"), |c| {
+                    let noun = c.noun(filter, Kind::Card(None)).singular(Kind::Card(None));
+                    format!(
+                        "{} you own from outside the game and put it into your hand",
+                        with_article(&noun)
+                    )
+                })]
+            }
             Effect::Draw { player, count } => vec![self.cards(player, ("draw", "draws"), count)],
             Effect::Discard { player, count } => {
                 let clause = self.cards(player, ("discard", "discards"), count);

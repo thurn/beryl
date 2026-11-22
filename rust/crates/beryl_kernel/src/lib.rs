@@ -570,12 +570,11 @@
 //! | a batch, in an order no seed decides: permanents as they entered, then library cards top first, then the rest by name | [`State::in_game_order`] |
 //! | a hand, by card definition | [`State::hand_by_definition`] |
 //!
-//! Per-object mutations take a game order. [`State::in_game_order`] returns [`fixed::Full`]
-//! if the batch exceeds the queue. [`SlotId::all`] enumerates storage and [`SlotId::pool`]
-//! locates free storage for tokens and spell copies. Ascending slot order still indexes a
-//! recorded [`decision::Choice`]. [`decision::Candidates::extend_options`] builds options in
-//! that order, [`decision::Candidates::objects`] reads them for object candidates, and
-//! [`decision::collapse()`] chooses a representative of interchangeable objects.
+//! Per-object mutations use [`State::in_game_order`], which returns [`fixed::Full`] if
+//! the batch exceeds the queue. [`SlotId::all`] enumerates storage and [`SlotId::pool`] finds
+//! free slots for tokens, spell copies and cards brought into the game. Ascending slot order
+//! indexes a recorded [`decision::Choice`], and [`decision::collapse()`] chooses a
+//! representative of interchangeable objects.
 //!
 //! A stack entry's targets are named the same way: a [`state::TargetPlace`] is a target's
 //! place in the entry's list, a [`state::TargetPlaces`] is a set of them with `insert`,
@@ -675,7 +674,7 @@
 //! ## Layouts
 //!
 //! How many players a game has, how many cards a deck, a library and a graveyard may hold,
-//! how many tokens and spell copies exist at once, how many objects there are in all and
+//! how many objects occupy the shared pool at once, how many objects there are in all and
 //! how many distinct cards a game contains are parameters of the [`Layout`], and nothing
 //! outside the layouts assumes them (by-w8gv.5.14, by-w8gv.5.15):
 //!
@@ -683,7 +682,7 @@
 //! |---|---|
 //! | players | [`SlotId::PLAYERS`] of its slots; [`Layout::PerPlayer`], the table with one entry each |
 //! | deck, library and graveyard size | [`SlotId::DECK_SLOTS`]; [`Layout::Deck`], the queue that long |
-//! | tokens and spell copies | the pool, [`SlotId::POOL`] to [`SlotId::COUNT`]: [`SlotId::pool`], [`Layout::TOKEN_POOL`] |
+//! | tokens, spell copies and cards brought into the game | the pool, [`SlotId::POOL`] to [`SlotId::COUNT`]: [`SlotId::pool`], [`Layout::TOKEN_POOL`] |
 //! | objects in all | [`SlotId::COUNT`] |
 //! | distinct cards, tokens and emblems among them | [`CardId::COUNT`] of [`Layout::Card`], the game index a state stores |
 //!
@@ -775,6 +774,7 @@ pub mod repeats;
 pub mod replacement;
 pub mod rng;
 pub mod rule_changes;
+mod sideboard;
 mod stack;
 pub mod state;
 pub mod static_ability;

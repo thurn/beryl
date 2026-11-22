@@ -414,6 +414,7 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
         Purpose::Color => picks("Choose Color"),
         Purpose::CreatureType => picks("Choose Creature Type"),
         Purpose::CardName => picks("Choose Card Name"),
+        Purpose::Wish => picks("Choose a Card"),
         // Not seen in Arena: composed on "Choose Color".
         Purpose::ReplaceWord => picks("Choose Word to Replace"),
         Purpose::NewWord => picks("Choose New Word"),

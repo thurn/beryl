@@ -4,7 +4,8 @@
 //! Implements: CR 102.2
 
 pub use beryl_card::Filter;
-use beryl_card::{CardDef, Players, Words};
+use beryl_card::definition::Shape;
+use beryl_card::{CardDef, FaceIx, Players, Words};
 
 use crate::bitboard::Bitboard;
 use crate::ids::Seat;
@@ -209,6 +210,52 @@ pub(crate) fn passes_so_far<L: Layout>(
         | Filter::ManaValueAtMostX
         | Filter::PowerAtMost(_)
         | Filter::InZone(_) => filter.matches(s, t, slot, you, words),
+    }
+}
+
+/// Tests a card that a wish could bring in. No zone effects or status apply here
+/// (see [CR 400.11c]). A split card has the combined printed characteristics of both
+/// halves (see [CR 709.4]), while a double-faced card has its front face (see [CR 712.6a]).
+///
+/// [CR 400.11c]: https://yawgatog.com/resources/magic-rules/#R40011c
+/// [CR 709.4]: https://yawgatog.com/resources/magic-rules/#R7094
+/// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a
+pub fn matches_outside(filter: &Filter, card: &CardDef, owner: Seat, words: &Words, x: u8) -> bool {
+    let front = card.front();
+    let back = matches!(card.shape, Shape::Split { .. }).then(|| card.face(FaceIx::BACK));
+    let mana_value = || {
+        front
+            .cost
+            .mana_value()
+            .saturating_add(back.map_or(0, |f| f.cost.mana_value()))
+    };
+    let passes = |subfilter: &Filter| matches_outside(subfilter, card, owner, words, x);
+    match *filter {
+        Filter::Any => true,
+        Filter::Types(types) => {
+            front.types.intersects(types) || back.is_some_and(|f| f.types.intersects(types))
+        }
+        Filter::Supertypes(types) => {
+            front.supertypes.intersects(types)
+                || back.is_some_and(|f| f.supertypes.intersects(types))
+        }
+        Filter::SubtypeWord(word) => {
+            let subtype = word.read(words);
+            front.subtypes.read(&Words::NONE).contains(subtype)
+                || back.is_some_and(|f| f.subtypes.read(&Words::NONE).contains(subtype))
+        }
+        Filter::ColorWords(colors) => {
+            let colors = colors.read(words);
+            front.colors.intersects(colors) || back.is_some_and(|f| f.colors.intersects(colors))
+        }
+        Filter::Whose(players) | Filter::Owned(players) => is_for(players, owner, owner),
+        Filter::ManaValueAtMost(n) => mana_value() <= n,
+        Filter::ManaValueAtMostX => mana_value() <= x,
+        Filter::PowerAtMost(n) => front.power.unwrap_or(0) <= n,
+        Filter::Not(f) => !passes(f),
+        Filter::All(fs) => fs.iter().all(passes),
+        Filter::AnyOf(fs) => fs.iter().any(passes),
+        Filter::Tapped | Filter::Token | Filter::InZone(_) => false,
     }
 }
 

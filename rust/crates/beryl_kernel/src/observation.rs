@@ -7,7 +7,7 @@ mod subgames;
 
 use crate::bitboard::Bitboard;
 use crate::filter::{Evaluate, Filter};
-use crate::ids::{CardId, Seat, SlotId};
+use crate::ids::{CardId, Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small};
 use crate::rng::SplitMix64;
 use crate::state::{
@@ -262,44 +262,41 @@ impl<'a, L: Layout> Observation<'a, L> {
     fn redeal(&self, t: &GameTable, rng: &mut SplitMix64, show_hands: bool, s: &mut State<L>) {
         let picks = self.unseen_hidden_picks(t);
         for player in Seat::BOTH {
-            let mut remainder: L::Deck<L::Card> = Default::default();
+            const IN_GAME: usize =
+                Slot::DECK_SLOTS + crate::format::Format::CONSTRUCTED.maximum_sideboard();
+            let mut remainder: L::Queue<L::Card, IN_GAME> = Default::default();
+            let slots = || self.root.in_game_card_slots(t, player);
             if self.root.in_subgame() {
                 // This deck contains only cards carried into the subgame.
-                for i in 0..t.deck_len(player) {
-                    let slot = L::Slot::deck(player, i);
-                    if self.root.object(slot).zone != Zone::Nowhere {
-                        remainder.push_bounded(self.root.card_really_is(slot));
-                    }
+                for slot in slots() {
+                    remainder.push_bounded(self.root.card_really_is(slot));
                 }
             } else {
-                for card in t.deck(player) {
-                    // A deck never holds more cards than the layout has slots for (State::deal).
+                // The sideboard list and every card revealed as it came in are public
+                // (architecture decision D19). Only cards in the game are redealt.
+                let admitted = self.root.admitted(t, player).map(|(_, card)| card);
+                for card in t.deck(player).chain(admitted) {
+                    // The queue holds a small game's main deck and all its sideboard cards.
                     remainder.push_bounded(card);
                 }
             }
-            let mut unknown: L::Deck<L::Slot> = Default::default();
+            let mut unknown: L::Queue<L::Slot, IN_GAME> = Default::default();
             // A copy can hide the card underneath while its copy effect stays in force.
             // Deal that card into its `Memo::Really`, separately from the slots that
             // can trade their card fields to satisfy a hidden pick.
-            let mut hidden_originals: L::Deck<L::Slot> = Default::default();
-            for i in 0..t.deck_len(player) {
-                let slot = L::Slot::deck(player, i);
-                if self.root.in_subgame() && self.root.object(slot).zone == Zone::Nowhere {
-                    continue;
-                }
+            let mut hidden_originals: L::Queue<L::Slot, IN_GAME> = Default::default();
+            for slot in slots() {
                 if (show_hands && self.root.object(slot).zone == Zone::Hand)
                     || self.root.knows_card_really_is(self.viewer, slot)
                 {
                     let card = s.card_really_is(slot);
                     let at = remainder
                         .position(card)
-                        .expect("a known card not in its deck");
+                        .expect("a known card not in its deck or among the admitted cards");
                     remainder.remove(at);
                 } else if self.root.object(slot).flags.has(Flag::Copy) {
-                    // One of the deck's slots, of which the layout has no more than these.
                     hidden_originals.push_bounded(slot);
                 } else {
-                    // One of the deck's slots, of which the layout has no more than these.
                     unknown.push_bounded(slot);
                 }
             }

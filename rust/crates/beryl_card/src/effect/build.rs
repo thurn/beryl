@@ -426,6 +426,12 @@ pub const fn fateseal(player: Players, library: Players) -> Effect {
     }
 }
 
+/// The controller may reveal a matching card they own from outside the game and
+/// put it into their hand.
+pub const fn wish(filter: Filter) -> Effect {
+    Effect::Wish { filter }
+}
+
 /// [`Effect::Search`] for one card: "[player] searches their library for a [filter] card,
 /// [puts it somewhere], then shuffles".
 pub const fn search(player: Players, filter: Filter, found: Found) -> Effect {

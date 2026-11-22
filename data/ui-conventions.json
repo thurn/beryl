@@ -1004,6 +1004,11 @@
     },
     {
       "kind": "not-seen",
+      "name": "Choosing a sideboard card during a game",
+      "rule": "The catalog shows eligible card names to the player making the choice. Done leaves every card in the sideboard. The chosen card is revealed and appears in its owner's hand."
+    },
+    {
+      "kind": "not-seen",
       "name": "Inspecting a face-down manual card",
       "rule": "The table shows a card back. Pointing at the card opens a face preview only if the viewer knows the card's identity."
     },

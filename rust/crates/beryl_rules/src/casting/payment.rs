@@ -240,6 +240,7 @@ fn unless_discards<L: Layout>(
         | Effect::Dig { .. }
         | Effect::ExileUntil { .. }
         | Effect::Fateseal { .. }
+        | Effect::Wish { .. }
         | Effect::Search { .. }
         | Effect::Draw { .. }
         | Effect::Discard { .. }

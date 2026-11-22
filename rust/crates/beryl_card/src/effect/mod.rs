@@ -651,6 +651,9 @@ pub enum Effect {
     ///
     /// [CR 725.1]: https://yawgatog.com/resources/magic-rules/#R7251
     EndTurn,
+    /// The controller may reveal a card they own from outside the game that matches
+    /// `filter` and put it into their hand (see CR 400.11b).
+    Wish { filter: Filter },
 }
 
 impl Effect {
@@ -716,6 +719,7 @@ impl Effect {
             | Effect::Dig { .. }
             | Effect::ExileUntil { .. }
             | Effect::Fateseal { .. }
+            | Effect::Wish { .. }
             | Effect::Search { .. }
             | Effect::GainLife { .. }
             | Effect::LoseLife { .. }

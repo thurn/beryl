@@ -113,6 +113,7 @@ pub mod decks {
                 names::COUNTERSPELL,
             ],
         ),
+        ("outside-the-game", &[names::BURNING_WISH]),
         (
             "attachments",
             &[names::SWIFT_RECONFIGURATION, names::LEONIN_SCIMITAR],

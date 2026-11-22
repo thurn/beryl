@@ -162,6 +162,33 @@
     }
   ],
   "Braingeyser": [],
+  "Burning Wish": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "bb7a88a2e141",
+      "untestable": "The engine has no ante zone. The scenario for no eligible card covers the library and graveyard."
+    },
+    {
+      "published_at": "2007-09-16",
+      "hash": "7e6bb8b3eb66",
+      "covered": "Effect::Wish"
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "eeb2829d4377",
+      "scenario": [
+        "bring in a sorcery and cast it",
+        "no eligible card outside the game"
+      ]
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "ba1238d7a656",
+      "scenario": [
+        "no eligible card outside the game"
+      ]
+    }
+  ],
   "Cavern of Souls": [
     {
       "published_at": "2018-12-07",
@@ -824,7 +851,9 @@
     {
       "published_at": "2024-04-12",
       "hash": "e9becc55cb47",
-      "untestable": "The scenario runner has no sideboard or choice from outside the game. Burning Wish and that scenario setup are tracked in by-ptc7.8.16."
+      "scenario": [
+        "the controller cannot wish from the opponent's sideboard"
+      ]
     },
     {
       "published_at": "2024-04-12",
