@@ -36,6 +36,7 @@ def message(reason: str, package_id: str, **fields: object) -> str:
 
 KERNEL = "path+file:///w/rust/crates/beryl_kernel#0.1.0"
 RULES = "path+file:///w/rust/crates/beryl_rules#beryl_rules@0.1.0"
+BUILD_FINISHED: str = json.dumps({"reason": "build-finished", "success": True})
 
 
 def test_clippy_fails_a_package_with_a_warning_and_passes_one_without() -> None:
@@ -56,9 +57,12 @@ def test_clippy_fails_a_package_with_a_warning_and_passes_one_without() -> None:
             message("compiler-artifact", KERNEL),
             message("compiler-message", RULES, message=warning),
             "not json",
+            BUILD_FINISHED,
         ]
     )
-    results = rust.clippy_results(output, ["beryl_kernel", "beryl_rules", "beryl_cli"])
+    results = rust.clippy_results(
+        output, ["beryl_kernel", "beryl_rules", "beryl_cli"], 0
+    )
     assert results == [
         ignite.Result("clippy:beryl_kernel", "pass"),
         ignite.Result(
@@ -66,6 +70,11 @@ def test_clippy_fails_a_package_with_a_warning_and_passes_one_without() -> None:
             "fail",
             "warning: needless borrow",
             "rust/crates/beryl_rules/src/a.rs:7",
+        ),
+        ignite.Result(
+            "clippy:beryl_cli",
+            "incomplete",
+            "cargo clippy exited with status 0 without reporting an artifact for this package",
         ),
     ]
 
@@ -76,11 +85,28 @@ def test_a_note_alone_is_no_failure() -> None:
         [
             message("compiler-artifact", KERNEL),
             message("compiler-message", KERNEL, message=note),
+            BUILD_FINISHED,
         ]
     )
-    assert rust.clippy_results(output, ["beryl_kernel"]) == [
+    assert rust.clippy_results(output, ["beryl_kernel"], 0) == [
         ignite.Result("clippy:beryl_kernel", "pass")
     ]
+
+
+@pytest.mark.parametrize(
+    ("returncode", "finished", "evidence"),
+    [
+        (0, "", "without a successful build-finished message"),
+        (1, BUILD_FINISHED, "status 1 before confirming the package result"),
+    ],
+)
+def test_clippy_requires_a_successful_build_to_report_a_pass(
+    returncode: int, finished: str, evidence: str
+) -> None:
+    output = "\n".join([message("compiler-artifact", KERNEL), finished])
+    result = rust.clippy_results(output, ["beryl_kernel"], returncode)[0]
+    assert result.outcome == "incomplete"
+    assert evidence in result.message
 
 
 DOCTESTS = """\

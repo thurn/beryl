@@ -17,7 +17,7 @@ from beryl_tools import paths
 from beryl_tools.beryl3d import gate, pack, timeline
 from beryl_tools.beryl3d.match import reference, score
 from beryl_tools.beryl3d.match.target import Target
-from beryl_tools.ignite import Result
+from beryl_tools.ignite import RESULTS_ENV, Result
 from beryl_tools.ignite import beryl3d as adapter
 from beryl_tools.ignite import beryl3d_match as web_match
 
@@ -224,19 +224,30 @@ def frame(index: int, **counts: float) -> dict[str, object]:
     return {"frame": index, "ms": index * 16, "phase": "rest", **every, **counts}
 
 
-def test_gate_results_hold_each_board_to_its_own_limits() -> None:
-    output = json.dumps(
+def test_gate_reports_budget_failures_and_missing_boards(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output: str = json.dumps(
         {
             "boards": [
                 {
                     "name": name,
-                    "frames": [frame(0), frame(1, elements=3.0)],
+                    "frames": [frame(0, resolved=1), frame(1, elements=3, resolved=1)],
                     "handle_allocations": 0,
                     "first_frame_allocation": None,
                 }
+                for name in ("held", "over", "baseline-only")
+            ],
+            "enhanced": [
+                {
+                    "name": f"{name} enhanced",
+                    "frames": [
+                        frame(0, particles=1, resolved=1),
+                        frame(1, particles=1, resolved=1),
+                    ],
+                }
                 for name in ("held", "over")
             ],
-            "enhanced": [],
         }
     )
     board = gate.parse(output)[0]
@@ -249,17 +260,129 @@ def test_gate_results_hold_each_board_to_its_own_limits() -> None:
         "boards": {
             "held": held,
             "over": {**held, "worst_frame_elements": {"max": 2, "why": "test budget"}},
+            "baseline-only": held,
         },
-        "enhanced": {},
+        "enhanced": {"particles": {"max": 2, "why": "test budget"}},
         "scaling": {},
         "trend": {"adjacent_percent": 5, "weekly_percent": 10},
     }
-    results = adapter.gate_results(output, ["held", "over", "absent"], budgets)
+
+    def run(command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess[str](command, 0, output, "")
+
+    monkeypatch.setattr(adapter, "run_out", run)
+    monkeypatch.setattr(gate, "read_budgets", lambda: budgets)
+    results = adapter.gate_run(
+        [f"b3d-gate:{name}" for name in ("held", "over", "absent", "baseline-only")]
+    )
     assert [(r.check, r.outcome) for r in results] == [
         ("b3d-gate:held", "pass"),
         ("b3d-gate:over", "fail"),
+        ("b3d-gate:absent", "incomplete"),
+        ("b3d-gate:baseline-only", "incomplete"),
     ]
     assert "over its budget 2" in results[1].message
+    assert "status 0 without a complete" in results[2].message
+    assert "b3d-gate:over: over" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "stderr", "evidence"),
+    [
+        (1, "", "", "without a complete"),
+        (2, "runner progress", "runner error", "without a complete"),
+        (0, "truncated report", "", "invalid board output"),
+    ],
+)
+def test_gate_runner_failures_report_incomplete_rows(
+    returncode: int,
+    stdout: str,
+    stderr: str,
+    evidence: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def run(command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, returncode, stdout, stderr)
+
+    def budgets() -> gate.Budgets:
+        return {
+            "boards": {},
+            "enhanced": {},
+            "scaling": {},
+            "trend": {"adjacent_percent": 5, "weekly_percent": 10},
+        }
+
+    monkeypatch.setattr(adapter, "run_out", run)
+    monkeypatch.setattr(gate, "read_budgets", budgets)
+    target = tmp_path / "results.jsonl"
+    monkeypatch.setenv(RESULTS_ENV, str(target))
+    checks = ["b3d-gate:pay-default", "b3d-gate:stress-verbs"]
+    assert adapter.main(["b3d-gate", "run", *checks]) == 0
+    rows = [json.loads(line) for line in target.read_text().splitlines()]
+    assert [(row["check"], row["outcome"]) for row in rows] == [
+        (check, "incomplete") for check in checks
+    ]
+    assert all(f"status {returncode}" in row["message"] for row in rows)
+    assert all(evidence in row["message"] for row in rows)
+    log = capsys.readouterr().err
+    assert f"gate exited with status {returncode}" in log
+    assert stdout in log and stderr in log
+
+
+def test_b3d_clippy_preserves_diagnostics_after_an_unsuccessful_exit(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output: str = "\n".join(
+        json.dumps(row)
+        for row in [
+            {
+                "reason": "compiler-artifact",
+                "package_id": "path+file:///w/crates/kit_scene#0.1.0",
+            },
+            {
+                "reason": "compiler-message",
+                "package_id": "path+file:///w/crates/app_client#0.1.0",
+                "message": {
+                    "level": "error",
+                    "rendered": "error: mismatched types",
+                    "spans": [
+                        {
+                            "file_name": "crates/app_client/src/lib.rs",
+                            "line_start": 17,
+                            "is_primary": True,
+                        }
+                    ],
+                },
+            },
+        ]
+    )
+
+    def run(command: list[str], **options: object) -> subprocess.CompletedProcess[str]:
+        assert options["cwd"] == adapter.WORKSPACE
+        print("Finished `dev` profile", file=sys.stderr)
+        return subprocess.CompletedProcess(command, 1, output)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    results = adapter.clippy_run(["b3d-clippy:kit_scene", "b3d-clippy:app_client"])
+    assert results == [
+        Result(
+            "b3d-clippy:kit_scene",
+            "incomplete",
+            "cargo clippy exited with status 1 before confirming the package result",
+        ),
+        Result(
+            "b3d-clippy:app_client",
+            "fail",
+            "error: mismatched types",
+            "rust/beryl3d/crates/app_client/src/lib.rs:17",
+        ),
+    ]
+    log = capsys.readouterr().err
+    assert "Finished `dev` profile" in log
+    assert "b3d-clippy:kit_scene: cargo clippy exited with status 1" in log
+    assert "b3d-clippy:app_client: error: mismatched types" in log
 
 
 def step(start: float) -> dict[str, object]:

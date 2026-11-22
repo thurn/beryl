@@ -34,7 +34,8 @@ from .. import card_files, card_store, paths, set_groups
 from ..beryl3d import gate, pack, purity, timeline
 from ..beryl3d import paths as b3d_paths
 from . import Listed, Result, beryl3d_validation, listed, report
-from .rust import asked, clippy_results, parse_packages, unformatted
+from .rust import asked, parse_packages, unformatted
+from .rust import clippy_run as run_clippy
 
 WORKSPACE: Path = b3d_paths.WORKSPACE
 # The `test` profile builds into target/debug, as `dev` does.
@@ -413,13 +414,16 @@ def gate_results(output: str, wanted: list[str], budgets: gate.Budgets) -> list[
         board = boards.get(name)
         if board is None:
             continue
+        tiered = enhanced.get(name)
         lines = gate.failures([board], budgets["boards"])
-        if name in enhanced:
+        if tiered is not None:
             lines += gate.enhanced_failures(
-                [board], [enhanced[name]], particles["max"] if particles else None
+                [board], [tiered], particles["max"] if particles else None
             )
-        outcome = "fail" if lines else "pass"
-        results.append(Result(f"b3d-gate:{name}", outcome, "\n".join(lines)))
+        if lines:
+            results.append(Result(f"b3d-gate:{name}", "fail", "\n".join(lines)))
+        elif tiered is not None:
+            results.append(Result(f"b3d-gate:{name}", "pass"))
     return results
 
 
@@ -431,10 +435,30 @@ def gate_run(checks: list[str]) -> list[Result]:
     for name in wanted:
         command += ["--board", name]
     done = run_out(command)
-    if done.returncode != 0:
-        print(done.stderr, file=sys.stderr)
-        return []
-    return gate_results(done.stdout, wanted, gate.read_budgets())
+    status = f"gate exited with status {done.returncode}"
+    results: list[Result] = []
+    missing = f"{status} without a complete Baseline and Enhanced board result"
+    if done.returncode == 0:
+        budgets = gate.read_budgets()
+        try:
+            results = gate_results(done.stdout, wanted, budgets)
+        except (KeyError, TypeError, ValueError) as error:
+            missing = f"{status} with invalid board output: {error}"
+    reported = {result.check for result in results}
+    for check in checks:
+        if check.startswith("b3d-gate:") and check not in reported:
+            results.append(Result(check, "incomplete", missing))
+    if (
+        any(result.outcome == "incomplete" for result in results)
+        and done.stdout.strip()
+    ):
+        print(done.stdout.rstrip()[-4000:], file=sys.stderr)
+    if done.stderr.strip():
+        print(done.stderr.rstrip(), file=sys.stderr)
+    for result in results:
+        if result.message:
+            print(f"{result.check}: {result.message}", file=sys.stderr)
+    return results
 
 
 # Timeline parity of the recorded fixtures.
@@ -608,27 +632,7 @@ def format_run(checks: list[str]) -> list[Result]:
 
 
 def clippy_run(checks: list[str]) -> list[Result]:
-    wanted = asked("b3d-clippy", checks)
-    if not wanted:
-        return []
-    done = subprocess.run(
-        [*CLIPPY, "--message-format=json"],
-        cwd=WORKSPACE,
-        stdout=subprocess.PIPE,
-        text=True,
-        errors="replace",
-        check=False,
-    )
-    found = clippy_results(done.stdout, wanted)
-    return [
-        Result(
-            r.check.replace("clippy:", "b3d-clippy:", 1),
-            r.outcome,
-            r.message,
-            r.at.replace("rust/", "rust/beryl3d/", 1) if r.at else "",
-        )
-        for r in found
-    ]
+    return run_clippy(checks, command=CLIPPY, workspace=WORKSPACE, family="b3d-clippy")
 
 
 def source_run(checks: list[str]) -> list[Result]:

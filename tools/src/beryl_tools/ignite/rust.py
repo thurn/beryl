@@ -152,12 +152,20 @@ def package_name(message: dict[str, object]) -> str:
     return name if at else location.rstrip("/").rsplit("/", 1)[-1]
 
 
-def clippy_results(output: str, wanted: list[str]) -> list[Result]:
-    """Each package in `wanted` from clippy's `--message-format=json` output: failed when it has
-    a warning or an error, passed when cargo reported its units without one, and left out (so
-    incomplete) when cargo never reached it."""
+def clippy_results(
+    output: str,
+    wanted: list[str],
+    returncode: int,
+    *,
+    family: str = "clippy",
+    directory: str = "rust",
+) -> list[Result]:
+    """A package warning or error is a failure. A pass needs both an artifact for the
+    package and a completed Cargo build, since later targets may still have diagnostics.
+    """
     reached: set[str] = set()
     diagnostics: dict[str, list[dict[str, object]]] = {}
+    finished = False
     for line in output.splitlines():
         try:
             message = json.loads(line)
@@ -169,27 +177,41 @@ def clippy_results(output: str, wanted: list[str]) -> list[Result]:
         name = package_name(cast(dict[str, object], message))
         if reason == "compiler-artifact":
             reached.add(name)
+        elif reason == "build-finished":
+            finished = message.get("success") is True
         elif reason == "compiler-message":
             body = cast(dict[str, object], message.get("message") or {})
             if body.get("level") in ("warning", "error"):
-                reached.add(name)
                 diagnostics.setdefault(name, []).append(body)
+    incomplete = f"cargo clippy exited with status {returncode}"
+    if returncode != 0:
+        incomplete += " before confirming the package result"
+    elif not finished:
+        incomplete += " without a successful build-finished message"
+    else:
+        incomplete += " without reporting an artifact for this package"
     results: list[Result] = []
     for name in wanted:
-        check = f"clippy:{name}"
+        check = f"{family}:{name}"
         found = diagnostics.get(name)
         if found:
-            results.append(diagnostic_result(check, found))
-        elif name in reached:
+            results.append(diagnostic_result(check, found, directory))
+        elif returncode == 0 and finished and name in reached:
             results.append(Result(check, "pass"))
+        else:
+            results.append(Result(check, "incomplete", incomplete))
     return results
 
 
-def diagnostic_result(check: str, found: list[dict[str, object]]) -> Result:
+def diagnostic_result(
+    check: str, found: list[dict[str, object]], directory: str
+) -> Result:
     """A failure naming the first diagnostic's place, with every diagnostic rendered."""
     spans = cast(list[dict[str, object]], found[0].get("spans") or [])
     primary = next((s for s in spans if s.get("is_primary")), None)
-    at = f"rust/{primary['file_name']}:{primary['line_start']}" if primary else ""
+    at = (
+        f"{directory}/{primary['file_name']}:{primary['line_start']}" if primary else ""
+    )
     rendered = "\n".join(
         str(d.get("rendered") or d.get("message")).rstrip() for d in found
     )
@@ -200,16 +222,39 @@ def clippy_build() -> int:
     return subprocess.run(CLIPPY, cwd=paths.RUST, check=False).returncode
 
 
-def clippy_run(checks: list[str]) -> list[Result]:
+def clippy_run(
+    checks: list[str],
+    *,
+    command: list[str] = CLIPPY,
+    workspace: Path = paths.RUST,
+    family: str = "clippy",
+) -> list[Result]:
+    wanted = asked(family, checks)
+    if not wanted:
+        return []
     run = subprocess.run(
-        [*CLIPPY, "--message-format=json"],
-        cwd=paths.RUST,
+        [*command, "--message-format=json"],
+        cwd=workspace,
         stdout=subprocess.PIPE,
         text=True,
         errors="replace",
         check=False,
     )
-    return clippy_results(run.stdout, asked("clippy", checks))
+    results = clippy_results(
+        run.stdout,
+        wanted,
+        run.returncode,
+        family=family,
+        directory=workspace.relative_to(paths.REPO).as_posix(),
+    )
+    # Cargo's stderr reaches the runner log directly. Keep the end of its JSON stream
+    # when results are missing, and log diagnostics that otherwise only reach JSONL.
+    if any(result.outcome == "incomplete" for result in results) and run.stdout.strip():
+        print(run.stdout.rstrip()[-4000:], file=sys.stderr)
+    for result in results:
+        if result.message:
+            print(f"{result.check}: {result.message}", file=sys.stderr)
+    return results
 
 
 # Formatting.
