@@ -381,9 +381,7 @@ pub(super) fn face_name<L: Layout>(
 fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot) -> ObjectView {
     let o = obs.object(slot);
     let on_battlefield = o.zone() == Zone::Battlefield;
-    let derived = on_battlefield
-        .then(|| characteristics(t, obs, slot))
-        .flatten();
+    let derived = characteristics(t, obs, slot);
     let types = derived.map_or(Types::NONE, |d| d.types);
     let creature = types.contains(Types::CREATURE);
     let counters = obs
@@ -511,7 +509,7 @@ fn has_mana_ability<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::
         })
 }
 
-/// A permanent's types, power, toughness and keywords as the view shows them.
+/// An object's types, power, toughness and keywords as the view shows them.
 #[derive(Clone, Copy)]
 struct Shown {
     types: Types,
@@ -523,7 +521,9 @@ struct Shown {
 /// The characteristics of the permanent in `slot`: after continuous effects, or for a
 /// phased-out permanent, which has no layer results, those printed on its face up, as it is
 /// treated as though it does not exist ([CR 702.26b]): "a phased-out permanent is treated as
-/// though it does not exist". None for a phased-out permanent the viewer does not know.
+/// though it does not exist". A face-down spell uses its public face ([CR 708.2a]).
+///
+/// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
 ///
 /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
 fn characteristics<L: Layout>(
@@ -531,16 +531,23 @@ fn characteristics<L: Layout>(
     obs: Observation<'_, L>,
     slot: L::Slot,
 ) -> Option<Shown> {
-    if !obs.object(slot).is_phased_out() {
-        let d = obs.derived(slot);
-        return Some(Shown {
-            types: d.types,
-            power: d.power,
-            toughness: d.toughness,
-            keywords: d.keywords,
-        });
-    }
-    let face = t.def(obs.card(slot)?).face(obs.object(slot).face());
+    let object = obs.object(slot);
+    let face = if object.zone() == Zone::Battlefield {
+        if !object.is_phased_out() {
+            let d = obs.derived(slot);
+            return Some(Shown {
+                types: d.types,
+                power: d.power,
+                toughness: d.toughness,
+                keywords: d.keywords,
+            });
+        }
+        t.def(obs.card(slot)?).face(object.face())
+    } else if object.zone() == Zone::Stack && object.face() == FaceIx::DOWN {
+        &beryl_engine::card::FACE_DOWN
+    } else {
+        return None;
+    };
     Some(Shown {
         types: face.types,
         power: face.power.unwrap_or(0),
@@ -604,7 +611,8 @@ fn paid_costs<L: Layout>(t: &GameTable, e: &StackEntry<L>, flashback: bool) -> V
             // spell shows its target instead.
             CastingOption::Alternative { .. }
             | CastingOption::Escape { .. }
-            | CastingOption::Mutate { .. } => None,
+            | CastingOption::Mutate { .. }
+            | CastingOption::Morph(_) => None,
         })
         .collect()
 }

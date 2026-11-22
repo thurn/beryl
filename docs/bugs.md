@@ -203,6 +203,13 @@ fixed in the same session. Newest first.
   outside it.
   [Fix](https://github.com/thurn/beryl/commit/d8cb347ea9d0676a817113b938a2872e74f24c18).
 
+- **A face-down spell could expose the card that was cast.** A stack entry
+  normally keeps the spell's card index. Face-down spells now record only their
+  public characteristics.
+  `morphs_hide_the_card_on_the_stack_and_in_saved_targets` checks that redealing
+  preserves the visible stack and that a saved target identifies the face-down
+  permanent by battlefield order.
+
 - **Redealing a face-down copy could corrupt its copied values.** The hidden
   card was dealt into the field that holds the copied definition. Search now
   deals it into the memo that keeps the original card. The regression

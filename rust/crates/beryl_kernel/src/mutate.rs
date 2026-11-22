@@ -230,7 +230,8 @@ impl<L: Layout> State<L> {
 
     /// Makes the card just put on the stack the spell its caster chose: `face` up, under their
     /// control (see [CR 601.2a]): "It has all the characteristics of the card (or the copy of a card)
-    /// associated with it, and that player becomes its controller."
+    /// associated with it, and that player becomes its controller." Face-down spells use the
+    /// characteristics of [`FaceIx::DOWN`] (see CR 708.4).
     ///
     /// [CR 601.2a]: https://yawgatog.com/resources/magic-rules/#R6012a
     #[inline]

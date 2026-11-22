@@ -111,9 +111,11 @@ pub(crate) fn decision<L: Layout>(
             source, ref lethal, ..
         } => combat::division_decision(s, source, lethal.as_slice()),
         Pending::Casting(c) => casting::decision(s, t, sink, &c),
-        Pending::TurningFaceUp { slot, remaining } => {
-            face_down::decision(s, t, sink, slot, remaining)
-        }
+        Pending::TurningFaceUp {
+            slot,
+            cost,
+            payment,
+        } => face_down::decision(s, t, sink, slot, cost, payment),
         Pending::Resolving(ref r) | Pending::StepActions(ref r) => Ok(r.question.clone()),
     }
 }
@@ -292,10 +294,18 @@ pub(super) fn perform_machine<L: Layout>(
             x.events.leave();
             done
         }
-        Pending::TurningFaceUp { slot, remaining } => {
-            let option = d.candidates.option(c).expect("a payment");
+        Pending::TurningFaceUp {
+            slot,
+            cost,
+            payment,
+        } => {
+            let option = d
+                .candidates
+                .option(c)
+                .or_else(|| d.candidates.object(c).map(Opt::Object))
+                .expect("a payment");
             act(s, &mut x.events, d.player, None);
-            let done = face_down::perform(s, t, &mut x.events, slot, remaining, option);
+            let done = face_down::perform(s, t, &mut x.events, slot, cost, payment, option);
             x.events.leave();
             done
         }

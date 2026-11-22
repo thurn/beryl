@@ -216,7 +216,10 @@ impl Chosen {
         let named = what.act.clone();
         let as_recorded = |act: Act| act.named_like(&named);
         let recorded = as_recorded(what.act.clone());
-        let same = |c: Choice| as_recorded(Act::of(t, s, d, c)) == recorded;
+        let same = |c: Choice| {
+            as_recorded(Act::of(t, s, d, c)) == recorded
+                || as_recorded(Act::of_named(t, s, d, c, true)) == recorded
+        };
         if let Some(nth) = what.nth {
             let alike = listed.iter().copied().filter(|&c| same(c)).collect();
             if let Some(c) =
@@ -521,7 +524,18 @@ impl Act {
 
     /// What candidate `c` of `d` does, in the position `s`.
     pub fn of<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>, c: Choice) -> Act {
-        let obj = |slot| Obj::of(t, s, slot);
+        Self::of_named(t, s, d, c, false)
+    }
+
+    /// Older saves named face-down cards by the card behind them.
+    fn of_named<L: Layout>(
+        t: &GameTable,
+        s: &State<L>,
+        d: &Decision<L>,
+        c: Choice,
+        legacy: bool,
+    ) -> Act {
+        let obj = |slot| Obj::of(t, s, slot, legacy);
         if let Some(slot) = d.candidates.object(c) {
             return Act::Object { object: obj(slot) };
         }
@@ -632,6 +646,7 @@ pub enum CastingName {
     /// [`Castings::ESCAPE`]: beryl_engine::card::Castings::ESCAPE
     Escape,
     Mutate,
+    Morph,
 }
 
 impl From<CastingOption> for CastingName {
@@ -645,6 +660,7 @@ impl From<CastingOption> for CastingName {
             CastingOption::Alternative { .. } => CastingName::Alternative,
             CastingOption::Escape { .. } => CastingName::Escape,
             CastingOption::Mutate { .. } => CastingName::Mutate,
+            CastingOption::Morph(_) => CastingName::Morph,
         }
     }
 }

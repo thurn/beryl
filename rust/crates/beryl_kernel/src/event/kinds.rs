@@ -39,6 +39,7 @@ pub enum EventKind {
     Targeted,
     /// A mutating creature spell merging with a creature ([`crate::event::Event::Mutated`]).
     Mutated,
+    TurnedFaceUp,
 }
 
 impl EventKind {
@@ -238,6 +239,7 @@ impl<L: Layout> Event<L> {
             Event::Draw { .. } => EventKind::Draw,
             Event::Targeted { .. } => EventKind::Targeted,
             Event::Mutated { .. } => EventKind::Mutated,
+            Event::TurnedFaceUp { .. } => EventKind::TurnedFaceUp,
             Event::ZoneChange { .. }
             | Event::DrawCard { .. }
             | Event::Scry { .. }

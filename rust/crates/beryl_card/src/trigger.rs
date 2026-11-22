@@ -120,6 +120,10 @@ pub enum TriggerEvent {
     ///
     /// [CR 603.8]: https://yawgatog.com/resources/magic-rules/#R6038
     State(&'static Condition),
+    /// When an object deals damage of any kind to any recipient.
+    DealsDamage,
+    /// When a face-down permanent turns face up (see CR 708.8).
+    TurnedFaceUp,
 }
 
 impl PartialEq for TriggerEvent {
@@ -141,7 +145,9 @@ impl PartialEq for TriggerEvent {
             | TriggerEvent::Discards
             | TriggerEvent::Draws
             | TriggerEvent::BecomesTarget
-            | TriggerEvent::Mutates => {
+            | TriggerEvent::Mutates
+            | TriggerEvent::DealsDamage
+            | TriggerEvent::TurnedFaceUp => {
                 std::mem::discriminant(self) == std::mem::discriminant(other)
             }
         }
@@ -190,6 +196,9 @@ impl Trigger {
     /// "Whenever this creature mutates."
     pub const MUTATES: Trigger = Trigger::of(TriggerEvent::Mutates, Subject::This);
     /// "Whenever this deals combat damage to a player."
+    pub const DEALS_DAMAGE: Trigger = Trigger::of(TriggerEvent::DealsDamage, Subject::This);
+    pub const TURNED_FACE_UP: Trigger = Trigger::of(TriggerEvent::TurnedFaceUp, Subject::This);
+
     pub const DEALS_COMBAT_DAMAGE_TO_A_PLAYER: Trigger =
         Trigger::of(TriggerEvent::DealsCombatDamageToPlayer, Subject::This);
 

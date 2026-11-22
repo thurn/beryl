@@ -17,7 +17,7 @@ mod costs;
 mod delve;
 pub(crate) mod land;
 mod legal;
-mod parts;
+pub(crate) mod parts;
 pub mod payment;
 mod stack;
 pub mod start;

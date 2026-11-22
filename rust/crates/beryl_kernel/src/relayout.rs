@@ -408,10 +408,28 @@ impl<L: Layout> Relayout for Pending<L> {
             }),
             Pending::Resolving(r) => Pending::Resolving(r.relayout()),
             Pending::StepActions(r) => Pending::StepActions(r.relayout()),
-            &Pending::TurningFaceUp { slot: s, remaining } => Pending::TurningFaceUp {
-                slot: slot(s),
-                remaining,
-            },
+            &Pending::TurningFaceUp {
+                slot: s,
+                cost,
+                payment,
+            } => {
+                use crate::pending::FaceUpPayment;
+                let payment = match payment {
+                    FaceUpPayment::ChooseCost { morph } => FaceUpPayment::ChooseCost { morph },
+                    FaceUpPayment::Mana(remaining) => FaceUpPayment::Mana(remaining),
+                    FaceUpPayment::Objects(p) => FaceUpPayment::Objects(PayingObjects {
+                        part: p.part,
+                        graveyard_from: p.graveyard_from,
+                        chosen: bits(p.chosen),
+                        left: p.left,
+                    }),
+                };
+                Pending::TurningFaceUp {
+                    slot: slot(s),
+                    cost,
+                    payment,
+                }
+            }
         }
     }
 }

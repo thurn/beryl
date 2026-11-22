@@ -1,6 +1,6 @@
 //! How a save names an object ([`Obj`]) and its zone ([`ZoneName`]).
 
-use beryl_engine::card::Types;
+use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::state::Flag;
 use beryl_engine::{GameTable, Layout, State, Zone};
 use serde::{Deserialize, Serialize};
@@ -108,12 +108,20 @@ pub struct Obj {
 }
 
 impl Obj {
-    pub fn of<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> Obj {
+    pub(super) fn of<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot, legacy: bool) -> Obj {
         let o = s.object(slot);
         let controller = s.controller(slot);
         let permanent = o.zone() == Zone::Battlefield;
+        let public_name = |slot| {
+            if !legacy && s.object(slot).face() == FaceIx::DOWN {
+                "Face-down card"
+            } else {
+                s.name(t, slot)
+            }
+        };
+        let hidden = !legacy && o.face() == FaceIx::DOWN;
         Obj {
-            name: s.name(t, slot).to_owned(),
+            name: public_name(slot).to_owned(),
             zone: o.zone().into(),
             controller: controller.get(),
             owner: (o.owner() != controller).then_some(o.owner().get()),
@@ -122,9 +130,9 @@ impl Obj {
                 && s.opponents_of(o.owner()).any(|p| s.knows(p, slot)),
             before_v5: false,
             token: (permanent || o.zone() == Zone::Stack) && o.is_token(),
-            card: (!o.is_token() && o.flags().has(Flag::Copy))
+            card: (!hidden && !o.is_token() && o.flags().has(Flag::Copy))
                 .then(|| s.definition_name(t, slot).to_owned()),
-            excepts: if permanent || o.zone() == Zone::Stack {
+            excepts: if !hidden && (permanent || o.zone() == Zone::Stack) {
                 Exception::of(t, s, slot)
             } else {
                 Vec::new()
@@ -145,7 +153,7 @@ impl Obj {
                 .attacked_planeswalker()
                 .or(o.blocked_attackers().first())
                 .filter(|&other| permanent && s.object(other).zone() == Zone::Battlefield)
-                .map(|other| s.name(t, other).to_owned()),
+                .map(|other| public_name(other).to_owned()),
             before_v6: false,
             before_v13: false,
         }

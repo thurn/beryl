@@ -132,7 +132,10 @@ fn entries() -> Entries {
             }
             for option in face.casting {
                 let by = address(option);
-                entries.add(format!("casting option {:?}", option.kind()), by, card);
+                let name = option
+                    .kind()
+                    .map_or_else(|| "Morph".to_owned(), |kind| format!("{kind:?}"));
+                entries.add(format!("casting option {name}"), by, card);
                 for part in option.parts() {
                     entries.add(format!("cost part {}", cost_part(part)), by, card);
                 }

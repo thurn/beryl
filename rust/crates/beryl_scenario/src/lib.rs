@@ -124,6 +124,9 @@ pub struct Position {
     /// The face-down permanents here, by their cards' names: an oracle names them otherwise,
     /// as they have no name (CR 708.2a).
     pub face_down: Vec<&'static str>,
+    /// Face-down permanents that were cast as morphs, by their cards' names.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub morphed: Vec<&'static str>,
     /// How many creatures each player controls here, by seat: whether an effect that counts
     /// them, as overloaded Winds of Abandon's searches, does anything, where an oracle asks
     /// regardless of the count.

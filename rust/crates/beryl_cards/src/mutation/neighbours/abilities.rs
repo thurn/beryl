@@ -210,7 +210,10 @@ fn triggers(trigger: &Trigger) -> Vec<(&'static str, Kind, String, Trigger)> {
         Event::PlayerAttacks | Event::CreatesTokens | Event::Discards => Event::Casts,
         Event::Casts if matches!(trigger.subject, Subject::This) => Event::BecomesTarget,
         Event::Casts => Event::Discards,
-        Event::DealsCombatDamageToPlayer | Event::Mutates => Event::BecomesTarget,
+        Event::DealsCombatDamageToPlayer
+        | Event::DealsDamage
+        | Event::Mutates
+        | Event::TurnedFaceUp => Event::BecomesTarget,
         Event::Step(TurnStep::Upkeep) | Event::Draws => Event::Step(TurnStep::Draw),
         Event::Step(_) => Event::Step(TurnStep::Upkeep),
         Event::MainPhase => Event::Step(TurnStep::PrecombatMain),

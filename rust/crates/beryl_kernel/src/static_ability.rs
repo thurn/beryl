@@ -54,6 +54,8 @@ impl Inputs {
     /// A player's life total, which an "as long as" compares ([`Amount::Life`]): "as long
     /// as an opponent has 10 or less life".
     pub const LIFE: Inputs = Inputs(8);
+    /// The number of cards in the controller's hand.
+    pub const HAND: Inputs = Inputs(16);
 
     /// Both sets' inputs.
     #[inline]
@@ -81,6 +83,13 @@ impl Inputs {
             }
             if spec.condition.as_ref().is_some_and(condition_reads_life) {
                 inputs = inputs.union(Inputs::LIFE);
+            }
+            if spec.condition.as_ref().is_some_and(|condition| {
+                compares(condition, &|amount| {
+                    matches!(counted(amount), Some(Counted::Hand))
+                })
+            }) {
+                inputs = inputs.union(Inputs::HAND);
             }
             let graveyards = spec.modifications.iter().any(|m| {
                 m.pt_amounts().is_some_and(|(power, toughness)| {
@@ -171,6 +180,24 @@ fn condition_reads_life(condition: &Condition) -> bool {
     }
 }
 
+fn compares(condition: &Condition, mentions: &impl Fn(&Amount) -> bool) -> bool {
+    match condition {
+        Condition::Compare(left, _, right) => mentions(left) || mentions(right),
+        Condition::Not(condition) => compares(condition, mentions),
+        Condition::All(conditions) | Condition::Any(conditions) => conditions
+            .iter()
+            .any(|condition| compares(condition, mentions)),
+        Condition::Did
+        | Condition::Paid(_)
+        | Condition::Is(..)
+        | Condition::EnteredThisTurn(_)
+        | Condition::OnBattlefield(_)
+        | Condition::Token(_)
+        | Condition::WonFlip
+        | Condition::DrewInDrawStep(_) => false,
+    }
+}
+
 /// Whether the layers' reading of `amount` counts cards in graveyards.
 fn reads_graveyards(amount: &Amount) -> bool {
     match amount {
@@ -227,6 +254,11 @@ impl<L: Layout> State<L> {
     #[inline]
     pub(crate) fn layers_read_graveyards(&self) -> bool {
         self.layer_inputs.contains(Inputs::GRAVEYARDS)
+    }
+
+    /// Whether a card moving into or out of a hand can change a layer result.
+    pub(crate) fn layers_read_hands(&self) -> bool {
+        self.layer_inputs.contains(Inputs::HAND)
     }
 }
 
@@ -514,9 +546,12 @@ fn reads(condition: &Condition) -> bool {
 pub fn reads_results(condition: &Condition) -> bool {
     match condition {
         Condition::Is(..) => true,
-        Condition::Compare(left, _, right) => [left, right]
-            .into_iter()
-            .any(|amount| matches!(counted(amount), Some(Counted::Permanents(_)))),
+        Condition::Compare(left, _, right) => [left, right].into_iter().any(|amount| {
+            matches!(
+                counted(amount),
+                Some(Counted::Permanents(_) | Counted::Hand)
+            )
+        }),
         Condition::Not(condition) => reads_results(condition),
         Condition::All(conditions) | Condition::Any(conditions) => {
             conditions.iter().any(reads_results)
@@ -544,6 +579,7 @@ enum Counted {
     /// total of their opponents' ("each opponent", which in a two-player game is the one
     /// opponent's).
     Life(Players),
+    Hand,
 }
 
 /// `amount` as a static ability's condition may compare it, or `None` for any other amount.
@@ -555,6 +591,11 @@ fn counted(amount: &Amount) -> Option<Counted> {
             zone: Zone::Battlefield,
             filter,
         }) if read_by_the_layers(*filter) => Some(Counted::Permanents(*filter)),
+        Amount::Count(Objects::InZoneOf {
+            zone: Zone::Hand,
+            players: Players::You,
+            filter: Filter::Any,
+        }) => Some(Counted::Hand),
         Amount::Life(players @ (Players::You | Players::EachOpponent)) => {
             Some(Counted::Life(*players))
         }
@@ -587,6 +628,7 @@ pub trait LayerResults {
     /// The number of permanents that pass `filter`, read for the controller of the
     /// permanent with the ability.
     fn count(&self, filter: Filter) -> usize;
+    fn own_hand(&self) -> u32;
 }
 
 /// No layer results, for a condition that reads none: what a caller passes [`holds`] for a
@@ -596,6 +638,10 @@ pub struct NoResults;
 impl LayerResults for NoResults {
     fn is(&self, _: Filter) -> bool {
         unreachable!("a condition that reads the layer results is read as they apply")
+    }
+
+    fn own_hand(&self) -> u32 {
+        unreachable!("the controller is known when the layer applies")
     }
 
     fn count(&self, _: Filter) -> usize {
@@ -619,6 +665,7 @@ pub fn holds<L: Layout>(
     let amount = |amount: &Amount| match counted(amount) {
         Some(Counted::Number(n)) => i32::from(n),
         Some(Counted::Counters(kind)) => i32::from(s.counters_of(slot, kind)),
+        Some(Counted::Hand) => i32::try_from(results.own_hand()).unwrap_or(i32::MAX),
         Some(Counted::Permanents(filter)) => {
             i32::try_from(results.count(filter)).unwrap_or(i32::MAX)
         }

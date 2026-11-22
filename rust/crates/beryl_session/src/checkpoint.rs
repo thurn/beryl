@@ -145,6 +145,9 @@ pub struct Permanent {
     /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)).
     #[serde(default, skip_serializing_if = "is_default")]
     pub impending: bool,
+    /// Entered by resolving a face-down spell cast for morph.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub morphed: bool,
     /// Who knows a face-down permanent's card.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub known: Vec<u8>,
@@ -394,6 +397,9 @@ impl Checkpoint {
                     .remember(slot, Memo::Paid(impending))
                     .map_err(full)?;
             }
+            if b.morphed {
+                s.board().remember(slot, Memo::Morphed).map_err(full)?;
+            }
             if b.face == Face::Down {
                 for p in Seat::BOTH {
                     s.board().set_known(p, slot, b.known.contains(&p.get()));
@@ -614,6 +620,7 @@ fn permanent<L: Layout>(
         damage: o.damage(),
         attached_to: o.attached_to().and_then(place),
         impending: s.paid(slot, CastingKind::Impending),
+        morphed: s.morphed(slot),
         known: if face == Face::Down {
             knowers(s, slot)
         } else {

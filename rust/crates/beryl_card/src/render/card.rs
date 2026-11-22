@@ -203,6 +203,14 @@ fn casting_line(ctx: &mut Ctx, option: CastingOption, first: bool) -> Option<Str
         CastingOption::Overload { cost, .. } => (false, format!("Overload {}", mana_text(cost))),
         // CR 702.140a: "Mutate [cost]", the first line of a mutating creature card.
         CastingOption::Mutate { cost, .. } => (true, format!("Mutate {}", mana_text(cost))),
+        CastingOption::Morph(cost) => {
+            let line = if cost.parts().is_empty() {
+                format!("Morph {}", mana_text(cost.mana))
+            } else {
+                format!("Morph—{}.", capitalized(&ctx.cost_text(&cost)))
+            };
+            (false, line)
+        }
         CastingOption::Evoke { cost, parts } => {
             let line = if parts.is_empty() {
                 format!("Evoke {}", mana_text(cost))

@@ -5,7 +5,7 @@
 //! They are mutators of [`State`] (the crate's contract, "Mutators"), and the only code that
 //! writes the zones' membership and order.
 //!
-//! Implements: CR 400.7, CR 701.20d
+//! Implements: CR 400.7, CR 701.20d, CR 708.9
 
 use crate::bitboard::Bitboard;
 use crate::chance;
@@ -73,10 +73,11 @@ impl<L: Layout> State<L> {
         // to every player already, and the card it becomes is that component
         // ([`crate::Memo::FaceDownUnder`]).
         let o = self.object(slot).clone();
-        if o.zone == Zone::Battlefield && o.face == FaceIx::DOWN {
-            for k in self.knowledge.as_mut_slice() {
-                k.insert(slot);
-            }
+        let stays_down = o.zone == Zone::Stack && to == Zone::Battlefield && o.face == FaceIx::DOWN;
+        if o.face == FaceIx::DOWN && !stays_down {
+            // CR 708.9: "If a face-down spell moves from the stack to any zone other than
+            // the battlefield, its owner must reveal it to all players as they move it."
+            self.reveal(sink, o.owner, slot);
         }
         let from = o.zone;
         // A token copy stays one ([`State::carried_copy`]); a card under a copy effect is the
@@ -127,7 +128,8 @@ impl<L: Layout> State<L> {
                 self.flags.derived_dirty = true;
             }
             Zone::Stack => self.zones.stack.insert(slot),
-            Zone::Hand | Zone::Exile | Zone::Nowhere | Zone::Merged => {}
+            Zone::Hand => self.flags.derived_dirty |= self.layers_read_hands(),
+            Zone::Exile | Zone::Nowhere | Zone::Merged => {}
         }
         if (to.index()) < Zone::OWNED {
             self.zones.members[owner][to.index()].insert(slot);
@@ -142,7 +144,7 @@ impl<L: Layout> State<L> {
             self.forget_links_to(slot);
         }
         // See CR 400.2: cards in public zones are seen by every player.
-        if to.is_public() {
+        if to.is_public() && !stays_down {
             for k in self.knowledge.as_mut_slice() {
                 k.insert(slot);
             }
@@ -390,6 +392,14 @@ impl<L: Layout> State<L> {
         )
     }
 
+    /// An opponent cannot match a face-down cast with a card they saw in a hand
+    /// (see CR 708.5). Forget the slot bindings for that hand, as when it moves an
+    /// unrevealed card to a library (see CR 402.3).
+    pub fn hide_choice_from_hand(&mut self, moved: L::Slot) {
+        let owner = self.object(moved).owner;
+        forget_hand(self, owner, moved);
+    }
+
     /// The number of cards in a player's hand.
     pub fn hand_size(&self, player: Seat) -> u32 {
         self.zone(ZoneKey::Of(player, Zone::Hand)).count()
@@ -466,7 +476,8 @@ fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
             }
         }
         Zone::Stack => s.zones.stack.remove(slot),
-        Zone::Hand | Zone::Exile | Zone::Nowhere | Zone::Merged => {}
+        Zone::Hand => s.flags.derived_dirty |= s.layers_read_hands(),
+        Zone::Exile | Zone::Nowhere | Zone::Merged => {}
     }
     if (o.zone.index()) < Zone::OWNED {
         s.zones.members[owner][o.zone.index()].remove(slot);

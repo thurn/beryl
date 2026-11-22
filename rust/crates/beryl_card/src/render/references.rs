@@ -365,6 +365,8 @@ impl Ctx {
             | TriggerEvent::Attacks
             | TriggerEvent::Mutates
             | TriggerEvent::PlayerAttacks
+            | TriggerEvent::DealsDamage
+            | TriggerEvent::TurnedFaceUp
             | TriggerEvent::DealsCombatDamageToPlayer => "that creature",
             TriggerEvent::Step(_) | TriggerEvent::MainPhase | TriggerEvent::State(_) => "it",
         }

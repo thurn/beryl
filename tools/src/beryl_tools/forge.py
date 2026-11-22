@@ -29,6 +29,7 @@ from .card_facts import (
     Unsupported,
     SYMBOLS,
     cost_text,
+    setup_face,
     keyword_cost,
     made_by,
     named_cards,
@@ -178,16 +179,16 @@ def permanent_text(
     permanent: JsonObject, faces: Mapping[str, Card], store: Path
 ) -> str:
     card = cast(str, permanent["card"])
-    face = cast(int, permanent["face"])
+    index = setup_face(permanent)
     # These permanents start on the battlefield. Forge's NoETBTrigs setup path
     # places them there without an origin zone, bypassing entry replacements.
     parts = [card, "NoETBTrigs"]
     if permanent["tapped"]:
         parts.append("Tapped")
-    if face:
+    if index:
         parts.append("Transformed")
     counters = cast(JsonObject | None, permanent["counters"])
-    up = faces.get(face_name(card, face, faces, store))
+    up = faces.get(face_name(card, index, faces, store))
     if counters is not None:
         parts.append(
             f"Counters:{COUNTERS[cast(str, counters['kind'])]}={counters['count']}"

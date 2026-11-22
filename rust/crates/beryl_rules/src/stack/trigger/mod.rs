@@ -197,7 +197,8 @@ fn times<L: Layout>(e: &Event<L>) -> u8 {
         | Event::Lose { .. }
         | Event::Targeted { .. }
         | Event::Win { .. }
-        | Event::Mutated { .. } => 1,
+        | Event::Mutated { .. }
+        | Event::TurnedFaceUp { .. } => 1,
     }
 }
 
@@ -232,6 +233,8 @@ pub(super) fn begins(event: TriggerEvent, step: TurnStep) -> bool {
         | TriggerEvent::Draws
         | TriggerEvent::BecomesTarget
         | TriggerEvent::Mutates
+        | TriggerEvent::DealsDamage
+        | TriggerEvent::TurnedFaceUp
         | TriggerEvent::State(_) => false,
     }
 }
@@ -286,6 +289,12 @@ fn fires<L: Layout>(
                 combat: true,
             },
         ) if whose(player) && about(source) => Some(info(Some(source), player, amount)),
+        (TriggerEvent::DealsDamage, &Event::Damage { source, amount, .. }) if about(source) => {
+            Some(info(Some(source), you, amount))
+        }
+        (TriggerEvent::TurnedFaceUp, &Event::TurnedFaceUp { object }) if about(object) => {
+            Some(info(Some(object), you, 0))
+        }
         (event, &Event::StepBegins { step, active, .. })
             if begins(event, step) && whose(active) =>
         {

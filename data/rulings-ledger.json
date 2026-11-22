@@ -388,6 +388,15 @@
       "untestable": "The vocabulary only grants flash timing to spells. Land plays have no permission for Scout's Warning or Teferi, Mage of Zhalfir to change their timing."
     }
   ],
+  "Exalted Angel": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "e7aee0115fc2",
+      "scenario": [
+        "Exalted Angel gains life only when the damage trigger resolves"
+      ]
+    }
+  ],
   "Fencing Ace": [],
   "Flickerwisp": [
     {
@@ -550,6 +559,15 @@
       "scenario": [
         "preventing first, Mending Hands stops a Bolt under Furnace of Rath",
         "doubling first, a Bolt under Furnace of Rath gets 2 past Mending Hands"
+      ]
+    }
+  ],
+  "Gathan Raiders": [
+    {
+      "published_at": "2021-03-19",
+      "hash": "417b59b87033",
+      "scenario": [
+        "Drawing a card makes marked damage lethal to the Raiders"
       ]
     }
   ],

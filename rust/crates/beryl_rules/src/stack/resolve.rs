@@ -60,6 +60,7 @@ pub(crate) fn resolve<L: Layout>(
         && s.outcome().is_none()
         && s.note_resolution()
     {
+        crate::sba::reveal_face_down(s, &mut x.events);
         s.end_game(Outcome::Draw);
     }
     Ok(())
@@ -545,7 +546,9 @@ fn enter_battlefield<L: Layout>(
         ..Entry::default()
     };
     for option in entry.costs().paid(face) {
-        how.paid = how.paid.with(option.kind());
+        if let Some(kind) = option.kind() {
+            how.paid = how.paid.with(kind);
+        }
         if let CastingOption::Impending { counters, .. } = option {
             how.counters = Some((CounterKind::Time, counters));
         }

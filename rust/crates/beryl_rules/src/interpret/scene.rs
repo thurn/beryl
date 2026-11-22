@@ -636,7 +636,7 @@ impl<L: Layout> Scene<'_, L> {
     fn paid(&self, kind: CastingKind) -> bool {
         if let Some(costs) = self.costs {
             let face = self.t.def(self.subject.of.card).face(self.subject.of.face);
-            return costs.paid(face).any(|option| option.kind() == kind);
+            return costs.paid(face).any(|option| option.kind() == Some(kind));
         }
         kind != CastingKind::Overload && entered_with(self.s, self.subject, kind)
     }

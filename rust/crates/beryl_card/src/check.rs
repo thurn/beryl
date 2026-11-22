@@ -537,6 +537,10 @@ impl Scope<'_> {
             Amount::Fixed(_) | Amount::X | Amount::ThatMany => Ok(()),
             Amount::Carried => match self.ability.trigger() {
                 Some(trigger) if trigger.delayed => Ok(()),
+                Some(Trigger {
+                    event: TriggerEvent::DealsDamage,
+                    ..
+                }) => Ok(()),
                 _ => Err(Malformed::Carried),
             },
             Amount::SpellsCastBefore => match self.ability.trigger() {
@@ -580,7 +584,9 @@ impl Scope<'_> {
                 let casting = self.face.casting;
                 let mut i = 0;
                 while i < casting.len() {
-                    if casting[i].kind().index() == kind.index() {
+                    if let Some(paid) = casting[i].kind()
+                        && paid.index() == kind.index()
+                    {
                         return Ok(());
                     }
                     i += 1;

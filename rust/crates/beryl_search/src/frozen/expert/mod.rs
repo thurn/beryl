@@ -1359,6 +1359,7 @@ impl Expert<'_> {
                 | CastingOption::Alternative { cost: c, .. }
                 | CastingOption::Escape { cost: c, .. }
                 | CastingOption::Mutate { cost: c, .. } => cost = i32::from(c.mana_value()),
+                CastingOption::Morph(_) => cost = 3,
             }
         }
         self.mana(self.me()) - cost

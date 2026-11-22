@@ -299,6 +299,11 @@ fn move_ordered<L: Layout, const N: usize>(
         s.move_object(sink, slot, dest, place)?;
         if dest == Zone::Battlefield {
             arrive(s, t, slot, entry)?;
+            // See CR 702.37c: "When the spell resolves, it enters the battlefield with the
+            // same characteristics the spell had." Its controller still pays its morph cost.
+            if from == Zone::Stack && entry.face == FaceIx::DOWN {
+                s.remember(slot, Memo::Morphed)?;
+            }
             if !sink.copies.is_empty() {
                 start_copy(s, sink, slot)?;
             }

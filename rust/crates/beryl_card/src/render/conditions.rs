@@ -207,6 +207,9 @@ impl Ctx {
                         && n <= 1
                         && how_many(comparison, n) == "no"
                     {
+                        if players == Players::You && zone == Zone::Hand {
+                            return "you have no cards in hand".to_owned();
+                        }
                         let owner = self.possessive(players);
                         return format!("{owner} {} has no cards in it", zone_name(zone));
                     }

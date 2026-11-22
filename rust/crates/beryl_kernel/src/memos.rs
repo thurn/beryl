@@ -126,6 +126,8 @@ pub enum Memo<L: Layout = Small> {
     /// [CR 731.2e]: https://yawgatog.com/resources/magic-rules/#R7312e
     /// [CR 708.9]: https://yawgatog.com/resources/magic-rules/#R7089
     FaceDownUnder(PlayerSet),
+    /// This permanent entered by resolving a face-down spell cast for morph (see CR 702.37c).
+    Morphed,
 }
 
 impl<L: Layout> Memo<L> {
@@ -143,6 +145,7 @@ impl<L: Layout> Memo<L> {
             Memo::PhasedOutUnder(_) => Kinds::PHASED_OUT_UNDER,
             Memo::PartOf(_) => Kinds::PART_OF,
             Memo::FaceDownUnder(_) => Kinds::FACE_DOWN_UNDER,
+            Memo::Morphed => Kinds::MORPHED,
         }
     }
 
@@ -157,7 +160,8 @@ impl<L: Layout> Memo<L> {
             | Memo::Really(_)
             | Memo::PutOntoBattlefieldWith(_)
             | Memo::PhasedOutUnder(_)
-            | Memo::FaceDownUnder(_) => Zone::Battlefield,
+            | Memo::FaceDownUnder(_)
+            | Memo::Morphed => Zone::Battlefield,
             Memo::ExiledWith(_) | Memo::ExiledUntil(_) => Zone::Exile,
             Memo::PartOf(_) => Zone::Merged,
         }
@@ -182,7 +186,8 @@ impl<L: Layout> Memo<L> {
             | Memo::Chosen(_)
             | Memo::Really(_)
             | Memo::PhasedOutUnder(_)
-            | Memo::FaceDownUnder(_) => None,
+            | Memo::FaceDownUnder(_)
+            | Memo::Morphed => None,
             Memo::ExiledWith(by)
             | Memo::ExiledUntil(by)
             | Memo::PutOntoBattlefieldWith(by)
@@ -198,7 +203,7 @@ impl<L: Layout> Memo<L> {
             Memo::X(x) => x > 0,
             Memo::Paid(paid) => !paid.is_empty(),
             Memo::Chosen(value) => value.holds(),
-            Memo::Really(_) | Memo::PhasedOutUnder(_) => true,
+            Memo::Really(_) | Memo::PhasedOutUnder(_) | Memo::Morphed => true,
             // Somebody knew the face-down card: at least its controller (see CR 708.5).
             Memo::FaceDownUnder(knew) => !knew.is_empty(),
             // What exiled it left a card or a token in its slot.
@@ -223,6 +228,7 @@ impl<L: Layout> Memo<L> {
             Memo::PhasedOutUnder(player) => Memo::PhasedOutUnder(player),
             Memo::PartOf(of) => Memo::PartOf(slot(of)),
             Memo::FaceDownUnder(knew) => Memo::FaceDownUnder(knew),
+            Memo::Morphed => Memo::Morphed,
         }
     }
 
@@ -250,6 +256,7 @@ impl Kinds {
     const PHASED_OUT_UNDER: u32 = 1 << 14;
     const PART_OF: u32 = 1 << 15;
     const FACE_DOWN_UNDER: u32 = 1 << 16;
+    const MORPHED: u32 = 1 << 17;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u32 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL | Kinds::PUT_WITH | Kinds::PART_OF;
     /// The kinds whose memo ends as a new object arrives in the slot it names
@@ -481,7 +488,8 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::PutOntoBattlefieldWith(_)
             | Memo::PhasedOutUnder(_)
             | Memo::PartOf(_)
-            | Memo::FaceDownUnder(_) => None,
+            | Memo::FaceDownUnder(_)
+            | Memo::Morphed => None,
         })
     }
 
@@ -498,7 +506,8 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::PutOntoBattlefieldWith(_)
             | Memo::PhasedOutUnder(_)
             | Memo::PartOf(_)
-            | Memo::FaceDownUnder(_) => None,
+            | Memo::FaceDownUnder(_)
+            | Memo::Morphed => None,
         })
     }
 
@@ -515,7 +524,8 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::PutOntoBattlefieldWith(_)
             | Memo::PhasedOutUnder(_)
             | Memo::PartOf(_)
-            | Memo::FaceDownUnder(_) => None,
+            | Memo::FaceDownUnder(_)
+            | Memo::Morphed => None,
         })
     }
 }
@@ -558,6 +568,31 @@ impl<L: Layout> State<L> {
             .of(Kinds::paid(asked))
             .iter()
             .any(|e| e.slot == slot && matches!(e.memo, Memo::Paid(paid) if paid.contains(kind)))
+    }
+
+    /// Reveals face-down components under the face-up tops of merged permanents
+    /// (see [CR 708.9]): "At the end of each game, all ... face-down components of
+    /// merged permanents ... must be revealed to all players."
+    ///
+    /// [CR 708.9]: https://yawgatog.com/resources/magic-rules/#R7089
+    pub fn reveal_face_down_components(&mut self) {
+        if self.memos.kinds.0 & Kinds::FACE_DOWN_UNDER == 0 {
+            return;
+        }
+        let players = self.players();
+        for row in self.memos.entries.as_mut_slice() {
+            if let Memo::FaceDownUnder(knew) = &mut row.memo {
+                *knew = players;
+            }
+        }
+    }
+
+    /// Whether the permanent in `slot` entered by resolving a face-down morph spell.
+    pub fn morphed(&self, slot: L::Slot) -> bool {
+        self.memos
+            .of(Kinds::MORPHED)
+            .iter()
+            .any(|e| e.slot == slot && e.memo == Memo::Morphed)
     }
 
     /// The value of X the permanent in `slot` was cast with

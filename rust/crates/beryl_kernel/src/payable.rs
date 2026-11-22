@@ -115,7 +115,13 @@ pub(crate) fn check(def: &CardDef) -> Result<(), Unpayable> {
         for a in face.abilities.iter().chain(face.grants) {
             ability(a)?;
         }
-        let options = face.casting.iter().flat_map(|option| option.parts());
+        let options = face.casting.iter().flat_map(|option| {
+            if let beryl_card::CastingOption::Morph(cost) = option {
+                cost.parts()
+            } else {
+                option.parts()
+            }
+        });
         if let Some(part) = face
             .additional_cost
             .iter()

@@ -234,6 +234,7 @@ fn awaited(def: &'static CardDef, f: FaceIx) -> Vec<(String, Vec<Stimulus>)> {
             e,
             TriggerEvent::Attacks
                 | TriggerEvent::PlayerAttacks
+                | TriggerEvent::DealsDamage
                 | TriggerEvent::DealsCombatDamageToPlayer
                 | TriggerEvent::Dies
                 | TriggerEvent::Leaves

@@ -486,6 +486,12 @@ pub enum CastingOption {
     ///
     /// [CR 702.140a]: https://yawgatog.com/resources/magic-rules/#R702140a
     Mutate { cost: ManaCost, ability: AbilityIx },
+    /// Morph ([CR 702.37a]): "You may cast this card as a 2/2 face-down creature with
+    /// no text, no name, no subtypes, and no mana cost by paying {3} rather than paying
+    /// its mana cost." The listed cost turns the permanent face up (see CR 702.37e).
+    ///
+    /// [CR 702.37a]: https://yawgatog.com/resources/magic-rules/#R70237a
+    Morph(Cost),
 }
 
 /// The part of a granted escape cost that is not mana ([`CastingOption::Escape`]): "exile
@@ -595,13 +601,15 @@ impl CastingOption {
             | CastingOption::Impending { .. }
             | CastingOption::Evoke { .. }
             | CastingOption::Alternative { .. }
-            | CastingOption::Escape { .. } => None,
+            | CastingOption::Escape { .. }
+            | CastingOption::Morph(_) => None,
         }
     }
 
-    /// Which keyword it is.
-    pub const fn kind(self) -> CastingKind {
-        match self {
+    /// The cost paid by choosing this option on the spell's face. Morph changes the face
+    /// itself, whose characteristics have no casting options.
+    pub const fn kind(self) -> Option<CastingKind> {
+        Some(match self {
             CastingOption::Kicker { .. } => CastingKind::Kicker,
             CastingOption::Offspring(_) => CastingKind::Offspring,
             CastingOption::Impending { .. } => CastingKind::Impending,
@@ -610,7 +618,8 @@ impl CastingOption {
             CastingOption::Alternative { .. } => CastingKind::Alternative,
             CastingOption::Escape { .. } => CastingKind::Escape,
             CastingOption::Mutate { .. } => CastingKind::Mutate,
-        }
+            CastingOption::Morph(_) => return None,
+        })
     }
 
     /// Whether it is paid rather than the mana cost
@@ -625,6 +634,7 @@ impl CastingOption {
                 | CastingOption::Alternative { .. }
                 | CastingOption::Escape { .. }
                 | CastingOption::Mutate { .. }
+                | CastingOption::Morph(_)
         )
     }
 
@@ -639,6 +649,7 @@ impl CastingOption {
             | CastingOption::Alternative { cost, .. }
             | CastingOption::Escape { cost, .. }
             | CastingOption::Mutate { cost, .. } => cost,
+            CastingOption::Morph(_) => ManaCost::generic(3),
         }
     }
 
@@ -652,7 +663,8 @@ impl CastingOption {
             | CastingOption::Offspring(_)
             | CastingOption::Impending { .. }
             | CastingOption::Overload { .. }
-            | CastingOption::Mutate { .. } => &[],
+            | CastingOption::Mutate { .. }
+            | CastingOption::Morph(_) => &[],
         }
     }
 }

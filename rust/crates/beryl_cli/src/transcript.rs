@@ -368,6 +368,9 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         Opt::Block(slot) => format!("block with {}", named(slot)),
         Opt::Lethal(slot) => format!("lethal to {}", named(slot)),
         Opt::Cast { slot, face, costs } => {
+            if face == beryl_engine::card::FaceIx::DOWN {
+                return "cast a face-down spell".to_owned();
+            }
             let spell = s.copiable(slot).turned(t, face);
             let mut text = format!("cast {}", spell.name(t));
             for option in costs.paid(spell.face(t)) {
@@ -380,6 +383,7 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
                     CastingOption::Alternative { .. } => " for its alternative cost",
                     CastingOption::Escape { .. } => " with escape",
                     CastingOption::Mutate { .. } => " for mutate",
+                    CastingOption::Morph(_) => " face down",
                 });
             }
             text

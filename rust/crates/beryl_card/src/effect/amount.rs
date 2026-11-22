@@ -27,7 +27,8 @@ pub enum Amount {
     ThatMany,
     /// "That much", or "that spell's mana value" of a spell long gone, in a delayed triggered
     /// ability: the number it carries from the effect that made it ([`crate::Effect::Delay`]),
-    /// settled as that effect was applied (CR 608.2h). [CR 603.7c]: "A delayed triggered ability
+    /// settled as that effect was applied (CR 608.2h). A damage trigger can also carry the
+    /// amount of damage that triggered it. [CR 603.7c]: "A delayed triggered ability
     /// that refers to a particular object still affects it even if the object changes
     /// characteristics."
     ///

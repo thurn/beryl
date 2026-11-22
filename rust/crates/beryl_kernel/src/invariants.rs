@@ -153,8 +153,9 @@ impl<L: Layout> State<L> {
             let known_by = |p: Seat| self.knows(p, slot);
             if o.face == FaceIx::DOWN {
                 check(
-                    o.zone == Zone::Battlefield && known_by(self.controller(slot)),
-                    "a face-down permanent its controller doesn't know",
+                    matches!(o.zone, Zone::Battlefield | Zone::Stack)
+                        && known_by(self.controller(slot)),
+                    "a face-down object its controller doesn't know",
                     at,
                 )?;
             } else if o.zone.is_public() {

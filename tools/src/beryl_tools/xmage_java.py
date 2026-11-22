@@ -476,6 +476,40 @@ def spell_cast(cards: Cards, card: str, face: int, costs: int) -> SpellCast:
     return SpellCast(command, name, face, costs)
 
 
+def activate_on_stack(at: str, who: str, text: str, spell: str | None) -> str:
+    """Schedules an activation after the named spell is on the stack, if required."""
+    args = f"{at}, {who}, {java_string(text)}"
+    if spell is not None:
+        args += f", TestPlayer.NO_TARGET, {java_string(spell)}"
+    return f"activateAbility({args});"
+
+
+def turn_face_up_rule(cards: Cards, card: str, printed: str, morphed: bool) -> str:
+    """The special action XMage offers to turn a permanent face up."""
+    if not morphed:
+        return f"{printed}: Turn"
+    for option in cards.casting(card):
+        if option["keyword"] != "Morph":
+            continue
+        cost = cast(Json, option.get("turn_up", {}))
+        parts = cast(list[Json], cost.get("parts", []))
+        if not parts and "mana" in cost:
+            return f"{cost['mana']}: Turn"
+        if (
+            len(parts) == 1
+            and "mana" not in cost
+            and parts[0]
+            == {
+                "action": "Discard",
+                "of": "Chosen",
+                "zone": "Hand",
+                "count": 1,
+            }
+        ):
+            return "Discard a card: Turn"
+    raise Unsupported(f"paying {card}'s morph cost")
+
+
 def cast_choices(cards: Cards, who: str, card: str, costs: int, face: int) -> list[str]:
     """The questions XMage asks about casting options during a priority cast."""
     lines: list[str] = []

@@ -303,6 +303,10 @@ impl<L: Layout> LayerResults for SoFar<'_, '_, L> {
         self.passes_at(filter, self.at)
     }
 
+    fn own_hand(&self) -> u32 {
+        self.s.hand_size(self.by.you)
+    }
+
     fn count(&self, filter: Filter) -> usize {
         (0..self.s.battlefield().len())
             .filter(|&i| self.passes_at(filter, i))

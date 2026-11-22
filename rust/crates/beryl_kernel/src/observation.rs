@@ -178,9 +178,9 @@ impl<'a, L: Layout> Observation<'a, L> {
         self.state.derived(slot)
     }
 
-    /// The stack, bottom first. It is a public zone (see CR 400.2), and a spell is revealed as it
-    /// is cast (see [CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a)): "a player
-    /// first moves that card ... from where it is to the stack".
+    /// The stack, bottom first. This is a public zone (see CR 400.2). A face-down
+    /// spell records its public characteristics, and its card is visible through
+    /// [`Self::card`] to its controller (see CR 708.5).
     pub fn stack(&self) -> &'a [StackEntry<L>] {
         self.state.stack()
     }
@@ -192,10 +192,12 @@ impl<'a, L: Layout> Observation<'a, L> {
     }
 
     /// Whether the object in `slot` passes `filter`, evaluated for the viewer through `words`,
-    /// the text changes of the object the filter is printed on ([`Self::words_of`]): always
-    /// false for an object the viewer does not know, whose characteristics would betray it.
+    /// the text changes of the object the filter is printed on ([`Self::words_of`]).
+    /// Face-down objects have publicly known characteristics. Other unknown cards have no
+    /// visible characteristics to match.
     pub fn matches(&self, t: &GameTable, filter: &Filter, slot: L::Slot, words: &Words) -> bool {
-        self.knows(slot) && filter.matches(self.state, t, slot, self.viewer, words)
+        (self.knows(slot) || self.state.object(slot).face == FaceIx::DOWN)
+            && filter.matches(self.state, t, slot, self.viewer, words)
     }
 
     /// The text changes on the object in `slot` ([`State::words_of`]), which every player
@@ -302,6 +304,27 @@ impl<'a, L: Layout> Observation<'a, L> {
                 }
             }
             rng.shuffle(remainder.as_mut_slice());
+            // Casting face down is public evidence of the card's morph ability.
+            // Choose those unknown cards from the shuffled remainder before filling the
+            // unconstrained slots. No assignment reads the card previously in a slot.
+            for (position, &slot) in unknown.iter().enumerate() {
+                if !s.requires_morph(slot) {
+                    continue;
+                }
+                let Some(index) = (0..remainder.len()).find(|&i| {
+                    if i < position && s.requires_morph(unknown.as_slice()[i]) {
+                        return false;
+                    }
+                    let def = t.def(remainder.as_slice()[i]);
+                    def.front()
+                        .casting
+                        .iter()
+                        .any(|option| matches!(option, beryl_card::CastingOption::Morph(_)))
+                }) else {
+                    break;
+                };
+                remainder.as_mut_slice().swap(position, index);
+            }
             for (&slot, &card) in unknown.iter().zip(remainder.iter()) {
                 s.object_mut(slot).card = card;
             }
@@ -391,7 +414,7 @@ impl<L: Layout> HiddenPicks<L> {
             }
             let dealt = s.object(slot).card;
             let traded = unknown.iter().any(|&other| {
-                if self.slots.contains(other) {
+                if self.slots.contains(other) || s.requires_morph(other) {
                     return false;
                 }
                 let card = s.object(other).card;
@@ -411,5 +434,13 @@ impl<L: Layout> HiddenPicks<L> {
 
     fn passes(&self, s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
         self.filter.matches(s, t, slot, self.you, &self.words)
+    }
+}
+
+impl<L: Layout> State<L> {
+    /// The public slot in which a spell was cast for morph (see CR 702.37c).
+    fn requires_morph(&self, slot: L::Slot) -> bool {
+        self.object(slot).face == FaceIx::DOWN
+            && (self.object(slot).zone == Zone::Stack || self.morphed(slot))
     }
 }

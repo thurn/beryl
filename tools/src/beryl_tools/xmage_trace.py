@@ -47,6 +47,8 @@ class Position:
     graveyard_cards: list[int] | None = None
     # The open decision chooses what an entering permanent copies.
     enter_as_copy: bool = False
+    # The face-down permanents cast as morphs.
+    morphed: list[str] = field(default_factory=list)
 
     def supported_castings(self, action: Json) -> int:
         """The casting options, if XMage can offer the cast before payment."""
@@ -153,4 +155,5 @@ class Position:
             kept=cast("Json | None", t.get("kept")),
             graveyard_cards=cast("list[int] | None", t.get("graveyard_cards")),
             enter_as_copy=cast(bool, t.get("enter_as_copy", False)),
+            morphed=cast(list[str], t.get("morphed", [])),
         )

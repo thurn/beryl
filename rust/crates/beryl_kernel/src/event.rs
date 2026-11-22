@@ -343,6 +343,10 @@ pub enum Event<L: Layout = Small> {
         object: ObjectRef<L>,
         controller: Seat,
     },
+    /// The permanent is already face up when abilities check this event.
+    TurnedFaceUp {
+        object: ObjectRef<L>,
+    },
 }
 
 impl Copy for Event<Small> {}

@@ -335,6 +335,7 @@ fn end<L: Layout>(s: &mut State<L>, format: Format, sink: &mut Sink<L>, causes: 
     let Some(outcome) = format.outcome_after_loss(left) else {
         return;
     };
+    reveal_face_down(s, sink);
     s.end_game(outcome);
     // They lose at once: the events of one happening, by seat, kept as one group.
     sink.together();
@@ -460,4 +461,33 @@ pub(crate) fn apply_legend_rule<L: Layout>(
         Reason::StateBased,
         Entry::default(),
     )
+}
+
+/// See [CR 708.9]: "At the end of each game, all face-down permanents, face-down
+/// components of merged permanents, and face-down spells must be revealed to all players."
+///
+/// [CR 708.9]: https://yawgatog.com/resources/magic-rules/#R7089
+pub(crate) fn reveal_face_down<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) {
+    s.reveal_face_down_components();
+    let reveal = |s: &mut State<L>, sink: &mut Sink<L>, slot| {
+        let object = s.object(slot);
+        if object.face() == crate::card::FaceIx::DOWN {
+            s.reveal(sink, object.owner(), slot);
+        }
+    };
+    for i in 0..s.battlefield().len() {
+        let slot = s.battlefield()[i];
+        reveal(s, sink, slot);
+    }
+    for i in 0..s.stack().len() {
+        if let Some(spell) = s.stack()[i].spell() {
+            reveal(s, sink, spell.slot);
+        }
+    }
+    for (_, slot) in s
+        .phased_out()
+        .sorted(|slot| (s.object(slot).timestamp(), slot))
+    {
+        reveal(s, sink, slot);
+    }
 }

@@ -20,8 +20,8 @@ pub use crate::object::{
     SlotSet,
 };
 pub use crate::pending::{
-    CastKind, CastStep, Casting, LethalAssignment, PayingObjects, Pending, Resolving,
-    hidden_pick_answer, hidden_pick_of,
+    CastKind, CastStep, Casting, FaceUpPayment, LethalAssignment, PayingObjects, Pending,
+    Resolving, hidden_pick_answer, hidden_pick_of,
 };
 pub use crate::player::{ManaPool, MulliganStatus, Player};
 pub use crate::stack::{

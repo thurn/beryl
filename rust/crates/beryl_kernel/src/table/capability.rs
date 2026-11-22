@@ -107,15 +107,17 @@ pub enum Capability {
     /// A mana ability can ask a question while a spell's costs are paid. Resolutions run
     /// on a copy so that such a question can pause from inside a payment.
     ManaAbilityChoices,
+    /// A card can be cast face down for morph.
+    Morph,
 }
 
 // The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::ManaAbilityChoices as u32) < u32::BITS);
+const _: () = assert!((Capability::Morph as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities a face gives a game that can contain it.
     pub(super) fn of(face: &Face) -> u32 {
-        let mut found = 0;
+        let mut found = casting_capabilities(face);
         if face.keywords.contains(beryl_card::Keywords::DELVE) {
             found |= Capability::Delve.bit();
         }
@@ -130,9 +132,6 @@ impl Capability {
         });
         if gives_triggers {
             found |= Capability::GivesTriggers.bit();
-        }
-        if (face.casting.iter()).any(|o| matches!(o, beryl_card::CastingOption::Mutate { .. })) {
-            found |= Capability::Merges.bit();
         }
         if face.subtypes.read(&Words::NONE).contains(Subtype::Aura) {
             found |= Capability::ChoosesAsEnters.bit();
@@ -223,6 +222,26 @@ impl Capability {
     pub(super) const fn bit(self) -> u32 {
         1 << (self as u32)
     }
+}
+
+/// The capabilities that come from a face's casting options.
+fn casting_capabilities(face: &Face) -> u32 {
+    use beryl_card::CastingOption;
+
+    face.casting.iter().fold(0, |found, option| {
+        found
+            | match option {
+                CastingOption::Mutate { .. } => Capability::Merges.bit(),
+                CastingOption::Morph(_) => Capability::Morph.bit(),
+                CastingOption::Kicker { .. }
+                | CastingOption::Offspring(_)
+                | CastingOption::Impending { .. }
+                | CastingOption::Overload { .. }
+                | CastingOption::Evoke { .. }
+                | CastingOption::Alternative { .. }
+                | CastingOption::Escape { .. } => 0,
+            }
+    })
 }
 
 /// Whether `effect`, or an instruction it holds, copies the spell whose ability it is.

@@ -127,7 +127,7 @@ pub(super) fn substitute(
 /// (see CR 302.6). Elsewhere they are cards
 /// (see [CR 111.6](https://yawgatog.com/resources/magic-rules/#R1116): "A token isn't a card"): a
 /// sacrificed token remains in a graveyard until state-based actions are checked.
-pub(super) fn candidates<L: Layout>(
+pub(crate) fn candidates<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
@@ -173,7 +173,7 @@ fn power_of<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
 /// ([CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183)): "A player can't pay a
 /// cost without having the necessary resources to pay it fully." A part paid rather than
 /// generic mana is always payable: its player may pay the mana.
-pub(super) fn payable<L: Layout>(
+pub(crate) fn payable<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
@@ -571,7 +571,7 @@ fn choices<L: Layout>(
 
 /// What a player is asked as they choose the objects of a part: the prompts that exist are
 /// crew's, a waterbend cost's, delve's and the objects taken by other costs.
-fn purpose(action: CostAction, chosen: &Chosen) -> Purpose {
+pub(crate) fn purpose(action: CostAction, chosen: &Chosen) -> Purpose {
     match (action, chosen.measure) {
         (CostAction::Tap, Measure::TotalPower(_)) => Purpose::Crew,
         (CostAction::Tap, Measure::ForGeneric(_)) => Purpose::Waterbend,
@@ -655,7 +655,7 @@ fn pay_with<L: Layout>(
 }
 
 /// Does the part's action to all the objects chosen for it, at once.
-fn pay_with_all<L: Layout>(
+pub(crate) fn pay_with_all<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,

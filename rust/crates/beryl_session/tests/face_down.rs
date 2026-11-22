@@ -122,3 +122,203 @@ fn a_copy_of_a_face_down_permanent_is_a_face_up_nameless_two_two() {
         assert_eq!(o.types, [CardType::Creature]);
     }
 }
+
+#[test]
+fn morphs_hide_the_card_on_the_stack_and_in_saved_targets() {
+    use beryl_cards::names::{EXALTED_ANGEL, GATHAN_RAIDERS, LIGHTNING_BOLT, MOUNTAIN, PLAINS};
+    use beryl_engine::card::{CastingOption, FaceIx};
+    use beryl_engine::rng::SplitMix64;
+    use beryl_engine::{Choice, DecisionKind, Opt, Replay, Scratch, Step, next};
+    use beryl_scenario::prelude::{ME, Resolve, THEM};
+    use beryl_scenario::{P0, P1, Scenario};
+    use beryl_session::save::Chosen;
+
+    const SCENARIO: Scenario = Scenario::new("The opponent targets the second face-down creature")
+        .hand(P0, &[EXALTED_ANGEL, GATHAN_RAIDERS])
+        .library(P0, &[GATHAN_RAIDERS, EXALTED_ANGEL, MOUNTAIN])
+        .battlefield(P0, &[PLAINS, PLAINS, PLAINS, PLAINS, PLAINS, PLAINS])
+        .hand(P1, &[LIGHTNING_BOLT])
+        .battlefield(P1, &[MOUNTAIN])
+        .actions(&[
+            ME.casts_face(EXALTED_ANGEL, FaceIx::DOWN),
+            Resolve,
+            ME.casts_face(GATHAN_RAIDERS, FaceIx::DOWN),
+            Resolve,
+            ME.passes(),
+            THEM.casts(LIGHTNING_BOLT),
+            THEM.targets(GATHAN_RAIDERS),
+            ME.has(Zone::Graveyard, GATHAN_RAIDERS, 1),
+        ]);
+    let mut rng = SplitMix64::new(81);
+    let mut stack_checks = 0;
+    let mut recorded = None;
+    beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
+        let obs = Observation::new(s, P1);
+        for entry in obs.stack().iter().filter(|e| e.face() == FaceIx::DOWN) {
+            let slot = entry.spell().unwrap().slot;
+            assert_eq!(obs.card(slot), None);
+            assert_eq!(entry.card(), t.face_down_copy::<beryl_engine::Small>());
+            assert_eq!(s.mana_value(t, slot), 0);
+            assert_eq!(Observation::new(s, P0).card(slot), s.card_behind(slot));
+            let det = obs.determinize(t, &mut rng);
+            assert!(
+                det.card_def(t, slot)
+                    .unwrap()
+                    .front()
+                    .casting
+                    .iter()
+                    .any(|o| matches!(o, CastingOption::Morph(_)))
+            );
+            assert_eq!(Observation::new(&det, P1).stack(), obs.stack());
+            stack_checks += 1;
+        }
+        if d.kind != DecisionKind::Target || d.player != P1 {
+            return;
+        }
+        let down: Vec<_> = s
+            .battlefield()
+            .iter()
+            .copied()
+            .filter(|&slot| s.object(slot).face() == FaceIx::DOWN)
+            .collect();
+        assert_eq!(down.len(), 2);
+        assert_hidden_face_down_permanents(t, obs);
+        let targets: Vec<_> = (0..u16::try_from(d.len()).unwrap())
+            .map(Choice)
+            .filter_map(|choice| match d.candidates.option(choice) {
+                Some(Opt::Object(slot)) if down.contains(&slot) => Some((choice, slot)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!([targets[0].1, targets[1].1], down.as_slice());
+        let chosen = targets[1].0;
+        let saved = Chosen::new(t, s, d, chosen);
+        let json = serde_json::to_string(&saved).unwrap();
+        assert!(
+            !json.contains(EXALTED_ANGEL) && !json.contains(GATHAN_RAIDERS),
+            "{json}"
+        );
+        let mut det = obs.determinize(t, &mut rng);
+        let Step::Decide(again) = next(&mut det, t, &mut Scratch::new(), &mut Replay) else {
+            panic!("redealing must leave the target decision open");
+        };
+        assert_eq!(again, *d);
+        recorded = Some((t.clone(), saved));
+    })
+    .unwrap_or_else(|e| panic!("{e}"));
+    assert!(stack_checks >= 2);
+    let (table, saved) = recorded.expect("the opponent targeted a face-down creature");
+    assert_saved_face_down_target(&SCENARIO, &table, &saved);
+}
+
+fn assert_saved_face_down_target(
+    scenario: &beryl_scenario::Scenario,
+    table: &beryl_engine::GameTable,
+    saved: &beryl_session::save::Chosen,
+) {
+    use beryl_engine::card::FaceIx;
+    use beryl_engine::state::{CastStep, Pending};
+    use beryl_engine::{Opt, Replay, Scratch, Step, next};
+    use beryl_scenario::Slots;
+    use beryl_session::perturb;
+
+    for slots in Slots::ALL {
+        let mut tested = false;
+        beryl_scenario::watch_with(&CARDS, scenario, slots, |s, _| {
+            if !matches!(s.pending(), Pending::Casting(c) if matches!(c.step, CastStep::Target { .. })) {
+                return;
+            }
+            let mut state = *s;
+            let Step::Decide(d) = next(&mut state, table, &mut Scratch::new(), &mut Replay) else {
+                panic!("the target choice must still be open");
+            };
+            let second = state.battlefield().iter().copied()
+                .filter(|&slot| state.object(slot).face() == FaceIx::DOWN).nth(1).unwrap();
+            for (_, _, perturbation) in perturb::Perturbation::EACH {
+                let choice = perturb::with(perturbation, || saved.find(table, &state, &d))
+                    .expect("the saved answer has the same target");
+                assert_eq!(d.candidates.option(choice), Some(Opt::Object(second)));
+            }
+            tested = true;
+        }).unwrap_or_else(|e| panic!("{e}"));
+        assert!(tested);
+    }
+}
+
+fn assert_hidden_face_down_permanents(
+    t: &beryl_engine::GameTable,
+    obs: Observation<'_, beryl_engine::Small>,
+) {
+    let view = player_view(
+        t,
+        obs,
+        Moment::Thinking {
+            resolving: None,
+            decision: None,
+        },
+        StopsSetting::SMART,
+        &[],
+    );
+    let shown: Vec<_> = view
+        .objects
+        .iter()
+        .filter(|o| o.facing == Facing::Down)
+        .collect();
+    assert_eq!(shown.len(), 2);
+    for shown in shown {
+        assert_eq!(shown.name, None);
+        assert_eq!(shown.types, [CardType::Creature]);
+        assert_eq!(
+            shown.pt,
+            Some(PowerToughness {
+                power: 2,
+                toughness: 2
+            })
+        );
+    }
+}
+
+#[test]
+fn a_face_down_cast_hides_which_revealed_hand_card_was_chosen() {
+    use beryl_cards::names::{EXALTED_ANGEL, GATHAN_RAIDERS, PLAINS};
+    use beryl_engine::card::FaceIx;
+    use beryl_engine::{Choice, Opt, Replay, Scratch, Step, ZoneKey, apply, next};
+    use beryl_scenario::{P0, P1, Scenario};
+
+    let scenario = Scenario::new("Cast one of two previously seen cards face down")
+        .hand(P0, &[EXALTED_ANGEL, GATHAN_RAIDERS])
+        .battlefield(P0, &[PLAINS; 3]);
+    let (table, mut state) = beryl_scenario::position(&CARDS, &scenario).unwrap();
+    let hand = state.zone(ZoneKey::Of(P0, Zone::Hand));
+    for name in [EXALTED_ANGEL, GATHAN_RAIDERS] {
+        let slot = hand
+            .filter(|slot| state.name(&table, slot) == name)
+            .sole()
+            .unwrap();
+        state.board().set_known(P1, slot, true);
+    }
+    let mut scratch = Scratch::new();
+    let Step::Decide(decision) = next(&mut state, &table, &mut scratch, &mut Replay) else {
+        panic!("the caster must have priority");
+    };
+    let choice = (0..u16::try_from(decision.len()).unwrap())
+        .map(Choice)
+        .find(|&choice| {
+            matches!(
+                decision.candidates.option(choice),
+                Some(Opt::Cast {
+                    face: FaceIx::DOWN,
+                    ..
+                })
+            )
+        })
+        .expect("a face-down cast");
+    apply(&mut state, &table, &mut scratch, &mut Replay, choice);
+    let spell = state
+        .stack()
+        .last()
+        .and_then(beryl_engine::state::StackEntry::spell)
+        .unwrap();
+    assert!(Observation::new(&state, P0).knows(spell.slot));
+    assert!(hand.all(|slot| !Observation::new(&state, P1).knows(slot)));
+}

@@ -543,6 +543,13 @@ impl<L: Layout> Runner<L> {
             .filter(|&&slot| self.s.object(slot).face() == FaceIx::DOWN)
             .map(|&slot| self.name(slot))
             .collect();
+        let morphed = self
+            .s
+            .battlefield()
+            .iter()
+            .filter(|&&slot| self.s.object(slot).face() == FaceIx::DOWN && self.s.morphed(slot))
+            .map(|&slot| self.name(slot))
+            .collect();
         let mut creatures = [0u8; 2];
         if let Step::Decide(_) = step {
             for &slot in self.s.battlefield() {
@@ -557,6 +564,7 @@ impl<L: Layout> Runner<L> {
             creatures,
             flashback,
             face_down,
+            morphed,
             turn: turn.number(),
             step: turn.step(),
             active: turn.active(),

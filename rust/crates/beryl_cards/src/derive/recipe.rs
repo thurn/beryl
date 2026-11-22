@@ -96,6 +96,8 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         TriggerEvent::Draws => on(event, Recipe::Draw),
         TriggerEvent::BecomesTarget => vec![Recipe::TargetSource],
         TriggerEvent::Mutates => vec![Recipe::Mutate],
+        TriggerEvent::DealsDamage => vec![Recipe::Attack(P0)],
+        TriggerEvent::TurnedFaceUp => Vec::new(),
         TriggerEvent::State(condition) => vec![match *condition {
             Condition::Compare(Amount::Counters(Objects::This, kind), _, Amount::Fixed(0)) => {
                 Recipe::RemoveLastCounter(kind)

@@ -7,7 +7,7 @@ use beryl_engine::card::{
 use beryl_engine::chosen::ChosenValue;
 use beryl_engine::filter::Filter;
 use beryl_engine::layout::Queue;
-use beryl_engine::state::StackEntry;
+use beryl_engine::state::{FaceUpPayment, Pending, StackEntry};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Candidates, Decision, GameTable, Layout, Observation, Opt, Seat, SlotId, Zone, ZoneKey,
@@ -122,10 +122,7 @@ pub(super) fn candidate<L: Layout>(
             (format!("Spend {symbol}"), Candidate::Pool { color })
         }
         Opt::Number(n) => (n.to_string(), Candidate::Number { n }),
-        Opt::Plan(index) => {
-            let index = index.into();
-            (format!("Payment {}", index + 1), Candidate::Plan { index })
-        }
+        Opt::Plan(index) => payment_plan(obs, index.into()),
         Opt::Player(p) => (
             match side(obs, p) {
                 Side::You => "You",
@@ -152,6 +149,27 @@ pub(super) fn candidate<L: Layout>(
         text: ability_text(t, obs, o),
         targets: Vec::new(),
     }
+}
+
+/// The player turning a manifested card with morph face up can choose which cost to pay.
+fn payment_plan<L: Layout>(obs: Observation<'_, L>, index: u16) -> (String, Candidate) {
+    let label = if matches!(
+        obs.shown().pending(),
+        Pending::TurningFaceUp {
+            payment: FaceUpPayment::ChooseCost { .. },
+            ..
+        }
+    ) {
+        if index == 0 {
+            "Pay mana cost"
+        } else {
+            "Pay morph cost"
+        }
+        .to_owned()
+    } else {
+        format!("Payment {}", index + 1)
+    };
+    (label, Candidate::Plan { index })
 }
 
 /// The ability at `place` on the stack as a target, named by its source, as a stack item is
@@ -327,9 +345,24 @@ fn cast_candidate<L: Layout>(
     face: FaceIx,
     costs: Castings,
 ) -> (String, Candidate) {
-    let spell = face_name(t, obs, slot, face).unwrap_or("a hidden card");
+    let spell = face_name(
+        t,
+        obs,
+        slot,
+        if face == FaceIx::DOWN {
+            FaceIx::FRONT
+        } else {
+            face
+        },
+    )
+    .unwrap_or("a hidden card");
+    let options = if face == FaceIx::DOWN {
+        " face down".to_owned()
+    } else {
+        casting_options(t, obs, slot, face, costs)
+    };
     (
-        format!("Cast {spell}{}", casting_options(t, obs, slot, face, costs)),
+        format!("Cast {spell}{options}"),
         Candidate::Cast {
             slot: ObjectId::of(slot),
             face: face.get(),
@@ -395,6 +428,7 @@ fn casting_options<L: Layout>(
             // and the cards it exiles.
             CastingOption::Escape { .. } => " with escape".to_owned(),
             CastingOption::Mutate { cost, .. } => format!(" with mutate {}", mana_text(cost)),
+            CastingOption::Morph(_) => " face down".to_owned(),
         })
         .collect()
 }

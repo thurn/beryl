@@ -677,6 +677,14 @@ class Unsupported(Exception):
     """A scenario, or a part of one, outside what the exporter can say in XMage's terms."""
 
 
+def setup_face(spec: Json) -> int:
+    """The face of a permanent the oracle harness puts on the battlefield."""
+    index = cast(int, spec["face"])
+    if index == FACE_DOWN:
+        raise Unsupported(f"setting up {spec['card']} face down")
+    return index
+
+
 def as_their_own(action: Json, decides_for: object) -> Json:
     """`action` as the player it was decided for takes it: a scenario names the player who
     answers, who controls that player this turn (CR 724.5) when the dump's `decides_for` says

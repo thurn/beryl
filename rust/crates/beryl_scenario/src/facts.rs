@@ -148,6 +148,9 @@ pub struct CastingFacts {
     /// Paid rather than the mana cost; else on top of it.
     pub alternative: bool,
     pub cost: CostFacts,
+    /// The cost to turn a permanent with morph face up.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_up: Option<CostFacts>,
     /// An overload's changed text: the face's ability the spell has instead.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ability: Option<String>,
@@ -546,11 +549,18 @@ fn part_facts(part: &CostPart) -> PartFacts {
 fn casting_facts(bit: usize, option: CastingOption) -> CastingFacts {
     CastingFacts {
         bit,
-        keyword: variant(&option.kind()),
+        keyword: option
+            .kind()
+            .map_or_else(|| "Morph".to_owned(), |kind| variant(&kind)),
         alternative: option.is_alternative(),
         cost: CostFacts {
             mana: mana_text(option.cost()),
             parts: option.parts().iter().map(part_facts).collect(),
+        },
+        turn_up: if let CastingOption::Morph(cost) = option {
+            cost_facts(&cost)
+        } else {
+            None
         },
         ability: match option {
             CastingOption::Overload { ability, .. } => Some(format!("Own {}", ability.get())),

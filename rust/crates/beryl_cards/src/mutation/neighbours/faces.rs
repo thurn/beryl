@@ -1,6 +1,6 @@
 //! Neighbours of a face's keywords and casting costs.
 
-use beryl_card::{CastingOption, Face, Keywords};
+use beryl_card::{CastingOption, Cost, Face, Keywords};
 
 use super::{Kind, costs, leak_slice, with};
 
@@ -29,6 +29,9 @@ pub(super) fn neighbours(face: &Face) -> Vec<(String, Kind, String, Face)> {
             }),
             CastingOption::Escape { cost, parts } => ((cost, parts), |cost, parts| {
                 CastingOption::Escape { cost, parts }
+            }),
+            CastingOption::Morph(cost) => ((cost.mana, cost.parts()), |mana, parts| {
+                CastingOption::Morph(Cost::of(mana, parts))
             }),
             _ => continue,
         };

@@ -1,7 +1,7 @@
 //! Whether a player may begin to cast a spell (CR 601.3) or activate an ability (CR 602.5), and
 //! so which casts and activations a priority decision offers.
 //!
-//! Implements: CR 305.9, CR 606.3, CR 606.6
+//! Implements: CR 305.9, CR 606.3, CR 606.6, CR 702.37a
 
 use std::cell::{Cell, OnceCell};
 
@@ -9,8 +9,8 @@ use beryl_kernel::reference::Graveyard;
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, Castings, CostAction, CostPart, Face, FaceIx, Keywords,
-    ManaCost, ObjectAbility, Timing, Types,
+    Ability, AbilityIx, AbilityKind, CastingOption, Castings, CostAction, CostPart, FACE_DOWN,
+    Face, FaceIx, Keywords, ManaCost, ObjectAbility, Timing, Types,
 };
 use crate::continuous::rule_change;
 use crate::decision::{Candidates, OPTIONS, Opt, Refusal};
@@ -274,6 +274,22 @@ pub(crate) fn refusal<L: Layout>(
             }
         }
     }
+    if t.can(Capability::Morph) && ways.plain && !ways.alternative && has_morph(def.front()) {
+        let Some(r) = refused(
+            s,
+            t,
+            &now,
+            slot,
+            FaceIx::DOWN,
+            Castings::NONE,
+            From::Priority,
+        ) else {
+            return Ok(None);
+        };
+        if most.is_none_or(|m| progress(r) > progress(m)) {
+            most = Some(r);
+        }
+    }
     // Only sorcery speed, where a face could be cast at instant speed but for the limit.
     if most == Some(Refusal::Timing { by: None }) {
         let instant = (def.face_ixs().map(|f| def.face(f)))
@@ -387,12 +403,13 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
     // Cards no face of which may be cast now are left out before collapsing, which saves
     // comparing them: whether one may depends only on its card, which interchangeable cards
     // share, so the cards kept are the same.
+    let morph = t.can(Capability::Morph);
     let cards = cards.filter(|slot| {
         s.card_def(t, slot).is_some_and(|def| {
             def.face_ixs().any(|f| {
                 let face = def.face(f);
                 face.playable() && in_time(s, t, now, face, from)
-            })
+            }) || (morph && has_morph(def.front()) && in_time(s, t, now, &FACE_DOWN, from))
         })
     });
     Candidates::<L>::extend_options(out, collapse(s, cards), |out, slot| {
@@ -420,8 +437,25 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
                 escape_options(s, t, now, slot, f, from, out)?;
             }
         }
+        if morph && ways.plain && !ways.alternative && has_morph(def.front()) {
+            let face = FaceIx::DOWN;
+            let costs = Castings::NONE;
+            if refused(s, t, now, slot, face, costs, from).is_none() {
+                out.push(Opt::Cast { slot, face, costs })?;
+            }
+        }
         Ok(())
     })
+}
+
+/// A card with morph may be cast face down. [CR 702.37a] says "Morph is a static ability
+/// that functions in any zone from which you could play the card it’s on".
+///
+/// [CR 702.37a]: https://yawgatog.com/resources/magic-rules/#R70237a
+fn has_morph(face: &Face) -> bool {
+    face.casting
+        .iter()
+        .any(|o| matches!(o, CastingOption::Morph(_)))
 }
 
 /// Appends the casts of face `face` of the card in `slot` with the escape an effect grants it

@@ -35,6 +35,14 @@ pub enum CastStep<L: Layout = Small> {
     Objects(PayingObjects<L>),
 }
 
+/// The next payment decision before a special action can turn a permanent face up.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FaceUpPayment<L: Layout> {
+    ChooseCost { morph: beryl_card::Cost },
+    Mana(ManaCost),
+    Objects(PayingObjects<L>),
+}
+
 /// Where [`CastStep::Objects`] has got to in paying one part of the cost with objects its
 /// player chooses, one at a time (see [CR 601.2h]: "The player pays the total cost.").
 ///
@@ -285,10 +293,13 @@ pub enum Pending<L: Layout = Small> {
     /// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
     StepActions(Resolving<L>),
     /// The controller of the face-down permanent in `slot` turns it face up, a special action
-    /// (see CR 116.2b), and chooses how to pay its mana cost: among payment plans, or under manual
-    /// payment one source at a time, `remaining` being what is left to pay.
+    /// (see CR 116.2b), and chooses which cost to pay or how to pay the chosen cost.
     // Leave the tag of the former post-resolution cast offer unassigned.
-    TurningFaceUp { slot: L::Slot, remaining: ManaCost } = 13,
+    TurningFaceUp {
+        slot: L::Slot,
+        cost: beryl_card::Cost,
+        payment: FaceUpPayment<L>,
+    } = 13,
     /// Permanents that entered the battlefield together, whose controllers choose the order
     /// of their timestamps (see [CR 613.7m]): "Objects controlled by the active player ... have an
     /// earlier relative timestamp in the order of that player's choice, followed by each
@@ -341,7 +352,18 @@ impl<L: Layout> std::hash::Hash for Pending<L> {
             Self::Casting(casting) => (9_isize, casting).hash(state),
             Self::Resolving(resolving) => (10_isize, resolving).hash(state),
             Self::StepActions(resolving) => (11_isize, resolving).hash(state),
-            Self::TurningFaceUp { slot, remaining } => (13_isize, slot, remaining).hash(state),
+            Self::TurningFaceUp {
+                slot,
+                cost,
+                payment: FaceUpPayment::Mana(remaining),
+            } if cost.parts().is_empty() => (13_isize, slot, remaining).hash(state),
+            Self::TurningFaceUp {
+                slot,
+                cost,
+                payment,
+            } => {
+                (13_isize, slot, cost, payment).hash(state);
+            }
             Self::OrderEntered { group } => (14_isize, group).hash(state),
             Self::EnterChoosing {
                 slot,

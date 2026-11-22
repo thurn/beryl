@@ -1,12 +1,14 @@
 //! The steps of casting a spell (CR 601.2a to 601.2i) and activating an ability (CR 602.2a), in
 //! order: announce, targets, pay, and the spell becomes cast.
 //!
-//! Implements: none. Runs the casting and activation steps declared in the parent module.
+//! Implements: CR 702.37c, CR 708.4
 
 use beryl_kernel::reference::Graveyard;
 
 use crate::bitboard::Bitboard;
-use crate::card::{CastingIx, ObjectAbility, Part, Prompt, Purpose, TargetSpec};
+use crate::card::{
+    CastingIx, CastingOption, FaceIx, ObjectAbility, Part, Prompt, Purpose, TargetSpec,
+};
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::collapse;
 use crate::fixed::Full;
@@ -60,8 +62,28 @@ pub(crate) fn begin_cast<L: Layout>(
     if cfg!(debug_assertions) && costs.escapes() {
         hit_escape(s, t, slot);
     }
+    // CR 702.37c: "Put it onto the stack (as a face-down spell with the same characteristics)".
+    // CR 708.4: "Objects that are cast face down are turned face down before they are put
+    // onto the stack". The stack record carries only the public characteristics.
+    let down = (face == FaceIx::DOWN).then(|| (s.object(slot).zone(), s.who_knows(slot)));
     event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;
-    let (card, _) = s.definition(slot).record(t);
+    let card = if let Some((from, knew)) = down {
+        if from == Zone::Hand {
+            s.hide_choice_from_hand(slot);
+            s.look(sink, player, Bitboard::single(slot));
+        } else {
+            for opponent in s
+                .players()
+                .filter(|p| p != player && !knew.contains(p))
+                .in_seat_order()
+            {
+                s.forget(opponent, slot);
+            }
+        }
+        t.face_down_copy::<L>()
+    } else {
+        s.definition(slot).record(t).0
+    };
     let spell = s
         .spell(s.object_ref(slot))
         .expect("a card just put on the stack");
@@ -323,6 +345,19 @@ pub(super) fn finish<L: Layout>(
         costs,
     } = entry.item
     {
+        if face == FaceIx::DOWN
+            && cfg!(debug_assertions)
+            && let Some(def) = s.card_def(t, spell.slot)
+        {
+            for option in def
+                .front()
+                .casting
+                .iter()
+                .filter(|o| matches!(o, CastingOption::Morph(_)))
+            {
+                crate::coverage::hit(option);
+            }
+        }
         let face = t.def(card).face(face);
         for (option, i) in face.casting.iter().zip(0..) {
             if costs.contains(CastingIx::new(i)) {
@@ -461,44 +496,13 @@ pub(crate) fn decision<L: Layout>(
         // A spec that can choose players lists them as options, by seat, which a `Choice`
         // counts in, and then any objects it can also choose, in the candidate order. One
         // that chooses abilities on the stack lists them as options too.
-        CastStep::Target { left } => match target_options(s, t, c) {
-            TargetSet {
-                objects,
-                players,
-                abilities: 0,
-            } if players.is_empty() => Decision {
-                player: c.player,
-                decider: c.player,
-                kind: DecisionKind::Target,
-                candidates: Candidates::Objects(collapse(s, objects)),
-                prompt: Prompt::new(Purpose::Target).most(left),
-                about: Bitboard::EMPTY,
-            },
-            TargetSet {
-                objects,
-                players,
-                abilities,
-            } => {
-                let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
-                for player in players.in_seat_order() {
-                    list.push(Opt::Player(player))?;
-                }
-                // Abilities on the stack, the top first, as the stack is read.
-                let mut unlisted = abilities;
-                while unlisted != 0 {
-                    let place = usize::try_from(unlisted.ilog2()).expect("a bit in a u64");
-                    unlisted &= !(1 << place);
-                    list.push(Opt::Ability(index::<L>(place)))?;
-                }
-                Candidates::<L>::extend_options(&mut list, collapse(s, objects), |out, slot| {
-                    out.push(Opt::Object(slot))
-                })?;
-                options(
-                    DecisionKind::Target,
-                    list,
-                    Prompt::new(Purpose::Target).most(left),
-                )
-            }
+        CastStep::Target { left } => Decision {
+            player: c.player,
+            decider: c.player,
+            kind: DecisionKind::Target,
+            candidates: target_candidates(s, t, c)?,
+            prompt: Prompt::new(Purpose::Target).most(left),
+            about: Bitboard::EMPTY,
         },
         CastStep::Plan => {
             let entry = top(s);
@@ -534,6 +538,40 @@ pub(crate) fn decision<L: Layout>(
         ),
         CastStep::Objects(_) => parts::decision(s, t, c)?,
     })
+}
+
+fn target_candidates<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    c: &Casting<L>,
+) -> Result<Candidates<L>, Full> {
+    let TargetSet {
+        objects,
+        players,
+        abilities,
+    } = target_options(s, t, c);
+    let down = face_down_targets(s, t, objects);
+    if players.is_empty() && abilities == 0 && down.is_empty() {
+        return Ok(Candidates::Objects(collapse(s, objects)));
+    }
+    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
+    for player in players.in_seat_order() {
+        list.push(Opt::Player(player))?;
+    }
+    // Abilities on the stack, the top first, as the stack is read.
+    let mut unlisted = abilities;
+    while unlisted != 0 {
+        let place = usize::try_from(unlisted.ilog2()).expect("a bit in a u64");
+        unlisted &= !(1 << place);
+        list.push(Opt::Ability(index::<L>(place)))?;
+    }
+    Candidates::<L>::extend_options(&mut list, collapse(s, objects & !down), |out, slot| {
+        out.push(Opt::Object(slot))
+    })?;
+    if !down.is_empty() {
+        ordered_face_down_targets(s, down, &mut list)?;
+    }
+    Ok(Candidates::Options(list))
 }
 
 /// Applies an answer to the machine's question: an option, or an object for a target.
@@ -603,4 +641,38 @@ pub(crate) fn perform<L: Layout>(
         }
     }
     advance(s, t, sink, c)
+}
+
+/// See [CR 708.6]: players distinguish face-down objects by "the order spells were cast"
+/// and "the order that face-down permanents entered the battlefield". Keep those orders
+/// in the targets so a slot's position never depends on the name on its hidden face.
+///
+/// [CR 708.6]: https://yawgatog.com/resources/magic-rules/#R7086
+fn face_down_targets<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    objects: Bitboard<L::Slot>,
+) -> Bitboard<L::Slot> {
+    if t.can(Capability::Morph) {
+        objects.filter(|slot| s.object(slot).face() == FaceIx::DOWN)
+    } else {
+        Bitboard::EMPTY
+    }
+}
+
+#[cold]
+fn ordered_face_down_targets<L: Layout>(
+    s: &State<L>,
+    down: Bitboard<L::Slot>,
+    list: &mut L::Queue<Opt<L>, OPTIONS>,
+) -> Result<(), Full> {
+    for &slot in s.battlefield().iter().filter(|&&slot| down.contains(slot)) {
+        list.push(Opt::Object(slot))?;
+    }
+    for spell in s.stack().iter().filter_map(StackEntry::spell) {
+        if down.contains(spell.slot) {
+            list.push(Opt::Object(spell.slot))?;
+        }
+    }
+    Ok(())
 }

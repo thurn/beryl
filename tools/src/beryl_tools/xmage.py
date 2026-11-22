@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from typing import cast
 
+from . import card_facts
 from .card_facts import Cards, Json, Unsupported, as_their_own, payment_position
 from .xmage_payment import Payments
 from .xmage_trace import (
@@ -51,6 +52,7 @@ from .xmage_java import (
     COUNTERS,
     Export,
     Faces,
+    activate_on_stack,
     assertion_code,
     cast_choices,
     java_string,
@@ -58,6 +60,7 @@ from .xmage_java import (
     spell_cast,
     outcome_lines,
     trample_amount,
+    turn_face_up_rule,
 )
 
 
@@ -294,7 +297,7 @@ class Exporter:
 
     def permanent(self, who: str, permanent: Json, start: str) -> None:
         card = cast(str, permanent["card"])
-        name = self.faces.back[card] if permanent["face"] else card
+        name = self.faces.back[card] if card_facts.setup_face(permanent) else card
         quoted = java_string(name)
         # XMage plays turn 1 from its untap step, which untaps player A's permanents.
         retap = permanent["tapped"] and who == "playerA" and start != "Untap"
@@ -349,14 +352,14 @@ class Exporter:
             raise Unsupported(f"action {kind}")
 
     def turn_face_up(self, action: Json, p: Position) -> None:
-        """Turns a manifested permanent face up for its card's mana cost, the special action
-        XMage offers as "<cost>: Turn this face-down permanent face up"."""
         who = self.player(action["player"])
         card = cast(str, action["card"])
         self.prepare(who, p)
         self.pay(who, p, None)
-        text = java_string(f"{self.faces.mana_cost[card]}: Turn")
-        self.emit(f"activateAbility({self.at(p)}, {who}, {text});")
+        text = turn_face_up_rule(
+            self.cards, card, self.faces.mana_cost[card], card in p.morphed
+        )
+        self.emit(activate_on_stack(self.at(p), who, text, p.topmost_spell()))
 
     def empty_search(self, p: Position) -> None:
         """After a spell or ability resolves whose search by each player who lost objects to it
@@ -520,14 +523,7 @@ class Exporter:
             raise Unsupported(f"{card}'s ability {how} {index}")
         self.prepare(who, p, starts=True)
         self.pay(who, p, card)
-        spell = p.spell_on_top()
-        if spell is None:
-            self.emit(f"activateAbility({self.at(p)}, {who}, {java_string(text)});")
-        else:
-            self.emit(
-                f"activateAbility({self.at(p)}, {who}, {java_string(text)}, "
-                f"TestPlayer.NO_TARGET, {java_string(spell)});"
-            )
+        self.emit(activate_on_stack(self.at(p), who, text, p.spell_on_top()))
 
     def answer(
         self,

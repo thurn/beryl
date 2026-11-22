@@ -4,7 +4,7 @@
 //! Implements: CR 107.3b, CR 118.9a
 
 use crate::bitboard::Bitboard;
-use crate::card::{CastingOption, Castings, Face, ManaCost};
+use crate::card::{CastingOption, Castings, FACE_DOWN, Face, ManaCost};
 use crate::continuous::rule_change;
 use crate::ids::Seat;
 use crate::layout::Layout;
@@ -36,7 +36,13 @@ pub(super) fn option_sets(face: &Face, alternative: bool) -> impl Iterator<Item 
         if costs.is_empty() {
             return true;
         }
-        let alternatives = costs.paid(face).filter(|o| o.is_alternative()).count();
+        let mut alternatives = 0;
+        for option in costs.paid(face) {
+            if matches!(option, CastingOption::Morph(_)) {
+                return false;
+            }
+            alternatives += usize::from(option.is_alternative());
+        }
         alternatives <= usize::from(!alternative)
     })
 }
@@ -63,7 +69,8 @@ pub(super) fn x_range_start(face: &Face, costs: Castings, free: bool) -> Option<
                 | CastingOption::Evoke { .. }
                 | CastingOption::Alternative { .. }
                 | CastingOption::Escape { .. }
-                | CastingOption::Mutate { .. } => 0,
+                | CastingOption::Mutate { .. }
+                | CastingOption::Morph(_) => 0,
             };
             min = Some(min.map_or(least, |m: u8| m.max(least)));
         }
@@ -114,7 +121,14 @@ pub(super) fn spell_cost<L: Layout>(
 }
 
 fn mana_cost(face: &Face, free: bool) -> ManaCost {
-    if free { ManaCost::NONE } else { face.cost }
+    if free {
+        ManaCost::NONE
+    } else if std::ptr::eq(face, &raw const FACE_DOWN) {
+        // See CR 702.37c: "pay {3} rather than pay its mana cost."
+        ManaCost::generic(3)
+    } else {
+        face.cost
+    }
 }
 
 /// The mana or alternative cost plus any chosen additional costs. Keep the option scans out of

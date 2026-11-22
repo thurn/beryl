@@ -92,6 +92,8 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
         TriggerEvent::Leaves => (EventKind::Leaves, About::Either, false),
         TriggerEvent::Attacks => (EventKind::Attack, About::This, false),
         TriggerEvent::PlayerAttacks => (EventKind::Attack, About::Filtered, true),
+        TriggerEvent::DealsDamage => (EventKind::Damage, About::This, false),
+        TriggerEvent::TurnedFaceUp => (EventKind::TurnedFaceUp, About::Either, false),
         TriggerEvent::DealsCombatDamageToPlayer => (EventKind::Damage, About::This, true),
         TriggerEvent::Step(_) | TriggerEvent::MainPhase => (EventKind::Step, About::Nothing, true),
         TriggerEvent::CreatesTokens => (EventKind::Tokens, About::Filtered, true),

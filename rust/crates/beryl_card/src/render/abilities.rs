@@ -139,6 +139,8 @@ impl Ctx {
             | TriggerEvent::Attacks
             | TriggerEvent::BecomesTarget
             | TriggerEvent::Mutates
+            | TriggerEvent::DealsDamage
+            | TriggerEvent::TurnedFaceUp
             | TriggerEvent::DealsCombatDamageToPlayer => {
                 let (word, subject) = match trigger.subject {
                     Subject::This => (
@@ -146,6 +148,7 @@ impl Ctx {
                             trigger.event,
                             TriggerEvent::Attacks
                                 | TriggerEvent::DealsCombatDamageToPlayer
+                                | TriggerEvent::DealsDamage
                                 | TriggerEvent::Mutates
                         ) {
                             "whenever"
@@ -223,6 +226,8 @@ impl Ctx {
             TriggerEvent::Attacks => "attacks".to_owned(),
             TriggerEvent::BecomesTarget => "becomes the target of a spell or ability".to_owned(),
             TriggerEvent::Mutates => "mutates".to_owned(),
+            TriggerEvent::DealsDamage => "deals damage".to_owned(),
+            TriggerEvent::TurnedFaceUp => "is turned face up".to_owned(),
             TriggerEvent::DealsCombatDamageToPlayer => {
                 let whom = match trigger.whose {
                     Players::EachPlayer => "a player".to_owned(),
