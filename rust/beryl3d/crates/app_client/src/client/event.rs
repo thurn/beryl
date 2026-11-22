@@ -40,6 +40,8 @@ pub enum Input {
     /// The names of the recordings the testing screen lists, sorted. Only a tools build of the
     /// app sends it, so a release build's client has no testing screen to go to.
     Recordings(Vec<String>),
+    /// The story catalog supplied by the host.
+    Stories(Arc<[crate::stories::Source]>),
     /// The bug report asked for with `Request::SaveBug` was written, or why it was not.
     BugSaved(Result<(), String>),
     /// Nothing changes. A thread other than the host's sends it to wake a host that sleeps until

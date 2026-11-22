@@ -19,9 +19,7 @@ use crate::inspect::Viewed;
 pub mod revealed;
 pub use revealed::RevealedFace;
 mod view;
-pub use view::{
-    cards, count_words, grid, object_box, pile_title, scry_sample, show_grid, viewer_dialog,
-};
+pub use view::{cards, count_words, grid, object_box, pile_title, show_grid, viewer_dialog};
 
 /// Requests from the viewer and the Revealed Cards pill.
 #[derive(Clone, Debug, PartialEq)]

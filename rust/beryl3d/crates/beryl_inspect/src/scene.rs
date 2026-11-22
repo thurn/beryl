@@ -46,6 +46,12 @@ impl Preview {
     }
 }
 
+fn feature_preview(page: &mut Page, id: &str) -> Result<Preview, String> {
+    page.feature_element(id)
+        .map(|element| Preview::Feature(Box::new(element)))
+        .ok_or_else(|| format!("feature {id:?} has no standalone view at this moment"))
+}
+
 /// A toolkit or feature preview and its context for the interface tools.
 pub struct StoryScene {
     source: Preview,
@@ -76,14 +82,10 @@ impl Scene {
             return Err(format!("story {name:?} has one view; use --seat you"));
         }
         let source = stories::open(name)?;
-        let profile = match source.as_ref() {
-            stories::Story::Toolkit(_) => None,
-            stories::Story::Game(story) => story
-                .profile
-                .as_deref()
-                .map(pages::inspection_profile)
-                .transpose()?,
-        };
+        let profile = source
+            .profile()
+            .map(pages::inspection_profile)
+            .transpose()?;
         let (data, safe_area) = pages::scene_data(layout, profile)?;
         let window = Window {
             size_class: None,
@@ -94,11 +96,32 @@ impl Scene {
         let source = match source.as_ref() {
             stories::Story::Toolkit(_) => Preview::Toolkit(source),
             stories::Story::Game(story) => match &story.body {
-                Body::Table(_) | Body::Replay(_) => {
+                Body::Replay(_) => {
                     let recording = pages::story_recording(&story.body)
                         .expect("table and feature stories have replay inputs");
                     return pages::page_with_messages(name, recording, seat, layout, size, profile)
                         .map(|page| Self::Recording(Box::new(page.with_scale(scale))));
+                }
+                Body::Table(table) => {
+                    let mut page = pages::page_with_messages(
+                        name,
+                        Recording(table.messages()),
+                        seat,
+                        layout,
+                        size,
+                        profile,
+                    )?
+                    .with_scale(scale);
+                    page.story_actions(&table.actions)?;
+                    if let Some(id) = table.feature.as_deref() {
+                        feature_preview(&mut page, id)?
+                    } else {
+                        if !table.actions.is_empty() {
+                            let at = page.now();
+                            page = page.with_story_moment(at);
+                        }
+                        return Ok(Self::Recording(Box::new(page)));
+                    }
                 }
                 Body::Settings(settings) => {
                     Preview::Feature(Box::new(settings_element(settings, window, &data)))
@@ -116,15 +139,12 @@ impl Scene {
                     .with_catch_up(capture.catch_up);
                     let moment = Moment::At(Duration(capture.at));
                     page.seek(&moment).map_err(|error| error.to_string())?;
+                    page.story_actions(&capture.actions)?;
                     if let Some(id) = feature {
-                        let element = page.feature_element(id).ok_or_else(|| {
-                            format!("feature {id:?} has no standalone view at this moment")
-                        })?;
-                        Preview::Feature(Box::new(element))
+                        feature_preview(&mut page, id)?
                     } else {
-                        return Ok(Self::Recording(Box::new(
-                            page.with_story_moment(capture.at),
-                        )));
+                        let at = page.now();
+                        return Ok(Self::Recording(Box::new(page.with_story_moment(at))));
                     }
                 }
             },

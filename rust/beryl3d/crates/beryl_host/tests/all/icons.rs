@@ -376,7 +376,7 @@ fn prepared_then_demanded(scale: f32) -> (Vec<u16>, Vec<GlyphCell>, usize, Vec<G
         match prepared.ready {
             AssetReady::Glyphs { glyphs: cells, .. } => glyphs.extend(cells),
             AssetReady::Icons { cells, .. } => icons += cells.len(),
-            other => panic!("a glyph worker sent {other:?}"),
+            other @ AssetReady::Face { .. } => panic!("a glyph worker sent {other:?}"),
         }
     }
     (pages, glyphs, icons, demanded)

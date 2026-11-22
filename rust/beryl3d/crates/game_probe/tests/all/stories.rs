@@ -74,6 +74,7 @@ script {script}
         scale: 1.0,
         catch_up: true,
         messages: table.messages(),
+        actions: Vec::new(),
     };
     assert_eq!(capture.messages.len(), 3);
     let written = capture.write(story.header, None, None).unwrap();

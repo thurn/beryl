@@ -14,7 +14,7 @@ use super::{FILTER, Inputs, Message, State};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Element, Justify, column, row, text};
-use kit_ui::widgets::{button, field, list, primary};
+use kit_ui::widgets::{button, field, list, primary, screen::whole_window};
 
 /// The name of the list of recordings.
 pub const RECORDINGS: &str = "recordings";
@@ -36,11 +36,28 @@ pub(super) fn testing(testing: &State, input: &Inputs) -> Element {
         .filter(|(_, name)| name.to_lowercase().contains(&query))
         .filter_map(|(index, name)| {
             Some(recording_row(
-                u16::try_from(index).ok()?,
+                Message::Replay {
+                    recording: u16::try_from(index).ok()?,
+                },
                 name,
                 layout.map(|layout| layout.metrics.list_row),
             ))
         });
+    let stories = testing
+        .stories
+        .iter()
+        .filter(|name| name.to_lowercase().contains(&query))
+        .map(|name| {
+            recording_row(
+                Message::Story(name.clone()),
+                name,
+                layout.map(|layout| layout.metrics.list_row),
+            )
+        });
+    let stories = list("Stories", stories).grow(1.0).basis(0.0);
+    let story_heading = || text("Stories").style(type_style::MENU).shrink(0.0);
+    let show_stories = !testing.stories.is_empty();
+    let rows = list(RECORDINGS, rows).grow(1.0).basis(0.0);
     if let Some(layout) = layout {
         // One safe-area column: the title beside the seat toggle, the field under them as wide
         // as the column, then the list, whose long names break onto more lines.
@@ -62,7 +79,9 @@ pub(super) fn testing(testing: &State, input: &Inputs) -> Element {
             .gap(space::L)
             .child(header)
             .child(filter)
-            .child(list(RECORDINGS, rows).grow(1.0).basis(0.0));
+            .child(rows)
+            .children(show_stories.then(story_heading))
+            .children(show_stories.then_some(stories));
         return layout
             .scrolling("testing", input.window, content)
             .background(color::SURFACE);
@@ -74,15 +93,32 @@ pub(super) fn testing(testing: &State, input: &Inputs) -> Element {
         .child(text("Scenarios").style(type_style::TITLE))
         .child(filter)
         .child(seat_toggle(testing.seat));
-    column()
-        .name("testing")
-        .align_self(Align::Stretch)
-        .grow(1.0)
-        .gap(space::L)
-        .padding(space::L)
-        .background(color::SURFACE)
-        .child(header)
-        .child(list(RECORDINGS, rows).grow(1.0).basis(0.0))
+    whole_window(
+        input.window.size,
+        column()
+            .name("testing")
+            .gap(space::L)
+            .padding(space::L)
+            .background(color::SURFACE)
+            .child(header.shrink(0.0))
+            .child(
+                row()
+                    .grow(1.0)
+                    .basis(0.0)
+                    .min_height(0.0)
+                    .gap(space::L)
+                    .child(rows.min_width(0.0).min_height(0.0))
+                    .children(show_stories.then(|| {
+                        column()
+                            .grow(1.0)
+                            .basis(0.0)
+                            .min_width(0.0)
+                            .min_height(0.0)
+                            .child(story_heading())
+                            .child(stories.min_height(0.0))
+                    })),
+            ),
+    )
 }
 
 /// The toggle for the seat recordings replay from: on, drawn as the primary button, while it
@@ -100,7 +136,7 @@ fn seat_toggle(seat: Side) -> Element {
 
 /// The row of the `index`th recording, named `name`, which replays it when pressed.
 /// On a phone the row is a touch target's height at the least.
-fn recording_row(index: u16, name: &str, minimum: Option<f32>) -> Element {
+fn recording_row(message: Message, name: &str, minimum: Option<f32>) -> Element {
     let least = minimum.unwrap_or(size::MENU_ROW_HEIGHT);
     // A long name breaks onto more lines, so the row keeps the height its text takes rather
     // than shrinking to fit more rows in the list.
@@ -109,11 +145,8 @@ fn recording_row(index: u16, name: &str, minimum: Option<f32>) -> Element {
         .min_height(least)
         .shrink(0.0)
         .align_items(Align::Center)
-        .on_press(Message::Replay { recording: index });
-    if minimum.is_some() {
-        // The name is a text element of its own, which is measured at the width it is drawn
-        // at, so a name that breaks onto more lines makes the row as tall as its lines.
-        row = row.child(
+        .on_press(message)
+        .child(
             text(name)
                 .style(type_style::MENU)
                 .color(color::TYPE)
@@ -121,10 +154,6 @@ fn recording_row(index: u16, name: &str, minimum: Option<f32>) -> Element {
                 .shrink(1.0)
                 .passes(true),
         );
-    } else {
-        row.text = Some(name.to_owned());
-        row.style.text = type_style::MENU;
-    }
     // The phone's row is a touch target's height already, so it needs no padding above and
     // below; its lines, a whole number of points tall, then make a row of whole points, which
     // keeps rows from overlapping by a fraction.

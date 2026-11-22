@@ -3,14 +3,11 @@
 //! one function per file, so each screen is built in its own file.
 
 pub mod bug_report;
-mod gallery;
+pub mod gallery;
 pub mod settings;
 pub mod start;
 pub mod testing;
 
-pub use gallery::escape_press as gallery_escape;
-pub use gallery::faces as gallery_faces;
-pub use gallery::{GalleryMenu, GalleryQuery, GalleryState};
 pub use game_manual::screens::table_entries::{
     COULD_NOT_OPEN, EntryMode, INVITE, NAME, TableEntries,
 };
@@ -61,12 +58,10 @@ pub struct ScreenIn<'a> {
     pub stops: StopsSetting,
     /// The sheet open over the screen, if any.
     pub sheet: Option<Sheet>,
-    /// Which samples are open in the gallery.
-    pub gallery: GalleryState,
     /// What each text field holds, by its name.
     pub fields: &'a Fields,
     /// The card the pointer is over that the inspector shows, if any (`inspect::inspector`).
-    /// The faces of the match or, on the gallery screen, its stand-in cards.
+    /// The faces of the match.
     pub faces: Option<&'a FaceList>,
     /// The pile whose viewer is open, if any (`inspect::viewer`).
     pub viewing: Option<Viewed>,
@@ -109,7 +104,7 @@ impl<'a> ScreenIn<'a> {
     }
 }
 
-/// Composes the game and gallery routes.
+/// Composes the game route.
 #[must_use]
 pub fn screen(
     input: &ScreenIn,
@@ -118,7 +113,9 @@ pub fn screen(
     result: Option<Element>,
 ) -> Option<Element> {
     Some(match input.screen {
-        Screen::Start | Screen::Testing | Screen::Lobby | Screen::Table => return None,
+        Screen::Start | Screen::Testing | Screen::Lobby | Screen::Table | Screen::Gallery => {
+            return None;
+        }
         Screen::Game => game::game(
             &input.hud(),
             furniture,
@@ -126,7 +123,6 @@ pub fn screen(
             result,
             Action::new(settings::Message::Open),
         ),
-        Screen::Gallery => gallery::gallery(input),
     })
 }
 
@@ -151,6 +147,3 @@ pub fn music(screen: Screen, view: Option<&PlayerView>) -> Option<Music> {
         },
     })
 }
-
-mod message;
-pub use message::GalleryMessage;

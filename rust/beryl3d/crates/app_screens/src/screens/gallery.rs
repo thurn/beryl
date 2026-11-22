@@ -1,683 +1,210 @@
-//! The web component gallery's samples. On the desktop they stand on the web's page of numbered
-//! panels (`desktop`); on a phone they stand in one scrolling column.
+//! Browses the stories the host provides and reserves a pane for the selected scene.
 
-mod reference;
-mod samples;
+use std::convert::Infallible;
+use std::sync::Arc;
 
-pub use samples::faces;
+use kit_base::data::flat::Gallery;
+use kit_base::geometry::Window;
+use kit_base::tokens::{color, space, type_style};
+use kit_scene::{Context, Feature};
+use kit_ui::element::{Align, Element, Justify, column, row, text};
+use kit_ui::widgets::{button, list, screen::whole_window};
 
-use crate::screens::GalleryMessage;
-use glam::Vec2;
+pub const PREVIEW: &str = "Story preview";
 
-use super::{Screen, ScreenIn, start};
-use game_hud::inspect::viewer::scry_sample;
-use game_table::faces::{CARD_BACK, FaceList};
-use kit_base::data::Card;
-use kit_base::data::presentation::Gallery;
-use kit_base::tokens::{color, shadow, size, space, type_style};
-use kit_frame::frame::Role;
-use kit_ui::element::{
-    Action, Align, Anchor, Element, Justify, Overflow, Shown, TextAlign, column, row, text,
-};
-use kit_ui::input::{FaceId, FaceSize};
-use kit_ui::widgets::{MenuGroup, MenuRow, button, context_menu, icons, menu, primary};
+pub struct GalleryScreen;
 
-/// A context menu sample opened in the gallery.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GalleryMenu {
-    Permanent,
-    Library,
-    Corner,
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Inputs {
+    pub window: Window,
+    pub layout: Gallery,
 }
 
-/// What the gallery shows from the command list's three example queries.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GalleryQuery {
-    Empty,
-    Top,
-    Untap,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Story {
+    pub name: String,
+    pub feature: Option<String>,
 }
 
-/// Which interactive samples are open on the gallery.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct GalleryState {
-    pub menu: Option<(GalleryMenu, Vec2)>,
-    pub query: Option<GalleryQuery>,
+#[derive(Debug, Default)]
+pub struct State {
+    stories: Arc<[Story]>,
+    selected: Option<String>,
+    details: Option<String>,
+    timed: bool,
 }
 
-/// The component library at `#/gallery` in the web interface.
-pub fn gallery(input: &ScreenIn) -> Element {
-    let GalleryState {
-        menu: opened,
-        query,
-    } = input.gallery;
-    let samples;
-    let faces = if let Some(faces) = input.faces {
-        faces
-    } else {
-        samples = faces();
-        &samples
-    };
-    let inset = input.window.safe_area;
-    let width = (input.window.size.width - inset.left - inset.right).max(0.0);
-    let height = (input.window.size.height - inset.top - inset.bottom).max(0.0);
-    let Some(slot) = input.profile.slot("gallery.column") else {
-        return reference_page(input, faces, width, height);
-    };
-    // On a phone the samples stand in one column the phone's gutter in from the safe area's
-    // sides, as the other portrait screens do; the sample rows wrap to that width.
-    let edge = slot.rect.x - inset.left;
-    let sizes = &input.data.gallery;
-    let content = column()
-        .width(slot.rect.width.min(sizes.width))
-        .shrink(0.0)
-        .align_items(Align::Center)
-        .gap(space::L)
-        .child(
-            text("Project Beryl")
-                .style(type_style::TITLE)
-                .color(color::GOLD),
-        )
-        .child(text("Game UI · Component Library").style(type_style::OVERLAY_INSTRUCTION))
-        .child(foundations(sizes))
-        .child(actions())
-        .child(player_zones(faces, sizes, input.data.card))
-        .child(card_states(faces, sizes, input.data.card))
-        .child(combat(faces, sizes, input.data.card))
-        .child(
-            section("Scry overlay")
-                .child(scry_sample(faces, sizes, input.data.card))
-                .child(
-                    specimen_row().children(
-                        [
-                            "Drag & reorder",
-                            "Source card",
-                            "Confirm",
-                            "Dimmed table backdrop",
-                        ]
-                        .map(caption),
-                    ),
-                ),
-        )
-        .child(prompts(sizes))
-        .child(context_menus(opened.is_none()))
-        .child(commands(query, opened.is_none()));
-    let screen = column()
-        .name("gallery")
-        .width(width)
-        .height(height)
-        .background(color::TABLE)
-        .overflow(Overflow::Scroll)
-        .align_items(Align::Center)
-        .padding(edge)
-        .child(content);
-    let mut screen = screen;
-    // The gallery fills the safe area. The game screen's root reserves room for its dock.
-    screen.anchor = Some(Anchor::Point(Vec2::new(inset.left, inset.top), Vec2::ZERO));
-    if let Some((kind, at)) = opened {
-        let at = if kind == GalleryMenu::Corner {
-            Vec2::new(input.window.size.width, input.window.size.height)
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Message {
+    Stories(Arc<[Story]>),
+    Open(String),
+    Details { text: String, timed: bool },
+    Restart,
+}
+
+pub enum Request {
+    Open(String),
+    Restart,
+}
+
+impl Feature for GalleryScreen {
+    const SOURCE: &'static str = file!();
+
+    type State = State;
+    type Message = Message;
+    type Inputs<'a> = Inputs;
+    type ViewKey = Inputs;
+    type Command = Infallible;
+    type Request = Request;
+
+    fn update(
+        state: &mut State,
+        message: &Message,
+        context: &mut Context<'_, Infallible, Request>,
+    ) -> bool {
+        match message {
+            Message::Stories(stories) => {
+                state.stories = Arc::clone(stories);
+                if state
+                    .selected
+                    .as_ref()
+                    .is_some_and(|selected| stories.iter().any(|story| &story.name == selected))
+                {
+                    return true;
+                }
+                state.selected = stories
+                    .iter()
+                    .find(|story| story.name == "story/kit_ui/button-states")
+                    .or_else(|| stories.first())
+                    .map(|story| story.name.clone());
+                state.details = None;
+                if let Some(name) = &state.selected {
+                    context.request(Request::Open(name.clone()));
+                }
+            }
+            Message::Open(name) if state.stories.iter().any(|story| &story.name == name) => {
+                state.selected = Some(name.clone());
+                context.request(Request::Open(name.clone()));
+            }
+            Message::Details { text, timed } => {
+                state.details = Some(text.clone());
+                state.timed = *timed;
+            }
+            Message::Restart => context.request(Request::Restart),
+            Message::Open(_) => return false,
+        }
+        true
+    }
+
+    fn view_key(_: &State, inputs: &Inputs) -> Inputs {
+        *inputs
+    }
+
+    fn view(state: &State, Inputs { window, layout }: Inputs) -> Element {
+        let compact = window.size.width < layout.split_width;
+        let mut catalog = list("Stories", story_rows(state, layout.row_height))
+            .min_height(0.0)
+            .min_width(0.0)
+            .background(color::BACKDROP);
+        if compact {
+            catalog = catalog
+                .height((window.size.height * layout.stacked_catalog_share).max(layout.row_height));
         } else {
-            at
-        };
-        screen = screen.child(context_menu(at, example_menu(kind)));
-    }
-    screen
-}
-
-/// The gallery on the desktop: the web's page, centred in the window, which scrolls to show
-/// its lower panels. A menu opens where its button was pressed, and the command list's preview
-/// stands in the middle of the window, as the web's `CommandList` panel does.
-fn reference_page(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -> Element {
-    let GalleryState {
-        menu: opened,
-        query,
-    } = input.gallery;
-    let layout = input
-        .profile
-        .data()
-        .gallery
-        .as_ref()
-        .expect("a profile without a gallery column supplies the numbered panels");
-    let inset = input.window.safe_area;
-    let screen = column()
-        .name("gallery")
-        .width(width)
-        .height(height)
-        .background(color::GALLERY_PAGE)
-        .overflow(Overflow::Scroll)
-        .align_items(Align::Center)
-        .child(reference::page(
-            layout,
-            (faces, input.data.card),
-            opened.is_none() && query.is_none(),
-            input.profile.data().play.life.orb_scale,
-        ));
-    let mut screen = screen;
-    screen.anchor = Some(Anchor::Point(Vec2::new(inset.left, inset.top), Vec2::ZERO));
-    if let Some(query) = query {
-        let mut preview = command_preview(query)
-            .padding(space::L)
-            .background(color::SURFACE)
-            .border((color::METAL, size::BORDER))
-            .radius(size::PANEL_RADIUS);
-        preview.anchor = Some(Anchor::Point(
-            Vec2::new(input.window.size.width, input.window.size.height) / 2.0,
-            Vec2::splat(0.5),
-        ));
-        screen = screen.child(preview);
-    }
-    if let Some((kind, at)) = opened {
-        screen = screen.child(context_menu(
-            menu_point(input, kind, at),
-            example_menu(kind),
-        ));
-    }
-    screen
-}
-
-/// What Escape does on the gallery: closes an open menu, then the command list's preview, then
-/// goes back to the start screen.
-#[must_use]
-pub fn escape_press(state: GalleryState) -> Action {
-    if state.menu.is_some() {
-        Action::new(GalleryMessage::DismissMenu)
-    } else if state.query.is_some() {
-        Action::new(GalleryMessage::GalleryQuery(None))
-    } else {
-        Action::new(start::Message::Open(Screen::Start))
-    }
-}
-
-/// Where menu `kind` opens: at the point its button gave, or at the window's bottom right corner
-/// for the corner sample.
-fn menu_point(input: &ScreenIn, kind: GalleryMenu, at: Vec2) -> Vec2 {
-    if kind == GalleryMenu::Corner {
-        Vec2::new(input.window.size.width, input.window.size.height)
-    } else {
-        at
-    }
-}
-
-fn section(name: &str) -> Element {
-    column()
-        .name(name)
-        .align_self(Align::Stretch)
-        .shrink(0.0)
-        .gap(space::M)
-        .padding(space::L)
-        .background(color::PANEL)
-        .border((color::METAL, size::BORDER))
-        .radius(size::PANEL_RADIUS)
-        .child(text(name).style(type_style::MENU_TITLE))
-}
-
-fn specimen_row() -> Element {
-    row()
-        .align_items(Align::Center)
-        .justify_content(Justify::Center)
-        .gap(space::L)
-        .wrap(true)
-}
-
-fn caption(name: &str) -> Element {
-    text(name).style(type_style::BODY).color(color::TEXT_DIM)
-}
-
-fn specimen(item: Element, name: &str) -> Element {
-    column()
-        .gap(space::S)
-        .align_items(Align::Center)
-        .child(item)
-        .child(caption(name))
-}
-
-fn foundations(sizes: &Gallery) -> Element {
-    let swatches = [
-        ("Table", color::TABLE),
-        ("Surface", color::SURFACE),
-        ("Text", color::TEXT),
-        ("Gold", color::GOLD),
-        ("Cyan", color::CYAN),
-    ];
-    section("Foundations")
-        .child(
-            specimen_row().children(swatches.map(|(name, [r, g, b, a])| {
-                let chip = row()
-                    .name(name)
-                    .width(sizes.chip)
-                    .height(space::L)
-                    .background([r, g, b, a]);
-                specimen(chip, name).child(caption(&format!("#{r:02X}{g:02X}{b:02X}")))
-            })),
-        )
-        .child(specimen_row().children([
-            specimen(
-                text("Scry").style(type_style::TITLE),
-                "Serif · titles and actions",
-            ),
-            specimen(
-                text("Drag cards to reorder").style(type_style::BODY),
-                "Sans serif · instructions",
-            ),
-        ]))
-        .child(
-            specimen_row().children([
-                specimen(
-                    row()
-                        .name("matte")
-                        .width(sizes.chip)
-                        .height(space::M)
-                        .background(color::TABLE),
-                    "Tabletop (matte)",
-                ),
-                specimen(
-                    row()
-                        .name("metal")
-                        .width(sizes.chip)
-                        .height(space::M)
-                        .border((color::METAL, size::BORDER)),
-                    "Thin metallic borders",
-                ),
-            ]),
-        )
-}
-
-fn actions() -> Element {
-    section("Actions & status")
-        .child(specimen_row().children([
-            specimen(primary("Done"), "Primary"),
-            specimen(button("View Battlefield"), "Secondary"),
-            specimen(primary("Pass").enabled(false), "Disabled"),
-        ]))
-        .child(specimen_row().child(pill("Opponent has priority", color::TEXT_DIM)))
-        .child(specimen_row().child(phase_tracker()))
-}
-
-/// The phase tracker's thin grey rim, the top and bottom color of `.phase-tracker`'s border in
-/// `ui/src/design/components/phase-tracker.css` (its sides are darker on the web).
-const PHASE_TRACKER_RIM: [u8; 4] = [0x8a, 0x83, 0x7c, 0xff];
-
-fn phase_tracker() -> Element {
-    let side = f32::from(icons::PHASE_SIDE);
-    row()
-        .name("Phase tracker")
-        .padding(space::S)
-        .gap(space::S)
-        .background([0; 4])
-        .background_image(vec![kit_base::tokens::gradient::PHASE_TRACKER])
-        .border((PHASE_TRACKER_RIM, 1.0))
-        .radius(size::PILL_HEIGHT / 2.0)
-        .children(
-            icons::PHASES
-                .into_iter()
-                .zip([
-                    "Upkeep",
-                    "First main phase",
-                    "Combat",
-                    "Second main phase",
-                    "End",
-                ])
-                .map(|(icon, label)| {
-                    let mut sample = row()
-                        .name(label)
-                        .width(side)
-                        .height(side)
-                        .color(if label == "Combat" {
-                            color::GOLD
-                        } else {
-                            color::TEXT_DIM
-                        })
-                        // The web gallery's tracker lights combat
-                        // (`.phase-current .phase-icon`).
-                        .drop_shadow(if label == "Combat" {
-                            shadow::CURRENT_GLOW.to_vec()
-                        } else {
-                            shadow::PHASE_ICON.to_vec()
-                        });
-                    sample.shows = Some(Shown::Icon(icon, icons::PHASE_SIDE));
-                    sample
-                }),
-        )
-}
-
-fn pill(label: &str, tint: [u8; 4]) -> Element {
-    text(label)
-        .style(type_style::PILL)
-        .padding(space::S)
-        .min_width(size::PILL_HEIGHT)
-        .text_align(TextAlign::Center)
-        .background(color::SURFACE)
-        .border((tint, size::BORDER))
-        .radius(size::PILL_HEIGHT / 2.0)
-        .color(tint)
-}
-
-fn player_zones(faces: &FaceList, sizes: &Gallery, shape: Card) -> Element {
-    section("Player & zones")
-        .child(specimen_row().children([
-            specimen(pill("22", color::GOLD), "Active"),
-            specimen(pill("17", color::TEXT_DIM), "Inactive"),
-            pill("Opponent", color::TEXT_DIM),
-        ]))
-        .child(specimen_row().children([
-            specimen(
-                pile(CARD_BACK, "Card back", 40, (sizes.small_card, shape)),
-                "Library",
-            ),
-            specimen(
-                pile(
-                    face(faces, "Dusk Cut"),
-                    "Dusk Cut",
-                    4,
-                    (sizes.small_card, shape),
-                ),
-                "Graveyard",
-            ),
-            specimen(
-                pile(
-                    face(faces, "Island"),
-                    "Island",
-                    3,
-                    (sizes.small_card, shape),
-                ),
-                "Lands (stacked)",
-            ),
-        ]))
-}
-
-fn pile(id: FaceId, name: &str, count: u8, width: (f32, Card)) -> Element {
-    column()
-        .gap(space::S)
-        .align_items(Align::Center)
-        .child(flat_card(id, name, width))
-        .child(pill(&count.to_string(), color::TEXT_DIM))
-}
-
-fn card_states(faces: &FaceList, sizes: &Gallery, shape: Card) -> Element {
-    section("Cards & states")
-        .child(specimen_row().children([
-            card(faces, "Cinder Colossus", (sizes.small_card, shape)),
-            specimen(
-                tapped_card(faces, "Mountain", (sizes.small_card, shape)),
-                "Tapped",
-            ),
-            specimen(card(faces, "Plains", (sizes.small_card, shape)), "Untapped"),
-            specimen(
-                rim(
-                    card(faces, "Gloom Wren", (sizes.small_card, shape)),
-                    color::GOLD,
-                    size::PANEL_RADIUS,
-                ),
-                "Source (gold)",
-            ),
-            specimen(
-                rim(
-                    card(faces, "Gloom Wren", (sizes.small_card, shape)),
-                    color::CYAN,
-                    size::PANEL_RADIUS,
-                ),
-                "Target (cyan)",
-            ),
-        ]))
-        .child(
-            specimen_row().children(
-                ["Exile Lance", "Mountain", "Plateau"]
-                    .map(|name| card(faces, name, (sizes.hand_card, shape))),
-            ),
-        )
-}
-
-fn combat(faces: &FaceList, sizes: &Gallery, shape: Card) -> Element {
-    const TRIGGER: &str = "When Cinder Colossus enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets.";
-    section("Combat & stack")
-        .child(specimen_row().children([
-            specimen(
-                rim(
-                    card(faces, "Beast", (sizes.small_card, shape)),
-                    color::EMBER,
-                    0.0,
-                ),
-                "Attacker · angular",
-            ),
-            specimen(
-                rim(
-                    card(faces, "Angel", (sizes.small_card, shape)),
-                    color::CYAN,
-                    size::PANEL_RADIUS,
-                ),
-                "Blocker · rounded",
-            ),
-        ]))
-        .child(
-            specimen_row().children([
-                card(faces, "Cinder Colossus", (sizes.small_card, shape)),
-                specimen(
-                    flat_card(
-                        faces
-                            .plate("Cinder Colossus", true, 0)
-                            .expect("the Colossus has a trigger"),
-                        "Cinder Colossus ability",
-                        (sizes.hand_card, shape),
-                    ),
-                    TRIGGER,
-                ),
-                card(faces, "Beast", (sizes.small_card, shape)),
-            ]),
-        )
-}
-
-fn rim(card: Element, tint: [u8; 4], radius: f32) -> Element {
-    column()
-        .padding(size::BORDER)
-        .border((tint, size::BORDER))
-        .radius(radius)
-        .child(card)
-}
-
-fn face(faces: &FaceList, name: &str) -> FaceId {
-    faces
-        .find(name)
-        .expect("the gallery lists every sample face")
-}
-
-/// A card `width` wide, in the shape of the card the width comes with.
-fn card(faces: &FaceList, name: &str, width: (f32, Card)) -> Element {
-    flat_card(face(faces, name), name, width)
-}
-
-fn tapped_card(faces: &FaceList, name: &str, (width, shape): (f32, Card)) -> Element {
-    let face = face(faces, name);
-    let mut card = flat_card(face, name, (width, shape))
-        .width(width * shape.height / shape.width)
-        .height(width);
-    card.shows = Some(Shown::TappedFace(face, FaceSize::Board));
-    card
-}
-
-fn flat_card(id: FaceId, name: &str, (width, shape): (f32, Card)) -> Element {
-    let mut card = Element::new(Role::Region)
-        .name(name)
-        .width(width)
-        .height(width * shape.height / shape.width)
-        .shrink(0.0)
-        .background(color::SURFACE);
-    card.shows = Some(Shown::Face(id, FaceSize::Board));
-    card
-}
-
-fn prompts(sizes: &Gallery) -> Element {
-    let prompt = |name, entries: Vec<Element>, confirm| {
-        column()
-            .name(name)
-            .width(sizes.prompt_width)
+            catalog = catalog.width(layout.catalog_width);
+        }
+        let details = state.details.as_deref().unwrap_or("No stories available");
+        let viewer = column()
+            .min_width(0.0)
+            .min_height(0.0)
+            .grow(1.0)
             .gap(space::S)
-            .padding(space::M)
+            .child(
+                row()
+                    .gap(space::S)
+                    .align_items(Align::Center)
+                    .justify_content(Justify::SpaceBetween)
+                    .child(text(details).style(type_style::MENU).shrink(1.0))
+                    .children(
+                        state
+                            .timed
+                            .then(|| button("Replay").on_press(Message::Restart)),
+                    ),
+            )
+            .child(
+                Element::new(kit_frame::frame::Role::Region)
+                    .name(PREVIEW)
+                    .min_height(0.0)
+                    .min_width(0.0)
+                    .grow(1.0)
+                    .background(color::BACKDROP),
+            );
+        let content = if compact { column() } else { row() };
+        let mut screen = column()
+            .name("gallery")
             .background(color::SURFACE)
-            .radius(size::PANEL_RADIUS)
-            .children(entries)
-            .child(row().gap(space::S).children(
-                [button("Cancel"), primary(confirm)].map(|button| button.min_width(0.0).grow(1.0)),
-            ))
-    };
-    let value = |label, words| {
-        column().gap(space::S).child(caption(label)).child(
-            text(words)
-                .style(type_style::FIELD)
-                .padding(space::S)
-                .border((color::METAL, size::FIELD_BORDER))
-                .radius(size::FIELD_RADIUS),
-        )
-    };
-    section("Manual table prompts").child(specimen_row().children([
-        prompt("Draw cards", vec![value("Cards to draw", "1")], "Draw 1"),
-        prompt("Set note", vec![value("Note", "Doesn't untap")], "Set note"),
-        prompt(
-            "Set power and toughness…",
-            vec![
-            row().gap(space::S).children([value("Power", "3"), value("Toughness", "3")]),
-        ],
-            "Set 3/3",
-        ),
-    ]))
-}
-
-fn context_menus(available: bool) -> Element {
-    section("Context menus").child(
-        specimen_row().children(
-            [
-                ("Permanent", GalleryMenu::Permanent),
-                ("Library", GalleryMenu::Library),
-                ("Bottom-right corner", GalleryMenu::Corner),
-            ]
-            .map(|(label, kind)| {
-                example_button(label, GalleryMessage::GalleryMenu(kind), available)
-            }),
-        ),
-    )
-}
-
-fn example_button(label: &str, press: GalleryMessage, available: bool) -> Element {
-    let mut button = button(label);
-    button.press = available.then(|| Action::new(press));
-    button
-}
-
-fn example_menu(kind: GalleryMenu) -> Element {
-    let group = |rows: &[(&str, &str)]| MenuGroup {
-        rows: rows
-            .iter()
-            .map(|&(label, key)| MenuRow {
-                key: (!key.is_empty()).then(|| key.to_owned()),
-                action: Some(Action::new(GalleryMessage::GalleryMenuChoice)),
-                ..MenuRow::new(label)
-            })
-            .collect(),
-    };
-    if kind == GalleryMenu::Permanent {
-        return menu(
-            "Beast",
-            "Token creature · yours",
-            &[
-                group(&[("Tap", "")]),
-                group(&[
-                    ("Graveyard", "Cmd+Backspace"),
-                    ("Exile", ""),
-                    ("Hand", ""),
-                    ("Top of library", ""),
-                    ("Bottom of library", "Cmd+B"),
-                ]),
-                group(&[
-                    ("Add counter…", ""),
-                    ("Set power and toughness…", "Cmd+P"),
-                    ("Every action…", "Cmd+K"),
-                ]),
-            ],
-        );
+            .gap(space::S)
+            .child(
+                row()
+                    .justify_content(Justify::SpaceBetween)
+                    .align_items(Align::Center)
+                    .child(text("Stories").style(type_style::TITLE))
+                    .child(
+                        button("Back").on_press(super::start::Message::Open(super::Screen::Start)),
+                    ),
+            )
+            .child(
+                content
+                    .min_height(0.0)
+                    .grow(1.0)
+                    .gap(space::M)
+                    .child(catalog)
+                    .child(viewer),
+            );
+        let safe = window.safe_area;
+        screen.style.padding = [
+            safe.top + space::M,
+            safe.right + space::M,
+            safe.bottom + space::M,
+            safe.left + space::M,
+        ];
+        whole_window(window.size, screen)
     }
-    let mut rows = group(&[
-        ("Keep top card revealed", "Cmd+N"),
-        ("Bottom of library", ""),
-        ("Every action…", "Cmd+K"),
-    ]);
-    rows.rows[0].checked = true;
-    rows.rows[1].submenu = group(&[
-        ("Draw bottom card", ""),
-        ("Look at bottom cards…", "Shift+Cmd+W"),
-        ("Move bottom card to graveyard", ""),
-    ])
-    .rows;
-    menu(
-        "Library",
-        "53 cards · yours",
-        &[
-            group(&[
-                ("Draw", ""),
-                ("Draw cards…", "Cmd+E"),
-                ("Look at top cards…", "Cmd+W"),
-                ("Search", "F3"),
-                ("Shuffle", "Cmd+S"),
-            ]),
-            group(&[("Scry…", ""), ("Surveil…", "")]),
-            rows,
-        ],
-    )
 }
 
-fn commands(query: Option<GalleryQuery>, available: bool) -> Element {
-    let buttons = specimen_row().children(
-        [
-            ("Empty query", GalleryQuery::Empty),
-            ("Two groups", GalleryQuery::Top),
-            ("No matches", GalleryQuery::Untap),
-        ]
-        .map(|(label, query)| {
-            example_button(label, GalleryMessage::GalleryQuery(Some(query)), available)
-        }),
-    );
-    section("Command list")
-        .child(buttons)
-        .children(query.map(command_preview))
-}
-
-fn command_preview(query: GalleryQuery) -> Element {
-    type Group = (&'static str, &'static [&'static str]);
-    let (value, groups): (&str, &[Group]) = match query {
-        GalleryQuery::Empty => (
-            "",
-            &[
-                ("Library", &["Draw cards…", "Look at top cards…", "Shuffle"]),
-                ("Selected card", &["Move to top of library", "Tap"]),
-            ],
-        ),
-        GalleryQuery::Top => (
-            "top",
-            &[
-                ("Library", &["Look at top cards…"]),
-                ("Selected card", &["Move to top of library"]),
-            ],
-        ),
-        GalleryQuery::Untap => ("untap", &[]),
-    };
-    let mut preview = column()
-        .name("Commands")
-        .gap(space::S)
-        .child(caption("Your library"))
-        .child(pill(
-            if value.is_empty() {
-                "Search commands"
-            } else {
-                value
-            },
-            color::TEXT_DIM,
-        ));
-    for &(name, rows) in groups {
-        preview = preview
-            .child(caption(name))
-            .children(rows.iter().map(|label| text(label)));
+fn story_rows(state: &State, row_height: f32) -> Vec<Element> {
+    let mut group = None;
+    let mut rows = Vec::new();
+    for Story { name, feature } in &*state.stories {
+        let path = name.strip_prefix("story/").unwrap_or(name);
+        let (package, story) = path.split_once('/').unwrap_or(("", path));
+        let category = (package, feature.as_deref());
+        if group != Some(category) {
+            group = Some(category);
+            let heading = feature.as_ref().map_or_else(
+                || package.to_owned(),
+                |feature| format!("{package} / {feature}"),
+            );
+            rows.push(
+                text(&heading)
+                    .style(type_style::MENU)
+                    .padding(space::S)
+                    .shrink(0.0),
+            );
+        }
+        let selected = state.selected.as_ref() == Some(name);
+        let mut entry = Element::new(kit_frame::frame::Role::Button)
+            .name(name)
+            .child(text(story).style(type_style::MENU).shrink(1.0).passes(true))
+            .padding(space::S)
+            .min_height(row_height)
+            .shrink(0.0)
+            .selected(selected)
+            .on_press(Message::Open(name.clone()));
+        entry.focus = true;
+        if selected {
+            entry = entry.background(color::SURFACE);
+        }
+        rows.push(entry);
     }
-    if groups.is_empty() {
-        preview = preview.child(text("No matching commands"));
-    }
-    preview
+    rows
 }

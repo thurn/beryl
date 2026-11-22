@@ -1,16 +1,23 @@
 //! The copyable card lines and protocol views of an authored table story.
 
+#[cfg(feature = "stories")]
 use std::collections::{BTreeMap, BTreeSet};
 
+use beryl_protocol::PlayerView;
 use beryl_protocol::card_records::{CardEntry, CardFace, CardImages, CardRecords};
+#[cfg(feature = "stories")]
 use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage};
+#[cfg(feature = "stories")]
 use beryl_protocol::protocol::{
-    CardType, Facing, ObjectId, PlayerState, PowerToughness, RowName, Side, StackItem, Status,
-    ZoneName,
+    CardType, Facing, ObjectId, PlayerState, RowName, StackItem, Status,
 };
+use beryl_protocol::protocol::{PowerToughness, Side, ZoneName};
+#[cfg(feature = "stories")]
 use beryl_protocol::script::{Reset, Script, Table, replay, time_script};
+#[cfg(feature = "stories")]
 use beryl_protocol::testing::{self, ViewBuilder};
-use beryl_protocol::{GameUpdate, PlayerView, SessionId};
+#[cfg(feature = "stories")]
+use beryl_protocol::{GameUpdate, SessionId};
 use kit_frame::frame::{Place, StateBits};
 use kit_probe::agent::{
     line::{parse_states, quoted_name},
@@ -18,13 +25,17 @@ use kit_probe::agent::{
 };
 
 /// The initial view and the view that arrives with each successive script.
+#[cfg(feature = "stories")]
 #[derive(Clone, Debug, PartialEq)]
 pub struct TableStory {
     pub views: Vec<PlayerView>,
+    pub actions: Vec<String>,
+    pub feature: Option<String>,
 }
 
+#[cfg(feature = "stories")]
 impl TableStory {
-    pub(super) fn parse(lines: &[(usize, &str)]) -> Result<Self, String> {
+    pub(super) fn parse(lines: &[(usize, &str)], feature: Option<&str>) -> Result<Self, String> {
         let mut builder = ViewBuilder::new();
         let mut slots = Slots::default();
         let mut life = [20; 2];
@@ -33,6 +44,8 @@ impl TableStory {
         let mut handling = None;
         let mut scripts = Vec::new();
         let mut neutral = false;
+        let mut manual = false;
+        let mut actions = Vec::new();
         let mut battlefield_order = false;
         let mut lines = lines.iter();
 
@@ -62,6 +75,8 @@ impl TableStory {
                 "spell" => stack.spell(value).map_err(why)?,
                 "life" => read_life(&mut life, value).map_err(why)?,
                 "neutral" if value.is_empty() => neutral = true,
+                "manual" if value.is_empty() => manual = true,
+                "action" if !value.is_empty() => actions.push(value.to_owned()),
                 "battlefield-order" if value.is_empty() => battlefield_order = true,
                 "handling" if handling.is_none() => {
                     handling =
@@ -95,38 +110,20 @@ impl TableStory {
         slots.apply(&mut start);
         stack.finish(&mut start)?;
         [start.players.you.life, start.players.opponent.life] = life;
-        if neutral {
-            let neutral = PlayerView::neutral(PlayerState::neutral(20), PlayerState::neutral(20));
-            start.turn = neutral.turn;
-            start.stops = neutral.stops;
+        if manual {
+            start.table = Some(testing::table(&start));
         }
-        let mut table = replay(
-            Table::of(&start),
-            start
-                .script
-                .as_ref()
-                .expect("the initial view resets the table"),
-        )
-        .map_err(|error| format!("script: {error}"))?;
-        let mut views = vec![start];
-        for (script, together) in scripts {
-            let previous = views.last().expect("a table story starts with a view");
-            let (mut view, after) = play(previous, table, script, together)?;
-            if battlefield_order {
-                order_objects(&mut view);
-            }
-            views.push(view);
-            table = after;
-        }
-        if !neutral && views.len() > 1 {
-            views[0].status = Status::Playing;
-        }
+        let mut views = play_views(start, scripts, neutral, battlefield_order)?;
         let end = views.last_mut().expect("a table story ends with a view");
         if let Some(decision) = decision {
             end.status = Status::Deciding { decision };
         }
         end.handling = handling;
-        Ok(Self { views })
+        Ok(Self {
+            views,
+            actions,
+            feature: feature.map(str::to_owned),
+        })
     }
 
     /// The messages the replay driver needs to play this story using its generated faces.
@@ -146,6 +143,43 @@ impl TableStory {
     }
 }
 
+#[cfg(feature = "stories")]
+fn play_views(
+    mut start: PlayerView,
+    scripts: Vec<(Script, bool)>,
+    neutral: bool,
+    battlefield_order: bool,
+) -> Result<Vec<PlayerView>, String> {
+    if neutral {
+        let neutral = PlayerView::neutral(PlayerState::neutral(20), PlayerState::neutral(20));
+        start.turn = neutral.turn;
+        start.stops = neutral.stops;
+    }
+    let mut table = replay(
+        Table::of(&start),
+        start
+            .script
+            .as_ref()
+            .expect("the initial view resets the table"),
+    )
+    .map_err(|error| format!("script: {error}"))?;
+    let mut views = vec![start];
+    for (script, together) in scripts {
+        let previous = views.last().expect("a table story starts with a view");
+        let (mut view, after) = play(previous, table, script, together)?;
+        if battlefield_order {
+            order_objects(&mut view);
+        }
+        views.push(view);
+        table = after;
+    }
+    if !neutral && views.len() > 1 {
+        views[0].status = Status::Playing;
+    }
+    Ok(views)
+}
+
+#[cfg(feature = "stories")]
 fn add_card(
     card: &Card,
     builder: &mut ViewBuilder,
@@ -158,6 +192,7 @@ fn add_card(
     card.add(builder, slots)
 }
 
+#[cfg(feature = "stories")]
 fn repeat_cards(lines: &mut std::slice::Iter<'_, (usize, &str)>) -> Result<Vec<Card>, String> {
     block(lines, "end-repeat")?
         .into_iter()
@@ -170,6 +205,7 @@ fn repeat_cards(lines: &mut std::slice::Iter<'_, (usize, &str)>) -> Result<Vec<C
         .collect()
 }
 
+#[cfg(feature = "stories")]
 fn block<'a>(
     lines: &mut std::slice::Iter<'_, (usize, &'a str)>,
     end: &str,
@@ -184,6 +220,7 @@ fn block<'a>(
     Err(format!("a block needs a closing {end} line"))
 }
 
+#[cfg(feature = "stories")]
 #[derive(Default)]
 struct Stack {
     size: usize,
@@ -191,6 +228,7 @@ struct Stack {
     spells: Vec<StackItem>,
 }
 
+#[cfg(feature = "stories")]
 impl Stack {
     fn ability(&mut self, text: &str) -> Result<(), String> {
         let (id, item) = text
@@ -247,6 +285,7 @@ impl Stack {
     }
 }
 
+#[cfg(feature = "stories")]
 fn read_life(life: &mut [i32; 2], text: &str) -> Result<(), String> {
     let Some((side, value)) = text.split_once(' ') else {
         return Err("write life yours 20 or life theirs 20".to_owned());
@@ -263,6 +302,7 @@ fn read_life(life: &mut [i32; 2], text: &str) -> Result<(), String> {
 }
 
 /// Applies the script with the same table replay used by the session and client.
+#[cfg(feature = "stories")]
 fn play(
     start: &PlayerView,
     table: Table,
@@ -314,6 +354,7 @@ fn play(
 }
 
 /// Keeps the order in which a view hands battlefield objects to the client.
+#[cfg(feature = "stories")]
 fn order_objects(view: &mut PlayerView) {
     let positions: BTreeMap<_, _> = view
         .battlefield
@@ -330,13 +371,17 @@ struct Card {
     name: Option<String>,
     slot: Option<u16>,
     zone: ZoneName,
+    #[cfg(feature = "stories")]
     side: Side,
+    #[cfg(feature = "stories")]
     row: Option<RowName>,
     count: u32,
     states: StateBits,
     really: Option<String>,
     note: Option<String>,
+    #[cfg(feature = "stories")]
     power_toughness: Option<PowerToughness>,
+    #[cfg(feature = "stories")]
     token: bool,
 }
 
@@ -397,18 +442,24 @@ impl Card {
         } else {
             (false, tail)
         };
+        #[cfg(not(feature = "stories"))]
+        let _ = (side, power_toughness, token);
         let (states, count) = repeat(tail)?;
         let mut card = Self {
             name,
             slot,
             zone,
+            #[cfg(feature = "stories")]
             side,
+            #[cfg(feature = "stories")]
             row,
             count,
             states: StateBits::default(),
             really: None,
             note: None,
+            #[cfg(feature = "stories")]
             power_toughness,
+            #[cfg(feature = "stories")]
             token,
         };
         for state in parse_states(states)? {
@@ -433,6 +484,7 @@ impl Card {
         Ok(card)
     }
 
+    #[cfg(feature = "stories")]
     fn add(&self, builder: &mut ViewBuilder, slots: &mut Slots) -> Result<(), String> {
         for index in 0..self.count {
             let slot = slots.add(self.slot.map(|start| u32::from(start) + index))?;
@@ -525,6 +577,7 @@ pub(super) fn read_capture_card(text: &str) -> Result<serde_json::Value, String>
     Ok(data.into())
 }
 
+#[cfg(feature = "stories")]
 #[derive(Default)]
 struct Slots {
     used: BTreeSet<ObjectId>,
@@ -532,6 +585,7 @@ struct Slots {
     next: u32,
 }
 
+#[cfg(feature = "stories")]
 impl Slots {
     fn add(&mut self, id: Option<u32>) -> Result<ObjectId, String> {
         let id = id.unwrap_or(self.next);

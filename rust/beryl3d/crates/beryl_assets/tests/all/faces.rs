@@ -137,9 +137,7 @@ fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
                     assert_eq!(size, FaceSize::Board);
                     (layer, face_layer(p).0.clone())
                 }
-                AssetReady::Glyphs { .. }
-                | AssetReady::Icons { .. }
-                | AssetReady::GalleryFace { .. } => {
+                AssetReady::Glyphs { .. } | AssetReady::Icons { .. } => {
                     panic!("a face worker sent an atlas page")
                 }
             })

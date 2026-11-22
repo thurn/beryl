@@ -51,6 +51,7 @@ mod refusal;
 mod screen;
 mod scrolling;
 mod stops;
+mod story;
 mod viewing;
 
 /// The platform a host runs on, as far as the client cares: where `Cmd` in a shortcut means
@@ -85,6 +86,7 @@ impl Config {
 pub struct Client {
     frame: Frame,
     probe: Option<game_probe::explain::Probe>,
+    stories: story::Stories,
     window: Window,
     /// The table and the scripts that lead it from view to view.
     show: Show,
@@ -125,6 +127,7 @@ impl Client {
         Self {
             frame: Frame::with_capacity(config.elements, config.draws, config.name_bytes),
             probe: None,
+            stories: story::Stories::default(),
             window,
             show: Show::new(table),
             layer,
@@ -197,6 +200,7 @@ impl Client {
                 self.update_testing(&testing::Message::Recordings(recordings));
                 self.show_screen();
             }
+            Input::Stories(sources) => self.set_stories(sources),
             Input::BugSaved(result) => {
                 if self.update_bug(&bug_report::Message::Saved(result)) {
                     self.show_screen();
@@ -409,28 +413,25 @@ impl Client {
         builder.placement_work(self.show.table().take_placed(), self.show.take_compiled());
         // The bug report is drawn whether or not the table has settled (`bug`).
         self.features.layer_open = reporting || self.show.settled();
-        let faces = if self.features.screen == Screen::Gallery {
-            self.features.gallery_faces.as_ref()
-        } else {
-            Some(self.show.faces())
-        };
+        let faces = self.show.faces();
         // While scripts play only what waits for the table (`Element::waits`) is left out.
         let face_layers = |face, size| match size {
-            FaceSize::Board => faces?.board_layer_of(face),
-            FaceSize::Full => faces?.full_layer_of(face),
+            FaceSize::Board => faces.board_layer_of(face),
+            FaceSize::Full => faces.full_layer_of(face),
         };
-        let layers = faces.map(|_| layout::FaceLayers {
+        let layers = layout::FaceLayers {
             back: CARD_BACK,
             layer: &face_layers,
-        });
+        };
         self.layer.write_with(
             &mut builder,
             &self.show.table().camera().screen_plane(),
             self.features.layer_open,
-            layers.as_ref(),
+            Some(&layers),
         );
         builder.finish();
         self.finish_frame(table_now, transitioning);
+        self.place_story();
         &self.frame
     }
 
@@ -473,8 +474,12 @@ impl Client {
         let window = self.data().profiles.resolve_window(window);
         self.cancel_gesture();
         self.routes.scrolling.cancel();
+        let previous_scale = self.window.scale;
         self.window = window;
         self.show.resize(window);
+        if (previous_scale - window.scale).abs() > f32::EPSILON {
+            self.restart_story();
+        }
         self.layer.resize(window);
         self.place_data_error();
         self.show_gear();
@@ -570,7 +575,11 @@ impl Client {
     /// has arrived since, because any input ends the wait.
     #[must_use]
     pub fn wake(&self) -> Wake {
-        self.wake.or_at(self.features.next_frame())
+        if self.story_moving() {
+            Wake::Now
+        } else {
+            self.wake.or_at(self.features.next_frame())
+        }
     }
 
     /// The next verb that a script played as an instant change because it is not built yet,
@@ -623,13 +632,24 @@ impl Client {
     /// The glyphs that laid-out text needs and no atlas page holds yet. Each is returned once.
     /// The host hands them to the rasterizer.
     pub fn wanted_glyphs(&mut self) -> impl Iterator<Item = GlyphKey> + '_ {
-        self.layer.glyphs_mut().drain_wanted()
+        let story = self.stories.wanted_glyphs();
+        self.layer.glyphs_mut().drain_wanted().chain(story)
     }
 
     /// The faces a card being read needs at full size and has not been asked for yet (a card in
     /// the inspector). Each is returned once. The host hands them to its asset workers, which
     /// report each one's full-size layer as an `AssetReady::Face`.
     pub fn wanted_faces(&mut self) -> impl Iterator<Item = FaceId> + '_ {
-        self.show.faces_mut().drain_wanted()
+        let story = self.active_story_faces();
+        let preview = story.then(|| {
+            self.stories
+                .board_mut()
+                .expect("active story board")
+                .wanted_faces()
+        });
+        let main = (!story).then(|| self.show.faces_mut().drain_wanted());
+        main.into_iter()
+            .flatten()
+            .chain(preview.into_iter().flatten())
     }
 }

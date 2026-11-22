@@ -349,13 +349,12 @@ def spread(times: Sequence[int], most: int) -> list[int]:
 
 
 def recordings() -> list[str]:
-    """The recordings `--choose` takes moments from: every built screen that can be drawn
-    (`reference.UNDRAWABLE`), then every UI fixture that two agents play from a seed."""
+    """List the built screens with a web reference and the UI fixtures played from a seed."""
     screens = json.loads(reference.SCREENS.read_text())["screens"]
     names = [
         s["recording"]
         for s in screens
-        if s.get("built") and s["recording"] not in reference.UNDRAWABLE
+        if s.get("built") and s["recording"] not in reference.WITHOUT_REFERENCE
     ]
     fixtures = json.loads(FIXTURES.read_text())["fixtures"]
     names += [f["name"] for f in fixtures if "agents" in f and "seed" in f]

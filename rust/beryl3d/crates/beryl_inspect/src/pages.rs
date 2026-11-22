@@ -255,6 +255,12 @@ pub(crate) fn page_with_messages(
     let mut page = Page::new(data, recording.into(), seat, layout, size)
         .map_err(|error| format!("{name}: {error}"))?
         .named(name);
+    if matches!(
+        stories::recording_story(name),
+        Some("story/app_screens/gallery" | "story/app_screens/testing")
+    ) {
+        page = page.with_stories(crate::gallery_sources()?);
+    }
     if safe_area != Insets::default() {
         // Giving a page its safe area sets its client up again.
         page = page.with_safe_area(safe_area);

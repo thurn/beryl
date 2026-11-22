@@ -10,7 +10,9 @@ use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
 use kit_probe::story::{Header, parse_header};
 
-pub use table::{TableStory, placeholder_records};
+#[cfg(feature = "stories")]
+pub use table::TableStory;
+pub use table::placeholder_records;
 
 /// Inputs for a settings sheet story, with omitted controls taking the app defaults.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -36,11 +38,14 @@ pub struct Capture {
     pub scale: f32,
     pub catch_up: bool,
     pub messages: Vec<FixtureMessage>,
+    /// Driver actions taken at the captured moment before drawing the story.
+    pub actions: Vec<String>,
 }
 
 /// The game and app story forms.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Body {
+    #[cfg(feature = "stories")]
     Table(TableStory),
     Settings(SettingsStory),
     /// A feature exercised through the full client over a sequence of recorded inputs.
@@ -102,11 +107,18 @@ impl Story {
             }
         } else {
             match feature {
-                None => Body::Table(TableStory::parse(inputs)?),
+                #[cfg(feature = "stories")]
+                None => Body::Table(TableStory::parse(inputs, None)?),
+                #[cfg(not(feature = "stories"))]
+                None => return Err("authored tables must be compiled to a recording".to_owned()),
                 Some(_) if inputs.first().is_some_and(|(_, line)| *line == "replay") => {
                     Body::Replay(capture::read_replay(&inputs[1..])?)
                 }
                 Some("settings") => Body::Settings(SettingsStory::parse(inputs)?),
+                #[cfg(feature = "stories")]
+                Some(id) if inputs.first().is_some_and(|(_, line)| *line == "manual") => {
+                    Body::Table(TableStory::parse(inputs, Some(id))?)
+                }
                 Some(id) => return Err(format!("no authored inputs for feature {id:?}")),
             }
         };
@@ -153,7 +165,17 @@ impl Capture {
                 "line {index}: write capture <source> <nanoseconds> <seat> <scale> <catch-up|real-time>"
             ));
         };
-        let messages = capture::read(&lines[1..])?;
+        let (actions, messages) = lines[1..].split_at(
+            lines[1..]
+                .iter()
+                .take_while(|(_, line)| line.starts_with("action "))
+                .count(),
+        );
+        let actions = actions
+            .iter()
+            .map(|(_, line)| line["action ".len()..].to_owned())
+            .collect();
+        let messages = capture::read(messages)?;
         Ok(Self {
             source,
             at,
@@ -161,6 +183,7 @@ impl Capture {
             scale,
             catch_up,
             messages,
+            actions,
         })
     }
 
@@ -199,6 +222,9 @@ impl Capture {
             "capture {} {} {seat} {} {pace}",
             self.source, self.at, self.scale
         );
+        for action in &self.actions {
+            let _ = writeln!(text, "action {action}");
+        }
         for message in &self.messages {
             capture::write(&mut text, message)?;
         }

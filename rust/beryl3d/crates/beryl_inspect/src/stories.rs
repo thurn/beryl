@@ -17,6 +17,13 @@ pub(crate) enum Story {
 }
 
 impl Story {
+    pub fn profile(&self) -> Option<&str> {
+        match self {
+            Self::Toolkit(_) => None,
+            Self::Game(story) => story.profile.as_deref(),
+        }
+    }
+
     pub fn header(&self) -> Header {
         match self {
             Self::Toolkit(story) => story.header,
@@ -71,6 +78,7 @@ pub(crate) fn has_extension(path: &Path) -> bool {
 struct Entry {
     path: PathBuf,
     parsed: OnceLock<Result<Arc<Story>, String>>,
+    feature: Option<String>,
 }
 
 fn catalog() -> Result<&'static BTreeMap<String, Entry>, String> {
@@ -85,7 +93,7 @@ fn discover(root: &Path) -> Result<BTreeMap<String, Entry>, String> {
     let mut entries = BTreeMap::new();
     for (name, path) in paths(root)? {
         if path.is_dir() && path.join("Cargo.toml").is_file() {
-            walk(&name, &path, false, &mut entries)?;
+            walk(&name, &path, None, &mut entries)?;
         }
     }
     Ok(entries)
@@ -108,15 +116,18 @@ fn paths(path: &Path) -> Result<Vec<(String, PathBuf)>, String> {
 fn walk(
     package: &str,
     dir: &Path,
-    in_stories: bool,
+    story_root: Option<&Path>,
     entries: &mut BTreeMap<String, Entry>,
 ) -> Result<(), String> {
     for (name, path) in paths(dir)? {
         if path.is_dir() {
             if !matches!(name.as_str(), "target" | ".git") {
-                walk(package, &path, in_stories || name == "stories", entries)?;
+                let root = story_root.or_else(|| (name == "stories").then_some(path.as_path()));
+                walk(package, &path, root, entries)?;
             }
-        } else if in_stories && path.extension() == Some(OsStr::new("story")) {
+        } else if let Some(root) = story_root
+            && path.extension() == Some(OsStr::new("story"))
+        {
             let slug = name.strip_suffix(".story").unwrap_or_default();
             if slug.is_empty()
                 || !slug
@@ -134,6 +145,15 @@ fn walk(
                 Entry {
                     path: path.clone(),
                     parsed: OnceLock::new(),
+                    feature: path
+                        .parent()
+                        .and_then(|parent| parent.strip_prefix(root).ok())
+                        .filter(|path| !path.as_os_str().is_empty())
+                        .map(|path| path.to_string_lossy().into_owned())
+                        .or_else(|| {
+                            let parent = root.parent()?.file_name()?.to_str()?;
+                            (parent != package).then(|| parent.to_owned())
+                        }),
                 },
             ) {
                 return Err(format!(
@@ -155,6 +175,26 @@ pub(crate) fn entries() -> Result<impl Iterator<Item = (&'static str, &'static P
     Ok(catalog()?
         .iter()
         .map(|(name, entry)| (name.as_str(), entry.path.as_path())))
+}
+
+/// Reads the story sources that a tools host makes available to the gallery.
+///
+/// # Errors
+///
+/// If the catalog or a story file cannot be read.
+pub fn gallery_sources() -> Result<Arc<[app_client::stories::Source]>, String> {
+    catalog()?
+        .iter()
+        .map(|(name, entry)| {
+            let text = std::fs::read_to_string(&entry.path)
+                .map_err(|why| format!("{}: {why}", entry.path.display()))?;
+            Ok(app_client::stories::Source::owned(
+                name.clone(),
+                text,
+                entry.feature.clone(),
+            ))
+        })
+        .collect()
 }
 
 pub(crate) fn open(name: &str) -> Result<Arc<Story>, String> {

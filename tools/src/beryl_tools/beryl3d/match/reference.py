@@ -53,11 +53,11 @@ PLACES = 2
 WINDOWS = (("desktop", "1600x900@2"), ("phone", "393x759"))
 
 
-# Screen recordings `b3d-render png` cannot draw yet, with why. The testing screen holds more
-# records in one frame (59467) than the renderer's frame limit (27728), so its pixels cannot be
-# counted and it has no reference target.
-UNDRAWABLE = {"screen/testing": "a frame of 59467 records, over the renderer's 27728"}
-
+# Built screens excluded from web comparison, with the reason for each.
+WITHOUT_REFERENCE = {
+    "screen/testing": "a frame of 59467 records, over the renderer's 27728",
+    "screen/gallery": "Beryl 3D's story browser has its own layout and content",
+}
 
 # Moments in the middle of a game, which no screen's end shows, each as a recording and a
 # moment played at real time (`--no-catch-up`), held in the desktop window. Arrows and lines of
@@ -79,7 +79,7 @@ def targets() -> list[Target]:
     screens = json.loads(SCREENS.read_text())["screens"]
     found: list[Target] = []
     for screen in screens:
-        if not screen.get("built") or screen["recording"] in UNDRAWABLE:
+        if not screen.get("built") or screen["recording"] in WITHOUT_REFERENCE:
             continue
         for _, window in WINDOWS:
             found.append(named(f"b3d:{screen['recording']}/you/{window}"))

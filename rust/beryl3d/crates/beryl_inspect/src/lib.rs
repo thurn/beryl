@@ -16,4 +16,5 @@ pub mod runner;
 pub mod scene;
 pub mod screens;
 mod stories;
+pub use stories::gallery_sources;
 pub mod stress;

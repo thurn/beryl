@@ -2464,12 +2464,11 @@ Before a match's opening hand is shown:
    each frame in which nothing animates (`upload_waiting`), waking the host
    while faces wait. The session thread gives the client the records of both
    decklists and their tokens when a game starts or resumes, and a replayed
-   recording gives its recorded ones. The component gallery's list is prepared
-   the same way, and its faces arrive as `AssetReady::GalleryFace`, so they
-   never overwrite where the match's faces are. The headless host behind
-   `just b3d png` uploads every face before its first picture
-   (`Renderer::upload_layer`), but never downloads a scan, so a picture shows
-   only what the scan cache holds.
+   recording gives its recorded ones. A table story in the gallery uses the same
+   workers with its own face list. The asset service switches lists as the
+   player switches scenes. The headless host behind `just b3d png` uploads every
+   face before its first picture (`Renderer::upload_layer`), but never downloads
+   a scan, so a picture shows only what the scan cache holds.
 
 Three crates do that work: `tiny-skia` 0.11.4 (a CPU rasterizer for 2D shapes)
 and `swash` 0.2.10 (a glyph rasterizer) draw Beryl's frame, and `ctt` 0.6.1 (a
@@ -4803,7 +4802,7 @@ launch tests  macOS pass, Windows, iOS and Android not required
   `ui/shapes.json`.
 - **Screens** are listed by hand in `data/beryl3d/screens.json`, because nothing
   generates them: the start screen, the opening hand and mulligan, the game,
-  game over, settings, the bug report, the card gallery, the testing screen and
+  game over, settings, the bug report, the story gallery, the testing screen and
   each of the manual table's screens. Each screen marked built names a moment of
   its recording (`at`) and a line of the tree printout there (`shows`), and a
   test fails when the recording does not show it. A built screen counts once its

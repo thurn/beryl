@@ -47,6 +47,9 @@ widgets! {
     IconButton = "icon-button" in icon_button;
     List = "list" in list;
     Menu = "menu" in menu;
+    ContextMenu = "context-menu" in menu;
+    SheetMenu = "sheet-menu" in menu;
+    Overlay = "overlay" in screen;
     Slider = "slider" in slider;
     Toggle = "toggle" in toggle;
     Tooltip = "tooltip" in tooltip;
@@ -62,9 +65,9 @@ impl Widget {
             | Self::IconButton
             | Self::SmallButton
             | Self::CompactAction => Role::Button,
-            Self::Check | Self::CheckSquare | Self::StartPanel => Role::Region,
+            Self::Check | Self::CheckSquare | Self::StartPanel | Self::Overlay => Role::Region,
             Self::Field => Role::Field,
-            Self::List | Self::Menu => Role::List,
+            Self::List | Self::Menu | Self::ContextMenu | Self::SheetMenu => Role::List,
             Self::Slider => Role::Slider,
             Self::Toggle | Self::Checkbox => Role::Toggle,
             Self::Tooltip => Role::Text,

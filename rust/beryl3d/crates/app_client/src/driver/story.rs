@@ -1,10 +1,47 @@
 //! Story inputs read from the driver, and authored settings rendered by the same feature.
 
+use std::sync::Arc;
+
 use kit_probe::agent::{TreeOptions, tree};
 
 use super::Page;
 
 impl Page {
+    /// The stories its host makes available to the gallery and testing screens.
+    #[must_use]
+    pub fn with_stories(mut self, stories: Arc<[crate::stories::Source]>) -> Self {
+        self.stories = stories;
+        self.restart();
+        self
+    }
+
+    /// Applies the driver actions stored at a captured story's moment.
+    ///
+    /// # Errors
+    ///
+    /// If an action is invalid or its locator cannot be reached.
+    pub fn story_actions(&mut self, actions: &[String]) -> Result<(), String> {
+        for action in actions {
+            let parsed = action
+                .parse::<super::Action>()
+                .map_err(|why| why.to_string())?;
+            if let super::Action::Type(locator, words) = &parsed
+                && self
+                    .try_find(locator)
+                    .is_ok_and(|field| field.state.has(kit_frame::frame::StateBits::FOCUSED))
+            {
+                use kit_ui::input::{Input as DeviceInput, TextChange};
+
+                self.give_input(crate::Input::Device(DeviceInput::Text(TextChange::Insert(
+                    words.clone(),
+                ))));
+            } else {
+                self.try_act(&parsed).map_err(|why| why.to_string())?;
+            }
+        }
+        Ok(())
+    }
+
     /// Prints the current state of a registered feature, by id.
     #[must_use]
     pub fn feature_state(&self, id: &str) -> Option<String> {
@@ -18,28 +55,32 @@ impl Page {
     }
 }
 
-#[cfg(feature = "stories")]
 pub use playback::settings_element;
 
-#[cfg(feature = "stories")]
 mod playback {
     use app_screens::screens::{
         Screen,
         settings::{self, SettingsSheet},
     };
-    use game_probe::story::{Capture, SettingsStory};
+    #[cfg(feature = "stories")]
+    use game_probe::story::Capture;
+    use game_probe::story::SettingsStory;
     use game_table::profiles::Profile;
     use kit_base::{data::Data, geometry::Window};
+    #[cfg(feature = "stories")]
     use kit_probe::agent::{Judged, checks};
     use kit_scene::Feature;
     use kit_ui::element::Element;
 
-    use crate::driver::{Checked, Duration, Moment, Page};
+    use crate::driver::Page;
+    #[cfg(feature = "stories")]
+    use crate::driver::{Checked, Duration, Moment};
     use crate::settings::{Graphics, Settings};
 
     impl Page {
         /// A portable capture of the current instant, including the client inputs that led to it.
         #[must_use]
+        #[cfg(feature = "stories")]
         pub fn capture(&self) -> Capture {
             Capture {
                 source: self.name.clone(),
@@ -48,22 +89,26 @@ mod playback {
                 scale: self.scale,
                 catch_up: self.catch_up,
                 messages: self.recording.0.clone(),
+                actions: Vec::new(),
             }
         }
 
         /// Marks the instant a table story exposes as its start and end.
         #[must_use]
+        #[cfg(feature = "stories")]
         pub fn with_story_moment(mut self, at: u64) -> Self {
             self.story_moment = Some(at);
             self
         }
 
         #[must_use]
+        #[cfg(feature = "stories")]
         pub fn story_moment(&self) -> Option<u64> {
             self.story_moment
         }
 
         /// Checks only the instant a captured table story exposes.
+        #[cfg(feature = "stories")]
         pub fn check_story(&mut self) -> Option<Checked> {
             let moment = Moment::At(Duration(self.story_moment?));
             self.seek(&moment).ok()?;
@@ -86,6 +131,7 @@ mod playback {
 
         /// The settings sheet's transient state and the settings and screen its view reads.
         #[must_use]
+        #[cfg(feature = "stories")]
         pub fn settings_story(&self) -> SettingsStory {
             self.client.settings_story()
         }

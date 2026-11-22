@@ -371,31 +371,6 @@ fn the_play_or_draw_buttons_are_drawn_as_the_webs_enabled_buttons() {
     );
 }
 
-/// The component gallery's buttons: primary, secondary and disabled, as the web's gallery shows
-/// them side by side.
-#[test]
-fn the_gallery_buttons_are_drawn_as_the_webs_in_each_state() {
-    let mut page = page_at("screen/gallery", "end");
-    assert_button_drawn(
-        &mut page,
-        "Done",
-        &button_look(".button-primary"),
-        "primary",
-    );
-    assert_button_drawn(
-        &mut page,
-        "View Battlefield",
-        &button_look(".button-secondary"),
-        "secondary",
-    );
-    assert_button_drawn(
-        &mut page,
-        "Pass",
-        &button_look(".button.button:disabled"),
-        "disabled",
-    );
-}
-
 /// Both life orbs: the core's fill and the bezel's width of the web's `.life-orb-core` and
 /// `BEZEL`, and the gold of `.life-orb-ring`, which both orbs draw toward their player's edge.
 #[test]

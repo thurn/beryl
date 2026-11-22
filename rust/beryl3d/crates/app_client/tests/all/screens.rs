@@ -3,7 +3,7 @@
 
 use app_client::Input;
 use app_client::command::{Reply, Request};
-use app_client::driver::{OPEN, Page, Recording};
+use app_client::driver::{Duration, OPEN, Page, Recording};
 use app_client::{Client, Config};
 use beryl_protocol::ipc::{CONCEDE, ConcedeRequest, FixtureMessage, LIST_AGENTS, START_GAME};
 use beryl_protocol::protocol::{Side, Status};
@@ -198,67 +198,51 @@ fn gallery(width: f32, height: f32) -> Page {
         }],
         Size { width, height },
     )
-}
-
-fn scroll_gallery(page: &mut Page, distance: f32) {
-    use glam::Vec2;
-    use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
-
-    page.give_input(Input::Device(DeviceInput::Pointer(Pointer {
-        kind: PointerKind::Mouse,
-        phase: PointerPhase::Wheel,
-        position: Vec2::new(720.0, 450.0),
-        button: Button::None,
-        wheel: Vec2::new(0.0, -distance),
-        id: 0,
-        modifiers: Modifiers::default(),
-    })));
-    page.still();
+    .with_stories(app_client::stories::embedded())
 }
 
 #[test]
-fn the_gallery_contains_every_section_and_scrolls_to_the_command_list() {
-    let mut page = gallery(1440.0, 900.0);
-    let visited = agent::tree(
-        page.frame(),
-        &TreeOptions {
-            full: true,
-            ..TreeOptions::default()
-        },
-    )
-    .unwrap();
-    for (index, heading) in [
-        "Foundations",
-        "Actions & status",
-        "Player & zones",
-        "Cards & states",
-        "Combat & stack",
-        "Scry overlay",
-        "Manual table prompts",
-        "Context menus",
-        "Command list",
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        // Each panel's title is numbered, as on the web's gallery page.
-        let title = format!("{:02} {heading}", index + 1);
-        assert!(visited.contains(&format!("text \"{title}\"")), "{title}");
-    }
-    let last = "button \"No matches\"";
-    for (width, height) in [
-        (1440.0, 900.0),
-        (1600.0, 900.0),
-        (1920.0, 1080.0),
-        (2560.0, 1080.0),
-    ] {
-        let mut page = gallery(width, height);
-        page.check();
-        assert!(!page.find(last).interactive);
-        scroll_gallery(&mut page, 10_000.0);
-        assert!(page.find(last).interactive);
-        page.check();
-    }
+fn the_gallery_plays_stories_in_their_authored_window() {
+    use app_client::stories::Source;
+
+    let mut page = gallery(1440.0, 900.0).with_stories(
+        [
+            Source::new("story/kit_ui/example", "story element 200x200 desktop\nbutton \"Sample\" #1 25,25 120x50 | widget=button\n"),
+            Source::new("story/kit_fx/sample", "story effect 393x759 phone\neffect glow 48,90 110x140\n"),
+        ]
+        .into(),
+    );
+    page.still();
+    page.find("list \"Stories\"");
+    page.find("region \"Story preview\"");
+    page.press("button \"story/kit_ui/example\"");
+    let inset = page.frame().inset.as_ref().expect("the selected story");
+    assert_eq!(
+        inset.size,
+        Size {
+            width: 200.0,
+            height: 200.0
+        }
+    );
+    assert!(
+        agent::tree(&inset.frame, &TreeOptions::default())
+            .unwrap()
+            .contains("button \"Sample\"")
+    );
+    page.find("text \"desktop · 200 × 200\"");
+
+    page.press("button \"story/kit_fx/sample\"");
+    let start = page.frame().inset.as_ref().unwrap().frame.draws.clone();
+    page.step(Duration(180_000_000));
+    let later = &page.frame().inset.as_ref().unwrap().frame.draws;
+    assert_ne!(&start, later);
+    page.find("text \"phone · 393 × 759\"");
+    page.find("button \"Replay\"");
+
+    page.press("button \"Back\"");
+    page.still();
+    assert!(page.try_find("region \"Story preview\"").is_err());
+    assert!(page.frame().inset.as_ref().unwrap().viewport.width <= 0.0);
 }
 
 #[test]
@@ -274,26 +258,6 @@ fn opening_the_gallery_from_start_turns_off_music() {
 
     page.find("region \"gallery\"");
     assert!(std::iter::from_fn(|| page.next_request()).any(|r| r == Request::Music(None)));
-}
-
-#[test]
-fn examples_open_their_menu_and_command_preview() {
-    let mut page = gallery(1440.0, 900.0);
-    scroll_gallery(&mut page, 10_000.0);
-    page.press("button \"Bottom-right corner\"");
-    page.still();
-    page.find("menuitem \"Keep top card revealed\"");
-    page.check();
-
-    page.chord("Escape");
-    page.still();
-    assert!(
-        page.try_find("menuitem \"Keep top card revealed\"")
-            .is_err()
-    );
-    page.press("button \"No matches\"");
-    scroll_gallery(&mut page, 10_000.0);
-    page.find("text \"No matching commands\"");
 }
 
 #[test]

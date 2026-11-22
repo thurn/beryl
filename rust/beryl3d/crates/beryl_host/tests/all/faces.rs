@@ -64,6 +64,7 @@ impl Host {
     fn frame(&mut self) {
         self.deliver(When::BeforeFrame);
         self.now += 16_666_667;
+        self.client.prepare(self.now);
         self.client.frame(self.now);
         self.deliver(When::AfterFrame);
     }
@@ -118,23 +119,28 @@ fn every_face_list_given_is_prepared_even_one_equal_to_the_last() {
     assert_eq!(host.board_layer(CARD_BACK), Some(CARD_BACK.0));
 }
 
-/// The gallery's faces arrive as its own (`AssetReady::GalleryFace`), so that a match whose
-/// faces have not landed still has none when the gallery closes.
+fn open_table_story(client: &mut Client) {
+    client.handle(Input::Stories(app_client::stories::embedded()));
+    client.dispatch(&Action::new(app_screens::screens::start::Message::Open(
+        Screen::Gallery,
+    )));
+    client.dispatch(&Action::new(app_screens::screens::gallery::Message::Open(
+        "story/game_table/zones-and-card-states".to_owned(),
+    )));
+}
+
 #[test]
-fn the_gallerys_faces_never_land_in_the_matchs() {
+fn story_face_uploads_do_not_change_the_matchs_layers() {
     let mut host = Host::new("gallery");
     host.client.handle(no_records());
-    host.client
-        .dispatch(&Action::new(app_screens::screens::start::Message::Open(
-            Screen::Gallery,
-        )));
-    assert!(host.client.showing_gallery());
+    open_table_story(&mut host.client);
+    assert!(host.client.face_generation().0);
     host.until(|client| client.face_layers().board_layer_of(FaceId(0)).is_some());
     host.client
         .dispatch(&Action::new(app_screens::screens::start::Message::Open(
             Screen::Start,
         )));
-    assert!(!host.client.showing_gallery());
+    assert!(!host.client.face_generation().0);
     assert_eq!(host.board_layer(CARD_BACK), None);
 }
 
@@ -144,13 +150,15 @@ fn the_gallerys_faces_never_land_in_the_matchs() {
 #[test]
 fn held_faces_are_uploaded_one_a_frame_before_it() {
     let mut host = Host::new("held");
-    host.client
-        .dispatch(&Action::new(app_screens::screens::start::Message::Open(
-            Screen::Gallery,
-        )));
+    let records = beryl_card_records::card_records_among(
+        ["Island", "Plains", "Forest"],
+        beryl_card_records::TokenMakers::NONE,
+    );
+    host.client.handle(Input::Cards(Box::new(records)));
+    host.client.frame(0);
     host.deliver(When::AfterFrame);
     let count = host.client.faces().faces().len();
-    assert!(count > 2, "the gallery lists {count} faces");
+    assert!(count > 2, "the match lists {count} faces");
     assert_eq!(host.renderer.waiting(), 0);
     while host.renderer.waiting() < count {
         host.wait_for_delivery();

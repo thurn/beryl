@@ -544,6 +544,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         live: None,
     };
     let mut client = Client::new(data, Config::LARGEST);
+    client.handle(Input::Stories(story_sources()));
     if let Some(settings) = settings {
         client.handle(Input::Settings(settings));
     }
@@ -599,6 +600,17 @@ pub fn run(options: &Options) -> Result<Finished, String> {
     let log = log.borrow_mut().take();
     finish_run(log, hosted)
 }
+
+#[cfg(feature = "tools")]
+fn story_sources() -> Arc<[app_client::stories::Source]> {
+    beryl_inspect::gallery_sources().unwrap_or_else(|why| {
+        eprintln!("beryl3d: could not load checkout stories: {why}");
+        app_client::stories::embedded()
+    })
+}
+
+#[cfg(not(feature = "tools"))]
+use app_client::stories::embedded as story_sources;
 
 /// Finishes the frame log after the host exits, keeping the host's error if it failed.
 fn finish_run(log: Option<Logged>, hosted: Result<(), String>) -> Result<Finished, String> {

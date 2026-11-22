@@ -5,26 +5,6 @@ use serde::Deserialize;
 
 use super::tuning::{finite, fraction, nonnegative, positive, vector};
 
-/// Dimensions for the scrolling gallery and its scry sample, in logical points.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct Gallery {
-    #[serde(deserialize_with = "positive")]
-    pub width: f32,
-    #[serde(deserialize_with = "positive")]
-    pub chip: f32,
-    #[serde(deserialize_with = "positive")]
-    pub small_card: f32,
-    #[serde(deserialize_with = "positive")]
-    pub hand_card: f32,
-    #[serde(deserialize_with = "positive")]
-    pub prompt_width: f32,
-    #[serde(deserialize_with = "positive")]
-    pub scry_card: f32,
-    #[serde(deserialize_with = "positive")]
-    pub scry_source: f32,
-}
-
 /// The time shares over which a notice fades in and out.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]

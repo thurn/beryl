@@ -70,20 +70,6 @@
    "unsupported": 0,
    "pixels": 290660
   },
-  "b3d:screen/gallery/you/1600x900@2": {
-   "unmatched": 191,
-   "boxes": 1,
-   "styles": 24,
-   "unsupported": 1,
-   "pixels": 877873
-  },
-  "b3d:screen/gallery/you/393x759": {
-   "unmatched": 326,
-   "boxes": 76,
-   "styles": 244,
-   "unsupported": 0,
-   "pixels": 126680
-  },
   "b3d:screen/lobby/you/1600x900@2": {
    "unmatched": 23,
    "boxes": 0,

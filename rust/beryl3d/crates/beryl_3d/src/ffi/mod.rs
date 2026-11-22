@@ -155,7 +155,8 @@ impl Beryl3d {
         // An agent stands in for the person only in a debug build.
         #[cfg(not(debug_assertions))]
         let stand_in: Option<String> = stand_in.and(None);
-        let client = Client::new(crate::data::embedded()?, Config::LARGEST);
+        let mut client = Client::new(crate::data::embedded()?, Config::LARGEST);
+        client.handle(app_client::Input::Stories(app_client::stories::embedded()));
         let phone = match fixture {
             Some(name) => {
                 let replay = Fixture::read(&data_dir, &name)?;

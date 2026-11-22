@@ -39,7 +39,6 @@ fn embedded_tuning(name: &str) -> Result<String, String> {
         "notices.json" => include_str!("../../../../../data/beryl3d/notices.json"),
         "revealed.json" => include_str!("../../../../../data/beryl3d/revealed.json"),
         "shown.json" => include_str!("../../../../../data/beryl3d/shown.json"),
-        "gallery.json" => include_str!("../../../../../data/beryl3d/gallery.json"),
         "lighting.json" => include_str!("../../../../../data/beryl3d/lighting.json"),
         "light.json" => include_str!("../../../../../data/beryl3d/light.json"),
         "own.json" => include_str!("../../../../../data/beryl3d/own.json"),

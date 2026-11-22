@@ -11,7 +11,7 @@ use super::light::{Light, Own};
 use super::lighting::Lighting;
 use super::playback::{CatchUp, FrameRate, Slide, TierProbe};
 use super::pointer::PointerTuning;
-use super::presentation::{Gallery, Notices, Revealed, Shown};
+use super::presentation::{Notices, Revealed, Shown};
 use super::{BadgeTuning, Card, profiles::Profiles, verbs::Verbs};
 
 /// A runtime tuning input and the type that decodes it.
@@ -73,7 +73,6 @@ tuning_files! {
     NOTICES: Notices = "notices.json";
     REVEALED: Revealed = "revealed.json";
     SHOWN: Shown = "shown.json";
-    GALLERY: Gallery = "gallery.json";
     LIGHTING: Lighting = "lighting.json";
 }
 
@@ -97,7 +96,6 @@ pub struct Data {
     pub notices: Notices,
     pub revealed: Revealed,
     pub shown: Shown,
-    pub gallery: Gallery,
     pub lighting: Lighting,
     pub profiles: Profiles,
     pub effects: Effects,
@@ -139,7 +137,6 @@ impl Data {
             notices: NOTICES.decode(&mut load, read)?,
             revealed: REVEALED.decode(&mut load, read)?,
             shown: SHOWN.decode(&mut load, read)?,
-            gallery: GALLERY.decode(&mut load, read)?,
             lighting: LIGHTING.decode(&mut load, |_, text| Lighting::parse(text))?,
             profiles: Profiles::parse(profiles, card)?,
             effects,

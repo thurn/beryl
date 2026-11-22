@@ -8,6 +8,7 @@ mod count;
 mod draw;
 mod enhanced;
 mod faces;
+mod inset;
 mod mesh;
 mod panel_blur;
 mod pipeline;

@@ -44,10 +44,12 @@ fn migrated_replays_are_listed_and_draw_the_same_frames_under_both_names() {
         "stress-stack",
         "screen/table",
         "screen/testing",
+        "screen/gallery",
     ] {
         let (crate_name, name) = match legacy {
             "screen/table" => ("game_manual", "table"),
             "screen/testing" => ("app_screens", "testing"),
+            "screen/gallery" => ("app_screens", "gallery"),
             board => ("game_table", board),
         };
         let story = format!("story/{crate_name}/{name}");

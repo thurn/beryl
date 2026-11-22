@@ -255,7 +255,6 @@ mod milestone_three {
             stops: settings.stops,
             sheet: None,
             spinning: false,
-            gallery: screens::GalleryState::default(),
             fields: &FIELDS,
             faces: None,
             viewing: None,
@@ -283,6 +282,13 @@ mod milestone_three {
                         has_recordings: false,
                         entries: &ENTRIES,
                         fields: &FIELDS,
+                    },
+                ),
+                Screen::Gallery => screens::gallery::GalleryScreen::view(
+                    &screens::gallery::State::default(),
+                    screens::gallery::Inputs {
+                        window: input.window,
+                        layout: input.data.flat.gallery,
                     },
                 ),
                 Screen::Testing => testing::TestingScreen::view(
@@ -318,7 +324,7 @@ mod milestone_three {
                         overlay_open: false,
                     },
                 ),
-                _ => screens::screen(&input, Furniture::default(), None, None)
+                Screen::Game => screens::screen(&input, Furniture::default(), None, None)
                     .expect("the screen has a view"),
             };
             assert!(!element.name.is_empty(), "{screen:?}");

@@ -284,9 +284,6 @@
     "screen.dock": {
       "inset": [0, 16, 16, 16]
     },
-    "gallery.column": {
-      "inset": [16, 16, 16, 16]
-    },
     "result.dock": {
       "inset": [0, 16, 16, 16],
       "max_width": 398,

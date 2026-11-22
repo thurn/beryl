@@ -18,7 +18,7 @@ use game_hud::screens::game::Furniture;
 use game_manual::features::{context_menu, table::Message as TableMessage};
 use game_table::faces::{FaceList, Faces};
 use kit_ui::element::{Action, Element, floats};
-use kit_ui::input::{AssetReady, FaceId, FaceSize};
+use kit_ui::input::{AssetReady, FaceId};
 use kit_ui::layout::FloatLook;
 
 struct MountedViews {
@@ -232,7 +232,6 @@ impl Client {
     }
 
     /// Builds a registered feature's view using the same state and inputs as its screen.
-    #[cfg(feature = "stories")]
     pub(crate) fn feature_element(&mut self, id: &str) -> Option<Element> {
         let placement = self.placement_scene();
         self.with_mounted_inputs(placement.as_ref(), |features, inputs, _| {
@@ -344,9 +343,8 @@ impl Client {
             full_control: self.settings.full_control,
             stops: self.settings.stops,
             sheet: self.features.sheet,
-            gallery: self.features.gallery,
             fields: self.layer.fields(),
-            faces: Some(self.faces()),
+            faces: Some(self.show.faces().list()),
             viewing: self.features.viewer().open(),
             revealed: self.features.viewer().revealed(),
             carried: self.carried_item(),
@@ -355,8 +353,7 @@ impl Client {
         }
     }
 
-    /// The active screen's faces, which the host's asset workers prepare. A match's
-    /// layers arrive as `AssetReady::Face` and the gallery's as `AssetReady::GalleryFace`.
+    /// The active scene's faces, which the host's asset workers prepare.
     #[must_use]
     pub fn faces(&self) -> &FaceList {
         self.face_layers().list()
@@ -365,18 +362,28 @@ impl Client {
     /// The layer each active face has landed in at each size.
     #[must_use]
     pub fn face_layers(&self) -> &Faces {
-        if self.features.screen == Screen::Gallery
-            && let Some(faces) = &self.features.gallery_faces
-        {
-            return faces;
+        if self.active_story_faces() {
+            return self
+                .stories
+                .board()
+                .expect("active story board")
+                .face_layers();
         }
         self.show.faces()
     }
 
-    /// Whether the active face list belongs to the gallery.
+    /// Identifies which scene owns the renderer's card face layers.
     #[must_use]
-    pub fn showing_gallery(&self) -> bool {
-        self.features.screen == Screen::Gallery
+    pub fn face_generation(&self) -> (bool, u64) {
+        if self.active_story_faces() {
+            (true, self.stories.generation)
+        } else {
+            (false, self.show.faces().number())
+        }
+    }
+
+    pub(crate) fn active_story_faces(&self) -> bool {
+        self.features.screen == Screen::Gallery && self.stories.board().is_some()
     }
 
     /// How many glyphs the flat layer's text asked for that no atlas page holds yet
@@ -386,24 +393,27 @@ impl Client {
         self.layer.glyphs().missing()
     }
 
-    /// The host made its face arrays anew, so that the full-size layers the match's faces were
-    /// given are empty: the match's faces forget them and are asked for again when read, as
-    /// after low memory. Their board-size layers stay, since the host uploads every board-size
-    /// face again into the layer numbered as its `FaceId`.
+    /// The host rebuilt the face arrays. Full-size faces need uploading again.
     pub fn face_arrays_made(&mut self) {
-        self.show.faces_mut().low_memory();
+        if self.active_story_faces() {
+            self.stories
+                .board_mut()
+                .expect("active story board")
+                .face_arrays_made();
+        } else {
+            self.show.faces_mut().low_memory();
+        }
     }
 
     /// Records where the host uploaded each face, glyph or icon the client can draw.
     pub(super) fn asset_ready(&mut self, asset: AssetReady) {
+        self.stories.asset(&asset);
         match asset {
+            asset @ AssetReady::Face { .. } if self.active_story_faces() => {
+                self.stories.give(asset);
+            }
             AssetReady::Face { face, size, layer } => {
                 self.show.faces_mut().arrived(face, size, layer);
-            }
-            AssetReady::GalleryFace { face, layer } => {
-                if let Some(faces) = &mut self.features.gallery_faces {
-                    faces.arrived(face, FaceSize::Board, layer);
-                }
             }
             AssetReady::Glyphs { page, glyphs } => {
                 self.layer.glyphs_mut().add(page, &glyphs);

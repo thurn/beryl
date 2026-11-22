@@ -6,7 +6,7 @@
     { "name": "game over", "screen": "game", "recording": "game-over", "built": true, "at": "end", "shows": "text \"Defeat\"" },
     { "name": "settings", "screen": "settings", "recording": "screen/settings", "built": true, "at": "end", "shows": "region \"settings\"", "web": { "hash": "/", "click": ".sound-corner button[aria-label=\"Sound\"]" } },
     { "name": "bug report", "screen": "bug-report", "recording": "screen/bug-report", "built": true, "at": "end", "shows": "region \"bug report\"", "web": { "hash": "/", "query": "bugreport=select" } },
-    { "name": "gallery", "screen": "gallery", "recording": "screen/gallery", "built": true, "at": "end", "shows": "region \"gallery\"", "web": { "hash": "/gallery" } },
+    { "name": "gallery", "screen": "gallery", "recording": "screen/gallery", "built": true, "at": "end", "shows": "list \"Stories\"" },
     { "name": "testing", "screen": "testing", "recording": "screen/testing", "built": true, "at": "end", "shows": "region \"testing\"" },
     { "name": "lobby", "screen": "lobby", "recording": "screen/lobby", "built": true, "at": "end", "shows": "region \"lobby\"", "web": { "hash": "/lobby" } },
     { "name": "manual table", "screen": "table", "recording": "screen/table", "built": true, "at": "end", "shows": "region \"table\"", "web": { "hash": "/table" } }

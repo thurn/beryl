@@ -40,7 +40,6 @@ pub use game_probe::driver::{
     REPLY_DELAY, TICK, key_code, plays_on, point,
 };
 pub use recording::{Answer, Recording, Responses};
-#[cfg(feature = "stories")]
 pub use story::settings_element;
 
 use self::cues::Cues;
@@ -123,6 +122,7 @@ pub struct Page {
     /// The glyph pages a host has given (`give_glyphs`), given again whenever the client is
     /// made anew, so that its text keeps drawing after a seek back.
     glyphs: Vec<AssetReady>,
+    stories: Arc<[crate::stories::Source]>,
     /// Whether the driver answers every glyph and icon the client asks for itself, as it does
     /// unless a host that draws gives the glyphs ([`Page::with_host_atlas`]).
     stub_atlas: bool,
@@ -173,6 +173,7 @@ impl Page {
             steps: None,
             heard: Vec::new(),
             glyphs: Vec::new(),
+            stories: Arc::default(),
             stub_atlas: true,
         };
         page.begin();
@@ -613,6 +614,9 @@ impl Page {
                 }
             }
         }
+        if !self.stories.is_empty() {
+            self.give(Input::Stories(Arc::clone(&self.stories)));
+        }
         if self.stub_atlas {
             self.give(Input::Device(DeviceInput::Assets(
                 glyphs::stub_client_icons(self.scale, &self.client.data().profiles),
@@ -629,16 +633,6 @@ impl Page {
         }
         for lobby in self.recording.lobbies() {
             self.give(Input::Lobby(Box::new(lobby)));
-        }
-        if self.stub_atlas && self.client.showing_gallery() {
-            let ready: Vec<_> = self.client.faces().all_ready().collect();
-            for asset in ready {
-                if let AssetReady::Face { face, layer, .. } = asset {
-                    self.give(Input::Device(DeviceInput::Assets(
-                        AssetReady::GalleryFace { face, layer },
-                    )));
-                }
-            }
         }
         self.release();
         // After the first views, as the live app sends them once it has resumed a game, so
@@ -689,6 +683,7 @@ impl Page {
         self.give_cues();
         loop {
             self.client.prepare_scroll(self.now);
+            self.client.prepare_story(self.now);
             let sounds = &self.client.frame(self.now).sounds;
             self.heard.extend(sounds.iter().map(|s| (self.now, *s)));
             let mut answered = false;
@@ -792,6 +787,7 @@ impl Page {
             steps: Some(Vec::new()),
             heard: Vec::new(),
             glyphs: self.glyphs.clone(),
+            stories: Arc::clone(&self.stories),
             stub_atlas: self.stub_atlas,
         };
         page.begin();

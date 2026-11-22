@@ -17,6 +17,7 @@ impl Client {
         if self.data() != &data {
             self.layer.set_tuning(data.flat);
             self.show.set_data(data);
+            self.restart_story();
             self.resize(self.window);
             // Badge sizes are part of shaping: shaped badges are shaped again at the new sizes
             // now, so that no frame draws text shaped at the old ones.

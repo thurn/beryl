@@ -515,7 +515,7 @@ impl Drawer {
             match ready {
                 AssetReady::Glyphs { page, glyphs } => layer.glyphs_mut().add(*page, glyphs),
                 AssetReady::Icons { page, cells } => layer.icons_mut().add(*page, cells),
-                _ => {}
+                AssetReady::Face { .. } => {}
             }
         }
     }

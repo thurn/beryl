@@ -51,7 +51,6 @@ impl Features {
         Some(element)
     }
 
-    #[cfg(feature = "stories")]
     pub(super) fn named_prompt_view<'a>(
         &'a self,
         placement: Placement,

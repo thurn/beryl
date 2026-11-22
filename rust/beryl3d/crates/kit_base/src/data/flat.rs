@@ -1,4 +1,4 @@
-//! Shared flat-layer and manual-table tuning.
+//! Shared flat-layer, story gallery and manual-table tuning.
 
 use serde::Deserialize;
 
@@ -13,6 +13,7 @@ pub struct Flat {
     pub menu_edge: f32,
     pub tooltip: Tooltip,
     pub manual: Manual,
+    pub gallery: Gallery,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
@@ -23,6 +24,19 @@ pub struct Tooltip {
     pub fade_ms: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub gap: f32,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Gallery {
+    #[serde(deserialize_with = "positive")]
+    pub catalog_width: f32,
+    #[serde(deserialize_with = "positive")]
+    pub split_width: f32,
+    #[serde(deserialize_with = "fraction")]
+    pub stacked_catalog_share: f32,
+    #[serde(deserialize_with = "positive")]
+    pub row_height: f32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

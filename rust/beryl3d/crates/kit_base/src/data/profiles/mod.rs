@@ -13,12 +13,10 @@ pub use screen::{BugScreen, ScreenMetrics, StartScreen};
 
 pub mod anchored;
 mod banded;
-mod gallery;
 mod hud;
 mod tray;
 pub use anchored::Anchored;
 pub use banded::Banded;
-pub use gallery::GalleryLayout;
 pub use hud::{
     FloatingPrompt, Hud, Incoming, Inspector, Piece, ResultLayout, SingleRow, WrappedHand,
 };
@@ -344,8 +342,6 @@ pub struct ProfileData {
     pub slots: BTreeMap<String, SlotSpec>,
     /// Tuning for screens that use a scrolling column.
     pub screen: Option<ScreenMetrics>,
-    /// The gallery's numbered panels when this profile has no scrolling column for samples.
-    pub gallery: Option<GalleryLayout>,
     pub manual: Option<ManualControls>,
     pub settings_quick_action_min_width: Option<f32>,
     test_matrix: Matrix,
@@ -488,7 +484,6 @@ impl ProfileData {
             ("divide.edge", false),
             ("divide.side", false),
             ("full_control", self.hud.table.contains(&Piece::FullControl)),
-            ("gallery.column", compact),
             ("gear", self.hud.table.contains(&Piece::Gear)),
             ("inspector", self.table.inspector.is_some()),
             ("log", true),
@@ -556,9 +551,6 @@ impl ProfileData {
         }
         if opening.wrapped_hand.is_some() && self.screen.is_none() {
             return Err("hud.opening.wrapped_hand requires screen metrics".to_owned());
-        }
-        if !self.slots.contains_key("gallery.column") && self.gallery.is_none() {
-            return Err("missing gallery layout".to_owned());
         }
         Ok(())
     }
@@ -656,6 +648,15 @@ impl Profiles {
         }
         self.preview = Some(Box::new(profile));
         Ok(self)
+    }
+
+    /// Selects an existing automatic profile for an authored window.
+    #[must_use]
+    pub fn selecting(&self, name: &str) -> Option<Self> {
+        let profile = self.iter().find(|profile| profile.name == name)?;
+        let mut profiles = self.clone();
+        profiles.preview = Some(Box::new(profile.clone()));
+        Some(profiles)
     }
 
     /// The explicit preview, the first matching automatic profile, or the fallback.

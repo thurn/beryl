@@ -201,7 +201,7 @@ impl Player {
         match ready {
             AssetReady::Glyphs { page, glyphs } => self.layer.glyphs_mut().add(page, &glyphs),
             AssetReady::Icons { page, cells } => self.layer.icons_mut().add(page, &cells),
-            _ => return,
+            AssetReady::Face { .. } => return,
         }
         self.dirty = true;
     }

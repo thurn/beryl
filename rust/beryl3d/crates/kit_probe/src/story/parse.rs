@@ -272,7 +272,7 @@ fn styles(line: usize, mut text: &str, role: Role) -> Result<Vec<Property>, Pars
             error(
                 line,
                 why,
-                "fill=#rrggbbaa, ink=#rrggbbaa, radius=8, border=1,#rrggbbaa, linear=90,#rrggbbaa,#rrggbbaa, shadow=0,2,6,#rrggbbaa, text=\"words\" level=50 or widget=<name> (see the crate guide)",
+                "fill=#rrggbbaa, ink=#rrggbbaa, radius=8, border=1,#rrggbbaa, linear=90,#rrggbbaa,#rrggbbaa, shadow=0,2,6,#rrggbbaa, text=\"words\", type=<title|body>, level=50 or widget=<name> (see the crate guide)",
             )
         };
         let (key, value) = text

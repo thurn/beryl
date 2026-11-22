@@ -290,7 +290,7 @@ project, and selects the main lanes.
   `card.json` holds a card's printed size and stacking, which each profile's
   camera carries (`CameraData::card`) and each frame passes to the renderer's
   card mesh (`Frame::card`). `badges.json` holds the badges' sizes; a change
-  reshapes their text. `gallery.json` holds the gallery's card and scry samples.
+  reshapes their text.
 
 - `data/beryl3d/effects/*.json` defines drawing layers for runtime effects. The
   app embeds them. Tools read them from the checkout or `BERYL3D_DATA`. The

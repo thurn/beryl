@@ -37,7 +37,7 @@ pub use undrawn::{Missing, Undrawn};
 pub use work::{Areas, Load, Work};
 
 use kit_base::atlas::Tier;
-use kit_base::geometry::Rect;
+use kit_base::geometry::{Rect, Size};
 use kit_base::paint::Shadow;
 use kit_base::pose::Pose;
 
@@ -347,6 +347,15 @@ pub const ELEMENTS: usize = 2 * OBJECTS + ABILITIES + RINGS + LAYER_ELEMENTS;
 /// rarely exceeds.
 pub const NAME_BYTES: usize = ELEMENTS * 32;
 
+/// A scene with its own camera and logical window, drawn within a physical pixel rectangle.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Inset {
+    pub frame: Frame,
+    pub size: Size,
+    pub scale: f32,
+    pub viewport: Rect,
+}
+
 /// What the client core hands the renderer and the checks for one moment.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Frame {
@@ -376,6 +385,8 @@ pub struct Frame {
     /// with depth from 0 at the near plane to 1 at the far one. It serves every record,
     /// because a flat-layer record is placed on a plane just in front of the camera.
     pub view_projection: Mat4,
+    /// A separate scene composited into this frame, if its viewport is visible.
+    pub inset: Option<Box<Inset>>,
     /// A card's printed width and height in millimetres, the size of the card mesh. The
     /// renderer builds its card mesh at this size, and `finish` bounds card records by it.
     pub card: Vec2,
@@ -463,6 +474,7 @@ impl Frame {
             bands: [0; BANDS + 1],
             tier: Tier::Baseline,
             view_projection: Mat4::IDENTITY,
+            inset: None,
             card: Vec2::ONE,
             clips: [Rect::default(); CLIPS],
             clips_full: false,

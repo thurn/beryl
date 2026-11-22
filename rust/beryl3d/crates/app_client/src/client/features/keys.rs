@@ -122,7 +122,6 @@ pub(super) fn start(client: &mut Client, pressed: Pressed) -> Option<KeyResponse
             .recordings
             .is_empty(),
         in_column: client.show.table().profile().screen_column().is_some(),
-        gallery: client.features.gallery,
     };
     start::shortcut_press(pressed.index, input).map(KeyResponse::Action)
 }

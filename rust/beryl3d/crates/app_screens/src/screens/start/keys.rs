@@ -2,8 +2,7 @@
 //! the primary button does (back to the game in progress, else a new one), G opens the gallery,
 //! T opens the testing screen in a tools build of the app, which lists the recordings, and on
 //! the desktop the keys of `lobby.host` (Cmd+N) open the host form, as the web's start screen
-//! binds them. On the gallery, which the start screen opens, Escape closes an open menu, then
-//! the command list's preview, then goes back to the start screen.
+//! binds them. Escape goes back to the start screen from the gallery.
 
 use beryl_protocol::SessionId;
 use game_manual::screens::table_entries::{HOST, host_press};
@@ -11,7 +10,7 @@ use kit_scene::Shortcut;
 use kit_ui::element::Action;
 
 use super::Message;
-use crate::screens::{GalleryState, Screen, gallery_escape};
+use crate::screens::Screen;
 
 /// The shortcuts, in the order `press` reads their indexes.
 pub const SHORTCUTS: [Shortcut; 5] = [
@@ -34,7 +33,6 @@ pub struct KeyInputs {
     /// Whether the start screen is laid out in a fitted column (`Inputs::column`), as on a
     /// phone, where it has no host key.
     pub in_column: bool,
-    pub gallery: GalleryState,
 }
 
 /// What a press of the shortcut at `index` of `SHORTCUTS` sends, or `None` where it does
@@ -48,7 +46,7 @@ pub fn press(index: usize, input: KeyInputs) -> Option<Action> {
         1 if start => Action::new(Message::Open(Screen::Gallery)),
         2 if start && input.has_recordings => Action::new(Message::Open(Screen::Testing)),
         3 if start && !input.in_column => Action::new(host_press()),
-        4 if input.screen == Screen::Gallery => gallery_escape(input.gallery),
+        4 if input.screen == Screen::Gallery => Action::new(Message::Open(Screen::Start)),
         _ => return None,
     })
 }

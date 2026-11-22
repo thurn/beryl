@@ -74,6 +74,14 @@ impl Page {
 
     /// Gives the drawing host the replay's client and the atlas deliveries it retains across
     /// backward seeks. Record each atlas delivery only after the renderer accepts its page.
+    pub(crate) fn face_layers(&self) -> &game_table::faces::Faces {
+        self.client.face_layers()
+    }
+
+    pub(crate) fn face_arrays_made(&mut self) {
+        self.client.face_arrays_made();
+    }
+
     pub fn host_assets(&mut self) -> (&mut client::Client, &mut Vec<AssetReady>) {
         (&mut self.client, &mut self.glyphs)
     }

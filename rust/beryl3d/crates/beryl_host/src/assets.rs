@@ -142,7 +142,7 @@ pub struct Assets {
     tuning: Option<Arc<Data>>,
     faces: Preparer,
     results: Option<Receiver<Prepared>>,
-    /// Whether the current list belongs to the gallery, and its number.
+    /// Whether the current list belongs to a story, and its generation.
     active: Option<(bool, u64)>,
     /// Owners of uploaded full-size layers. An assignment alone doesn't mean it was uploaded.
     full: [Option<FaceId>; FULL_LAYERS],
@@ -211,8 +211,7 @@ impl Assets {
         self.sync_light(renderer, client.data());
         self.request_text(client);
         self.prepare_faces(client, renderer);
-        // Match requests stay queued while the gallery's arrays are active.
-        if self.active.is_some_and(|(gallery, _)| !gallery) {
+        if self.active == Some(client.face_generation()) {
             let wanted = client.wanted_faces().collect::<Vec<_>>();
             for face in wanted {
                 self.request_full(client, face);
@@ -256,9 +255,9 @@ impl Assets {
         self.glyphs.flush();
         self.upload_text(client, renderer, |ready| remember_atlas(ready.clone()));
         self.prepare_faces(client, renderer);
-        let Some((gallery, _)) = self.active else {
+        if self.active != Some(client.face_generation()) {
             return;
-        };
+        }
         // A backward seek creates a new client. Board layers keep their contents in the
         // renderer and can be announced again without decoding any pictures.
         let count = client.faces().faces().len();
@@ -268,26 +267,19 @@ impl Assets {
             if client.face_layers().board_layer_of(face).is_none()
                 && renderer.layer_uploaded(FaceSize::Board, layer)
             {
-                client.handle(Input::Device(DeviceInput::Assets(for_list(
-                    AssetReady::Face {
-                        face,
-                        size: FaceSize::Board,
-                        layer,
-                    },
-                    gallery,
-                ))));
+                client.handle(Input::Device(DeviceInput::Assets(AssetReady::Face {
+                    face,
+                    size: FaceSize::Board,
+                    layer,
+                })));
             }
         }
-        let mut wanted = Vec::new();
-        if !gallery {
-            // A picture can wait for only as many full-size faces as fit at once.
-            let faces = client.wanted_faces().take(FULL_LAYERS).collect::<Vec<_>>();
-            for face in faces {
-                if self.request_full(client, face) {
-                    wanted.push(face);
-                }
-            }
-        }
+        // A picture can wait for only as many full-size faces as fit at once.
+        let faces = client.wanted_faces().take(FULL_LAYERS).collect::<Vec<_>>();
+        let wanted = faces
+            .into_iter()
+            .filter(|&face| self.request_full(client, face))
+            .collect::<Vec<_>>();
         self.receive_faces(renderer);
         while renderer.uploaded(FaceSize::Board) < count
             || wanted
@@ -385,7 +377,7 @@ impl Assets {
     }
 
     fn prepare_faces(&mut self, client: &mut Client, renderer: &mut Renderer) {
-        let active = (client.showing_gallery(), client.face_layers().number());
+        let active = client.face_generation();
         let list = client.faces();
         // A match's list is empty until its card records arrive.
         if self.active == Some(active) || list.faces().is_empty() {
@@ -400,9 +392,7 @@ impl Assets {
         renderer.set_faces(&names, format);
         self.results = Some(self.faces.prepare_match(match_faces(list), &[format]));
         self.full.fill(None);
-        if !active.0 {
-            client.face_arrays_made();
-        }
+        client.face_arrays_made();
         self.active = Some(active);
     }
 
@@ -431,7 +421,9 @@ impl Assets {
     }
 
     fn upload_faces(&mut self, client: &mut Client, renderer: &mut Renderer, wake: Wake) {
-        let gallery = self.active.is_some_and(|(gallery, _)| gallery);
+        if self.active != Some(client.face_generation()) {
+            return;
+        }
         for ready in renderer.upload_waiting(wake) {
             if let AssetReady::Face {
                 face,
@@ -441,19 +433,7 @@ impl Assets {
             {
                 self.full[usize::from(layer)] = Some(face);
             }
-            client.handle(Input::Device(DeviceInput::Assets(for_list(ready, gallery))));
+            client.handle(Input::Device(DeviceInput::Assets(ready)));
         }
-    }
-}
-
-/// Routes the gallery's faces to its own list, keeping their layers out of the match's list.
-fn for_list(ready: AssetReady, gallery: bool) -> AssetReady {
-    match ready {
-        AssetReady::Face {
-            face,
-            size: FaceSize::Board,
-            layer,
-        } if gallery => AssetReady::GalleryFace { face, layer },
-        ready => ready,
     }
 }

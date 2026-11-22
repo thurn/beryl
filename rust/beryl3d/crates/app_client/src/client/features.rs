@@ -6,10 +6,11 @@ use std::fmt::Debug;
 
 use crate::command::Request;
 use app_screens::screens::bug_report::{self, BugReport};
+use app_screens::screens::gallery::{self, GalleryScreen};
 use app_screens::screens::settings::{self, SettingsSheet};
 use app_screens::screens::start::{self, StartScreen};
 use app_screens::screens::testing::{self, TestingScreen};
-use app_screens::screens::{self, GalleryState, Music, Screen, Sheet};
+use app_screens::screens::{Music, Screen, Sheet};
 use app_screens::settings::ScreenSettings;
 use beryl_protocol::{PlayerView, SessionId};
 use game_hud::hud::HudIn;
@@ -23,7 +24,7 @@ mod prompt;
 use game_hud::screens::game_over::{self, GameOver};
 use game_manual::manual::bindings::Bindings;
 use game_manual::screens::table_entries::TableEntries;
-use game_table::faces::{FaceList, Faces};
+use game_table::faces::FaceList;
 use game_table::profiles::Profile;
 use game_table::table::Window;
 use kit_scene::{Effect, Feature, FeatureSlot, StateUpdate};
@@ -52,6 +53,7 @@ use manual::{
 const SETTINGS: &str = "settings";
 const START: &str = "start";
 const TESTING: &str = "testing";
+const GALLERY: &str = "gallery";
 pub(super) const BUG_REPORT: &str = "bug-report";
 const GAME_OVER: &str = "game-over";
 const STEPS: &str = "steps";
@@ -63,6 +65,7 @@ const REGISTRY: &[Registration] = &[
     Registration::of::<StartScreen>(START, Placement::Screen(Screen::Start))
         .keys(&start::SHORTCUTS, keys::start),
     Registration::of::<TestingScreen>(TESTING, Placement::Screen(Screen::Testing)),
+    Registration::of::<GalleryScreen>(GALLERY, Placement::Screen(Screen::Gallery)),
     Registration::of::<BugReport>(BUG_REPORT, Placement::Sheet(Sheet::BugReport))
         .keys(&keys::BUG_REPORT_KEYS, keys::bug_report),
     Registration::of::<GameOver>(GAME_OVER, Placement::GameOver),
@@ -199,8 +202,6 @@ pub(super) struct Features {
     pub opening: super::viewing::Opening,
     pub screen_cards: super::viewing::ScreenCards,
     pub screen: Screen,
-    pub gallery: GalleryState,
-    pub gallery_faces: Option<Faces>,
     pub music: Option<Music>,
     pub shown: (Screen, Option<Sheet>),
     pub prompts: prompts::router::Router,
@@ -228,8 +229,6 @@ impl Default for Features {
             opening: super::viewing::Opening::default(),
             screen_cards: super::viewing::ScreenCards::default(),
             screen: Screen::Game,
-            gallery: GalleryState::default(),
-            gallery_faces: None,
             music: None,
             shown: (Screen::Game, None),
             prompts: prompts::router::Router::default(),
@@ -349,7 +348,6 @@ impl Features {
             .find_map(|entry| self.mount(entry, inputs))
     }
 
-    #[cfg(feature = "stories")]
     pub fn view_named(&mut self, id: &str, inputs: ViewInputs<'_>) -> Option<Element> {
         let entry = REGISTRY.iter().find(|entry| entry.id == id)?;
         if entry.prompt_view.is_some() {
@@ -413,6 +411,10 @@ impl Client {
 
     pub(super) fn update_start(&mut self, message: &start::Message) {
         update::<StartScreen>(self, START, message);
+    }
+
+    pub(super) fn update_gallery(&mut self, message: &gallery::Message) {
+        update::<GalleryScreen>(self, GALLERY, message);
     }
 
     pub(super) fn update_testing(&mut self, message: &testing::Message) {
@@ -575,13 +577,6 @@ impl Mounted for StartScreen {
         match request {
             start::Request::Open(screen) => {
                 client.features.screen = screen;
-                client.features.gallery = GalleryState::default();
-                if screen == Screen::Gallery {
-                    client
-                        .features
-                        .gallery_faces
-                        .get_or_insert_with(|| Faces::new(screens::gallery_faces()));
-                }
                 client.change_sheet(None)
             }
             start::Request::AwaitGame => {
@@ -597,6 +592,33 @@ impl Mounted for StartScreen {
                 true
             }
         }
+    }
+}
+
+impl Mounted for GalleryScreen {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        Some(
+            Features::slot::<Self>(&mut features.slots, id).view(gallery::Inputs {
+                window: inputs.window,
+                layout: inputs.hud.data.flat.gallery,
+            }),
+        )
+    }
+
+    fn command(_: &mut Client, command: Self::Command) {
+        match command {}
+    }
+
+    fn request(client: &mut Client, request: Self::Request) -> bool {
+        match request {
+            gallery::Request::Open(name) => client.select_story(&name),
+            gallery::Request::Restart => client.restart_story(),
+        }
+        true
     }
 }
 
@@ -619,13 +641,18 @@ impl Mounted for TestingScreen {
         match command {}
     }
 
-    fn request(client: &mut Client, replay: Self::Request) -> bool {
-        client.requests.push_back(Request::Replay {
-            name: replay.name,
-            seat: replay.seat,
-        });
-        client.features.screen = Screen::Game;
-        client.change_sheet(None)
+    fn request(client: &mut Client, request: Self::Request) -> bool {
+        match request {
+            testing::Request::Replay { name, seat } => {
+                client.requests.push_back(Request::Replay { name, seat });
+                client.features.screen = Screen::Game;
+                client.change_sheet(None)
+            }
+            testing::Request::Story(name) => {
+                client.update_gallery(&gallery::Message::Open(name));
+                update::<StartScreen>(client, START, &start::Message::Open(Screen::Gallery))
+            }
+        }
     }
 }
 

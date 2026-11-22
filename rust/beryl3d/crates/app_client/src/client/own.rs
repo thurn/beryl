@@ -21,6 +21,7 @@ impl Client {
     /// also prepares the scripts for callers that omit this step.
     pub fn prepare(&mut self, now: u64) {
         self.prepare_scroll(now);
+        self.prepare_story(now);
         self.prepare_table(self.features.bug().table_time(now));
     }
 

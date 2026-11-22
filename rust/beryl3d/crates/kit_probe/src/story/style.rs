@@ -3,7 +3,7 @@
 use std::fmt;
 
 use kit_base::paint::{Gradient, Shadow, Stop};
-use kit_frame::frame::StateBits;
+use kit_frame::frame::{Role, StateBits};
 use kit_ui::element::Element;
 use kit_ui::widgets::{self, FieldState, MenuGroup, MenuRow, Widget, icons};
 
@@ -19,6 +19,8 @@ pub(super) enum Property {
     Linear(f32, Color, Color),
     Shadow([f32; 3], Color),
     Text(String),
+    Title,
+    Body,
     Level(u8),
     Widget(Widget),
 }
@@ -46,6 +48,8 @@ impl Property {
                 ],
                 color(parts.next()?)?,
             ),
+            "type" if value == "title" => Self::Title,
+            "type" if value == "body" => Self::Body,
             "level" => Self::Level(value.parse::<u8>().ok().filter(|level| *level <= 100)?),
             "widget" => Self::Widget(
                 Widget::ALL
@@ -73,6 +77,8 @@ impl Property {
             Self::Shadow([x, y, blur], color) => {
                 style.box_shadow = vec![Shadow::new(x, y, blur, color)];
             }
+            Self::Title => style.text = kit_base::tokens::type_style::TITLE,
+            Self::Body => style.text = kit_base::tokens::type_style::BODY,
             Self::Text(_) | Self::Widget(_) | Self::Level(_) => {}
         }
     }
@@ -115,6 +121,8 @@ impl fmt::Display for Property {
                 "text=\"{}\"",
                 words.replace('\\', "\\\\").replace('"', "\\\"")
             ),
+            Self::Title => out.write_str("type=title"),
+            Self::Body => out.write_str("type=body"),
             Self::Level(level) => write!(out, "level={level}"),
             Self::Widget(widget) => write!(out, "widget={}", widget.word()),
         }
@@ -158,12 +166,32 @@ pub(super) fn build_widget(
         ),
         Widget::IconButton => widgets::icon_button(icons::GEAR, name),
         Widget::List => widgets::list(name, []),
-        Widget::Menu => {
+        Widget::Menu | Widget::ContextMenu | Widget::SheetMenu => {
             let mut row = MenuRow::new(words);
             row.checked = selected;
             row.enabled = !bits.has(StateBits::DISABLED);
             row.action = Some(kit_ui::element::Action::new(()));
-            widgets::menu(name, "", &[MenuGroup { rows: vec![row] }])
+            let groups = &[MenuGroup { rows: vec![row] }];
+            if widget == Widget::SheetMenu {
+                let mut menu = widgets::sheet_menu(name, "", groups, None, |_| {
+                    kit_ui::element::Action::new(())
+                });
+                for row in menu
+                    .children
+                    .iter_mut()
+                    .filter(|row| row.role == Role::MenuItem)
+                {
+                    row.style.min_height = Some(actions.list_row);
+                }
+                menu
+            } else {
+                let menu = widgets::menu(name, "", groups);
+                if widget == Widget::ContextMenu {
+                    widgets::context_menu(glam::Vec2::new(node.rect.x, node.rect.y), menu)
+                } else {
+                    menu
+                }
+            }
         }
 
         Widget::Slider => {
@@ -177,6 +205,16 @@ pub(super) fn build_widget(
                 .unwrap_or_default();
             widgets::slider(name, level, 0u8)
         }
+        Widget::Overlay => widgets::screen::overlay(
+            kit_base::geometry::Size {
+                width: node.rect.width,
+                height: node.rect.height,
+            },
+            (words, Some("Choose an option")),
+            None,
+            kit_ui::element::text("First option"),
+            vec![widgets::primary("Done")],
+        ),
         Widget::Toggle => widgets::toggle(icons::GEAR, name, selected),
         Widget::Tooltip => widgets::tip_label(words.to_owned()),
     }

@@ -92,6 +92,7 @@ pub struct Renderer {
     pub(crate) enhanced: Option<Enhanced>,
     /// The backdrop filter, for frames that ask for one (`Frame::backdrop`).
     backdrop: Filter,
+    inset: crate::inset::Compositor,
     panel_blur: Option<PanelBlur>,
     /// Present when the renderer counts the fragments each frame shades.
     counter: Option<FragmentCounter>,
@@ -141,6 +142,7 @@ impl Renderer {
         });
         let enhanced = Enhanced::new(&device, target_format, &layout, slots.uniforms(), lighting);
         let backdrop = Filter::new(&device, target_format);
+        let inset = crate::inset::Compositor::new(&device, target_format);
         let panel_blur = enhanced
             .as_ref()
             .map(|_| PanelBlur::new(&device, target_format));
@@ -163,6 +165,7 @@ impl Renderer {
             depth: None,
             enhanced,
             backdrop,
+            inset,
             panel_blur,
             counter: None,
             adapter: "unknown".to_owned(),
@@ -425,6 +428,39 @@ impl Renderer {
     /// in the Enhanced tier when the frame is in it and this renderer can draw it, and in
     /// Baseline otherwise.
     pub(crate) fn render_view(
+        &mut self,
+        frame: &Frame,
+        view: &wgpu::TextureView,
+        width: u32,
+        height: u32,
+    ) -> Drawn {
+        let mut drawn = self.render_scene(frame, view, width, height);
+        if let Some(inset) = &frame.inset {
+            let mut viewport = inset.viewport;
+            viewport.x = viewport.x.clamp(0.0, width as f32);
+            viewport.y = viewport.y.clamp(0.0, height as f32);
+            viewport.width = viewport.width.min(width as f32 - viewport.x);
+            viewport.height = viewport.height.min(height as f32 - viewport.y);
+            if viewport.width >= 1.0 && viewport.height >= 1.0 {
+                let limit = self.device.limits().max_texture_dimension_2d;
+                let pixels = |points: f32| (points * inset.scale).round().max(1.0) as u32;
+                let width = pixels(inset.size.width).min(limit);
+                let height = pixels(inset.size.height).min(limit);
+                let target =
+                    self.inset
+                        .target(&self.device, &self.sampler, self.format, width, height);
+                self.fit_card_mesh(inset.frame.card);
+                std::mem::swap(&mut self.depth, &mut self.inset.depth);
+                let inside = self.render_scene(&inset.frame, &target, width, height);
+                std::mem::swap(&mut self.depth, &mut self.inset.depth);
+                self.inset.paint(&self.device, &self.queue, view, viewport);
+                drawn.draw_calls += inside.draw_calls + 1;
+            }
+        }
+        drawn
+    }
+
+    fn render_scene(
         &mut self,
         frame: &Frame,
         view: &wgpu::TextureView,
