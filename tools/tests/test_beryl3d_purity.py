@@ -63,6 +63,42 @@ def test_the_inspector_has_no_gpu_dependency(tmp_path: Path) -> None:
     assert "beryl_inspect depends on wgpu" in found
 
 
+@pytest.mark.parametrize(
+    "settings_fields, name, line",
+    [
+        (
+            "settings: crate::settings::Settings,\n"
+            "    transient_settings: app_screens::screens::settings::State,",
+            "transient_settings",
+            5,
+        ),
+        (
+            "settings: crate::settings::Settings,\n    confirm_concede: bool,",
+            "confirm_concede",
+            5,
+        ),
+        ("settings:\n        <SettingsSheet as Feature>::State,", "settings", 4),
+    ],
+)
+def test_client_state_keeps_transient_settings_in_the_registry(
+    tmp_path: Path, settings_fields: str, name: str, line: int
+) -> None:
+    client = f"{CRATES}/app_client/src/client/mod.rs"
+    shared = (
+        "pub struct Client {\n"
+        "    features: features::Features,\n"
+        "    routes: input::Routes,\n"
+    )
+    check = purity.SOURCE_RULES["client-state"]
+    write(tmp_path, client, shared + "    settings: crate::settings::Settings,\n}\n")
+    assert check(tmp_path) == []
+
+    write(tmp_path, client, shared + f"    {settings_fields}\n}}\n")
+    (found,) = check(tmp_path)
+    assert found.startswith(f"{client}:{line}: Client field starting with `{name}`")
+    assert "Feature registered in client/features.rs" in found
+
+
 def test_the_lint_tables_must_match(tmp_path: Path) -> None:
     write(tmp_path, "rust/Cargo.toml", LINTS)
     write(tmp_path, "rust/beryl3d/Cargo.toml", LINTS)

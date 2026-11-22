@@ -745,6 +745,12 @@ def guides(root: Path) -> list[str]:
     return check(root)
 
 
+def client_state(root: Path) -> list[str]:
+    from .client_state import check
+
+    return check(root)
+
+
 def report(name: str, found: list[str]) -> int:
     for line in found:
         print(f"{name}: {line}")
@@ -753,6 +759,7 @@ def report(name: str, found: list[str]) -> int:
 
 SOURCE_RULES: dict[str, Callable[[Path], list[str]]] = {
     "scene-purity": scene_purity,
+    "client-state": client_state,
     "levels": levels,
     "lints-match": lints_match,
     "data-names": data_names,
@@ -762,6 +769,7 @@ SOURCE_RULES: dict[str, Callable[[Path], list[str]]] = {
     "guides": guides,
 }
 SOURCE_INPUTS: dict[str, list[str]] = {
+    "client-state": ["tools/src/beryl_tools/beryl3d/client_state.py"],
     "data-names": ["tools/src/beryl_tools/beryl3d/tuning_names.py"],
     "guides": [
         "tools/src/beryl_tools/beryl3d/guides.py",
