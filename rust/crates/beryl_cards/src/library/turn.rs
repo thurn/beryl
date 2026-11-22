@@ -71,6 +71,7 @@ pub const FIRST_DRAW: &[Scenario] = &[Scenario::new("the player on the draw deck
 /// Only the active player can play a land, only in their main phase with an empty stack,
 /// and by default only once per turn.
 pub const LAND_PLAY: &[Scenario] = &[Scenario::new("players get one land play on their own turn")
+    .interaction(&[names::LIGHTNING_BOLT])
     .hand(P0, &[names::ISLAND, names::PLAINS])
     .hand(P1, &[names::ISLAND, names::PLAINS, names::LIGHTNING_BOLT])
     .battlefield(P1, &[names::MOUNTAIN])

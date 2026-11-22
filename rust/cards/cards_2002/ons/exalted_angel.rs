@@ -70,15 +70,14 @@ pub mod scenarios {
                 THEM.has(Zone::Graveyard, Card::LightningBolt, 1),
             ]),
         Scenario::new("A countered morph goes to the graveyard revealed")
-            .interaction(&[Card::Counterspell])
             .hand(P0, &[ANGEL])
             .battlefield(P0, &[PLAINS, PLAINS, PLAINS])
-            .hand(P1, &[Card::Counterspell])
+            .hand(P1, &[Prop::Instant])
             .battlefield(P1, &[Card::Island, Card::Island])
             .actions(&[
                 ME.casts_face(ANGEL, FaceIx::DOWN),
                 ME.colored(Zone::Stack, ANGEL, Colors::NONE),
-                THEM.casts(Card::Counterspell),
+                THEM.casts(Prop::Instant),
                 ME.has(Zone::Graveyard, ANGEL, 1),
             ]),
         Scenario::new("A morph that dies face down goes to the graveyard revealed")

@@ -143,6 +143,7 @@ pub const GRAVEYARD_RETURN: &[Scenario] = &[
             ME.tapped(names::BLOODGHAST, 0),
         ]),
     Scenario::new("Bloodghast stays in exile when its graveyard trigger resolves")
+        .interaction(&[names::TORMODS_CRYPT])
         .graveyard(P0, &[names::BLOODGHAST])
         .hand(P0, &[names::SWAMP])
         .battlefield(P1, &[names::TORMODS_CRYPT])

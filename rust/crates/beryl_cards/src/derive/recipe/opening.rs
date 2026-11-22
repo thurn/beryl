@@ -428,6 +428,14 @@ pub(super) fn open_recipe(def: &'static CardDef, place: Place, recipe: Recipe) -
             )));
             out
         }
+        Recipe::EmptyHand => {
+            let mut out = new("observe the source with an empty hand");
+            out.start.setup.players[P0.index()].hand = &[];
+            out.stimuli
+                .push(Stimulus::PassUntil(TURN, TurnStep::PostcombatMain));
+            out.stimuli.push(Stimulus::Keep);
+            out
+        }
         Recipe::ObserveState | Recipe::WithoutPermanent(_) => {
             let mut out = new("wait for the state condition");
             if let Recipe::WithoutPermanent(filter) = recipe {

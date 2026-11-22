@@ -25,7 +25,7 @@ pub mod scenarios {
     use crate::prelude::*;
 
     const BOLT: &str = Card::LightningBolt;
-    const COUNTERSPELL: &str = Card::Counterspell;
+    const COUNTERSPELL: &str = Prop::Instant;
     const FORK: &str = Card::Fork;
     const GEYSER: &str = Card::Braingeyser;
     const ISLAND: &str = Card::Island;
@@ -219,7 +219,7 @@ pub mod scenarios {
         // Fork remains a legal target while the copy's target is chosen. It leaves the stack
         // before the copy can resolve, so the original Counterspell still counters the Bolt.
         Scenario::new("Fork targets itself with a copy of Counterspell")
-            .interaction(&[BOLT, COUNTERSPELL])
+            .interaction(&[BOLT])
             .battlefield(P0, &[MOUNTAIN; 4])
             .hand(P0, &[BOLT, BOLT, FORK])
             .battlefield(P1, &[ISLAND; 2])

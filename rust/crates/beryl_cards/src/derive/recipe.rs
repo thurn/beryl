@@ -1,9 +1,9 @@
-//! Game actions that produce the events a card listens for or replaces. Each recipe adds
-//! only the cards it plays, so ordinary openings keep their original positions.
+//! Starting positions and game actions that exercise a card's abilities. Recipes change
+//! only their own starting positions, so ordinary openings keep their original setup.
 
 use beryl_card::{
-    Ability, AbilityKind, Amount, Behavior, CardDef, Condition, CounterKind, Effect, Filter,
-    Governed, Modification, Objects, Players, Replaced, Rewrite, Seat, Subject, TargetKind,
+    Ability, AbilityKind, Amount, Behavior, CardDef, Comparison, Condition, CounterKind, Effect,
+    Filter, Governed, Modification, Objects, Players, Replaced, Rewrite, Seat, Subject, TargetKind,
     Trigger, TriggerEvent,
 };
 use beryl_engine::{TurnStep, Zone};
@@ -43,6 +43,7 @@ enum Recipe {
     RemoveLastCounter(CounterKind),
     WithoutPermanent(Filter),
     ObserveState,
+    EmptyHand,
 }
 
 fn players(whose: Players) -> &'static [Seat] {
@@ -198,7 +199,11 @@ fn recipes(def: &'static CardDef, place: Place) -> Vec<Recipe> {
         }
         if let Some(rule) = ability.rule() {
             match rule.what {
-                Governed::Block(_) => recipes.push(Recipe::Attack(P1)),
+                // Either rule is checked during declarations. The multi-block rule is
+                // checked after the first block, even with no other attacker to block.
+                Governed::Block(_) | Governed::BlockAnyNumber(_) => {
+                    recipes.push(Recipe::Attack(P1));
+                }
                 Governed::Attack {
                     unless_defender_controls: Some(filter),
                     ..
@@ -213,15 +218,27 @@ fn recipes(def: &'static CardDef, place: Place) -> Vec<Recipe> {
             if layer.modifications.contains(&Modification::GrantEscape) {
                 recipes.push(Recipe::Escape);
             }
-            if let Some(Condition::Compare(Amount::Life(whose), _, Amount::Fixed(n))) =
-                layer.condition
-            {
-                recipes.extend(
-                    players(whose)
-                        .iter()
-                        .copied()
-                        .map(|p| Recipe::LoseLife(p, n)),
-                );
+            match layer.condition {
+                Some(Condition::Compare(Amount::Life(whose), _, Amount::Fixed(n))) => {
+                    recipes.extend(
+                        players(whose)
+                            .iter()
+                            .copied()
+                            .map(|p| Recipe::LoseLife(p, n)),
+                    );
+                }
+                Some(Condition::Compare(
+                    Amount::Count(Objects::InZoneOf {
+                        zone: Zone::Hand,
+                        players: Players::You,
+                        filter: Filter::Any,
+                    }),
+                    Comparison::Equal,
+                    Amount::Fixed(0),
+                )) if matches!(place, Place::Battlefield(_)) => {
+                    recipes.push(Recipe::EmptyHand);
+                }
+                _ => {}
             }
         }
     }

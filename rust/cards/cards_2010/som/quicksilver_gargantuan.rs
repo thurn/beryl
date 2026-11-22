@@ -29,7 +29,7 @@ pub mod scenarios {
     const GOYF: &str = Card::Tarmogoyf;
     const MIMIC: &str = Card::GlasspoolMimic;
     const OKO: &str = Card::OkoThiefOfCrowns;
-    const HOLE: &str = Card::PortableHole;
+    const HOLE: &str = Prop::Artifact;
 
     /// P0, at 10 life against P1's 20, holds Quicksilver Gargantuan and seven Islands; P1
     /// controls `permanents`.
@@ -218,7 +218,7 @@ pub mod scenarios {
         // The copy uses Portable Hole's copiable types. Its enters ability exiles the
         // original, and Oko's next +1 makes the copy a 3/3 Elk.
         copying("Oko makes the Gargantuan's artifact copy a 3/3", &[HOLE])
-            .interaction(&[OKO, HOLE])
+            .interaction(&[OKO])
             .permanents(P0, &[Permanent::new(OKO)])
             .actions(&[
                 ME.activates(OKO, 1),

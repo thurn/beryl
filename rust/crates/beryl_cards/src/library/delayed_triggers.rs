@@ -61,7 +61,7 @@ pub const SCENARIOS: &[Scenario] =
 
 const DRAIN: &str = names::MANA_DRAIN;
 const WISP: &str = names::FLICKERWISP;
-const SKYDIVER: &str = names::THIEVING_SKYDIVER;
+const SKYDIVER: &str = props::THIEF.card;
 const MYR: &str = names::GOLD_MYR;
 
 /// The delayed mana ability resolves at the caster's first subsequent main phase, then
@@ -98,7 +98,7 @@ pub const NEXT_MAIN_PHASE: &[Scenario] =
 pub const RETURN_TO_OWNER: &[Scenario] =
     &[
         Scenario::new("The delayed return gives a stolen creature back untapped")
-            .interaction(&[SKYDIVER, MYR])
+            .interaction(&[MYR])
             .battlefield(
                 P0,
                 &[
