@@ -24,9 +24,9 @@
 # The rollout benchmark's instruction count against the bar in
 # rust/crates/beryl_bench/count-gate.toml (that file's comments say when the bar may move), as
 # `counts:rollouts`, and each family's present cost against its ratio there, as
-# `counts:family/<name>` on ARM64. Callgrind measures rollouts in Lima and WSL against separate
-# architecture bars. The ARM64 trend files `count-creep` and `count-lower` tickets. When `beryl-bench`
-# is missing or out of reach, the adapter reports the check incomplete
+# `counts:family/<name>` on both platforms. Callgrind measures rollouts in Lima and WSL against
+# separate architecture bars. The ARM64 trend files `count-creep` and `count-lower` tickets.
+# When `beryl-bench` is missing or out of reach, the adapter reports the check incomplete
 # with the reason (`cannot-run:`).
 [family.counts]
 kind = "regression"

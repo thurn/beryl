@@ -18,7 +18,7 @@ Run from the repository's root as `python -m beryl_tools.ignite.rest <verb> <fam
 The families:
 
 - `counts`: `counts:rollouts` is the rollout benchmark's instruction count against its bar, and
-  `counts:family/<name>` a family's ARM64 present cost against its ratio, both in
+  `counts:family/<name>` a family's present cost against its ratio, both in
   `rust/crates/beryl_bench/count-gate.toml`. The count runs in the `beryl-bench` virtual machine
   under Lima or WSL. After `counts:rollouts` an ARM64 run in the `tip` class (`IGNITE_CLASS`)
   stores the verified commit's count and files the trend's `count-creep` and
@@ -185,11 +185,12 @@ def scale_checks(root: Path) -> list[dict[str, Any]]:
 
 def list_checks(family: str, root: Path) -> list[dict[str, Any]]:
     if family == "counts":
-        # The family ratios in the repository are qualified on ARM64.
-        names = [] if system.WINDOWS else gate_families(root)
         return [
             {"check": ROLLOUTS, "inputs": []},
-            *[{"check": f"{FAMILY_PREFIX}{name}", "inputs": []} for name in names],
+            *[
+                {"check": f"{FAMILY_PREFIX}{name}", "inputs": []}
+                for name in gate_families(root)
+            ],
         ]
     if family == "scale":
         return scale_checks(root)

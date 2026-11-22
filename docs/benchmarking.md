@@ -62,9 +62,9 @@ just bench -p beryl_bench --bench example_timing
   the architecture's bar in `rust/crates/beryl_bench/count-gate.toml`. Compare
   before and after counts from the same architecture. Ignite records ARM64
   counts in its trend. The file's comments say when either bar may rise.
-  `just count-gate --family <name>` gates a family's present cost instead
-  ([The present-cost gate](#the-present-cost-gate)). Its thresholds are for
-  ARM64 verification. Windows can run it for local measurements.
+  `just count-gate --family <name>` gates a family's present cost
+  ([The present-cost gate](#the-present-cost-gate)). Ignite runs the family
+  checks against the same ratio limits on macOS and Windows.
 
 Name benchmark targets by kind: `<subject>_counts`, `<subject>_abba`,
 `<subject>_timing`.

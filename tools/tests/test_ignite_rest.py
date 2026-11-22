@@ -133,19 +133,16 @@ def repository(root: Path) -> None:
     )
 
 
-def test_counts_lists_the_rollouts_and_arm64_family_bars(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("windows", [False, True])
+def test_counts_lists_rollouts_and_family_bars_on_each_platform(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, windows: bool
 ) -> None:
     repository(tmp_path)
-    monkeypatch.setattr(adapter.system, "WINDOWS", False)
+    monkeypatch.setattr(adapter.system, "WINDOWS", windows)
     assert [c["check"] for c in adapter.list_checks("counts", tmp_path)] == [
         "counts:rollouts",
         "counts:family/blank",
         "counts:family/layers",
-    ]
-    monkeypatch.setattr(adapter.system, "WINDOWS", True)
-    assert [c["check"] for c in adapter.list_checks("counts", tmp_path)] == [
-        "counts:rollouts",
     ]
 
 

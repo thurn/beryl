@@ -4217,10 +4217,10 @@ How the machines divide verification:
 - A check with `platforms = "any"` needs one pass anywhere. Cygnus can verify
   engine logic and run the XMage and Forge oracle checks for the fleet.
 - A check with a platform list needs a pass on each platform that lists it. The
-  `counts` family checks rollouts in Lima on macOS and in WSL on Windows. It
-  lists present-cost checks on macOS. The `ignite-platform` family covers Ignite
-  code that behaves differently across operating systems. The Macs run the
-  browser and app families.
+  `counts` family checks rollout instructions and present costs in Lima on macOS
+  and in WSL on Windows. The `ignite-platform` family covers Ignite code that
+  behaves differently across operating systems. The Macs run the browser and app
+  families.
 - A daemon prefers the checks only it can run, then claims portable ones. Fleet
   policy controls which machines can take tickets and verify tips. See
   [Fleet settings](#fleet-settings).
