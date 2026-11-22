@@ -40,7 +40,9 @@ use kit_base::geometry::Rect;
 pub use kit_space::camera::{Camera, CameraData};
 pub use look::{Dress, Look};
 pub use pile::{PILE_IDS, PileShown, pile_name};
-pub use place::{ContainerInfo, Placement, ROWS, Rest, Rows, Scroll, Scroller, containers, place};
+pub use place::{
+    ContainerDecision, Placement, ROWS, Rest, RowDecision, Rows, Scroll, Scroller, place,
+};
 pub use place::{
     Group, NO_GROUP, PileRules, Zones, Zooms, arrival, blocked, blocking_rows, host_slot,
 };
@@ -252,6 +254,12 @@ impl LifeDock {
 }
 
 impl Layout {
+    /// Whether this zone has its own visible pile in the layout.
+    #[must_use]
+    pub fn pile_visible(&self, zone: ZoneName) -> bool {
+        zone != ZoneName::Exile || self.style.show_exile
+    }
+
     /// The window line the horizontal stack scrolls along, in logical points from the top.
     #[must_use]
     pub fn centred_stack_line(&self) -> Option<f32> {

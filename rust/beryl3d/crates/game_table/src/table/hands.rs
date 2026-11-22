@@ -51,6 +51,13 @@ pub(super) fn hand(
         &fresh
     };
 
+    if let Some(decisions) = placement.decisions.as_mut() {
+        decisions.hand[usize::from(!yours)] = Some(super::place::ContainerDecision {
+            items: count + picked.len(),
+            overflow: solved.overflow,
+            press_points: if yours { strip } else { 0.0 },
+        });
+    }
     if yours {
         let (before, after) = (solved.before, solved.after);
         placement.rows.hand = RowWindow::new(

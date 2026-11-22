@@ -67,6 +67,22 @@ impl Track {
 }
 
 impl Tracks {
+    pub(super) fn active_properties(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.opacity
+            .iter()
+            .map(|_| "opacity")
+            .chain(self.placement.iter().map(|_| "layout position"))
+            .chain(self.other.iter().map(|(property, _)| match property {
+                Property::Opacity => "opacity",
+                Property::Translation => "translation",
+                Property::Scale => "scale",
+                Property::Color => "color",
+                Property::Background => "background",
+                Property::Width => "width",
+                Property::Height => "height",
+            }))
+    }
+
     pub(super) fn reserve_presence(&mut self, presence: &Presence) {
         self.other.reserve(
             usize::from(presence.translation.is_some()) + usize::from(presence.scale.is_some()),

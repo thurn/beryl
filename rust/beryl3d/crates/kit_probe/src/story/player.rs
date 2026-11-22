@@ -276,6 +276,16 @@ impl Player {
         self.dirty = true;
     }
 
+    /// Reads the kept node behind a story element's authored id.
+    #[must_use]
+    pub fn node_style(&self, id: ElementId) -> Option<kit_ui::layout::NodeStyle<'_>> {
+        let kept = self
+            .nodes
+            .iter()
+            .find_map(|(kept, shown)| (shown.id == id).then_some(*kept));
+        self.layer.node_style(kept.unwrap_or(id))
+    }
+
     /// Draws the current moment using the supplied glyphs and icons.
     pub fn frame(&mut self) -> &Frame {
         if self.dirty {

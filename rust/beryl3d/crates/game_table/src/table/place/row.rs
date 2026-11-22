@@ -221,6 +221,17 @@ fn row_rules(
     (fitted, scale, container)
 }
 
+/// The fit chosen for a battlefield container during an inspection solve.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct RowDecision {
+    pub items: usize,
+    pub groups: usize,
+    pub zoom: f32,
+    pub least_zoom: Option<f32>,
+    pub fit: solver::Decision,
+    pub region: &'static str,
+}
+
 /// One of one side's three battlefield rows, `cards` in the order they entered. They keep that
 /// order, except that mana sources stand untapped first, so how much mana is open reads at a
 /// glance, lands before artifacts, and each name together, in the order the names first appear.
@@ -234,6 +245,7 @@ pub(super) fn battlefield_row(
 ) {
     let RowFit { area, y, .. } = fit;
     let zoom = placement.zooms.get(side, row);
+    let items = cards.len();
     let (cards, under, names) = prepared(cards, row, ids);
     let (fitted, scale, container) = row_rules((layout, fit), (side, row), zoom);
     // A zoomed-out row keeps one edge where it stands at full size, as the web's does: a
@@ -305,6 +317,7 @@ pub(super) fn battlefield_row(
         let pressable = placed.copies > 0 && face_up(object) && object.name.as_deref() != Some("");
         (camera.card_corners(pose.transform()), pressable)
     };
+    let capture = placement.decisions.is_some();
     let restore = |placed: solver::Placed| {
         let (object, pose) = posed(&placed);
         placement.set(
@@ -317,20 +330,49 @@ pub(super) fn battlefield_row(
             },
         );
     };
-    let window = solver::arrange(
+    let mut decision = solver::Decision::default();
+    let window = solver::arrange_inspected(
         container,
         &inputs,
         offset,
         (camera, layout.strip),
         project,
         restore,
+        capture.then_some(&mut decision),
     );
+    if let Some(rows) = placement.decisions.as_mut() {
+        rows.battlefield[side_index(side)][row_index(row)] = RowDecision {
+            items,
+            groups: inputs.len(),
+            zoom,
+            least_zoom: layout.row_zoom.map(|limits| {
+                if row == RowName::Creatures {
+                    limits.minimum
+                } else {
+                    limits.back.minimum
+                }
+            }),
+            fit: decision,
+            region: region_key(fitted.is_some(), side, row),
+        };
+    }
     placement.rows.battlefield[side_index(side)][row_index(row)] = RowWindow::new(
         window.scroll.first,
         window.scroll.shown,
         window.scroll.last,
         (window.before, window.after),
     );
+}
+
+fn region_key(fitted: bool, side: Side, row: RowName) -> &'static str {
+    match (fitted, side, row) {
+        (false, _, RowName::Creatures) => "table.creatures",
+        (false, _, RowName::Lands) => "table.lands",
+        (false, _, RowName::Others) => "table.others",
+        (true, _, RowName::Creatures) => "table.anchored.web.room",
+        (true, Side::You, RowName::Lands | RowName::Others) => "table.anchored.web.you",
+        (true, Side::Opponent, RowName::Lands | RowName::Others) => "table.anchored.web.opponent",
+    }
 }
 
 /// Where each blocker of `cards` wants its middle to stand so that it faces its attacker

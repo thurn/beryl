@@ -74,3 +74,23 @@ impl Motion<'_> {
             .map(|change| change.copies)
     }
 }
+
+impl super::Table {
+    /// The table transitions contributing to one card's drawn pose at this moment.
+    pub fn transitions_for_probe(&self, slot: usize, now: u64) -> Vec<&'static str> {
+        let Some(mut object) = self.objects.cards.get(slot).copied().flatten() else {
+            return Vec::new();
+        };
+        [
+            (self.slide_look(slot, &mut object, now), "row scroll"),
+            (self.tray_look(slot, &mut object, now), "tray transition"),
+            (
+                self.shown_look(slot, &mut object, now),
+                "screen box transition",
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(active, name)| active.then_some(name))
+        .collect()
+    }
+}

@@ -11,6 +11,7 @@ mod chrome;
 mod cli;
 mod conventions;
 mod differential;
+mod explain;
 mod faults;
 mod frame_allocation;
 mod furniture;

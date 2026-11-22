@@ -6,7 +6,7 @@ use super::Table;
 use crate::table::HandFits;
 use crate::table::place::{
     Group, PileRules, Placement, Rules, Zones, Zooms, place_group, place_reusing, place_zones,
-    rezoom, zooms,
+    rezoom, solve_zones, zooms,
 };
 use crate::table::rows::NameIds;
 
@@ -27,6 +27,15 @@ impl Table {
     #[must_use]
     pub fn placement(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
         self.placement_of(&Zones::of_view(view, abilities))
+    }
+
+    /// Runs the placement solver with its optional decision side table enabled.
+    pub fn placement_for_probe(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
+        solve_zones(
+            &Zones::of_view(view, abilities),
+            self.placement_rules(None),
+            Some(Box::default()),
+        )
     }
 
     /// Every object's resting place in `zones`, for this window.

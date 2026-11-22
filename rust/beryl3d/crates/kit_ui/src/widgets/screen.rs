@@ -21,8 +21,39 @@ pub const fn screen_timing(duration_ms: f32) -> Timing {
 /// enter together. Fixed overlays appear at once, and transparent holders leave
 /// each panel inside them to enter on its own.
 #[must_use]
-pub fn with_transitions(mut screen: Element, duration_ms: f32) -> Element {
-    fn declare(element: &mut Element, in_fixed_overlay: bool, fade: Presence, instant: Presence) {
+pub fn with_transitions(screen: Element, duration_ms: f32) -> Element {
+    declare_transitions::<false>(screen, duration_ms)
+}
+
+/// Declares the same transitions with their screen timing provenance.
+#[must_use]
+pub fn with_recorded_transitions(screen: Element, duration_ms: f32) -> Element {
+    declare_transitions::<true>(screen, duration_ms)
+}
+
+const ENTER: u8 = 1;
+const OPACITY: u8 = 2;
+const SLIDE: u8 = 4;
+
+/// Whether the screen applied its timing to this declared property.
+#[must_use]
+pub fn supplied_timing(element: &Element, property: &str) -> bool {
+    let bit = match property {
+        "enter" => ENTER,
+        "opacity_transition" => OPACITY,
+        "layout_slide" => SLIDE,
+        _ => 0,
+    };
+    element.screen_timing_origin & bit != 0
+}
+
+fn declare_transitions<const RECORD: bool>(mut screen: Element, duration_ms: f32) -> Element {
+    fn declare<const RECORD: bool>(
+        element: &mut Element,
+        in_fixed_overlay: bool,
+        fade: Presence,
+        instant: Presence,
+    ) {
         let fixed = matches!(element.anchor, Some(Anchor::Point(..)));
         if element.style.enter.is_none() || (in_fixed_overlay && element.style.enter == Some(fade))
         {
@@ -33,13 +64,22 @@ pub fn with_transitions(mut screen: Element, duration_ms: f32) -> Element {
             } else {
                 None
             };
+            if RECORD {
+                element.screen_timing_origin |= ENTER;
+            }
         }
         if !in_fixed_overlay && element.style.transition.is_empty() {
             element.style.opacity_transition = Some(fade.timing);
+            if RECORD {
+                element.screen_timing_origin |= OPACITY;
+            }
+        }
+        if RECORD && element.style.layout_slide.is_none() {
+            element.screen_timing_origin |= SLIDE;
         }
         element.style.layout_slide.get_or_insert(fade.timing);
         for child in &mut element.children {
-            declare(child, fixed, fade, instant);
+            declare::<RECORD>(child, fixed, fade, instant);
         }
     }
     let timing = screen_timing(duration_ms);
@@ -51,7 +91,7 @@ pub fn with_transitions(mut screen: Element, duration_ms: f32) -> Element {
         grouped: true,
         ..Presence::new(timing)
     };
-    declare(&mut screen, false, fade, instant);
+    declare::<RECORD>(&mut screen, false, fade, instant);
     screen
 }
 

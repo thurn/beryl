@@ -34,6 +34,7 @@ const fn rim(top: [u8; 4], side: [u8; 4], bottom: [u8; 4]) -> Border {
 #[must_use]
 pub fn button(label: &str) -> Element {
     let mut element = Element::new(Role::Button).name(label);
+    element.action_button = true;
     element.text = Some(label.to_owned());
     element.style.text = type_style::BUTTON;
     element.style.text_align = TextAlign::Center;

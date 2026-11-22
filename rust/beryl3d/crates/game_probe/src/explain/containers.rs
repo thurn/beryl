@@ -4,8 +4,7 @@ use beryl_protocol::protocol::{Side, ZoneName};
 use kit_frame::frame::Place;
 use kit_space::arrange::PolicyKind;
 
-use super::super::{Layout, StackPlacement};
-use super::Group;
+use game_table::table::{Group, Layout};
 
 /// The container that places one group's objects in this layout.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,10 +15,6 @@ pub struct ContainerInfo {
     pub source: &'static str,
 }
 
-pub(super) fn pile_visible(zone: ZoneName, layout: &Layout) -> bool {
-    zone != ZoneName::Exile || layout.style.show_exile
-}
-
 /// Describes every group visited by the table's placement pass.
 pub fn containers(layout: &Layout) -> impl ExactSizeIterator<Item = ContainerInfo> + '_ {
     Group::ALL.into_iter().map(|group| {
@@ -28,7 +23,7 @@ pub fn containers(layout: &Layout) -> impl ExactSizeIterator<Item = ContainerInf
                 zone,
                 side,
                 None,
-                if pile_visible(zone, layout) {
+                if layout.pile_visible(zone) {
                     "zone pile"
                 } else {
                     "hidden beneath graveyard"
@@ -56,9 +51,10 @@ pub fn containers(layout: &Layout) -> impl ExactSizeIterator<Item = ContainerInf
                 ZoneName::Stack,
                 Side::You,
                 None,
-                match layout.stack {
-                    StackPlacement::Anchored(_) => "anchored stack",
-                    StackPlacement::Centred(_) => "centred stack",
+                if layout.centred_stack_line().is_some() {
+                    "centred stack"
+                } else {
+                    "anchored stack"
                 },
                 PolicyKind::Cascade,
                 "stack.rs",

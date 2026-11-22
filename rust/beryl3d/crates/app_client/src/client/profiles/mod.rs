@@ -18,6 +18,9 @@ impl super::Client {
         let profile = self.show.table().profile();
         profile.data().hud.floating_prompt?;
         let mut layout = PlacementScene::default();
+        if self.probe.is_some() {
+            layout.record();
+        }
         let Some(update) = self.show.latest() else {
             return Some(layout);
         };

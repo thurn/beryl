@@ -103,12 +103,22 @@ impl Client {
         {
             self.prepare_resized();
         }
+        if let Some(probe) = &mut self.probe {
+            probe.attempts = placement_scene
+                .as_ref()
+                .map_or_else(Vec::new, PlacementScene::take_attempts);
+        }
         self.frame.clearances = placement_scene
             .map(PlacementScene::into_clearances)
             .unwrap_or_default();
         let duration = self.data().flat.transition_ms;
+        let transitions = if self.probe.is_some() {
+            kit_ui::widgets::screen::with_recorded_transitions
+        } else {
+            kit_ui::widgets::screen::with_transitions
+        };
         self.layer
-            .show(shown.map(|screen| kit_ui::widgets::screen::with_transitions(screen, duration)));
+            .show(shown.map(|screen| transitions(screen, duration)));
         if let Some(field) = self.features.focus_after_show.take() {
             self.layer.focus_field(field);
         }
@@ -186,7 +196,7 @@ impl Client {
     ) -> Option<Element> {
         // The prompt takes presses only after the script of its view has played out.
         furniture.prompt = (input.screen == Screen::Game)
-            .then(|| self.features.prompt_view(input.hud()))
+            .then(|| self.features.prompt_view(input.hud(), self.probe.is_some()))
             .flatten()
             .map(Element::waits);
         screens::screen(input, furniture, log, result)
@@ -294,6 +304,7 @@ impl Client {
         };
         let menu_face = context_menu::sheet_face(self.features.menu(), &hud);
         let feature_inputs = ViewInputs {
+            explaining: self.probe.is_some(),
             drag_threshold: self.data().pointer.drag_threshold_points,
             profile,
             screen: self.features.screen,

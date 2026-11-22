@@ -97,6 +97,13 @@ pub(super) fn place_stack(
 ) {
     let count = stack.len();
     let (arranged, units) = arrange(layout, camera, (count, scroll));
+    if let Some(decisions) = placement.decisions.as_mut() {
+        decisions.stack = Some(super::place::ContainerDecision {
+            items: count,
+            overflow: arranged.overflow,
+            press_points: layout.target,
+        });
+    }
     let (depth, step_depth) = match layout.stack {
         StackPlacement::Anchored(data) => (data.depth, data.step_depth),
         StackPlacement::Centred(data) => (data.depth, data.step_depth),

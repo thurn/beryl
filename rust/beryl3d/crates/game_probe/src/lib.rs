@@ -2,6 +2,7 @@
 
 pub mod agent;
 pub mod driver;
+pub mod explain;
 pub mod signature;
 #[cfg(feature = "stories")]
 pub mod story;

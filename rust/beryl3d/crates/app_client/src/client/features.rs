@@ -136,11 +136,14 @@ pub(super) struct ViewInputs<'a> {
     pub settings: ScreenSettings,
     pub start: Option<(bool, &'a TableEntries)>,
     pub link_error: Option<&'a str>,
+    pub explaining: bool,
 }
 
 type Slots = BTreeMap<&'static str, Box<dyn Any>>;
 
 struct Registration {
+    owner: fn() -> &'static str,
+    owns_float: fn(kit_ui::element::FloatId) -> bool,
     id: &'static str,
     source: &'static str,
     placement: Option<Placement>,
@@ -161,6 +164,8 @@ impl Registration {
 
     const fn mounted<F: Mounted>(id: &'static str, placement: Option<Placement>) -> Self {
         Self {
+            owner: std::any::type_name::<F>,
+            owns_float: |_| false,
             id,
             source: F::SOURCE,
             placement,
@@ -239,6 +244,13 @@ impl Default for Features {
 }
 
 impl Features {
+    pub(super) fn float_owner(id: kit_ui::element::FloatId) -> Option<&'static str> {
+        REGISTRY
+            .iter()
+            .find(|entry| (entry.owns_float)(id))
+            .map(|entry| (entry.owner)())
+    }
+
     fn slot<'a, F: Feature + 'static>(
         slots: &'a mut Slots,
         id: &'static str,
@@ -370,7 +382,11 @@ impl Features {
             }
             _ => inputs,
         };
-        (entry.view)(self, entry.id, inputs)
+        let mut element = (entry.view)(self, entry.id, inputs)?;
+        if inputs.explaining {
+            element.probe_owner = Some((entry.owner)());
+        }
+        Some(element)
     }
 
     #[cfg(feature = "stories")]

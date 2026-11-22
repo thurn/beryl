@@ -113,6 +113,12 @@ pub struct Element {
     /// Whether it is the button a prompt or screen expects to be pressed (`widgets::primary`).
     /// Its resolved element has the `PRIMARY` state, so that the tree names it.
     pub primary: bool,
+    /// Owning feature's Rust type, supplied by the inspection driver on mounted views.
+    pub probe_owner: Option<&'static str>,
+    /// Transition properties supplied by the screen timing during a probe.
+    pub screen_timing_origin: u8,
+    /// Whether this element uses the action-button widget's style defaults.
+    pub action_button: bool,
     /// Whether it and everything in it wait for the table to settle: the flat layer neither
     /// draws them nor lets them take a press or the pointer until every script given so far has
     /// played out (the layer's `open`). The open prompt waits so, as the web interface's prompt
@@ -149,6 +155,9 @@ impl Element {
             holds_focus: false,
             selected: false,
             primary: false,
+            probe_owner: None,
+            screen_timing_origin: 0,
+            action_button: false,
             waits: false,
             modal: false,
             anchor: None,
@@ -164,6 +173,9 @@ impl Element {
     pub fn same_node(&self, other: &Self) -> bool {
         self.role == other.role
             && self.name == other.name
+            && self.probe_owner == other.probe_owner
+            && self.screen_timing_origin == other.screen_timing_origin
+            && self.action_button == other.action_button
             && self.style == other.style
             && self.text == other.text
             && self.spans == other.spans

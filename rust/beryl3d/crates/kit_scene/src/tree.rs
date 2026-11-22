@@ -384,6 +384,16 @@ impl<'a> Tree<Vec<Node<'a>>> {
 
     /// The boxes selected by a relation's queries, excluding the node itself.
     pub fn avoided(&self, index: u32, queries: &[NodeQuery]) -> impl Iterator<Item = Rect> + '_ {
+        self.obstacles(index, queries)
+            .map(|node| node.space.screen_bounds())
+    }
+
+    /// The nodes tested by a keep-clear relation, in the order used by the solver.
+    pub fn obstacles(
+        &self,
+        index: u32,
+        queries: &[NodeQuery],
+    ) -> impl Iterator<Item = &Node<'_>> + '_ {
         let matches: Vec<_> = queries
             .iter()
             .map(|query| match query {
@@ -403,7 +413,7 @@ impl<'a> Tree<Vec<Node<'a>>> {
                             || role == Some(node.role)
                     })
             })
-            .map(|(_, node)| node.space.screen_bounds())
+            .map(|(_, node)| node)
     }
 
     fn place_clear_nodes(&mut self) {

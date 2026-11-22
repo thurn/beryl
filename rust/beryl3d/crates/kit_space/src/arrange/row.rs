@@ -56,6 +56,16 @@ pub struct Window {
     pub after: usize,
 }
 
+/// Why a row used its overflow window.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Decision {
+    pub full_width: f32,
+    pub available_width: f32,
+    pub press_points: f32,
+    pub overflow: bool,
+    pub pile_groups: usize,
+}
+
 /// Left and right edges and optional centre for an ordered row, in its local millimetres.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Row {
@@ -340,10 +350,41 @@ pub fn arrange(
     project: impl Fn(&Placed) -> Projection,
     mut placed: impl FnMut(Placed),
 ) -> Window {
+    arrange_inspected(
+        row,
+        groups,
+        offset,
+        (camera, press_points),
+        project,
+        &mut placed,
+        None,
+    )
+}
+
+/// Arranges the row and optionally records the inputs and result of its full-size fit.
+pub fn arrange_inspected(
+    row: Row,
+    groups: &[Group],
+    offset: usize,
+    (camera, press_points): (&Camera, f32),
+    project: impl Fn(&Placed) -> Projection,
+    mut placed: impl FnMut(Placed),
+    decision: Option<&mut Decision>,
+) -> Window {
     let packs: Vec<Pack> = groups.iter().map(|group| Pack::new(group, row)).collect();
     let full = row.full_width(groups, packs.iter().map(|pack| pack.width));
     let layout = viewport::Layout::new(row, groups, &packs, (camera, press_points), &project);
-    if (full <= row.room() || groups.is_empty()) && layout.full(full, &mut placed) {
+    let fits = (full <= row.room() || groups.is_empty()) && layout.full(full, &mut placed);
+    if let Some(decision) = decision {
+        *decision = Decision {
+            full_width: full,
+            available_width: row.room(),
+            press_points,
+            overflow: !fits,
+            pile_groups: groups.iter().filter(|group| group.copies > 1).count(),
+        };
+    }
+    if fits {
         Window {
             scroll: GroupWindow {
                 first: 0,

@@ -12,7 +12,10 @@ use kit_scene::{Feature, FeatureSlot};
 use kit_ui::element::Element;
 use kit_ui::input::FaceId;
 
-use crate::hud::{HudIn, placement_scene::PlacementScene};
+use crate::hud::{
+    HudIn,
+    placement_scene::{Attempt, PlacementScene},
+};
 
 /// Session inputs and the already drawn bar, which shapes can add controls around.
 #[derive(Clone, Copy)]
@@ -36,6 +39,7 @@ pub struct ViewKey {
     placement: Option<Vec<(ElementId, Option<u32>, Rect)>>,
     bar: Option<Element>,
     details: Details,
+    recording: bool,
 }
 
 #[derive(Default, PartialEq)]
@@ -94,6 +98,7 @@ impl ViewKey {
             placement,
             bar: inputs.bar.cloned(),
             details,
+            recording: hud.placement_scene.is_some_and(PlacementScene::recording),
         }
     }
 }
@@ -124,6 +129,7 @@ type Update<F> = (
 pub struct Mounted<F: for<'a> Feature<Inputs<'a> = Inputs<'a>>> {
     slot: FeatureSlot<F>,
     clearances: Vec<Clearance>,
+    attempts: Vec<Attempt>,
 }
 
 impl<F: for<'a> Feature<Inputs<'a> = Inputs<'a>>> Default for Mounted<F> {
@@ -131,6 +137,7 @@ impl<F: for<'a> Feature<Inputs<'a> = Inputs<'a>>> Default for Mounted<F> {
         Self {
             slot: FeatureSlot::default(),
             clearances: Vec::new(),
+            attempts: Vec::new(),
         }
     }
 }
@@ -161,11 +168,15 @@ impl<F: for<'a> Feature<Inputs<'a> = Inputs<'a>>> Mounted<F> {
                     bar: inputs.bar,
                 },
             );
+            self.attempts = placement
+                .as_ref()
+                .map_or_else(Vec::new, PlacementScene::take_attempts);
             self.clearances = placement.map_or_else(Vec::new, PlacementScene::take_clearances);
             element
         });
         if let Some(scene) = inputs.hud.placement_scene {
             scene.add_clearances(&self.clearances);
+            scene.add_attempts(&self.attempts);
         }
         element.clone()
     }

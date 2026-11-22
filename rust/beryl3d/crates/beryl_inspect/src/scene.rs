@@ -155,6 +155,38 @@ impl Scene {
         })))
     }
 
+    pub(crate) fn enable_explanation(&mut self) {
+        if let Self::Recording(page) = self {
+            page.enable_explanation();
+        }
+    }
+
+    pub(crate) fn explain(&self, element: &kit_frame::frame::Resolved) -> serde_json::Value {
+        use serde_json::json;
+
+        match self {
+            Self::Recording(page) => page.explain(element),
+            Self::Story(story) => {
+                let node = story.player.node_style(element.id);
+                let source = &story.context.recording;
+                json!({
+                    "place": {
+                        "space": "screen",
+                        "layout": node.as_ref().and_then(|node| node.parent)
+                            .map(game_probe::explain::layout),
+                        "anchor": node.as_ref().and_then(|node| node.element.anchor)
+                            .map(|anchor| format!("{anchor:?}")),
+                    },
+                    "look": node.as_ref().map_or_else(Vec::new, |node| {
+                        game_probe::explain::styles(node.element, source, source, None)
+                    }),
+                    "motion": node.map_or_else(Vec::new, |node| node.transitions),
+                    "owner": {"feature": source, "directory": source},
+                })
+            }
+        }
+    }
+
     pub fn frame(&mut self) -> &Frame {
         match self {
             Self::Recording(page) => page.frame(),

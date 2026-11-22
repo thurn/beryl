@@ -305,6 +305,7 @@ fn floating_bar(
         let middle_left = slots.middle(left, width, tall);
         let (slot, placed) = slots.place(
             "stacked prompt controls",
+            "prompt.stacked",
             strip,
             [middle_right, middle_left],
         );
@@ -406,7 +407,25 @@ impl<'a> PromptSlots<'a> {
                 .then(|| self.middle((self.dock.x + self.dock.width) - width, width, height))
                 .flatten()
         };
-        let (slot, placed) = self.place(name, strip, [middle(width), narrow.and_then(middle)]);
+        if raised && let Some(scene) = self.scene {
+            scene.raise_dock(
+                name,
+                Rect {
+                    y: self.dock.y,
+                    ..strip
+                },
+            );
+        }
+        let (slot, placed) = self.place(
+            name,
+            if raised {
+                "prompt.dock raised above hand"
+            } else {
+                "prompt.dock"
+            },
+            strip,
+            [middle(width), narrow.and_then(middle)],
+        );
         (placed, slot)
     }
 
@@ -431,6 +450,7 @@ impl<'a> PromptSlots<'a> {
     fn place<const N: usize>(
         &self,
         name: &'static str,
+        strip_slot: &'static str,
         strip: Rect,
         middle: [Option<Rect>; N],
     ) -> (usize, Rect) {
@@ -451,11 +471,16 @@ impl<'a> PromptSlots<'a> {
             .collect();
         // The first candidate is also the fallback on a crowded board, where the buttons
         // must stay available even when no place can clear the table.
-        let boxes = candidates
-            .iter()
-            .map(|&(_, bounds)| inset(bounds, self.metrics.overlap));
+        let boxes = candidates.iter().map(|&(index, bounds)| {
+            let slot = if index == 0 {
+                strip_slot
+            } else {
+                "prompt.stacked (middle band)"
+            };
+            (slot, inset(bounds, self.metrics.overlap))
+        });
         scene
-            .place(name, of, boxes)
+            .place_named(name, of, boxes)
             .map_or((0, strip), |(index, _)| candidates[index])
     }
 }
@@ -554,7 +579,7 @@ fn pill(asks: &str, place: PillPlace, slots: &PromptSlots<'_>) -> Element {
     let mut bounds = rect(x, top, width, height);
     if let Some(scene) = slots.scene {
         if matches!(place, PillPlace::Over(_)) {
-            scene.place("prompt pill", Vec::new(), [bounds.into()]);
+            scene.place_named("prompt pill", Vec::new(), [("prompt.asked", bounds.into())]);
         } else {
             bounds = pill_slot(scene, slots, bounds);
         }
@@ -628,7 +653,13 @@ fn pill_slot(scene: &PlacementScene, slots: &PromptSlots, preferred: Rect) -> Re
             }
         });
     scene
-        .place("prompt pill", table_rows(), full_width.chain(beside))
+        .place_named(
+            "prompt pill",
+            table_rows(),
+            full_width
+                .chain(beside)
+                .map(|candidate| ("prompt.bar", candidate)),
+        )
         .map_or(preferred, |(_, bounds)| bounds)
 }
 

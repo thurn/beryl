@@ -15,6 +15,8 @@ mod focus;
 mod geometry;
 mod menu;
 mod motion;
+mod probe;
+pub use probe::NodeStyle;
 mod objects;
 mod panel;
 mod pointed;

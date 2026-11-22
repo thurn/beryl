@@ -256,6 +256,7 @@ def pack_selection(arguments: list[str]) -> tuple[str, ...]:
     if command in {
         "info",
         "tree",
+        "explain",
         "diff",
         "check",
         "timeline",
@@ -484,6 +485,7 @@ OWN_COMMANDS: tuple[Command, ...] = (
         "the elements on screen at one moment of a recording, as an indented tree",
         single=True,
     ),
+    b3d_command("explain", "why an element is placed and styled", single=True),
     b3d_command(
         "diff",
         "the elements that appeared, left, moved or changed state between two moments",

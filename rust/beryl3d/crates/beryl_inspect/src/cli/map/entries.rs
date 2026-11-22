@@ -193,7 +193,7 @@ pub(super) fn containers() -> Result<Vec<Entry>, String> {
     for source in layouts()? {
         let profile = source.definition;
         let layout = Profile::for_window(source.layouts, profile.usual_window()).layout();
-        entries.extend(game_table::table::containers(&layout).map(|info| {
+        entries.extend(game_probe::explain::containers(&layout).map(|info| {
             Entry::new(
                 format!("{} {}", profile.name, place_word(info.place)),
                 crate_path(&format!("game_table/src/table/{}", info.source)),

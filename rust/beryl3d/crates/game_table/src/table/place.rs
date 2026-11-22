@@ -11,14 +11,15 @@ use beryl_protocol::script::{Piles, Table as Played};
 
 mod indexed;
 mod policy;
+mod probe;
 pub use indexed::arrival;
 pub use policy::PileRules;
+pub use probe::ContainerDecision;
+pub(crate) use probe::Decisions;
 mod row;
 use row::battlefield_row;
+pub use row::{RowDecision, Zooms, blocked, blocking_rows, prepared as prepare_row, row_of};
 pub(crate) use row::{RowFits, rezoom, zooms};
-pub use row::{Zooms, blocked, blocking_rows, prepared as prepare_row, row_of};
-mod catalog;
-pub use catalog::{ContainerInfo, containers};
 mod under;
 pub use under::{host_slot, names_host};
 
@@ -31,7 +32,6 @@ use super::{Camera, Layout, lifted};
 use kit_base::data::verbs::Lift;
 use kit_base::pose::Pose;
 use kit_frame::frame::Place;
-
 /// Where one object rests.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rest {
@@ -63,6 +63,8 @@ pub struct Placement {
     pub rows: Rows,
     /// How far each battlefield row is zoomed out.
     pub zooms: Zooms,
+    /// Present only for an inspection solve.
+    pub(crate) decisions: Option<Box<Decisions>>,
 }
 
 /// A line of cards that scrolls when it holds more than fit with their least strip: a
@@ -165,9 +167,18 @@ pub fn place(
 
 /// Every object's resting place in `zones`, seen through `camera`.
 pub(crate) fn place_zones(zones: &Zones, rules: Rules<'_>) -> Placement {
+    solve_zones(zones, rules, None)
+}
+
+pub(super) fn solve_zones(
+    zones: &Zones,
+    rules: Rules<'_>,
+    decisions: Option<Box<Decisions>>,
+) -> Placement {
     let piles = zones.pile_rules();
     let mut placement = Placement {
         zooms: zooms(zones, &piles, rules),
+        decisions,
         ..Placement::default()
     };
     for (group, objects) in Group::ALL.into_iter().zip(zone_members(zones)) {
@@ -197,6 +208,7 @@ pub(crate) fn place_reusing(
         piles: known.piles,
         rows: known.rows,
         zooms: Zooms::default(),
+        decisions: None,
     };
     let mut laid = 0;
     let (piles, known_piles) = (zones.pile_rules(), known_zones.pile_rules());
@@ -712,7 +724,7 @@ fn lay(
     let (layout, camera, scroll, fits, ids, lift) = rules;
     match group {
         Group::Pile { side, zone } => {
-            if catalog::pile_visible(zone, layout) {
+            if layout.pile_visible(zone) {
                 lay_pile(placement, objects, (side, zone), (layout, camera));
             } else {
                 lay_unseen_exile(placement, objects, side, (layout, camera));

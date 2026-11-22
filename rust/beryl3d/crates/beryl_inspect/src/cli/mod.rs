@@ -8,6 +8,7 @@
 
 mod check;
 mod corpus;
+mod explain;
 pub use kit_probe::agent::line;
 mod listing;
 mod map;
@@ -185,6 +186,28 @@ const COMMANDS: &[Command] = &[
             ),
         ],
         run: view::tree,
+    },
+    Command {
+        name: "explain",
+        summary: "why an element is where it is and looks as it does",
+        argument: " <scene> <locator>",
+        examples: [
+            (
+                "just b3d explain pay-default --at prompt:2 'button \"Auto Pay\"'",
+                "the payment button's placement, style and owner",
+            ),
+            (
+                "just b3d explain verbs-zones --at 1500ms 'card #8' --json",
+                "one card's placement and motion as JSON",
+            ),
+        ],
+        spec: Spec {
+            recording: true,
+            values: &[],
+            switches: &[],
+        },
+        own: &[],
+        run: explain::run,
     },
     Command {
         name: "diff",

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use glam::Vec2;
 use kit_base::{geometry::Rect, pose::Pose};
 use kit_frame::frame::{Clearance, ElementId, Role};
+use kit_scene::hit::intersection;
 use kit_scene::{Band, Candidate, KeepClear, Node, NodeQuery, NodeRef, SolvePhase, Space, Tree};
 
 const YOUR_ROWS: ElementId = ElementId(u32::MAX);
@@ -39,11 +40,30 @@ impl Group {
     }
 }
 
+/// One slot tried by a keep-clear control.
+#[derive(Clone, Debug)]
+pub struct Attempt {
+    pub control: &'static str,
+    pub slot: &'static str,
+    pub bounds: Rect,
+    pub selected: bool,
+    pub blocked: Vec<Obstacle>,
+}
+
+/// A scene node that the slot would cover.
+#[derive(Clone, Debug)]
+pub struct Obstacle {
+    pub id: ElementId,
+    pub group: &'static str,
+    pub bounds: Rect,
+}
+
 /// The phone's arranged table and the screen-space relations solved as its HUD is built.
 #[derive(Debug)]
 pub struct PlacementScene {
     tree: RefCell<Tree>,
     clearances: RefCell<Vec<Clearance>>,
+    attempts: Option<RefCell<Vec<Attempt>>>,
 }
 
 impl Default for PlacementScene {
@@ -60,6 +80,7 @@ impl Default for PlacementScene {
         Self {
             tree: RefCell::new(tree),
             clearances: RefCell::default(),
+            attempts: None,
         }
     }
 }
@@ -127,11 +148,25 @@ impl PlacementScene {
         of: Vec<NodeQuery>,
         candidates: impl IntoIterator<Item = Candidate>,
     ) -> Option<(usize, Rect)> {
+        self.place_named(
+            name,
+            of,
+            candidates.into_iter().map(|candidate| (name, candidate)),
+        )
+    }
+
+    /// Places a control with profile slot names for its candidates.
+    pub fn place_named(
+        &self,
+        name: &'static str,
+        of: Vec<NodeQuery>,
+        candidates: impl IntoIterator<Item = (&'static str, Candidate)>,
+    ) -> Option<(usize, Rect)> {
         let mut tree = self.tree.borrow_mut();
         let candidates: Vec<_> = candidates.into_iter().collect();
         let places: Vec<_> = candidates
             .iter()
-            .map(|&candidate| tree.add_slot(candidate))
+            .map(|&(_, candidate)| tree.add_slot(candidate))
             .collect();
         let index = u32::try_from(tree.nodes().len()).expect("nodes fit u32 indexes");
         let mut node = Node::screen(ElementId(PHASE.0 - 1 - index), name, Rect::default());
@@ -141,10 +176,26 @@ impl PlacementScene {
         });
         let index = tree.push(node);
         tree.solve(SolvePhase::Handle, |_, _| {});
-        let slot = tree.selected_slot(index)?;
-        let choice = places.iter().position(|&place| place == slot)?;
-        let candidate = candidates[choice];
+        let selected = tree.selected_slot(index);
         let relation = tree.nodes()[index as usize].keep_clear.as_ref()?;
+        if let Some(attempts) = &self.attempts {
+            let mut attempts = attempts.borrow_mut();
+            for (&slot, &(slot_name, candidate)) in places.iter().zip(&candidates) {
+                let chosen = selected == Some(slot);
+                attempts.push(Attempt {
+                    control: name,
+                    slot: slot_name,
+                    bounds: candidate.bounds,
+                    selected: chosen,
+                    blocked: obstacles(&tree, index, &relation.of, candidate.clearance),
+                });
+                if chosen {
+                    break;
+                }
+            }
+        }
+        let choice = places.iter().position(|&slot| Some(slot) == selected)?;
+        let (_, candidate) = candidates[choice];
         self.clearances.borrow_mut().push(Clearance {
             name,
             rect: candidate.clearance,
@@ -181,6 +232,42 @@ impl PlacementScene {
         Self {
             tree: RefCell::new(tree),
             clearances: RefCell::default(),
+            attempts: self.recording().then(RefCell::default),
+        }
+    }
+
+    pub fn record(&mut self) {
+        self.attempts = Some(RefCell::default());
+    }
+
+    pub(crate) fn recording(&self) -> bool {
+        self.attempts.is_some()
+    }
+
+    pub(crate) fn raise_dock(&self, control: &'static str, bounds: Rect) {
+        if let Some(attempts) = &self.attempts {
+            attempts.borrow_mut().push(Attempt {
+                control,
+                slot: "prompt.dock",
+                bounds,
+                selected: false,
+                blocked: obstacles(
+                    &self.tree.borrow(),
+                    u32::MAX,
+                    &[Group::Hand.children()],
+                    bounds,
+                ),
+            });
+        }
+    }
+
+    pub fn take_attempts(&self) -> Vec<Attempt> {
+        self.attempts.as_ref().map_or_else(Vec::new, RefCell::take)
+    }
+
+    pub(crate) fn add_attempts(&self, recorded: &[Attempt]) {
+        if let Some(attempts) = &self.attempts {
+            attempts.borrow_mut().extend_from_slice(recorded);
         }
     }
 
@@ -222,4 +309,27 @@ pub fn inset(bounds: Rect, amount: f32) -> Candidate {
             (bounds.height - 2.0 * amount).max(0.0),
         ),
     }
+}
+
+fn obstacles(tree: &Tree, index: u32, of: &[NodeQuery], candidate: Rect) -> Vec<Obstacle> {
+    tree.obstacles(index, of)
+        .filter_map(|node| {
+            let bounds = node.space.screen_bounds();
+            intersection(candidate, bounds)?;
+            let group = node.parent.map_or(node.name.as_ref(), |parent| {
+                tree.nodes()[parent as usize].name.as_ref()
+            });
+            Some(Obstacle {
+                id: node.id,
+                group: match group {
+                    "viewer rows" => "viewer rows",
+                    "opponent rows" => "opponent rows",
+                    "viewer hand" => "viewer hand",
+                    "stack" => "stack",
+                    _ => "phase",
+                },
+                bounds,
+            })
+        })
+        .collect()
 }

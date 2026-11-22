@@ -9,6 +9,12 @@ use crate::table::place::Placement;
 use crate::table::shadows::Floors;
 
 impl Objects {
+    /// Ability numbers in the view's stack order, including items outside the window.
+    #[must_use]
+    pub fn ability_numbers(&self) -> &[u32] {
+        &self.numbers
+    }
+
     /// The table container of a card, including when a screen box shows it.
     #[must_use]
     pub fn card_place(&self, slot: usize) -> Option<Place> {

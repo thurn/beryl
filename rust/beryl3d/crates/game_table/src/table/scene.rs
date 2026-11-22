@@ -293,6 +293,7 @@ impl Table {
                 .collect(),
             // Only placing a group reads the zooms (`Motion::place` keeps its own).
             zooms: Zooms::default(),
+            decisions: None,
         };
         self.unhold(&mut placement);
         placement

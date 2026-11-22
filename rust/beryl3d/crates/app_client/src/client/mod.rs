@@ -8,6 +8,7 @@ mod carry;
 mod data;
 mod editing;
 mod event;
+mod explain;
 pub(crate) use crate::command::{Reply, Request, SessionCommand};
 pub use event::Input;
 mod card_input;
@@ -83,6 +84,7 @@ impl Config {
 /// The client core.
 pub struct Client {
     frame: Frame,
+    probe: Option<game_probe::explain::Probe>,
     window: Window,
     /// The table and the scripts that lead it from view to view.
     show: Show,
@@ -122,6 +124,7 @@ impl Client {
         let table = Table::new(data, window);
         Self {
             frame: Frame::with_capacity(config.elements, config.draws, config.name_bytes),
+            probe: None,
             window,
             show: Show::new(table),
             layer,

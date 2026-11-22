@@ -16,6 +16,8 @@ pub(super) type Draw = fn(&Slots, &'static str, prompts::Inputs<'_>) -> Element;
 impl Registration {
     pub(super) const fn prompt<F: Prompt>(id: &'static str, placement: Placement) -> Self {
         Self {
+            owner: std::any::type_name::<F>,
+            owns_float: |_| false,
             id,
             source: F::SOURCE,
             placement: Some(placement),
@@ -33,11 +35,20 @@ impl Registration {
 }
 
 impl Features {
-    fn draw_prompt(&self, placement: Placement, inputs: prompts::Inputs<'_>) -> Option<Element> {
+    fn draw_prompt(
+        &self,
+        placement: Placement,
+        inputs: prompts::Inputs<'_>,
+        explaining: bool,
+    ) -> Option<Element> {
         let entry = REGISTRY
             .iter()
             .find(|entry| entry.placement == Some(placement))?;
-        Some((entry.prompt_view?)(&self.slots, entry.id, inputs))
+        let mut element = (entry.prompt_view?)(&self.slots, entry.id, inputs);
+        if explaining && element.probe_owner.is_none() {
+            element.probe_owner = Some((entry.owner)());
+        }
+        Some(element)
     }
 
     #[cfg(feature = "stories")]
@@ -48,22 +59,30 @@ impl Features {
     ) -> Option<Element> {
         hud.prompt = self.prompts.current();
         if placement == Placement::PromptBar {
-            return self.draw_prompt(placement, prompts::Inputs { hud, bar: None });
+            return self.draw_prompt(placement, prompts::Inputs { hud, bar: None }, false);
         }
         let shown = match &hud.prompt?.body {
             ShapeBody::Candidates => Placement::Candidates,
             body => Placement::Shape(shape_name(body.shape()?)),
         };
         (shown == placement)
-            .then(|| self.prompt_view(hud))
+            .then(|| self.prompt_view(hud, false))
             .flatten()
     }
 
-    pub(in crate::client) fn prompt_view(&self, hud: HudIn<'_>) -> Option<Element> {
+    pub(in crate::client) fn prompt_view(
+        &self,
+        hud: HudIn<'_>,
+        explaining: bool,
+    ) -> Option<Element> {
         if !prompts::bar::appears(&hud) {
             return None;
         }
-        let bar = self.draw_prompt(Placement::PromptBar, prompts::Inputs { hud, bar: None })?;
+        let bar = self.draw_prompt(
+            Placement::PromptBar,
+            prompts::Inputs { hud, bar: None },
+            explaining,
+        )?;
         let Some(prompt) = hud.prompt else {
             return Some(bar);
         };
@@ -77,6 +96,7 @@ impl Features {
                 hud,
                 bar: Some(&bar),
             },
+            explaining,
         )
     }
 }

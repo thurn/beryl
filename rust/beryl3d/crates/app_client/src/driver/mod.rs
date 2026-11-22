@@ -11,6 +11,8 @@
 
 mod check;
 mod cues;
+mod explain;
+use explain::Capture;
 mod gesture;
 mod glyphs;
 mod keys;
@@ -108,8 +110,7 @@ pub struct Page {
     /// Every input handed to the client, in order, and the time of each.
     inputs: Vec<Input>,
     given_at: Vec<u64>,
-    /// Whether the client keeps a record of every script, for the interface checks.
-    records: bool,
+    capture: Capture,
     /// The faults planted in the recording's scripts (`plant`).
     plants: Vec<Plant>,
     /// Whether scripts play faster while many updates wait (`Client::set_catch_up`).
@@ -165,7 +166,7 @@ impl Page {
             rest_since: None,
             inputs: Vec::new(),
             given_at: Vec::new(),
-            records: false,
+            capture: Capture::None,
             plants: Vec::new(),
             catch_up: true,
             moments: None,
@@ -280,11 +281,6 @@ impl Page {
     #[must_use]
     pub fn size(&self) -> Size {
         self.size
-    }
-
-    /// Whether later frames record their elements' looks (`Client::set_looking`), until a restart.
-    pub fn set_looking(&mut self, looking: bool) {
-        self.client.set_looking(looking);
     }
 
     /// Every input handed to the client so far, in order.
@@ -590,8 +586,11 @@ impl Page {
     /// Gives the client the recording's initial inputs and views. Text tools supply stub atlas
     /// cells and face layers. A host that draws supplies the actual uploads.
     fn begin(&mut self) {
-        if self.records {
+        if self.capture != Capture::None {
             self.client.record();
+        }
+        if self.capture == Capture::Explanation {
+            self.client.enable_explanation();
         }
         self.client.set_catch_up(self.catch_up);
         for plant in &self.plants {
@@ -782,7 +781,11 @@ impl Page {
             rest_since: None,
             inputs: Vec::new(),
             given_at: Vec::new(),
-            records,
+            capture: if records {
+                Capture::Scripts
+            } else {
+                Capture::None
+            },
             plants: self.plants.clone(),
             catch_up: self.catch_up,
             moments: Some(Vec::new()),

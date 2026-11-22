@@ -23,6 +23,7 @@ pub(super) const INSPECTOR: &str = "inspector";
 impl Registration {
     pub(super) const fn floating<F: Mounted + FloatFeature>(id: &'static str) -> Self {
         Self {
+            owns_float: |id| F::floats().any(|float| float == id),
             view: |_, _, inputs| {
                 let mut floats = F::floats().filter_map(|id| inputs.layer.float_element(id));
                 let first = floats.next()?;
