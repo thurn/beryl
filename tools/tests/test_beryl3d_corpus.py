@@ -110,3 +110,28 @@ def test_exploration_reports_each_requested_crate_as_it_finishes(
             "message": failed.message(),
         },
     ]
+
+
+def test_a_card_change_in_one_crate_invalidates_every_crate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each part is checked against a baseline recorded from every crate, so its digest must
+    change when a card in another crate changes, and stay put when nothing does."""
+    for crate in ("cards_a", "cards_b"):
+        (tmp_path / "rust/cards" / crate / "set").mkdir(parents=True)
+        (tmp_path / "rust/cards" / crate / "Cargo.toml").write_text("[package]\n")
+        (tmp_path / "rust/cards" / crate / "set/card.rs").write_text(f"// {crate}\n")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    monkeypatch.setattr(corpus.paths, "REPO", tmp_path)
+    monkeypatch.setattr(corpus, "CRATES", tmp_path / "rust/cards")
+
+    before = {part.crate: part.digest for part in corpus.parts(corpus.crates())}
+    assert set(before) == {"cards_a", "cards_b"}
+    assert before["cards_a"] != before["cards_b"]
+    assert {part.crate: part.digest for part in corpus.parts(corpus.crates())} == before
+    assert corpus.parts(["cards_b"]) == [corpus.Part("cards_b", before["cards_b"])]
+
+    (tmp_path / "rust/cards/cards_a/set/card.rs").write_text("// edited\n")
+    after = {part.crate: part.digest for part in corpus.parts(corpus.crates())}
+    assert after["cards_b"] != before["cards_b"]
+    assert after["cards_a"] != before["cards_a"]

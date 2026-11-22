@@ -19,7 +19,9 @@ from . import paths as b3d_paths
 
 CRATES: Path = paths.RUST / "cards"
 UPDATE = "just b3d corpus --update"
-# These inputs affect every part. Only the card definitions are partitioned by crate.
+# These inputs affect every part, along with every card crate under `rust/cards`: each part is
+# checked against a baseline pack recorded from the whole catalog, so a card in one crate can
+# change the verdict of another crate's part.
 SHARED = (
     "rust/beryl3d",
     "rust/crates",
@@ -37,6 +39,8 @@ SHARED = (
     "ui/fixtures.json",
     "ui/src/generated",
     "tools/src/beryl_tools/beryl3d/corpus.py",
+    "tools/src/beryl_tools/beryl3d/pack.py",
+    "tools/src/beryl_tools/card_files.py",
 )
 
 
@@ -84,7 +88,12 @@ def digest_files(digest: str, files: Iterable[str]) -> str:
 
 
 def parts(wanted: Iterable[str]) -> list[Part]:
-    """One content digest per crate, shared by manual sweep checkpoints and Ignite's next."""
+    """One digest per crate, shared by manual sweep checkpoints and Ignite's `next`.
+
+    A part records its own crate's cards and checks them against a baseline pack recorded from
+    every crate, so its digest covers every card crate, the shared inputs and its crate's name.
+    Editing a card in any crate therefore invalidates every part, and the same inputs give the
+    same digests, so a resumed sweep reuses the parts it completed."""
     names = sorted(set(wanted))
     if not names:
         return []
@@ -101,19 +110,16 @@ def parts(wanted: Iterable[str]) -> list[Part]:
             "--exclude-standard",
             "--",
             *SHARED,
-            *(f"rust/cards/{name}" for name in names),
+            "rust/cards",
         ],
         cwd=paths.REPO,
     )
     files = sorted({os.fsdecode(name) for name in raw.split(b"\0") if name})
-    shared = digest_files(
-        "", (name for name in files if not name.startswith("rust/cards/"))
-    )
-    by_crate: dict[str, list[str]] = {name: [] for name in names}
-    for name in files:
-        if name.startswith("rust/cards/"):
-            by_crate[name.split("/", 3)[2]].append(name)
-    return [Part(name, digest_files(shared, by_crate[name])) for name in names]
+    baseline = digest_files("", files)
+    return [
+        Part(name, hashlib.sha256(f"{baseline}\0{name}".encode()).hexdigest())
+        for name in names
+    ]
 
 
 def inspect(
