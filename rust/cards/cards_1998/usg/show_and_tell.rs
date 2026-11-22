@@ -190,13 +190,7 @@ pub mod scenarios {
             .hand(P0, &[SHOW, Card::SwiftReconfiguration])
             .battlefield(
                 P0,
-                &[
-                    Card::Island,
-                    Card::Island,
-                    Card::Island,
-                    Prop::Vanilla,
-                    Prop::FlashCreature,
-                ],
+                &[Card::Island, Card::Island, Card::Island, Prop::Vanilla],
             )
             .hand(P1, &[Card::HolyStrength])
             .battlefield(P1, &[Prop::Flier])
@@ -204,9 +198,9 @@ pub mod scenarios {
                 ME.casts(SHOW),
                 ME.picks_up_to(Card::SwiftReconfiguration),
                 THEM.picks_up_to(Card::HolyStrength),
-                ME.deciding(DecisionKind::ChooseObject, 3),
+                ME.deciding(DecisionKind::ChooseObject, 2),
                 ME.picks(Prop::Flier),
-                THEM.deciding(DecisionKind::ChooseObject, 3),
+                THEM.deciding(DecisionKind::ChooseObject, 2),
                 THEM.picks(Prop::Vanilla),
                 ME.controls(Card::SwiftReconfiguration, 1),
                 THEM.controls(Card::HolyStrength, 1),

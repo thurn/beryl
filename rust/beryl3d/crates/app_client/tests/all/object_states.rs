@@ -150,13 +150,11 @@ fn a_picked_card_lies_apart_from_its_hand_face_up_only_for_its_player() {
     assert!(mine.state.has(StateBits::PICKED) && theirs.state.has(StateBits::PICKED));
     assert!(!mine.state.has(StateBits::FACE_DOWN));
     assert!(theirs.state.has(StateBits::FACE_DOWN));
-    // Each lies over the table, nearer its player than the middle: the viewer's below the
-    // opponent's, and both well inside the window, where neither hand is.
+    // Each lies on its player's side of the table. The opponent's pick is off the
+    // centre line of the battlefield, where it could cover a creature.
     let (mine_at, theirs_at) = (middle(mine), middle(theirs));
     assert!(theirs_at.y < mine_at.y, "{theirs_at} above {mine_at}");
-    for at in [mine_at, theirs_at] {
-        assert!(at.y > 100.0 && at.y < 800.0, "{at} is over the table");
-    }
+    assert!(theirs_at.x < mine_at.x, "{theirs_at} left of {mine_at}");
 }
 
 #[test]

@@ -229,11 +229,11 @@ pub(crate) fn lay(
 /// below the profile's ceiling so the back row retains a strip to press.
 fn held_up(
     side: Side,
-    opening: bool,
+    upper_corner: bool,
     ceiling: f32,
     hand: &LiftHand,
 ) -> (LiftedFan, LiftedPlane, Range<f32>) {
-    let (at, height, band) = match (opening, side) {
+    let (at, height, band) = match (upper_corner, side) {
         (true, _) => (hand.opening.at, hand.opening.height, 0.0..1.0),
         (false, Side::You) if ceiling.is_finite() => (
             Vec2::new(hand.at.x, ceiling - hand.height),
@@ -267,23 +267,22 @@ fn held_turn(object: &ObjectView, backs: bool) -> f32 {
     }
 }
 
-/// Lays out `picked`, the cards of `side`'s hand its player picked in a hidden pick of the
-/// resolution that is paused, apart from the hand where the cards a player handles from their
-/// hand are held up: face up for their player, face down for the other ([CR 101.4a]): "each
-/// player must clearly indicate which face-down card they are choosing." The web interface's
-/// `pickedPlacements` (`ui/src/game/layout.ts`) lays them out the same way. `ceiling` is the
-/// height the viewer's hand keeps under, which `held_up` keeps them under on the phone.
+/// Lays out the cards a player picked while a resolution is paused, apart from their hand:
+/// face up for their player and face down for the other ([CR 101.4a]): "each player must
+/// clearly indicate which face-down card they are choosing." The viewer's picks use the
+/// held-up hand position, as in `pickedPlacements` (`ui/src/game/layout.ts`). On the desktop
+/// the opponent's picks use the upper corner where a held-up opening hand lies, clear of
+/// the permanents the viewer may still need to choose.
 ///
 /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
 pub(crate) fn lay_picked(
     picked: &[&ObjectView],
     side: Side,
-    camera: &Camera,
-    ceiling: f32,
-    hand: &LiftHand,
+    (layout, camera, hand): (&Layout, &Camera, &LiftHand),
     placement: &mut Placement,
 ) {
-    let (fan, plane, band) = held_up(side, false, ceiling, hand);
+    let upper_corner = side == Side::Opponent && layout.bands.is_none();
+    let (fan, plane, band) = held_up(side, upper_corner, layout.hand.ceiling, hand);
     for (object, mut pose) in picked
         .iter()
         .zip(fan.poses(camera, picked.len(), plane, band))

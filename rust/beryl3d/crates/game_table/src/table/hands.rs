@@ -10,13 +10,13 @@ use kit_space::arrange::{
 };
 
 use super::place::{Placement, Rest, turn};
-use super::{Camera, HandData, RowWindow};
+use super::{Camera, HandData, Layout, RowWindow};
 
 pub(super) fn hand(
     placement: &mut Placement,
     objects: &[&ObjectView],
     (side, scroll): (Side, usize),
-    (data, strip, lift): (HandData, f32, &LiftHand),
+    (layout, lift): (&Layout, &LiftHand),
     camera: &Camera,
     cache: Option<&mut HandFits>,
 ) {
@@ -36,7 +36,12 @@ pub(super) fn hand(
         row: None,
     };
     let yours = side == Side::You;
-    let scroll = if yours { scroll } else { 0 };
+    let (data, scroll) = if yours {
+        (layout.hand, scroll)
+    } else {
+        (layout.opponent_hand, 0)
+    };
+    let strip = layout.strip;
     let arrange = || fan_rests(count, yours, data, strip, camera, scroll);
     let fresh;
     let solved = if let Some(cache) = cache.filter(|_| count <= HandFits::MAX_CACHED && scroll == 0)
@@ -81,7 +86,7 @@ pub(super) fn hand(
             },
         );
     }
-    super::lifted::lay_picked(&picked, side, camera, data.ceiling, lift, placement);
+    super::lifted::lay_picked(&picked, side, (layout, camera, lift), placement);
 }
 
 /// Fan layouts by card count in a single script, whose camera and hand regions stay fixed.

@@ -730,20 +730,14 @@ fn lay(
                 lay_unseen_exile(placement, objects, side, (layout, camera));
             }
         }
-        Group::Hand(side) => {
-            let data = match side {
-                Side::You => layout.hand,
-                Side::Opponent => layout.opponent_hand,
-            };
-            hand(
-                placement,
-                objects,
-                (side, scroll.hand),
-                (data, layout.strip, &lift.hand),
-                camera,
-                hands,
-            );
-        }
+        Group::Hand(side) => hand(
+            placement,
+            objects,
+            (side, scroll.hand),
+            (layout, &lift.hand),
+            camera,
+            hands,
+        ),
         Group::Row { side, row } => {
             let offset = scroll.battlefield[side_index(side)][row_index(row)];
             battlefield_row(
