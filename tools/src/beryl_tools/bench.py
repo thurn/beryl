@@ -44,7 +44,7 @@ VM = "beryl-bench"
 VM_LOCK = "$HOME/bench-count.lock"  # held while a run provisions, builds and counts
 # Held shared by each run someone waits for, so that a low-priority run goes after it ([`locked`]).
 VM_TURN = "$HOME/bench-turn.lock"
-# Inside the VM, which mounts the checkout read-only, each worktree has a target dir and a
+# Inside the VM, each worktree has a target dir and a
 # Gungraun home named after it, so its artifacts and "old" results are its own.
 VM_TARGETS = "$HOME/targets"
 VM_GUNGRAUN = "$HOME/gungraun"
@@ -53,6 +53,13 @@ VM_GUNGRAUN = "$HOME/gungraun"
 # workspace members.
 VM_OWNER = ".beryl-checkout"
 COUNT_BENCHES = ["--bench", "*_counts"]
+COUNT_SOURCES = (
+    "rust",
+    "rust-toolchain.toml",
+    "data",
+    "docs/sample-decks",
+    "ui/src/generated",
+)
 # A Cargo profile can't set the CPU, so the recipes building the `search` profile pass it: off
 # Apple silicon, this machine's own (the justfile's `search_cpu`).
 SEARCH_CPU = (
@@ -294,9 +301,7 @@ fi
 
 def vm_command(script: str, vm: str = VM, workdir: str | None = None) -> list[str]:
     """`script` run in `vm`'s login shell from `workdir`, by default this checkout's rust/
-    directory. That path exists in the machine only when this checkout is in the main checkout,
-    the one directory the machine mounts, so a script that may run from a worktree elsewhere
-    (Beryl 3D's counts) passes `/`."""
+    directory. Scripts that send sources from an unmounted worktree start at `/`."""
     where = str(paths.RUST) if workdir is None else workdir
     if system.WINDOWS:
         # Windows' command line would mangle the script's quotes on the way through wsl.exe:
@@ -371,6 +376,7 @@ def count_script(
     checkout: str,
     live: list[str],
     then: list[list[str]] | None = None,
+    source: str = "",
 ) -> str:
     """Counts in `name`'s target dir and Gungraun home, as `checkout`'s build, running each
     command of `then` after `cargo` if it succeeded. A new target dir copies the gate's warm
@@ -397,7 +403,9 @@ fi
 {fresh}"""
     env = f"CARGO_TARGET_DIR={target} GUNGRAUN_HOME={home}"
     commands = " && ".join(f"{env} {shlex.join(c)}" for c in [cargo, *(then or [])])
-    return locked(f"{provision}{prepare}{commands}\n")
+    # Parallel Rust compilers can exhaust the Lima guest's default 4 GiB on a cold build.
+    jobs = "" if system.WINDOWS else "export CARGO_BUILD_JOBS=1\n"
+    return locked(f"{source}{provision}{jobs}{prepare}{commands}\n")
 
 
 def wsl_ensure(vm: str = VM) -> int:
@@ -462,23 +470,47 @@ def vm_ensure(vm: str = VM, cpus: int = 4, memory_gib: int = 4) -> int:
     return code
 
 
+def run_count(
+    cargo: list[str],
+    name: str,
+    *,
+    then: list[list[str]] | None = None,
+    capture: bool = True,
+) -> tuple[int, str]:
+    runner = locked_version((paths.RUST / "Cargo.lock").read_text(), "gungraun")
+    if runner is None:
+        log("no gungraun in rust/Cargo.lock")
+        return 2, ""
+    mounted = vm_host.vm_sees(paths.RUST, VM)
+    script = count_script(
+        provision_script(toolchain(), runner),
+        cargo,
+        name,
+        str(paths.REPO) if mounted else f"streamed:{paths.REPO}",
+        paths.worktree_names(),
+        then=then,
+        source="" if mounted else vm_host.bench_source_script(),
+    )
+    if mounted:
+        run = subprocess.run(
+            vm_command(script),
+            stdout=subprocess.PIPE if capture else None,
+            text=True,
+            check=False,
+        )
+    else:
+        run = vm_host.run_with_sources(
+            vm_command(script, workdir="/"), COUNT_SOURCES, capture=capture
+        )
+    return run.returncode, run.stdout or ""
+
+
 def bench_count(args: argparse.Namespace) -> int:
     code = vm_ensure()
     if code != 0:
         return code
-    runner = locked_version((paths.RUST / "Cargo.lock").read_text(), "gungraun")
-    if runner is None:
-        log("no gungraun in rust/Cargo.lock")
-        return 2
-    extra: list[str] = args.extra or COUNT_BENCHES
-    script = count_script(
-        provision_script(toolchain(), runner),
-        cargo_bench(extra),
-        paths.REPO.name,
-        str(paths.REPO),
-        paths.worktree_names(),
-    )
-    return vm_shell(script)
+    cargo = cargo_bench(args.extra or COUNT_BENCHES)
+    return run_count(cargo, paths.REPO.name, capture=False)[0]
 
 
 # The instruction-count gate. Its bar, and when to move it, are in
@@ -647,9 +679,6 @@ def vm_ready() -> int:
         why = "Lima is missing: brew install lima, then `just bench-count` once"
     elif vm_host.status(VM) is None:  # Creating it takes minutes, too long for a gate.
         why = f"no {VM} VM: run `just bench-count` once to create it"
-    elif not vm_host.vm_sees(paths.RUST, VM):
-        mounts = ", ".join(map(str, vm_host.vm_mounts(VM)))
-        why = f"the {VM} VM mounts {mounts}, not {paths.REPO}: count from a worktree of it"
     if why:
         log(why)
     return CANNOT_RUN if why or vm_ensure() != 0 else 0
@@ -663,29 +692,15 @@ def family_gate(names: list[str]) -> int:
         known = ", ".join(bars) or "none"
         log(f"no bar in {GATE_FILE.name} for {', '.join(unknown)}; families: {known}")
         return 2
-    runner = locked_version((paths.RUST / "Cargo.lock").read_text(), "gungraun")
-    if runner is None:
-        log("no gungraun in rust/Cargo.lock")
-        return 2
     first, *rest = family_cargo(names)
-    script = count_script(
-        provision_script(toolchain(), runner),
-        first,
-        GATE_NAME,
-        str(paths.REPO),
-        paths.worktree_names(),
-        then=rest,
-    )
-    run = subprocess.run(
-        vm_command(script), stdout=subprocess.PIPE, text=True, check=False
-    )
-    if run.returncode != 0:
-        return vm_host.vm_failed(run.returncode, VM)
+    code, out = run_count(first, GATE_NAME, then=rest)
+    if code != 0:
+        return vm_host.vm_failed(code, VM)
     failed = False
     for name in names:
-        present = counted(run.stdout, family_benchmark("present", name))
-        control = counted(run.stdout, family_benchmark("control", name))
-        found = pairing(run.stdout, name)
+        present = counted(out, family_benchmark("present", name))
+        control = counted(out, family_benchmark("control", name))
+        found = pairing(out, name)
         if present is None or control is None or found is None:
             log(f"Gungraun or {FAMILY_STEPS} reported nothing for the family {name}")
             return 2
@@ -702,27 +717,11 @@ def count_gate(args: argparse.Namespace) -> int:
     families: list[str] | None = args.family
     if families:
         return family_gate(families)
-    runner = locked_version((paths.RUST / "Cargo.lock").read_text(), "gungraun")
-    if runner is None:
-        log("no gungraun in rust/Cargo.lock")
-        return 2
     gate = load_gate(GATE_FILE.read_text(), windows=system.WINDOWS)
-    script = count_script(
-        provision_script(toolchain(), runner),
-        gate_cargo(gate),
-        GATE_NAME,
-        str(paths.REPO),
-        paths.worktree_names(),
-    )
-    run = subprocess.run(
-        vm_command(script),
-        stdout=subprocess.PIPE,
-        text=True,
-        check=False,
-    )
-    if run.returncode != 0:
-        return vm_host.vm_failed(run.returncode, VM)
-    measured = counted(run.stdout, gate.benchmark)
+    code, out = run_count(gate_cargo(gate), GATE_NAME)
+    if code != 0:
+        return vm_host.vm_failed(code, VM)
+    measured = counted(out, gate.benchmark)
     if measured is None:
         log(f"Gungraun reported no count for {gate.benchmark}")
         return 2
@@ -743,7 +742,6 @@ def count_gate(args: argparse.Namespace) -> int:
             )
             + "\n"
         )
-        return 0 if ok else 1
     return 0 if ok else 1
 
 

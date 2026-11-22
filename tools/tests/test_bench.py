@@ -1,6 +1,11 @@
+import argparse
 import json
 import subprocess
+import sys
+import tarfile
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -321,6 +326,7 @@ def test_the_vm_sees_only_checkouts_under_its_mounts(
 ) -> None:
     (tmp_path / ".lima" / "vm").mkdir(parents=True)
     (tmp_path / ".lima" / "vm" / "lima.yaml").write_text(LIMA_YAML)
+    monkeypatch.delenv("LIMA_HOME", raising=False)
     monkeypatch.setattr(bench.Path, "home", lambda: tmp_path)
     monkeypatch.setattr(bench.system, "WINDOWS", False)
     # Image URLs and commented-out mounts are not mounts.
@@ -328,8 +334,92 @@ def test_the_vm_sees_only_checkouts_under_its_mounts(
     assert bench.vm_host.vm_sees(Path("/Users/me/beryl/.worktrees/a/rust"), "vm")
     # A second clone, such as the one the tracker cutover pushed from, is not visible.
     assert not bench.vm_host.vm_sees(Path("/Users/me/.config/rollout/beryl/rust"), "vm")
-    # A VM whose config cannot be read is given the benefit of the doubt.
-    assert bench.vm_host.vm_sees(Path("/anywhere"), "missing")
+    # When the mount cannot be confirmed, the count sends the checkout.
+    assert not bench.vm_host.vm_sees(Path("/anywhere"), "missing")
+
+
+def test_the_gate_counts_the_current_files_of_an_unmounted_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if sys.platform == "win32":
+        pytest.skip("Windows counts use WSL")
+    main, lease = tmp_path / "main", tmp_path / "trees" / "lease"
+    (main / "rust").mkdir(parents=True)
+    (main / ".gitignore").write_text("/rust/target/\n")
+    (main / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "stable"\n')
+    (main / "rust" / "Cargo.lock").write_text(
+        '[[package]]\nname = "gungraun"\nversion = "0.20.0"\n'
+    )
+    (main / "rust" / "deleted.rs").touch()
+    git = [
+        "git",
+        "-C",
+        str(main),
+        "-c",
+        "user.name=test",
+        "-c",
+        "user.email=test@example.com",
+    ]
+    subprocess.run([*git, "init", "-q"], check=True)
+    subprocess.run([*git, "add", "."], check=True)
+    subprocess.run(
+        [*git, "-c", "commit.gpgsign=false", "commit", "-qm", "source"], check=True
+    )
+    subprocess.run([*git, "worktree", "add", "-q", "--detach", str(lease)], check=True)
+    (lease / "rust" / "deleted.rs").unlink()
+    (lease / "rust" / "added file.rs").write_text("lease sources")
+    (lease / "rust" / "target").mkdir()
+    (lease / "rust" / "target" / "artifact").touch()
+    (lease / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "beta"\n')
+
+    lima_home = tmp_path / "lima"
+    (lima_home / bench.VM).mkdir(parents=True)
+    (lima_home / bench.VM / "lima.yaml").write_text(
+        LIMA_YAML.replace("/Users/me/beryl", str(main))
+    )
+    gate = tmp_path / "gate.toml"
+    gate.write_text(
+        f'benchmark = "{GATE.benchmark}"\n'
+        f"instructions = {GATE.instructions}\ntolerance_percent = {GATE.tolerance_percent}\n"
+    )
+    monkeypatch.setenv("LIMA_HOME", str(lima_home))
+    monkeypatch.setattr(bench.paths, "REPO", lease)
+    monkeypatch.setattr(bench.paths, "RUST", lease / "rust")
+    monkeypatch.setattr(bench, "GATE_FILE", gate)
+    monkeypatch.setattr(bench.system, "WINDOWS", False)
+    monkeypatch.setattr(bench.platform, "machine", lambda: "arm64")
+    monkeypatch.setattr(bench.shutil, "which", lambda tool: tool)
+    monkeypatch.setattr(bench.vm_host, "status", lambda _vm: "Running")
+    monkeypatch.setattr(bench, "vm_ensure", lambda: 0)
+    original_run: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run
+
+    def count(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+        if cmd[0] != "limactl":
+            return original_run(cmd, **kwargs)
+        assert cmd[:5] == ["limactl", "shell", "--workdir", "/", bench.VM]
+        script = cmd[-1]
+        assert (
+            script.index("flock -s 8")
+            < script.index("tar -xf -")
+            < script.index("export CARGO_BUILD_JOBS=1")
+            < script.index("cargo bench")
+        )
+        with tarfile.open(fileobj=kwargs["stdin"], mode="r:") as archive:
+            assert set(archive.getnames()) == {
+                "rust-toolchain.toml",
+                "rust/Cargo.lock",
+                "rust/added file.rs",
+            }
+            edited = archive.extractfile("rust-toolchain.toml")
+            assert edited is not None and b"beta" in edited.read()
+        return subprocess.CompletedProcess(
+            cmd, 0, summary(GATE.benchmark.rsplit("::", 1)[0], GATE.instructions)
+        )
+
+    monkeypatch.setattr(subprocess, "run", count)
+    measure = tmp_path / "measure.json"
+    assert bench.count_gate(argparse.Namespace(family=None, measure=str(measure))) == 0
+    assert json.loads(measure.read_text())["measured"] == GATE.instructions
 
 
 def test_a_vm_that_stopped_mid_count_cannot_run(

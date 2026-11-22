@@ -34,6 +34,8 @@ import os
 import re
 import subprocess
 import sys
+import tarfile
+import tempfile
 import time
 from pathlib import Path
 
@@ -80,9 +82,13 @@ def live_users(vm: str) -> list[int]:
     return live
 
 
+def lima_home() -> Path:
+    return Path(os.environ.get("LIMA_HOME") or Path.home() / ".lima")
+
+
 def machine_process(vm: str) -> int | None:
     """The process running `vm`: the one that holds its disk image open."""
-    disk = Path.home() / ".lima" / vm / "disk"
+    disk = lima_home() / vm / "disk"
     found = subprocess.run(
         ["lsof", "-t", str(disk)], capture_output=True, text=True, check=False
     )
@@ -220,10 +226,9 @@ def status(vm: str) -> str | None:
 
 def vm_mounts(vm: str) -> list[Path]:
     """The host directories Lima mounts in `vm`, from the `location:` lines of its
-    lima.yaml; empty when the file cannot be read. The VM sees only these, so a checkout
-    elsewhere (a second clone, say) cannot be built there."""
+    lima.yaml; empty when the file cannot be read."""
     try:
-        text = (Path.home() / ".lima" / vm / "lima.yaml").read_text()
+        text = (lima_home() / vm / "lima.yaml").read_text()
     except OSError:
         return []
     found = re.findall(
@@ -233,13 +238,71 @@ def vm_mounts(vm: str) -> list[Path]:
 
 
 def vm_sees(path: Path, vm: str) -> bool:
-    """Whether `path` is inside a directory `vm` mounts. WSL sees every Windows drive, and a
-    lima.yaml that cannot be read is given the benefit of the doubt."""
+    """Whether `path` is inside a known mount. WSL sees every Windows drive."""
     if system.WINDOWS:
         return True
-    mounts = vm_mounts(vm)
     resolved = path.resolve()
-    return not mounts or any(resolved.is_relative_to(m.resolve()) for m in mounts)
+    return any(resolved.is_relative_to(m.resolve()) for m in vm_mounts(vm))
+
+
+def bench_source_script() -> str:
+    """Receives a checkout under the guest's count lock. Checksums preserve the mtimes of
+    unchanged files and give changed files new mtimes, even when switching to an older tree.
+    """
+    return """set -e
+incoming="$HOME/bench-incoming"
+source="$HOME/bench-source"
+rm -rf -- "$incoming"
+mkdir -p "$incoming" "$source"
+tar -xf - -C "$incoming"
+# Tar can stop at the end marker before reading all the padding.
+cat >/dev/null
+exec </dev/null
+if ! command -v rsync >/dev/null; then
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rsync
+fi
+rsync -rl --checksum --delete "$incoming/" "$source/"
+rm -rf -- "$incoming"
+cd "$source/rust"
+"""
+
+
+def run_with_sources(
+    command: list[str], includes: tuple[str, ...], *, capture: bool
+) -> subprocess.CompletedProcess[str]:
+    """Sends the checkout's current files as tar on stdin, including local edits and new
+    files. Excludes ignored files such as host build artifacts."""
+    listing = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            *includes,
+        ],
+        cwd=paths.REPO,
+        capture_output=True,
+        check=True,
+    ).stdout
+    with tempfile.TemporaryFile() as archive:
+        with tarfile.open(fileobj=archive, mode="w") as tar:
+            for name in sorted(set(listing.split(b"\0")) - {b""}):
+                relative = os.fsdecode(name)
+                path = paths.REPO / relative
+                if path.is_file() or path.is_symlink():
+                    tar.add(path, arcname=relative, recursive=False)
+        archive.seek(0)
+        return subprocess.run(
+            command,
+            stdin=archive,
+            stdout=subprocess.PIPE if capture else None,
+            text=True,
+            check=False,
+        )
 
 
 def vm_failed(code: int, vm: str) -> int:

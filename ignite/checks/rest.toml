@@ -7,10 +7,9 @@
 
 # Lessons from the checks Ignite replaces:
 #
-# - The count steps use Lima on macOS and WSL on Windows. Lima must be able to see the build
-#   tree through a mount. WSL sees the Windows drives. A tree the VM cannot see reports
-#   `CANNOT_RUN`, which Ignite records as `incomplete`. The `bench-vm` resource serializes
-#   counts that share the same VM lock and build directory.
+# - The count steps use Lima on macOS and WSL on Windows. Lima receives the sources when the
+#   build tree is outside its mounts. WSL sees the Windows drives. The `bench-vm` resource
+#   serializes counts that share the same VM lock and build directory.
 # - A count says nothing about speed, so a loaded machine does not change it; the family may
 #   run in any class. Only a run in the `tip` class stores its count, since only a tip is a
 #   commit that was verified (`IGNITE_CLASS`, see rest.py).
@@ -27,7 +26,7 @@
 # `counts:rollouts`, and each family's present cost against its ratio there, as
 # `counts:family/<name>` on ARM64. Callgrind measures rollouts in Lima and WSL against separate
 # architecture bars. The ARM64 trend files `count-creep` and `count-lower` tickets. When `beryl-bench`
-# is missing, out of reach or cannot see the tree, the adapter reports the check incomplete
+# is missing or out of reach, the adapter reports the check incomplete
 # with the reason (`cannot-run:`).
 [family.counts]
 kind = "regression"
