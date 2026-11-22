@@ -12,7 +12,7 @@ fn pressable(name: &str) -> Element {
 
 /// The name the focused element's press says, as `pressable` gives it.
 fn focused(layer: &Layer) -> Option<String> {
-    let press = layer.focused_press()?;
+    let press = layer.focused_press(true)?;
     press.downcast_ref::<String>().cloned()
 }
 
@@ -21,7 +21,7 @@ fn focused(layer: &Layer) -> Option<String> {
 fn tab(layer: &mut Layer, forward: bool, times: usize) -> Vec<String> {
     (0..times)
         .map(|_| {
-            layer.move_focus(forward);
+            layer.move_focus(forward, true);
             focused(layer).unwrap_or_default()
         })
         .collect()
