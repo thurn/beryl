@@ -7,12 +7,15 @@
 //! only when complete. The newest 6 snapshots are kept, and beyond them the newest of each day
 //! for 7 days. A snapshot is a whole copy of the database, several gigabytes on a busy hub, and
 //! keeping 48 hourly and 30 daily copies took over 100 GB of the hub's disk, which the build
-//! trees on the same disk needed. Every daemon's ticket mirror is the longer record. A staging
-//! directory that a restart left behind is removed with the old snapshots.
+//! trees on the same disk needed. A 48 GiB budget for completed copies drops the oldest extra
+//! hourly copies first, then the oldest daily copies, and always keeps the newest snapshot.
+//! Every daemon's ticket mirror is the longer record. A staging directory that a restart left
+//! behind is removed with the old snapshots.
 //!
 //! An export is `exports/<day>.json`: every ticket with its comments and history. The newest 30
 //! are kept.
 
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -31,6 +34,7 @@ pub const DATABASE: &str = "hub.sqlite";
 
 const SNAPSHOTS_KEPT: usize = 6;
 const DAILY_DAYS: f64 = 7.0;
+const SNAPSHOT_BUDGET_BYTES: u64 = 48 * 1024 * 1024 * 1024;
 const EXPORTS_KEPT: usize = 30;
 
 fn io_error(what: &str, error: &io::Error) -> StoreError {
@@ -82,7 +86,7 @@ pub fn snapshot(conn: &Connection, dir: &Path, now: Timestamp) -> Result<PathBuf
     }
     let destination = dir.join(&name);
     fs::rename(&staging, &destination).map_err(|e| io_error("completing a snapshot", &e))?;
-    prune_snapshots(dir, now)?;
+    prune_snapshots(dir, now, SNAPSHOT_BUDGET_BYTES)?;
     Ok(destination)
 }
 
@@ -106,11 +110,9 @@ fn write_snapshot(conn: &Connection, staging: &Path, now: Timestamp) -> Result<(
         .map_err(|e| io_error("writing a snapshot manifest", &e))
 }
 
-/// Keeps the newest 6 snapshots, and of the older ones the newest of each day for 7 days. Removes
-/// every staging directory: a daemon restarted while `VACUUM INTO` was writing one left it
-/// behind, and nothing else ever removed it. Only one hub writes snapshots, and it has renamed
-/// its own staging directory by the time it prunes.
-fn prune_snapshots(dir: &Path, now: Timestamp) -> Result<()> {
+/// Applies the count, age and byte limits to completed backups. Only one hub writes snapshots,
+/// and it has renamed its own staging directory by the time it removes abandoned ones.
+fn prune_snapshots(dir: &Path, now: Timestamp, budget_bytes: u64) -> Result<()> {
     for entry in fs::read_dir(dir).map_err(|e| io_error("listing backups", &e))? {
         let entry = entry.map_err(|e| io_error("listing backups", &e))?;
         if entry
@@ -122,14 +124,51 @@ fn prune_snapshots(dir: &Path, now: Timestamp) -> Result<()> {
                 .map_err(|e| io_error("removing an abandoned snapshot", &e))?;
         }
     }
-    let mut days = std::collections::HashSet::new();
+    let mut days = HashSet::new();
+    let mut hourly_copies = Vec::new();
+    let mut daily_copies = Vec::new();
+    let mut total_bytes = 0;
     for (index, (at, path)) in snapshots(dir)?.into_iter().enumerate() {
         let daily = days.insert(at.day()) && now.seconds_since(at) < DAILY_DAYS * 86_400.0;
         if index >= SNAPSHOTS_KEPT && !daily {
             fs::remove_dir_all(&path).map_err(|e| io_error("removing an old snapshot", &e))?;
+            continue;
+        }
+        let bytes = snapshot_bytes(&path).map_err(|e| io_error("measuring a snapshot", &e))?;
+        total_bytes += bytes;
+        if index == 0 {
+            continue;
+        }
+        if daily {
+            daily_copies.push((path, bytes));
+        } else {
+            hourly_copies.push((path, bytes));
         }
     }
+    for (path, bytes) in hourly_copies
+        .into_iter()
+        .rev()
+        .chain(daily_copies.into_iter().rev())
+    {
+        if total_bytes <= budget_bytes {
+            break;
+        }
+        fs::remove_dir_all(&path).map_err(|e| io_error("removing an old snapshot", &e))?;
+        total_bytes -= bytes;
+    }
     Ok(())
+}
+
+/// A completed snapshot contains the database and manifest, plus any SQLite sidecar files.
+fn snapshot_bytes(path: &Path) -> io::Result<u64> {
+    let mut bytes = 0;
+    for entry in fs::read_dir(path)? {
+        let metadata = entry?.metadata()?;
+        if metadata.is_file() {
+            bytes += metadata.len();
+        }
+    }
+    Ok(bytes)
 }
 
 /// Writes today's export into `dir/exports`, then removes the exports no longer kept. Returns
@@ -222,6 +261,46 @@ mod tests {
                 .all(|(at, _)| now.seconds_since(*at) < 7.0 * 86_400.0)
         );
         assert!(!abandoned.exists());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn pruning_by_bytes_drops_oldest_hourly_copies_before_daily_copies() {
+        let dir = ignite_core::test_files::temp_dir().join("backup-byte-budget");
+        fs::create_dir(&dir).unwrap();
+        let newest = Timestamp::parse("2026-11-21T12:30:00Z").unwrap();
+        let recent_hourly = newest.plus_seconds(-3_600.0);
+        let older_hourly = newest.plus_seconds(-7_200.0);
+        let yesterday = newest.plus_seconds(-86_400.0);
+        let two_days_ago = newest.plus_seconds(-172_800.0);
+        for (at, database_bytes) in [
+            (newest, 48),
+            (recent_hourly, 48),
+            (older_hourly, 32),
+            (yesterday, 40),
+            (two_days_ago, 32),
+        ] {
+            let path = dir.join(snapshot_name(at));
+            fs::create_dir(&path).unwrap();
+            fs::write(path.join(DATABASE), vec![0; database_bytes]).unwrap();
+            fs::write(path.join("manifest.json"), b"manifest").unwrap();
+        }
+        let kept = || {
+            snapshots(&dir)
+                .unwrap()
+                .into_iter()
+                .map(|(at, _)| at)
+                .collect::<Vec<_>>()
+        };
+
+        prune_snapshots(&dir, newest, 200).unwrap();
+        assert_eq!(kept(), [newest, recent_hourly, yesterday, two_days_ago]);
+
+        prune_snapshots(&dir, newest, 104).unwrap();
+        assert_eq!(kept(), [newest, yesterday]);
+
+        prune_snapshots(&dir, newest, 1).unwrap();
+        assert_eq!(kept(), [newest]);
         fs::remove_dir_all(&dir).unwrap();
     }
 }
