@@ -6,6 +6,7 @@
 use crate::common::{MS, empty_frame, frame, show};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{ObjectId, PlayerView, Side, StackItem, Why, ZoneName};
+use game_table::table::labels::ABILITY_ROLE;
 
 use beryl_protocol::script::{Act, Curve as Named, Subject, Table as Played, Verb, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
@@ -13,7 +14,7 @@ use game_play::play::Show;
 use game_play::play::record::ScriptRecord;
 use game_probe::agent::steps::{Sample, no_jumps, rest_equals_placement, step_shown, step_times};
 use kit_base::pose::{Pose, Segment};
-use kit_frame::frame::{Frame, Role};
+use kit_frame::frame::Frame;
 use kit_scene::hit::bounds;
 use kit_space::motion::pose_at;
 
@@ -309,7 +310,7 @@ fn ability_samples(moments: &[Moment]) -> Vec<Sample> {
                 .frame
                 .resolved
                 .iter()
-                .find(|element| element.role == Role::Ability)?;
+                .find(|element| element.role == ABILITY_ROLE)?;
             let seen = element.opacity > audit.transparent;
             Some(Sample {
                 t: moment.t,

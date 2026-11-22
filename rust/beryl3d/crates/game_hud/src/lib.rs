@@ -3,6 +3,8 @@
 pub mod art;
 pub mod hud;
 pub mod inspect;
+pub mod labels;
+pub mod mana_icons;
 pub mod navigation;
 pub mod prompts;
 pub mod screens;

@@ -23,14 +23,14 @@
 //! Each outline takes its box shadows from the draw geometry recorded for its mark node.
 
 use beryl_protocol::protocol::Side;
-use beryl_protocol::script::Subject;
 use game_table::table::ABILITY_IDS;
+use game_table::table::labels::ABILITY_ROLE;
 use kit_frame::frame::{
-    EffectLook, ElementLook, Frame, LookPaint, LookShadow, NodeRef, Place, REVEALED_FACE, Resolved,
-    Ring, Role, ShapeAnchor,
+    EffectLook, EffectTarget, ElementLook, Frame, LookPaint, LookShadow, NodeRef, Place,
+    REVEALED_FACE, Resolved, Ring, Role, ShapeAnchor,
 };
 use kit_probe::agent::checks::{ring_outer, ring_rect};
-use kit_probe::agent::tree::{locator_of, place_word};
+use kit_probe::agent::tree::locator_of;
 use kit_scene::hit::bounds;
 use kit_ui::element::{Border, Extent, Filter, Gradient, Length, Shadow, Shape};
 use kit_ui::input::Size;
@@ -296,12 +296,9 @@ fn subject(effect: &EffectLook) -> Value {
         return Value::from("table");
     };
     match on {
-        Subject::Object { slot } => json!(slot.0),
-        Subject::Ability { id } => Value::from(format!("a{id}")),
-        Subject::Player { player: Side::You } => Value::from("you"),
-        Subject::Player {
-            player: Side::Opponent,
-        } => Value::from("opponent"),
+        EffectTarget::Key(id) => json!(id.0),
+        EffectTarget::Label(label) => Value::from(label),
+        EffectTarget::Numbered { prefix, number } => Value::from(format!("{prefix}{number}")),
     }
 }
 
@@ -446,9 +443,9 @@ fn mark_record(
     json!({
         "key": Value::Null,
         "role": "mark",
-        "name": ring.mark.name(),
+        "name": ring.name,
         "object": object,
-        "place": parent.map_or_else(String::new, |at| place_word(frame.resolved[at].place)),
+        "place": parent.map_or("", |at| frame.resolved[at].place.label()),
         "box": [round(line.x), round(line.y), round(line.width), round(line.height)],
         "z": z,
         "parent": parent.and_then(|at| indexes[at]),
@@ -514,7 +511,7 @@ pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
             // its number, and the stage names its node `a` and the number (`a1`).
             let object = match element.role {
                 Role::Card => Some(Value::from(element.id.0 % REVEALED_FACE)),
-                Role::Ability => Some(Value::from(format!("a{}", element.id.0 - ABILITY_IDS))),
+                ABILITY_ROLE => Some(Value::from(format!("a{}", element.id.0 - ABILITY_IDS))),
                 _ => None,
             };
             let transform = (element.role == Role::Card && element.place != Place::Layer)
@@ -527,7 +524,7 @@ pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
                 // Where on the table it lies, as the tree writes it (`battlefield.yours.lands`,
                 // `stack`), or empty for the flat layer. `just b3d match census` reads it to
                 // tell a card in hand from one on the battlefield or the stack.
-                "place": place_word(element.place),
+                "place": element.place.label(),
                 "box": [round(rect.x), round(rect.y), round(rect.width), round(rect.height)],
                 "z": z[at],
                 "parent": indexes.get(element.parent as usize).copied().flatten(),

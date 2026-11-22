@@ -6,7 +6,9 @@
 use app_client::Input;
 use beryl_protocol::protocol::{CardType, ObjectId, Side, Status, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
-use kit_frame::frame::{Frame, Place, Resolved, Role, StateBits};
+use game_table::table::Place;
+use game_table::table::labels::{COPY_NOTE, PHASED_OUT, PICKED};
+use kit_frame::frame::{Frame, Resolved, Role, StateBits};
 use kit_probe::agent::Context;
 use kit_probe::agent::checks::{duplicates, on_screen, reachable};
 use kit_probe::agent::tree::{TreeOptions, tree};
@@ -123,6 +125,7 @@ fn the_card_under_a_merged_permanent_peeks_out_to_its_left_and_away() {
             side: Side::You,
             row: Some(beryl_protocol::protocol::RowName::Creatures),
         }
+        .into()
     );
     let (host_at, under_at) = (middle(host), middle(under));
     assert!(under_at.x < host_at.x, "{under_at} left of {host_at}");
@@ -135,11 +138,11 @@ fn the_card_under_a_merged_permanent_peeks_out_to_its_left_and_away() {
 fn a_phased_out_permanent_is_faded_and_a_copy_names_its_card() {
     let (frame, slots) = frame();
     let phased = card(&frame, slots.phased);
-    assert!(phased.state.has(StateBits::PHASED_OUT));
+    assert!(phased.state.has(PHASED_OUT));
     assert!((phased.opacity - 0.4).abs() < 1e-6, "{}", phased.opacity);
     let copy = card(&frame, slots.copy);
     assert_eq!(frame.name(copy.name), "Mother of Runes");
-    assert_eq!(frame.name(copy.really), "Phantasmal Image");
+    assert_eq!(frame.name(copy.annotations[COPY_NOTE]), "Phantasmal Image");
 }
 
 #[test]
@@ -147,7 +150,7 @@ fn a_picked_card_lies_apart_from_its_hand_face_up_only_for_its_player() {
     let (frame, slots) = frame();
     let mine = card(&frame, slots.mine_picked);
     let theirs = card(&frame, slots.theirs_picked);
-    assert!(mine.state.has(StateBits::PICKED) && theirs.state.has(StateBits::PICKED));
+    assert!(mine.state.has(PICKED) && theirs.state.has(PICKED));
     assert!(!mine.state.has(StateBits::FACE_DOWN));
     assert!(theirs.state.has(StateBits::FACE_DOWN));
     // Each lies over the table, nearer its player than the middle: the viewer's below the

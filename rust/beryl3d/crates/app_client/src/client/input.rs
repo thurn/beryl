@@ -12,7 +12,7 @@ use app_screens::screens::settings::{Message as SettingsMessage, slider_setting}
 use app_screens::screens::{Screen, Sheet};
 use game_hud::hud::rows::Message as RowMessage;
 use game_hud::inspect::Viewed;
-use game_table::table::Table;
+use game_table::table::{Place as GamePlace, Table};
 use kit_frame::frame::{
     ElementId, Frame, Place, Resolved, Role, StateBits, TRAY_CARD_BOX_IDS, TRAY_GRID_IDS,
 };
@@ -154,7 +154,7 @@ impl PointerScene<'_> {
         {
             let target = Target {
                 node: Node::Card(object.0 as usize),
-                container: Some(place),
+                container: Some(place.into()),
             };
             return (target, self.index_of(object, Role::Card));
         }
@@ -280,6 +280,7 @@ impl Client {
                         matches!(target.node, Node::Card(_))
                             && target
                                 .container
+                                .and_then(GamePlace::in_frame)
                                 .is_some_and(game_play::pointer::takes_pointer)
                     });
                 let policy = TouchPolicy {

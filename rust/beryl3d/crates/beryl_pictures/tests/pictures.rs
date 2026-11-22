@@ -150,7 +150,7 @@ fn crossing_cards(
                 parent: u32::MAX,
                 role: Role::Card,
                 name: NameRef::default(),
-                place: Place::Revealed,
+                place: Place::named("preview"),
                 pose: Some(pose),
                 corners,
                 depth: 2.0,
@@ -159,9 +159,8 @@ fn crossing_cards(
                 interactive: true,
                 state: StateBits(state),
                 face: None,
-                copies: 1,
-                really: NameRef::default(),
-                note: NameRef::default(),
+                count: 1,
+                annotations: Default::default(),
             },
         );
         let resting = if tint[3] == 255 {

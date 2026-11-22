@@ -24,12 +24,12 @@ use glam::{Affine3A, Mat3, Quat, Vec2, Vec3};
 
 use super::place::{Placement, Rest, turn};
 use super::scene::Table;
-use super::{Camera, Layout};
+use super::{Camera, Layout, Place};
 use kit_base::data::Card;
 use kit_base::pose::Pose;
 use kit_frame::frame::{
-    Anchor, Band, Draw, ElementId, ElementLook, FrameBuilder, NameRef, Place, REVEALED_FACE,
-    Resolved, Role, StateBits,
+    Anchor, Band, Draw, ElementId, ElementLook, FrameBuilder, NameRef, REVEALED_FACE, Resolved,
+    Role, StateBits,
 };
 use kit_space::arrange::Pile;
 
@@ -384,7 +384,8 @@ impl Table {
                         zone,
                         side,
                         row: None,
-                    },
+                    }
+                    .into(),
                     pose: Some(top),
                     corners: self.camera().card_corners(top.transform()),
                     depth: self.camera().depth(top.position),
@@ -393,9 +394,8 @@ impl Table {
                     interactive: false,
                     state: StateBits(0),
                     face: None,
-                    copies: 1,
-                    really: kit_frame::frame::NameRef::default(),
-                    note: kit_frame::frame::NameRef::default(),
+                    count: 1,
+                    annotations: Default::default(),
                 },
             );
             builder.look(

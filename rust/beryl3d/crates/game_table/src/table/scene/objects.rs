@@ -2,9 +2,8 @@
 //! with the cards lying on the table that contact shadows fall on (`Floors`).
 
 use beryl_protocol::protocol::{PlayerView, StackItem};
-use kit_frame::frame::Place;
 
-use super::{Objects, SceneObject, Table};
+use super::{Objects, Place, SceneObject, Table};
 use crate::table::place::Placement;
 use crate::table::shadows::Floors;
 

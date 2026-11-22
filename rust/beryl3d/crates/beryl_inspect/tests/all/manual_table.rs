@@ -9,8 +9,9 @@
 use app_client::driver::Page;
 use beryl_inspect::pages;
 use beryl_protocol::protocol::{Side, ZoneName};
+use game_table::table::Place;
 use glam::Vec2;
-use kit_frame::frame::{Place, Resolved, Role, StateBits};
+use kit_frame::frame::{Resolved, Role, StateBits};
 use kit_probe::agent::Layout;
 use kit_ui::input::Size;
 
@@ -51,12 +52,12 @@ fn yours(page: &mut Page, name: &str) -> Resolved {
             element.role == Role::Card
                 && frame.name(element.name) == name
                 && matches!(
-                    element.place,
-                    Place::Card {
+                    Place::in_frame(element.place),
+                    Some(Place::Card {
                         zone: ZoneName::Battlefield,
                         side: Side::You,
                         ..
-                    }
+                    })
                 )
         })
         .unwrap_or_else(|| panic!("you have no {name} on the battlefield"))
@@ -153,12 +154,12 @@ fn face_down(page: &mut Page, side: Side) -> String {
             element.role == Role::Card
                 && element.state.has(StateBits::FACE_DOWN)
                 && matches!(
-                    element.place,
-                    Place::Card {
+                    Place::in_frame(element.place),
+                    Some(Place::Card {
                         zone: ZoneName::Battlefield,
                         side: placed,
                         ..
-                    } if placed == side
+                    }) if placed == side
                 )
         })
         .unwrap_or_else(|| panic!("{side:?} has no face-down card on the battlefield"));

@@ -24,7 +24,6 @@ use kit_frame::frame::{
     Anchored, Band, Draw, ElementId, FrameBuilder, Missing, NameRef, Place, Resolved, Role,
     ScreenClip, StateBits,
 };
-use kit_text::text;
 
 /// Looks up texture layers for faces shown in the flat layer.
 pub struct FaceLayers<'a> {
@@ -186,9 +185,8 @@ impl Layer {
                 interactive: takes_press(element, &look, painted),
                 state,
                 face: None,
-                copies: 1,
-                really: kit_frame::frame::NameRef::default(),
-                note: kit_frame::frame::NameRef::default(),
+                count: 1,
+                annotations: Default::default(),
             },
         );
         if !look.departing
@@ -505,7 +503,7 @@ impl Layer {
                 .unwrap_or(""),
         };
         let words = if builder.looking() {
-            text::shaped_words(source)
+            self.text.shaped_words(source)
         } else {
             Cow::Borrowed("")
         };

@@ -14,7 +14,9 @@ mod hands;
 pub use hands::HandFits;
 mod hud_anchors;
 pub use hud_anchors::HudAnchor;
+pub mod labels;
 pub mod lifted;
+mod location;
 mod look;
 mod own;
 pub(crate) mod pile;
@@ -56,7 +58,7 @@ pub use tray_layout::{
 };
 
 use kit_base::tokens::type_style;
-use kit_frame::frame::Place;
+pub use location::Place;
 
 /// Half the line height of a life total in logical points.
 pub const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.line_height / 2.0;

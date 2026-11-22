@@ -69,13 +69,10 @@
   "cap_allowances": {},
   "protocol": {
     "kit_base": 0,
-    "kit_text": 0,
-    "kit_frame": 3,
-    "kit_ui": 0,
     "kit_space": 0,
     "kit_fx": 4,
     "kit_scene": 0,
-    "kit_probe": 2
+    "kit_probe": 1
   },
   "protocol_literals": {},
   "profile_words": {

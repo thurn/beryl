@@ -3,7 +3,7 @@
 //! place where what is left fits, and ends with an ellipsis, as CSS's `text-overflow:
 //! ellipsis` cuts one line and `line-clamp` cuts a paragraph after its last allowed line.
 
-use super::{Block, Span, Text, TypeStyle, symbols};
+use super::{Block, Span, Text, TypeStyle};
 
 /// How a text that does not fit its box is cut.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,7 +39,7 @@ impl Text {
     /// `text` as `block` lays it out at `max_width`, unless it takes more lines than
     /// `truncate` allows or a line is wider than `max_width`: then the longest start of it that
     /// fits, with the ellipsis after it, whose block names the text it shows (`Block::shown`).
-    /// A mana symbol is kept whole or cut whole. When not even the ellipsis fits, the block
+    /// An inline icon is kept whole or cut whole. When not even the ellipsis fits, the block
     /// shows the ellipsis alone.
     pub fn truncated(
         &mut self,
@@ -59,8 +59,8 @@ impl Text {
         if fits(whole) {
             return whole.clone();
         }
-        // The places the text may be cut: every character boundary outside a mana symbol.
-        let tokens = symbols::tokens(text);
+        // The places the text may be cut: every character boundary outside an inline icon.
+        let tokens = self.icon_ranges(text);
         let cuts: Vec<usize> = (text.char_indices().map(|(at, _)| at))
             .filter(|at| {
                 !tokens

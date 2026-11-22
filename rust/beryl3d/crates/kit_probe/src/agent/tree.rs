@@ -4,11 +4,9 @@
 
 use std::fmt::Write;
 
-use beryl_protocol::protocol::{RowName, Side, ZoneName};
-
 use super::fault::rect_text;
 use super::locate::{LocateError, locate};
-use kit_frame::frame::{ElementId, Frame, Place, Resolved, Role, StateBits};
+use kit_frame::frame::{ElementId, Frame, Resolved, Role, StateBits};
 use kit_scene::hit::covered;
 use kit_scene::{Node, Space, Tree};
 
@@ -35,14 +33,34 @@ pub struct TreeOptions {
 ///
 /// When `options.within` is neither a place nor a locator of exactly one element.
 pub fn tree(frame: &Frame, options: &TreeOptions) -> Result<String, LocateError> {
+    tree_with_places(frame, options, |_| false)
+}
+
+/// Prints the tree, also recognizing valid place labels that have no elements in this frame.
+///
+/// # Errors
+///
+/// When `options.within` is neither a recognized place nor a locator of exactly one element.
+pub fn tree_with_places(
+    frame: &Frame,
+    options: &TreeOptions,
+    known_place: impl Fn(&str) -> bool,
+) -> Result<String, LocateError> {
     let tree = Tree::from_frame(frame);
     let children = children(&tree);
     let within = match options.within.as_deref() {
         None => Within::All,
-        Some(text) => match place_from_word(text) {
-            Some(place) => Within::Place(place),
-            None => Within::Element(locate(frame, text)?),
-        },
+        Some(text)
+            if !text.is_empty()
+                && (known_place(text)
+                    || frame
+                        .resolved
+                        .iter()
+                        .any(|element| element.place.label() == text)) =>
+        {
+            Within::Place(text)
+        }
+        Some(text) => Within::Element(locate(frame, text)?),
     };
     let whole = options.full || options.role.is_some() || !matches!(within, Within::All);
     let mut out = String::from("game\n");
@@ -95,127 +113,11 @@ fn locator(id: ElementId, role: Role, name: &str) -> String {
     out
 }
 
-/// The word the tree uses for a place: the zone, then whose side unless it is the stack, then
-/// the battlefield row, joined by dots (`battlefield.yours.lands`); `revealed` for a face in the
-/// Revealed Cards pile. Empty for the flat layer.
-#[must_use]
-pub fn place_word(place: Place) -> String {
-    let (zone, side, row) = match place {
-        Place::Card { zone, side, row } => (zone, side, row),
-        Place::Revealed => return String::from(REVEALED),
-        Place::Layer => return String::new(),
-    };
-    let mut out = String::from(zone_word(zone));
-    if zone != ZoneName::Stack {
-        out.push('.');
-        out.push_str(side_word(side));
-    }
-    if let Some(row) = row {
-        out.push('.');
-        out.push_str(row_word(row));
-    }
-    out
-}
-
-/// The place `word` names, as `place_word` writes it.
-#[must_use]
-pub fn place_from_word(word: &str) -> Option<Place> {
-    if word == REVEALED {
-        return Some(Place::Revealed);
-    }
-    let mut parts = word.split('.');
-    let first = parts.next()?;
-    let zone = ZONES.into_iter().find(|&zone| zone_word(zone) == first)?;
-    let side = if zone == ZoneName::Stack {
-        Side::You
-    } else {
-        let part = parts.next()?;
-        [Side::You, Side::Opponent]
-            .into_iter()
-            .find(|&side| side_word(side) == part)?
-    };
-    let row = match parts.next() {
-        None => None,
-        Some(part) => Some(
-            [RowName::Creatures, RowName::Others, RowName::Lands]
-                .into_iter()
-                .find(|&row| row_word(row) == part)?,
-        ),
-    };
-    if parts.next().is_some() {
-        return None;
-    }
-    Some(Place::Card { zone, side, row })
-}
-
-/// The tree's word for the Revealed Cards pile.
-const REVEALED: &str = "revealed";
-
-const ZONES: [ZoneName; 9] = [
-    ZoneName::Library,
-    ZoneName::Hand,
-    ZoneName::Battlefield,
-    ZoneName::Graveyard,
-    ZoneName::Exile,
-    ZoneName::Stack,
-    ZoneName::Nowhere,
-    ZoneName::Sideboard,
-    ZoneName::Merged,
-];
-
-fn zone_word(zone: ZoneName) -> &'static str {
-    match zone {
-        ZoneName::Library => "library",
-        ZoneName::Hand => "hand",
-        ZoneName::Battlefield => "battlefield",
-        ZoneName::Graveyard => "graveyard",
-        ZoneName::Exile => "exile",
-        ZoneName::Stack => "stack",
-        ZoneName::Nowhere => "nowhere",
-        ZoneName::Sideboard => "sideboard",
-        ZoneName::Merged => "merged",
-    }
-}
-
-fn side_word(side: Side) -> &'static str {
-    match side {
-        Side::You => "yours",
-        Side::Opponent => "theirs",
-    }
-}
-
-fn row_word(row: RowName) -> &'static str {
-    match row {
-        RowName::Creatures => "creatures",
-        RowName::Others => "others",
-        RowName::Lands => "lands",
-    }
-}
-
-/// Whether two places are the same for the tree: the stack is one place whoever's spell it is.
-fn same_place(a: Place, b: Place) -> bool {
-    match (a, b) {
-        (
-            Place::Card {
-                zone: ZoneName::Stack,
-                row: first,
-                ..
-            },
-            Place::Card {
-                zone: ZoneName::Stack,
-                row: second,
-                ..
-            },
-        ) => first == second,
-        _ => a == b,
-    }
-}
-
 /// Which part of the tree is printed.
 #[derive(Clone, Copy)]
-enum Within {
+enum Within<'a> {
     All,
-    Place(Place),
+    Place(&'a str),
     Element(u32),
 }
 
@@ -238,7 +140,7 @@ struct Printer<'a> {
     tree: &'a Tree<&'a Frame>,
     children: &'a [Vec<u32>],
     options: &'a TreeOptions,
-    within: Within,
+    within: Within<'a>,
     /// Whether no place is cut short.
     whole: bool,
 }
@@ -263,7 +165,7 @@ impl Printer<'_> {
                 .filter(|&other| {
                     let candidate = siblings[other];
                     self.node(candidate).role == Role::Card
-                        && same_place(self.frame.resolved[candidate as usize].place, place)
+                        && self.frame.resolved[candidate as usize].place.label() == place.label()
                 })
                 .collect();
             for &other in &group {
@@ -275,7 +177,7 @@ impl Printer<'_> {
                 self.element(siblings[other], indent, inside, out);
             }
             if cut {
-                let word = place_word(place);
+                let word = place.label();
                 let _ = writeln!(
                     out,
                     "{:indent$}... {} more in {word} (--within {word})",
@@ -295,9 +197,7 @@ impl Printer<'_> {
         let matched = inside
             || match self.within {
                 Within::All => true,
-                Within::Place(place) => {
-                    same_place(self.frame.resolved[index as usize].place, place)
-                }
+                Within::Place(place) => self.frame.resolved[index as usize].place.label() == place,
                 Within::Element(target) => target == index,
             };
         let shown = matched && self.options.role.is_none_or(|role| role == node.role);
@@ -323,7 +223,7 @@ pub fn line(frame: &Frame, index: u32) -> String {
 fn line_for(frame: &Frame, index: u32, node: &Node<'_>) -> String {
     let element = &frame.resolved[index as usize];
     let mut out = locator(node.id, node.role, &node.name);
-    let place = place_word(element.place);
+    let place = element.place.label();
     if !place.is_empty() {
         let _ = write!(out, " {place}");
     }
@@ -337,32 +237,25 @@ fn states(frame: &Frame, index: u32, element: &Resolved, out: &mut String) {
     if element.interactive {
         out.push_str(" interactive");
     }
-    for (bit, word) in [
-        (StateBits::TAPPED, "tapped"),
-        (StateBits::FACE_DOWN, "face-down"),
-        (StateBits::MOVING, "moving"),
-        (StateBits::HOVERED, "hovered"),
-        (StateBits::HELD, "held"),
-        (StateBits::ELIGIBLE, "eligible"),
-        (StateBits::SELECTED, "selected"),
-        (StateBits::TARGET, "target"),
-        (StateBits::DISABLED, "disabled"),
-        (StateBits::FOCUSED, "focused"),
-        (StateBits::PHASED_OUT, "phased-out"),
-        (StateBits::PICKED, "picked"),
-        (StateBits::PRIMARY, "primary"),
-    ] {
-        if element.state.has(bit) {
-            out.push(' ');
-            out.push_str(word);
-        }
+    for word in frame.labels.states(element.state) {
+        out.push(' ');
+        out.push_str(word);
     }
-    if element.copies > 1 {
-        let _ = write!(out, " pile({})", element.copies);
+    if element.count > 1
+        && let Some(word) = frame.labels.count
+    {
+        let _ = write!(out, " {word}({})", element.count);
     }
-    for (word, name) in [("copy", element.really), ("note", element.note)] {
+    for (label, name) in frame
+        .labels
+        .annotations
+        .into_iter()
+        .zip(element.annotations)
+    {
         let text = frame.name(name);
-        if !text.is_empty() {
+        if !text.is_empty()
+            && let Some(word) = label
+        {
             let _ = write!(
                 out,
                 " {word}(\"{}\")",

@@ -5,8 +5,8 @@
 use beryl_protocol::protocol::{CardType, ObjectId, PlayerView, RowName, Side, ZoneName};
 use beryl_protocol::testing::ViewBuilder;
 use game_table::profiles::Profile;
+use game_table::table::Place;
 use game_table::table::{Camera, Placement, Scroll, Window, place};
-use kit_frame::frame::Place;
 use kit_ui::input::{Insets, Size};
 
 use crate::reference;
@@ -163,4 +163,57 @@ fn an_artifact_with_a_mana_ability_stands_among_the_lands_after_them() {
     assert!(x(land) < x(rock), "the land stands left of the rock");
     assert_eq!(row(equipment), Some(RowName::Others));
     assert_eq!(row(dork), Some(RowName::Creatures));
+}
+
+#[test]
+fn game_locations_round_trip_across_the_frame_boundary() {
+    use kit_frame::frame::Place as FramePlace;
+
+    for zone in [
+        ZoneName::Library,
+        ZoneName::Hand,
+        ZoneName::Battlefield,
+        ZoneName::Graveyard,
+        ZoneName::Exile,
+        ZoneName::Stack,
+        ZoneName::Nowhere,
+        ZoneName::Sideboard,
+        ZoneName::Merged,
+    ] {
+        for side in [Side::You, Side::Opponent] {
+            for row in [
+                None,
+                Some(RowName::Creatures),
+                Some(RowName::Others),
+                Some(RowName::Lands),
+            ] {
+                let place = Place::Card { zone, side, row };
+                assert_eq!(Place::in_frame(place.into()), Some(place));
+            }
+        }
+    }
+    assert_eq!(Place::in_frame(Place::Layer.into()), Some(Place::Layer));
+    assert_eq!(
+        Place::in_frame(Place::Revealed.into()),
+        Some(Place::Revealed)
+    );
+    assert_eq!(FramePlace::from(Place::Revealed).label(), "revealed");
+}
+
+#[test]
+fn stack_locations_group_under_one_label_but_keep_their_sides() {
+    use kit_frame::frame::Place as FramePlace;
+
+    let on_stack = |side| {
+        FramePlace::from(Place::Card {
+            zone: ZoneName::Stack,
+            side,
+            row: None,
+        })
+    };
+    let yours = on_stack(Side::You);
+    let theirs = on_stack(Side::Opponent);
+    assert_eq!(yours.label(), "stack");
+    assert_eq!(theirs.label(), "stack");
+    assert_ne!(yours, theirs);
 }

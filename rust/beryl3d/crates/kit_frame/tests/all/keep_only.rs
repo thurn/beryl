@@ -24,9 +24,8 @@ fn element(id: u32, parent: u32) -> Resolved {
         interactive: false,
         state: StateBits::default(),
         face: None,
-        copies: 1,
-        really: NameRef::default(),
-        note: NameRef::default(),
+        count: 1,
+        annotations: Default::default(),
     }
 }
 

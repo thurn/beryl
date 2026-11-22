@@ -51,9 +51,8 @@ impl Scene {
                     interactive: true,
                     state: StateBits::default(),
                     face: None,
-                    copies: 0,
-                    really: NameRef::default(),
-                    note: NameRef::default(),
+                    count: 0,
+                    annotations: Default::default(),
                 },
             );
         }

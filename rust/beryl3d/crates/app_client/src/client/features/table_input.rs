@@ -17,7 +17,8 @@ use game_manual::manual::arrows::{self, Pick};
 use game_manual::manual::drop::{self, Area, End};
 use game_manual::manual::selection;
 use game_manual::manual::{Target, target_from_hit};
-use kit_frame::frame::{Place, Role};
+use game_table::table::Place;
+use kit_frame::frame::{Place as FramePlace, Role};
 use kit_ui::input::{Button, PointerPhase};
 
 impl Client {
@@ -290,11 +291,11 @@ impl Client {
     /// Whether a press may pick up the card in `slot`, resting at `place`, on the manual table:
     /// a card on the battlefield, on the stack or in the viewer's hand that the table can act
     /// on. `None` off the table, where the open prompt decides.
-    pub(in crate::client) fn table_holdable(&self, slot: usize, place: Place) -> Option<bool> {
+    pub(in crate::client) fn table_holdable(&self, slot: usize, place: FramePlace) -> Option<bool> {
         if !self.at_table() || self.features.table().picking.is_some() {
             return None;
         }
-        let Place::Card { zone, side, .. } = place else {
+        let Some(Place::Card { zone, side, .. }) = Place::in_frame(place) else {
             return Some(false);
         };
         let reachable = match zone {
