@@ -285,5 +285,12 @@
     "scenario": "a creature declining to copy is exiled by Containment Priest",
     "cr": "CR 616.1c (https://yawgatog.com/resources/magic-rules/#R6161c): \"If any of the replacement and/or prevention effects would cause an object to become a copy of another object as it enters the battlefield, one of them must be chosen. If not, proceed to rule 616.1d.\"",
     "reason": "XMage exiles Clever Impersonator without asking whether to copy a permanent. Containment Priest should exile it after the controller declines the copy or chooses to copy a creature."
+  },
+  {
+    "oracle": "xmage",
+    "card": "The Eldest Reborn",
+    "scenario": "An animated Saga with no abilities enters without lore",
+    "cr": "CR 614.12 (https://yawgatog.com/resources/magic-rules/#R61412): \"Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c-d.) Such effects may come from the permanent itself if they affect only that permanent (as opposed to a general subset of permanents that includes it). They may also come from other sources. To determine which replacement effects apply and how they apply, check the characteristics of the permanent as it would exist on the battlefield, taking into account replacement effects that have already modified how it enters the battlefield (see rule 616.1), continuous effects from the permanent's own static abilities that would apply to it once it's on the battlefield, and continuous effects that already exist and would apply to the permanent.\"",
+    "reason": "XMage adds an entry lore counter even though Opalescence would make the Saga a creature and Humility would remove its intrinsic entry replacement on the battlefield."
   }
 ]

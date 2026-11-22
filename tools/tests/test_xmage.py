@@ -619,7 +619,7 @@ def test_setup_answers_as_enters_choices_without_changing_the_game(
         "tapped": False,
         "counters": None,
     }
-    writer.permanent("playerB", permanent, "Upkeep")
+    writer.permanent("playerB", permanent, "Upkeep", 0)
     assert export.body == [
         f'addCard(Zone.BATTLEFIELD, playerB, "{card}", 1, false);',
         f'setChoice(playerB, "{answer}");',
@@ -642,12 +642,38 @@ def test_player_as_tapped_permanents_are_tapped_after_xmages_untap_step() -> Non
         "tapped": True,
         "counters": None,
     }
-    writer.permanent("playerA", permanent, "PrecombatMain")
-    writer.permanent("playerB", permanent, "PrecombatMain")
+    writer.permanent("playerA", permanent, "PrecombatMain", 0)
+    writer.permanent("playerB", permanent, "PrecombatMain", 0)
     assert export.body == [
         'addCard(Zone.BATTLEFIELD, playerA, "Wetland Sambar", 1, false);',
         'tapAtStart(playerA, PhaseStep.PRECOMBAT_MAIN, "Wetland Sambar");',
         'addCard(Zone.BATTLEFIELD, playerB, "Wetland Sambar", 1, true);',
+    ]
+
+
+def test_setup_sagas_keep_their_individual_lore_totals() -> None:
+    name = "The Eldest Reborn"
+    entry: card_facts.Json = {
+        "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
+        "actions": [],
+    }
+    export = xmage_java.Export(card=name, scenario="setup", method="setup")
+    faces = xmage_java.Faces.load(card_store.STORE, [name])
+    writer = xmage.Exporter(entry, faces, export)
+    permanent: card_facts.Json = {
+        "card": name,
+        "face": False,
+        "tapped": False,
+        "counters": None,
+    }
+    writer.permanent("playerA", permanent, "PrecombatMain", 0)
+    permanent["counters"] = {"kind": "Lore", "count": 2}
+    writer.permanent("playerA", permanent, "PrecombatMain", 1)
+    assert export.body == [
+        'addCard(Zone.BATTLEFIELD, playerA, "The Eldest Reborn@beryl_lore_playerA_0", 1, false);',
+        'setLoreAtStart(playerA, "beryl_lore_playerA_0", 0);',
+        'addCard(Zone.BATTLEFIELD, playerA, "The Eldest Reborn@beryl_lore_playerA_1", 1, false);',
+        'setLoreAtStart(playerA, "beryl_lore_playerA_1", 2);',
     ]
 
 

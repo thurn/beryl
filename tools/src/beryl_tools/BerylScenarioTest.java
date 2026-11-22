@@ -47,6 +47,7 @@ import mage.constants.RangeOfInfluence;
 import mage.constants.SubType;
 import mage.constants.Zone;
 import mage.counters.CounterType;
+import mage.counters.Counters;
 import mage.game.Game;
 import mage.game.permanent.Permanent;
 import mage.game.permanent.PermanentToken;
@@ -398,6 +399,19 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
         List<PlayerAction> actions = player.getActions();
         int last = actions.size() - 1;
         actions.set(last, new CastWithCost(actions.get(last), cost));
+    }
+
+    /** Sets a setup permanent's lore before the first main phase, without triggering chapters. */
+    protected void setLoreAtStart(TestPlayer player, String alias, int count) {
+        runCode("set starting lore", 1, PhaseStep.UPKEEP, playerA, (info, who, game) -> {
+            Permanent permanent = game.getPermanent(player.getAliasByName(alias));
+            Assert.assertNotNull("no setup permanent with alias " + alias, permanent);
+            Counters counters = permanent.getCounters(game);
+            counters.remove(CounterType.LORE.getName());
+            if (count > 0) {
+                counters.addCounter(CounterType.LORE.createInstance(count));
+            }
+        });
     }
 
     /**

@@ -132,7 +132,7 @@ ZONE_COUNTS: dict[str, str] = {
 @dataclass(frozen=True)
 class Faces:
     """What the exporter needs of the decks' cards in the store: backs, land backs, loyalty,
-    toughness, mana cost and each face's Oracle text."""
+    toughness, mana cost, Saga faces and each face's Oracle text."""
 
     back: dict[str, str]
     land_back: dict[str, str]
@@ -140,6 +140,7 @@ class Faces:
     mana_cost: dict[str, str]
     oracle: dict[str, str]
     toughness: dict[str, int] = field(default_factory=dict)
+    sagas: set[str] = field(default_factory=set)
 
     @staticmethod
     def load(store: Path, also: Iterable[str] = ()) -> Faces:
@@ -149,12 +150,16 @@ class Faces:
         mana_cost: dict[str, str] = {}
         oracle: dict[str, str] = {}
         toughness: dict[str, int] = {}
+        sagas: set[str] = set()
         for card in listed(store, also)[0]:
             faces = cast(list[Json], card["faces"])
             names = [cast(str, f["name"]) for f in faces]
             mana_cost[names[0]] = cast(str, faces[0].get("mana_cost", ""))
             for face, name in zip(faces, names):
                 oracle[name] = cast(str, face.get("oracle_text", ""))
+                subtypes = cast(str, face["type_line"]).partition(" — ")[2].split()
+                if "Saga" in subtypes:
+                    sagas.add(name)
                 if "loyalty" in face:
                     loyalty[name] = int(cast(str, face["loyalty"]))
                 printed = cast(str, face.get("toughness", ""))
@@ -165,7 +170,7 @@ class Faces:
                 front_land = "Land" in cast(str, faces[0]["type_line"])
                 if "Land" in cast(str, faces[1]["type_line"]) and not front_land:
                     land_back[names[0]] = names[1]
-        return Faces(back, land_back, loyalty, mana_cost, oracle, toughness)
+        return Faces(back, land_back, loyalty, mana_cost, oracle, toughness, sagas)
 
 
 @dataclass

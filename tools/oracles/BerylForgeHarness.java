@@ -1880,6 +1880,12 @@ public final class BerylForgeHarness {
         }
 
         @Override
+        public CardCollectionView choosePermanentsToSacrifice(SpellAbility sa, int min, int max, CardCollectionView valid, String message) {
+            List<Card> picked = pickMany(List.copyOf(valid), min, max, "sacrifice");
+            return picked != null ? new CardCollection(picked) : super.choosePermanentsToSacrifice(sa, min, max, valid, message);
+        }
+
+        @Override
         public CardCollection chooseCardsToDiscardFrom(Player p, SpellAbility sa, CardCollection valid, int min, int max, CardCollectionView visible) {
             List<Card> picked = pickMany(List.copyOf(valid), min, max, "discard");
             return picked != null ? new CardCollection(picked) : super.chooseCardsToDiscardFrom(p, sa, valid, min, max, visible);

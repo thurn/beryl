@@ -283,8 +283,8 @@ class Exporter:
                 self.emit(f"setLife({who}, {life});")
             for key in ("hand", "battlefield", "graveyard", "exile", "library"):
                 if key == "battlefield":
-                    for permanent in cast(list[Json], setup[key]):
-                        self.permanent(who, permanent, start)
+                    for index, permanent in enumerate(cast(list[Json], setup[key])):
+                        self.permanent(who, permanent, start, index)
                     continue
                 zone = "EXILED" if key == "exile" else key.upper()
                 names = cast(list[str], setup[key])
@@ -306,14 +306,26 @@ class Exporter:
                 self.emit(f"setFlipCoinResult({who}, true);")
         self.emit("setStrictChooseMode(true);")
 
-    def permanent(self, who: str, permanent: Json, start: str) -> None:
+    def permanent(self, who: str, permanent: Json, start: str, index: int) -> None:
         card = cast(str, permanent["card"])
         name = self.faces.back[card] if card_facts.setup_face(permanent) else card
         quoted = java_string(name)
         # XMage plays turn 1 from its untap step, which untaps player A's permanents.
         retap = permanent["tapped"] and who == "playerA" and start != "Untap"
         tapped = "true" if permanent["tapped"] and not retap else "false"
-        self.emit(f"addCard(Zone.BATTLEFIELD, {who}, {quoted}, 1, {tapped});")
+        counters = cast("Json | None", permanent["counters"])
+        lore = (
+            cast(int, counters["count"])
+            if counters is not None and counters["kind"] == "Lore"
+            else None
+        )
+        if lore is not None or name in self.faces.sagas:
+            alias = f"beryl_lore_{who}_{index}"
+            aliased = java_string(f"{name}@{alias}")
+            self.emit(f"addCard(Zone.BATTLEFIELD, {who}, {aliased}, 1, {tapped});")
+            self.emit(f"setLoreAtStart({who}, {java_string(alias)}, {lore or 0});")
+        else:
+            self.emit(f"addCard(Zone.BATTLEFIELD, {who}, {quoted}, 1, {tapped});")
         if retap:
             self.emit(f"tapAtStart({who}, PhaseStep.{STEPS[start]}, {quoted});")
         if self.cards.chooses_as_it_enters(name, "card name"):
@@ -323,7 +335,8 @@ class Exporter:
         elif self.cards.enters_as_copy(name):
             # The scenario starts with the printed card already on the battlefield.
             self.emit(f"setChoice({who}, false);")
-        counters = cast("Json | None", permanent["counters"])
+        if lore is not None:
+            return
         kind, count = counters_to_add(self.faces, name, counters)
         if count:
             self.emit(
@@ -695,7 +708,16 @@ class Exporter:
             self.emit(f"setChoice({who}, {name if kind == 'ChooseObject' else yes});")
         elif (kind in CHOICE_KINDS or bending) and card is not None:
             name = java_string(p.object_name(card))
-            self.emit(f"{self.choice_command(source, kind)}({who}, {name});")
+            purpose = action.get("purpose", p.purpose)
+            text = self.faces.oracle.get(resolving, "").lower()
+            # XMage's simultaneous discard effect uses TargetDiscard for each player.
+            discard_together = purpose == "discard" and (
+                "each opponent discards" in text or "each player discards" in text
+            )
+            command = (
+                "addTarget" if discard_together else self.choice_command(source, kind)
+            )
+            self.emit(f"{command}({who}, {name});")
         elif action.get("purpose", p.purpose) == "delve" and what == "Done":
             pass  # XMage's delve ends once it has as many cards as generic mana left to pay
         elif (kind == "ChooseUpTo" or bending) and what == "Done":

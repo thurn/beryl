@@ -146,8 +146,8 @@ pub mod scenarios {
                 stack(0),
             ]),
         Scenario::new("An animated Saga with no abilities keeps its lore and stays")
-            .interaction(&[Card::Opalescence, Card::Humility])
-            .battlefield(P0, &[Card::Opalescence, Card::Humility])
+            .interaction(&[Card::Opalescence, Card::DressDown])
+            .battlefield(P0, &[Card::Opalescence, Card::DressDown])
             .permanents(P0, &[Permanent::new(SAGA).counters(CounterKind::Lore, 3)])
             .at(3, P0, TurnStep::Draw)
             .actions(&[
