@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use rusqlite::Connection;
 
+use ignite_core::capacity::CapacityReport;
 use ignite_core::protocol::hub::Heartbeat;
-
 use ignite_core::protocol::machine_state::MachineSample;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Result;
@@ -35,14 +35,20 @@ impl Sampling {
     pub(super) fn send<T>(
         &self,
         now: Timestamp,
-        collect: impl FnOnce() -> MachineSample,
-        send: impl FnOnce(Option<MachineSample>) -> Result<T>,
+        mut beat: Heartbeat,
+        collect: impl FnOnce() -> (MachineSample, CapacityReport),
+        send: impl FnOnce(&Heartbeat) -> Result<T>,
     ) -> Result<T> {
         let due = self
             .last
             .get()
             .is_none_or(|last| now.seconds_since(last) >= SAMPLE_EVERY_SECONDS);
-        let reply = send(due.then(collect))?;
+        if due {
+            let (sample, capacity) = collect();
+            beat.sample = Some(sample);
+            beat.capacity = Some(capacity);
+        }
+        let reply = send(&beat)?;
         if due {
             self.last.set(Some(now));
         }
@@ -95,6 +101,7 @@ impl Parts {
             self.version.clone(),
         );
         let (scheduler, trees) = (self.scheduler.clone(), self.trees.clone());
+        let facts = self.facts.clone();
         let update = self.update.clone();
         let reporter = self.reporter.clone();
         let emergencies = self.emergencies.clone();
@@ -118,18 +125,17 @@ impl Parts {
                 let now = ctx.clock.now();
                 let reply = samples.send(
                     now,
-                    || dispatcher.machine_sample(now, &scheduler, &trees),
-                    |sample| {
-                        client.heartbeat(&Heartbeat {
-                            sample,
-                            capacity: None,
-                            machine: ctx.machine.clone(),
-                            version,
-                            workers: dispatcher.view().unwrap_or_default(),
-                            cli_apps: dispatcher.cli_apps().map(str::to_owned).collect(),
-                            families: current_families(&ctx.repo, &hostname),
-                        })
+                    Heartbeat {
+                        sample: None,
+                        capacity: None,
+                        machine: ctx.machine.clone(),
+                        version,
+                        workers: dispatcher.view().unwrap_or_default(),
+                        cli_apps: dispatcher.cli_apps().map(str::to_owned).collect(),
+                        families: current_families(&ctx.repo, &hostname),
                     },
+                    || dispatcher.machine_sample(now, &scheduler, &trees, &facts),
+                    |beat| client.heartbeat(beat),
                 )?;
                 if let Err(error) = crate::fleet_notice::heard(pool, &reply) {
                     eprintln!("ignite: fleet notice not saved: {error}");
@@ -195,6 +201,7 @@ fn current_families(repo: &std::path::Path, hostname: &str) -> Option<Vec<String
 
 #[cfg(test)]
 mod tests {
+    use ignite_core::capacity::{MachineFacts, ProviderCapacity};
     use ignite_core::config::Os;
     use ignite_core::dispatch_pressure::DispatchPressure;
     use ignite_core::protocol::hub::{
@@ -208,6 +215,8 @@ mod tests {
     use ignite_store::hub;
 
     use super::*;
+    use crate::dispatchd::capacity_report;
+    use crate::sched::Status;
 
     fn fixture_sample(start: Timestamp) -> MachineSample {
         MachineSample {
@@ -241,14 +250,9 @@ mod tests {
         }
     }
 
-    fn post(
-        conn: &mut Connection,
-        machine: &ignite_core::ids::MachineId,
-        at: Timestamp,
-        sample: Option<MachineSample>,
-    ) {
-        let beat = Heartbeat {
-            sample,
+    fn beat(machine: &ignite_core::ids::MachineId) -> Heartbeat {
+        Heartbeat {
+            sample: None,
             capacity: None,
             machine: machine.clone(),
             version: "v1".into(),
@@ -268,16 +272,19 @@ mod tests {
                 .collect(),
             cli_apps: vec!["codex".into()],
             families: Some(vec![]),
-        };
+        }
+    }
+
+    fn post(conn: &mut Connection, beat: &Heartbeat, at: Timestamp) {
         let request = Request {
             method: "POST".into(),
             path: "/machines/heartbeat".into(),
             query: vec![],
             writer: Some(Writer {
-                machine: machine.clone(),
+                machine: beat.machine.clone(),
                 actor: "test".into(),
             }),
-            body: serde_json::to_vec(&beat).unwrap(),
+            body: serde_json::to_vec(beat).unwrap(),
             headers: vec![],
         };
         assert_eq!(
@@ -286,25 +293,34 @@ mod tests {
         );
     }
 
+    fn register(
+        conn: &Connection,
+        machine: &ignite_core::ids::MachineId,
+        cores: u32,
+        at: Timestamp,
+    ) {
+        hub::fleet::register(
+            conn,
+            &MachineRegister {
+                machine: machine.clone(),
+                name: "test".into(),
+                os: Os::Macos,
+                cores,
+                memory_mb: 32_000,
+                families: vec![],
+                version: "v1".into(),
+            },
+            at,
+        )
+        .unwrap();
+    }
+
     #[test]
     fn every_machine_sampling_round_posts_the_complete_heartbeat_sample() {
         let mut conn = hub::open_in_memory().unwrap();
         let machine = "m-test".parse::<ignite_core::ids::MachineId>().unwrap();
         let start = Timestamp::EPOCH;
-        hub::fleet::register(
-            &conn,
-            &MachineRegister {
-                machine: machine.clone(),
-                name: "test".into(),
-                os: Os::Macos,
-                cores: 16,
-                memory_mb: 32_000,
-                families: vec![],
-                version: "v1".into(),
-            },
-            start,
-        )
-        .unwrap();
+        register(&conn, &machine, 16, start);
         conn.execute_batch(
             "INSERT INTO tickets
              (id, title, type, status, priority, created_at, updated_at, created_by, version, cores)
@@ -332,15 +348,18 @@ mod tests {
             sampling
                 .send(
                     at,
+                    beat(&machine),
                     || {
                         let mut sample = sample.clone();
                         sample.pressure.free_gb = Some(free);
                         sample.pressure.queue_seconds = queue;
                         sample.admit_cores = admit;
-                        sample
+                        let report = CapacityReport::default();
+                        (sample, report)
                     },
-                    |sample| {
-                        post(&mut conn, &machine, at, sample);
+                    |beat| {
+                        assert_eq!(beat.capacity.is_some(), beat.sample.is_some());
+                        post(&mut conn, beat, at);
                         Ok(())
                     },
                 )
@@ -374,5 +393,100 @@ mod tests {
             .query_row("SELECT count(*) FROM reservations", [], |row| row.get(0))
             .unwrap();
         assert_eq!(reserved, 0);
+    }
+    #[test]
+    fn sampled_heartbeat_carries_capacity_to_the_fleet_api() {
+        let facts = MachineFacts {
+            os: Os::Macos,
+            logical_cores: 20,
+            physical_cores: 12,
+            memory_mb: 32_000,
+            disk_total_gb: 930,
+        };
+        let status = Status {
+            cores: 16,
+            outside: 3,
+            granted: 8,
+            committed: 6,
+            used: 6,
+            swap_used_mb: Some(100),
+            memory_pressed: false,
+            max_per_command: 12,
+            free_memory_mb: Some(9_000),
+            tip_build: 4,
+            tip_build_used: 0,
+            priority_grants: std::collections::BTreeMap::new(),
+            classes: vec![],
+            resources: vec![],
+        };
+        let mut sample = fixture_sample(Timestamp::EPOCH);
+        let output = "rust/target".to_owned();
+        let ticket = "work".parse::<ignite_core::ids::TicketId>().unwrap();
+        sample.pressure.outputs = vec![output.clone()];
+        sample.pressure.free_trees = vec![vec![output.clone()], vec![]];
+        sample
+            .pressure
+            .leased
+            .insert(ticket.clone(), vec![output.clone()]);
+        let provider = ProviderCapacity {
+            name: "codex".into(),
+            tiers: vec!["sonnet".into()],
+            probed: true,
+            hold_reason: Some("plan_limit".into()),
+        };
+        let expected = CapacityReport {
+            logical_cores: 20,
+            physical_cores: 12,
+            memory_mb: 32_000,
+            admit_cores: 16.0,
+            free_cores: 7.0,
+            worker_room: 3,
+            free_memory_mb: Some(9_000),
+            memory_pressed: false,
+            free_disk_gb: Some(47),
+            disk_budget_gb: 300,
+            queue_seconds: 14.25,
+            outputs: vec![output.clone()],
+            free_trees: vec![vec![output.clone()], vec![]],
+            leased_trees: [(ticket, vec![output])].into(),
+            providers: vec![provider.clone()],
+        };
+        let mut conn = hub::open_in_memory().unwrap();
+        let machine = "m-test".parse::<ignite_core::ids::MachineId>().unwrap();
+        let now = Timestamp::EPOCH;
+        register(&conn, &machine, facts.logical_cores, now);
+
+        Sampling::default()
+            .send(
+                now,
+                beat(&machine),
+                || {
+                    let report =
+                        capacity_report(&facts, &status, &sample, 300, 14.25, vec![provider]);
+                    (sample, report)
+                },
+                |beat| {
+                    assert_eq!(beat.capacity.as_ref(), Some(&expected));
+                    assert!(beat.sample.is_some());
+                    post(&mut conn, beat, now);
+                    Ok(())
+                },
+            )
+            .unwrap();
+
+        let request = Request {
+            method: "GET".into(),
+            path: "/fleet".into(),
+            query: vec![],
+            writer: None,
+            body: vec![],
+            headers: vec![],
+        };
+        let response = ignite_hub::routes::fleet::handle(&mut conn, &request, now).unwrap();
+        assert_eq!(response.status, 200);
+        let view: ignite_core::fleet::FleetView = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(view.machines.len(), 1);
+        assert_eq!(view.machines[0].id, machine);
+        assert_eq!(view.machines[0].capacity.as_ref(), Some(&expected));
     }
 }

@@ -166,11 +166,11 @@ pub trait CliPool: Send + Sync {
     }
     /// `app`'s CLI hold, if it is on one.
     fn held(&self, app: &str) -> Option<Hold>;
-    /// Whether `app`'s slots may be offered to the hub: a probe turn has passed since the
-    /// daemon started and the app is on no CLI hold (see `health`). The default asks only
-    /// whether the app is held.
+    /// Whether the provider has passed a probe since the daemon started.
+    fn probed(&self, app: &str) -> bool;
+    /// Whether the provider has passed a probe and is clear of CLI holds.
     fn offers(&self, app: &str) -> bool {
-        self.held(app).is_none()
+        self.held(app).is_none() && self.probed(app)
     }
     /// Starts a session of `app` that holds no ticket, whose first turn runs `prompt` on `model`
     /// at `effort`: the justiciar the daemon starts when the hub cannot be reached. Returns the
@@ -766,8 +766,8 @@ impl CliPool for CliDaemon {
         })
     }
 
-    fn offers(&self, app: &str) -> bool {
-        self.held(app).is_none() && self.effects.probed(app)
+    fn probed(&self, app: &str) -> bool {
+        self.effects.probed(app)
     }
 
     fn hidden_models(&self, app: &str) -> Vec<String> {

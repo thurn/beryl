@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use rusqlite::Connection;
 
+use ignite_core::capacity::MachineFacts;
 use ignite_core::config::Config;
 use ignite_core::protocol::Class;
 use ignite_core::time::SystemClock;
@@ -82,6 +83,7 @@ pub struct Parts {
     pub claims: Arc<Claims>,
     pub dispatcher: Arc<Dispatcher>,
     pub scheduler: Arc<Scheduler>,
+    pub facts: MachineFacts,
     /// The sender's own connection to the local database, taken by the first [`Parts::spawn`].
     pub sender_db: Mutex<Option<Connection>>,
     pub home: Home,

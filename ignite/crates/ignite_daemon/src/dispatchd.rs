@@ -42,6 +42,8 @@ mod wake;
 mod work;
 #[path = "dispatchd_workers.rs"]
 mod workers;
+#[cfg(test)]
+pub(crate) use workers::capacity_report;
 
 pub use cli_view::digest_text;
 pub use stall::RunningVerb;

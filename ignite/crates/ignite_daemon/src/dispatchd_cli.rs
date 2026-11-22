@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 use std::sync::{Arc, PoisonError};
 
-use ignite_core::capacity::{RoomInputs, start_room, worker_memory_room};
+use ignite_core::capacity::{ProviderCapacity, RoomInputs, start_room, worker_memory_room};
 use ignite_core::config::Config;
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::hub::{ProviderOffer, Reservation};
@@ -131,6 +131,24 @@ impl Dispatcher {
             .get()
             .into_iter()
             .flat_map(|cli| cli.config.pool.cli.keys().map(String::as_str))
+    }
+
+    /// Includes providers on hold and providers still waiting for their first successful probe.
+    pub(super) fn provider_capacity(&self) -> Vec<ProviderCapacity> {
+        let Some(cli) = self.cli.get() else {
+            return Vec::new();
+        };
+        self.cli_apps()
+            .map(|app| ProviderCapacity {
+                name: app.to_owned(),
+                tiers: tiers(&cli.config, app),
+                probed: cli.pool.probed(app),
+                hold_reason: cli
+                    .pool
+                    .held(app)
+                    .map(|hold| hold.reason.as_str().to_owned()),
+            })
+            .collect()
     }
 
     pub(super) fn provider_offers(&self, state: &State) -> Vec<ProviderOffer> {

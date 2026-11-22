@@ -89,6 +89,7 @@ crate::tables! {
         stalled_workers: i64,
         down_workers: i64,
         ready_tickets: i64,
+        capacity: Option<String>,
     }
 
     PlacementDeferral = "placement_deferrals" { ticket: String, first_at: String }

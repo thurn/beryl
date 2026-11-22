@@ -165,7 +165,7 @@ pub struct Heartbeat {
     /// the field, which leaves the list the hub holds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub families: Option<Vec<String>>,
-    /// The machine's current room, queue and build outputs.
+    /// Capacity measured with the machine sample.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capacity: Option<CapacityReport>,
 }

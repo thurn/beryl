@@ -53,7 +53,9 @@ pub struct CapacityReport {
     pub worker_room: u32,
     pub free_memory_mb: Option<u64>,
     pub memory_pressed: bool,
+    /// Free volume space in GiB, matching the dispatch disk thresholds.
     pub free_disk_gb: Option<u64>,
+    /// The trees' budget in decimal GB, matching the configured disk cap.
     pub disk_budget_gb: u64,
     pub queue_seconds: f64,
     /// Configured build output directories, whether or not any tree holds them.

@@ -52,7 +52,12 @@ pub(in crate::routes::dispatch) fn record(
             _ => {}
         }
     }
-    machine_snapshots::record(conn, beat.machine.as_str(), &snapshot)
+    machine_snapshots::record(
+        conn,
+        beat.machine.as_str(),
+        &snapshot,
+        beat.capacity.as_ref(),
+    )
 }
 
 fn project_next_start(

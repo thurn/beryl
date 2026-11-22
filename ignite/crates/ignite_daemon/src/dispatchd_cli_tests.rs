@@ -587,3 +587,34 @@ fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
     assert!(records.all().unwrap().is_empty());
     std::fs::remove_dir(dir).unwrap();
 }
+
+#[test]
+fn capacity_reports_probe_and_hold_independently() {
+    use ignite_core::capacity::ProviderCapacity;
+    use ignite_core::cli::{Hold, HoldReason};
+
+    let rig = rig(&[]);
+    let fake = cli(&rig, 2);
+    fake.set_hold(
+        "claude",
+        Some(Hold {
+            app: "claude".into(),
+            reason: HoldReason::PlanLimit,
+            since: rig.clock.now(),
+            cli_version: None,
+            message: "The plan is at its limit".into(),
+        }),
+    );
+    let mut expected = ProviderCapacity {
+        name: "claude".into(),
+        tiers: ["light", "opus", "sonnet"].map(str::to_owned).into(),
+        probed: true,
+        hold_reason: Some("plan_limit".into()),
+    };
+    assert_eq!(rig.dispatcher.provider_capacity(), [expected.clone()]);
+    fake.set_probed("claude", false);
+    fake.set_hold("claude", None);
+    expected.probed = false;
+    expected.hold_reason = None;
+    assert_eq!(rig.dispatcher.provider_capacity(), [expected]);
+}

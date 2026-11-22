@@ -1,6 +1,6 @@
 //! Active CLI workers as shown in the pool list and hub heartbeat.
 
-use ignite_core::capacity::start_room;
+use ignite_core::capacity::{CapacityReport, MachineFacts, ProviderCapacity, start_room};
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::hub::{ProviderOffer, Room};
 use ignite_core::protocol::hub::{WorkerRole, WorkerState};
@@ -10,6 +10,8 @@ use ignite_core::traits::Result;
 
 use super::{Dispatcher, State, cli, shared};
 use crate::pool::Member;
+use crate::sched::{Scheduler, Status};
+use crate::trees::Trees;
 
 impl Dispatcher {
     /// Removes from the pool every chat whose ticket ended: it holds no tree and no reservation,
@@ -116,18 +118,31 @@ impl Dispatcher {
     pub(crate) fn machine_sample(
         &self,
         now: Timestamp,
-        scheduler: &crate::sched::Scheduler,
-        trees: &crate::trees::Trees,
-    ) -> MachineSample {
+        scheduler: &Scheduler,
+        trees: &Trees,
+        facts: &MachineFacts,
+    ) -> (MachineSample, CapacityReport) {
         let pressure = self.pressure(now).unwrap_or_default();
         let free_trees = self.host.free_ticket_trees();
         let (cpu_percent, queued_cores, swap_used_mb) = scheduler.machine_readings();
         let reclaimable = trees.reclaimable_disk();
-        let admit_cores = scheduler.status().cores;
-        let state = self.state();
-        let (room, idle_workers) = self.reported_room(&state, self.provider_offers(&state));
-        let reserved = u32::try_from(state.reserved.len()).unwrap_or(u32::MAX);
-        MachineSample {
+        let status = scheduler.status();
+        let (room, idle_workers, reserved, draining, shared_failure) = {
+            let state = self.state();
+            let (room, idle_workers) = self.reported_room(&state, self.provider_offers(&state));
+            (
+                room,
+                idle_workers,
+                u32::try_from(state.reserved.len()).unwrap_or(u32::MAX),
+                state.draining,
+                state
+                    .shared
+                    .current
+                    .as_ref()
+                    .map(shared::SharedFailure::reason),
+            )
+        };
+        let sample = MachineSample {
             pressure,
             reclaimable,
             cpu_percent,
@@ -136,13 +151,45 @@ impl Dispatcher {
             idle_workers,
             room,
             free_ticket_trees: free_trees.saturating_sub(reserved),
-            admit_cores,
-            draining: state.draining,
-            shared_failure: state
-                .shared
-                .current
-                .as_ref()
-                .map(shared::SharedFailure::reason),
-        }
+            admit_cores: status.cores,
+            draining,
+            shared_failure,
+        };
+        let report = capacity_report(
+            facts,
+            &status,
+            &sample,
+            trees.disk_budget_gb(),
+            self.host.ticket_work_wait(),
+            self.provider_capacity(),
+        );
+        (sample, report)
+    }
+}
+
+pub(crate) fn capacity_report(
+    facts: &MachineFacts,
+    status: &Status,
+    sample: &MachineSample,
+    disk_budget_gb: u64,
+    queue_seconds: f64,
+    providers: Vec<ProviderCapacity>,
+) -> CapacityReport {
+    CapacityReport {
+        logical_cores: facts.logical_cores,
+        physical_cores: facts.physical_cores,
+        memory_mb: facts.memory_mb,
+        admit_cores: f64::from(sample.admit_cores),
+        free_cores: f64::from(status.free_cores()),
+        worker_room: sample.room.start,
+        free_memory_mb: status.free_memory_mb,
+        memory_pressed: status.memory_pressed,
+        free_disk_gb: sample.pressure.free_gb,
+        disk_budget_gb,
+        queue_seconds,
+        outputs: sample.pressure.outputs.clone(),
+        free_trees: sample.pressure.free_trees.clone(),
+        leased_trees: sample.pressure.leased.clone(),
+        providers,
     }
 }

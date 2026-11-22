@@ -10,7 +10,7 @@ use ignite_core::fleet::{
 use ignite_core::time::Timestamp;
 use ignite_store::hub::fleet_settings::{self, PutOutcome};
 use ignite_store::hub::rows::Machine;
-use ignite_store::hub::{fleet, provider_usage};
+use ignite_store::hub::{capacity, fleet, machine_snapshots, provider_usage};
 use ignite_store::{Result, StoreError};
 
 use super::{Request, Response};
@@ -47,11 +47,14 @@ pub(crate) fn view_in_snapshot(
 ) -> Result<FleetView> {
     let settings = fleet_settings::settings(conn)?;
     let changes = fleet_settings::changes(conn, 20)?;
+    let mut reports = capacity::latest(conn, now)?;
     let machines = machines
         .iter()
         .map(|machine| {
+            let id = machine.id.parse().map_err(invalid)?;
             Ok(FleetMachine {
-                id: machine.id.parse().map_err(invalid)?,
+                capacity: reports.remove(&id),
+                id,
                 name: machine.name.clone(),
                 os: match machine.os.as_str() {
                     "macos" => Os::Macos,
@@ -59,9 +62,7 @@ pub(crate) fn view_in_snapshot(
                     other => return Err(invalid(format!("unknown machine OS {other}"))),
                 },
                 last_seen: machine.last_seen.parse().map_err(invalid)?,
-                // The hub has no stored capacity reports yet.
-                capacity: None,
-                snapshot: ignite_store::hub::machine_snapshots::latest(conn, &machine.id)?,
+                snapshot: machine_snapshots::latest(conn, &machine.id)?,
             })
         })
         .collect::<Result<Vec<_>>>()?;

@@ -95,3 +95,12 @@ impl super::super::Scheduler {
         self.lock().ledger.machine_readings()
     }
 }
+
+impl Status {
+    /// Cores that neither Ignite's commands nor processes outside Ignite are using.
+    pub(crate) fn free_cores(&self) -> u32 {
+        self.cores
+            .saturating_sub(self.committed)
+            .saturating_sub(self.outside)
+    }
+}

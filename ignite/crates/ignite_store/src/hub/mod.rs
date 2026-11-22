@@ -2,6 +2,7 @@
 
 pub mod attachments;
 pub mod batch;
+pub mod capacity;
 pub mod capital_ids;
 pub mod check_state;
 pub mod checks;
@@ -260,6 +261,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 42,
         sql: include_str!("work_estimates.sql"),
+        code: None,
+    },
+    Migration {
+        version: 43,
+        sql: "ALTER TABLE machine_snapshots ADD COLUMN capacity TEXT;",
         code: None,
     },
 ];

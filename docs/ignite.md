@@ -4541,10 +4541,15 @@ Dispatch stays a pull: a machine with room asks, and the hub answers. What
 changes is the question the hub answers, from "can this ticket run here?" to
 "should it?".
 
-Each daemon reports its capacity with every heartbeat: cores admitted and free,
-worker room, free memory, free disk and the disk budget, how long commands have
-waited for cores, and the build outputs that each of its trees holds. The hub
-uses a report for 60 seconds.
+Once a minute, each daemon includes a machine snapshot and its capacity report
+in a heartbeat. The report includes logical and physical cores, admitted and
+free cores, worker room, total and free memory, memory pressure, free disk
+space, the trees' disk budget, and the longest wait for cores among ticket
+commands. It lists the configured build outputs, the outputs each free or leased
+ticket tree holds, and each configured provider's model tiers, probe status and
+CLI hold reason. The hub timestamps the report with the snapshot. The Fleet API
+exposes each machine's newest report for up to 60 seconds, the same window
+available to placement. The hub keeps snapshot history for 14 days.
 
 For a ticket and a machine, the hub estimates the seconds until the ticket's
 first build is current there. That is the machine's wait for cores, plus 1,000

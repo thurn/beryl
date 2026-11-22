@@ -193,8 +193,8 @@ impl CliPool for FakeCliPool {
         lock(&self.holds).get(app).cloned()
     }
 
-    fn offers(&self, app: &str) -> bool {
-        !lock(&self.unprobed).contains(app) && self.held(app).is_none()
+    fn probed(&self, app: &str) -> bool {
+        !lock(&self.unprobed).contains(app)
     }
 
     fn begin_justiciar(

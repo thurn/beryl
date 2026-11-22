@@ -123,6 +123,7 @@ impl Daemon {
             claims: desks.claims.clone(),
             dispatcher: desks.dispatcher.clone(),
             scheduler: machinery.scheduler.clone(),
+            facts: base.facts.clone(),
             sender_db: Mutex::new(Some(base.open()?)),
             home: base.options.home.clone(),
             version: base.options.version.clone(),

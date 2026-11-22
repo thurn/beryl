@@ -1,23 +1,34 @@
 //! Machine history, with one timestamp index for expiry and one per machine for recent readings.
 
+use ignite_core::capacity::CapacityReport;
 use ignite_core::ids::TicketId;
 use ignite_core::protocol::machine_state::{MachineSnapshot, ReclaimableDisk, StartBlock};
 use ignite_core::time::Timestamp;
 use rusqlite::{Connection, OptionalExtension, params};
 
-use crate::Result;
+use crate::{Result, StoreError};
 
 pub const RETENTION_SECONDS: f64 = 14.0 * 86_400.0;
 
-pub fn record(conn: &Connection, machine: &str, snapshot: &MachineSnapshot) -> Result<()> {
+pub fn record(
+    conn: &Connection,
+    machine: &str,
+    snapshot: &MachineSnapshot,
+    capacity: Option<&CapacityReport>,
+) -> Result<()> {
+    let capacity = capacity
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|error| StoreError::Invalid(format!("cannot encode machine capacity: {error}")))?;
     conn.execute(
         "INSERT INTO machine_snapshots (
             machine, at, free_disk_gib, reclaimable_bytes, reclaimable_measured_at,
             next_ticket, next_ticket_disk_gib, start_block, start_reason, cpu_percent,
             queued_cores, swap_used_mb, idle_workers, working_workers, stalled_workers,
-            down_workers, ready_tickets
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
-         ON CONFLICT (machine, at) DO NOTHING",
+            down_workers, ready_tickets, capacity
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+         ON CONFLICT (machine, at) DO UPDATE SET capacity = excluded.capacity
+         WHERE machine_snapshots.capacity IS NULL AND excluded.capacity IS NOT NULL",
         params![
             machine,
             snapshot.at.to_string(),
@@ -41,6 +52,7 @@ pub fn record(conn: &Connection, machine: &str, snapshot: &MachineSnapshot) -> R
             snapshot.stalled_workers,
             snapshot.down_workers,
             snapshot.ready_tickets,
+            capacity,
         ],
     )?;
     Ok(())
@@ -134,23 +146,13 @@ pub fn delete_expired(conn: &Connection, now: Timestamp) -> Result<usize> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn machine_snapshot_retention_keeps_the_boundary_and_newer_samples() {
-        let conn = crate::hub::open_in_memory().unwrap();
-        let now = Timestamp::EPOCH.plus_seconds(RETENTION_SECONDS + 60.0);
-        let cutoff = now.plus_seconds(-RETENTION_SECONDS);
-        conn.execute(
-            "INSERT INTO machines (id, name, os, cores, memory_mb, families, version, last_seen)
-             VALUES ('m-test', 'test', 'macos', 8, 16000, '[]', 'v1', ?1)",
-            [now.to_string()],
-        )
-        .unwrap();
-        let mut snapshot = MachineSnapshot {
-            at: cutoff.plus_seconds(-0.001),
+    fn fixture(at: Timestamp) -> MachineSnapshot {
+        MachineSnapshot {
+            at,
             free_disk_gib: Some(123),
             reclaimable: Some(ReclaimableDisk {
                 bytes: 321,
-                measured_at: cutoff,
+                measured_at: at,
             }),
             next_ticket: Some("Tabcd".parse().unwrap()),
             next_ticket_disk_gib: Some(140),
@@ -164,18 +166,69 @@ mod tests {
             stalled_workers: 1,
             down_workers: 1,
             ready_tickets: 4,
-        };
-        record(&conn, "m-test", &snapshot).unwrap();
+        }
+    }
+
+    #[test]
+    fn machine_snapshot_retention_keeps_the_boundary_and_newer_samples() {
+        let conn = crate::hub::open_in_memory().unwrap();
+        let now = Timestamp::EPOCH.plus_seconds(RETENTION_SECONDS + 60.0);
+        let cutoff = now.plus_seconds(-RETENTION_SECONDS);
+        conn.execute(
+            "INSERT INTO machines (id, name, os, cores, memory_mb, families, version, last_seen)
+             VALUES ('m-test', 'test', 'macos', 8, 16000, '[]', 'v1', ?1)",
+            [now.to_string()],
+        )
+        .unwrap();
+        let mut snapshot = fixture(cutoff.plus_seconds(-0.001));
+        record(&conn, "m-test", &snapshot, None).unwrap();
         snapshot.at = cutoff;
-        record(&conn, "m-test", &snapshot).unwrap();
+        record(&conn, "m-test", &snapshot, None).unwrap();
         snapshot.at = now;
-        record(&conn, "m-test", &snapshot).unwrap();
-        record(&conn, "m-test", &snapshot).unwrap();
+        record(&conn, "m-test", &snapshot, None).unwrap();
+        record(&conn, "m-test", &snapshot, None).unwrap();
         assert_eq!(delete_expired(&conn, now).unwrap(), 1);
         assert_eq!(latest(&conn, "m-test").unwrap(), Some(snapshot));
         let oldest: String = conn
             .query_row("SELECT min(at) FROM machine_snapshots", [], |r| r.get(0))
             .unwrap();
         assert_eq!(oldest, cutoff.to_string());
+    }
+
+    #[test]
+    fn latest_capacity_keeps_one_fresh_report_per_machine() {
+        let conn = crate::hub::open_in_memory().unwrap();
+        let now = Timestamp::EPOCH.plus_seconds(120.0);
+        for machine in ["m-current", "m-boundary", "m-old", "m-legacy"] {
+            conn.execute(
+                "INSERT INTO machines (id, name, os, cores, memory_mb, families, version, last_seen)
+                 VALUES (?1, ?1, 'macos', 8, 16000, '[]', 'v1', ?2)",
+                params![machine, now.to_string()],
+            )
+            .unwrap();
+        }
+        for (machine, age, cores) in [
+            ("m-current", 10.0, Some(8)),
+            ("m-current", 20.0, Some(6)),
+            ("m-current", 0.0, None),
+            ("m-boundary", 60.0, Some(4)),
+            ("m-old", 60.001, Some(2)),
+            ("m-legacy", 0.0, None),
+        ] {
+            let snapshot = fixture(now.plus_seconds(-age));
+            let report = cores.map(|logical_cores| CapacityReport {
+                logical_cores,
+                ..CapacityReport::default()
+            });
+            record(&conn, machine, &snapshot, report.as_ref()).unwrap();
+        }
+
+        let reports = crate::hub::capacity::latest(&conn, now).unwrap();
+        let found: Vec<_> = reports
+            .iter()
+            .map(|(id, report)| (id.as_str(), report.logical_cores))
+            .collect();
+        assert_eq!(found, [("m-boundary", 4), ("m-current", 8)]);
+        assert!(latest(&conn, "m-old").unwrap().is_some());
     }
 }
