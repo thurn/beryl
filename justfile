@@ -165,10 +165,14 @@ bench *args:
 scale *args:
     {{ by }} scale "$@"
 
+# Ignite grants fleet metrics a batch slot. Keep its priority so the round can
+# finish even when the machine has no idle cores.
+efficiency_priority := if env_var_or_default("IGNITE_CORES", "") == "" { low } else { "" }
+
 # Where agent time, CPU and tokens go, per ticket (ingest [--rebuild], sql '<query>', coverage; --json, --no-ingest; serve runs at normal priority)
 [group('bench')]
 efficiency *args:
-    @{{ if args =~ '^serve( |$)' { "" } else { low } }} uv run --quiet --no-dev --project efficiency beryl-efficiency "$@"
+    @{{ if args =~ '^serve( |$)' { "" } else { efficiency_priority } }} uv run --quiet --no-dev --project efficiency beryl-efficiency "$@"
 
 # Gungraun instruction counts in the Lima VM (cargo bench flags; default -p beryl_bench --bench '*_counts')
 [group('bench')]
