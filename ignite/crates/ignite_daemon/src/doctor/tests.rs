@@ -506,6 +506,30 @@ fn status_shows_the_sections_its_flags_ask_for() {
 }
 
 #[test]
+fn status_lists_declared_exploration_families_only_with_the_flag() {
+    let verb = StatusVerb::new(vec![Box::new(ExplorationSection(Arc::new(|| {
+        vec!["new-seeds".to_owned(), "timeline-drift".to_owned()]
+    })))]);
+
+    let plain = verb.render("m-1", None, &[]);
+    assert!(!plain.text.contains("exploration"), "{}", plain.text);
+    assert!(plain.json.unwrap().get("exploration").is_none());
+
+    let requested = verb.render("m-1", None, &["--exploration".to_owned()]);
+    assert!(requested.text.contains("exploration  new-seeds"));
+    assert!(
+        requested
+            .text
+            .lines()
+            .any(|line| line.trim() == "timeline-drift")
+    );
+    assert_eq!(
+        requested.json.unwrap()["exploration"],
+        json!(["new-seeds", "timeline-drift"])
+    );
+}
+
+#[test]
 fn status_shows_the_tip_reserve_and_grants_with_ticket_priority() {
     let status = Arc::new(|| sched::Status {
         cores: 10,

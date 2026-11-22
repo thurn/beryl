@@ -257,6 +257,23 @@ impl StatusSection for AdmissionSection {
     }
 }
 
+/// The declared exploration families eligible to run on this machine.
+pub struct ExplorationSection(pub Arc<dyn Fn() -> Vec<String> + Send + Sync>);
+
+impl StatusSection for ExplorationSection {
+    fn when(&self) -> When {
+        When::Exploration
+    }
+
+    fn title(&self) -> &'static str {
+        "exploration"
+    }
+
+    fn lines(&self) -> Vec<String> {
+        (self.0)()
+    }
+}
+
 /// `ignite status`: prints the machine's state, assembled from the sections the daemon's modules
 /// supply.
 pub struct StatusVerb {

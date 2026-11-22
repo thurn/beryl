@@ -28,8 +28,8 @@ use crate::checks::{CheckSettings, Checks};
 use crate::claim::{BriefVerb, ClaimHook, Claims, CloseVerb, ReleaseVerb, StartVerb};
 use crate::dispatchd::{Dispatcher, Setup, TellVerb, TurnEndedVerb};
 use crate::doctor::{
-    self, AdmissionSection, CoresSection, DoctorVerb, GitTrees, LoopsSection, NativeHost,
-    StatusSection, StatusVerb, TreesSection,
+    self, AdmissionSection, CoresSection, DoctorVerb, ExplorationSection, GitTrees, LoopsSection,
+    NativeHost, StatusSection, StatusVerb, TreesSection,
 };
 use crate::host::{Host, HostParts, SupervisedStarter, TreesLanding};
 use crate::hubclient::HubClient;
@@ -616,6 +616,7 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
     let trees = parts.trees.clone();
     let dispatcher = parts.dispatcher.clone();
     let fleet_trees = trees.clone();
+    let idle = parts.idle.clone();
     vec![
         Box::new(doctor::CapacitySection {
             derived: base.derived.clone(),
@@ -626,6 +627,9 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
         Box::new(super::machine_state::SnapshotSection(parts.client.clone())),
         Box::new(CoresSection(status.clone())),
         Box::new(AdmissionSection(status)),
+        Box::new(ExplorationSection(Arc::new(move || {
+            idle.exploration_families()
+        }))),
         Box::new(TreesSection {
             source: Arc::new(GitTrees {
                 repo: base.options.repo.clone(),
