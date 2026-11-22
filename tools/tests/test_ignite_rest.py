@@ -335,7 +335,7 @@ def test_the_trend_files_a_count_creep_ticket_and_fails_nothing(
 
     def ignite(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         calls.append(args)
-        return subprocess.CompletedProcess(
+        return subprocess.CompletedProcess[str](
             args, 0, "[]" if args[2] == "list" else "Tnew1"
         )
 
