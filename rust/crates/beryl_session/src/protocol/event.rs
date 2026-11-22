@@ -206,7 +206,8 @@ pub(super) fn game_events<L: Layout>(
             // does ([`heard`]): a view shows the stack itself.
             if let Event::StackArrival { .. }
             | Event::StackDeparture { .. }
-            | Event::TurnPlanChanged(_) = e
+            | Event::TurnPlanChanged(_)
+            | Event::GameRestarted = e
             {
                 return None;
             }
@@ -267,7 +268,8 @@ pub fn heard<L: Layout>(
                 Event::DrawCard { .. }
                 | Event::StackArrival { .. }
                 | Event::StackDeparture { .. }
-                | Event::TurnPlanChanged(_),
+                | Event::TurnPlanChanged(_)
+                | Event::GameRestarted,
                 _,
             ) => {}
             _ => {
@@ -368,6 +370,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             item: stack_item(t, obs, item),
         },
         Event::AbilityFinished => GameEvent::AbilityFinished,
+        Event::GameRestarted => unreachable!("a restart is shown by the script's reset"),
         Event::StackArrival { .. } | Event::StackDeparture { .. } => {
             unreachable!("the stack's arrivals and departures are in no view")
         }

@@ -22,7 +22,7 @@ use crate::casting::{payment, start};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
-use crate::game::{ending, life};
+use crate::game::{ending, life, restart};
 use crate::ids::Seat;
 use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::keywords::flashback;
@@ -129,6 +129,10 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// Carries out one instruction, or each of several in order
     /// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "The controller of
     /// the spell or ability follows its instructions in the order written."
+    #[expect(
+        clippy::too_many_lines,
+        reason = "dispatches each control-flow instruction and the leaf instructions"
+    )]
     pub(crate) fn carry_out(&mut self, effect: &'static Effect) -> Flow {
         // For the bar of a library entry: one hand-written scenario carries it out.
         crate::coverage::hit(effect);
@@ -165,6 +169,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::ForEachPlayer { players, effect } => {
                 return self.for_each_player(players, effect);
             }
+            Effect::RestartGame { filter } => return restart::instruction(self, filter),
             Effect::EndTurn => {
                 let (game, resolving) = self.resolving();
                 crate::turn::end_the_turn(game, resolving)?;
@@ -256,6 +261,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     fn instruction(&mut self, effect: &'static Effect) -> Result<Outcome<L>, Stop> {
         Ok(match *effect {
             Effect::EndTurn
+            | Effect::RestartGame { .. }
             | Effect::Sequence(_)
             | Effect::If { .. }
             | Effect::May { .. }

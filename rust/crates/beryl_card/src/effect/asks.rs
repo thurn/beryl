@@ -32,6 +32,7 @@ impl Effect {
             | Effect::Search { .. }
             | Effect::MayCast { .. }
             // State-based actions can ask which legendary permanent to keep.
+            | Effect::RestartGame { .. }
             | Effect::EndTurn
             | Effect::PutIntoLibrary {
                 position: LibraryPosition::TopOrBottom,
@@ -206,6 +207,7 @@ impl Effect {
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
+            | Effect::RestartGame { .. }
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
             | Effect::ExtraTurn(..) => None,

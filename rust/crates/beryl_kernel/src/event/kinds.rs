@@ -261,6 +261,7 @@ impl<L: Layout> Event<L> {
             | Event::Mana { .. }
             | Event::ResolutionPayment { .. }
             | Event::AbilityFinished
+            | Event::GameRestarted
             | Event::StackArrival { .. }
             | Event::StackDeparture { .. }
             | Event::Ability { .. }

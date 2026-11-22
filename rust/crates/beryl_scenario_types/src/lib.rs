@@ -341,6 +341,8 @@ pub enum Pick {
     },
     Yes,
     No,
+    Keep,
+    Mulligan,
     /// Finish a declaration or a division.
     Done,
     /// A player, as a target.

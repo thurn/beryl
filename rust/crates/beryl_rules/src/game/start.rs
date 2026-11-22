@@ -4,10 +4,12 @@
 
 use beryl_kernel::format::Mulligan;
 
+use crate::decision::Answers;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::replacement::event::Sink;
+use crate::scratch::Scratch;
 use crate::state::{MulliganStatus, Pending, State, Zone};
 use crate::table::GameTable;
 use crate::turn;
@@ -31,7 +33,7 @@ pub(crate) fn set_starting_player<L: Layout>(
         s.draw_n(sink, player, t.format().opening_hand())?;
     }
     s.ask(Pending::Mulligans);
-    advance_mulligans(s, t, sink)
+    Ok(())
 }
 
 /// The players in turn order from the starting player
@@ -46,7 +48,8 @@ pub(crate) fn turn_order<L: Layout>(s: &State<L>) -> impl Iterator<Item = Seat> 
 pub(crate) fn declare<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink<L>,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
     player: Seat,
     mulligan: bool,
 ) -> Result<(), Full> {
@@ -55,7 +58,7 @@ pub(crate) fn declare<L: Layout>(
     } else {
         keep(s, player);
     }
-    advance_mulligans(s, t, sink)
+    finish_if_kept(s, t, x, a)
 }
 
 /// Keeps a player's hand, leaving them a card to put on the bottom for each mulligan taken.
@@ -78,17 +81,34 @@ fn keep<L: Layout>(s: &mut State<L>, player: Seat) {
 pub(crate) fn put_on_bottom<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink<L>,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
     player: Seat,
     slot: L::Slot,
 ) -> Result<(), Full> {
-    s.move_object(sink, slot, Zone::Library, Place::Bottom)?;
+    s.move_object(&mut x.events, slot, Zone::Library, Place::Bottom)?;
     s.count_bottomed(player);
-    advance_mulligans(s, t, sink)
+    finish_if_kept(s, t, x, a)
 }
 
-/// Runs the London mulligan until a player must answer or every player has kept, then begins
-/// the first turn.
+/// When both players have kept their hands, starts the first turn. After a restart, the
+/// carried cards may ask replacement questions as they enter, using the step-action record.
+fn finish_if_kept<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
+) -> Result<(), Full> {
+    if !advance_mulligans(s, t, &mut x.events)? {
+        return Ok(());
+    }
+    if s.restarted() {
+        return turn::paused_step::step_actions(s, t, x, a);
+    }
+    turn::begin_turn(s, t, &mut x.events)
+}
+
+/// Runs the London mulligan until a player must answer or every player has kept.
 ///
 /// [CR 103.5](https://yawgatog.com/resources/magic-rules/#R1035): "First, the starting player
 /// declares whether they will take a mulligan. Then each other player in turn order does the
@@ -103,7 +123,7 @@ fn advance_mulligans<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-) -> Result<(), Full> {
+) -> Result<bool, Full> {
     let format = t.format();
     let Mulligan::London = format.mulligan();
     let opening_hand = format.opening_hand();
@@ -118,13 +138,13 @@ fn advance_mulligans<L: Layout>(
         }
         // Bottom picks come first: they finish the hand just kept.
         if order.clone().any(|p| s.player(p).to_bottom() > 0) {
-            return Ok(());
+            return Ok(false);
         }
         if order
             .clone()
             .any(|p| s.player(p).mulligan() == MulliganStatus::Undeclared)
         {
-            return Ok(());
+            return Ok(false);
         }
         let mut any = false;
         for p in order.clone() {
@@ -138,7 +158,7 @@ fn advance_mulligans<L: Layout>(
         }
         if !any {
             s.settle_question();
-            return turn::begin_turn(s, t, sink);
+            return Ok(true);
         }
     }
 }

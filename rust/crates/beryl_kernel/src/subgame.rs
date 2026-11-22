@@ -114,13 +114,31 @@ impl<L: Layout> State<L> {
             .map_or(0, |outer| 1 + outer.subgame_depth())
     }
 
-    /// Turns started across the whole game, including any suspended or completed games.
+    /// Turns started, excluding games that ended by restarting. Subgames share the turn
+    /// budget with their suspended games.
+    #[inline]
+    pub fn turns_for_limit(&self) -> u16 {
+        self.turn
+            .number()
+            .saturating_add(self.subgame_turns.get())
+            .saturating_add(self.outer.get().map_or(0, Self::turns_for_limit))
+    }
+
+    /// Turns started across this playthrough, including suspended, completed and restarted
+    /// games. Used where time must advance across game boundaries.
     #[inline]
     pub fn elapsed_turns(&self) -> u16 {
         self.turn
             .number()
+            .saturating_add(self.restarted_turns)
             .saturating_add(self.subgame_turns.get())
             .saturating_add(self.outer.get().map_or(0, Self::elapsed_turns))
+    }
+
+    /// A restart has contributed turns to this game's history. If the game is still
+    /// in its opening, it may have carried cards waiting in exile.
+    pub fn restarted(&self) -> bool {
+        self.restarted_turns != 0
     }
 
     /// Deals a fresh game from the libraries as they stand at the instruction, over the
@@ -199,6 +217,7 @@ impl<L: Layout> State<L> {
         let turns = self.turn.number().saturating_add(self.subgame_turns.get());
         outer.subgame_turns =
             L::SubgameTurns::from_turns(outer.subgame_turns.get().saturating_add(turns));
+        outer.restarted_turns = outer.restarted_turns.saturating_add(self.restarted_turns);
         if self.turn.number() == 0 {
             outer.budgets.decisions = self.budgets.decisions;
         }

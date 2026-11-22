@@ -837,11 +837,16 @@ player outside the game's player set.
 
 **Restarting** ([CR 728.1](https://yawgatog.com/resources/magic-rules/#R7281)).
 `State::restart(table, starter, carried)` builds a new state as `State::deal`
-does, from every card each player owns, with `starter` taking the first turn and
-the `carried` cards put onto the battlefield before it under one player's
-control. Nothing of the old state survives: no effects, memos, trackers or
-counters. The session treats it as one update whose script is the existing reset
-of the table.
+does, from the physical cards in the game, including cards admitted from a
+sideboard. The resolving ability's controller is the starting player. Carried
+cards stay in exile through mulligans and enter together under the starting
+player's control before untap, using the same replacement-choice record as
+turn-based actions. Effects, memos, trackers and counters begin empty. An outer
+game stays suspended if a subgame restarts.
+
+The turn limit starts again. The session dates checkpoints by turns elapsed
+across the playthrough and replays to a post-restart checkpoint when recovering.
+At the restart boundary, both seats get the table's existing reset script.
 
 **Subgames** ([CR 730.1](https://yawgatog.com/resources/magic-rules/#R7301)). A
 subgame is a second state, played to its end while the main game waits.

@@ -61,6 +61,14 @@ impl Scope<'_> {
             Effect::AddMana { .. } if !matches!(self.ability.kind(), AbilityKind::Mana) => {
                 Err(Malformed::AddMana)
             }
+            Effect::RestartGame { .. }
+                if matches!(
+                    self.ability.kind(),
+                    AbilityKind::Replacement | AbilityKind::Mana
+                ) =>
+            {
+                Err(Malformed::RestartGame)
+            }
             Effect::EndTurn if matches!(self.ability.kind(), AbilityKind::Replacement) => {
                 Err(Malformed::EndTurn)
             }
@@ -228,6 +236,7 @@ impl Scope<'_> {
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
+            | Effect::RestartGame { .. }
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
             | Effect::ExtraTurn(_, None) => Ok(()),

@@ -322,6 +322,7 @@ impl Layout for Large {
             turn_plan,
             outer,
             subgame_turns,
+            restarted_turns,
         } = state;
         State {
             objects: objects.clone(),
@@ -359,6 +360,7 @@ impl Layout for Large {
             turn_plan: turn_plan.clone(),
             outer: outer.clone(),
             subgame_turns: *subgame_turns,
+            restarted_turns: *restarted_turns,
         }
     }
 
@@ -438,6 +440,7 @@ impl State<Large> {
             turn_plan,
             outer,
             subgame_turns,
+            restarted_turns,
         );
         None
     }

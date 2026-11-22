@@ -959,6 +959,88 @@
       ]
     }
   ],
+  "Karn Liberated": [
+    {
+      "published_at": "2020-08-07",
+      "hash": "f3e62abad8cf",
+      "untestable": "Commander and commander damage are outside the two-player constructed format."
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "0896627b30d1",
+      "scenario": [
+        "Karn restarts with the linked non-Aura permanent cards"
+      ]
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "16c12c0ab80e",
+      "scenario": [
+        "Karn restarts with the linked non-Aura permanent cards"
+      ]
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "81db42ea3b10",
+      "untestable": "The two-player constructed game ends if either player leaves."
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "584f9aa99256",
+      "scenario": [
+        "Karn restarts with the linked non-Aura permanent cards"
+      ]
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "a112cebb1ef7",
+      "covered": "Effect::RestartGame"
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "2a368eecdf3b",
+      "scenario": [
+        "Karn restarts with the linked non-Aura permanent cards"
+      ]
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "87147fb66ad5",
+      "scenario": [
+        "Karn restarts with the linked non-Aura permanent cards"
+      ]
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "857b2528501e",
+      "untestable": "The two-player constructed format has no commander or command zone."
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "b8cee194f323",
+      "scenario": [
+        "Karn restarts with the linked non-Aura permanent cards",
+        "Karn restarts even when a library cannot deal seven cards"
+      ]
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "61658d79d864",
+      "covered": "Effect::RestartGame"
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "f27543cce1ae",
+      "untestable": "Multiplayer games are outside the two-player constructed format."
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "72637c7662b0",
+      "scenario": [
+        "Karn restarts with the linked non-Aura permanent cards"
+      ]
+    }
+  ],
   "Life from the Loam": [
     {
       "published_at": "2024-01-12",

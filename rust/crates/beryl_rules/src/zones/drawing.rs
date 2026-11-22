@@ -190,7 +190,9 @@ fn instructions<L: Layout>(
     game.sink.leave();
     match flow {
         Ok(()) => Ok(()),
-        Err(Stop::EndTurn) => unreachable!("a draw replacement cannot end the turn"),
+        Err(Stop::EndTurn | Stop::RestartGame) => {
+            unreachable!("a draw replacement cannot end the turn or restart the game")
+        }
         Err(Stop::Full) => Err(Full),
         // A question the record could not answer stops the run, to be asked; with no question
         // the game is over.

@@ -1,6 +1,6 @@
 //! A new game's state: each deck dealt into its slots, and the coin flip (see CR 103).
 //!
-//! Implements: CR 103.3, CR 103.4
+//! Implements: CR 103.3, CR 103.4, CR 728.2, CR 728.5, CR 728.6
 
 use beryl_card::{TurnStep, Zone};
 
@@ -8,6 +8,7 @@ use crate::bitboard::Bitboard;
 use crate::chance;
 use crate::event::{Listens, Replaces};
 use crate::fit::Misfit;
+use crate::fixed::Full;
 use crate::format::{Format, StartingPlayer};
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
@@ -20,6 +21,7 @@ use crate::rule_changes::Rules;
 use crate::state::{Budgets, CounterTable, Effects, Flags, Memos, State, Trackers, Zones};
 use crate::static_ability::Inputs;
 use crate::store::Store;
+use crate::subgame::CompletedTurns;
 use crate::table::GameTable;
 use crate::turn::{Turn, plan::TurnPlan};
 
@@ -108,6 +110,74 @@ impl<L: Layout> State<L> {
         Ok(s)
     }
 
+    /// A fresh game with the current players' physical cards. The marked cards stay in exile
+    /// for the effect to put onto the battlefield after mulligans.
+    ///
+    /// Under [CR 728.2], "All Magic cards involved in the game that was restarted when it
+    /// ended, including phased-out permanents and nontraditional Magic cards, are involved
+    /// in the new game". This includes cards admitted from a sideboard. Under [CR 728.5],
+    /// "These cards are not in their owner’s deck as the new game begins" if exempted.
+    /// Under [CR 728.6], "If a Magic subgame (see rule 730) is restarted, the main game
+    /// is unaffected."
+    ///
+    /// [CR 728.2]: https://yawgatog.com/resources/magic-rules/#R7282
+    /// [CR 728.5]: https://yawgatog.com/resources/magic-rules/#R7285
+    /// [CR 728.6]: https://yawgatog.com/resources/magic-rules/#R7286
+    #[cold]
+    pub fn restart(
+        &mut self,
+        table: &GameTable,
+        starter: Seat,
+        carried: Bitboard<L::Slot>,
+    ) -> Result<(), Full> {
+        let mut next = Self::empty_in(table.format(), self.profile);
+        next.set_starting_player(starter);
+        next.rng = self.rng;
+        next.sideboard_taken = self.sideboard_taken;
+        for player in self.players().in_seat_order() {
+            let index = player.index();
+            for slot in self.in_game_card_slots(table, player) {
+                let previous = self.object(slot);
+                if previous.zone == Zone::Nowhere || previous.is_token() {
+                    continue;
+                }
+                let kept_exiled = previous.zone == Zone::Exile && carried.contains(slot);
+                let zone = if kept_exiled {
+                    Zone::Exile
+                } else {
+                    Zone::Library
+                };
+                *next.object_mut(slot) = Object {
+                    card: self.card_really_is(slot),
+                    zone,
+                    owner: player,
+                    base_controller: player,
+                    ..Object::EMPTY
+                };
+                next.zones.members[index][zone.index()].insert(slot);
+                if kept_exiled {
+                    for known in next.knowledge.as_mut_slice() {
+                        known.insert(slot);
+                    }
+                } else {
+                    next.zones.library[index].push(slot)?;
+                }
+            }
+            let objects = &next.objects;
+            next.zones.library[index]
+                .as_mut_slice()
+                .sort_unstable_by_key(|slot| objects[slot.index()].card);
+            next.shuffle_library(player)?;
+        }
+        next.restarted_turns = self
+            .restarted_turns
+            .saturating_add(self.turn.number())
+            .saturating_add(self.subgame_turns.get());
+        next.outer = std::mem::take(&mut self.outer);
+        *self = next;
+        Ok(())
+    }
+
     /// A state with no objects, before the game begins.
     pub fn empty(profile: Profile) -> State<L> {
         Self::empty_in(Format::CONSTRUCTED, profile)
@@ -166,6 +236,7 @@ impl<L: Layout> State<L> {
             budgets: Budgets::default(),
             flags: Flags::default(),
             outcome: None,
+            restarted_turns: 0,
             outer: Default::default(),
             subgame_turns: Default::default(),
         }

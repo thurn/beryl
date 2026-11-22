@@ -197,14 +197,26 @@ impl Ctx {
 }
 
 /// How an object refers to itself (CR 201.5): an instant or sorcery and a legendary object
-/// by name, the latter by the part before its comma ("Adeline"), and any other permanent as
-/// "this" and its card type, or "this permanent" when it has several.
+/// by name, the latter by the part before its comma ("Adeline") or a planeswalker's
+/// subtype when it is their first name. Other permanents use "this" and their card type,
+/// or "this permanent" when they have several.
 fn self_reference(face: &Face, name: &str) -> String {
     if face.is_instant_or_sorcery() {
         return name.to_owned();
     }
     if face.supertypes.contains(Supertypes::LEGENDARY) {
-        return name.split(',').next().unwrap_or(name).to_owned();
+        let name = name.split(',').next().unwrap_or(name);
+        if face.types.contains(Types::PLANESWALKER)
+            && let Some((first, _)) = name.split_once(' ')
+            && face
+                .subtypes
+                .read(&Words::NONE)
+                .iter()
+                .any(|subtype| subtype.name() == first)
+        {
+            return first.to_owned();
+        }
+        return name.to_owned();
     }
     for (subtype, noun) in [
         (Subtype::Aura, "Aura"),

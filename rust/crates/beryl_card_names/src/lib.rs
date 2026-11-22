@@ -223,6 +223,7 @@ pub mod decks {
                 names::STASIS,
                 names::TIME_VAULT,
                 names::FINAL_FORTUNE,
+                names::KARN_LIBERATED,
             ],
         ),
         ("sagas", &[names::THE_ELDEST_REBORN]),

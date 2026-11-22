@@ -575,7 +575,7 @@ impl Ctx {
                 "that player gets an additional {} after this step",
                 super::words::step_noun(step),
             )],
-            Effect::EndTurn => vec!["end the turn".to_owned()],
+            Effect::EndTurn | Effect::RestartGame { .. } => self.end_or_restart(effect),
             Effect::ExtraTurn(player, ability) => {
                 let take_turn = self.clause(player, ("take", "takes"), |_| {
                     "an extra turn after this one".to_owned()

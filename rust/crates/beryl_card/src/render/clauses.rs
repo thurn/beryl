@@ -63,12 +63,12 @@ impl Ctx {
         let mut previous: Option<&Effect> = None;
         let mut effects = effects.iter().peekable();
         while let Some(effect) = effects.next() {
-            if let Some(put) = effects
-                .peek()
-                .and_then(|&next| self.hidden_put(effect, next))
-            {
+            if let Some(clause) = effects.peek().and_then(|&next| {
+                self.hidden_put(effect, next)
+                    .or_else(|| self.chosen_exile(effect, next))
+            }) {
                 effects.next();
-                clauses.push(put);
+                clauses.push(clause);
                 previous = None;
                 continue;
             }
@@ -94,6 +94,41 @@ impl Ctx {
             previous = Some(effect);
         }
         clauses
+    }
+
+    /// A player chooses a card from their own hand to exile.
+    fn chosen_exile(&mut self, choose: &Effect, exile: &Effect) -> Option<String> {
+        let Effect::Choose {
+            player,
+            among:
+                Objects::InZoneOf {
+                    zone: crate::Zone::Hand,
+                    players,
+                    filter,
+                },
+            optional: false,
+            hidden: false,
+            ..
+        } = choose
+        else {
+            return None;
+        };
+        if player != *players
+            || !matches!(
+                exile,
+                Effect::Exile(Objects::Those) | Effect::ExileLinked(Objects::Those)
+            )
+        {
+            return None;
+        }
+        self.discarded = None;
+        self.those_named = None;
+        self.plural = false;
+        Some(self.clause(*player, ("exile", "exiles"), |ctx| {
+            let kind = super::filters::Kind::Card(Some(crate::Zone::Hand));
+            let card = ctx.noun(*filter, kind).indefinite(kind);
+            format!("{card} from {} hand", ctx.possessive(*player))
+        }))
     }
 
     /// A player chooses a permanent they control, then sacrifices the chosen permanent.
@@ -303,7 +338,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::WinGame(player)
         | Effect::LoseGame(player)
         | Effect::ExtraTurn(player, _) => Some(player),
-        Effect::EndTurn | Effect::AdditionalStep(_) => None,
+        Effect::EndTurn | Effect::AdditionalStep(_) | Effect::RestartGame { .. } => None,
         Effect::ForEachPlayer { .. }
         | Effect::Counter(_)
         | Effect::CopySpell { .. }

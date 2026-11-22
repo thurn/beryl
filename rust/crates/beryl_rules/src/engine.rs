@@ -656,7 +656,7 @@ fn perform<L: Layout>(
             start::set_starting_player(s, t, sink, starting)
         }
         DecisionKind::KeepOrMulligan => {
-            start::declare(s, t, sink, d.player, option() == Opt::Mulligan)
+            start::declare(s, t, x, a, d.player, option() == Opt::Mulligan)
         }
     }
 }

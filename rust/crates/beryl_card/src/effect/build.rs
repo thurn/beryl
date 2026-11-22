@@ -41,7 +41,7 @@ pub use damage::{
 
 mod turn;
 
-pub use turn::{control_player, end_turn, extra_turn, extra_turn_with_trigger};
+pub use turn::{control_player, end_turn, extra_turn, extra_turn_with_trigger, restart_game};
 
 /// "This creature", "this spell": [`Objects::This`].
 pub const fn this() -> Objects {

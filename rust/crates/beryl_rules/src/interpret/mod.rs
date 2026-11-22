@@ -86,7 +86,7 @@ pub(crate) fn instead_of_drawing<'a, L: Layout>(
 pub(crate) fn finish<L: Layout>(game: &mut Game<'_, L>, flow: Flow) -> Result<bool, Full> {
     layers::refresh(game.state, game.table, game.sink)?;
     match flow {
-        Ok(()) | Err(Stop::EndTurn) => Ok(false),
+        Ok(()) | Err(Stop::EndTurn | Stop::RestartGame) => Ok(false),
         Err(Stop::Pause) => Ok(true),
         Err(Stop::Full) => Err(Full),
     }

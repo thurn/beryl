@@ -156,6 +156,11 @@ impl Names {
         Subject::Ability { id: self.abilities }
     }
 
+    /// Drops the old stack at a restart while keeping ability numbers unique.
+    pub(crate) fn forget_stack(&mut self) {
+        self.stack.clear();
+    }
+
     /// The entries by name, bottom first.
     pub fn stack(&self) -> &[Subject] {
         &self.stack

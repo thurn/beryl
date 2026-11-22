@@ -353,6 +353,8 @@ pub enum Event<L: Layout = Small> {
         object: ObjectRef<L>,
         level: u8,
     },
+    /// The previous game ended by restarting. Views start over with the next game.
+    GameRestarted,
 }
 
 impl Copy for Event<Small> {}

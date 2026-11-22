@@ -593,6 +593,7 @@ impl<L: Layout> Relayout for State<L> {
             turn_plan,
             outer,
             subgame_turns,
+            restarted_turns,
         } = self;
         let mut new_outer = M::Outer::default();
         if let Some(outer) = outer.get() {
@@ -640,6 +641,7 @@ impl<L: Layout> Relayout for State<L> {
             turn_plan: turn_plan.relayout(),
             outer: new_outer,
             subgame_turns: M::SubgameTurns::from_turns(subgame_turns.get()),
+            restarted_turns: *restarted_turns,
             elsewhere: queue(
                 elsewhere.as_slice(),
                 crate::query::zone_characteristics::Reach::relayout,

@@ -97,7 +97,7 @@ impl<'a> Checks<'a> {
         };
         self.ahead.pop_front();
         let difference = recorded.difference(t, board);
-        // A standalone board can be rebuilt directly. A checkpoint with subgame history
+        // A standalone board can be rebuilt directly. A checkpoint with subgame or restart history
         // can be recovered only if replay matched the recorded position.
         if difference.is_none() || (recorded.outer.is_none() && recorded.elapsed.is_none()) {
             self.reached.push(recorded);

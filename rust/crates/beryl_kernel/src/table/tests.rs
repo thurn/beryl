@@ -357,3 +357,48 @@ fn determinization_preserves_sideboard_admissions_when_the_cards_are_shuffled() 
     }
     assert_eq!(places.len(), 3);
 }
+
+#[test]
+fn a_restart_redeals_sideboard_cards_that_entered_the_game() {
+    use crate::State;
+    use crate::bitboard::Bitboard;
+    use crate::profile::Profile;
+    use crate::state::ZoneKey;
+
+    let player = Seat::P0;
+    let table = GameTable::with_sideboards(
+        Format::CONSTRUCTED,
+        &TABLE,
+        [&[(2, "Alpha")], &[]],
+        [&[(2, "Beta")], &[]],
+    )
+    .unwrap();
+    let mut state = State::new(&table, 0, Profile::EXACT).unwrap();
+    state.board().begin_at(9, player, TurnStep::PrecombatMain);
+    let admitted = state
+        .prepare_sideboard_card(&table, player, 0)
+        .unwrap()
+        .unwrap();
+    state.board().place(admitted, Zone::Hand).unwrap();
+    state.board().set_life(player, 5);
+    let graveyard = state.library(player)[0];
+    state.board().place(graveyard, Zone::Graveyard).unwrap();
+
+    state.restart(&table, Seat::P1, Bitboard::EMPTY).unwrap();
+
+    assert_eq!(state.sideboard(&table, player).count(), 1);
+    let mut names: Vec<_> = state
+        .library(player)
+        .iter()
+        .map(|&slot| state.definition_name(&table, slot))
+        .collect();
+    names.sort_unstable();
+    assert_eq!(names, ["Alpha", "Alpha", "Beta"]);
+    assert!(state.zone(ZoneKey::Of(player, Zone::Hand)).is_empty());
+    assert!(state.graveyard(player).is_empty());
+    assert_eq!(state.player(player).life(), 20);
+    assert_eq!(state.turn().starting_player(), Seat::P1);
+    assert_eq!(state.turns_for_limit(), 0);
+    assert_eq!(state.elapsed_turns(), 9);
+    assert_eq!(state.check_invariants(&table), Ok(()));
+}

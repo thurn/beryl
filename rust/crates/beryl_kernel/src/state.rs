@@ -252,11 +252,13 @@ pub struct State<L: Layout = Small> {
     pub(crate) sideboard_taken: crate::sideboard::Taken,
     pub(crate) outer: L::Outer,
     pub(crate) subgame_turns: L::SubgameTurns,
+    /// Turns in games that ended by restarting. They date checkpoints and search horizons.
+    pub(crate) restarted_turns: u16,
 }
 
-// The two fields at the end of the C layout for subgames occupy no space in Small.
+// Subgame storage occupies no space in Small.
 const _: () = {
-    assert!(size_of::<State<Small>>() == 20_448);
+    assert!(size_of::<State<Small>>() == 20_456);
     assert!(size_of::<<Small as Layout>::Outer>() == 0);
     assert!(size_of::<<Small as Layout>::SubgameTurns>() == 0);
 };
@@ -272,6 +274,9 @@ pub const CAPTURED_WORDS: usize = 4;
 impl<L: Layout> std::hash::Hash for State<L> {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         self.hash_position(h, true);
+        if self.restarted_turns != 0 {
+            self.restarted_turns.hash(h);
+        }
         let subgame_turns = self.subgame_turns.get();
         if subgame_turns != 0 {
             subgame_turns.hash(h);
@@ -328,6 +333,7 @@ impl<L: Layout> State<L> {
             turn_plan,
             outer: _,
             subgame_turns: _,
+            restarted_turns: _,
         } = self;
         objects.hash(h);
         battlefield.hash(h);
@@ -433,7 +439,7 @@ impl<L: Layout> State<L> {
     /// The budgets search plays under below this position ([`Limits::search`]): a player game
     /// lifts its own ([`Limits::PLAYER`]), which a runaway rollout must not inherit.
     pub fn search_limits(&self) -> Limits {
-        Limits::search(self.elapsed_turns(), self.budgets.decisions)
+        Limits::search(self.turns_for_limit(), self.budgets.decisions)
     }
 
     /// The game's random streams: a session compares them to tell whether anything random

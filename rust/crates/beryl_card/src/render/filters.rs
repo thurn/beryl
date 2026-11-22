@@ -4,6 +4,7 @@
 
 use super::Ctx;
 use super::words::{article, colors, list, plural, supertypes, types, with_article};
+use crate::Types;
 use crate::effect::Players;
 use crate::filter::Filter;
 use crate::ids::Zone;
@@ -66,6 +67,7 @@ impl Ctx {
             // The zone of `Filter::InZone` is the noun's own ("card in your graveyard"), which
             // `Filter::Whose` says.
             Filter::Any | Filter::InZone(_) => {}
+            Filter::Types(Types::PERMANENT) => noun.kind_or_adjective(vec!["permanent".to_owned()]),
             Filter::Types(set) => noun.kind_or_adjective(types(set)),
             Filter::Supertypes(set) => noun.adjectives.extend(supertypes(set)),
             Filter::SubtypeWord(word) => {

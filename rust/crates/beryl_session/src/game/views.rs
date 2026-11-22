@@ -20,7 +20,7 @@ impl Game {
     /// asked, not after. The body executes them again whenever it runs on, after an answer,
     /// and those repeats go unreported.
     pub(super) fn view(&mut self) -> PlayerView {
-        let mut fresh = self.board.drain_events();
+        let mut fresh = self.fresh_events();
         let seen = self.paused.len();
         if seen > 0
             && let Some(at) = fresh.windows(seen).position(|w| w == self.paused)
@@ -79,8 +79,29 @@ impl Game {
     /// view, still noting what hurt each player ([`Game::note_hurt`]): a game replayed to its
     /// end names the culprit of its loss as live play did.
     pub(super) fn skip_events(&mut self) {
-        let events = self.board.drain_events();
+        let events = self.fresh_events();
         self.note_hurt(&events);
+    }
+
+    /// Starts a new screen and forgets stack names and damage from the old game at a restart.
+    fn fresh_events(&mut self) -> Vec<Tagged<Large>> {
+        let mut events = self.board.drain_events();
+        if let Some(restart) = events
+            .iter()
+            .rposition(|e| matches!(e.event, Event::GameRestarted))
+        {
+            events.drain(..=restart);
+            self.names.forget_stack();
+            self.paused.clear();
+            self.hurt_by = Default::default();
+            self.before_cast = None;
+            self.passing = None;
+            self.run = None;
+            for screen in &mut self.screens {
+                screen.forget();
+            }
+        }
+        events
     }
 
     /// The human's view now, with the events of the latest view.

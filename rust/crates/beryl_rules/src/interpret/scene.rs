@@ -213,6 +213,12 @@ impl<L: Layout> Scene<'_, L> {
         places
     }
 
+    /// The linked cards in exile that pass `filter`.
+    pub(crate) fn linked_exiles(&self, filter: Filter) -> Bitboard<L::Slot> {
+        let exiled = self.objects(Objects::ExiledWithThis);
+        filter.select_x(self.s, self.t, exiled, self.you(), &self.words(), self.x)
+    }
+
     /// The objects `objects` names that are where they were: one that has changed zones is
     /// a new object (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), which
     /// only [`Objects::Those`] follows.

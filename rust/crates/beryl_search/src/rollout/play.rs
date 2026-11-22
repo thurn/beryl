@@ -120,10 +120,14 @@ fn play_within<L: Layout>(
     turn: u16,
     work_limit: u64,
 ) -> Option<RolloutEnd> {
+    // A playthrough's turn count can saturate even when its current game is young.
+    // An unbounded turn horizon still leaves the rollout's work limit in force.
     loop {
         match next_within(s, t, x, inline, AdvanceUntil::WorkLimit, work_limit)? {
             Step::Over(outcome) => return Some(RolloutEnd::Outcome(outcome)),
-            Step::Decide(_) if s.elapsed_turns() >= turn => return Some(RolloutEnd::Cutoff),
+            Step::Decide(_) if turn != u16::MAX && s.elapsed_turns() >= turn => {
+                return Some(RolloutEnd::Cutoff);
+            }
             Step::Decide(d) => {
                 let c = inline.choose(Observation::new(s, d.decider), &d);
                 // An inline answer does not need a transactional copy.
@@ -191,7 +195,7 @@ fn play_out<A: Answers<L>, L: Layout>(
     loop {
         match next(s, t, x, answers) {
             Step::Over(outcome) => return Some(outcome),
-            Step::Decide(_) if s.elapsed_turns() >= turn => return None,
+            Step::Decide(_) if turn != u16::MAX && s.elapsed_turns() >= turn => return None,
             Step::Decide(d) => {
                 let c = choose(answers, Observation::new(s, d.decider), &d);
                 apply_decided(s, t, x, answers, &d, c);

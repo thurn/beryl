@@ -39,6 +39,8 @@ pub enum Stop {
     ///
     /// [CR 725.1]: https://yawgatog.com/resources/magic-rules/#R7251
     EndTurn,
+    /// The resolving ability restarted the game. The old resolution and its stack are gone.
+    RestartGame,
 }
 
 impl From<Full> for Stop {

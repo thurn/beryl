@@ -329,7 +329,9 @@ impl Checkpoint {
     #[allow(clippy::too_many_lines)] // A few lines per zone of the board, in order.
     pub fn arrange(&self, t: &GameTable, s: &mut State<Small>, seed: u64) -> Result<(), String> {
         if self.outer.is_some() || self.elapsed.is_some() {
-            return Err("a checkpoint with subgame history needs its replay log".to_owned());
+            return Err(
+                "a checkpoint with another game in its history needs its replay log".to_owned(),
+            );
         }
         let seat = |p: u8| Seat::try_new(p).ok_or_else(|| format!("no seat {p}"));
         let full = |_| "a zone is full".to_owned();

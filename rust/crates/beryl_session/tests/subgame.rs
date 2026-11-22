@@ -220,3 +220,120 @@ fn a_subgame_concession_leaves_the_live_session_open() {
     }
     panic!("no decision after resuming the main game");
 }
+
+static RESTART: CardDef = CardDef {
+    name: "Test Restart Spell",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::SORCERY,
+        abilities: &[Ability::spell().effect(&beryl_card::Effect::Sequence(&[
+            beryl_card::prelude::restart_game(beryl_card::Filter::Any),
+            beryl_card::prelude::lose_life(beryl_card::Players::You, 20),
+        ]))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static RESTART_CARDS: CardTable = CardTable::new(&[&RESTART, &LAND]);
+
+/// Plays into the first turn of a restarted game. A reset is sent once, and the next
+/// decision after the restart keeps an opening hand without a play-or-draw choice.
+fn recorded_restart() -> Game {
+    let start = StartGame {
+        decks: [
+            vec![(39, RESTART.name.to_owned()), (1, LAND.name.to_owned())],
+            vec![(40, LAND.name.to_owned())],
+        ],
+        ..start()
+    };
+    let mut game = Game::new(&RESTART_CARDS, &start, SESSION).unwrap();
+    let mut cast = false;
+    let mut resets = 0;
+    for _ in 0..100 {
+        let view = game.next_view().expect("the game can advance");
+        if cast && view.turn.number == 0 {
+            if view.script.as_ref().is_some_and(|s| s.reset.is_some()) {
+                resets += 1;
+            }
+            if let Status::Deciding { decision } = &view.status {
+                assert!(
+                    decision
+                        .candidates
+                        .iter()
+                        .any(|c| c.option == Candidate::Keep)
+                );
+                assert_eq!(view.players.you.life, 20);
+                assert_eq!(view.players.opponent.life, 20);
+            }
+        }
+        if game
+            .replay()
+            .log
+            .iter()
+            .any(|e| matches!(e, Entry::Checkpoint(c) if c.turn == 1 && c.elapsed.is_some()))
+        {
+            assert_eq!(resets, 1);
+            assert_eq!(game.state().turn().starting_player(), Seat::P0);
+            assert_eq!(game.state().turns_for_limit(), 1);
+            assert_eq!(
+                game.state().elapsed_turns(),
+                game.state().turn().number() + 1
+            );
+            return game;
+        }
+        if let Status::Deciding { decision } = &view.status {
+            let should_cast = !cast
+                && decision
+                    .candidates
+                    .iter()
+                    .any(|c| matches!(c.option, Candidate::Cast { .. }));
+            choose(&mut game, &view, |candidate| {
+                matches!(candidate, Candidate::Keep)
+                    || (should_cast && matches!(candidate, Candidate::Cast { .. }))
+            });
+            cast |= should_cast;
+        }
+    }
+    panic!("the game did not reach its first post-restart checkpoint");
+}
+
+#[test]
+fn a_save_through_a_restart_replays_under_each_perturbation() {
+    use beryl_session::perturb::{self, Perturbation};
+
+    let game = recorded_restart();
+    let file: ReplayFile =
+        serde_json::from_str(&serde_json::to_string(game.replay()).unwrap()).unwrap();
+    let (replayed, _) = Game::replay_exactly(&RESTART_CARDS, &file, SESSION).unwrap();
+    assert_eq!(replayed.state().turn().number(), 1);
+    for (name, _, perturbation) in Perturbation::EACH {
+        let (replayed, _) = perturb::with(perturbation, || {
+            Game::replay_exactly(&RESTART_CARDS, &file, SESSION)
+        })
+        .unwrap_or_else(|error| panic!("{name}: {error}"));
+        assert_eq!(
+            replayed.state().turn().starting_player(),
+            Seat::P0,
+            "{name}"
+        );
+        assert_eq!(replayed.state().turn().number(), 1, "{name}");
+    }
+}
+
+#[test]
+fn a_bad_answer_recovers_at_the_post_restart_checkpoint() {
+    let game = recorded_restart();
+    let mut file = game.replay().clone();
+    file.log.push(Entry::Choice(beryl_session::save::Chosen {
+        index: u16::MAX,
+        continuation: false,
+        what: None,
+    }));
+    assert!(Game::replay_exactly(&RESTART_CARDS, &file, SESSION).is_err());
+    let (recovered, _) = Game::from_replay(&RESTART_CARDS, &file, SESSION).unwrap();
+    assert!(matches!(recovered.replay().log.last(),
+        Some(Entry::Checkpoint(c)) if c.turn == 1 && c.elapsed == Some(2)));
+    assert_eq!(recovered.state().turns_for_limit(), 1);
+    assert_eq!(recovered.state().elapsed_turns(), 2);
+}

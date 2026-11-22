@@ -70,6 +70,7 @@ fn library<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
         | Event::Mana { .. }
         | Event::ResolutionPayment { .. }
         | Event::AbilityFinished
+        | Event::GameRestarted
         | Event::StackArrival { .. }
         | Event::StackDeparture { .. }
         | Event::TokensCreated { .. }
@@ -297,6 +298,7 @@ impl<L: Layout> Relayout for Event<L> {
             Event::Mana { .. } => mana(self),
             Event::ResolutionPayment { .. } => resolution_payment(self),
             Event::AbilityFinished => Event::AbilityFinished,
+            Event::GameRestarted => Event::GameRestarted,
             Event::StackArrival { entry } => arrival(entry),
             &Event::StackDeparture { entry } => Event::StackDeparture { entry },
             &Event::TokensCreated { controller, tokens } => Event::TokensCreated {

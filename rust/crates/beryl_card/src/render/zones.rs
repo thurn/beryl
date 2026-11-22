@@ -7,9 +7,25 @@ use super::words::{number, ordinal};
 use crate::effect::{
     Amount, Effect, LibraryOrder, LibraryPosition, Objects, Players, PutOnto, Taken,
 };
-use crate::ids::ZoneSet;
+use crate::ids::{Zone, ZoneSet};
 
 impl Ctx {
+    /// An instruction that ends the turn or restarts the game with carried cards in exile.
+    pub(super) fn end_or_restart(&mut self, effect: &Effect) -> Vec<String> {
+        let Effect::RestartGame { filter } = *effect else {
+            return vec!["end the turn".to_owned()];
+        };
+        let kind = Kind::Card(Some(Zone::Exile));
+        let cards = self.noun(filter, kind).plural(kind);
+        vec![
+            format!(
+                "restart the game, leaving in exile all {cards} exiled with {}",
+                self.this
+            ),
+            "then put those cards onto the battlefield under your control".to_owned(),
+        ]
+    }
+
     /// "Look at the top four cards of your library. Put two of them into your hand and the
     /// rest on the bottom of your library in any order."
     pub(super) fn dig(

@@ -99,6 +99,10 @@
 //! - **End the turn.** The effect exiles the stack and enters cleanup (see CR 725.1).
 //!   The transaction commits without carrying out any remaining instructions or moving the
 //!   resolving spell to the graveyard.
+//! - **Restart the game.** The effect replaces the board and opens mulligans (see CR 728.1
+//!   and see CR 728.1a). The old stack and its answer record end with the old game. After the
+//!   players keep, the carried cards enter on the step-action record before the first untap
+//!   (see CR 728.4).
 //!
 //! A function of the game alone returns `Result<T, Full>`, or its value plain when nothing it
 //! does can run out of room ([`actions::shuffle`], [`actions::reveal`]). One that may ask

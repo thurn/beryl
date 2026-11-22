@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable, Sequence
+from itertools import pairwise
 from typing import cast
 
 Json = dict[str, object]
@@ -517,9 +518,19 @@ class Cards:
         )
 
     def choices_as_targets(self, card: str) -> bool:
-        """Whether XMage takes the choices of cards resolving `card` makes from the target
-        queue (`CHOICES_AS_TARGETS`)."""
-        return any(i["kind"] in CHOICES_AS_TARGETS for i in self.instructions(card))
+        """Whether XMage takes the choices resolving `card` from the target queue.
+
+        A player choosing a card to exile from their hand fills XMage's hand target
+        queue, just as a library search fills its library target queue.
+        """
+        instructions = self.instructions(card)
+        return any(i["kind"] in CHOICES_AS_TARGETS for i in instructions) or any(
+            choose["kind"] == "Choose"
+            and choose.get("objects") == "InZoneOf Hand"
+            and exile["kind"] == "ExileLinked"
+            and exile.get("objects") == "Those"
+            for choose, exile in pairwise(instructions)
+        )
 
     def refuse_identical_damage_replacements(self, setup: Json) -> None:
         """Refuses a scenario that starts with two permanents of one card whose replacement

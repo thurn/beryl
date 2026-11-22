@@ -185,6 +185,7 @@ fn times<L: Layout>(e: &Event<L>) -> u8 {
         | Event::Mana { .. }
         | Event::ResolutionPayment { .. }
         | Event::AbilityFinished
+        | Event::GameRestarted
         | Event::StackArrival { .. }
         | Event::StackDeparture { .. }
         | Event::TokensCreated { .. }

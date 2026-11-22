@@ -527,6 +527,10 @@ def export(
             snapshot = cast("int | None", entry.get("snapshot"))
             paid_as_made = False
             trace = cast(list[JsonObject], entry.get("trace", []))
+            # The harness advances a single prearranged game and has no opening-hand
+            # driver for a new game caused by a resolving effect.
+            if any(p.get("kind") == "KeepOrMulligan" for p in trace):
+                raise Unsupported("opening-hand decisions after the scenario has begun")
             actions = [
                 as_their_own(a, trace[i].get("decides_for")) if i < len(trace) else a
                 for i, a in enumerate(cast(list[JsonObject], entry["actions"]))

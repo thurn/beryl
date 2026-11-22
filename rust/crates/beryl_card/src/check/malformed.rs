@@ -52,6 +52,8 @@ pub enum Malformed {
     AddMana,
     /// [`Effect::EndTurn`] in a replacement ability, where no spell or ability is resolving.
     EndTurn,
+    /// [`Effect::RestartGame`] outside the resolution of a spell or nonmana ability.
+    RestartGame,
     /// [`Effect::CounterInto`] a zone other than exile, which is the one place the engine
     /// puts a countered spell instead of its owner's graveyard.
     Countered,
@@ -146,6 +148,9 @@ impl Malformed {
                 "a copy names an exception, or an exception an ability, its face lacks"
             }
             Malformed::AddMana => "an effect adds mana outside a mana ability",
+            Malformed::RestartGame => {
+                "only a resolving spell or nonmana ability can restart the game"
+            }
             Malformed::EndTurn => "a replacement ability cannot end the turn",
             Malformed::Countered => "a countered spell is put somewhere other than exile",
             Malformed::Cost => "an effect names a cost the engine cannot take as it resolves",

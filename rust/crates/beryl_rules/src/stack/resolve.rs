@@ -57,7 +57,7 @@ pub(crate) fn resolve<L: Layout>(
     a: &mut dyn Answers<L>,
 ) -> Result<(), Full> {
     resolve_top(s, t, x, a)?;
-    if !matches!(s.pending(), Pending::Resolving(_))
+    if !matches!(s.pending(), Pending::Resolving(_) | Pending::Mulligans)
         && (!State::<L>::SUPPORTS_SUBGAMES || s.turn().number() != 0)
         && s.outcome().is_none()
         && s.note_resolution()
@@ -481,7 +481,8 @@ fn body<L: Layout>(
             // See CR 725.1: this process differs "from the normal process for resolving
             // spells and abilities." The turn-ending instruction has handled the stack and
             // started cleanup. Commit the run without normal resolution's timing or moves.
-            if flow == Err(Stop::EndTurn) || s.outcome().is_some() {
+            // See CR 728.1: "A game that is restarted immediately ends."
+            if matches!(flow, Err(Stop::EndTurn | Stop::RestartGame)) || s.outcome().is_some() {
                 return Ok(None);
             }
             if paused {

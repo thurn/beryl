@@ -61,6 +61,16 @@ bitset! {
     }
 }
 
+impl Types {
+    /// The six types a permanent card may have (see CR 110.4).
+    pub const PERMANENT: Types = Types::ARTIFACT
+        .union(Types::BATTLE)
+        .union(Types::CREATURE)
+        .union(Types::ENCHANTMENT)
+        .union(Types::LAND)
+        .union(Types::PLANESWALKER);
+}
+
 bitset! {
     /// Supertypes ([CR 205.4a](https://yawgatog.com/resources/magic-rules/#R2054a)), those the
     /// pool's cards have, held to them as [`Types`] is.

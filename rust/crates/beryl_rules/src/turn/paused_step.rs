@@ -134,6 +134,8 @@ fn run<L: Layout>(
     let scopes = sink.save_scopes();
     let done = if starting_turn {
         turn::start::replay(s, t, sink)
+    } else if s.turn().number() == 0 {
+        crate::game::restart::finish_opening(s, t, sink)
     } else {
         turn::step_actions(s, t, sink)
     };

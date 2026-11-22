@@ -13,7 +13,7 @@ use std::fmt::Write;
 use crate::{Action, Permanent, Pick, Scenario};
 
 /// The action that takes candidate `c` of `d` in a scenario, where the scenario vocabulary
-/// can name it: the opening's play-or-draw and mulligans, and spending floating mana, have no
+/// can name it: play-or-draw and spending floating mana have no
 /// action. A pick by name takes the first candidate of that name, which need not be `c`:
 /// compare [`answer`](crate::answer) of the result with `c` to tell.
 pub fn script<L: Layout>(
@@ -80,6 +80,8 @@ pub(crate) fn pick<L: Layout>(
         Opt::Pass => Pick::Pass,
         Opt::Yes => Pick::Yes,
         Opt::No => Pick::No,
+        Opt::Keep => Pick::Keep,
+        Opt::Mulligan => Pick::Mulligan,
         Opt::Done => Pick::Done,
         Opt::Number(n) if d.prompt.purpose == Purpose::Wish => Pick::Card {
             card: t.def(t.sideboard_card::<L::Card>(d.player, n)?).name,

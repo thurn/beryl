@@ -41,7 +41,7 @@ pub(crate) fn begin_turn<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
-    if s.elapsed_turns() >= s.profile().limits.turns {
+    if s.turns_for_limit() >= s.profile().limits.turns {
         s.end_game(Outcome::Stalled(StallReason::Turns));
         return Ok(());
     }

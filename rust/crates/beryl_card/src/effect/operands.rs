@@ -121,6 +121,7 @@ impl Effect {
             | Effect::ChangeRule { .. }
             | Effect::AdditionalStep(_)
             | Effect::EndTurn => Operands::NONE,
+            Effect::RestartGame { filter } => Operands::NONE.filter(Some(filter)),
             Effect::May { player, .. }
             | Effect::ForEachPlayer {
                 players: player, ..

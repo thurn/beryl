@@ -5,6 +5,7 @@
 
 pub mod ending;
 pub mod life;
+pub(crate) mod restart;
 pub(crate) mod start;
 pub(crate) mod subgame;
 

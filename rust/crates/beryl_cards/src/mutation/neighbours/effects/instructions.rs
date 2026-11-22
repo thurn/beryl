@@ -751,6 +751,11 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
             "omit adding the step".to_owned(),
             Effect::NOTHING,
         ),
+        Effect::RestartGame { .. } => add(
+            Kind::SequenceStep,
+            "omit restarting the game".to_owned(),
+            Effect::NOTHING,
+        ),
         Effect::EndTurn => add(
             Kind::SequenceStep,
             "omit ending the turn".to_owned(),

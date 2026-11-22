@@ -661,6 +661,13 @@ pub enum Effect {
     ///
     /// [CR 725.1]: https://yawgatog.com/resources/magic-rules/#R7251
     EndTurn,
+    /// Restarts the game and keeps the linked cards that pass the filter in exile.
+    /// After mulligans the ability's controller puts those cards onto the battlefield
+    /// under their control (see [CR 728.4] and [CR 728.5]).
+    ///
+    /// [CR 728.4]: https://yawgatog.com/resources/magic-rules/#R7284
+    /// [CR 728.5]: https://yawgatog.com/resources/magic-rules/#R7285
+    RestartGame { filter: Filter },
     /// The controller may reveal a card they own from outside the game that matches
     /// `filter` and put it into their hand (see CR 400.11b).
     Wish { filter: Filter },
@@ -763,6 +770,7 @@ impl Effect {
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
+            | Effect::RestartGame { .. }
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
             | Effect::ExtraTurn(..) => false,
