@@ -157,7 +157,7 @@ fn provision(
         "tmutil",
         &[
             "addexclusion".into(),
-            "-p".into(),
+            "-v".into(),
             volume.mount.into_os_string(),
         ],
     );
@@ -249,7 +249,7 @@ mod tests {
     }
 
     #[test]
-    fn volume_has_equal_reserve_and_quota_and_writes_both_markers() {
+    fn volume_sets_reserve_quota_markers_and_backup_exclusion() {
         let fake = FakeSystem::default();
         let volume = provision(&fake, Path::new("/checkout"), "TestTrees", false, 60).unwrap();
         assert!(volume.folder_ready && volume.notes.is_empty());
@@ -284,6 +284,15 @@ mod tests {
                 ]
                 .map(OsString::from)
                 .to_vec()
+            )
+        );
+        assert_eq!(
+            commands[4],
+            (
+                "tmutil".into(),
+                ["addexclusion", "-v", "/Volumes/Test Trees"]
+                    .map(OsString::from)
+                    .to_vec()
             )
         );
     }
