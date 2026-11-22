@@ -150,7 +150,7 @@ fn inventories_cover_their_owning_registries() {
                     entry["name"].as_str().unwrap().split_once(' ').unwrap().0 == name
                 })
                 .count(),
-            Group::ALL.len(),
+            Group::ALL.len() + 1,
             "{name}"
         );
     }
@@ -191,6 +191,31 @@ fn map_names_the_profile_differences_and_declared_shortcuts() {
     let effect_output = output(&["map", "effects"]);
     assert!(effect_output.contains("glow"));
     assert!(effect_output.contains("surface"));
+}
+
+#[test]
+fn map_finds_the_prompt_tray_and_shared_effect_timing() {
+    let containers = inventory("containers");
+    for (name, boxes) in [("desktop tray", "side-by-side"), ("phone tray", "stacked")] {
+        let tray = containers
+            .iter()
+            .find(|entry| entry["name"] == name)
+            .unwrap();
+        assert_eq!(
+            tray["path"],
+            "rust/beryl3d/crates/game_table/src/table/tray_layout.rs"
+        );
+        assert_eq!(
+            tray["detail"],
+            format!(
+                "prompt tray with {boxes} boxes  ScreenFit (rust/beryl3d/crates/kit_space/src/arrange/screen.rs)"
+            )
+        );
+    }
+    let data = output(&["map", "data", "--full"]);
+    assert!(data.lines().any(|line| {
+        line.contains("Shared verb and effect timing") && line.ends_with("data/ui-conventions.json")
+    }));
 }
 
 #[test]

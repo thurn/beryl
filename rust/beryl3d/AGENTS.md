@@ -15,12 +15,16 @@ core's crate boundaries, arrangement, layout profiles and checks.
   time, input and assets. The renderer consumes the finished frame.
 
 `just b3d map` lists the inventories. Give it a kind such as `crates`,
-`features` or `containers` for names and source paths. Read the guide in the
-crate you change. At the same level a crate may depend on earlier crates in
-`levels.json`. Dependencies between levels point down. Only `app_client` depends
-on `scaffold_web`, which owns new web fit values. The client core reads time and
-assets through its inputs. Given the same inputs it draws the same frames, and
-an animation-only frame allocates nothing.
+`features` or `containers` for names and source paths.
+`just b3d map containers --full` shows where each profile's prompt tray is laid
+out and which fitting policy it uses. `just b3d map data` lists the shared
+timing file, and `just b3d new effect --help` shows how to register an effect.
+
+Read the guide in the crate you change. At the same level a crate may depend on
+earlier crates in `levels.json`. Dependencies between levels point down. Only
+`app_client` depends on `scaffold_web`, which owns new web fit values. The
+client core reads time and assets through its inputs. Given the same inputs it
+draws the same frames, and an animation-only frame allocates nothing.
 
 ## Building and testing
 

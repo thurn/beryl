@@ -11,13 +11,15 @@ from beryl_tools.beryl3d import cli, guides, new, purity
 def test_recipes_are_the_help_users_get(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["new"]) == 0
     listing = capsys.readouterr().out
-    for kind, help_text in new.help_by_kind().items():
+    recipes = new.help_by_kind()
+    for kind, help_text in recipes.items():
         assert f"  {kind} " in listing
         with pytest.raises(SystemExit) as exit:
             cli.main(["new", kind, "--help"])
         assert exit.value.code == 0
         assert capsys.readouterr().out == help_text
         assert len(help_text.splitlines()) <= 30
+    assert "timing to the effects list in data/ui-conventions.json" in recipes["effect"]
 
 
 def test_guides_checks_caps_companions_and_map_recipes(tmp_path: Path) -> None:

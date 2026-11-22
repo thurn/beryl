@@ -8,7 +8,7 @@ use beryl_protocol::script::Verb;
 use game_hud::labels::GAME_LABELS;
 use game_table::profiles::Profile;
 use kit_base::data::TUNING_FILES;
-use kit_base::data::effect::PrimitiveKind;
+use kit_base::data::effect::{PrimitiveKind, SHIPPED};
 use kit_base::data::profiles::{self, ProfileData, Profiles};
 use kit_frame::frame::Role;
 use kit_probe::agent::Rule;
@@ -196,9 +196,9 @@ pub(super) fn containers() -> Result<Vec<Entry>, String> {
         let layout = Profile::for_window(source.layouts, profile.usual_window()).layout();
         entries.extend(game_probe::explain::containers(&layout).map(|info| {
             Entry::new(
-                format!("{} {}", profile.name, info.place.label()),
+                format!("{} {}", profile.name, info.name),
                 crate_path(&format!("game_table/src/table/{}", info.source)),
-                format!("{}  {}", info.container, info.policy.word()),
+                format!("{}  {}", info.container, info.policy),
             )
         }));
     }
@@ -288,6 +288,14 @@ pub(super) fn data() -> Result<Vec<Entry>, String> {
         .iter()
         .map(|file| Entry::new(file.name, data_path(file.name), file.reader))
         .collect::<Vec<_>>();
+    entries.push(Entry::new(
+        "ui-conventions.json",
+        "data/ui-conventions.json",
+        format!(
+            "Shared verb and effect timing read by beryl_protocol::script::timing ({} shipped effects)",
+            SHIPPED.len()
+        ),
+    ));
     let profile_files = profiles::FILES.into_iter().chain(
         pages::INSPECTION_PROFILES
             .iter()

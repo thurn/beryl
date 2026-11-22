@@ -28,7 +28,7 @@ const KINDS: &[Kind] = &[
     ),
     Kind::new(
         "containers",
-        "game_table/src/table/place.rs",
+        "game_table/src/table/mod.rs",
         entries::containers,
     ),
     Kind::scaffold(

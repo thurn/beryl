@@ -673,7 +673,8 @@ RECIPES = (
     Recipe(
         "effect",
         "A data-defined effect and a timed preview.",
-        "Edit the JSON layers. Remove preview and register shared timing to ship the effect.\n"
+        "Edit the JSON layers. To ship the effect, remove preview and add its shared\n"
+        f"timing to the effects list in {CONVENTIONS}.\n"
         "See it with just b3d png story/kit_fx/<name> --at 200ms.\n"
         "Run ignite test b3d-source and just b3d test story/kit_fx/<name>.",
         add_effect,

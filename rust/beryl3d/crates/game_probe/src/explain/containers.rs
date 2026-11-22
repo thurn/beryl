@@ -5,18 +5,18 @@ use kit_space::arrange::PolicyKind;
 
 use game_table::table::{Group, Layout, Place};
 
-/// The container that places one group's objects in this layout.
+/// A container that places cards in this layout.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ContainerInfo {
-    pub place: Place,
+    pub name: &'static str,
     pub container: &'static str,
-    pub policy: PolicyKind,
+    pub policy: &'static str,
     pub source: &'static str,
 }
 
-/// Describes every group visited by the table's placement pass.
-pub fn containers(layout: &Layout) -> impl ExactSizeIterator<Item = ContainerInfo> + '_ {
-    Group::ALL.into_iter().map(|group| {
+/// Describes the resting groups and the prompt tray in the fitted layout.
+pub fn containers(layout: &Layout) -> impl Iterator<Item = ContainerInfo> + '_ {
+    let groups = Group::ALL.into_iter().map(|group| {
         let (zone, side, row, container, policy, file) = match group {
             Group::Pile { side, zone } => (
                 zone,
@@ -60,10 +60,20 @@ pub fn containers(layout: &Layout) -> impl ExactSizeIterator<Item = ContainerInf
             ),
         };
         ContainerInfo {
-            place: Place::Card { zone, side, row },
+            name: Place::Card { zone, side, row }.label(),
             container,
-            policy,
+            policy: policy.word(),
             source: file,
         }
-    })
+    });
+    groups.chain(std::iter::once(ContainerInfo {
+        name: "tray",
+        container: if layout.tray.second.is_some() {
+            "prompt tray with stacked boxes"
+        } else {
+            "prompt tray with side-by-side boxes"
+        },
+        policy: "ScreenFit (rust/beryl3d/crates/kit_space/src/arrange/screen.rs)",
+        source: "tray_layout.rs",
+    }))
 }
