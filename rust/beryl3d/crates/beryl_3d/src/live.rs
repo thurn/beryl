@@ -4,9 +4,9 @@
 //!
 //! A client connects, sends one line (`tree`, `png`, `do <action>` or `quit`) and reads the
 //! answer to the end of the connection. The answer's first line is `ok` or `error`, and the
-//! rest is the tree, the picture's path, or what went wrong. The server thread only parses and
-//! queues; the frame loop answers on the frame thread (`Live::before` hands over what is
-//! queued, and the app's feed answers after the frame it draws).
+//! rest is the tree, the picture's path, or what went wrong. Connection threads queue requests
+//! for the frame thread and write its replies back. The frame thread writes the reply to
+//! `quit` itself so the connection is closed before the host can exit.
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
@@ -32,7 +32,7 @@ enum Request {
     Do(Drive, Sender<Answer>),
     /// Ends the run as closing the window does, so that the frame log gets its summary and a
     /// live game stays saved to be resumed.
-    Quit(Sender<Answer>),
+    Quit(UnixStream),
 }
 
 /// The folder a socket is made in: `$TMPDIR`, or `/tmp`.
@@ -63,7 +63,7 @@ pub struct Live {
     /// Pictures asked for and not yet drawn, then groups of askers waiting for one picture.
     pictures_asked: Vec<Sender<Answer>>,
     pictures_waiting: VecDeque<Vec<Sender<Answer>>>,
-    /// Whether a `quit` request has been taken up.
+    /// Whether the frame thread has handled a `quit` request.
     quit: bool,
 }
 
@@ -132,9 +132,12 @@ impl Live {
                     self.new_scripts.push((self.next_script, script));
                     self.scripts.push((self.next_script, reply));
                 }
-                Request::Quit(reply) => {
+                Request::Quit(stream) => {
+                    // This is the only write to the connection, so the three bytes fit in its
+                    // send buffer even if the client has yet to read. The host may exit as
+                    // soon as it sees the flag, so write and close the socket first.
+                    respond(stream, &Ok(String::new()));
                     self.quit = true;
-                    let _ = reply.send(Ok(String::new()));
                 }
             }
         }
@@ -218,14 +221,26 @@ impl Drop for Live {
     }
 }
 
-/// Reads one request from `stream`, queues it, waits for its answer and writes it.
+/// Reads one request from `stream` and queues it. For commands other than `quit`, this
+/// thread waits for the answer and writes it.
 fn serve(stream: UnixStream, queue: &Mutex<VecDeque<Request>>, inbox: &Inbox) {
     let mut line = String::new();
     if BufReader::new(&stream).read_line(&mut line).is_err() {
         return;
     }
+    let line = line.trim();
+    if line == "quit" {
+        // Hold the queue lock while waking the host so the next tick sees the quit request.
+        if let Ok(mut queue) = queue.lock()
+            && inbox.send(Input::Nudge)
+        {
+            queue.push_back(Request::Quit(stream));
+            return;
+        }
+        return respond(stream, &Err("the app has ended".to_owned()));
+    }
     let (reply, answer) = channel();
-    let request = match parse(line.trim(), reply) {
+    let request = match parse(line, reply) {
         Ok(request) => request,
         Err(error) => return respond(stream, &Err(error)),
     };
@@ -245,7 +260,6 @@ fn parse(line: &str, reply: Sender<Answer>) -> Result<Request, String> {
     match line.split_once(' ').unwrap_or((line, "")) {
         ("tree", "") => Ok(Request::Tree(reply)),
         ("png", "") => Ok(Request::Png(reply)),
-        ("quit", "") => Ok(Request::Quit(reply)),
         ("do", action) if !action.trim().is_empty() => {
             // An action that gives no time starts when the script does.
             Drive::parse("live", action.trim()).map(|script| Request::Do(script, reply))

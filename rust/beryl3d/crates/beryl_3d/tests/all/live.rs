@@ -21,15 +21,21 @@ impl Drop for App {
     }
 }
 
-/// Sends `request` to the socket at `path` and returns the first line of the answer and the
-/// rest.
-fn ask(path: &str, request: &str) -> (String, String) {
+/// Sends `request` to the socket at `path` and reads the answer through the end of the
+/// connection.
+fn exchange(path: &str, request: &str) -> String {
     let mut stream = UnixStream::connect(path).expect("the socket accepts");
     writeln!(stream, "{request}").expect("the request is sent");
     let mut answer = String::new();
     stream
         .read_to_string(&mut answer)
         .expect("the answer is read");
+    answer
+}
+
+/// Returns the first line of the answer and the rest.
+fn ask(path: &str, request: &str) -> (String, String) {
+    let answer = exchange(path, request);
     let (status, body) = answer.split_once('\n').unwrap_or((&answer, ""));
     (status.to_owned(), body.to_owned())
 }
@@ -98,9 +104,8 @@ fn a_running_app_answers_tree_do_and_png() {
     assert_eq!(status, "error");
     assert!(why.contains("tree, png, do <action> or quit"), "{why}");
 
-    // Quit ends the run as closing the window does, which removes the socket.
-    let (status, body) = ask(&path, "quit");
-    assert_eq!(status, "ok", "{body}");
+    // Quit must send the complete reply before ending the run and removing the socket.
+    assert_eq!(exchange(&path, "quit"), "ok\n");
     let mut app = app;
     let ended = app.0.wait().expect("the app ends after quit");
     assert!(ended.success(), "{ended}");
