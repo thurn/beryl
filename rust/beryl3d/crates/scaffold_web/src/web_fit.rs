@@ -41,6 +41,10 @@ pub(crate) fn screen(window: Window) -> ScreenProjection {
     ScreenProjection {
         origin: stage.on_window(Vec2::ZERO),
         scale: stage.scale,
+        stage_size: Some(Size {
+            width: stage.width,
+            height: data.stage.height,
+        }),
     }
 }
 

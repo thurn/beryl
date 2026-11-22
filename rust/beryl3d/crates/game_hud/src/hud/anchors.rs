@@ -3,8 +3,8 @@
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
-use game_table::table::{ABILITY_IDS, HudAnchor};
-use kit_frame::frame::{AnchorBox, ElementId, FrameBuilder, NodeRef};
+use game_table::table::HudAnchor;
+use kit_frame::frame::{AnchorBox, ElementId, FrameBuilder, NodeRef, ability_element};
 use kit_ui::{element::AnchorTarget, layout::Spot};
 
 /// Maps a session subject to its drawn scene node or registered life anchor.
@@ -12,7 +12,7 @@ use kit_ui::{element::AnchorTarget, layout::Spot};
 pub fn anchor_target(subject: Subject) -> AnchorTarget {
     match subject {
         Subject::Object { slot } => AnchorTarget::Node(ElementId(u32::from(slot.0))),
-        Subject::Ability { id } => AnchorTarget::Node(ElementId(ABILITY_IDS + id % ABILITY_IDS)),
+        Subject::Ability { id } => AnchorTarget::Node(ability_element(id)),
         Subject::Player { player } => AnchorTarget::Layout(HudAnchor::Life(player).id()),
     }
 }

@@ -8,7 +8,7 @@ use game_hud::hud::placement_scene::{Group, PlacementScene};
 use game_table::table::labels::ABILITY_ROLE;
 use game_table::table::{Camera, Objects};
 use kit_base::data::profiles::Piece;
-use kit_frame::frame::{ABILITY_IDS, ElementId, Role};
+use kit_frame::frame::{ElementId, Role, ability_element};
 
 const SHOWN_BOARD_IDS: u32 = 1 << 31;
 
@@ -88,7 +88,7 @@ fn project(
     }
     for (id, pose) in objects.ability_poses() {
         layout.object(
-            ElementId(id_offset + ABILITY_IDS + id),
+            ElementId(id_offset + ability_element(id).0),
             ABILITY_ROLE,
             Group::Stack,
             pose,

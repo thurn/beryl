@@ -32,7 +32,8 @@ impl Layer {
         let scale = node.scale();
         let scaled = scale.to_bits() != 1.0_f32.to_bits();
         let zoom = if scaled {
-            let pivot = Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+            let pivot = Vec2::new(rect.x, rect.y)
+                + Vec2::new(rect.width, rect.height) * node.element.style.scale_origin;
             zoom.inside(pivot, scale.max(0.0))
         } else {
             zoom

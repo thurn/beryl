@@ -10,7 +10,7 @@ use super::{Act, Fact, Subject, Tally};
 use crate::protocol::ObjectId;
 use crate::protocol::{
     ManaPool, ManualPiles, NamedCounter, ObjectView, PlayerState, PlayerView, Side, StackItem,
-    Status, Step as TurnStep, ZoneName,
+    Step as TurnStep, ZoneName,
 };
 
 /// What a seat's screen shows of the game.
@@ -131,14 +131,8 @@ impl Table {
     pub fn named(view: &PlayerView, names: &[Subject]) -> Table {
         let objects: BTreeMap<ObjectId, ObjectView> =
             view.objects.iter().map(|o| (o.slot, o.clone())).collect();
-        let resolving = match &view.status {
-            Status::Deciding { decision } => decision.resolving.as_ref(),
-            _ => None,
-        };
         let stack = view
-            .stack
-            .iter()
-            .chain(resolving)
+            .stack_with_resolving()
             .enumerate()
             .filter(|(_, item)| match item {
                 StackItem::Spell { slot, .. } => {

@@ -40,6 +40,7 @@ pub fn game(
     let opening = opening::opening(input);
     let is_opening = opening.is_some();
     let prompt = views.prompt.filter(|_| !opening::choosing_start(input));
+    let shade = prompt.as_ref().and_then(|_| prompts::question_shade(input));
     let covers = input.prompt.is_some_and(prompts::covers_table);
     let overlays = overlays(input, log, result, views.viewer);
     let mut menu = Some(menu);
@@ -65,7 +66,12 @@ pub fn game(
             furniture.extend(element);
         }
     }
-    if !is_opening && furniture.is_empty() && overlays.is_empty() && !layout.anchored_to_window {
+    if !is_opening
+        && shade.is_none()
+        && furniture.is_empty()
+        && overlays.is_empty()
+        && !layout.anchored_to_window
+    {
         return prompt.unwrap_or_else(|| row().name("game"));
     }
     if is_opening && layout.table_under_opening {
@@ -78,6 +84,7 @@ pub fn game(
         game.children.extend(prompt);
         game.children.extend(furniture);
     }
+    game.children.extend(shade);
     game.children.extend(overlays);
     if layout.anchored_to_window {
         game.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));

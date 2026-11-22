@@ -9,6 +9,7 @@ use beryl_protocol::protocol::{Side, Status};
 use glam::Vec2;
 
 use super::Message;
+use super::question::{fit_question_dock, question_title};
 use crate::hud::HudIn;
 use crate::hud::phase::phase_box;
 use crate::hud::placement_scene::{Group, PlacementScene, inset, rect};
@@ -19,7 +20,9 @@ use kit_base::geometry::Rect;
 use kit_base::tokens::{color, shadow, size, space, type_style};
 use kit_scene::{Candidate, NodeQuery};
 use kit_text::text::TypeStyle;
-use kit_ui::element::{Align, Anchor, Element, Position, TextAlign, column, holder, row, text};
+use kit_ui::element::{
+    Align, Anchor, Element, LayerDepth, Position, TextAlign, column, holder, row, text,
+};
 use kit_ui::layout::{DOCK_BOTTOM, DOCK_RIGHT};
 use kit_ui::widgets::{self, button, icon_button, icons, primary};
 
@@ -68,13 +71,22 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
     let acting_for = input.view.is_some_and(acting_for);
     let asks = title(prompt, acting_for);
     let held_up = Piles::of(prompt).is_some();
+    let question = matches!(prompt.body, ShapeBody::YesNo { .. });
     if let Some(slots) = PromptSlots::new(input, held_up || covers_table(prompt)) {
-        return floating_bar(prompt, &asks, controls, &slots, held_up);
+        let mut bar = floating_bar(prompt, &asks, controls, &slots, held_up);
+        if question && held_up {
+            bar.layer_depth = LayerDepth::AboveCards;
+        }
+        return bar;
     }
     let title = (!asks.is_empty()).then(|| {
-        text(&asks)
-            .style(type_style::TITLE)
-            .text_align(TextAlign::Center)
+        if question {
+            question_title(&asks, prompt.title.encode_utf16().count())
+        } else {
+            text(&asks)
+                .style(type_style::TITLE)
+                .text_align(TextAlign::Center)
+        }
     });
     let ways = || ways(prompt).map(|way| way.id);
     let buttons: Vec<&PromptButton> = (prompt.buttons.iter())
@@ -99,7 +111,7 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
             )
         })
         .collect();
-    bar_column(input.profile)
+    let dock = bar_column(input.profile)
         .children(title)
         .children(others)
         .children(controls.map(|controls| controls.element))
@@ -116,7 +128,11 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
             .children(pass_on.filter(|button| button.enabled).map(|button| {
                 widgets::tooltip(&button.label, &button.label, input.data.flat.tooltip)
             }))
-        }))
+        }));
+    if question {
+        return fit_question_dock(dock, input.profile);
+    }
+    dock
 }
 
 /// The desktop's action dock, as the web's `.dock` in `ui/src/screens/styles/controls.css`

@@ -33,7 +33,9 @@ pub enum PaintBand {
     ScreenPanels,
     ShownObjects,
     Overlays,
+    LayerControls,
     Dragged,
+    Foreground,
 }
 
 impl PaintBand {
@@ -53,6 +55,8 @@ impl PaintBand {
                 Self::ShownObjects
             }
             Some(_) => Self::Table,
+            None if node.state.has(StateBits::FOREGROUND) => Self::Foreground,
+            None if node.state.has(StateBits::ABOVE_CARDS) => Self::LayerControls,
             None if node.role == Role::Arrow => Self::Overlays,
             None => Self::ScreenPanels,
         }
@@ -67,7 +71,9 @@ impl PaintBand {
             Self::Moving => Band::Moving,
             Self::ShownObjects => Band::LayerCards,
             Self::Dragged => Band::Dragged,
+            Self::Foreground => Band::Foreground,
             Self::Overlays => Band::LayerCover,
+            Self::LayerControls => Band::LayerControls,
             Self::ScreenPanels => Band::Layer,
             Self::Table => resting,
         }
@@ -333,6 +339,20 @@ impl Frame {
 }
 
 impl FrameBuilder<'_> {
+    /// Ends the last element's draw records before emitting light or effects with no node.
+    pub fn clear_owner(&mut self) {
+        self.owner = u32::MAX;
+    }
+
+    /// Assigns a flat subtree's nodes and draw records to the requested layer band.
+    pub fn with_layer_band<T>(&mut self, band: Band, write: impl FnOnce(&mut Self) -> T) -> T {
+        let previous = self.layer_band;
+        self.layer_band = band.max(previous);
+        let result = write(self);
+        self.layer_band = previous;
+        result
+    }
+
     /// The paint band of the element at `index` in the registered tree.
     #[must_use]
     pub fn node_band(&self, index: u32) -> PaintBand {
@@ -382,7 +402,9 @@ fn band_of(key: u64) -> Band {
         9 => Band::Layer,
         10 => Band::LayerCards,
         11 => Band::LayerCover,
-        _ => Band::Dragged,
+        12 => Band::LayerControls,
+        13 => Band::Dragged,
+        _ => Band::Foreground,
     }
 }
 
@@ -393,7 +415,7 @@ fn depth_key(band: Band, draw: &Draw, view_projection: Mat4) -> u32 {
         Band::Opaque if draw.material == Material::Table as u8 => u32::MAX,
         Band::Opaque | Band::MovingOpaque => ordered(depth(draw, view_projection)),
         // The flat layer is drawn in the order of its tree, which is the order it was pushed.
-        Band::Layer | Band::LayerCover => 0,
+        Band::Layer | Band::LayerCover | Band::LayerControls | Band::Foreground => 0,
         // Blended records are drawn farthest first, so that nearer ones blend over them.
         _ => !ordered(depth(draw, view_projection)),
     }

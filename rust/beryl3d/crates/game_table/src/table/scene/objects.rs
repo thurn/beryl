@@ -32,8 +32,7 @@ impl Table {
     ) -> Objects {
         let mut abilities = Vec::with_capacity(placement.abilities.len());
         let stack = view
-            .stack
-            .iter()
+            .stack_with_resolving()
             .enumerate()
             .filter(|(_, item)| matches!(item, StackItem::Ability { .. }));
         for ((index, _), &id) in stack.zip(&numbers) {

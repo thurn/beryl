@@ -69,20 +69,38 @@ impl Shown<'_> {
     }
 }
 
-/// The whole window in the tray's shade (`.stage-tray`), which the pointer goes through.
+/// The tray shade (`.stage-tray`), which the pointer goes through.
 fn shade(input: &HudIn) -> Element {
-    let window = input.window.size;
+    let stage = input.profile.fitted_stage().map_or(
+        kit_base::geometry::Rect {
+            width: input.window.size.width,
+            height: input.window.size.height,
+            ..Default::default()
+        },
+        |(stage, _)| stage,
+    );
     let mut shade = kit_ui::element::column()
         .name("shade")
-        .width(window.width)
-        .height(window.height)
+        .width(stage.width)
+        .height(stage.height)
         .background(kit_base::tokens::color::TRAY_SHADE)
         .passes(true);
     shade.anchor = Some(kit_ui::element::Anchor::Point(
-        glam::Vec2::ZERO,
+        glam::Vec2::new(stage.x, stage.y),
         glam::Vec2::ZERO,
     ));
     shade
+}
+
+/// The yes/no tray's shade belongs above the HUD. Its card and buttons draw above it.
+pub(crate) fn question_shade(input: &HudIn) -> Option<Element> {
+    let prompt = input.prompt?;
+    if !matches!(prompt.body, ShapeBody::YesNo { .. }) || Piles::of(prompt).is_none() {
+        return None;
+    }
+    let mut shade = shade(input).waits();
+    shade.layer_depth = kit_ui::element::LayerDepth::Dimming;
+    Some(shade)
 }
 
 /// The faces the open prompt shows in the flat layer at full size, which the client asks for

@@ -328,6 +328,13 @@
         "line_height": 1.15,
         "note": "A prompt's question: the dock's `.prompt-title`, 26 points at weight 600, line height 1.15."
       },
+      "LONG_QUESTION_TITLE": {
+        "font": "Serif",
+        "weight": 600,
+        "size": 18,
+        "line_height": 1.2,
+        "note": "The compact text of a long question in the action dock."
+      },
       "BODY": {
         "font": "OpenSans",
         "weight": 400,
@@ -1435,6 +1442,14 @@
         "value": 460,
         "note": "The most room the desktop's action dock takes across: `.dock`'s `max-width` in `ui/src/screens/styles/controls.css`."
       },
+      "LONG_QUESTION_EXTENSION": {
+        "value": 110,
+        "note": "How far a long question extends to the left of the action dock."
+      },
+      "QUESTION_TITLE_GAP": {
+        "value": 2,
+        "note": "Extra space below the question, from the action dock's title margin."
+      },
       "TURN_CAPTION_GAP": {
         "value": 8.5,
         "note": "How far under the turn button its caption's top stands: `.turn-action > :not(.button)`'s `top: calc(100% + 8.5px)`."
@@ -1686,6 +1701,10 @@
         "value": "#b4b2ae",
         "note": "The caption under the prompt's primary button: `.turn-caption`'s `color`."
       },
+      "QUESTION_TITLE": {
+        "value": "#fff7e6",
+        "note": "The question above the action dock."
+      },
       "REFUSAL": {
         "value": "rgb(27 26 24 / 88%)",
         "note": "The face of the inspector's line that says why a card can't be played: `.inspect-refusal`'s `background`; its words are `stat-down`."
@@ -1839,6 +1858,10 @@
       "WAY_CAPTION": {
         "value": "0 1px 3px rgb(0 0 0 / 80%)",
         "note": "The shadow under a mode choice caption, measured in stage pixels."
+      },
+      "QUESTION_TITLE": {
+        "value": "0 2px 2px rgb(0 0 0 / 90%)",
+        "note": "The close shadow below an action dock question."
       },
       "ICON_BUTTON": {
         "value": "inset 0 0 0 1px rgb(214 192 150 / 16%), 0 2px 6px rgb(0 0 0 / 30%)",

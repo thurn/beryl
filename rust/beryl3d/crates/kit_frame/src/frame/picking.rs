@@ -18,6 +18,23 @@ pub struct DropRegion {
 }
 
 impl FrameBuilder<'_> {
+    /// Records that only the modal at `root` and its descendants accept input.
+    /// Resolved screen elements are written in tree order, after the table.
+    ///
+    /// # Panics
+    ///
+    /// If `root` is not an index of a resolved element.
+    pub fn restrict_input(&mut self, root: u32) {
+        let (before, modal) = self.frame.resolved.split_at_mut(root as usize);
+        let after = modal[1..]
+            .iter()
+            .position(|node| node.parent < root || node.parent == u32::MAX)
+            .map_or(modal.len(), |position| position + 1);
+        for node in before.iter_mut().chain(&mut modal[after..]) {
+            node.interactive = false;
+        }
+    }
+
     /// Registers an empty-space drop region. The first registered region wins at a shared edge.
     pub fn drop_region(&mut self, region: DropRegion) {
         self.frame.drop_regions.push(region);

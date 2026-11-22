@@ -145,6 +145,125 @@ fn shows_report(frame: &Frame) -> bool {
     (frame.resolved.iter()).any(|element| frame.name(element.name) == "bug report")
 }
 
+/// A discard held up while the player decides whether to exile it.
+fn exile_prompt() -> Page {
+    use super::flat_layer::prompt_button;
+    use beryl_protocol::prompt::{ButtonId, Purpose, ShapeBody};
+    use beryl_protocol::protocol::{Kind, StackItem, Status};
+    use beryl_protocol::testing::prompt;
+
+    let mut view = ViewBuilder::sample();
+    let card = view.card(ZoneName::Graveyard, Side::You, "Oust").slot;
+    let converter = view
+        .card(ZoneName::Battlefield, Side::You, "Currency Converter")
+        .slot;
+    view.script(ScriptBuilder::reset().build());
+    let mut update = view.update();
+    let Input::Update(deciding) = super::flat_layer::deciding(prompt(
+        Purpose::Move,
+        "Exile that card from your graveyard?",
+        vec![
+            prompt_button(ButtonId::Option { index: 0 }, "Take Action", true),
+            prompt_button(ButtonId::Option { index: 1 }, "Decline", false),
+        ],
+        ShapeBody::YesNo {
+            about: vec![card],
+            places: None,
+        },
+    )) else {
+        unreachable!("the sample prompt is a game update");
+    };
+    update.view.status = deciding.view.status;
+    if let Status::Deciding { decision } = &mut update.view.status {
+        decision.kind = Kind::YesNo;
+        decision.cancellable = false;
+        decision.resolving = Some(StackItem::Ability {
+            source: Some(converter),
+            ability: 0,
+            granted: false,
+            name: "Currency Converter".to_owned(),
+            triggered: true,
+            taps_to_pay: None,
+            nth: 0,
+            text: None,
+            controller: Side::You,
+            manual: None,
+            targets: Vec::new(),
+            x: 0,
+        });
+    }
+    let mut page = page(&[update]);
+    page.still();
+    page
+}
+
+#[test]
+fn the_exile_question_keeps_the_action_dock_width() {
+    let mut page = exile_prompt();
+    page.find("ability \"Currency Converter\"");
+    let title = page
+        .find("text \"Exile that card from your graveyard?\"")
+        .rect();
+    let decline = page.find("button \"Decline\"").rect();
+    let action = page.find("button \"Take Action\"").rect();
+    assert!((action.width - 250.0).abs() < 0.01, "{action:?}");
+    assert!((decline.width - action.width).abs() < 0.01, "{decline:?}");
+    assert!((title.width - action.width).abs() < 0.01, "{title:?}");
+    assert!((title.height - 59.8).abs() < 0.1, "{title:?}");
+}
+
+#[test]
+fn the_bug_report_paints_over_a_card_held_up_by_the_prompt() {
+    let mut page = exile_prompt();
+    let card = "card \"Oust\"";
+    let before = page.find(card).rect();
+
+    page.set_looking(true);
+    open(&mut page);
+    assert_eq!(page.find(card).rect(), before);
+    let frame = page.frame();
+    let card = super::flat_layer::find(frame, Role::Card, "Oust");
+    // The tray shade has the same name. Use the shade belonging to the bug reporter.
+    let shade = (frame.resolved.iter().enumerate())
+        .rfind(|(_, node)| frame.name(node.name) == "shade")
+        .expect("the reporter draws a shade")
+        .0;
+    assert_drawn_over(frame, shade, card);
+
+    page.press("button \"Whole window\"");
+    page.still();
+    let frame = page.frame();
+    let card = super::flat_layer::find(frame, Role::Card, "Oust");
+    let panel = super::flat_layer::find(frame, Role::Region, "Report bug");
+    assert_drawn_over(frame, panel, card);
+    page.find(FIELD);
+}
+
+fn assert_drawn_over(frame: &Frame, front: usize, behind: usize) {
+    let front = u32::try_from(front).unwrap();
+    let behind = u32::try_from(behind).unwrap();
+    let start = frame
+        .owners
+        .iter()
+        .position(|&owner| owner == front)
+        .unwrap();
+    let end = frame
+        .owners
+        .iter()
+        .rposition(|&owner| owner == behind)
+        .unwrap();
+    assert!(
+        start > end,
+        "the reporter must paint after every record of the held card"
+    );
+    let order: Vec<_> = frame.paint_order().collect();
+    let position = |owner| order.iter().position(|&index| index == owner).unwrap();
+    assert!(
+        position(front) > position(behind),
+        "the probe must report the same paint order"
+    );
+}
+
 #[test]
 fn the_two_frames_after_cmd_b_show_nothing_of_the_report() {
     // The host sees `FreezeFrame` after the first frame and reads back the second.

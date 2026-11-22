@@ -77,12 +77,15 @@ pub struct ScreenProjection {
     pub origin: Vec2,
     /// Window points per reference point.
     pub scale: f32,
+    /// The fitted reference dimensions before scaling, when a reference stage is available.
+    pub stage_size: Option<kit_base::geometry::Size>,
 }
 
 impl ScreenProjection {
     const IDENTITY: Self = Self {
         origin: Vec2::ZERO,
         scale: 1.0,
+        stage_size: None,
     };
 }
 

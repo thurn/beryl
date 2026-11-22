@@ -146,8 +146,10 @@ pub struct Style {
     pub opaque_on_hover: Option<Timing>,
     /// A visual offset in logical points. It moves the element and its contents.
     pub translation: Vec2,
-    /// Uniform visual scale about the element's centre.
+    /// Uniform visual scale about the element's scale origin.
     pub scale: f32,
+    /// The point within the element its visual scale keeps fixed, as fractions of its size.
+    pub scale_origin: Vec2,
     /// How changes to individual properties are drawn. The first entry for a property wins.
     pub transition: &'static [Transition],
     /// The screen's default fade when no opacity transition is declared.
@@ -267,6 +269,7 @@ impl Default for Style {
             opaque_on_hover: None,
             translation: Vec2::ZERO,
             scale: 1.0,
+            scale_origin: Vec2::splat(0.5),
             transition: &[],
             opacity_transition: None,
             enter: None,

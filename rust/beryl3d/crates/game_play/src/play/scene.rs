@@ -5,10 +5,11 @@ use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Subject;
 
 use super::Show;
-use game_table::table::{ABILITY_IDS, Table, ability_track};
+use game_table::table::{Table, ability_track};
 use glam::{Quat, Vec2};
 use kit_frame::frame::{
     AnchorBox, ElementId, Endpoint, FrameBuilder, NodeRef, PaintBand, Resolved, StateBits,
+    ability_element,
 };
 use kit_fx::effects::Reach;
 
@@ -178,7 +179,7 @@ impl Scene<'_> {
 fn light_target_id(subject: Subject) -> ElementId {
     match subject {
         Subject::Object { slot } => ElementId(u32::from(slot.0)),
-        Subject::Ability { id } => ElementId(ABILITY_IDS + id % ABILITY_IDS),
+        Subject::Ability { id } => ability_element(id),
         Subject::Player { player } => orb::target_id(player),
     }
 }

@@ -70,6 +70,7 @@ impl<'a> Profile<'a> {
             let anchored = table.anchored.as_ref().expect("validated anchored table");
             desktop::reference(self.data, anchored)
         };
+        layout.tray = self.fit_tray(layout.tray);
         self.region_fit.apply(self.data, self.window, &mut layout);
         layout
     }
@@ -144,6 +145,49 @@ impl<'a> Profile<'a> {
             sizes,
             table.creatures.y,
             table.lands.y,
+        ))
+    }
+
+    // Keep the tray's stage units while projecting its bounds into the fitted table. The
+    // tray solver otherwise treats any letterboxing as part of the playable surface.
+    fn fit_tray(self, mut tray: TraySpace) -> TraySpace {
+        let Some((stage, _)) = self.fitted_stage() else {
+            return tray;
+        };
+        let window = self.window.size;
+        let fit = stage.height / window.height;
+        let per_point = tray.stage_height / window.height;
+        tray.y = tray.y * fit + stage.y * per_point;
+        tray.height *= fit;
+        tray.most *= fit;
+        tray.least *= fit;
+        tray.gap *= fit;
+        tray.heading *= fit;
+        if let crate::table::Across::Middle {
+            half_most,
+            stack_side,
+        } = &mut tray.across
+        {
+            *half_most *= fit;
+            *stack_side = *stack_side * fit + stage.x * per_point;
+        }
+        tray
+    }
+
+    /// The optional fitted stage from which desktop layout takes its size and margins.
+    #[must_use]
+    pub fn fitted_stage(self) -> Option<(Rect, f32)> {
+        self.data.table.anchored.as_ref()?;
+        let projection = self.screen_projection();
+        let size = projection.stage_size?;
+        Some((
+            Rect {
+                x: projection.origin.x,
+                y: projection.origin.y,
+                width: size.width * projection.scale,
+                height: size.height * projection.scale,
+            },
+            projection.scale,
         ))
     }
 

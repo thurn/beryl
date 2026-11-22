@@ -220,7 +220,7 @@ impl FaceList {
                 faces.len += 1;
             }
         };
-        for item in view.stack.iter().rev() {
+        for item in view.stack_with_resolving().rev() {
             match item {
                 StackItem::Spell { slot, .. } => {
                     let object = view.objects.iter().find(|object| object.slot == *slot);

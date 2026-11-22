@@ -158,6 +158,7 @@ impl Layer {
         }
         let text_changed = node.element.text != element.text
             || node.element.style.text != element.style.text
+            || node.element.style.text_align != element.style.text_align
             || node.element.spans != element.spans
             || node.element.style.fit != element.style.fit
             || node.element.style.truncate != element.style.truncate;

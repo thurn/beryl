@@ -502,8 +502,7 @@ impl<'a> Zones<'a> {
             StackItem::Ability { .. } => true,
         };
         let stack = on_stack(
-            view.stack
-                .iter()
+            view.stack_with_resolving()
                 .filter(|item| on(item))
                 .map(|item| (item, None)),
             abilities,
@@ -517,7 +516,7 @@ impl<'a> Zones<'a> {
             object_order: None,
             battlefield: &view.battlefield,
             stack: Cow::Owned(stack),
-            stack_items: policy::StackItems::View(&view.stack),
+            stack_items: policy::StackItems::View(view),
             piles: [player(&view.players.you), player(&view.players.opponent)],
             handling: None,
             arrival: None,

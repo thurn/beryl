@@ -237,7 +237,9 @@ macro_rules! prompt_feature {
                 let prompt = inputs.hud.prompt.expect("only the open prompt's shape is mounted");
                 let bar = inputs.bar.expect("the bar is drawn before the shape").clone();
                 let mut element = $view(prompt, &inputs.hud, bar);
-                if crate::prompts::Piles::of(prompt).is_some() {
+                if !matches!(prompt.body, beryl_protocol::prompt::ShapeBody::YesNo { .. })
+                    && crate::prompts::Piles::of(prompt).is_some()
+                {
                     element.children.insert(0, crate::prompts::shade(&inputs.hud));
                 }
                 element

@@ -1,5 +1,6 @@
 //! The prompt bar and the buttons the game offers outside of a shape's controls.
 
+mod question;
 mod view;
 
 use beryl_protocol::prompt::ButtonId;

@@ -14,7 +14,7 @@ use super::edit::Marks;
 use super::panel::{Chain, box_shadows, look_of, panel, write_box};
 use super::shadows::write_icon_shadows;
 use super::{Layer, Node, text_top};
-use crate::element::{Anchor, Display, Element, Overflow, Property, Shown, TextAlign};
+use crate::element::{Anchor, Display, Element, LayerDepth, Overflow, Property, Shown, TextAlign};
 use crate::input::{FaceId, FaceSize, Rect};
 use crate::widgets::icons::{LayeredIcon, cell_width};
 use kit_base::geometry::plane::{ScreenPlane, Zoom};
@@ -24,6 +24,7 @@ use kit_frame::frame::{
     Anchored, Band, Draw, ElementId, FrameBuilder, Missing, NameRef, Place, Resolved, Role,
     ScreenClip, Show, StateBits,
 };
+pub(super) use layer::above_floats;
 
 /// Looks up texture layers for faces shown in the flat layer.
 pub struct FaceLayers<'a> {
@@ -136,7 +137,7 @@ impl Layer {
     /// not at all while the object it is anchored to is not shown. A node that clips or
     /// scrolls writes its children under a clip of its box, the box of any clip it is under
     /// cut to it, moved by its scroll offset.
-    fn write_node<'a>(
+    fn write_element<'a>(
         &'a self,
         node: &'a Node,
         parent: u32,
@@ -709,6 +710,9 @@ impl Layer {
         if self.pressed == Some(node.id) {
             state |= StateBits::HELD;
         }
+        if element.layer_depth == LayerDepth::Dimming {
+            state |= StateBits::DIMMING;
+        }
         StateBits(state)
     }
 }
@@ -767,19 +771,6 @@ fn corners(rect: Rect, turn: f32) -> [Vec2; 4] {
     let center = corners[0].midpoint(corners[2]);
     let rotation = Vec2::from_angle(turn);
     corners.map(|corner| center + rotation.rotate(corner - center))
-}
-
-/// Visible modal overlays are painted in front of regular screen contents and floats.
-pub(super) fn above_floats(node: &Node) -> bool {
-    node.element.anchor.is_some() && (node.element.modal || over_floats(node))
-}
-
-/// Whether `node`, a child of a top element, is painted with a backdrop filter: an anchored element
-/// with a backdrop filter (`Style::backdrop`), which filters the floats with the rest of what is
-/// drawn under it. Only the screen's are written; a float's are not written at all.
-pub(super) fn over_floats(node: &Node) -> bool {
-    let style = &node.element.style;
-    node.element.anchor.is_some() && style.backdrop && !style.filter.is_empty()
 }
 
 /// The filter functions drawn on the element and its children. A backdrop filter applies

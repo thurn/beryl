@@ -49,6 +49,12 @@ pub use kit_base::ids::ElementId;
 /// The first reserved id in the range used for stack abilities, above all card and UI ids.
 pub const ABILITY_IDS: u32 = 1 << 20;
 
+/// Maps both recorded and fallback ability numbers into the reserved element ID range.
+#[must_use]
+pub const fn ability_element(number: u32) -> ElementId {
+    ElementId(ABILITY_IDS + number % ABILITY_IDS)
+}
+
 /// The first element id of the arrows: an arrow's id is this plus its index among the open
 /// spans.
 pub const ARROW_IDS: u32 = 1 << 22;
@@ -206,6 +212,12 @@ impl StateBits {
 
     /// A card moving within its resting arrangement, such as a hand closing a gap.
     pub const LAYOUT_MOTION: u32 = 1 << 16;
+    /// Part of a flat overlay drawn in front of the entire scene.
+    pub const FOREGROUND: u32 = 1 << 18;
+    /// Part of the flat layer drawn above the shown cards.
+    pub const ABOVE_CARDS: u32 = 1 << 19;
+    /// An intentional tint over live controls that leaves their input available.
+    pub const DIMMING: u32 = 1 << 20;
 
     /// A hand card rising out of the fan, held up to read, or easing back into the fan.
     pub const RAISED: u32 = 1 << 17;
@@ -284,8 +296,12 @@ pub enum Band {
     LayerCards,
     /// Flat-layer elements that must cover those cards, such as a tooltip.
     LayerCover,
+    /// Flat controls drawn above the shown cards and their marks.
+    LayerControls,
     /// Objects held by the pointer above the scene.
     Dragged,
+    /// A flat overlay above the scene, including cards shown in trays or held by the pointer.
+    Foreground,
 }
 
 /// How many entries `Frame::clips` has; entry 0 means no clip.
@@ -313,7 +329,7 @@ pub const TEXT_RECORDS: usize = 2048;
 pub const DRAWS: usize =
     (OBJECTS + ABILITIES) * RECORDS_PER_OBJECT + LAYER_RECORDS + PARTICLES + TEXT_RECORDS;
 /// How many bands there are (`Band`).
-pub const BANDS: usize = Band::Dragged as usize + 1;
+pub const BANDS: usize = Band::Foreground as usize + 1;
 /// The most elements of the flat layer a frame holds.
 pub const LAYER_ELEMENTS: usize = 3072;
 /// The most resolved elements a frame holds: one for each card and each ability on the stack,
@@ -508,6 +524,7 @@ pub struct FrameBuilder<'a> {
     clips: u8,
     /// The element added last, which the records pushed after it belong to (`Frame::owners`).
     owner: u32,
+    layer_band: Band,
 }
 
 impl<'a> FrameBuilder<'a> {
@@ -547,6 +564,7 @@ impl<'a> FrameBuilder<'a> {
             frame,
             clips: 0,
             owner: u32::MAX,
+            layer_band: Band::Layer,
         }
     }
 
@@ -568,6 +586,11 @@ impl<'a> FrameBuilder<'a> {
             element.parent == u32::MAX || element.parent < at,
             "a scene parent must be registered before its child"
         );
+        element.state.0 |= match self.layer_band {
+            Band::LayerControls => StateBits::ABOVE_CARDS,
+            Band::Foreground => StateBits::FOREGROUND,
+            _ => 0,
+        };
         element.name = NameRef {
             start: index(self.frame.names.len()),
             len: index(name.len()),
@@ -576,28 +599,6 @@ impl<'a> FrameBuilder<'a> {
         self.frame.resolved.push(element);
         self.owner = at;
         at
-    }
-
-    /// Records that only the modal at `root` and its descendants accept input.
-    /// Resolved screen elements are written in tree order, after the table.
-    ///
-    /// # Panics
-    ///
-    /// If `root` is not an index of a resolved element.
-    pub fn restrict_input(&mut self, root: u32) {
-        let (before, modal) = self.frame.resolved.split_at_mut(root as usize);
-        let after = modal[1..]
-            .iter()
-            .position(|node| node.parent < root || node.parent == u32::MAX)
-            .map_or(modal.len(), |position| position + 1);
-        for node in before.iter_mut().chain(&mut modal[after..]) {
-            node.interactive = false;
-        }
-    }
-
-    /// Ends the last element's draw records before emitting light or effects with no node.
-    pub fn clear_owner(&mut self) {
-        self.owner = u32::MAX;
     }
 
     /// The centre of the table's element `id` as written so far (`Frame::centre`).
@@ -670,6 +671,11 @@ impl<'a> FrameBuilder<'a> {
             "a particle record pushed in the Baseline tier"
         );
         self.frame.load.particles += u32::from(particle);
+        let band = if band == Band::Layer {
+            self.layer_band
+        } else {
+            band
+        };
         self.frame.scratch.push(band, self.frame.draws.len(), &draw);
         self.frame.draws.push(draw);
         if self.frame.looking {

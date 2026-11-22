@@ -88,6 +88,18 @@ pub struct PlayerView {
     pub table: Option<TableView>,
 }
 
+impl PlayerView {
+    /// The stack in display order, with the entry whose resolution is waiting for a decision
+    /// at the top. Callers can omit spells whose cards have already moved to another zone.
+    pub fn stack_with_resolving(&self) -> impl DoubleEndedIterator<Item = &StackItem> {
+        let resolving = match &self.status {
+            Status::Deciding { decision } => decision.resolving.as_ref(),
+            _ => None,
+        };
+        self.stack.iter().chain(resolving)
+    }
+}
+
 /// Where the game stands for the viewer.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]

@@ -23,6 +23,17 @@ pub use style::{
 
 pub use transition::{Presence, Property, Timing, Transition};
 
+/// Where a flat subtree belongs relative to floats and projected objects.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LayerDepth {
+    #[default]
+    Normal,
+    /// An anchored shade that covers the HUD but stays under the cards a prompt holds up.
+    Dimming,
+    AboveCards,
+    Foreground,
+}
+
 use crate::input::{FaceId, FaceSize};
 use crate::widgets::icons::LayeredIcon;
 use crate::widgets::{FieldState, IconId};
@@ -143,6 +154,8 @@ pub struct Element {
     pub waits: bool,
     /// A top-level overlay that owns input while it is visible.
     pub modal: bool,
+    /// The paint order of this subtree.
+    pub layer_depth: LayerDepth,
     /// Where it stands if it is placed at a point of the window or on a scene object rather
     /// than in its parent's layout. It is laid out at its content's size (`layout::anchor`).
     pub anchor: Option<Anchor>,
@@ -177,6 +190,7 @@ impl Element {
             action_button: false,
             waits: false,
             modal: false,
+            layer_depth: LayerDepth::Normal,
             anchor: None,
             shows: None,
             show: None,
@@ -204,6 +218,7 @@ impl Element {
             && self.primary == other.primary
             && self.waits == other.waits
             && self.modal == other.modal
+            && self.layer_depth == other.layer_depth
             && self.anchor == other.anchor
             && self.shows == other.shows
             && self.show == other.show

@@ -114,6 +114,7 @@ pub(super) fn overlay(state: &State, input: Inputs) -> Element {
         .width(window.width)
         .height(window.height)
         .children(children);
+    overlay.layer_depth = kit_ui::element::LayerDepth::Foreground;
     overlay.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
     overlay
 }

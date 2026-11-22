@@ -12,7 +12,7 @@ use super::{Group, Zones, side_index};
 const LANDS_PILED: usize = 7;
 
 pub(super) enum StackItems<'a> {
-    View(&'a [StackItem]),
+    View(&'a PlayerView),
     Played(&'a [Entry]),
 }
 
@@ -39,7 +39,7 @@ impl Zones<'_> {
 
     fn stack_names(&self, names: &mut Vec<ObjectId>) {
         match self.stack_items {
-            StackItems::View(stack) => stack_names(names, stack.iter()),
+            StackItems::View(view) => stack_names(names, view.stack_with_resolving()),
             StackItems::Played(stack) => stack_names(names, stack.iter().map(|entry| &entry.item)),
         }
     }
@@ -56,7 +56,7 @@ impl PileRules {
             lands: piled_lands(permanents),
             ..Self::default()
         };
-        stack_names(&mut rules.named, view.stack.iter());
+        stack_names(&mut rules.named, view.stack_with_resolving());
         rules
     }
 

@@ -4,12 +4,33 @@ use std::cell::Cell;
 
 use glam::Vec2;
 
-use super::super::{Layer, float::Float, panel::Chain};
-use super::{Drawing, FaceLayers, Look, above_floats, children, over_floats, own_filter};
+use super::super::{Layer, Node, float::Float, panel::Chain};
+use super::{Drawing, FaceLayers, Look, children, own_filter};
+use crate::element::LayerDepth;
 use kit_base::geometry::plane::{ScreenPlane, Zoom};
-use kit_frame::frame::{Anchored, ElementId, FrameBuilder, StateBits};
+use kit_frame::frame::{Anchored, Band, ElementId, FrameBuilder, StateBits};
 
 impl Layer {
+    /// Writes a flat subtree in its declared paint band.
+    pub(super) fn write_node<'a>(
+        &'a self,
+        node: &'a Node,
+        parent: u32,
+        top: bool,
+        look: Look<'a>,
+        builder: &mut FrameBuilder,
+        drawing: Drawing<'_, 'a, impl Fn(ElementId) -> StateBits + Copy>,
+    ) -> Option<u32> {
+        let band = match node.element.layer_depth {
+            LayerDepth::AboveCards => Band::LayerControls,
+            LayerDepth::Foreground => Band::Foreground,
+            _ => return self.write_element(node, parent, top, look, builder, drawing),
+        };
+        builder.with_layer_band(band, |builder| {
+            self.write_element(node, parent, top, look, builder, drawing)
+        })
+    }
+
     /// Writes the flat layer into `builder`, on the plane `camera` puts in front of the table:
     /// the floats drawn under the screen (`FloatId::under_screen`), the screen, leaving out what
     /// waits for the table to settle (`Element::waits`) unless the layer is `open`, then every
@@ -189,4 +210,18 @@ impl Layer {
             });
         }
     }
+}
+
+/// Visible modal overlays and table dimming are painted in front of the screen and floats.
+pub(in crate::layout) fn above_floats(node: &Node) -> bool {
+    node.element.anchor.is_some()
+        && (node.element.modal
+            || node.element.layer_depth == LayerDepth::Dimming
+            || over_floats(node))
+}
+
+/// An anchored screen child with a backdrop filter also filters any floats beneath it.
+fn over_floats(node: &Node) -> bool {
+    let style = &node.element.style;
+    node.element.anchor.is_some() && style.backdrop && !style.filter.is_empty()
 }
