@@ -1,5 +1,6 @@
 //! Switching a check on or off by hand: `POST /checks/state` (`ignite flaky on|off`), which needs
-//! an authorized writer, and `GET /checks/flaky` (`ignite flaky list`).
+//! an authorized writer, and the read routes for `ignite flaky list` and
+//! `ignite flaky evidence`.
 //!
 //! A switch records who made it, and comments on the check's flaky ticket if it has one, in the
 //! same transaction as the change.
@@ -14,24 +15,24 @@ use ignite_core::protocol::tickets::{BatchRequest, Operation};
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::check_state;
+use ignite_store::hub::{check_state, checks, tickets};
 
 use super::{Request, Response};
 
 /// The response if this module owns the request's path.
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
     let method = match request.path.as_str() {
-        "/checks/flaky" => "GET",
+        "/checks/flaky" | "/checks/flaky/evidence" => "GET",
         "/checks/state" => "POST",
         _ => return None,
     };
     if request.method != method {
         return Some(failure(405, &format!("use {method} for {}", request.path)));
     }
-    let reply = if method == "GET" {
-        list(conn)
-    } else {
-        switch(conn, request, now)
+    let reply = match request.path.as_str() {
+        "/checks/flaky" => list(conn),
+        "/checks/flaky/evidence" => evidence(conn, request),
+        _ => switch(conn, request, now),
     };
     Some(reply.unwrap_or_else(|response| response))
 }
@@ -47,6 +48,17 @@ fn store_failure(error: &StoreError) -> Response {
 fn list(conn: &Connection) -> Result<Response, Response> {
     let checks = check_state::flaky_checks(conn).map_err(|e| store_failure(&e))?;
     Ok(Response::json(200, &json!(FlakyChecksReply { checks })))
+}
+
+fn evidence(conn: &Connection, request: &Request) -> Result<Response, Response> {
+    let ticket = request
+        .param("ticket")
+        .ok_or_else(|| failure(400, "name a ticket"))?;
+    let ticket = tickets::resolve(conn, ticket)
+        .map_err(|e| store_failure(&e))?
+        .ok_or_else(|| failure(404, &format!("no ticket named {ticket}")))?;
+    let reports = checks::filed_flakes(conn, ticket.as_str()).map_err(|e| store_failure(&e))?;
+    Ok(Response::json(200, &json!(reports)))
 }
 
 fn word(state: CheckState) -> &'static str {

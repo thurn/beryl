@@ -89,12 +89,7 @@ pub(super) fn file(
         now,
         |tx, ticket| {
             record(tx, ticket)?;
-            if !remedy.keep_on
-                && check_state::state(tx, check)?.is_some_and(|s| s != CheckState::Off)
-            {
-                checks::set_state(tx, check, CheckState::Off)?;
-                switched_off = true;
-            }
+            switched_off = !remedy.keep_on && quarantine(tx, check)?;
             Ok(())
         },
     )?;
@@ -103,6 +98,15 @@ pub(super) fn file(
     }
     outcome.filed.push(filed);
     Ok(())
+}
+
+/// Quarantines a check once. The caller records its evidence and chooses whether it can be off.
+pub(super) fn quarantine(conn: &Connection, check: &str) -> Result<bool> {
+    if check_state::state(conn, check)?.is_none_or(|state| state == CheckState::Off) {
+        return Ok(false);
+    }
+    checks::set_state(conn, check, CheckState::Off)?;
+    Ok(true)
 }
 
 #[derive(Debug)]

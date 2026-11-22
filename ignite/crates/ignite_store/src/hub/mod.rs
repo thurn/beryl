@@ -13,6 +13,7 @@ pub mod feed;
 pub mod filer_deps;
 pub mod findings;
 pub mod fix_outcomes;
+pub mod flaky_triage;
 pub mod fleet;
 pub mod fleet_settings;
 pub mod leases;

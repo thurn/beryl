@@ -28,7 +28,7 @@ use ignite_core::protocol::tickets::{
 use ignite_core::time::Timestamp;
 
 use crate::hub::fix_outcomes::{self, LandingFix};
-use crate::hub::{feed, findings, fleet, placement_deferrals, tickets};
+use crate::hub::{feed, findings, flaky_triage, fleet, placement_deferrals, tickets};
 use crate::{Result, StoreError};
 
 mod ancestors;
@@ -413,7 +413,12 @@ impl<'a> Run<'a> {
             params![ticket.id.as_str(), self.now.to_string()],
             |row| row.get::<_, bool>(0),
         )?;
-        if reserved || ticket.assignee.as_deref().is_some_and(|a| a != self.actor) {
+        let blocked_triage = flaky_triage::is_batch(ticket)
+            && ticket.assignee.as_deref() != Some(self.actor)
+            && (ticket.status == Status::PendingApproval
+                || flaky_triage::slot_taken(self.conn, self.now)?);
+        if reserved || blocked_triage || ticket.assignee.as_deref().is_some_and(|a| a != self.actor)
+        {
             return Err(Stop::Conflict {
                 failed: index,
                 id: Some(ticket.id.to_string()),

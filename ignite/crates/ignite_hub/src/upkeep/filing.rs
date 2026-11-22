@@ -26,7 +26,7 @@
 
 use std::collections::BTreeMap;
 
-use rusqlite::{Connection, TransactionBehavior, params};
+use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use serde_json::Value;
 
 use ignite_core::config::Os;
@@ -37,7 +37,7 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{feed, fleet, tickets};
+use ignite_store::hub::{feed, flaky_triage, fleet, tickets};
 use ignite_store::{Result, StoreError};
 
 use super::platform_wait::{PlatformWait, WAIT_SCOPE_KEY};
@@ -107,7 +107,7 @@ pub(crate) fn allocation_source(
         if flaky
             || matches!(
                 category.as_deref(),
-                Some("flaky" | "flaky-always" | "machine-flaky")
+                Some("flaky" | "flaky-always" | "machine-flaky" | flaky_triage::CATEGORY)
             )
         {
             Some(Source::Flaky)
@@ -191,6 +191,7 @@ pub struct Filed {
 pub enum Change {
     Created,
     Commented,
+    Updated,
     /// The ticket already held this sighting.
     Unchanged,
     /// Upkeep had closed the ticket because the fault cleared, and the fault came back.
@@ -238,6 +239,61 @@ pub(super) fn file_then(
 ) -> Result<Filed> {
     file_with(conn, UPKEEP, filing, now, |_| Ok(true), record)?
         .ok_or_else(|| StoreError::Invalid("an unconditional filing was skipped".to_owned()))
+}
+
+/// Replaces the summary of the pending batch, or creates it. The caller holds the write
+/// transaction from evidence selection through acknowledgement, so approval freezes the batch.
+pub(super) fn file_pending_batch(
+    tx: &mut Transaction<'_>,
+    mut filing: Filing,
+    now: Timestamp,
+    summary: impl FnOnce(&Connection, Option<&str>) -> Result<String>,
+) -> Result<Filed> {
+    let key = filing.signature.key();
+    let pending = load_matches(
+        tx,
+        "json_extract(metadata, '$.ignite_signature') = ?1 AND status = 'pending_approval'
+         AND NOT EXISTS (SELECT 1 FROM history h WHERE h.ticket = tickets.id
+                         AND json_extract(h.change, '$.status[1]') != 'pending_approval')",
+        &key,
+    )?;
+    let pending = pending.first();
+    filing.fields.body = Some(summary(tx, pending.map(|ticket| ticket.id.as_str()))?);
+    let (op, change) = match pending {
+        Some(ticket) => (
+            Operation::Update {
+                id: ticket.id.clone(),
+                set: Some(TicketFields {
+                    body: filing.fields.body.clone(),
+                    ..TicketFields::default()
+                }),
+                add_labels: Vec::new(),
+                remove_labels: Vec::new(),
+                set_meta: sighting_meta(ticket, &filing, UPKEEP, now),
+                unset_meta: Vec::new(),
+            },
+            Change::Updated,
+        ),
+        None => (
+            create(&filing, &key, UPKEEP, None, None, now),
+            Change::Created,
+        ),
+    };
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops: vec![op],
+    };
+    let BatchOutcome::Applied(reply) =
+        batch::apply_automatic_in(tx, &request, UPKEEP.actor, UPKEEP.machine, now)?
+    else {
+        return Err(StoreError::Invalid(
+            "the pending batch filing conflicted".to_owned(),
+        ));
+    };
+    Ok(Filed {
+        ticket: reply.results[0].id.to_string(),
+        change,
+    })
 }
 
 fn file_with(

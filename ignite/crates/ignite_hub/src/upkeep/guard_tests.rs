@@ -1,6 +1,8 @@
 //! The flaky-check guards, machines that disagree, and tickets no machine can take, against an
 //! in-memory hub database with time from a fake clock.
 
+use std::collections::BTreeMap;
+
 use rusqlite::Connection;
 
 use ignite_core::config::Os;
@@ -9,7 +11,7 @@ use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     FlakyReport, MachineRegister, NewResult, ResultKey, StoreRequest,
 };
-use ignite_core::protocol::tickets::{Operation, TicketFields, TicketType};
+use ignite_core::protocol::tickets::{Operation, Status, TicketFields, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
 use ignite_store::hub::{self, checks, fleet, results};
@@ -115,48 +117,113 @@ fn many_checks_flaking_in_one_command_switch_none_off_and_file_one_machine_ticke
 }
 
 #[test]
-fn flaky_checks_of_one_family_share_one_ticket_and_other_families_get_their_own() {
+fn twenty_ordinary_check_families_share_one_pending_batch() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
     let mut upkeep = Upkeep::new(None).unwrap();
-    for name in ["rust:a", "rust:b", "ui:c"] {
+    let mut names: Vec<_> = (0..19).map(|n| format!("family-{n:02}:check")).collect();
+    names.push("ui-smoke:protected".to_owned());
+    for (n, name) in names.iter().enumerate() {
         list_check(&mut conn, name);
+        let command = if n < 2 {
+            "m-1:shared".to_owned()
+        } else {
+            format!("m-1:{n}")
+        };
+        checks::record_flaky(&conn, &flaky(name, "aaaa", &command), clock.now()).unwrap();
     }
-    // Each check flakes alone in its own command.
-    let once = |conn: &Connection, clock: &dyn Clock, name: &str| {
-        let command = format!("m-1:{name}");
-        checks::record_flaky(conn, &flaky(name, "aaaa", &command), clock.now()).unwrap();
-    };
 
-    once(&conn, &clock, "rust:a");
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
-    assert_eq!(report.checks_switched_off, vec!["rust:a"]);
+    assert_eq!(report.checks_switched_off, names[..19]);
+    assert_eq!(report.tickets_filed.len(), 1);
     let shared = ticket(&conn, &report.tickets_filed[0]);
-    assert_eq!(shared.title, "Delete or redesign invalid checks in rust");
-    assert!(shared.body.contains("rust:a failed in m-1:rust:a"));
-    assert!(shared.body.contains("Delete rust:a or redesign it"));
-    assert_eq!(check_state(&conn, "rust:a"), "off");
+    assert_eq!(shared.status, Status::PendingApproval);
+    assert_eq!(shared.priority, 3);
+    assert_eq!(shared.metadata["ignite_checks"], serde_json::json!(names));
+    assert_eq!(shared.body.matches("- Command ").count(), 19);
+    assert!(
+        shared
+            .body
+            .contains("Checks: family-00:check, family-01:check.")
+    );
+    assert_eq!(check_state(&conn, "family-00:check"), "off");
+    assert_eq!(check_state(&conn, "ui-smoke:protected"), "on");
+    assert_eq!(all_tickets(&conn, clock.now()).len(), 1);
+    let evidence = checks::filed_flakes(&conn, shared.id.as_str()).unwrap();
+    assert_eq!(evidence.len(), 20);
+    assert_eq!(evidence[1].output, "family-01:check failed in m-1:shared");
+    assert_eq!(
+        ignite_store::hub::check_state::flaky_ticket(&conn, "family-00:check").unwrap(),
+        Some(shared.id.to_string())
+    );
 
-    checks::set_state(&conn, "rust:a", ignite_core::protocol::hub::CheckState::On).unwrap();
+    checks::set_state(
+        &conn,
+        "family-00:check",
+        ignite_core::protocol::hub::CheckState::On,
+    )
+    .unwrap();
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
     assert!(report.checks_switched_off.is_empty() && report.tickets_filed.is_empty());
-    assert_eq!(check_state(&conn, "rust:a"), "on");
+    assert_eq!(check_state(&conn, "family-00:check"), "on");
+}
 
-    // A second check of the same family goes onto the open ticket as a comment.
-    clock.advance(3_600.0);
-    once(&conn, &clock, "rust:b");
-    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
-    assert_eq!(report.checks_switched_off, vec!["rust:b"]);
-    assert_eq!(report.tickets_filed, vec![shared.id.to_string()]);
-    assert_eq!(comment_count(&conn, shared.id.as_str()), 1);
-    assert_eq!(check_state(&conn, "rust:b"), "off");
+#[test]
+fn a_pending_batch_updates_its_cluster_summary_until_approval() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    let mut seed = |conn: &mut Connection, name: &str, command: &str| {
+        list_check(conn, name);
+        checks::record_flaky(conn, &flaky(name, "aaaa", command), clock.now()).unwrap();
+        let pass = upkeep.pass(conn, clock.now()).unwrap();
+        let [id]: [String; 1] = pass.tickets_filed.try_into().expect("one filing");
+        id
+    };
+    let first = seed(&mut conn, "ui:shape", "m-1:shared");
+    assert_eq!(first, seed(&mut conn, "ui:shot", "m-1:shared"));
+    assert_eq!(first, seed(&mut conn, "unit:legacy", ""));
+    assert_eq!(first, seed(&mut conn, "rust:legacy", ""));
+    let frozen = ticket(&conn, &first);
+    assert_eq!(frozen.body.matches("- Command ").count(), 1);
+    assert_eq!(frozen.body.matches("- Legacy evidence").count(), 1);
+    assert!(frozen.body.contains("Checks: rust:legacy, unit:legacy."));
 
-    // A check of another family gets a ticket of its own.
-    clock.advance(3_600.0);
-    once(&conn, &clock, "ui:c");
-    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
-    assert_ne!(report.tickets_filed, vec![shared.id.to_string()]);
+    for status in [Status::Open, Status::PendingApproval] {
+        apply(
+            &mut conn,
+            vec![Operation::Update {
+                id: first.clone(),
+                set: Some(TicketFields {
+                    status: Some(status),
+                    ..TicketFields::default()
+                }),
+                add_labels: Vec::new(),
+                remove_labels: Vec::new(),
+                set_meta: BTreeMap::new(),
+                unset_meta: Vec::new(),
+            }],
+            clock.now(),
+        );
+        if status == Status::Open {
+            clock.advance(1.0);
+            assert_ne!(first, seed(&mut conn, "unit:next", "m-1:new"));
+        }
+    }
+    clock.advance(1.0);
+    let next = seed(&mut conn, "unit:later", "m-1:later");
+    assert_ne!(first, next);
+    assert_eq!(ticket(&conn, &first).body, frozen.body);
+    assert_eq!(ticket(&conn, &first).metadata, frozen.metadata);
+    assert_eq!(checks::filed_flakes(&conn, &next).unwrap().len(), 2);
     assert_eq!(all_tickets(&conn, clock.now()).len(), 2);
+    assert!(
+        upkeep
+            .pass(&mut conn, clock.now())
+            .unwrap()
+            .tickets_filed
+            .is_empty()
+    );
 }
 
 fn store(conn: &mut Connection, machine: &str, outcome: Outcome, now: Timestamp) -> u16 {

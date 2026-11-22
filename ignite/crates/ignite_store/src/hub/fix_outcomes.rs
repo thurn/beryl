@@ -3,6 +3,7 @@
 
 use rusqlite::{Connection, params};
 
+use crate::hub::flaky_triage;
 use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::hub::{CheckFix, FixOutcome, FixSource};
 use ignite_core::time::Timestamp;
@@ -56,6 +57,7 @@ pub(super) fn record_close(
          ) WHERE EXISTS (
              SELECT 1 FROM tickets, json_each(tickets.labels)
              WHERE tickets.id = ?2 AND json_each.value = 'flaky'
+               AND json_extract(tickets.metadata, '$.ignite_fault.category') IS NOT ?7
          )",
         params![
             close_seq,
@@ -63,7 +65,8 @@ pub(super) fn record_close(
             now.to_string(),
             outcome.as_str(),
             commit,
-            prior_commits
+            prior_commits,
+            flaky_triage::CATEGORY,
         ],
     )?;
     if outcome == FixOutcome::Product {

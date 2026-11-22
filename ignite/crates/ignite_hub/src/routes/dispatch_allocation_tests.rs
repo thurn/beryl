@@ -8,9 +8,9 @@ use serde_json::{Value, json};
 use ignite_core::fleet::{Allocations, FleetSettings};
 use ignite_core::ids::TicketId;
 use ignite_core::shares::Source;
-use ignite_store::hub::{self, batch, fleet_settings};
+use ignite_store::hub::{self, batch, flaky_triage, fleet_settings};
 
-use super::tests::{at, claim_reserved, free, landed, post, register, start};
+use super::tests::{at, claim, claim_reserved, free, landed, post, register, start};
 
 fn write(conn: &mut Connection, ops: &Value) -> Vec<TicketId> {
     let body = serde_json::from_value(json!({"ops": ops})).unwrap();
@@ -27,6 +27,74 @@ fn ask(conn: &mut Connection, n: u32) -> (String, Value) {
     let (status, ticket) = post(conn, "/next", &free("m-1", &[&session]), at(f64::from(n)));
     assert_eq!(status, 200);
     (session, ticket)
+}
+
+#[test]
+fn one_flaky_triage_reservation_or_claim_occupies_the_fleet_slot() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    let second_machine = json!({"machine": "m-2", "name": "other", "os": "macos", "cores": 18,
+                                "memory_mb": 65536, "families": [], "version": "d97ed0e"});
+    assert_eq!(
+        post(&mut conn, "/machines/register", &second_machine, start()).0,
+        200
+    );
+    let metadata = json!({"ignite_fault": {"category": flaky_triage::CATEGORY}});
+    let batches = write(
+        &mut conn,
+        &json!([
+            {"op":"create","fields":{"title":"First batch","priority":3,"labels":["flaky"],"metadata":metadata}},
+            {"op":"create","fields":{"title":"Second batch","priority":3,"labels":["flaky"],"metadata":metadata}}
+        ]),
+    );
+    let (session, reserved) = ask(&mut conn, 1);
+    let first = reserved["ticket"].as_str().unwrap();
+    let waiting = batches
+        .iter()
+        .find(|id| id.as_str() != first)
+        .unwrap()
+        .as_str();
+    let ask_second = |conn: &mut Connection, n| {
+        let (status, reply) = post(conn, "/next", &free("m-2", &["local_other"]), at(n));
+        assert_eq!(status, 200);
+        reply
+    };
+    assert!(ask_second(&mut conn, 2.0).is_null());
+    assert_eq!(
+        post(&mut conn, "/claims", &claim(waiting, "manual"), at(2.0)).0,
+        409
+    );
+    assert_eq!(
+        post(
+            &mut conn,
+            "/claims",
+            &claim_reserved(&reserved, &session),
+            at(3.0)
+        )
+        .0,
+        200
+    );
+    assert!(ask_second(&mut conn, 4.0).is_null());
+    assert_eq!(
+        post(&mut conn, "/claims", &claim(waiting, "manual"), at(4.0)).0,
+        409
+    );
+
+    let urgent = write(
+        &mut conn,
+        &json!([
+            {"op":"create","fields":{"title":"Always-set check","priority":1,"labels":["flaky","hub"],
+                                    "metadata":{"ignite_fault":{"category":"flaky-always"}}}}
+        ]),
+    );
+    let urgent_reservation = ask_second(&mut conn, 5.0);
+    assert_eq!(urgent_reservation["ticket"], urgent[0].as_str());
+    let mut urgent_claim = claim_reserved(&urgent_reservation, "local_other");
+    urgent_claim["machine"] = json!("m-2");
+    assert_eq!(post(&mut conn, "/claims", &urgent_claim, at(5.0)).0, 200);
+    let close = json!({"ticket": first, "machine": "m-1", "session": session, "reason": "triaged"});
+    assert_eq!(post(&mut conn, "/close", &close, at(6.0)).0, 200);
+    assert_eq!(ask(&mut conn, 7).1["ticket"], waiting);
 }
 
 #[test]

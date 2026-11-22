@@ -1,7 +1,6 @@
-//! `ignite flaky`: list the checks that are switched off or have flaked, and switch one on or
-//! off by hand. It talks to the hub directly, like the ticket verbs, so it works while the daemon
-//! is down. A switch needs the machine's write token; the hub records who made it and comments
-//! on the check's flaky ticket if it has one.
+//! `ignite flaky` lists flaky checks, reads a ticket's saved evidence, and switches checks on
+//! or off. It talks to the hub directly, so it works while the daemon is down. A switch needs
+//! the machine's write token. The hub records who made it and comments on the check's ticket.
 
 use std::fmt::Write as _;
 
@@ -9,7 +8,7 @@ use clap::Subcommand;
 use serde_json::{Value, json};
 
 use ignite_core::protocol::client::{Exit, Reply};
-use ignite_core::protocol::hub::{CheckState, CheckStateChanged, FlakyChecksReply};
+use ignite_core::protocol::hub::{CheckState, CheckStateChanged, FlakyChecksReply, FlakyEvidence};
 
 use crate::client::session_from_env;
 use crate::ticket::Hub;
@@ -20,6 +19,11 @@ use crate::ticket::ids::spelled;
 pub enum FlakyCommand {
     /// List the checks that are switched off, have flaked or were switched by hand.
     List,
+    /// Show the saved reports and outputs for a flaky-check ticket.
+    Evidence {
+        /// The ticket that holds the reports.
+        ticket: String,
+    },
     /// Switch a check back on, such as after replacing what made it flaky.
     On {
         /// The check, such as `ui:hand-chooser`.
@@ -52,6 +56,17 @@ pub fn execute(hub: &Hub, command: &FlakyCommand) -> Result<Reply> {
             let reply: FlakyChecksReply = serde_json::from_value(value.clone()).map_err(usage)?;
             return Ok(answer(value, list_text(&reply)));
         }
+        FlakyCommand::Evidence { ticket } => {
+            let value = hub
+                .get(
+                    &["checks", "flaky", "evidence"],
+                    &[("ticket", ticket.clone())],
+                )?
+                .json()?;
+            let reports: Vec<FlakyEvidence> =
+                serde_json::from_value(value.clone()).map_err(usage)?;
+            return Ok(answer(value, evidence_text(&reports)));
+        }
         FlakyCommand::On { check, note } => (check, CheckState::On, note),
         FlakyCommand::Off { check, note } => (check, CheckState::Off, note),
     };
@@ -81,6 +96,30 @@ fn word(state: CheckState) -> &'static str {
         CheckState::Off => "off",
         CheckState::Uncached => "uncached",
     }
+}
+
+fn evidence_text(reports: &[FlakyEvidence]) -> String {
+    if reports.is_empty() {
+        return "this ticket has no saved flaky reports".to_owned();
+    }
+    let mut text = String::new();
+    for report in reports {
+        let _ = writeln!(
+            text,
+            "{} at {} on {} (commit {}, input {})",
+            report.check, report.at, report.machine, report.commit, report.hash
+        );
+        if !report.command.is_empty() {
+            let _ = writeln!(text, "command {}", report.command);
+        }
+        let output = if report.output.is_empty() {
+            "(no output was reported)"
+        } else {
+            &report.output
+        };
+        let _ = writeln!(text, "{output}\n");
+    }
+    text
 }
 
 fn switched_text(changed: &CheckStateChanged) -> String {

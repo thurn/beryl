@@ -166,6 +166,63 @@ fn closing_a_flaky_ticket_by_batch_records_each_grouped_check_once() {
 }
 
 #[test]
+fn an_ordinary_batch_records_outcomes_only_on_the_repair_ticket() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    for check in ["unit:fixed", "unit:unresolved"] {
+        let report = FlakyReport {
+            check: check.parse().unwrap(),
+            hash: "a".repeat(64).parse().unwrap(),
+            commit: "aaaa".parse().unwrap(),
+            machine: "m-1".parse().unwrap(),
+            always: false,
+            command: String::new(),
+            output: "flaked".to_owned(),
+        };
+        checks::register(&conn, check).unwrap();
+        checks::record_flaky(&conn, &report, start()).unwrap();
+    }
+    let pass = Upkeep::new(None).unwrap().pass(&mut conn, at(1.0)).unwrap();
+    let [triage] = pass.tickets_filed.try_into().expect("one pending batch");
+    let request = serde_json::from_value(json!({"ops": [
+        {"op":"create","fields":{"title":"Fix the isolated cause","labels":["flaky"],
+                                "metadata":{"ignite_checks":["unit:fixed"]}}},
+        {"op":"close","id":triage,"reason":"Filed one repair; other evidence unresolved"}
+    ]}))
+    .unwrap();
+    let batch::BatchOutcome::Applied(reply) =
+        batch::apply(&mut conn, &request, "test", "m-1", at(2.0)).unwrap()
+    else {
+        panic!("triage did not close");
+    };
+    assert!(
+        fix_outcomes::between(&conn, start(), at(3.0), None)
+            .unwrap()
+            .is_empty()
+    );
+    let repair = reply.results[0].id.as_str();
+    assert_eq!(
+        post(&mut conn, "/claims", &claim(repair, "a"), at(3.0)).0,
+        200
+    );
+    assert_eq!(
+        post(&mut conn, "/landed", &landed(repair, "a", "fixed"), at(4.0)).0,
+        200
+    );
+    let [fix]: [CheckFix; 1] = fix_outcomes::between(&conn, start(), at(5.0), None)
+        .unwrap()
+        .try_into()
+        .expect("one repaired check");
+    assert_eq!(fix.check.as_str(), "unit:fixed");
+    assert_eq!(fix.ticket.as_str(), repair);
+    assert_eq!(fix.outcome, FixOutcome::Product);
+    assert_eq!(
+        ignite_store::hub::check_state::flaky_ticket(&conn, "unit:unresolved").unwrap(),
+        Some(triage)
+    );
+}
+
+#[test]
 fn only_product_landings_credit_exploration() {
     let mut conn = hub::open_in_memory().unwrap();
     register(&mut conn);

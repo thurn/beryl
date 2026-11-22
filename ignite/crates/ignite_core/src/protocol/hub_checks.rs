@@ -95,6 +95,20 @@ pub struct FlakyReport {
     pub output: String,
 }
 
+/// A saved flake returned by `GET /checks/flaky/evidence` for its filing ticket.
+/// Older imports may have a tree hash instead of an input hash, or lack a hash entirely.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FlakyEvidence {
+    pub check: String,
+    pub hash: String,
+    pub commit: String,
+    pub machine: String,
+    pub at: Timestamp,
+    pub always: bool,
+    pub command: String,
+    pub output: String,
+}
+
 /// What the files in a check's fix changed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

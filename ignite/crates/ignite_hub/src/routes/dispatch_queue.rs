@@ -32,7 +32,7 @@ use ignite_core::protocol::hub::{MachineFree, Reservation};
 use ignite_core::protocol::tickets::{LandedWork, Saving, Status, Ticket, TicketType};
 use ignite_core::shares::{self, Group, Source, Unit};
 use ignite_core::time::Timestamp;
-use ignite_store::hub::{fleet, fleet_settings, provider_usage, releases, tickets};
+use ignite_store::hub::{flaky_triage, fleet, fleet_settings, provider_usage, releases, tickets};
 use ignite_store::{Result, StoreError};
 
 use super::{families::Requirements, mix, placement, usage};
@@ -544,6 +544,7 @@ impl Snapshot {
     ) -> Result<Vec<ReadyTicket>> {
         let mut memo = HashMap::new();
         let mut ready = Vec::new();
+        let triage_busy = flaky_triage::slot_taken(conn, now)?;
         for id in &self.ready {
             if self.reserved.contains_key(id.as_str()) {
                 continue;
@@ -553,6 +554,7 @@ impl Snapshot {
             };
             if ticket.status != Status::Open
                 || ticket.assignee.is_some()
+                || (triage_busy && flaky_triage::is_batch(&ticket))
                 || matches!(ticket.ticket_type, TicketType::Epic | TicketType::Milestone)
             {
                 continue;

@@ -261,7 +261,7 @@ impl Upkeep {
     }
 }
 
-/// Records the tickets that a filing created or commented on.
+/// Records the tickets that a filing created or updated.
 fn note(report: &mut UpkeepReport, filed: Vec<filing::Filed>) {
     for filed in filed {
         if filed.change != filing::Change::Unchanged {

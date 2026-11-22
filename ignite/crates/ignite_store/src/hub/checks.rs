@@ -2,7 +2,9 @@
 
 use rusqlite::{Connection, TransactionBehavior, params};
 
-use ignite_core::protocol::hub::{AreaStats, CheckState, CheckStats, CheckStatsReply, FlakyReport};
+use ignite_core::protocol::hub::{
+    AreaStats, CheckState, CheckStats, CheckStatsReply, FlakyEvidence, FlakyReport,
+};
 use ignite_core::score;
 use ignite_core::time::Timestamp;
 
@@ -344,6 +346,65 @@ pub fn record_flaky(conn: &Connection, report: &FlakyReport, now: Timestamp) -> 
         ],
     )?;
     Ok(())
+}
+
+/// The unacknowledged check failures, excluding machine faults and switched-off checks.
+pub fn pending_flakes(conn: &Connection) -> Result<Vec<FlakyEvidence>> {
+    flaky_evidence(
+        conn,
+        &format!(
+            "{} AND check_name IN (SELECT name FROM checks WHERE state != 'off')",
+            counting_flaky()
+        ),
+        [],
+    )
+}
+
+/// Every saved flake from one command, in time order.
+pub fn command_flakes(conn: &Connection, command: &str) -> Result<Vec<FlakyEvidence>> {
+    flaky_evidence(conn, "command = ?1", [command])
+}
+
+/// The full saved evidence for a ticket, including reports filed by older hubs.
+pub fn filed_flakes(conn: &Connection, ticket: &str) -> Result<Vec<FlakyEvidence>> {
+    flaky_evidence(conn, "filed = ?1", [ticket])
+}
+
+fn flaky_evidence(
+    conn: &Connection,
+    condition: &str,
+    args: impl rusqlite::Params,
+) -> Result<Vec<FlakyEvidence>> {
+    let mut query = conn.prepare_cached(&format!(
+        "SELECT check_name, hash, commit_sha, machine, at, always, command, output
+         FROM flaky WHERE {condition} ORDER BY at, check_name, commit_sha, hash"
+    ))?;
+    let rows = query.query_map(args, |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, String>(4)?,
+            row.get(5)?,
+            row.get(6)?,
+            row.get(7)?,
+        ))
+    })?;
+    rows.map(|row| {
+        let (check, hash, commit, machine, at, always, command, output) = row?;
+        Ok(FlakyEvidence {
+            check,
+            hash,
+            commit,
+            machine,
+            at: parse("time", &at)?,
+            always,
+            command,
+            output,
+        })
+    })
+    .collect()
 }
 
 #[cfg(test)]
