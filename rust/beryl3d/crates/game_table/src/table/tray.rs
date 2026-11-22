@@ -3,10 +3,9 @@
 //! Where in the tray each card lies is `tray_layout`'s.
 
 use beryl_protocol::protocol::{ObjectId, PlayerView};
-use glam::Vec2;
 
 use super::scene::SceneObject;
-use super::tray_layout::{Held, TrayGrid, TrayPoses, tray_poses};
+use super::tray_layout::{Held, TrayArrangement, TrayPoses, tray_poses};
 use super::{Placement, Rest, Table};
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose};
@@ -45,7 +44,7 @@ pub(crate) struct TrayMotion {
     poses: Vec<(ObjectId, Pose)>,
     /// The card backs a put-back's library is drawn with in the tray, the deepest first.
     library: Vec<Pose>,
-    grids: Vec<TrayGrid>,
+    arrangement: TrayArrangement,
     zone: Vec<Option<(Pose, bool)>>,
     from: Vec<Option<Pose>>,
     over: Option<(u64, u64)>,
@@ -70,7 +69,7 @@ impl TrayMotion {
         Self {
             poses: Vec::new(),
             library: Vec::new(),
-            grids: Vec::new(),
+            arrangement: TrayArrangement::default(),
             zone: vec![None; OBJECTS],
             from: vec![None; OBJECTS],
             over: None,
@@ -84,11 +83,11 @@ impl TrayMotion {
     }
 
     /// A reordering or resize clamps the grid's previous scroll to its new bounds.
-    fn set_grids(&mut self, mut grids: Vec<TrayGrid>) {
-        for (grid, old) in grids.iter_mut().zip(&self.grids) {
-            grid.offset = old.offset.min(grid.limit);
+    fn set_arrangement(&mut self, mut arrangement: TrayArrangement) {
+        for (grid, old) in arrangement.grids.iter_mut().zip(&self.arrangement.grids) {
+            grid.view.scroll_to(old.view.offset());
         }
-        self.grids = grids;
+        self.arrangement = arrangement;
     }
 
     /// How far through the move is at `now`, eased, or `None` once it is over. A move that has
@@ -198,7 +197,7 @@ impl Table {
         let TrayPoses {
             cards: poses,
             library,
-            grids,
+            arrangement,
         } = poses;
         for &(slot, pose) in &poses {
             let slot = usize::from(slot.0);
@@ -217,7 +216,7 @@ impl Table {
         self.held = Some(held);
         self.tray.poses = poses;
         self.tray.library = library;
-        self.tray.set_grids(grids);
+        self.tray.set_arrangement(arrangement);
         self.tray.over = Some(over);
         self.tray.waiting = None;
         self.tray.curve = curve;
@@ -272,7 +271,7 @@ impl Table {
         }
         self.tray.poses.clear();
         self.tray.library.clear();
-        self.tray.grids.clear();
+        self.tray.arrangement = TrayArrangement::default();
         self.tray.over = None;
         self.tray.waiting = Some(Wait { length, script });
         self.tray.curve = curve;
@@ -387,12 +386,12 @@ impl Table {
             let TrayPoses {
                 cards,
                 library,
-                grids,
+                arrangement,
             } = self.tray_poses(held);
             placement.hold(&cards);
             self.tray.poses = cards;
             self.tray.library = library;
-            self.tray.set_grids(grids);
+            self.tray.set_arrangement(arrangement);
         }
         placement
     }
@@ -435,14 +434,12 @@ impl Table {
         if self.tray.library.is_empty() {
             return;
         }
-        let clip = self.tray.grids.first().filter(|grid| grid.limit > 0.0);
-        let clip_id = clip.and_then(|grid| builder.clip(grid.region)).unwrap_or(0);
+        let view = self.tray.arrangement.grids.first().map(|grid| &grid.view);
+        let clip_id = view
+            .and_then(|view| builder.clip(view.clip()?))
+            .unwrap_or(0);
         for &pose in &self.tray.library {
-            let mut pose = pose;
-            if let Some(grid) = clip {
-                self.camera()
-                    .move_in_screen(&mut pose, -Vec2::Y * grid.offset);
-            }
+            let pose = view.map_or(pose, |view| view.pose(self.camera(), pose));
             let draw = Draw::card(
                 pose.transform(),
                 [255; 4],

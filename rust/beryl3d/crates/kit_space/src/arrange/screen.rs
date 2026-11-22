@@ -1,13 +1,15 @@
 //! Fits screen-facing items while keeping each item reachable in the viewport.
 
 use glam::Vec2;
-use kit_base::geometry::Rect;
+use kit_base::geometry::{Rect, zoom_rect};
+use kit_base::pose::Pose;
 
 use super::Grid;
 use super::press::{PressArea, Quad, Rectangle};
+use crate::camera::Camera;
 
 /// One screen-facing rectangle, with a clockwise turn in degrees.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScreenItem {
     pub rect: Rect,
     pub turn: f32,
@@ -29,6 +31,7 @@ impl ScreenItem {
 }
 
 /// Item positions before scrolling, and the fixed window through which they are seen.
+#[derive(Clone, Debug, PartialEq)]
 pub struct ScreenLayout {
     pub items: Vec<ScreenItem>,
     pub viewport: Rect,
@@ -47,6 +50,18 @@ impl ScreenLayout {
             viewport,
             scroll: (grid.size(count).y - viewport.height).max(0.0),
             rows: count > grid.columns,
+        }
+    }
+
+    /// Displays this layout in logical points, with its scroll position initially at the top.
+    #[must_use]
+    pub fn view(self, units_per_point: f32) -> ScreenView {
+        ScreenView {
+            region: zoom_rect(self.viewport, (Vec2::ZERO, 1.0 / units_per_point)),
+            limit: self.scroll / units_per_point,
+            offset: 0.0,
+            units_per_point,
+            layout: self,
         }
     }
 
@@ -69,6 +84,85 @@ impl ScreenLayout {
                 )
                 .is_some()
         })
+    }
+}
+
+/// A fitted layout and its clamped vertical scroll. The viewport stays fixed as its contents
+/// move. Scroll offsets and screen positions are in logical points.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ScreenView {
+    layout: ScreenLayout,
+    region: Rect,
+    limit: f32,
+    offset: f32,
+    units_per_point: f32,
+}
+
+impl ScreenView {
+    #[must_use]
+    pub fn region(&self) -> Rect {
+        self.region
+    }
+
+    #[must_use]
+    pub fn offset(&self) -> f32 {
+        self.offset
+    }
+
+    #[must_use]
+    pub fn limit(&self) -> f32 {
+        self.limit
+    }
+
+    /// The fixed clip of a layout whose contents can scroll.
+    #[must_use]
+    pub fn clip(&self) -> Option<Rect> {
+        (self.limit > 0.0).then_some(self.region)
+    }
+
+    pub fn scroll_to(&mut self, offset: f32) {
+        self.offset = offset.clamp(0.0, self.limit);
+    }
+
+    /// Projects an unscrolled pose at its current depth through the viewport.
+    #[must_use]
+    pub fn pose(&self, camera: &Camera, mut pose: Pose) -> Pose {
+        if self.offset != 0.0 {
+            camera.move_in_screen(&mut pose, -Vec2::Y * self.offset);
+        }
+        pose
+    }
+
+    /// Maps a logical screen point to the unscrolled layout's coordinates.
+    #[must_use]
+    pub fn content_point(&self, point: Vec2) -> Vec2 {
+        (point + Vec2::Y * self.offset) * self.units_per_point
+    }
+
+    /// The insertion index in a row-major layout. Selects the nearest row by its centre and
+    /// counts the items to the left of the pointer in that row.
+    #[must_use]
+    pub fn insertion_at(&self, point: Vec2) -> usize {
+        let point = self.content_point(point);
+        let items = &self.layout.items;
+        let row = if self.layout.rows {
+            let distance = |rect: Rect| (rect.y + rect.height / 2.0 - point.y).abs();
+            items
+                .iter()
+                .map(|item| item.rect)
+                .min_by(|a, b| distance(*a).total_cmp(&distance(*b)))
+                .map(|rect| rect.y)
+        } else {
+            None
+        };
+        items
+            .iter()
+            .filter(|item| {
+                row.is_some_and(|row| item.rect.y < row)
+                    || (row.is_none_or(|row| item.rect.y <= row)
+                        && item.rect.x + item.rect.width / 2.0 < point.x)
+            })
+            .count()
     }
 }
 

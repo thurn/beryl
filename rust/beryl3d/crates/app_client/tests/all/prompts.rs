@@ -387,9 +387,16 @@ fn a_crowded_tray_scrolls_to_its_last_card_and_clips_the_first_row() {
     client.handle(roll(rect.height / 4.0));
     let frame = client.frame(10_001 * MS);
     let clipped = card(frame, first).expect("part of the first row is still visible");
+    let shown_box = (0..frame.resolved.len())
+        .find(|&at| frame.shown_by(at as u32) == Some(clipped.id))
+        .map(|at| &frame.resolved[at])
+        .expect("the clipped card still has a shown box");
     let point = Vec2::new(rect.x + rect.width / 2.0, clip.y - 1.0);
     assert_eq!(clipped.clip, Some(clip));
-    assert!(kit_scene::hit::bounds(&clipped).y < point.y);
+    let clipped_bounds = kit_scene::hit::bounds(&clipped);
+    assert!(clipped_bounds.y < point.y);
+    assert_eq!(shown_box.clip, clipped.clip);
+    assert_eq!(kit_scene::hit::bounds(shown_box), clipped_bounds);
     assert!(
         kit_scene::hit::hit(frame, point)
             .is_none_or(|at| frame.resolved[at as usize].id != clipped.id)

@@ -11,19 +11,20 @@ use kit_scene::hit::{contains, intersection};
 use kit_ui::scroll::Viewport;
 
 use super::super::Table;
-use super::super::tray_layout::{Held, TrayGrid, landing_at};
+use super::super::tray_layout::{Held, TrayGrid};
 use super::SceneObject;
 
 impl Table {
     /// A tray grid's offset and range, through the same recognizer as other scrollers.
     #[must_use]
     pub fn tray_viewport(&self, index: usize) -> Option<Viewport> {
-        let grid = self.tray.grids.get(index).filter(|grid| grid.limit > 0.0)?;
+        let view = &self.tray.arrangement.grids.get(index)?.view;
+        let clip = view.clip()?;
         Some(
             Viewport::points(
-                Vec2::Y * grid.offset,
-                Vec2::Y * grid.limit,
-                Vec2::new(grid.region.width, grid.region.height),
+                Vec2::Y * view.offset(),
+                Vec2::Y * view.limit(),
+                Vec2::new(clip.width, clip.height),
             )
             .directional(),
         )
@@ -31,8 +32,8 @@ impl Table {
 
     /// Sets the grid's offset. The clipping rectangle stays in place.
     pub fn scroll_tray(&mut self, index: usize, offset: f32) {
-        if let Some(grid) = self.tray.grids.get_mut(index) {
-            grid.offset = offset.clamp(0.0, grid.limit);
+        if let Some(grid) = self.tray.arrangement.grids.get_mut(index) {
+            grid.view.scroll_to(offset);
         }
     }
 
@@ -44,14 +45,12 @@ impl Table {
         point: Vec2,
         carried: ObjectId,
     ) -> Option<(usize, usize)> {
-        landing_at(
-            held,
-            self.layout().tray,
-            self.camera().window.size,
-            point,
-            carried,
-            |index| self.tray.grids.get(index).map_or(0.0, |grid| grid.offset),
-        )
+        // The drop command uses the prompt's pile indices. They must still describe the tray
+        // that supplied the visible cards.
+        if self.held.as_ref()? != held {
+            return None;
+        }
+        self.tray.arrangement.landing(held, point, carried)
     }
 
     /// The grid containing this card in the tray.
@@ -63,21 +62,22 @@ impl Table {
             .iter()
             .position(|(card, _)| usize::from(card.0) == slot)?;
         self.tray
+            .arrangement
             .grids
             .iter()
             .position(|grid| grid.cards.contains(&index))
     }
 
     fn tray_grid(&self, slot: usize) -> Option<&TrayGrid> {
-        self.tray.grids.get(self.tray_grid_index(slot)?)
+        self.tray.arrangement.grids.get(self.tray_grid_index(slot)?)
     }
 
     /// Shifts the tray destination with the scroll offset. An item entering a box that
     /// fits wholly inside the viewport can fly in from outside it.
     pub(super) fn tray_grid_rest(&self, slot: usize, object: &mut SceneObject) -> Option<Rect> {
-        let grid = self.tray_grid(slot).filter(|grid| grid.limit > 0.0)?;
-        self.camera()
-            .move_in_screen(&mut object.pose, -Vec2::Y * grid.offset);
+        let grid = self.tray_grid(slot)?;
+        grid.view.clip()?;
+        object.pose = grid.view.pose(self.camera(), object.pose);
         self.tray_clip(slot)
     }
 
@@ -88,19 +88,18 @@ impl Table {
     }
 
     pub(in crate::table) fn tray_clip(&self, slot: usize) -> Option<Rect> {
-        let grid = self.tray_grid(slot).filter(|grid| grid.limit > 0.0)?;
+        let grid = self.tray_grid(slot)?;
+        let clip = grid.view.clip()?;
         if self.tray.share(self.tray.now).is_some() {
-            let (_, mut pose) = self.tray.poses[grid.cards.clone()]
+            let (_, pose) = self.tray.poses[grid.cards.clone()]
                 .iter()
                 .find(|(card, _)| usize::from(card.0) == slot)
                 .copied()?;
-            self.camera()
-                .move_in_screen(&mut pose, -Vec2::Y * grid.offset);
-            if contains(grid.region, self.grid_box(pose)) {
+            if contains(clip, self.grid_box(grid.view.pose(self.camera(), pose))) {
                 return None;
             }
         }
-        Some(grid.region)
+        Some(clip)
     }
 
     fn grid_box(&self, pose: kit_base::pose::Pose) -> Rect {
@@ -110,23 +109,20 @@ impl Table {
     /// Declares which part of each grid shows each scene object. The table draws and
     /// animates the object itself, so these boxes take no pointer input.
     pub(in crate::table) fn write_tray_grids(&self, builder: &mut FrameBuilder) {
-        for (index, grid) in self.tray.grids.iter().enumerate() {
+        for (index, grid) in self.tray.arrangement.grids.iter().enumerate() {
             let id =
                 ElementId(TRAY_GRID_IDS + u32::try_from(index).expect("grid index fits in u32"));
-            let clip = (grid.limit > 0.0).then_some(grid.region);
-            let parent = builder.resolved(&grid.name, region(id, u32::MAX, grid.region, None));
-            for (&(slot, mut pose), label) in
+            let clip = grid.view.clip();
+            let parent =
+                builder.resolved(&grid.name, region(id, u32::MAX, grid.view.region(), None));
+            for (&(slot, pose), label) in
                 self.tray.poses[grid.cards.clone()].iter().zip(&grid.labels)
             {
                 // A screen viewer owns the picture while it also lists a card held in a tray.
                 if self.in_box(usize::from(slot.0)) {
                     continue;
                 }
-                if grid.offset > 0.0 {
-                    self.camera()
-                        .move_in_screen(&mut pose, -Vec2::Y * grid.offset);
-                }
-                let rect = self.grid_box(pose);
+                let rect = self.grid_box(grid.view.pose(self.camera(), pose));
                 let id = ElementId(u32::from(slot.0));
                 let shown = builder.resolved(
                     label,

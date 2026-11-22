@@ -29,7 +29,7 @@ use super::Camera;
 use kit_base::data::Card;
 use kit_base::data::profiles::TrayTuning;
 use kit_base::pose::Pose;
-use kit_space::arrange::screen::{FanShape, ScreenFit, ScreenGroup, ScreenLayout};
+use kit_space::arrange::screen::{FanShape, ScreenFit, ScreenGroup, ScreenLayout, ScreenView};
 use kit_ui::input::{Rect, Size};
 
 mod put_back;
@@ -133,17 +133,23 @@ pub struct Held {
 pub struct TrayPoses {
     pub cards: Vec<(ObjectId, Pose)>,
     pub library: Vec<Pose>,
-    pub(super) grids: Vec<TrayGrid>,
+    pub(super) arrangement: TrayArrangement,
+}
+
+/// The fitted tray and the outer areas where the game accepts drops.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct TrayArrangement {
+    pub grids: Vec<TrayGrid>,
+    boxes: Vec<Rect>,
+    library: Option<Rect>,
+    column: Vec<f32>,
 }
 
 /// A grid's viewport and its cards in `TrayPoses::cards`, in logical points.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct TrayGrid {
     pub cards: Range<usize>,
-    pub region: Rect,
-    pub limit: f32,
-    pub offset: f32,
-    rows: bool,
+    pub view: ScreenView,
     pub name: String,
     pub labels: Vec<String>,
 }
@@ -154,10 +160,11 @@ pub(super) struct TrayGrid {
 /// in its column, the deepest first, as many as the library's pile can come to hold.
 struct Laid {
     spots: Vec<Spot>,
+    /// The outer drop areas in stage pixels until `laid_out` converts them to logical points.
     boxes: Vec<Rect>,
     library: Option<Rect>,
     column: Vec<f32>,
-    grids: Vec<TrayGrid>,
+    grids: Vec<ScreenLayout>,
 }
 
 impl Laid {
@@ -233,28 +240,40 @@ fn rows(count: usize, space: &TraySpace, span: (f32, f32)) -> Laid {
 impl Laid {
     fn grid(&mut self, layout: ScreenLayout) {
         let start = self.spots.len();
-        self.spots.extend(
-            layout
-                .items
-                .into_iter()
-                .enumerate()
-                .map(|(index, item)| Spot {
-                    x: item.rect.x,
-                    y: item.rect.y,
-                    width: item.rect.width,
-                    turn: item.turn,
-                    drawn: start + index,
-                }),
-        );
-        self.grids.push(TrayGrid {
-            cards: start..self.spots.len(),
-            region: layout.viewport,
-            limit: layout.scroll,
-            rows: layout.rows,
-            offset: 0.0,
-            name: String::new(),
-            labels: Vec::new(),
-        });
+        self.spots
+            .extend(layout.items.iter().enumerate().map(|(index, item)| Spot {
+                x: item.rect.x,
+                y: item.rect.y,
+                width: item.rect.width,
+                turn: item.turn,
+                drawn: start + index,
+            }));
+        self.grids.push(layout);
+    }
+
+    fn into_arrangement(self, units_per_point: f32) -> TrayArrangement {
+        let mut start = 0;
+        let grids = self
+            .grids
+            .into_iter()
+            .map(|layout| {
+                let end = start + layout.items.len();
+                let grid = TrayGrid {
+                    cards: start..end,
+                    view: layout.view(units_per_point),
+                    name: String::new(),
+                    labels: Vec::new(),
+                };
+                start = end;
+                grid
+            })
+            .collect();
+        TrayArrangement {
+            grids,
+            boxes: self.boxes,
+            library: self.library,
+            column: self.column,
+        }
     }
 }
 
@@ -343,14 +362,21 @@ fn laid_out(held: &Held, mut space: TraySpace, size: Size) -> Laid {
     space.grid_target *= per_point;
     let space = &space;
     let span = across(space, stage_width);
-    match &held.kind {
+    let mut laid = match &held.kind {
         TrayKind::PutBack if held.piles.len() == 2 => put_back(held, space, span),
         TrayKind::Fan { order } => fan(&held.piles, order, space, span),
         _ => {
             let counts: Vec<usize> = held.piles.iter().map(Vec::len).collect();
             laid_piles(&counts, &held.rooms, space, span)
         }
+    };
+    for area in &mut laid.boxes {
+        area.x /= per_point;
+        area.y /= per_point;
+        area.width /= per_point;
+        area.height /= per_point;
     }
+    laid
 }
 
 /// Stage pixels per logical point of a window `size`, and the width of the stage it shows.
@@ -371,16 +397,7 @@ pub fn tray_area(space: TraySpace, size: Size) -> Rect {
 /// as the web's `TrayUnder` draws them: none for a tray of one pile or a fan.
 #[must_use]
 pub fn tray_boxes(held: &Held, space: TraySpace, size: Size) -> Vec<Rect> {
-    let (per_point, _) = stage_of(&space, size);
-    let laid = laid_out(held, space, size);
-    (laid.boxes.iter())
-        .map(|area| Rect {
-            x: area.x / per_point,
-            y: area.y / per_point,
-            width: area.width / per_point,
-            height: area.height / per_point,
-        })
-        .collect()
+    laid_out(held, space, size).boxes
 }
 
 /// Where the card `carried` let go at `point`, in logical points of a window `size`, lands in
@@ -397,58 +414,38 @@ pub fn landing(
     point: Vec2,
     carried: ObjectId,
 ) -> Option<(usize, usize)> {
-    landing_at(held, space, size, point, carried, |_| 0.0)
+    let (per_point, _) = stage_of(&space, size);
+    laid_out(held, space, size)
+        .into_arrangement(per_point)
+        .landing(held, point, carried)
 }
 
-pub(super) fn landing_at(
-    held: &Held,
-    space: TraySpace,
-    size: Size,
-    point: Vec2,
-    carried: ObjectId,
-    scroll: impl Fn(usize) -> f32,
-) -> Option<(usize, usize)> {
-    let (per_point, _) = stage_of(&space, size);
-    let mut point = point * per_point;
-    let laid = laid_out(held, space, size);
-    let pile = laid.boxes.iter().position(|area| {
-        area.width > 0.0
-            && area.height > 0.0
-            && (area.x..=area.x + area.width).contains(&point.x)
-            && (area.y..=area.y + area.height).contains(&point.y)
-    })?;
-    let grid = &laid.grids[pile];
-    if grid.region.width <= 0.0 || grid.region.height <= 0.0 {
-        return None;
+impl TrayArrangement {
+    pub fn landing(&self, held: &Held, point: Vec2, carried: ObjectId) -> Option<(usize, usize)> {
+        let pile = self.boxes.iter().position(|area| {
+            area.width > 0.0
+                && area.height > 0.0
+                && (area.x..=area.x + area.width).contains(&point.x)
+                && (area.y..=area.y + area.height).contains(&point.y)
+        })?;
+        let view = &self.grids[pile].view;
+        let viewport = view.region();
+        if viewport.width <= 0.0 || viewport.height <= 0.0 {
+            return None;
+        }
+        let at = if let (0, Some(library)) = (pile, self.library) {
+            library_at(
+                &held.piles[0],
+                &self.column,
+                library,
+                view.content_point(point),
+                carried,
+            )
+        } else {
+            view.insertion_at(point)
+        };
+        Some((pile, at))
     }
-    point.y += (scroll(pile) * per_point).clamp(0.0, grid.limit);
-    if let (0, Some(library)) = (pile, laid.library) {
-        return Some((
-            0,
-            library_at(&held.piles[0], &laid.column, library, point, carried),
-        ));
-    }
-    let first: usize = held.piles[..pile].iter().map(Vec::len).sum();
-    let spots = &laid.spots[first..first + held.piles[pile].len()];
-    let nearest_row = if grid.rows {
-        spots.iter().map(|spot| spot.y).min_by(|a, b| {
-            let middle = point.y - space.fit().size(spots[0].width).y / 2.0;
-            (a - middle).abs().total_cmp(&(b - middle).abs())
-        })
-    } else {
-        None
-    };
-    Some((
-        pile,
-        spots
-            .iter()
-            .filter(|spot| {
-                nearest_row.is_some_and(|row| spot.y < row)
-                    || (nearest_row.is_none_or(|row| spot.y <= row)
-                        && spot.x + spot.width / 2.0 < point.x)
-            })
-            .count(),
-    ))
 }
 
 /// The pose, seen through `camera`, of a card at `area`'s top left corner and `area.width`
@@ -505,7 +502,7 @@ pub fn tray<T>(piles: &[&[T]], mut space: TraySpace, camera: &Camera) -> Vec<Pos
 /// in `ui/src/stage/Tray.tsx`), all behind the cards of the tray.
 #[must_use]
 pub fn tray_poses(held: &Held, space: TraySpace, camera: &Camera) -> TrayPoses {
-    let (_, stage_width) = stage_of(&space, camera.window.size);
+    let (per_point, stage_width) = stage_of(&space, camera.window.size);
     let laid = laid_out(held, space, camera.window.size);
     let cards: Vec<_> = (held.piles.iter().flatten().copied())
         .zip(poses(&laid, &space, stage_width, camera))
@@ -532,20 +529,17 @@ pub fn tray_poses(held: &Held, space: TraySpace, camera: &Camera) -> TrayPoses {
             })
         })
         .collect();
-    let (per_point, _) = stage_of(&space, camera.window.size);
-    let mut grids = laid.grids;
-    for (index, grid) in grids.iter_mut().enumerate() {
+    let mut arrangement = laid.into_arrangement(per_point);
+    for (index, grid) in arrangement.grids.iter_mut().enumerate() {
         grid.name = format!("tray grid {}", index + 1);
         grid.labels = cards[grid.cards.clone()]
             .iter()
             .map(|(slot, _)| format!("card box #{}", slot.0))
             .collect();
-        grid.region = kit_base::geometry::zoom_rect(grid.region, (Vec2::ZERO, 1.0 / per_point));
-        grid.limit /= per_point;
     }
     TrayPoses {
         cards,
         library,
-        grids,
+        arrangement,
     }
 }
