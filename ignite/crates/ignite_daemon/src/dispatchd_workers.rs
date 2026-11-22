@@ -151,6 +151,7 @@ impl HeadlessDispatch {
             queued_cores,
             swap_used_mb,
             active_memory_pressure,
+            fseventsd_rss_mib: scheduler.fseventsd_rss_mib(),
             idle_workers,
             room,
             free_ticket_trees: free_trees.saturating_sub(reserved),

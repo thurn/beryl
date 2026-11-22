@@ -75,6 +75,7 @@ pub(super) fn record(conn: &Connection, machine: &str, report: &CapacityReport, 
         down_workers: 0,
         ready_tickets: 0,
         active_memory_pressure: None,
+        fseventsd_rss_mib: None,
     };
     machine_snapshots::record(conn, machine, &snapshot, Some(report)).unwrap();
 }

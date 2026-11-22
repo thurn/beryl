@@ -24,6 +24,7 @@ use crate::server::{Context, Verb};
 use crate::update::ExecutableStore;
 
 mod capacity;
+mod fseventsd;
 pub mod listener;
 mod loops;
 mod mirror;
@@ -749,6 +750,12 @@ impl Verb for DoctorVerb {
         }
         findings.extend(self.emergency.as_ref().and_then(|e| e.finding()));
         findings.extend(scanning::finding());
+        findings.extend(
+            ignite_os::Native
+                .fseventsd_rss_mib()
+                .ok()
+                .map(fseventsd::finding),
+        );
         report(&findings)
     }
 }

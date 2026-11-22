@@ -41,6 +41,7 @@ fn healthy() -> MachineSnapshot {
         down_workers: 0,
         ready_tickets: 1,
         active_memory_pressure: Some(false),
+        fseventsd_rss_mib: None,
     }
 }
 

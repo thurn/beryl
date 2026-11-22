@@ -299,6 +299,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: "ALTER TABLE machine_snapshots ADD COLUMN active_memory_pressure INTEGER;",
         code: None,
     },
+    Migration {
+        version: 50,
+        sql: "ALTER TABLE machine_snapshots ADD COLUMN fseventsd_rss_mib INTEGER;",
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

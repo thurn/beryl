@@ -277,6 +277,7 @@ mod tests {
             draining: false,
             shared_failure: None,
             active_memory_pressure: Some(false),
+            fseventsd_rss_mib: None,
         }
     }
 

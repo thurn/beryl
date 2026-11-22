@@ -39,6 +39,7 @@ pub(in crate::routes::dispatch) fn record(
         down_workers: 0,
         ready_tickets: 0,
         active_memory_pressure: sample.active_memory_pressure,
+        fseventsd_rss_mib: sample.fseventsd_rss_mib,
     };
     // Keep the queue and capacity reads consistent. Release the read snapshot before writing
     // so a dispatch on another connection cannot prevent upgrading this transaction.

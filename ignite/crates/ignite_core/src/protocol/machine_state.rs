@@ -37,6 +37,9 @@ pub struct MachineSample {
     /// Current OS memory pressure, absent on older daemons or when the reading fails.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_memory_pressure: Option<bool>,
+    /// Resident memory of the macOS file event daemon, absent when unavailable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fseventsd_rss_mib: Option<u64>,
 }
 
 /// What keeps an otherwise eligible ticket from starting.
@@ -101,6 +104,9 @@ pub struct MachineSnapshot {
     /// Current OS memory pressure, absent when the reading is unsupported or unavailable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_memory_pressure: Option<bool>,
+    /// Resident memory of the macOS file event daemon, absent when unavailable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fseventsd_rss_mib: Option<u64>,
 }
 
 impl MachineSnapshot {
@@ -125,6 +131,9 @@ impl MachineSnapshot {
         let swap = self
             .swap_used_mb
             .map_or_else(|| "unknown".to_owned(), |value| format!("{value} MB"));
+        let fsevents = self
+            .fseventsd_rss_mib
+            .map_or_else(String::new, |mib| format!(", fseventsd RSS {mib} MiB"));
         let next = self.next_ticket.as_ref().map_or_else(
             || "No eligible ticket".to_owned(),
             |ticket| {
@@ -143,7 +152,10 @@ impl MachineSnapshot {
             ("Disk", format!("{free} free, {reclaimable}")),
             (
                 "CPU and swap",
-                format!("{cpu} CPU, {} queued cores, {swap} swap", self.queued_cores),
+                format!(
+                    "{cpu} CPU, {} queued cores, {swap} swap{fsevents}",
+                    self.queued_cores
+                ),
             ),
             (
                 "Workers",

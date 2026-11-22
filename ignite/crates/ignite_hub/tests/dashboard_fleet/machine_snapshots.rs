@@ -33,10 +33,12 @@ fn fleet_shows_the_latest_machine_snapshot() {
         down_workers: 1,
         ready_tickets: 8,
         active_memory_pressure: None,
+        fseventsd_rss_mib: None,
     };
     hub::machine_snapshots::record(&conn, "m-j", &snapshot, None).unwrap();
     snapshot.at = now.plus_seconds(-30.0);
     snapshot.free_disk_gib = Some(67);
+    snapshot.fseventsd_rss_mib = Some(7000);
     let report = CapacityReport {
         admit_cores: 15.0,
         free_cores: 4.0,
@@ -82,6 +84,7 @@ fn fleet_shows_the_latest_machine_snapshot() {
         "64% CPU",
         "12 queued cores",
         "512 MB swap",
+        "fseventsd RSS 7000 MiB",
         "5 idle, 3 working, 2 stalled, 1 down",
         "Ready tickets",
         "work needs 129 GiB free",

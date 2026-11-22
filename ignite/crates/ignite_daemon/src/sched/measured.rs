@@ -157,6 +157,11 @@ impl Scheduler {
         self.host.active_memory_pressure().ok()
     }
 
+    /// Reads the file event daemon's RSS for the heartbeat without affecting admission.
+    pub(crate) fn fseventsd_rss_mib(&self) -> Option<u64> {
+        self.host.fseventsd_rss_mib().ok()
+    }
+
     /// Reads memory for a worker admission decision without waiting for the next sample.
     /// A failed read leaves available memory unknown. The periodic swap history still applies.
     pub fn worker_memory(&self) -> (bool, Option<u64>) {

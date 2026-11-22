@@ -3,6 +3,8 @@
 
 use std::io;
 use std::mem::MaybeUninit;
+use std::path::Path;
+use std::process::Command;
 use std::sync::Mutex;
 use std::thread;
 
@@ -64,6 +66,10 @@ impl HostCpu for HostMeter {
         Native.swap_used_mb()
     }
 
+    fn fseventsd_rss_mib(&self) -> io::Result<u64> {
+        Native.fseventsd_rss_mib()
+    }
+
     fn tree_cpu_seconds(&self, group: u64) -> io::Result<f64> {
         Native.tree_cpu_seconds(group)
     }
@@ -78,6 +84,22 @@ impl HostCpu for HostMeter {
 }
 
 impl HostCpu for Native {
+    fn fseventsd_rss_mib(&self) -> io::Result<u64> {
+        // Task-info calls fail for this root-owned process from a login service. macOS
+        // ps can report its RSS in KiB without elevated privileges.
+        let output = Command::new("/bin/ps")
+            .args(["-U", "root", "-o", "rss=,comm="])
+            .output()?;
+        if !output.status.success() {
+            return Err(io::Error::other(format!(
+                "/bin/ps exited with {}",
+                output.status
+            )));
+        }
+        fseventsd_rss_mib(&String::from_utf8_lossy(&output.stdout))
+            .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
+    }
+
     fn cores(&self) -> u32 {
         thread::available_parallelism().map_or(1, |cores| cores.get() as u32)
     }
@@ -220,6 +242,34 @@ impl HostCpu for Native {
     fn process_trees_cpu_seconds(&self, roots: &[u32]) -> io::Result<Vec<(u32, f64)>> {
         Ok(Self::process_trees_cpu_seconds_of(roots))
     }
+}
+
+fn fseventsd_rss_mib(processes: &str) -> Option<u64> {
+    processes
+        .lines()
+        .filter_map(|line| {
+            let (rss, executable) = line.trim().split_once(char::is_whitespace)?;
+            if Path::new(executable.trim_start()).file_name()? == "fseventsd" {
+                let kib = rss.parse::<u64>().ok()?;
+                Some(kib.div_ceil(1024))
+            } else {
+                None
+            }
+        })
+        .max()
+}
+
+#[cfg(test)]
+#[test]
+fn reads_fseventsd_rss_in_mib_from_the_macos_process_list() {
+    let processes = "  99999999 /usr/local/bin/fseventsd-helper\n\
+                       7340033 /System/Library/Frameworks/FSEvents.framework/Support/fseventsd\n\
+                       invalid /System/Library/Frameworks/FSEvents.framework/Support/fseventsd\n";
+    assert_eq!(fseventsd_rss_mib(processes), Some(7169));
+    assert_eq!(
+        fseventsd_rss_mib("123 /usr/local/bin/fseventsd-helper"),
+        None
+    );
 }
 
 fn cpu_ticks() -> io::Result<[u64; 4]> {

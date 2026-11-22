@@ -93,6 +93,7 @@ crate::tables! {
         capacity: Option<String>,
         last_disk_cleanup_at: Option<String>,
         active_memory_pressure: Option<i64>,
+        fseventsd_rss_mib: Option<i64>,
     }
 
     MachineTreeVolumes = "machine_tree_volumes" {

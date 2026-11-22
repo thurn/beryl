@@ -51,6 +51,10 @@ pub trait HostCpu {
     fn swap_used_mb(&self) -> io::Result<u64> {
         Err(io::Error::from(io::ErrorKind::Unsupported))
     }
+    /// Resident memory of the macOS file event daemon, rounded up to whole MiB.
+    fn fseventsd_rss_mib(&self) -> io::Result<u64> {
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
     /// The CPU seconds used so far by the process group `group` and every process its members
     /// started, including processes that left the group, and the children they reaped. A
     /// process that exits unreaped by the tree takes its time with it, so the total can fall.
