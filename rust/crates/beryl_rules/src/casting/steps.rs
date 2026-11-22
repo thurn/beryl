@@ -360,8 +360,8 @@ pub(super) fn finish<L: Layout>(
                 crate::coverage::hit(option);
             }
         }
-        let face = t.def(card).face(face);
-        for (option, i) in face.casting.iter().zip(0..) {
+        let characteristics = t.def(card).face(face);
+        for (option, i) in characteristics.casting.iter().zip(0..) {
             if costs.contains(CastingIx::new(i)) {
                 crate::coverage::hit(option);
             }
@@ -375,7 +375,7 @@ pub(super) fn finish<L: Layout>(
             flashback: flashback::paid(s, spell),
             from: c.from,
         };
-        if s.has_preparations()
+        if face == FaceIx::BACK
             && let Some(source) = s.prepare_source(spell.slot)
         {
             // See CR 723.3c: "That permanent loses the prepared designation at the time the

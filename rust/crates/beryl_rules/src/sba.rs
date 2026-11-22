@@ -224,11 +224,20 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
     let away = [Zone::Library, Zone::Hand, Zone::Graveyard, Zone::Exile]
         .into_iter()
         .fold(Bitboard::EMPTY, |away, zone| away | s.in_zone(zone));
-    let tokens = (away & L::TOKEN_POOL).filter(|slot| {
-        s.object(slot).is_token()
-            && !(s.object(slot).zone() == Zone::Exile && s.prepare_source(slot).is_some())
-    });
+    let tokens = (away & L::TOKEN_POOL).filter(|slot| s.object(slot).is_token());
+    let tokens = if !tokens.is_empty() && s.has_preparations() {
+        expired_copies(s, tokens)
+    } else {
+        tokens
+    };
     (graveyard, tokens, legendary)
+}
+
+/// Excludes copies that prepared permanents are still holding in exile (see CR 723.3c).
+#[cold]
+#[inline(never)]
+fn expired_copies<L: Layout>(s: &State<L>, tokens: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
+    tokens.filter(|slot| s.object(slot).zone() != Zone::Exile || s.prepare_source(slot).is_none())
 }
 
 /// Those of `graveyard`, the permanents [`doomed`] found, that go there only because they are

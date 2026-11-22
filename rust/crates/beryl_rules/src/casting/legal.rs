@@ -604,6 +604,11 @@ pub fn pointless<L: Layout>(
 
 /// Appends the abilities `player` can activate now. see CR 117.1b: "A player may activate an
 /// activated ability any time they have priority."
+#[expect(
+    clippy::inline_always,
+    reason = "keeps the activation scan in the priority decision's hot path"
+)]
+#[inline(always)]
 fn activation_options<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
@@ -716,10 +721,10 @@ pub(crate) fn priority_options<L: Layout>(
 ) -> Result<(), Full> {
     let now = Situation::of(player);
     cast_options::<L, true, false>(s, t, &now, cast_sources(s, t, player), From::Priority, out)?;
-    if s.has_preparations() {
+    activation_options(s, t, &now, out)?;
+    if t.can(Capability::Preparation) {
         preparation::casts(s, t, &now, out)?;
     }
-    activation_options(s, t, &now, out)?;
     now.complete()?;
     Ok(())
 }
@@ -749,10 +754,10 @@ pub fn payable_responses<L: Layout>(
         From::Priority,
         &mut out,
     )?;
-    if s.has_preparations() {
+    activation_options(s, t, &now, &mut out)?;
+    if t.can(Capability::Preparation) {
         preparation::casts(s, t, &now, &mut out)?;
     }
-    activation_options(s, t, &now, &mut out)?;
     now.complete()?;
     Ok(out)
 }

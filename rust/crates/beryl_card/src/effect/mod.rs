@@ -211,8 +211,6 @@ pub enum Effect {
     /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
     /// [CR 502.1]: https://yawgatog.com/resources/magic-rules/#R5021
     PhaseOut(Objects),
-    /// Makes the selected permanents prepared or unprepared (see CR 723.3a–b).
-    SetPrepared { objects: Objects, prepared: bool },
     /// "Exile [objects]"
     /// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an
     /// object, move it to the exile zone from wherever it is."
@@ -679,6 +677,8 @@ pub enum Effect {
     /// The controller may reveal a card they own from outside the game that matches
     /// `filter` and put it into their hand (see CR 400.11b).
     Wish { filter: Filter },
+    /// Makes the selected permanents prepared or unprepared (see CR 723.3a–b).
+    SetPrepared { objects: Objects, prepared: bool },
 }
 
 impl Effect {

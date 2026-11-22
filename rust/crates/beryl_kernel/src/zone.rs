@@ -80,9 +80,6 @@ impl<L: Layout> State<L> {
             self.reveal(sink, o.owner, slot);
         }
         let from = o.zone;
-        if self.has_preparations() {
-            self.leaving_preparations(slot, from, to)?;
-        }
         // A token copy stays one ([`State::carried_copy`]); a card under a copy effect is the
         // card it really is again, with the effect ended with the rest of what the stores hold
         // ([`crate::Memo::Really`]).
@@ -98,8 +95,10 @@ impl<L: Layout> State<L> {
         } else {
             None
         };
-        leave(self, slot);
-        self.forget_stored(slot);
+        leave(self, slot, to);
+        if self.keyed.contains(slot) {
+            self.forget_moved_object(slot)?;
+        }
         let o = self.object_mut(slot);
         o.incarnation = incarnation;
         o.zone = to;
@@ -348,7 +347,7 @@ impl<L: Layout> State<L> {
     /// [CR 704.5d]: https://yawgatog.com/resources/magic-rules/#R7045d
     pub fn cease_to_exist(&mut self, slot: L::Slot) -> Result<(), Full> {
         let incarnation = self.object(slot).incarnation.checked_add(1).ok_or(Full)?;
-        leave(self, slot);
+        leave(self, slot, Zone::Nowhere);
         self.forget_stored(slot);
         *self.object_mut(slot) = Object {
             incarnation,
@@ -434,7 +433,7 @@ fn forget_hand<L: Layout>(s: &mut State<L>, owner: Seat, moved: L::Slot) {
     }
 }
 
-fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
+fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot, to: Zone) {
     let o = s.object(slot).clone();
     let owner = o.owner.index();
     match o.zone {
@@ -482,6 +481,7 @@ fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
         }
         Zone::Stack => s.zones.stack.remove(slot),
         Zone::Hand => s.flags.derived_dirty |= s.layers_read_hands(),
+        Zone::Exile if to != Zone::Stack && o.is_token() => s.detach_prepare_copy(slot),
         Zone::Exile | Zone::Nowhere | Zone::Merged => {}
     }
     if (o.zone.index()) < Zone::OWNED {

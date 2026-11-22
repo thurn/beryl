@@ -248,8 +248,6 @@ pub enum Rewrite {
     ToZone(Zone),
     /// It enters tapped.
     EntersTapped,
-    /// Gives an entering permanent its prepared designation (see CR 723.3a).
-    EntersPrepared,
     /// It enters tapped unless its controller controls N or fewer other lands.
     EntersTappedUnlessFewLands(u8),
     /// Its controller may pay N life as it enters; if they don't, it enters tapped. Whoever
@@ -279,6 +277,8 @@ pub enum Rewrite {
         of: &'static Filter,
         except: Option<ExceptIx>,
     },
+    /// Gives an entering permanent its prepared designation (see CR 723.3a).
+    EntersPrepared,
 }
 
 /// The kind of value a permanent chooses as it enters ([`Rewrite::Choose`]): one entry of a

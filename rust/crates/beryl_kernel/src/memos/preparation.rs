@@ -120,26 +120,27 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
-    /// Ends the old object's relation to its copy before a zone change. The one exception
-    /// is a copy moving to the stack, which retains the relation until the cast completes.
+    /// Ends storage for a moved object that had keyed data. A prepared permanent loses
+    /// its linked copy as it leaves the battlefield (see CR 723.3c).
     #[cold]
     #[inline(never)]
-    pub(crate) fn leaving_preparations(
-        &mut self,
-        slot: L::Slot,
-        from: Zone,
-        to: Zone,
-    ) -> Result<(), Full> {
-        if from == Zone::Battlefield {
+    pub(crate) fn forget_moved_object(&mut self, slot: L::Slot) -> Result<(), Full> {
+        if self.has_preparations() {
             self.remove_prepare_copy(slot)?;
-        } else if from == Zone::Exile
-            && to != Zone::Stack
-            && let Some(source) = self.prepare_source(slot)
+        }
+        self.forget_stored(slot);
+        Ok(())
+    }
+
+    /// Ends the link to a copy that left exile without being cast.
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn detach_prepare_copy(&mut self, copy: L::Slot) {
+        if let Some(source) = self.prepare_source(copy)
             && let Some(memo) = self.preparation_mut(source)
         {
             *memo = None;
         }
-        Ok(())
     }
 
     fn preparation_mut(&mut self, source: L::Slot) -> Option<&mut Option<L::Slot>> {
