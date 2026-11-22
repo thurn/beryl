@@ -304,7 +304,7 @@ await check(
     "manual table QA shakes a private opposing hand card on drag",
     linked(async (host, guest) => {
         await start([["Island", 20]], [["Mountain", 20]]);
-        const opening = await tableView("guest");
+        const opening = await showBoth(host, guest);
         await act(
             {
                 move: {
@@ -569,9 +569,11 @@ await check(
     "manual table QA shows a private top-card look and undoes a draw past a guest tap",
     linked(async (host, guest) => {
         await start([["Llanowar Elves", 20]], [["Mountain", 20]]);
-        const setup = await tableView("guest");
+        // The host can acknowledge start before the guest receives its opening
+        // hand and the action references for those cards.
+        const opening = await showBoth(host, guest);
         await act(
-            { move: { to: "play", ...ref(setup, lastHand(setup)) } },
+            { move: { to: "play", ...ref(opening, lastHand(opening)) } },
             "guest",
         );
         const theirs = await showBoth(host, guest);
