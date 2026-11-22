@@ -154,11 +154,16 @@ fn working(ticket: &Ticket) -> &'static str {
     }
 }
 
-/// The guide topic the ticket's labels call for.
+/// The guide displayed in the brief, including any instructions for a reverted landing.
 fn guide(ticket: &Ticket) -> Option<&'static str> {
     if ticket.metadata.contains_key("reverted") {
         return Some("reverted");
     }
+    guide_for_labels(ticket)
+}
+
+/// The guide topic the ticket's labels call for.
+pub(super) fn guide_for_labels(ticket: &Ticket) -> Option<&'static str> {
     GUIDES
         .iter()
         .find(|(label, _)| ticket.labels.iter().any(|l| l == label))

@@ -110,18 +110,31 @@ fn a_lapsed_reservation_code_claims_nothing() {
 }
 
 #[test]
-fn a_reserved_justiciar_ticket_starts_without_prebuilding() {
-    let world = World::new();
-    let mut incident = ticket("Tq.48", "Investigate a full disk", "");
-    incident.labels.push(JUSTICIAR.to_owned());
-    incident.cores = Some(4.0);
-    world.desk.add(incident);
-    lock(&world.desk.reservations).insert(id("Tq.48"), "7f3a".to_owned());
+fn reserved_claims_prebuild_for_code_work_and_skip_diagnosis() {
+    for (label, prebuilds) in [
+        (Some(JUSTICIAR), false),
+        (Some("fleet"), false),
+        (Some("graph-repair"), false),
+        (None, true),
+    ] {
+        let world = World::new();
+        let mut reserved = ticket("Tq.48", "Inspect build scheduling", "");
+        if let Some(label) = label {
+            reserved.labels.push(label.to_owned());
+        }
+        reserved.cores = Some(4.0);
+        world.desk.add(reserved);
+        lock(&world.desk.reservations).insert(id("Tq.48"), "7f3a".to_owned());
 
-    let reply = start(&world, &["Tq.48", "--reservation", "7f3a"], WORKER);
+        let reply = start(&world, &["Tq.48", "--reservation", "7f3a"], WORKER);
 
-    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    assert_eq!(*lock(&world.trees.leases), [(id("Tq.48"), false)]);
+        assert_eq!(reply.exit, Exit::Success, "label {label:?}: {}", reply.text);
+        assert_eq!(
+            *lock(&world.trees.leases),
+            [(id("Tq.48"), prebuilds)],
+            "label {label:?}"
+        );
+    }
 }
 
 #[test]
