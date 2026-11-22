@@ -264,9 +264,7 @@
 //! | by-bajq.8.4 | +32 (landed: +32) | a set of the phased-out permanents' slots |
 //! | Turn plan | +208 | the queue of 24 remaining steps and their positions |
 //!
-//! With the turn plan, `State<Small>` is 20,448 bytes. Subgames add zero-sized storage
-//! to that layout, so it still copies as one flat value. Large owns the suspended state
-//! until the active subgame finishes (see [CR 730.1a](https://yawgatog.com/resources/magic-rules/#R7301a)).
+//! With the turn plan, `State<Small>` is 20,448 bytes.
 //!
 //! ### Affected sides and payloads
 //!
@@ -781,7 +779,6 @@ mod stack;
 pub mod state;
 pub mod static_ability;
 pub mod store;
-#[doc(hidden)]
 pub mod subgame;
 pub mod subtypes;
 pub mod table;
