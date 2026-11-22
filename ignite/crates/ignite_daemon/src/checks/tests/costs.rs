@@ -250,6 +250,36 @@ fn a_list_command_asks_for_one_core_and_a_run_for_the_settings_cores() {
 }
 
 #[test]
+fn a_list_can_skip_benchmark_resources_while_the_runner_keeps_them() {
+    for option in ["", "\nlist_without_resources = true"] {
+        let config = MANIFEST.replace(
+            "list = \"lister\"",
+            &format!("resources = [\"benchmark\"]{option}\nlist = \"lister\""),
+        );
+        let world = world(&config, &[], FakeHistory::default());
+        *world.launcher.listing.lock().unwrap() =
+            format!("{{\"check\": \"unit:a\"}}\n{NEXTEST_LISTING}\n");
+        world
+            .launcher
+            .script("unit:a", &[Some("fail"), Some("fail")]);
+
+        let checked = run(&world, &["unit:a"]);
+
+        assert_eq!(outcome(&checked, "unit:a"), Outcome::Fail);
+        let runs = world.launcher.runs.lock().unwrap();
+        let listed = runs.iter().find(|spec| spec.args[0] == "lister").unwrap();
+        let ran = runs.iter().find(|spec| spec.args[0] == "runner").unwrap();
+        let expected: &[&str] = if option.is_empty() {
+            &["benchmark"]
+        } else {
+            &[]
+        };
+        assert_eq!(listed.resources, expected);
+        assert_eq!(ran.resources, ["benchmark"]);
+    }
+}
+
+#[test]
 fn a_gate_run_that_is_entirely_cached_launches_no_command() {
     let world = jsonl_world();
     assert!(run(&world, &["unit:a"]).passed());

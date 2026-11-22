@@ -1663,6 +1663,10 @@ The fields:
   clippy family lists one check per package from `cargo metadata`, and waiting
   for the `clippy` product made a one-line card change build clippy only to list
   it.
+- `list_without_resources = true` lets `list` run without the family's shared
+  resources when it only reads files. The benchmark families use it to list
+  checks while the virtual machine is busy. Their run commands still reserve the
+  virtual machine.
 - `listing_ignores_comments = true` says that what `list` prints cannot depend
   on the comments in a Rust file, as with test names or what a built program
   does. The family's listing hash and its listing's sources hash then cover each

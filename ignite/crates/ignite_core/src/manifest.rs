@@ -120,6 +120,9 @@ pub struct Family {
     /// Shared resources the checks hold while they run.
     #[serde(default)]
     pub resources: Vec<String>,
+    /// Let `list` run without these resources when it only reads the checkout or build outputs.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub list_without_resources: bool,
     /// The `run` command rereads the file `IGNITE_CORES_FILE` names while it runs and starts
     /// more threads as its grant grows, so the scheduler gives it cores as they free up.
     #[serde(default)]

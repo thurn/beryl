@@ -1067,6 +1067,8 @@ adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env", "b3d"]
 resources = ["bench-vm"]
+# Listing reads board and recording metadata from the host.
+list_without_resources = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-frame-counts list"
 # The listing comes from what a built program does, which comments cannot change, so a change
 # that edits only comments keeps the listing and builds nothing to list.

@@ -34,6 +34,8 @@ platforms = ["macos", "windows"]
 needs = ["python-env"]
 # The list reads the gate file and observes the local count guest without building a product.
 list_needs = []
+# Listing reads the gate file without starting the benchmark VM.
+list_without_resources = true
 resources = ["bench-vm"]
 # The adapter waits while Callgrind runs in the Linux guest. The guest's CPU shows as load
 # outside Ignite.

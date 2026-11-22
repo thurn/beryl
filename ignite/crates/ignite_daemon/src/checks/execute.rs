@@ -693,7 +693,11 @@ impl Checks {
             env,
             class: options.class,
             cores: cores_for(command, family.cores.unwrap_or(self.settings.cores)),
-            resources: family.resources.clone(),
+            resources: if command == LIST && family.list_without_resources {
+                Vec::new()
+            } else {
+                family.resources.clone()
+            },
             grows: family.grows,
             tree: Some(tree.id.clone()),
             ticket: options.ticket.clone(),

@@ -835,5 +835,10 @@
     "metric": "bead.agent-minutes",
     "expect": "down",
     "commit": "4144a2771e1dad781041ee94a933a85b9ebb9629"
+  },
+  {
+    "label": "The engine and Beryl 3D benchmark listings run while the benchmark virtual machine is busy, so reading the list of checks no longer holds up landing checks.",
+    "metric": "ignite.gate-wait-seconds",
+    "expect": "down"
   }
 ]
