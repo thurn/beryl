@@ -137,7 +137,8 @@ impl CardDef {
     /// empty string.
     pub fn face_name(&self, face: FaceIx) -> &'static str {
         if face == FaceIx::FRONT
-            && (!matches!(self.shape, Shape::Split { .. }) || self.front().name.is_empty())
+            && (!matches!(self.shape, Shape::Split { .. } | Shape::Prepared)
+                || self.front().name.is_empty())
         {
             self.name
         } else {

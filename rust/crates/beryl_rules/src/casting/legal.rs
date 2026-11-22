@@ -30,6 +30,7 @@ use super::parts;
 use super::targets::{Itself, targetable};
 use super::timing::{activated, instant_speed, sorcery_timing};
 
+mod preparation;
 mod special;
 mod ways;
 
@@ -264,7 +265,11 @@ pub(crate) fn refusal<L: Layout>(
 ) -> Result<Option<Refusal<L>>, Full> {
     let now = Situation::of(player);
     let Some(def) = s.card_def(t, slot) else {
-        return Ok(land);
+        return if s.prepare_spells_for(player).contains(slot) {
+            preparation::refusal(s, t, &now, slot)
+        } else {
+            Ok(land)
+        };
     };
     let ways = Ways::of(s, t, player, slot, From::Priority);
     let mut most = land;
@@ -711,6 +716,9 @@ pub(crate) fn priority_options<L: Layout>(
 ) -> Result<(), Full> {
     let now = Situation::of(player);
     cast_options::<L, true, false>(s, t, &now, cast_sources(s, t, player), From::Priority, out)?;
+    if s.has_preparations() {
+        preparation::casts(s, t, &now, out)?;
+    }
     activation_options(s, t, &now, out)?;
     now.complete()?;
     Ok(())
@@ -741,6 +749,9 @@ pub fn payable_responses<L: Layout>(
         From::Priority,
         &mut out,
     )?;
+    if s.has_preparations() {
+        preparation::casts(s, t, &now, &mut out)?;
+    }
     activation_options(s, t, &now, &mut out)?;
     now.complete()?;
     Ok(out)

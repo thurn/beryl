@@ -138,6 +138,7 @@ pub mod decks {
                 names::BONECRUSHER_GIANT,
                 names::PANGLACIAL_WURM,
                 names::TRINKET_MAGE,
+                names::ADVENTUROUS_EATER_HAVE_A_BITE,
                 names::LIGHTNING_BOLT,
                 names::COUNTERSPELL,
             ],

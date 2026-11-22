@@ -238,6 +238,7 @@ impl Scope<'_> {
                 Rewrite::None
                 | Rewrite::ToZone(_)
                 | Rewrite::EntersTapped
+                | Rewrite::EntersPrepared
                 | Rewrite::EntersTappedUnlessFewLands(_)
                 | Rewrite::EntersTappedUnlessPayLife(_)
                 | Rewrite::EntersWithCounters(..)

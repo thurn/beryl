@@ -191,6 +191,7 @@ fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
             }
             Rewrite::None
             | Rewrite::ToZone(_)
+            | Rewrite::EntersPrepared
             | Rewrite::EntersTappedUnlessPayLife(_)
             | Rewrite::EntersWithCounters(..)
             | Rewrite::Instead

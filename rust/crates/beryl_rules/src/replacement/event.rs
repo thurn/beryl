@@ -46,6 +46,8 @@ pub(crate) struct Entry<L: Layout = Small> {
     pub counters: Option<(CounterKind, u8)>,
     /// The intrinsic lore counter, which can be placed alongside other entry counters.
     pub saga_lore: bool,
+    /// An entry replacement gives this permanent the prepared designation (see CR 723.3a).
+    pub prepared: bool,
     /// Its controller chose to pay the life an "unless you pay N life" replacement asks.
     pub pay_life: bool,
     /// What its spell was cast with that its abilities read, which it enters remembering
@@ -401,6 +403,9 @@ fn move_ordered<L: Layout, const N: usize>(
         crate::continuous::arrival_timestamps::order(s, t, arrived.as_slice())?;
         layers::refresh(s, t, sink)?;
     }
+    if !arrived.is_empty() && t.can(Capability::Preparation) {
+        prepare_arrivals(s, t, sink, moves.as_slice())?;
+    }
     for &(slot, from, dest, _) in moves.iter() {
         trigger::match_event(s, t, &changed(slot, s.object_ref(slot), from, dest))?;
     }
@@ -422,6 +427,24 @@ fn move_ordered<L: Layout, const N: usize>(
         );
         sink.apart();
         returned?;
+    }
+    Ok(())
+}
+
+/// Creates the prepare spell copies for permanents that entered prepared before any enters
+/// trigger reads the completed batch (see CR 723.3c).
+#[cold]
+#[inline(never)]
+fn prepare_arrivals<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    moves: &[PreparedMove<L>],
+) -> Result<(), Full> {
+    for &(slot, _, dest, entry) in moves {
+        if dest == Zone::Battlefield && entry.prepared {
+            crate::objects::preparation::prepare(s, t, sink, slot)?;
+        }
     }
     Ok(())
 }
@@ -448,7 +471,9 @@ fn prepare_move<L: Layout>(
     // it as a spell does: onto the battlefield as a token as it resolves
     // (see [CR 608.3f](https://yawgatog.com/resources/magic-rules/#R6083f)), or to where a
     // card would go, where the state-based check ends it (see CR 704.5e).
-    if s.object(slot).is_token() && !matches!(from, Zone::Battlefield | Zone::Nowhere | Zone::Stack)
+    if s.object(slot).is_token()
+        && !matches!(from, Zone::Battlefield | Zone::Nowhere | Zone::Stack)
+        && !(from == Zone::Exile && s.prepare_source(slot).is_some())
     {
         return Ok(None);
     }

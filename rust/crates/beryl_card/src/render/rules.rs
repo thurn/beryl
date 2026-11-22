@@ -200,6 +200,17 @@ impl Ctx {
         format!("{} {phase} out", self.objects(objects))
     }
 
+    /// Renders a change to a permanent's prepared designation.
+    pub(super) fn set_prepared(&mut self, objects: Objects, prepared: bool) -> String {
+        let verb = if self.is_plural(objects) {
+            "become"
+        } else {
+            "becomes"
+        };
+        let designation = if prepared { "prepared" } else { "unprepared" };
+        format!("{} {verb} {designation}", self.objects(objects))
+    }
+
     /// "This creature can't attack unless defending player controls an Island"
     /// ([CR 508.1c](https://yawgatog.com/resources/magic-rules/#R5081c)).
     fn attack_restriction(

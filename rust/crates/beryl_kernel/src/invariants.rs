@@ -136,6 +136,12 @@ impl<L: Layout> State<L> {
                         owner: o.owner,
                         base_controller: o.owner,
                         timestamp: o.timestamp,
+                        // See CR 723.3c: the exiled copy has the inset's characteristics.
+                        face: if o.zone == Zone::Exile && self.prepare_source(slot).is_some() {
+                            FaceIx::BACK
+                        } else {
+                            FaceIx::FRONT
+                        },
                         flags: o.flags.kept_across_zones(),
                         ..Object::EMPTY
                     },

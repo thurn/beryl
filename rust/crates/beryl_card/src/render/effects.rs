@@ -13,7 +13,6 @@ use crate::characteristics::Types;
 use crate::continuous::Duration;
 use crate::definition::CardDef;
 use crate::effect::{Amount, Effect, Found, Objects, Players, Regeneration};
-use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::trigger::TriggerEvent;
 
@@ -116,6 +115,9 @@ impl Ctx {
             }
             Effect::Tap(objects) => vec![format!("tap {}", self.objects(objects))],
             Effect::PhaseOut(objects) => vec![self.phase_out(objects)],
+            Effect::SetPrepared { objects, prepared } => {
+                vec![self.set_prepared(objects, prepared)]
+            }
             Effect::Attach { objects, to } => {
                 let host = self.objects(to);
                 vec![self.acts(("attach", "attaches"), objects, &format!(" to {host}"))]
@@ -675,22 +677,6 @@ fn emblem_text(emblem: &'static CardDef) -> String {
         .map(|ability| ctx.paragraph(ability))
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-impl Ctx {
-    /// Whether `objects` is a target that must be a card in its chooser's own graveyard.
-    fn own_graveyard_target(&self, objects: Objects) -> bool {
-        let Objects::Target(spec) = objects else {
-            return false;
-        };
-        let yours = |filter: &Filter| matches!(filter, Filter::Whose(Players::You));
-        self.targets.get(spec.index()).is_some_and(|t| {
-            t.kind == crate::TargetKind::GraveyardCard
-                && t.filter
-                    .conjunction()
-                    .map_or_else(|| yours(&t.filter), |parts| parts.iter().any(yours))
-        })
-    }
 }
 
 /// How long a continuous effect from a resolving spell lasts, after what it does

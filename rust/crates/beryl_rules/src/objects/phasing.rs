@@ -83,6 +83,15 @@ fn phase_in_for_active<L: Layout>(
     }
     s.phase_in(phasing_in)?;
     layers::refresh(s, t, sink)?;
+    if s.has_preparations() {
+        let mut phased_in = s.permanents_in(phasing_in.slots());
+        while let Some(permanent) = s.next_permanent(&mut phased_in) {
+            let slot = permanent.slot();
+            if s.is_prepared(slot) {
+                s.create_prepare_copy(t, sink, slot)?;
+            }
+        }
+    }
     s.reset_permanents_for_turn(active);
     Ok(())
 }

@@ -420,6 +420,7 @@ impl Effect {
                 | Effect::Regenerate(_)
                 | Effect::Tap(_)
                 | Effect::PhaseOut(_)
+                | Effect::SetPrepared { .. }
                 | Effect::Exile(_)
                 | Effect::ExileUntilThisLeaves(_)
                 | Effect::ExileLinked(_)

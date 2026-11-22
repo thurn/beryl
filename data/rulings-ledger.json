@@ -1,4 +1,104 @@
 {
+  "Adventurous Eater // Have a Bite": [
+    {
+      "published_at": "2026-03-20",
+      "hash": "41b8184e1426",
+      "scenario": [
+        "The new controller can cast an existing prepare spell copy"
+      ]
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "6bbd2ceaf345",
+      "scenario": [
+        "Adventurous Eater prepares Have a Bite as it enters",
+        "Have a Bite cannot be cast during the opponent's turn"
+      ]
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "e1f4c1801532",
+      "scenario": [
+        "Losing all abilities does not unprepare Adventurous Eater"
+      ]
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "e237fceb2bf6",
+      "covered": "Effect::SetPrepared"
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "b3a2c7495a03",
+      "untestable": "No implemented card grants an alternative cost for casting Have a Bite from exile."
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "148f29f8bf46",
+      "scenario": [
+        "The inset is a card name a player can choose"
+      ]
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "d83c6281e4f7",
+      "covered": "Effect::SetPrepared"
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "3e8408ae4785",
+      "untestable": "Croaking Counterpart is not implemented. Fractured Identity makes an unmodified token copy."
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "e0991be2fd66",
+      "scenario": [
+        "Adventurous Eater prepares Have a Bite as it enters",
+        "A token copy enters prepared and its original's copy ceases to exist"
+      ]
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "799076b25802",
+      "covered": "Effect::SetPrepared"
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "a75a6b6c41b0",
+      "scenario": [
+        "Adventurous Eater prepares Have a Bite as it enters"
+      ]
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "b24e3972a169",
+      "scenario": [
+        "Adventurous Eater prepares Have a Bite as it enters",
+        "A token copy enters prepared and its original's copy ceases to exist"
+      ]
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "7845a341f315",
+      "scenario": [
+        "A prepared permanent retains its spell after it stops being a creature"
+      ]
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "8d8e6d801211",
+      "scenario": [
+        "Have a Bite does not resolve after losing its only target"
+      ]
+    },
+    {
+      "published_at": "2026-03-20",
+      "hash": "8c820f368184",
+      "scenario": [
+        "A token copy enters prepared and its original's copy ceases to exist"
+      ]
+    }
+  ],
   "Animate Dead": [
     {
       "published_at": "2016-06-08",

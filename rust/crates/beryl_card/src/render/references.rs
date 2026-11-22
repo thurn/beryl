@@ -666,3 +666,19 @@ fn zone_of(filter: Filter) -> Option<Zone> {
         | Filter::AnyOf(_) => None,
     }
 }
+
+impl Ctx {
+    /// Whether `objects` is a target that must be a card in its chooser's own graveyard.
+    pub(super) fn own_graveyard_target(&self, objects: Objects) -> bool {
+        let Objects::Target(spec) = objects else {
+            return false;
+        };
+        let yours = |filter: &Filter| matches!(filter, Filter::Whose(Players::You));
+        self.targets.get(spec.index()).is_some_and(|t| {
+            t.kind == crate::TargetKind::GraveyardCard
+                && t.filter
+                    .conjunction()
+                    .map_or_else(|| yours(&t.filter), |parts| parts.iter().any(yours))
+        })
+    }
+}

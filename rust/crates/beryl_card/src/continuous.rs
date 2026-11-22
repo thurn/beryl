@@ -39,6 +39,9 @@ impl Replacement {
     /// "This enters tapped."
     pub const ENTERS_TAPPED: Replacement = Replacement::this_enters(Rewrite::EntersTapped);
 
+    /// "This enters prepared" (see CR 723.3a).
+    pub const ENTERS_PREPARED: Replacement = Replacement::this_enters(Rewrite::EntersPrepared);
+
     /// If you would begin your turn while this permanent is tapped, you may skip that turn
     /// instead. If you do, untap this permanent.
     pub const SKIP_TURN_TO_UNTAP: Replacement = Replacement {
@@ -245,6 +248,8 @@ pub enum Rewrite {
     ToZone(Zone),
     /// It enters tapped.
     EntersTapped,
+    /// Gives an entering permanent its prepared designation (see CR 723.3a).
+    EntersPrepared,
     /// It enters tapped unless its controller controls N or fewer other lands.
     EntersTappedUnlessFewLands(u8),
     /// Its controller may pay N life as it enters; if they don't, it enters tapped. Whoever

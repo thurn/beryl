@@ -484,6 +484,7 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::Regenerate(_)
         | Effect::Tap(_)
         | Effect::PhaseOut(_)
+        | Effect::SetPrepared { .. }
         | Effect::ExileUntilThisLeaves(_)
         | Effect::Sacrifice(_)
         | Effect::ReturnToHand(_)

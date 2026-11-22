@@ -130,10 +130,12 @@ pub enum Capability {
     ReadsDepartedTriggeringSpell,
     /// A card has banding, so combat can declare attacking bands and change who assigns damage.
     Banding,
+    /// A permanent can enter prepared and make a spell copy in exile.
+    Preparation,
 }
 
 // The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::Banding as u32) < u32::BITS);
+const _: () = assert!((Capability::Preparation as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -156,6 +158,9 @@ impl Capability {
             .any(|def| matches!(def.shape, Shape::Split { .. }))
         {
             capabilities |= Self::Split.bit();
+        }
+        if defs.iter().any(|def| def.shape == Shape::Prepared) {
+            capabilities |= Self::Preparation.bit();
         }
         capabilities
     }

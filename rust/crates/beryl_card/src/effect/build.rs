@@ -339,6 +339,22 @@ pub const fn destroy_without_regeneration(objects: Objects) -> Effect {
     }
 }
 
+/// [`Effect::SetPrepared`]: "[permanents] become prepared."
+pub const fn prepare(objects: Objects) -> Effect {
+    Effect::SetPrepared {
+        objects,
+        prepared: true,
+    }
+}
+
+/// [`Effect::SetPrepared`]: "[permanents] become unprepared."
+pub const fn unprepare(objects: Objects) -> Effect {
+    Effect::SetPrepared {
+        objects,
+        prepared: false,
+    }
+}
+
 /// [`Effect::PhaseOut`]: "[permanents] phase out".
 pub const fn phase_out(objects: Objects) -> Effect {
     Effect::PhaseOut(objects)

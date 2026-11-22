@@ -36,6 +36,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::Regenerate(_)
         | Effect::Tap(_)
         | Effect::PhaseOut(_)
+        | Effect::SetPrepared { .. }
         | Effect::PutBack { .. }
         | Effect::Dig { .. }
         | Effect::ExileUntil { .. }

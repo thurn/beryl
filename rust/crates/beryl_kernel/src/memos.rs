@@ -35,6 +35,7 @@ use crate::table::GameTable;
 
 mod combat;
 mod designation;
+mod preparation;
 mod value;
 
 /// The memos a [`Small`] game holds at once. One past it stalls the game into
@@ -145,6 +146,9 @@ pub enum Memo<L: Layout = Small> {
     /// This attacker is in the band identified by the first member's slot number at
     /// declaration. The number still identifies the band if that creature leaves combat.
     CombatBand(L::Slot),
+    /// The prepared designation and the copy it created, while that copy remains in exile
+    /// or is being cast (see CR 723.3a–c). Phasing out removes the copy but preserves the memo.
+    Prepared(Option<L::Slot>),
 }
 
 /// The kinds of memo among a store's entries: its index by kind, so that a reader of a kind
@@ -168,8 +172,13 @@ impl Kinds {
     const CLASS_LEVEL: u32 = 1 << 18;
     const SOLVED: u32 = 1 << 19;
     const COMBAT_BAND: u32 = 1 << 20;
+    const PREPARED: u32 = 1 << 21;
     /// The kinds whose memo names a slot ([`Memo::names`]).
-    const NAMING: u32 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL | Kinds::PUT_WITH | Kinds::PART_OF;
+    const NAMING: u32 = Kinds::EXILED_WITH
+        | Kinds::EXILED_UNTIL
+        | Kinds::PUT_WITH
+        | Kinds::PART_OF
+        | Kinds::PREPARED;
     /// The kinds whose memo ends as a new object arrives in the slot it names
     /// ([`State::forget_links_to`]).
     const LINKS: u32 = Kinds::EXILED_WITH | Kinds::PUT_WITH;
@@ -404,7 +413,8 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::Morphed
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
-            | Memo::Solved => None,
+            | Memo::Solved
+            | Memo::Prepared(_) => None,
         })
     }
 
@@ -425,7 +435,8 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::Morphed
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
-            | Memo::Solved => None,
+            | Memo::Solved
+            | Memo::Prepared(_) => None,
         })
     }
 
@@ -446,7 +457,8 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::Morphed
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
-            | Memo::Solved => None,
+            | Memo::Solved
+            | Memo::Prepared(_) => None,
         })
     }
 }

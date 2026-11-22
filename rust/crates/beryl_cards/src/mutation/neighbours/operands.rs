@@ -157,3 +157,34 @@ pub(super) fn player_count(
         add(Kind::Amount, name, build(player, count));
     }
 }
+
+pub(super) fn objects_of(
+    which: Objects,
+    build: impl Fn(Objects) -> Effect,
+    add: &mut impl FnMut(Kind, String, Effect),
+) {
+    for (name, which) in objects(which) {
+        add(Kind::EffectObjects, name, build(which));
+    }
+}
+
+/// Changes either the objects designated or whether they become prepared.
+pub(super) fn preparation(
+    objects: Objects,
+    prepared: bool,
+    add: &mut impl FnMut(Kind, String, Effect),
+) {
+    add(
+        Kind::EffectCondition,
+        "opposite designation".to_owned(),
+        Effect::SetPrepared {
+            objects,
+            prepared: !prepared,
+        },
+    );
+    objects_of(
+        objects,
+        |objects| Effect::SetPrepared { objects, prepared },
+        add,
+    );
+}

@@ -22,6 +22,7 @@ impl<L: Layout> Memo<L> {
             Memo::ClassLevel(_) => Kinds::CLASS_LEVEL,
             Memo::Solved => Kinds::SOLVED,
             Memo::CombatBand(_) => Kinds::COMBAT_BAND,
+            Memo::Prepared(_) => Kinds::PREPARED,
         }
     }
 
@@ -40,7 +41,8 @@ impl<L: Layout> Memo<L> {
             | Memo::Morphed
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
-            | Memo::Solved => Zone::Battlefield,
+            | Memo::Solved
+            | Memo::Prepared(_) => Zone::Battlefield,
             Memo::ExiledWith(_) | Memo::ExiledUntil(_) => Zone::Exile,
             Memo::PartOf(_) => Zone::Merged,
         }
@@ -70,6 +72,7 @@ impl<L: Layout> Memo<L> {
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
             | Memo::Solved => None,
+            Memo::Prepared(copy) => copy,
             Memo::ExiledWith(by)
             | Memo::ExiledUntil(by)
             | Memo::PutOntoBattlefieldWith(by)
@@ -99,6 +102,9 @@ impl<L: Layout> Memo<L> {
             Memo::ExiledUntil(by) => zone(by) == Zone::Battlefield,
             // A card is part of a permanent only while it is on the battlefield.
             Memo::PartOf(of) => zone(of) == Zone::Battlefield,
+            Memo::Prepared(copy) => {
+                copy.is_none_or(|copy| matches!(zone(copy), Zone::Exile | Zone::Stack))
+            }
         }
     }
 
@@ -119,6 +125,7 @@ impl<L: Layout> Memo<L> {
             Memo::ClassLevel(level) => Memo::ClassLevel(level),
             Memo::Solved => Memo::Solved,
             Memo::CombatBand(band) => Memo::CombatBand(slot(band)),
+            Memo::Prepared(copy) => Memo::Prepared(copy.map(slot)),
         }
     }
 

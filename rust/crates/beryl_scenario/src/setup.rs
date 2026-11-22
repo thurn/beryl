@@ -215,7 +215,7 @@ fn arrange<L: Layout>(
                 .library(p)
                 .iter()
                 .copied()
-                .find(|&slot| s.name(t, slot) == name && !order.contains(&slot))
+                .find(|&slot| matches_name(&s, t, slot, name) && !order.contains(&slot))
                 .expect("the library holds the cards it lists");
             order.push(slot);
         }
@@ -236,6 +236,11 @@ fn library_slot<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, name: &str
     s.library(player)
         .iter()
         .copied()
-        .find(|&slot| s.name(t, slot) == name)
+        .find(|&slot| matches_name(s, t, slot, name))
         .expect("the deck holds every card the setup names")
+}
+
+/// Setup accepts the registry name as well as the card's name in the game.
+fn matches_name<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, name: &str) -> bool {
+    s.definition_name(t, slot) == name || s.name(t, slot) == name
 }

@@ -147,6 +147,7 @@ impl Effect {
             | Effect::Regenerate(objects)
             | Effect::Tap(objects)
             | Effect::PhaseOut(objects)
+            | Effect::SetPrepared { objects, .. }
             | Effect::Exile(objects)
             | Effect::ExileUntilThisLeaves(objects)
             | Effect::ExileLinked(objects)

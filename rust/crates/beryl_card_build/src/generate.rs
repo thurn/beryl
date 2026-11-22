@@ -378,7 +378,7 @@ pub fn set_crate_source(
         } else {
             "&[]".to_owned()
         };
-        writeln!(scenarios, "    (names::{own}, {cases}),").unwrap();
+        writeln!(scenarios, "    ({set}::{module}::CARD.name, {cases}),").unwrap();
         card_names.push((camel(name)?, format!("names::{own}")));
         constants.insert(own, name.to_string());
     }

@@ -80,6 +80,9 @@ impl<L: Layout> State<L> {
             self.reveal(sink, o.owner, slot);
         }
         let from = o.zone;
+        if self.has_preparations() {
+            self.leaving_preparations(slot, from, to)?;
+        }
         // A token copy stays one ([`State::carried_copy`]); a card under a copy effect is the
         // card it really is again, with the effect ended with the rest of what the stores hold
         // ([`crate::Memo::Really`]).

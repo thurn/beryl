@@ -94,6 +94,9 @@ impl<L: Layout> State<L> {
             self.remove_from_combat(permanent);
         }
         for slot in all.iter() {
+            if self.has_preparations() {
+                self.remove_prepare_copy(slot)?;
+            }
             self.leave_battlefield(slot);
             let o = self.object_mut(slot);
             o.flags.set(Flag::PhasedOut, true);

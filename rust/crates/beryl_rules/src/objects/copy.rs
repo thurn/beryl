@@ -4,10 +4,10 @@
 //!
 //! A copy of a spell is an object in a slot of the shared pool, which holds tokens and spell
 //! copies, marked as a token: a copy of a permanent spell becomes a token as it resolves
-//! (see [CR 608.3f]), and a token on the stack is always a copy of a spell, since no token is
-//! ever cast. It takes the copiable values of the spell it copies, with the copier's exception
-//! after them, and a stack entry with the original's face, targets, X and casting options
-//! paid. Nothing notes that it was cast, so no "when you cast" ability triggers and no count
+//! (see [CR 608.3f]). A prepare spell uses the same pool representation, and is cast under
+//! its own permission (see CR 723.3c). A copy made by this module takes the original's
+//! copiable values with the copier's exception, and a stack entry with the original's face,
+//! targets, X and casting options paid. No "when you cast" ability triggers and no count
 //! of spells cast counts it. When it leaves the stack it goes where a spell's card would, and
 //! the state-based check ends it there (see [CR 704.5e]): "If a copy of a spell is in a zone other
 //! than the stack, it ceases to exist."

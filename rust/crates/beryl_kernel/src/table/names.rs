@@ -10,8 +10,11 @@ use super::GameTable;
 /// The game index of each distinct name among `defs` that a card has ([`GameTable::names`]):
 /// not a token's or an emblem's, which some card of `defs` lists among what it creates, and
 /// not [`FACE_DOWN_COPY`]'s, which is no card's. A split card contributes each half's name
-/// (see [CR 709.4a]): "Each split card has two names."
+/// (see [CR 709.4a]): "Each split card has two names." See [CR 723.5] for a preparation
+/// card: "If an effect instructs a player to choose a card name and the player wants to
+/// choose a preparation card’s alternative name, the player may do so."
 ///
+/// [CR 723.5]: https://yawgatog.com/resources/magic-rules/#R7235
 /// [CR 709.4a]: https://yawgatog.com/resources/magic-rules/#R7094a
 pub(super) fn card_names(defs: &[&'static CardDef]) -> (Vec<usize>, Vec<&'static str>) {
     let made = |def: &CardDef| {
@@ -32,7 +35,7 @@ pub(super) fn card_names(defs: &[&'static CardDef]) -> (Vec<usize>, Vec<&'static
     let mut backs = Vec::new();
     for &i in &names {
         let def = defs[i];
-        if matches!(def.shape, Shape::Split { .. }) {
+        if matches!(def.shape, Shape::Split { .. } | Shape::Prepared) {
             let name = def.face_name(FaceIx::BACK);
             if !name.is_empty()
                 && !backs.contains(&name)
@@ -65,7 +68,9 @@ impl GameTable {
         if let Some(def) = self.defs.get(number) {
             Some(def.face_name(FaceIx::FRONT))
         } else {
-            self.split_back_names.get(number - self.defs.len()).copied()
+            self.additional_face_names
+                .get(number - self.defs.len())
+                .copied()
         }
     }
 }

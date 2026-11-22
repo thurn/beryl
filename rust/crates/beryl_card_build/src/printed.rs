@@ -333,9 +333,10 @@ pub fn faces(record: &Record, subtypes: &Subtypes) -> Result<Vec<(String, String
                 )
                 .unwrap();
             }
-            // A one-faced card supplies the name for `Face::card`. A split front half
-            // has its own name on the stack.
-            if record.faces.len() == 1 || (i == 0 && record.layout == "split") {
+            // The front of a split or preparation card has a name of its own.
+            if record.faces.len() == 1
+                || (i == 0 && matches!(record.layout.as_str(), "split" | "prepare"))
+            {
                 source = source.replacen(
                     "beryl_card::Face::EMPTY",
                     &format!("beryl_card::Face::EMPTY\n    .named({:?})", face.name),

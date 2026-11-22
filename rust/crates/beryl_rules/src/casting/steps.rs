@@ -93,6 +93,9 @@ pub(crate) fn begin_cast<L: Layout>(
         .spell(s.object_ref(slot))
         .expect("a card just put on the stack");
     s.become_spell(spell, face, player);
+    if face == FaceIx::BACK && s.object(slot).is_token() {
+        s.set_prepare_spell_owner(spell, player);
+    }
     s.put_on_stack(
         sink,
         StackEntry::new(StackItem::Spell {
@@ -363,20 +366,23 @@ pub(super) fn finish<L: Layout>(
                 crate::coverage::hit(option);
             }
         }
-        event::settle(
-            s,
-            t,
-            sink,
-            Event::Cast {
-                spell,
-                controller,
-                targets: entry.targets.clone(),
-                x: entry.x,
-                costs,
-                flashback: flashback::paid(s, spell),
-                from: c.from,
-            },
-        )?;
+        let cast = Event::Cast {
+            spell,
+            controller,
+            targets: entry.targets.clone(),
+            x: entry.x,
+            costs,
+            flashback: flashback::paid(s, spell),
+            from: c.from,
+        };
+        if s.has_preparations()
+            && let Some(source) = s.prepare_source(spell.slot)
+        {
+            // See CR 723.3c: "That permanent loses the prepared designation at the time the
+            // spell becomes cast".
+            s.unprepare(source)?;
+        }
+        event::settle(s, t, sink, cast)?;
     } else {
         sink.push(ability_event(entry));
     }

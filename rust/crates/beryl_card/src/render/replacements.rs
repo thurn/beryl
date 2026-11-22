@@ -20,6 +20,7 @@ impl Ctx {
             ability.replacement().unwrap_or(&Replacement::NONE);
         let mut clauses = match (replaces, rewrite) {
             (_, Rewrite::EntersTapped) => vec![format!("{this} enters tapped")],
+            (_, Rewrite::EntersPrepared) => vec![format!("{this} enters prepared")],
             (_, Rewrite::EntersTappedUnlessFewLands(n)) => vec![format!(
                 "{this} enters tapped unless you control {} or fewer other lands",
                 number(n)

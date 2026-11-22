@@ -174,8 +174,8 @@ pub struct GameTable {
     /// first index with each name among the cards that are not tokens or emblems
     /// ([`GameTable::names`]).
     names: Vec<usize>,
-    /// Split back face names. Their catalog numbers start after the card indices.
-    split_back_names: Vec<&'static str>,
+    /// Names of split halves and prepare spells. Their catalog numbers start after the card indices.
+    additional_face_names: Vec<&'static str>,
     /// Per game index, the printed subtypes of its first two faces by those numbers.
     face_subtypes: Vec<[GameSubtypes; 2]>,
 }
@@ -339,7 +339,7 @@ impl GameTable {
         let subtypes =
             SubtypeNumbers::new(&defs).map_err(|count| TableError::Subtypes { count })?;
         let face_subtypes = subtypes.of_cards(&defs);
-        let (names, split_back_names) = names::card_names(&defs);
+        let (names, additional_face_names) = names::card_names(&defs);
         let restrictions = mana_memory::number(&defs);
         let capabilities = Capability::of_game(&defs, &subtypes);
         Ok(Self {
@@ -371,7 +371,7 @@ impl GameTable {
             subtypes,
             face_subtypes,
             names,
-            split_back_names,
+            additional_face_names,
         })
     }
 

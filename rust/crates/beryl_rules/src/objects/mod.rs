@@ -8,5 +8,6 @@ pub mod linked;
 pub mod mutate;
 pub mod one_shot;
 pub(crate) mod phasing;
+pub(crate) mod preparation;
 
 pub(crate) mod designation;

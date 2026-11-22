@@ -216,13 +216,18 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
     }
     // The zones' memberships hold everything off the battlefield and in a zone, so the
     // token slots need no scan. A token on the stack is a copy of a spell, which no token
-    // ever is otherwise, and stays there
+    // can be, and stays there
     // ([CR 704.5e](https://yawgatog.com/resources/magic-rules/#R7045e)): "If a copy of a spell is in a zone
     // other than the stack, it ceases to exist."
+    // See CR 723.3c: "This copy remains in exile for as long as the prepared permanent
+    // remains on the battlefield and has the prepared designation."
     let away = [Zone::Library, Zone::Hand, Zone::Graveyard, Zone::Exile]
         .into_iter()
         .fold(Bitboard::EMPTY, |away, zone| away | s.in_zone(zone));
-    let tokens = (away & L::TOKEN_POOL).filter(|slot| s.object(slot).is_token());
+    let tokens = (away & L::TOKEN_POOL).filter(|slot| {
+        s.object(slot).is_token()
+            && !(s.object(slot).zone() == Zone::Exile && s.prepare_source(slot).is_some())
+    });
     (graveyard, tokens, legendary)
 }
 

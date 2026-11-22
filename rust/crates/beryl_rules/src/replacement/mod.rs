@@ -418,6 +418,9 @@ fn entering<L: Layout>(
         }
         match replacement.rewrite {
             Rewrite::EntersTapped => entry.tapped = true,
+            // See CR 723.3a: "Some spells and abilities cause a permanent with a prepare
+            // spell to become prepared or state that a permanent enters prepared."
+            Rewrite::EntersPrepared => entry.prepared = true,
             Rewrite::EntersTappedUnlessFewLands(n) => {
                 // Not yet on the battlefield, so every land counted is another land.
                 let lands = s
@@ -527,6 +530,7 @@ fn copy_to_enter<L: Layout>(
                 Rewrite::None
                 | Rewrite::ToZone(_)
                 | Rewrite::EntersTapped
+                | Rewrite::EntersPrepared
                 | Rewrite::EntersTappedUnlessFewLands(_)
                 | Rewrite::EntersTappedUnlessPayLife(_)
                 | Rewrite::EntersWithCounters(..)
@@ -594,6 +598,7 @@ fn life_asked(face: &crate::card::Face) -> Option<(AbilityIx, u8)> {
             Rewrite::None
             | Rewrite::ToZone(_)
             | Rewrite::EntersTapped
+            | Rewrite::EntersPrepared
             | Rewrite::EntersTappedUnlessFewLands(_)
             | Rewrite::EntersWithCounters(..)
             | Rewrite::Instead
@@ -732,6 +737,7 @@ fn chooses(face: &crate::card::Face) -> Option<(AbilityIx, ChosenKind)> {
             Rewrite::None
             | Rewrite::ToZone(_)
             | Rewrite::EntersTapped
+            | Rewrite::EntersPrepared
             | Rewrite::EntersTappedUnlessFewLands(_)
             | Rewrite::EntersTappedUnlessPayLife(_)
             | Rewrite::EntersWithCounters(..)

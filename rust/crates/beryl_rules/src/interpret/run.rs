@@ -184,6 +184,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::Regenerate(_)
             | Effect::Tap(_)
             | Effect::PhaseOut(_)
+            | Effect::SetPrepared { .. }
             | Effect::Exile(_)
             | Effect::ExileUntilThisLeaves(_)
             | Effect::ExileLinked(_)
@@ -291,6 +292,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::Regenerate(objects) => regenerate::instruction(self, objects)?,
             Effect::Tap(objects) => crate::actions::tap::instruction(self, objects)?,
             Effect::PhaseOut(objects) => crate::objects::phasing::instruction(self, objects)?,
+            Effect::SetPrepared { objects, prepared } => {
+                crate::objects::preparation::instruction(self, objects, prepared)?
+            }
             Effect::PreventDamage {
                 to,
                 prevention,

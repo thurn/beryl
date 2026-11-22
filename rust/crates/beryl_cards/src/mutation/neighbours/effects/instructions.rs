@@ -1,9 +1,11 @@
 //! The neighbouring values of a single effect instruction, with its children left alone.
 
-use beryl_card::{Condition, Duration, Effect, Filter, Objects, Players, PutOnto, Regeneration};
+use beryl_card::{Condition, Duration, Effect, Filter, Players, PutOnto, Regeneration};
 
 use super::super::continuous::rules;
-use super::super::operands::{amounts, chooser, objects, player_count, players, zones};
+use super::super::operands::{
+    amounts, chooser, objects, objects_of, player_count, players, preparation, zones,
+};
 use super::super::{Kind, LINKED, Neighbours, leak, leak_slice};
 
 mod damage;
@@ -168,6 +170,7 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
         Effect::Regenerate(o) => objects_of(o, Effect::Regenerate, &mut add),
         Effect::Tap(o) => objects_of(o, Effect::Tap, &mut add),
         Effect::PhaseOut(o) => objects_of(o, Effect::PhaseOut, &mut add),
+        Effect::SetPrepared { objects, prepared } => preparation(objects, prepared, &mut add),
         Effect::Exile(o) => objects_of(o, Effect::Exile, &mut add),
         Effect::ExileUntilThisLeaves(o) => objects_of(o, Effect::ExileUntilThisLeaves, &mut add),
         Effect::Sacrifice(o) => objects_of(o, Effect::Sacrifice, &mut add),
@@ -785,14 +788,4 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
         | Effect::GetEmblem { .. } => {}
     }
     out
-}
-
-fn objects_of(
-    which: Objects,
-    build: fn(Objects) -> Effect,
-    add: &mut impl FnMut(Kind, String, Effect),
-) {
-    for (name, which) in objects(which) {
-        add(Kind::EffectObjects, name, build(which));
-    }
 }
