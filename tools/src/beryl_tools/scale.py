@@ -18,6 +18,9 @@ prints what that cost against the plan's budgets ([`BUDGETS`]):
   `--edits` edits ([`REBUILDS`] by default), with each edit's time printed as the spread.
 - largest compiler process: the highest peak resident set of any single process of the three
   builds (`/usr/bin/time -l`), which is a `rustc`.
+- build directory size: the logical bytes in Cargo's `target` directory after the release
+  build and again after all the one-card edits. These measurements have no budget. The build
+  report is also saved to `$BERYL_CACHE/scale/build-report.txt`.
 
 Seconds are wall-clock seconds on this machine with all its cores. The CPU-seconds beside each
 are what scales with machines. With `--assert`, a measure over its budget makes the run exit
@@ -62,6 +65,7 @@ from .scale_workspace import (
     REGISTRY,
     WARM,
     Source,
+    directory_bytes,
     edit_card,
     generate,
     plan,
@@ -181,9 +185,15 @@ def missed(values: dict[str, float], times: bool = True) -> list[str]:
 
 
 def report(
-    cards: int, crates: int, chosen: bool, pool: int, runs: dict[str, Run]
+    cards: int,
+    crates: int,
+    chosen: bool,
+    pool: int,
+    runs: dict[str, Run],
+    built_bytes: int,
+    rebuilt_bytes: int,
 ) -> str:
-    """Each measure with its budget and margin, and each build's CPU-seconds."""
+    """Build timings, budget margins, compiler memory, and build directory sizes."""
     how = "as --crates gave" if chosen else "as the tree's grouping gives"
     lines = [
         f"{cards:,} cards: clones of {pool} real card files, in {crates} set crates "
@@ -208,6 +218,11 @@ def report(
                 f"peak process {run.rss / GIB:.2f} GiB"
             )
         lines.append(line)
+    for name, size in (
+        ("target after build", built_bytes),
+        ("target after edits", rebuilt_bytes),
+    ):
+        lines.append(f"{name:<26}{size:>10,} B")
     one, five, fifteen = system.loadavg()
     lines.append(
         f"load average {one:.0f} {five:.0f} {fifteen:.0f} on {os.cpu_count()} cores"
@@ -366,19 +381,32 @@ def scale(args: argparse.Namespace) -> int:
     print("scale: release build", file=sys.stderr)
     release = ["cargo", "build", "--release", f"--package={REGISTRY}"]
     runs["release build"] = timed([*release, f"--bin={BINARY}"], root)
+    target = root / "target"
+    built_bytes = directory_bytes(target)
     print("scale: one-edit rebuild", file=sys.stderr)
     rebuilds = []
     for _ in range(args.edits):
         edit_card(root, names)
         rebuilds.append(timed(check, root))
     runs["one-edit rebuild"] = median(rebuilds)
-    print(report(args.cards, len(crates), args.crates is not None, len(pool), runs))
+    rebuilt_bytes = directory_bytes(target)
+    summary = report(
+        args.cards,
+        len(crates),
+        args.crates is not None,
+        len(pool),
+        runs,
+        built_bytes,
+        rebuilt_bytes,
+    )
     each = ", ".join(f"{run.seconds:.1f} s" for run in rebuilds)
     spread = sorted(run.seconds for run in rebuilds)
-    print(
-        f"{'':<26}the {args.edits} edits' rebuilds, in order: {each}; "
+    summary += (
+        f"\n{'':<26}the {args.edits} edits' rebuilds, in order: {each}; "
         f"range {spread[0]:.1f} to {spread[-1]:.1f} s"
     )
+    print(summary)
+    (root / "build-report.txt").write_text(summary + "\n", encoding="utf-8")
     if not args.no_scripts:
         print("scale: script checks", file=sys.stderr)
         print(script_report(measure_scripts(pool), pool, args.cards))

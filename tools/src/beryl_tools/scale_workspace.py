@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import shutil
 import time
@@ -346,6 +347,18 @@ def store_lines(pool: list[Source], store: Path = card_store.STORE) -> list[byte
         if name in aliased and name not in wanted:
             kept.append(raw)
     return kept
+
+
+def directory_bytes(directory: Path) -> int:
+    """Sum the logical sizes of the regular files under `directory`."""
+    total = 0
+    with os.scandir(directory) as entries:
+        for entry in entries:
+            if entry.is_dir(follow_symlinks=False):
+                total += directory_bytes(Path(entry.path))
+            elif entry.is_file(follow_symlinks=False):
+                total += entry.stat(follow_symlinks=False).st_size
+    return total
 
 
 def clear(root: Path) -> None:
