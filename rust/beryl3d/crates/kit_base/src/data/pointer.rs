@@ -22,6 +22,14 @@ pub struct PointerTuning {
     pub nearer: f32,
     #[serde(deserialize_with = "positive")]
     pub held_height_mm: f32,
+    /// The desktop web stage is at least this wide for each point of height.
+    #[serde(deserialize_with = "positive")]
+    pub held_hand_stage_min_aspect: f32,
+    /// How much a hand card grows from pickup to full lift, as in web `Heft`.
+    #[serde(deserialize_with = "positive")]
+    pub held_hand_scale: f32,
+    #[serde(deserialize_with = "positive")]
+    pub held_hand_lift_hz: f32,
     #[serde(deserialize_with = "positive")]
     pub max_gap_ms: f32,
     #[serde(deserialize_with = "positive")]

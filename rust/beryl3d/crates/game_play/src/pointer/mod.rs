@@ -23,7 +23,7 @@ use crate::play::compile::Compiled;
 use game_table::table::Place;
 pub use game_table::table::takes_pointer;
 use game_table::table::{Camera, Look, PILE_IDS};
-use held::{Fall, Lean};
+use held::{Fall, Heft, Held};
 use kit_base::data::pointer::PointerTuning;
 use kit_base::pose::{Pose, Segment, between};
 use kit_frame::frame::{ElementId, Frame, Lifted, Role, StateBits};
@@ -51,9 +51,8 @@ pub struct Pointer {
     pile: Option<usize>,
     /// The hand cards out of their place in the fan: rising, raised or falling.
     lifts: Vec<Lift>,
-    /// The slot and position of the card carried under the pointer.
-    held: Option<(usize, Vec2)>,
-    lean: Lean,
+    held: Option<Held>,
+    heft: Heft,
     /// The card let go last, falling back to where it rests.
     fall: Option<Fall>,
     /// The card shaking because the manual table refused an action sent from it (`refuse`).
@@ -121,7 +120,7 @@ impl Pointer {
         pile: None,
         lifts: Vec::new(),
         held: None,
-        lean: Lean::FLAT,
+        heft: Heft::FLAT,
         fall: None,
         shake: None,
     };
@@ -138,11 +137,17 @@ impl Pointer {
     }
 
     /// Draws a carried card under the pointer.
-    pub fn carry(&mut self, slot: usize, at: Vec2) {
-        if self.held() != Some(slot) {
-            self.lean = Lean::FLAT;
+    pub(crate) fn carry(&mut self, slot: usize, at: Vec2, hand_height: Option<f32>) {
+        if let Some(held) = self.held.as_mut().filter(|held| held.slot == slot) {
+            held.at = at;
+        } else {
+            self.heft = Heft::FLAT;
+            self.held = Some(Held {
+                slot,
+                at,
+                hand_height,
+            });
         }
-        self.held = Some((slot, at));
     }
 
     /// Starts the card's fall from the point where the gesture ended.
@@ -152,24 +157,22 @@ impl Pointer {
         camera: &Camera,
         tuning: &PointerTuning,
     ) -> Option<usize> {
-        let (slot, was) = self.held.take()?;
+        let mut held = self.held.take()?;
+        if let Some(at) = at {
+            held.at = at;
+        }
         self.fall = Some(Fall {
-            slot,
-            from: held::pose(
-                camera,
-                at.unwrap_or(was),
-                self.lean.tilt(),
-                tuning.held_height_mm,
-            ),
+            slot: held.slot,
+            from: held.pose(camera, &self.heft, tuning),
             since: None,
         });
-        Some(slot)
+        Some(held.slot)
     }
 
     /// The slot of the card being carried.
     #[must_use]
     pub fn held(&self) -> Option<usize> {
-        self.held.map(|(slot, _)| slot)
+        self.held.map(|held| held.slot)
     }
 
     /// Whether the pointer holds a card, or one it let go is still falling back at `now`: a
@@ -183,7 +186,7 @@ impl Pointer {
     #[must_use]
     pub fn lean(&self) -> Vec2 {
         if self.held().is_some() {
-            self.lean.tilt()
+            self.heft.tilt()
         } else {
             Vec2::ZERO
         }
@@ -196,8 +199,8 @@ impl Pointer {
         if let Some(fall) = &mut self.fall {
             fall.since.get_or_insert(now);
         }
-        if let Some((_, at)) = self.held {
-            self.lean.advance(at, now, tuning);
+        if let Some(held) = self.held {
+            self.heft.advance(held, now, tuning);
         }
         if let Some((_, shake)) = &mut self.shake
             && !shake.advance(now)
@@ -230,13 +233,8 @@ impl Pointer {
         (now, camera): (u64, &Camera),
         tuning: &PointerTuning,
     ) -> Option<Pose> {
-        if let Some((_, at)) = self.held.filter(|(held, _)| *held == slot) {
-            return Some(held::pose(
-                camera,
-                at,
-                self.lean.tilt(),
-                tuning.held_height_mm,
-            ));
+        if let Some(held) = self.held.filter(|held| held.slot == slot) {
+            return Some(held.pose(camera, &self.heft, tuning));
         }
         let fall = self
             .fall

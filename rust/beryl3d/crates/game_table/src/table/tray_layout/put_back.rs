@@ -73,9 +73,8 @@ pub(super) fn put_back(held: &Held, space: &TraySpace, span: (f32, f32)) -> Laid
 /// Where on the library of a put-back the card `carried`, let go with its middle at `point`,
 /// lands, as the web's `library`: the place of the library's `column` (`cards` lie there now,
 /// the top first) that, once the card is in it, lies nearest to where its middle was let go. A
-/// held card is drawn with its middle under the pointer (`pointer::held::pose`), so the point is
-/// its middle. Comparing the point with the middles of the cards, as a row's landing does, would
-/// leave each place a strip only a name bar tall.
+/// held card is drawn with its middle under the pointer. Comparing that point with the cards'
+/// current middles, as a row's landing does, would leave each place a strip only a name bar tall.
 pub(super) fn library_at(
     cards: &[ObjectId],
     column: &[f32],

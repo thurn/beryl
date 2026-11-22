@@ -3,6 +3,8 @@
 
 use super::Show;
 use crate::pointer::{self, Pointer};
+use beryl_protocol::protocol::{Side, ZoneName};
+use game_table::table::Place;
 use glam::Vec2;
 use kit_frame::frame::Frame;
 
@@ -11,6 +13,37 @@ impl Show {
     #[must_use]
     pub fn pointer(&self) -> &Pointer {
         &self.pointer
+    }
+
+    /// Carries a card under the pointer. The hand gives the held face its size at pickup.
+    pub fn carry_card(&mut self, slot: usize, at: Vec2) {
+        let table = &self.table;
+        let hand = self.pointer.held() != Some(slot)
+            && !table.in_tray(slot)
+            && matches!(
+                table.objects().card_place(slot),
+                Some(Place::Card {
+                    zone: ZoneName::Hand,
+                    side: Side::You,
+                    ..
+                })
+            );
+        let hand_height = table.rest(slot).filter(|_| hand).map(|rest| {
+            let camera = table.camera();
+            let size = camera.window.size;
+            let height =
+                camera.data.card.height * rest.scale * camera.points_per_millimetre(rest.position);
+            // On a narrow desktop window the web stage leaves room above and below it.
+            // Its dragged card inherits that fit. The phone uses logical points directly.
+            let fit = if table.profile().data().table.anchored.is_some() {
+                let min_aspect = table.data().pointer.held_hand_stage_min_aspect;
+                (size.width / (size.height * min_aspect)).min(1.0)
+            } else {
+                1.0
+            };
+            height / size.height * fit
+        });
+        self.pointer.carry(slot, at, hand_height);
     }
 
     /// Updates hover against the drawn frame, including cards that move under a still mouse.

@@ -7,13 +7,14 @@ use app_client::Input;
 use app_client::command::SessionCommand;
 use app_client::driver::{Recording, Responses, plays_on};
 use app_client::{Client, Config};
-use beryl_inspect::pages::recording;
+use beryl_inspect::pages::{page, recording};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::prompt::{Click, ClickRequest};
 use beryl_protocol::protocol::{ObjectId, Side, Status};
 use beryl_protocol::script::Subject;
 use game_probe::agent::steps::no_jumps;
 use glam::Vec2;
+use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::{Frame, Role, StateBits, Wake};
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::Size;
@@ -82,13 +83,18 @@ impl Table {
     /// The named card's element in the frame at the present time: its state, and the centre
     /// of its face on screen, where the diagonals of its corners cross.
     fn card(&mut self, name: &str) -> (StateBits, Vec2) {
+        let (state, corners) = self.card_face(name);
+        (state, crossing(corners))
+    }
+
+    fn card_face(&mut self, name: &str) -> (StateBits, [Vec2; 4]) {
         let frame = self.frame();
         let element = frame
             .resolved
             .iter()
             .find(|element| element.role == Role::Card && frame.name(element.name) == name)
             .unwrap_or_else(|| panic!("no card {name}"));
-        (element.state, crossing(element.corners))
+        (element.state, element.corners)
     }
 
     /// Presses on Trinket Mage, and moves the pointer `by` from there over `seconds`, a move
@@ -189,6 +195,46 @@ fn a_long_gap_between_frames_moves_the_lean_no_more_than_the_longest_gap() {
 }
 
 #[test]
+fn a_held_hand_card_keeps_the_web_face_size_across_the_battlefield() {
+    // WebKit measurements at a regular desktop size, a window taller than its 16:10 stage,
+    // and a phone with a narrower hand.
+    for (width, height, layout, face) in [
+        (1600.0, 900.0, SizeClass::Regular, Vec2::new(193.0, 269.6)),
+        (1728.0, 1117.0, SizeClass::Regular, Vec2::new(231.6, 323.5)),
+        (393.0, 759.0, SizeClass::Compact, Vec2::new(100.0, 139.6)),
+    ] {
+        for at in [
+            Vec2::new(width * 0.74, height * 0.51),
+            Vec2::new(width * 0.30, height * 0.30),
+        ] {
+            let mut page = page("shape-zone", Side::You, layout, Size { width, height })
+                .expect("shape-zone recording");
+            page.seek(&"prompt:1".parse().expect("prompt moment"))
+                .expect("priority to cast");
+            page.still();
+            page.run(&format!(
+                "hold card \"{CARD}\" over {},{}\nstep 700ms",
+                at.x, at.y
+            ));
+            let held = page.find(&format!("card \"{CARD}\""));
+            assert!(held.state.has(StateBits::HELD), "card under the pointer");
+            let size = Vec2::new(held.rect.width, held.rect.height);
+            assert!(
+                (size - face).abs().max_element() < 1.0,
+                "at {width}×{height}, held at {at}: {size}, web face {face}"
+            );
+            let corners = page.frame().resolved[held.index as usize].corners;
+            assert!(crossing(corners).distance(at) < 0.01);
+            let faults = page.faults();
+            assert!(
+                faults.is_empty(),
+                "{width}×{height}, held at {at}: {faults:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn dragging_a_castable_card_onto_the_battlefield_casts_it_from_where_it_was_let_go() {
     let mut table = Table::new();
     let Status::Deciding { decision } = &table.views[0].view.status else {
@@ -196,7 +242,7 @@ fn dragging_a_castable_card_onto_the_battlefield_casts_it_from_where_it_was_let_
     };
     let (decision, revision) = (decision.id, decision.prompt.revision);
     let at = table.carry(DRAG, 0.25, 60);
-    let (_, held) = table.card(CARD);
+    let (_, held) = table.card_face(CARD);
     table.pointer(PointerPhase::Up, at);
     table.frame();
     let commands = table.commands();
@@ -222,12 +268,14 @@ fn dragging_a_castable_card_onto_the_battlefield_casts_it_from_where_it_was_let_
             break;
         }
     }
-    let (state, centre) = table.card(CARD);
+    let (state, corners) = table.card_face(CARD);
     assert!(state.has(StateBits::MOVING), "the cast moves it");
-    assert!(
-        centre.distance(held) < 0.01,
-        "its flight starts at {centre}, where it was let go at {held}"
-    );
+    for (start, before_release) in corners.into_iter().zip(held) {
+        assert!(
+            start.distance(before_release) < 0.01,
+            "the cast starts with a corner at {start}, held at {before_release}"
+        );
+    }
     for script in table.client.history() {
         assert_eq!(no_jumps(script), []);
     }
