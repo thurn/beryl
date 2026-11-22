@@ -20,8 +20,8 @@ The families:
 - `counts`: `counts:rollouts` is the rollout benchmark's instruction count against its bar, and
   `counts:family/<name>` a family's present cost against its ratio, both in
   `rust/crates/beryl_bench/count-gate.toml`. The count runs in the `beryl-bench` virtual machine
-  under Lima or WSL. After `counts:rollouts` an ARM64 run in the `tip` class (`IGNITE_CLASS`)
-  stores the verified commit's count and files the trend's `count-creep` and
+  under Lima or WSL. After `counts:rollouts` a run in the `tip` class (`IGNITE_CLASS`)
+  stores the verified count for its verifier and calibration and files `count-creep` and
   `count-lower` tickets through `ignite ticket`, as `count_trend.py` does; they never change the
   check's outcome.
 - `fuzz`: batches of random games, `fuzz:<target>/<first seed>+<games>`, played by the tests of
@@ -154,6 +154,26 @@ def gate_families(root: Path) -> list[str]:
     return list(tomllib.loads((root / GATE_FILE).read_text()).get("family", {}))
 
 
+def list_counts(root: Path) -> list[dict[str, Any]]:
+    from .. import calibration, count_gate
+
+    checks = [
+        {"check": name, "inputs": []}
+        for name in [
+            ROLLOUTS,
+            *(f"{FAMILY_PREFIX}{name}" for name in gate_families(root)),
+        ]
+    ]
+    try:
+        digest = count_gate.load_gate(root).profile.digest
+    except calibration.SetupError as error:
+        # A machine-relative listing without a digest is incomplete. Keep the actual names
+        # visible on every verifier, even if setup prevents it from measuring any of them.
+        print(f"counts setup: {error}", file=sys.stderr)
+        return checks
+    return [{**check, "digest": digest} for check in checks]
+
+
 def card_names(root: Path) -> dict[str, str]:
     """Each card file's slug mapped to the card's name, which the exhaustive search takes."""
     names: dict[str, str] = {}
@@ -185,13 +205,7 @@ def scale_checks(root: Path) -> list[dict[str, Any]]:
 
 def list_checks(family: str, root: Path) -> list[dict[str, Any]]:
     if family == "counts":
-        return [
-            {"check": ROLLOUTS, "inputs": []},
-            *[
-                {"check": f"{FAMILY_PREFIX}{name}", "inputs": []}
-                for name in gate_families(root)
-            ],
-        ]
+        return list_counts(root)
     if family == "scale":
         return scale_checks(root)
     if family == "ignite-lint":
@@ -388,9 +402,9 @@ def verified_commit(root: Path) -> str | None:
     return git(root, "rev-parse", "HEAD") or None
 
 
-# What the count gate says: `python -m beryl_tools.bench count-gate` command lines, which tests replace.
+# The count gate command line, which tests replace.
 def count_gate_command(*args: str) -> list[str]:
-    return [sys.executable, "-m", "beryl_tools.bench", "count-gate", *args]
+    return [sys.executable, "-m", "beryl_tools.count_gate", "count-gate", *args]
 
 
 def run_gate(args: Sequence[str], root: Path) -> tuple[int, str]:
@@ -405,12 +419,14 @@ def run_gate(args: Sequence[str], root: Path) -> tuple[int, str]:
     return done.returncode, done.stdout + done.stderr
 
 
-def trend(root: Path, measured: int, bar: int, ok: bool) -> None:
+def trend(
+    root: Path, measured: int, bar: int, ok: bool, verifier: str, digest: str
+) -> None:
     """Stores the verified commit's count and files what the trend calls for. A failure here
     never changes the check's outcome."""
     try:
         for line in count_trend.report_at(
-            verified_commit(root), measured, bar, ok, IgniteTickets()
+            verified_commit(root), measured, bar, ok, IgniteTickets(), verifier, digest
         ):
             print(line, file=sys.stderr)
     except Exception as error:  # noqa: BLE001 - best effort by design
@@ -427,9 +443,14 @@ def run_rollouts(root: Path) -> dict[str, Any]:
         if not measure.is_file():
             return {}
         found = json.loads(measure.read_text())
-    # The trend stores ARM64 counts. Windows checks its own x86-64 instruction bar.
-    if not system.WINDOWS:
-        trend(root, int(found["measured"]), int(found["bar"]), bool(found["ok"]))
+    trend(
+        root,
+        int(found["measured"]),
+        int(found["bar"]),
+        bool(found["ok"]),
+        str(found["verifier"]),
+        str(found["calibration"]),
+    )
     result: dict[str, Any] = {"outcome": "pass" if found["ok"] else "fail"}
     if not found["ok"]:
         result["message"] = clip(str(found["message"]))

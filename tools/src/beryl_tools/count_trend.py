@@ -1,12 +1,12 @@
 """The instruction-count gate's trend: small rises file tickets while they are fresh.
 
-The gate (`bench.count_gate`, run by Ignite's `counts` family) fails only past its tolerance, and its
+The gate (`count_gate`, run by Ignite's `counts` family) fails only past its tolerance, and its
 bar is the total since the bar last moved. Between 2026-11-11 and 2026-11-13 the count rose
 from 386.0M to 393.2M (+1.85%) in steps of 0.05% to 0.64%, with nothing flagging any of them,
 until one more commit failed the gate and had to win back the creep along with its own cost.
 
-Ignite already measures each staging tip it tests, so watching the trend costs nothing: each
-count it measures on a staging commit goes in [`history_path`], and `report_at`
+Ignite already measures each staging tip it tests, so watching the trend costs nothing. A
+verifier's counts go in [`history_path`] for its current calibration, and `report_at`
 
 - prints the change since the previous measured tip, naming the commits between them;
 - files one "count creep" ticket ([`CREEP_LABEL`]) when one tested range adds more than
@@ -58,8 +58,8 @@ LOWER_LABEL = "count-lower"
 PRIORITY = "2"
 
 
-def history_path() -> Path:
-    return paths.cache_root() / "ci" / "counts.jsonl"
+def history_path(verifier: str, digest: str) -> Path:
+    return paths.cache_root() / "ci" / "counts" / verifier / f"{digest}.jsonl"
 
 
 @dataclass(frozen=True)
@@ -191,7 +191,7 @@ def creep_body(head: str, why: str, f: Findings) -> str:
     listed = "\n".join(f"- {c}" for c in commits) or "- (none under rust/)"
     since = f.previous.commit[:12] if f.previous else "the last measured tip"
     return (
-        f"Slow CI's count gate measured the rollout benchmark at {head[:12]}: {why}. The "
+        f"The count gate measured the rollout benchmark at {head[:12]}: {why}. The "
         f"gate itself still passed (tools/src/beryl_tools/count_trend.py).\n\n"
         f"Commits under rust/ since {since}:\n{listed}\n\n"
         f"Find what added the instructions (`just bench-count` on both commits, then "
@@ -203,12 +203,12 @@ def creep_body(head: str, why: str, f: Findings) -> str:
     )
 
 
-def lower_body(head: str, why: str) -> str:
+def lower_body(head: str, why: str, verifier: str) -> str:
     return (
-        f"Slow CI's count gate measured the rollout benchmark at {head[:12]}: {why}. Set "
-        f"`instructions` in rust/crates/beryl_bench/count-gate.toml to the count measured "
-        f"on current staging (`just count-gate`), so the gain isn't left as slack for later "
-        f"rises. The commit body names the old and new counts."
+        f"The count gate measured the rollout benchmark at {head[:12]}: {why}. Set "
+        f"`profile.{verifier}.limits.instructions` in rust/crates/beryl_bench/count-gate.toml "
+        f"to the count measured by that verifier on current staging (`just count-gate`). "
+        f"Record the measured revision in the profile. The commit body names the old and new counts."
     )
 
 
@@ -218,8 +218,10 @@ def file_or_comment(
     body: str,
     tier: str,
     store: Tickets,
+    digest: str,
 ) -> str:
-    known = open_bead(label, store)
+    scoped_label = f"{label}:{digest}"
+    known = open_bead(scoped_label, store)
     if known:
         code, _ = store.add_comment(known, body)
         return f"commented on {known}" if code == 0 else f"{known} is open"
@@ -227,18 +229,24 @@ def file_or_comment(
         title=title,
         body=body,
         priority=PRIORITY,
-        labels=f"{label},{tier}",
+        labels=f"{label},{scoped_label},{tier}",
     )
     return f"filed {out.strip()}" if code == 0 else "ticket not filed"
 
 
 def report_at(
-    head: str | None, measured: int, bar: int, passed: bool, store: Tickets
+    head: str | None,
+    measured: int,
+    bar: int,
+    passed: bool,
+    store: Tickets,
+    verifier: str,
+    digest: str,
 ) -> list[str]:
     """Records the count measured on the commit `head`, the verified one, and files the tickets its
     trend calls for; returns lines to print. `head` of None only compares the count with the
     earlier ones of HEAD's ancestors, and records and files nothing."""
-    path = history_path()
+    path = history_path(verifier, digest)
     try:
         records = load(path.read_text()) if path.exists() else []
     except OSError:
@@ -260,18 +268,21 @@ def report_at(
         said = file_or_comment(
             CREEP_LABEL,
             "Win back the rollout benchmark's creeping instruction count",
-            creep_body(head, f.creep, f),
+            f"Verifier {verifier}, calibration {digest}.\n\n"
+            + creep_body(head, f.creep, f),
             "tier:opus",
             store,
+            digest,
         )
         lines.append(f"count creep: {f.creep}: {said}")
     if f.lower:
         said = file_or_comment(
             LOWER_LABEL,
             "Lower the count gate's bar",
-            lower_body(head, f.lower),
+            lower_body(head, f.lower, verifier),
             "tier:light",
             store,
+            digest,
         )
         lines.append(f"count gate: {f.lower}: {said}")
     return lines

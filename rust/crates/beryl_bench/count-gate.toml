@@ -1,6 +1,6 @@
 # The instruction-count gate: slow CI's `counts` lane (`just count-gate`) runs
 # this benchmark under Callgrind in the `beryl-bench` VM and fails when it
-# executes more than `tolerance_percent` above the bar for its instruction set.
+# executes more than `tolerance_percent` above the registered verifier's bar.
 #
 # Why: the corpus is WU Control mirror positions (docs/benchmarking.md). A rule
 # or card those decks don't use must cost them nothing: gate it behind a
@@ -10,8 +10,8 @@
 # unrelated code. The bar is the total since the last bump, so small rises add
 # up and fail together.
 #
-# Raise either instruction bar only for one of these reasons. Name the reason
-# and the old and new counts for that architecture in the commit body:
+# Raise an instruction bar only for one of these reasons. Name the reason and
+# the old and new counts for that verifier in the commit body:
 #
 # 1. The work changed, not its cost: a rules fix or card change alters what
 #    the corpus's rollouts do, so `rollouts_never_change` was updated in the
@@ -27,22 +27,18 @@
 # pass a change.
 #
 # Lower a bar whenever the count is more than 0.5% below it, so the slack is
-# taken out before the next regression. On ARM64, tip verification files a
+# taken out before the next regression. For each verifier, tip verification files a
 # `count-lower` ticket when it measures that, and a `count-creep` ticket when one
 # tested range adds more than 0.25% or the count drifts 0.5% above its lowest
 # since the bar moved, while the gate still passes (`count_trend.py`).
 
 benchmark = "rollout_counts::cube_rollout::rollouts::corpus"
-# ARM64 under Lima on macOS.
-instructions = 378_137_522
-# x86-64 under WSL on Windows.
-instructions_x86_64 = 436_580_889
+fixture = "wu-control-rollout-and-present-cost/v1"
 tolerance_percent = 1.0
 
 # The present-cost gate (docs/benchmarking.md, "The present-cost gate"): each family's
 # rollouts, every step counted on the state the rollout is at and on the same state with the
-# family taken out. `ratio` is the most the first sum may be over the second. A family over
-# its bar after three attempts is recorded with its cause on its bead, and the bar stays.
+# family taken out. `ratio` is the maximum allowed ratio for verifier profiles.
 [family.blank]
 ratio = 1.25
 
@@ -66,3 +62,59 @@ ratio = 1.25
 
 [family.identity]
 ratio = 1.25
+
+# Cygnus. The rollout bar was measured twice on the recorded revision in WSL.
+[profile.m-1d943bdd]
+revision = "fdeca921562c632c35fba72703aafeb8baf8084e"
+fixture = "wu-control-rollout-and-present-cost/v1"
+
+[profile.m-1d943bdd.runtime]
+backend = "wsl"
+guest = "ubuntu 24.04"
+arch = "x86_64"
+valgrind = "valgrind-3.22.0"
+libc = "glibc 2.39"
+cc = "13.3.0"
+rustc = "rustc 1.98.1 (48a229cea 2026-09-01)"
+gungraun = "gungraun-runner 0.20.0"
+
+[profile.m-1d943bdd.limits]
+instructions = 436_580_889
+
+[profile.m-1d943bdd.limits.family]
+blank = 1.25
+attachments = 1.25
+layers = 1.25
+replacement = 1.25
+costs = 1.25
+zones-and-text = 1.25
+copies = 1.25
+identity = 1.25
+
+# Jarvis. Two runs at this revision measured 379,282,830 instructions against the existing bar.
+[profile.m-cf83bfb6]
+revision = "481adb013660976156f9163e63297f2ef5f6bb2d"
+fixture = "wu-control-rollout-and-present-cost/v1"
+
+[profile.m-cf83bfb6.runtime]
+backend = "lima"
+guest = "ubuntu 26.04"
+arch = "aarch64"
+valgrind = "valgrind-3.26.0"
+libc = "glibc 2.43"
+cc = "15.2.0"
+rustc = "rustc 1.98.1 (48a229cea 2026-09-01)"
+gungraun = "gungraun-runner 0.20.0"
+
+[profile.m-cf83bfb6.limits]
+instructions = 378_137_522
+
+[profile.m-cf83bfb6.limits.family]
+blank = 1.25
+attachments = 1.25
+layers = 1.25
+replacement = 1.25
+costs = 1.25
+zones-and-text = 1.25
+copies = 1.25
+identity = 1.25

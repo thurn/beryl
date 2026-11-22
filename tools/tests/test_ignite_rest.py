@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import json
 import re
-import stat
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
 
 import pytest
 
-from beryl_tools import count_trend, paths
+from beryl_tools import calibration, count_gate, count_trend, paths
 from beryl_tools.ignite import rest as adapter
 
 CHECKS: Path = paths.REPO / "ignite" / "checks"
@@ -55,6 +55,7 @@ def test_the_manifest_declares_the_families_and_products() -> None:
             assert "{checks}" in str(family["run"])
     counts = declared["family"]["counts"]
     assert counts["platforms"] == ["macos", "windows"]
+    assert counts["machine_relative"] is True
     assert counts["list_needs"] == []
     assert counts["resources"] == ["bench-vm"]
     for name in ("fuzz", "exhaust"):
@@ -133,17 +134,30 @@ def repository(root: Path) -> None:
     )
 
 
-@pytest.mark.parametrize("windows", [False, True])
-def test_counts_lists_rollouts_and_family_bars_on_each_platform(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, windows: bool
+def test_counts_lists_local_digests_or_reports_missing_calibration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repository(tmp_path)
-    monkeypatch.setattr(adapter.system, "WINDOWS", windows)
-    assert [c["check"] for c in adapter.list_checks("counts", tmp_path)] == [
-        "counts:rollouts",
-        "counts:family/blank",
-        "counts:family/layers",
-    ]
+    checks = ["counts:rollouts", "counts:family/blank", "counts:family/layers"]
+    digests = []
+    for verifier in ("win", "mac"):
+        profile = calibration.Profile(verifier, "a" * 40, "fixture", {}, {})
+        setup = count_gate.CalibratedGate(profile, count_gate.Gate("bench", 1, 1.0), {})
+        monkeypatch.setattr(count_gate, "load_gate", lambda _: setup)
+        lines = adapter.list_checks("counts", tmp_path)
+        assert [line["check"] for line in lines] == checks
+        assert {line["digest"] for line in lines} == {profile.digest}
+        digests.append(profile.digest)
+    assert digests[0] != digests[1]
+
+    def missing(_: Path) -> count_gate.CalibratedGate:
+        raise calibration.SetupError("no matching calibration")
+
+    monkeypatch.setattr(count_gate, "load_gate", missing)
+    lines = adapter.list_checks("counts", tmp_path)
+    assert [line["check"] for line in lines] == checks
+    assert all("digest" not in line for line in lines)
+    assert "no matching calibration" in capsys.readouterr().err
 
 
 def test_the_ignite_lint_family_lists_fmt_and_clippy(tmp_path: Path) -> None:
@@ -233,7 +247,8 @@ if mode == "cannot":
 ok = mode != "fail"
 if sys.argv[1] == "--measure":
     result = {"measured": 995 if ok else 1010, "bar": 1000, "ok": ok,
-              "message": "ok" if ok else "over"}
+              "message": "ok" if ok else "over",
+              "verifier": "cygnus", "calibration": "windows-digest"}
     Path(sys.argv[2]).write_text(json.dumps(result))
 sys.exit(0 if ok else 1)
 """
@@ -260,32 +275,19 @@ def test_a_passing_count_is_a_pass_and_never_files_when_it_is_not_a_tip(
 ) -> None:
     monkeypatch.delenv("FAKE_GATE", raising=False)
     monkeypatch.delenv("IGNITE_CLASS", raising=False)
-    monkeypatch.setattr(adapter.system, "WINDOWS", False)
-    trended: list[tuple[str | None, int, int, bool]] = []
+    trended: list[tuple[str | None, int, int, bool, str, str]] = []
     monkeypatch.setattr(
         count_trend,
         "report_at",
-        lambda head, measured, bar, ok, store: trended.append((head, measured, bar, ok))
+        lambda head, measured, bar, ok, store, verifier, digest: trended.append(
+            (head, measured, bar, ok, verifier, digest)
+        )
         or [],
     )
     results = tmp_path / "results.jsonl"
     adapter.run_counts([adapter.ROLLOUTS], tmp_path, results)
     assert lines(results) == [{"check": "counts:rollouts", "outcome": "pass"}]
-    assert trended == [(None, 995, 1000, True)]
-
-
-def test_windows_counts_are_judged_without_entering_the_arm64_trend(
-    tmp_path: Path, gate: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def unexpected_trend(*args: object) -> None:
-        pytest.fail("Windows counts must stay out of the ARM64 trend")
-
-    monkeypatch.setattr(adapter.system, "WINDOWS", True)
-    monkeypatch.setattr(adapter, "trend", unexpected_trend)
-    monkeypatch.delenv("FAKE_GATE", raising=False)
-    results = tmp_path / "results.jsonl"
-    adapter.run_counts([adapter.ROLLOUTS], tmp_path, results)
-    assert lines(results) == [{"check": "counts:rollouts", "outcome": "pass"}]
+    assert trended == [(None, 995, 1000, True, "cygnus", "windows-digest")]
 
 
 def test_a_count_over_the_bar_fails_with_the_gates_message(
@@ -325,45 +327,56 @@ def test_a_family_check_runs_the_gate_for_that_family(
 
 # --- the trend files its tickets through `ignite ticket` ---
 
-IGNITE = """\
-#!/bin/sh
-echo "$@" >> "$IGNITE_LOG"
-case "$2" in
-list) echo '[]' ;;
-create) echo "Tnew1" ;;
-esac
-"""
-
 
 def test_the_trend_files_a_count_creep_ticket_and_fails_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    script = tmp_path / "ignite"
-    script.write_text(IGNITE)
-    script.chmod(script.stat().st_mode | stat.S_IEXEC)
-    log = tmp_path / "log"
-    monkeypatch.setenv("IGNITE_BIN", str(script))
-    monkeypatch.setenv("IGNITE_LOG", str(log))
-    history = tmp_path / "counts.jsonl"
+    calls: list[list[str]] = []
+
+    def ignite(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        return subprocess.CompletedProcess(
+            args, 0, "[]" if args[2] == "list" else "Tnew1"
+        )
+
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
+    monkeypatch.setattr(subprocess, "run", ignite)
+    history = count_trend.history_path("mac", "lima")
+    history.parent.mkdir(parents=True)
     history.write_text(
         count_trend.dump(count_trend.Record("old", 1_000_000, 1_100_000)) + "\n"
     )
-    monkeypatch.setattr(count_trend, "history_path", lambda: history)
     monkeypatch.setattr(
         count_trend, "proper_ancestor", lambda head: lambda c: c == "old"
     )
     monkeypatch.setattr(
         count_trend, "rust_commits", lambda old, new: ["abc1234 feat: x"]
     )
+    windows = count_trend.report_at(
+        "newcommit", 1_005_000, 1_005_000, True, adapter.IgniteTickets(), "pc", "wsl"
+    )
+    recalibrated = count_trend.report_at(
+        "newcommit",
+        1_005_000,
+        1_005_000,
+        True,
+        adapter.IgniteTickets(),
+        "mac",
+        "new-lima",
+    )
+    assert windows == recalibrated == []
+    assert not calls
     said = count_trend.report_at(
-        "newcommit", 1_005_000, 1_100_000, True, adapter.IgniteTickets()
+        "newcommit", 1_005_000, 1_100_000, True, adapter.IgniteTickets(), "mac", "lima"
     )
     assert any("count creep" in line and "filed Tnew1" in line for line in said)
-    calls = log.read_text().splitlines()
-    assert calls[0].startswith("ticket list --label count-creep")
-    assert calls[1].startswith("ticket create Win back the rollout benchmark")
-    assert "-p P2" in calls[1] and "--labels count-creep,tier:opus" in calls[1]
-    # The verified commit's count is stored.
+    assert calls[0][1:5] == ["ticket", "list", "--label", "count-creep:lima"]
+    assert calls[1][1:4] == [
+        "ticket",
+        "create",
+        "Win back the rollout benchmark's creeping instruction count",
+    ]
+    assert "count-creep,count-creep:lima,tier:opus" in calls[1]
     assert count_trend.load(history.read_text())[-1] == count_trend.Record(
         "newcommit", 1_005_000, 1_100_000
     )

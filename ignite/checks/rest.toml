@@ -24,17 +24,15 @@
 # The rollout benchmark's instruction count against the bar in
 # rust/crates/beryl_bench/count-gate.toml (that file's comments say when the bar may move), as
 # `counts:rollouts`, and each family's present cost against its ratio there, as
-# `counts:family/<name>` on both platforms. Callgrind measures rollouts in Lima and WSL against
-# separate architecture bars. The ARM64 trend files `count-creep` and `count-lower` tickets.
-# When `beryl-bench` is missing or out of reach, the adapter reports the check incomplete
-# with the reason (`cannot-run:`).
+# `counts:family/<name>` on both platforms. Each verifier uses its own calibrated limits
+# and trend. Missing or incompatible calibration makes the check incomplete.
 [family.counts]
 kind = "regression"
 adapter = "jsonl"
+machine_relative = true
 platforms = ["macos", "windows"]
 needs = ["python-env"]
-# The list reads the same gate file on both platforms. Either verifier can list the checks
-# before it has the other platform's results.
+# The list reads the gate file and observes the local count guest without building a product.
 list_needs = []
 resources = ["bench-vm"]
 # The adapter waits while Callgrind runs in the Linux guest. The guest's CPU shows as load
@@ -44,6 +42,7 @@ list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list co
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run counts {checks}"
 inputs = [
   "crate:beryl_bench",
+  "rust/crates/beryl_bench/count-gate.toml",
   "rust/Cargo.toml",
   "rust/Cargo.lock",
   "rust-toolchain.toml",
@@ -56,6 +55,8 @@ inputs = [
   "data/set-groups.json",
   "docs/sample-decks/**",
   "tools/src/beryl_tools/bench.py",
+  "tools/src/beryl_tools/calibration.py",
+  "tools/src/beryl_tools/count_gate.py",
   "tools/src/beryl_tools/vm_host.py",
   "tools/src/beryl_tools/deps.py",
   "tools/src/beryl_tools/count_trend.py",

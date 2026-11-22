@@ -59,12 +59,12 @@ just bench -p beryl_bench --bench example_timing
 
 - `just count-gate` counts only `rollout_counts`' `rollouts` subject in the VM,
   about 15 s once built, and fails when it runs more than the tolerance above
-  the architecture's bar in `rust/crates/beryl_bench/count-gate.toml`. Compare
-  before and after counts from the same architecture. Ignite records ARM64
-  counts in its trend. The file's comments say when either bar may rise.
-  `just count-gate --family <name>` gates a family's present cost
+  the verifier's bar in `rust/crates/beryl_bench/count-gate.toml`. Compare
+  counts taken on the same verifier with the same calibration. Ignite keeps a
+  separate trend for each calibration. The file's comments say when a bar may
+  rise. `just count-gate --family <name>` gates a family's present cost
   ([The present-cost gate](#the-present-cost-gate)). Ignite runs the family
-  checks against the same ratio limits on macOS and Windows.
+  checks against the calibrated ratios on macOS and Windows.
 
 Name benchmark targets by kind: `<subject>_counts`, `<subject>_abba`,
 `<subject>_timing`.
@@ -155,13 +155,13 @@ it is in play. The present-cost gate measures what it costs while one is:
   S', advancing it to its decision and matching the choice run outside both
   functions, so neither side counts them.
 - **The gate** reports both sums, their ratio and the steps paired and skipped.
-  It fails when the ratio passes the family's `ratio` in `count-gate.toml`
-  (`[family.<name>] ratio = 1.25`), or when more than a tenth of the steps were
-  skipped, since the ratio then describes too few of them. The steps come from
-  `benches/family_steps.rs`, which runs the same rollouts natively and also
-  prints the rollouts that ended in `Stalled(Capacity)` (a list filled, so a
-  `Large` game would have gone on) and the layer recomputes per step. Slow CI's
-  `counts` lane runs every family with a bar in one step, `count-gate-families`.
+  It fails when the ratio passes the verifier's limit in `count-gate.toml`, or
+  when more than a tenth of the steps were skipped, since the ratio then
+  describes too few of them. The steps come from `benches/family_steps.rs`,
+  which runs the same rollouts natively and also prints the rollouts that ended
+  in `Stalled(Capacity)` (a list filled, so a `Large` game would have gone on)
+  and the layer recomputes per step. Ignite lists each family with a bar as
+  `counts:family/<name>`.
 
 What a paired step does not see: work the mechanism did earlier that changed the
 state, such as a card exiled where it would have gone to a graveyard. Both sides
@@ -170,9 +170,40 @@ share that history, and its cost was counted at the step that did it.
 To add a family: add it to `family::FAMILIES`, add its name as a
 `#[bench::<name>(FamilyWorkload::new("<name>"))]` on both functions in
 `benches/family_counts.rs`, add `[family.<name>]` with its `ratio` to
-`count-gate.toml`, and pin its corpus and pairing in `family/tests.rs`. Swap out
-cards the family's positions can do without; the count of copies decides how
-often a card of the family is in play.
+`count-gate.toml`, give each verifier a limit at or below that ratio, and pin
+its corpus and pairing in `family/tests.rs`. Swap out cards the family's
+positions can do without; the count of copies decides how often a card of the
+family is in play.
+
+### Calibrating instruction counts
+
+Run `just bench-count` once to provision `beryl-bench` in Lima or WSL. Then run
+`just count-gate --environment` to get the registered Ignite verifier ID and the
+versions of the tools in that guest. The gate reports an incomplete result when
+the verifier has no profile or the observed runtime differs from it.
+
+Measure an accepted revision in an Ignite lease. Run the rollout twice with
+`just bench-count --bench rollout_counts -- --output-format=json` and check that
+the Callgrind `Ir` counts agree. For a new profile, record that count under
+`profile.<verifier>.limits.instructions`. For an existing profile, follow the
+rules in `count-gate.toml` before changing its bar. Record the full revision,
+fixture ID and observed runtime in the profile. The initial bars were
+378,137,522 on ARM64 Lima and 436,580,889 on x86-64 WSL.
+
+Run `just count-gate` and the paired `--family` checks on that verifier. Confirm
+that the pairings are complete enough to judge and that an intentionally lower
+limit makes the same measurement fail. Restore the intended limit before
+committing. When the corpus or pairing fixture is replaced, update the fixture
+ID and recalibrate on each verifier. A toolchain, runner or guest change
+requires a new observed runtime and an accepted measurement. Previous trend
+files stay under `$BERYL_CACHE/ci/counts/<verifier>/<calibration digest>.jsonl`.
+
+Rollout and Beryl 3D checks can use `beryl_tools.calibration.select` with a TOML
+or JSON mapping keyed by verifier ID. Each entry has `revision`, `fixture`,
+`runtime` and `limits`. Each caller supplies its fixture ID, probes the runtime
+that will run the measurement and validates its own limits. Use `Profile.digest`
+in the machine-relative Ignite listing and to scope the trend. Runtime or
+profile errors give setup or incomplete results.
 
 ## Determinism
 

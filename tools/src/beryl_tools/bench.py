@@ -10,9 +10,7 @@
   Each worktree builds into a target dir of its own there: Cargo names a path package's
   artifacts the same in every worktree and trusts mtimes, so a shared dir would let one
   worktree link another's code. Runs take turns under a lock in the VM.
-- `count-gate`, which Ignite's `counts` family runs, counts one benchmark there and fails when it rises past
-  the bar in `beryl_bench/count-gate.toml`. With `--family <name>` it counts a family's paired
-  rollouts instead, on both sides, and fails when their ratio passes the family's bar there.
+- `count-gate` (`count_gate.py`) judges rollout and paired present-cost counts from that guest.
 
 Extra arguments go to `cargo bench`: `by bench -p beryl_bench --bench example_abba`.
 """
@@ -21,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import json
 import os
 import platform
 import re
@@ -34,7 +31,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import paths, system, vm_host
-from .deps import CANNOT_RUN
 
 # Compilers and the like, named in the load report: their bursts come and go faster than one
 # CPU sample.
@@ -52,6 +48,8 @@ VM_GUNGRAUN = "$HOME/gungraun"
 # be older than its artifacts, which Cargo would call fresh, so a new owner rebuilds the
 # workspace members.
 VM_OWNER = ".beryl-checkout"
+# The gate shares a warm target among throwaway worktrees.
+GATE_NAME = "count-gate"
 COUNT_BENCHES = ["--bench", "*_counts"]
 COUNT_SOURCES = (
     "rust",
@@ -511,238 +509,6 @@ def bench_count(args: argparse.Namespace) -> int:
     return run_count(cargo, paths.REPO.name, capture=False)[0]
 
 
-# The instruction-count gate. Its bar, and when to move it, are in
-# GATE_FILE's comments.
-
-GATE_FILE: Path = paths.RUST / "crates" / "beryl_bench" / "count-gate.toml"
-# Its own target dir and Gungraun home, shared by throwaway worktrees so the build stays
-# warm and they don't each leave one in the VM.
-GATE_NAME = "count-gate"
-
-
-@dataclass
-class Gate:
-    benchmark: str  # FILE::GROUP::FUNCTION::ID, as Gungraun filters and reports it
-    instructions: int
-    tolerance_percent: float
-
-
-def load_gate(text: str, *, windows: bool = False) -> Gate:
-    data = tomllib.loads(text)
-    return Gate(
-        benchmark=str(data["benchmark"]),
-        instructions=int(data["instructions_x86_64" if windows else "instructions"]),
-        tolerance_percent=float(data["tolerance_percent"]),
-    )
-
-
-def gate_cargo(gate: Gate) -> list[str]:
-    """Builds and counts only the gated benchmark, printing Gungraun's JSON summary."""
-    file = gate.benchmark.split("::")[0]
-    return cargo_bench(["--bench", file, "--", "--output-format=json", gate.benchmark])
-
-
-def counted(stdout: str, benchmark: str) -> int | None:
-    """The benchmark's instructions (Callgrind's `Ir`) from Gungraun's JSON lines."""
-    for line in stdout.splitlines():
-        if not line.startswith("{"):
-            continue
-        try:
-            summary = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if f"{summary.get('module_path')}::{summary.get('id')}" != benchmark:
-            continue
-        for profile in summary.get("profiles", []):
-            if profile.get("tool") == "Callgrind":
-                return int(profile["data"]["total"]["metrics"]["Ir"]["values"]["new"])
-    return None
-
-
-def judge(gate: Gate, measured: int) -> tuple[bool, str]:
-    """Fails a rise past the tolerance; a drop past it passes, asking for a lower bar."""
-    change = 100.0 * (measured - gate.instructions) / gate.instructions
-    said = f"{measured:,} instructions, {change:+.2f}% against the bar of {gate.instructions:,}"
-    if change > gate.tolerance_percent:
-        return False, (
-            f"{said}: over the {gate.tolerance_percent}% tolerance. Make the new cost free "
-            f"for these decks, or raise the bar only as {GATE_FILE.name} allows"
-        )
-    if change < -gate.tolerance_percent:
-        return (
-            True,
-            f"{said}: lower `instructions` in {GATE_FILE.name} to keep the gain",
-        )
-    return True, said
-
-
-# The present-cost gate (docs/benchmarking.md, "The present-cost gate"): each family's paired
-# rollouts, counted on both sides, and their pairing, run natively in the same build.
-FAMILY_BENCH = "family_counts"
-FAMILY_GROUP = "present_cost"
-FAMILY_STEPS = "family_steps"
-# Past this share of steps left out of both sums, the ratio describes too few of them.
-SKIPPED_LIMIT = 0.1
-
-
-@dataclass
-class FamilyBar:
-    name: str
-    ratio: float  # the most the present side may count over the control's
-
-
-@dataclass
-class Pairing:
-    paired: int
-    skipped: int
-
-
-def load_families(text: str) -> list[FamilyBar]:
-    """The families with a bar, `[family.<name>] ratio = 1.25`, in the file's order."""
-    data = tomllib.loads(text)
-    families = data.get("family", {})
-    return [FamilyBar(name, float(bar["ratio"])) for name, bar in families.items()]
-
-
-def family_benchmark(side: str, name: str) -> str:
-    """The family's benchmark on one side, `present` or `control`, as Gungraun names it.
-    A benchmark id is a Rust identifier, so a family's hyphens become underscores."""
-    return f"{FAMILY_BENCH}::{FAMILY_GROUP}::{side}::{name.replace('-', '_')}"
-
-
-def family_cargo(names: list[str]) -> list[list[str]]:
-    """Counts both sides of each family as Gungraun JSON, then prints their pairings."""
-    counts = [
-        cargo_bench(
-            ["--bench", FAMILY_BENCH, "--", "--output-format=json"]
-            + [family_benchmark("*", name)]
-        )
-        for name in names
-    ]
-    return [*counts, cargo_bench(["--bench", FAMILY_STEPS, "--", *names])]
-
-
-def pairing(stdout: str, name: str) -> Pairing | None:
-    """The family's steps paired and skipped, from `family_steps`' JSON line."""
-    for line in stdout.splitlines():
-        if not line.startswith("{"):
-            continue
-        try:
-            found = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if found.get("family") == name:
-            return Pairing(int(found["paired"]), int(found["skipped"]))
-    return None
-
-
-def judge_family(
-    bar: FamilyBar, present: int, control: int, steps: Pairing
-) -> tuple[bool, str]:
-    """Fails a ratio over the bar, or more than a tenth of the steps left out."""
-    ratio = present / control
-    total = steps.paired + steps.skipped
-    share = steps.skipped / total if total else 1.0
-    said = (
-        f"family {bar.name}: {present:,} instructions with the family, {control:,} on the "
-        f"controls, ratio {ratio:.3f} against the bar of {bar.ratio}; {steps.paired:,} steps "
-        f"paired, {steps.skipped:,} skipped ({100 * share:.1f}%)"
-    )
-    if share > SKIPPED_LIMIT:
-        return False, (
-            f"{said}: over a tenth of the steps skipped, so the ratio says little. Make the "
-            f"control offer the choices the family's positions do"
-        )
-    if ratio > bar.ratio:
-        return (
-            False,
-            f"{said}: over the bar. Make the mechanism cheaper while it is in play",
-        )
-    return True, said
-
-
-def vm_ready() -> int:
-    """0 when the bench VM can count now, else `CANNOT_RUN` with the reason logged, so a VM
-    problem is not rerun, judged or bisected as a count that failed (vm_host.vm_failed).
-    """
-    why = None
-    machine = platform.machine().lower()
-    if system.WINDOWS and machine not in ("amd64", "x86_64"):
-        why = "the Windows count gate needs an x86-64 WSL distribution"
-    elif not system.WINDOWS and machine not in ("arm64", "aarch64"):
-        why = "the Lima count gate needs an ARM64 host"
-    elif system.WINDOWS and shutil.which("wsl") is None:
-        why = "WSL is missing: install it, then run `just bench-count` once"
-    elif not system.WINDOWS and shutil.which("limactl") is None:
-        why = "Lima is missing: brew install lima, then `just bench-count` once"
-    elif vm_host.status(VM) is None:  # Creating it takes minutes, too long for a gate.
-        why = f"no {VM} VM: run `just bench-count` once to create it"
-    if why:
-        log(why)
-    return CANNOT_RUN if why or vm_ensure() != 0 else 0
-
-
-def family_gate(names: list[str]) -> int:
-    """Counts each family named and judges it against its bar: 0 if all pass."""
-    bars = {bar.name: bar for bar in load_families(GATE_FILE.read_text())}
-    unknown = [name for name in names if name not in bars]
-    if unknown:
-        known = ", ".join(bars) or "none"
-        log(f"no bar in {GATE_FILE.name} for {', '.join(unknown)}; families: {known}")
-        return 2
-    first, *rest = family_cargo(names)
-    code, out = run_count(first, GATE_NAME, then=rest)
-    if code != 0:
-        return vm_host.vm_failed(code, VM)
-    failed = False
-    for name in names:
-        present = counted(out, family_benchmark("present", name))
-        control = counted(out, family_benchmark("control", name))
-        found = pairing(out, name)
-        if present is None or control is None or found is None:
-            log(f"Gungraun or {FAMILY_STEPS} reported nothing for the family {name}")
-            return 2
-        ok, message = judge_family(bars[name], present, control, found)
-        log(message)
-        failed |= not ok
-    return 1 if failed else 0
-
-
-def count_gate(args: argparse.Namespace) -> int:
-    code = vm_ready()
-    if code != 0:
-        return code
-    families: list[str] | None = args.family
-    if families:
-        return family_gate(families)
-    gate = load_gate(GATE_FILE.read_text(), windows=system.WINDOWS)
-    code, out = run_count(gate_cargo(gate), GATE_NAME)
-    if code != 0:
-        return vm_host.vm_failed(code, VM)
-    measured = counted(out, gate.benchmark)
-    if measured is None:
-        log(f"Gungraun reported no count for {gate.benchmark}")
-        return 2
-    ok, message = judge(gate, measured)
-    if system.WINDOWS:
-        message = f"x86-64 WSL: {message}"
-    log(f"{gate.benchmark}: {message}")
-    if args.measure:
-        # Ignite's `counts` family judges the trend itself and files its tickets.
-        Path(args.measure).write_text(
-            json.dumps(
-                {
-                    "measured": measured,
-                    "bar": gate.instructions,
-                    "ok": ok,
-                    "message": message,
-                }
-            )
-            + "\n"
-        )
-    return 0 if ok else 1
-
-
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "bench",
@@ -761,36 +527,9 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         allow_abbrev=False,
     )
     p.set_defaults(func=bench_count, passthrough=True)
-    p = sub.add_parser(
-        "count-gate",
-        help="fail when the gated benchmark's instruction count rises past its bar",
-    )
-    p.add_argument(
-        "--family",
-        action="append",
-        help="gate this family's present cost instead (`[family.<name>]` in count-gate.toml);"
-        " repeat for several",
-    )
-    p.add_argument(
-        "--measure",
-        metavar="FILE",
-        help="write the count, the bar and the verdict to FILE as JSON and leave the trend's"
-        " tickets to the caller",
-    )
-    p.set_defaults(func=count_gate)
-
-
-def count_gate_main(argv: list[str]) -> int:
-    """`python -m beryl_tools.bench count-gate ...`: the count gate without `cli.py`, so that
-    Ignite's `counts` family loads only this module and the ones it declares as inputs.
-    """
-    parser = argparse.ArgumentParser(prog="beryl_tools.bench")
-    register(parser.add_subparsers(dest="command", required=True))
-    args = parser.parse_args(argv)
-    if args.command != "count-gate":
-        parser.error("only count-gate runs this way; run the others as `by <command>`")
-    return int(count_gate(args))
 
 
 if __name__ == "__main__":
-    sys.exit(count_gate_main(sys.argv[1:]))
+    from .count_gate import main
+
+    sys.exit(main(sys.argv[1:]))
