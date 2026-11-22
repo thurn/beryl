@@ -100,6 +100,57 @@ fn headless_dispatch_hands_the_ticket_to_the_cli_pool() {
 }
 
 #[test]
+fn a_room_based_dispatch_ask_gets_a_reservation_from_the_hub() {
+    use ignite_core::time::SystemClock;
+    use ignite_hub::server::HubServer;
+    use ignite_store::hub::{self, batch};
+    use serde_json::json;
+
+    use crate::hubclient::HubClient;
+
+    let mut rig = rig(&[]);
+    let fake = cli(&rig, 1);
+    // The HTTP server sets reservation expiry using the system clock.
+    let now = SystemClock.now();
+    rig.clock.set(now);
+
+    let dir = ignite_core::test_files::temp_dir().join("dispatch-room");
+    std::fs::create_dir(&dir).unwrap();
+    let server = HubServer {
+        config: rig.ctx.config.clone(),
+        listen: "127.0.0.1:0".to_owned(),
+        database: dir.join("hub.sqlite"),
+        wordmark: None,
+    };
+    let mut db = hub::open(&server.database).unwrap();
+    let token = hub::tokens::issue(&db, &rig.ctx.machine).unwrap();
+    let request = serde_json::from_value(json!({
+        "ops": [{"op": "create", "fields": {"title": "Ready work"}}]
+    }))
+    .unwrap();
+    let batch::BatchOutcome::Applied(filed) =
+        batch::apply(&mut db, &request, "test", rig.ctx.machine.as_str(), now).unwrap()
+    else {
+        panic!("filing the ready ticket conflicted");
+    };
+    drop(db);
+
+    let running = server.start().unwrap();
+    rig.ctx.config.hub.url = format!("http://{}", running.address());
+    rig.ctx.hub = Arc::new(HubClient::new(&rig.ctx.config.hub, &token, "test"));
+    tick(&rig);
+    running.stop();
+    let _ = std::fs::remove_dir_all(dir);
+
+    let begun = fake.begun();
+    assert_eq!(begun.len(), 1, "{:?}", rig.headless_dispatch.idle_reason());
+    let (reservation, _, _) = &begun[0];
+    assert_eq!(reservation.ticket, filed.results[0].id);
+    assert_eq!(reservation.provider.as_deref(), Some("claude"));
+    assert!(!reservation.code.is_empty());
+}
+
+#[test]
 fn configured_providers_offer_their_tiers_and_use_their_effort_defaults() {
     let fake = Arc::new(FakeCliPool::default());
     let mut rig = rig(&[]);
