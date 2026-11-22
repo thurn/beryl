@@ -1,5 +1,5 @@
-//! The tip budget: `master` moves once the best-scored checks within `[tip] seconds` pass, and
-//! the rest run afterwards without holding it, until one of them fails.
+//! `master` moves once the best-scored checks within `[tip] seconds` and the required
+//! platform checks pass. The remaining portable checks run afterwards.
 
 use std::collections::BTreeMap;
 
@@ -14,7 +14,7 @@ use crate::checks::Scoring;
 fn scored(text: &str, failures: u32) -> GateCheck {
     GateCheck {
         family_startup: ignite_core::score::Cost::Billions(0.0),
-        check: name(&format!("unit:{text}")),
+        check: name(text),
         always: false,
         edited: false,
         cached: false,
@@ -56,10 +56,10 @@ fn master_moves_once_the_budgeted_checks_pass_and_a_later_failure_holds_it() {
     *world.work.scoring.lock().unwrap() = Some(Scoring {
         areas: vec!["src".to_owned()],
         checks: vec![
-            scored("a", 9),
-            scored("b", 6),
-            scored("c", 1),
-            scored("d", 0),
+            scored("unit:a", 9),
+            scored("unit:b", 6),
+            scored("unit:c", 1),
+            scored("unit:d", 0),
         ],
     });
     let tip = commit("bbbb000");
@@ -123,6 +123,108 @@ fn master_moves_once_the_budgeted_checks_pass_and_a_later_failure_holds_it() {
     assert_eq!(world.hub.regressions().len(), 1, "reported once");
 }
 
+#[test]
+fn both_platforms_publish_their_results_before_master_moves() {
+    let world = World::new();
+    let mut mac = world.ctx("m-1");
+    mac.config.machine.get_mut("local").unwrap().os = Some(Os::Macos);
+    // Each round can afford only one portable check. The second round reuses the first
+    // pass and chooses the next check, in a different family with its own batch claim.
+    mac.config.tip.seconds = 150.0 / DEFAULT_TIP_RATE;
+    let mut windows = world.ctx("m-2");
+    windows.config.clone_from(&mac.config);
+    let named_check = |family: &str, text: &str, hash| {
+        let mut check = check(text, hash);
+        check.family = family.to_owned();
+        check.check = name(&format!("{family}:{text}"));
+        check.key.check.clone_from(&check.check);
+        check
+    };
+    let first = check("first", 'a');
+    let second = named_check("other", "second", 'b');
+    let last = named_check("other", "last", 'c');
+    let mut mac_check = named_check("platform", "required", 'd');
+    mac_check.key.platform = Some(Os::Macos);
+    let mut windows_check = named_check("platform", "required", 'e');
+    windows_check.key.platform = Some(Os::Windows);
+    *world.work.scoring.lock().unwrap() = Some(Scoring {
+        areas: vec!["src".to_owned()],
+        checks: vec![
+            scored("unit:first", 9),
+            scored("other:second", 6),
+            scored("other:last", 1),
+            scored("platform:required", 0),
+        ],
+    });
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    let previous = world.master();
+    let listing = |local| {
+        let mut mac_check = mac_check.clone();
+        let mut windows_check = windows_check.clone();
+        mac_check.runnable = local == Os::Macos;
+        windows_check.runnable = local == Os::Windows;
+        vec![
+            first.clone(),
+            second.clone(),
+            last.clone(),
+            mac_check,
+            windows_check,
+        ]
+    };
+    let keys = [mac_check.key.clone(), windows_check.key.clone()];
+
+    world.work.set_checks(&tip, listing(Os::Macos));
+    assert_eq!(
+        world
+            .verifier()
+            .with_host("local")
+            .verify(&mac, &tip)
+            .unwrap(),
+        TipOutcome::Waiting {
+            checks: vec![name("platform:required")],
+            unrunnable: Vec::new(),
+        }
+    );
+    assert_eq!(world.master(), previous);
+    let cached = world.hub.lookup(&keys).unwrap();
+    assert!(
+        cached[0]
+            .as_ref()
+            .is_some_and(|hit| hit.outcome == Outcome::Pass)
+    );
+    assert!(cached[1].is_none());
+
+    world.work.set_checks(&tip, listing(Os::Windows));
+    assert_eq!(
+        world
+            .verifier()
+            .with_host("windows")
+            .verify(&windows, &tip)
+            .unwrap(),
+        TipOutcome::Verified
+    );
+    assert_eq!(world.master(), tip);
+    assert!(
+        world
+            .hub
+            .lookup(&keys)
+            .unwrap()
+            .iter()
+            .all(|hit| { hit.as_ref().is_some_and(|hit| hit.outcome == Outcome::Pass) })
+    );
+    assert_eq!(
+        ran_with_master(&world),
+        [
+            (vec!["platform:required".to_owned()], previous.clone()),
+            (vec!["unit:first".to_owned()], previous.clone()),
+            (vec!["platform:required".to_owned()], previous.clone()),
+            (vec!["other:second".to_owned()], previous),
+            (vec!["other:last".to_owned()], tip),
+        ]
+    );
+}
+
 /// A check with an open regression ticket runs before `master` moves whatever its score, so a
 /// fix that has not landed keeps holding `master`.
 #[test]
@@ -130,11 +232,11 @@ fn an_open_regression_runs_before_master_whatever_the_budget() {
     let world = World::new();
     let mut ctx = world.ctx("m-1");
     ctx.config.tip.seconds = 150.0 / DEFAULT_TIP_RATE;
-    let mut broken = scored("c", 0);
+    let mut broken = scored("unit:c", 0);
     broken.regression = Some(ticket("tk.31"));
     *world.work.scoring.lock().unwrap() = Some(Scoring {
         areas: vec!["src".to_owned()],
-        checks: vec![scored("a", 9), broken],
+        checks: vec![scored("unit:a", 9), broken],
     });
     world.work.add_landing("tk.32", &["bbbb000"], &["src/c"]);
     let tip = commit("bbbb000");
@@ -165,7 +267,7 @@ fn a_newer_tip_ends_the_checks_past_the_budget_at_the_next_batch() {
     ctx.config.tip.seconds = 150.0 / DEFAULT_TIP_RATE;
     *world.work.scoring.lock().unwrap() = Some(Scoring {
         areas: vec!["src".to_owned()],
-        checks: vec![scored("a", 9), scored("b", 0)],
+        checks: vec![scored("unit:a", 9), scored("unit:b", 0)],
     });
     world.work.add_landing("tk.33", &["bbbb000"], &["src/b"]);
     let tip = commit("bbbb000");

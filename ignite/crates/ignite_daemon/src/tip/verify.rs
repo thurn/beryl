@@ -130,7 +130,7 @@ impl TipVerifier {
         self.record_cached(ctx, tip, &checks, &to_run, &recheck);
         tally.cached = u32::try_from(verdicts.len()).unwrap_or(u32::MAX);
 
-        // The tip budget: the best-scored checks run before `master` moves, the rest after.
+        // Required platform checks and the best-scored portable checks run before `master` moves.
         let split = self.split(
             ctx,
             last,

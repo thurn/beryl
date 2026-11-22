@@ -255,7 +255,7 @@ impl TipWork for FakeWork {
                 .get(&(at.clone(), check.clone()))
                 .copied()
                 .unwrap_or(Outcome::Pass);
-            if let Some(listed) = listed.iter().find(|c| c.check == *check)
+            if let Some(listed) = listed.iter().find(|c| c.runnable && c.check == *check)
                 && matches!(outcome, Outcome::Pass | Outcome::Fail)
             {
                 let output = (outcome == Outcome::Fail).then(|| format!("{check} failed"));

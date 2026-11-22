@@ -6,9 +6,9 @@
 //!   `[tip] seconds` of running checks at the `tip` class's rate are spent. There is no
 //!   threshold, and builds are outside the budget.
 //! - Some checks run before `master` moves whatever the budget: a cached failure being run
-//!   again, and a check with an open regression ticket. So a failure among the checks past the
-//!   budget, once reported, holds `master` on every later round until its fix lands, as a
-//!   cached failure does.
+//!   again, a check with an open regression ticket, and a check keyed for this platform. So a
+//!   failure among the checks past the budget, once reported, holds `master` on every later
+//!   round until its fix lands, as a cached failure does.
 //! - When the checks within the budget, the forced ones and every check already answered pass,
 //!   `master` moves. The checks past the budget then run in the same round, in the `tip` class
 //!   on whatever cores are free. A failure among them is reported as a regression, which files
@@ -212,6 +212,7 @@ pub(super) fn note_unrun(tally: &mut Tally, left: BTreeMap<String, u32>, ended_b
 
 /// The split of `to_run` by `budget`, with `scored` the hub's record of the checks over `areas`.
 /// A check with no record (switched off since it was listed, say) runs before `master` moves.
+/// So does a platform-specific check, whose keyed result other platforms need to promote.
 fn split_by<'a>(
     to_run: &[&'a TipCheck],
     recheck: &[&'a TipCheck],
@@ -240,7 +241,7 @@ fn split_by<'a>(
     }
     for check in to_run {
         match record.get(&check.check) {
-            Some(scored) if scored.regression.is_none() => {
+            Some(scored) if check.key.platform.is_none() && scored.regression.is_none() => {
                 // Builds are outside the budget, and the always set has no special place here.
                 candidates.push(GateCheck {
                     always: false,
