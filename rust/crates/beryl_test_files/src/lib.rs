@@ -148,7 +148,12 @@ mod tests {
 
     #[test]
     fn the_root_holds_this_crate() {
-        let root = root().unwrap();
-        assert!(Path::new(env!("CARGO_MANIFEST_DIR")).starts_with(root));
+        // Ignite can reuse a test binary built in another checkout. Nextest sets
+        // the package directory for the checkout where the test runs.
+        let package = std::env::var_os("CARGO_MANIFEST_DIR").expect("Cargo names the package");
+        assert_eq!(
+            root().unwrap().join("rust/crates/beryl_test_files"),
+            Path::new(&package)
+        );
     }
 }
