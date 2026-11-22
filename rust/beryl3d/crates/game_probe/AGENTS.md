@@ -9,8 +9,8 @@ the first name in each group and includes every fixture separately.
 - Each update records the turn step, active side, opening and undo flags,
   status, the opponent's public handling and the count of pending attackers. For
   either player it records mulligan state, counts of emblems and named counters,
-  which mana colors are floating, and whether an incoming combat damage badge
-  is present, how many digits it shows, and whether it glows for lethal damage.
+  which mana colors are floating, and whether an incoming combat damage badge is
+  present, how many digits it shows, and whether it glows for lethal damage.
 - Outside the battlefield it records the cards in each zone by side. On the
   battlefield it reads the same rows and pile policy as placement, including the
   cards tucked to the left or right of each host. For each card it records
