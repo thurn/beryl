@@ -10,7 +10,12 @@ use beryl_protocol::testing::ViewBuilder;
 use kit_frame::frame::{Frame, Role, StateBits};
 use kit_ui::input::PointerPhase;
 
-use beryl_protocol::prompt::ButtonId;
+use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, Purpose, ShapeBody};
+use beryl_protocol::protocol::{Kind, Status};
+use glam::Vec2;
+use kit_base::paint::Filter;
+use kit_base::tokens::gradient;
+use kit_frame::frame::GradientEntry;
 
 use super::flat_layer::{centre, client, deciding, edges, find, pointer, prompt, prompt_button};
 
@@ -335,6 +340,77 @@ fn the_recording_driver_reports_a_features_live_state() {
     assert_ne!(closed, opened);
     page.press("button \"Hide log\"");
     assert_eq!(page.feature_state("game-log"), Some(closed));
+}
+
+#[test]
+fn pass_on_brightens_only_while_hovered_and_still_sends_its_action() {
+    for primary in ["Resolve", "Next"] {
+        let mut client = client();
+        let prompt = beryl_protocol::testing::prompt(
+            Purpose::Priority,
+            "",
+            vec![
+                prompt_button(ButtonId::Decline, primary, true),
+                prompt_button(ButtonId::PassOn, "To End", false),
+            ],
+            ShapeBody::Pick {
+                least: 0,
+                most: 1,
+                picked: Vec::new(),
+                tray: Vec::new(),
+                warned: Vec::new(),
+            },
+        );
+        let Input::Update(mut update) = deciding(prompt) else {
+            unreachable!("deciding is an update");
+        };
+        let Status::Deciding { decision } = &mut update.view.status else {
+            unreachable!("the view has a decision");
+        };
+        decision.kind = Kind::Priority;
+        if primary == "Next" {
+            update.view.stack.clear();
+        } else {
+            update.view.turn.active = Side::Opponent;
+            let spell = update.view.objects.last_mut().expect("sample spell");
+            spell.controller = Side::Opponent;
+            spell.owner = Side::Opponent;
+        }
+        let decision = decision.id;
+        client.handle(Input::Update(update));
+
+        let bright = gradient::PRIMARY.map_colors(|color| Filter::Brightness(1.1).color(color));
+        let bright = GradientEntry::of(&bright.resolve(Vec2::splat(48.0)));
+        let paints_bright = |frame: &Frame| {
+            frame.paints.table.gradients[..usize::from(frame.paints.gradients)].contains(&bright)
+        };
+        let frame = client.frame(0);
+        let at = centre(frame, find(frame, Role::Button, "To End"));
+        assert!(!paints_bright(frame), "{primary}: resting face");
+
+        client.handle(pointer(PointerPhase::Move, at));
+        assert!(
+            paints_bright(client.frame(1_000_000)),
+            "{primary}: hovered face"
+        );
+        client.handle(pointer(PointerPhase::Move, Vec2::new(700.0, 400.0)));
+        assert!(
+            !paints_bright(client.frame(2_000_000)),
+            "{primary}: pointer left"
+        );
+
+        client.handle(pointer(PointerPhase::Move, at));
+        client.handle(pointer(PointerPhase::Down, at));
+        client.handle(pointer(PointerPhase::Up, at));
+        assert!(matches!(
+            client.next_command(),
+            Some(SessionCommand::Click(ClickRequest {
+                decision: sent,
+                click: Click::Button { button: ButtonId::PassOn },
+                ..
+            })) if sent == decision
+        ));
+    }
 }
 
 /// A deciding view whose prompt has a turn button and, if `pass_on`, the round button that passes

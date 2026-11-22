@@ -121,7 +121,7 @@ pub fn styles(
         grid_template_columns, grid_template_rows, grid_column, grid_row, overflow, opacity, opaque_on_hover,
         translation, scale, transition, opacity_transition, enter, leave, layout_slide,
         background, background_image => &format!("flat.gradient.{variant}"), background_boxes,
-        mask, scroll_fade, filter, border, radius, legend,
+        mask, scroll_fade, filter, hover_filter, border, radius, legend,
         box_shadow => &format!("flat.shadow.{variant}"), drop_shadow,
         text => "flat.type_style.BUTTON", text_align,
         color => &format!("flat.color.{variant}_INK"), fit, truncate, passes, backdrop,

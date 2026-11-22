@@ -7,7 +7,7 @@
 //! button shrinks to fit (`Style::fit`), as the web's `TurnButton` shrinks its label.
 
 use super::icons;
-use crate::element::{Align, Border, Element, Justify, Shown, TextAlign};
+use crate::element::{Align, Border, Element, Filter, Justify, Shown, TextAlign};
 use kit_base::tokens::{color, gradient, ratio, shadow, size, type_style};
 use kit_frame::frame::Role;
 
@@ -107,5 +107,7 @@ pub fn pass_on(name: &str, side: f32) -> Element {
         .background([0; 4])
         .child(face);
     element.style.border = Some(Border::uniform([0; 4], 0.0));
+    // CSS brightens the face and its glyph together when the pointer is over the button.
+    element.style.hover_filter = Some(Filter::Brightness(ratio::BUTTON_HOVER_BRIGHTNESS));
     element
 }

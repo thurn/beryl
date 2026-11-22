@@ -1795,6 +1795,10 @@
         "value": 0.55,
         "note": "How far a way that cannot be chosen is darkened: `brightness(0.55)` of `.stage-way:disabled .stage-way-face`."
       },
+      "BUTTON_HOVER_BRIGHTNESS": {
+        "value": 1.1,
+        "note": "The brightness multiplier for an action button under the pointer, including the pass-on button's face in `ui/src/screens/styles/controls.css`."
+      },
       "PASS_ON_GLYPH_ASPECT": {
         "value": 0.6667,
         "note": "The pass-on glyph's height over its width: its artwork's view box is 24 by 16, so the web's 22-point-wide `svg` is 14.7 points tall."

@@ -113,6 +113,9 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
                 pass_on,
                 &forward.caption,
             )
+            .children(pass_on.filter(|button| button.enabled).map(|button| {
+                widgets::tooltip(&button.label, &button.label, input.data.flat.tooltip)
+            }))
         }))
 }
 

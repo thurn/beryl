@@ -115,7 +115,8 @@ impl Layer {
                     clip: None,
                     passes: node.element.style.passes,
                     faces,
-                    filters: Chain::default().inner(own_filter(&node.element)),
+                    filters: Chain::default()
+                        .inner(own_filter(&node.element, StateBits::default())),
                     open,
                     zoom: Zoom::IDENTITY,
                     departing,

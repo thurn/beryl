@@ -181,6 +181,9 @@ pub struct Style {
     /// change every color the element and everything under it is drawn in; a blur softens the
     /// edges of its own panel and gradients.
     pub filter: Vec<Filter>,
+    /// Replaces the element's own filter while an enabled control is hovered. Its children
+    /// are painted through the same filter.
+    pub hover_filter: Option<Filter>,
     /// The colors and widths of the element's border.
     pub border: Option<Border>,
     /// The radius of the element's panel's corners, or 0 for the usual radius: a screen's
@@ -272,6 +275,7 @@ impl Default for Style {
             mask: None,
             scroll_fade: None,
             filter: Vec::new(),
+            hover_filter: None,
             border: None,
             radius: 0.0,
             legend: false,

@@ -12,7 +12,7 @@ use crate::element::paint::{blur_of, filtered};
 use crate::element::{BackgroundBox, Border, Filter, Gradient, Shadow, Shown, Stop};
 use crate::input::Rect;
 use kit_base::geometry::plane::ScreenPlane;
-use kit_base::tokens::{color, shadow, size};
+use kit_base::tokens::{color, ratio, shadow, size};
 use kit_frame::frame::text::faded;
 use kit_frame::frame::{
     BackdropPanel, Band, Draw, ElementLook, FrameBuilder, Role, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT,
@@ -198,7 +198,10 @@ pub(super) fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> O
         if state.has(StateBits::HOVERED) || state.has(StateBits::FOCUSED) {
             border = recolor(border, color::ICON_BUTTON_RIM_HOVERED);
         }
-    } else if state.has(StateBits::HOVERED) && super::write::pressable(node) {
+    } else if style.hover_filter.is_none()
+        && state.has(StateBits::HOVERED)
+        && super::write::pressable(node)
+    {
         tint = brighter(tint);
         border = border.map_colors(brighter);
         lifted = true;
@@ -585,16 +588,16 @@ pub(super) fn look_of(
         text,
     };
     builder.look(look, box_shadows(node, state), &style.drop_shadow);
-    let lifted = [Filter::Brightness(1.1)];
+    let lifted = [Filter::Brightness(ratio::BUTTON_HOVER_BRIGHTNESS)];
     let filter: &[Filter] = if panel.is_some_and(|panel| panel.lifted) {
         &lifted
     } else {
-        super::write::own_filter(&node.element)
+        super::write::own_filter(&node.element, state)
     };
     builder.look_paints(index, gradients(node, panel), mask, filter);
 }
 
 /// `color` 10% brighter, as CSS's `brightness(1.1)` makes it.
 pub(super) fn brighter(color: [u8; 4]) -> [u8; 4] {
-    Filter::Brightness(1.1).color(color)
+    Filter::Brightness(ratio::BUTTON_HOVER_BRIGHTNESS).color(color)
 }

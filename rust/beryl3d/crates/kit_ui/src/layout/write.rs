@@ -135,9 +135,9 @@ impl Layer {
         builder.visit();
         look.opacity *= node.opacity();
         look.passes |= look.departing || node.element.style.passes;
-        look.filters = look.filters.inner(own_filter(&node.element));
         let element = &node.element;
         let mut state = StateBits(self.state(node).0 | (drawing.preview)(node.id).0);
+        look.filters = look.filters.inner(own_filter(element, state));
         let camera = drawing.camera;
         if look.passes {
             state.0 |= StateBits::PASSES;
@@ -758,11 +758,16 @@ pub(super) fn over_floats(node: &Node) -> bool {
     node.element.anchor.is_some() && style.backdrop && !style.filter.is_empty()
 }
 
-/// The filter functions `element` is drawn through itself: none when they filter what is drawn
-/// under it instead (`Style::backdrop`).
-pub(super) fn own_filter(element: &Element) -> &[crate::element::Filter] {
+/// The filter functions drawn on the element and its children. A backdrop filter applies
+/// behind the element instead.
+pub(super) fn own_filter(element: &Element, state: StateBits) -> &[crate::element::Filter] {
     if element.style.backdrop {
         &[]
+    } else if element.enabled
+        && state.has(StateBits::HOVERED)
+        && let Some(hover) = &element.style.hover_filter
+    {
+        std::slice::from_ref(hover)
     } else {
         &element.style.filter
     }
