@@ -207,9 +207,7 @@ fn table_of_clones(seed: u64, fixed: bool) -> GameTable {
         .map(|(copy, def)| {
             &*Box::leak(Box::new(CardDef {
                 name: clone(copy, def.name),
-                shape: beryl_engine::card::CardShape::Single,
-                faces: def.faces,
-                tokens: def.tokens,
+                ..**def
             }))
         })
         .collect();
