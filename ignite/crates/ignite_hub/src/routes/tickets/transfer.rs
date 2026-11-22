@@ -208,6 +208,7 @@ fn import_ticket(conn: &Connection, whole: &WholeTicket, seq: Seq, force: bool) 
         )));
     }
     let mut ticket = whole.ticket.clone();
+    ticket.allocation = ticket.local_allocation();
     let stored = tickets::load(conn, id)?;
     if let Some(stored) = &stored {
         if stored.updated_at > ticket.updated_at && !force {

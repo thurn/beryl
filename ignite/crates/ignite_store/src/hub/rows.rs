@@ -49,6 +49,7 @@ crate::tables! {
         provider: Option<String>,
         estimate_minutes: Option<i64>,
         unfiled_minutes: Option<i64>,
+        allocation: Option<i64>,
     }
 
     FleetChange = "fleet_changes" {

@@ -11,7 +11,7 @@ fn ticket(id: &str, labels: &[&str]) -> HomeCard {
             title: format!("ticket {id}"),
             ticket_type: "bug".to_owned(),
             status: Status::Open,
-            priority: 1,
+            allocation: Some(200),
             assignee: None,
             updated_at: "2026-11-17T00:00:00Z".to_owned(),
             pins: ignite_core::pins::Pins::default(),
@@ -101,7 +101,7 @@ fn the_most_recently_updated_ticket_comes_first_whatever_its_status() {
     cards[1].card.updated_at = "2026-11-18T00:00:00Z".to_owned();
     cards[1].card.status = Status::Blocked;
     cards[2].card.updated_at = "2026-11-10T00:00:00Z".to_owned();
-    cards[2].card.priority = 3;
+    cards[2].card.allocation = Some(50);
     cards.sort_by(|left, right| by_recency(&left.card, &right.card));
     let ids: Vec<&str> = cards.iter().map(|card| card.card.id.as_str()).collect();
     assert_eq!(ids, ["Tnew", "Tmid", "Told"]);

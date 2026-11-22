@@ -9,6 +9,7 @@ use crate::capacity::CapacityReport;
 use crate::config::Os;
 use crate::ids::MachineId;
 use crate::plan_usage::{DEFAULT_HOLD_PERCENT, Hold};
+use crate::shares::Source;
 use crate::time::Timestamp;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,6 +17,17 @@ pub struct FleetSettings {
     pub version: u64,
     pub machines: BTreeMap<String, MachineSetting>,
     pub providers: BTreeMap<String, ProviderSetting>,
+    /// Omitted by older fleet clients. Their writes leave these settings in place.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allocations: Option<Allocations>,
+}
+
+/// Local worker-share weights. A source without its own weight shares the general pool.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Allocations {
+    pub general: Option<u32>,
+    #[serde(default)]
+    pub sources: BTreeMap<Source, u32>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -283,6 +295,23 @@ pub fn summary(before: &FleetSettings, after: &FleetSettings) -> String {
             }
             None => changes.push(format!("provider {name}: defaults restored")),
             Some(_) => {}
+        }
+    }
+    let default = Allocations::default();
+    let old = before.allocations.as_ref().unwrap_or(&default);
+    let new = after.allocations.as_ref().unwrap_or(&default);
+    let describe =
+        |weight: Option<u32>| weight.map_or_else(|| "inherited".to_owned(), |n| n.to_string());
+    if old.general != new.general {
+        changes.push(format!("General pool allocation {}", describe(new.general)));
+    }
+    for source in Source::ALL {
+        if old.sources.get(&source) != new.sources.get(&source) {
+            changes.push(format!(
+                "{} allocation {}",
+                source.label(),
+                describe(new.sources.get(&source).copied())
+            ));
         }
     }
     if changes.is_empty() {

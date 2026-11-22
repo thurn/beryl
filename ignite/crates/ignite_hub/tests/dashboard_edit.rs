@@ -9,9 +9,11 @@ use serde_json::{Value, json};
 
 use ignite_core::config::{Config, Os};
 use ignite_core::fleet::{
-    FleetSettings, FleetUpdate, FleetView, MachineState, ProviderSample, ProviderSetting,
+    Allocations, FleetSettings, FleetUpdate, FleetView, MachineState, ProviderSample,
+    ProviderSetting,
 };
 use ignite_core::protocol::hub::MachineRegister;
+use ignite_core::shares::Source;
 use ignite_core::time::Timestamp;
 use ignite_hub::server::HubServer;
 use ignite_store::hub;
@@ -129,9 +131,17 @@ fn a_tailscale_user_edits_tickets_on_the_private_listener_only() {
     );
     assert_eq!(status, 401);
 
-    // Release it, raise its priority, replace its machine pin and comment.
+    let page = format!("/{id}");
+    let (status, parked) = send(private.address(), "GET", &page, &BROWSER[..1], "");
+    assert_eq!(status, 200);
+    assert!(parked.contains("0 · Parked"));
+    assert!(parked.contains("data-edit=\"allocation\""));
+    assert!(!parked.contains("data-edit=\"priority\""));
+    assert!(!parked.contains("data-action=\"release\""));
+
+    // An allocation makes the ticket eligible and is recorded with the other edits.
     let edits = json!([
-        {"op": "update", "id": id, "set": {"status": "open", "priority": 0}},
+        {"op": "update", "id": id, "set": {"allocation": 300}},
         {"op": "update", "id": id, "add_labels": ["machine:m1"],
          "remove_labels": ["machine:old", "machine:older"]},
         {"op": "comment", "id": id, "text": "Released from the dashboard"},
@@ -147,6 +157,7 @@ fn a_tailscale_user_edits_tickets_on_the_private_listener_only() {
     let detail: Value = serde_json::from_str(&detail).unwrap();
     assert_eq!(detail["status"], "open", "{detail}");
     assert_eq!(detail["priority"], 0);
+    assert_eq!(detail["allocation"], 300);
     assert_eq!(
         detail["labels"],
         json!(["provider:codex", "tier:sonnet", "machine:m1"])
@@ -157,7 +168,6 @@ fn a_tailscale_user_edits_tickets_on_the_private_listener_only() {
     assert!(detail.to_string().contains("\"someone\""), "{detail}");
 
     // The private listener shows the controls to a Tailscale user; the public one never does.
-    let page = format!("/{id}");
     let (status, private_page) = send(private.address(), "GET", &page, &BROWSER[..1], "");
     assert_eq!(status, 200);
     assert!(private_page.contains("id=\"c-edit\""), "{private_page}");
@@ -361,5 +371,91 @@ families = ["rust"]
     let restarted = server.start().unwrap();
     assert_eq!(get_fleet(restarted.address()), seeded);
     restarted.stop();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn allocation_controls_round_trip_fleet_and_epic_weights() {
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-allocation-edit-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let server = HubServer {
+        config: Config::parse("ignite.toml", CONFIG).unwrap(),
+        listen: "127.0.0.1:0".to_owned(),
+        database: dir.join("hub.sqlite"),
+        wordmark: None,
+    };
+    let private = server.start().unwrap();
+    let address = private.address();
+    let (_, pool) = send(address, "GET", "/pool", &BROWSER[..1], "");
+    assert!(pool.contains("data-edit=\"general\""));
+    assert!(pool.contains("data-edit=\"flaky\""));
+    assert!(pool.contains("Inherited (1)"));
+
+    let mut desired = get_fleet(address).settings;
+    desired.allocations = Some(Allocations {
+        general: Some(100),
+        sources: [(Source::Flaky, 0)].into(),
+    });
+    assert_eq!(put_fleet(address, BROWSER, &desired).0, 200);
+    let mut current = get_fleet(address).settings;
+    assert_eq!(current.allocations, desired.allocations);
+    current.allocations = None; // A client from before allocation updates an unrelated setting.
+    current.machines.get_mut("m1").unwrap().disk_cap_gb = Some(200);
+    assert_eq!(put_fleet(address, BROWSER, &current).0, 200);
+    assert_eq!(get_fleet(address).settings.allocations, desired.allocations);
+    let (_, pool) = send(address, "GET", "/pool", &BROWSER[..1], "");
+    assert!(pool.contains("0 · Parked"));
+    assert!(pool.contains("Inherited (100)"));
+    let (_, read_only) = send(address, "GET", "/pool", &[], "");
+    assert!(!read_only.contains("data-edit=\"general\""));
+
+    let batch = |ops: Value| {
+        let (status, body) = send(
+            address,
+            "POST",
+            "/pj/api/batch",
+            BROWSER,
+            &json!({"ops":ops}).to_string(),
+        );
+        assert_eq!(status, 200, "{body}");
+        serde_json::from_str::<Value>(&body).unwrap()
+    };
+    let reply = batch(json!([
+        {"op":"create","fields":{"type":"epic","title":"Planned epic"}},
+        {"op":"create","parent":"$0","fields":{"type":"milestone","title":"Nested milestone"}},
+        {"op":"create","parent":"$1","fields":{"title":"Queued task"}},
+        {"op":"create","parent":"$1","fields":{"title":"Parked task","allocation":0}}
+    ]));
+    let id = |n: usize| reply["results"][n]["id"].as_str().unwrap();
+    let detail = |n| {
+        let (status, body) = send(
+            address,
+            "GET",
+            &format!("/pj/api/tickets/{}", id(n)),
+            &[],
+            "",
+        );
+        assert_eq!(status, 200, "{body}");
+        serde_json::from_str::<Value>(&body).unwrap()
+    };
+    assert_eq!(detail(2)["status"], "pending_approval");
+    batch(json!([{"op":"update","id":id(0),"set":{"allocation":200}}]));
+    assert_eq!(detail(0)["allocation"], 200);
+    assert_eq!(detail(0)["workers"], 200);
+    assert_eq!(detail(2)["status"], "open");
+    assert_eq!(detail(3)["allocation"], 0);
+    let (_, milestone) = send(address, "GET", &format!("/{}", id(1)), &BROWSER[..1], "");
+    assert!(milestone.contains("Inherited (200)"));
+
+    batch(json!([{"op":"update","id":id(0),"set":{"workers":100}}]));
+    assert_eq!(detail(0)["allocation"], 100);
+    batch(json!([{"op":"update","id":id(2),"set":{"priority":1}}]));
+    assert_eq!(detail(2)["allocation"], 200);
+    batch(json!([{"op":"update","id":id(2),"set":{"allocation":null}}]));
+    assert_eq!(detail(2)["allocation"], Value::Null);
+    assert_eq!(detail(2)["priority"], 2);
+
+    private.stop();
     let _ = std::fs::remove_dir_all(dir);
 }

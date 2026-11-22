@@ -119,6 +119,13 @@ fn label_chip(label: &str) -> String {
     c::chip(label, Tone::Muted, None)
 }
 
+fn allocation_change(value: &Value) -> String {
+    value.as_u64().map_or_else(
+        || "restored inherited allocation".to_owned(),
+        |allocation| format!("set allocation to {allocation}"),
+    )
+}
+
 /// Describes one stored change. `kind` is set for an imported event, whose fields hold plain
 /// values; a change this system wrote holds `[old, new]` pairs.
 fn describe(actor: &str, at: &str, changed: &[(String, Value)], kind: Option<&str>) -> Entry {
@@ -176,6 +183,8 @@ fn describe(actor: &str, at: &str, changed: &[(String, Value)], kind: Option<&st
                     parts.push(format!("changed status to {}", status(value)));
                 }
             }
+            "allocation" => parts.push(allocation_change(value)),
+            "priority" | "workers" if get(delta, "allocation").is_some() => {}
             "priority" => parts.push(format!("set priority to {}", priority_chip(number(value)))),
             "assignee" => {
                 if action.is_empty() {

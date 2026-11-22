@@ -32,6 +32,7 @@ fn ticket(text: &str) -> Ticket {
         closed_at: None,
         version: Seq(0),
         workers: None,
+        allocation: None,
         max_workers: None,
         estimate_minutes: None,
         unfiled_minutes: None,

@@ -429,8 +429,7 @@ pub struct TicketFieldArgs {
     /// after it by writing them on the meta-ticket.
     #[arg(long)]
     pub notes_file: Option<PathBuf>,
-    /// An epic's allocation: its weight when the pool divides workers between epics. 3 when an
-    /// epic is filed without one, 0 to park it. `--workers` is its old name.
+    /// An epic's worker share or a ticket's queue weight. Zero parks work.
     #[arg(long, alias = "workers")]
     pub allocation: Option<u32>,
     /// A hard cap on an epic's workers.

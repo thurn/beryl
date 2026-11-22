@@ -47,7 +47,7 @@ pub struct Card {
     pub title: String,
     pub ticket_type: String,
     pub status: Status,
-    pub priority: u8,
+    pub allocation: Option<u32>,
     pub assignee: Option<String>,
     pub updated_at: String,
     /// The ticket's own pins.
@@ -109,8 +109,7 @@ pub struct TicketRow {
     pub closed_at: Option<String>,
     /// The feed position of the ticket's last change, which an edit names as its precondition.
     pub version: u64,
-    /// An epic's target number of workers and its hard cap.
-    pub workers: Option<u32>,
+    pub inherited_allocation: Option<u32>,
     pub max_workers: Option<u32>,
     /// A meta-ticket's interval in hours (see `ignite_core::schedule`).
     pub every_hours: Option<u32>,
@@ -133,11 +132,17 @@ fn status_rank(status: Status) -> u8 {
 }
 
 /// Orders cards by what needs attention: working, blocked, open, deferred, pending approval,
-/// closed; then by priority; then the most recently updated first, with ties broken by ticket ID.
+/// closed; then by ticket allocation; then the most recently updated first, with ties broken by ticket ID.
 pub fn by_attention(left: &Card, right: &Card) -> std::cmp::Ordering {
     status_rank(left.status)
         .cmp(&status_rank(right.status))
-        .then(left.priority.cmp(&right.priority))
+        .then_with(|| {
+            let weight = |card: &Card| {
+                card.allocation
+                    .unwrap_or(ignite_core::shares::DEFAULT_TICKET_ALLOCATION)
+            };
+            weight(right).cmp(&weight(left))
+        })
         .then(right.updated_at.cmp(&left.updated_at))
         .then_with(|| by_ticket_id(left, right))
 }
@@ -160,7 +165,8 @@ pub fn by_recency(left: &Card, right: &Card) -> std::cmp::Ordering {
         .then(left.id.cmp(&right.id))
 }
 
-const CARD_FIELDS: &str = "id, parent, title, type, status, priority, assignee, updated_at, labels";
+const CARD_FIELDS: &str =
+    "id, parent, title, type, status, allocation, assignee, updated_at, labels";
 
 fn card(row: &Row) -> rusqlite::Result<Card> {
     Ok(Card {
@@ -169,7 +175,7 @@ fn card(row: &Row) -> rusqlite::Result<Card> {
         title: row.get(2)?,
         ticket_type: row.get(3)?,
         status: parse_status(&row.get::<_, String>(4)?),
-        priority: row.get::<_, i64>(5)?.clamp(0, 255) as u8,
+        allocation: row.get(5)?,
         assignee: row.get(6)?,
         updated_at: row.get(7)?,
         pins: ignite_core::pins::from_labels(&labels_of(&row.get::<_, String>(8)?)),
@@ -339,7 +345,7 @@ fn next_copy(conn: &Connection, ticket: &TicketRow) -> Result<Option<NextCopy>, 
 pub fn ticket_row(conn: &Connection, id: &str) -> Result<Option<TicketRow>, ReadError> {
     let mut statement = conn.prepare(&format!(
         "SELECT {CARD_FIELDS}, body, acceptance, design, notes, labels, metadata, close_reason,
-                created_at, created_by, closed_at, version, workers, max_workers, every_hours, estimate_minutes
+                created_at, created_by, closed_at, version, max_workers, every_hours, estimate_minutes
          FROM tickets WHERE id = ?1"
     ))?;
     let mut rows = statement.query_map([id], |row| {
@@ -357,13 +363,43 @@ pub fn ticket_row(conn: &Connection, id: &str) -> Result<Option<TicketRow>, Read
             created_by: row.get(17)?,
             closed_at: row.get(18)?,
             version: u64::try_from(row.get::<_, i64>(19)?).unwrap_or_default(),
-            workers: row.get(20)?,
-            max_workers: row.get(21)?,
-            every_hours: row.get(22)?,
-            estimate_minutes: row.get(23)?,
+            inherited_allocation: None,
+            max_workers: row.get(20)?,
+            every_hours: row.get(21)?,
+            estimate_minutes: row.get(22)?,
         })
     })?;
-    Ok(rows.next().transpose()?)
+    let Some(mut ticket) = rows.next().transpose()? else {
+        return Ok(None);
+    };
+    ticket.inherited_allocation = match ticket.card.ticket_type.as_str() {
+        "epic" | "milestone" => inherited_worker_share(conn, ticket.card.parent.as_deref())?,
+        "meta" => Some(ignite_core::shares::DEFAULT_GENERAL_ALLOCATION),
+        _ => Some(ignite_core::shares::DEFAULT_TICKET_ALLOCATION),
+    };
+    Ok(Some(ticket))
+}
+
+/// The allocation of the nearest ancestor with its own share.
+pub(super) fn inherited_worker_share(
+    conn: &Connection,
+    parent: Option<&str>,
+) -> Result<Option<u32>, ReadError> {
+    let Some(parent) = parent else {
+        return Ok(None);
+    };
+    Ok(conn.query_row(
+        "WITH RECURSIVE ancestors(id, parent, weight) AS (
+           SELECT id, parent, coalesce(workers, CASE type WHEN 'meta' THEN 1 END)
+           FROM tickets WHERE id = ?1
+           UNION
+           SELECT t.id, t.parent, coalesce(t.workers, CASE t.type WHEN 'meta' THEN 1 END)
+           FROM tickets t JOIN ancestors a ON t.id = a.parent WHERE a.weight IS NULL
+         )
+         SELECT max(weight) FROM ancestors",
+        [parent],
+        |row| row.get(0),
+    )?)
 }
 
 /// The members of a JSON object in the order they were written; empty if it is not one.

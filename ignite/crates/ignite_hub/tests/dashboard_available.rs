@@ -120,7 +120,7 @@ fn running_tickets_come_first_and_waiting_ones_follow_in_dispatch_order() {
     let waiting = section(&body, "waiting");
     let small = waiting.find("Small next task").expect("e1.2 waits");
     let huge = waiting.find("Huge build").expect("e1.3 waits");
-    assert!(small < huge, "the higher priority ticket goes first");
+    assert!(small < huge, "the higher allocation goes first");
     assert!(waiting.contains("#1") && waiting.contains("#2"));
     assert!(waiting.contains("Next on jarvis"));
 }
@@ -154,7 +154,7 @@ fn ready_tickets_the_pool_is_never_offered_say_why() {
     let body = page(&conn, "/available");
     let held = section(&body, "not-offered");
     assert!(held.contains("Waits for its epic"));
-    assert!(held.contains("Its epic has no allocation"));
+    assert!(held.contains("Its epic has allocation zero"));
     assert!(held.contains("Choose a vendor"));
     assert!(held.contains("Set aside for a person"));
 }

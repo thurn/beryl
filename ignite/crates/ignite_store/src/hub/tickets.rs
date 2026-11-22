@@ -39,7 +39,7 @@ pub(crate) const TICKET_COLUMNS: &str = "id, parent, next_child, title, body, ac
     type, status, priority, assignee, last, labels, metadata, defer_until, close_reason, \
     created_at, created_by, updated_at, closed_at, version, workers, max_workers, cores, \
     machine, session, tree, claimed_at, landed_at, landed, saving, needs_os, fallback, \
-    every_hours, provider, estimate_minutes, unfiled_minutes";
+    every_hours, provider, estimate_minutes, unfiled_minutes, allocation";
 
 /// One ticket, found by ID or by any alias, with its edges, children and readiness.
 pub fn get(
@@ -422,8 +422,8 @@ pub(crate) fn sql_value(column: &str, value: &Value) -> SqlValue {
     }
 }
 
-/// Gives each ticket that `batch` creates without a status the one it waits in: an epic, and any
-/// ticket filed under a pending ancestor, wait for a person's release (`pending_approval`);
+/// Gives each ticket that `batch` creates without a status the one it waits in: an epic and any
+/// ticket under a pending ancestor start parked;
 /// any other ticket is filed `open`, so the pool may be offered it at once. A parent created in
 /// the same batch (`$<index>`) counts as pending when this pass made it so. A create that names
 /// its status, as the hub's own filings and `ignite ticket create --release` do, is kept.
@@ -482,72 +482,8 @@ fn pending_line(conn: &Connection, name: &str) -> Result<bool> {
     Ok(false)
 }
 
-/// Adds to `batch` the release of every pending descendant of each pending ticket that one of
-/// its updates releases (sets `open`), so that releasing an epic releases its tickets whichever
-/// client sent the update: `ignite ticket update --release` or the dashboard's Release button.
-/// A ticket created in the same batch (`$<index>`) has no descendants yet and is skipped.
-///
-/// A released epic with no allocation (the `workers` column), such as one imported from Enact,
-/// also gets the default ([`shares::DEFAULT_EPIC_ALLOCATION`]) unless the update sets one. The pool offers a
-/// ticket only when the nearest ancestor with an allocation has one above 0
-/// (`ignite_hub`'s `dispatch_queue`), so without it a released epic inside a larger project
-/// whose epics have no number either would never be worked.
-pub fn add_releases(conn: &Connection, batch: &mut BatchRequest) -> Result<()> {
-    let mut released = Vec::new();
-    for operation in &mut batch.ops {
-        let Operation::Update {
-            id, set: Some(set), ..
-        } = operation
-        else {
-            continue;
-        };
-        if set.status != Some(Status::Open) || id.starts_with('$') {
-            continue;
-        }
-        let Some(id) = resolve(conn, id)? else {
-            continue;
-        };
-        let Some(ticket) = load(conn, id.as_str())? else {
-            continue;
-        };
-        if ticket.status != Status::PendingApproval {
-            continue;
-        }
-        if ticket.ticket_type == TicketType::Epic
-            && ticket.workers.is_none()
-            && set.workers.is_none()
-        {
-            set.workers = Some(Some(shares::DEFAULT_EPIC_ALLOCATION));
-        }
-        released.push(id);
-    }
-    let mut added = HashSet::new();
-    for id in released {
-        let mut below: Vec<String> = descendants(conn, id.as_str())?.into_iter().collect();
-        below.sort();
-        for descendant in below {
-            let pending =
-                load(conn, &descendant)?.is_some_and(|t| t.status == Status::PendingApproval);
-            if pending && added.insert(descendant.clone()) {
-                batch.ops.push(Operation::Update {
-                    id: descendant,
-                    set: Some(TicketFields {
-                        status: Some(Status::Open),
-                        ..TicketFields::default()
-                    }),
-                    add_labels: Vec::new(),
-                    remove_labels: Vec::new(),
-                    set_meta: BTreeMap::new(),
-                    unset_meta: Vec::new(),
-                });
-            }
-        }
-    }
-    Ok(())
-}
-
 /// The IDs of every descendant of `ancestor`, closed or not.
-fn descendants(conn: &Connection, ancestor: &str) -> Result<HashSet<String>> {
+pub(crate) fn descendants(conn: &Connection, ancestor: &str) -> Result<HashSet<String>> {
     let ids = collect_strings(
         conn,
         "WITH RECURSIVE below(id) AS ( \
@@ -694,12 +630,23 @@ fn collect_ids(conn: &Connection, sql: &str, args: &[&str]) -> Result<Vec<Ticket
         .collect()
 }
 
+/// Backfills only the new column. Older hubs can still read every field they knew before.
+pub(super) fn backfill_allocation(transaction: &rusqlite::Transaction<'_>) -> Result<()> {
+    transaction.execute_batch(include_str!("allocation.sql"))?;
+    Ok(())
+}
+
 /// Gives an epic filed without an allocation (the `workers` column) the default
 /// ([`shares::DEFAULT_EPIC_ALLOCATION`]), so releasing it is enough for the pool to work it. An
 /// explicit number, `0` included, is kept.
 pub(crate) fn default_workers(fields: &TicketFields, changes: &mut Map<String, Value>) {
-    if fields.ticket_type == Some(TicketType::Epic) && fields.workers.is_none() {
-        changes.insert("workers".to_owned(), json!(shares::DEFAULT_EPIC_ALLOCATION));
+    if fields.ticket_type == Some(TicketType::Epic)
+        && fields.workers.is_none()
+        && fields.allocation.is_none()
+    {
+        let weight = json!(shares::DEFAULT_EPIC_ALLOCATION);
+        changes.insert("workers".to_owned(), weight.clone());
+        changes.insert("allocation".to_owned(), weight);
     }
 }
 
@@ -737,6 +684,7 @@ pub(crate) fn blank(
         closed_at: (status == Status::Closed).then_some(now),
         version,
         workers: None,
+        allocation: None,
         max_workers: None,
         estimate_minutes: None,
         unfiled_minutes: None,

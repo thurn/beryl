@@ -13,8 +13,7 @@ use ignite_core::protocol::tickets::Status;
 use ignite_core::work_estimate::duration;
 
 use super::common::{
-    PRIORITY_NAMES, SITE_ICONS, brand, person, priority_chip, status_dot, ticket_heading,
-    work_progress, worker,
+    SITE_ICONS, allocation_chip, brand, person, status_dot, ticket_heading, work_progress, worker,
 };
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
 use super::data::{
@@ -143,7 +142,10 @@ pub fn page(
         c::row(
             &label,
             &(work_progress(forecasts.get(&card.id), forecasts.default)
-                + &priority_chip(i64::from(card.priority))),
+                + &allocation_chip(
+                    card.allocation
+                        .filter(|_| card.status != Status::PendingApproval),
+                )),
             Some(&ticket_url(root, &card.id)),
         )
     };
@@ -324,13 +326,6 @@ pub fn page(
     }
 
     let status = status_dot(card.status, true);
-    let priority = priority_chip(i64::from(card.priority))
-        + &c::muted(
-            PRIORITY_NAMES
-                .get(usize::from(card.priority))
-                .copied()
-                .unwrap_or(""),
-        );
     // On an editable page a value carries its pencil; a closed ticket's status changes only by
     // reopening it.
     let editable_value = |field: &str, label: &str, kind: &str, view: String, raw: &str| {
@@ -340,7 +335,7 @@ pub fn page(
             view
         }
     };
-    let status = if card.status == Status::Closed {
+    let status = if matches!(card.status, Status::Closed | Status::PendingApproval) {
         status
     } else {
         editable_value(
@@ -354,13 +349,17 @@ pub fn page(
     let mut properties: Vec<(String, String)> = vec![
         ("Status".into(), status),
         (
-            "Priority".into(),
-            editable_value(
-                "priority",
-                "Priority",
-                "priority",
-                priority,
-                &card.priority.to_string(),
+            "Allocation".into(),
+            edit::allocation(
+                "allocation",
+                "Allocation",
+                if card.status == Status::PendingApproval {
+                    Some(0)
+                } else {
+                    card.allocation
+                },
+                ticket.inherited_allocation,
+                editable && card.status != Status::Closed,
             ),
         ),
         (
@@ -403,17 +402,14 @@ pub fn page(
         ));
     }
     if editable && card.ticket_type == "epic" {
-        for (label, field, value) in [
-            ("Allocation", "workers", ticket.workers),
-            ("Max workers", "max_workers", ticket.max_workers),
-        ] {
-            let view = value.map_or_else(|| c::muted("None"), |n| esc(&n.to_string()));
-            let raw = value.map(|n| n.to_string()).unwrap_or_default();
-            properties.push((
-                label.into(),
-                editable_value(field, label, "count", view, &raw),
-            ));
-        }
+        let label = "Max workers";
+        let value = ticket.max_workers;
+        let view = value.map_or_else(|| c::muted("None"), |n| esc(&n.to_string()));
+        let raw = value.map(|n| n.to_string()).unwrap_or_default();
+        properties.push((
+            label.into(),
+            editable_value("max_workers", label, "count", view, &raw),
+        ));
     }
     if let Some(next) = &data.next_copy {
         let every = ticket.every_hours.unwrap_or_default();

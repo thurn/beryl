@@ -1,4 +1,4 @@
-//! Pieces every page of the ticket views shares: status dots, priority chips, the way a
+//! Pieces every page of the ticket views shares: status dots, allocation chips, the way a
 //! session or person is named, progress bars and the page icons.
 // Pages are built from many small fragments; building them with `format!` reads better than
 // the allocation-free forms these lints suggest.
@@ -27,10 +27,9 @@ fn status_display(status: Status) -> (Tone, &'static str) {
     match status {
         Status::InProgress => (Tone::Blue, "In progress"),
         Status::Blocked => (Tone::Amber, "Blocked"),
-        // An open ticket has been released by a person, so it is shown as approved.
-        Status::Open => (Tone::Orange, "Approved"),
+        Status::Open => (Tone::Orange, "Open"),
         Status::Deferred => (Tone::Muted, "Deferred"),
-        Status::PendingApproval => (Tone::Muted, "Pending approval"),
+        Status::PendingApproval => (Tone::Muted, "Parked"),
         Status::Closed => (Tone::Green, "Closed"),
     }
 }
@@ -215,12 +214,25 @@ pub fn brand() -> String {
     "Ignite".to_owned()
 }
 
-/// A card's ID and priority.
+/// A local allocation when a card has one.
+pub fn allocation_chip(allocation: Option<u32>) -> String {
+    match allocation {
+        None => String::new(),
+        Some(0) => c::chip("Parked", Tone::Muted, Some("Allocation 0")),
+        Some(n) => c::chip(&n.to_string(), Tone::Neutral, Some("Allocation")),
+    }
+}
+
+/// A card's ID and allocation.
 pub fn ticket_heading(ticket: &Card) -> String {
     format!(
         "<div class=\"c-card-top\">{}{}</div>",
         c::mono(&display_id(&ticket.id)),
-        priority_chip(i64::from(ticket.priority)) + &super::pins::chips(&ticket.pins)
+        allocation_chip(
+            ticket
+                .allocation
+                .filter(|_| ticket.status != Status::PendingApproval)
+        ) + &super::pins::chips(&ticket.pins)
     )
 }
 

@@ -4,28 +4,27 @@
 // - `.c-editable[data-field][data-kind]` is a value, with its rendered HTML in `.c-edit-view`
 //   and its raw text in `<template class="c-edit-source">`;
 // - `[data-edit=<field>]` is the pencil that opens that value's editor;
-// - `[data-action]` buttons release, close or reopen the ticket, `[data-add]` buttons show an
+// - `[data-action]` buttons close or reopen the ticket, `[data-add]` buttons show an
 //   empty text section, and `form[data-composer]` adds a comment;
-// - `#c-edit` names the ticket, the version an edit expects and the batch address.
-// Every edit is one `POST /batch`. While an editor is open its element carries `c-editing`, and
-// cirrus.js holds back live page updates so the editor is not replaced; closing it sends
-// `cirrus:flush`, which brings the page up to date.
+// - `#c-edit` holds the ticket's batch address and version. `#c-allocation-fleet` holds the
+//   fleet settings snapshot for edits to pool weights.
+// While an editor is open, `c-editing` keeps cirrus.js from replacing it. Closing the editor
+// asks cirrus.js to catch up with changes.
 (() => {
     "use strict";
 
-    const PRIORITIES = ["Critical", "High", "Medium", "Low", "Backlog"];
     const STATUSES = [
-        ["open", "Approved"],
+        ["open", "Open"],
         ["in_progress", "In progress"],
         ["blocked", "Blocked"],
         ["deferred", "Deferred"],
-        ["pending_approval", "Pending approval"],
     ];
-    // Text fields name the version they were edited from, so a change someone else made in the
+    // Guarded fields name the version they were edited from, so a change someone else made in the
     // meantime is not overwritten without a second Save.
-    const GUARDED = new Set(["line", "markdown"]);
+    const GUARDED = new Set(["line", "markdown", "allocation"]);
 
     const context = () => document.getElementById("c-edit");
+    const fleetAllocation = () => document.getElementById("c-allocation-fleet");
     const flush = (resync) =>
         document.dispatchEvent(new CustomEvent("cirrus:flush", { detail: { resync } }));
     const unitOf = (field) =>
@@ -128,11 +127,18 @@
                 requestAnimationFrame(grow);
                 return area;
             }
-            case "priority":
-                return select(
-                    PRIORITIES.map((name, index) => [String(index), `P${index} ${name}`]),
-                    raw,
-                );
+            case "allocation": {
+                const input = element("input", {
+                    type: "number",
+                    min: "0",
+                    max: "4294967295",
+                    step: "1",
+                    value: raw,
+                    placeholder: unit.querySelector(".c-edit-inherited").content.textContent,
+                });
+                input.setAttribute("aria-label", label);
+                return input;
+            }
             case "status":
                 return select(STATUSES, raw);
             case "count": {
@@ -158,6 +164,12 @@
 
     const words = (text) => text.split(/[\s,]+/).filter(Boolean);
 
+    function wholeNumber(value) {
+        const text = value.trim();
+        if (text && !/^\d+$/.test(text)) throw new Error("Enter a whole number, or leave it blank.");
+        return text ? Number(text) : null;
+    }
+
     // The batch operations that set `field` of `kind` from `raw` to `value`.
     function operations(field, kind, raw, value, unit) {
         const id = context().dataset.ticket;
@@ -165,8 +177,6 @@
             case "line":
                 if (!value.trim()) throw new Error("The title cannot be empty.");
                 return [{ op: "update", id, set: { [field]: value.trim() } }];
-            case "priority":
-                return [{ op: "update", id, set: { priority: Number(value) } }];
             case "choice":
                 return [{
                     op: "update",
@@ -186,13 +196,44 @@
                     },
                 ];
             }
-            case "count": {
-                const text = value.trim();
-                if (text && !/^\d+$/.test(text)) throw new Error("Enter a whole number, or nothing.");
-                return [{ op: "update", id, set: { [field]: text ? Number(text) : null } }];
-            }
+            case "allocation":
+            case "count":
+                return [{ op: "update", id, set: { [field]: wholeNumber(value) } }];
             default:
                 return [{ op: "update", id, set: { [field]: value } }];
+        }
+    }
+
+    async function saveFleetAllocation(context, field, value) {
+        const settings = JSON.parse(context.dataset.settings);
+        const { general = null, sources = {} } = settings.allocations ?? {};
+        const allocations = { general, sources };
+        const weight = wholeNumber(value);
+        if (field === "general") {
+            allocations.general = weight;
+        } else if (weight === null) {
+            delete sources[field];
+        } else {
+            sources[field] = weight;
+        }
+        const response = await fetch(context.dataset.api, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", "X-Ignite-Dashboard": "1" },
+            credentials: "same-origin",
+            cache: "no-store",
+            body: JSON.stringify({
+                version: settings.version,
+                settings: { ...settings, allocations },
+            }),
+        });
+        if (response.status === 409) {
+            const current = await response.json();
+            context.dataset.settings = JSON.stringify(current);
+            throw new Conflict("Fleet settings changed. Save again to apply this allocation.");
+        }
+        if (!response.ok) {
+            const data = await response.json().catch(() => null);
+            throw new Error(data?.error || `The hub answered ${response.status}.`);
         }
     }
 
@@ -200,9 +241,12 @@
 
     function open(field) {
         const unit = unitOf(field);
-        if (!unit || !context()) return;
-        if (unit.classList.contains("c-editing")) {
-            unit.querySelector(".c-edit-form input, .c-edit-form textarea, .c-edit-form select")?.focus();
+        const fleet = fleetAllocation();
+        if (!unit || (!context() && !fleet?.contains(unit))) return;
+        const current = fleet?.querySelector(".c-editing")
+            ?? (unit.classList.contains("c-editing") ? unit : null);
+        if (current) {
+            current.querySelector(".c-edit-form input, .c-edit-form textarea, .c-edit-form select")?.focus();
             return;
         }
         const kind = unit.dataset.kind;
@@ -227,6 +271,7 @@
             flush(kind === "choice" && Boolean(form.dataset.conflict));
         };
         const save = async () => {
+            if (!input.reportValidity()) return;
             const value = input.value;
             if (value === raw && !form.dataset.conflict) {
                 close();
@@ -236,9 +281,16 @@
             form.querySelectorAll("button, input, select, textarea").forEach((el) => (el.disabled = true));
             // Both label changes must apply to the ticket whose pins this dropdown showed.
             let version;
-            if (kind === "choice") version = context().dataset.renderedVersion;
-            else if (GUARDED.has(kind) && !form.dataset.conflict) version = context().dataset.version;
+            if (!fleet && kind === "choice") version = context().dataset.renderedVersion;
+            else if (!fleet && GUARDED.has(kind) && !form.dataset.conflict) version = context().dataset.version;
             try {
+                if (fleet) {
+                    await saveFleetAllocation(fleet, field, value);
+                    unit.classList.remove("c-editing");
+                    history.replaceState({ ...history.state, scroll: scrollY }, "");
+                    location.reload();
+                    return;
+                }
                 await send(operations(field, kind, raw, value, unit), version);
             } catch (failure) {
                 form.querySelectorAll("button, input, select, textarea").forEach((el) => (el.disabled = false));
@@ -274,7 +326,9 @@
                 if (input.value === raw && form.isConnected && !input.disabled) close();
             });
         } else {
-            const hint = kind === "markdown" ? "⌘↩ to save · Esc to cancel" : "↩ to save · Esc to cancel";
+            const hint = kind === "allocation"
+                ? "Blank inherits. Zero parks work."
+                : kind === "markdown" ? "⌘↩ to save · Esc to cancel" : "↩ to save · Esc to cancel";
             form.insertBefore(buttons("Save", cancel, hint), error);
         }
         form.addEventListener("keydown", (e) => {
@@ -314,11 +368,9 @@
         if (!id || !bar) return;
         // Closing takes one click: the dashboard records no reason, so the ticket's close reason
         // is the same placeholder the hub uses when a session closes without one.
-        const ops = action === "release"
-            ? [{ op: "update", id, set: { status: "open" } }]
-            : action === "close"
-              ? [{ op: "close", id, reason: "closed" }]
-              : [{ op: "reopen", id }];
+        const ops = action === "close"
+            ? [{ op: "close", id, reason: "closed" }]
+            : [{ op: "reopen", id }];
         bar.querySelectorAll("button").forEach((el) => (el.disabled = true));
         try {
             await send(ops);

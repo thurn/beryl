@@ -675,7 +675,7 @@ fn epics_show_activity_shares_and_verification() {
     // The landed ticket landed at 10:00 and the last verified tip is from 11:10.
     assert!(active.contains("landed work verified"));
     let dormant = row("Dormant epic");
-    assert!(dormant.contains("Inactive"));
+    assert!(dormant.contains("Inherited"));
 }
 
 #[test]

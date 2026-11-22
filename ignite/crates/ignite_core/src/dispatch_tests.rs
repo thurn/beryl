@@ -47,8 +47,8 @@ fn ticket(name: &str, epic: Option<&str>) -> ReadyTicket {
         id: id(name),
         kind: TicketKind::Ordinary,
         holds_tip: false,
-        epic: epic.map(id),
-        priority: 2,
+        epic: epic.map_or(Group::General, |value| Group::Epic(id(value))),
+        allocation: 100,
         chain: 0,
         created_at: Timestamp::from_millis(1_000),
         labels: Vec::new(),
@@ -84,7 +84,7 @@ fn everyone() -> MachineFree {
     machine(vec![worker("local_a", "claude", &["opus", "sonnet"])])
 }
 
-const ALL: [Group; 1] = [None];
+const ALL: [Group; 1] = [Group::General];
 
 #[test]
 fn a_regression_goes_first_and_skips_the_cores_test() {
@@ -93,7 +93,7 @@ fn a_regression_goes_first_and_skips_the_cores_test() {
     let mut regression = ticket("Tr1", None);
     regression.kind = TicketKind::Regression;
     regression.expected_cores = 4.0;
-    regression.priority = 3;
+    regression.allocation = 50;
     let ready = [ticket("To1", None), regression];
     let answer = next_for(&free, &ready, &ALL, Some(Unit::Dollars), &[]);
     assert_eq!(ticket_of(answer), Some("Tr1".to_owned()));
@@ -127,7 +127,7 @@ fn a_justiciar_ticket_goes_before_a_regression() {
 fn an_improvement_goes_next_only_while_under_its_share() {
     let mut improvement = ticket("Ti1", None);
     improvement.kind = TicketKind::Improvement;
-    improvement.priority = 4;
+    improvement.allocation = 25;
     improvement.saving = Some((Unit::CoreHours, 12.0));
     let ready = [ticket("To1", None), improvement];
     let free = everyone();
@@ -166,14 +166,14 @@ fn improvements_take_the_largest_saving_in_each_unit_in_turn() {
 fn the_group_furthest_below_its_share_goes_first() {
     let epics = [
         EpicDemand {
-            epic: Some(id("Tq44s")),
+            epic: Group::Epic(id("Tq44s")),
             allocation: Some(5),
             max_workers: None,
             ready: 3,
             held: 5,
         },
         EpicDemand {
-            epic: Some(id("Tw8gv")),
+            epic: Group::Epic(id("Tw8gv")),
             allocation: Some(2),
             max_workers: None,
             ready: 3,
@@ -182,7 +182,7 @@ fn the_group_furthest_below_its_share_goes_first() {
     ];
     let order = shares::epic_order(&epics);
     let mut urgent = ticket("Tq44s.1", Some("Tq44s"));
-    urgent.priority = 0;
+    urgent.allocation = 300;
     let ready = [urgent, ticket("Tw8gv.1", Some("Tw8gv"))];
     let answer = next_for(&everyone(), &ready, &order, None, &[]);
     assert_eq!(ticket_of(answer), Some("Tw8gv.1".to_owned()));
@@ -202,7 +202,7 @@ fn within_a_group_priority_then_chain_then_age_decide() {
     let mut long_chain = ticket("Tb", None);
     long_chain.chain = 3;
     let mut urgent = ticket("Tc", None);
-    urgent.priority = 1;
+    urgent.allocation = 200;
     let free = everyone();
     let all = [old.clone(), long_chain.clone(), urgent];
     assert_eq!(
@@ -227,7 +227,7 @@ fn a_tools_ticket_is_admitted_where_a_third_kernel_ticket_waits() {
     let mut free = everyone();
     free.free_cores = admission::free_cores(13.0, &[4.8, 4.6, 2.2]);
     let mut kernel = ticket("Tw8gv.21.80", None);
-    kernel.priority = 1;
+    kernel.allocation = 200;
     kernel.expected_cores = 2.1;
     let mut tools = ticket("Ten2c.4", None);
     tools.expected_cores = 0.1;
@@ -346,12 +346,12 @@ fn two_calls_on_the_same_snapshot_give_the_same_answer() {
     let ready: Vec<ReadyTicket> = (0..20)
         .map(|n| {
             let mut t = ticket(&format!("T{n}"), if n % 2 == 0 { None } else { Some("Tq") });
-            t.priority = (n % 3) as u8;
-            t.chain = (n % 4) as u32;
+            t.allocation = 300 - (n % 3) * 100;
+            t.chain = n % 4;
             t
         })
         .collect();
-    let order = [Some(id("Tq")), None];
+    let order = [Group::Epic(id("Tq")), Group::General];
     let first = next_for(&free, &ready, &order, Some(Unit::CoreHours), &[]);
     let second = next_for(&free, &ready, &order, Some(Unit::CoreHours), &[]);
     assert!(first.is_some());

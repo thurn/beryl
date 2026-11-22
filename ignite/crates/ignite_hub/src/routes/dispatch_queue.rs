@@ -17,7 +17,7 @@
 //! machine's hand-offs are paused only a ticket that holds `master` back is offered, and nothing
 //! while every machine's are (see `dispatch_held.rs`).
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use rusqlite::Connection;
 
@@ -25,14 +25,12 @@ use ignite_core::admission::{self, Worked};
 use ignite_core::config::Improvement;
 use ignite_core::dispatch::{self, ReadyTicket, TicketKind};
 use ignite_core::dispatch_pressure::{DispatchPressure, HandoffWait};
-use ignite_core::fleet::{FleetSettings, MachineState};
+use ignite_core::fleet::{Allocations, FleetSettings, MachineState};
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::pins::Pins;
 use ignite_core::protocol::hub::{MachineFree, Reservation};
-use ignite_core::protocol::tickets::{
-    LandedWork, REVERTED_KEY, Saving, Status, Ticket, TicketType,
-};
-use ignite_core::shares::{self, EpicDemand, Group, Unit};
+use ignite_core::protocol::tickets::{LandedWork, Saving, Status, Ticket, TicketType};
+use ignite_core::shares::{self, Group, Source, Unit};
 use ignite_core::time::Timestamp;
 use ignite_store::hub::{fleet, fleet_settings, provider_usage, releases, tickets};
 use ignite_store::{Result, StoreError};
@@ -40,25 +38,9 @@ use ignite_store::{Result, StoreError};
 use super::{families::Requirements, mix, placement, usage};
 use crate::{rules, upkeep::regressions};
 
-/// The labels of tickets the hub files itself, which are offered whether or not an epic is
-/// active. `hub` is on everything the hub files today (`upkeep::filing::HUB_LABEL`); the other
-/// labels are the ones tickets filed before it carry, and `justiciar` marks the judge's
-/// reports of faults in the system itself.
-const HUB_FILED: [&str; 10] = [
-    crate::upkeep::filing::HUB_LABEL,
-    "regression",
-    "improvement",
-    "machine",
-    "incomplete",
-    "cache-audit",
-    "graph-repair",
-    "fleet",
-    "flaky",
-    dispatch::JUSTICIAR,
-];
-
-/// The label of a ticket set aside for a person, which no machine is offered.
-const NEEDS_PERSON: &str = "needs:person";
+#[path = "dispatch_allocation.rs"]
+mod allocation;
+use allocation::source;
 
 #[path = "dispatch_pins.rs"]
 mod pins;
@@ -245,7 +227,11 @@ fn dispatch_groups(snapshot: &Snapshot, ready: &mut Vec<ReadyTicket>) -> Vec<Gro
         .filter(|group| group.max_workers.is_some_and(|cap| group.held >= cap))
         .map(|group| &group.epic)
         .collect();
-    ready.retain(|ticket| ticket.kind != TicketKind::Improvement || !full.contains(&ticket.epic));
+    ready.retain(|ticket| {
+        held::holds_master(ticket)
+            || ticket.kind != TicketKind::Improvement
+            || !full.contains(&ticket.epic)
+    });
     shares::epic_order(&demand)
 }
 
@@ -368,6 +354,7 @@ fn reserve(
 struct Node {
     parent: Option<TicketId>,
     workers: Option<u32>,
+    source: Option<Source>,
     max_workers: Option<u32>,
     in_progress: bool,
 }
@@ -375,6 +362,7 @@ struct Node {
 /// Every ticket's place in the tree, the reservations and the chains of waiting tickets.
 struct Snapshot {
     nodes: HashMap<TicketId, Node>,
+    allocations: Allocations,
     /// Reserved tickets and the session each waits for.
     reserved: HashMap<String, String>,
     /// For each ticket, the live tickets that depend on it.
@@ -393,7 +381,11 @@ impl Snapshot {
         // have a parent and so are not loose, would wait for an allocation nobody sets.
         let mut statement = conn.prepare(
             "SELECT id, parent, coalesce(workers, CASE type WHEN 'meta' THEN 1 END), max_workers, \
-             status FROM tickets",
+             status, metadata -> 'ignite_fault' ->> 'category',
+             EXISTS (SELECT 1 FROM json_each(labels) WHERE value = 'flaky'),
+             saving IS NOT NULL OR EXISTS (SELECT 1 FROM json_each(labels) WHERE value = 'improvement'),
+             EXISTS (SELECT 1 FROM json_each(labels) WHERE value = 'hub')
+             FROM tickets",
         )?;
         let rows = statement.query_map([], |row| {
             Ok((
@@ -402,12 +394,18 @@ impl Snapshot {
                 row.get::<_, Option<u32>>(2)?,
                 row.get::<_, Option<u32>>(3)?,
                 row.get::<_, String>(4)?,
+                source(
+                    row.get::<_, Option<String>>(5)?.as_deref(),
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                ),
             ))
         })?;
         let mut nodes = HashMap::new();
         let mut live = HashSet::new();
         for row in rows {
-            let (id, parent, workers, max_workers, status) = row?;
+            let (id, parent, workers, max_workers, status, source) = row?;
             if status != "closed" {
                 live.insert(id.clone());
             }
@@ -416,6 +414,7 @@ impl Snapshot {
                 Node {
                     parent: parent.as_deref().map(parse_id).transpose()?,
                     workers,
+                    source,
                     max_workers,
                     in_progress: status == "in_progress",
                 },
@@ -438,6 +437,9 @@ impl Snapshot {
         let heard = pins::heard_machines(conn, now)?;
         Ok(Snapshot {
             nodes,
+            allocations: fleet_settings::settings(conn)?
+                .allocations
+                .unwrap_or_default(),
             reserved,
             dependents,
             requirements: Requirements::load(conn)?,
@@ -446,19 +448,6 @@ impl Snapshot {
             ready: releases::offerable(conn, tickets::ready(conn, now)?)?,
             heard,
         })
-    }
-
-    /// The group a ticket shares workers in: its ancestors, nearest first, through
-    /// [`shares::group_of`].
-    fn group(&self, id: &TicketId) -> Group {
-        let ancestors: Vec<(TicketId, Option<u32>)> = self
-            .ancestors(id)
-            .map(|id| {
-                let workers = self.nodes.get(&id).and_then(|n| n.workers);
-                (id, workers)
-            })
-            .collect();
-        shares::group_of(&ancestors)
     }
 
     /// The cap on a group's workers: the smallest `max_workers` of the group's own ticket and
@@ -521,9 +510,9 @@ impl Snapshot {
             {
                 continue;
             }
-            let Some(ticket) = self.offered(ticket) else {
+            if self.parked(&ticket, &self.group(id)).is_some() {
                 continue;
-            };
+            }
             let pins = pins::effective(conn, &ticket, &self.heard)?;
             let candidate = self.ready_ticket(ticket, pins, history, landed, &mut memo, now);
             if fallback.is_some_and(|fallback| !fallback.allows(&candidate)) {
@@ -532,32 +521,6 @@ impl Snapshot {
             ready.push(candidate);
         }
         Ok(ready)
-    }
-
-    /// The ticket if it may be offered: it is under an active epic, under no epic at all, or
-    /// the hub filed it itself, and it is not set aside for a person (`needs:person`).
-    ///
-    /// An epic is active when it has an allocation (the `workers` column) greater than zero: the
-    /// nearest ancestor with an allocation decides, so an epic set to 0 stops its milestones however their
-    /// parent is set. A meta-ticket always has one (see [`Snapshot::load`]), so its copies are
-    /// offered. A ticket with no parent has no epic a person could activate, so a person
-    /// releasing it (only an `open` ticket gets here) is what asks for it to be worked. A ticket
-    /// started by name skips these rules, because `/claims` does not ask the queue.
-    fn offered(&self, ticket: Ticket) -> Option<Ticket> {
-        let filed_by_hub = self.requirements.is_regression(ticket.id.as_str())
-            || ticket.metadata.contains_key(REVERTED_KEY)
-            || ticket
-                .labels
-                .iter()
-                .any(|label| HUB_FILED.contains(&label.as_str()));
-        let mut ancestors = self.ancestors(&ticket.id).peekable();
-        let loose = ancestors.peek().is_none();
-        let active = loose
-            || ancestors
-                .find_map(|id| self.nodes.get(&id).and_then(|node| node.workers))
-                .is_some_and(|workers| workers > 0);
-        let for_person = ticket.labels.iter().any(|label| label == NEEDS_PERSON);
-        ((filed_by_hub || active) && !for_person).then_some(ticket)
     }
 
     /// The ticket's ancestors, nearest first, stopping at a cycle.
@@ -605,7 +568,9 @@ impl Snapshot {
             kind,
             holds_tip: self.tip_blockers.contains(ticket.id.as_str()),
             epic: self.group(&ticket.id),
-            priority: ticket.priority,
+            allocation: ticket
+                .local_allocation()
+                .unwrap_or(shares::DEFAULT_TICKET_ALLOCATION),
             chain: self.chain(ticket.id.as_str(), memo, &mut HashSet::new()),
             created_at: ticket.created_at,
             expected_cores,
@@ -615,36 +580,6 @@ impl Snapshot {
             labels: ticket.labels,
             id: ticket.id,
         }
-    }
-
-    /// Each group's share, cap, ready tickets and tickets in progress or reserved, across every
-    /// machine, for the groups that have a ready ticket. Sorted by group, so the input order that
-    /// breaks ties is the same on every request.
-    fn demand(&self, ready: &[ReadyTicket]) -> Vec<EpicDemand> {
-        let mut groups: BTreeMap<Group, EpicDemand> = BTreeMap::new();
-        for ticket in ready {
-            let group = ticket.epic.clone();
-            let node = group.as_ref().and_then(|id| self.nodes.get(id));
-            let cap = group.as_ref().and_then(|id| self.cap(id));
-            groups
-                .entry(group.clone())
-                .or_insert_with(|| EpicDemand {
-                    epic: group,
-                    allocation: node.and_then(|n| n.workers),
-                    max_workers: cap,
-                    ready: 0,
-                    held: 0,
-                })
-                .ready += 1;
-        }
-        for (id, node) in &self.nodes {
-            if (node.in_progress || self.reserved.contains_key(id.as_str()))
-                && let Some(demand) = groups.get_mut(&self.group(id))
-            {
-                demand.held += 1;
-            }
-        }
-        groups.into_values().collect()
     }
 }
 

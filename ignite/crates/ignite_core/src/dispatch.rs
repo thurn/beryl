@@ -10,7 +10,7 @@
 //!    ([`crate::shares::improvements_due`]). The largest saving goes first, taking the three
 //!    units in turn.
 //! 4. A ready ticket from the group furthest below its allocation of workers
-//!    ([`crate::shares::epic_order`]). Within a group, the highest priority goes first, then the
+//!    ([`crate::shares::epic_order`]). Within a group, the highest ticket allocation goes first, then the
 //!    longest chain of tickets waiting behind it, then the oldest.
 //!
 //! A machine can take a ticket when it has a free ticket tree, an idle worker that suits the
@@ -52,8 +52,8 @@ pub struct ReadyTicket {
     pub holds_tip: bool,
     /// The group it shares workers in ([`crate::shares::group_of`]).
     pub epic: Group,
-    /// 0 is the highest.
-    pub priority: u8,
+    /// The ticket weight within its pool.
+    pub allocation: u32,
     /// The longest chain of tickets waiting behind it.
     pub chain: u32,
     pub created_at: Timestamp,
@@ -103,11 +103,11 @@ pub fn label<'a>(labels: &'a [String], prefix: &str) -> Option<&'a str> {
     labels.iter().find_map(|l| l.strip_prefix(prefix))
 }
 
-/// Within a group: priority, then the longest chain behind, then the oldest, then the ID so that
+/// Within a group: allocation, then the longest chain behind, then the oldest, then the ID so that
 /// the order is total.
 fn queue_order(a: &ReadyTicket, b: &ReadyTicket) -> Ordering {
-    a.priority
-        .cmp(&b.priority)
+    b.allocation
+        .cmp(&a.allocation)
         .then(b.chain.cmp(&a.chain))
         .then(a.created_at.cmp(&b.created_at))
         .then(a.id.cmp(&b.id))
@@ -185,7 +185,10 @@ pub fn pick_worker(
 /// Improvement tickets in the order the share takes them: the largest saving in `first`, then
 /// the largest in the next unit, and so on in turn; tickets with no saving last.
 fn improvement_order(ready: &[ReadyTicket], first: Unit) -> Vec<&ReadyTicket> {
-    let improvements = ready.iter().filter(|t| t.kind == TicketKind::Improvement);
+    let improvements = ready.iter().filter(|t| {
+        t.kind == TicketKind::Improvement
+            && t.epic != Group::Source(crate::shares::Source::Improvement)
+    });
     let mut by_unit: Vec<Vec<&ReadyTicket>> = Unit::ALL
         .iter()
         .map(|&unit| {
@@ -304,9 +307,13 @@ pub fn order<'a>(
 ) -> Vec<(&'a ReadyTicket, Stage)> {
     let mut regressions: Vec<&ReadyTicket> = ready
         .iter()
-        .filter(|t| t.kind == TicketKind::Regression)
+        .filter(|t| t.kind == TicketKind::Regression || t.holds_tip)
         .collect();
-    regressions.sort_by(|a, b| queue_order(a, b));
+    regressions.sort_by(|a, b| {
+        b.holds_tip
+            .cmp(&a.holds_tip)
+            .then_with(|| queue_order(a, b))
+    });
     let improvements = improvements.map_or_else(Vec::new, |unit| improvement_order(ready, unit));
     let groups = epic_order.iter().flat_map(|group| {
         let mut tickets: Vec<&ReadyTicket> = ready

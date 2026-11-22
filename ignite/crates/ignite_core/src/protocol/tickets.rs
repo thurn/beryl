@@ -31,6 +31,13 @@ pub enum TicketType {
     Meta,
 }
 
+impl TicketType {
+    /// Whether an allocation sets a pool's worker share.
+    pub fn has_worker_share(self) -> bool {
+        matches!(self, Self::Epic | Self::Milestone | Self::Meta)
+    }
+}
+
 /// A ticket's status.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -177,7 +184,14 @@ pub struct TicketFields {
         skip_serializing_if = "Option::is_none"
     )]
     pub unfiled_minutes: Option<Option<u32>>,
-    /// The epic's target number of workers.
+    /// The local allocation. Null inherits the parent or pool default.
+    #[serde(
+        default,
+        deserialize_with = "present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub allocation: Option<Option<u32>>,
+    /// The legacy name for a container's allocation.
     #[serde(
         default,
         deserialize_with = "present",
@@ -274,6 +288,8 @@ pub struct Ticket {
     pub version: Seq,
     #[serde(default)]
     pub workers: Option<u32>,
+    #[serde(default)]
+    pub allocation: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub estimate_minutes: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -305,6 +321,19 @@ pub struct Ticket {
     /// A meta-ticket's schedule: a copy is due every this many hours ([`crate::schedule`]).
     #[serde(default)]
     pub every_hours: Option<u32>,
+}
+
+impl Ticket {
+    /// The local weight, including the legacy field for tickets exported by an older hub.
+    pub fn local_allocation(&self) -> Option<u32> {
+        self.allocation.or_else(|| {
+            if self.ticket_type.has_worker_share() {
+                self.workers
+            } else {
+                crate::shares::legacy_priority(self.priority)
+            }
+        })
+    }
 }
 
 /// Reads a flag stored as `true`/`false` or as the integer 0 or 1, as SQLite stores it.

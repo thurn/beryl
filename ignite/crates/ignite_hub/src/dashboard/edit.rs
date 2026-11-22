@@ -7,7 +7,7 @@
 //!   its editor, the rendered value in `.c-edit-view` and the raw value in a
 //!   `<template class="c-edit-source">`;
 //! - a pencil button (`data-edit="<field>"`) beside a heading or value opens that value's editor;
-//! - buttons with `data-action` (release, close, reopen) change the status;
+//! - buttons with `data-action` (close, reopen) change the status;
 //! - one hidden `#c-edit` element names the ticket, its version and the batch address.
 //!
 //! An edit is an ordinary `POST /batch` of the hub's API, so it is recorded, relayed to a
@@ -45,7 +45,7 @@ pub fn pencil(field: &str, label: &str) -> String {
 }
 
 /// A value the script can edit: `view` is its HTML, `raw` its text as the editor starts with,
-/// and `kind` one of `line`, `markdown`, `priority`, `status`, `labels`, `count` or `choice`. `block`
+/// and `kind` one of `line`, `markdown`, `status`, `labels`, `count`, `choice` or `allocation`. `block`
 /// values (text sections) are a `div`, others a `span`.
 pub fn unit(field: &str, kind: &str, view: &str, raw: &str, block: bool) -> String {
     let tag = if block { "div" } else { "span" };
@@ -60,6 +60,34 @@ pub fn unit(field: &str, kind: &str, view: &str, raw: &str, block: bool) -> Stri
 /// A rail value with its pencil after it.
 pub fn property(field: &str, label: &str, kind: &str, view: &str, raw: &str) -> String {
     unit(field, kind, view, raw, false) + &pencil(field, label)
+}
+
+/// The numeric allocation editor, shared by tickets, epics and fleet settings.
+pub(super) fn allocation(
+    field: &str,
+    label: &str,
+    local: Option<u32>,
+    inherited: Option<u32>,
+    editable: bool,
+) -> String {
+    let fallback = inherited.map_or_else(
+        || "Inherited (inactive)".to_owned(),
+        |n| format!("Inherited ({n})"),
+    );
+    let view = match local {
+        Some(0) => super::components::muted("0 · Parked"),
+        Some(n) => n.to_string(),
+        None => super::components::muted(&fallback),
+    };
+    if !editable {
+        return view;
+    }
+    let raw = local.map(|n| n.to_string()).unwrap_or_default();
+    let view = format!(
+        "{view}<template class=\"c-edit-inherited\">{}</template>",
+        esc(&fallback)
+    );
+    property(field, label, "allocation", &view, &raw)
 }
 
 /// A dropdown whose choices are labels. An empty value removes the ticket's local pin.
@@ -113,23 +141,16 @@ pub fn adders(missing: &[(&str, &str)]) -> String {
     format!("<div class=\"c-edit-adders\">{buttons}</div>")
 }
 
-/// The status actions at the top of the rail: release a ticket pending approval, close an open
-/// one (in one click, with no reason) or reopen a closed one.
+/// The status actions at the top of the rail.
 pub fn actions(status: Status) -> String {
-    let button = |action: &str, text: &str, primary: bool| {
-        format!(
-            "<button type=\"button\" class=\"c-edit-action{}\" data-action=\"{action}\">{text}</button>",
-            if primary { " c-primary" } else { "" }
-        )
+    let (action, text) = if status == Status::Closed {
+        ("reopen", "Reopen")
+    } else {
+        ("close", "Close")
     };
-    let buttons = match status {
-        Status::PendingApproval => {
-            button("release", "Release", true) + &button("close", "Close", false)
-        }
-        Status::Closed => button("reopen", "Reopen", false),
-        _ => button("close", "Close", false),
-    };
-    format!("<div class=\"c-edit-actions\">{buttons}</div>")
+    format!(
+        "<div class=\"c-edit-actions\"><button type=\"button\" class=\"c-edit-action\" data-action=\"{action}\">{text}</button></div>"
+    )
 }
 
 /// The box under the comments that adds one.
@@ -170,7 +191,7 @@ mod tests {
 
     #[test]
     fn the_actions_follow_the_status() {
-        assert!(actions(Status::PendingApproval).contains("data-action=\"release\""));
+        assert!(actions(Status::PendingApproval).contains("data-action=\"close\""));
         assert!(actions(Status::Open).contains("data-action=\"close\""));
         assert!(!actions(Status::Open).contains("release"));
         assert!(actions(Status::Closed).contains("data-action=\"reopen\""));

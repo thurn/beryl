@@ -28,7 +28,7 @@ use ignite_store::hub::{fleet, fleet_settings, machine_asks, tickets};
 
 use super::super::{mix, usage};
 use super::held::{self, Paused};
-use super::{NEEDS_PERSON, Snapshot, capacity, history, improvements_due, landed_files};
+use super::{Snapshot, capacity, history, improvements_due, landed_files};
 
 /// A ticket a worker holds, or that is reserved for one.
 #[derive(Clone, Debug, PartialEq)]
@@ -230,7 +230,7 @@ fn waiting(
         .collect();
     let mut capped = Vec::new();
     ready.retain(|ticket| {
-        let keep = ticket.kind == TicketKind::Regression || !full.contains(&ticket.epic);
+        let keep = held::holds_master(ticket) || !full.contains(&ticket.epic);
         if !keep {
             capped.push(ticket.id.clone());
         }
@@ -642,10 +642,8 @@ fn held_back(
             "its epic is at its --max-workers cap"
         } else if !offerable.contains(&id) {
             "released by two sessions, so it waits for a justiciar"
-        } else if ticket.labels.iter().any(|label| label == NEEDS_PERSON) {
-            "set aside for a person (needs:person)"
-        } else if snapshot.offered(ticket).is_none() {
-            "its epic has no allocation, so the pool is never offered it"
+        } else if let Some(reason) = snapshot.parked(&ticket, &snapshot.group(&id)) {
+            reason
         } else {
             continue;
         };

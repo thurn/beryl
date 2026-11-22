@@ -122,7 +122,6 @@ fn apply_batch(
             .map_err(|e| store_failure(&e))?
     };
     tickets::add_holds(conn, &mut batch).map_err(|e| store_failure(&e))?;
-    tickets::add_releases(conn, &mut batch).map_err(|e| store_failure(&e))?;
     // The CLI sends the writing session's title beside the operations, so the dashboard can
     // name the session by its title; see `session_titles`.
     if let Some(title) = raw.get(ACTOR_TITLE).and_then(Value::as_str) {

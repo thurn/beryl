@@ -279,6 +279,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: include_str!("tree_volumes.sql"),
         code: None,
     },
+    Migration {
+        version: 46,
+        sql: "ALTER TABLE tickets ADD COLUMN allocation INTEGER;",
+        code: Some(tickets::backfill_allocation),
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

@@ -753,6 +753,10 @@ mod tests;
 mod security_tests;
 
 #[cfg(test)]
+#[path = "dispatch_allocation_tests.rs"]
+mod allocation_tests;
+
+#[cfg(test)]
 #[path = "dispatch_hardening_tests.rs"]
 mod hardening_tests;
 

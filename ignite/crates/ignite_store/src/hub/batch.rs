@@ -477,6 +477,7 @@ impl<'a> Run<'a> {
             return rejected("A ticket needs a title");
         };
         let mut changes = Self::field_changes(fields)?;
+        Self::allocation_changes(fields, fields.ticket_type.unwrap_or_default(), &mut changes);
         tickets::default_workers(fields, &mut changes);
         let parent_name = match parent {
             Some(parent) => Some(parent.to_owned()),
@@ -603,9 +604,8 @@ impl<'a> Run<'a> {
         if let Some(metadata) = metadata {
             changes.insert("metadata".to_owned(), json!(metadata));
         }
-        let releasing_epic = ticket.ticket_type == TicketType::Epic
-            && ticket.status == Status::PendingApproval
-            && fields.status == Some(Status::Open);
+        let releasing = Self::update_allocation(ticket, fields, &mut changes);
+        let releasing_epic = releasing && ticket.ticket_type == TicketType::Epic;
         let was_closed = ticket.status == Status::Closed;
         let closing = !was_closed && fields.status == Some(Status::Closed);
         match fields.status {
@@ -623,6 +623,9 @@ impl<'a> Run<'a> {
             self.check_epic_dependencies(ticket.id.as_str(), false)?;
         } else if releasing_epic {
             self.check_epic_dependencies(ticket.id.as_str(), true)?;
+        }
+        if releasing {
+            self.release_descendants(&ticket.id)?;
         }
         let (closed, filed) = if closing {
             self.close_ancestors(ticket.id.as_str(), None)?

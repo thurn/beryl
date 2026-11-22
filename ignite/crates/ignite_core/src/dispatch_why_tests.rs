@@ -36,8 +36,8 @@ fn ticket(name: &str, cores: f64) -> ReadyTicket {
         id: TicketId::new(name).unwrap(),
         kind: TicketKind::Ordinary,
         holds_tip: false,
-        epic: None,
-        priority: 2,
+        epic: crate::shares::Group::General,
+        allocation: 100,
         chain: 0,
         created_at: Timestamp::from_millis(1_000),
         labels: Vec::new(),
@@ -56,7 +56,7 @@ fn why(free: &MachineFree, ready: &[ReadyTicket], order: &[Group]) -> String {
     why_nothing(free, ready, order)
 }
 
-const ALL: [Group; 1] = [None];
+const ALL: [Group; 1] = [Group::General];
 
 #[test]
 fn an_empty_queue_says_to_file_tickets() {
@@ -89,7 +89,7 @@ fn tickets_for_another_machine_are_not_for_these_workers() {
 #[test]
 fn a_ticket_whose_epic_is_at_its_cap_waits_for_the_cap() {
     let mut capped = ticket("TA.1", 0.5);
-    capped.epic = Some(TicketId::new("TA").unwrap());
+    capped.epic = Group::Epic(TicketId::new("TA").unwrap());
     assert_eq!(
         why(&machine(), &[capped], &ALL),
         "1 ready ticket for this machine, all in epics at their --max-workers cap"
@@ -175,7 +175,7 @@ fn blocker_names_the_first_limit_a_person_would_lift() {
 #[test]
 fn order_lists_each_ticket_once_in_the_order_next_for_tries_them() {
     use crate::dispatch::{Stage, order};
-    let epic = Some(TicketId::new("TE").unwrap());
+    let epic = Group::Epic(TicketId::new("TE").unwrap());
     let mut late = ticket("TB", 0.5);
     late.epic.clone_from(&epic);
     let mut regression = ticket("TC", 0.5);
@@ -183,11 +183,11 @@ fn order_lists_each_ticket_once_in_the_order_next_for_tries_them() {
     regression.labels = vec![JUSTICIAR.to_owned()];
     let capped = {
         let mut t = ticket("TD", 0.5);
-        t.epic = Some(TicketId::new("TF").unwrap());
+        t.epic = Group::Epic(TicketId::new("TF").unwrap());
         t
     };
     let ready = [ticket("TA", 0.5), late, regression, capped];
-    let listed: Vec<(String, Stage)> = order(&ready, &[epic, None], None)
+    let listed: Vec<(String, Stage)> = order(&ready, &[epic, Group::General], None)
         .into_iter()
         .map(|(t, stage)| (t.id.to_string(), stage))
         .collect();

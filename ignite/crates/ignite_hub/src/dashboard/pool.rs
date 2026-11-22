@@ -126,6 +126,7 @@ pub(crate) fn options(
     seq: &str,
     private: bool,
     now: Timestamp,
+    editable: Option<&str>,
 ) -> Result<PageOptions, ReadError> {
     let mut machines = conn.prepare("SELECT id, name, cli_apps FROM machines ORDER BY name, id")?;
     let machines = machines
@@ -143,8 +144,8 @@ pub(crate) fn options(
          FROM workers w LEFT JOIN tickets t ON t.id = w.ticket
          WHERE w.machine = ?1 AND w.role = 'worker' ORDER BY w.session",
     )?;
-    let mut body = String::new();
     let settings = fleet_settings::settings(conn)?;
+    let mut body = allocation_controls(&settings, editable);
     for (id, name, cli_apps) in &machines {
         let state = machine_state(conn, name, settings.machine(name).state)?;
         let cli_apps: Vec<String> =
@@ -184,7 +185,7 @@ pub(crate) fn options(
         body += &c::section(name, &(status + &list), Some(workers.len()), None, 3);
     }
     if machines.is_empty() {
-        body = c::empty("No machine has registered.");
+        body += &c::empty("No machine has registered.");
     }
     Ok(frame(
         root,
@@ -224,6 +225,50 @@ fn counts(
     Ok((in_progress, ready_here, landed, unverified))
 }
 
+/// General and source pools have the same allocation editor as ticket pages.
+fn allocation_controls(
+    settings: &ignite_core::fleet::FleetSettings,
+    editable: Option<&str>,
+) -> String {
+    use ignite_core::shares::{DEFAULT_GENERAL_ALLOCATION, Source};
+
+    let allocations = settings.allocations.clone().unwrap_or_default();
+    let general = allocations.general.unwrap_or(DEFAULT_GENERAL_ALLOCATION);
+    let mut rows = vec![(
+        "General pool".to_owned(),
+        super::edit::allocation(
+            "general",
+            "general pool allocation",
+            allocations.general,
+            Some(DEFAULT_GENERAL_ALLOCATION),
+            editable.is_some(),
+        ),
+    )];
+    rows.extend(Source::ALL.map(|source| {
+        let label = source.label();
+        (
+            label.to_owned(),
+            super::edit::allocation(
+                source.key(),
+                &format!("{label} allocation"),
+                allocations.sources.get(&source).copied(),
+                Some(general),
+                editable.is_some(),
+            ),
+        )
+    }));
+    let body = c::section("Allocation", &c::meta(&rows), None, None, 2);
+    let Some(project) = editable else {
+        return body;
+    };
+    let settings = serde_json::to_string(settings).unwrap_or_default();
+    format!(
+        r#"<div id="c-allocation-fleet" data-api="/{}/api/fleet" data-settings="{}">{body}</div>"#,
+        esc(project),
+        esc(&settings),
+    )
+}
+
 /// The `epics` page: which epics are active and their worker shares, with the tickets in
 /// progress and ready and whether landed work is verified.
 pub(crate) fn epics(
@@ -237,7 +282,7 @@ pub(crate) fn epics(
         .map(ToString::to_string)
         .collect();
     let mut statement = conn.prepare(
-        "SELECT id, title, workers, max_workers FROM tickets
+        "SELECT id, title, workers, max_workers, status, parent FROM tickets
          WHERE status != 'closed' AND (workers IS NOT NULL OR type = 'epic')
            AND EXISTS (SELECT 1 FROM tickets c WHERE c.parent = tickets.id)
          ORDER BY workers IS NULL, id",
@@ -247,29 +292,30 @@ pub(crate) fn epics(
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
-                row.get::<_, Option<i64>>(2)?,
-                row.get::<_, Option<i64>>(3)?,
+                row.get::<_, Option<u32>>(2)?,
+                row.get::<_, Option<u32>>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let mut rows = Vec::new();
-    for (id, title, workers, max_workers) in &epics {
+    for (id, title, allocation, max_workers, status, parent) in &epics {
         let (in_progress, ready_here, landed, unverified) = counts(conn, id, &ready)?;
-        let share = match (workers, max_workers) {
-            (Some(allocation), Some(cap)) => c::chip(
-                &format!("Allocation {allocation}, at most {cap} workers"),
-                Tone::Green,
-                None,
-            ),
-            (Some(allocation), None) => {
-                c::chip(&format!("Allocation {allocation}"), Tone::Green, None)
-            }
-            _ => c::chip(
-                "Inactive",
-                Tone::Muted,
-                Some("The epic has no allocation, so none of its tickets are offered."),
-            ),
+        let allocation = if status == "pending_approval" {
+            Some(0)
+        } else {
+            *allocation
         };
+        let mut share = if let Some(n) = allocation.filter(|&weight| weight > 0) {
+            c::chip(&format!("Allocation {n}"), Tone::Green, None)
+        } else {
+            let inherited = super::data::inherited_worker_share(conn, parent.as_deref())?;
+            super::edit::allocation("allocation", "Allocation", allocation, inherited, false)
+        };
+        if let Some(cap) = max_workers {
+            share += &c::muted(&format!(" · At most {cap} workers"));
+        }
         let verified = if landed == 0 {
             c::muted("nothing landed")
         } else if unverified == 0 {

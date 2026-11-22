@@ -18,7 +18,7 @@ fn shared_fields(fields: &mut Fields, args: &TicketFieldArgs) -> Result<()> {
     put(fields, "body", read_file(args.body_file.as_deref())?);
     put(fields, "acceptance", args.acceptance.clone());
     put(fields, "notes", read_file(args.notes_file.as_deref())?);
-    put(fields, "workers", args.allocation);
+    put(fields, "allocation", args.allocation);
     put(fields, "max_workers", args.max_workers);
     put(fields, "cores", args.cores);
     put(
@@ -431,7 +431,7 @@ mod tests {
             op,
             json!({
                 "op": "create", "parent": "Tig9a",
-                "fields": {"title": "Split", "priority": 1, "workers": 3, "max_workers": 5,
+                "fields": {"title": "Split", "priority": 1, "allocation": 3, "max_workers": 5,
                            "cores": 2.5, "estimate_minutes": 45, "unfiled_minutes": 180,
                            "labels": ["tier:opus"]},
                 "deps": [{"on": "a"}, {"on": "b", "kind": "blocks"},

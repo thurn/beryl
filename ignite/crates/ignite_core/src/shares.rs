@@ -6,7 +6,7 @@
 //! unit of allocation, counted across every machine. A group with fewer ready tickets than its
 //! allocation takes what it can use and the others divide the rest. `--max-workers` is a hard
 //! cap, the one setting that can leave a worker idle. A group with no allocation counts as 1, and
-//! tickets under no epic form one group (`None`) with an allocation of 1.
+//! tickets under no epic share the general pool unless their automation source has its own weight.
 //!
 //! Improvement share. Improvement tickets get at least 15% of the last 20 hand-offs to a
 //! machine, not counting regressions, rising in a straight line to 30% as the backlog's saving
@@ -17,8 +17,82 @@ use crate::config::Improvement;
 use crate::dispatch::TicketKind;
 use crate::ids::TicketId;
 
-/// A group of tickets that shares workers: an epic, or `None` for tickets under no epic.
-pub type Group = Option<TicketId>;
+/// An automated source with independent allocation controls.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Deserialize, serde::Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Source {
+    Flaky,
+    Exploration,
+    Improvement,
+    Upkeep,
+}
+
+impl Source {
+    pub const ALL: [Self; 4] = [
+        Self::Flaky,
+        Self::Exploration,
+        Self::Improvement,
+        Self::Upkeep,
+    ];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Flaky => "flaky",
+            Self::Exploration => "exploration",
+            Self::Improvement => "improvement",
+            Self::Upkeep => "upkeep",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Flaky => "Flaky test investigations",
+            Self::Exploration => "Exploration findings",
+            Self::Improvement => "Efficiency improvements",
+            Self::Upkeep => "Other upkeep tickets",
+        }
+    }
+}
+
+/// A pool of work that competes for workers.
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(untagged)]
+pub enum Group {
+    #[default]
+    General,
+    Epic(TicketId),
+    Source(Source),
+}
+
+/// The general pool's historical weight.
+pub const DEFAULT_GENERAL_ALLOCATION: u32 = 1;
+
+/// The weight of a ticket with no local override.
+pub const DEFAULT_TICKET_ALLOCATION: u32 = 100;
+
+/// Adapts P0 through P4 to numeric allocations while preserving their order.
+pub fn legacy_priority(priority: u8) -> Option<u32> {
+    match priority {
+        0 => Some(300),
+        1 => Some(200),
+        3 => Some(50),
+        4 => Some(25),
+        _ => None,
+    }
+}
+
+/// Reports the closest legacy priority band to clients that still display it.
+pub fn priority_band(allocation: Option<u32>) -> u8 {
+    match allocation.unwrap_or(DEFAULT_TICKET_ALLOCATION) {
+        300.. => 0,
+        200..=299 => 1,
+        100..=199 => 2,
+        50..=99 => 3,
+        _ => 4,
+    }
+}
 
 /// The `--allocation` an epic gets when it is filed without one, so filing and releasing an epic
 /// is enough for the pool to work it. Allocations are weights bounded by the pool, so this
@@ -40,10 +114,9 @@ pub struct EpicDemand {
 }
 
 impl EpicDemand {
-    /// The allocation, never below 1: an allocation of 0 would divide nothing, and pausing an
-    /// epic is what `--max-workers 0` is for.
+    /// The denominator used when comparing pools that can take a worker.
     fn share(&self) -> u64 {
-        u64::from(self.allocation.unwrap_or(1).max(1))
+        u64::from(self.allocation.unwrap_or(DEFAULT_GENERAL_ALLOCATION))
     }
 
     fn cap(&self) -> u32 {
@@ -53,14 +126,14 @@ impl EpicDemand {
 
 /// The group a ticket belongs to, from its ancestors listed nearest first with each one's
 /// `--allocation`: the nearest that has one. When none has one, the outermost ancestor, so
-/// that an epic's milestones share the epic's 1 instead of each claiming its own. `None` when
-/// the ticket has no ancestor.
+/// that an epic's milestones share the epic's pool. Tickets with no ancestor use the general
+/// pool.
 pub fn group_of(ancestors: &[(TicketId, Option<u32>)]) -> Group {
     ancestors
         .iter()
         .find(|(_, workers)| workers.is_some())
         .or(ancestors.last())
-        .map(|(id, _)| id.clone())
+        .map_or(Group::General, |(id, _)| Group::Epic(id.clone()))
 }
 
 /// Whether group `a`, holding `a_held`, comes before group `b`, holding `b_held`, for the next
@@ -84,7 +157,7 @@ fn before(
 
 /// Whether a group can use one more worker beyond the `given` it has been handed here.
 fn wants(epic: &EpicDemand, given: u32) -> bool {
-    given < epic.ready && epic.held.saturating_add(given) < epic.cap()
+    epic.share() > 0 && given < epic.ready && epic.held.saturating_add(given) < epic.cap()
 }
 
 /// How many of `idle` workers each group should get, in the order given. Each worker goes in
@@ -253,7 +326,7 @@ mod tests {
 
     fn epic(name: &str, allocation: Option<u32>, ready: u32) -> EpicDemand {
         EpicDemand {
-            epic: Some(id(name)),
+            epic: Group::Epic(id(name)),
             allocation,
             max_workers: None,
             ready,
@@ -288,7 +361,7 @@ mod tests {
         assert_eq!(counts(&divide(7, &epics)), vec![3, 4]);
         assert_eq!(
             epic_order(&epics),
-            vec![Some(id("Tw8gv")), Some(id("Tq44s"))]
+            vec![Group::Epic(id("Tw8gv")), Group::Epic(id("Tq44s"))]
         );
     }
 
@@ -305,7 +378,7 @@ mod tests {
     #[test]
     fn tickets_under_no_epic_share_like_an_epic_with_a_share_of_one() {
         let loose = EpicDemand {
-            epic: None,
+            epic: Group::General,
             allocation: None,
             max_workers: None,
             ready: 10,
@@ -313,17 +386,20 @@ mod tests {
         };
         let epics = [epic("Tq44s", Some(3), 10), loose];
         assert_eq!(counts(&divide(8, &epics)), vec![6, 2]);
-        assert_eq!(divide(8, &epics)[1].0, None);
+        assert_eq!(divide(8, &epics)[1].0, Group::General);
     }
 
     #[test]
     fn a_ticket_belongs_to_the_nearest_ancestor_with_a_number() {
         let milestone = (id("Tq44s.3"), None);
         let numbered = (id("Tq44s"), Some(5));
-        assert_eq!(group_of(&[milestone.clone(), numbered]), Some(id("Tq44s")));
+        assert_eq!(
+            group_of(&[milestone.clone(), numbered]),
+            Group::Epic(id("Tq44s"))
+        );
         let top = (id("Tq44s"), None);
-        assert_eq!(group_of(&[milestone, top]), Some(id("Tq44s")));
-        assert_eq!(group_of(&[]), None);
+        assert_eq!(group_of(&[milestone, top]), Group::Epic(id("Tq44s")));
+        assert_eq!(group_of(&[]), Group::General);
     }
 
     #[test]

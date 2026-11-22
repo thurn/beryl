@@ -362,7 +362,9 @@ fn serve_pages(
             let built = match page {
                 available::PATH => available::options(conn, &root, &seq, now),
                 "fleet" => machines::options(conn, &root, &seq, now, editable.then_some(project)),
-                "pool" => pool::options(conn, &root, &seq, private, now),
+                "pool" => {
+                    pool::options(conn, &root, &seq, private, now, editable.then_some(project))
+                }
                 "epics" => pool::epics(conn, &root, &seq, now),
                 "landings" => landings::options(conn, &root, &seq, now),
                 "tips" => tips::options(conn, &root, &seq, now),

@@ -85,7 +85,7 @@ mod tests {
             title: title.to_owned(),
             ticket_type: "epic".to_owned(),
             status: Status::Open,
-            priority: 2,
+            allocation: None,
             assignee: None,
             updated_at: String::new(),
             pins: ignite_core::pins::Pins::default(),

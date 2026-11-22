@@ -221,6 +221,9 @@ fn write(
     now: Timestamp,
 ) -> Result<FleetSettings> {
     proposed.validate().map_err(StoreError::Rejected)?;
+    if proposed.allocations.is_none() {
+        proposed.allocations.clone_from(&before.allocations);
+    }
     proposed.version = before.version;
     if before.version != 0 && *before == proposed {
         return Ok(before.clone());

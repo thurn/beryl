@@ -573,9 +573,8 @@ fn an_export_names_tickets_and_a_forced_import_rolls_one_back() {
     assert_eq!(title(&hub), "First");
 }
 
-/// The dashboard's Release button sends one update for the ticket it shows. The hub releases
-/// that ticket's pending descendants too, as `ignite ticket update --release` does, and leaves a
-/// closed one alone.
+/// An older client releases an epic by setting its status to open. Pending descendants open
+/// with it. Closed and unrelated tickets keep their existing status.
 #[test]
 fn releasing_an_epic_by_one_update_releases_its_pending_tickets() {
     let fixture = Fixture::new("release");
