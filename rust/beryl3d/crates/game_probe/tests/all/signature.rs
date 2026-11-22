@@ -1,11 +1,11 @@
 use beryl_protocol::GameUpdate;
 use beryl_protocol::ipc::FixtureMessage;
-use beryl_protocol::prompt::{PartName, PromptView, Purpose, ShapeBody, Words};
+use beryl_protocol::prompt::{Purpose, ShapeBody};
 use beryl_protocol::protocol::{
     Candidate, CandidateView, Combat, DecisionId, DecisionView, Kind, ObjectId, PowerToughness,
     SessionId, Side, Status, Step, ZoneName,
 };
-use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{self, ScriptBuilder, ViewBuilder};
 use game_probe::signature::{Measure, Signature};
 use game_table::table::Window;
 
@@ -14,20 +14,7 @@ fn moment(name: &str, title: &str, candidates: &[u16], tapped: bool) -> GameUpda
     builder.card(ZoneName::Battlefield, Side::You, name).tapped = tapped;
     builder.card(ZoneName::Battlefield, Side::Opponent, "Forest");
     let mut update = builder.update();
-    let prompt = PromptView {
-        revision: 0,
-        purpose: Purpose::Choose,
-        part: PartName::Pick,
-        title: title.to_owned(),
-        words: Words::default(),
-        count: None,
-        about: Vec::new(),
-        from: None,
-        marks: Vec::new(),
-        previews: Vec::new(),
-        buttons: Vec::new(),
-        body: ShapeBody::Candidates,
-    };
+    let prompt = testing::prompt(Purpose::Choose, title, Vec::new(), ShapeBody::Candidates);
     update.view.status = Status::Deciding {
         decision: DecisionView {
             id: DecisionId {

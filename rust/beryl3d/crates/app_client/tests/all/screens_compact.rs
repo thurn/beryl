@@ -10,11 +10,11 @@ use app_client::driver::{Page, Recording};
 use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::ipc::{FixtureMessage, LIST_AGENTS, START_GAME};
-use beryl_protocol::prompt::{PartName, PromptView, Purpose, ShapeBody, Words};
+use beryl_protocol::prompt::{PromptView, Purpose, ShapeBody};
 use beryl_protocol::protocol::{
     DecisionId, DecisionView, Kind, LossReason, OutcomeView, SessionId, Side, Status, ZoneName,
 };
-use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{self, ScriptBuilder, ViewBuilder};
 use beryl_protocol::{AgentView, StartRequest};
 use kit_frame::frame::StateBits;
 use kit_probe::agent::Rule;
@@ -220,23 +220,17 @@ fn with_the_keyboard_up_the_seed_stays_in_view_and_the_rest_scrolls_into_reach()
 
 /// A mulligan's prompt, as the session's decision on the opening hand.
 fn keep_or_mulligan() -> PromptView {
-    PromptView {
-        revision: 1,
-        purpose: Purpose::Choose,
-        part: PartName::Pick,
-        title: "Keep or mulligan?".to_owned(),
-        words: Words::default(),
-        count: None,
-        about: Vec::new(),
-        from: None,
-        marks: Vec::new(),
-        previews: Vec::new(),
-        buttons: Vec::new(),
-        body: ShapeBody::YesNo {
+    let mut prompt = testing::prompt(
+        Purpose::Choose,
+        "Keep or mulligan?",
+        Vec::new(),
+        ShapeBody::YesNo {
             about: Vec::new(),
             places: None,
         },
-    }
+    );
+    prompt.revision = 1;
+    prompt
 }
 
 /// A game before its first turn, with seven cards in your hand, you on the play and the

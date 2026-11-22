@@ -26,8 +26,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use app_client::Input;
 use app_client::{Client, Config};
 use beryl_protocol::GameUpdate;
-use beryl_protocol::prompt::Purpose;
-use beryl_protocol::prompt::{ButtonId, PartName, PromptButton, PromptView, ShapeBody, Words};
+use beryl_protocol::prompt::{ButtonId, PromptButton, Purpose, ShapeBody};
 use beryl_protocol::protocol::{
     CardType, Combat, Counter, CounterView, DecisionId, DecisionView, Kind, ObjectId,
     PowerToughness, SessionId, Side, Status, ZoneName,
@@ -85,23 +84,15 @@ fn deciding() -> Input {
         enabled: true,
         primary: false,
     };
-    let prompt = PromptView {
-        revision: 0,
-        purpose: Purpose::Mana,
-        part: PartName::Pick,
-        title: "Pay {1}{U}".to_owned(),
-        words: Words::default(),
-        count: None,
-        about: Vec::new(),
-        from: None,
-        marks: Vec::new(),
-        previews: Vec::new(),
-        buttons: vec![
+    let prompt = beryl_protocol::testing::prompt(
+        Purpose::Mana,
+        "Pay {1}{U}",
+        vec![
             button(ButtonId::Auto, "Auto Pay"),
             button(ButtonId::Decline, "Cancel"),
         ],
-        body: ShapeBody::Candidates,
-    };
+        ShapeBody::Candidates,
+    );
     let mut view = ViewBuilder::sample().build();
     view.status = Status::Deciding {
         decision: DecisionView {

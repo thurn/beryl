@@ -448,7 +448,10 @@ def protocol_literal_lines(source: str) -> list[tuple[int, str]]:
     starts = line_starts(source)
     found: list[tuple[int, str]] = []
     for index, name in enumerate(names[:-2]):
-        if name not in {"ObjectView", "PlayerView", "Step"} or names[index + 1] != "{":
+        if (
+            name not in {"ObjectView", "PlayerView", "PromptView", "Step"}
+            or names[index + 1] != "{"
+        ):
             continue
         start = index
         while start >= 2 and names[start - 1] == "::":

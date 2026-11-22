@@ -1,6 +1,7 @@
 //! Builders for the views and scripts that tests and playback tools hand to clients.
 
 use crate::GameUpdate;
+use crate::prompt::{PartName, PromptButton, PromptView, Purpose, ShapeBody, Words};
 use crate::protocol::{
     AssistsView, CardType, LinkState, ManualOrders, ObjectId, ObjectView, PlayerState, PlayerView,
     PowerToughness, SessionId, Side, StackItem, TablePhase, TableView, ZoneName,
@@ -161,6 +162,31 @@ pub fn object(slot: ObjectId, zone: ZoneName, side: Side, name: Option<&str>) ->
     ObjectView {
         name: name.map(str::to_owned),
         ..ObjectView::neutral(slot, zone, side)
+    }
+}
+
+/// A prompt at revision zero for the pick part, with the given buttons in display order.
+/// Counts, card context, marks, payment previews and client-managed wording start empty.
+#[must_use]
+pub fn prompt(
+    purpose: Purpose,
+    title: &str,
+    buttons: Vec<PromptButton>,
+    body: ShapeBody,
+) -> PromptView {
+    PromptView {
+        revision: 0,
+        purpose,
+        part: PartName::Pick,
+        title: title.to_owned(),
+        words: Words::default(),
+        count: None,
+        about: Vec::new(),
+        from: None,
+        marks: Vec::new(),
+        previews: Vec::new(),
+        buttons,
+        body,
     }
 }
 

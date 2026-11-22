@@ -9,12 +9,12 @@ use app_client::{Client, Config};
 use beryl_card_records::{TokenMakers, card_records_among};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::prompt::{
-    ButtonId, Click, ClickRequest, PartName, PromptButton, PromptView, Purpose, ShapeBody, Words,
+    ButtonId, Click, ClickRequest, PromptButton, PromptView, Purpose, ShapeBody,
 };
 use beryl_protocol::protocol::{
     Candidate, CandidateView, DecisionView, Kind, ObjectId, SessionId, Side, Status, ZoneName,
 };
-use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{self, ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits};
 use kit_ui::input::Input as DeviceInput;
@@ -47,20 +47,9 @@ fn prompt(
     buttons: Vec<PromptButton>,
     body: ShapeBody,
 ) -> PromptView {
-    PromptView {
-        revision: 2,
-        purpose,
-        part: PartName::Pick,
-        title: title.to_owned(),
-        words: Words::default(),
-        count: None,
-        about: Vec::new(),
-        from: None,
-        marks: Vec::new(),
-        previews: Vec::new(),
-        buttons,
-        body,
-    }
+    let mut prompt = testing::prompt(purpose, title, buttons, body);
+    prompt.revision = 2;
+    prompt
 }
 
 /// `builder`'s view, with the viewer deciding `prompt` among `candidates`.

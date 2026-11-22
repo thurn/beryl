@@ -251,6 +251,20 @@ def test_protocol_literals_checks_sources_and_tests(tmp_path: Path) -> None:
     assert found[2].startswith(f"{path}:8: PlayerView literal")
 
 
+def test_a_prompt_struct_update_is_a_protocol_literal(tmp_path: Path) -> None:
+    write(tmp_path, purity.LEVELS_FILE, '{"protocol_literals": {}}')
+    path = f"{CRATES}/app_client/tests/prompt.rs"
+    write(
+        tmp_path,
+        path,
+        "fn copy(prompt: PromptView) -> PromptView {\n"
+        "    PromptView { ..prompt }\n"
+        "}\n",
+    )
+    (found,) = purity.protocol_literals(tmp_path)
+    assert found.startswith(f"{path}:2: PromptView literal")
+
+
 def test_protocol_literal_allowances_hold_exact_counts(tmp_path: Path) -> None:
     path = f"{CRATES}/beryl_inspect/src/stress.rs"
     write(tmp_path, purity.LEVELS_FILE, json.dumps({"protocol_literals": {path: 1}}))

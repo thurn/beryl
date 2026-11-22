@@ -5,13 +5,12 @@ use app_client::Input;
 use app_client::command::{Reply, SessionCommand};
 use app_client::{Client, Config};
 use beryl_protocol::GameUpdate;
-use beryl_protocol::prompt::Purpose;
 use beryl_protocol::prompt::{
-    ButtonId, Click, ClickReply, ClickRequest, PartName, PromptButton, PromptView, ShapeBody, Words,
+    ButtonId, Click, ClickReply, ClickRequest, PromptButton, PromptView, Purpose, ShapeBody,
 };
 use beryl_protocol::protocol::{DecisionId, DecisionView, Kind, SessionId, Status, Why, ZoneName};
 use beryl_protocol::script::Act;
-use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
+use beryl_protocol::testing::{self, ScriptBuilder, ViewBuilder, timing};
 use game_hud::prompts::bar::Message as BarMessage;
 use game_table::table::Table;
 use glam::Vec2;
@@ -72,26 +71,20 @@ pub(super) fn prompt_button(id: ButtonId, label: &str, primary: bool) -> PromptB
 
 /// A mana payment, as the session words one.
 pub(super) fn prompt(title: &str) -> PromptView {
-    PromptView {
-        revision: 3,
-        purpose: Purpose::Mana,
-        part: PartName::Pick,
-        title: title.to_owned(),
-        words: Words::default(),
-        count: None,
-        about: Vec::new(),
-        from: None,
-        marks: Vec::new(),
-        previews: Vec::new(),
-        buttons: vec![
+    let mut prompt = testing::prompt(
+        Purpose::Mana,
+        title,
+        vec![
             prompt_button(ButtonId::Auto, "Auto Pay", true),
             prompt_button(ButtonId::Decline, "Cancel", false),
         ],
-        body: ShapeBody::Pay {
+        ShapeBody::Pay {
             cost: "{1}{U}".to_owned(),
             left: "{1}{U}".to_owned(),
         },
-    }
+    );
+    prompt.revision = 3;
+    prompt
 }
 
 /// The sample table, with the viewer deciding `prompt`.
