@@ -122,6 +122,8 @@ export interface StageLayout {
   /** Where a card you draw is held up to be read before it drops into your hand, where it
    * will lie at `rest`; one of several drawn together passes it without stopping. */
   drawn(rest: Pose): Pose;
+  /** The center and width of the opponent's played land at the far end of its swing. */
+  opponentLandTurn(): Point & { width: number };
   /** The middle of the card `resting` is dressed as, were it drawn at `pose`: what a card
    * turns about as it taps, grows about as it turns over, and strikes at. */
   middle(resting: Resting, pose: Pose): Point;

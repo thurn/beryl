@@ -146,6 +146,7 @@ export const row = {
     chevron: 1 / 6,
     // A drawn card is held up 300 above where it will lie, at twice its width.
     drawn: (rest) => ({ ...rest, y: rest.y - 300, width: rest.width * 2 }),
+    opponentLandTurn: () => ({ x: 1340, y: 270, width: 180 }),
 };
 
 /** A surface that records what the stage did to it: the nodes it made and removed (`log`),

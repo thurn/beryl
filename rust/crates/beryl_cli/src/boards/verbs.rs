@@ -283,7 +283,18 @@ pub(super) const VERBS: &[Scenario] = &[
                 PLAINS_,
             ],
         )
-        .hand(P0, &[ISLAND, THIEVING_SKYDIVER, SWIFT_RECONFIGURATION])
+        // The land leaves the left edge of a six-card hand as seen by the opponent.
+        .hand(
+            P0,
+            &[
+                ISLAND,
+                THIEVING_SKYDIVER,
+                SWIFT_RECONFIGURATION,
+                THIRST_FOR_DISCOVERY,
+                THIRST_FOR_DISCOVERY,
+                THIRST_FOR_DISCOVERY,
+            ],
+        )
         .library(P0, LANDS)
         .permanents(P1, &[Permanent::new(CURRENCY_CONVERTER), ISLAND_, PLAINS_])
         .hand(P1, &[OUST])

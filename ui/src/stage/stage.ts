@@ -70,7 +70,6 @@ import {
   carries,
   piled,
   dissolve,
-  halfTurned,
   home,
   keep,
   moverOf,
@@ -689,8 +688,7 @@ export class ScriptStage {
           at,
           [name, start, before, resting],
           this.#table!,
-          (pose, near) =>
-            halfTurned(pose, this.#layout.middle(entry.resting, pose), near),
+          this.#layout,
         );
         this.#fly(name, entry, ...showingOn(track, kept, showing));
       }

@@ -12,7 +12,7 @@
       "verb": "fly",
       "path": "Rises out of the hand or library and glides on a shallow arc to its place, easing out. An opponent's card turns face up as it leaves their hand, edge-on about a third of the way along. A draw holds large beside the library for about 0.2 s, then drops into the hand.",
       "gaps": [
-        "Land played: both instances are in UrGalw_f35w; no land drop was found in pE4XSNi-nZc's turn windows. Opponent land played: two instances, whose farthest points differ (0.93 and 0.68 of the table's width).",
+        "Land played: both instances are in UrGalw_f35w; no land drop was found in pE4XSNi-nZc's turn windows. Opponent land played: three whole-table instances, including a departure from the left of the opponent's fan. Their farthest points are within about 0.02 of the table's width.",
         "Discard: one two-card discard (pE4XSNi-nZc); in UrGalw_f35w 57:20.4 a looted card left the hand with no flight in the crop filmed.",
         "Draw: SswBO8aOOgc 21:30.4 and 24:22.9 were tracked only inside a crop that misses the library leg (fly-in 330 to 360 ms, hold 200 ms, drop 200 to 330 ms), so they are left out.",
         "Peak size of the spells was not taken. The land played and discard peaks are widths read by eye, not retaken as the tracker takes size (the resolves' were, by-w8gv.21.37)."
@@ -78,9 +78,9 @@
           "delay_ms": null,
           "stagger_ms": null,
           "peak": null,
-          "path": "The opponent's land leaves the middle of their hand at the top of the table at 16:46.33, already face up, and drops down and to the right, away from their lands at the top left, tilted about 25 degrees with its shadow apart from it on the table. It is farthest out at 16:46.60, about 0.93 of the table's width across and 0.3 of its height down, where it levels out, and then glides left along the table to its slot at the top left, at rest 16:46.97.",
+          "path": "The opponent's land leaves the middle of their hand at the top of the table at 16:46.33, already face up, and drops down and to the right, away from their lands at the top left, tilted about 25 degrees with its shadow apart from it on the table. It is farthest out at 16:46.60, about 0.68 of the table's width across and 0.29 of its height down, where it levels out, and then glides left along the table to its slot at the top left, at rest 16:46.97.",
           "curve": "ease-out",
-          "note": "Whole table, no crop. Farthest out 270 ms in, 0.43 of its time. It slows as it comes in. No flash where it lands."
+          "note": "Retaken whole at 60 fps. Farthest right about 270 ms in, 0.43 of its time. Its shadow lies below and left of the card and catches up when it lands. No flash on arrival."
         },
         {
           "case": "opponent land played",
@@ -96,9 +96,27 @@
           "delay_ms": null,
           "stagger_ms": null,
           "peak": null,
-          "path": "The opponent's land leaves their hand at the top at 20:13.60, face up, drops down and to the right tilted with its shadow apart from it, is farthest out at 20:13.83, about 0.68 of the table's width across and 0.22 of its height down, levels out and glides left to its slot beside their other lands, at rest about 20:14.20.",
+          "path": "The opponent's land leaves their hand at the top at 20:13.60, face up, drops down and to the right tilted with its shadow apart from it, is farthest out at 20:13.83, about 0.67 of the table's width across and 0.28 of its height down, levels out and glides left to its slot beside their other lands, at rest about 20:14.20.",
           "curve": "ease-out",
-          "note": "Whole table, no crop. Farthest out 230 ms in, 0.38 of its time: the same hooked route as UrGalw_f35w 16:46.1, less far out. The land's own trigger follows it."
+          "note": "Retaken whole at 30 fps. The card levels out by about 270 ms, travels left at that height, then moves up into its row. The land's own trigger follows it."
+        },
+        {
+          "case": "opponent land played",
+          "recording": "AhTcvQ-lQQQ",
+          "time": "23:51.50",
+          "span": 1.13,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "the opening fan, the card's shadow and its later ability share the frame",
+          "command": "just video film AhTcvQ-lQQQ 23:51.50 --span 1.13 --fps 30 --cols 8 --width 480",
+          "since": "",
+          "duration_ms": 630,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "Flooded Strand leaves from left of the opponent's life badge at about (0.45, 0.03), where positions are fractions of the table's width and height. Face up at departure, it passes over the badge, leans as it swings to (0.67, 0.29) around 230 ms, and is level at (0.67, 0.30) by 270 ms. It glides left from there, rising into the land row at (0.28, 0.19) by 630 ms.",
+          "curve": "ease-out",
+          "note": "Whole table at 30 fps. At the turn the visible face is about 0.09 of the table's width, in perspective. The fan closes behind the departing card and the land settles without a flash. Its ability comes later."
         },
         {
           "case": "permanent resolves",
@@ -492,7 +510,7 @@
           },
           "opponent land played": {
             "duration_ms": {
-              "median": 615,
+              "median": 630,
               "min": 600,
               "max": 630
             },

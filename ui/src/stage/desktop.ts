@@ -24,6 +24,7 @@ import {
   type StageLayout,
 } from "./layout.ts";
 import type { Pose } from "./pose.ts";
+import { opponentLandTurn } from "./land-play.ts";
 import { fan, type PileSpace } from "./revealed.ts";
 import { arranged, type Table, type Tray } from "./table.ts";
 import { laidOut, type TraySpace } from "./tray.ts";
@@ -354,6 +355,7 @@ export const desktopWith = (around: Around): StageLayout => ({
   anchors,
   emerging,
   drawn: beside,
+  opponentLandTurn: () => opponentLandTurn(STAGE.width, STAGE.height),
   middle,
   half,
   chevron: CHEVRON,

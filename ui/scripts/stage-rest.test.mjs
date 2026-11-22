@@ -7,9 +7,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { LIFT, lifts } from "../src/stage/lift.ts";
-import { bowed, bowOf } from "../src/stage/bows.ts";
+import { bowOf } from "../src/stage/bows.ts";
 import { glide } from "../src/stage/tracks.ts";
-import { move, object, reach, stage, view } from "./stage-table.mjs";
+import { move, object, reach, row, stage, view } from "./stage-table.mjs";
 
 const card = (slot) => ({ kind: "object", slot });
 /** A streak of one blue mana from `from` into `to`. */
@@ -333,52 +333,68 @@ test("a coin has the table to itself: it waits for the turn's banner to go", () 
     ]);
 });
 
-test("the opponent's land played hooks round, and the player's own glides straight", () => {
-    const fly = (from, zone, controller) => ({
-        verb: "fly",
-        from,
-        object: { ...object(1), zone, controller },
+test("a land from the left of the opponent's hand swings past their life badge", () => {
+    const hand = object(1, "hand", {
+        name: null,
+        controller: "opponent",
+        owner: "opponent",
     });
-    const [mine, theirs] = [
-        fly("hand", "battlefield", "you"),
-        fly("hand", "battlefield", "opponent"),
-    ];
-    // The player's own land glides straight. The opponent's leaves the line: with their
-    // hand at the top middle and their lands at the top left, it is farthest off the line
-    // below it and to the right of where it left, the side away from where it is going.
-    assert.equal(bowOf(mine, 1), undefined);
-    const bow = bowOf(theirs, -1);
-    const [from, to] = [
-        { x: 800, y: 0, rotation: 0 },
-        { x: 200, y: 150, rotation: 0 },
-    ];
-    const at = (through) =>
-        bowed(
-            {
-                ...from,
-                x: from.x + (to.x - from.x) * through,
-                y: from.y + (to.y - from.y) * through,
-            },
-            from,
-            to,
-            through,
-            bow,
-        );
-    const farthest = at(bow.peak);
-    assert.ok(farthest.x > from.x + 150, "it swings out past where it left");
-    assert.ok(farthest.y > to.y + 50, "and down into the open table");
-    assert.ok(Math.abs(farthest.rotation) >= 15, "tilted as it goes");
+    const land = { ...hand, name: "Land", zone: "battlefield" };
+    const start = { x: 600, y: -107, width: 105 };
+    const end = { x: 510, y: 112, width: 78 };
+    const layout = {
+        ...row,
+        opponentLandTurn: () => ({ x: 1072, y: 270, width: 144 }),
+        rest(table) {
+            const found = row.rest(table);
+            const card = found.get(1);
+            Object.assign(card.pose, card.object.zone === "hand" ? start : end);
+            return found;
+        },
+    };
+    const { stage: made } = stage(
+        { fly: { duration: 615 } },
+        undefined,
+        layout,
+    );
+    const act = { verb: "fly", from: "hand", object: land, why: "play" };
+    made.play(view([], [1], { objects: [hand] }));
+    assert.equal(made.pose(1).face, "back");
+    made.play(view([1], [], { objects: [land] }), { beats: [[{ act }]] });
+    made.clock.advance(0);
+    const leaving = made.pose(1);
     assert.deepEqual(
-        [at(0), at(1)].map((pose) => [
-            Math.round(pose.x),
-            Math.round(pose.y),
-            Math.round(pose.rotation),
-        ]),
-        [
-            [800, 0, 0],
-            [200, 150, 0],
-        ],
-        "and leaves and lands on the line, upright",
+        [leaving.x, leaving.y, leaving.face],
+        [start.x, start.y, "front"],
+    );
+    made.clock.advance(265);
+    const turn = made.pose(1);
+    assert.ok(
+        turn.x + turn.width / 2 > 1040,
+        "it clears the right of the life badge",
+    );
+    assert.ok(
+        turn.y + turn.width * 0.7 > 240,
+        "it reaches down into the table",
+    );
+    assert.ok(turn.flat < 0.8, "it pitches towards the table");
+    assert.ok(
+        turn.shadow.x < turn.x && turn.shadow.y > turn.y + turn.width,
+        "its shadow separates from the card",
+    );
+    made.clock.advance(110);
+    assert.ok(made.pose(1).x < turn.x, "it glides back to the left");
+    assert.ok(made.pose(1).width > 140, "it stays wide as it starts back");
+    made.clock.advance(240);
+    const landed = made.pose(1);
+    assert.equal(landed.shadow, undefined);
+    assert.deepEqual(
+        [landed.x, landed.y, landed.width, landed.rotation],
+        [end.x, end.y, end.width, 0],
+    );
+    assert.equal(
+        bowOf({ ...act, object: { ...land, controller: "you" } }, 1),
+        undefined,
     );
 });
 

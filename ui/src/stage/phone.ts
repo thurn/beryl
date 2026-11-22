@@ -27,6 +27,7 @@ import {
   type Viewport,
 } from "../mobile/layout";
 import { drawn, emerging, half, middle, origin } from "./desktop.ts";
+import { opponentLandTurn } from "./land-play.ts";
 import {
   abilityName,
   type Anchors,
@@ -358,6 +359,7 @@ export const phone = (viewport: Viewport): StageLayout => ({
   anchors: (view) => anchors(view, viewport),
   emerging,
   drawn,
+  opponentLandTurn: () => opponentLandTurn(viewport.width, viewport.height),
   middle,
   half,
   // The phone's scans wear no combat marks (mobile/faces.tsx).

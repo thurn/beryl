@@ -25,8 +25,10 @@ export interface Pose {
   face: "front" | "back";
   /** How much of its card's height shows as it turns over top over bottom, about the card's
    * own middle: nothing said at rest, where it lies flat, and 0 as it is edge-on to the eye
-   * (tracks.ts `flatAt`). */
+   * (tracks.ts `flatAt` and land-play.ts). */
   flat?: number;
+  /** The projection of a card in flight onto the felt, by the shadow's center in stage pixels. */
+  shadow?: { x: number; y: number; width: number; opacity: number };
 }
 
 /** How far over everything at rest a moving object is drawn. */

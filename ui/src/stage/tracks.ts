@@ -6,9 +6,16 @@ import { LIFT, lifted, lifts } from "./lift.ts";
 import type { Run } from "./beat.ts";
 import type { Act } from "./table.ts";
 import type { On } from "./effects.ts";
-import { abilityName, type Name, type Point, type Resting } from "./layout.ts";
+import {
+  abilityName,
+  type Name,
+  type Point,
+  type Resting,
+  type StageLayout,
+} from "./layout.ts";
 import { ALOFT, between, type Pose } from "./pose.ts";
 import { bowed, bowOf, type Bow } from "./bows.ts";
+import { playedLand } from "./land-play.ts";
 import type { Table } from "./table.ts";
 import type { Room } from "../generated/protocol";
 
@@ -627,16 +634,25 @@ export function carried(
   at: number,
   [name, start, before, resting]: [Name, Pose, Resting, Resting],
   table: Table,
-  halfTurn: NonNullable<Flown["over"]>,
+  layout: StageLayout,
 ): [Track, Resting | undefined] {
   const { verb, to: end } = run;
   const kept = shownUntil(before, resting, verb === "lift");
   const toward = resting.object?.controller === "opponent" ? -1 : 1;
   const about = verb === "fly" || verb === "count";
   const flies = about && litBy(run.step.act) === name;
-  // The land an opponent plays is face up as it leaves their hand, the way up it will lie
-  // (Arena's, `UrGalw_f35w 16:46.37`): it does not turn over on the way.
-  const faceUp = flies && bowOf(run.step.act, toward)?.back !== undefined;
+  const act = run.step.act;
+  const bow = flies ? bowOf(act, toward) : undefined;
+  const opponentLand =
+    flies &&
+    toward < 0 &&
+    act.verb === "fly" &&
+    act.from === "hand" &&
+    act.object.zone === "battlefield" &&
+    act.why === "play";
+  const faceUp = opponentLand || bow?.back !== undefined;
+  const halfTurn = (pose: Pose, near: number) =>
+    halfTurned(pose, layout.middle(resting, pose), near);
   const turns =
     flies && !faceUp && start.face === "back" && resting.pose.face === "front";
   const room = run.room;
@@ -656,21 +672,23 @@ export function carried(
           ? [run.from, end]
           : roomIn(verb, at, end);
   const ease = regroups || opens || run.closes !== undefined ? out : run.ease;
-  const pose = regroups
-    ? glide(start, ease, false)
-    : run.each
-      ? later(start, ease, ...shareOf(run, table, name))
-      : ((opens ? undefined : makingRoom(verb, room, start, ease, toward)) ??
-        glide(start, ease, flies, {
-          over: turns ? halfTurn : undefined,
-          turning: turningOf(run.step.act),
-          bow: flies ? bowOf(run.step.act, toward) : undefined,
-          lift: flies && lifts(run.step.act),
-          round:
-            flies && (faceUp || resting.pose.face === "back")
-              ? halfTurn
-              : undefined,
-        }));
+  const pose = opponentLand
+    ? playedLand(layout, before, start, resting)
+    : regroups
+      ? glide(start, ease, false)
+      : run.each
+        ? later(start, ease, ...shareOf(run, table, name))
+        : ((opens ? undefined : makingRoom(verb, room, start, ease, toward)) ??
+          glide(start, ease, flies, {
+            over: turns ? halfTurn : undefined,
+            turning: turningOf(act),
+            bow,
+            lift: flies && lifts(act),
+            round:
+              flies && (faceUp || resting.pose.face === "back")
+                ? halfTurn
+                : undefined,
+          }));
   const turn = turns ? turningOf(run.step.act).at : kept && 1;
   return [{ from, to, closes: to > end, pose, turn, own: flies }, kept];
 }

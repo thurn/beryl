@@ -33,6 +33,7 @@ import type { Shape } from "./lines.ts";
 import type { StreakShape } from "./streaks.ts";
 import type { Pointer, Under } from "./pointer.ts";
 import { tippedOf, transformOf, turnOf, type Pose } from "./pose.ts";
+import { drawFlightShadow, removeWithFlightShadow } from "./flight-shadow.ts";
 import type { Surface } from "./stage.ts";
 
 /** How much deeper a hand card's element over the hand (`over`) is drawn than its node: over
@@ -156,7 +157,6 @@ export class DomSurface implements Surface {
     const { style } = node;
     const z = String((Number(style.zIndex) || 0) + OVER_HAND);
     const frame = style.getPropertyValue("--frame");
-    // Written only where it changed: the stage draws every node each tick it moves.
     const to = over.style;
     if (to.transform !== style.transform) to.transform = style.transform;
     if (to.opacity !== style.opacity) to.opacity = style.opacity;
@@ -179,7 +179,7 @@ export class DomSurface implements Surface {
   }
 
   remove(name: Name) {
-    this.#nodes.get(name)?.remove();
+    removeWithFlightShadow(this.#nodes.get(name));
     this.#nodes.delete(name);
     this.#overs.get(name)?.remove();
     this.#overs.delete(name);
@@ -668,19 +668,18 @@ export class DomSurface implements Surface {
 
   draw(name: Name, pose: Pose, frame: number) {
     const node = this.#nodes.get(name);
-    const style = node?.style;
-    if (!node || !style) return;
+    if (!node) return;
+    const { style } = node;
     style.transform = transformOf(pose, frame);
     style.opacity = String(pose.opacity);
     style.zIndex = String(Math.round(pose.depth));
-    // The card inside is turned by the stage's rule for it (stage.css), only while it turns.
     const turn = turnOf(pose);
     style.setProperty("--turn", turn);
     node.toggleAttribute("data-turning", turn !== "");
-    // And tipped as it turns over on its way, only while it does.
     const tipped = tippedOf(pose);
     style.setProperty("--tipped", tipped);
     node.toggleAttribute("data-turning-over", tipped !== "");
+    drawFlightShadow(node, pose.shadow);
     this.#weigh(name, node, pose, frame);
     this.#mirror(name);
   }

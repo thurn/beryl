@@ -34,12 +34,8 @@ export interface Bow {
  * 16:47.47`, `17:16.33`). Arena's own spell bows 0.29 of its
  * line, and its ability's copy and its resolving permanent travel a curve
  * (data/arena-motion.json, fly and emerge). A card drawn that no one reads, the opponent's,
- * leaves the line toward the middle of the table, away from its player's edge. So does the
- * land an opponent plays, and farther: Arena's drops out of their hand down into the table
- * on the side away from their lands, tilted, and swings back along the table to its place
- * (`UrGalw_f35w 16:46.33`, `pE4XSNi-nZc 20:13.60`: farthest out about 0.4 of its time in,
- * between 0.12 and 0.39 of the table's width beyond where it left the hand and 0.18 to 0.27
- * of its height below it). */
+ * leaves the line toward the middle of the table, away from its player's edge. A land played
+ * from the opponent's hand has its own path (land-play.ts). */
 export const BOWS = {
   cast: { share: 0.15 },
   theirs: { share: 0.08, peak: 0.6, lean: -8 },
@@ -69,8 +65,8 @@ export function bowOf(act: Act, toward: number): Bow | undefined {
   }
   if (draws(act)) return { ...BOWS.drawn, toward: -toward };
   if (act.object.zone !== "battlefield") return undefined;
-  // The player's own land glides straight from where it is let go (Arena's, `UrGalw_f35w
-  // 16:35.42`).
+  // The local player's land glides straight from release (`UrGalw_f35w 16:35.42`).
+  // A card moved by an effect from the opponent's hand to the table uses a bow.
   if (act.from === "hand") {
     return toward < 0 ? { ...BOWS.played, toward: -toward } : undefined;
   }

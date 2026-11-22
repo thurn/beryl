@@ -25,3 +25,10 @@
   box-shadow: 0 0 calc(var(--frame) * 0.22) calc(var(--frame) * 0.06)
     rgb(8 6 4 / 75%);
 }
+
+.stage-flight-shadow {
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  z-index: 1;
+}
