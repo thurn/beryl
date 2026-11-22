@@ -1,7 +1,9 @@
 //! Starting again, when the daemon starts, the seeds a restart cut short (see `seed_swap.rs` for
 //! the seed directory that marks one).
 
+use std::collections::BTreeSet;
 use std::fs;
+use std::path::Path;
 
 use ignite_core::traits::Result;
 use ignite_git::refs;
@@ -22,21 +24,31 @@ impl Trees {
     /// this returns, so it runs before the daemon serves its socket: a build that a verb asks
     /// for after the restart then waits for the copy. Returns the trees resumed.
     pub fn resume_seeds(&self) -> Result<Vec<ignite_core::ids::TreeId>> {
-        let config = &self.inner.config;
-        for entry in fs::read_dir(&config.dir)?.filter_map(std::result::Result::ok) {
-            if entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with(discarded_prefix())
-            {
-                delete(entry.path());
+        let rows = store::all(&self.lock().db).map_err(|e| store_error(&e))?;
+        let root = self.root();
+        let roots: BTreeSet<_> = rows
+            .iter()
+            .filter_map(|row| Path::new(&row.path).parent())
+            .chain(std::iter::once(root.as_path()))
+            .collect();
+        for root in roots {
+            let Ok(entries) = fs::read_dir(root) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                if entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(discarded_prefix())
+                {
+                    delete(entry.path());
+                }
             }
         }
         let mut resumed = Vec::new();
-        let rows = store::all(&self.lock().db).map_err(|e| store_error(&e))?;
         for row in rows {
             let tree = id_of(&row)?;
-            let path = config.path(&tree);
+            let path = std::path::PathBuf::from(&row.path);
             if fs::symlink_metadata(staging(&path)).is_err() {
                 continue;
             }

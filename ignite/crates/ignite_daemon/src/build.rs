@@ -111,17 +111,15 @@ pub trait TreeFacts: Send + Sync {
     fn crate_graph(&self, path: &Path, tracked: &[String]) -> Result<CrateGraph>;
 }
 
-/// Trees in one directory, each a subdirectory named by its ID, read with `git` and `cargo`.
+/// Build trees read from the daemon store, with facts from `git` and `cargo`.
 #[derive(Clone, Debug)]
 pub struct DirectoryTrees {
-    /// The directory that holds the trees (`repository.trees` in `ignite.toml`).
-    pub root: PathBuf,
+    pub db: Arc<Mutex<rusqlite::Connection>>,
 }
 
 impl TreeFacts for DirectoryTrees {
     fn path(&self, tree: &TreeId) -> Option<PathBuf> {
-        let path = self.root.join(tree.as_str());
-        path.is_dir().then_some(path)
+        crate::trees::root::recorded_path(&lock(&self.db), tree).filter(|path| path.is_dir())
     }
 
     fn tracked(&self, path: &Path) -> Result<Vec<String>> {

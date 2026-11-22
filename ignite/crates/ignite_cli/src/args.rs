@@ -137,6 +137,11 @@ pub enum Command {
         #[command(subcommand)]
         command: Option<FleetCommand>,
     },
+    /// Manage where this machine keeps its build trees.
+    Trees {
+        #[command(subcommand)]
+        command: TreesCommand,
+    },
     /// The machine's pool of worker sessions.
     #[command(disable_help_subcommand = true)]
     Pool {
@@ -640,6 +645,19 @@ pub enum DepCommand {
     },
 }
 
+#[derive(Debug, Subcommand)]
+pub enum TreesCommand {
+    /// Provision an APFS volume with matching reserve and quota.
+    Volume {
+        /// Use the volume for Ignite's databases and services instead of build trees.
+        #[arg(long)]
+        state: bool,
+        /// Reserve and quota in decimal gigabytes.
+        #[arg(long, value_parser = clap::value_parser!(u32).range(1..))]
+        size_gb: u32,
+    },
+}
+
 impl Command {
     /// The verb's name, as the client sends it to the daemon.
     pub fn verb(&self) -> &'static str {
@@ -663,6 +681,7 @@ impl Command {
             Command::Guide { .. } => "guide",
             Command::Install => "install",
             Command::Fleet { .. } => "fleet",
+            Command::Trees { .. } => "trees",
             Command::Pool { .. } => "pool",
             Command::Tell { .. } => "tell",
             Command::Justiciar { .. } => "justiciar",

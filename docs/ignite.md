@@ -1024,6 +1024,47 @@ Ignite manages two kinds of trees:
 The daemon derives the landing-tree count from the machine's physical cores (see
 [Derived capacity](#derived-capacity)).
 
+### Tree roots and volumes
+
+Each machine uses its Fleet `trees_root`, or the main checkout's
+`repository.trees` directory when the setting is unset. A root change takes
+effect when the daemon receives the new settings. New ticket and landing trees
+are created under that root. A tree under a previous root keeps its path until
+its lease ends, then the disk loop retires it. The first build at the new path
+is cold or seeded from a tree already there.
+
+On a Mac, run `ignite trees volume --size-gb <n>` on the machine that will use
+the volume. It creates `BerylTrees` in the APFS container that holds the
+checkout, with equal reserve and quota in decimal GB, then sets `trees_root` to
+the mounted volume's `trees` directory. It enables ownership, writes
+`.fseventsd/no_log` and `.metadata_never_index`, and excludes the volume from
+Time Machine. If a step needs administrator privileges, the command prints the
+corresponding `sudo` command. It reuses an existing volume of the same name and
+size when run again.
+
+APFS sets a volume's reserve and quota at creation. The macOS `diskutil`
+interface exposes those options on `apfs addVolume`, and `apfs resizeContainer`
+sizes the container.
+[Apple's Disk Utility guide](https://support.apple.com/guide/disk-utility/dskua9e6a110/mac)
+also exposes reserve and quota when adding a volume. To resize a tree volume,
+create a volume with the new size and let Ignite move to its new root as leases
+end.
+
+`ignite trees volume --state --size-gb <n>` prepares `BerylState` with the same
+volume settings. It prints the shell commands to stop the Ignite services, move
+the state directory and leave a symbolic link at its original path. Run them
+when the machine can stop running Ignite. On Windows, set `trees_root` and
+`tree_space_gb` by hand in Fleet or with `ignite fleet machine`.
+
+`ignite doctor` warns when the tree volume on a Mac holds other files. It also
+lists Cargo `target` directories in registered worktrees outside the current
+tree root and the main checkout.
+
+A disposable APFS image was remounted with `.fseventsd/no_log` in place. A live
+FSEvents stream reported a source edit in a git worktree on the image, and its
+Cargo build passed. The `fseventsd` footprint was 6,684,672 bytes before that
+build and 6,668,288 bytes after it.
+
 Rules for trees:
 
 - Ignite builds in its managed worktrees. When no ticket tree is free, the lease
@@ -4306,14 +4347,14 @@ through a reviewed landing. Operators edit policy in Fleet.
 ### Fleet settings
 
 The dashboard's Fleet page at `/fleet` shows registered machines and their
-state, disk cap, recent work, trees, and capacity. Capacity includes worker
-count and room for more, admitted and free cores, cores busy outside Ignite,
-memory, disk, the tree budget and what set it, and the longest wait for cores.
-The page shows the latest reason the hub gave when it could offer no ticket.
-Reports older than 60 seconds are marked stale with their sample age. The
-provider section shows enabled shares as percentages, current worker counts,
-recent usage and reset times, holds and eligible alternatives, and machine CLI
-probe results when reported.
+state, disk cap, tree root, tree space and ceiling, recent work, trees, and
+capacity. Capacity includes worker count and room for more, admitted and free
+cores, cores busy outside Ignite, memory, disk, the tree budget and what set it,
+and the longest wait for cores. The page shows the latest reason the hub gave
+when it could offer no ticket. Reports older than 60 seconds are marked stale
+with their sample age. The provider section shows enabled shares as percentages,
+current worker counts, recent usage and reset times, holds and eligible
+alternatives, and machine CLI probe results when reported.
 
 On the private dashboard through Tailscale, the operator or justiciar can edit
 policy. The public dashboard shows the saved settings. `ignite fleet` prints the
@@ -4322,6 +4363,13 @@ fleet view, including the last 20 settings changes. Its edit commands are:
 - `ignite fleet machine <name> --state active|checks-only|off` changes the
   machine's state. Add `--disk-cap-gb <n>` to cap its build-tree budget or
   `--disk-cap-gb auto` to use the automatic budget.
+- `ignite fleet machine <name> --trees-root <path> --tree-space-gb <n|auto> --tree-ceiling-gb <n>`
+  edits the tree settings. The root is an absolute path. Pass
+  `--trees-root default` to use `repository.trees`. The sizes are decimal GB and
+  the ceiling defaults to 60 GB. Use `auto` for the size of a dedicated volume,
+  after the daemon reports it. Use a number when the volume is shared. The tree
+  space and ceiling are stored for the build-slot policy. The current budget
+  still uses the disk cap.
 - `ignite fleet provider <name> [--on|--off] [--share <n>] [--stop-percent <n>]`
   edits provider policy. A share is a weight from 0 to 1,000. Zero makes an
   enabled provider a standby. The stop percentage is from 1 to 100.
@@ -5201,12 +5249,13 @@ Use a rehearsal hub with two eligible machines and two providers with passing
 probes. Use scripted plan samples and seeded capacity reports for the hold and
 placement cases.
 
-- **Fleet page.** On the private dashboard, set a machine's disk cap and reload.
-  Expect the cap in `ignite fleet` and a change with the editor in the audit
-  log. Clear it with `--disk-cap-gb auto` and confirm both views agree. On the
-  public dashboard, expect the same saved values and no edit controls. Compare a
-  fresh capacity sample with one older than 60 seconds and expect the older one
-  to be marked stale.
+- **Fleet page.** On the private dashboard, set a machine's disk cap, tree root,
+  tree space and tree ceiling. Reload and expect those values in `ignite fleet`
+  and changes with the editor in the audit log. Clear the disk cap with
+  `--disk-cap-gb auto` and confirm both views agree. On the public dashboard,
+  expect the same saved values and no edit controls. Compare a fresh capacity
+  sample with one older than 60 seconds and expect the older one to be marked
+  stale.
 - **Share change.** Give one provider all the share and the other zero. Reserve
   a ticket that either can run, then swap the shares on Fleet. Expect the
   existing reservation to keep its provider and the next one to name the new

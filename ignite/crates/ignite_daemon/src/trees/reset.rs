@@ -1,7 +1,7 @@
 //! Ending a ticket tree's lease: stop its processes and reset it to a clean checkout.
 
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -45,7 +45,7 @@ impl Trees {
         caller: Option<u32>,
     ) -> Result<Vec<Ended>> {
         let config = &self.inner.config;
-        let path = config.path(tree);
+        let path = PathBuf::from(&row.path);
         let had_build = {
             let locked = self.wait_for_ticket_tree_work(self.lock(), tree);
             // Read again after waiting. The sweep may have cleared the build, or another
@@ -118,7 +118,7 @@ impl Trees {
         let running: Vec<_> = self
             .inner
             .steps
-            .in_tree(tree, &self.inner.config.path(tree))
+            .in_tree(tree, Path::new(&self.row(tree)?.path))
             .into_iter()
             .filter(|activity| own.as_ref().is_none_or(|own| !Arc::ptr_eq(own, activity)))
             .collect();

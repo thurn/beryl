@@ -299,11 +299,10 @@ impl Process {
             ticket,
             session: ctx.session.clone(),
             tree: ctx.tree.clone(),
-            tree_path: ctx.tree.as_ref().map(|tree| {
-                ctx.repo
-                    .join(&ctx.config.repository.trees)
-                    .join(tree.as_str())
-            }),
+            tree_path: ctx
+                .tree
+                .as_ref()
+                .and_then(|tree| crate::trees::root::recorded_path(&lock(&self.db), tree)),
         }
     }
 
@@ -450,7 +449,7 @@ fn assemble(
         .find(|verb| verb.name() == name)
         .ok_or_else(|| Error::Invalid(format!("`{name}` does not run in a verb process")))?;
     ctx.session.clone_from(&req.session);
-    ctx.tree = ctx.tree_of(&req.cwd);
+    ctx.tree = ctx.tree_of_in(&req.cwd, Some(&lock(db)));
     Ok(Assembled {
         verb: Arc::from(verb),
         ctx,
@@ -462,7 +461,7 @@ fn assemble(
 /// writes is in the tree and not empty.
 fn has_built(base: &crate::main::assemble::Base, db: Arc<Mutex<Connection>>) -> HasBuilt {
     let manifest = base.manifest.clone();
-    let trees = base.trees_dir.clone();
+
     Arc::new(move |tree, product| {
         let held = ignite_store::local::builds::all(&lock(&db)).is_ok_and(|rows| {
             rows.iter().any(|row| {
@@ -472,9 +471,12 @@ fn has_built(base: &crate::main::assemble::Base, db: Arc<Mutex<Connection>>) -> 
             })
         });
         held || manifest.products.get(product).is_some_and(|declared| {
+            let Some(path) = crate::trees::root::recorded_path(&lock(&db), tree) else {
+                return false;
+            };
             !declared.outputs.is_empty()
                 && declared.outputs.iter().all(|output| {
-                    std::fs::read_dir(trees.join(tree.as_str()).join(output))
+                    std::fs::read_dir(path.join(output))
                         .is_ok_and(|mut entries| entries.next().is_some())
                 })
         })

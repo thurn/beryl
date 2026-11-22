@@ -200,6 +200,35 @@ fn fleet_edits_are_visible_in_the_cli_and_preserve_other_fields() {
     let saved = json(&fleet(&[
         "machine",
         "m1",
+        "--trees-root",
+        "/Volumes/Project Trees/trees",
+        "--tree-space-gb",
+        "480",
+        "--tree-ceiling-gb",
+        "100",
+        "--json",
+    ]));
+    let machine = &saved["machines"]["m1"];
+    assert_eq!(machine["trees_root"], "/Volumes/Project Trees/trees");
+    assert_eq!(machine["tree_space_gb"], 480);
+    assert_eq!(machine["tree_ceiling_gb"], 100);
+    assert_eq!(machine["disk_cap_gb"], 10);
+    let text = String::from_utf8(fleet(&[]).stdout).unwrap();
+    assert!(text.contains(
+        "trees root /Volumes/Project Trees/trees, tree space (GB) 480, tree ceiling 100 GB"
+    ));
+
+    let rejected = fleet(&["machine", "m1", "--tree-space-gb", "auto"]);
+    assert_eq!(rejected.status.code(), Some(1));
+    assert!(
+        String::from_utf8(rejected.stdout)
+            .unwrap()
+            .contains("requires a recent tree volume report")
+    );
+
+    let saved = json(&fleet(&[
+        "machine",
+        "m1",
         "--state",
         "checks-only",
         "--json",

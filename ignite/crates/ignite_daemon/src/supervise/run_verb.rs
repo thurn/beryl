@@ -151,11 +151,23 @@ fn express_hint(ctx: &Context, cwd: &Path) -> Option<String> {
     if express.families.is_empty() {
         return None;
     }
-    let trees = ctx.repo.join(&ctx.config.repository.trees);
-    let in_dir = cwd.strip_prefix(&trees).is_ok_and(|rest| {
-        let in_tree: std::path::PathBuf = rest.components().skip(1).collect();
-        in_tree.starts_with(&express.dir)
+    let registered = ctx.tree.as_ref().and_then(|tree| {
+        cwd.ancestors().find(|dir| {
+            dir.file_name().is_some_and(|name| name == tree.as_str()) && dir.join(".git").is_file()
+        })
     });
+    let in_dir = if let Some(root) = registered {
+        cwd.strip_prefix(root)
+            .is_ok_and(|rest| rest.starts_with(&express.dir))
+    } else {
+        let default = ctx.repo.join(&ctx.config.repository.trees);
+        cwd.strip_prefix(default).is_ok_and(|rest| {
+            rest.components()
+                .skip(1)
+                .collect::<std::path::PathBuf>()
+                .starts_with(&express.dir)
+        })
+    };
     let names: Vec<String> = express.families.iter().map(|f| format!("{f}:")).collect();
     in_dir.then(|| {
         format!(

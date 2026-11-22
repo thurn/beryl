@@ -1,6 +1,7 @@
 //! The disk loop removes surplus ticket trees and landing trees that are no longer configured.
 
 use std::fs;
+use std::path::Path;
 
 use ignite_core::ids::TreeId;
 use ignite_core::traits::Result;
@@ -8,7 +9,7 @@ use ignite_git::worktree;
 use ignite_store::local::{rows, trees as store};
 
 use super::disk::id_of;
-use super::{Kind, Trees, store_error};
+use super::{Kind, Seeding, Trees, store_error};
 
 /// Keep warm donors available when work arrives after a quiet period.
 const FREE_TREE_KEEP: usize = 2;
@@ -39,14 +40,17 @@ impl Trees {
         {
             return id_of(row).map(Some);
         }
+        let root = self.root_in(&locked.db);
         let mut free: Vec<&rows::Tree> = rows
             .iter()
-            .filter(|row| row.state == store::State::Free.as_str())
+            .filter(|row| {
+                row.state == store::State::Free.as_str() && !Seeding::involves(Path::new(&row.path))
+            })
             .collect();
-        let surplus_landing = free
+        let surplus_tree = free
             .iter()
             .copied()
-            .find(|row| !self.inner.config.uses(row));
+            .find(|row| !self.inner.config.uses(&root, row));
         let now = self.inner.clock.now();
         let cutoff = now
             .plus_seconds(-f64::from(FREE_TREE_RETIRE_HOURS * 3600))
@@ -59,7 +63,7 @@ impl Trees {
             .copied()
             .take(free.len().saturating_sub(FREE_TREE_KEEP))
             .find(|row| row.last_used.as_ref().is_some_and(|last| last <= &cutoff));
-        let Some(row) = surplus_landing.or(old_ticket) else {
+        let Some(row) = surplus_tree.or(old_ticket) else {
             return Ok(None);
         };
         let id = id_of(row)?;
@@ -76,10 +80,11 @@ impl Trees {
 
     fn remove_retiring(&self, id: &TreeId) -> Result<()> {
         let config = &self.inner.config;
-        let path = config.path(id);
+        let row = self.row(id)?;
+        let path = Path::new(&row.path);
         self.inner.builds.forget(id);
         if path.join(".git").exists() {
-            worktree::remove(&config.repo, &path)?;
+            worktree::remove(&config.repo, path)?;
         }
         // Git can leave ignored build directories behind. A restart may also have interrupted
         // this deletion, so the persisted retirement is retried even with no checkout left.

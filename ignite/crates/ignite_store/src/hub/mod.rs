@@ -274,6 +274,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: "ALTER TABLE machine_asks ADD COLUMN no_ticket_reason TEXT;",
         code: None,
     },
+    Migration {
+        version: 45,
+        sql: include_str!("tree_volumes.sql"),
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

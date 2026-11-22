@@ -37,9 +37,13 @@ pub trait TreeSource: Send + Sync {
 
 impl TreeSource for DirectoryTrees {
     fn tree_of(&self, cwd: &Path) -> Option<TreeId> {
-        let rest = cwd.strip_prefix(&self.root).ok()?;
-        let first = rest.components().next()?.as_os_str().to_str()?;
-        TreeId::new(first).ok()
+        crate::trees::root::tree_at(
+            &self
+                .db
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            cwd,
+        )
     }
 
     fn path(&self, tree: &TreeId) -> Option<PathBuf> {

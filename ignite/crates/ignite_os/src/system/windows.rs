@@ -3,7 +3,7 @@
 
 use std::io;
 use std::os::windows::ffi::OsStrExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
 use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
@@ -33,6 +33,24 @@ pub fn disk_space(path: &Path) -> io::Result<DiskSpace> {
         return Err(io::Error::last_os_error());
     }
     Ok(DiskSpace { total, available })
+}
+
+/// Local drive roots, including mounted Dev Drives with assigned letters.
+pub fn mount_points() -> Vec<PathBuf> {
+    use windows_sys::Win32::Storage::FileSystem::{GetDriveTypeW, GetLogicalDrives};
+
+    // SAFETY: GetLogicalDrives takes no arguments.
+    let drives = unsafe { GetLogicalDrives() };
+    (0..26)
+        .filter(|&index| drives & (1 << index) != 0)
+        .filter_map(|index| {
+            let letter = b'A' + index;
+            let name = [u16::from(letter), u16::from(b':'), u16::from(b'\\'), 0];
+            // SAFETY: name is NUL-terminated and lives through the call. DRIVE_FIXED is 3.
+            (unsafe { GetDriveTypeW(name.as_ptr()) } == 3)
+                .then(|| PathBuf::from(format!("{}:\\", char::from(letter))))
+        })
+        .collect()
 }
 
 /// The machine's physical memory in bytes.

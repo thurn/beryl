@@ -44,7 +44,11 @@ fn state_description(state: MachineState) -> &'static str {
 }
 
 fn machine_settings(machine: &Machine, setting: MachineSetting, editable: bool) -> String {
-    let MachineSetting { state, disk_cap_gb } = setting;
+    let MachineSetting {
+        state,
+        disk_cap_gb,
+        trees,
+    } = setting;
     let description = state_description(state);
     let (state_control, disk_cap) = if editable {
         let name = esc(&machine.name);
@@ -76,9 +80,47 @@ fn machine_settings(machine: &Machine, setting: MachineSetting, editable: bool) 
             disk_cap_gb.map_or_else(|| "Automatic".to_owned(), |gb| gb.to_string()),
         )
     };
+    let root = trees.trees_root.as_deref().unwrap_or("");
+    let space = trees
+        .tree_space_gb
+        .map_or_else(String::new, |space| space.to_string());
+    let ceiling = trees.tree_ceiling_gb.to_string();
+    let name = esc(&machine.name);
+    let (root_control, space_control, ceiling_control) = if editable {
+        let max = u32::MAX;
+        (
+            format!(
+                r#"<div class="c-edit-form"><input type="text" autocomplete="off" data-fleet-field="trees_root" aria-label="{name} trees root" value="{}" placeholder="Repository default"></div>"#,
+                esc(root)
+            ),
+            format!(
+                r#"<div class="c-edit-form"><input type="text" autocomplete="off" data-fleet-field="tree_space_gb" aria-label="{name} tree space in GB" value="{space}" pattern="auto|[1-9][0-9]*" placeholder="GB or auto"></div>"#
+            ),
+            format!(
+                r#"<div class="c-edit-form"><input type="number" autocomplete="off" data-fleet-field="tree_ceiling_gb" aria-label="{name} tree ceiling in GB" value="{ceiling}" min="1" max="{max}" step="1" required></div>"#
+            ),
+        )
+    } else {
+        (
+            if root.is_empty() {
+                "Repository default".to_owned()
+            } else {
+                esc(root)
+            },
+            if space.is_empty() {
+                "Unset".to_owned()
+            } else {
+                space
+            },
+            ceiling,
+        )
+    };
     let items = [
         ("State".to_owned(), state_control),
         ("Disk cap (GB)".to_owned(), disk_cap),
+        ("Trees root".to_owned(), root_control),
+        ("Tree space (GB)".to_owned(), space_control),
+        ("Tree ceiling (GB)".to_owned(), ceiling_control),
     ];
     format!(
         r#"<div class="c-fleet-settings" data-fleet-machine="{}">{}</div>"#,

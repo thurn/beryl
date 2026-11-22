@@ -44,3 +44,9 @@ mod tests {
         );
     }
 }
+
+#[cfg(target_os = "macos")]
+mod volumes;
+
+#[cfg(target_os = "macos")]
+pub use volumes::{ApfsVolume, NativeVolumeSystem, VolumeSystem, mount_points};

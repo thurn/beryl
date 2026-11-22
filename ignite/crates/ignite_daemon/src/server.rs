@@ -72,7 +72,15 @@ pub struct Context {
 }
 
 impl Context {
-    /// The build tree that holds `cwd`: the first directory under the configured trees folder.
+    /// The build tree that holds `cwd`. Persisted paths keep working while the root moves.
+    pub(crate) fn tree_of_in(&self, cwd: &Path, db: Option<&Connection>) -> Option<TreeId> {
+        match db {
+            Some(db) => crate::trees::root::tree_at(db, cwd),
+            None => self.tree_of(cwd),
+        }
+    }
+
+    /// The tree path from the repository default, used without a daemon store.
     pub fn tree_of(&self, cwd: &Path) -> Option<TreeId> {
         let root = self.repo.join(&self.config.repository.trees);
         let canonical = ignite_os::paths::canonicalize(&root).ok();
@@ -432,7 +440,7 @@ impl Server {
         }
         let mut ctx = self.ctx.clone();
         ctx.session.clone_from(&req.session);
-        ctx.tree = ctx.tree_of(&req.cwd);
+        ctx.tree = ctx.tree_of_in(&req.cwd, self.db.as_ref().map(|db| lock(db)).as_deref());
         let verb = self
             .registry
             .get(&req.verb)
@@ -767,11 +775,10 @@ fn begin_activity(
                 .and_then(|ticket| ignite_core::ids::TicketId::new(ticket).ok()),
             session: ctx.session.clone(),
             tree: ctx.tree.clone(),
-            tree_path: ctx.tree.as_ref().map(|tree| {
-                ctx.repo
-                    .join(&ctx.config.repository.trees)
-                    .join(tree.as_str())
-            }),
+            tree_path: ctx
+                .tree
+                .as_ref()
+                .and_then(|tree| crate::trees::root::recorded_path(&lock(db?), tree)),
         },
     )
 }

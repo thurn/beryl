@@ -128,10 +128,11 @@ impl Trees {
         let config = &self.inner.config;
         let keep = config.keep.get();
         let rows = store::all(&self.lock().db).unwrap_or_default();
-        let trees = rows.iter().filter_map(|row| id_of(row).ok()).map(|id| {
-            let path = config.path(&id);
+        let trees = rows.iter().filter_map(|row| {
+            let id = id_of(row).ok()?;
+            let path = Path::new(&row.path);
             let dirs = keep.iter().map(|dir| path.join(dir)).collect();
-            (id, dirs)
+            Some((id, dirs))
         });
         Space::measure_until(trees, stop)
     }
@@ -298,7 +299,7 @@ impl Trees {
             let Some(row) = self.take_for_sweep(&row.id)? else {
                 continue;
             };
-            let path = self.inner.config.path(&id_of(&row)?);
+            let path = Path::new(&row.path);
             for dir in self.inner.config.keep.get().iter() {
                 sweep(&path.join(dir));
             }
@@ -336,7 +337,7 @@ impl Trees {
                 break;
             }
             let id = id_of(&row)?;
-            let path = config.path(&id);
+            let path = Path::new(&row.path);
             if row.kind != Kind::Ticket.as_str() || !keep.iter().any(|dir| path.join(dir).exists())
             {
                 continue;
@@ -373,7 +374,7 @@ impl Trees {
             return Ok(false);
         };
         self.inner.builds.forget(id);
-        let path = self.inner.config.path(id);
+        let path = Path::new(&row.path);
         for dir in self.inner.config.keep.get().iter() {
             remove(&path.join(dir));
         }

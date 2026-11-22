@@ -40,10 +40,18 @@
                     control.dataset.fleetField,
                     control.type === "checkbox" ? control.defaultChecked : Number(control.defaultValue),
                 ]))
-                : { state: "active", disk_cap_gb: null };
+                : {
+                    state: "active",
+                    disk_cap_gb: null,
+                    trees_root: null,
+                    tree_space_gb: null,
+                    tree_ceiling_gb: Number(row.querySelector('[data-fleet-field="tree_ceiling_gb"]').defaultValue),
+                };
         let value = input.value;
         if (input.type === "number") value = input.value === "" ? null : input.valueAsNumber;
         if (input.type === "checkbox") value = input.checked;
+        if (field === "trees_root" && value === "") value = null;
+        if (field === "tree_space_gb") value = value === "auto" ? value : value === "" ? null : Number(value);
         if (current[field] === value) return;
 
         const controls = context.querySelectorAll("[data-fleet-field]");

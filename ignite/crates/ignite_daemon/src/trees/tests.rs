@@ -162,7 +162,7 @@ impl Fixture {
             let locked = trees.lock();
             let rows = store::all(&locked.db).unwrap();
             trees
-                .create_ticket_tree(&locked, &rows, &made[0])
+                .create_ticket_tree(&locked, &trees.config().dir, &rows, &made[0])
                 .unwrap()
                 .unwrap();
         }

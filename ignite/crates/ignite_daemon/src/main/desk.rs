@@ -161,7 +161,9 @@ impl TreeDeskOver {
     }
 
     fn path(&self, tree: &ignite_core::ids::TreeId) -> PathBuf {
-        self.trees.config().dir.join(tree.as_str())
+        self.trees
+            .path(tree)
+            .unwrap_or_else(|| self.trees.root().join(tree.as_str()))
     }
 
     /// The ticket's saved branch on the remote, if it has one.

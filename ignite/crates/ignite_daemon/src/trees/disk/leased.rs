@@ -74,7 +74,7 @@ impl Trees {
     /// [`Trees::pause_idle`], or what keeps the tree busy, in words for the disk loop's report
     /// when it cannot get the disk back above its floor (`disk/floor.rs`).
     pub(super) fn pause_or_why(&self, id: &TreeId) -> std::result::Result<Paused<'_>, String> {
-        {
+        let path = {
             let mut locked = self.lock();
             let row = store::get(&locked.db, id.as_str())
                 .map_err(|error| store_error(&error).to_string())?
@@ -87,11 +87,12 @@ impl Trees {
             if !locked.ticket_tree_work.insert(id.clone()) {
                 return Err("a checkout or disk sweep is already in progress".to_owned());
             }
-        }
+            PathBuf::from(row.path)
+        };
         let mut paused = Paused {
             trees: self,
             id: id.clone(),
-            path: self.inner.config.path(id),
+            path,
             resume_builds: false,
         };
         if super::super::Seeding::involves(&paused.path) {

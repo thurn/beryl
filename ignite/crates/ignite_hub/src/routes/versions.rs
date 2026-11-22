@@ -111,6 +111,7 @@ mod tests {
         ignite_store::hub::fleet::heartbeat(
             conn,
             &Heartbeat {
+                tree_volumes: None,
                 sample: None,
                 capacity: None,
                 machine,

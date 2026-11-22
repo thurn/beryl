@@ -126,6 +126,7 @@ impl Parts {
                 let reply = samples.send(
                     now,
                     Heartbeat {
+                        tree_volumes: None,
                         sample: None,
                         capacity: None,
                         machine: ctx.machine.clone(),
@@ -135,7 +136,15 @@ impl Parts {
                         families: current_families(&ctx.repo, &hostname),
                     },
                     || headless_dispatch.machine_sample(now, &scheduler, &trees, &facts),
-                    |beat| client.heartbeat(beat),
+                    |beat| {
+                        if beat.sample.is_none() {
+                            return client.heartbeat(beat);
+                        }
+                        let mut beat = beat.clone();
+                        beat.tree_volumes =
+                            Some(crate::trees::volumes::report(&trees.config().dir));
+                        client.heartbeat(&beat)
+                    },
                 )?;
                 if let Err(error) = crate::fleet_notice::heard(pool, &reply) {
                     eprintln!("ignite: fleet notice not saved: {error}");
@@ -254,6 +263,7 @@ mod tests {
 
     fn beat(machine: &ignite_core::ids::MachineId) -> Heartbeat {
         Heartbeat {
+            tree_volumes: None,
             sample: None,
             capacity: None,
             machine: machine.clone(),

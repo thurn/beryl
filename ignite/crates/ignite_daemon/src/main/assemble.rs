@@ -28,8 +28,8 @@ use crate::checks::{CheckSettings, Checks};
 use crate::claim::{BriefVerb, ClaimHook, Claims, CloseVerb, ReleaseVerb, StartVerb};
 use crate::dispatchd::{HeadlessDispatch, Setup, TellVerb, TurnEndedVerb};
 use crate::doctor::{
-    self, AdmissionSection, CoresSection, DoctorVerb, ExplorationSection, GitTrees, LoopsSection,
-    NativeHost, StatusSection, StatusVerb, TreesSection,
+    self, AdmissionSection, CoresSection, DoctorVerb, ExplorationSection, LiveGitTrees,
+    LoopsSection, NativeHost, StatusSection, StatusVerb, TreesSection,
 };
 use crate::host::{Host, HostParts, SupervisedStarter, TreesLanding};
 use crate::hubclient::HubClient;
@@ -66,8 +66,6 @@ pub struct Base {
     pub hub: Arc<dyn Hub>,
     pub git: Arc<dyn Git>,
     pub limits: Limits,
-    /// The directory that holds the build trees.
-    pub trees_dir: PathBuf,
 }
 
 impl Base {
@@ -101,7 +99,6 @@ impl Base {
         let derived = derive(&facts);
         let limits = Limits::for_machine(&config, &declared, &manifest, &facts, &derived);
         Ok(Base {
-            trees_dir: repo.join(&config.repository.trees),
             options,
             config,
             live: manifest.clone().into(),
@@ -134,10 +131,10 @@ impl Base {
         self.declared.families.clone()
     }
 
-    fn trees_source(&self) -> DirectoryTrees {
-        DirectoryTrees {
-            root: self.trees_dir.clone(),
-        }
+    fn trees_source(&self) -> Result<DirectoryTrees> {
+        Ok(DirectoryTrees {
+            db: Arc::new(Mutex::new(self.open()?)),
+        })
     }
 }
 
@@ -205,7 +202,7 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
             },
             launcher.clone(),
             base.git.clone(),
-            Arc::new(base.trees_source()),
+            Arc::new(base.trees_source()?),
         )
         // What each tree holds and which builds failed survive the restart, and builds a previous
         // daemon left running are waited for instead of run again (see `crate::build`).
@@ -293,7 +290,7 @@ pub fn checking_with(
             base.machine.clone(),
             base.clock.clone(),
         ),
-        Box::new(base.trees_source()),
+        Box::new(base.trees_source()?),
         Box::new(HubHistory {
             base: base.client.base.clone(),
             token: base.token.clone(),
@@ -631,10 +628,7 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
             idle.exploration_families()
         }))),
         Box::new(TreesSection {
-            source: Arc::new(GitTrees {
-                repo: base.options.repo.clone(),
-                dir: base.trees_dir.clone(),
-            }),
+            source: Arc::new(LiveGitTrees(parts.trees.clone())),
             landing_trees: base.derived.landing_trees,
             host: Arc::new(NativeHost),
         }),

@@ -9,7 +9,7 @@ use rusqlite::Connection;
 use ignite_core::config::Config;
 use ignite_core::fleet::{
     FleetSettings, FleetUpdate, FleetView, MachineSetting, MachineState, ProviderSample,
-    ProviderSetting,
+    ProviderSetting, TreeSettings, TreeSpace,
 };
 use ignite_core::time::Timestamp;
 use ignite_hub::dashboard::serve::{Site, serve, serve_with};
@@ -372,6 +372,22 @@ fn fleet_renders_provider_shares_usage_holds_and_workers() {
     assert!(provider_row(&body, "standby").contains(">Standby<"));
 }
 
+fn assert_cygnus_tree_fields(page: &str, editable: bool) {
+    let cygnus = machine_settings(page, "cygnus");
+    let values = if editable {
+        &[
+            r#"data-fleet-field="trees_root" aria-label="cygnus trees root" value="D:\trees""#,
+            r#"data-fleet-field="tree_space_gb" aria-label="cygnus tree space in GB" value="90""#,
+            r#"data-fleet-field="tree_ceiling_gb" aria-label="cygnus tree ceiling in GB" value="40""#,
+        ][..]
+    } else {
+        &[r">D:\trees<", ">90<", ">40<", ">250<"]
+    };
+    for value in values {
+        assert!(cygnus.contains(value), "{value} in {cygnus}");
+    }
+}
+
 #[test]
 fn fleet_settings_are_editable_only_on_the_private_listener() {
     let config = Config::parse("ignite.toml", FLEET_CONFIG).unwrap();
@@ -394,6 +410,11 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
             MachineSetting {
                 state: MachineState::ChecksOnly,
                 disk_cap_gb: Some(250),
+                trees: TreeSettings {
+                    trees_root: Some(r"D:\trees".to_owned()),
+                    tree_space_gb: Some(TreeSpace::Gigabytes(90)),
+                    tree_ceiling_gb: 40,
+                },
             },
         ),
         (
@@ -401,6 +422,7 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
             MachineSetting {
                 state: MachineState::Off,
                 disk_cap_gb: None,
+                ..MachineSetting::default()
             },
         ),
     ]);
@@ -422,10 +444,11 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
     assert!(private_page.contains(&format!("&quot;version&quot;:{}", settings.version)));
     assert_provider_controls(&private_page);
     assert_machine_controls(&private_page);
+    assert_cygnus_tree_fields(&private_page, true);
 
     let (status, public_page) = browser_request(public.address(), "GET", "/fleet", "");
     assert_eq!(status, 200);
-    assert!(machine_settings(&public_page, "cygnus").contains(">250<"));
+    assert_cygnus_tree_fields(&public_page, false);
     assert!(machine_settings(&public_page, "multivac").contains(">Automatic<"));
     assert!(!public_page.contains("data-fleet-field"));
     assert!(!public_page.contains("data-settings="));
@@ -447,6 +470,10 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
     let saved: FleetSettings = serde_json::from_str(&saved).unwrap();
     assert_eq!(saved.version, original_version + 2);
     assert_eq!(saved.machine("cygnus").disk_cap_gb, None);
+    assert_eq!(
+        saved.machine("cygnus").trees,
+        settings.machine("cygnus").trees
+    );
     assert_eq!(
         fleet_view(public.address())
             .settings
@@ -536,6 +563,7 @@ fn a_reporting_cli_pool_can_start_workers_for_a_regression() {
     let mut conn = seeded();
     let now = Timestamp::parse(NOW).unwrap();
     let mut beat = ignite_core::protocol::hub::Heartbeat {
+        tree_volumes: None,
         sample: None,
         capacity: None,
         machine: "m-m".parse().unwrap(),

@@ -31,7 +31,7 @@ impl Host {
     /// stop` ended it while no daemon ran or the process wrote its reply.
     pub(super) fn remote(
         self: &Arc<Self>,
-        ctx: &Context,
+        _ctx: &Context,
         handle: &Handle,
     ) -> Option<Arc<Activity>> {
         if self.is_handed_back(handle) {
@@ -49,11 +49,9 @@ impl Host {
             class: None,
             ticket: None,
             session: row.session.as_deref().and_then(|s| SessionId::new(s).ok()),
-            tree_path: tree.as_ref().map(|tree| {
-                ctx.repo
-                    .join(&ctx.config.repository.trees)
-                    .join(tree.as_str())
-            }),
+            tree_path: tree
+                .as_ref()
+                .and_then(|tree| crate::trees::root::recorded_path(&lock(&self.db), tree)),
             tree,
         };
         // The verb started under the daemon before this one: its age counts from its handle's

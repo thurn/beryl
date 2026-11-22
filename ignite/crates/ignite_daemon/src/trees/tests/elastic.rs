@@ -120,7 +120,8 @@ fn startup_recovers_a_parked_worktree_without_a_row() {
 fn startup_finishes_an_allocation_reserved_before_checkout() {
     let f = Fixture::new(0, 1);
     let tree = id("tree-01");
-    let row = f.trees.config().resetting_tree(&tree, Kind::Ticket);
+    let row =
+        crate::trees::setup::resetting_tree(&f.trees.config().path(&tree), &tree, Kind::Ticket);
     store::upsert(&f.trees.lock().db, &row).unwrap();
     let pending = f.trees.mark_unfinished().unwrap();
     assert_eq!(

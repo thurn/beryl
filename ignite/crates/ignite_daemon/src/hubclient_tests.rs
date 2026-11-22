@@ -687,13 +687,19 @@ fn a_machine_state_edit_preserves_concurrent_fleet_changes() {
                 let body: Value = serde_json::from_str(body).unwrap();
                 if body["version"] == 1 {
                     return (409, json!({
-                        "version": 2, "machines": {"host": {"state": "active", "disk_cap_gb": 350}},
+                        "version": 2, "machines": {"host": {
+                            "state": "active", "disk_cap_gb": 350,
+                            "trees_root": "/Volumes/Builds/trees", "tree_space_gb": "auto",
+                            "tree_ceiling_gb": 100
+                        }},
                         "providers": {"codex": {"enabled": true, "share": 2, "stop_percent": 99}}
                     }).to_string());
                 }
                 assert_eq!(body["version"], 2);
                 assert_eq!(body["settings"]["machines"]["host"], json!({
-                    "state": "checks-only", "disk_cap_gb": 350
+                    "state": "checks-only", "disk_cap_gb": 350,
+                    "trees_root": "/Volumes/Builds/trees", "tree_space_gb": "auto",
+                    "tree_ceiling_gb": 100
                 }));
                 assert_eq!(body["settings"]["providers"]["codex"]["share"], 2);
                 (200, body["settings"].to_string())

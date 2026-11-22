@@ -92,6 +92,12 @@ crate::tables! {
         capacity: Option<String>,
     }
 
+    MachineTreeVolumes = "machine_tree_volumes" {
+        machine: String,
+        observed_at: String,
+        volumes: String,
+    }
+
     PlacementDeferral = "placement_deferrals" { ticket: String, first_at: String }
 
     Edge = "edges" { src: String, dst: String, kind: String }

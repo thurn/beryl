@@ -35,11 +35,13 @@ mod landing;
 mod pressure;
 mod reset;
 mod retire;
+pub(crate) mod root;
 mod seed;
 mod setup;
 mod status;
 #[cfg(test)]
 mod tests;
+pub(crate) mod volumes;
 mod wait;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -91,7 +93,7 @@ fn park_branch(tree: &TreeId) -> String {
 pub struct TreeConfig {
     /// The repository's main checkout.
     pub repo: PathBuf,
-    /// The directory that holds every tree.
+    /// The default directory for new trees, from the repository configuration.
     pub dir: PathBuf,
     pub remote: String,
     /// The prefix of the remote ref that holds a released ticket's work (`repository.saved`).
@@ -146,15 +148,6 @@ impl TreeConfig {
     fn configured_landings(&self) -> impl Iterator<Item = TreeId> + '_ {
         (1..=self.landing_trees)
             .map(|n| TreeId::new(format!("landing-{n}")).expect("a tree ID is a token"))
-    }
-
-    fn uses(&self, row: &rows::Tree) -> bool {
-        row.kind == Kind::Ticket.as_str()
-            || self.configured_landings().any(|id| id.as_str() == row.id)
-    }
-
-    fn path(&self, tree: &TreeId) -> PathBuf {
-        self.dir.join(tree.as_str())
     }
 }
 
@@ -430,17 +423,20 @@ impl Trees {
         request: &LeaseRequest,
     ) -> Result<Option<TreeId>> {
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
+        let root = self.root_in(&locked.db);
         let keep = self.inner.config.keep.get();
         let wanted = choice::wanted(&keep, &request.files);
         let mut free: Vec<(usize, Option<usize>, &rows::Tree)> = rows
             .iter()
             .filter(|row| {
-                row.state == store::State::Free.as_str() && row.kind == Kind::Ticket.as_str()
+                row.state == store::State::Free.as_str()
+                    && row.kind == Kind::Ticket.as_str()
+                    && root::holds(&root, row)
             })
             .map(|row| {
-                let path = self.inner.config.dir.join(&row.id);
+                let path = Path::new(&row.path);
                 (
-                    choice::missing(&path, &wanted),
+                    choice::missing(path, &wanted),
                     self.distance(row.built_commit.as_deref(), &request.tip),
                     row,
                 )
@@ -465,7 +461,7 @@ impl Trees {
         let id = if let Some((_, _, row)) = chosen {
             TreeId::new(row.id.clone()).map_err(|e| Error::Invalid(e.to_string()))?
         } else {
-            let Some(id) = self.create_ticket_tree(locked, &rows, &request.tip)? else {
+            let Some(id) = self.create_ticket_tree(locked, &root, &rows, &request.tip)? else {
                 return Ok(None);
             };
             id
@@ -519,7 +515,7 @@ impl Trees {
     /// failure the tree is made free again.
     fn check_out(&self, tree: &TreeId, request: &LeaseRequest) -> Result<TreeLease> {
         let config = &self.inner.config;
-        let path = config.path(tree);
+        let path = PathBuf::from(self.row(tree)?.path);
         // A tree given back while its last lease's copy ran may be leased again before the copy ends.
         let _ = seed::wait_until_seeded(&path);
         // Saved work that is only an ancestor of the tip has no commits of its own (for example
@@ -609,14 +605,9 @@ impl Trees {
             .transpose()
             .map_err(|e| Error::Invalid(e.to_string()))?
             .ok_or_else(|| Error::Invalid(format!("tree {tree} is leased to no ticket")))?;
-        let path = config.path(tree);
+        let path = Path::new(&row.path);
         let message = format!("wip: {ticket} saved at release\n\n{SAVED_TRAILER}");
-        let saved = save::save(
-            &path,
-            &config.remote,
-            &config.save_branch(&ticket),
-            &message,
-        )?;
+        let saved = save::save(path, &config.remote, &config.save_branch(&ticket), &message)?;
         let ended = self.reset_leased(tree, &row, park_at, caller)?;
         Ok(Released {
             tree: tree.clone(),
@@ -681,7 +672,9 @@ impl Trees {
 
     /// Frees a tree that was leased but never used, without saving or resetting it.
     fn give_back(&self, tree: &TreeId) {
-        let _ = seed::wait_until_seeded(&self.inner.config.path(tree));
+        if let Ok(row) = self.row(tree) {
+            let _ = seed::wait_until_seeded(Path::new(&row.path));
+        }
         {
             let locked = self.wait_for_ticket_tree_work(self.lock(), tree);
             let _ = store::release(&locked.db, tree.as_str(), None, &self.now());
@@ -707,8 +700,11 @@ impl Trees {
         let tree = {
             let locked = self.lock();
             let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
+            let root = self.root_in(&locked.db);
             let free = |row: &&rows::Tree| {
-                row.kind == Kind::Ticket.as_str() && row.state == store::State::Free.as_str()
+                row.kind == Kind::Ticket.as_str()
+                    && row.state == store::State::Free.as_str()
+                    && root::holds(&root, row)
             };
             if rows
                 .iter()
@@ -754,7 +750,7 @@ impl Trees {
     }
 
     fn prebuild(&self, tree: &TreeId, tip: &Commit) -> Result<()> {
-        let path = self.inner.config.path(tree);
+        let path = PathBuf::from(self.row(tree)?.path);
         let activity = self.inner.steps.begin(
             crate::steps::Kind::Loop("ignite-idle-prebuild".to_owned()),
             crate::steps::Work {

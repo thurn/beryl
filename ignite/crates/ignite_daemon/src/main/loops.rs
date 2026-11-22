@@ -355,6 +355,8 @@ impl Parts {
     /// the space, so `ignite status` and `ignite doctor` show it.
     fn spawn_disk(&self) {
         let (idle, trees) = (self.idle.clone(), self.trees.clone());
+        let git = self.ctx.git.clone();
+        let staging = self.ctx.config.repository.staging.clone();
         self.start_loop("ignite-disk", DISK_STALLS_AFTER, move |ticker| {
             loop {
                 ticker.round(|| {
@@ -383,6 +385,14 @@ impl Parts {
                         Err(error) => {
                             eprintln!("ignite: surplus trees not retired: {error}");
                             failure = Some(format!("surplus trees not retired: {error}"));
+                        }
+                    }
+                    match trees.mark_missing_landings() {
+                        Ok(pending) => {
+                            trees.finish_in_background(git.clone(), staging.clone(), pending);
+                        }
+                        Err(error) => {
+                            failure = Some(format!("landing trees not prepared: {error}"));
                         }
                     }
                     if idle.below_floor() {

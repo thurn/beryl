@@ -44,9 +44,13 @@ pub(crate) fn is_off(pool: &Pool) -> bool {
 
 /// Saves a received notice. An older hub may omit it, so callers store only present notices.
 pub fn store(pool: &Pool, notice: &FleetNotice) -> Result<()> {
+    pool.with_database(|conn| write(conn, notice))
+}
+
+pub(crate) fn write(conn: &Connection, notice: &FleetNotice) -> Result<()> {
     let encoded = serde_json::to_string(notice)
         .map_err(|error| StoreError::Invalid(format!("fleet notice: {error}")))?;
-    pool.with_database(|conn| settings::set_setting(conn, KEY, Some(&encoded)))
+    settings::set_setting(conn, KEY, Some(&encoded))
 }
 
 #[cfg(test)]

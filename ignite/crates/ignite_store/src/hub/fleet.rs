@@ -64,6 +64,9 @@ pub fn heartbeat(conn: &mut Connection, heartbeat: &Heartbeat, now: Timestamp) -
             params![machine, families],
         )?;
     }
+    if let Some(volumes) = &heartbeat.tree_volumes {
+        super::fleet_settings::record_tree_volumes(&tx, machine, now, volumes)?;
+    }
     // A worker that reports the state it was in keeps the time it entered it.
     let mut since: std::collections::HashMap<String, (String, String)> =
         std::collections::HashMap::new();
@@ -498,6 +501,7 @@ mod tests {
         let clock = clock();
         register(&conn, &register_message(), clock.now()).unwrap();
         let mut beat = Heartbeat {
+            tree_volumes: None,
             sample: None,
             capacity: None,
             machine: "m-7f3a".parse().unwrap(),
@@ -534,6 +538,7 @@ mod tests {
         let clock = clock();
         register(&conn, &register_message(), clock.now()).unwrap();
         let mut beat = Heartbeat {
+            tree_volumes: None,
             sample: None,
             capacity: None,
             machine: "m-7f3a".parse().unwrap(),
@@ -554,6 +559,7 @@ mod tests {
     fn a_heartbeat_from_an_unregistered_machine_is_refused() {
         let mut conn = hub::open_in_memory().unwrap();
         let beat = Heartbeat {
+            tree_volumes: None,
             sample: None,
             capacity: None,
             machine: "m-unknown".parse().unwrap(),
@@ -634,6 +640,7 @@ mod tests {
         running.command_since = Some(clock.now());
         running.command_running = true;
         let beat = Heartbeat {
+            tree_volumes: None,
             sample: None,
             capacity: None,
             machine: "m-7f3a".parse().unwrap(),

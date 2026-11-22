@@ -159,7 +159,7 @@ impl Trees {
         let mut busy = Vec::new();
         for row in rows {
             let tree = id_of(&row)?;
-            let path = config.path(&tree);
+            let path = std::path::Path::new(&row.path);
             if !keep.iter().any(|dir| path.join(dir).exists()) {
                 continue;
             }

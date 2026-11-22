@@ -1,7 +1,7 @@
 //! Fleet policy stored by the hub and the messages that carry it to operators and daemons.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt;
+use std::fmt::{self, Write as _};
 
 use serde::{Deserialize, Serialize};
 
@@ -18,10 +18,134 @@ pub struct FleetSettings {
     pub providers: BTreeMap<String, ProviderSetting>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct MachineSetting {
     pub state: MachineState,
     pub disk_cap_gb: Option<u32>,
+    #[serde(flatten)]
+    pub trees: TreeSettings,
+}
+
+pub const DEFAULT_TREE_CEILING_GB: u32 = 60;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TreeSettings {
+    pub trees_root: Option<String>,
+    pub tree_space_gb: Option<TreeSpace>,
+    pub tree_ceiling_gb: u32,
+}
+
+impl Default for TreeSettings {
+    fn default() -> Self {
+        Self {
+            trees_root: None,
+            tree_space_gb: None,
+            tree_ceiling_gb: DEFAULT_TREE_CEILING_GB,
+        }
+    }
+}
+
+impl TreeSettings {
+    pub fn root(&self, fallback: &std::path::Path) -> std::path::PathBuf {
+        self.trees_root
+            .as_deref()
+            .map_or_else(|| fallback.to_owned(), Into::into)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum TreeSpace {
+    Gigabytes(u32),
+    Automatic(Auto),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Auto {
+    Auto,
+}
+
+impl fmt::Display for TreeSpace {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Gigabytes(gb) => write!(formatter, "{gb}"),
+            Self::Automatic(Auto::Auto) => formatter.write_str("auto"),
+        }
+    }
+}
+
+impl std::str::FromStr for TreeSpace {
+    type Err = String;
+
+    fn from_str(raw: &str) -> Result<Self, Self::Err> {
+        if raw == "auto" {
+            return Ok(Self::Automatic(Auto::Auto));
+        }
+        raw.parse::<u32>()
+            .ok()
+            .filter(|gb| *gb > 0)
+            .map(Self::Gigabytes)
+            .ok_or_else(|| "expected a positive number of gigabytes or auto".to_owned())
+    }
+}
+
+/// A volume observed by a daemon. An empty volume can hold trees directly or in one
+/// top-level directory. Once populated, only the reported root is eligible.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TreeVolume {
+    pub mount: String,
+    pub root: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TreeVolumes {
+    pub default_root: String,
+    pub dedicated: Vec<TreeVolume>,
+}
+
+impl TreeVolumes {
+    pub fn allows_auto(&self, root: Option<&str>, os: Os) -> bool {
+        let normalize = |path: &str| match os {
+            Os::Macos => path.trim_end_matches('/').to_owned(),
+            Os::Windows => path.replace('\\', "/").trim_end_matches('/').to_lowercase(),
+        };
+        let root = normalize(root.unwrap_or(&self.default_root));
+        self.dedicated.iter().any(|volume| {
+            if let Some(known) = &volume.root {
+                return root == normalize(known);
+            }
+            let mount = normalize(&volume.mount);
+            root == mount
+                || root
+                    .strip_prefix(&format!("{mount}/"))
+                    .is_some_and(|relative| !relative.is_empty() && !relative.contains('/'))
+        })
+    }
+}
+
+/// Fleet edits can target a machine on a different operating system.
+pub fn absolute_trees_root(path: &str, os: Option<Os>) -> bool {
+    let drive_root = |path: &str| {
+        let bytes = path.as_bytes();
+        bytes.len() >= 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && matches!(bytes[2], b'/' | b'\\')
+    };
+    let mac = path.starts_with('/');
+    let windows = drive_root(path) || path.strip_prefix(r"\\?\").is_some_and(drive_root);
+    !path.chars().any(char::is_control)
+        && match os {
+            Some(Os::Macos) => mac,
+            Some(Os::Windows) => windows,
+            None => mac || windows,
+        }
+        && !path
+            .split(['/', '\\'])
+            .any(|part| part == "." || part == "..")
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,7 +186,7 @@ impl Default for ProviderSetting {
 
 impl FleetSettings {
     pub fn machine(&self, name: &str) -> MachineSetting {
-        self.machines.get(name).copied().unwrap_or_default()
+        self.machines.get(name).cloned().unwrap_or_default()
     }
 
     pub fn provider(&self, name: &str) -> ProviderSetting {
@@ -70,6 +194,23 @@ impl FleetSettings {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        for (name, machine) in &self.machines {
+            let trees = &machine.trees;
+            if trees
+                .trees_root
+                .as_deref()
+                .is_some_and(|root| !absolute_trees_root(root, None))
+            {
+                return Err(format!(
+                    "machine {name}: trees root must be an absolute path"
+                ));
+            }
+            if trees.tree_ceiling_gb == 0 || trees.tree_space_gb == Some(TreeSpace::Gigabytes(0)) {
+                return Err(format!(
+                    "machine {name}: tree space and ceiling must be positive"
+                ));
+            }
+        }
         for (name, provider) in &self.providers {
             if provider.share > 1_000 {
                 return Err(format!("provider {name}: share must be at most 1,000"));
@@ -98,7 +239,29 @@ pub fn summary(before: &FleetSettings, after: &FleetSettings) -> String {
                 let cap = setting
                     .disk_cap_gb
                     .map_or_else(|| "auto".to_owned(), |gb| format!("{gb} GB"));
-                changes.push(format!("machine {name}: {}, disk cap {cap}", setting.state));
+                let mut change = format!("machine {name}: {}, disk cap {cap}", setting.state);
+                let previous = before.machine(name).trees;
+                let trees = &setting.trees;
+                if previous.trees_root != trees.trees_root {
+                    let _ = write!(
+                        change,
+                        ", trees root {}",
+                        trees.trees_root.as_deref().unwrap_or("repository default")
+                    );
+                }
+                if previous.tree_space_gb != trees.tree_space_gb {
+                    let _ = write!(
+                        change,
+                        ", tree space {}",
+                        trees
+                            .tree_space_gb
+                            .map_or_else(|| "unset".to_owned(), |space| space.to_string())
+                    );
+                }
+                if previous.tree_ceiling_gb != trees.tree_ceiling_gb {
+                    let _ = write!(change, ", tree ceiling {} GB", trees.tree_ceiling_gb);
+                }
+                changes.push(change);
             }
             None => changes.push(format!("machine {name}: defaults restored")),
             Some(_) => {}
@@ -137,6 +300,8 @@ pub struct FleetNotice {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state_actor: Option<String>,
     pub disk_cap_gb: Option<u32>,
+    #[serde(default, flatten)]
+    pub trees: TreeSettings,
     pub off_platforms: BTreeSet<Os>,
     pub holds: BTreeMap<String, Vec<Hold>>,
 }

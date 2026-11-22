@@ -37,7 +37,7 @@ pub use tip_round::{GreenAt, TipRoundSection};
 pub(crate) use capacity::{CapacitySection, FleetSection, machine_facts};
 pub use loops::LoopsSection;
 pub use running::{ExecutableOf, RunningSection};
-pub use trees::{GitTrees, TreeInfo, TreeSource, TreesSection};
+pub use trees::{GitTrees, LiveGitTrees, TreeInfo, TreeSource, TreesSection};
 
 /// The most lines `status` prints.
 const MAX_LINES: usize = 40;
@@ -717,9 +717,13 @@ impl Verb for DoctorVerb {
     }
 
     fn run(&self, ctx: &Context, _req: &Request) -> Reply {
+        let dir = self.managed_trees.as_ref().map_or_else(
+            || ctx.repo.join(&ctx.config.repository.trees),
+            crate::trees::Trees::root,
+        );
         let trees = GitTrees {
             repo: ctx.repo.clone(),
-            dir: ctx.repo.join(&ctx.config.repository.trees),
+            dir,
         };
         let (used_tree_bytes, leased_tree_bytes) = self
             .managed_trees

@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use ignite_core::config::Os;
-use ignite_core::fleet::{FleetChange, FleetSettings, MachineState, summary};
+use ignite_core::fleet::{
+    FleetChange, FleetSettings, MachineState, TreeSpace, TreeVolumes, absolute_trees_root, summary,
+};
 use ignite_core::time::Timestamp;
 
 use super::rows;
@@ -62,9 +64,86 @@ pub fn put(
     if expected_version != before.version {
         return Ok(PutOutcome::Conflict(before));
     }
+    validate_tree_settings(&transaction, &before, &proposed, now)?;
     let stored = write(&transaction, &before, proposed, actor, now)?;
     transaction.commit()?;
     Ok(PutOutcome::Stored(stored))
+}
+
+/// An older daemon omits this field. Its heartbeat must not refresh a previous report.
+pub(super) fn record_tree_volumes(
+    conn: &Connection,
+    machine: &str,
+    now: Timestamp,
+    volumes: &TreeVolumes,
+) -> Result<()> {
+    let volumes =
+        serde_json::to_string(volumes).map_err(|error| StoreError::Invalid(error.to_string()))?;
+    conn.execute(
+        "INSERT INTO machine_tree_volumes (machine, observed_at, volumes) VALUES (?1, ?2, ?3)
+         ON CONFLICT(machine) DO UPDATE SET observed_at = excluded.observed_at, volumes = excluded.volumes",
+        params![machine, now.to_string(), volumes],
+    )?;
+    Ok(())
+}
+
+fn validate_tree_settings(
+    conn: &Connection,
+    before: &FleetSettings,
+    proposed: &FleetSettings,
+    now: Timestamp,
+) -> Result<()> {
+    // Reports are sampled every minute. Allow one delayed sample before requiring a new one.
+    const TREE_VOLUME_REPORT_MAX_AGE_S: f64 = 120.0;
+    for (name, machine) in &proposed.machines {
+        let previous = before.machine(name).trees;
+        let trees = &machine.trees;
+        if trees.trees_root == previous.trees_root && trees.tree_space_gb == previous.tree_space_gb
+        {
+            continue;
+        }
+        let registered: Option<(String, Option<String>, Option<String>)> = conn
+            .query_row(
+                "SELECT m.os, v.observed_at, v.volumes FROM machines m
+             LEFT JOIN machine_tree_volumes v ON v.machine = m.id
+             WHERE m.name = ?1 ORDER BY m.last_seen DESC, m.id LIMIT 1",
+                [name],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()?;
+        let os = registered
+            .as_ref()
+            .and_then(|(os, _, _)| match os.as_str() {
+                "macos" => Some(Os::Macos),
+                "windows" => Some(Os::Windows),
+                _ => None,
+            });
+        let root = trees.trees_root.as_deref();
+        if root.is_some_and(|root| !absolute_trees_root(root, os)) {
+            return Err(StoreError::Rejected(format!(
+                "machine {name}: trees root must be an absolute path for its operating system"
+            )));
+        }
+        if !matches!(trees.tree_space_gb, Some(TreeSpace::Automatic(_))) {
+            continue;
+        }
+        let report = registered
+            .and_then(|(_, at, volumes)| Some((Timestamp::parse(&at?).ok()?, volumes?)))
+            .filter(|(at, _)| now.seconds_since(*at) <= TREE_VOLUME_REPORT_MAX_AGE_S)
+            .and_then(|(_, volumes)| serde_json::from_str::<TreeVolumes>(&volumes).ok());
+        let (Some(report), Some(os)) = (report, os) else {
+            return Err(StoreError::Rejected(format!(
+                "machine {name}: auto requires a recent tree volume report from the daemon"
+            )));
+        };
+        if !report.allows_auto(root, os) {
+            return Err(StoreError::Rejected(format!(
+                "machine {name}: the daemon has not reported a dedicated volume for {}; set tree space to a number",
+                root.unwrap_or(&report.default_root)
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Changes only the state, for older daemons still using the per-machine `POST /pause`.
@@ -217,6 +296,7 @@ mod tests {
             MachineSetting {
                 state: MachineState::Active,
                 disk_cap_gb: Some(150),
+                ..MachineSetting::default()
             },
         );
         put(&mut conn, 0, initial, "ignite.toml", now).unwrap();
@@ -229,6 +309,7 @@ mod tests {
             MachineSetting {
                 state: MachineState::ChecksOnly,
                 disk_cap_gb: Some(150),
+                ..MachineSetting::default()
             }
         );
         assert_eq!(
@@ -270,6 +351,7 @@ mod tests {
             MachineSetting {
                 state: MachineState::ChecksOnly,
                 disk_cap_gb: Some(200),
+                ..MachineSetting::default()
             },
         );
         proposed.providers.insert(
@@ -312,6 +394,72 @@ mod tests {
         assert_eq!(latest.len(), 1);
         assert_eq!(latest[0].seq, 2);
         assert_eq!(latest[0].settings, settings(&conn).unwrap());
+    }
+
+    #[test]
+    fn auto_requires_a_recent_daemon_report_for_the_selected_root() {
+        use ignite_core::fleet::{Auto, TreeVolume};
+
+        let mut conn = open_in_memory().unwrap();
+        let now = Timestamp::EPOCH;
+        conn.execute_batch(
+            "INSERT INTO machines (id, name, os, cores, memory_mb, families, version, last_seen)
+             VALUES ('m-1', 'host', 'macos', 8, 16000, '[]', 'aaaa000', '2026-11-17T12:00:00.000Z');",
+        )
+        .unwrap();
+        let mut proposed = FleetSettings::default();
+        let machine = proposed.machines.entry("host".to_owned()).or_default();
+        machine.trees.tree_space_gb = Some(TreeSpace::Automatic(Auto::Auto));
+        machine.trees.trees_root = Some("/Volumes/Shared/trees".to_owned());
+        let volumes = TreeVolumes {
+            default_root: "/repo/.worktrees".to_owned(),
+            dedicated: vec![TreeVolume {
+                mount: "/Volumes/Builds".to_owned(),
+                root: Some("/Volumes/Builds/trees".to_owned()),
+            }],
+        };
+        record_tree_volumes(&conn, "m-1", now, &volumes).unwrap();
+        let result = put(&mut conn, 0, proposed.clone(), "operator", now);
+        assert!(
+            matches!(result, Err(StoreError::Rejected(message)) if message.contains("dedicated volume"))
+        );
+        assert_eq!(settings(&conn).unwrap().version, 0);
+
+        proposed.machines.get_mut("host").unwrap().trees.trees_root =
+            Some("/Volumes/Builds/trees".to_owned());
+        let result = put(
+            &mut conn,
+            0,
+            proposed.clone(),
+            "operator",
+            now.plus_seconds(121.0),
+        );
+        assert!(
+            matches!(result, Err(StoreError::Rejected(message)) if message.contains("recent tree volume report"))
+        );
+
+        let result = put(&mut conn, 0, proposed, "operator", now).unwrap();
+        let PutOutcome::Stored(stored) = result else {
+            panic!("an observed dedicated volume was rejected")
+        };
+        let automatic = stored.machine("host").trees;
+        assert_eq!(
+            automatic.tree_space_gb,
+            Some(TreeSpace::Automatic(Auto::Auto))
+        );
+        assert_eq!(automatic.tree_ceiling_gb, 60);
+    }
+
+    #[test]
+    fn legacy_fleet_json_preserves_the_cap_and_supplies_tree_defaults() {
+        let conn = open_in_memory().unwrap();
+        conn.execute(
+            "INSERT INTO meta (key, value) VALUES ('fleet', ?1)",
+            [r#"{"version":2,"machines":{"host":{"state":"checks-only","disk_cap_gb":200}},"providers":{}}"#],
+        ).unwrap();
+        let machine = settings(&conn).unwrap().machine("host");
+        assert_eq!(machine.disk_cap_gb, Some(200));
+        assert_eq!(machine.trees, ignite_core::fleet::TreeSettings::default());
     }
 
     #[test]

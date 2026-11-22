@@ -1,9 +1,9 @@
 //! `doctor`'s findings about the build trees: which trees exist, which
-//! directories under the trees folder are not Ignite's, and whether the disk has room for the
-//! trees' budget.
+//! directories under the trees folder are not Ignite's, and where build output uses disk.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ignite_core::capacity::{BYTES_PER_GB, BYTES_PER_GIB, DiskLimitSource};
@@ -32,6 +32,14 @@ pub trait TreeSource: Send + Sync {
     fn directories(&self) -> Vec<String> {
         Vec::new()
     }
+
+    fn stray_builds(&self) -> Result<Vec<PathBuf>> {
+        Ok(Vec::new())
+    }
+
+    fn shared_volume(&self) -> bool {
+        false
+    }
 }
 
 /// The trees git has registered under the repository's tree directory. A tree whose directory
@@ -57,6 +65,30 @@ impl TreeSource for GitTrees {
             .collect())
     }
 
+    fn stray_builds(&self) -> Result<Vec<PathBuf>> {
+        let path_on_disk =
+            |path: &Path| ignite_os::paths::canonicalize(path).unwrap_or_else(|_| path.to_owned());
+        let main = path_on_disk(&self.repo);
+        let root = path_on_disk(&self.dir);
+        let worktrees: BTreeSet<_> = ignite_git::worktree::list(&self.repo)?
+            .iter()
+            .map(|tree| path_on_disk(&tree.path))
+            .collect();
+        let mut builds = Vec::new();
+        for tree in &worktrees {
+            if tree != &main && !tree.starts_with(&root) {
+                cargo_targets(tree, &root, &worktrees, &mut builds);
+            }
+        }
+        builds.sort();
+        Ok(builds)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn shared_volume(&self) -> bool {
+        crate::trees::volumes::mac_volume_is_shared(&self.dir)
+    }
+
     fn directories(&self) -> Vec<String> {
         let Ok(entries) = std::fs::read_dir(&self.dir) else {
             return Vec::new();
@@ -67,6 +99,74 @@ impl TreeSource for GitTrees {
             .filter_map(|entry| entry.file_name().into_string().ok())
             .filter(|name| !name.starts_with('.'))
             .collect()
+    }
+}
+
+/// Check only registered git worktrees. Symlinks, nested worktrees, and the managed root
+/// are not traversed. Once a Cargo target is found there is no need to walk its outputs.
+fn cargo_targets(
+    tree: &Path,
+    managed_root: &Path,
+    worktrees: &BTreeSet<PathBuf>,
+    builds: &mut Vec<PathBuf>,
+) {
+    let mut pending = vec![tree.to_owned()];
+    while let Some(dir) = pending.pop() {
+        let Ok(entries) = fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !entry.file_type().is_ok_and(|kind| kind.is_dir())
+                || entry.file_name() == ".git"
+                || path == managed_root
+                || worktrees.contains(&path)
+            {
+                continue;
+            }
+            if entry.file_name() == "target" && is_cargo_target(&path) {
+                builds.push(path);
+            } else {
+                pending.push(path);
+            }
+        }
+    }
+}
+
+fn is_cargo_target(path: &Path) -> bool {
+    path.join(".rustc_info.json").is_file()
+        || fs::read_dir(path).is_ok_and(|entries| {
+            entries.flatten().any(|entry| {
+                entry.file_type().is_ok_and(|kind| kind.is_dir())
+                    && (entry.path().join(".fingerprint").is_dir()
+                        || fs::read_dir(entry.path()).is_ok_and(|profiles| {
+                            profiles
+                                .flatten()
+                                .any(|profile| profile.path().join(".fingerprint").is_dir())
+                        }))
+            })
+        })
+}
+
+/// Status reads the current root when requested, including after a fleet edit.
+pub struct LiveGitTrees(pub crate::trees::Trees);
+
+impl TreeSource for LiveGitTrees {
+    fn trees(&self) -> Result<Vec<TreeInfo>> {
+        self.source().trees()
+    }
+
+    fn directories(&self) -> Vec<String> {
+        self.source().directories()
+    }
+}
+
+impl LiveGitTrees {
+    fn source(&self) -> GitTrees {
+        GitTrees {
+            repo: self.0.config().repo.clone(),
+            dir: self.0.root(),
+        }
     }
 }
 
@@ -130,7 +230,12 @@ fn present_count(present: usize) -> String {
 }
 
 pub(super) fn findings(input: &DoctorInput, landing_trees: u32, findings: &mut Vec<Finding>) {
-    let dir = input.repo.join(&input.config.repository.trees);
+    let default = input.repo.join(&input.config.repository.trees);
+    let dir = input
+        .fleet
+        .as_ref()
+        .map_or_else(|| default.clone(), |notice| notice.trees.root(&default));
+    volume_findings(input.trees, &dir, findings);
     let restart = "restart the daemon, which creates the trees it is missing";
     if !input.host.path_exists(&dir) {
         findings.push(Finding::problem(
@@ -206,6 +311,35 @@ pub(super) fn findings(input: &DoctorInput, landing_trees: u32, findings: &mut V
         input.leased_tree_bytes,
         cap,
     ));
+}
+
+fn volume_findings(trees: &dyn TreeSource, dir: &Path, findings: &mut Vec<Finding>) {
+    if trees.shared_volume() {
+        findings.push(Finding::warning(
+            "trees",
+            format!(
+                "the volume holding {} also holds other files.",
+                dir.display()
+            ),
+            "run `ignite trees volume --size-gb <n>` to create a dedicated APFS volume",
+        ));
+    }
+    match trees.stray_builds() {
+        Ok(builds) => {
+            for path in builds {
+                findings.push(Finding::warning(
+                    "disk",
+                    format!("Cargo build outside the managed trees: {}.", path.display()),
+                    "remove the build directory when the worktree no longer needs it",
+                ));
+            }
+        }
+        Err(error) => findings.push(Finding::warning(
+            "disk",
+            format!("cannot look for Cargo builds outside the managed trees: {error}."),
+            "check `git worktree list`",
+        )),
+    }
 }
 
 fn leased_disk_finding(

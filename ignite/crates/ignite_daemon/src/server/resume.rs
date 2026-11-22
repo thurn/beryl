@@ -105,7 +105,10 @@ pub(super) fn run_again(
                 if let Some(host) = &shared.host {
                     let mut ctx = shared.ctx.clone();
                     ctx.session.clone_from(&request.session);
-                    ctx.tree = ctx.tree_of(&request.cwd);
+                    ctx.tree = ctx.tree_of_in(
+                        &request.cwd,
+                        shared.db.as_ref().map(|db| super::lock(db)).as_deref(),
+                    );
                     host.track(&ctx, handle);
                 }
                 super::process::watch(shared.clone(), handle, Some(child), Some(runs));
@@ -142,7 +145,10 @@ pub(super) fn run_on_daemon(
     };
     let mut ctx = shared.ctx.clone();
     ctx.session.clone_from(&request.session);
-    ctx.tree = ctx.tree_of(&request.cwd);
+    ctx.tree = ctx.tree_of_in(
+        &request.cwd,
+        shared.db.as_ref().map(|db| super::lock(db)).as_deref(),
+    );
     let activity = begin_activity(&shared.steps, shared.db.as_ref(), &ctx, &request);
     activity.attach_handle(handle);
     let launch = Launch {

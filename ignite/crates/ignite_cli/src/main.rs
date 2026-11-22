@@ -15,6 +15,7 @@ mod rejected;
 mod replay;
 mod restore;
 mod ticket;
+mod trees;
 mod values;
 
 use std::process::ExitCode;
@@ -78,6 +79,7 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
     match &cli.command {
         Command::Ticket { command } => ticket::run(command),
         Command::Fleet { command } => fleet::run(command.as_ref(), &current_dir()),
+        Command::Trees { command } => trees::run(command, &current_dir()),
         Command::Plan { command } => plan::run(command),
         Command::Manifest { command } => manifest::run(command, &current_dir()),
         Command::Import { .. } => import::run(&cli.command, &current_dir()),

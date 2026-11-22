@@ -238,7 +238,9 @@ impl Trees {
     /// tree is marked as being seeded before this returns, so a build asked for at once, by the
     /// prebuild or by the session, waits for the copy instead of running under it.
     pub(super) fn start_builds(&self, tree: &TreeId, request: &LeaseRequest) {
-        let path = self.inner.config.path(tree);
+        let Some(path) = self.path(tree) else {
+            return;
+        };
         let seeding = Native
             .copies_are_clones(&path)
             .then(|| Seeding::start(path, tree.clone()));
@@ -364,15 +366,14 @@ impl Trees {
     /// need) passed it on to be built cold.
     fn donors(&self, tree: &TreeId, tip: &Commit) -> Result<Vec<Donor>> {
         let rows = store::all(&self.lock().db).map_err(|e| store_error(&e))?;
-        let own = rows
-            .iter()
-            .find(|row| row.id == tree.as_str())
-            .and_then(|row| self.candidate(row, false, tip));
+        let own_row = rows.iter().find(|row| row.id == tree.as_str());
+        let own = own_row.and_then(|row| self.candidate(row, false, tip));
         let candidates: Vec<Candidate> = rows
             .iter()
             .filter(|row| row.id != tree.as_str())
             .filter_map(|row| {
-                if !self.inner.config.uses(row) {
+                let root = Path::new(&own_row?.path).parent()?;
+                if !self.inner.config.uses(root, row) {
                     return None;
                 }
                 let free = row.state == store::State::Free.as_str();
@@ -381,8 +382,8 @@ impl Trees {
                 if !free && !leased {
                     return None;
                 }
-                let path = self.inner.config.path(&id_of(row).ok()?);
-                if Seeding::contains(&path) || self.cargo_dirs(&path).is_empty() {
+                let path = Path::new(&row.path);
+                if Seeding::contains(path) || self.cargo_dirs(path).is_empty() {
                     return None;
                 }
                 self.candidate(row, leased, tip)
@@ -432,10 +433,10 @@ impl Trees {
         tip: &Commit,
     ) -> Option<Candidate<'a>> {
         let id = id_of(row).ok()?;
-        let path = self.inner.config.path(&id);
+        let path = Path::new(&row.path);
         let recorded = Commit::new(row.built_commit.as_deref()?).ok()?;
         let base = if leased {
-            refs::head(&path).ok()?
+            refs::head(path).ok()?
         } else {
             recorded
         };
@@ -444,14 +445,14 @@ impl Trees {
             .into_iter()
             .collect();
         if leased {
-            changed.extend(changed::uncommitted(&path).ok()?);
+            changed.extend(changed::uncommitted(path).ok()?);
         }
         Some(Candidate {
             row,
             leased,
             behind: self.distance(Some(base.as_str()), tip)?,
             changed: changed.len(),
-            held: self.inner.builds.held_in(&id, &self.cargo_dirs(&path)),
+            held: self.inner.builds.held_in(&id, &self.cargo_dirs(path)),
             base,
         })
     }
@@ -491,18 +492,18 @@ impl Trees {
     /// aside and deletes when the seed ends.
     fn copy_from(&self, donor: &rows::Tree, tree: &TreeId) -> Result<Vec<String>> {
         let donor_id = id_of(donor)?;
-        let from = self.inner.config.path(&donor_id);
-        let to = self.inner.config.path(tree);
-        let dirs = self.cargo_dirs(&from);
-        let Some(_locks) = cargo_locks(&from, &dirs)? else {
+        let from = Path::new(&donor.path);
+        let to = PathBuf::from(self.row(tree)?.path);
+        let dirs = self.cargo_dirs(from);
+        let Some(_locks) = cargo_locks(from, &dirs)? else {
             return Ok(Vec::new());
         };
         // Everything git says is read before the tree is touched.
         let pairs = [
-            path_pair(&from, &to),
-            path_pair(&tracked::git_dir(&from)?, &tracked::git_dir(&to)?),
+            path_pair(from, &to),
+            path_pair(&tracked::git_dir(from)?, &tracked::git_dir(&to)?),
         ];
-        let times = file_times(&from, &to)?;
+        let times = file_times(from, &to)?;
         let staging = staging(&to);
         let (new, old) = (staging.join("new"), staging.join("old"));
         clear(&staging)?;
@@ -511,7 +512,7 @@ impl Trees {
             rewrite_target(&new.join(dir), &pairs)?;
         }
         let own = self.cargo_dirs(&to);
-        let profiles = tree_profiles(&from, &to, &own, &dirs);
+        let profiles = tree_profiles(from, &to, &own, &dirs);
         let tree_locked = match tree_locks(&profiles) {
             Ok(Some(locks)) => locks,
             locked => {

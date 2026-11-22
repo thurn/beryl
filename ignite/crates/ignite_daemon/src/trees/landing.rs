@@ -1,7 +1,7 @@
 //! Landing trees: they stay at the tip, and a landing or a tip verification leases one so that
 //! it builds only what one change added.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ignite_core::ids::{Commit, Handle, TicketId, TreeId};
 use ignite_core::traits::{Error, Result};
@@ -64,7 +64,7 @@ impl Trees {
                 None => return Ok(None),
             },
         };
-        let path = self.inner.config.path(&tree);
+        let path = PathBuf::from(self.row(&tree)?.path);
         let branch = park_branch(&tree);
         if held && head::commit_at(&path).as_ref() == Some(tip) {
             return Ok(Some(TreeLease {
@@ -125,23 +125,23 @@ impl Trees {
                 });
             (choice::missing(path, &wanted), changed)
         };
-        let rows = store::all(&self.lock().db).map_err(|e| store_error(&e))?;
+        let (root, rows) = {
+            let locked = self.lock();
+            (
+                self.root_in(&locked.db),
+                store::all(&locked.db).map_err(|e| store_error(&e))?,
+            )
+        };
         let best = rows
             .iter()
             .filter(|row| {
                 row.kind == Kind::Landing.as_str()
                     && row.state == store::State::Free.as_str()
-                    && self.inner.config.uses(row)
+                    && self.inner.config.uses(&root, row)
             })
-            .filter_map(|row| {
-                let tree = TreeId::new(row.id.clone()).ok()?;
-                Some(cost(
-                    &self.inner.config.path(&tree),
-                    row.built_commit.as_deref(),
-                ))
-            })
+            .map(|row| cost(Path::new(&row.path), row.built_commit.as_deref()))
             .min();
-        let own = cost(&self.inner.config.path(ticket), Some(built.as_str()));
+        let own = cost(Path::new(&self.row(ticket)?.path), Some(built.as_str()));
         Ok(best.is_some_and(|best| own < best))
     }
 
@@ -174,12 +174,13 @@ impl Trees {
     ) -> Result<Option<TreeId>> {
         let locked = self.lock();
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
+        let root = self.root_in(&locked.db);
         let free: Vec<_> = rows
             .iter()
             .filter(|row| {
                 row.kind == Kind::Landing.as_str()
                     && row.state == store::State::Free.as_str()
-                    && self.inner.config.uses(row)
+                    && self.inner.config.uses(&root, row)
             })
             .collect();
         if free.len() <= keep_free {
@@ -229,9 +230,7 @@ impl Trees {
                 );
                 // Commands its owner left, such as those of a verb process that was killed,
                 // may still run there; the next lease resets the tree under them otherwise.
-                let tree =
-                    TreeId::new(row.id.clone()).map_err(|e| Error::Invalid(e.to_string()))?;
-                let ended = Self::end_processes(&self.inner.config.path(&tree), None)?;
+                let ended = Self::end_processes(Path::new(&row.path), None)?;
                 if !ended.is_empty() {
                     eprintln!(
                         "ignite: ended {} process(es) {owner} left in {}",

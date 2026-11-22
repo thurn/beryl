@@ -7,7 +7,7 @@ use std::path::Path;
 use clap::{Subcommand, ValueEnum};
 use serde_json::{Value, json};
 
-use ignite_core::fleet::{FleetSettings, FleetUpdate, FleetView, MachineState, summary};
+use ignite_core::fleet::{FleetSettings, FleetUpdate, FleetView, MachineState, TreeSpace, summary};
 use ignite_core::protocol::client::{Exit, Reply};
 
 use crate::client::session_from_env;
@@ -15,14 +15,23 @@ use crate::ticket::http::{Failure, Hub, Result, usage};
 
 #[derive(Debug, Subcommand)]
 pub enum FleetCommand {
-    /// Change a machine's state and optionally its disk cap.
+    /// Change a machine's state and build tree settings.
     Machine {
         name: String,
         #[arg(long, value_enum)]
-        state: State,
+        state: Option<State>,
         /// Limit the build trees to this many gigabytes, or use "auto" for the derived cap.
         #[arg(long, value_parser = parse_disk_cap, value_name = "GB|auto")]
         disk_cap_gb: Option<DiskCap>,
+        /// Absolute tree directory, or "default" to use the repository setting.
+        #[arg(long)]
+        trees_root: Option<String>,
+        /// Space in decimal gigabytes, or "auto" on a dedicated volume.
+        #[arg(long, value_name = "GB|auto")]
+        tree_space_gb: Option<TreeSpace>,
+        /// Maximum size of one tree's build directories in decimal gigabytes.
+        #[arg(long)]
+        tree_ceiling_gb: Option<u32>,
     },
     /// Change a provider's settings.
     Provider {
@@ -80,9 +89,23 @@ impl FleetCommand {
                 name,
                 state,
                 disk_cap_gb,
+                trees_root,
+                tree_space_gb,
+                tree_ceiling_gb,
             } => {
                 let mut machine = settings.machine(name);
-                machine.state = (*state).into();
+                if let Some(state) = state {
+                    machine.state = (*state).into();
+                }
+                if let Some(root) = trees_root {
+                    machine.trees.trees_root = (root != "default").then(|| root.clone());
+                }
+                if let Some(space) = tree_space_gb {
+                    machine.trees.tree_space_gb = Some(*space);
+                }
+                if let Some(ceiling) = tree_ceiling_gb {
+                    machine.trees.tree_ceiling_gb = *ceiling;
+                }
                 if let Some(cap) = disk_cap_gb {
                     machine.disk_cap_gb = match cap {
                         DiskCap::Auto => None,
@@ -125,7 +148,7 @@ pub fn run(command: Option<&FleetCommand>, cwd: &Path) -> Reply {
         .unwrap_or_else(Failure::into_reply)
 }
 
-fn execute(hub: &Hub, command: Option<&FleetCommand>) -> Result<Reply> {
+pub(crate) fn execute(hub: &Hub, command: Option<&FleetCommand>) -> Result<Reply> {
     let view: FleetView = serde_json::from_str(&hub.get(&["fleet"], &[])?.body).map_err(usage)?;
     let Some(command) = command else {
         return Ok(reply(render(&view), json!(view)));
@@ -186,7 +209,16 @@ fn render(view: &FleetView) -> String {
         let cap = setting
             .disk_cap_gb
             .map_or_else(|| "auto".to_owned(), |gb| format!("{gb} GB"));
-        let _ = write!(text, "  machine {name}: {}, disk cap {cap}", setting.state);
+        let trees = &setting.trees;
+        let root = trees.trees_root.as_deref().unwrap_or("repository default");
+        let space = trees
+            .tree_space_gb
+            .map_or_else(|| "unset".to_owned(), |space| space.to_string());
+        let _ = write!(
+            text,
+            "  machine {name}: {}, disk cap {cap}, trees root {root}, tree space (GB) {space}, tree ceiling {} GB",
+            setting.state, trees.tree_ceiling_gb,
+        );
         for machine in view.machines.iter().filter(|machine| &machine.name == name) {
             let _ = write!(text, " | {}, last seen {}", machine.os, machine.last_seen);
             if let Some(capacity) = &machine.capacity {

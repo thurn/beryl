@@ -12,18 +12,7 @@ impl Trees {
     /// The tree that holds `path`, if any. This includes a surplus landing tree whose
     /// holder can still use it until release.
     pub fn tree_at(&self, path: &Path) -> Option<TreeId> {
-        let real = |p: &Path| ignite_os::paths::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-        let path = real(path);
-        let stored = store::all(&self.lock().db).unwrap_or_default();
-        self.inner
-            .config
-            .configured_landings()
-            .chain(
-                stored
-                    .into_iter()
-                    .filter_map(|row| TreeId::new(row.id).ok()),
-            )
-            .find(|id| path.starts_with(real(&self.inner.config.path(id))))
+        super::root::tree_at(&self.lock().db, path)
     }
 
     /// The session that holds a ticket tree's lease.
@@ -60,9 +49,12 @@ impl Trees {
     pub fn status(&self) -> Result<Status> {
         let locked = self.lock();
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
+        let root = self.root_in(&locked.db);
         let mut trees: Vec<_> = rows
             .into_iter()
-            .filter(|row| self.inner.config.uses(row) || row.state != store::State::Free.as_str())
+            .filter(|row| {
+                self.inner.config.uses(&root, row) || row.state != store::State::Free.as_str()
+            })
             .map(|row| {
                 let tree = TreeId::new(row.id).map_err(|e| Error::Invalid(e.to_string()))?;
                 let kind = if row.kind == Kind::Ticket.as_str() {
@@ -71,7 +63,7 @@ impl Trees {
                     Kind::Landing
                 };
                 Ok(TreeStatus {
-                    path: self.inner.config.path(&tree),
+                    path: row.path.into(),
                     tree,
                     kind,
                     state: row.state,
