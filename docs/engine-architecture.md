@@ -1605,8 +1605,11 @@ and tools (`scenarios` feature).
 
 **Scale rehearsal.** `just scale --assert --edits 8` clones the implemented card
 files into 50,000 definitions in 66 set crates of 387 to 1,212 cards, sized like
-the real groups, and builds them with the real build scripts. On 2026-11-12, at
-a load of 11 to 15:
+the real groups, and builds them with the real build scripts. It records the
+logical size of Cargo's `target` directory in bytes after the release build and
+again after all the edits. Both sizes appear in the build table and in
+`$BERYL_CACHE/scale/build-report.txt`. They have no budget. On 2026-11-12, at a
+load of 11 to 15:
 
 | Measure                                 | Result             | Budget |
 | --------------------------------------- | ------------------ | ------ |

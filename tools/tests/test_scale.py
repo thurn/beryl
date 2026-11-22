@@ -1,7 +1,11 @@
+import argparse
 import json
 import re
+import subprocess
 from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from beryl_tools import card_store, scale, scale_workspace
 
@@ -127,7 +131,7 @@ def runs(check: float) -> dict[str, scale.Run]:
 
 
 def test_the_report_gives_each_budget_and_margin() -> None:
-    text = scale.report(2000, 4, False, 41, runs(45.0))
+    text = scale.report(2000, 4, False, 41, runs(45.0), 1_234, 5_678)
     assert "2,000 cards" in text and "as the tree's grouping gives" in text
     assert "45.0 s   budget 60.0 s, margin 15.0 s  ok" in text
     assert "3.00 GiB   budget 4.00 GiB, margin 1.00 GiB  ok" in text
@@ -137,7 +141,42 @@ def test_the_report_gives_each_budget_and_margin() -> None:
 def test_a_measure_over_its_budget_is_missed() -> None:
     assert scale.missed(scale.measures(runs(45.0))) == []
     assert scale.missed(scale.measures(runs(61.0))) == ["cold check"]
-    assert "MISSED" in scale.report(2000, 4, False, 41, runs(61.0))
+    assert "MISSED" in scale.report(2000, 4, False, 41, runs(61.0), 1_234, 5_678)
+
+
+def test_scale_reports_target_bytes_before_and_after_edits_under_assert(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
+    target = tmp_path / "scale" / "target"
+    release = target / "release" / "all"
+    incremental = target / "debug" / "incremental"
+    timing = TIME.replace("3.21 real", "1.21 real")
+
+    def cargo(
+        command: list[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        if "--bin=all" in command:
+            release.parent.mkdir(parents=True)
+            release.write_bytes(b"release")
+        if "--features=scenarios" in command:
+            incremental.mkdir(parents=True, exist_ok=True)
+            artifact = incremental / "objects"
+            with artifact.open("ab") as file:
+                file.write(b"debug")
+        return subprocess.CompletedProcess[str](command, 0, "", timing)
+
+    monkeypatch.setattr(scale.subprocess, "run", cargo)
+    parser = argparse.ArgumentParser()
+    scale.register(parser.add_subparsers())
+    args = parser.parse_args("scale --cards 3 --edits 2 --no-scripts --assert".split())
+
+    assert scale.scale(args) == 0
+    captured = capsys.readouterr()
+    assert re.search(r"^target after build\s+12 B$", captured.out, re.MULTILINE)
+    assert re.search(r"^target after edits\s+22 B$", captured.out, re.MULTILINE)
+    saved = (target.parent / "build-report.txt").read_text(encoding="utf-8")
+    assert captured.out.endswith(saved)
 
 
 def test_the_memory_assertion_ignores_times() -> None:
