@@ -814,5 +814,10 @@
     "label": "Beryl 3D scaffolds supply the first story, test and registry edits for new client parts, reducing setup time.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D agents read a short workspace guide and the guide for the crate they change. Web comparison instructions load only when needed.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

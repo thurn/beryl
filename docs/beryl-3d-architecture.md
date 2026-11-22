@@ -527,8 +527,8 @@ kept where one change can remove it:
   profile's regions and the camera fitted to Arena.
 - `tools/src/beryl_tools/beryl3d/match/`, `data/beryl3d/match/`,
   `data/beryl3d/web-match.json`, `data/beryl3d/timeline/`,
-  `data/beryl3d/timeline-parity.json` and `data/beryl3d/parity.json`. The b3d
-  skill's matching instructions go with these tools.
+  `data/beryl3d/timeline-parity.json`, `data/beryl3d/parity.json` and the
+  `web-match` skill, including its link in `.claude/skills/`.
 
 The counts in `web-match.json` may only go down while this design is built. The
 change that makes the switch deletes everything in this list.

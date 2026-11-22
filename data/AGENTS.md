@@ -2,16 +2,8 @@
 
 This adds to the root `AGENTS.md`, whose rules all apply here.
 
-- `beryl3d/` holds Beryl 3D's data files, described in `rust/beryl3d/AGENTS.md`.
-  `beryl3d/match/web/` holds the web interface's element records of the
-  reference targets of `just b3d match score`, one file per target, written by
-  `just b3d match score --refresh-web` and read by the `b3d-web-match` check;
-  `beryl3d/web-match.json` holds each target's counts, which may only go down.
-  `beryl3d/timeline/web/` holds the web interface's timeline of each recorded
-  fixture (`ui/scripts/timeline.mjs`), one JSONL file per fixture with the
-  `recording` field left out, written by
-  `just b3d timeline-parity --fixtures --refresh-web` and read by the
-  `b3d-timeline` check in place of the live web interface.
+- The [Beryl 3D data guide](beryl3d/AGENTS.md) describes the files in
+  `beryl3d/`.
 - `pytest-reads.json` maps each Python module of `tools/` and `efficiency/` to
   the tracked files and directories it reads at run time, so a pytest check's
   input hash covers them (`tools/src/beryl_tools/ignite/pytest_reads.py`). A

@@ -17,9 +17,12 @@
     "cifix": "none: fixes the checks CI files, not a client",
     "efficiency": "none: measures agent and CI cost, not a client",
     "ignite": "none: starts and staffs work through Ignite, not a client",
+    "ignite-justiciar": "none: recovers Ignite during emergencies",
     "motion-review": "motion-review",
+    "release": "none: files and releases Ignite tickets",
     "specs": "specs",
-    "ui-review": "ui-review"
+    "ui-review": "ui-review",
+    "web-match": "none: compares Beryl 3D with the web client during the switch"
   },
   "web_screens": {
     "ui/src/screens/Board.tsx": "game",
