@@ -4,6 +4,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 
 use kit_base::data::flat::Gallery;
+use kit_base::data::profiles::GalleryArrangement;
 use kit_base::geometry::Window;
 use kit_base::tokens::{color, space, type_style};
 use kit_scene::{Context, Feature};
@@ -18,6 +19,7 @@ pub struct GalleryScreen;
 pub struct Inputs {
     pub window: Window,
     pub layout: Gallery,
+    pub arrangement: GalleryArrangement,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -100,18 +102,27 @@ impl Feature for GalleryScreen {
         *inputs
     }
 
-    fn view(state: &State, Inputs { window, layout }: Inputs) -> Element {
-        let compact = window.size.width < layout.split_width;
-        let mut catalog = list("Stories", story_rows(state, layout.row_height))
+    fn view(
+        state: &State,
+        Inputs {
+            window,
+            layout,
+            arrangement,
+        }: Inputs,
+    ) -> Element {
+        let catalog = list("Stories", story_rows(state, layout.row_height))
             .min_height(0.0)
             .min_width(0.0)
             .background(color::BACKDROP);
-        if compact {
-            catalog = catalog
-                .height((window.size.height * layout.stacked_catalog_share).max(layout.row_height));
-        } else {
-            catalog = catalog.width(layout.catalog_width);
-        }
+        let (content, catalog) = match arrangement {
+            GalleryArrangement::SideBySide => (row(), catalog.width(layout.catalog_width)),
+            GalleryArrangement::Stacked => (
+                column(),
+                catalog.height(
+                    (window.size.height * layout.stacked_catalog_share).max(layout.row_height),
+                ),
+            ),
+        };
         let details = state.details.as_deref().unwrap_or("No stories available");
         let viewer = column()
             .min_width(0.0)
@@ -138,7 +149,6 @@ impl Feature for GalleryScreen {
                     .grow(1.0)
                     .background(color::BACKDROP),
             );
-        let content = if compact { column() } else { row() };
         let mut screen = column()
             .name("gallery")
             .background(color::SURFACE)

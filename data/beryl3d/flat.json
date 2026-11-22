@@ -8,7 +8,6 @@
   },
   "gallery": {
     "catalog_width": 240,
-    "split_width": 680,
     "stacked_catalog_share": 0.35,
     "row_height": 44
   },

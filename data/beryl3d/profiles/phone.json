@@ -1,6 +1,7 @@
 {
   "name": "phone",
   "size_class": "compact",
+  "gallery_arrangement": "stacked",
   "shorter_side_below": 500,
   "table": {
     "camera": {

@@ -9,7 +9,7 @@ use super::Card;
 use super::tuning::{fraction, nonnegative, positive, read, vector};
 use crate::geometry::{Insets, Size, Window};
 mod screen;
-pub use screen::{BugScreen, ScreenMetrics, StartScreen};
+pub use screen::{BugScreen, GalleryArrangement, ScreenMetrics, StartScreen};
 
 pub mod anchored;
 mod banded;
@@ -362,6 +362,7 @@ pub struct ProfileData {
     pub slots: BTreeMap<String, SlotSpec>,
     /// Tuning for screens that use a scrolling column.
     pub screen: Option<ScreenMetrics>,
+    pub gallery_arrangement: GalleryArrangement,
     pub manual: Option<ManualControls>,
     pub settings_quick_action_min_width: Option<f32>,
     test_matrix: Matrix,

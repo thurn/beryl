@@ -605,6 +605,7 @@ impl Mounted for GalleryScreen {
             Features::slot::<Self>(&mut features.slots, id).view(gallery::Inputs {
                 window: inputs.window,
                 layout: inputs.hud.data.flat.gallery,
+                arrangement: inputs.profile.data().gallery_arrangement,
             }),
         )
     }

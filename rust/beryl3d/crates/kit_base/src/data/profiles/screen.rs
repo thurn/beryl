@@ -1,8 +1,16 @@
-//! Dimensions for screens that lay their content out in a scrolling column.
+//! Screen arrangements and dimensions supplied by a layout profile.
 
 use serde::Deserialize;
 
 use crate::data::tuning::positive;
+
+/// Where the story catalog sits relative to the preview.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GalleryArrangement {
+    SideBySide,
+    Stacked,
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]

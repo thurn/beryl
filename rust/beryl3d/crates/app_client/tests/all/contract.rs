@@ -289,6 +289,7 @@ mod milestone_three {
                     screens::gallery::Inputs {
                         window: input.window,
                         layout: input.data.flat.gallery,
+                        arrangement: input.profile.data().gallery_arrangement,
                     },
                 ),
                 Screen::Testing => testing::TestingScreen::view(

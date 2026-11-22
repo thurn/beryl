@@ -1,6 +1,7 @@
 {
   "name": "desktop",
   "size_class": "regular",
+  "gallery_arrangement": "side_by_side",
   "table": {
     "camera": {
       "pitch_degrees": 27.0,

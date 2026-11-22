@@ -1,6 +1,8 @@
 //! The start screen, driven through the `Page` test driver: choosing an opponent, starting a
 //! game, conceding a game in progress first, and the screen's place at startup.
 
+use std::sync::Arc;
+
 use app_client::Input;
 use app_client::command::{Reply, Request};
 use app_client::driver::{Duration, OPEN, Page, Recording};
@@ -9,10 +11,11 @@ use beryl_protocol::ipc::{CONCEDE, ConcedeRequest, FixtureMessage, LIST_AGENTS, 
 use beryl_protocol::protocol::{Side, Status};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use beryl_protocol::{AgentView, SessionId, StartRequest};
+use kit_base::data::Data;
 use kit_frame::frame::StateBits;
 use kit_probe::agent::{self, TreeOptions};
 use kit_ui::input::Input as DeviceInput;
-use kit_ui::input::{Insets, Size};
+use kit_ui::input::{Insets, Size, Window};
 
 const START: &str = "button \"Start\"";
 
@@ -189,22 +192,61 @@ fn the_start_screen_passes_the_checks_at_1440_by_900() {
     page.check();
 }
 
-fn gallery(width: f32, height: f32) -> Page {
-    page_at(
-        vec![FixtureMessage::Event {
+fn gallery(data: Arc<Data>, size: Size) -> Page {
+    Page::in_window(
+        data,
+        Recording(vec![FixtureMessage::Event {
             event: OPEN.to_owned(),
             payload: "gallery".into(),
-        }],
-        Size { width, height },
+        }])
+        .into(),
+        Side::You,
+        Window {
+            size,
+            ..Window::default()
+        },
     )
-    .with_stories(app_client::stories::embedded())
+    .unwrap()
+}
+
+#[test]
+fn compact_profiles_can_arrange_the_gallery_differently_in_the_same_window() {
+    let data = crate::test_data::data();
+    let size = Size {
+        width: 759.0,
+        height: 393.0,
+    };
+    let mut stacked = (*data).clone();
+    stacked.profiles = data.profiles.selecting("phone").unwrap();
+    let mut page = gallery(Arc::new(stacked), size);
+    page.still();
+    let catalog = page.find("list \"Stories\"").rect();
+    let preview = page.find("region \"Story preview\"").rect();
+    assert!(catalog.y + catalog.height <= preview.y);
+
+    let mut wide = (*data).clone();
+    let (_, file) = game_table::profiles::wide_compact::SOURCE;
+    let profile = beryl_test_files::read_to_string(format!("data/beryl3d/{file}")).unwrap();
+    wide.profiles = wide
+        .profiles
+        .with_preview(file, &profile, wide.card)
+        .unwrap();
+    page.give_input(Input::Data(Arc::new(wide)));
+    page.still();
+    let catalog = page.find("list \"Stories\"").rect();
+    let preview = page.find("region \"Story preview\"").rect();
+    assert!(catalog.x + catalog.width <= preview.x);
 }
 
 #[test]
 fn the_gallery_plays_stories_in_their_authored_window() {
     use app_client::stories::Source;
 
-    let mut page = gallery(1440.0, 900.0).with_stories(
+    let size = Size {
+        width: 1440.0,
+        height: 900.0,
+    };
+    let mut page = gallery(crate::test_data::data(), size).with_stories(
         [
             Source::new("story/kit_ui/example", "story element 200x200 desktop\nbutton \"Sample\" #1 25,25 120x50 | widget=button\n"),
             Source::new("story/kit_fx/sample", "story effect 393x759 phone\neffect glow 48,90 110x140\n"),

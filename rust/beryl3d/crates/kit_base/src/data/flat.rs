@@ -31,8 +31,6 @@ pub struct Tooltip {
 pub struct Gallery {
     #[serde(deserialize_with = "positive")]
     pub catalog_width: f32,
-    #[serde(deserialize_with = "positive")]
-    pub split_width: f32,
     #[serde(deserialize_with = "fraction")]
     pub stacked_catalog_share: f32,
     #[serde(deserialize_with = "positive")]
