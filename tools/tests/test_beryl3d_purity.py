@@ -199,6 +199,7 @@ def test_only_the_app_and_the_recorder_depend_on_the_engine(tmp_path: Path) -> N
     (
         "app_screens/src/screens/start.rs",
         "kit_ui/src/widgets/button.rs",
+        "game_table/src/table/rows.rs",
         "game_play/src/hud/counts.rs",
         "game_hud/src/prompts/bar.rs",
         "game_hud/src/screens/game.rs",
@@ -214,6 +215,19 @@ def test_elements_take_their_sizes_from_tokens(tmp_path: Path, source: str) -> N
     (found,) = purity.scene_literals(tmp_path)
     assert found.startswith(f"{path}:3: the literal 12.0")
     assert "data/design-tokens.json" in found
+
+
+def test_table_geometry_must_come_from_data(tmp_path: Path) -> None:
+    path = f"{CRATES}/game_table/src/table/rows.rs"
+    write(
+        tmp_path,
+        path,
+        "let rounding = 0.01; // scene-literals: 0.01 covers projection rounding.\n"
+        'let label = "block // attacker"; '
+        "const WIDTH: f32 = 13.75; // scene-literals: 0.01 covers projection rounding.\n",
+    )
+    (found,) = purity.scene_literals(tmp_path)
+    assert found.startswith(f"{path}:2: the literal 13.75")
 
 
 def test_a_test_module_may_hold_numbers(tmp_path: Path) -> None:

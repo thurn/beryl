@@ -12,9 +12,7 @@ use crate::table::place::{row_index, side_index};
 use crate::table::{RowWindow, Rows, Scroller};
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose};
-
-/// Nanoseconds in a millisecond.
-const MILLISECOND: f32 = 1_000_000.0;
+use kit_base::tokens::ratio::NANOS_PER_MS;
 
 /// The cards of the line scrolled last, and where each was drawn when it scrolled.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -36,7 +34,7 @@ impl Slide {
     fn share(&self, now: u64, regroup_ms: f32) -> Option<f32> {
         self.place?;
         let elapsed = now.saturating_sub(self.since.unwrap_or(now)) as f32;
-        let length = regroup_ms * MILLISECOND;
+        let length = regroup_ms * NANOS_PER_MS;
         (elapsed < length).then(|| Curve::EASE_OUT.ease(elapsed / length))
     }
 }

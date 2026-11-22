@@ -28,11 +28,6 @@ pub fn row_area((layout, camera): (&Layout, &Camera), side: Side, row: RowName) 
     (clear_of_life((layout, camera), side, row, (area, y)), y)
 }
 
-/// How far, in logical points, the back row's two parts end from the step stops either side of
-/// their player's life orb: the web interface ends the viewer's lands 10 stage pixels left of
-/// the stops (`ROWS.you.landsEnd` in `ui/src/game/tableRows.ts`).
-const LIFE_CLEARANCE: f32 = 10.0;
-
 /// `area`, the lands' or other permanents' part of `side`'s back row at height `y` on the table,
 /// ended clear of `side`'s life orb and the step stops about it where the row's band of the
 /// screen meets the orb's, as the web interface ends the lands left of the stops and starts the
@@ -80,13 +75,13 @@ fn clear_of_life(
     };
     let mut area = area;
     if row == RowName::Lands {
-        let [a, b] = table_x(life.x - half_width - LIFE_CLEARANCE);
+        let [a, b] = table_x(life.x - half_width - layout.life_clearance);
         area.right = area
             .right
             .min(a.min(b))
             .max(area.left + camera.data.card.height);
     } else {
-        let [a, b] = table_x(life.x + half_width + LIFE_CLEARANCE);
+        let [a, b] = table_x(life.x + half_width + layout.life_clearance);
         area.left = area
             .left
             .max(a.max(b))

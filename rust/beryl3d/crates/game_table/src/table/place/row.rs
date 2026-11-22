@@ -262,8 +262,8 @@ pub(super) fn battlefield_row(
         }
     });
     let height = fitted.map_or(0.0, |fitted| fitted.height(line, camera.data.card));
-    let on_line = (row, Vec3::new(0.0, line, height));
-    let faces = faces(&cards, placement, (camera, area, on_line), |x| {
+    let on_line = (camera, area, row, Vec3::new(0.0, line, height));
+    let faces = faces(&cards, placement, on_line, layout.blocker_spacing, |x| {
         fit.row.unscaled(x, scale)
     });
     let beneath = Beneath::new(under, &cards);
@@ -378,14 +378,15 @@ fn region_key(fitted: bool, side: Side, row: RowName) -> &'static str {
 /// straight across the table, as the web interface's `row` (`ui/src/game/battlefield.ts`)
 /// stands it, in the row's millimetres before it is scaled (`local` turns a table x into
 /// them): under its attacker's middle on the screen, and an attacker's blockers side by side
-/// about that, 1.04 card widths apart, in the creatures' row only. `line` is the camera, the
-/// row's area, the row and a point on its line at the height its cards rest at. A blocker
+/// about that, `spacing` card widths apart, in the creatures' row only. `line` is a point
+/// on the row's line at the height its cards rest at. A blocker
 /// whose attacker has no resting place yet faces nothing; `place_zones` lays such a row out
 /// again once every row has been placed.
 fn faces(
     cards: &[&ObjectView],
     placement: &Placement,
-    (camera, area, (row, line)): (&Camera, RowArea, (RowName, Vec3)),
+    (camera, area, row, line): (&Camera, RowArea, RowName, Vec3),
+    spacing: f32,
     local: impl Fn(f32) -> f32,
 ) -> Vec<(ObjectId, f32)> {
     let attacker = |object: &ObjectView| match object.combat {
@@ -422,7 +423,7 @@ fn faces(
         for (index, slot) in together.into_iter().enumerate() {
             faces.push((
                 slot,
-                x + (index as f32 - middle) * camera.data.card.width * 1.04,
+                x + (index as f32 - middle) * camera.data.card.width * spacing,
             ));
         }
     }

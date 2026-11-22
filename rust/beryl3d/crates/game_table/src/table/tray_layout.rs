@@ -200,8 +200,7 @@ fn across(space: &TraySpace, stage_width: f32) -> (f32, f32) {
 
 impl TraySpace {
     fn press(&self) -> f32 {
-        // Leave room for rounding as the camera projects the layout back to the screen.
-        self.grid_target + 0.01
+        self.grid_target + 0.01 // scene-literals: 0.01 covers rounding when projecting the tray.
     }
 
     fn fit(&self) -> ScreenFit {

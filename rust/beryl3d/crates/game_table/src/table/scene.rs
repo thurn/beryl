@@ -42,12 +42,6 @@ mod scroll;
 pub use motion::PileCount;
 pub use motion::{Motion, Turn};
 
-/// How large the table cloth is, in millimetres: past every edge of any window.
-const CLOTH: f32 = 4000.0;
-/// The cloth lies this far below the cards lying on the table, so that the two never share a
-/// height.
-const CLOTH_HEIGHT: f32 = -0.5;
-
 /// One game object's presence on the table.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct SceneObject {
@@ -408,16 +402,17 @@ impl Table {
         self.write_tray_library(back, builder);
         self.write_abilities(view, motion, faces, (back, dress), builder);
         self.write_revealed(faces, (back, dress.now), revealed, builder);
-        let cloth = Affine3A::from_scale_rotation_translation(
+        let cloth = self.layout.cloth;
+        let cloth_transform = Affine3A::from_scale_rotation_translation(
             Vec3::new(
-                CLOTH / self.camera.data.card.width,
-                CLOTH / self.camera.data.card.height,
+                cloth.size / self.camera.data.card.width,
+                cloth.size / self.camera.data.card.height,
                 1.0,
             ),
             glam::Quat::IDENTITY,
-            Vec3::new(0.0, 0.0, CLOTH_HEIGHT),
+            Vec3::new(0.0, 0.0, -cloth.depth),
         );
-        let mut tabletop = Draw::tabletop(cloth, [255; 4]);
+        let mut tabletop = Draw::tabletop(cloth_transform, [255; 4]);
         if let Some(shade) = self.layout.tabletop_shade {
             tabletop = tabletop.with_tabletop_shade(shade.centre, shade.radii);
         }
@@ -698,7 +693,7 @@ impl Table {
                 annotations: Default::default(),
             },
         );
-        let opacity = (look.pose.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
+        let opacity = (look.pose.opacity.clamp(0.0, 1.0) * f32::from(u8::MAX)).round() as u8;
         let [red, green, blue] = look.tint;
         // The full-size face, once it has landed, or the board-size one enlarged.
         let (size, layer, back) = match (look.face, look.full) {

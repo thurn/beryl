@@ -164,6 +164,8 @@ pub struct StackData {
     /// How many times the reachable square's side each item beneath keeps uncovered, across
     /// and up, once the stack is too tall to lean and stands in rows.
     pub spare: f32,
+    /// The smallest scale of an item in the stack.
+    pub least_scale: f32,
 }
 
 /// Where one player's parts of the table that are not cards stand on the screen, in normalized
@@ -191,6 +193,10 @@ pub struct Layout {
     pub others: RowArea,
     /// How far apart cards stand in a row with room to spare, in millimetres.
     pub gap: f32,
+    pub(crate) blocker_spacing: f32,
+    pub(crate) life_clearance: f32,
+    pub(crate) cloth: kit_base::data::profiles::Cloth,
+    pub(crate) pile: kit_base::data::profiles::PileGeometry,
     /// How far each copy under the top of a pile of identical permanents peeks out, in
     /// millimetres to the right and away from the viewer.
     pub pile_step: Vec2,

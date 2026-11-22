@@ -40,7 +40,7 @@ impl Table {
         let boxed = slot.is_some_and(|slot| self.in_box(slot));
         if boxed
             || pose.position.z <= contact.least_height
-            || (!under_way && self.lies(place, pose))
+            || (!under_way && self.lies(place, pose, contact.pile_tolerance_squared))
         {
             return;
         }
@@ -70,7 +70,7 @@ impl Table {
             clippy::cast_sign_loss,
             reason = "0 to 255"
         )]
-        let alpha = (alpha * 255.0).round() as u8;
+        let alpha = (alpha * f32::from(u8::MAX)).round() as u8;
         // The blur is in the card mesh's own millimetres: the shadow fades over its spread.
         let blur = spread / (2.0 * scale * grown.x);
         builder.draw(
@@ -81,7 +81,7 @@ impl Table {
 
     /// Whether a card at `pose`, resting at `place`, lies on the table: in a battlefield row, or
     /// on its pile (and not lifted off it, beside the pile, while the opponent looks at it).
-    fn lies(&self, place: Place, pose: &Pose) -> bool {
+    fn lies(&self, place: Place, pose: &Pose, pile_tolerance_squared: f32) -> bool {
         let Place::Card { zone, side, .. } = place else {
             return false;
         };
@@ -91,7 +91,7 @@ impl Table {
             _ => return false,
         }
         let pile = self.objects.piles[PileShown::index(side, zone)].base;
-        pose.position.truncate().distance_squared(pile) < 0.01
+        pose.position.truncate().distance_squared(pile) < pile_tolerance_squared
     }
 
     /// The height of what lies at `point` on the table: the highest card lying on the table at

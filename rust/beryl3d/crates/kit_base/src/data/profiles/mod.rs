@@ -14,12 +14,14 @@ pub use screen::{BugScreen, GalleryArrangement, ScreenMetrics, StartScreen};
 pub mod anchored;
 mod banded;
 mod hud;
+mod pile;
 mod tray;
 pub use anchored::Anchored;
 pub use banded::Banded;
 pub use hud::{
     FloatingPrompt, Hud, Incoming, Inspector, Piece, ResultLayout, SingleRow, WrappedHand,
 };
+pub use pile::PileGeometry;
 pub use tray::{PutBack, TrayTuning};
 
 /// The space a feature has for its content.
@@ -176,6 +178,11 @@ pub struct Table {
     pub gap: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub row_count_gap: f32,
+    /// Centre-to-centre spacing for blockers of the same attacker, in card widths.
+    #[serde(deserialize_with = "positive")]
+    pub blocker_spacing: f32,
+    pub cloth: Cloth,
+    pub pile: PileGeometry,
     pub inspector: Option<Inspector>,
     #[serde(deserialize_with = "super::tuning::vector")]
     pub pile_step: Vec2,
@@ -184,6 +191,17 @@ pub struct Table {
     pub tray_tuning: TrayTuning,
     /// Dedicated tray geometry for ordering prompts.
     pub order_tray: Option<anchored::Tray>,
+}
+
+/// The square of cloth underneath the cards, in table millimetres.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Cloth {
+    #[serde(deserialize_with = "positive")]
+    pub size: f32,
+    /// How far below the cards the cloth lies so that they never share a height.
+    #[serde(deserialize_with = "positive")]
+    pub depth: f32,
 }
 
 /// Table presentation choices independent of container geometry.

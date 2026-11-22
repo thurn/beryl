@@ -253,7 +253,7 @@ fn anchored(data: &StackData, camera: &Camera, target: f32) -> (Cascade, Anchore
             size,
             reach: data.reach,
             pitch: target * data.spare,
-            least_scale: 0.4,
+            least_scale: data.least_scale,
         },
         target,
     )

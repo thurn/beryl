@@ -6,7 +6,8 @@
       "emerging": 4.922,
       "penumbra": 0.18,
       "least_height": 1,
-      "above": 0.1
+      "above": 0.1,
+      "pile_tolerance_squared": 0.01
     }
   },
   "enhanced": {

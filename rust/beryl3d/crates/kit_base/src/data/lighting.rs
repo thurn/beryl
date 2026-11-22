@@ -75,6 +75,9 @@ pub struct Contact {
     /// How far above what it falls on a shadow is drawn, so that it is not lost in it.
     #[serde(deserialize_with = "nonnegative")]
     pub above: f32,
+    /// Squared distance in millimetres for treating a stationary card as lying on its pile.
+    #[serde(deserialize_with = "positive")]
+    pub pile_tolerance_squared: f32,
 }
 
 /// The Enhanced tier's lights, shadow map and bloom.

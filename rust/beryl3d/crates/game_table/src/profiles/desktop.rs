@@ -18,6 +18,10 @@ pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
         lands: row(table.lands, false),
         others: row(table.others, false),
         gap: table.gap,
+        blocker_spacing: table.blocker_spacing,
+        life_clearance: data.life_clearance,
+        cloth: table.cloth,
+        pile: table.pile,
         pile_step: table.pile_step,
         beneath_step: table.beneath_step,
         piles: piles.map(|pile| [pile.outer, pile.middle, pile.inner]),
@@ -103,5 +107,6 @@ fn stack(data: anchored::Stack) -> StackData {
         reach: data.reach,
         lean: data.lean,
         spare: data.spare,
+        least_scale: data.least_scale,
     }
 }

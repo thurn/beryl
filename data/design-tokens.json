@@ -938,6 +938,10 @@
         "value": 10,
         "note": "The radius of a pile's box in a tray: `.stage-tray-pile`'s `border-radius`."
       },
+      "CARD_RADIUS": {
+        "token": "radius-card",
+        "note": "The corner radius of a card or zone pile."
+      },
       "OVERLAY_TOP": {
         "value": 48,
         "note": "How far below the window's top an overlay's columns begin: `.overlay`'s top padding."

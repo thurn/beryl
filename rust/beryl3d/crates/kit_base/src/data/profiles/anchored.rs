@@ -13,6 +13,9 @@ pub struct Anchored {
     pub hand: Hand,
     pub opponent_hand: Hand,
     pub stack: Stack,
+    /// The gap from the back row to the life orb and step stops, in logical points.
+    #[serde(deserialize_with = "nonnegative")]
+    pub life_clearance: f32,
     /// The player anchors in normalized device coordinates, the viewer's first.
     pub players: [Player; 2],
 }
@@ -104,6 +107,8 @@ pub struct Stack {
     pub lean: f32,
     #[serde(deserialize_with = "positive")]
     pub spare: f32,
+    #[serde(deserialize_with = "positive_fraction")]
+    pub least_scale: f32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

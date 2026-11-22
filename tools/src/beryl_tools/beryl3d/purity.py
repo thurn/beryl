@@ -289,6 +289,7 @@ def data_names(root: Path) -> list[str]:
 # Elements take their sizes from kit_base design tokens (docs/beryl-3d.md, "Elements").
 TOKEN_FOLDERS: tuple[tuple[str, str], ...] = (
     ("kit_ui", "widgets"),
+    ("game_table", "table"),
     ("game_play", "hud"),
     ("game_hud", "hud"),
     ("game_hud", "inspect"),
@@ -309,9 +310,9 @@ FLOAT_LITERAL: re.Pattern[str] = re.compile(
 STRING_LITERAL: re.Pattern[str] = re.compile(r'"(?:[^"\\]|\\.)*"')
 
 
-def non_test_lines(path: Path) -> list[tuple[int, str]]:
-    """The code lines of `path` outside `#[cfg(test)]` items, comments and string contents."""
-    kept: list[tuple[int, str]] = []
+def non_test_lines(path: Path) -> list[tuple[int, str, str]]:
+    """Code lines outside tests, with any documented non-tuning literal on each line."""
+    kept: list[tuple[int, str, str]] = []
     depth = 0
     waiting = False
     for number, line in code_lines(path):
@@ -325,19 +326,24 @@ def non_test_lines(path: Path) -> list[tuple[int, str]]:
             elif waiting and ";" in line:
                 waiting = False
             continue
-        kept.append((number, STRING_LITERAL.sub('""', line.split("//")[0])))
+        code, _, comment = STRING_LITERAL.sub('""', line).partition("//")
+        reason = re.match(r"\s*scene-literals: (\S+) \S", comment)
+        kept.append((number, code, reason[1] if reason else ""))
     return kept
 
 
 def scene_literals(root: Path) -> list[str]:
-    """Each nontrivial float literal outside tests in code that lays out and styles elements."""
+    """Find hard-coded float tuning in element styling and table geometry."""
     found: list[str] = []
     for crate, folder in TOKEN_FOLDERS:
         directory = crates(root) / crate / "src" / folder
         for path in sorted(directory.rglob("*.rs")):
-            for number, line in non_test_lines(path):
+            for number, line, documented in non_test_lines(path):
                 for match in FLOAT_LITERAL.finditer(line):
-                    if float(match[0].replace("_", "")) not in PLAIN_FLOATS:
+                    if (
+                        match[0] != documented
+                        and float(match[0].replace("_", "")) not in PLAIN_FLOATS
+                    ):
                         found.append(
                             f"{path.relative_to(root)}:{number}: the literal {match[0]} belongs "
                             f"in {TOKEN_FILE} under `flat` for a design token, or in "
