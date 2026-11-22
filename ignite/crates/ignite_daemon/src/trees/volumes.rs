@@ -1,7 +1,9 @@
 //! Identifies mounted volumes that contain only build trees and normal filesystem metadata.
 
 use std::fs::{self, DirEntry};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(target_os = "macos")]
+use std::path::PathBuf;
 
 use ignite_core::fleet::{TreeVolume, TreeVolumes};
 
