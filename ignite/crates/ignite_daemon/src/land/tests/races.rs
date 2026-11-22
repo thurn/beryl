@@ -76,7 +76,7 @@ fn a_landing_keeps_its_landing_tree_across_passes() {
     let world = two_families();
     world.trees.landing.lock().unwrap().push(GateTree {
         tree: TreeId::new("landing-2").unwrap(),
-        path: PathBuf::from("/trees/landing-2"),
+        path: PathBuf::from("/ignite-test-trees/landing-2"),
     });
     // Something landed before the landing started, so its first pass takes a landing tree.
     world.git.land_other(&[("c.txt", "before")]);
@@ -88,7 +88,7 @@ fn a_landing_keeps_its_landing_tree_across_passes() {
     assert!(reply.text.contains("in pass 2 ("), "{}", reply.text);
     let leased = world.trees.leased.lock().unwrap().clone();
     assert_eq!(leased.len(), 1, "{leased:?}");
-    let path = PathBuf::from(format!("/trees/{}", leased[0]));
+    let path = PathBuf::from(format!("/ignite-test-trees/{}", leased[0]));
     let judged = judged(&world);
     assert_eq!(judged.len(), 2, "{judged:?}");
     assert!(judged.iter().all(|(tree, _)| *tree == path), "{judged:?}");
@@ -102,7 +102,7 @@ fn a_rebased_landing_gates_in_its_ticket_tree_when_that_builds_less() {
     let world = two_families();
     world.trees.landing.lock().unwrap().push(GateTree {
         tree: TreeId::new("landing-2").unwrap(),
-        path: PathBuf::from("/trees/landing-2"),
+        path: PathBuf::from("/ignite-test-trees/landing-2"),
     });
     world
         .trees
@@ -115,7 +115,7 @@ fn a_rebased_landing_gates_in_its_ticket_tree_when_that_builds_less() {
 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
     assert!(world.trees.leased.lock().unwrap().is_empty());
-    let ticket = PathBuf::from("/trees/tree-01");
+    let ticket = PathBuf::from("/ignite-test-trees/tree-01");
     let judged = judged(&world);
     assert!(judged.iter().all(|(tree, _)| *tree == ticket), "{judged:?}");
 }
@@ -129,7 +129,7 @@ fn a_landing_that_started_in_its_ticket_tree_stays_there_after_a_lost_race() {
 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
     assert!(world.trees.leased.lock().unwrap().is_empty());
-    let ticket = PathBuf::from("/trees/tree-01");
+    let ticket = PathBuf::from("/ignite-test-trees/tree-01");
     let judged = judged(&world);
     assert_eq!(judged.len(), 2, "{judged:?}");
     assert!(judged.iter().all(|(tree, _)| *tree == ticket), "{judged:?}");

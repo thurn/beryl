@@ -34,7 +34,7 @@ impl ExpressLane for FakeExpress {
     fn tree(&self) -> GateTree {
         GateTree {
             tree: TreeId::new("express").unwrap(),
-            path: PathBuf::from("/trees/express"),
+            path: PathBuf::from("/ignite-test-trees/express"),
         }
     }
 

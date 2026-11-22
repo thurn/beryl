@@ -181,7 +181,7 @@ mod tests {
     fn a_replay_rebases_in_the_object_database_and_leaves_the_tree_alone() {
         let clock = Arc::new(FakeClock::new(Timestamp::EPOCH));
         let git = TestGit::with_clock(&[("a.txt", "a")], Some(clock.clone()));
-        let tree = Path::new("/trees/tree-01");
+        let tree = Path::new("/ignite-test-trees/tree-01");
         let base = git.tip_now();
         git.start(tree, &[("a.txt", "mine")]);
         let head = git.repo.lock().unwrap().checked_out[tree].clone();

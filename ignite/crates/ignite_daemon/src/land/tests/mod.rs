@@ -107,7 +107,7 @@ fn world_with(
         uncommitted: Mutex::new(HashMap::new()),
         landing: Mutex::new(vec![GateTree {
             tree: TreeId::new("landing-1").unwrap(),
-            path: PathBuf::from("/trees/landing-1"),
+            path: PathBuf::from("/ignite-test-trees/landing-1"),
         }]),
         released: Mutex::new(Vec::new()),
         deleted: Mutex::new(Vec::new()),
@@ -158,7 +158,7 @@ fn world_with(
 impl World {
     /// Leases `tree` to `ticket` for `session_name`, with `changes` committed on its branch.
     fn hold(&self, tree: &str, ticket: &str, session_name: &str, changes: &[(&str, &str)]) {
-        let path = PathBuf::from(format!("/trees/{tree}"));
+        let path = PathBuf::from(format!("/ignite-test-trees/{tree}"));
         self.git.start(&path, changes);
         let held = TicketTree {
             tree: TreeId::new(tree).unwrap(),
@@ -176,7 +176,7 @@ impl World {
         Request {
             verb: verb.to_owned(),
             args: args.iter().map(|a| (*a).to_owned()).collect(),
-            cwd: PathBuf::from(format!("/trees/{tree}")),
+            cwd: PathBuf::from(format!("/ignite-test-trees/{tree}")),
             session: Some(SessionId::new(session_name).unwrap()),
             wait_s: 1,
             pid: None,
@@ -305,7 +305,11 @@ fn a_failed_gate_exits_2_and_leaves_staging_and_the_ticket_as_they_were() {
     assert_eq!(world.hub.holder("staging"), None);
     assert!(reply.text.contains("FAIL     unit:a"), "{}", reply.text);
     assert!(reply.text.contains("src/a.rs:3"), "{}", reply.text);
-    assert!(!reply.text.contains("/trees/"), "{}", reply.text);
+    assert!(
+        !reply.text.contains("/ignite-test-trees/"),
+        "{}",
+        reply.text
+    );
     assert!(
         reply.text.contains("rerun    ignite test unit:a"),
         "{}",
@@ -377,7 +381,7 @@ fn a_push_while_the_hub_is_down_closes_the_ticket_when_it_returns_with_one_push(
 fn a_tree_on_another_branch_is_refused() {
     let world = world();
     world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
-    let path = PathBuf::from("/trees/tree-01");
+    let path = PathBuf::from("/ignite-test-trees/tree-01");
     let mut branches = world.trees.branches.lock().unwrap();
     branches.insert(path, "ticket/t.9".to_owned());
     drop(branches);
@@ -399,7 +403,7 @@ fn files_neither_committed_nor_ignored_are_named_in_the_refusal() {
     world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
     let mut uncommitted = world.trees.uncommitted.lock().unwrap();
     uncommitted.insert(
-        PathBuf::from("/trees/tree-01"),
+        PathBuf::from("/ignite-test-trees/tree-01"),
         vec!["scratch.log".to_owned()],
     );
     drop(uncommitted);
@@ -425,8 +429,10 @@ fn a_rebase_conflict_exits_3_with_the_files() {
     let world = world();
     world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
     let mut repo = world.git.repo.lock().unwrap();
-    repo.conflicts
-        .insert(PathBuf::from("/trees/tree-01"), vec!["a.txt".to_owned()]);
+    repo.conflicts.insert(
+        PathBuf::from("/ignite-test-trees/tree-01"),
+        vec!["a.txt".to_owned()],
+    );
     drop(repo);
 
     let reply = world.land_as("tree-01", "local_a");
@@ -579,7 +585,7 @@ fn a_landing_whose_pushes_are_always_rejected_gives_up_after_ten_passes() {
 fn an_empty_rebase_does_not_close_a_ticket_whose_push_never_reached_the_remote() {
     let world = world();
     world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
-    let path = PathBuf::from("/trees/tree-01");
+    let path = PathBuf::from("/ignite-test-trees/tree-01");
     // The ticket's commits are on the branch already, so the rebase leaves nothing to land,
     // but the record's commit was never pushed.
     let tip = world.git.tip_now();

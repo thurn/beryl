@@ -17,7 +17,7 @@ use super::express::{FakeExpress, express_world};
 use super::{World, ticket_titled, world, world_with_checks};
 use crate::land::records::RecordState;
 
-const TREE: &str = "/trees/tree-01";
+const TREE: &str = "/ignite-test-trees/tree-01";
 
 fn in_verdict_mode(mut world: World) -> World {
     world.ctx.config.land.mode = LandMode::Verdict;
@@ -300,7 +300,7 @@ fn a_change_to_ignites_source_and_other_files_lands_checked_with_no_express_sect
     // release branch moved to it.
     let judged = world.gate.judged.lock().unwrap().clone();
     assert_eq!(judged.len(), 1, "{judged:?}");
-    assert_eq!(judged[0].0, PathBuf::from("/trees/landing-1"));
+    assert_eq!(judged[0].0, PathBuf::from("/ignite-test-trees/landing-1"));
     let tip = world.git.tip_now();
     assert_eq!(base_of(&world), world.git.parent_of(&tip).unwrap());
     let branches = world.git.repo.lock().unwrap().branch_pushes.clone();
@@ -456,7 +456,7 @@ fn a_gate_reports_the_range_when_its_culprit_probe_is_incomplete() {
     let world = search_world();
     let middle = land_on_tip(&world, "t.2", &[("b.txt", "passing")]);
     let tip = land_on_tip(&world, "t.3", &[("b.txt", "broken")]);
-    let landing = Path::new("/trees/landing-1");
+    let landing = Path::new("/ignite-test-trees/landing-1");
     world.git.check_out(landing, &middle);
     let key = key(&world.ctx, landing, "unit:both", &["a.txt", "b.txt"]);
     store(&world.ctx, &key, Outcome::Incomplete);

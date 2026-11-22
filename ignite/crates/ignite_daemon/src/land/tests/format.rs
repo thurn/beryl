@@ -87,7 +87,8 @@ fn a_landing_with_misformatted_rust_and_markdown_files_lands_with_a_format_commi
 fn a_landing_with_nothing_to_format_adds_no_commit() {
     let (world, format) = format_world(Vec::new());
     world.hold("tree-01", "t.1", "local_a", &[("a.rs", "fn a() {}")]);
-    let head = world.git.repo.lock().unwrap().checked_out[Path::new("/trees/tree-01")].clone();
+    let head =
+        world.git.repo.lock().unwrap().checked_out[Path::new("/ignite-test-trees/tree-01")].clone();
 
     let reply = world.land_as("tree-01", "local_a");
 

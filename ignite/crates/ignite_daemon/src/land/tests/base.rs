@@ -26,7 +26,7 @@ fn broken(file: &'static str, text: &'static str) -> Arc<World> {
     Arc::new(world)
 }
 
-const LANDING_TREE: &str = "/trees/landing-1";
+const LANDING_TREE: &str = "/ignite-test-trees/landing-1";
 
 /// Caches `outcome` for `unit:both` at the tip, as a run there would have.
 fn cache_at_tip(world: &World, outcome: Outcome) {

@@ -486,7 +486,9 @@ impl LandTrees for TestTrees {
         self.held.lock().unwrap().retain(|(_, t)| t.tree != *tree);
         self.landing.lock().unwrap().push(GateTree {
             tree: tree.clone(),
-            path: PathBuf::from(format!("/trees/{tree}")),
+            // No machine has this root. On Windows a path with no drive is read on the current
+            // drive, so `/trees/...` once found a real tree's `ignite.toml` there.
+            path: PathBuf::from(format!("/ignite-test-trees/{tree}")),
         });
         Ok(())
     }
