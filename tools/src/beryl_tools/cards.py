@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import sys
 from collections import Counter, defaultdict
 from collections.abc import Iterable
@@ -480,6 +481,16 @@ def engine_name(name: str, type_line: str) -> str:
     return name
 
 
+def split_face_colors(mana_cost: str) -> list[str]:
+    """The colors in one half's mana cost, including both colors in a hybrid symbol."""
+    symbols = {
+        part
+        for symbol in re.findall(r"\{([^}]+)\}", mana_cost)
+        for part in symbol.split("/")
+    }
+    return [color for color in "WUBRG" if color in symbols]
+
+
 def store_faces(card: Json, token: bool) -> list[Json]:
     """A record's faces: each one's characteristics (CR 109.3) and the side its image is on."""
     printed = is_printed(card)
@@ -494,7 +505,12 @@ def store_faces(card: Json, token: bool) -> list[Json]:
                 record[key] = face[key]
         if printed and "printed_text" in face:
             record["oracle_text"] = face["printed_text"]
-        record["colors"] = face.get("colors", card.get("colors", []))
+        # Scryfall can list combined colors on a split card without listing each half's.
+        # A spell on the stack uses the chosen half's mana symbols (CR 709.3b, 202.2).
+        if card.get("layout") == "split" and "colors" not in face:
+            record["colors"] = split_face_colors(str(face.get("mana_cost", "")))
+        else:
+            record["colors"] = face.get("colors", card.get("colors", []))
         if "color_indicator" in face:
             record["color_indicator"] = face["color_indicator"]
         # A double-faced card's back face has an image of its own; other faces share the

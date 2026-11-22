@@ -576,6 +576,36 @@ def turn_face_up_rule(cards: Cards, card: str, printed: str, morphed: bool) -> s
     raise Unsupported(f"paying {card}'s morph cost")
 
 
+def divided_damage(
+    who: str,
+    answers: Sequence[Json],
+    total: int,
+    object_name: Callable[[str], str],
+    player: Callable[[object], str],
+) -> list[str]:
+    """XMage's target commands for damage whose shares are fixed by the target count."""
+    names: list[str] = []
+    for answer in answers:
+        if player(answer["player"]) != who:
+            raise Unsupported("another player chooses a divided damage target")
+        if answer["kind"] == "TargetCount":
+            continue
+        pick = cast(Json, answer["pick"])
+        if "card" in pick:
+            names.append(object_name(cast(str, pick["card"])))
+        elif "player" in pick:
+            target_player = (
+                "PlayerA" if player(pick["player"]) == "playerA" else "PlayerB"
+            )
+            names.append(f"targetPlayer={target_player}")
+        else:
+            raise Unsupported("a divided damage target that is not a card or player")
+    if not names or total % len(names):
+        raise Unsupported("divided damage without a fixed share for each target")
+    share = total // len(names)
+    return [f"addTargetAmount({who}, {java_string(name)}, {share});" for name in names]
+
+
 def cast_choices(cards: Cards, who: str, card: str, costs: int, face: int) -> list[str]:
     """The questions XMage asks about casting options during a priority cast."""
     lines: list[str] = []

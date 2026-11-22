@@ -10,6 +10,7 @@ use beryl_card::{
 };
 
 pub mod additions;
+mod split;
 
 use crate::event::{Listens, Replaces};
 use crate::fit::{Misfit, room};
@@ -45,7 +46,7 @@ use additions::{Addition, AdditionList};
 /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 /// [CR 111.3]: https://yawgatog.com/resources/magic-rules/#R1113
 /// [CR 708.2]: https://yawgatog.com/resources/magic-rules/#R7082
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Copiable<L: Layout = Small> {
     card: L::Card,
     /// [`FaceIx::DOWN`] for a face-down permanent's.
@@ -56,6 +57,8 @@ pub struct Copiable<L: Layout = Small> {
     read: ReadColors,
     /// A merge can store the face of its own top component in a copy effect (see CR 731.2a).
     component_face: bool,
+    /// A split card off the stack has both halves' characteristics.
+    off_stack: bool,
 }
 
 /// The colors one of a copy's exceptions sets ([`CopyChange::Colors`]), read through the text
@@ -116,6 +119,7 @@ impl<L: Layout> crate::relayout::Relayout for Copiable<L> {
             additions: relayout_additions::<L, M>(self.additions),
             read: self.read,
             component_face: self.component_face,
+            off_stack: self.off_stack,
         }
     }
 }
@@ -198,6 +202,7 @@ impl<L: Layout> Copiable<L> {
             additions: L::Additions::NONE,
             read: ReadColors::NONE,
             component_face: false,
+            off_stack: false,
         }
     }
 
@@ -211,6 +216,7 @@ impl<L: Layout> Copiable<L> {
             additions: L::Additions::NONE,
             read: ReadColors::NONE,
             component_face: false,
+            off_stack: false,
         }
     }
 
@@ -363,7 +369,11 @@ impl<L: Layout> Copiable<L> {
     #[must_use]
     pub fn turned(self, t: &GameTable, face: FaceIx) -> Copiable<L> {
         debug_assert!(face == FaceIx::DOWN || usize::from(face.get()) < self.shape(t).face_count());
-        Copiable { face, ..self }
+        Copiable {
+            face,
+            off_stack: false,
+            ..self
+        }
     }
 
     /// The characteristics of the face that is up, or a face-down permanent's blank ones (CR
@@ -378,7 +388,12 @@ impl<L: Layout> Copiable<L> {
     /// exceptions add are [`Copiable::excepted_subtypes`].
     #[inline]
     pub fn subtypes(self, t: &GameTable) -> GameSubtypes {
-        t.face_subtypes(self.card, self.face)
+        let subtypes = t.face_subtypes(self.card, self.face);
+        if self.other_half(t).is_some() {
+            subtypes.union(t.face_subtypes(self.card, FaceIx::BACK))
+        } else {
+            subtypes
+        }
     }
 
     /// The subtypes of the face that is up with those the exceptions add (CR 707.9b): what
@@ -426,16 +441,13 @@ impl<L: Layout> Copiable<L> {
     pub fn excepted_supertypes(self, t: &GameTable) -> Supertypes {
         (self.additions.iter())
             .flat_map(|addition| addition.changes(t))
-            .fold(
-                self.face(t).supertypes,
-                |supertypes, change| match *change {
-                    CopyChange::WithoutSupertypes(removed) => supertypes.minus(removed),
-                    CopyChange::PowerToughness(..)
-                    | CopyChange::Colors(_)
-                    | CopyChange::AddSubtype(_)
-                    | CopyChange::Has(_) => supertypes,
-                },
-            )
+            .fold(self.supertypes(t), |supertypes, change| match *change {
+                CopyChange::WithoutSupertypes(removed) => supertypes.minus(removed),
+                CopyChange::PowerToughness(..)
+                | CopyChange::Colors(_)
+                | CopyChange::AddSubtype(_)
+                | CopyChange::Has(_) => supertypes,
+            })
     }
 
     /// The abilities the exceptions of these values give, each with the card and face that
@@ -645,7 +657,7 @@ impl<L: Layout> Copiable<L> {
     #[inline]
     pub fn colors(self, t: &GameTable) -> Colors {
         if self.additions.is_empty() {
-            self.face(t).colors
+            self.printed_colors(t)
         } else {
             self.colors_of_additions(t)
         }
@@ -660,7 +672,7 @@ impl<L: Layout> Copiable<L> {
         let changes = (self.additions.iter().enumerate())
             .flat_map(|(place, addition)| addition.changes(t).iter().map(move |c| (place, c)));
         changes.fold(
-            self.face(t).colors,
+            self.printed_colors(t),
             |colors, (place, change)| match *change {
                 CopyChange::Colors(set) => {
                     (self.read.at(place)).unwrap_or_else(|| set.read(&Words::NONE))

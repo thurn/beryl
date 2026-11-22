@@ -20,12 +20,13 @@ use crate::rule_changes::{self, RuleChanges, RuleId, RuleKind, Rules, Unchecked}
 use crate::static_ability::{self, Inputs, Unapplied};
 use crate::subtypes::{GameSubtypes, SubtypeNumbers};
 use listeners::{Indexed, found_where_they_work};
-use lists::{card_names, gather_extra, gather_role};
+use lists::{gather_extra, gather_role};
 
 mod capability;
 mod cards;
 mod listeners;
 mod lists;
+mod names;
 
 pub use crate::payable::{ANY_COLOR, is_instant_mana};
 pub use capability::Capability;
@@ -173,6 +174,8 @@ pub struct GameTable {
     /// first index with each name among the cards that are not tokens or emblems
     /// ([`GameTable::names`]).
     names: Vec<usize>,
+    /// Split back face names. Their catalog numbers start after the card indices.
+    split_back_names: Vec<&'static str>,
     /// Per game index, the printed subtypes of its first two faces by those numbers.
     face_subtypes: Vec<[GameSubtypes; 2]>,
 }
@@ -336,7 +339,7 @@ impl GameTable {
         let subtypes =
             SubtypeNumbers::new(&defs).map_err(|count| TableError::Subtypes { count })?;
         let face_subtypes = subtypes.of_cards(&defs);
-        let names = card_names(&defs);
+        let (names, split_back_names) = names::card_names(&defs);
         let restrictions = mana_memory::number(&defs);
         let capabilities = Capability::of_game(&defs, &subtypes);
         Ok(Self {
@@ -368,6 +371,7 @@ impl GameTable {
             subtypes,
             face_subtypes,
             names,
+            split_back_names,
         })
     }
 
@@ -382,17 +386,6 @@ impl GameTable {
     #[inline]
     pub fn subtypes(&self) -> &SubtypeNumbers {
         &self.subtypes
-    }
-
-    /// The game index of each card name of the game a player may choose, in game order
-    /// (see [CR 201.4](https://yawgatog.com/resources/magic-rules/#R2014)): "the player must
-    /// choose the name of a card in the Oracle card reference". A token's name is among them
-    /// only where a card has it: tokens and emblems are not cards in that reference. Every
-    /// other name has the same consequences in this game, as no card of it has that name, so
-    /// one choice ("another card") stands for them all.
-    #[inline]
-    pub fn names(&self) -> &[usize] {
-        &self.names
     }
 
     /// The printed subtypes of the face `face` of the card at `card` by the game's numbers: found

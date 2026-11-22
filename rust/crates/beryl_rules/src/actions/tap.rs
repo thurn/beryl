@@ -24,6 +24,22 @@ pub fn tap<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Result<()
     event::set_tapped(game.state, game.table, game.sink, object, true)
 }
 
+/// Taps the untapped permanents named by the instruction.
+pub(crate) fn instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    objects: Objects,
+) -> Result<Outcome<L>, Full> {
+    let mut left = run.permanents(objects);
+    let mut tapped = Bitboard::EMPTY;
+    while let Some(permanent) = run.next_permanent(&mut left) {
+        if !run.state().object(permanent.slot()).is_tapped() {
+            tap(run.game(), permanent.into())?;
+            tapped.insert(permanent.slot());
+        }
+    }
+    Ok(Outcome::acted_on(tapped))
+}
+
 /// Untaps a permanent ([CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b)):
 /// "To untap a permanent, rotate it back to the upright position from a sideways position.
 /// Only tapped permanents can be untapped."

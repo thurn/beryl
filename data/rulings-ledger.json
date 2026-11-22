@@ -586,6 +586,57 @@
     }
   ],
   "Fencing Ace": [],
+  "Fire // Ice": [
+    {
+      "published_at": "2022-12-08",
+      "hash": "3501304ac7d9",
+      "scenario": [
+        "Pithing Needle can name Ice"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "f2748ccb5a52",
+      "scenario": [
+        "Fire deals two damage to one target",
+        "Ice taps a permanent and draws one card"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "0b02944b54ad",
+      "scenario": [
+        "Fire deals two damage to one target",
+        "Fire // Ice pays Force of Will's blue pitch cost"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "f7e186f4d02d",
+      "scenario": [
+        "Spell Snare counters Fire as a spell with mana value two"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "67e3325698b5",
+      "covered": "Shape::can_cast_back"
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "17bf9375f1f9",
+      "scenario": [
+        "Fire deals two damage to one target"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "69ad5d3ac8f9",
+      "scenario": [
+        "Fork copies the Fire half and its division"
+      ]
+    }
+  ],
   "Flickerwisp": [
     {
       "published_at": "2021-03-19",
@@ -1450,6 +1501,7 @@
       ]
     }
   ],
+  "Spell Snare": [],
   "Stifle": [
     {
       "published_at": "2004-10-04",

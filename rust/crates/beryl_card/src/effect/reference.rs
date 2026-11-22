@@ -207,6 +207,11 @@ pub enum Recipients {
     /// [`Objects::Target`] of one spec, "to any target": the players and the permanents
     /// together. [`Recipients::target`] makes the second.
     Both(Players, Objects),
+    /// The targets that share a fixed total of two damage. One target receives both
+    /// points, or two targets receive one point each (see [CR 601.2d]).
+    ///
+    /// [CR 601.2d]: https://yawgatog.com/resources/magic-rules/#R6012d
+    DividedTwo(SpecIx),
 }
 
 impl Recipients {
@@ -216,6 +221,7 @@ impl Recipients {
             Recipients::Players(players) => players.names_paid(),
             Recipients::Permanents(objects) => objects.names_paid(),
             Recipients::Both(players, objects) => players.names_paid() || objects.names_paid(),
+            Recipients::DividedTwo(_) => false,
         }
     }
 

@@ -13,7 +13,7 @@ use crate::game::Game;
 use crate::game::life;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::replacement::event::Recipient;
 use crate::state::{
     ChosenSource, Continuous, Duration, ObjectRef, PendingTrigger, Shield, StackEntry, Subject,
@@ -137,13 +137,14 @@ pub(crate) fn instruction<L: Layout>(
     to: Recipients,
     amount: Amount,
 ) -> Result<Outcome<L>, Full> {
-    let amount = run.scene().amount(amount);
-    let source = run.resolution().source();
     let (players, permanents) = match to {
         Recipients::Players(players) => (Some(players), None),
         Recipients::Permanents(objects) => (None, Some(objects)),
         Recipients::Both(players, objects) => (Some(players), Some(objects)),
+        Recipients::DividedTwo(spec) => return divided_two(run, spec),
     };
+    let amount = run.scene().amount(amount);
+    let source = run.resolution().source();
     let (mut damaged, mut dealt) = (Bitboard::EMPTY, 0);
     if let Some(players) = players {
         for player in run.in_turn_order(players) {
@@ -163,6 +164,46 @@ pub(crate) fn instruction<L: Layout>(
             let to = Recipient::Permanent(permanent.into());
             dealt += u32::from(deal(run.game(), source, to, amount, false)?);
         }
+    }
+    Ok(Outcome::of(damaged, dealt))
+}
+
+/// Deals the shares determined by the number of targets chosen while casting.
+/// (see [CR 601.2d]): "Each of these targets must receive at least one of whatever is being
+/// divided." With two points the number of chosen targets determines the only legal
+/// division. Count those targets before checking which are still legal (see CR 608.2b).
+///
+/// [CR 601.2d]: https://yawgatog.com/resources/magic-rules/#R6012d
+#[cold]
+#[inline(never)]
+fn divided_two<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    spec: beryl_card::SpecIx,
+) -> Result<Outcome<L>, Full> {
+    let resolution = run.resolution();
+    let source = resolution.source();
+    let count = resolution
+        .entry
+        .targets
+        .iter()
+        .filter(|target| target.spec() == spec)
+        .count();
+    let amount = if count == 1 { 2 } else { 1 };
+    let mut targets = [None; 2];
+    for (place, target) in targets.iter_mut().zip(run.scene().legal_targets(spec)) {
+        *place = Some(target);
+    }
+    let mut damaged = Bitboard::EMPTY;
+    let mut dealt = 0;
+    for target in targets.into_iter().flatten() {
+        let to = if let Some(player) = target.as_player() {
+            Recipient::Player(player)
+        } else {
+            let object = target.as_object().expect("a permanent target");
+            damaged.insert(object.slot);
+            Recipient::Permanent(object)
+        };
+        dealt += u32::from(deal(run.game(), source, to, amount, false)?);
     }
     Ok(Outcome::of(damaged, dealt))
 }
@@ -212,6 +253,7 @@ pub(crate) fn prevent_instruction<L: Layout>(
         Recipients::Players(players) => (Some(players), None),
         Recipients::Permanents(objects) => (None, Some(objects)),
         Recipients::Both(players, objects) => (Some(players), Some(objects)),
+        Recipients::DividedTwo(_) => unreachable!("division is only used to deal damage"),
     };
     if let Some(players) = players {
         for player in run.in_turn_order(players) {

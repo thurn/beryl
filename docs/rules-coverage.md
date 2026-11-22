@@ -937,8 +937,16 @@ Built by by-bajq.3.10:
 - **The repeat shortcut** (CR 733). The session replays a recorded run of
   choices N times, matching each by what it does, as a save does. The engine
   needs nothing.
-- **Split cards** in a hand or graveyard have both halves' characteristics. That
-  is one more value of the face `State::copiable` answers for.
+
+## Split cards
+
+Fire // Ice has the combined colors, types, mana value and both names off the
+stack. On the stack, a spell has only the characteristics of the half cast. Each
+name can be chosen separately for Pithing Needle. A copy of Fire keeps its
+announced targets and shares, and an illegal target's share is lost.
+([CR 709.3b](https://yawgatog.com/resources/magic-rules/#R7093b),
+[CR 709.4](https://yawgatog.com/resources/magic-rules/#R7094),
+[CR 601.2d](https://yawgatog.com/resources/magic-rules/#R6012d))
 
 ## Bars and validation
 

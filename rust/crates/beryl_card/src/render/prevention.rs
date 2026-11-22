@@ -12,6 +12,7 @@ impl Ctx {
     /// Who is dealt damage: "you", "target creature", "any target".
     pub(super) fn recipients(&mut self, to: Recipients) -> String {
         match to {
+            Recipients::DividedTwo(_) => unreachable!("division is only used to deal damage"),
             Recipients::Players(players) => self.player(players),
             Recipients::Permanents(objects) => self.objects(objects),
             // "Any target": the one target, said once.

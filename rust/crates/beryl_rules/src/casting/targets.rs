@@ -277,7 +277,7 @@ fn enough_candidates<L: Layout>(
         abilities,
     } = domain(s, t, spec, you, itself, source);
     let found = players.count() + abilities.count_ones();
-    let Some(need) = usize::from(spec.count)
+    let Some(need) = usize::from(spec.required())
         .checked_sub(usize::try_from(found).expect("at most the players and stack abilities"))
     else {
         return true;
@@ -315,9 +315,10 @@ pub(super) fn targetable<L: Layout>(
     source: Option<L::Slot>,
 ) -> bool {
     ability.is_none_or(|a| {
-        a.targets()
-            .iter()
-            .all(|spec| spec.optional || enough_candidates(s, t, spec, you, itself, x, source))
+        a.targets().iter().all(|spec| {
+            (spec.optional && spec.minimum == 0)
+                || enough_candidates(s, t, spec, you, itself, x, source)
+        })
     })
 }
 

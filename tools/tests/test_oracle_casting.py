@@ -22,11 +22,25 @@ class CastingCase:
     command: str
     spell: str | None = None
     cost: str | None = None
+    divided: int | None = None
     targets: tuple[str, ...] = ()
     assertions: tuple[tuple[str, object], ...] = ()
 
 
 CASES: list[CastingCase] = [
+    CastingCase(
+        "Fire // Ice",
+        "Fire // Ice",
+        ("Fire", "Ice"),
+        "Split",
+        0,
+        ("Mountain", "Mountain"),
+        "Fire",
+        spell="Fire",
+        divided=2,
+        targets=("opponent",),
+        assertions=(("life", 18),),
+    ),
     CastingCase(
         "Wear",
         "Wear // Tear",
@@ -147,6 +161,13 @@ def assertion(case: CastingCase, kind: str, value: object) -> Json:
 
 def scenario(case: CastingCase) -> Json:
     faces = [dict[str, object](name=name) for name in case.faces]
+    if case.divided is not None:
+        faces[case.face]["abilities"] = [
+            {
+                "kind": "Spell",
+                "instructions": [{"kind": "DealDamage", "divided": case.divided}],
+            }
+        ]
     if case.cost is not None:
         faces[0]["casting"] = [{"bit": 0, "keyword": case.cost, "alternative": True}]
     actions: list[Json] = [
@@ -266,6 +287,12 @@ def test_export_casting_modes(case: CastingCase) -> None:
         expected["spell"] = case.spell
     if case.cost is not None:
         expected["cost"] = case.cost
+    if case.divided is not None:
+        expected["divided"] = case.divided
+        assert (
+            f'addTargetAmount(playerA, "targetPlayer=PlayerB", {case.divided});'
+            in java.body
+        )
     assert step == expected
 
 

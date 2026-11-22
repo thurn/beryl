@@ -2,6 +2,7 @@
 //!
 //! Implements: none. Records which game mechanics the current card pool can use.
 
+use beryl_card::definition::Shape;
 use beryl_card::{
     Ability, AbilityKind, Amount, Behavior, CardDef, Condition, Draws, Effect, FACE_DOWN, Face,
     Modification, Node, Objects, Replaced, Replacement, Rewrite, Subtype, Words, Zone,
@@ -114,10 +115,12 @@ pub enum Capability {
     Saga,
     /// The game may have an Equipment that can become illegally attached.
     Equipment,
+    /// A card has two halves with combined characteristics off the stack.
+    Split,
 }
 
 // The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::Equipment as u32) < u32::BITS);
+const _: () = assert!((Capability::Split as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -132,6 +135,12 @@ impl Capability {
         }
         if subtypes.has(Subtype::Equipment).possible() {
             capabilities |= Self::Equipment.bit();
+        }
+        if defs
+            .iter()
+            .any(|def| matches!(def.shape, Shape::Split { .. }))
+        {
+            capabilities |= Self::Split.bit();
         }
         capabilities
     }

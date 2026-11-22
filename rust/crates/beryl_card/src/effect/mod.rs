@@ -198,6 +198,10 @@ pub enum Effect {
     /// resolving spell or ability regenerates a permanent, it creates a replacement effect that
     /// protects the permanent the next time it would be destroyed this turn."
     Regenerate(Objects),
+    /// "Tap [permanents]" ([CR 701.26a]).
+    ///
+    /// [CR 701.26a]: https://yawgatog.com/resources/magic-rules/#R70126a
+    Tap(Objects),
     /// "[Permanents] phase out" ([CR 702.26b]): "If a permanent phases out, its status changes to
     /// “phased out.” Except for rules and effects that specifically mention phased-out
     /// permanents, a phased-out permanent is treated as though it does not exist." What is
@@ -708,6 +712,7 @@ impl Effect {
             | Effect::CopySpell { .. }
             | Effect::ExchangeControl(..)
             | Effect::Regenerate(_)
+            | Effect::Tap(_)
             | Effect::PhaseOut(_)
             | Effect::PreventDamage { .. }
             | Effect::Draw { .. }

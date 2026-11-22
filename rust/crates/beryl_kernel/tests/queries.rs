@@ -2,11 +2,14 @@
 //! face-down permanent and a double-faced one.
 
 use beryl_card::{
-    CardDef, Castings, CopyException, ExceptIx, FACE_DOWN, Face, FaceIx, ManaCost, Types,
+    CardDef, Castings, ChosenKind, Colors, CopyException, ExceptIx, FACE_DOWN, Face, FaceIx,
+    Filter, ManaCost, Types, Words,
     Zone::{self, Battlefield, Graveyard, Hand, Nowhere, Stack},
 };
+use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::copiable::additions::Addition;
 use beryl_kernel::event::Sink;
+use beryl_kernel::filter::Evaluate;
 use beryl_kernel::format::Format;
 use beryl_kernel::mutate::Arrival;
 use beryl_kernel::profile::Profile;
@@ -77,6 +80,32 @@ static BLAST: CardDef = CardDef {
         types: Types::SORCERY,
         ..Face::EMPTY
     }],
+    tokens: &[],
+};
+
+/// A split card with a different type, color and mana value on each half.
+static SPLIT: CardDef = CardDef {
+    name: "Test Red // Test Blue",
+    shape: beryl_card::definition::Shape::Split { fuse: false },
+    faces: &[
+        Face {
+            name: "Test Red",
+            cost: ManaCost::new(1, [0, 0, 0, 1, 0, 0]),
+            types: Types::INSTANT,
+            colors: Colors::RED,
+            ..Face::EMPTY
+        },
+        Face {
+            name: "Test Blue",
+            cost: ManaCost::new(2, [0, 1, 0, 0, 0, 0]),
+            types: Types::SORCERY,
+            colors: Colors::BLUE,
+            ..Face::EMPTY.for_shape(
+                beryl_card::definition::Shape::Split { fuse: false },
+                FaceIx::BACK,
+            )
+        },
+    ],
     tokens: &[],
 };
 
@@ -339,6 +368,66 @@ fn mana_value_counts_x_on_the_stack_and_a_copied_back_face_as_nothing() {
     s.put_on_stack(&mut beryl_kernel::event::Sink::off(), entry)
         .unwrap();
     assert_eq!(s.mana_value(&t, blast), 4);
+}
+
+#[test]
+fn a_split_card_combines_its_halves_only_off_the_stack() {
+    static CARDS: CardTable = CardTable::new(&[&SPLIT]);
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [&[(2, SPLIT.name)]; 2]).unwrap();
+    let mut s = State::new(&t, 7, Profile::EXACT).unwrap();
+    let card = put(&t, &mut s, Seat::P0, SPLIT.name, Graveyard);
+
+    let both = Colors::RED.union(Colors::BLUE);
+    let types = Types::INSTANT.union(Types::SORCERY);
+    let values = s.copiable(card);
+    assert_eq!(s.colors(&t, card), both);
+    assert_eq!(s.types(&t, card), types);
+    assert_eq!(s.mana_value(&t, card), 5);
+    assert_eq!(values.colors(&t), both);
+    assert_eq!(values.types(&t), types);
+    assert_eq!(values.mana_cost(&t).mana_value(), 5);
+    assert_eq!(values.names(&t), [Some("Test Red"), Some("Test Blue")]);
+    let names: Vec<_> = ChosenValue::<beryl_kernel::Small>::candidates(&t, ChosenKind::CardName)
+        .map(|number| {
+            ChosenValue::<beryl_kernel::Small>::of_number(ChosenKind::CardName, number)
+                .unwrap()
+                .name(&t)
+        })
+        .collect();
+    assert_eq!(names, ["Test Red", "Test Blue", "Another card"]);
+    let two_or_less = Filter::ManaValueAtMost(2);
+    assert!(!two_or_less.matches(&s, &t, card, Seat::P0, &Words::NONE));
+    assert!(
+        CARDS
+            .get("Test Red")
+            .is_some_and(|def| std::ptr::eq(def, &raw const SPLIT))
+    );
+    assert!(
+        CARDS
+            .get("Test Blue")
+            .is_some_and(|def| std::ptr::eq(def, &raw const SPLIT))
+    );
+
+    s.board().place(card, Stack).unwrap();
+    s.become_spell(
+        s.spell(s.object_ref(card)).unwrap(),
+        FaceIx::FRONT,
+        Seat::P0,
+    );
+    let (def, face) = s.copiable(card).record(&t);
+    let entry = StackEntry::new(StackItem::Spell {
+        object: s.object_ref(card),
+        controller: Seat::P0,
+        card: def,
+        face,
+        costs: Castings::NONE,
+    });
+    s.put_on_stack(&mut Sink::off(), entry).unwrap();
+    assert_eq!(s.colors(&t, card), Colors::RED);
+    assert_eq!(s.types(&t, card), Types::INSTANT);
+    assert_eq!(s.mana_value(&t, card), 2);
+    assert_eq!(s.copiable(card).names(&t), [Some("Test Red"), None]);
+    assert!(two_or_less.matches(&s, &t, card, Seat::P0, &Words::NONE));
 }
 
 #[test]

@@ -160,6 +160,11 @@ impl<L: Layout> Scene<'_, L> {
         })
     }
 
+    /// The legal targets of one target spec in the order they were chosen.
+    pub(crate) fn legal_targets(&self, spec: SpecIx) -> impl Iterator<Item = Target<L>> + '_ {
+        self.targets(spec).map(|(_, target)| target)
+    }
+
     /// The targets among [`Scene::targets`] the effect has moved, as they were last known.
     /// One an instruction set out to move and could not, as when what would have exiled it
     /// had left first (see CR 610.3b), is still what [`Scene::objects`] names, and is not here.

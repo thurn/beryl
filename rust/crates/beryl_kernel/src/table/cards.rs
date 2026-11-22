@@ -2,7 +2,8 @@
 //!
 //! Implements: none. Indexes supported card definitions by name.
 
-use beryl_card::CardDef;
+use beryl_card::definition::Shape;
+use beryl_card::{CardDef, FaceIx};
 
 /// Every card the program knows, built once and shared by every thread as a `&'static`: the
 /// cards written in files, which [`CardTable::cards`] lists, and the cards complete from the
@@ -103,12 +104,14 @@ impl CardTable {
     /// would find it, else the card complete from the store of that name.
     pub fn get(&self, name: &str) -> Option<&'static CardDef> {
         if let Some(base) = self.base {
+            let known = base.get(name);
+            let canonical = known.map_or(name, |card| card.name);
             return self
                 .cards()
                 .iter()
                 .copied()
-                .find(|card| card.name == name)
-                .or_else(|| base.get(name));
+                .find(|card| card.name == name || card.name == canonical)
+                .or(known);
         }
         self.by_name
             .get_or_init(|| {
@@ -117,6 +120,13 @@ impl CardTable {
                     std::collections::HashMap::with_capacity(cards.len() + from_store.len());
                 for &card in cards.iter().chain(from_store) {
                     map.entry(card.name).or_insert(card);
+                }
+                for &card in cards.iter().chain(from_store) {
+                    if matches!(card.shape, Shape::Split { .. }) {
+                        for face in [FaceIx::FRONT, FaceIx::BACK] {
+                            map.entry(card.face_name(face)).or_insert(card);
+                        }
+                    }
                 }
                 map
             })

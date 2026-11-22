@@ -446,6 +446,7 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::CopySpell { .. }
         | Effect::Destroy { .. }
         | Effect::Regenerate(_)
+        | Effect::Tap(_)
         | Effect::PhaseOut(_)
         | Effect::ExileUntilThisLeaves(_)
         | Effect::Sacrifice(_)

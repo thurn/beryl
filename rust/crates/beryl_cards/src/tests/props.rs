@@ -49,7 +49,15 @@ fn scenario_strings(scenario: &Scenario) -> BTreeSet<String> {
                 into.insert(s.clone());
             }
             Value::Array(items) => items.iter().for_each(|v| walk(v, into)),
-            Value::Object(fields) => fields.values().for_each(|v| walk(v, into)),
+            Value::Object(fields) => {
+                for (field, value) in fields {
+                    // An enum tag such as a counter kind can share a spelling
+                    // with a card name without naming that card.
+                    if field != "kind" || !value.is_string() {
+                        walk(value, into);
+                    }
+                }
+            }
             _ => {}
         }
     }

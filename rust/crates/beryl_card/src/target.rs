@@ -100,11 +100,14 @@ pub enum Takes {
 pub struct TargetSpec {
     pub kind: TargetKind,
     pub filter: Filter,
-    /// Exactly this many, or up to this many when `optional`
+    /// Exactly this many, or at most this many when `optional`
     /// ([CR 115.6](https://yawgatog.com/resources/magic-rules/#R1156)): "A spell or ability
     /// that requires targets may allow zero targets to be chosen."
     pub count: u8,
     pub optional: bool,
+    /// The fewest targets in a variable range. Zero for an optional target;
+    /// ignored when the count is fixed.
+    pub minimum: u8,
     /// "Other target": not the object whose ability this is.
     pub other: bool,
     /// Only a permanent an ability of the object with this spec put onto the battlefield,
@@ -120,6 +123,7 @@ impl TargetSpec {
             filter,
             count: 1,
             optional: false,
+            minimum: 0,
             other: false,
             put_with_this: false,
         }
@@ -138,6 +142,27 @@ impl TargetSpec {
         TargetSpec {
             count,
             ..TargetSpec::up_to_one(kind, filter)
+        }
+    }
+
+    /// A variable number of targets, from `minimum` to `maximum`, inclusive.
+    #[must_use]
+    pub const fn range(self, minimum: u8, maximum: u8) -> TargetSpec {
+        assert!(minimum <= maximum, "a nonempty target range");
+        TargetSpec {
+            count: maximum,
+            optional: true,
+            minimum,
+            ..self
+        }
+    }
+
+    /// The number of targets that must be available to cast the spell or activate the ability.
+    pub const fn required(self) -> u8 {
+        if self.optional {
+            self.minimum
+        } else {
+            self.count
         }
     }
 
@@ -194,6 +219,7 @@ impl TargetSpec {
     pub const fn optional(self) -> TargetSpec {
         TargetSpec {
             optional: true,
+            minimum: 0,
             ..self
         }
     }

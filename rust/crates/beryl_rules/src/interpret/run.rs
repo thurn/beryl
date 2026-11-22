@@ -177,6 +177,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::CopySpell { .. }
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
+            | Effect::Tap(_)
             | Effect::PhaseOut(_)
             | Effect::Exile(_)
             | Effect::ExileUntilThisLeaves(_)
@@ -280,6 +281,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 regeneration,
             } => destroy::instruction(self, objects, regeneration)?,
             Effect::Regenerate(objects) => regenerate::instruction(self, objects)?,
+            Effect::Tap(objects) => crate::actions::tap::instruction(self, objects)?,
             Effect::PhaseOut(objects) => crate::objects::phasing::instruction(self, objects)?,
             Effect::PreventDamage {
                 to,

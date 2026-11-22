@@ -164,6 +164,7 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
         }
         Effect::Counter(o) => objects_of(o, Effect::Counter, &mut add),
         Effect::Regenerate(o) => objects_of(o, Effect::Regenerate, &mut add),
+        Effect::Tap(o) => objects_of(o, Effect::Tap, &mut add),
         Effect::PhaseOut(o) => objects_of(o, Effect::PhaseOut, &mut add),
         Effect::Exile(o) => objects_of(o, Effect::Exile, &mut add),
         Effect::ExileUntilThisLeaves(o) => objects_of(o, Effect::ExileUntilThisLeaves, &mut add),

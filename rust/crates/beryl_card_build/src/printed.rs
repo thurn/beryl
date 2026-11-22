@@ -333,8 +333,9 @@ pub fn faces(record: &Record, subtypes: &Subtypes) -> Result<Vec<(String, String
                 )
                 .unwrap();
             }
-            // A card of one face carries its name, which `Face::card` builds the card under.
-            if record.faces.len() == 1 {
+            // A one-faced card supplies the name for `Face::card`. A split front half
+            // has its own name on the stack.
+            if record.faces.len() == 1 || (i == 0 && record.layout == "split") {
                 source = source.replacen(
                     "beryl_card::Face::EMPTY",
                     &format!("beryl_card::Face::EMPTY\n    .named({:?})", face.name),

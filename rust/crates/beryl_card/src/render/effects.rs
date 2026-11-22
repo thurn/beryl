@@ -7,6 +7,7 @@ use super::clauses::{prefix, subject_of};
 use super::filters::Kind;
 use super::words::{mana_set, number, symbol, with_article};
 use super::zones::owners;
+use crate::Recipients;
 use crate::ability::Behavior;
 use crate::characteristics::Types;
 use crate::continuous::Duration;
@@ -123,6 +124,7 @@ impl Ctx {
             Effect::Regenerate(objects) => {
                 vec![self.acts(("regenerate", "regenerates"), objects, "")]
             }
+            Effect::Tap(objects) => vec![format!("tap {}", self.objects(objects))],
             Effect::PhaseOut(objects) => vec![self.phase_out(objects)],
             Effect::Attach { objects, to } => {
                 let host = self.objects(to);
@@ -307,6 +309,12 @@ impl Ctx {
             }
             Effect::DealDamage { to, amount } => {
                 let damage = self.quantity(amount, "damage");
+                if matches!(to, Recipients::DividedTwo(_)) {
+                    return vec![format!(
+                        "{} deals {damage} divided as you choose among one or two targets",
+                        self.this
+                    )];
+                }
                 let to = self.recipients(to);
                 vec![format!("{} deals {damage} to {to}", self.this)]
             }

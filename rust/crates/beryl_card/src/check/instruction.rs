@@ -4,7 +4,7 @@ use super::{Checked, Malformed, Scope, both};
 use crate::PutOnto;
 use crate::ability::AbilityKind;
 use crate::continuous::Duration;
-use crate::effect::{Amount, Effect, Objects, Operands, Players};
+use crate::effect::{Amount, Effect, Objects, Operands, Players, Recipients};
 use crate::ids::Zone;
 use crate::prompt::Shape;
 
@@ -14,6 +14,31 @@ impl Scope<'_> {
     #[allow(clippy::too_many_lines)] // Each instruction is classified in one match.
     pub(super) const fn instruction(self, effect: &Effect) -> Checked {
         let entry = match effect {
+            Effect::DealDamage {
+                to: Recipients::DividedTwo(spec),
+                amount,
+            } => {
+                let targets = self.ability.targets();
+                if spec.index() < targets.len()
+                    && matches!(amount, Amount::Fixed(2))
+                    && targets[spec.index()].required() == 1
+                    && targets[spec.index()].count == 2
+                    && matches!(
+                        targets[spec.index()].kind,
+                        crate::TargetKind::Permanent
+                            | crate::TargetKind::Player
+                            | crate::TargetKind::PermanentOrPlayer
+                    )
+                {
+                    Ok(())
+                } else {
+                    Err(Malformed::Target)
+                }
+            }
+            Effect::PreventDamage {
+                to: Recipients::DividedTwo(_),
+                ..
+            } => Err(Malformed::Target),
             Effect::CounterInto { zone, .. } => match zone {
                 Zone::Exile => Ok(()),
                 Zone::Library
@@ -143,6 +168,7 @@ impl Scope<'_> {
             | Effect::CopySpell { .. }
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
+            | Effect::Tap(_)
             | Effect::PhaseOut(_)
             | Effect::Exile(_)
             | Effect::ExileUntilThisLeaves(_)

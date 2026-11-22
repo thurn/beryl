@@ -256,7 +256,10 @@ impl Scope<'_> {
         let targets = self.ability.targets();
         let mut i = 0;
         while i < targets.len() {
-            if targets[i].kind.abilities().is_some() && !matches!(targets[i].filter, Filter::Any) {
+            if targets[i].required() > targets[i].count
+                || (targets[i].kind.abilities().is_some()
+                    && !matches!(targets[i].filter, Filter::Any))
+            {
                 return Err(Malformed::Target);
             }
             i += 1;

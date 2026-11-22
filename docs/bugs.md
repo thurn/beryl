@@ -12,6 +12,13 @@ fixed in the same session. Newest first.
   are cast. A scenario where Fork copies a spell targeting Bonecrusher Giant
   checks that the copy triggers the Giant again.
 
+- **A front half of a split spell could show both colors.** The card store used
+  the combined color field when Scryfall did not list a half's colors, and
+  object queries read only one face off the stack. The store now derives missing
+  split face colors from that face's mana cost. The Fire // Ice scenarios check
+  that Fire is red on the stack and that both colors exist when the card is in a
+  graveyard.
+
 - **A subgame could offer the suspended game's sideboard.** Both games use the
   same card table. Sideboard choices now require the main game, while cards
   already in its library can enter a subgame from their pool slots.

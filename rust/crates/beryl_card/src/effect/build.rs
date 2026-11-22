@@ -24,13 +24,20 @@ use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::effect::{
     Amount, CastTerms, Comparison, Condition, Effect, Found, LibraryOrder, LibraryPosition,
-    Objects, Players, Prevention, PutOnto, Recipients, Regeneration, Taken,
+    Objects, Players, PutOnto, Regeneration, Taken,
 };
 use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::index::{AbilityIx, ExceptIx, SpecIx};
 use crate::mana::{ManaColor, ManaCost, ManaSet};
 use crate::prompt::Prompt;
+
+mod damage;
+
+pub use damage::{
+    deal_damage_to, deal_damage_to_any_target, deal_two_divided,
+    prevent_next_damage_from_chosen_source, prevent_next_damage_to_any_target,
+};
 
 /// "This creature", "this spell": [`Objects::This`].
 pub const fn this() -> Objects {
@@ -494,48 +501,6 @@ pub const fn manifest_dread(player: Players) -> Effect {
 /// [`Effect::FlipCoin`]: "[player] flips a coin".
 pub const fn flip_coin(player: Players) -> Effect {
     Effect::FlipCoin(player)
-}
-
-/// [`Effect::DealDamage`] to players: "this deals [amount] damage to [player]".
-pub const fn deal_damage_to(player: Players, amount: u8) -> Effect {
-    Effect::DealDamage {
-        to: Recipients::Players(player),
-        amount: Amount::Fixed(amount),
-    }
-}
-
-/// [`Effect::DealDamage`] to the first target, a player or a permanent: "this deals [amount]
-/// damage to any target", with [`crate::TargetSpec::any_target`].
-pub const fn deal_damage_to_any_target(amount: u8) -> Effect {
-    Effect::DealDamage {
-        to: Recipients::target(SpecIx::new(0)),
-        amount: Amount::Fixed(amount),
-    }
-}
-
-/// [`Effect::PreventDamage`] of the next `n` damage to the first target, a player or a
-/// permanent: "prevent the next [n] damage that would be dealt to any target this turn", with
-/// [`crate::TargetSpec::any_target`].
-pub const fn prevent_next_damage_to_any_target(n: u8) -> Effect {
-    Effect::PreventDamage {
-        to: Recipients::target(SpecIx::new(0)),
-        prevention: Prevention::Next(n),
-        from: None,
-    }
-}
-
-/// [`Effect::PreventDamage`] of the next damage a source of the controller's choice that
-/// `filter` accepts would deal to `players`: "the next time a red source of your choice would
-/// deal damage to you this turn, prevent that damage".
-pub const fn prevent_next_damage_from_chosen_source(
-    players: Players,
-    filter: &'static Filter,
-) -> Effect {
-    Effect::PreventDamage {
-        to: Recipients::Players(players),
-        prevention: Prevention::NextTime,
-        from: Some(filter),
-    }
 }
 
 /// [`Effect::GainLife`]: "[player] gains [amount] life".

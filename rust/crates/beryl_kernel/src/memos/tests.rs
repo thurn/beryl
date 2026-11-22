@@ -120,11 +120,14 @@ fn chosen_names_omit_unknown_names_and_phased_out_permanents() {
         .unwrap();
     derive(&t, &mut s);
 
-    assert_eq!(s.chosen_names().collect::<Vec<_>>(), [(slots[0], card)]);
+    assert_eq!(
+        s.chosen_names(&t).collect::<Vec<_>>(),
+        [(slots[0], BEAR.name)]
+    );
     s.phase_out(s.permanents_in(Bitboard::single(slots[0])))
         .unwrap();
     assert_eq!(s.chosen(slots[0]), Some(known));
-    assert_eq!(s.chosen_names().next(), None);
+    assert_eq!(s.chosen_names(&t).next(), None);
 }
 
 #[test]

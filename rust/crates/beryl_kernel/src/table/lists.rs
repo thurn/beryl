@@ -49,21 +49,3 @@ pub(super) fn gather_extra(defs: &mut Vec<&'static CardDef>, extra: &[&'static C
     }
     defs.push(&FACE_DOWN_COPY);
 }
-
-/// The game index of each distinct name among `defs` that a card has ([`super::GameTable::names`]):
-/// not a token's or an emblem's, which some card of `defs` lists among what it creates, and
-/// not [`FACE_DOWN_COPY`]'s, which is no card's.
-pub(super) fn card_names(defs: &[&'static CardDef]) -> Vec<usize> {
-    let made = |def: &CardDef| {
-        defs.iter()
-            .any(|d| d.tokens.iter().any(|&token| std::ptr::eq(token, def)))
-    };
-    let mut names: Vec<usize> = Vec::new();
-    for (i, &def) in defs.iter().enumerate() {
-        let card = !std::ptr::eq(def, &raw const FACE_DOWN_COPY) && !made(def);
-        if card && !names.iter().any(|&n| defs[n].name == def.name) {
-            names.push(i);
-        }
-    }
-    names
-}

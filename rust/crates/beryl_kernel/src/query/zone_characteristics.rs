@@ -106,10 +106,9 @@ impl<L: Layout> State<L> {
     #[inline(never)]
     pub(crate) fn elsewhere(&self, t: &GameTable, slot: L::Slot) -> SoFar {
         let what = self.copiable(slot);
-        let face = what.face(t);
         let mut so_far = SoFar {
-            types: face.types,
-            supertypes: face.supertypes,
+            types: what.types(t),
+            supertypes: what.supertypes(t),
             subtypes: what.subtypes(t),
             colors: what.colors(t),
         };

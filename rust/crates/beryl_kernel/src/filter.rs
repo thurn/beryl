@@ -12,7 +12,7 @@ use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::query::zone_characteristics::SoFar;
 use crate::state::{Flag, State};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
 /// What a [`Filter`] accepts in a game. Evaluating one is a pass over a candidate set; the
 /// hot ones become ANDs over per-slot attribute bitboards as the cards that need them arrive.
@@ -94,7 +94,8 @@ impl Evaluate for Filter {
         // A permanent's characteristics are the layers' results. Anything else's are its
         // face's while no effect reaches other zones, and the kernel's reads of them
         // otherwise ([`crate::query::zone_characteristics`]), out of line.
-        let elsewhere = || s.reaches_elsewhere().then(|| s.elsewhere(t, slot));
+        let elsewhere =
+            || (s.reaches_elsewhere() || t.can(Capability::Split)).then(|| s.elsewhere(t, slot));
         match *self {
             Filter::Any => true,
             Filter::Types(types) => match derived() {

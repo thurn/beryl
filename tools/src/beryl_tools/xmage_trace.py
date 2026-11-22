@@ -187,3 +187,23 @@ def resolution_skips(
     ):
         if count < old_count:
             yield f"addTarget({player(seat)}, TestPlayer.TARGET_SKIP);"
+
+
+def cast_targets(
+    actions: Sequence[Json], trace: Sequence[Position], index: int
+) -> list[Json]:
+    """The target choices following this cast, or the choices Beryl made without asking."""
+    answers: list[Json] = []
+    for action in actions[index + 1 :]:
+        if action["action"] != "Answer" or action["kind"] not in (
+            "Target",
+            "TargetCount",
+        ):
+            break
+        answers.append(action)
+    if not answers and index + 1 < len(trace):
+        for forced in trace[index + 1].forced:
+            if forced["kind"] != "Target":
+                break
+            answers.append(forced)
+    return answers

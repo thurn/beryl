@@ -104,6 +104,15 @@ pub mod decks {
     /// the cards of a family meet each other far more often than in decks drawn from every card.
     pub const KEYSTONE_FAMILIES: &[(&str, &[&str])] = &[
         ("combat", &[names::PALACE_GUARD, names::FENCING_ACE]),
+        (
+            "split",
+            &[
+                names::FIRE_ICE,
+                names::FORK,
+                names::FORCE_OF_WILL,
+                names::SPELL_SNARE,
+            ],
+        ),
         ("face-down", &[names::EXALTED_ANGEL, names::GATHAN_RAIDERS]),
         (
             "casting",

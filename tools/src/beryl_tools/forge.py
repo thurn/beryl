@@ -290,12 +290,15 @@ def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject
             if cost not in (None, "Morph"):
                 raise Unsupported(f"casting option {costs:#b} of face-down {card}")
             cost = "Morph"
-        elif face or cards.printed_name(card) != card:
+        elif face or spell != card or cards.printed_name(card) != card:
             out["spell"] = spell
         if cost == "Fuse":
             out.pop("spell", None)  # The fused ability belongs to the whole card.
         if cost is not None:
             out["cost"] = cost
+        damage = cards.instruction(card, "DealDamage", face)
+        if damage and "divided" in damage:
+            out["divided"] = damage["divided"]
         return out
     if kind == "Activate":
         card = cast(str, action["card"])

@@ -606,8 +606,14 @@ impl<L: Layout> State<L> {
     /// [CR 708.2]: https://yawgatog.com/resources/magic-rules/#R7082
     pub fn name(&self, t: &crate::table::GameTable, slot: L::Slot) -> &'static str {
         let def = t.def(self.card(slot));
-        match self.object(slot).face {
+        let object = self.object(slot);
+        match object.face {
             FaceIx::DOWN => def.name,
+            _ if object.zone != Zone::Stack
+                && matches!(def.shape, beryl_card::definition::Shape::Split { .. }) =>
+            {
+                def.name
+            }
             face => def.face_name(face),
         }
     }

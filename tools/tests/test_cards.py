@@ -355,3 +355,18 @@ def test_the_committed_store_holds_the_sample_s_records(tmp_path: Path) -> None:
                 assert committed.card(name) == record
             else:
                 assert record in committed.tokens(name)
+
+
+def test_split_halves_use_their_own_colors() -> None:
+    faces = cards.store_faces(
+        {
+            "layout": "split",
+            "colors": ["U", "R", "G"],
+            "card_faces": [
+                {"name": "Front", "mana_cost": "{1}{R/G}", "type_line": "Instant"},
+                {"name": "Back", "mana_cost": "{2}{U}", "type_line": "Sorcery"},
+            ],
+        },
+        token=False,
+    )
+    assert [face["colors"] for face in faces] == [["R", "G"], ["U"]]

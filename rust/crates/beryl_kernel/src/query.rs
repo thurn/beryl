@@ -1,6 +1,6 @@
 //! Queries: what the rules ask about an object, answered once.
 //!
-//! Implements: CR 108.4a, CR 202.3, CR 709.4b, CR 712.6d
+//! Implements: CR 108.4a, CR 202.3, CR 712.6d
 //!
 //! A slot holds the game index of a definition and the face that is up. Neither is an answer:
 //! a token's definition is no card, a face-down permanent's says nothing of what it is, a
@@ -20,7 +20,7 @@ use crate::layout::Layout;
 use crate::object::{AbilityMask, CombatRole, Flag};
 use crate::reference::Permanent;
 use crate::state::{StackEntry, State};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
 pub(crate) mod defined_power;
 pub mod zone_characteristics;
@@ -85,12 +85,15 @@ impl<L: Layout> State<L> {
 
     /// The copiable values of the object in `slot` (see CR 707.2): what it is before any other
     /// effect, and what a copy of it would be. Its definition and face are fields of the
-    /// object; the exceptions of a copy effect on it are read behind [`Flag::Copy`], so for
-    /// every other object this reads what it always read and tests one bit.
+    /// object. A split card outside the stack has the values of both halves (see CR 709.4).
+    /// Exceptions from copy effects are read behind [`Flag::Copy`].
     #[inline]
     pub fn copiable(&self, slot: L::Slot) -> Copiable<L> {
         let o = self.object(slot);
-        let values = Copiable::of_object(o);
+        let mut values = Copiable::of_object(o);
+        if o.zone != Zone::Stack && !o.on_battlefield() {
+            values = values.with_other_half();
+        }
         if o.flags.has(Flag::Copy) {
             values.with_additions_of(self.copy_effect(slot))
         } else {
@@ -132,7 +135,7 @@ impl<L: Layout> State<L> {
             return spell_mana_value(t, entry);
         }
         let definition = t.def(o.card);
-        // CR 709.4b: "A split card’s colors and mana value are determined from its combined
+        // see CR 709.4b: "A split card’s colors and mana value are determined from its combined
         // mana cost." A spell on the stack used its chosen face above.
         if matches!(definition.shape, Shape::Split { .. })
             && o.zone != Zone::Stack
@@ -376,6 +379,8 @@ impl<L: Layout> State<L> {
         let o = self.object(slot);
         if o.on_battlefield() {
             self.derived(slot).colors
+        } else if !self.reaches_elsewhere() && t.can(Capability::Split) {
+            self.copiable(slot).colors(t)
         } else if !self.reaches_elsewhere() && !o.flags.has(Flag::Copy) {
             self.definition(slot).face(t).colors
         } else if !self.reaches_elsewhere() {
@@ -396,7 +401,11 @@ impl<L: Layout> State<L> {
         if o.on_battlefield() {
             self.derived(slot).types
         } else if !self.reaches_elsewhere() {
-            self.definition(slot).face(t).types
+            if t.can(Capability::Split) {
+                self.copiable(slot).types(t)
+            } else {
+                self.definition(slot).face(t).types
+            }
         } else {
             self.elsewhere(t, slot).types
         }
@@ -412,7 +421,11 @@ impl<L: Layout> State<L> {
         if o.on_battlefield() {
             self.derived(slot).supertypes
         } else if !self.reaches_elsewhere() {
-            self.definition(slot).face(t).supertypes
+            if t.can(Capability::Split) {
+                self.copiable(slot).supertypes(t)
+            } else {
+                self.definition(slot).face(t).supertypes
+            }
         } else {
             self.elsewhere(t, slot).supertypes
         }
@@ -428,6 +441,15 @@ impl<L: Layout> State<L> {
         if o.on_battlefield() {
             self.derived(slot).subtypes.contains(t.subtypes(), subtype)
         } else if !self.reaches_elsewhere() {
+            if t.can(Capability::Split)
+                && matches!(t.def(o.card).shape, Shape::Split { .. })
+                && o.zone != Zone::Stack
+            {
+                return self
+                    .copiable(slot)
+                    .subtypes(t)
+                    .contains(t.subtypes(), subtype);
+            }
             let printed = self.definition(slot).face(t).subtypes;
             printed.read(&self.words_of(slot)).contains(subtype)
         } else {

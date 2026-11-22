@@ -38,6 +38,7 @@ from .xmage_trace import (
     FORCED_COSTS,
     FORCED_TARGETS,
     Position,
+    cast_targets,
     resolution_skips,
 )
 from .xmage_java import (
@@ -56,6 +57,7 @@ from .xmage_java import (
     activate_on_stack,
     assertion_code,
     cast_choices,
+    divided_damage,
     java_string,
     offered_cast_choices,
     spell_cast,
@@ -403,6 +405,19 @@ class Exporter:
                 f"{java_string(spell)});"
             )
         cost_face = face if chosen.face is None else chosen.face
+        damage = self.cards.instruction(card, "DealDamage", cost_face)
+        if damage and "divided" in damage:
+            answers = cast_targets(self.actions, self.trace, self.index)
+            self.lines.extend(
+                divided_damage(
+                    who,
+                    answers,
+                    cast(int, damage["divided"]),
+                    p.object_name,
+                    self.player,
+                )
+            )
+            self.taken.update(map(id, answers))
         self.lines.extend(cast_choices(self.cards, who, card, chosen.costs, cost_face))
         if self.cards.unless_pays(card, chosen.face):
             self.unless_pays[chosen.name] = self.target_controller(
@@ -444,30 +459,11 @@ class Exporter:
         at = payment_position(self.actions, [t.taps for t in self.trace], self.index)
         return self.trace[at] if at is not None else None
 
-    def cast_targets(self) -> list[Json]:
-        """The Target answers of the cast at hand: those that follow it, or else those Beryl
-        gave without asking."""
-        i = self.index
-        answers: list[Json] = []
-        for action in self.actions[i + 1 :]:
-            if action["action"] != "Answer" or action["kind"] not in (
-                "Target",
-                "TargetCount",
-            ):
-                break
-            answers.append(action)
-        if not answers and i + 1 < len(self.trace):
-            for forced in self.trace[i + 1].forced:
-                if forced["kind"] != "Target":
-                    break
-                answers.append(forced)
-        return answers
-
     def target_controller(self, seat: object, card: str) -> str:
         """The controller of the spell that `card`, cast at hand by `seat`, targets."""
         names = {
             cast(Json, a["pick"]).get("card")
-            for a in self.cast_targets()
+            for a in cast_targets(self.actions, self.trace, self.index)
             if a["player"] == seat and a["kind"] == "Target"
         }
         for item in self.trace[self.index].stack:
@@ -479,7 +475,7 @@ class Exporter:
         """The cards the cast at hand targets (`cast_targets`); they are taken, not queued
         again."""
         names = []
-        for answer in self.cast_targets():
+        for answer in cast_targets(self.actions, self.trace, self.index):
             pick = cast(Json, answer["pick"])
             if answer["player"] != seat or (
                 answer["kind"] == "Target" and "card" not in pick

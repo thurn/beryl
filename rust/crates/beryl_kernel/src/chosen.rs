@@ -9,7 +9,7 @@
 //!
 //! Each kind of value is a catalog, numbered so that a prompt's candidate is a number
 //! ([`ChosenValue::candidates`]): a color by its place in [`Colors::EACH`], a creature type by
-//! the game's number for it, a card name by the game index of a card with it. A creature type
+//! the game's number for it, a card name by its number in the game table. A creature type
 //! or a name no card of the game has would have the same consequences as every other such
 //! one, since nothing in the game reads it, so one candidate, [`ANOTHER`], stands for them all.
 //!
@@ -35,8 +35,8 @@ pub enum ChosenValue<L: Layout = Small> {
     /// A creature type, by the game's number for it, or `None` for a type no card of the game
     /// names.
     CreatureType(Option<u8>),
-    /// A card name, by the game index of the first card with it, or `None` for a name no card
-    /// of the game has.
+    /// A card name, numbered by the game table, or `None` for a name no card of the game has.
+    /// Front faces keep their card's index. Split back faces have their own numbers after them.
     Name(Option<L::Card>),
     /// A color word or a basic land type a text-changing effect names
     /// ([`beryl_card::TextWord`]), by its number, which a byte holds where the word would
@@ -134,11 +134,23 @@ impl<L: Layout> ChosenValue<L> {
                 |s| s.name().to_owned(),
             ),
             ChosenValue::CreatureType(None) => "Another creature type".to_owned(),
-            ChosenValue::Name(Some(c)) => t.def(c).name.to_owned(),
+            ChosenValue::Name(Some(c)) => t
+                .chosen_name(c.index())
+                .unwrap_or("Another card")
+                .to_owned(),
             ChosenValue::Name(None) => "Another card".to_owned(),
             ChosenValue::Word(n) => TextWord::of_number(n)
                 .map_or("No word", TextWord::name)
                 .to_owned(),
+        }
+    }
+
+    /// The chosen card name, when a card in the game has it.
+    pub fn card_name(self, t: &GameTable) -> Option<&'static str> {
+        if let ChosenValue::Name(Some(number)) = self {
+            t.chosen_name(number.index())
+        } else {
+            None
         }
     }
 

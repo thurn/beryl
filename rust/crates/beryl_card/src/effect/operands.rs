@@ -142,6 +142,7 @@ impl Effect {
             }
             | Effect::Destroy { objects, .. }
             | Effect::Regenerate(objects)
+            | Effect::Tap(objects)
             | Effect::PhaseOut(objects)
             | Effect::Exile(objects)
             | Effect::ExileUntilThisLeaves(objects)
@@ -258,6 +259,7 @@ impl Effect {
             Effect::DealDamage { to, amount } => match to {
                 Recipients::Players(players) => Operands::of_players(players).amount(amount),
                 Recipients::Permanents(objects) => Operands::of_objects(objects).amount(amount),
+                Recipients::DividedTwo(_) => Operands::NONE.amount(amount),
                 Recipients::Both(players, objects) => Operands::of_players(players)
                     .objects(objects)
                     .amount(amount),
@@ -265,6 +267,7 @@ impl Effect {
             Effect::PreventDamage { to, from, .. } => match to {
                 Recipients::Players(players) => Operands::of_players(players),
                 Recipients::Permanents(objects) => Operands::of_objects(objects),
+                Recipients::DividedTwo(_) => Operands::NONE,
                 Recipients::Both(players, objects) => {
                     Operands::of_players(players).objects(objects)
                 }

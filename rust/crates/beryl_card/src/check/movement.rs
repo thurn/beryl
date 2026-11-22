@@ -34,6 +34,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::LookAt { .. }
         | Effect::CopySpell { .. }
         | Effect::Regenerate(_)
+        | Effect::Tap(_)
         | Effect::PhaseOut(_)
         | Effect::PutBack { .. }
         | Effect::Dig { .. }

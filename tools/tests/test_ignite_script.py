@@ -124,6 +124,25 @@ def test_a_card_asked_for_lists_its_checks_with_its_own_file(repo: Path) -> None
     ]
 
 
+def test_a_split_card_slug_maps_to_its_card_file(repo: Path) -> None:
+    folder = repo / "rust/cards/cards_1/set"
+    (folder / "fire_ice.rs").write_text(card("Fire", "{1}{R}"))
+    alpha = folder / "alpha.rs"
+    alpha.write_text(alpha.read_text() + "const OTHER: &str = Card::FireIce;\n")
+
+    assert adapter.list_checks("script", repo, ["Fire // Ice"]) == [
+        {
+            "check": f"script:fire-ice/start/{seat}",
+            "inputs": ["rust/cards/cards_1/set/fire_ice.rs"],
+        }
+        for seat in ("yours", "theirs")
+    ]
+    assert adapter.list_checks("script", repo, ["Alpha"])[0]["inputs"] == [
+        "rust/cards/cards_1/set/alpha.rs",
+        "rust/cards/cards_1/set/fire_ice.rs",
+    ]
+
+
 def test_every_card_and_fixture_is_listed_without_a_card(repo: Path) -> None:
     names = [c["check"] for c in adapter.list_checks("script", repo, [])]
     assert "script:beta/start/theirs" in names

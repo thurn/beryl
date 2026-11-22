@@ -121,7 +121,9 @@ impl CardDef {
     /// characteristics of its back face." A face-down permanent has no name (CR 708.2a): the
     /// empty string.
     pub fn face_name(&self, face: FaceIx) -> &'static str {
-        if face == FaceIx::FRONT {
+        if face == FaceIx::FRONT
+            && (!matches!(self.shape, Shape::Split { .. }) || self.front().name.is_empty())
+        {
             self.name
         } else {
             self.face(face).name
@@ -155,7 +157,7 @@ impl FaceIx {
 /// The characteristics printed on one face.
 #[derive(Debug)]
 pub struct Face {
-    /// The name of a back face. A front face's name is its card's, [`CardDef::name`], which
+    /// The name of a split half or a back face. Other front faces take [`CardDef::name`], which
     /// is the card's name wherever it is not a permanent or spell with another face up
     /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)): "While a
     /// double-faced card is outside the game or in a zone other than the battlefield or

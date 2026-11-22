@@ -767,7 +767,8 @@ public final class BerylForgeHarness {
                 }
             }
             chosen.setActivatingPlayer(player);
-            prepare(player, chosen);
+            Integer divided = step.has("divided") ? step.get("divided").getAsInt() : null;
+            prepare(player, chosen, divided);
             if (escape && step.has("exile-cost")) {
                 ArrayDeque<JsonObject> picks = new ArrayDeque<>();
                 step.getAsJsonArray("exile-cost").forEach(pick -> picks.add(pick.getAsJsonObject()));
@@ -880,25 +881,42 @@ public final class BerylForgeHarness {
 
         /** Takes the casting's own answers from the script (X, how many targets, the targets) and applies them. */
         void prepare(Player player, SpellAbility sa) {
+            prepare(player, sa, null);
+        }
+
+        void prepare(Player player, SpellAbility sa, Integer divided) {
             JsonObject x = takeFollowing(player, Set.of("X"));
             if (x != null) {
                 sa.setXManaCostPaid(x.get("n").getAsInt());
             }
-            chooseTargets(player, sa);
+            chooseTargets(player, sa, divided);
         }
 
         /** Chooses each targeted part's targets from the script's TargetCount and Target answers, or the only candidates. */
         void chooseTargets(Player player, SpellAbility sa) {
+            chooseTargets(player, sa, null);
+        }
+
+        void chooseTargets(Player player, SpellAbility sa, Integer divided) {
             for (SpellAbility part = sa; part != null; part = part.getSubAbility()) {
                 if (!part.usesTargeting()) {
                     continue;
                 }
+                // A copy keeps the original number of targets and the share at
+                // each position, even if its controller chooses new recipients.
+                boolean divides = part.isDividedAsYouChoose();
+                List<Integer> shares = sa.isCopied() && divides
+                        ? part.getTargets().stream().map(part::getDividedValue).toList() : List.of();
                 part.resetTargets();
                 TargetRestrictions tr = part.getTargetRestrictions();
                 int min = tr.getMinTargets(part.getHostCard(), part);
                 int max = tr.getMaxTargets(part.getHostCard(), part);
                 JsonObject count = takeFollowing(player, Set.of("TargetCount"));
-                int wanted = count != null ? count.get("n").getAsInt() : min;
+                int wanted = shares.isEmpty() ? (count != null ? count.get("n").getAsInt() : min)
+                        : shares.size();
+                if (divided != null && divides && (wanted == 0 || divided % wanted != 0)) {
+                    throw new StepFailed("divided effect without a fixed share for each target");
+                }
                 List<GameObject> candidates = candidates(part);
                 for (int i = 0; i < wanted; i++) {
                     JsonObject pick = takeFollowing(player, Set.of("Target"));
@@ -913,6 +931,11 @@ public final class BerylForgeHarness {
                     }
                     candidates.remove(target);
                     part.getTargets().add(target);
+                    if (!shares.isEmpty()) {
+                        part.addDividedAllocation(target, shares.get(i));
+                    } else if (divided != null && divides) {
+                        part.addDividedAllocation(target, divided / wanted);
+                    }
                 }
             }
         }

@@ -361,6 +361,7 @@ fn prevention_filter(effect: &'static Effect) -> Option<&'static Filter> {
         | Effect::CopySpell { .. }
         | Effect::Destroy { .. }
         | Effect::Regenerate(_)
+        | Effect::Tap(_)
         | Effect::PhaseOut(_)
         | Effect::Exile(_)
         | Effect::ExileUntilThisLeaves(_)

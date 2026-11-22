@@ -224,7 +224,9 @@ pub(crate) fn prohibitions<L: Layout>(s: &State<L>, t: &GameTable, player: Seat)
 /// sources. A rule change is numbered once for the game, so each permanent that makes it
 /// can choose a different name.
 ///
-/// A source's name comes from its copiable values (see [CR 707.2]). A face-down permanent
+/// A source's names come from its copiable values (see [CR 707.2]). For a split card
+/// (see [CR 709.4a]), the object "has the chosen name if one of its names is the chosen name."
+/// A face-down permanent
 /// "becomes a 2/2 face-down creature with no text, no name, no subtypes, and no mana cost"
 /// (see [CR 708.2a]). The choice of a card outside this game has no name to match here.
 /// "Each opponent" and "you" are read for the maker's controller (see [CR 109.5]): "For a
@@ -232,6 +234,7 @@ pub(crate) fn prohibitions<L: Layout>(s: &State<L>, t: &GameTable, player: Seat)
 ///
 /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
 /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
+/// [CR 709.4a]: https://yawgatog.com/resources/magic-rules/#R7094a
 /// [CR 109.5]: https://yawgatog.com/resources/magic-rules/#R1095
 #[cold]
 #[inline(never)]
@@ -246,16 +249,13 @@ pub(crate) fn unprohibited<L: Layout>(
         return objects;
     }
     let mut allowed = objects;
-    for (maker, card) in s.chosen_names() {
-        let name = t.def(card).name;
+    for (maker, name) in s.chosen_names(t) {
         let made = player_rules_of(s, t, maker).common(rules);
-        if !name.is_empty()
-            && made.iter().any(|id| {
-                filter::is_for(&t.rule(id).players, player, s.derived(maker).controller)
-                    && maker_of(s, t, maker, id).is_some()
-            })
-        {
-            allowed = allowed.filter(|slot| s.definition(slot).name(t) != name);
+        if made.iter().any(|id| {
+            filter::is_for(&t.rule(id).players, player, s.derived(maker).controller)
+                && maker_of(s, t, maker, id).is_some()
+        }) {
+            allowed = allowed.filter(|slot| !s.copiable(slot).has_name(t, name));
         }
     }
     allowed

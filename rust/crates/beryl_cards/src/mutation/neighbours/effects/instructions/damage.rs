@@ -5,6 +5,17 @@ use beryl_card::{Amount, Effect, Filter, Prevention, Recipients};
 use super::{Kind, Neighbours, amounts, objects, players};
 
 pub(super) fn dealing(to: Recipients, amount: Amount, add: &mut impl FnMut(Kind, String, Effect)) {
+    if let Recipients::DividedTwo(spec) = to {
+        add(
+            Kind::DamageRecipients,
+            "all damage to each target".to_owned(),
+            Effect::DealDamage {
+                to: Recipients::target(spec),
+                amount,
+            },
+        );
+        return;
+    }
     for (name, to) in recipients(to) {
         add(
             Kind::DamageRecipients,
@@ -60,6 +71,7 @@ pub(super) fn preventing(
 /// players or only the permanents of the two.
 fn recipients(to: Recipients) -> Neighbours<Recipients> {
     match to {
+        Recipients::DividedTwo(_) => Vec::new(),
         Recipients::Players(p) => players(p)
             .into_iter()
             .map(|(n, p)| (n, Recipients::Players(p)))

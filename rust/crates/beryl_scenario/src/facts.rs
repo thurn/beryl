@@ -191,6 +191,9 @@ pub struct Instruction {
     /// Its number: a fixed one, or the name of the expression it is read from.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub count: Option<Value>,
+    /// Fixed damage divided among the targets announced during casting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub divided: Option<u8>,
     /// A choice's "you may".
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub optional: bool,
@@ -443,6 +446,12 @@ fn leaf(effect: &Effect, shape: &Shape) -> Instruction {
             out.rest = Some(variant(&rest));
         }
         Effect::Search { found, .. } => out.rest = Some(variant(&found)),
+        Effect::DealDamage {
+            to: beryl_card::Recipients::DividedTwo(_),
+            amount: Amount::Fixed(total),
+        } => {
+            out.divided = Some(total);
+        }
         _ => {}
     }
     out

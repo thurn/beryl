@@ -79,6 +79,9 @@ pub(super) fn ability_neighbours(
         );
     }
     for (j, spec) in ability.targets().iter().enumerate() {
+        if spec.minimum > 0 {
+            continue;
+        }
         let mut specs = ability.targets().to_vec();
         specs[j].optional = !spec.optional;
         add(

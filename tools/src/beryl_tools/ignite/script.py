@@ -83,11 +83,16 @@ def card_name(text: str) -> str | None:
 def card_files(root: Path) -> dict[str, str]:
     """Each card's slug, mapped to the path of its file from `root`."""
     files: dict[str, str] = {}
+    modules: dict[str, str] = {}
     for file in sorted((root / CARDS).glob("*/*/*.rs")):
         name = card_name(file.read_text())
         if name:
-            files[slug(name)] = file.relative_to(root).as_posix()
-    return files
+            path = file.relative_to(root).as_posix()
+            files[slug(name)] = path
+            # A split card's header starts with its first half. Its module is
+            # spelled from the whole card name that the checker uses.
+            modules[slug(file.stem.replace("_", " "))] = path
+    return modules | files
 
 
 # How a card's file names another card: a constant of a generated type, `Card`, `Printed` or

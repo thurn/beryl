@@ -203,6 +203,12 @@ impl GameSubtypes {
             || (usize::from(n) < EVERY_CREATURE_TYPE && self.has_bit(usize::from(n)))
     }
 
+    /// The subtypes present in either set.
+    #[must_use]
+    pub const fn union(self, other: Self) -> Self {
+        Self([self.0[0] | other.0[0], self.0[1] | other.0[1]])
+    }
+
     /// The set with `subtype` added.
     ///
     /// # Panics

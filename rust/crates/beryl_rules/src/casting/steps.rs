@@ -508,7 +508,7 @@ pub(crate) fn decision<L: Layout>(
                 .unwrap_or(u8::MAX)
                 .min(spec.count);
             let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
-            for n in 0..=most {
+            for n in spec.minimum..=most {
                 list.push(Opt::Number(n))?;
             }
             let count = Prompt::new(Purpose::Target)
