@@ -20,8 +20,8 @@ watches every file opened for reading (the `open` event) and every directory lis
 the stack that runs a module of `tools` or `efficiency` (under `src` or `tests`). A read the
 record does not list fails the test that made it, with a message naming the record's missing
 entry; a read during collection fails the tests of the file being collected, and one outside
-both fails every test of the run. The failure is deterministic: the same code reads the same
-file on every run, so a test cannot pass in one run and fail in another for this reason.
+both fails every test of the run. Python's import and installed-plugin discovery scans are
+part of loading the Python environment.
 
 With `IGNITE_RECORD_READS=1` the plugin adds what it saw to the record instead of failing
 (`python -m beryl_tools.ignite.python reads` runs both projects' tests that way). Python source
@@ -175,6 +175,14 @@ class Watcher:
             # The import system lists package directories and reads source files to import
             # them; the import graph covers what it finds.
             if caller.f_code.co_filename.startswith("<frozen importlib"):
+                return
+            # Finding installed plugins can list the working directory on sys.path.
+            # A worker that already has the distribution lookup cached skips this scan.
+            if (
+                event == "os.listdir"
+                and caller.f_globals.get("__name__") == "importlib.metadata"
+                and caller.f_code.co_qualname == "FastPath.children"
+            ):
                 return
             module = self.reader(caller)
             if module is None:

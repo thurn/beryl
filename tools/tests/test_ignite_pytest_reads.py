@@ -38,6 +38,25 @@ def test_also_reads_the_table() -> None:
     assert reader.table()["b"] == 2
 """
 
+PLUGIN_TESTS = """\
+import os
+
+import mdformat
+import pytest
+
+# A spelling pytest's own plugin discovery has not already cached.
+SEARCH_PATH = "./."
+
+
+def test_discovers_formatter_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.syspath_prepend(SEARCH_PATH)
+    assert mdformat.text("~~strike~~", extensions={"gfm"}).strip() == "~~strike~~"
+
+
+def test_lists_project_directory() -> None:
+    assert "pyproject.toml" in os.listdir(SEARCH_PATH)
+"""
+
 NODE = "tests/test_reader.py::test_reads_the_table"
 PROJECT = adapter.Project("tools", "pkg")
 
@@ -119,6 +138,21 @@ def test_a_read_the_record_lacks_fails_until_recorded_and_then_is_an_input(
     assert input_hash(root) == recorded
     (root / "data/table.json").write_text('{"a": 1, "b": 3}\n')
     assert input_hash(root) != recorded
+
+
+def test_plugin_discovery_does_not_hide_a_real_directory_read(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    checkout(root)
+    write(root, {"tools/tests/test_reader.py": PLUGIN_TESTS})
+    discovery = "tests/test_reader.py::test_discovers_formatter_plugin"
+    listing = "tests/test_reader.py::test_lists_project_directory"
+    results = run(root, [discovery, listing])
+
+    discovered = results[f"pytest:tools/{discovery}"]
+    assert discovered["outcome"] == "pass", discovered
+    failed = results[f"pytest:tools/{listing}"]
+    assert failed["outcome"] == "fail"
+    assert "tools/tests/test_reader.py read tools" in failed["message"]
 
 
 def test_a_recorded_file_that_was_deleted_is_not_an_input(tmp_path: Path) -> None:
