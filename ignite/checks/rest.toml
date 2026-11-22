@@ -7,12 +7,10 @@
 
 # Lessons from the checks Ignite replaces:
 #
-# - The count steps run in a Lima virtual machine that mounts only the main checkout. A tree
-#   under the checkout (trees live in `.worktrees/`, see ignite.toml) is inside that mount, so
-#   the `counts` family runs from the tree Ignite gives it. A second clone of the repository is
-#   not mounted: its run says `CANNOT_RUN`, which Ignite records as `incomplete` and does not
-#   rerun on that machine. The VM is also why the family holds the `bench-vm` resource: two runs
-#   at once would share its lock and build directory.
+# - The count steps use Lima on macOS and WSL on Windows. Lima must be able to see the build
+#   tree through a mount. WSL sees the Windows drives. A tree the VM cannot see reports
+#   `CANNOT_RUN`, which Ignite records as `incomplete`. The `bench-vm` resource serializes
+#   counts that share the same VM lock and build directory.
 # - A count says nothing about speed, so a loaded machine does not change it; the family may
 #   run in any class. Only a run in the `tip` class stores its count, since only a tip is a
 #   commit that was verified (`IGNITE_CLASS`, see rest.py).
@@ -27,21 +25,18 @@
 # The rollout benchmark's instruction count against the bar in
 # rust/crates/beryl_bench/count-gate.toml (that file's comments say when the bar may move), as
 # `counts:rollouts`, and each family's present cost against its ratio there, as
-# `counts:family/<name>`. The count is of the aarch64 build under Callgrind, so only macOS runs
-# it. A rise past the trend's bounds that still passes files one `count-creep` ticket and fails
-# nothing; a count far under the bar files one `count-lower` ticket. The count runs in the
-# `beryl-bench` Lima machine, which mounts only the main checkout: when the machine is missing,
-# stopped, out of reach or cannot see the tree, the adapter reports the check incomplete with
-# the reason (`cannot-run:`), which is never a failure.
+# `counts:family/<name>` on ARM64. Callgrind measures rollouts in Lima and WSL against separate
+# architecture bars. The ARM64 trend files `count-creep` and `count-lower` tickets. When `beryl-bench`
+# is missing, out of reach or cannot see the tree, the adapter reports the check incomplete
+# with the reason (`cannot-run:`).
 [family.counts]
 kind = "regression"
 adapter = "jsonl"
-platforms = ["macos"]
+platforms = ["macos", "windows"]
 needs = ["python-env"]
 resources = ["bench-vm"]
-# The count runs in the Lima machine, so this process only waits: over an hour on 2026-11-18
-# its runs held about five cores each and used 0.14. The machine's own CPU shows as load
-# outside Ignite, which the scheduler already leaves alone.
+# The adapter waits while Callgrind runs in the Linux guest. The guest's CPU shows as load
+# outside Ignite.
 cores = 1
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list counts"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run counts {checks}"

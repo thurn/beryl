@@ -244,11 +244,12 @@ os = "macos"
 [machine.multivac.resources]
 oracle = 1
 
-# The Windows PC (12 cores, 20 threads, 32 GB) with a 128 GB Dev Drive (ReFS) at D:. No browser,
-# oracle or app families: those need WebKit, the Java oracles, the Lima machines or a desktop
-# window system, which only the Macs have.
+# The Windows PC (12 cores, 20 threads, 32 GB) with a 128 GB Dev Drive (ReFS) at D:.
+# The browser and app families require the Mac's WebKit or desktop runtime.
+# Oracle checks use the pinned JDK and Maven builds from `just oracle-setup`.
+# Rollout counts use the `beryl-bench` WSL distribution from `just bench-count`.
 #
-# `families` holds those that passed when run by hand on cygnus on 2026-11-19. `pytest` is left
+# `families` holds those verified on cygnus. `pytest` is left
 # out: 29 of its 1,021 checks assume Unix paths or Unix sockets. `ignite-platform` declares
 # Windows as a platform it must pass on, and cygnus is the only Windows machine, so it must be
 # listed here: without it every tip waits on its Windows checks and `master` never moves.
@@ -257,7 +258,12 @@ os = "windows"
 families = [
   "rust", "doctests", "clippy", "rust-format", "ignite", "ignite-lint", "source", "markdown",
   "repository", "commit", "black", "b3d-format", "b3d-source", "ignite-platform",
+  "counts", "oracle", "oracle-generated",
 ]
+
+[machine.cygnus.resources]
+bench-vm = 1
+oracle = 1
 
 [[rebuild]]
 name = "kernel-body"
