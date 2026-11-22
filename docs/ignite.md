@@ -4258,8 +4258,12 @@ uses `0` to clear either flag.
 
 The dashboard divides the estimated effort on closed tickets by the whole
 estimated scope, including unfiled work. Hover or focus the percentage for the
-breakdown. When estimates are missing and work remains, a dash takes the place
-of the percentage and the breakdown gives the missing counts.
+breakdown. Unsized tickets use the repository's average saved estimate, or 30
+minutes before anyone has sized a ticket. A percentage that depends on those
+defaults is approximate. The ticket's Work estimate field in the details panel
+shows the saved estimate or the current default. An editor can enter their own
+estimate in minutes or clear the field to use the default again. Plan check
+lists tickets that still need their own estimates.
 
 A review is a ticket like any other, with the label `review`, that depends on
 the tickets it reviews. A planner files one where a change is large or risky.
