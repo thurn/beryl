@@ -196,7 +196,7 @@ fn a_tray_narrower_than_a_card_keeps_its_cards_and_drops_inside_the_band() {
     use beryl_protocol::protocol::ObjectId;
     use game_table::table::{Held, Table, TrayKind, landing, tray_area, tray_boxes};
     use glam::Vec2;
-    use kit_base::data::profiles::{Profiles, SHIPPED};
+    use kit_base::data::profiles::Profiles;
     use kit_scene::hit::{contains, corner_bounds};
 
     let mut data = (*crate::test_data::data()).clone();

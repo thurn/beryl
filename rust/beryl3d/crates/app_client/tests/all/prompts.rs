@@ -492,11 +492,11 @@ fn every_crowded_pick_and_put_back_card_keeps_a_press_target() {
                 })
                 .collect();
             let mut client = client();
-            client.handle(Input::Surface {
+            client.handle(Input::Device(DeviceInput::Surface {
                 size,
                 scale: 1.0,
                 safe_area: Insets::default(),
-            });
+            }));
             client.handle(Input::Update(Box::new(builder.update())));
             client.frame(0);
             client.handle(deciding(&builder, chosen, Vec::new()));
@@ -586,11 +586,11 @@ fn assert_tray_press_targets(
 }
 
 fn roll_tray(client: &mut Client, at: Vec2, distance: f32) {
-    let Input::Pointer(mut wheel) = pointer(PointerPhase::Wheel, at) else {
+    let Input::Device(DeviceInput::Pointer(mut wheel)) = pointer(PointerPhase::Wheel, at) else {
         unreachable!("a pointer event");
     };
     wheel.wheel = Vec2::new(0.0, -distance);
-    client.handle(Input::Pointer(wheel));
+    client.handle(Input::Device(DeviceInput::Pointer(wheel)));
 }
 
 fn assert_scrolled_reorder(
@@ -648,9 +648,9 @@ fn tray_pointer(
     phase: PointerPhase,
     position: Vec2,
 ) {
-    let Input::Pointer(mut event) = pointer(phase, position) else {
+    let Input::Device(DeviceInput::Pointer(mut event)) = pointer(phase, position) else {
         unreachable!("a pointer event");
     };
     event.kind = kind;
-    client.handle(Input::Pointer(event));
+    client.handle(Input::Device(DeviceInput::Pointer(event)));
 }
