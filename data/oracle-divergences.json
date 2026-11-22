@@ -127,13 +127,6 @@
   },
   {
     "oracle": "xmage",
-    "card": "Chains of Mephistopheles",
-    "scenario": "an upkeep draw is replaced, the draw step's draw is not",
-    "cr": "CR 103.8a (https://yawgatog.com/resources/magic-rules/#R1038a): \"In a two-player game, the player who plays first skips the draw step (see rule 504, 'Draw Step') of their first turn.\"",
-    "reason": "The XMage translation plays this turn-3 scenario as XMage's turn 1, whose draw step XMage skips because the starting player doesn't draw in their first turn, so the draw step draw the scenario expects never happens."
-  },
-  {
-    "oracle": "xmage",
     "card": "Mindslaver",
     "scenario": "the controller chooses the controlled player's cleanup discard",
     "cr": "CR 724.5 (https://yawgatog.com/resources/magic-rules/#R7245): \"While controlling another player, a player makes all choices and decisions the controlled player is allowed to make or is told to make by the rules or by any objects. This includes choices and decisions about what to play, and choices and decisions called for by spells and abilities.\"",
