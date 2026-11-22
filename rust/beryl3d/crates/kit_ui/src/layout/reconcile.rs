@@ -4,13 +4,31 @@
 //! printout or a check that follows an element by its id still finds it after its siblings
 //! move.
 
-use taffy::{NodeId, TraversePartialTree};
+use taffy::{NodeId, TaffyTree, TraversePartialTree};
 
 use super::style::{same_layout, taffy_style};
 use super::{Layer, Node, TextLeaf};
 use crate::element::{Anchor, Element};
 use crate::input::Rect;
 use kit_frame::frame::ElementId;
+
+fn text_leaf(element: &Element) -> Option<TextLeaf> {
+    element.text.clone().map(|text| TextLeaf {
+        text,
+        style: element.style.text,
+        spans: element.spans.clone(),
+        fit: element.style.fit,
+        truncate: element.style.truncate,
+    })
+}
+
+fn set_text(taffy: &mut TaffyTree<TextLeaf>, node: &mut Node, leaf: Option<TextLeaf>) {
+    taffy
+        .set_node_context(node.taffy, leaf)
+        .expect("the node is in the tree");
+    node.block = None;
+    node.pending_tip_text = false;
+}
 
 impl Layer {
     /// Matches `element` against `old`, the node matched to it before: a node of the same role
@@ -27,7 +45,7 @@ impl Layer {
                 element.children = children;
                 self.update(&mut node, element);
                 if self.animating
-                    && node.element.anchor != Some(Anchor::Tip)
+                    && !matches!(node.element.anchor, Some(Anchor::Tip(_)))
                     && let Some(enter) = node.element.style.enter
                 {
                     node.presence(enter, true);
@@ -108,12 +126,14 @@ impl Layer {
             rect: Rect::default(),
             content: Rect::default(),
             block: None,
+            pending_tip_text: false,
             followed: None,
             location: None,
             scroll_room: glam::Vec2::ZERO,
             scroll: glam::Vec2::ZERO,
             fitted: None,
             tracks: super::motion::Tracks::default(),
+            hovering: false,
             departing: Vec::new(),
             placed: None,
             shown: false,
@@ -141,18 +161,14 @@ impl Layer {
             || node.element.spans != element.spans
             || node.element.style.fit != element.style.fit
             || node.element.style.truncate != element.style.truncate;
-        if text_changed {
-            let leaf = (element.text.clone()).map(|text| TextLeaf {
-                text,
-                style: element.style.text,
-                spans: element.spans.clone(),
-                fit: element.style.fit,
-                truncate: element.style.truncate,
-            });
-            self.taffy
-                .set_node_context(node.taffy, leaf)
-                .expect("the node is in the tree");
-            node.block = None;
+        if text_changed || node.pending_tip_text {
+            if matches!(element.anchor, Some(Anchor::Tip(Some(_)))) {
+                // Phase rows change during playback. Hidden tooltips need no text layout.
+                node.pending_tip_text = true;
+            } else {
+                let leaf = text_leaf(&element);
+                set_text(&mut self.taffy, node, leaf);
+            }
         }
         if !matches!(
             element.anchor,
@@ -173,13 +189,30 @@ impl Layer {
         if !node.element.same_node(&element) {
             node.element = element;
         }
-        if node.element.anchor == Some(Anchor::Tip)
+        if matches!(node.element.anchor, Some(Anchor::Tip(_)))
             && let Some(enter) = node.element.style.enter
         {
             node.tracks.reserve_presence(&enter);
         }
         self.reconcile_children(node, children);
         self.link_children(node);
+    }
+
+    /// Prepares the one hover tooltip the pointer is on, before drawing a frame.
+    pub fn prepare_tip(&mut self) {
+        let Some(tip) = self.tip else { return };
+        let Some(node) = self
+            .screen
+            .as_mut()
+            .and_then(|screen| screen.find_mut(tip.tooltip))
+        else {
+            return;
+        };
+        if node.pending_tip_text {
+            let leaf = text_leaf(&node.element);
+            set_text(&mut self.taffy, node, leaf);
+            self.relayout();
+        }
     }
 
     /// Matches `children` against `node`'s children. A child is matched to the old child with

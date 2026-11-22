@@ -22,6 +22,9 @@ pub struct StepTrack {
     pub off: f32,
     #[serde(deserialize_with = "fraction")]
     pub fixed: f32,
+    /// How long a phase icon takes to brighten or dim on hover.
+    #[serde(deserialize_with = "nonnegative")]
+    pub hover_ms: f32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

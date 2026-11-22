@@ -181,7 +181,25 @@ impl Node {
 
     pub(super) fn opacity(&self) -> f32 {
         self.property(Property::Opacity)
-            .map_or(self.element.style.opacity, |value| value.x)
+            .map_or_else(|| self.opacity_target(&self.element.style), |value| value.x)
+    }
+
+    fn opacity_target(&self, style: &Style) -> f32 {
+        if self.hovering && style.opaque_on_hover.is_some() {
+            1.0
+        } else {
+            style.opacity
+        }
+    }
+
+    pub(super) fn set_hovering(&mut self, hovering: bool) {
+        let style = &self.element.style;
+        let old = Vec4::splat(self.opacity_target(style));
+        self.hovering = hovering;
+        let new = Vec4::splat(self.opacity_target(style));
+        if old != new {
+            self.change_track(Property::Opacity, old, new, style.opaque_on_hover);
+        }
     }
 
     pub(super) fn translation(&self) -> Vec2 {
@@ -243,8 +261,17 @@ impl Node {
     pub(super) fn update_tracks(&mut self, next: &Style, anchored: bool, animate: bool) {
         let timing = |property| animate.then(|| timing(next, property, anchored)).flatten();
         for property in LOOK_PROPERTIES {
-            let old = style_value(&self.element.style, property);
-            let new = style_value(next, property);
+            let (old, new) = if property == Property::Opacity {
+                (
+                    Vec4::splat(self.opacity_target(&self.element.style)),
+                    Vec4::splat(self.opacity_target(next)),
+                )
+            } else {
+                (
+                    style_value(&self.element.style, property),
+                    style_value(next, property),
+                )
+            };
             if old != new {
                 self.change_track(property, old, new, timing(property));
             }

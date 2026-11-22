@@ -36,6 +36,7 @@ pub struct ViewKey {
     profile: ProfileData,
     tuning: kit_base::data::flat::Manual,
     hud_tuning: kit_base::data::hud::Hud,
+    tooltip: kit_base::data::flat::Tooltip,
     view: Option<PlayerView>,
     link_error: Option<String>,
     next_slot: Option<Rect>,
@@ -55,6 +56,7 @@ impl ViewKey {
             profile: hud.profile.data().clone(),
             tuning: hud.data.flat.manual,
             hud_tuning: hud.data.hud,
+            tooltip: hud.data.flat.tooltip,
             view: hud.view.cloned(),
             link_error: input.link_error.map(str::to_owned),
             next_slot: input.next_slot,
@@ -188,18 +190,13 @@ fn table_steps(input: &HudIn, size_class: SizeClass) -> Option<Element> {
         return None;
     }
     let lit = turn::icon_of(table.phase);
-    Some(steps::table_tracks(
-        view.turn.active,
-        lit,
-        input,
-        |at, active| {
-            Action::new(Message::Step {
-                #[expect(clippy::cast_possible_truncation, reason = "twelve icons")]
-                at: at as u8,
-                active,
-            })
-        },
-    ))
+    Some(steps::table_tracks(&view.turn, lit, input, |at, active| {
+        Action::new(Message::Step {
+            #[expect(clippy::cast_possible_truncation, reason = "twelve icons")]
+            at: at as u8,
+            active,
+        })
+    }))
 }
 
 /// The message the table's key `chord` sends on the Mac if `mac`: `Message::Shortcut` with the

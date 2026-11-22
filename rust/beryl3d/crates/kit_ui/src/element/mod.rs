@@ -62,10 +62,23 @@ pub enum Anchor {
     /// fits there and on its left if not, level with its row, and inside the window. It is shown
     /// only while its row is open, under the pointer or opened by the right arrow key.
     Submenu,
-    /// Beside the element a tooltip explains, as `tips.css` places a tip: centred above it,
-    /// or below it where there is no room above. It is shown only once the pointer has rested
-    /// on that element for `flat.tooltip_delay` milliseconds (`layout::tip`).
-    Tip,
+    /// Beside the element a tooltip explains. With no placement, the tip waits for the
+    /// pointer to rest and prefers the space above the target. A placement makes it open
+    /// immediately on hover and identifies the target by role as well as by name.
+    Tip(Option<TipPlacement>),
+}
+
+/// The target and preferred side of a tooltip that opens on hover.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TipPlacement {
+    pub target: Role,
+    pub side: TipSide,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TipSide {
+    Above,
+    Below,
 }
 
 /// What an element shows in its box besides its text and children.

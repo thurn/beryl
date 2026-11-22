@@ -118,7 +118,7 @@ pub fn styles(
         margin, grow, shrink, basis, wrap, align_items, align_self, justify_content, position,
         inset, width, height => "flat.size.BUTTON_HEIGHT",
         min_width => "flat.size.BUTTON_MIN_WIDTH", max_width, min_height, max_height,
-        grid_template_columns, grid_template_rows, grid_column, grid_row, overflow, opacity,
+        grid_template_columns, grid_template_rows, grid_column, grid_row, overflow, opacity, opaque_on_hover,
         translation, scale, transition, opacity_transition, enter, leave, layout_slide,
         background, background_image => &format!("flat.gradient.{variant}"), background_boxes,
         mask, scroll_fade, filter, border, radius, legend,

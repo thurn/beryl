@@ -22,6 +22,7 @@ impl Client {
     pub fn prepare(&mut self, now: u64) {
         self.prepare_scroll(now);
         self.prepare_story(now);
+        self.layer.prepare_tip();
         self.prepare_table(self.features.bug().table_time(now));
     }
 

@@ -142,6 +142,8 @@ pub struct Style {
     pub overflow: Overflow,
     /// How opaque the element and its children are, from 0 to 1.
     pub opacity: f32,
+    /// Fades to full opacity when this element or its control parent is hovered.
+    pub opaque_on_hover: Option<Timing>,
     /// A visual offset in logical points. It moves the element and its contents.
     pub translation: Vec2,
     /// Uniform visual scale about the element's centre.
@@ -256,6 +258,7 @@ impl Default for Style {
             grid_row: None,
             overflow: Overflow::Visible,
             opacity: 1.0,
+            opaque_on_hover: None,
             translation: Vec2::ZERO,
             scale: 1.0,
             transition: &[],

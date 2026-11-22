@@ -91,6 +91,8 @@ struct Node {
     content: Rect,
     /// Its text, broken at the content box's width.
     block: Option<Block>,
+    /// A hover tooltip's words are shaped only while the pointer is on its target.
+    pending_tip_text: bool,
     /// For an element anchored to a scene object, the object's centre on the window as the
     /// last frame drew it (the middle of its box's top edge for `Anchor::Above`, and of its
     /// bottom edge for `Anchor::Below`), or `None` if the table did not show it
@@ -108,6 +110,8 @@ struct Node {
     fitted: Option<f32>,
     /// Visual tracks sampled on the client's clock.
     tracks: motion::Tracks,
+    /// The pointer is over this node or its control parent.
+    hovering: bool,
     /// Children leaving the tree. Their last layout is kept for painting.
     departing: Vec<Node>,
     /// For a menu, a submenu or a tooltip, where its top left corner stands on the window, once
@@ -484,6 +488,10 @@ impl Layer {
     /// frame has begun that fade. `at_once` says that the node and everything under it move to
     /// their new places without sliding, because a sibling in the same flow changed size.
     fn place(&mut self, node: &mut Node, origin: glam::Vec2, unseen: bool, at_once: bool) {
+        // The tooltip keeps its last box until the pointer needs its new text.
+        if node.pending_tip_text {
+            return;
+        }
         let layout = self
             .taffy
             .layout(node.taffy)

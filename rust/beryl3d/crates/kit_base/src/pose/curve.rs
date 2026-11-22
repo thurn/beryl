@@ -10,6 +10,13 @@ impl Curve {
         x2: 1.0,
         y2: 1.0,
     };
+    /// CSS's default `ease`, `cubic-bezier(0.25, 0.1, 0.25, 1)`.
+    pub const EASE: Self = Self {
+        x1: 0.25,
+        y1: 0.1,
+        x2: 0.25,
+        y2: 1.0,
+    };
     /// CSS's `ease-in`, `cubic-bezier(0.42, 0, 1, 1)`.
     pub const EASE_IN: Self = Self {
         x1: 0.42,

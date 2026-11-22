@@ -177,6 +177,103 @@ fn untap_and_cleanup_show_an_icon_but_no_toggle() {
     assert_eq!(toggles, 20);
 }
 
+#[test]
+fn phase_stop_hover_fades_the_icon_and_places_the_label_on_each_side() {
+    let mut client = client();
+    client.set_looking(true);
+    client.handle(deciding(prompt("Pay {1}{U}")));
+
+    for (start, side, name, step) in [
+        (0, Side::You, "Your damage", Step::CombatDamage),
+        (1_000, Side::Opponent, "Opponent's draw", Step::Draw),
+    ] {
+        let frame = client.frame(start * 1_000_000);
+        let toggle = find(frame, Role::Toggle, name);
+        let rest = frame.resolved[find(frame, Role::Icon, name)].opacity;
+        let at = centre(frame, toggle);
+        let (_, icon_top, _, icon_bottom) = edges(frame, toggle);
+        client.handle(pointer(PointerPhase::Move, at));
+        client.frame((start + 1) * 1_000_000);
+        let frame = client.frame((start + 61) * 1_000_000);
+        let fading = frame.resolved[find(frame, Role::Icon, name)].opacity;
+        assert!(rest < fading && fading < 1.0);
+        let tip = find(frame, Role::Text, &format!("tooltip {name}"));
+        assert_eq!(tooltip_words(frame, tip), name);
+        assert!(!frame.resolved[tip].interactive);
+        let (left, top, right, bottom) = edges(frame, tip);
+        assert!((f32::midpoint(left, right) - at.x).abs() < 0.01);
+        let gap = match side {
+            Side::You => icon_top - bottom,
+            Side::Opponent => top - icon_bottom,
+        };
+        assert!((gap - 8.0).abs() < 0.01);
+
+        let frame = client.frame((start + 121) * 1_000_000);
+        assert!((frame.resolved[find(frame, Role::Icon, name)].opacity - 1.0).abs() < 0.01);
+        assert_eq!(stops_sent(&mut client), []);
+        press_toggle(&mut client, (start + 122) * 1_000_000, name);
+        let mut want = StopsSetting::SMART;
+        let set = match side {
+            Side::You => &mut want.yours,
+            Side::Opponent => &mut want.theirs,
+        };
+        *set = game_hud::hud::steps::toggled(*set, step);
+        assert_eq!(stops_sent(&mut client), [want]);
+        press_toggle(&mut client, (start + 123) * 1_000_000, name);
+        assert_eq!(stops_sent(&mut client), [StopsSetting::SMART]);
+
+        client.handle(pointer(PointerPhase::Move, glam::Vec2::splat(5.0)));
+        let frame = client.frame((start + 124) * 1_000_000);
+        assert!(!has(frame, Role::Text, &format!("tooltip {name}")));
+        let frame = client.frame((start + 244) * 1_000_000);
+        assert!((frame.resolved[find(frame, Role::Icon, name)].opacity - rest).abs() < 0.01);
+    }
+}
+
+#[test]
+fn phase_hover_names_the_current_turn_and_leaves_fixed_icons_dim() {
+    let mut client = client();
+    client.set_looking(true);
+    let Input::Update(mut update) = deciding(prompt("Pay {1}{U}")) else {
+        unreachable!("a decision is sent in a game update");
+    };
+    update.view.turn.number = 8;
+    update.view.turn.own_number = 4;
+    update.view.turn.active = Side::You;
+    update.view.turn.step = Step::FirstStrikeDamage;
+    client.handle(Input::Update(update));
+
+    let frame = client.frame(0);
+    let at = centre(frame, find(frame, Role::Toggle, "Your damage"));
+    client.handle(pointer(PointerPhase::Move, at));
+    let frame = client.frame(1_000_000);
+    let tip = find(frame, Role::Text, "tooltip Your damage");
+    assert_eq!(tooltip_words(frame, tip), "Turn 4 · First-strike damage");
+
+    let fixed = find(frame, Role::Icon, "Your cleanup");
+    let rest = frame.resolved[fixed].opacity;
+    let at = centre(frame, fixed);
+    client.handle(pointer(PointerPhase::Move, at));
+    client.frame(2_000_000);
+    let frame = client.frame(122_000_000);
+    let tip = find(frame, Role::Text, "tooltip Your cleanup");
+    assert_eq!(tooltip_words(frame, tip), "Your cleanup");
+    assert!((frame.resolved[find(frame, Role::Icon, "Your cleanup")].opacity - rest).abs() < 0.01);
+    client.handle(pointer(PointerPhase::Down, at));
+    client.handle(pointer(PointerPhase::Up, at));
+    assert_eq!(stops_sent(&mut client), []);
+}
+
+fn tooltip_words(frame: &Frame, tip: usize) -> &str {
+    let tip = u32::try_from(tip).expect("a frame index fits in u32");
+    let line = frame
+        .lines
+        .iter()
+        .find(|line| line.element == tip)
+        .expect("a tooltip has text");
+    frame.name(line.words)
+}
+
 /// A view of `lands` lands on each side of the table, besides a creature each, whose events say
 /// the viewer gained 2 life.
 fn lands(lands: usize) -> Input {

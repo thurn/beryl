@@ -119,7 +119,17 @@ impl Layer {
     /// element a press that has not ended went down on, which the next frame draws so and
     /// marks `HOVERED` and `HELD`.
     pub fn point_at(&mut self, hovered: Option<ElementId>, pressed: Option<ElementId>) {
-        self.hovered = hovered;
+        if self.hovered != hovered {
+            for (target, over) in [(self.hovered, false), (hovered, true)] {
+                if let Some(node) = target.and_then(|id| self.screen.as_mut()?.find_mut(id)) {
+                    node.set_hovering(over);
+                    for child in &mut node.children {
+                        child.set_hovering(over);
+                    }
+                }
+            }
+            self.hovered = hovered;
+        }
         self.pressed = pressed;
     }
 
@@ -156,7 +166,7 @@ impl Layer {
                 return None;
             }
             let element = &node.element;
-            let tooltip = self.tooltip_of(&element.name);
+            let tooltip = self.tooltip_of(&element.name, element.role);
             let menu = matches!(element.anchor, Some(Anchor::Menu(_) | Anchor::Submenu));
             let takes_input = element.press.is_some() || element.focus || tooltip.is_some();
             let scrolls = branch.scroller.is_some_and(|(id, _)| id == node.id);

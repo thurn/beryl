@@ -6,7 +6,7 @@ use std::convert::Infallible;
 use beryl_protocol::protocol::{DecisionId, SessionId, Side, Step, StepSet, StopsSetting};
 use beryl_protocol::script::Turn;
 use glam::Vec2;
-use kit_base::data::{hud::StepTrack, profiles::Piece};
+use kit_base::data::{flat::Tooltip, hud::StepTrack, profiles::Piece};
 use kit_scene::{Context, Feature, StateUpdate};
 use kit_ui::element::{Element, row};
 use kit_ui::layout::Layer;
@@ -43,8 +43,9 @@ type RowsFrom = (
     bool,
     bool,
     StepTrack,
+    Tooltip,
 );
-type Lit = (Side, Step);
+type Lit = (Side, Step, u16);
 
 /// The desktop step row, with stops the player can toggle.
 pub struct StepRow;
@@ -82,6 +83,7 @@ impl Feature for StepRow {
 pub struct Inputs {
     centres: [Vec2; 2],
     tuning: StepTrack,
+    tooltip: Tooltip,
     enabled: bool,
     pub latest: Option<Lit>,
     pub turn: Option<Turn>,
@@ -102,8 +104,11 @@ impl Inputs {
         Self {
             centres,
             tuning: input.data.hud.steps,
+            tooltip: input.data.flat.tooltip,
             enabled,
-            latest: input.view.map(|view| (view.turn.active, view.turn.step)),
+            latest: input
+                .view
+                .map(|view| (view.turn.active, view.turn.step, view.turn.own_number)),
             turn: input.turn,
             stops: input.stops,
             viewing: input.viewing,
@@ -124,6 +129,7 @@ impl Inputs {
             self.opening,
             self.enabled,
             self.tuning,
+            self.tooltip,
         )
     }
 
@@ -133,7 +139,7 @@ impl Inputs {
 }
 
 fn lit(turn: Turn) -> Lit {
-    (turn.active, turn.step)
+    (turn.active, turn.step, turn.own_number)
 }
 
 /// The step row as it appears within the game screen.

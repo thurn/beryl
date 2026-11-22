@@ -247,7 +247,7 @@ impl Layer {
             }
             let mut look = inside;
             look.departing = departing;
-            if child.element.anchor == Some(Anchor::Tip) {
+            if matches!(child.element.anchor, Some(Anchor::Tip(_))) {
                 if !departing && self.tip_is_shown(child.id) {
                     drawing.tip.set(Some(TipDraw {
                         node: child,

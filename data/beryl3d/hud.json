@@ -1,7 +1,8 @@
 {
   "steps": {
     "off": 0.6,
-    "fixed": 0.32
+    "fixed": 0.32,
+    "hover_ms": 120
   },
   "incoming": {
     "line": 1.1,

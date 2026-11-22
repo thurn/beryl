@@ -1,16 +1,15 @@
 //! Tooltips (docs/beryl-3d.md, "Widgets"): words that explain the element the pointer rests
 //! on. A tooltip is an element anywhere in the screen's tree, anchored `Anchor::Tip` and named
 //! `tooltip <name>` for the element named `<name>` that it explains (`widgets::tooltip`). It is
-//! hidden until the pointer has rested on that element for the milliseconds set by
-//! `tooltip.delay_ms` in `flat.json`,
-//! as the web interface's `.tip` waits for `:hover` (`ui/src/design/components/tips.css`),
-//! and then stands centred above the element, or below it where there is no room above,
-//! `tooltip.gap` points away. It takes no presses.
+//! hidden until the pointer rests on its target for the delay in `flat.json`. A hover tip
+//! appears immediately and can prefer the space below its target, as `.tip-below` does in
+//! `ui/src/design/components/tips.css`. Each tip is centred on its target with the configured gap and takes no
+//! presses.
 
 use glam::Vec2;
 
 use super::{Layer, menu::fit};
-use crate::element::{Anchor, Display};
+use crate::element::{Anchor, Display, TipSide};
 use crate::input::{Rect, Size};
 use kit_frame::frame::{Anchor as SceneAnchor, AnchorBox, ElementId, FrameBuilder, NodeRef, Role};
 
@@ -20,9 +19,10 @@ pub const TIP_PREFIX: &str = "tooltip ";
 /// The tooltip of the element the pointer is on.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Resting {
-    tooltip: ElementId,
+    pub(super) tooltip: ElementId,
     /// The id of the current target, whose box can move after the wait starts.
     target: ElementId,
+    side: Option<TipSide>,
     /// When the pointer came onto that element: the `now` of the first frame after it did.
     since: Option<u64>,
     shown: bool,
@@ -41,7 +41,7 @@ impl Layer {
         });
         let wanted = point.and_then(|point| {
             self.hit(point, open, |node, _| {
-                let tooltip = self.tooltip_of(&node.element.name)?;
+                let tooltip = self.tooltip_of(&node.element.name, node.element.role)?;
                 Some((tooltip, node.id))
             })
         });
@@ -60,12 +60,20 @@ impl Layer {
         if wanted == current {
             return;
         }
-        self.tip = wanted.map(|(tooltip, target)| Resting {
-            tooltip,
-            target,
-            since: None,
-            shown: false,
+        self.tip = wanted.and_then(|(tooltip, target)| {
+            let node = self.screen.as_ref()?.find(tooltip)?;
+            let Some(Anchor::Tip(placement)) = node.element.anchor else {
+                return None;
+            };
+            Some(Resting {
+                tooltip,
+                target,
+                side: placement.map(|placement| placement.side),
+                since: None,
+                shown: false,
+            })
         });
+        self.prepare_tip();
     }
 
     /// Starts the clock of a tooltip that began to wait since the last frame, and shows the
@@ -75,7 +83,9 @@ impl Layer {
             return;
         };
         let since = *tip.since.get_or_insert(now);
-        if tip.shown || now.saturating_sub(since) < self.tuning.tooltip.delay_ns() {
+        if tip.shown
+            || (tip.side.is_none() && now.saturating_sub(since) < self.tuning.tooltip.delay_ns())
+        {
             return;
         }
         tip.shown = true;
@@ -87,7 +97,15 @@ impl Layer {
     /// that the client asks for a frame then; `None` with none waiting.
     #[must_use]
     pub fn tip_due(&self) -> Option<u64> {
-        let tip = self.tip.as_ref().filter(|tip| !tip.shown)?;
+        let tip = self.tip.as_ref()?;
+        if tip.shown {
+            // A playing phase can replace the words under a stationary pointer.
+            let node = self.find(tip.tooltip)?;
+            return self
+                .ticks
+                .filter(|_| node.pending_tip_text)
+                .map(|(_, now)| now);
+        }
         tip.since
             .map(|since| since.saturating_add(self.tuning.tooltip.delay_ns()))
     }
@@ -124,33 +142,38 @@ impl Layer {
             self.window.size,
             self.tuning.menu_edge,
             self.tuning.tooltip.gap,
+            tip.side.unwrap_or(TipSide::Above),
         );
         Some((anchor, target))
     }
 
     /// The tooltip on the screen that explains the element named `name`, if any.
-    pub(super) fn tooltip_of(&self, name: &str) -> Option<ElementId> {
-        fn search(node: &super::Node, name: &str) -> Option<ElementId> {
+    pub(super) fn tooltip_of(&self, name: &str, role: Role) -> Option<ElementId> {
+        fn search(node: &super::Node, name: &str, role: Role) -> Option<ElementId> {
             if node.element.style.display == Display::None {
                 return None;
             }
             let element = &node.element;
-            if matches!(element.anchor, Some(Anchor::Tip))
+            if let Some(Anchor::Tip(placement)) = element.anchor
                 && element.name.strip_prefix(TIP_PREFIX) == Some(name)
+                && placement.is_none_or(|placement| placement.target == role)
             {
                 return Some(node.id);
             }
-            node.children.iter().find_map(|child| search(child, name))
+            node.children
+                .iter()
+                .find_map(|child| search(child, name, role))
         }
         if name.is_empty() {
             return None;
         }
-        self.screen.as_ref().and_then(|node| search(node, name))
+        self.screen
+            .as_ref()
+            .and_then(|node| search(node, name, role))
     }
 }
 
-/// Centres a tooltip above its target, or below it when it would pass the
-/// window's top. The horizontal offset keeps the tooltip inside the window.
+/// Centres the tip on the target's preferred side if it fits, with an offset at the window edge.
 fn beside(
     id: ElementId,
     target: Rect,
@@ -158,11 +181,17 @@ fn beside(
     window: Size,
     edge: f32,
     gap: f32,
+    preferred_side: TipSide,
 ) -> SceneAnchor {
     let x = target.x + (target.width - size.x) / 2.0;
     let dx = fit(x, size.x, window.width, edge) - x;
     let above = target.y - gap - size.y;
-    if above >= edge {
+    let below = target.y + target.height + gap + size.y;
+    let above = match preferred_side {
+        TipSide::Above => above >= edge,
+        TipSide::Below => below > window.height - edge && above >= edge,
+    };
+    if above {
         SceneAnchor::new(
             id,
             Vec2::new(0.5, 0.0),

@@ -303,7 +303,7 @@ pub(super) fn place_menus(
                 }
                 continue;
             }
-            Some(Anchor::Tip) => continue,
+            Some(Anchor::Tip(_)) => continue,
             None => {
                 place_menus(child, tree, panel, window, edge);
                 continue;

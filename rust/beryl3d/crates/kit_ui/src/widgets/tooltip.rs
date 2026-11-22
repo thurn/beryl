@@ -4,7 +4,7 @@
 //! on one line. It may stand anywhere in the screen's tree; the flat layer shows it beside the
 //! element it explains once the pointer has rested there (`layout::tip`).
 
-use crate::element::{Anchor, Element, Presence, Timing};
+use crate::element::{Anchor, Element, Presence, Timing, TipPlacement};
 use crate::layout::TIP_PREFIX;
 use kit_base::data::flat::Tooltip;
 use kit_base::pose::Curve;
@@ -15,7 +15,17 @@ use kit_frame::frame::Role;
 /// takes a press.
 #[must_use]
 pub fn tooltip(words: &str, of: &str, metrics: Tooltip) -> Element {
-    let mut element = tip_label(words.to_owned())
+    build(words.to_owned(), of, metrics, None)
+}
+
+/// A tooltip that opens as soon as the pointer enters its target, on the given side.
+#[must_use]
+pub fn hover_tip(words: String, of: &str, metrics: Tooltip, placement: TipPlacement) -> Element {
+    build(words, of, metrics, Some(placement))
+}
+
+fn build(words: String, of: &str, metrics: Tooltip, placement: Option<TipPlacement>) -> Element {
+    let mut element = tip_label(words)
         .name(&format!("{TIP_PREFIX}{of}"))
         .enter(Presence::fade(Timing::new(
             metrics.fade_ms,
@@ -23,7 +33,7 @@ pub fn tooltip(words: &str, of: &str, metrics: Tooltip) -> Element {
             Curve::EASE_OUT,
         )))
         .passes(true);
-    element.anchor = Some(Anchor::Tip);
+    element.anchor = Some(Anchor::Tip(placement));
     element
 }
 

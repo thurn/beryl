@@ -60,7 +60,7 @@ impl Node {
             }
             Anchor::Menu(_) => self.placed,
             Anchor::Submenu => self.placed.filter(|_| self.shown),
-            Anchor::Tip => None,
+            Anchor::Tip(_) => None,
         }
     }
 }
