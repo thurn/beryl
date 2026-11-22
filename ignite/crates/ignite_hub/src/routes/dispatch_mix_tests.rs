@@ -62,11 +62,11 @@ fn ask(conn: &mut Connection, machine: &Value, now: Timestamp) -> Value {
     reply
 }
 
-fn hold_claude(conn: &Connection, label: &str, reset: Timestamp) {
+fn hold_provider(conn: &Connection, provider: &str, label: &str, reset: Timestamp) {
     provider_usage::record(
         conn,
         &ProviderSample {
-            provider: "claude".to_owned(),
+            provider: provider.to_owned(),
             at: start(),
             machine: "m-2".parse().unwrap(),
             status: "ok".into(),
@@ -190,9 +190,9 @@ fn an_older_daemon_cannot_start_work_with_a_disabled_provider() {
 }
 
 #[test]
-fn a_standby_takes_work_during_a_hold_and_yields_at_reset() {
+fn the_third_provider_takes_work_during_holds_and_yields_at_reset() {
     let mut conn = open_in_memory().unwrap();
-    set_mix(&mut conn, [100, 0, 0], false);
+    set_mix(&mut conn, [60, 40, 0], true);
     file(
         &mut conn,
         &[
@@ -204,9 +204,10 @@ fn a_standby_takes_work_during_a_hold_and_yields_at_reset() {
     );
     let machine = machine_room("m-1", 4, &["claude", "codex", "third"]);
     assert_eq!(ask(&mut conn, &machine, start())["provider"], "claude");
-    assert_eq!(ask(&mut conn, &machine, at(1.0))["provider"], "claude");
-    hold_claude(&conn, "5-hour", at(5.0));
+    hold_provider(&conn, "claude", "5-hour", at(5.0));
     assert_eq!(ask(&mut conn, &machine, at(2.0))["provider"], "codex");
+    hold_provider(&conn, "codex", "5-hour", at(10.0));
+    assert_eq!(ask(&mut conn, &machine, at(3.0))["provider"], "third");
     assert_eq!(ask(&mut conn, &machine, at(5.0))["provider"], "claude");
 }
 
@@ -222,7 +223,7 @@ fn a_pin_overrides_share_but_still_waits_for_holds_and_enabled_providers() {
         ],
     );
     let machine = machine_room("m-1", 2, &["claude", "codex", "third"]);
-    hold_claude(&conn, "5-hour", at(10.0));
+    hold_provider(&conn, "claude", "5-hour", at(10.0));
     let reply = ask(&mut conn, &machine, at(1.0));
     let reason = reply["nothing"].as_str().unwrap();
     assert!(
@@ -268,7 +269,7 @@ fn the_machine_only_gets_providers_it_offers_and_the_reason_names_absent_ones() 
     file(&mut conn, &[("one", &[], &[]), ("two", &[], &[])]);
     let machine = machine_room("m-1", 2, &["third"]);
     assert_eq!(ask(&mut conn, &machine, start())["provider"], "third");
-    hold_claude(&conn, "5-hour", at(10.0));
+    hold_provider(&conn, "claude", "5-hour", at(10.0));
     let machine = machine_room("m-1", 2, &["claude"]);
     let reply = ask(&mut conn, &machine, at(1.0));
     let reason = reply["nothing"].as_str().unwrap();
@@ -403,7 +404,7 @@ fn a_family_hold_uses_the_model_under_the_tier() {
             ("two", &["tier:sonnet"], &[0]),
         ],
     );
-    hold_claude(&conn, "Weekly · Sonnet", at(10.0));
+    hold_provider(&conn, "claude", "Weekly · Sonnet", at(10.0));
     let mut machine = machine_room("m-1", 2, &["claude", "codex"]);
     machine["room"]["providers"][0]["model_ids"] =
         json!({"opus": "claude-sonnet-5", "sonnet": "claude-opus-5"});

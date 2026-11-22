@@ -404,7 +404,7 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
         ),
     ]);
     let original_version = settings.version;
-    let hub::fleet_settings::PutOutcome::Stored(mut settings) = hub::fleet_settings::put(
+    let hub::fleet_settings::PutOutcome::Stored(settings) = hub::fleet_settings::put(
         &mut conn,
         original_version,
         settings,
@@ -429,21 +429,20 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
     assert!(!public_page.contains("data-fleet-field"));
     assert!(!public_page.contains("data-settings="));
 
-    settings.machines.insert(
-        "cygnus".to_owned(),
-        MachineSetting {
-            state: MachineState::ChecksOnly,
-            disk_cap_gb: None,
-        },
-    );
-    settings.providers.get_mut("codex").unwrap().share = 36;
+    let mut desired = settings.clone();
+    desired.machines.get_mut("cygnus").unwrap().disk_cap_gb = None;
+    desired.providers.get_mut("codex").unwrap().share = 36;
     let body = serde_json::to_string(&FleetUpdate {
         version: settings.version,
-        settings,
+        settings: desired,
     })
     .unwrap();
+    let (status, reply) = browser_request(public.address(), "PUT", "/proj/api/fleet", &body);
+    assert_eq!(status, 405, "{reply}");
+    assert_eq!(fleet_view(public.address()).settings, settings);
+
     let (status, saved) = browser_request(private.address(), "PUT", "/proj/api/fleet", &body);
-    assert_eq!(status, 200);
+    assert_eq!(status, 200, "{saved}");
     let saved: FleetSettings = serde_json::from_str(&saved).unwrap();
     assert_eq!(saved.version, original_version + 2);
     assert_eq!(saved.machine("cygnus").disk_cap_gb, None);
