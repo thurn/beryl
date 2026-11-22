@@ -86,28 +86,66 @@ pub struct Item {
     pub under: Option<Under>,
 }
 
-/// The way the container places its items in the region's local plane.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Policy {
+// The solver and inspection share the same list of policies, including their names.
+macro_rules! policies {
+    ($($(#[$doc:meta])* $variant:ident = $word:literal [$($fields:tt)*],)*) => {
+        /// The way the container places its items in the region's local plane.
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub enum Policy {
+            $($(#[$doc])* $variant $($fields)*,)*
+        }
+
+        /// A placement policy without its tuning.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum PolicyKind {
+            $($variant,)*
+        }
+
+        impl PolicyKind {
+            /// Every policy the solver supports.
+            pub const ALL: &[Self] = &[$(Self::$variant,)*];
+
+            /// The name used for the policy in inspection.
+            #[must_use]
+            pub const fn word(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $word,)*
+                }
+            }
+        }
+
+        impl Policy {
+            /// The kind of arrangement this policy specifies.
+            #[must_use]
+            pub const fn kind(self) -> PolicyKind {
+                match self {
+                    $(Self::$variant { .. } => PolicyKind::$variant,)*
+                }
+            }
+        }
+    };
+}
+
+policies! {
     /// Side by side. `group_gap` is added between distinct groups. Successive items under
     /// the same side of a host are offset by `tuck_step` per item of depth.
-    Row {
+    Row = "row" [{
         alignment: Alignment,
         gap: f32,
         group_gap: f32,
         tuck_step: Vec2,
-    },
+    }],
     /// A circular arc, with each rectangle turned along the arc.
-    Fan(Fan),
+    Fan = "fan" [(Fan)],
     /// A step along `direction`, with `step` as the preferred distance between successive advances.
-    Cascade { direction: Vec2, step: f32 },
+    Cascade = "cascade" [{ direction: Vec2, step: f32 }],
     /// One stack, with its first item on top. The following nonpressable items are
     /// layered below it with this offset. A separately pressable item starts another stack.
-    Pile { offset: Vec2 },
+    Pile = "pile" [{ offset: Vec2 }],
     /// From the top left, by rows of at most `columns` items.
-    Grid { columns: usize, gap: Vec2 },
+    Grid = "grid" [{ columns: usize, gap: Vec2 }],
     /// A single rectangle centred in the region.
-    Spot,
+    Spot = "spot" [],
 }
 
 /// How the arc is anchored in its region.

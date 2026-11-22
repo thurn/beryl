@@ -89,6 +89,10 @@ impl InspectionProfile {
     }
 
     #[must_use]
+    pub(crate) fn file(&self) -> &'static str {
+        self.source.1
+    }
+
     pub(crate) fn name(&self) -> &'static str {
         self.source.0
     }
@@ -101,7 +105,7 @@ impl InspectionProfile {
     }
 }
 
-static INSPECTION_PROFILES: [InspectionProfile; 1] = [InspectionProfile {
+pub(crate) static INSPECTION_PROFILES: [InspectionProfile; 1] = [InspectionProfile {
     source: game_table::profiles::wide_compact::SOURCE,
     data: OnceLock::new(),
 }];

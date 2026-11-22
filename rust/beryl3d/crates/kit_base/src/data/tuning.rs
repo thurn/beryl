@@ -5,12 +5,77 @@ use serde::de::{DeserializeOwned, Error};
 use serde::{Deserialize, Deserializer};
 
 use super::effect::{Effects, SHIPPED};
+use super::flat::Flat;
+use super::hud::Hud;
 use super::light::{Light, Own};
 use super::lighting::Lighting;
 use super::playback::{CatchUp, FrameRate, Slide, TierProbe};
 use super::pointer::PointerTuning;
 use super::presentation::{Gallery, Notices, Revealed, Shown};
 use super::{BadgeTuning, Card, profiles::Profiles, verbs::Verbs};
+
+/// A runtime tuning input and the type that decodes it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TuningFile {
+    pub name: &'static str,
+    pub reader: &'static str,
+}
+
+struct File<T> {
+    name: &'static str,
+    reader: std::marker::PhantomData<T>,
+}
+
+impl<T> File<T> {
+    const fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            reader: std::marker::PhantomData,
+        }
+    }
+
+    fn decode(
+        &self,
+        load: &mut impl FnMut(&str) -> Result<String, String>,
+        parse: impl FnOnce(&str, &str) -> Result<T, String>,
+    ) -> Result<T, String> {
+        parse(self.name, &load(self.name)?)
+    }
+}
+
+// The typed file constants, watcher inputs and map entries share one declaration.
+macro_rules! tuning_files {
+    ($($id:ident: $reader:ident = $name:literal;)*) => {
+        $(const $id: File<$reader> = File::new($name);)*
+        /// Runtime tuning files at the root of the data directory.
+        pub const TUNING_FILES: &[TuningFile] = &[
+            $(TuningFile { name: $id.name, reader: stringify!($reader) },)*
+        ];
+        /// Names used by hosts that watch runtime tuning.
+        pub const TUNING_FILE_NAMES: [&str; TUNING_FILES.len()] = [$($id.name,)*];
+    };
+}
+
+tuning_files! {
+    CARD: Card = "card.json";
+    BADGES: BadgeTuning = "badges.json";
+    VERBS: VerbFile = "verbs.json";
+    AUDIT: Audit = "audit.json";
+    FLAT: Flat = "flat.json";
+    HUD: Hud = "hud.json";
+    POINTER: PointerTuning = "pointer.json";
+    LIGHT: Light = "light.json";
+    OWN: Own = "own.json";
+    CATCH_UP: CatchUp = "catch-up.json";
+    FRAME_RATE: FrameRate = "frame-rate.json";
+    SLIDE: Slide = "slide.json";
+    TIER_PROBE: TierProbe = "tier-probe.json";
+    NOTICES: Notices = "notices.json";
+    REVEALED: Revealed = "revealed.json";
+    SHOWN: Shown = "shown.json";
+    GALLERY: Gallery = "gallery.json";
+    LIGHTING: Lighting = "lighting.json";
+}
 
 /// The tuning data supplied by a host. The client uses the typed values directly.
 #[derive(Clone, Debug, PartialEq)]
@@ -47,35 +112,35 @@ impl Data {
         profiles: &[(&str, &str)],
         effects: impl IntoIterator<Item = (&'a str, &'a str)>,
     ) -> Result<Self, String> {
-        let VerbFile { verbs } = read("verbs.json", &load("verbs.json")?)?;
+        let VerbFile { verbs } = VERBS.decode(&mut load, read)?;
         validate(&verbs).map_err(|(key, why)| format!("verbs.json: verbs.{key}: {why}"))?;
-        let light = Light::parse(&load("light.json")?)?;
+        let light = LIGHT.decode(&mut load, |_, text| Light::parse(text))?;
         let effects = Effects::parse(effects)?.with_lift(light.lift);
         for &required in SHIPPED {
             if effects.get(required).is_none() {
                 return Err(format!("effects/{required}.json: missing definition"));
             }
         }
-        let card = Card::parse(&load("card.json")?)?;
+        let card = CARD.decode(&mut load, |_, text| Card::parse(text))?;
         Ok(Self {
             card,
-            badges: BadgeTuning::parse(&load("badges.json")?)?,
+            badges: BADGES.decode(&mut load, |_, text| BadgeTuning::parse(text))?,
             verbs,
-            flat: read("flat.json", &load("flat.json")?)?,
-            hud: read("hud.json", &load("hud.json")?)?,
-            audit: read("audit.json", &load("audit.json")?)?,
-            pointer: PointerTuning::parse(&load("pointer.json")?)?,
+            flat: FLAT.decode(&mut load, read)?,
+            hud: HUD.decode(&mut load, read)?,
+            audit: AUDIT.decode(&mut load, read)?,
+            pointer: POINTER.decode(&mut load, |_, text| PointerTuning::parse(text))?,
             light,
-            own: Own::parse(&load("own.json")?)?,
-            catch_up: CatchUp::parse(&load("catch-up.json")?)?,
-            frame_rate: FrameRate::parse(&load("frame-rate.json")?)?,
-            slide: read("slide.json", &load("slide.json")?)?,
-            tier_probe: read("tier-probe.json", &load("tier-probe.json")?)?,
-            notices: read("notices.json", &load("notices.json")?)?,
-            revealed: read("revealed.json", &load("revealed.json")?)?,
-            shown: read("shown.json", &load("shown.json")?)?,
-            gallery: read("gallery.json", &load("gallery.json")?)?,
-            lighting: Lighting::parse(&load("lighting.json")?)?,
+            own: OWN.decode(&mut load, |_, text| Own::parse(text))?,
+            catch_up: CATCH_UP.decode(&mut load, |_, text| CatchUp::parse(text))?,
+            frame_rate: FRAME_RATE.decode(&mut load, |_, text| FrameRate::parse(text))?,
+            slide: SLIDE.decode(&mut load, read)?,
+            tier_probe: TIER_PROBE.decode(&mut load, read)?,
+            notices: NOTICES.decode(&mut load, read)?,
+            revealed: REVEALED.decode(&mut load, read)?,
+            shown: SHOWN.decode(&mut load, read)?,
+            gallery: GALLERY.decode(&mut load, read)?,
+            lighting: LIGHTING.decode(&mut load, |_, text| Lighting::parse(text))?,
             profiles: Profiles::parse(profiles, card)?,
             effects,
         })

@@ -30,6 +30,8 @@ pub enum Request {
 pub struct AskPrompt;
 
 impl Feature for AskPrompt {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;

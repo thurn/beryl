@@ -20,6 +20,8 @@ pub enum Message {
 pub struct ProposalPanel;
 
 impl Feature for ProposalPanel {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;

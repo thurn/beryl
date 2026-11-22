@@ -13,6 +13,8 @@ enum Message {
 }
 
 impl Feature for Counter {
+    const SOURCE: &'static str = file!();
+
     type State = u8;
     type Message = Message;
     type Inputs<'a> = (&'a Cell<u8>, &'a str);

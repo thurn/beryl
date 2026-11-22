@@ -31,6 +31,8 @@ pub enum Request {
 pub struct CommandList;
 
 impl Feature for CommandList {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;

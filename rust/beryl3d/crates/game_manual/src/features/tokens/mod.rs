@@ -49,6 +49,8 @@ impl StateUpdate<TokenSearch> for Highlight<'_> {
 }
 
 impl Feature for TokenSearch {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;

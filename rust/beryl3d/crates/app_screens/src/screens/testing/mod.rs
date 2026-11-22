@@ -51,6 +51,8 @@ pub struct Inputs {
 }
 
 impl Feature for TestingScreen {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs;

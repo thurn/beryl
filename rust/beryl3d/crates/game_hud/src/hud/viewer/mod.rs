@@ -61,6 +61,8 @@ pub struct Inputs<'a> {
 pub struct Viewer;
 
 impl Feature for Viewer {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;

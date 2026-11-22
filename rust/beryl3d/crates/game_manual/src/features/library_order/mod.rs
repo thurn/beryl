@@ -28,6 +28,8 @@ pub enum Request {
 pub struct OrderTray;
 
 impl Feature for OrderTray {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;

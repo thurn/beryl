@@ -39,6 +39,8 @@ pub struct Inputs {
 }
 
 impl Feature for PileCounts {
+    const SOURCE: &'static str = file!();
+
     type State = Self;
     type Message = Infallible;
     type Inputs<'a> = Inputs;

@@ -44,6 +44,8 @@ pub struct Inputs<'a> {
 }
 
 impl Feature for NoticeFloats {
+    const SOURCE: &'static str = file!();
+
     type State = Self;
     type Message = Infallible;
     type Inputs<'a> = Inputs<'a>;

@@ -25,6 +25,8 @@ pub enum Message {
 pub struct ContextMenu;
 
 impl Feature for ContextMenu {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;

@@ -269,6 +269,8 @@ pub enum Request {
 pub struct TableScreen;
 
 impl Feature for TableScreen {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;

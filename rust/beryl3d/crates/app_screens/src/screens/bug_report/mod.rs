@@ -231,6 +231,8 @@ pub struct Inputs {
 }
 
 impl Feature for BugReport {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs;

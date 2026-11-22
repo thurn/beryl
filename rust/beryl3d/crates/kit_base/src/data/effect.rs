@@ -58,6 +58,11 @@ impl Effects {
         })
     }
 
+    /// The loaded definitions, ordered by their filename stems.
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &Definition> {
+        self.definitions.values().map(Arc::as_ref)
+    }
+
     /// Resolves a playback name to a definition that runs can keep across frames.
     #[must_use]
     pub fn get(&self, name: &str) -> Option<&Arc<Definition>> {
@@ -132,27 +137,65 @@ pub struct Layer {
     pub primitive: Primitive,
 }
 
-/// The primitives the effect player can draw. Values that vary across a layer are curves.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum Primitive {
-    Sprite {
+// Keep the JSON tag, the drawable variants and their fieldless inventory together.
+macro_rules! primitives {
+    ($($variant:ident = $word:literal { $($fields:tt)* },)*) => {
+        /// The primitives the effect player can draw. Values that vary across a layer are curves.
+        #[derive(Clone, Debug, Deserialize, PartialEq)]
+        #[serde(tag = "kind", deny_unknown_fields)]
+        pub enum Primitive {
+            $(#[serde(rename = $word)] $variant { $($fields)* },)*
+        }
+
+        /// A primitive's kind without its tuning.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum PrimitiveKind {
+            $($variant,)*
+        }
+
+        impl PrimitiveKind {
+            /// Every primitive the effect player accepts.
+            pub const ALL: &[Self] = &[$(Self::$variant,)*];
+
+            /// The tag used in effect data files.
+            #[must_use]
+            pub const fn word(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $word,)*
+                }
+            }
+        }
+
+        impl Primitive {
+            /// The kind named by this layer's JSON tag.
+            #[must_use]
+            pub const fn kind(&self) -> PrimitiveKind {
+                match self {
+                    $(Self::$variant { .. } => PrimitiveKind::$variant,)*
+                }
+            }
+        }
+    };
+}
+
+primitives! {
+    Sprite = "sprite" {
         shape: Shape,
         quad: Quad,
     },
-    Ring {
+    Ring = "ring" {
         quad: Quad,
     },
-    Burst {
+    Burst = "burst" {
         quad: Quad,
         /// Draw with the surface, using its resolved pose and nominal size.
         #[serde(default)]
         on_surface: bool,
     },
-    Directed {
+    Directed = "directed" {
         sprite: DirectedSprite,
     },
-    Streak {
+    Streak = "streak" {
         lookback_ms: u16,
         width: Scalar,
         minimum: Scalar,
@@ -160,23 +203,23 @@ pub enum Primitive {
         opacity: Scalar,
         record: Option<LightRecord>,
     },
-    Particles {
+    Particles = "particles" {
         emitter: Emitter,
     },
-    Vortex {
+    Vortex = "vortex" {
         emitter: Vortex,
     },
-    Surface {
+    Surface = "surface" {
         surface: Surface,
         amount: Scalar,
         #[serde(default)]
         record: bool,
     },
-    Shake {
+    Shake = "shake" {
         x: Scalar,
         y: Scalar,
     },
-    Number {
+    Number = "number" {
         origin: NumberOrigin,
         drift: Scalar,
         opacity: Scalar,

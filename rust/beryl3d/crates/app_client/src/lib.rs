@@ -5,4 +5,4 @@ pub mod command;
 pub mod driver;
 pub mod settings;
 
-pub use client::{Client, Config, Input};
+pub use client::{Client, Config, FeatureInfo, Input, registered_features};

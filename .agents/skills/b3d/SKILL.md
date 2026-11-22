@@ -18,6 +18,7 @@ can be pasted into the next command.
 ## The commands
 
 ```bash
+just b3d map features                        # registered features and where they live
 just b3d list verbs                          # recordings whose names start with "verbs"
 just b3d info verbs-zones                    # every moment of one recording
 just b3d tree verbs-zones --at 1500ms        # the elements on screen at a moment
@@ -28,6 +29,11 @@ just b3d png verbs-zones --at 1500ms --tree  # a picture of that moment, and its
 just b3d film verbs-zones --from 0ms --to 3s --frames 12   # twelve frames in one picture
 just b3d perf verbs-zones --verbs               # frame timing of a fixture played in the app
 ```
+
+- **`map [kind]`** prints the client's inventories with counts and source
+  paths. Give a kind, such as `features`, `containers`, `profiles`, `effects`
+  or `checks`, to see the entries. Use `--json` for structured output and
+  `--full` to show every entry.
 
 - **`list [prefix]`** prints each recording's name, its seat (`--seat you` or
   `--seat opponent`), its length and how many views it has, the first 95 unless

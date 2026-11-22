@@ -2660,6 +2660,7 @@ last time it used it, and several agents often run it at once.
 ### Commands
 
 ```bash
+just b3d map features
 just b3d list counterspell
 just b3d info pay-default
 just b3d tree pay-default --at prompt:1
@@ -2672,6 +2673,7 @@ just b3d test b3d:counterspell
 
 | Command                          | What it prints                                                                                                                                                         |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `map [kind]`                     | Counts of the available inventories, or the names and source paths in one inventory. See `just b3d map --help`.                                                        |
 | `list [prefix]`                  | Every recording whose name starts with the prefix: fixtures, card spec moments and stress boards, each with its length and its number of views.                        |
 | `info <recording>`               | The recording's moments: each view with its time, each script's steps with their start and end, and each prompt with its buttons.                                      |
 | `tree <recording>`               | The resolved elements at one moment, as an indented tree.                                                                                                              |
@@ -2685,6 +2687,12 @@ just b3d test b3d:counterspell
 | `gate`                           | The frame gates (see [Performance gates](#performance-gates)).                                                                                                         |
 | `app`, `smoke`, `frames`, `live` | The running app (see [Driving the running app](#driving-the-running-app)).                                                                                             |
 | `match score [prefix]`           | Counts of differences from the web interface on each reference target, held to a ratchet (see [Matching the web interface's look](#matching-the-web-interfaces-look)). |
+
+`just b3d map` lists the available kinds. Give a kind to see its entries and
+their paths, such as registered shortcuts under `features`, placement policies
+under `containers`, or test windows under `profiles`. The `data` inventory names
+the readers of runtime tuning, profile and effect files. Use `--full` to show
+every entry and `--json` to read the map programmatically.
 
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>`, `--scale <number>`,

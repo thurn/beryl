@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import json
 import os
 import re
 import shlex
@@ -324,6 +325,8 @@ def launch_program(
     env: dict[str, str] = (
         {**os.environ, CORES_ENV: str(want)} if want else dict(os.environ)
     )
+    if name == "b3d" and arguments[:1] == ["map"]:
+        env["BERYL3D_LAUNCHER_COMMANDS"] = json.dumps(command_entries())
     selection = () if PACK_ENV in env else pack_selection(arguments)
     if selection:
         if recorder is None:
@@ -463,6 +466,9 @@ MODULES: tuple[ModuleType, ...] = (
 
 OWN_COMMANDS: tuple[Command, ...] = (
     b3d_command("data", "validate the client tuning files", single=True),
+    b3d_command(
+        "map", "the client’s source and data, from its registries", single=True
+    ),
     b3d_command(
         "list",
         "every recording whose name starts with a prefix, with its length and views",
@@ -717,6 +723,24 @@ COMMANDS: tuple[Command, ...] = (
     *OWN_COMMANDS,
     *(command for module in MODULES for command in module.COMMANDS),
 )
+
+
+def command_entries() -> list[dict[str, str]]:
+    """Names, descriptions and registration files for the inspector's command map."""
+    registries = [(Path(__file__), OWN_COMMANDS)]
+    for module in MODULES:
+        source = module.__file__
+        assert source is not None
+        registries.append((Path(source), module.COMMANDS))
+    return [
+        {
+            "name": command.name,
+            "detail": command.summary,
+            "path": path.resolve().relative_to(repo_paths.REPO).as_posix(),
+        }
+        for path, commands in registries
+        for command in commands
+    ]
 
 
 def listing() -> str:

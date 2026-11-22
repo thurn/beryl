@@ -40,10 +40,10 @@ use kit_base::geometry::Rect;
 pub use kit_space::camera::{Camera, CameraData};
 pub use look::{Dress, Look};
 pub use pile::{PILE_IDS, PileShown, pile_name};
+pub use place::{ContainerInfo, Placement, ROWS, Rest, Rows, Scroll, Scroller, containers, place};
 pub use place::{
     Group, NO_GROUP, PileRules, Zones, Zooms, arrival, blocked, blocking_rows, host_slot,
 };
-pub use place::{Placement, ROWS, Rest, Rows, Scroll, Scroller, place};
 pub use place::{names_host, prepare_row, row_of, stack_slots, zone_members};
 pub use rows::{Beneath, Groups, NameIds, RowChange, SameName, grouped, reposed};
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};

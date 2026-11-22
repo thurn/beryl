@@ -3,9 +3,9 @@
 use std::fmt;
 
 use kit_base::paint::{Gradient, Shadow, Stop};
-use kit_frame::frame::{Role, StateBits};
+use kit_frame::frame::StateBits;
 use kit_ui::element::Element;
-use kit_ui::widgets::{self, FieldState, MenuGroup, MenuRow, icons};
+use kit_ui::widgets::{self, FieldState, MenuGroup, MenuRow, Widget, icons};
 
 use super::Node;
 use super::parse::number;
@@ -49,7 +49,8 @@ impl Property {
             "level" => Self::Level(value.parse::<u8>().ok().filter(|level| *level <= 100)?),
             "widget" => Self::Widget(
                 Widget::ALL
-                    .into_iter()
+                    .iter()
+                    .copied()
                     .find(|widget| widget.word() == value)?,
             ),
             _ => return None,
@@ -120,138 +121,63 @@ impl fmt::Display for Property {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Widget {
-    Button,
-    PassOn,
-    SmallButton,
-    PhoneAction,
-    Check,
-    Checkbox,
-    CheckSquare,
-    StartPanel,
-    Field,
-    IconButton,
-    List,
-    Menu,
-    Slider,
-    Toggle,
-    Tooltip,
-}
-
-impl Widget {
-    const ALL: [Self; 15] = [
-        Self::Button,
-        Self::PassOn,
-        Self::SmallButton,
-        Self::PhoneAction,
-        Self::Check,
-        Self::Checkbox,
-        Self::CheckSquare,
-        Self::StartPanel,
-        Self::Field,
-        Self::IconButton,
-        Self::List,
-        Self::Menu,
-        Self::Slider,
-        Self::Toggle,
-        Self::Tooltip,
-    ];
-
-    pub(super) const fn word(self) -> &'static str {
-        match self {
-            Self::Button => "button",
-            Self::PassOn => "pass-on",
-            Self::SmallButton => "small-button",
-            Self::PhoneAction => "phone-action",
-            Self::Check => "check",
-            Self::Checkbox => "checkbox",
-            Self::CheckSquare => "check-square",
-            Self::StartPanel => "start-panel",
-            Self::Field => "field",
-            Self::IconButton => "icon-button",
-            Self::List => "list",
-            Self::Menu => "menu",
-            Self::Slider => "slider",
-            Self::Toggle => "toggle",
-            Self::Tooltip => "tooltip",
+pub(super) fn build_widget(
+    widget: Widget,
+    node: &Node,
+    words: &str,
+    bits: StateBits,
+    actions: &kit_base::data::profiles::ScreenMetrics,
+) -> Element {
+    let name = node.name.as_deref().unwrap_or_default();
+    let side = node.rect.width.min(node.rect.height);
+    let selected = bits.has(StateBits::SELECTED);
+    let button = || {
+        if bits.has(StateBits::PRIMARY) {
+            widgets::primary(words)
+        } else {
+            widgets::button(words)
         }
-    }
-
-    pub(super) fn build(
-        self,
-        node: &Node,
-        words: &str,
-        bits: StateBits,
-        actions: &kit_base::data::profiles::ScreenMetrics,
-    ) -> Element {
-        let name = node.name.as_deref().unwrap_or_default();
-        let side = node.rect.width.min(node.rect.height);
-        let selected = bits.has(StateBits::SELECTED);
-        let button = || {
-            if bits.has(StateBits::PRIMARY) {
-                widgets::primary(words)
-            } else {
-                widgets::button(words)
-            }
-        };
-        match self {
-            Self::Button => button(),
-            Self::SmallButton => widgets::start_panel::small(button()),
-            Self::PhoneAction => widgets::screen::compact_action(button(), actions),
-            Self::PassOn => widgets::pass_on(name, side),
-            Self::Check => widgets::check_mark(side),
-            Self::Checkbox => widgets::start_panel::checkbox(words, selected),
-            Self::CheckSquare => widgets::start_panel::check_square(side, selected),
-            Self::StartPanel => widgets::start_panel::panel_look(kit_ui::element::column()),
-            Self::Field => widgets::field(
-                name,
-                &FieldState {
-                    text: words.to_owned(),
-                    caret: u32::try_from(words.len()).unwrap_or(u32::MAX),
-                    placeholder: "Type here".to_owned(),
-                    ..FieldState::default()
-                },
-            ),
-            Self::IconButton => widgets::icon_button(icons::GEAR, name),
-            Self::List => widgets::list(name, []),
-            Self::Menu => {
-                let mut row = MenuRow::new(words);
-                row.checked = selected;
-                row.enabled = !bits.has(StateBits::DISABLED);
-                row.action = Some(kit_ui::element::Action::new(()));
-                widgets::menu(name, "", &[MenuGroup { rows: vec![row] }])
-            }
-
-            Self::Slider => {
-                let level = node
-                    .properties
-                    .iter()
-                    .find_map(|property| match property {
-                        Property::Level(level) => Some(*level),
-                        _ => None,
-                    })
-                    .unwrap_or_default();
-                widgets::slider(name, level, 0u8)
-            }
-            Self::Toggle => widgets::toggle(icons::GEAR, name, selected),
-            Self::Tooltip => widgets::tip_label(words.to_owned()),
+    };
+    match widget {
+        Widget::Button => button(),
+        Widget::SmallButton => widgets::start_panel::small(button()),
+        Widget::CompactAction => widgets::screen::compact_action(button(), actions),
+        Widget::PassOn => widgets::pass_on(name, side),
+        Widget::Check => widgets::check_mark(side),
+        Widget::Checkbox => widgets::start_panel::checkbox(words, selected),
+        Widget::CheckSquare => widgets::start_panel::check_square(side, selected),
+        Widget::StartPanel => widgets::start_panel::panel_look(kit_ui::element::column()),
+        Widget::Field => widgets::field(
+            name,
+            &FieldState {
+                text: words.to_owned(),
+                caret: u32::try_from(words.len()).unwrap_or(u32::MAX),
+                placeholder: "Type here".to_owned(),
+                ..FieldState::default()
+            },
+        ),
+        Widget::IconButton => widgets::icon_button(icons::GEAR, name),
+        Widget::List => widgets::list(name, []),
+        Widget::Menu => {
+            let mut row = MenuRow::new(words);
+            row.checked = selected;
+            row.enabled = !bits.has(StateBits::DISABLED);
+            row.action = Some(kit_ui::element::Action::new(()));
+            widgets::menu(name, "", &[MenuGroup { rows: vec![row] }])
         }
-    }
 
-    pub(super) const fn role(self) -> Role {
-        match self {
-            Self::Button
-            | Self::PassOn
-            | Self::IconButton
-            | Self::SmallButton
-            | Self::PhoneAction => Role::Button,
-            Self::Check | Self::CheckSquare | Self::StartPanel => Role::Region,
-            Self::Field => Role::Field,
-            Self::List | Self::Menu => Role::List,
-            Self::Slider => Role::Slider,
-            Self::Toggle | Self::Checkbox => Role::Toggle,
-            Self::Tooltip => Role::Text,
+        Widget::Slider => {
+            let level = node
+                .properties
+                .iter()
+                .find_map(|property| match property {
+                    Property::Level(level) => Some(*level),
+                    _ => None,
+                })
+                .unwrap_or_default();
+            widgets::slider(name, level, 0u8)
         }
+        Widget::Toggle => widgets::toggle(icons::GEAR, name, selected),
+        Widget::Tooltip => widgets::tip_label(words.to_owned()),
     }
 }

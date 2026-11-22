@@ -76,6 +76,8 @@ impl Layout {
 }
 
 impl Feature for SettingsSheet {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs;

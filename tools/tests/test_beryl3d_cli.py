@@ -1,5 +1,6 @@
 """`just b3d`'s cargo commands and the text commands it hands to the `b3d` program."""
 
+import json
 import os
 import subprocess
 import sys
@@ -8,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from beryl_tools import paths
 from beryl_tools.beryl3d import cli
 
 
@@ -61,6 +63,27 @@ def test_text_commands_hand_every_argument_to_the_b3d_program(
     # The one-thread program is told to use one thread.
     _build_env, run_env = envs
     assert run_env[cli.CORES_ENV] == "1"
+
+
+def test_map_includes_every_launcher_command_with_its_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def program(
+        command: list[str], env: dict[str, str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        assert command == ["/linked/b3d", "map", "commands", "--json"]
+        entries = json.loads(env["BERYL3D_LAUNCHER_COMMANDS"])
+        assert {entry["name"] for entry in entries} == {
+            command.name for command in cli.COMMANDS
+        }
+        for entry in entries:
+            assert (paths.REPO / entry["path"]).is_file(), entry
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(cli, "quick_build", lambda _arguments: 0)
+    monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
+    monkeypatch.setattr(cli.subprocess, "run", program)
+    assert cli.main(["map", "commands", "--json"]) == 0
 
 
 def test_interface_tests_run_the_shared_builds_b3d(

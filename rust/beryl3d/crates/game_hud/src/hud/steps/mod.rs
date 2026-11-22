@@ -50,6 +50,8 @@ type Lit = (Side, Step);
 pub struct StepRow;
 
 impl Feature for StepRow {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs;

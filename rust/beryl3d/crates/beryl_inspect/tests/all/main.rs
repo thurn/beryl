@@ -18,6 +18,7 @@ mod gate;
 mod hud;
 mod log;
 mod manual_table;
+mod map;
 mod opening;
 mod pack;
 mod parity;

@@ -10,6 +10,9 @@ use kit_ui::element::{Action, Element};
 /// folded, a scroll position or a draft. Derive what the latest session view or
 /// prompt already tells you in `view`, from its inputs.
 pub trait Feature {
+    /// Source file in the Beryl 3D workspace that owns this feature.
+    const SOURCE: &'static str;
+
     type State: Default + Debug;
     /// A closed message enum specific to this feature. The router uses its
     /// type to find the owning feature.

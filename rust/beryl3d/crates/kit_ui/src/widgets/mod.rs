@@ -28,3 +28,6 @@ pub use menu::{MenuGroup, MenuPage, MenuRow, context_menu, menu, sheet_menu};
 pub use slider::{STEP, level_at, slider};
 pub use toggle::toggle;
 pub use tooltip::{tip_label, tooltip};
+
+mod catalog;
+pub use catalog::Widget;

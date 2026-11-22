@@ -27,6 +27,8 @@ pub enum Message {
 pub struct TableLog;
 
 impl Feature for TableLog {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;

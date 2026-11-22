@@ -379,7 +379,9 @@ fn element(node: &Node, origin: Vec2, actions: &ScreenMetrics) -> (Element, Stat
                 .map(str::to_owned);
             element
         },
-        |widget| widget.build(node, text_property.unwrap_or(name), bits, actions),
+        |widget| {
+            super::style::build_widget(widget, node, text_property.unwrap_or(name), bits, actions)
+        },
     );
     element = element
         .name(name)

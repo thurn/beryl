@@ -53,6 +53,8 @@ pub enum ViewKey {
 }
 
 impl Feature for Inspector {
+    const SOURCE: &'static str = file!();
+
     type State = Self;
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;

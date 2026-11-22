@@ -51,6 +51,8 @@ impl Inputs {
 pub struct FullControl;
 
 impl Feature for FullControl {
+    const SOURCE: &'static str = file!();
+
     type State = ();
     type Message = Infallible;
     type Inputs<'a> = Inputs;

@@ -208,7 +208,7 @@ fn node(line: usize, text: &str) -> Result<Node, ParseError> {
     if properties
         .iter()
         .any(|property| matches!(property, Property::Level(_)))
-        && !properties.contains(&Property::Widget(super::style::Widget::Slider))
+        && !properties.contains(&Property::Widget(kit_ui::widgets::Widget::Slider))
     {
         return Err(error(
             line,

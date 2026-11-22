@@ -457,6 +457,7 @@ dependencies = [
  "kit_frame",
  "kit_probe",
  "kit_scene",
+ "kit_space",
  "kit_ui",
  "libc",
  "miniz_oxide 0.8.9",

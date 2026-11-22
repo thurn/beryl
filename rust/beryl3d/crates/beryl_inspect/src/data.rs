@@ -11,27 +11,7 @@ use kit_base::data::{Data, profiles};
 
 use crate::recordings;
 
-/// The runtime tuning at the root of the data directory, excluding build-time constants.
-pub const TUNING_FILES: [&str; 18] = [
-    "card.json",
-    "badges.json",
-    "verbs.json",
-    "audit.json",
-    "flat.json",
-    "hud.json",
-    "pointer.json",
-    "light.json",
-    "own.json",
-    "catch-up.json",
-    "frame-rate.json",
-    "slide.json",
-    "tier-probe.json",
-    "notices.json",
-    "revealed.json",
-    "shown.json",
-    "gallery.json",
-    "lighting.json",
-];
+pub use kit_base::data::TUNING_FILE_NAMES as TUNING_FILES;
 
 pub fn directory() -> PathBuf {
     std::env::var_os("BERYL3D_DATA")

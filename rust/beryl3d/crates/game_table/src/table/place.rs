@@ -17,6 +17,8 @@ mod row;
 use row::battlefield_row;
 pub(crate) use row::{RowFits, rezoom, zooms};
 pub use row::{Zooms, blocked, blocking_rows, prepared as prepare_row, row_of};
+mod catalog;
+pub use catalog::{ContainerInfo, containers};
 mod under;
 pub use under::{host_slot, names_host};
 
@@ -710,10 +712,10 @@ fn lay(
     let (layout, camera, scroll, fits, ids, lift) = rules;
     match group {
         Group::Pile { side, zone } => {
-            if zone == ZoneName::Exile && !layout.style.show_exile {
-                lay_unseen_exile(placement, objects, side, (layout, camera));
-            } else {
+            if catalog::pile_visible(zone, layout) {
                 lay_pile(placement, objects, (side, zone), (layout, camera));
+            } else {
+                lay_unseen_exile(placement, objects, side, (layout, camera));
             }
         }
         Group::Hand(side) => {

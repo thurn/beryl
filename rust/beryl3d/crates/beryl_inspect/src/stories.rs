@@ -151,6 +151,12 @@ pub(crate) fn names() -> Result<impl Iterator<Item = &'static str>, String> {
     Ok(catalog()?.keys().map(String::as_str))
 }
 
+pub(crate) fn entries() -> Result<impl Iterator<Item = (&'static str, &'static Path)>, String> {
+    Ok(catalog()?
+        .iter()
+        .map(|(name, entry)| (name.as_str(), entry.path.as_path())))
+}
+
 pub(crate) fn open(name: &str) -> Result<Arc<Story>, String> {
     let path = Path::new(name);
     if has_extension(path) {

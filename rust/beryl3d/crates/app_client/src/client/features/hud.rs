@@ -11,7 +11,7 @@ use game_hud::hud::rows::{self, RowCounts};
 use kit_scene::StateUpdate;
 use std::convert::Infallible;
 
-use super::{Client, Features, Mounted, Registration};
+use super::{Client, Features, Mounted, Placement, Registration};
 
 pub(super) const LIFE_TOTALS: &str = "life-totals";
 pub(super) const PILE_COUNTS: &str = "pile-counts";
@@ -37,7 +37,7 @@ impl Registration {
                     Some(first)
                 }
             },
-            ..Self::routed::<F>(id)
+            ..Self::of::<F>(id, Placement::Floating)
         }
     }
 }

@@ -77,6 +77,8 @@ type Effects<'a> = Context<'a, Command, Request>;
 pub struct LobbyScreen;
 
 impl Feature for LobbyScreen {
+    const SOURCE: &'static str = file!();
+
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;

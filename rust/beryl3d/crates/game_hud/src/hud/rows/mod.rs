@@ -49,6 +49,8 @@ pub struct Inputs {
 }
 
 impl Feature for RowCounts {
+    const SOURCE: &'static str = file!();
+
     type State = Self;
     type Message = Message;
     type Inputs<'a> = Inputs;

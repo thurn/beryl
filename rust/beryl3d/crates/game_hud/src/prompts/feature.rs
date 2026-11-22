@@ -197,6 +197,8 @@ macro_rules! prompt_feature {
         }
 
         impl kit_scene::Feature for $feature {
+            const SOURCE: &'static str = file!();
+
             // The session owns every selection and sends the resulting controls and marks.
             type State = ();
             type Message = crate::prompts::feature::Message<Self>;

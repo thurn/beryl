@@ -10,6 +10,7 @@ mod check;
 mod corpus;
 pub use kit_probe::agent::line;
 mod listing;
+mod map;
 pub mod options;
 mod records;
 mod story;
@@ -65,7 +66,7 @@ impl Printed {
     }
 }
 
-const COMMANDS: [Command; 11] = [
+const COMMANDS: &[Command] = &[
     Command {
         name: "data",
         summary: "validate the client tuning files",
@@ -84,6 +85,28 @@ const COMMANDS: [Command; 11] = [
         },
         own: &[],
         run: validate_data,
+    },
+    Command {
+        name: "map",
+        summary: "the client’s source and data, from its registries",
+        argument: " [kind]",
+        examples: [
+            ("just b3d map", "list the kinds and entry counts"),
+            (
+                "just b3d map features --json",
+                "list registered features as JSON",
+            ),
+        ],
+        spec: Spec {
+            recording: false,
+            values: &[],
+            switches: &["--full"],
+        },
+        own: &[
+            ("--full", "show every entry"),
+            ("--json", "print the map and its repeat command as JSON"),
+        ],
+        run: map::run,
     },
     Command {
         name: "list",
@@ -431,7 +454,9 @@ pub fn main(args: &[String]) -> Ran {
         rest
     };
     let printed = Options::parse(command.name, rest, command.spec).and_then(|options| {
-        crate::data::checkout().map_err(Usage)?;
+        if command.name != "map" {
+            crate::data::checkout().map_err(Usage)?;
+        }
         (command.run)(&options)
     });
     match printed {
@@ -459,7 +484,7 @@ fn usage(error: &Usage) -> Ran {
 /// The listing of the text commands, one line each.
 fn listing_text() -> String {
     let mut out = String::from("b3d: Beryl 3D's text commands\n");
-    for command in &COMMANDS {
+    for command in COMMANDS {
         let _ = writeln!(out, "  {:<8}  {}", command.name, command.summary);
     }
     out.push_str("`b3d <command> --help` gives a command's options and examples.\n");

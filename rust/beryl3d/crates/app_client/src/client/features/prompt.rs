@@ -17,6 +17,7 @@ impl Registration {
     pub(super) const fn prompt<F: Prompt>(id: &'static str, placement: Placement) -> Self {
         Self {
             id,
+            source: F::SOURCE,
             placement: Some(placement),
             create: || Box::new(RefCell::new(prompts::Mounted::<F>::default())),
             state: |slots, id| print_state(prompt_slot::<F>(slots, id).borrow().state()),

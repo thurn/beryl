@@ -12,6 +12,7 @@ pub(crate) use crate::command::{Reply, Request, SessionCommand};
 pub use event::Input;
 mod card_input;
 mod features;
+pub use features::{FeatureInfo, registered_features};
 
 use kit_ui::input::Input as DeviceInput;
 use std::collections::VecDeque;

@@ -43,6 +43,8 @@ pub struct Banner {
 }
 
 impl Feature for Banner {
+    const SOURCE: &'static str = file!();
+
     type State = Self;
     type Message = Infallible;
     type Inputs<'a> = usize;

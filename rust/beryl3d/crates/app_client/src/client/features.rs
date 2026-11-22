@@ -34,12 +34,14 @@ use kit_ui::widgets::{FieldState, Fields};
 use super::{Client, SessionCommand};
 
 mod hud;
+mod inspect;
 mod keys;
 use game_hud::hud::{
     banner::Banner, counts::CountFloats, inspector::Inspector, notices::NoticeFloats,
     piles::PileCounts, rows::RowCounts,
 };
 use hud::{INSPECTOR, LIFE_TOTALS, NOTICES, PILE_COUNTS, ROW_COUNTS, STEP_BANNER};
+pub use inspect::{FeatureInfo, registered_features};
 mod manual;
 mod table_input;
 use manual::{
@@ -105,6 +107,7 @@ pub(super) enum Placement {
     Screen(Screen),
     Sheet(Sheet),
     GameLog,
+    Floating,
     GameOver,
     PromptBar,
     Shape(&'static str),
@@ -139,6 +142,7 @@ type Slots = BTreeMap<&'static str, Box<dyn Any>>;
 
 struct Registration {
     id: &'static str,
+    source: &'static str,
     placement: Option<Placement>,
     create: fn() -> Box<dyn Any>,
     state: fn(&Slots, &'static str) -> String,
@@ -158,6 +162,7 @@ impl Registration {
     const fn mounted<F: Mounted>(id: &'static str, placement: Option<Placement>) -> Self {
         Self {
             id,
+            source: F::SOURCE,
             placement,
             create: || Box::new(FeatureSlot::<F>::default()),
             state: |slots, id| {

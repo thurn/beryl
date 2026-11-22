@@ -20,6 +20,8 @@ pub enum Message {
 pub struct PromptBar;
 
 impl Feature for PromptBar {
+    const SOURCE: &'static str = file!();
+
     type State = ();
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;

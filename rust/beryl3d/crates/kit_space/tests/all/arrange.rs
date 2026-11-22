@@ -8,7 +8,7 @@ use kit_base::data::profiles::Profiles;
 use kit_base::geometry::{Insets, Rect, Size, Window};
 use kit_space::arrange::{
     Alignment, CentredFan, Container, Edge, Fan, Group, Item, Limits, Overflow, Placed, Policy,
-    Region, Solved, Under, arrange,
+    PolicyKind, Region, Solved, Under, arrange,
 };
 use kit_space::camera::Camera;
 
@@ -19,6 +19,30 @@ fn row(alignment: Alignment) -> Policy {
         group_gap: 0.0,
         tuck_step: Vec2::ZERO,
     }
+}
+
+#[test]
+fn policy_catalog_lists_each_arrangement_kind() {
+    let policies = [
+        row(Alignment::Start),
+        Policy::Fan(Fan::Fixed {
+            alignment: Alignment::Start,
+            radius: 1.0,
+            max_lean: 1.0,
+            gap: 0.0,
+        }),
+        Policy::Cascade {
+            direction: Vec2::X,
+            step: 1.0,
+        },
+        Policy::Pile { offset: Vec2::ZERO },
+        Policy::Grid {
+            columns: 1,
+            gap: Vec2::ZERO,
+        },
+        Policy::Spot,
+    ];
+    assert_eq!(policies.map(Policy::kind).as_slice(), PolicyKind::ALL);
 }
 
 fn rectangles(count: usize, size: Vec2) -> Vec<Item> {

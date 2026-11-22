@@ -28,6 +28,7 @@ game_play.workspace = true
 game_table.workspace = true
 kit_frame.workspace = true
 kit_probe.workspace = true
+kit_space.workspace = true
 kit_ui.workspace = true
 game_probe = { workspace = true, features = ["stories"] }
 # The views, scripts and fixture messages a recording holds, with no engine.

@@ -779,5 +779,10 @@
     "label": "Beryl 3D landing checks build and test only the corpus recordings and fixtures",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The Beryl 3D map gives agents source and data paths directly from client registries, shortening the search for code to change.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
