@@ -14,11 +14,8 @@ use super::scene::SceneObject;
 use super::{Camera, Table};
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose};
-use kit_frame::frame::ElementId;
-use kit_scene::{
-    ShowPlacement,
-    hit::{contains, intersection},
-};
+use kit_frame::frame::{ScreenClip, ShowPlacement};
+use kit_scene::hit::{contains, intersection};
 use kit_ui::input::Rect;
 
 /// Where a card stands in the box that shows it and how much of that box is visible.
@@ -26,7 +23,7 @@ use kit_ui::input::Rect;
 struct InBox {
     pose: Pose,
     visible: bool,
-    clip: Option<Rect>,
+    clip: Option<ScreenClip>,
     clipped_at_rest: bool,
 }
 
@@ -63,9 +60,9 @@ impl Move {
     }
 }
 
-/// The boxes cards are shown in and their moves, each by its card's slot. Both lists are empty
-/// while no viewer is open, so that a copy of the table allocates nothing for them; they
-/// change only as the client hands the table new boxes, never in a frame.
+/// Card boxes and moves, each by slot. The client installs boxes when screens change,
+/// and each frame refreshes their geometry. The vectors are empty without a viewer,
+/// so copying the table then allocates nothing for this state.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Shown {
     boxes: Vec<(usize, InBox)>,
@@ -77,11 +74,6 @@ pub(crate) struct Shown {
 }
 
 impl Shown {
-    /// Whether a box shows the card in `slot`.
-    pub(crate) fn holds(&self, slot: usize) -> bool {
-        self.in_box(slot).is_some()
-    }
-
     fn in_box(&self, slot: usize) -> Option<InBox> {
         (self.boxes.iter()).find_map(|&(card, in_box)| (card == slot).then_some(in_box))
     }
@@ -116,7 +108,12 @@ impl Table {
     /// to its resting pose. Both moves start at the next frame and take their timing from
     /// `moves`. A card whose box moved takes its new position immediately unless
     /// `moves.relaid` gives it a glide. When `covered` is set, the table takes no presses.
+    ///
+    /// # Panics
+    ///
+    /// If two placements present the same table object.
     pub fn place_shows(&mut self, boxes: &[ShowPlacement], moves: Moves, covered: bool) {
+        ShowPlacement::assert_unique(boxes);
         self.shown.covered = covered;
         let now = self.shown.now;
         self.shown.moves.retain(|(_, moving)| moving.running(now));
@@ -125,42 +122,57 @@ impl Table {
             .filter(|&slot| !boxes.iter().any(|card| card.object.0 as usize == slot))
             .collect();
         for slot in gone {
-            let drawn = self.drawn_in_box(slot, now);
+            let drawn = self.shown_pose(slot, now).unwrap_or_default();
             self.shown.boxes.retain(|&(card, _)| card != slot);
             self.start_move(slot, drawn, moves.back);
         }
-        for &ShowPlacement {
-            object,
-            bounds: rect,
-            clip,
-        } in boxes
-        {
-            let slot = object.0 as usize;
-            let in_box = InBox {
-                pose: box_pose(self.camera(), rect, self.data().shown.depth),
-                visible: clip.is_none_or(|clip| intersection(clip, rect).is_some()),
-                clip,
-                clipped_at_rest: clip.is_some_and(|clip| !contains(clip, rect)),
-            };
+        for &placement in boxes {
+            let slot = placement.object.0 as usize;
+            let in_box = self.show_box(placement);
             if let Some(index) = (self.shown.boxes.iter()).position(|(shown, _)| *shown == slot) {
                 let was = self.shown.boxes[index].1;
                 let glide = moves.relaid.filter(|_| was.pose != in_box.pose);
-                let drawn = glide.map(|_| self.drawn_in_box(slot, now));
+                let drawn = glide.map(|_| self.shown_pose(slot, now).unwrap_or_default());
                 self.shown.boxes[index].1 = in_box;
                 if let (Some(relaid), Some(drawn)) = (glide, drawn) {
                     let camera = self.camera();
                     let rise = camera.to_screen(was.pose.position).y
                         - camera.to_screen(in_box.pose.position).y;
-                    let crossing = rise.abs() > rect.height / 2.0;
+                    let crossing = rise.abs() > placement.bounds.height / 2.0;
                     let timing = if crossing { relaid.cross } else { relaid.shift };
                     self.start_move(slot, drawn, timing);
                 }
                 continue;
             }
-            if let Some(drawn) = self.drawn_out_of_box(slot, now) {
+            if let Some(drawn) = self.shown_pose(slot, now) {
                 self.start_move(slot, drawn, moves.into);
             }
             self.shown.boxes.push((slot, in_box));
+        }
+    }
+
+    /// Updates an existing host's presentation from the current frame's screen geometry.
+    /// A host's animation changes the destination without starting another card move.
+    pub fn update_show(&mut self, placement: ShowPlacement) {
+        let in_box = self.show_box(placement);
+        let slot = placement.object.0 as usize;
+        if let Some((_, current)) = self
+            .shown
+            .boxes
+            .iter_mut()
+            .find(|(shown, _)| *shown == slot)
+        {
+            *current = in_box;
+        }
+    }
+
+    fn show_box(&self, placement: ShowPlacement) -> InBox {
+        let ShowPlacement { bounds, clip, .. } = placement;
+        InBox {
+            pose: box_pose(self.camera(), bounds, self.data().shown.depth),
+            visible: clip.is_none_or(|clip| intersection(clip.bounds, bounds).is_some()),
+            clip,
+            clipped_at_rest: clip.is_some_and(|clip| !contains(clip.bounds, bounds)),
         }
     }
 
@@ -181,25 +193,12 @@ impl Table {
     pub(super) fn advance_shown(&mut self, now: u64) {
         self.shown.now = now;
         for (_, shown) in &mut self.shown.moves {
-            if shown.over.is_none() {
-                shown.over = Some((now, now + shown.length));
-            }
+            shown.over.get_or_insert_with(|| (now, now + shown.length));
         }
     }
 
-    /// Where the card in `slot`, which a box shows, is drawn at `now`.
-    fn drawn_in_box(&self, slot: usize, now: u64) -> Pose {
-        let Some(Some(object)) = self.objects.cards.get(slot).copied() else {
-            return Pose::default();
-        };
-        let mut object = object;
-        self.shown_look(slot, &mut object, now);
-        object.pose
-    }
-
-    /// Where the card in `slot`, which no box shows, is drawn at `now`: part of the way back
-    /// from a box, or where it rests. None for a slot the table holds no card in.
-    fn drawn_out_of_box(&self, slot: usize, now: u64) -> Option<Pose> {
+    /// The card's current pose, including its move into or out of a host.
+    fn shown_pose(&self, slot: usize, now: u64) -> Option<Pose> {
         let mut object = self.objects.cards.get(slot).copied().flatten()?;
         self.shown_look(slot, &mut object, now);
         Some(object.pose)
@@ -248,8 +247,7 @@ impl Table {
 
     /// The clip of a shown card. Cards flying in from the board or gliding across the
     /// opening screen may cross the clip on their way to a fully visible box.
-    pub(super) fn shown_clip(&self, id: ElementId) -> Option<Rect> {
-        let slot = id.0 as usize;
+    pub(super) fn shown_clip(&self, slot: usize) -> Option<ScreenClip> {
         let in_box = self.shown.in_box(slot)?;
         if !in_box.clipped_at_rest
             && self
@@ -265,7 +263,7 @@ impl Table {
     /// Whether a box shows the card in `slot`.
     #[must_use]
     pub fn in_box(&self, slot: usize) -> bool {
-        self.shown.holds(slot)
+        self.shown.in_box(slot).is_some()
     }
 
     /// Whether a card moves into or out of a box at `now`.

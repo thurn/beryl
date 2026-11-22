@@ -12,7 +12,7 @@ mod relations;
 mod rings;
 pub use relations::{
     Anchor, AnchorBox, Anchored, Clearance, Decoration, Endpoint, LineEnd, NodeRef, ShapeAnchor,
-    Show,
+    Show, ShowPlacement,
 };
 pub mod text;
 
@@ -31,7 +31,7 @@ pub use draw::{
     TextureArray, box_shadow_reach, fixed, gradient_reach, rows, sprites,
 };
 pub use look::{EffectLook, ElementLook, LookPaint, LookShadow, Looks};
-pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints};
+pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints, ScreenClip};
 pub use rings::{LIFTED, Lifted, RINGS, Ring, outline_corners};
 pub use undrawn::{Missing, Undrawn};
 pub use work::{Areas, Load, Work};
@@ -564,25 +564,29 @@ impl<'a> FrameBuilder<'a> {
     }
 
     /// Adds `element` named `name`, and returns its index. The builder sets `element.name`.
+    ///
+    /// # Panics
+    ///
+    /// If the parent is neither the root sentinel nor an already registered node.
     pub fn resolved(&mut self, name: &str, mut element: Resolved) -> u32 {
+        let at = index(self.frame.resolved.len());
+        assert!(
+            element.parent == u32::MAX || element.parent < at,
+            "a scene parent must be registered before its child"
+        );
         element.name = NameRef {
             start: index(self.frame.names.len()),
             len: index(name.len()),
         };
         self.frame.names.push_str(name);
         self.frame.resolved.push(element);
-        self.owner = index(self.frame.resolved.len() - 1);
-        self.owner
+        self.owner = at;
+        at
     }
 
     /// Ends the last element's draw records before emitting light or effects with no node.
     pub fn clear_owner(&mut self) {
         self.owner = u32::MAX;
-    }
-
-    /// Records the Show relation declared by the screen element.
-    pub fn shows(&mut self, element: u32, object: ElementId) {
-        self.frame.shows.push((element, object));
     }
 
     /// The centre of the table's element `id` as written so far (`Frame::centre`).

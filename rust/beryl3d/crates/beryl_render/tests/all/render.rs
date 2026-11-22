@@ -10,7 +10,8 @@ use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
 use kit_base::atlas::{FaceSize, Tier};
 use kit_base::geometry::{Rect, Window};
-use kit_frame::frame::{Band, DRAWS, Draw, Frame, FrameBuilder, sprites};
+use kit_base::paint::{Gradient, Stop};
+use kit_frame::frame::{Band, DRAWS, Draw, Frame, FrameBuilder, ScreenClip, sprites};
 use kit_space::camera::Camera;
 
 pub(super) const BOTH: [Limits; 2] = [Limits::Default, Limits::Downlevel];
@@ -652,13 +653,23 @@ fn a_shown_card_draws_only_inside_its_elements_clip() {
             let mut frame = Frame::with_capacity(0, 2, 0);
             let mut builder = FrameBuilder::new(&mut frame, tier, crate::card());
             builder.camera(overhead());
+            let bounds = Rect {
+                x: 0.0,
+                y: 100.0,
+                width: 200.0,
+                height: 100.0,
+            };
+            let transparent = [0; 4];
+            let opaque = [0, 0, 0, 255];
+            let mask = Gradient::linear(
+                180.0,
+                &[
+                    Stop::percent(transparent, 10.0),
+                    Stop::percent(opaque, 16.0),
+                ],
+            );
             let clip = builder
-                .scissor(Rect {
-                    x: 0.0,
-                    y: 100.0,
-                    width: 200.0,
-                    height: 100.0,
-                })
+                .screen_clip(ScreenClip::masked(bounds, None, mask).unwrap(), 1.0)
                 .unwrap();
             builder.draw(
                 Band::Layer,
@@ -674,6 +685,7 @@ fn a_shown_card_draws_only_inside_its_elements_clip() {
             };
             let panel = picture.at(40, 80);
             assert_eq!(picture.at(100, 80), panel, "{limits:?} {tier:?}");
+            assert_eq!(picture.at(100, 105), panel, "{limits:?} {tier:?}");
             assert_ne!(picture.at(100, 120), panel, "{limits:?} {tier:?}");
         }
     }

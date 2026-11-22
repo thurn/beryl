@@ -9,7 +9,7 @@ use super::Node;
 use super::shadows::{ShadowBox, write_box_shadows};
 use super::write::{Look, clip_inside, intersection, scaled};
 use crate::element::paint::{blur_of, filtered};
-use crate::element::{BackgroundBox, Border, Filter, Gradient, Shadow, Shape, Shown, Stop};
+use crate::element::{BackgroundBox, Border, Filter, Gradient, Shadow, Shown, Stop};
 use crate::input::Rect;
 use kit_base::geometry::plane::ScreenPlane;
 use kit_base::tokens::{color, shadow, size};
@@ -282,7 +282,9 @@ fn write_backdrop(
     }
     let bounds = scaled(look.zoom.rect(rect), scale);
     // The parent's clip is already expressed in window points after its own transform.
-    let clip = look.clip.map_or(bounds, |(clip, _)| scaled(clip, scale));
+    let clip = look
+        .clip
+        .map_or(bounds, |(clip, _)| scaled(clip.bounds, scale));
     let Some(clip) = intersection(bounds, clip) else {
         return;
     };
@@ -426,7 +428,7 @@ fn write_panel(
             width: (rect.width - legend.right).max(0.0),
             ..rect
         };
-        [left, right].map(|part| clip_inside(part, look, scale, builder).1)
+        [left, right].map(|part| clip_inside(part, look, scale, builder))
     });
     let mut write = |draw: Draw, clip: u8| {
         builder.draw(
@@ -523,35 +525,6 @@ fn write_gradient(
         draw = draw.with_clip(clip);
     }
     builder.draw(Band::Layer, draw);
-}
-
-/// The clip that `mask`, an element's `mask-image` over its box `rect`, puts the element and
-/// everything under it in: `rect` cut to the clip `look` is already under, with the mask on it.
-/// `None` for a mask that is not a linear gradient, which is not drawn, or when the frame's
-/// clips or gradients are all taken (a fault the checks report).
-pub(super) fn write_mask(
-    mask: &Gradient,
-    rect: Rect,
-    look: &Look,
-    scale: f32,
-    builder: &mut FrameBuilder,
-) -> Option<(Rect, u8)> {
-    let Shape::Linear { angle } = mask.shape else {
-        return None;
-    };
-    let cut = look
-        .clip
-        .map_or(Some(rect), |(clip, _)| intersection(clip, rect))
-        .unwrap_or(Rect {
-            width: 0.0,
-            height: 0.0,
-            ..rect
-        });
-    let resolved = mask.resolve(Vec2::new(rect.width, rect.height));
-    let gradient = builder.gradient(&resolved)?;
-    let entry = builder.clip(scaled(cut, scale))?;
-    builder.mask(entry, scaled(rect, scale), angle.to_radians(), gradient);
-    Some((cut, entry))
 }
 
 /// The mask `node` is drawn under: the one its `scroll_fade` makes where it is scrolled, fading

@@ -339,3 +339,154 @@ fn assert_clipped_card(
     assert!(card_at(frame, Vec2::new(x, clip.y + 5.0), shown).is_some());
     assert!(card_at(frame, Vec2::new(x, clip.y - 5.0), shown).is_none());
 }
+
+#[test]
+fn a_shown_card_draws_and_hits_inside_its_scaled_hosts_mask() {
+    use game_hud::inspect::Viewed;
+    use glam::Vec2;
+    use kit_frame::frame::{ElementId, Show};
+    use kit_ui::element::{Anchor, Gradient, Presence, Stop, column};
+    use kit_ui::widgets::screen::screen_timing;
+
+    let size = Size {
+        width: 1600.0,
+        height: 900.0,
+    };
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
+    client.handle(Input::Device(DeviceInput::Surface {
+        size,
+        scale: 2.0,
+        safe_area: Insets::default(),
+    }));
+    let mut builder = ViewBuilder::new();
+    let slot = builder.card(ZoneName::Graveyard, Side::You, "Island").slot;
+    builder.script(ScriptBuilder::reset().build());
+    let mut update = builder.update();
+    update.view.table = Some(table(&update.view));
+    client.handle(Input::Update(Box::new(update)));
+    client.frame(0);
+    client.dispatch(&kit_ui::element::Action::new(
+        game_hud::hud::viewer::Message::Open(Viewed::Pile(Side::You, ZoneName::Graveyard)),
+    ));
+    client.frame(1);
+
+    // Keep the same viewer card, but put its host under two transforms and a mask whose
+    // box cuts the card. The mask itself is the only clip.
+    let object = ElementId(u32::from(slot.0));
+    let card = client.data().card.size();
+    let mut host = column()
+        .name("scaled card host")
+        .width(160.0 * card.x / card.y)
+        .height(160.0)
+        .background([200, 200, 200, 255])
+        .on_press(game_hud::hud::viewer::Message::Close);
+    host.style.shrink = 0.0;
+    host.style.scale = 1.25;
+    host.show = Some(Show::object(object));
+    let mut mask = column().name("mask").width(180.0).height(100.0).child(host);
+    mask.style.mask = Some(Gradient::linear(
+        180.0,
+        &[Stop::new([0, 0, 0, 255]), Stop::new([0, 0, 0, 64])],
+    ));
+    let mut panel = column()
+        .name("panel")
+        .width(200.0)
+        .height(180.0)
+        .enter(Presence {
+            scale: Some(1.0),
+            ..Presence::new(screen_timing(180.0))
+        })
+        .child(mask);
+    panel.anchor = Some(Anchor::Point(Vec2::new(500.0, 250.0), Vec2::ZERO));
+    panel.style.scale = 1.5;
+    client.layer_mut().show(Some(column().child(panel)));
+    client.set_looking(true);
+    assert_scaled_show(client.frame(1_000_000_000), object, 200.0);
+    assert_scaled_show(client.frame(2_000_000_000), object, 300.0);
+}
+
+/// The hosted card shares the transformed box and the mask's rectangle at each frame.
+fn assert_scaled_show(frame: &Frame, object: kit_frame::frame::ElementId, height: f32) {
+    use glam::Vec2;
+    use kit_frame::frame::{Band, Material};
+
+    let host = frame
+        .show_host(object)
+        .expect("the screen registered its Show host");
+    let card = frame
+        .resolved
+        .iter()
+        .position(|element| element.role == Role::Card && element.id == object)
+        .expect("the viewer drew its card");
+    let bounds = |index| kit_scene::hit::bounds(&frame.resolved[index]);
+    let host_bounds = bounds(host as usize);
+    let card_bounds = bounds(card);
+    assert!(
+        (host_bounds.height - height).abs() < 0.01,
+        "{host_bounds:?}"
+    );
+    for (actual, expected) in [
+        (card_bounds.x, host_bounds.x),
+        (card_bounds.y, host_bounds.y),
+        (card_bounds.width, host_bounds.width),
+        (card_bounds.height, host_bounds.height),
+    ] {
+        assert!(
+            (actual - expected).abs() < 0.01,
+            "{card_bounds:?} vs {host_bounds:?}"
+        );
+    }
+    let clip = frame.resolved[host as usize].clip.unwrap();
+    assert_eq!(frame.resolved[card].clip, Some(clip));
+    assert_ne!(clip, host_bounds);
+    let host_clip = frame
+        .draws
+        .iter()
+        .zip(&frame.owners)
+        .find_map(|(draw, &owner)| {
+            (owner == host && draw.material == Material::Panel as u8).then_some(draw.clip())
+        })
+        .unwrap();
+    let card_clip = frame
+        .draws
+        .iter()
+        .enumerate()
+        .find_map(|(index, draw)| {
+            (frame.owners[index] == card as u32 && frame.band(index) == Some(Band::LayerCards))
+                .then_some(draw.clip())
+        })
+        .unwrap();
+    assert_eq!(card_clip, host_clip);
+    assert_ne!(card_clip, 0);
+    assert!(frame.paints.table.masks[usize::from(card_clip)].line[2] > 0.0);
+    let x = clip.x.max(card_bounds.x) + 10.0;
+    let bottom = clip.y + clip.height;
+    let pick = |y| {
+        game_manual::manual::viewers::card_at(frame, Vec2::new(x, y), |id| {
+            u32::from(id.0) == object.0
+        })
+    };
+    assert!(pick(bottom - 5.0).is_some());
+    assert!(pick(bottom + 5.0).is_none());
+    assert_eq!(
+        kit_scene::hit::hit(frame, Vec2::new(x, bottom - 5.0)),
+        Some(host)
+    );
+    assert_ne!(
+        kit_scene::hit::hit(frame, Vec2::new(x, bottom + 5.0)),
+        Some(host)
+    );
+}
+
+#[test]
+#[should_panic(expected = "a Show host must be laid out before the table")]
+fn a_screen_cannot_show_a_card_in_a_box_anchored_to_that_card() {
+    use glam::Vec2;
+    use kit_frame::frame::{ElementId, Show};
+    use kit_ui::element::{Anchor, AnchorTarget, column};
+
+    let mut host = column();
+    host.show = Some(Show::object(ElementId(1)));
+    host.anchor = Some(Anchor::Object(AnchorTarget::Node(ElementId(1)), Vec2::ZERO));
+    kit_ui::layout::Layer::new().show(Some(column().child(host)));
+}

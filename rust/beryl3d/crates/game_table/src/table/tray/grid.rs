@@ -129,6 +129,10 @@ impl Table {
             for (&(slot, mut pose), label) in
                 self.tray.poses[grid.cards.clone()].iter().zip(&grid.labels)
             {
+                // A screen viewer owns the picture while it also lists a card held in a tray.
+                if self.in_box(usize::from(slot.0)) {
+                    continue;
+                }
                 if grid.offset > 0.0 {
                     self.camera()
                         .move_in_screen(&mut pose, -Vec2::Y * grid.offset);

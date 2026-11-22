@@ -423,8 +423,51 @@ fn a_badged_table_allocates_nothing() {
 /// A badged table, a hand card rising under the mouse and a row sliding as it scrolls.
 fn tables_allocate_nothing() {
     a_badged_table_allocates_nothing();
+    a_viewer_frame_allocates_nothing();
     a_rising_hand_card_allocates_nothing();
     a_scrolling_row_allocates_nothing();
+}
+
+/// A viewer draws its hosted cards and clips in the normal client frame.
+fn a_viewer_frame_allocates_nothing() {
+    use beryl_protocol::testing::table;
+    use game_hud::{hud::viewer::Message, inspect::Viewed};
+    use kit_ui::element::Action;
+
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
+    client.handle(Input::Device(DeviceInput::Surface {
+        size: Size {
+            width: 1600.0,
+            height: 900.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    }));
+    let mut builder = ViewBuilder::new();
+    for _ in 0..20 {
+        builder.card(ZoneName::Graveyard, Side::You, "Island");
+    }
+    builder.script(ScriptBuilder::reset().build());
+    let mut update = builder.update();
+    update.view.table = Some(table(&update.view));
+    client.handle(Input::Update(Box::new(update)));
+    client.frame(0);
+    client.dispatch(&Action::new(Message::Open(Viewed::Pile(
+        Side::You,
+        ZoneName::Graveyard,
+    ))));
+    let now = 1_000_000_000;
+    client.prepare(now);
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    let frame = client.frame(now);
+    let after = ALLOCATIONS.load(Ordering::Relaxed);
+    assert!(
+        frame
+            .resolved
+            .iter()
+            .any(|element| element.role == Role::Card && element.clip.is_some())
+    );
+    assert_eq!(after - before, 0, "allocations in a pile viewer frame");
 }
 
 /// The frames while a hand card rises under the mouse, and while it falls back as the mouse moves

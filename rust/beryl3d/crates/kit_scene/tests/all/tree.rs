@@ -78,9 +78,7 @@ fn references_survive_rebuilding_a_mixed_scene() {
             align: Vec2::ZERO,
             offset: Vec2::Y,
         });
-        child.show = Some(Show {
-            object: target.clone(),
-        });
+        child.show = Some(Show::object(ElementId(42)));
         let index = tree.push(child);
         if reverse {
             tree.push(shape);
@@ -95,7 +93,7 @@ fn references_survive_rebuilding_a_mixed_scene() {
             tree.nodes()[object as usize].space,
             Space::Table { .. }
         ));
-        assert_eq!(child.show.as_ref().unwrap().object, anchor.to);
+        assert_eq!(child.show.unwrap().object_id(), ElementId(42));
         let keep_clear = tree.nodes()[parent as usize].keep_clear.as_ref().unwrap();
         assert_eq!(keep_clear.of, [NodeQuery::Node(target.clone())]);
         assert_eq!(keep_clear.places, [SlotRef(1), SlotRef(2)]);

@@ -87,7 +87,14 @@ impl Layer {
     /// the one the float had, as `show` matches a screen: an equal element keeps its layout and
     /// its laid-out text. A new float takes the default look until `set_float_look` gives it
     /// another; a float that is kept keeps its look.
+    ///
+    /// # Panics
+    ///
+    /// If the float presents a table object. Show hosts belong to the screen.
     pub fn float(&mut self, id: FloatId, element: Option<Element>) {
+        if let Some(element) = &element {
+            super::objects::validate_float(element);
+        }
         let at = self.floats.binary_search_by_key(&id, |float| float.id);
         match (at, element) {
             (Ok(index), Some(element)) => {
@@ -167,13 +174,19 @@ impl Layer {
     /// Lays the element `element` makes out now as what the float `id` shows under `key`, which
     /// `show_prepared` can then show in a frame with no layout and no allocation. Does nothing,
     /// and makes no element, when the float already holds one under `key`, shown or not.
+    ///
+    /// # Panics
+    ///
+    /// If the prepared float presents a table object.
     pub fn prepare(&mut self, id: FloatId, key: u64, element: impl FnOnce() -> Element) {
         let held = self.prepared.iter().any(|p| p.id == id && p.key == key)
             || (self.floats.iter()).any(|float| float.id == id && float.key == Some(key));
         if held {
             return;
         }
-        let mut node = self.reconcile(None, element());
+        let element = element();
+        super::objects::validate_float(&element);
+        let mut node = self.reconcile(None, element);
         self.layout_nodes += self.dirty(&node);
         compute(&mut self.taffy, &mut self.text, node.taffy, CONTENT);
         compute_anchored(&mut self.taffy, &mut self.text, &node);

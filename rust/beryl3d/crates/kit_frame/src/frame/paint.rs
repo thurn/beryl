@@ -5,8 +5,43 @@
 //! whose entry every record already names in its flags. Building the table allocates nothing.
 
 use super::{CLIPS, FrameBuilder};
-use kit_base::geometry::Rect;
-use kit_base::paint::{MOST_STOPS, Resolved};
+use glam::Vec2;
+use kit_base::geometry::{Rect, zoom_rect};
+use kit_base::paint::{Gradient, MOST_STOPS, Resolved, Shape};
+
+/// A scissor rectangle in logical points, optionally carrying a linear mask.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScreenClip {
+    pub bounds: Rect,
+    mask: Option<(Rect, f32, Resolved)>,
+}
+
+impl ScreenClip {
+    /// Clips to a box and the inherited scissor, retaining the inherited mask.
+    #[must_use]
+    pub fn cut(bounds: Rect, inherited: Option<Self>) -> Self {
+        let mut cut = super::picking::Area::clip(bounds, inherited.map(|clip| clip.bounds));
+        cut.width = cut.width.max(0.0);
+        cut.height = cut.height.max(0.0);
+        Self {
+            bounds: cut,
+            mask: inherited.and_then(|clip| clip.mask),
+        }
+    }
+
+    /// Clips to the box and applies its linear mask. The renderer supports one mask per clip.
+    #[must_use]
+    pub fn masked(bounds: Rect, inherited: Option<Self>, mask: Gradient) -> Option<Self> {
+        let Shape::Linear { angle } = mask.shape else {
+            return None;
+        };
+        let gradient = mask.resolve(Vec2::new(bounds.width, bounds.height));
+        Some(Self {
+            mask: Some((bounds, angle.to_radians(), gradient)),
+            ..Self::cut(bounds, inherited)
+        })
+    }
+}
 
 /// How many gradients a frame's table holds. Elements whose gradients resolve to the same stops
 /// share an entry.
@@ -94,6 +129,26 @@ impl Paints {
 }
 
 impl FrameBuilder<'_> {
+    /// Registers a logical clip for painting, reusing the entry when another node uses it.
+    pub fn screen_clip(&mut self, clip: ScreenClip, scale: f32) -> Option<u8> {
+        let pixels = |rect| zoom_rect(rect, (Vec2::ZERO, scale));
+        let cut = pixels(clip.bounds);
+        let Some((bounds, angle, gradient)) = clip.mask else {
+            return self.scissor(cut);
+        };
+        let bounds = pixels(bounds);
+        let gradient = self.gradient(&gradient)?;
+        if let Some(entry) = (1..=self.clips).find(|&entry| {
+            self.frame.clips[usize::from(entry)] == cut
+                && self.mask_of(entry) == Some((bounds, angle, gradient))
+        }) {
+            return Some(entry);
+        }
+        let entry = self.clip(cut)?;
+        self.mask(entry, bounds, angle, gradient);
+        Some(entry)
+    }
+
     /// The entry of the frame's gradients that holds `resolved`'s stops, adding it if no entry
     /// holds the same, or `None` once all `GRADIENTS` are taken, which sets `Paints::full`.
     pub fn gradient(&mut self, resolved: &Resolved) -> Option<u16> {

@@ -140,31 +140,73 @@ impl From<Rect> for AnchorBox {
 }
 
 /// Displays a table object in this node's box, cut to the node's clip.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Show {
-    pub object: NodeRef,
-}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Show(ElementId);
 
 impl Show {
     /// Shows a table object with a stable id, including while the object is out of view.
     #[must_use]
     pub const fn object(id: ElementId) -> Self {
-        Self {
-            object: NodeRef::Id(id),
-        }
+        Self(id)
     }
 
-    /// The stable id of a table object shown by a screen element.
+    /// The stable id of the table object.
     #[must_use]
-    pub const fn object_id(&self) -> Option<ElementId> {
-        match &self.object {
-            NodeRef::Id(id) => Some(*id),
-            NodeRef::Named { .. } => None,
+    pub const fn object_id(self) -> ElementId {
+        self.0
+    }
+}
+
+/// The frame-time geometry of a screen element that presents a table object.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ShowPlacement {
+    pub object: ElementId,
+    pub bounds: Rect,
+    pub clip: Option<super::ScreenClip>,
+}
+
+impl ShowPlacement {
+    /// Validates ownership before changing the table's presentation.
+    ///
+    /// # Panics
+    ///
+    /// If two placements present the same object.
+    pub fn assert_unique(placements: &[Self]) {
+        for (index, placement) in placements.iter().enumerate() {
+            assert!(
+                !placements[..index]
+                    .iter()
+                    .any(|earlier| earlier.object == placement.object),
+                "table object {:?} has multiple Show hosts",
+                placement.object
+            );
         }
     }
 }
 
 impl FrameBuilder<'_> {
+    /// Records the Show relation declared by the screen element.
+    ///
+    /// # Panics
+    ///
+    /// If the host is not a registered screen element or already has a relation, or
+    /// another host already presents the object.
+    pub fn shows(&mut self, element: u32, object: ElementId) {
+        assert_eq!(self.frame.resolved[element as usize].place, Place::Layer);
+        assert!(
+            self.frame
+                .shows
+                .last()
+                .is_none_or(|&(host, _)| host < element),
+            "Show hosts must be registered once, in scene order"
+        );
+        assert!(
+            !self.frame.shows.iter().any(|&(_, shown)| shown == object),
+            "table object {object:?} has multiple Show hosts"
+        );
+        self.frame.shows.push((element, object));
+    }
+
     /// Registers the box of a layout node that has no draw records of its own.
     pub fn anchor_node(&mut self, id: ElementId, rect: Rect) {
         self.frame.anchor_nodes.push((id, rect));

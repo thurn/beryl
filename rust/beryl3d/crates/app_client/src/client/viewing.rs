@@ -12,8 +12,7 @@ use game_play::light::Span;
 use game_play::verbs::Interval;
 use game_table::table::{Moves, Relaid, Window};
 use kit_base::pose::Curve;
-use kit_frame::frame::Place;
-use kit_scene::{ShowPlacement, Tree};
+use kit_frame::frame::{Place, ShowPlacement};
 
 /// Nanoseconds in a millisecond, as the session's step timings are written in milliseconds.
 const NS_PER_MS: f64 = 1_000_000.0;
@@ -174,7 +173,10 @@ impl Client {
     /// and back (`OwnStep::TrayLifts` and `OwnStep::TrayLetGo`), the steps a client makes
     /// itself that carry cards off the table to be looked at.
     pub(super) fn place_shown(&mut self) {
-        Tree::screen_shows(&self.layer, &mut self.features.screen_cards.placements);
+        let placements = &mut self.features.screen_cards.placements;
+        placements.clear();
+        self.layer
+            .visit_shows(|placement| placements.push(placement));
         let timing = |step: OwnStep| {
             (self.step_timings.entries.iter())
                 .find(|entry| entry.step == step)

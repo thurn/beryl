@@ -1,5 +1,7 @@
 //! Writes a flat layer in paint order, including outgoing screens and floats.
 
+use std::cell::Cell;
+
 use glam::Vec2;
 
 use super::super::{Layer, float::Float, panel::Chain};
@@ -47,7 +49,12 @@ impl Layer {
         faces: Option<&FaceLayers<'_>>,
         preview: impl Fn(ElementId) -> StateBits + Copy,
     ) {
-        let drawing = Drawing { camera, preview };
+        let tip = Cell::new(None);
+        let drawing = Drawing {
+            camera,
+            preview,
+            tip: &tip,
+        };
         // Two passes over the floats rather than a partition, which would allocate every frame.
         for float in (self.floats.iter()).filter(|float| float.id.under_screen()) {
             self.write_float(float, builder, drawing, open, faces);
@@ -85,41 +92,46 @@ impl Layer {
         for float in (self.floats.iter()).filter(|float| !float.id.under_screen()) {
             self.write_float(float, builder, drawing, open, faces);
         }
-        let Some((node, index)) = screen else {
-            return;
-        };
-        for (child, departing) in children(node, false)
-            .filter(|(child, _)| above_floats(child) && (open || !child.element.waits))
-        {
-            let Some(point) = child.corner() else {
-                continue;
-            };
-            if !departing && over_floats(child) {
-                builder.backdrop(&child.element.style.filter, self.window.scale);
+        if let Some((node, index)) = screen {
+            for (child, departing) in children(node, false)
+                .filter(|(child, _)| above_floats(child) && (open || !child.element.waits))
+            {
+                let Some(point) = child.corner() else {
+                    continue;
+                };
+                if !departing && child.element.modal && child.accepts_input(open) {
+                    tip.set(None);
+                }
+                if !departing && over_floats(child) {
+                    builder.backdrop(&child.element.style.filter, self.window.scale);
+                }
+                let look = Look {
+                    point,
+                    opacity: node.opacity(),
+                    tint: None,
+                    clip: None,
+                    passes: node.element.style.passes,
+                    faces,
+                    filters: Chain::default().inner(own_filter(&node.element)),
+                    open,
+                    zoom: Zoom::IDENTITY,
+                    departing,
+                };
+                self.write_node(child, index, false, look, builder, drawing);
             }
-            let look = Look {
-                point,
-                opacity: node.opacity(),
-                tint: None,
-                clip: None,
-                passes: node.element.style.passes,
-                faces,
-                filters: Chain::default().inner(own_filter(&node.element)),
-                open,
-                zoom: Zoom::IDENTITY,
-                departing,
-            };
-            self.write_node(child, index, false, look, builder, drawing);
+        }
+        if let Some(tip) = tip.take() {
+            self.write_tip(tip, builder, drawing);
         }
     }
 
-    fn write_float(
-        &self,
-        float: &Float,
+    fn write_float<'a>(
+        &'a self,
+        float: &'a Float,
         builder: &mut FrameBuilder,
-        drawing: Drawing<'_, impl Fn(ElementId) -> StateBits + Copy>,
+        drawing: Drawing<'_, 'a, impl Fn(ElementId) -> StateBits + Copy>,
         open: bool,
-        faces: Option<&FaceLayers<'_>>,
+        faces: Option<&'a FaceLayers<'a>>,
     ) {
         let rect = float.node.rect;
         let Some(corner) = float.corner() else {

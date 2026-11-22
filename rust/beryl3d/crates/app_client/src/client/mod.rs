@@ -328,6 +328,8 @@ impl Client {
         self.show.advance_slide(table_now);
         self.inspect(table_now);
         self.viewing_frame(table_now);
+        self.layer
+            .visit_shows(|placement| self.show.update_show(placement));
         let visible = self.hud_shown();
         // The guided start's opening covers the table's life totals and pile counts, not notices.
         let counted = visible && !self.guided_start();

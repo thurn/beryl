@@ -12,7 +12,7 @@ use glam::Vec2;
 use super::{Layer, menu::fit};
 use crate::element::{Anchor, Display};
 use crate::input::{Rect, Size};
-use kit_frame::frame::{Anchor as SceneAnchor, ElementId, Role};
+use kit_frame::frame::{Anchor as SceneAnchor, AnchorBox, ElementId, FrameBuilder, NodeRef, Role};
 
 /// What a tooltip's name starts with, before the name of the element it explains.
 pub const TIP_PREFIX: &str = "tooltip ";
@@ -97,16 +97,21 @@ impl Layer {
         }
     }
 
-    /// Places a visible tooltip against its target's current box, even when the
-    /// tooltip is registered before its target in the screen.
+    pub(super) fn tip_is_shown(&self, id: ElementId) -> bool {
+        self.tip.is_some_and(|tip| tip.shown && tip.tooltip == id)
+    }
+
+    /// Places a tooltip against a painted target. Tooltips are written after the
+    /// rest of the layer, so none can be an anchor target for another tooltip.
     pub(super) fn tip_anchor(
         &self,
         id: ElementId,
         size: Vec2,
-        open: bool,
+        builder: &FrameBuilder<'_>,
     ) -> Option<(SceneAnchor, Rect)> {
         let tip = self.tip.filter(|tip| tip.shown && tip.tooltip == id)?;
-        let (_, target) = self.positioned_node(tip.target, open)?;
+        let (_, target) = builder.anchor_element(&NodeRef::Id(tip.target))?;
+        let target = AnchorBox::around(target.corners).rect();
         let anchor = beside(
             tip.target,
             target,

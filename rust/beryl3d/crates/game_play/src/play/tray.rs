@@ -12,7 +12,7 @@ use crate::beat::Laid;
 use crate::light::Lit;
 use game_table::table::{Held, Moves, TrayPoses};
 use kit_base::pose::{Curve, Pose};
-use kit_scene::ShowPlacement;
+use kit_frame::frame::ShowPlacement;
 
 impl Show {
     /// The latest view, which says where each object lies, and the spans the table shows, for
@@ -42,6 +42,11 @@ impl Show {
     /// Places the objects that the active screen shows.
     pub fn place_shows(&mut self, placements: &[ShowPlacement], moves: Moves, covered: bool) {
         self.table.place_shows(placements, moves, covered);
+    }
+
+    /// Refreshes a Show host before the table writes its card.
+    pub fn update_show(&mut self, placement: ShowPlacement) {
+        self.table.update_show(placement);
     }
 
     /// Covers the table for the open prompt or uncovers it (`Table::cover_for_prompt`).

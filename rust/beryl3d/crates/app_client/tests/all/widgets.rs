@@ -440,6 +440,38 @@ fn a_tooltip_shows_after_the_pointer_rests_500_ms_and_not_before() {
 }
 
 #[test]
+fn a_tooltip_uses_the_painted_box_of_its_scaled_target() {
+    use kit_ui::element::Anchor;
+
+    let mut client = client();
+    client.frame(0);
+    let tuning = client.data().flat.tooltip;
+    let button = widgets::button("Undo").on_press(BarMessage::Undo);
+    let mut dock = row()
+        .name("scaled dock")
+        .width(200.0)
+        .height(100.0)
+        .align_items(kit_ui::element::Align::Start)
+        .child(widgets::tooltip("Undo the last action", "Undo", tuning))
+        .child(button);
+    dock.anchor = Some(Anchor::Point(Vec2::new(300.0, 250.0), Vec2::ZERO));
+    dock.style.scale = 1.5;
+    client.layer_mut().show(Some(row().child(dock)));
+    let frame = client.frame(OPEN);
+    let on_undo = centre(frame, find(frame, Role::Button, "Undo"));
+    client.handle(pointer(PointerPhase::Move, on_undo));
+    client.frame(2 * OPEN);
+    let frame = client.frame(2 * OPEN + tuning.delay_ns());
+    let undo = find(frame, Role::Button, "Undo");
+    let tip = find(frame, Role::Text, "tooltip Undo");
+    let (_, undo_top, _, _) = edges(frame, undo);
+    let (_, _, _, tip_bottom) = edges(frame, tip);
+    assert!((tip_bottom + tuning.gap - undo_top).abs() < 0.01);
+    assert!((centre(frame, tip).x - centre(frame, undo).x).abs() < 0.01);
+    assert!(anchors_hold(frame, &context()).is_empty());
+}
+
+#[test]
 fn a_50_row_list_in_a_short_box_is_on_screen_and_reachable_with_only_its_visible_rows_interactive()
 {
     let mut layer = Layer::new();

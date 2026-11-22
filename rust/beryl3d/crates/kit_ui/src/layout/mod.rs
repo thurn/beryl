@@ -12,6 +12,7 @@ mod edit;
 mod fit;
 mod float;
 mod focus;
+mod geometry;
 mod menu;
 mod motion;
 mod objects;
@@ -118,6 +119,7 @@ pub struct Layer {
     /// The window, padded by the safe area: the root every screen is laid out in.
     root: NodeId,
     screen: Option<Node>,
+    screen_shows: usize,
     departing: Vec<Node>,
     /// The floats, in order of their ids, which is the order they are drawn in.
     floats: Vec<Float>,
@@ -186,6 +188,7 @@ impl Layer {
             taffy,
             root,
             screen: None,
+            screen_shows: 0,
             departing: Vec::new(),
             floats: Vec::new(),
             prepared: Vec::new(),
@@ -258,7 +261,12 @@ impl Layer {
     }
 
     /// Shows `screen`, or nothing, matching it against the screen shown before.
+    ///
+    /// # Panics
+    ///
+    /// When two elements present the same table object or a host depends on table placement.
     pub fn show(&mut self, screen: Option<Element>) {
+        self.screen_shows = screen.as_ref().map_or(0, objects::validate_screen_shows);
         self.animating = self.started();
         let old = self.screen.take();
         self.screen = match (old, screen) {

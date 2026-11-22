@@ -5,11 +5,11 @@
 
 use glam::Vec2;
 
-use super::{Layer, Node, write::moved};
-use crate::element::{Action, Overflow};
+use super::{Layer, Node};
+use crate::element::Action;
 use crate::input::Rect;
 use kit_base::geometry::plane::Zoom;
-use kit_frame::frame::{ElementId, Role};
+use kit_frame::frame::{ElementId, Role, ScreenClip};
 
 impl Layer {
     /// Takes `hovered`, the element a press under the pointer would reach, and `pressed`, the
@@ -38,38 +38,45 @@ impl Layer {
 
         // Visit in reverse layout tree order. An anchored child starts its own clip chain.
         fn visit<'a, T>(
+            layer: &Layer,
             node: &'a Node,
             (origin, open, zoom): (glam::Vec2, bool, Zoom),
-            clip: Option<Rect>,
+            clip: Option<ScreenClip>,
             test: &dyn Fn(Area, (&'a Node, Rect)) -> Option<T>,
         ) -> Option<T> {
             if !node.accepts_input(open) {
                 return None;
             }
-            let origin = origin + node.translation();
-            let rect = moved(node.paint_rect(), origin + node.offset());
-            let zoom = node.zoom(zoom, rect);
-            let rect = zoom.rect(rect);
-            let inside = origin - node.scroll;
-            let clips = node.element.style.overflow != Overflow::Visible;
-            let inside_clip = if clips {
-                Some(Area::clip(rect, clip))
-            } else {
-                clip
-            };
+            let geometry = layer.geometry(node, origin, zoom, layer.state(node));
+            let masked = geometry.mask(node.mask(), clip);
+            let inside_clip = geometry.inside_clip(node, masked, clip);
+            let inside = geometry.inside(node);
+            let rect = geometry.painted;
+            let zoom = geometry.zoom;
             (node.children.iter().rev())
                 .find_map(|child| match child.element.anchor {
                     // An anchored child's tree is laid out from (0, 0), and stands at its corner.
-                    Some(_) => visit(child, (child.corner()?, open, zoom), None, test),
-                    None => visit(child, (inside, open, zoom), inside_clip, test),
+                    Some(_) => visit(layer, child, (child.corner()?, open, zoom), None, test),
+                    None => visit(layer, child, (inside, open, zoom), inside_clip, test),
                 })
-                .or_else(|| test(Area::Rect(rect, clip), (node, rect)))
+                .or_else(|| {
+                    test(
+                        Area::Rect(rect, masked.or(clip).map(|clip| clip.bounds)),
+                        (node, rect),
+                    )
+                })
         }
         hit_test(
             point,
             |test| {
                 if let Some(modal) = self.input_modal(open) {
-                    return visit(modal, (modal.corner()?, open, Zoom::IDENTITY), None, test);
+                    return visit(
+                        self,
+                        modal,
+                        (modal.corner()?, open, Zoom::IDENTITY),
+                        None,
+                        test,
+                    );
                 }
                 let floats = |under: bool| {
                     (self.floats.iter().rev())
@@ -79,18 +86,26 @@ impl Layer {
                             let rect = float.node.rect;
                             let pivot = corner + glam::Vec2::new(rect.width, rect.height) / 2.0;
                             let zoom = Zoom::around(pivot, float.look.scale);
-                            visit(&float.node, (corner, open, zoom), None, test)
+                            visit(self, &float.node, (corner, open, zoom), None, test)
                         })
                 };
                 floats(false)
                     .or_else(|| {
                         (self.screen.as_ref()).and_then(|node| match node.element.anchor {
-                            Some(_) => {
-                                visit(node, (node.corner()?, open, Zoom::IDENTITY), None, test)
-                            }
-                            None => {
-                                visit(node, (glam::Vec2::ZERO, open, Zoom::IDENTITY), None, test)
-                            }
+                            Some(_) => visit(
+                                self,
+                                node,
+                                (node.corner()?, open, Zoom::IDENTITY),
+                                None,
+                                test,
+                            ),
+                            None => visit(
+                                self,
+                                node,
+                                (glam::Vec2::ZERO, open, Zoom::IDENTITY),
+                                None,
+                                test,
+                            ),
                         })
                     })
                     .or_else(|| floats(true))
@@ -128,20 +143,17 @@ impl Layer {
             if !node.accepts_input(open) {
                 return None;
             }
-            let origin = origin + node.translation();
-            let sink = layer.node_sink(node, layer.state(node));
-            let rect = moved(node.paint_rect(), origin + node.offset() + sink);
-            let zoom = node.zoom(zoom, rect);
+            let geometry = layer.geometry(node, origin, zoom, layer.state(node));
             if node.id == id {
-                return Some((node, zoom.rect(rect)));
+                return Some((node, geometry.painted));
             }
-            let inside = origin - node.scroll;
+            let inside = geometry.inside(node);
             node.children.iter().find_map(|child| {
                 let origin = match child.element.anchor {
                     Some(_) => child.corner()?,
                     None => inside,
                 };
-                search(layer, child, id, open, origin, zoom)
+                search(layer, child, id, open, origin, geometry.zoom)
             })
         }
         let screen = self.screen.as_ref()?;

@@ -1,70 +1,116 @@
-//! The laid-out screen nodes that declare a Show relation.
+//! Screen boxes that present table objects. They are placed before the table is drawn.
+
+use std::collections::BTreeSet;
 
 use glam::Vec2;
-use kit_frame::frame::{FrameBuilder, Show};
+use kit_base::geometry::plane::Zoom;
+use kit_frame::frame::{ScreenClip, ShowPlacement};
 
-use super::write::{intersection, moved};
+use super::write::above_floats;
 use super::{Layer, Node};
-use crate::element::{Display, Overflow};
-use crate::input::Rect;
+use crate::element::{Anchor, Display, Element};
+
+/// A host must be placeable before the table. In particular, a card cannot be shown by
+/// a descendant of a node whose position follows that card.
+pub(super) fn validate_screen_shows(screen: &Element) -> usize {
+    fn visit(element: &Element, independent: bool, objects: &mut BTreeSet<u32>) {
+        if element.style.display == Display::None {
+            return;
+        }
+        let independent = independent
+            && !element.waits
+            && matches!(element.anchor, None | Some(Anchor::Point(..)));
+        if let Some(show) = element.show {
+            assert!(independent, "a Show host must be laid out before the table");
+            let id = show.object_id();
+            assert!(
+                objects.insert(id.0),
+                "table object {id:?} has multiple Show hosts"
+            );
+        }
+        for child in &element.children {
+            visit(child, independent, objects);
+        }
+    }
+
+    let mut objects = BTreeSet::new();
+    visit(screen, true, &mut objects);
+    objects.len()
+}
+
+pub(super) fn validate_float(element: &Element) {
+    assert!(
+        element.show.is_none(),
+        "a Show host must be part of the screen"
+    );
+    for child in &element.children {
+        validate_float(child);
+    }
+}
 
 impl Layer {
-    /// Visits the active screen's Show declarations with their boxes and inherited clips in
-    /// logical points. Objects outside their clip still belong to the declaring elements.
-    pub fn visit_shows(&self, mut visit: impl FnMut(&Show, Rect, Option<Rect>)) {
-        if let Some(screen) = &self.screen {
-            let origin = match screen.element.anchor {
-                Some(_) => screen.corner(),
-                None => Some(Vec2::ZERO),
-            };
-            if let Some(origin) = origin {
-                collect(screen, origin, None, &mut visit);
-            }
+    /// Visits the active screen's Show placements. A host outside its clip still owns the card.
+    /// Uses the same transform and clip calculations as the frame writer.
+    pub fn visit_shows(&self, mut visit: impl FnMut(ShowPlacement)) {
+        if self.screen_shows == 0 {
+            return;
         }
-    }
-}
-
-impl Node {
-    pub(super) fn record_show(&self, index: u32, builder: &mut FrameBuilder) {
-        if let Some(object) = self.element.show.as_ref().and_then(Show::object_id) {
-            builder.shows(index, object);
-        }
-    }
-}
-
-fn collect(
-    node: &Node,
-    origin: Vec2,
-    clip: Option<Rect>,
-    visit: &mut impl FnMut(&Show, Rect, Option<Rect>),
-) {
-    if node.element.style.display == Display::None {
-        return;
-    }
-    let origin = origin + node.translation();
-    let rect = moved(node.paint_rect(), origin + node.offset());
-    if let Some(show) = &node.element.show {
-        visit(show, rect, clip);
-    }
-    let clip = if node.element.style.overflow == Overflow::Visible {
-        clip
-    } else {
-        Some(clip.map_or(rect, |clip| {
-            intersection(clip, rect).unwrap_or(Rect {
-                width: 0.0,
-                height: 0.0,
-                ..rect
-            })
-        }))
-    };
-    let inside = origin - node.scroll;
-    for child in &node.children {
-        if child.element.anchor.is_some() {
-            if let Some(corner) = child.corner() {
-                collect(child, corner, None, visit);
-            }
+        let Some(root) = &self.screen else {
+            return;
+        };
+        let origin = if root.element.anchor.is_some() {
+            root.corner()
         } else {
-            collect(child, inside, clip, visit);
+            Some(Vec2::ZERO)
+        };
+        if let Some(origin) = origin {
+            self.shows_in(root, true, origin, Zoom::IDENTITY, None, &mut visit);
+        }
+    }
+
+    fn shows_in(
+        &self,
+        node: &Node,
+        root: bool,
+        origin: Vec2,
+        zoom: Zoom,
+        clip: Option<ScreenClip>,
+        visit: &mut impl FnMut(ShowPlacement),
+    ) {
+        if node.element.style.display == Display::None {
+            return;
+        }
+        let geometry = self.geometry(node, origin, zoom, self.state(node));
+        let masked = geometry.mask(node.mask(), clip);
+        if let Some(show) = node.element.show {
+            visit(ShowPlacement {
+                object: show.object_id(),
+                bounds: geometry.painted,
+                clip: masked.or(clip),
+            });
+        }
+        let inside = geometry.inside(node);
+        let inside_clip = geometry.inside_clip(node, masked, clip);
+        for child in &node.children {
+            match child.element.anchor {
+                None => self.shows_in(child, false, inside, geometry.zoom, inside_clip, visit),
+                Some(Anchor::Point(..)) => {
+                    let zoom = if root && above_floats(child) {
+                        Zoom::IDENTITY
+                    } else {
+                        geometry.zoom
+                    };
+                    self.shows_in(
+                        child,
+                        false,
+                        child.corner().expect("a point anchor has a corner"),
+                        zoom,
+                        None,
+                        visit,
+                    );
+                }
+                _ => {}
+            }
         }
     }
 }

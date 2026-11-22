@@ -438,35 +438,13 @@ impl<'a> Tree<Vec<Node<'a>>> {
     }
 }
 
-/// A Show relation resolved against the active screen layout.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ShowPlacement {
-    pub object: ElementId,
-    pub bounds: Rect,
-    pub clip: Option<Rect>,
-}
-
 impl Tree {
-    /// Runs the frame anchor pass on retained screen floats after the table has been drawn.
+    /// Solves floats against the table phase. A float can only follow a target
+    /// registered before the flat layer, so it cannot depend on itself or another float.
     pub fn solve_float_anchors(layer: &mut Layer, frame: &FrameBuilder<'_>) {
         layer.place_float_anchors(|anchor, size| {
             let target = frame.anchor_bounds(&anchor.to)?;
             Some(anchor.corner(target, size))
-        });
-    }
-
-    /// Resolves the active screen's Show declarations after layout or scrolling. The object
-    /// keeps its resting pose, even when the declaring element is currently outside its clip.
-    pub fn screen_shows(layer: &Layer, placements: &mut Vec<ShowPlacement>) {
-        placements.clear();
-        layer.visit_shows(|show, bounds, clip| {
-            if let Some(object) = show.object_id() {
-                placements.push(ShowPlacement {
-                    object,
-                    bounds,
-                    clip,
-                });
-            }
         });
     }
 }

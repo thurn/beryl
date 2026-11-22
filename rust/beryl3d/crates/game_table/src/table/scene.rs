@@ -26,7 +26,8 @@ use crate::profiles::Profile;
 use kit_base::data::Data;
 use kit_base::pose::{Interval, Pose};
 use kit_frame::frame::{
-    Band, Draw, ElementId, FrameBuilder, OBJECTS, PaintBand, Place, Resolved, Role, StateBits,
+    Band, Draw, ElementId, FrameBuilder, OBJECTS, PaintBand, Place, Resolved, Role, ScreenClip,
+    StateBits,
 };
 use kit_fx::effects;
 use kit_space::motion::Track;
@@ -712,15 +713,18 @@ impl Table {
         builder: &mut FrameBuilder,
     ) -> u32 {
         let transform = look.pose.transform();
-        let shown =
-            role == Role::Card && (self.shown.holds(id.0 as usize) || self.in_tray(id.0 as usize));
-        let clip = shown
-            .then(|| {
-                self.shown_clip(id)
-                    .or_else(|| self.tray_clip(id.0 as usize))
-            })
-            .flatten()
-            .filter(|_| look.state & StateBits::HELD == 0);
+        let slot = id.0 as usize;
+        let boxed = role == Role::Card && self.in_box(slot);
+        let shown = role == Role::Card && (boxed || self.in_tray(slot));
+        let clip = if look.state & StateBits::HELD != 0 {
+            None
+        } else if boxed {
+            self.shown_clip(slot)
+        } else if shown {
+            self.tray_clip(slot).map(|rect| ScreenClip::cut(rect, None))
+        } else {
+            None
+        };
         let at = builder.resolved(
             name,
             Resolved {
@@ -733,7 +737,7 @@ impl Table {
                 corners: self.camera.card_corners(transform),
                 depth: self.camera.depth(look.pose.position),
                 opacity: look.pose.opacity,
-                clip,
+                clip: clip.map(|clip| clip.bounds),
                 interactive: look.interactive,
                 state: StateBits(look.state | if shown { StateBits::SHOWN } else { 0 }),
                 face: look.face,
@@ -761,13 +765,7 @@ impl Table {
             Band::RaisedMarks
         };
         let scissor = clip
-            .and_then(|rect| {
-                let scale = self.camera.window.scale;
-                builder.scissor(kit_base::geometry::zoom_rect(
-                    rect,
-                    (glam::Vec2::ZERO, scale),
-                ))
-            })
+            .and_then(|clip| builder.screen_clip(clip, self.camera.window.scale))
             .unwrap_or(0);
         builder.draw_card(
             at,

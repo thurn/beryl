@@ -6,11 +6,12 @@
 mod layer;
 
 use std::borrow::Cow;
+use std::cell::Cell;
 
 use glam::{Affine3A, Vec2};
 
 use super::edit::Marks;
-use super::panel::{Chain, look_of, mask_of, panel, write_box, write_mask};
+use super::panel::{Chain, look_of, panel, write_box};
 use super::shadows::write_icon_shadows;
 use super::{Layer, Node, text_top};
 use crate::element::{Anchor, Display, Element, Overflow, Property, Shown, TextAlign};
@@ -21,7 +22,7 @@ use kit_base::tokens::color;
 use kit_frame::frame::text::{BlockLook, faded, write_block};
 use kit_frame::frame::{
     Anchored, Band, Draw, ElementId, FrameBuilder, Missing, NameRef, Place, Resolved, Role,
-    StateBits,
+    ScreenClip, StateBits,
 };
 use kit_text::text;
 
@@ -41,7 +42,7 @@ pub(super) struct Look<'a> {
     tint: Option<[u8; 4]>,
     /// The clip's rectangle on the window, in logical points, and its entry in the frame's
     /// clips (`FrameBuilder::clip`), 0 when the frame's clips were all taken.
-    pub(super) clip: Option<(Rect, u8)>,
+    pub(super) clip: Option<(ScreenClip, u8)>,
     /// It or an element over it lets the pointer through (`Style::passes`).
     passes: bool,
     faces: Option<&'a FaceLayers<'a>>,
@@ -64,9 +65,17 @@ fn children(node: &Node, departing: bool) -> impl Iterator<Item = (&Node, bool)>
 }
 
 #[derive(Clone, Copy)]
-struct Drawing<'a, Preview> {
-    camera: &'a ScreenPlane,
+struct Drawing<'camera, 'node, Preview> {
+    camera: &'camera ScreenPlane,
     preview: Preview,
+    tip: &'node Cell<Option<TipDraw<'node>>>,
+}
+
+#[derive(Clone, Copy)]
+struct TipDraw<'a> {
+    node: &'a Node,
+    parent: u32,
+    look: Look<'a>,
 }
 
 /// Whether `element`, drawn as `look` in `rect`, takes a press. An element scrolled out of its
@@ -78,7 +87,9 @@ fn takes_press(element: &Element, look: &Look<'_>, rect: Rect) -> bool {
         && look.opacity > 0.0
         && rect.width > 0.0
         && rect.height > 0.0
-        && look.clip.is_none_or(|(clip, _)| overlaps(clip, rect))
+        && look
+            .clip
+            .is_none_or(|(clip, _)| overlaps(clip.bounds, rect))
 }
 
 impl Layer {
@@ -109,14 +120,14 @@ impl Layer {
     /// not at all while the object it is anchored to is not shown. A node that clips or
     /// scrolls writes its children under a clip of its box, the box of any clip it is under
     /// cut to it, moved by its scroll offset.
-    fn write_node(
-        &self,
-        node: &Node,
+    fn write_node<'a>(
+        &'a self,
+        node: &'a Node,
         parent: u32,
         top: bool,
-        mut look: Look<'_>,
+        mut look: Look<'a>,
         builder: &mut FrameBuilder,
-        drawing: Drawing<'_, impl Fn(ElementId) -> StateBits + Copy>,
+        drawing: Drawing<'_, 'a, impl Fn(ElementId) -> StateBits + Copy>,
     ) -> Option<u32> {
         if node.element.style.display == Display::None || (node.element.waits && !look.open) {
             return None;
@@ -124,7 +135,6 @@ impl Layer {
         builder.visit();
         look.opacity *= node.opacity();
         look.passes |= look.departing || node.element.style.passes;
-        look.point += node.translation();
         look.filters = look.filters.inner(own_filter(&node.element));
         let element = &node.element;
         let mut state = StateBits(self.state(node).0 | (drawing.preview)(node.id).0);
@@ -132,17 +142,27 @@ impl Layer {
         if look.passes {
             state.0 |= StateBits::PASSES;
         }
-        let sink = self.node_sink(node, state);
-        let rect = moved(node.paint_rect(), look.point + node.offset() + sink);
+        let geometry = self.geometry(node, look.point, look.zoom, state);
+        look.point = geometry.point;
+        let rect = geometry.rect;
         let scaled_camera;
-        let camera = if node.scaled() {
-            look.zoom = node.zoom(look.zoom, rect);
+        let camera = if geometry.scaled {
+            look.zoom = geometry.zoom;
             scaled_camera = camera.with_zoom(look.zoom);
             &scaled_camera
         } else {
             camera
         };
-        let painted = look.zoom.rect(rect);
+        let painted = geometry.painted;
+        let inherited = look.clip.map(|(clip, _)| clip);
+        let mask = node.mask();
+        let masked = geometry.mask(mask, inherited);
+        if let Some(clip) = masked {
+            look.clip = Some((
+                clip,
+                builder.screen_clip(clip, self.window.scale).unwrap_or(0),
+            ));
+        }
         // A menu row is drawn highlighted while it has the focus or its submenu is open.
         let active = element.role == Role::MenuItem
             && (state.has(StateBits::FOCUSED) || self.submenu == Some(node.id));
@@ -162,7 +182,7 @@ impl Layer {
                 corners: corners(painted),
                 depth: 0.0,
                 opacity: look.opacity,
-                clip: look.clip.map(|(rect, _)| rect),
+                clip: look.clip.map(|(clip, _)| clip.bounds),
                 interactive: takes_press(element, &look, painted),
                 state,
                 face: None,
@@ -171,10 +191,11 @@ impl Layer {
                 note: kit_frame::frame::NameRef::default(),
             },
         );
-        if !look.departing {
-            node.record_show(index, builder);
+        if !look.departing
+            && let Some(show) = element.show
+        {
+            builder.shows(index, show.object_id());
         }
-        let mask = mask_of(node);
         if builder.looking() {
             let ink = ink(node, state, look.tint);
             look_of(
@@ -185,25 +206,21 @@ impl Layer {
                 builder,
             );
         }
-        // A mask puts the element and everything under it in a clip of its box.
-        let masked = (mask.as_ref())
-            .and_then(|mask| write_mask(mask, painted, &look, self.window.scale, builder));
-        if masked.is_some() {
-            look.clip = masked;
-        }
         write_box(node, state, panel.as_ref(), rect, &look, builder, camera);
         let shown = Look {
-            point: look.point + node.offset() + sink,
+            point: look.point + node.offset() + geometry.sink,
             ..look
         };
         self.write_content(node, (index, state), shown, builder, camera);
         let mut inside = look;
-        if element.style.overflow != Overflow::Visible {
-            // A mask's clip is already the box.
-            if masked.is_none() {
-                inside.clip = Some(clip_inside(painted, &look, self.window.scale, builder));
-            }
-            inside.point -= node.scroll;
+        inside.point = geometry.inside(node);
+        if masked.is_none() && element.style.overflow != Overflow::Visible {
+            inside.clip = geometry.inside_clip(node, masked, inherited).map(|clip| {
+                (
+                    clip,
+                    builder.screen_clip(clip, self.window.scale).unwrap_or(0),
+                )
+            });
         }
         self.write_children(
             node,
@@ -216,13 +233,13 @@ impl Layer {
     }
 
     /// Writes the children in paint order, with each anchor outside the parent's clip.
-    fn write_children(
-        &self,
-        node: &Node,
+    fn write_children<'a>(
+        &'a self,
+        node: &'a Node,
         (index, top): (u32, bool),
-        inside: Look<'_>,
+        inside: Look<'a>,
         builder: &mut FrameBuilder,
-        drawing: Drawing<'_, impl Fn(ElementId) -> StateBits + Copy>,
+        drawing: Drawing<'_, 'a, impl Fn(ElementId) -> StateBits + Copy>,
     ) {
         for (child, departing) in children(node, inside.departing) {
             // `write_with` writes these after the floats.
@@ -232,8 +249,12 @@ impl Layer {
             let mut look = inside;
             look.departing = departing;
             if child.element.anchor == Some(Anchor::Tip) {
-                if !departing {
-                    self.write_tip(child, index, look, builder, drawing);
+                if !departing && self.tip_is_shown(child.id) {
+                    drawing.tip.set(Some(TipDraw {
+                        node: child,
+                        parent: index,
+                        look,
+                    }));
                 }
                 continue;
             }
@@ -251,20 +272,23 @@ impl Layer {
         }
     }
 
-    fn write_tip(
-        &self,
-        node: &Node,
-        parent: u32,
-        mut look: Look<'_>,
+    fn write_tip<'a>(
+        &'a self,
+        TipDraw {
+            node,
+            parent,
+            mut look,
+        }: TipDraw<'a>,
         builder: &mut FrameBuilder<'_>,
-        drawing: Drawing<'_, impl Fn(ElementId) -> StateBits + Copy>,
+        drawing: Drawing<'_, 'a, impl Fn(ElementId) -> StateBits + Copy>,
     ) {
         let rect = node.paint_rect();
         let size = Vec2::new(rect.width, rect.height);
-        let Some((anchor, target)) = self.tip_anchor(node.id, size, look.open) else {
+        let Some((anchor, target)) = self.tip_anchor(node.id, size, builder) else {
             return;
         };
         look.point = anchor.corner(target, size);
+        look.zoom = Zoom::IDENTITY;
         look.clip = None;
         if let Some(element) = self.write_node(node, parent, false, look, builder, drawing) {
             builder.anchored(Anchored {
@@ -513,35 +537,10 @@ impl Layer {
     }
 }
 
-/// The clip the children of an element that clips or scrolls are drawn under: its box `rect`
-/// cut to the clip `look` is under, and its entry in the frame's clips (0 when they were all
-/// taken). A clip made under a masked one keeps its mask.
-pub(super) fn clip_inside(
-    rect: Rect,
-    look: &Look,
-    scale: f32,
-    builder: &mut FrameBuilder,
-) -> (Rect, u8) {
-    let cut = look
-        .clip
-        .map_or(Some(rect), |(clip, _)| intersection(clip, rect));
-    let cut = cut.unwrap_or(Rect {
-        width: 0.0,
-        height: 0.0,
-        ..rect
-    });
-    let pixels = scaled(cut, scale);
-    let mask = look.clip.and_then(|(_, outer)| builder.mask_of(outer));
-    let entry = if mask.is_some() {
-        builder.clip(pixels)
-    } else {
-        builder.scissor(pixels)
-    }
-    .unwrap_or(0);
-    if let (Some((rect, angle, gradient)), true) = (mask, entry > 0) {
-        builder.mask(entry, rect, angle, gradient);
-    }
-    (cut, entry)
+/// Paints part of a box inside its inherited clip, as a fieldset's border does.
+pub(super) fn clip_inside(rect: Rect, look: &Look, scale: f32, builder: &mut FrameBuilder) -> u8 {
+    let clip = ScreenClip::cut(rect, look.clip.map(|(clip, _)| clip));
+    builder.screen_clip(clip, scale).unwrap_or(0)
 }
 
 /// Writes the marks of the field `node` while it is edited, moved and clipped by `look`:

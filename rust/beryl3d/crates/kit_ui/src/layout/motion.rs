@@ -6,7 +6,6 @@ use glam::{Vec2, Vec4};
 use super::{Layer, Node};
 use crate::element::{Action, Presence, Property, Style, Timing};
 use crate::input::Rect;
-use kit_base::geometry::plane::Zoom;
 
 /// One independently timed property. Opacity and layout slides are kept inline because
 /// screens use them frequently. Other properties reserve storage only when first animated.
@@ -179,20 +178,6 @@ impl Node {
     pub(super) fn scale(&self) -> f32 {
         self.property(Property::Scale)
             .map_or(self.element.style.scale, |value| value.x)
-    }
-
-    pub(super) fn scaled(&self) -> bool {
-        self.scale().to_bits() != 1.0_f32.to_bits()
-    }
-
-    pub(super) fn zoom(&self, zoom: Zoom, rect: Rect) -> Zoom {
-        let scale = self.scale();
-        if scale.to_bits() == 1.0_f32.to_bits() {
-            zoom
-        } else {
-            let pivot = Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
-            zoom.inside(pivot, scale.max(0.0))
-        }
     }
 
     pub(super) fn paint_color(&self, property: Property) -> Option<[u8; 4]> {

@@ -30,6 +30,25 @@ fn element(id: u32, parent: u32) -> Resolved {
     }
 }
 
+#[test]
+#[should_panic(expected = "a scene parent must be registered before its child")]
+fn a_frame_cannot_register_a_child_before_its_parent() {
+    let mut frame = Frame::with_capacity(2, 0, 16);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
+    builder.resolved("child", element(1, 1));
+}
+
+#[test]
+#[should_panic(expected = "has multiple Show hosts")]
+fn a_frame_cannot_register_two_hosts_for_one_object() {
+    let mut frame = Frame::with_capacity(2, 0, 16);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
+    let first = builder.resolved("first", element(1, u32::MAX));
+    builder.shows(first, ElementId(12));
+    let second = builder.resolved("second", element(2, u32::MAX));
+    builder.shows(second, ElementId(12));
+}
+
 /// A record whose red channel names it, so a test can read back which records remain.
 fn quad(tag: u8) -> Draw {
     Draw::glyph(Affine3A::IDENTITY, [tag, 0, 0, 255], Sprite::default())
