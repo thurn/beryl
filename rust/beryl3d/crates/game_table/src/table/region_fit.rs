@@ -16,6 +16,7 @@ pub struct RegionFit(Option<&'static RegionPolicy>);
 #[derive(Debug)]
 pub struct RegionPolicy {
     pub regions: fn(&ProfileData, &Layout, Window) -> Option<FittedRegions>,
+    pub screen: fn(Window) -> ScreenProjection,
     pub row_pose: fn(&FittedRow, f32, &Camera, Pose, bool) -> Pose,
 }
 
@@ -36,6 +37,11 @@ impl RegionFit {
             layout.pile_scale = fit.piles.scale;
             layout.tabletop_shade = fit.tabletop_shade;
         }
+    }
+
+    pub(crate) fn screen(self, window: Window) -> ScreenProjection {
+        self.0
+            .map_or(ScreenProjection::IDENTITY, |policy| (policy.screen)(window))
     }
 
     pub(crate) fn row_pose(
@@ -62,6 +68,22 @@ impl PartialEq for RegionFit {
             _ => false,
         }
     }
+}
+
+/// Where a reference screen sits in the native window and how large it is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScreenProjection {
+    /// The reference screen's top left in window points.
+    pub origin: Vec2,
+    /// Window points per reference point.
+    pub scale: f32,
+}
+
+impl ScreenProjection {
+    const IDENTITY: Self = Self {
+        origin: Vec2::ZERO,
+        scale: 1.0,
+    };
 }
 
 /// Screen-projected overrides for a profile's rows, piles and cloth shade.

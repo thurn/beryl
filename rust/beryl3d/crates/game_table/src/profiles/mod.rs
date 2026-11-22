@@ -8,7 +8,7 @@ use kit_base::geometry::{Rect, Window};
 use kit_scene::{SizeClass, Slot};
 use kit_ui::widgets::screen::ScreenColumn;
 
-use crate::table::{Camera, Layout, RegionFit, RowArea, TraySpace};
+use crate::table::{Camera, Layout, RegionFit, RowArea, ScreenProjection, TraySpace};
 
 mod desktop;
 mod phone;
@@ -52,6 +52,12 @@ impl<'a> Profile<'a> {
     pub fn with_region_fit(mut self, fit: RegionFit) -> Self {
         self.region_fit = fit;
         self
+    }
+
+    /// The projection used by screen elements laid out in reference coordinates.
+    #[must_use]
+    pub fn screen_projection(self) -> ScreenProjection {
+        self.region_fit.screen(self.window)
     }
 
     /// Fits the table's containers for this window.

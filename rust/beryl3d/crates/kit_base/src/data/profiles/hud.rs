@@ -95,6 +95,12 @@ pub struct SingleRow {
     pub card: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub card_gap: f32,
+    /// Degrees of rotation per step from the middle card.
+    #[serde(deserialize_with = "nonnegative")]
+    pub fan_turn: f32,
+    /// Downward offset in stage points per squared step from the middle card.
+    #[serde(deserialize_with = "nonnegative")]
+    pub fan_drop: f32,
     #[serde(deserialize_with = "positive")]
     pub slot: f32,
     #[serde(deserialize_with = "nonnegative")]

@@ -140,20 +140,38 @@ impl From<Rect> for AnchorBox {
 }
 
 /// Displays a table object in this node's box, cut to the node's clip.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Show(ElementId);
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Show {
+    object: ElementId,
+    turn: f32,
+}
 
 impl Show {
     /// Shows a table object with a stable id, including while the object is out of view.
     #[must_use]
     pub const fn object(id: ElementId) -> Self {
-        Self(id)
+        Self {
+            object: id,
+            turn: 0.0,
+        }
+    }
+
+    /// Turns the card clockwise by `turn` radians around the center of its box.
+    #[must_use]
+    pub const fn with_turn(self, turn: f32) -> Self {
+        Self { turn, ..self }
     }
 
     /// The stable id of the table object.
     #[must_use]
     pub const fn object_id(self) -> ElementId {
-        self.0
+        self.object
+    }
+
+    /// The clockwise screen rotation in radians.
+    #[must_use]
+    pub const fn turn(self) -> f32 {
+        self.turn
     }
 }
 
@@ -162,6 +180,8 @@ impl Show {
 pub struct ShowPlacement {
     pub object: ElementId,
     pub bounds: Rect,
+    /// Clockwise rotation in radians around the center of `bounds`.
+    pub turn: f32,
     pub clip: Option<super::ScreenClip>,
 }
 

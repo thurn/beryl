@@ -22,7 +22,7 @@ use kit_base::tokens::color;
 use kit_frame::frame::text::{BlockLook, faded, write_block};
 use kit_frame::frame::{
     Anchored, Band, Draw, ElementId, FrameBuilder, Missing, NameRef, Place, Resolved, Role,
-    ScreenClip, StateBits,
+    ScreenClip, Show, StateBits,
 };
 
 /// Looks up texture layers for faces shown in the flat layer.
@@ -178,7 +178,7 @@ impl Layer {
                 name: NameRef::default(),
                 place: Place::Layer,
                 pose: None,
-                corners: corners(painted),
+                corners: corners(painted, element.show.map_or(0.0, Show::turn)),
                 depth: 0.0,
                 opacity: look.opacity,
                 clip: look.clip.map(|(clip, _)| clip.bounds),
@@ -721,14 +721,21 @@ pub(super) fn moved(rect: Rect, offset: Vec2) -> Rect {
 
 /// A box's corners as a resolved element holds them: bottom left, bottom right, top right and
 /// top left, on screen.
-fn corners(rect: Rect) -> [Vec2; 4] {
+fn corners(rect: Rect, turn: f32) -> [Vec2; 4] {
     let (right, bottom) = (rect.x + rect.width, rect.y + rect.height);
-    [
+    let corners = [
         Vec2::new(rect.x, bottom),
         Vec2::new(right, bottom),
         Vec2::new(right, rect.y),
         Vec2::new(rect.x, rect.y),
-    ]
+    ];
+    if turn == 0.0 {
+        return corners;
+    }
+    // A card that takes presses through its host uses the same outline as its settled face.
+    let center = corners[0].midpoint(corners[2]);
+    let rotation = Vec2::from_angle(turn);
+    corners.map(|corner| center + rotation.rotate(corner - center))
 }
 
 /// Visible modal overlays are painted in front of regular screen contents and floats.

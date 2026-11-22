@@ -10,5 +10,6 @@ pub const FIT: RegionFit = RegionFit::new(&POLICY);
 
 static POLICY: RegionPolicy = RegionPolicy {
     regions: web_fit::regions,
+    screen: web_fit::screen,
     row_pose: web_fit::lean,
 };

@@ -15,7 +15,7 @@ use super::{Camera, Table};
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose};
 use kit_frame::frame::{ScreenClip, ShowPlacement};
-use kit_scene::hit::{contains, intersection};
+use kit_scene::hit::{contains, corner_bounds, intersection};
 use kit_ui::input::Rect;
 
 /// Where a card stands in the box that shows it and how much of that box is visible.
@@ -167,9 +167,18 @@ impl Table {
     }
 
     fn show_box(&self, placement: ShowPlacement) -> InBox {
-        let ShowPlacement { bounds, clip, .. } = placement;
+        let ShowPlacement {
+            bounds, turn, clip, ..
+        } = placement;
+        let camera = self.camera();
+        let pose = box_pose(camera, bounds, turn, self.data().shown.depth);
+        let bounds = if clip.is_some() && turn != 0.0 {
+            corner_bounds(camera.card_corners(pose.transform()))
+        } else {
+            bounds
+        };
         InBox {
-            pose: box_pose(self.camera(), bounds, self.data().shown.depth),
+            pose,
             visible: clip.is_none_or(|clip| intersection(clip.bounds, bounds).is_some()),
             clip,
             clipped_at_rest: clip.is_some_and(|clip| !contains(clip.bounds, bounds)),
@@ -279,8 +288,9 @@ impl Table {
 }
 
 /// Where a card stands to fill `rect`, a box of the window in logical points, seen through
-/// `camera`: centred in it, facing the camera, as large as fits it.
-fn box_pose(camera: &Camera, rect: Rect, depth: f32) -> Pose {
+/// `camera`: centred in it, facing the camera, as large as fits it, and turned clockwise
+/// by `turn` radians.
+fn box_pose(camera: &Camera, rect: Rect, turn: f32, depth: f32) -> Pose {
     let window = camera.window.size;
     let centre = glam::Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
     let ndc = glam::Vec2::new(
@@ -291,5 +301,6 @@ fn box_pose(camera: &Camera, rect: Rect, depth: f32) -> Pose {
         .height
         .min(rect.width * camera.data.card.height / camera.data.card.width)
         / window.height;
-    camera.screen_pose(ndc, depth, glam::Quat::IDENTITY, height)
+    // Positive screen angles turn clockwise, opposite the camera's z rotation.
+    camera.screen_pose(ndc, depth, glam::Quat::from_rotation_z(-turn), height)
 }

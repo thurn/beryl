@@ -206,6 +206,8 @@
         "title_gap": 30,
         "card": 176,
         "card_gap": 8,
+        "fan_turn": 2,
+        "fan_drop": 5,
         "slot": 120,
         "slot_gap": 12,
         "slots_gap": 26

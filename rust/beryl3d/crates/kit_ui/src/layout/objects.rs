@@ -86,6 +86,7 @@ impl Layer {
             visit(ShowPlacement {
                 object: show.object_id(),
                 bounds: geometry.painted,
+                turn: show.turn(),
                 clip: masked.or(clip),
             });
         }

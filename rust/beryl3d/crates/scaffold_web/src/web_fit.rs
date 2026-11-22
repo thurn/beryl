@@ -26,12 +26,21 @@ use glam::{Vec2, Vec3};
 use crate::tuning::{Perspective, StageSize, WebFit};
 use game_table::table::{
     Camera, FittedPiles, FittedRegions, FittedRow, Layout, RowArea, RowProjection, RowZoom,
-    TabletopShade, Window,
+    ScreenProjection, TabletopShade, Window,
 };
 use kit_base::data::Card;
 use kit_base::data::profiles::ProfileData;
 use kit_base::pose::Pose;
 use kit_space::arrange::{Pile, row::ScaleLimit};
+
+pub(crate) fn screen(window: Window) -> ScreenProjection {
+    let data = WebFit::shipped();
+    let stage = Stage::of(window, data.stage, data.perspective);
+    ScreenProjection {
+        origin: stage.on_window(Vec2::ZERO),
+        scale: stage.scale,
+    }
+}
 
 pub(crate) fn regions(
     profile: &ProfileData,

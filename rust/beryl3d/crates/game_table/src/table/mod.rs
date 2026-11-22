@@ -52,7 +52,7 @@ pub use place::{
 pub use place::{names_host, prepare_row, row_of, stack_slots, zone_members};
 pub use region_fit::{
     FittedPiles, FittedRegions, FittedRow, FittedRows, RegionFit, RegionPolicy, RowProjection,
-    RowZoom, TabletopShade,
+    RowZoom, ScreenProjection, TabletopShade,
 };
 pub use rows::{Beneath, Groups, NameIds, RowChange, SameName, grouped, reposed};
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};

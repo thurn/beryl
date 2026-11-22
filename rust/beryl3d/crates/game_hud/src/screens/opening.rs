@@ -1,8 +1,8 @@
 //! The opening hand and the mulligan, shown on the game screen before the first turn: the web
 //! interface's `Opening` (`ui/src/screens/Opening.tsx`) with the rules of `.opening` in
 //! `ui/src/screens/styles/opening.css`. A dimmed table, whether the viewer is on the play, a
-//! title, the viewer's hand in a row of large cards and, while cards are being put on the
-//! bottom of the library, a row of slots under it for them. The open prompt's buttons stand in
+//! title, the viewer's hand fanned across the desktop or in rows on the phone, and, while putting
+//! cards on the bottom of the library, a row of slots under it. The open prompt's buttons stand in
 //! the prompt bar, which `screens::game` adds after this so that the backdrop is drawn under
 //! them. The life orbs and the step stops stand under the backdrop, which dims them, as the
 //! web's overlay is drawn over its `Hud`.
@@ -34,6 +34,7 @@ use glam::Vec2;
 
 use crate::hud::HudIn;
 use game_table::profiles::Profile;
+use game_table::table::ScreenProjection;
 use kit_base::data::Card;
 use kit_base::data::hud::OpeningStyle;
 use kit_base::data::profiles::{ScreenMetrics, SingleRow, WrappedHand};
@@ -292,12 +293,15 @@ fn hand_grid(
     shape: Card,
     card: impl Fn(ObjectId, f32) -> Element,
 ) -> Element {
-    let hand: Vec<_> = shown
+    let item = Vec2::new(sizes.card, sizes.card * shape.height / shape.width);
+    let mut hand: Vec<_> = shown
         .hand
         .iter()
         .map(|&slot| card(slot, sizes.card))
         .collect();
-    let item = Vec2::new(sizes.card, sizes.card * shape.height / shape.width);
+    if let Some(fan) = sizes.fan.filter(|_| !shown.hand_hidden) {
+        fan_hand(&mut hand, item.y, fan);
+    }
     let columns = sizes.hand_columns.unwrap_or(hand.len());
     let grid = Grid::new(columns, item, Vec2::splat(sizes.card_gap));
     let width = grid.size(sizes.hand_columns.unwrap_or(hand.len())).x;
@@ -317,6 +321,32 @@ fn hand_grid(
             .child(hand_row);
     }
     hand_row
+}
+
+/// How far one step away from the middle of the hand turns and lowers a card.
+#[derive(Clone, Copy)]
+struct Fan {
+    turn: f32,
+    drop: f32,
+}
+
+/// Adds the web's `.opening-fan` transform without changing the grid's layout.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "an opening hand holds only a few cards"
+)]
+fn fan_hand(cards: &mut [Element], height: f32, fan: Fan) {
+    let middle = (cards.len() as f32 - 1.0) / 2.0;
+    let from_pivot = Vec2::new(0.0, -height / 2.0);
+    for (index, card) in cards.iter_mut().enumerate() {
+        let offset = index as f32 - middle;
+        let turn = offset * fan.turn;
+        // The web rotates around the bottom center. Move the box's center by the same
+        // rotation about that pivot, then apply the web's vertical offset.
+        card.style.translation = Vec2::from_angle(turn).rotate(from_pivot) - from_pivot
+            + Vec2::new(0.0, offset * offset * fan.drop);
+        card.show = card.show.map(|show| show.with_turn(turn));
+    }
 }
 
 /// The play or draw buttons, `.opening-choice`: a row reversed so that the first button stands
@@ -422,6 +452,7 @@ fn empty_slot(at: usize, (width, card): (f32, Card)) -> Element {
 
 /// How large the opening's pieces are and where it stands, on one layout.
 struct Sizes {
+    fan: Option<Fan>,
     /// How far the group's top stands below the window's top.
     top: f32,
     coin_height: f32,
@@ -462,25 +493,36 @@ impl Sizes {
             Self::single_row(
                 room.y,
                 opening.single_row.expect("validated single-row opening"),
+                profile.screen_projection(),
             )
         }
     }
 
-    /// The desktop's: the hand in one row of large cards (`.opening`).
-    const fn single_row(top: f32, metrics: SingleRow) -> Self {
+    /// The desktop's opening hand uses the same stage units as the reference screen.
+    fn single_row(top: f32, metrics: SingleRow, projection: ScreenProjection) -> Self {
+        let scale = projection.scale;
+        let text_style = |style: TypeStyle| TypeStyle {
+            size: style.size * scale,
+            letter_spacing: style.letter_spacing * scale,
+            ..style
+        };
         Self {
-            top,
-            coin_height: metrics.coin_height,
-            coin_gap: metrics.coin_gap,
+            fan: Some(Fan {
+                turn: metrics.fan_turn.to_radians(),
+                drop: metrics.fan_drop * scale,
+            }),
+            top: projection.origin.y + top * scale,
+            coin_height: metrics.coin_height * scale,
+            coin_gap: metrics.coin_gap * scale,
             coin_align: Align::Center,
-            coin: COIN,
-            title: TITLE,
-            title_gap: metrics.title_gap,
-            card: metrics.card,
-            slot: metrics.slot,
-            card_gap: metrics.card_gap,
-            slot_gap: metrics.slot_gap,
-            slots_gap: metrics.slots_gap,
+            coin: text_style(COIN),
+            title: text_style(TITLE),
+            title_gap: metrics.title_gap * scale,
+            card: metrics.card * scale,
+            slot: metrics.slot * scale,
+            card_gap: metrics.card_gap * scale,
+            slot_gap: metrics.slot_gap * scale,
+            slots_gap: metrics.slots_gap * scale,
             hand_columns: None,
             hand_height: None,
         }
@@ -547,6 +589,7 @@ impl Sizes {
             card
         };
         Self {
+            fan: None,
             top: room.y - coin / 2.0,
             coin_height: coin + wrapped.coin_line,
             coin_gap: wrapped.coin_gap,
