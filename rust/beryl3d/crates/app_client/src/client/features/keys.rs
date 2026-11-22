@@ -206,7 +206,11 @@ fn presses(bindings: &Bindings, keys: Keys, pressed: Pressed) -> bool {
         Keys::Binding(binding) => Chord::parse(binding, pressed.mac) == chord,
         Keys::Command(id) => (COMMANDS.iter())
             .filter(|command| command.id == id)
-            .any(|command| bindings.keys(command).any(|key| Chord::parse(key, pressed.mac) == chord)),
+            .any(|command| {
+                bindings
+                    .keys(command)
+                    .any(|key| Chord::parse(key, pressed.mac) == chord)
+            }),
         Keys::Commands(_) => true,
     }
 }

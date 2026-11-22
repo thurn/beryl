@@ -55,7 +55,10 @@ fn every_shortcut_of_the_web_interface_is_declared_by_a_feature() {
             let sent = table::shortcut(&bindings, chord, true);
             assert_eq!(
                 sent,
-                Some(table::Message::Shortcut(u16::try_from(index).unwrap(), false)),
+                Some(table::Message::Shortcut(
+                    u16::try_from(index).unwrap(),
+                    false
+                )),
                 "{} sends {}",
                 key.mac,
                 command.id

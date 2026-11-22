@@ -52,7 +52,10 @@ fn an_ellipsis_keeps_a_long_line_inside_its_box() {
     assert_eq!(lines.len(), 1, "{lines:?}");
     let (line, words) = &lines[0];
     assert!(words.ends_with('\u{2026}'), "{words}");
-    assert!(LONG.starts_with(words.trim_end_matches('\u{2026}')), "{words}");
+    assert!(
+        LONG.starts_with(words.trim_end_matches('\u{2026}')),
+        "{words}"
+    );
     assert!(inside(&frame, line), "{line:?}");
 }
 
@@ -62,7 +65,10 @@ fn a_line_clamp_keeps_two_lines_inside_the_box() {
     let lines = lines(&frame);
     assert_eq!(lines.len(), 2, "{lines:?}");
     assert!(lines[1].1.ends_with('\u{2026}'), "{lines:?}");
-    assert!(lines.iter().all(|(line, _)| inside(&frame, line)), "{lines:?}");
+    assert!(
+        lines.iter().all(|(line, _)| inside(&frame, line)),
+        "{lines:?}"
+    );
 }
 
 #[test]

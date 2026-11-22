@@ -31,7 +31,12 @@ fn screen(sheet: Option<Element>) -> Element {
     column()
         .name("screen")
         .child(pressable("one"))
-        .child(row().name("row").child(pressable("two")).child(pressable("three")))
+        .child(
+            row()
+                .name("row")
+                .child(pressable("two"))
+                .child(pressable("three")),
+        )
         .children(sheet)
 }
 

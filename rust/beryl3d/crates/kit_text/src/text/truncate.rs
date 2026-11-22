@@ -62,7 +62,11 @@ impl Text {
         // The places the text may be cut: every character boundary outside a mana symbol.
         let tokens = symbols::tokens(text);
         let cuts: Vec<usize> = (text.char_indices().map(|(at, _)| at))
-            .filter(|at| !tokens.iter().any(|token| token.start < *at && *at < token.end))
+            .filter(|at| {
+                !tokens
+                    .iter()
+                    .any(|token| token.start < *at && *at < token.end)
+            })
             .collect();
         // The cut at `cuts[0]`, the text's start, shows the ellipsis alone, which is shown even
         // when it does not fit. Search for the last cut that fits.

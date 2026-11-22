@@ -30,7 +30,10 @@ fn a_truncated_line_fits_its_box_and_ends_with_the_ellipsis() {
     assert!(block.width <= 160.0, "{}", block.width);
     let shown = block.shown.as_deref().expect("the text was cut");
     assert!(shown.ends_with('\u{2026}'), "{shown}");
-    assert!(LONG.starts_with(shown.trim_end_matches('\u{2026}')), "{shown}");
+    assert!(
+        LONG.starts_with(shown.trim_end_matches('\u{2026}')),
+        "{shown}"
+    );
     // Nothing longer would fit: one more word goes past the box.
     let (whole, _) = text.measure(LONG, BODY, &[], None);
     assert!(whole > 160.0);
@@ -59,8 +62,18 @@ fn a_two_line_clamp_keeps_two_lines_and_cuts_the_second() {
 #[test]
 fn a_mana_symbol_is_cut_whole() {
     let mut text = Text::new();
-    let block = text.truncated("Pay {1}{U}{U}{U}", BODY, &[], Some(70.0), Truncate::ELLIPSIS);
+    let block = text.truncated(
+        "Pay {1}{U}{U}{U}",
+        BODY,
+        &[],
+        Some(70.0),
+        Truncate::ELLIPSIS,
+    );
     let shown = block.shown.as_deref().expect("the text was cut");
     let kept = shown.trim_end_matches('\u{2026}');
-    assert_eq!(kept.matches('{').count(), kept.matches('}').count(), "{shown}");
+    assert_eq!(
+        kept.matches('{').count(),
+        kept.matches('}').count(),
+        "{shown}"
+    );
 }

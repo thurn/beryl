@@ -10,9 +10,9 @@
 //! phone lobby to follow.
 
 use super::Message;
-use kit_scene::Shortcut;
 use beryl_protocol::ipc::decks::SavedDeck;
 use beryl_protocol::ipc::{LobbyChange, LobbyView};
+use kit_scene::Shortcut;
 
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::lobby::{

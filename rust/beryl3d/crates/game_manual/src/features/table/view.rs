@@ -226,9 +226,8 @@ fn table_steps(input: &HudIn, size_class: SizeClass) -> Option<Element> {
 /// to the shifted chord keeps it.
 #[must_use]
 pub fn shortcut(bindings: &Bindings, chord: Chord, mac: bool) -> Option<Message> {
-    let table = || {
-        (COMMANDS.iter().enumerate()).filter(|(_, command)| command.scope == Scope::Table)
-    };
+    let table =
+        || (COMMANDS.iter().enumerate()).filter(|(_, command)| command.scope == Scope::Table);
     let index = |at: usize| u16::try_from(at).ok();
     for (at, command) in table() {
         if (bindings.keys(command)).any(|key| Chord::parse(key, mac) == Some(chord)) {
