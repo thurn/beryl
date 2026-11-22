@@ -109,12 +109,12 @@ kinds! {
         ///
         /// [CR 121.1]: https://yawgatog.com/resources/magic-rules/#R1211
         CardsDrawn = "cards drawn this turn",
-        /// The cards the player drew in their own draw step this turn, so that the first of them is
+        /// The cards the player drew in their most recent draw step, so that the first is
         /// told from the others (see [CR 504.1]): "First, the active player draws a card."
         /// `beryl_card`'s `Condition::DrewInDrawStep` reads it.
         ///
         /// [CR 504.1]: https://yawgatog.com/resources/magic-rules/#R5041
-        DrewInDrawStep = "cards drawn in their draw step this turn",
+        DrewInDrawStep = "cards drawn in their most recent draw step",
     }
 }
 

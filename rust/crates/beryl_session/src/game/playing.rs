@@ -63,8 +63,8 @@ impl Game {
             self.at = match step {
                 None => {
                     let turn = self.board.turn();
-                    let began = turn.number() != self.seen.0;
-                    self.seen = (turn.number(), turn.step());
+                    let began = turn.number() != self.seen.turn;
+                    self.seen = self.board.step_position();
                     self.answered = None;
                     if began {
                         let checkpoint =

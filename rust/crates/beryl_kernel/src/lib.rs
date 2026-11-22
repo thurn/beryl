@@ -195,9 +195,8 @@
 //! | Trackers' counts | a byte for each player and kind of count, padded to the sets' alignment | 1 | 3 kinds, 2 players | 8 | the same |
 //! | Counters | a queue of (slot, kind, count), in the order each kind was first put on its object | 3 | 32 ([`counters::COUNTERS`]) | 97, of the 104 allowed | a `Vec` |
 //!
-//! A store that fills returns [`fixed::Full`] and the game stalls into `Large`
-//! (`docs/rules-coverage.md`, principle 3). So does every other list of a fixed layout: no
-//! push's result is thrown away. A list that cannot fill says why in a comment and takes
+//! A full fixed-layout store returns [`fixed::Full`] so the game can retry in `Large`.
+//! A list that cannot fill says why in a comment and takes
 //! [`layout::Queue::push_bounded`], which checks the argument in debug builds; a list a
 //! heuristic samples takes [`layout::Queue::push_if_room`]; the `discarded-push` check in
 //! the `names` lane refuses a push whose result is bound to `_` in the kernel,
@@ -263,10 +262,9 @@
 //! | by-bajq.7.4 | +48 (landed: +32) | up to four entries of mana that remembers in each player's pool |
 //! | by-bajq.8.3 | +16 (landed: +16) | the count of mandatory resolutions in a row and the hash it compares, padded |
 //! | by-bajq.8.4 | +32 (landed: +32) | a set of the phased-out permanents' slots |
+//! | Turn plan | +208 | the queue of 24 remaining steps and their positions |
 //!
-//! With groups 4 to 8 landed and 63 options a decision ([`decision::OPTIONS`]) it is 20,240.
-//! The next room is in [`state::CombatRole`], five bytes in each of the 255 objects, and in
-//! moving a structure only a rare game fills to [`Large`] alone.
+//! With the turn plan, `State<Small>` is 20,448 bytes.
 //!
 //! ### Affected sides and payloads
 //!
@@ -798,3 +796,4 @@ pub use player_set::PlayerSet;
 pub use query::Copiable;
 pub use state::State;
 pub use table::GameTable;
+pub use turn::plan::{CombatPosition, Placement, StepPosition, StepTarget, TurnChange, TurnPhase};

@@ -86,6 +86,8 @@ pub struct Custom {
 pub struct Says {
     /// Whether it may ask a player a question mid-resolution ([`Ability::asks`]).
     pub asks: bool,
+    /// Whether the body can insert, skip or cut short a step or phase.
+    pub changes_turn_structure: bool,
     /// How it takes what is chosen for each instance of the word "target" from its
     /// controller, in the order of the ability's targets, with none for one it leaves alone
     /// and for any past the list's end ([`Ability::takes_target`]).
@@ -96,6 +98,7 @@ impl Says {
     /// A body that asks nothing and takes no target.
     pub const NOTHING: Says = Says {
         asks: false,
+        changes_turn_structure: false,
         takes: &[],
     };
 }

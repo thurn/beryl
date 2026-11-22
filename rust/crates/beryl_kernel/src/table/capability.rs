@@ -102,10 +102,12 @@ pub enum Capability {
     /// A card has an activated ability that works in a graveyard or in exile
     /// ([`beryl_card::Ability::in_zones`]), so priority decisions also look in those zones.
     ActivatesFromGraveyardOrExile,
+    /// A custom body can change the sequence of steps or phases in a turn.
+    TurnStructure,
 }
 
 // The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::ActivatesFromGraveyardOrExile as u32) < u32::BITS);
+const _: () = assert!((Capability::TurnStructure as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities a face gives a game that can contain it.
@@ -173,6 +175,11 @@ impl Capability {
                 && copies_itself(effect)
             {
                 found |= Capability::CopiesItself.bit();
+            }
+            if let Behavior::Custom(body) = a.body()
+                && body.says().changes_turn_structure
+            {
+                found |= Capability::TurnStructure.bit();
             }
             if a.cost().is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();

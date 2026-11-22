@@ -56,4 +56,53 @@ impl<'a, L: Layout> Game<'a, L> {
     pub(crate) fn settle(&mut self, e: Event<L>) -> Result<(), Full> {
         event::settle(self.state, self.table, self.sink, e)
     }
+
+    /// Inserts a step in the remaining turn. The custom body's registration must set
+    /// `changes_turn_structure`.
+    pub fn insert_step(
+        &mut self,
+        anchor: beryl_card::TurnStep,
+        placement: beryl_kernel::Placement,
+        step: beryl_card::TurnStep,
+    ) -> Result<(), Full> {
+        if let Some(event) = self.state.insert_step(anchor, placement, step)? {
+            self.sink.note(event);
+        }
+        Ok(())
+    }
+
+    /// Inserts a phase relative to the named phase.
+    pub fn insert_phase(
+        &mut self,
+        anchor: beryl_kernel::TurnPhase,
+        placement: beryl_kernel::Placement,
+        phase: beryl_kernel::TurnPhase,
+    ) -> Result<(), Full> {
+        if let Some(event) = self.state.insert_phase(anchor, placement, phase)? {
+            self.sink.note(event);
+        }
+        Ok(())
+    }
+
+    /// Skips the next scheduled step with this name.
+    pub fn remove_step(&mut self, step: beryl_card::TurnStep) {
+        if let Some(event) = self.state.remove_step(step) {
+            self.sink.note(event);
+        }
+    }
+
+    /// Skips the next scheduled phase of this kind.
+    pub fn remove_phase(&mut self, phase: beryl_kernel::TurnPhase) {
+        if let Some(event) = self.state.remove_phase(phase) {
+            self.sink.note(event);
+        }
+    }
+
+    /// Leaves only cleanup on the schedule. The caller carries out the other actions
+    /// required when an effect ends the turn.
+    pub fn cut_to_cleanup(&mut self) -> Result<(), Full> {
+        let event = self.state.cut_to_cleanup()?;
+        self.sink.note(event);
+        Ok(())
+    }
 }

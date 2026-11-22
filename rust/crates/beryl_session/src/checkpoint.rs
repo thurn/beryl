@@ -29,6 +29,9 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[serde(rename_all = "camelCase")]
 pub struct Checkpoint {
     pub turn: u16,
+    /// Where the checkpoint was taken in a turn with a planned step sequence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ordinal: Option<u32>,
     pub active: u8,
     pub players: [Side; 2],
     /// Every permanent, in the order they entered the battlefield.
@@ -284,6 +287,7 @@ impl Checkpoint {
         };
         Checkpoint {
             turn: s.turn().number(),
+            ordinal: crate::save::saved_ordinal(s),
             active: s.turn().active().get(),
             players: Seat::BOTH.map(|p| side(t, s, p, &place)),
             battlefield: battlefield

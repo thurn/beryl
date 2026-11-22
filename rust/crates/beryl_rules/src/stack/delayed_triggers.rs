@@ -6,14 +6,16 @@
 use beryl_card::{Amount, Objects};
 
 use crate::card::{AbilityIx, TriggerEvent};
+use crate::filter::is_for;
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::resolution::Resolution;
 use crate::stack::trigger;
 use crate::state::{
-    AbilityRef, ObjectRef, PendingTrigger, State, TriggerInfo, TriggeredAbility, Zone,
+    AbilityRef, ObjectRef, PendingTrigger, State, TriggerInfo, TriggeredAbility, TurnStep, Zone,
 };
 use crate::table::GameTable;
 
@@ -101,4 +103,26 @@ pub(crate) fn fire_on_leaving<L: Layout>(
         })?;
     }
     Ok(())
+}
+
+/// Fires the delayed triggers waiting for this step, each once (see [CR 603.7b]).
+/// Each step occurrence has its own beginning event. A trigger created during one
+/// occurrence can fire at the next occurrence of the same step.
+///
+/// [CR 603.7b]: https://yawgatog.com/resources/magic-rules/#R6037b
+pub(crate) fn fire_step<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    step: TurnStep,
+    active: Seat,
+) -> Result<(), Full> {
+    s.fire_delayed(|d| {
+        match trigger::ability(t, d.of.card, d.of.face, d.of.ability.get()).trigger() {
+            Some(trigger) if trigger.delayed => {
+                trigger::begins(trigger.event, step)
+                    && is_for(&trigger.whose, active, d.of.controller)
+            }
+            _ => unreachable!("a delayed trigger's ability is a delayed one"),
+        }
+    })
 }

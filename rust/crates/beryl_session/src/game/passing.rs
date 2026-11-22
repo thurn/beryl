@@ -1,6 +1,6 @@
 //! The human's pass on to their next stop, while the session passes their priority for them.
 
-use beryl_engine::{DecisionKind, NextStop, Observation, TurnStep, view};
+use beryl_engine::{DecisionKind, NextStop, Observation, StepPosition, StepTarget, view};
 
 use crate::replay::Entry;
 
@@ -11,7 +11,7 @@ use super::{At, Boards, Game, Open, on_board};
 #[derive(Clone, Copy, Debug)]
 pub(super) struct PassingOn {
     /// The turn and step of their next stop, where it ends.
-    pub(super) until: (u16, TurnStep),
+    pub(super) until: StepTarget,
 }
 
 impl Game {
@@ -29,7 +29,7 @@ impl Game {
     /// The turn and step of the human's next stop in a later step, if their open decision is a
     /// priority from which passing would stop them again in this one
     /// ([`crate::protocol::DecisionView::pass_on`]).
-    pub(super) fn pass_on_target(&mut self) -> Option<(u16, TurnStep)> {
+    pub(super) fn pass_on_target(&mut self) -> Option<StepTarget> {
         if self.reviewing()
             || !matches!(&self.at, At::Human(_, Open::Decision(d)) if d.kind == DecisionKind::Priority)
         {
@@ -41,8 +41,11 @@ impl Game {
         })?;
         let turn = self.board.turn().number();
         Some(match next {
-            NextStop::Step(step) => (turn, step),
-            NextStop::NextTurn => (turn + 1, TurnStep::Untap),
+            NextStop::Step(_, target) => target,
+            NextStop::NextTurn => StepTarget::Standard(StepPosition {
+                turn: turn + 1,
+                ordinal: 1,
+            }),
             NextStop::Resolve | NextStop::CombatDamage => {
                 unreachable!("a later step's stop is a step or the next turn")
             }
@@ -55,7 +58,6 @@ impl Game {
     /// the end step"). The human asked for the end step, and a pass button that stopped at
     /// each opponent spell would do no more than "Resolve" beside it.
     pub(super) fn passes_for(&self, passing: PassingOn) -> bool {
-        let turn = self.board.turn();
-        (turn.number(), turn.step()) < passing.until
+        on_board!(&self.board, b => b.state.before_step(passing.until))
     }
 }

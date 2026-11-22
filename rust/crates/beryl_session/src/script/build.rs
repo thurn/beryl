@@ -178,6 +178,8 @@ pub(super) struct Builder<'a> {
     /// What the engine said each event came from, in step with them.
     pub(super) causes: Vec<Cause>,
     pub(super) moves: &'a [(usize, Move)],
+    /// The turn number of each step-beginning event ([`Heard::step_turns`]).
+    step_turns: &'a [(usize, u16)],
     /// The copies of spells put on the stack ([`Heard::copies`]).
     pub(super) copies: &'a [(usize, Copied)],
     pub(super) beats: Vec<Vec<Step>>,
@@ -236,6 +238,7 @@ impl<'a> Builder<'a> {
             causes,
             moves: &heard.moves,
             copies: &heard.copies,
+            step_turns: &heard.step_turns,
             beats: Vec::new(),
             ends: Vec::new(),
             open: false,
@@ -597,18 +600,25 @@ impl<'a> Builder<'a> {
                 | TurnStep::CombatDamage
                 | TurnStep::EndOfCombat
         );
-        if !combat {
+        if !combat || step == TurnStep::BeginningOfCombat {
             self.end_combat();
         }
-        let later = self.events[i + 1..]
-            .iter()
-            .any(|e| matches!(e, GameEvent::StepBegins { .. }));
         let was = self.table.turn.number;
-        let number = if later {
-            was + u16::from(step == TurnStep::Untap)
-        } else {
-            self.after.turn.number
-        };
+        let number = self
+            .step_turns
+            .iter()
+            .find_map(|&(index, turn)| (index == i).then_some(turn))
+            .unwrap_or_else(|| {
+                // Synthetic views can omit the engine's event metadata.
+                if self.events[i + 1..]
+                    .iter()
+                    .any(|e| matches!(e, GameEvent::StepBegins { .. }))
+                {
+                    was + u16::from(step == TurnStep::Untap)
+                } else {
+                    self.after.turn.number
+                }
+            });
         let fact = Fact::Turn {
             number,
             own_number: own_number(number),

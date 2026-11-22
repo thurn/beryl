@@ -26,11 +26,12 @@ pub use beryl_rules::{card, coverage, layout, profile};
 
 pub use beryl_kernel::Misfit;
 pub use beryl_kernel::invariants::{At, Violation};
+pub use beryl_kernel::{CombatPosition, Placement, StepPosition, StepTarget, TurnPhase};
 pub use beryl_rules::{
-    Counts, Scratch, apply, apply_decided, check_references, concede, cost_being_cast,
-    flashback_paid, interchangeable, mana_contribution, next, next_in_step, next_within, observe,
-    paused_events, payable_responses, pointless, preferred_damage, rederive, refusal, target_takes,
-    view, wins_instead_of_drawing,
+    AdvanceUntil, Counts, Scratch, apply, apply_decided, check_references, concede,
+    cost_being_cast, flashback_paid, interchangeable, mana_contribution, next, next_in_step,
+    next_within, observe, paused_events, payable_responses, pointless, preferred_damage, rederive,
+    refusal, target_takes, view, wins_instead_of_drawing,
 };
 pub use bitboard::Bitboard;
 pub use decision::{

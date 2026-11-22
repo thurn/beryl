@@ -257,6 +257,7 @@ impl<L: Layout> Event<L> {
             | Event::StackDeparture { .. }
             | Event::Ability { .. }
             | Event::Block { .. }
+            | Event::TurnPlanChanged(_)
             | Event::GainControl { .. }
             | Event::CoinFlip { .. }
             | Event::Lose { .. }

@@ -9,6 +9,8 @@
 //!
 //! Implements: none. The turn record stores progress through the turn and priority.
 
+pub(crate) mod plan;
+
 use beryl_card::TurnStep;
 
 use crate::decision::Outcome;
@@ -265,6 +267,7 @@ impl<L: Layout> State<L> {
         self.turn.step = step;
         self.give_priority(self.turn.active);
         Event::StepBegins {
+            turn: self.turn.number,
             step,
             active: self.turn.active,
         }

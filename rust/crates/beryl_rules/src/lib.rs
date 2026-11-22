@@ -277,8 +277,8 @@ pub use casting::{cost_being_cast, payable_responses, pointless, target_takes};
 pub use combat::preferred_damage;
 pub use continuous::layers::rederive;
 pub use engine::{
-    Counts, Scratch, apply, apply_decided, concede, interchangeable, next, next_in_step,
-    next_within, observe, paused_events, refusal, view,
+    AdvanceUntil, Counts, Scratch, apply, apply_decided, concede, interchangeable, next,
+    next_in_step, next_within, observe, paused_events, refusal, view,
 };
 pub use game::Game;
 pub use interpret::choices;

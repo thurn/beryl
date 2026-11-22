@@ -6,6 +6,17 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Removing the final phase could still start its cleanup step.** An empty turn
+  plan used cleanup as a fallback. It now advances to the next turn.
+  `skipping_the_ending_phase_advances_to_the_next_turn` checks the turn number
+  and its step events.
+
+- **Advancing one step could pass through a repeated cleanup.** The engine
+  compared the turn number and step name, which are the same in both cleanups.
+  It now uses a position within the turn. The regression
+  `an_ordinary_turn_distinguishes_repeated_cleanup_steps` covers the boundary,
+  and the turn plan test checks that advancement stops for both upkeeps.
+
 - **Checking whether a spell could pay its sacrifice or discard costs allocated
   on the heap.** The payability and choice checks built temporary vectors of
   ordered cost parts and their eligible objects. They now use the layout's

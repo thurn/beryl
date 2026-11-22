@@ -15,8 +15,8 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::CombatRole;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
-    Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Scratch,
-    Seat, Slot, State, Step, TurnStep, apply, next, next_within,
+    AdvanceUntil, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
+    Scratch, Seat, Slot, State, Step, apply, next, next_within,
 };
 use beryl_engine::{Large, LargeSlot, Layout, Relayout, Small};
 
@@ -493,7 +493,7 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
         }
         let mut s = start.clone();
         self.x.counts.copied();
-        let turn = s.turn().number();
+        let combat = s.combat_position();
         let mut inline = Inline {
             policy: self.policy,
             t: self.t,
@@ -502,13 +502,7 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
         // The opponent's blocks, planned as we plan ours, one level deep.
         let mut theirs = Plan::default();
         loop {
-            let step = s.turn().step();
-            if s.turn().number() != turn
-                || matches!(
-                    step,
-                    TurnStep::EndOfCombat | TurnStep::PostcombatMain | TurnStep::End
-                )
-            {
+            if s.reached_end_of_combat(combat) {
                 break;
             }
             let step = match self.work_limit {
@@ -517,13 +511,13 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
                     self.t,
                     self.x,
                     &mut inline,
-                    (turn, TurnStep::EndOfCombat),
+                    AdvanceUntil::EndOfCombat(combat),
                     limit,
                 ),
                 None => Some(next(&mut s, self.t, self.x, &mut inline)),
             };
             let d = match step {
-                None if (s.turn().number(), s.turn().step()) >= (turn, TurnStep::EndOfCombat) => {
+                None if s.reached_end_of_combat(combat) => {
                     break;
                 }
                 None => return None,

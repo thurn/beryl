@@ -153,8 +153,8 @@ pub(crate) fn match_event<L: Layout>(
             }
         }
     }
-    if let Event::StepBegins { step, active } = *e {
-        fire_delayed(s, t, step, active)?;
+    if let Event::StepBegins { step, active, .. } = *e {
+        super::delayed_triggers::fire_step(s, t, step, active)?;
     }
     Ok(())
 }
@@ -191,6 +191,7 @@ fn times<L: Layout>(e: &Event<L>) -> u8 {
         | Event::Attack { .. }
         | Event::Block { .. }
         | Event::StepBegins { .. }
+        | Event::TurnPlanChanged(_)
         | Event::GainControl { .. }
         | Event::CoinFlip { .. }
         | Event::Lose { .. }
@@ -212,7 +213,7 @@ fn counted(count: u32) -> u8 {
 /// step trigger."
 ///
 /// [CR 500.6]: https://yawgatog.com/resources/magic-rules/#R5006
-fn begins(event: TriggerEvent, step: TurnStep) -> bool {
+pub(super) fn begins(event: TriggerEvent, step: TurnStep) -> bool {
     match event {
         TriggerEvent::Step(at) => at == step,
         // see CR 505.1: "There are two main phases in a turn."
@@ -285,7 +286,9 @@ fn fires<L: Layout>(
                 combat: true,
             },
         ) if whose(player) && about(source) => Some(info(Some(source), player, amount)),
-        (event, &Event::StepBegins { step, active }) if begins(event, step) && whose(active) => {
+        (event, &Event::StepBegins { step, active, .. })
+            if begins(event, step) && whose(active) =>
+        {
             Some(info(None, active, 0))
         }
         (TriggerEvent::CreatesTokens, &Event::TokensCreated { controller, tokens })
@@ -615,25 +618,6 @@ fn enqueue<L: Layout>(
         return Ok(());
     }
     s.queue_trigger(pending)
-}
-
-/// Fires the delayed triggers waiting for this step, each once (see [CR 603.7b]).
-///
-/// [CR 603.7b]: https://yawgatog.com/resources/magic-rules/#R6037b
-fn fire_delayed<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    step: TurnStep,
-    active: Seat,
-) -> Result<(), Full> {
-    s.fire_delayed(
-        |d| match ability(t, d.of.card, d.of.face, d.of.ability.get()).trigger() {
-            Some(trigger) if trigger.delayed => {
-                begins(trigger.event, step) && is_for(&trigger.whose, active, d.of.controller)
-            }
-            _ => unreachable!("a delayed trigger's ability is a delayed one"),
-        },
-    )
 }
 
 /// The player who puts the next waiting trigger on the stack, and the triggers they choose

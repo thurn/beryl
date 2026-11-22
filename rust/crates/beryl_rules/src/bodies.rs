@@ -16,8 +16,7 @@ use crate::resolution::Resolution;
 /// its own instance of.
 pub trait CustomBody: 'static {
     /// What the body says of itself, since nothing can read code: whether it may ask a
-    /// player a question, and how it takes each of its targets from its controller. Effect
-    /// data says both itself.
+    /// player a question, how it handles its targets, and whether it changes turn structure.
     const SAYS: Says = Says::NOTHING;
 
     /// Resolves the ability: `resolution` is of it, in `game`.

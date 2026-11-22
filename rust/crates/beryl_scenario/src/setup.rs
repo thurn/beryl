@@ -129,6 +129,10 @@ fn arrange<L: Layout>(
     let setup = &scenario.setup;
     slots.apply(&mut s);
     s.board().begin_at(setup.turn, setup.active, setup.step);
+    if t.can(beryl_engine::table::Capability::TurnStructure) {
+        s.plan_from_current_step(t.format())
+            .map_err(|_| setup_failure(scenario, "the initial turn plan is full".to_string()))?;
+    }
     for (p, player) in Seat::BOTH.into_iter().zip(&setup.players) {
         s.board().set_life(p, player.life);
         let full = |_| setup_failure(scenario, "a zone is full".to_string());

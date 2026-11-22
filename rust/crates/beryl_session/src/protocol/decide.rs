@@ -160,10 +160,10 @@ pub(crate) fn pass_on<L: Layout>(
 ) -> Option<NextStop> {
     match pass_to(t, obs, stops) {
         NextStop::Resolve | NextStop::CombatDamage => {
-            let later = next_step_stop(t, obs, stops.step_stops(), obs.turn().step());
+            let later = next_step_stop(t, obs, stops.step_stops(), None);
             Some(skip_idle_blocks(t, obs, stops, later))
         }
-        NextStop::Step(_) | NextStop::NextTurn => None,
+        NextStop::Step(..) | NextStop::NextTurn => None,
     }
 }
 
@@ -178,12 +178,12 @@ fn skip_idle_blocks<L: Layout>(
     next: NextStop,
 ) -> NextStop {
     match next {
-        NextStop::Step(TurnStep::DeclareBlockers)
+        NextStop::Step(TurnStep::DeclareBlockers, target)
             if !stops.full_control
                 && obs.turn().active() != obs.viewer()
                 && !can_declare_blockers(obs, t) =>
         {
-            next_step_stop(t, obs, stops.step_stops(), TurnStep::DeclareBlockers)
+            next_step_stop(t, obs, stops.step_stops(), Some(target))
         }
         next => next,
     }
@@ -194,7 +194,7 @@ fn wire_pass_to(next: NextStop) -> PassTo {
     match next {
         NextStop::Resolve => PassTo::Resolve,
         NextStop::CombatDamage => PassTo::CombatDamage,
-        NextStop::Step(step) => PassTo::Step { step: step.into() },
+        NextStop::Step(step, _) => PassTo::Step { step: step.into() },
         NextStop::NextTurn => PassTo::NextTurn,
     }
 }

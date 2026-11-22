@@ -41,8 +41,7 @@ use beryl_kernel::replacement::{self as card_replacement, Instead};
 /// the cards drawn before it ([`instead`]). Where it ends the game, the draws left are never
 /// made. With no such permanent on the battlefield a draw reads no ability.
 ///
-/// Each card drawn is counted for the player this turn, and in their own draw step as drawn
-/// in it (see [CR 504.1]): "First, the active player draws a card." A replaced draw never happened
+/// Each card drawn is counted for the player this turn, and in their own draw step for that occurrence (see [CR 504.1]): "First, the active player draws a card." A replaced draw never happened
 /// (see [CR 614.6]): "If an event is replaced, it never happens." Neither is a draw from an empty
 /// library, which draws no card.
 ///

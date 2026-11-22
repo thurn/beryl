@@ -6,7 +6,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{Count, Tracker};
-use beryl_engine::{SlotId, TurnStep, apply_decided, next_within, payable_responses};
+use beryl_engine::{AdvanceUntil, SlotId, apply_decided, next_within, payable_responses};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -429,7 +429,7 @@ impl<L: Layout> TurnSearch<'_, L> {
             self.table,
             &mut self.scratch,
             &mut Replay,
-            (self.turn.saturating_add(1), TurnStep::Untap),
+            AdvanceUntil::Turn(self.turn.saturating_add(1)),
             limit,
         )
     }

@@ -398,9 +398,12 @@ impl<L: Layout> Runner<L> {
             Action::AdvanceTo { turn, step } => loop {
                 let d = self.decision()?;
                 let now = self.s.turn();
-                let here = (now.number(), now.step() as u8);
-                let target = (turn, step as u8);
-                if here > target {
+                let here = self.s.compare_named_step(turn, step);
+                if here.is_gt()
+                    && !(now.number() == turn
+                        && self.s.has_turn_plan()
+                        && self.s.later_steps().any(|(later, _)| later == step))
+                {
                     return Err(format!(
                         "the game passed turn {turn} {step:?} without stopping there; now {}",
                         self.describe(&d)
@@ -409,7 +412,7 @@ impl<L: Layout> Runner<L> {
                 if d.kind != DecisionKind::Priority {
                     return Err(format!("unscripted decision: {}", self.describe(&d)));
                 }
-                if here == target && d.player == now.active() {
+                if here.is_eq() && d.player == now.active() {
                     // Stopped: keep the decision, and stop no more.
                     self.set_profile(TRACED);
                     return Ok(());

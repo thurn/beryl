@@ -7,7 +7,7 @@ use beryl_engine::event::Tagged;
 use beryl_engine::state::{Pending, StackEntry, Turn};
 use beryl_engine::{
     Choice, GameTable, Large, Layout, Outcome, Profile, Relayout, Replay, Scratch, Small,
-    StallReason, State, Step, TurnStep, apply, next_in_step,
+    StallReason, State, Step, apply, next_in_step,
 };
 
 /// The game's state and the engine's working memory for it, in one layout.
@@ -117,7 +117,7 @@ impl Boards {
     pub(super) fn next_in_step(
         &mut self,
         t: &GameTable,
-        seen: (u16, TurnStep),
+        seen: beryl_engine::StepPosition,
         chance: &mut Chance,
     ) -> Option<Step<Large>> {
         if let Boards::Small(b) = self {
@@ -144,7 +144,7 @@ impl Boards {
     pub(super) fn ahead(
         &mut self,
         t: &GameTable,
-        seen: (u16, TurnStep),
+        seen: beryl_engine::StepPosition,
         chance: &Chance,
     ) -> Option<Step<Large>> {
         match self {
@@ -213,6 +213,10 @@ impl Boards {
 
     pub(super) fn stack_is_empty(&self) -> bool {
         on_board!(self, b => b.state.stack().is_empty())
+    }
+
+    pub(super) fn step_position(&self) -> beryl_engine::StepPosition {
+        on_board!(self, b => b.state.step_position())
     }
 
     pub(super) fn turn(&self) -> &Turn {

@@ -12,8 +12,7 @@ use beryl_engine::card::{CastingOption, FaceIx, ObjectAbility, Types};
 use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::ObjectRef;
 use beryl_engine::{
-    Candidates, Choice, Decision, GameTable, Opt, Outcome, Seat, Slot, State, TurnStep, Zone,
-    ZoneKey,
+    Candidates, Choice, Decision, GameTable, Opt, Outcome, Seat, Slot, State, Zone, ZoneKey,
 };
 
 pub struct Transcript {
@@ -79,18 +78,10 @@ impl Transcript {
         c: Choice,
         happened: &[Event],
     ) -> String {
-        // What happened before a new turn's untap step belongs to the turn before.
+        // Events before the first step of a new turn belong to the preceding turn.
         let split = happened
             .iter()
-            .position(|e| {
-                matches!(
-                    e,
-                    Event::StepBegins {
-                        step: TurnStep::Untap,
-                        ..
-                    }
-                )
-            })
+            .position(|e| matches!(e, Event::StepBegins { turn, .. } if Some(*turn) != self.turn))
             .unwrap_or(happened.len());
         self.events(t, s, &happened[..split]);
         let turn = s.turn();

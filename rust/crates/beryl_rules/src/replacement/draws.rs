@@ -183,7 +183,7 @@ fn choose_draw_replacement<L: Layout>(
 /// Whether a replacement of `player`'s draws that replaces those `draws` replaces the one they
 /// would make now. Every draw but the first one they draw in their own draw step
 /// (see [CR 504.1]): "First, the active player draws a card." That is the count of cards they
-/// have drawn in their draw step this turn, which counts only cards drawn: a draw that was
+/// have drawn in this draw step, which counts only cards drawn: a draw that was
 /// replaced never happened ([CR 614.6]), so the next one is still the first.
 ///
 /// [CR 504.1]: https://yawgatog.com/resources/magic-rules/#R5041

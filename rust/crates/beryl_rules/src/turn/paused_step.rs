@@ -36,8 +36,10 @@ pub(crate) fn end_step<L: Layout>(
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
 ) -> Result<(), Full> {
-    turn::end_step_before_actions(s, t, &mut x.events)?;
-    step_actions(s, t, x, a)
+    if turn::end_step_before_actions(s, t, &mut x.events)? {
+        step_actions(s, t, x, a)?;
+    }
+    Ok(())
 }
 
 /// Runs the turn-based actions of the step that has just begun on a copy of the state, or

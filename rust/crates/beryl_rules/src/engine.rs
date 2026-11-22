@@ -17,7 +17,9 @@ use crate::replacement::event::{Cause, Sink, StackIx, Tagged};
 #[cfg(debug_assertions)]
 use crate::scratch::assert_sound;
 pub use crate::scratch::{Counts, Scratch};
-use crate::state::{Pending, State, TurnStep};
+use beryl_kernel::{CombatPosition, StepPosition};
+
+use crate::state::{Pending, State};
 use crate::table::GameTable;
 use crate::turn::paused_step;
 use crate::{
@@ -130,7 +132,7 @@ pub fn next<L: Layout>(
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
 ) -> Step<L> {
-    let step = advance(s, t, x, a, Limit::NONE);
+    let step = advance(s, t, x, a, Limit::None);
     x.settle_counts();
     #[cfg(debug_assertions)]
     assert_sound(s, t, x);
@@ -155,18 +157,9 @@ pub fn next_in_step<L: Layout>(
     t: &GameTable,
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
-    seen: (u16, TurnStep),
+    seen: StepPosition,
 ) -> Option<Step<L>> {
-    let step = advance(
-        s,
-        t,
-        x,
-        a,
-        Limit {
-            step: Some(seen),
-            ..Limit::NONE
-        },
-    );
+    let step = advance(s, t, x, a, Limit::Seen(seen));
     x.settle_counts();
     // Stopped at a new step, the game has yet to check state-based actions: a player who drew
     // from an empty library has not lost yet, so the invariants need not hold.
@@ -175,6 +168,14 @@ pub fn next_in_step<L: Layout>(
         assert_sound(s, t, x);
     }
     step
+}
+
+/// Where a bounded advance stops before using all its work allowance.
+#[derive(Clone, Copy, Debug)]
+pub enum AdvanceUntil {
+    WorkLimit,
+    Turn(u16),
+    EndOfCombat(CombatPosition),
 }
 
 /// Advances as [`next`] does, stopping at `end` or when the absolute
@@ -190,20 +191,10 @@ pub fn next_within<L: Layout>(
     t: &GameTable,
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
-    end: (u16, TurnStep),
+    end: AdvanceUntil,
     work_limit: u64,
 ) -> Option<Step<L>> {
-    let step = advance(
-        s,
-        t,
-        x,
-        a,
-        Limit {
-            step: None,
-            end: Some(end),
-            work: Some(work_limit),
-        },
-    );
+    let step = advance(s, t, x, a, Limit::Bounded { end, work_limit });
     x.settle_counts();
     #[cfg(debug_assertions)]
     if step.is_some() {
@@ -215,38 +206,30 @@ pub fn next_within<L: Layout>(
 /// Where [`advance`] returns `None` instead of going on, for [`next_in_step`] and
 /// [`next_within`].
 #[derive(Clone, Copy)]
-struct Limit {
-    /// The turn and step the caller has seen: stop once the game is at any other.
-    step: Option<(u16, TurnStep)>,
-    /// Stop once the game reaches this turn and step or a later one.
-    end: Option<(u16, TurnStep)>,
-    /// Stop once this scratch's [`Counts::decision_work`] leaves less than one loop's worth.
-    work: Option<u64>,
+enum Limit {
+    None,
+    Seen(StepPosition),
+    Bounded { end: AdvanceUntil, work_limit: u64 },
 }
 
 impl Limit {
-    const NONE: Limit = Limit {
-        step: None,
-        end: None,
-        work: None,
-    };
-
-    /// Whether this limit can stop the loop at all.
-    fn is_some(self) -> bool {
-        self.step.is_some() || self.end.is_some() || self.work.is_some()
-    }
-
-    /// Whether the game, now at turn and step `at`, has reached this limit.
+    /// Whether the game has reached this limit.
     #[cold]
     #[inline(never)]
-    fn reached(self, at: (u16, TurnStep), counts: &Counts) -> bool {
-        self.step.is_some_and(|seen| at != seen)
-            || self.end.is_some_and(|end| at >= end)
-            // One loop can silently answer a decision and copy twice to resolve it
-            // transactionally. Reserve those counts before changing the state.
-            || self
-                .work
-                .is_some_and(|work| work.saturating_sub(counts.decision_work()) < 3)
+    fn reached<L: Layout>(self, s: &State<L>, counts: &Counts) -> bool {
+        match self {
+            Self::None => false,
+            Self::Seen(seen) => s.step_position() != seen,
+            Self::Bounded { end, work_limit } => {
+                let reached = match end {
+                    AdvanceUntil::WorkLimit => false,
+                    AdvanceUntil::Turn(turn) => s.turn().number() >= turn,
+                    AdvanceUntil::EndOfCombat(combat) => s.reached_end_of_combat(combat),
+                };
+                // One loop can silently answer a decision and copy twice to resolve it.
+                reached || work_limit.saturating_sub(counts.decision_work()) < 3
+            }
+        }
     }
 }
 
@@ -274,7 +257,7 @@ fn advance<L: Layout>(
         if combat::in_combat(s.turn().step()) {
             combat::prune(s);
         }
-        if limit.is_some() && limit.reached((s.turn().number(), s.turn().step()), &x.counts) {
+        if !matches!(limit, Limit::None) && limit.reached(s, &x.counts) {
             return None;
         }
         // `matches!` rather than `==`: the derived `PartialEq` of `Pending` is not always
@@ -303,7 +286,12 @@ fn advance<L: Layout>(
                 // See CR 514.3a: with no state-based actions and no waiting triggers, no player
                 // receives priority and the turn ends.
                 if s.triggers().is_empty() {
-                    stall_if_full(turn::begin_turn(s, t, &mut x.events), s);
+                    let advanced = if t.can(crate::table::Capability::TurnStructure) {
+                        turn::finish_planned_cleanup(s, t, &mut x.events)
+                    } else {
+                        turn::begin_turn(s, t, &mut x.events)
+                    };
+                    stall_if_full(advanced, s);
                     continue;
                 }
             }

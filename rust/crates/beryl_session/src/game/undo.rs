@@ -1,7 +1,7 @@
 //! Taking back the human's answers: undo points, and the cast in progress that can be cancelled.
 
 use beryl_engine::state::{ObjectRef, StackEntry};
-use beryl_engine::{Large, Relayout, TurnStep, paused_events};
+use beryl_engine::{Large, Relayout, paused_events};
 use beryl_search::AgentDecision;
 
 use crate::SessionError;
@@ -39,7 +39,7 @@ pub(super) struct UndoPoint {
     pub(super) continuation: bool,
     /// The open decision there.
     pub(super) at: At,
-    pub(super) seen: (u16, TurnStep),
+    pub(super) seen: beryl_engine::StepPosition,
     pub(super) answered: Option<Vec<StackEntry<Large>>>,
     pub(super) before_cast: Option<BeforeCast>,
     /// The index among the agent's own of its next decision then, which the game goes back

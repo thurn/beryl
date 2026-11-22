@@ -18,8 +18,7 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectRef, Pending, StackEntry};
 use beryl_engine::{
     CardTable, Choice, Decision, DecisionKind, GameTable, Large, Limits, Outcome, Profile,
-    Relayout, Seat, Small, State, StepStops, TurnStep, observe, two_player::TwoPlayerSeat as _,
-    view,
+    Relayout, Seat, Small, State, StepStops, observe, two_player::TwoPlayerSeat as _, view,
 };
 use beryl_search::{Agent, AgentDecision, Budget, GameAgent};
 use serde_json::json;
@@ -232,7 +231,7 @@ pub struct Game {
     across: Option<crate::AcrossViews>,
     at: At,
     /// The turn and step the latest view began, or the game's first.
-    seen: (u16, TurnStep),
+    seen: beryl_engine::StepPosition,
     /// The stack as it was once the human's latest answer was applied, if they answered in
     /// this step: what they know of it ([`Game::own_top`]). With no answer yet in this step,
     /// they knew it empty, as every step begins
@@ -271,7 +270,7 @@ pub struct Game {
     /// The human's pass on to their next stop, while it lasts.
     passing: Option<PassingOn>,
     /// Where the human's open decision passes on to, if it can ([`Game::pass_on`]).
-    passes_on: Option<(u16, TurnStep)>,
+    passes_on: Option<beryl_engine::StepTarget>,
     /// The coin flip's winner, who chooses who takes the first turn
     /// ([CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)), in a game begun by one.
     flip_winner: Option<Seat>,
@@ -413,13 +412,12 @@ impl Game {
         session: SessionId,
         agent: Box<dyn GameAgent + Send>,
     ) -> Game {
-        let turn = state.turn();
         let flip_winner = match state.pending() {
             Pending::PlayOrDraw { chooser } => Some(*chooser),
             _ => None,
         };
         Game {
-            seen: (turn.number(), turn.step()),
+            seen: state.step_position(),
             answered: None,
             stops: replay.stops,
             table,

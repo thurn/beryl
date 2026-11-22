@@ -339,6 +339,7 @@ fn a_recorded_pass_where_no_priority_is_open_is_skipped() {
             decider: None,
             turn,
             step,
+            ordinal: None,
             kind: Kind::Priority,
             before_v10: None,
             act: Act::Pass,

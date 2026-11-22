@@ -324,9 +324,10 @@ log, which is the trap DeepScry fell into when its rollouts ran with the log
 off.
 
 `Turn` holds the turn number, active player, step, the priority holder and pass
-count. Extra turns are entries of the Effects store (§4.5). Nothing yet inserts
-or skips a step or a phase; [project-50k-part-2.md](project-50k-part-2.md) plans
-the turn's remaining steps as a queue.
+count. Extra turns are entries of the Effects store (§4.5). When a game's cards
+can add or skip steps or phases, the Turn Plan store holds the remaining steps.
+A step's ordinal identifies its occurrence within the turn. Its name still tells
+triggers, stops and the session what kind of step began.
 
 ### 4.5 Queues
 
@@ -896,13 +897,15 @@ Combat is factored into single picks with legality-aware candidates:
 
 The turn is a small program of steps: untap, upkeep, draw, main, beginning of
 combat, declare attackers, declare blockers, combat damage (twice with first
-strike), end of combat, main, end, cleanup. Extra turns queue. Extra combat
-phases, extra steps and ending the turn are not built. Each step boundary is an
-event, so "at the beginning of" and "until end of turn" are triggers and
-durations like any other. Priority passes in succession with an empty stack
-advance the step; with a non-empty stack they resolve the top object. Cleanup
-discards to hand size, removes damage and ends until-end-of-turn effects, and
-repeats if that caused a trigger.
+strike), end of combat, main, end, cleanup. Extra turns queue. If a custom body
+declares that it can edit the turn structure, the engine starts each turn with
+the format's step sequence. Insertions after a common anchor play newest first.
+Skipping a step removes it from the queue, and ending a turn can cut the queue
+to cleanup. A step-beginning event carries its turn number, so a repeated upkeep
+or untap is still presented in the correct turn. Priority passes in succession
+with an empty stack advance the step; with a non-empty stack they resolve the
+top object. Cleanup discards to hand size, removes damage and ends
+until-end-of-turn effects, and repeats if that caused a trigger.
 
 The game starts with the London mulligan: keep or mulligan, then the cards to
 bottom one pick at a time.

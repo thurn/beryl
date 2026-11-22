@@ -21,7 +21,7 @@ use crate::state::{Budgets, CounterTable, Effects, Flags, Memos, State, Trackers
 use crate::static_ability::Inputs;
 use crate::store::Store;
 use crate::table::GameTable;
-use crate::turn::Turn;
+use crate::turn::{Turn, plan::TurnPlan};
 
 /// A player before the game begins ([CR 103.4]): "Each player begins the game with a starting life
 /// total of 20."
@@ -154,6 +154,7 @@ impl<L: Layout> State<L> {
             memos: Memos::empty(),
             counters: CounterTable::empty(),
             elsewhere: Default::default(),
+            turn_plan: TurnPlan::default(),
             trackers: Trackers::empty(),
             pending: Pending::None,
             knowledge: Table::filled(Bitboard::EMPTY),

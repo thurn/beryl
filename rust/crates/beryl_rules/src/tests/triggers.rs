@@ -216,7 +216,11 @@ fn a_main_phase_trigger_matches_its_controllers_main_phase_events() {
     put(&t, &mut s, &mut x, p, "Test Metronome");
     for step in [TurnStep::PrecombatMain, TurnStep::PostcombatMain] {
         for active in [p.opponent(), p] {
-            let event = Event::StepBegins { step, active };
+            let event = Event::StepBegins {
+                turn: s.turn().number(),
+                step,
+                active,
+            };
             event::settle(&mut s, &t, &mut x.events, event).unwrap();
             assert_eq!(s.triggers().len(), usize::from(active == p));
             resolve_all(&t, &mut s, &mut x);

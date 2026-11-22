@@ -236,7 +236,7 @@ fn cut_game(t: &GameTable, b: &Build, g: u32) -> Result<GameCuts, String> {
     let mut asked = [AgentDecision(0); 2];
     let mut s = State::new(t, seed, Profile::SMART).map_err(|e| e.to_string())?;
     let mut x = Scratch::new();
-    let mut at = (s.turn().number(), s.turn().step());
+    let mut at = s.step_position();
     let mut out = GameCuts {
         cuts: 0,
         clean: 0,
@@ -248,7 +248,7 @@ fn cut_game(t: &GameTable, b: &Build, g: u32) -> Result<GameCuts, String> {
             None => {
                 let turn = s.turn();
                 // A turn is seen as its upkeep begins, as a save's checkpoint is taken.
-                if turn.number() != at.0 && TURNS.contains(&turn.number()) {
+                if turn.number() != at.turn && TURNS.contains(&turn.number()) {
                     out.cuts += 1;
                     let board = Checkpoint::of(t, &s);
                     if clean(&board) {
@@ -276,7 +276,7 @@ fn cut_game(t: &GameTable, b: &Build, g: u32) -> Result<GameCuts, String> {
                 if turn.number() > *TURNS.end() {
                     break;
                 }
-                at = (turn.number(), turn.step());
+                at = s.step_position();
             }
             Some(Step::Over(_)) => break,
             Some(Step::Decide(d)) => {

@@ -4,6 +4,8 @@
 //!
 //! Implements: none. Applies the player's stop settings.
 
+use beryl_kernel::{StepPosition, StepTarget};
+
 use crate::card::Purpose;
 use crate::combat;
 use crate::decision::{Decision, DecisionKind};
@@ -53,7 +55,7 @@ pub enum NextStop {
     /// Combat damage is dealt.
     CombatDamage,
     /// The viewer next gets priority, or declares attackers, in this step of the turn.
-    Step(TurnStep),
+    Step(TurnStep, StepTarget),
     /// The turn ends.
     NextTurn,
 }
@@ -80,14 +82,29 @@ pub fn next_stop<L: Layout>(
             step,
             TurnStep::DeclareBlockers | TurnStep::FirstStrikeDamage
         )
+        && (!s.has_turn_plan()
+            || matches!(
+                s.planned_next_step(),
+                Some((TurnStep::FirstStrikeDamage | TurnStep::CombatDamage, false))
+            ))
     {
         return NextStop::CombatDamage;
     }
-    let later = TurnStep::ALL.into_iter().filter(|&l| l > step);
     if stops != Stops::Smart {
-        return NextStop::Step(later.min().unwrap_or(TurnStep::Untap));
+        return s.later_steps().next().map_or_else(
+            || {
+                NextStop::Step(
+                    TurnStep::Untap,
+                    StepTarget::Standard(StepPosition {
+                        turn: s.turn().number() + 1,
+                        ordinal: 1,
+                    }),
+                )
+            },
+            |(step, target)| NextStop::Step(step, target),
+        );
     }
-    next_step_stop(t, obs, step_stops, step)
+    next_step_stop(t, obs, step_stops, None)
 }
 
 /// The next step of the turn after `after` that is one of the viewer's `steps` under the smart
@@ -97,18 +114,26 @@ pub fn next_step_stop<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
     steps: StepStops,
-    after: TurnStep,
+    after: Option<StepTarget>,
 ) -> NextStop {
     let s = obs.shown();
     let active = s.turn().active() == obs.viewer();
-    let declares = active
-        && s.turn().step() < TurnStep::BeginningOfCombat
-        && combat::can_declare_attackers(s, t);
-    let attacking = declares || any_attacking(s);
-    for l in TurnStep::ALL.into_iter().filter(|&l| l > after) {
-        if (l == TurnStep::BeginningOfCombat && declares) || steps.stops_in(l, active, || attacking)
-        {
-            return NextStop::Step(l);
+    let mut after = after;
+    let mut attacking = any_attacking(s);
+    for (step, target) in s.later_steps() {
+        let declares =
+            step == TurnStep::BeginningOfCombat && active && combat::can_declare_attackers(s, t);
+        if step == TurnStep::BeginningOfCombat {
+            attacking = declares;
+        }
+        if after.is_some() {
+            if after == Some(target) {
+                after = None;
+            }
+            continue;
+        }
+        if declares || steps.stops_in(step, active, || attacking) {
+            return NextStop::Step(step, target);
         }
     }
     NextStop::NextTurn

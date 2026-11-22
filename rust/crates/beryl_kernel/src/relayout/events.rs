@@ -78,6 +78,7 @@ fn library<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
         | Event::Attack { .. }
         | Event::Block { .. }
         | Event::StepBegins { .. }
+        | Event::TurnPlanChanged(_)
         | Event::GainControl { .. }
         | Event::CoinFlip { .. }
         | Event::Lose { .. }
@@ -307,7 +308,8 @@ impl<L: Layout> Relayout for Event<L> {
                 attackers: bits(attackers),
             },
             Event::Block { .. } => block(self),
-            &Event::StepBegins { step, active } => Event::StepBegins { step, active },
+            &Event::TurnPlanChanged(change) => Event::TurnPlanChanged(change),
+            &Event::StepBegins { turn, step, active } => Event::StepBegins { turn, step, active },
             &Event::GainControl { object, player } => Event::GainControl {
                 object: object.relayout(),
                 player,

@@ -107,6 +107,8 @@ pub struct Heard {
     /// exist no view has a record of it: a copy that resolves before the view would have
     /// no record to go on the stack with.
     pub copies: Vec<(usize, Copied)>,
+    /// The actual turn number for each step beginning, by its index in the view's events.
+    pub step_turns: Vec<(usize, u16)>,
 }
 
 /// A copy of a spell as it arrived on the stack

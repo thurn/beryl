@@ -47,6 +47,9 @@ pub struct Described {
     pub decider: Option<u8>,
     pub turn: u16,
     pub step: StepName,
+    /// The position as played when this game can repeat or reorder steps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ordinal: Option<u32>,
     pub kind: Kind,
     /// The kind a file before version 10 gave it, where that format had a kind of its own for
     /// the question ([`KindBeforeV10`]). Replay matches an answer by `kind`; this says which
@@ -78,6 +81,8 @@ enum ChosenFile {
         decider: Option<u8>,
         turn: u16,
         step: StepName,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ordinal: Option<u32>,
         kind: KindFile,
         #[serde(
             default,
@@ -106,6 +111,7 @@ impl From<ChosenFile> for Chosen {
                 decider,
                 turn,
                 step,
+                ordinal,
                 kind,
                 kind_before_v10,
                 act,
@@ -118,6 +124,7 @@ impl From<ChosenFile> for Chosen {
                     decider,
                     turn,
                     step,
+                    ordinal,
                     kind: kind.now(),
                     before_v10: kind_before_v10.or(kind.before_v10()),
                     act,
@@ -137,6 +144,7 @@ impl From<Chosen> for ChosenFile {
                 decider,
                 turn,
                 step,
+                ordinal,
                 kind,
                 before_v10,
                 act,
@@ -148,6 +156,7 @@ impl From<Chosen> for ChosenFile {
                 decider,
                 turn,
                 step,
+                ordinal,
                 kind: KindFile::Now(kind),
                 kind_before_v10: before_v10,
                 act,
@@ -176,6 +185,7 @@ impl Chosen {
                 decider: (d.decider != d.player).then(|| d.decider.get()),
                 turn: s.turn().number(),
                 step: s.turn().step().into(),
+                ordinal: saved_ordinal(s),
                 kind: d.kind.into(),
                 before_v10: None,
                 act,
@@ -195,7 +205,7 @@ impl Chosen {
         };
         if what.player != d.player.get()
             || what.decider.unwrap_or(what.player) != d.decider.get()
-            || Some(when(s)) != self.when()
+            || self.compare_when(s) != Some(std::cmp::Ordering::Equal)
             || what.kind != Kind::from(d.kind)
         {
             return None;
@@ -222,9 +232,23 @@ impl Chosen {
         listed.into_iter().find(|&c| same(c))
     }
 
-    /// The turn and step the answer was made in, if the save says.
+    /// The turn and step name the answer was made in, if the save says.
     pub fn when(&self) -> Option<(u16, StepName)> {
         self.what.as_ref().map(|w| (w.turn, w.step))
+    }
+
+    /// Where the recorded answer falls relative to the current step. Historical saves
+    /// without an ordinal identify the step by name.
+    pub(crate) fn compare_when<L: Layout>(&self, s: &State<L>) -> Option<std::cmp::Ordering> {
+        let what = self.what.as_ref()?;
+        let turn = s.turn();
+        let in_turn = match what.ordinal {
+            Some(ordinal) => ordinal
+                .cmp(&s.step_position().ordinal)
+                .then_with(|| what.step.cmp(&turn.step().into())),
+            None => what.step.cmp(&turn.step().into()),
+        };
+        Some(what.turn.cmp(&turn.number()).then(in_turn))
     }
 
     /// Whether this answer passed priority: an answer that no later position can miss, which
@@ -287,10 +311,12 @@ fn in_order<L: Layout>(
     Some(alike)
 }
 
-/// The turn and step the position `s` is in.
-pub fn when<L: Layout>(s: &State<L>) -> (u16, StepName) {
-    let turn = s.turn();
-    (turn.number(), turn.step().into())
+/// Legacy saves already distinguish the ordinary steps by name. Write a position
+/// for planned turns and when cleanup repeats in an ordinary turn.
+pub(crate) fn saved_ordinal<L: Layout>(s: &State<L>) -> Option<u32> {
+    let position = s.step_position();
+    (s.has_turn_plan() || position.ordinal > u32::try_from(TurnStep::ALL.len()).unwrap())
+        .then_some(position.ordinal)
 }
 
 /// A step of the turn ([`TurnStep`]), under names a save keeps, in turn order.

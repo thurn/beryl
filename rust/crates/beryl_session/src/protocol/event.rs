@@ -204,7 +204,10 @@ pub(super) fn game_events<L: Layout>(
             }
             // Said for whoever follows the stack through the events, which a seat's screen
             // does ([`heard`]): a view shows the stack itself.
-            if let Event::StackArrival { .. } | Event::StackDeparture { .. } = e {
+            if let Event::StackArrival { .. }
+            | Event::StackDeparture { .. }
+            | Event::TurnPlanChanged(_) = e
+            {
                 return None;
             }
             let mut event = game_event(t, obs, e);
@@ -261,10 +264,16 @@ pub fn heard<L: Layout>(
             }
             // A view's draw says its cards, and a spell arrives and leaves as its card moves.
             (
-                Event::DrawCard { .. } | Event::StackArrival { .. } | Event::StackDeparture { .. },
+                Event::DrawCard { .. }
+                | Event::StackArrival { .. }
+                | Event::StackDeparture { .. }
+                | Event::TurnPlanChanged(_),
                 _,
             ) => {}
             _ => {
+                if let Event::StepBegins { turn, .. } = *event {
+                    heard.step_turns.push((before, turn));
+                }
                 heard.causes.push(cause);
                 heard.together.push(told == Some(group));
                 told = Some(group);
@@ -377,7 +386,8 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             player: side(player),
             attackers: slots(crate::protocol::slots_by_id(attackers)),
         },
-        Event::StepBegins { step, active } => GameEvent::StepBegins {
+        Event::TurnPlanChanged(_) => unreachable!("the turn plan is an engine event"),
+        Event::StepBegins { step, active, .. } => GameEvent::StepBegins {
             step: step.into(),
             active: side(active),
         },

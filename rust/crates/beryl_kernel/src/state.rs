@@ -246,6 +246,7 @@ pub struct State<L: Layout = Small> {
     /// apply, as the layers last applied ([`crate::query::zone_characteristics`]): stored with the layer
     /// results, and empty in most games.
     pub(crate) elsewhere: crate::query::zone_characteristics::Reaching<L>,
+    pub(crate) turn_plan: crate::turn::plan::TurnPlan<L>,
 }
 
 const _: () = assert!(size_of::<State<Small>>() <= 20 * 1024);
@@ -304,6 +305,7 @@ impl<L: Layout> State<L> {
             elsewhere: _,
             // Bookkeeping about the past that only the loop check reads ([`crate::repeats`]).
             repeats: _,
+            turn_plan,
         } = self;
         objects.hash(h);
         battlefield.hash(h);
@@ -340,6 +342,9 @@ impl<L: Layout> State<L> {
         }
         flags.hash(h);
         outcome.hash(h);
+        if !turn_plan.is_unused() && (self.has_turn_plan() || turn.step() == TurnStep::Cleanup) {
+            turn_plan.hash(h);
+        }
     }
 }
 

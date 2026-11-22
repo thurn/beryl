@@ -1,8 +1,8 @@
 //! The rollout loop and the answer sources it plays with.
 
 use beryl_engine::{
-    Answers, Choice, Decision, GameTable, Layout, Observation, Outcome, Replay, Scratch, State,
-    Step, TurnStep, apply, apply_decided, next, next_within,
+    AdvanceUntil, Answers, Choice, Decision, GameTable, Layout, Observation, Outcome, Replay,
+    Scratch, State, Step, apply, apply_decided, next, next_within,
 };
 
 use crate::mcts::smart;
@@ -121,7 +121,7 @@ fn play_within<L: Layout>(
     work_limit: u64,
 ) -> Option<RolloutEnd> {
     loop {
-        match next_within(s, t, x, inline, (u16::MAX, TurnStep::Cleanup), work_limit)? {
+        match next_within(s, t, x, inline, AdvanceUntil::WorkLimit, work_limit)? {
             Step::Over(outcome) => return Some(RolloutEnd::Outcome(outcome)),
             Step::Decide(_) if s.turn().number() >= turn => return Some(RolloutEnd::Cutoff),
             Step::Decide(d) => {

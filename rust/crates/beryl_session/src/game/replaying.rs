@@ -230,8 +230,7 @@ impl Game {
             .map_err(|reason| SessionError::BadReplay {
                 reason: format!("the checkpoint of turn {}: {reason}", from.turn),
             })?;
-        let turn = state.turn();
-        game.seen = (turn.number(), turn.step());
+        game.seen = state.step_position();
         game.board = Boards::new(&state);
         game.flip_winner = None;
         game.replay.chooser = None;
@@ -568,18 +567,17 @@ impl Game {
             self.answer_first();
             return Ok(false);
         }
-        let now = on_board!(&self.board, b => save::when(&b.state));
-        let when = chosen.when();
+        let when = on_board!(&self.board, b => chosen.compare_when(&b.state));
         // Every decision is recorded: one before the record's next, which the original game
         // never asked, is a priority it passed unasked.
-        if d.kind == DecisionKind::Priority && when.is_some_and(|w| w > now) {
+        if d.kind == DecisionKind::Priority && when.is_some_and(std::cmp::Ordering::is_gt) {
             self.lenient_note("passed a priority the record lacks", &entry, drift);
             debug_assert_eq!(d.candidates.option(Choice(0)), Some(Opt::Pass));
             self.answer_first();
             return Ok(false);
         }
         if chosen.is_priority_pass()
-            && (d.kind != DecisionKind::Priority || when.is_some_and(|w| w < now))
+            && (d.kind != DecisionKind::Priority || when.is_some_and(std::cmp::Ordering::is_lt))
         {
             self.lenient_note("skipped a pass where no priority is open", &entry, drift);
             return Ok(true);

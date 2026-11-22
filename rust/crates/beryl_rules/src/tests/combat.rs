@@ -851,24 +851,27 @@ fn passing_goes_to_the_next_smart_stop() {
     let (a, d) = (g.attacker, g.defender());
     // Nothing can attack: main 1 passes to main 2, and the defender's next stop is the
     // opponent's end step. Under exact stops it is the next step.
-    assert_eq!(
+    assert!(matches!(
         next(&g, a, Stops::Smart),
-        NextStop::Step(TurnStep::PostcombatMain)
-    );
-    assert_eq!(next(&g, d, Stops::Smart), NextStop::Step(TurnStep::End));
-    assert_eq!(
+        NextStop::Step(TurnStep::PostcombatMain, _)
+    ));
+    assert!(matches!(
+        next(&g, d, Stops::Smart),
+        NextStop::Step(TurnStep::End, _)
+    ));
+    assert!(matches!(
         next(&g, a, Stops::Exact),
-        NextStop::Step(TurnStep::BeginningOfCombat)
-    );
+        NextStop::Step(TurnStep::BeginningOfCombat, _)
+    ));
     // A creature ready to attack: to combat.
     let bear = g.put(a, "Bear");
     let ogre = g.put(d, "Ogre");
     // The same open decision, with the layers brought up to date.
     g.expect(DecisionKind::Priority);
-    assert_eq!(
+    assert!(matches!(
         next(&g, a, Stops::Smart),
-        NextStop::Step(TurnStep::BeginningOfCombat)
-    );
+        NextStop::Step(TurnStep::BeginningOfCombat, _)
+    ));
     g.pass_to_combat();
     g.pick(DecisionKind::Attacker, Opt::Attack(bear));
     // Blockers being declared, passing deals combat damage.
@@ -880,7 +883,10 @@ fn passing_goes_to_the_next_smart_stop() {
     // step.
     g.finish_combat();
     assert_eq!(next(&g, a, Stops::Smart), NextStop::NextTurn);
-    assert_eq!(next(&g, d, Stops::Smart), NextStop::Step(TurnStep::End));
+    assert!(matches!(
+        next(&g, d, Stops::Smart),
+        NextStop::Step(TurnStep::End, _)
+    ));
 }
 
 mod keywords;

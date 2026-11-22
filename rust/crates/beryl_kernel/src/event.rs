@@ -295,9 +295,12 @@ pub enum Event<L: Layout = Small> {
     ///
     /// [CR 500.6]: https://yawgatog.com/resources/magic-rules/#R5006
     StepBegins {
+        turn: u16,
         step: TurnStep,
         active: Seat,
     },
+    /// The remaining steps of this turn changed.
+    TurnPlanChanged(crate::TurnChange),
     GainControl {
         object: ObjectRef<L>,
         player: Seat,

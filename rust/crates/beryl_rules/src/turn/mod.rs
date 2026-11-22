@@ -17,7 +17,7 @@ use crate::layout::Layout;
 use crate::objects::phasing;
 use crate::replacement::event::{self, Reason, Sink};
 use crate::state::{Duration, Pending, State, TurnStep, Zone, ZoneKey};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 use crate::zones::drawing;
 
 /// Whether any creature is attacking.
@@ -47,6 +47,9 @@ pub(crate) fn begin_turn<L: Layout>(
     // See CR 302.6: the active player's permanents have now been under their control since their
     // most recent turn began.
     s.reset_permanents_for_turn(active);
+    if t.can(Capability::TurnStructure) {
+        return begin_planned_turn(s, t, sink);
+    }
     begin_step(s, t, sink, TurnStep::Untap)
 }
 
@@ -95,7 +98,7 @@ pub(crate) fn step_actions<L: Layout>(
             let skip = match t.format().first_draw() {
                 FirstDraw::SkippedByStartingPlayer => s.turn().is_starting_players_first_turn(),
             };
-            if !skip {
+            if !skip || s.has_turn_plan() {
                 // CR 504.1: "First, the active player draws a card."
                 drawing::draw(&mut Game::new(s, t, sink), active, 1)?;
             }
@@ -155,29 +158,40 @@ pub(crate) fn end_step<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
-    let next = next_step(s, t, sink)?;
-    begin_step(s, t, sink, next)
+    if let Some(next) = next_step(s, t, sink)? {
+        begin_step(s, t, sink, next)
+    } else {
+        begin_turn(s, t, sink)
+    }
 }
 
 /// [`end_step`] up to the turn-based actions of the step it begins ([`step_actions`]).
+/// Returns whether the caller still has step actions to run.
 pub(crate) fn end_step_before_actions<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-) -> Result<(), Full> {
-    let next = next_step(s, t, sink)?;
+) -> Result<bool, Full> {
+    let Some(next) = next_step(s, t, sink)? else {
+        begin_turn(s, t, sink)?;
+        return Ok(false);
+    };
     let began = s.begin_step(next);
-    event::settle(s, t, sink, began)
+    event::settle(s, t, sink, began)?;
+    Ok(true)
 }
 
-/// Ends the current step, returning the step that begins next.
+/// Ends the current step, returning the step that begins next, if any remain this turn.
 #[inline]
 fn next_step<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-) -> Result<TurnStep, Full> {
+) -> Result<Option<TurnStep>, Full> {
     s.empty_mana_pools();
+    if t.can(Capability::TurnStructure) {
+        return planned_next(s, t, sink);
+    }
     let next = match s.turn().step() {
         TurnStep::Untap => TurnStep::Upkeep,
         TurnStep::Upkeep => TurnStep::Draw,
@@ -206,9 +220,115 @@ fn next_step<L: Layout>(
         TurnStep::PostcombatMain => TurnStep::End,
         // CR 514.3a: once players pass with an empty stack in a cleanup step where they
         // received priority, "another cleanup step begins."
-        TurnStep::End | TurnStep::Cleanup => TurnStep::Cleanup,
+        TurnStep::End => {
+            s.reset_cleanup();
+            TurnStep::Cleanup
+        }
+        TurnStep::Cleanup => {
+            s.repeat_cleanup();
+            TurnStep::Cleanup
+        }
     };
-    Ok(next)
+    Ok(Some(next))
+}
+
+/// Begins a turn whose steps can change. The starting player's first draw step is skipped
+/// (see [CR 103.8a]: "the player who plays first skips the draw step").
+///
+/// [CR 103.8a]: https://yawgatog.com/resources/magic-rules/#R1038a
+#[cold]
+#[inline(never)]
+fn begin_planned_turn<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
+    s.plan_turn(t.format())?;
+    if s.turn().is_starting_players_first_turn() {
+        let _skipped = s.remove_step(TurnStep::Draw);
+    }
+    let step = s
+        .take_planned_step()
+        .expect("a new turn has its untap step");
+    begin_step(s, t, sink, step)
+}
+
+/// Applies conditional combat steps within the current phase and advances the plan.
+///
+/// See [CR 508.8]: "If no creatures are declared as attackers or put onto the battlefield
+/// attacking, skip the declare blockers and combat damage steps."
+/// See [CR 510.4]: "the only creatures that assign combat damage in that step are those
+/// with first strike or double strike".
+///
+/// [CR 508.8]: https://yawgatog.com/resources/magic-rules/#R5088
+/// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
+#[cold]
+#[inline(never)]
+fn planned_next<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<Option<TurnStep>, Full> {
+    if !s.has_turn_plan() {
+        s.plan_from_current_step(t.format())?;
+    }
+    let step = s.turn().step();
+    if step == TurnStep::Cleanup {
+        if s.planned_next_step() == Some((TurnStep::Cleanup, true)) {
+            return Ok(s.take_planned_step());
+        }
+        s.repeat_cleanup();
+        return Ok(Some(TurnStep::Cleanup));
+    }
+    advance_plan(s, t, sink)
+}
+
+/// Finds the next step allowed by the plan and the combat rules.
+fn advance_plan<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<Option<TurnStep>, Full> {
+    let mut still_in_combat = combat::in_combat(s.turn().step());
+    while let Some((next, starts_phase)) = s.planned_next_step() {
+        if still_in_combat && starts_phase {
+            combat::end_combat(s);
+            still_in_combat = false;
+        }
+        let requires_attackers = matches!(
+            next,
+            TurnStep::DeclareBlockers | TurnStep::FirstStrikeDamage | TurnStep::CombatDamage
+        );
+        let mut skip = requires_attackers && !(s.turn().attacked() || any_attacking(s));
+        if next == TurnStep::FirstStrikeDamage && !skip {
+            layers::refresh(s, t, sink)?;
+            skip = !combat::first_strike_step(s);
+        }
+        if !skip {
+            return Ok(s.take_planned_step());
+        }
+        let _skipped = s.remove_step(next);
+    }
+    if still_in_combat {
+        combat::end_combat(s);
+    }
+    Ok(None)
+}
+
+/// Continues after a cleanup that needed no priority (see CR 514.3a).
+#[cold]
+#[inline(never)]
+pub(crate) fn finish_planned_cleanup<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
+    if let Some(step) = advance_plan(s, t, sink)? {
+        s.empty_mana_pools();
+        begin_step(s, t, sink, step)
+    } else {
+        begin_turn(s, t, sink)
+    }
 }
 
 /// The cleanup step's first turn-based action

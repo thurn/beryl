@@ -788,11 +788,16 @@ filled from `Format::turn` as the turn begins.
   by its `TurnStep`, so a second upkeep and a second combat are distinct to the
   stops, the limits and the script. Readers that compared `TurnStep`s compare
   ordinals or ask a named query (`Turn::is_before_combat_damage`).
-- A game whose cards cannot change the turn (`Capability::TurnStructure` absent)
-  keeps the `match` and stores no plan, so the mirror pays nothing.
-- The plan is a `Fixed` queue in `Small`. Its bytes come from the kernel
-  contract's allotment table; a turn with more inserted steps than it holds is
-  `Full`, which widens the game to `Large`.
+- A game whose cards cannot change the turn keeps the direct step transitions. A
+  custom body that can edit the queue declares `changes_turn_structure`, which
+  sets `Capability::TurnStructure` for the game.
+- The plan is a 24-entry `Fixed` queue in `Small`. When an insertion would
+  exceed the queue's capacity, `Full` lets the session retry in `Large`.
+- A pass to a scheduled stop uses the queue entry's identity, so insertions and
+  skips ahead of it can change its ordinal without changing the target.
+- Existing choice records use the turn and step name. Planned games also record
+  the ordinal as played, so replay can distinguish choices in the first and
+  second occurrence of a step.
 
 **Ending the turn**
 ([CR 725.1](https://yawgatog.com/resources/magic-rules/#R7251)).

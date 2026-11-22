@@ -952,6 +952,7 @@ fn upkeep_triggers_are_ordered_apnap_and_flip_coins() {
             .iter()
             .position(|e| {
                 *e == Event::StepBegins {
+                    turn: s.turn().number(),
                     step: TurnStep::Upkeep,
                     active: q,
                 }

@@ -42,6 +42,7 @@ mod spell_costs;
 mod static_abilities;
 mod trackers;
 mod triggers;
+mod turn_plan;
 mod widths;
 
 use std::hash::{DefaultHasher, Hash, Hasher};

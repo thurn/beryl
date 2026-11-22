@@ -146,7 +146,14 @@ impl<L: Layout> Ahead<L> {
 ///   determines which permanents they control will untap. Then they untap them all
 ///   simultaneously."
 fn sorcery_window<L: Layout>(s: &State<L>, player: Seat) -> bool {
-    s.turn().active() == player && s.turn().step() <= TurnStep::PostcombatMain
+    s.turn().active() == player
+        && (matches!(
+            s.turn().step(),
+            TurnStep::PrecombatMain | TurnStep::PostcombatMain
+        ) || s
+            .later_steps()
+            .take_while(|(step, _)| *step != TurnStep::Untap)
+            .any(|(step, _)| matches!(step, TurnStep::PrecombatMain | TurnStep::PostcombatMain)))
 }
 
 /// Whether `player` may cast `face` at instant speed, as casting decides: an instant

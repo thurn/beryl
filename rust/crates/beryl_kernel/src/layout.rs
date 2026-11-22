@@ -295,6 +295,7 @@ impl Layout for Large {
             flags,
             outcome,
             elsewhere,
+            turn_plan,
         } = state;
         State {
             objects: objects.clone(),
@@ -328,6 +329,7 @@ impl Layout for Large {
             flags: *flags,
             outcome: *outcome,
             elsewhere: elsewhere.clone(),
+            turn_plan: turn_plan.clone(),
         }
     }
 
@@ -395,6 +397,7 @@ impl State<Large> {
             memos,
             counters,
             elsewhere,
+            turn_plan,
         );
         None
     }

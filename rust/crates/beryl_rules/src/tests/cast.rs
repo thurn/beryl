@@ -49,6 +49,7 @@ struct DestroyTarget;
 impl CustomBody for DestroyTarget {
     const SAYS: Says = Says {
         asks: false,
+        changes_turn_structure: false,
         takes: &[Some(Takes::Removal)],
     };
 
@@ -95,6 +96,7 @@ impl CustomBody for Ponder {
 /// A body that may ask and takes no target.
 const ASKS: Says = Says {
     asks: true,
+    changes_turn_structure: false,
     takes: &[],
 };
 

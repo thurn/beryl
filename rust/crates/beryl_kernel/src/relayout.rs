@@ -569,6 +569,7 @@ impl<L: Layout> Relayout for State<L> {
             flags,
             outcome,
             elsewhere,
+            turn_plan,
         } = self;
         State {
             objects: self::objects::<L, M>(objects),
@@ -608,6 +609,7 @@ impl<L: Layout> Relayout for State<L> {
             budgets: *budgets,
             flags: *flags,
             outcome: *outcome,
+            turn_plan: turn_plan.relayout(),
             elsewhere: queue(
                 elsewhere.as_slice(),
                 crate::query::zone_characteristics::Reach::relayout,
