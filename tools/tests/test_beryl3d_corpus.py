@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -73,4 +74,39 @@ def test_exploration_lists_one_check_per_crate(
     assert [json.loads(line) for line in capsys.readouterr().out.splitlines()] == [
         {"check": "b3d-corpus:cards_a", "digest": "hash-cards_a"},
         {"check": "b3d-corpus:cards_b", "digest": "hash-cards_b"},
+    ]
+
+
+def test_exploration_reports_each_requested_crate_as_it_finishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    results: Path = tmp_path / "results.jsonl"
+    monkeypatch.setenv("IGNITE_RESULTS", str(results))
+    monkeypatch.setattr(
+        corpus, "parts", lambda names: [corpus.Part(n, f"hash-{n}") for n in names]
+    )
+    first_result: dict[str, str] = {"check": "b3d-corpus:cards_b", "outcome": "pass"}
+    failed: corpus.Sweep = corpus.Sweep(missing=["card/cast"], faults=[], tests=2)
+
+    def sweep(
+        pending: Iterable[corpus.Part], _inspector: Path, _recorder: Path
+    ) -> Iterable[tuple[corpus.Part, corpus.Sweep]]:
+        first, second = pending
+        assert [first.crate, second.crate] == ["cards_b", "cards_a"]
+        yield first, corpus.Sweep(missing=[], faults=[], tests=2)
+        assert [json.loads(line) for line in results.read_text().splitlines()] == [
+            first_result
+        ]
+        yield second, failed
+
+    monkeypatch.setattr(corpus, "sweep", sweep)
+    checks = ["b3d-corpus:cards_b", "b3d-corpus:cards_a"]
+    assert adapter.main(["b3d-corpus", "run", *checks]) == 1
+    assert [json.loads(line) for line in results.read_text().splitlines()] == [
+        first_result,
+        {
+            "check": "b3d-corpus:cards_a",
+            "outcome": "fail",
+            "message": failed.message(),
+        },
     ]

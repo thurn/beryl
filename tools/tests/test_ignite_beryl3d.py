@@ -49,7 +49,11 @@ def test_each_jsonl_family_is_listed_and_run_by_its_own_name() -> None:
     for name, family in manifest()["family"].items():
         if family["adapter"] != "jsonl":
             continue
-        assert name in adapter.LISTS and name in adapter.RUNS, name
+        if name == "b3d-corpus":
+            # The corpus streams results through its own command dispatch.
+            assert str(family["next"]).endswith(f"beryl3d {name} next")
+        else:
+            assert name in adapter.LISTS and name in adapter.RUNS, name
         assert family["list"] == (
             f"uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d {name} list"
         )
