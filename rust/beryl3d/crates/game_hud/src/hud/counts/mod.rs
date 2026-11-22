@@ -8,7 +8,7 @@ use glam::Vec2;
 use game_table::table::{HALF_LIFE, HudAnchor, Table};
 use kit_base::data::effect::NumberOrigin;
 use kit_base::data::profiles::{Life, LifeChange, LifeText};
-use kit_base::tokens::{color, size, type_style};
+use kit_base::tokens::{color, ratio, size, type_style};
 use kit_fx::effects::{self, EffectRun, NumberLook};
 use kit_scene::{Context, Feature, StateUpdate};
 use kit_ui::element::{Element, FloatId, floats};
@@ -313,12 +313,14 @@ impl CountFloats {
             let art_offset = orb::face_offset(side) * life_style.orb_scale;
             let offset = Vec2::new(0.0, art_offset);
             let life = HudAnchor::Life(side);
-            // Under the opening's backdrop the total is dimmed as the orb under it is.
+            // The float draws above the backdrop, so apply both the orb's opening opacity
+            // and the backdrop's dimming to the number.
             let opacity = if dimmed {
-                1.0 - backdrop::backdrop_cover(
+                let cover = backdrop::backdrop_cover(
                     table.life_centre(side).y + art_offset,
                     table.camera().window.size.height,
-                )
+                );
+                ratio::OPENING_HUD_OPACITY * (1.0 - cover)
             } else {
                 1.0
             };

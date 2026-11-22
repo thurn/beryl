@@ -82,12 +82,11 @@ impl Client {
         } else {
             mounted_screen.or_else(|| self.compose_screen(&input, furniture, log, result))
         };
-        let opening = under.is_some()
-            && sheet.is_none()
-            && self.features.screen == Screen::Game
-            && game_hud::screens::opening::shown(&input.hud());
-        let away =
+        let game_opening =
             self.features.screen == Screen::Game && game_hud::screens::opening::shown(&input.hud());
+        // The bug report captures the opening under its sheet. Keep the same life HUD and
+        // opening-hand placement while the header is still drawn.
+        let opening = under.is_some() && game_opening;
         let shown = match sheet {
             Some(Sheet::Settings) => sheet_view,
             Some(Sheet::BugReport) => Some(bug_report::compose(under, sheet_view)),
@@ -99,7 +98,7 @@ impl Client {
         // desktop board holds it away under the opening, a sheet open over it or not; the
         // phone's board does not.
         if self.show.table().layout().style.hand_away > 0.0
-            && self.show.hold_hand_away(away, self.window)
+            && self.show.hold_hand_away(game_opening, self.window)
         {
             self.prepare_resized();
         }

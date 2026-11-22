@@ -26,20 +26,29 @@ use glam::Vec2;
 
 use super::orb;
 use crate::hud::HudIn;
+use crate::screens::opening;
 use game_table::profiles::Profile;
 use kit_base::data::hud::IncomingStyle;
 use kit_base::data::profiles::Incoming;
+use kit_base::tokens::ratio;
 use kit_text::text::TypeStyle;
 use kit_text::text::fonts::Font;
 use kit_ui::element::{Anchor, Element, Position, Shadow, Shown, TextAlign, holder, text};
 
-/// What the game screen shows for the players: both orbs, once a game has a view.
+/// Both orbs once a game has a view. The opening fades them like the web's
+/// `.table-dimmed[data-opening] [data-life]` rule, before the backdrop is drawn over them.
 #[must_use]
 pub fn players(input: &HudIn) -> Option<Element> {
     let view = input.view?;
+    let opacity = if opening::shown(input) {
+        ratio::OPENING_HUD_OPACITY
+    } else {
+        1.0
+    };
     Some(
         holder()
             .name("players")
+            .opacity(opacity)
             .children([Side::You, Side::Opponent].map(|side| orb(view, side, input))),
     )
 }

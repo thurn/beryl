@@ -9,7 +9,7 @@ use app_client::driver::{Duration, Page, Recording};
 use app_client::{Client, Config};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::ipc::FixtureMessage;
-use beryl_protocol::protocol::{CardType, Side, ZoneName};
+use beryl_protocol::protocol::{CardType, Side, Status, ZoneName};
 use beryl_protocol::script::{Act, Table as Played, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
@@ -184,6 +184,74 @@ fn the_two_frames_after_cmd_b_show_nothing_of_the_report() {
         shows_report(client.frame(48_000_000)),
         "then the region chooser"
     );
+}
+
+#[test]
+fn the_opening_header_stays_clear_in_the_bug_report_picture() {
+    use super::{elements::key, flat_layer::find};
+    use kit_base::tokens::ratio::OPENING_HUD_OPACITY;
+    use kit_ui::input::Window;
+
+    let mut view = ViewBuilder::new();
+    for _ in 0..7 {
+        view.card(ZoneName::Hand, Side::You, "Island");
+    }
+    view.script(ScriptBuilder::reset().build());
+    let mut opening = view.update();
+    opening.view.turn.number = 0;
+    opening.view.turn.starting = Some(Side::Opponent);
+    opening.view.status = Status::Thinking;
+    let mut page = Page::in_window(
+        crate::test_data::data(),
+        Recording(vec![FixtureMessage::game_update(&opening)]).into(),
+        Side::You,
+        Window {
+            size: Size {
+                width: 1728.0,
+                height: 1117.0,
+            },
+            scale: 2.0,
+            ..Window::default()
+        },
+    )
+    .expect("the opening plays");
+    page.still();
+    let now = page.now();
+    let (client, _) = page.host_assets();
+
+    let check_header = |frame: &Frame| {
+        let printed = tree(frame, &TreeOptions::default()).expect("a whole tree prints");
+        assert!(printed.contains("text \"On the draw\""), "{printed}");
+        assert!(printed.contains("text \"Opening hand\""), "{printed}");
+        assert!(printed.contains("player \"You 20\""), "{printed}");
+        assert!(!printed.contains("player \"Opponent 20\""), "{printed}");
+        let orb = &frame.resolved[find(frame, Role::Region, "opponent's orb")];
+        let total = &frame.resolved[find(frame, Role::Player, "You 20")];
+        assert!((orb.opacity - OPENING_HUD_OPACITY).abs() < f32::EPSILON);
+        assert!(total.opacity < OPENING_HUD_OPACITY);
+    };
+    check_header(client.frame(now));
+    client.handle(key(
+        KeyCode::B,
+        Modifiers {
+            command: true,
+            ..Modifiers::default()
+        },
+    ));
+    // The host reads the second frame. Both frames should retain the same HUD visibility.
+    check_header(client.frame(now + 16_000_000));
+    check_header(client.frame(now + 32_000_000));
+    client.handle(key(KeyCode::Escape, Modifiers::default()));
+    check_header(client.frame(now + 48_000_000));
+
+    client.handle(Input::Update(Box::new(view.update())));
+    client.frame(now + 64_000_000);
+    let frame = client.frame(now + 80_000_000);
+    let printed = tree(frame, &TreeOptions::default()).expect("a whole tree prints");
+    assert!(!printed.contains("text \"Opening hand\""), "{printed}");
+    assert!(printed.contains("player \"Opponent 20\""), "{printed}");
+    let orb = &frame.resolved[find(frame, Role::Region, "opponent's orb")];
+    assert!((orb.opacity - 1.0).abs() < f32::EPSILON);
 }
 
 #[test]
