@@ -12,6 +12,7 @@
 use kit_ui::input::Input as DeviceInput;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use app_client::Input;
@@ -21,6 +22,7 @@ use beryl_host::{Chosen, Opening};
 use beryl_protocol::protocol::SessionId;
 use beryl_protocol::{GameUpdate, performance_probe};
 use beryl_render::{Renderer, Target};
+use kit_base::data::Data;
 use kit_ui::input::{Insets, Size, Tier};
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +32,8 @@ const PERMANENTS: u16 = 255;
 /// What the measurement found.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Probe {
+    /// The number of measured frames configured for the probe.
+    pub frames: usize,
     /// The slowest of the frames drawn, or `None` when none was, because the renderer has no
     /// Enhanced tier.
     pub slowest: Option<Duration>,
@@ -57,6 +61,9 @@ pub struct Tiered {
     /// How long choosing the tier took before the first frame, in milliseconds.
     #[serde(default)]
     pub took_ms: f64,
+    /// The configured frame count when the setting is Automatic.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub probe_frames: Option<usize>,
     /// The display's refresh interval, in milliseconds.
     pub interval_ms: f64,
     /// The tier the client starts in: `baseline` or `enhanced`.
@@ -66,17 +73,23 @@ pub struct Tiered {
 /// Measures how fast `renderer` draws the Enhanced tier in a window of `size` logical points at
 /// `scale`, on a display of `display_hz`. Draws nothing when the renderer has no Enhanced tier.
 #[must_use]
-pub fn probe(renderer: &mut Renderer, size: Size, scale: f32, display_hz: f32) -> Probe {
+pub fn probe(
+    renderer: &mut Renderer,
+    size: Size,
+    scale: f32,
+    display_hz: f32,
+    data: Arc<Data>,
+) -> Probe {
     let interval = Duration::from_secs_f64(1.0 / f64::from(display_hz.max(1.0)));
+    let tuning = data.tier_probe;
     if !renderer.enhanced_available() {
         return Probe {
+            frames: tuning.frames,
             slowest: None,
             interval,
             chosen: Tier::Baseline,
         };
     }
-    let data = crate::data::embedded().expect("app tuning");
-    let tuning = data.tier_probe;
     let mut client = Client::new(data, Config::LARGEST);
     client.handle(Input::Device(DeviceInput::Surface {
         size,
@@ -110,6 +123,7 @@ pub fn probe(renderer: &mut Renderer, size: Size, scale: f32, display_hz: f32) -
         Tier::Baseline
     };
     Probe {
+        frames: tuning.frames,
         slowest: Some(slowest),
         interval,
         chosen,
@@ -124,11 +138,12 @@ pub fn choose(
     opening: Opening,
     graphics: Graphics,
     verdict: Option<Verdict>,
+    data: Arc<Data>,
 ) -> (Chosen, Tiered) {
     let started = Instant::now();
     let enhanced_available = renderer.enhanced_available();
     let interval = Duration::from_secs_f64(1.0 / f64::from(opening.display_hz.max(1.0)));
-    let (wanted, slowest) = match graphics {
+    let (wanted, measurement) = match graphics {
         Graphics::Baseline => (Tier::Baseline, None),
         Graphics::Enhanced => (Tier::Enhanced, None),
         Graphics::Automatic => {
@@ -136,13 +151,13 @@ pub fn choose(
                 width: opening.width as f32 / opening.scale,
                 height: opening.height as f32 / opening.scale,
             };
-            let probe = probe(renderer, size, opening.scale, opening.display_hz);
+            let probe = probe(renderer, size, opening.scale, opening.display_hz, data);
             let chosen = match verdict {
                 Some(Verdict::Pass) => Tier::Enhanced,
                 Some(Verdict::Fail) => Tier::Baseline,
                 None => probe.chosen,
             };
-            (chosen, probe.slowest)
+            (chosen, Some(probe))
         }
     };
     let tier = if wanted == Tier::Enhanced && !enhanced_available {
@@ -156,8 +171,11 @@ pub fn choose(
     };
     let tiered = Tiered {
         setting: word(graphics).to_owned(),
-        slowest_ms: slowest.map(|slowest| slowest.as_secs_f64() * 1e3),
+        slowest_ms: measurement
+            .and_then(|probe| probe.slowest)
+            .map(|slowest| slowest.as_secs_f64() * 1e3),
         took_ms: started.elapsed().as_secs_f64() * 1e3,
+        probe_frames: measurement.map(|probe| probe.frames),
         interval_ms: interval.as_secs_f64() * 1e3,
         tier: match tier {
             Tier::Baseline => "baseline",
@@ -182,6 +200,7 @@ pub(crate) type Pending = Rc<RefCell<Option<Tiered>>>;
 pub(crate) fn setup(
     settings: Option<&Settings>,
     verdict: Option<Verdict>,
+    data: Arc<Data>,
 ) -> (
     impl FnOnce(&mut Renderer, Opening) -> Chosen + use<>,
     Pending,
@@ -190,7 +209,7 @@ pub(crate) fn setup(
     let pending = Pending::default();
     let tiered = Rc::clone(&pending);
     let setup = move |renderer: &mut Renderer, opening: Opening| {
-        let (chosen, line) = choose(renderer, opening, graphics, verdict);
+        let (chosen, line) = choose(renderer, opening, graphics, verdict, data);
         *tiered.borrow_mut() = Some(line);
         chosen
     };

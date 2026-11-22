@@ -49,10 +49,10 @@ fn embedded_tuning(name: &str) -> Result<String, String> {
     Ok(text.to_owned())
 }
 
-/// A watch began before the initial load, so an edit during startup is noticed too.
+/// The watcher remembers the snapshot used during startup.
 #[cfg(feature = "tools")]
 pub(crate) struct Reload {
-    watch: beryl_host::DataWatch,
+    watch: beryl_host::DataWatch<beryl_inspect::data::Snapshot>,
     initial_error: Option<String>,
 }
 
@@ -62,10 +62,14 @@ pub(crate) fn initial(embedded: Arc<Data>, watch: bool) -> (Arc<Data>, Option<Re
         return (embedded, None);
     }
     let directory = beryl_inspect::data::directory();
-    let watch = beryl_host::DataWatch::new(directory.clone());
-    let (data, initial_error) = match beryl_inspect::data::load(&directory) {
-        Ok(data) => (Arc::new(data), None),
-        Err(error) => (embedded, Some(error)),
+    let mut watch = beryl_host::DataWatch::new(
+        move || beryl_inspect::data::Snapshot::read(&directory),
+        beryl_inspect::data::Snapshot::parse,
+    );
+    let (data, initial_error) = match watch.poll() {
+        Some(Ok(data)) => (data, None),
+        Some(Err(error)) => (embedded, Some(error)),
+        None => (embedded, None),
     };
     (
         data,
@@ -89,7 +93,7 @@ pub(crate) fn start_watch(
     }
     reload
         .watch
-        .start(inbox, beryl_inspect::data::load)
+        .start(inbox)
         .map(Some)
         .map_err(|error| format!("could not start the tuning watcher: {error}"))
 }

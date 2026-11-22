@@ -28,7 +28,7 @@ mod threads;
 mod windowless;
 
 pub use assets::{Assets, Scans, match_faces, spawn_glyph_worker};
-pub use data_watch::{DataWatch, TUNING_FILES, WatchingData};
+pub use data_watch::{DataWatch, WatchingData};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use desktop::{Desktop, Options, WindowMode, is_fullscreen_key};
 #[cfg(feature = "drive")]

@@ -6,6 +6,7 @@ use kit_ui::input::Input as DeviceInput;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use app_client::Input;
 use app_client::command::Request;
@@ -514,7 +515,10 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         .transpose()?;
     let slow_gpu = options.slow_gpu.unwrap_or_default();
     let (settings, saver) = player_settings(options);
-    let (setup, tier) = crate::tier::setup(settings.as_ref(), options.probe);
+    let data = crate::data::embedded()?;
+    #[cfg(feature = "tools")]
+    let (data, reload) = crate::data::initial(data, options.watch);
+    let (setup, tier) = crate::tier::setup(settings.as_ref(), options.probe, Arc::clone(&data));
     let audio = start_audio(options.window, &settings.clone().unwrap_or_default());
     let log = Rc::new(RefCell::new(None));
     let mut feed = AppFeed {
@@ -539,9 +543,6 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         #[cfg(all(feature = "tools", unix))]
         live: None,
     };
-    let data = crate::data::embedded()?;
-    #[cfg(feature = "tools")]
-    let (data, reload) = crate::data::initial(data, options.watch);
     let mut client = Client::new(data, Config::LARGEST);
     if let Some(settings) = settings {
         client.handle(Input::Settings(settings));

@@ -3,14 +3,16 @@
 //! options a release build lacks are not options without `tools`, and read as given with it;
 //! `--replay` names a file that exists.
 
-use std::fs::{self, File};
+use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use app_client::{Client, Config, Input};
 use beryl_3d::frame_log;
 use beryl_3d::options::Options;
+use beryl_inspect::data::{Snapshot, TUNING_FILES};
 use kit_base::data::profiles;
 
 #[test]
@@ -46,23 +48,13 @@ fn a_fixture_with_no_window_runs_for_its_time_and_logs_its_frames() {
 }
 
 #[test]
-fn a_paused_windowless_app_logs_one_reload_for_a_touched_data_file() {
-    let directory = std::env::temp_dir().join(format!("b3d-app-watch-{}", std::process::id()));
-    let source = Path::new("data/beryl3d");
-    let effects = source.join("effects");
-    let effect_names = beryl_test_files::read_dir(&effects)
-        .unwrap()
-        .map(|entry| Path::new("effects").join(entry.unwrap().file_name()));
-    for name in beryl_host::TUNING_FILES
-        .into_iter()
-        .chain(profiles::FILES)
-        .map(std::path::PathBuf::from)
-        .chain(effect_names)
-    {
-        let target = directory.join(&name);
-        fs::create_dir_all(target.parent().unwrap()).unwrap();
-        fs::write(target, beryl_test_files::read(source.join(name)).unwrap()).unwrap();
-    }
+fn a_watched_app_probes_with_checkout_tuning_and_reloads_when_paused() {
+    let directory = copy_tuning("app");
+    fs::write(
+        directory.join("tier-probe.json"),
+        r#"{"frames":1,"share":0.3333}"#,
+    )
+    .unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_beryl3d"))
         .args([
             "--fixture",
@@ -75,7 +67,7 @@ fn a_paused_windowless_app_logs_one_reload_for_a_touched_data_file() {
             "--pause-at",
             "0ms",
             "--tier",
-            "baseline",
+            "automatic",
         ])
         .env("BERYL3D_DATA", &directory)
         .stdout(Stdio::piped())
@@ -91,7 +83,10 @@ fn a_paused_windowless_app_logs_one_reload_for_a_touched_data_file() {
             break;
         }
         if text[start..].starts_with(beryl_3d::app::FIRST_SHOWN) {
-            let verbs = File::open(directory.join("verbs.json")).unwrap();
+            let verbs = OpenOptions::new()
+                .write(true)
+                .open(directory.join("verbs.json"))
+                .unwrap();
             let modified = verbs.metadata().unwrap().modified().unwrap();
             verbs
                 .set_modified(modified - Duration::from_secs(1))
@@ -113,6 +108,9 @@ fn a_paused_windowless_app_logs_one_reload_for_a_touched_data_file() {
         .unwrap();
     let log = frame_log::read(path.as_ref()).unwrap();
     fs::remove_file(path).unwrap();
+    let tier = log.tier.unwrap();
+    assert_eq!(tier.setting, "automatic");
+    assert_eq!(tier.probe_frames, Some(1));
     let reloads: Vec<_> = log
         .inputs
         .into_iter()
@@ -125,6 +123,86 @@ fn a_paused_windowless_app_logs_one_reload_for_a_touched_data_file() {
         })
         .collect();
     assert_eq!(reloads, [frame_log::InputLine::DataReloaded {}]);
+}
+
+fn copy_tuning(name: &str) -> PathBuf {
+    let directory = std::env::temp_dir().join(format!("b3d-watch-{name}-{}", std::process::id()));
+    let source = Path::new("data/beryl3d");
+    let effects = source.join("effects");
+    let effect_names = beryl_test_files::read_dir(&effects)
+        .unwrap()
+        .map(|entry| Path::new("effects").join(entry.unwrap().file_name()));
+    for name in TUNING_FILES
+        .into_iter()
+        .chain(profiles::FILES)
+        .map(std::path::PathBuf::from)
+        .chain(effect_names)
+    {
+        let target = directory.join(&name);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::write(target, beryl_test_files::read(source.join(name)).unwrap()).unwrap();
+    }
+    directory
+}
+
+#[test]
+fn reload_detects_equal_length_and_timestamp_edits_and_keeps_the_last_valid_tuning() {
+    let directory = copy_tuning("snapshot");
+    let tuning = directory.join("tier-probe.json");
+    let before = r#"{"frames":1,"share":0.3333}"#;
+    let after = r#"{"frames":2,"share":0.3333}"#;
+    fs::write(&tuning, before).unwrap();
+
+    let watched = directory.clone();
+    let mut watch = beryl_host::DataWatch::new(move || Snapshot::read(&watched), Snapshot::parse);
+    let mut client = Client::new(watch.poll().unwrap().unwrap(), Config::LARGEST);
+    assert_eq!(client.data().tier_probe.frames, 1);
+
+    let original = fs::metadata(&tuning).unwrap();
+    fs::write(&tuning, after).unwrap();
+    OpenOptions::new()
+        .write(true)
+        .open(&tuning)
+        .unwrap()
+        .set_modified(original.modified().unwrap())
+        .unwrap();
+    let edited = fs::metadata(&tuning).unwrap();
+    assert_eq!(edited.len(), original.len());
+    assert_eq!(edited.modified().unwrap(), original.modified().unwrap());
+    client.handle(Input::Data(watch.poll().unwrap().unwrap()));
+    assert_eq!(client.data().tier_probe.frames, 2);
+
+    let effect = directory.join("effects/beam.json");
+    let effect_bytes = fs::read(&effect).unwrap();
+    fs::remove_file(&effect).unwrap();
+    let error = watch.poll().unwrap().unwrap_err();
+    assert!(error.contains("effects/beam.json"), "{error}");
+    client.handle(Input::DataError(error));
+    assert!(client.data().effects.get("beam").is_some());
+    assert!(watch.poll().is_none());
+    fs::write(&effect, effect_bytes).unwrap();
+    client.handle(Input::Data(watch.poll().unwrap().unwrap()));
+    assert!(client.data().effects.get("beam").is_some());
+
+    fs::write(&tuning, "{").unwrap();
+    let error = watch.poll().unwrap().unwrap_err();
+    assert!(error.contains("tier-probe.json"), "{error}");
+    client.handle(Input::DataError(error));
+    assert_eq!(client.data().tier_probe.frames, 2);
+    assert!(watch.poll().is_none());
+
+    fs::remove_file(&tuning).unwrap();
+    let error = watch.poll().unwrap().unwrap_err();
+    assert!(error.contains("tier-probe.json"), "{error}");
+    client.handle(Input::DataError(error));
+    assert_eq!(client.data().tier_probe.frames, 2);
+    assert!(watch.poll().is_none());
+
+    fs::write(&tuning, before).unwrap();
+    client.handle(Input::Data(watch.poll().unwrap().unwrap()));
+    assert_eq!(client.data().tier_probe.frames, 1);
+    assert!(watch.poll().is_none());
+    fs::remove_dir_all(directory).unwrap();
 }
 
 #[test]

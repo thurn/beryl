@@ -1,121 +1,60 @@
 //! Watches the app's runtime tuning away from the frame thread.
 
-use std::fs;
-use std::io::{self, ErrorKind};
-use std::path::{Path, PathBuf};
+use std::io;
 use std::sync::Arc;
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use app_client::Input;
-use kit_base::data::{Data, profiles};
+use kit_base::data::Data;
 
 use crate::Inbox;
 
-/// The runtime tuning at the root of the data directory. The app's reload test starts with
-/// this list, the profiles and the effects, and verifies that the runtime loader accepts them.
-pub const TUNING_FILES: [&str; 18] = [
-    "card.json",
-    "badges.json",
-    "verbs.json",
-    "audit.json",
-    "flat.json",
-    "hud.json",
-    "pointer.json",
-    "light.json",
-    "own.json",
-    "catch-up.json",
-    "frame-rate.json",
-    "slide.json",
-    "tier-probe.json",
-    "notices.json",
-    "revealed.json",
-    "shown.json",
-    "gallery.json",
-    "lighting.json",
-];
-
-/// The files the runtime data loader reads. Build-time constants and other check data are
-/// outside the watch. Keep the stamp of a failed read too, so a broken save is reported once.
-#[derive(PartialEq, Eq)]
-struct Snapshot {
-    tuning: Vec<Stamp>,
-    effects: Result<Vec<(PathBuf, Stamp)>, ErrorKind>,
+/// A runtime tuning source and its last stable read, including failed reads.
+pub struct DataWatch<Snapshot> {
+    read: Box<dyn FnMut() -> Result<Snapshot, String> + Send>,
+    parse: fn(&Snapshot) -> Result<Data, String>,
+    seen: Option<Result<Snapshot, String>>,
 }
 
-type Stamp = Result<(SystemTime, u64), ErrorKind>;
-
-fn stamp(path: &Path) -> Stamp {
-    let read = || {
-        let metadata = fs::metadata(path)?;
-        Ok::<_, io::Error>((metadata.modified()?, metadata.len()))
-    };
-    read().map_err(|error| error.kind())
-}
-
-impl Snapshot {
-    fn read(directory: &Path) -> Self {
-        let tuning = TUNING_FILES
-            .into_iter()
-            .chain(profiles::FILES)
-            .map(|name| stamp(&directory.join(name)))
-            .collect();
-        let effects = || {
-            let mut files = Vec::new();
-            for entry in fs::read_dir(directory.join("effects"))? {
-                let path = entry?.path();
-                if path
-                    .extension()
-                    .is_some_and(|extension| extension == "json")
-                {
-                    let stamp = stamp(&path);
-                    files.push((path, stamp));
-                }
-            }
-            files.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-            Ok::<_, io::Error>(files)
-        };
+impl<Snapshot: PartialEq + Send + 'static> DataWatch<Snapshot> {
+    /// Watches the complete input sets returned by `read`, validating them with `parse`.
+    pub fn new(
+        read: impl FnMut() -> Result<Snapshot, String> + Send + 'static,
+        parse: fn(&Snapshot) -> Result<Data, String>,
+    ) -> Self {
         Self {
-            tuning,
-            effects: effects().map_err(|error| error.kind()),
+            read: Box::new(read),
+            parse,
+            seen: None,
         }
     }
-}
 
-/// The tuning directory and its last observed file stamps.
-pub struct DataWatch {
-    directory: PathBuf,
-    seen: Snapshot,
-}
-
-impl DataWatch {
-    /// Takes the baseline stamps before the app reads its initial tuning.
-    #[must_use]
-    pub fn new(directory: PathBuf) -> Self {
-        let seen = Snapshot::read(&directory);
-        Self { directory, seen }
+    /// Returns a new set or error once two consecutive reads agree. A save during the first
+    /// read can mix files from before and after the edit, so validate only the captured set
+    /// that agrees with the second read. Leave a changing set for the next poll.
+    pub fn poll(&mut self) -> Option<Result<Arc<Data>, String>> {
+        let candidate = (self.read)();
+        if self.seen.as_ref() == Some(&candidate) || (self.read)() != candidate {
+            return None;
+        }
+        let data = candidate
+            .as_ref()
+            .map_err(Clone::clone)
+            .and_then(self.parse)
+            .map(Arc::new);
+        self.seen = Some(candidate);
+        Some(data)
     }
 
-    /// Reports a changed set of stamps once, including when a file is removed or restored.
-    pub fn changed(&mut self) -> bool {
-        let snapshot = Snapshot::read(&self.directory);
-        let changed = self.seen != snapshot;
-        self.seen = snapshot;
-        changed
-    }
-
-    /// Polls for edits on a utility thread, validating each changed set before handing it to
-    /// the client. Sending via the inbox wakes the host even when playback is paused.
+    /// Polls for edits on a utility thread. Sending via the inbox wakes the host even when
+    /// playback is paused.
     ///
     /// # Errors
     ///
     /// When the operating system cannot start the thread.
-    pub fn start(
-        mut self,
-        inbox: Inbox,
-        load: fn(&Path) -> Result<Data, String>,
-    ) -> io::Result<WatchingData> {
+    pub fn start(mut self, inbox: Inbox) -> io::Result<WatchingData> {
         let (stop, stopped) = mpsc::channel();
         let thread = thread::Builder::new()
             .name("beryl3d-data".to_owned())
@@ -124,9 +63,9 @@ impl DataWatch {
                 while stopped.recv_timeout(Duration::from_millis(250))
                     == Err(RecvTimeoutError::Timeout)
                 {
-                    if self.changed() {
-                        let input = match load(&self.directory) {
-                            Ok(data) => Input::Data(Arc::new(data)),
+                    if let Some(data) = self.poll() {
+                        let input = match data {
+                            Ok(data) => Input::Data(data),
                             Err(error) => Input::DataError(error),
                         };
                         if !inbox.send(input) {

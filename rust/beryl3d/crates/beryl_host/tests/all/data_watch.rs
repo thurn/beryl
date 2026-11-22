@@ -1,33 +1,28 @@
-//! The watcher observes edits once, including changes to which effect files exist.
-
-use std::fs::{self, File};
-use std::time::Duration;
+//! A save partway through a read must leave the active tuning in place.
 
 use beryl_host::DataWatch;
+use kit_base::data::Data;
 
 #[test]
-fn reports_a_modification_time_change_once_and_detects_effect_additions_and_removals() {
-    let directory = std::env::temp_dir().join(format!("b3d-data-watch-{}", std::process::id()));
-    fs::create_dir_all(directory.join("effects")).unwrap();
-    let tuning =
-        ["verbs.json", "pointer.json"].map(|name| File::create(directory.join(name)).unwrap());
-    let mut watch = DataWatch::new(directory.clone());
-    assert!(!watch.changed());
+fn a_save_between_file_reads_never_publishes_the_mixed_set() {
+    let mut files = [1, 1];
+    let mut reads = 0;
+    let read = move || {
+        let first = files[0];
+        reads += 1;
+        if reads == 3 {
+            files = [2, 2];
+        }
+        Ok([first, files[1]])
+    };
+    let mut watch = DataWatch::new(read, |&[first, second]| {
+        let mut data = Data::clone(&crate::test_data::data());
+        data.tier_probe.frames = first * 10 + second;
+        Ok(data)
+    });
 
-    for file in tuning {
-        let modified = file.metadata().unwrap().modified().unwrap();
-        file.set_modified(modified - Duration::from_secs(1))
-            .unwrap();
-        assert!(watch.changed());
-        assert!(!watch.changed());
-    }
-
-    let effect = directory.join("effects/new.json");
-    fs::write(&effect, "{}").unwrap();
-    assert!(watch.changed());
-    assert!(!watch.changed());
-    fs::remove_file(effect).unwrap();
-    assert!(watch.changed());
-    assert!(!watch.changed());
-    fs::remove_dir_all(directory).unwrap();
+    assert_eq!(watch.poll().unwrap().unwrap().tier_probe.frames, 11);
+    assert!(watch.poll().is_none(), "the first read saw [1, 2]");
+    assert_eq!(watch.poll().unwrap().unwrap().tier_probe.frames, 22);
+    assert!(watch.poll().is_none());
 }
