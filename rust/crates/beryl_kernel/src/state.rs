@@ -16,8 +16,8 @@ pub use crate::effects::{
 pub use crate::last_known::{DEPARTED_SPELLS, DepartedSpell, LAST_KNOWN, LastKnown};
 pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
 pub use crate::object::{
-    AbilityMask, AttackTarget, CombatRole, Derived, Flag, GrantRef, Object, ObjectFlags, ObjectRef,
-    SlotSet,
+    AbilityMask, Attachment, AttackTarget, CombatRole, Derived, Flag, GrantRef, Object,
+    ObjectFlags, ObjectRef, SlotSet,
 };
 pub use crate::pending::{
     CastKind, CastStep, Casting, FaceUpPayment, LethalAssignment, PayingObjects, Pending,

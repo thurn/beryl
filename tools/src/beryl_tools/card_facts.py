@@ -451,8 +451,17 @@ class Cards:
         countered. XMage asks even a controller who cannot pay, where Beryl asks nothing
         (CR 118.3): its mana costs can always be paid as far as its question is concerned.
         """
-        unless = self.instruction(card, "Unless", face)
-        return unless is not None and "mana" in cast(Json, unless.get("cost", {}))
+        return any(
+            instruction["kind"] == "Unless"
+            and "mana" in cast(Json, instruction.get("cost", {}))
+            for ability in self.abilities(card, face)
+            if ability["kind"] == "Spell"
+            and any(
+                target["kind"] in ("Spell", "SpellOrPermanent")
+                for target in cast(list[Json], ability.get("targets", []))
+            )
+            for instruction in cast(list[Json], ability.get("instructions", []))
+        )
 
     def untaps_up_to(self, card: str) -> bool:
         """Whether resolving `card` untaps up to some number of permanents, which XMage first

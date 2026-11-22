@@ -11,7 +11,7 @@ pub(crate) mod stops;
 use beryl_kernel::format::{FirstDraw, Format};
 
 use crate::combat;
-use crate::continuous::layers;
+use crate::continuous::{layers, rule_change};
 use crate::decision::{Outcome, StallReason};
 use crate::fixed::Full;
 use crate::game::Game;
@@ -256,9 +256,7 @@ fn begin_planned_turn<L: Layout>(
     if s.turn().is_starting_players_first_turn() {
         let _skipped = s.remove_step(TurnStep::Draw);
     }
-    let step = s
-        .take_planned_step()
-        .expect("a new turn has its untap step");
+    let step = advance_plan(s, t, sink)?.expect("a new turn has a step");
     begin_step(s, t, sink, step)
 }
 
@@ -283,7 +281,7 @@ fn planned_next<L: Layout>(
     }
     let step = s.turn().step();
     if step == TurnStep::Cleanup {
-        if s.planned_next_step() == Some((TurnStep::Cleanup, true)) {
+        if matches!(s.planned_next_step(), Some((TurnStep::Cleanup, _))) {
             return Ok(s.take_planned_step());
         }
         s.repeat_cleanup();
@@ -313,7 +311,7 @@ fn advance_plan<L: Layout>(
             layers::refresh(s, t, sink)?;
             skip = !combat::first_strike_step(s);
         }
-        if !skip {
+        if !skip && !rule_change::skips_step(s, t, next) {
             return Ok(s.take_planned_step());
         }
         let _skipped = s.remove_step(next);
@@ -322,6 +320,26 @@ fn advance_plan<L: Layout>(
         combat::end_combat(s);
     }
     Ok(None)
+}
+
+/// Adds the step immediately after the one being played (see [CR 500.9]):
+/// "Some effects can add steps to a phase. They do this by adding the steps
+/// directly after a specified step or directly before a specified step."
+///
+/// [CR 500.9]: https://yawgatog.com/resources/magic-rules/#R5009
+pub(crate) fn additional_step<L: Layout>(
+    game: &mut Game<'_, L>,
+    step: TurnStep,
+) -> Result<crate::interpret::Outcome<L>, Full> {
+    use crate::interpret::Outcome;
+    use beryl_kernel::{Placement, TurnPhase};
+    let current = game.state.turn().step();
+    let phase = TurnPhase::of(current);
+    if !game.state.has_turn_plan() || phase == TurnPhase::Main || phase != TurnPhase::of(step) {
+        return Ok(Outcome::NOTHING);
+    }
+    game.insert_step(current, Placement::After, step)?;
+    Ok(Outcome::of(crate::bitboard::Bitboard::EMPTY, 1))
 }
 
 /// Continues after a cleanup that needed no priority (see CR 514.3a).

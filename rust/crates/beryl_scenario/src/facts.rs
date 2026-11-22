@@ -466,6 +466,7 @@ fn players_name(players: &Players, shape: &Shape) -> String {
         Players::Target(i) => format!("Target {}", i.get()),
         Players::ControllerOf(objects) => format!("ControllerOf {}", objects_name(&objects)),
         Players::OwnerOf(objects) => format!("OwnerOf {}", objects_name(&objects)),
+        Players::Enchanted => "Enchanted".to_owned(),
         Players::EachOther(players) => format!("EachOther {}", players_name(players, shape)),
         Players::You | Players::EachOpponent | Players::EachPlayer => variant(players),
     }

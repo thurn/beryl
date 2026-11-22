@@ -3,6 +3,7 @@
 
 use crate::characteristics::{Colors, Keywords, Supertypes, Types};
 use crate::continuous::Protection;
+use crate::ids::TurnStep;
 use crate::mana::{ManaColor, ManaCost, ManaSet};
 use crate::words::Words;
 
@@ -239,4 +240,43 @@ pub(super) fn pt_change(power: i8, toughness: i8) -> String {
         }
     };
     format!("{}/{}", sign(power, toughness), sign(toughness, power))
+}
+
+/// The name of a step or phase as a trigger says it, such as "upkeep" or "end step"
+/// ([CR 500.1](https://yawgatog.com/resources/magic-rules/#R5001)).
+pub(super) fn step_name(step: TurnStep) -> &'static str {
+    match step {
+        TurnStep::Untap => "untap step",
+        TurnStep::Upkeep => "upkeep",
+        TurnStep::Draw => "draw step",
+        TurnStep::PrecombatMain => "precombat main phase",
+        TurnStep::BeginningOfCombat => "combat",
+        TurnStep::DeclareAttackers => "declare attackers step",
+        TurnStep::DeclareBlockers => "declare blockers step",
+        TurnStep::FirstStrikeDamage => "first-strike damage step",
+        TurnStep::CombatDamage => "combat damage step",
+        TurnStep::EndOfCombat => "end of combat step",
+        TurnStep::PostcombatMain => "postcombat main phase",
+        TurnStep::End => "end step",
+        TurnStep::Cleanup => "cleanup step",
+    }
+}
+
+/// A step as an instruction names it.
+pub(super) fn step_noun(step: TurnStep) -> &'static str {
+    match step {
+        TurnStep::Upkeep => "upkeep step",
+        TurnStep::BeginningOfCombat => "beginning of combat step",
+        TurnStep::Untap
+        | TurnStep::Draw
+        | TurnStep::PrecombatMain
+        | TurnStep::DeclareAttackers
+        | TurnStep::DeclareBlockers
+        | TurnStep::FirstStrikeDamage
+        | TurnStep::CombatDamage
+        | TurnStep::EndOfCombat
+        | TurnStep::PostcombatMain
+        | TurnStep::End
+        | TurnStep::Cleanup => step_name(step),
+    }
 }

@@ -137,7 +137,7 @@ fn triggers_before_main(face: &Face) -> bool {
     face.abilities.iter().any(|a| {
         a.trigger().is_some_and(|trigger| {
             !trigger.delayed
-                && matches!(trigger.event, TriggerEvent::Step(step)
+                && matches!(trigger.event, TriggerEvent::Step(step) | TriggerEvent::FirstStep(step)
                     if (step as u8) < TurnStep::PrecombatMain as u8)
         })
     })

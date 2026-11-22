@@ -79,7 +79,7 @@ impl<L: Layout> Itself<L> {
 /// Whether a target spec can choose `player`: a spec for "target player" or "target opponent"
 /// asks its filter, and one for "any target" may choose every player, since its filter is
 /// for the permanents.
-fn player_matches(spec: &TargetSpec, player: Seat, you: Seat) -> bool {
+pub(crate) fn player_matches(spec: &TargetSpec, player: Seat, you: Seat) -> bool {
     match spec.kind {
         TargetKind::Player => match spec.filter {
             Filter::Any => true,

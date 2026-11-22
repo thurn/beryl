@@ -104,7 +104,7 @@ pub enum Capability {
     /// A card has an activated ability that works in a graveyard or in exile
     /// ([`beryl_card::Ability::in_zones`]), so priority decisions also look in those zones.
     ActivatesFromGraveyardOrExile,
-    /// A custom body can change the sequence of steps or phases in a turn.
+    /// A card can change the sequence of steps or phases in a turn.
     TurnStructure,
     /// A mana ability can ask a question while a spell's costs are paid. Resolutions run
     /// on a copy so that such a question can pause from inside a payment.
@@ -113,8 +113,10 @@ pub enum Capability {
     Morph,
     /// The game may have a Saga or an ability with a chapter symbol.
     Saga,
-    /// The game may have an Equipment that can become illegally attached.
-    Equipment,
+    /// An Aura may be attached to a player.
+    PlayerAttachments,
+    /// An Equipment or a player attachment can become unattached.
+    AttachmentStateChecks,
     /// A card has two halves with combined characteristics off the stack.
     Split,
 }
@@ -133,8 +135,10 @@ impl Capability {
         if subtypes.has(Subtype::Saga).possible() {
             capabilities |= Self::Saga.bit();
         }
-        if subtypes.has(Subtype::Equipment).possible() {
-            capabilities |= Self::Equipment.bit();
+        if subtypes.has(Subtype::Equipment).possible()
+            || capabilities & Self::PlayerAttachments.bit() != 0
+        {
+            capabilities |= Self::AttachmentStateChecks.bit();
         }
         if defs
             .iter()
@@ -165,6 +169,18 @@ impl Capability {
         }
         if face.subtypes.read(&Words::NONE).contains(Subtype::Aura) {
             found |= Capability::ChoosesAsEnters.bit();
+            if face.abilities.iter().chain(face.grants).any(|ability| {
+                ability.kind() == AbilityKind::Spell
+                    && ability.targets().iter().any(|target| {
+                        matches!(
+                            target.kind,
+                            beryl_card::TargetKind::Player
+                                | beryl_card::TargetKind::PermanentOrPlayer
+                        )
+                    })
+            }) {
+                found |= Capability::PlayerAttachments.bit();
+            }
         }
         // An ability a permanent is granted reads what one of its own does.
         if face.grants.iter().any(|a| a.layer().is_some()) {
@@ -205,6 +221,11 @@ impl Capability {
             }
             if a.spend().is_some() {
                 found |= Capability::RemembersMana.bit();
+            }
+            if a.rule()
+                .is_some_and(|rule| matches!(rule.what, beryl_card::Governed::TakeStep(_)))
+            {
+                found |= Capability::TurnStructure.bit();
             }
             found |= body_capabilities(a.body());
             if a.cost().is_loyalty() {
@@ -260,7 +281,11 @@ fn body_capabilities(body: Behavior) -> u32 {
             if copies_itself(effect) {
                 found |= Capability::ReadsDepartedSpell.bit();
             }
-            if effect.any(&|instruction| matches!(instruction, Effect::EndTurn)) {
+            if effect.any(&|instruction| {
+                matches!(instruction, Effect::EndTurn | Effect::AdditionalStep(_))
+                    || matches!(instruction, Effect::ChangeRule { rule, .. }
+                        if matches!(rule.what, beryl_card::Governed::TakeStep(_)))
+            }) {
                 found |= Capability::TurnStructure.bit();
             }
             found

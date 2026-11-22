@@ -682,6 +682,7 @@ pub fn holds<L: Layout>(
                 | Players::Target(_)
                 | Players::ControllerOf(_)
                 | Players::OwnerOf(_)
+                | Players::Enchanted
                 | Players::ThatPlayer
                 | Players::EachOther(_) => s.opponents_of(controller),
             };

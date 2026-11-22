@@ -320,6 +320,7 @@ pub(super) fn rules(rule: &RuleChange) -> Vec<(Kind, String, RuleChange)> {
 fn governed(what: Governed) -> Neighbours<Governed> {
     use Governed as G;
     match what {
+        G::TakeStep(step) => skipped_steps(step),
         G::CastSpells(filter) => filters(filter)
             .into_iter()
             .map(|(name, f)| (name, G::CastSpells(f)))
@@ -417,6 +418,18 @@ fn governed(what: Governed) -> Neighbours<Governed> {
                 .collect()
         }
     }
+}
+
+fn skipped_steps(step: beryl_card::TurnStep) -> Neighbours<Governed> {
+    [
+        beryl_card::TurnStep::Untap,
+        beryl_card::TurnStep::Upkeep,
+        beryl_card::TurnStep::Draw,
+    ]
+    .into_iter()
+    .filter(|&other| other != step)
+    .map(|other| (format!("skip {other:?}"), Governed::TakeStep(other)))
+    .collect()
 }
 
 fn objects_of(objects: Objects, build: fn(Objects) -> Governed) -> Neighbours<Governed> {

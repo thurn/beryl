@@ -511,7 +511,9 @@ impl Scope<'_> {
 
     const fn players(self, players: &Players) -> Checked {
         match players {
-            Players::You | Players::EachOpponent | Players::EachPlayer => Ok(()),
+            Players::You | Players::EachOpponent | Players::EachPlayer | Players::Enchanted => {
+                Ok(())
+            }
             Players::Target(target) => match self.target(*target) {
                 Some(TargetKind::Player | TargetKind::PermanentOrPlayer) => Ok(()),
                 Some(

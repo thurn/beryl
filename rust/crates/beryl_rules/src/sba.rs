@@ -2,6 +2,7 @@
 //!
 //! Implements: CR 104.2a, CR 104.3a, CR 104.4a, CR 704.3, CR 704.5a, CR 704.5b, CR 704.5d, CR 704.5e, CR 704.5f, CR 704.5g, CR 704.5i, CR 704.5j, CR 704.5m, CR 704.5n, CR 704.5s
 
+use beryl_kernel::Attachment;
 use beryl_kernel::format::Format;
 
 use crate::PlayerSet;
@@ -48,8 +49,8 @@ pub(crate) fn check<L: Layout>(
     // same as state-based actions."), but they are found at the same moments.
     crate::stack::trigger::match_states(s, t)?;
     let (mut graveyard, tokens, legendary) = doomed(s, t);
-    // One table test skips both scans in games with neither subtype.
-    let (loose, sacrifices) = if t.can_either(Capability::Equipment, Capability::Saga) {
+    // One table test skips both scans in games without these state-based actions.
+    let (loose, sacrifices) = if t.can_either(Capability::AttachmentStateChecks, Capability::Saga) {
         let (loose, sacrifices) = read_equipment_and_sagas(s, t);
         graveyard |= sacrifices;
         (loose, sacrifices)
@@ -178,9 +179,10 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
                     && !d.keywords.contains(Keywords::INDESTRUCTIBLE)));
         let unattached = auras
             && aura.of(d.subtypes)
-            && match o.attached_to() {
+            && match o.attachment() {
                 None => true,
-                Some(host) => !attach::may_enchant(s, t, slot, host),
+                Some(Attachment::Object(host)) => !attach::may_enchant(s, t, slot, host),
+                Some(Attachment::Player(player)) => !attach::may_enchant_player(s, t, slot, player),
             };
         if dies || unattached || (types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0)
         {
@@ -216,13 +218,13 @@ fn destroyed_for_damage<L: Layout>(
         let lethal = d.types.contains(Types::CREATURE)
             && d.toughness > 0
             && i16::from(o.damage()) >= i16::from(d.toughness);
-        let unattached = o.attached_to().is_none() && aura.of(d.subtypes);
+        let unattached = aura.of(d.subtypes) && o.attachment().is_none();
         let no_loyalty = d.types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0;
         lethal && !unattached && !no_loyalty
     })
 }
 
-/// Finds illegally attached Equipment and completed Sagas only for the subtypes the game may have.
+/// Finds illegal attachments and completed Sagas when the game may have them.
 ///
 /// CR 704.5s: "... that Saga’s controller sacrifices it." Both conditions are read before
 /// the game changes any permanent.
@@ -232,7 +234,7 @@ fn read_equipment_and_sagas<L: Layout>(
     s: &State<L>,
     t: &GameTable,
 ) -> (Bitboard<L::Slot>, Bitboard<L::Slot>) {
-    let loose = if t.can(Capability::Equipment) {
+    let loose = if t.can(Capability::AttachmentStateChecks) {
         attached_illegally(s, t)
     } else {
         Bitboard::EMPTY
@@ -249,14 +251,14 @@ fn read_equipment_and_sagas<L: Layout>(
 /// ([CR 704.5n](https://yawgatog.com/resources/magic-rules/#R7045n)): "If an Equipment or
 /// Fortification is attached to an illegal permanent or to a player, it becomes unattached
 /// from that permanent or player. It remains on the battlefield." What may be equipped is
-/// `attach::may_equip`'s (see CR 301.5c). An Equipment whose creature left the battlefield is
+/// `attach::may_equip_in`'s (see CR 301.5c). An Equipment whose creature left the battlefield is
 /// already attached to nothing (`zone::leave` detaches it).
 #[cold]
 #[inline(never)]
 fn attached_illegally<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> {
     let mut loose = Bitboard::EMPTY;
     for (slot, d) in s.permanents_with_derived() {
-        let Some(host) = s.object(slot).attached_to() else {
+        let Some(host) = s.object(slot).attachment() else {
             continue;
         };
         // An Aura's is CR 704.5m's, above. An Equipment that lost the subtype is an object
@@ -264,7 +266,10 @@ fn attached_illegally<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slo
         if t.subtypes().has(Subtype::Aura).of(d.subtypes) {
             continue;
         }
-        if !crate::actions::attach::may_equip_in(s, t, slot, host) {
+        if match host {
+            Attachment::Player(_) => true,
+            Attachment::Object(host) => !attach::may_equip_in(s, t, slot, host),
+        } {
             loose.insert(slot);
         }
     }

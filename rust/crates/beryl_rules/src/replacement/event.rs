@@ -15,6 +15,7 @@ pub use beryl_kernel::event::{
 };
 
 pub use crate::zones::tokens::TokenEntry;
+use beryl_kernel::Attachment;
 use beryl_kernel::mutate::Arrival;
 
 use crate::bitboard::Bitboard;
@@ -52,8 +53,8 @@ pub(crate) struct Entry<L: Layout = Small> {
     /// (see [CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)).
     pub paid: CastingKinds,
     pub x: u8,
-    /// The object an Aura spell attaches to as it resolves (see CR 608.3c).
-    pub attach: Option<L::Slot>,
+    /// The object or player an Aura spell attaches to as it resolves (see CR 608.3c).
+    pub attach: Option<Attachment<L::Slot>>,
 }
 
 /// Gives the permanent that just entered in `slot` what it enters with, has it remember
@@ -423,7 +424,7 @@ fn prepare_move<L: Layout>(
     if auras && m.to == Zone::Battlefield && m.entry.attach.is_none() {
         match replacement::enchants(s, t, sink, slot, m.entry)? {
             replacement::Enchants::NotAnAura => {}
-            replacement::Enchants::Object(host) => m.entry.attach = Some(host),
+            replacement::Enchants::Host(host) => m.entry.attach = Some(host),
             replacement::Enchants::Nothing => {
                 sink.copies.retain(|&(copier, _)| copier != slot);
                 if from != Zone::Stack {

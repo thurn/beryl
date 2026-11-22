@@ -249,7 +249,12 @@ def permanent_assertion(a: Json, player: Callable[[object], str]) -> str:
     obj = snapshot_ref(cast(Json, a["object"]), player)
     state = cast(Json, a["state"])
     attachment = state["attached_to"]
-    host = snapshot_ref(cast(Json, attachment), player) if attachment else "null"
+    enchanted_player = state.get("enchanted_player")
+    host = "null"
+    if attachment:
+        host = f"{snapshot_ref(cast(Json, attachment), player)}.getId()"
+    elif enchanted_player is not None:
+        host = f"{player(enchanted_player)}.getId()"
     arrays = [
         java_string("|".join(cast(list[str], state[field])))
         for field in ("colors", "types", "subtypes", "keywords")

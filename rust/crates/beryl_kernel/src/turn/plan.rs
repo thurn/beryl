@@ -59,7 +59,8 @@ impl TurnPhase {
         }
     }
 
-    fn of(step: TurnStep) -> Self {
+    /// The phase the ordinary turn schedules this step in.
+    pub const fn of(step: TurnStep) -> Self {
         match step {
             TurnStep::Untap | TurnStep::Upkeep | TurnStep::Draw => Self::Beginning,
             TurnStep::PrecombatMain | TurnStep::PostcombatMain => Self::Main,
@@ -153,6 +154,10 @@ impl<L: Layout> TurnPlan<L> {
         Ok(())
     }
 
+    // The low bits of `played` record the step names. This bit records whether the
+    // step just taken was already played this turn.
+    const REPEATED: u16 = 1 << 15;
+
     fn has_played(&self, step: TurnStep) -> bool {
         self.played & (1 << step.index()) != 0
     }
@@ -193,6 +198,15 @@ impl<L: Layout> State<L> {
         StepPosition {
             turn: self.turn.number,
             ordinal,
+        }
+    }
+
+    /// Whether the current step is the first occurrence of its name in this turn.
+    pub fn current_step_is_first(&self) -> bool {
+        if self.has_turn_plan() {
+            self.turn_plan.played & TurnPlan::<L>::REPEATED == 0
+        } else {
+            self.turn.step != TurnStep::Cleanup || self.turn_plan.ordinal == 0
         }
     }
 
@@ -321,7 +335,12 @@ impl<L: Layout> State<L> {
             plan.phase = plan.ordinal;
         }
         let step = main_phase_name(entry.name(), plan.has_played(TurnStep::PrecombatMain));
+        let repeated = plan.has_played(step);
+        plan.played &= !TurnPlan::<L>::REPEATED;
         plan.played |= 1 << step.index();
+        if repeated {
+            plan.played |= TurnPlan::<L>::REPEATED;
+        }
         if step == TurnStep::Draw {
             self.trackers
                 .set_count(crate::trackers::Count::DrewInDrawStep, self.turn.active, 0);
@@ -332,6 +351,9 @@ impl<L: Layout> State<L> {
     /// Records a cleanup step the rules repeat after giving players priority.
     pub fn repeat_cleanup(&mut self) {
         self.turn_plan.ordinal += 1;
+        if self.has_turn_plan() {
+            self.turn_plan.played |= TurnPlan::<L>::REPEATED;
+        }
     }
 
     /// Starts the first cleanup of an ordinary turn.

@@ -202,7 +202,7 @@ fn draws(a: &Ability, e: &Effect) -> bool {
         AbilityKind::Triggered => a.trigger().is_some_and(|trigger| {
             matches!(
                 trigger.event,
-                TriggerEvent::Step(_) | TriggerEvent::MainPhase
+                TriggerEvent::Step(_) | TriggerEvent::FirstStep(_) | TriggerEvent::MainPhase
             )
         }),
         _ => false,

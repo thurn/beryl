@@ -6,13 +6,13 @@ use super::Ctx;
 use super::filters::{Kind, zone_name};
 use super::words::{
     capitalized, colors, counted, keywords, list, mana_text, number, protection, pt_change,
-    sentence, types, with_article,
+    sentence, step_name, types, with_article,
 };
 use crate::ability::{Ability, AbilityKind, Behavior, Timing};
 use crate::continuous::{LayerSpec, Modification, Replacement, Rewrite};
 use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, ESCAPE_EXILES, Measure};
 use crate::effect::{Amount, Comparison, Condition, Effect, Objects, Players};
-use crate::ids::{TurnStep, Zone, ZoneSet};
+use crate::ids::{Zone, ZoneSet};
 use crate::index::GrantIx;
 use crate::trigger::{Subject, Trigger, TriggerEvent};
 
@@ -188,6 +188,10 @@ impl Ctx {
                     )
                 }
             },
+            TriggerEvent::FirstStep(step) => {
+                let step = self.whose_step(trigger, &format!("first {}", step_name(step)));
+                format!("at the beginning of {step} each turn")
+            }
             TriggerEvent::Step(step) => {
                 let step = step_name(step);
                 format!("at the beginning of {}", self.whose_step(trigger, step))
@@ -248,6 +252,7 @@ impl Ctx {
                     | Players::Target(_)
                     | Players::ControllerOf(_)
                     | Players::OwnerOf(_)
+                    | Players::Enchanted
                     | Players::ThatPlayer
                     | Players::EachOther(_)) => self.player(other),
                 };
@@ -255,6 +260,7 @@ impl Ctx {
             }
             TriggerEvent::PlayerAttacks
             | TriggerEvent::Step(_)
+            | TriggerEvent::FirstStep(_)
             | TriggerEvent::MainPhase
             | TriggerEvent::CreatesTokens
             | TriggerEvent::Casts
@@ -275,6 +281,7 @@ impl Ctx {
             other @ (Players::Target(_)
             | Players::ControllerOf(_)
             | Players::OwnerOf(_)
+            | Players::Enchanted
             | Players::ThatPlayer
             | Players::EachOther(_)) => (self.player(other), true),
         }
@@ -701,26 +708,6 @@ pub(super) fn possessive(who: &str) -> String {
         "its".to_owned()
     } else {
         format!("{who}'s")
-    }
-}
-
-/// The name of a step or phase as a trigger says it, such as "upkeep" or "end step"
-/// ([CR 500.1](https://yawgatog.com/resources/magic-rules/#R5001)).
-fn step_name(step: TurnStep) -> &'static str {
-    match step {
-        TurnStep::Untap => "untap step",
-        TurnStep::Upkeep => "upkeep",
-        TurnStep::Draw => "draw step",
-        TurnStep::PrecombatMain => "precombat main phase",
-        TurnStep::BeginningOfCombat => "combat",
-        TurnStep::DeclareAttackers => "declare attackers step",
-        TurnStep::DeclareBlockers => "declare blockers step",
-        TurnStep::FirstStrikeDamage => "first-strike damage step",
-        TurnStep::CombatDamage => "combat damage step",
-        TurnStep::EndOfCombat => "end of combat step",
-        TurnStep::PostcombatMain => "postcombat main phase",
-        TurnStep::End => "end step",
-        TurnStep::Cleanup => "cleanup step",
     }
 }
 

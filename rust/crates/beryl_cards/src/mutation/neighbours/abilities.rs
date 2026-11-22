@@ -219,6 +219,7 @@ fn triggers(trigger: &Trigger) -> Vec<(&'static str, Kind, String, Trigger)> {
         | Event::DealsDamage
         | Event::Mutates
         | Event::TurnedFaceUp => Event::BecomesTarget,
+        Event::FirstStep(step) => Event::Step(step),
         Event::Step(TurnStep::Upkeep) | Event::Draws => Event::Step(TurnStep::Draw),
         Event::Step(_) => Event::Step(TurnStep::Upkeep),
         Event::MainPhase => Event::Step(TurnStep::PrecombatMain),

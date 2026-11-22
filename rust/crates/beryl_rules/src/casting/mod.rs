@@ -33,5 +33,7 @@ pub use legal::{payable_responses, pointless};
 pub(crate) use legal::{priority_options, refusal};
 pub(crate) use stack::{leave_stack, unstack};
 pub(crate) use steps::{begin_activate, begin_cast, cast_before, decision, perform, targeted};
-pub(crate) use targets::{TargetSet, new_targets, spells, still_legal, target_trigger};
+pub(crate) use targets::{
+    TargetSet, new_targets, player_matches, spells, still_legal, target_trigger,
+};
 pub(crate) use timing::{entry_ability, sorcery_timing};

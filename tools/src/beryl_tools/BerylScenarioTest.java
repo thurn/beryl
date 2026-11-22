@@ -628,7 +628,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
 
     protected void assertPermanentState(Permanent permanent, String colors, String types,
             String subtypes, String keywords, boolean allCreatureTypes, int damage,
-            MageObject host, Integer power, Integer toughness) {
+            UUID host, Integer power, Integer toughness) {
         String name = permanent.getName();
         Assert.assertEquals("colors of " + name, snapshotNames(colors),
                 new HashSet<>(colorNames(permanent.getColor(currentGame))));
@@ -645,7 +645,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                 .map(Map.Entry::getKey).collect(Collectors.toSet());
         Assert.assertEquals("keywords of " + name, snapshotNames(keywords), actualKeywords);
         Assert.assertEquals("damage marked on " + name, damage, permanent.getDamage());
-        Assert.assertEquals("attachment on " + name, host == null ? null : host.getId(), permanent.getAttachedTo());
+        Assert.assertEquals("attachment on " + name, host, permanent.getAttachedTo());
         if (power != null) {
             Assert.assertEquals("power of " + name, power.intValue(), permanent.getPower().getValue());
             Assert.assertEquals("toughness of " + name, toughness.intValue(), permanent.getToughness().getValue());

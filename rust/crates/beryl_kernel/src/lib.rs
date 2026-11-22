@@ -795,6 +795,6 @@ pub use layout::{Large, Layout, Small};
 pub use observation::Observation;
 pub use player_set::PlayerSet;
 pub use query::Copiable;
-pub use state::State;
+pub use state::{Attachment, State};
 pub use table::GameTable;
 pub use turn::plan::{CombatPosition, Placement, StepPosition, StepTarget, TurnChange, TurnPhase};

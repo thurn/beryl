@@ -77,6 +77,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::LoseGame(_)
         | Effect::ControlPlayer(_)
         | Effect::EndTurn
+        | Effect::AdditionalStep(_)
         | Effect::ExtraTurn(_) => None,
     }
 }

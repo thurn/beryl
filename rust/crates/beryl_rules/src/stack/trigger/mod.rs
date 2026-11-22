@@ -18,12 +18,14 @@ use crate::query::Copiable;
 use crate::replacement::event::{Event, EventKind, Listens, Recipient, Sink};
 use crate::state::TriggeredAbility;
 use crate::state::{
-    AbilityRef, ObjectRef, PendingTrigger, StackEntry, StackItem, State, TriggerInfo, TurnStep,
-    Zone, ZoneKey,
+    AbilityRef, ObjectRef, PendingTrigger, StackEntry, StackItem, State, TriggerInfo, Zone, ZoneKey,
 };
 use crate::table::{Capability, GameTable};
 
 mod other_zones;
+mod step;
+
+pub(super) use step::begins;
 
 /// The ability a pending trigger or stack entry names: one of the face's own, or one of its
 /// grants that a copy exception gives ([`Copiable::given_abilities`]).
@@ -209,38 +211,6 @@ fn counted(count: u32) -> u8 {
     u8::try_from(count).unwrap_or(u8::MAX)
 }
 
-/// Whether a trigger waiting for the beginning of a step or phase waits for `step` (see [CR 500.6]):
-/// "When a phase or step begins, any abilities that trigger 'at the beginning of' that phase or
-/// step trigger."
-///
-/// [CR 500.6]: https://yawgatog.com/resources/magic-rules/#R5006
-pub(super) fn begins(event: TriggerEvent, step: TurnStep) -> bool {
-    match event {
-        TriggerEvent::Step(at) => at == step,
-        // see CR 505.1: "There are two main phases in a turn."
-        TriggerEvent::MainPhase => {
-            matches!(step, TurnStep::PrecombatMain | TurnStep::PostcombatMain)
-        }
-        TriggerEvent::Enters
-        | TriggerEvent::Dies
-        | TriggerEvent::Leaves
-        | TriggerEvent::Attacks
-        | TriggerEvent::PlayerAttacks
-        | TriggerEvent::DealsCombatDamageToPlayer
-        | TriggerEvent::CreatesTokens
-        | TriggerEvent::Casts
-        | TriggerEvent::Discards
-        | TriggerEvent::Draws
-        | TriggerEvent::BecomesTarget
-        | TriggerEvent::BecomesTargetOfSpell
-        | TriggerEvent::Mutates
-        | TriggerEvent::DealsDamage
-        | TriggerEvent::TurnedFaceUp
-        | TriggerEvent::Chapter { .. }
-        | TriggerEvent::State(_) => false,
-    }
-}
-
 /// Whether a trigger of a source controlled by `you` fires on `e`, an event of the kind it
 /// listens to, and with what: the event's object if it is the trigger's subject, the
 /// event's player if the trigger is for them, and an amount.
@@ -298,9 +268,15 @@ fn fires<L: Layout>(
             Some(info(Some(object), you, 0))
         }
         (event, &Event::StepBegins { step, active, .. })
-            if begins(event, step) && whose(active) =>
+            if begins(event, step, || s.current_step_is_first()) =>
         {
-            Some(info(None, active, 0))
+            // See CR 303.4b: "The object or player an Aura is attached to is called enchanted."
+            let matches = if trigger.whose == beryl_card::Players::Enchanted {
+                this.and_then(|slot| s.object(slot).enchanted_player()) == Some(active)
+            } else {
+                whose(active)
+            };
+            matches.then(|| info(None, active, 0))
         }
         (TriggerEvent::CreatesTokens, &Event::TokensCreated { controller, tokens })
             if whose(controller) =>

@@ -7,7 +7,7 @@ use beryl_engine::card::{
     Ability, CardDef, FaceIx, ObjectAbility, TargetKind, TriggerEvent, Types,
 };
 
-use beryl_card::Seat;
+use beryl_card::{Players, Seat};
 use beryl_engine::{Decision, DecisionKind, Opt, Outcome, Step, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, Ending, Live, P0, Scenario};
 
@@ -102,6 +102,31 @@ fn leads(
     leads
 }
 
+/// Waits for step triggers after the spell resolves. An Aura that watches its enchanted player
+/// needs time to reach that player's turn when it was cast on an opponent.
+fn wait_for_step_trigger(def: &CardDef, place: Place) -> Option<Stimulus> {
+    def.faces
+        .iter()
+        .flat_map(|face| face.abilities)
+        .filter_map(Ability::trigger)
+        .filter(|t| {
+            matches!(
+                t.event,
+                TriggerEvent::Step(_) | TriggerEvent::FirstStep(_) | TriggerEvent::MainPhase
+            )
+        })
+        .map(|trigger| {
+            if trigger.whose == Players::Enchanted {
+                LAST_TURN
+            } else {
+                TURN
+            }
+        })
+        .max()
+        .filter(|_| !matches!(place, Place::Mana(..)))
+        .map(|turn| Stimulus::PassUntil(turn, TurnStep::End))
+}
+
 /// Every opening of a scenario of `def` starting in `place`, labelled: each action naming the
 /// card its owner can take at the first priority in their main phase, each they can take in
 /// response to a spell of theirs that they could not take there, and each event a triggered
@@ -115,19 +140,8 @@ pub(super) fn openings(
     preamble: &[Stimulus],
 ) -> Vec<(String, Vec<Stimulus>)> {
     let with = |more: &[Stimulus]| preamble.iter().chain(more).copied().collect::<Vec<_>>();
-    // On to the end step after it, for a card with an ability that waits for a step: a
-    // delayed trigger's, or a countdown's.
-    let waits = def
-        .faces
-        .iter()
-        .flat_map(|face| face.abilities)
-        .filter_map(Ability::trigger)
-        .any(|t| matches!(t.event, TriggerEvent::Step(_) | TriggerEvent::MainPhase));
-    let then: &[Stimulus] = if waits && !matches!(place, Place::Mana(..)) {
-        &[Stimulus::PassUntil(TURN, TurnStep::End)]
-    } else {
-        &[]
-    };
+    let wait = wait_for_step_trigger(def, place);
+    let then = wait.as_slice();
     // A card that targets a spell, with its spell ability or as it enters, responds to each
     // lead even where it can be cast without.
     let targets = |kind: fn(TargetKind) -> bool| {
@@ -246,7 +260,7 @@ fn awaited(def: &'static CardDef, f: FaceIx) -> Vec<(String, Vec<Stimulus>)> {
     }
     for event in &events {
         match *event {
-            TriggerEvent::Step(step) => {
+            TriggerEvent::Step(step) | TriggerEvent::FirstStep(step) => {
                 for turn in [TURN, LAST_TURN] {
                     // The preamble plays this turn's beginning phase.
                     if turn > TURN || (step as u8) > TurnStep::PrecombatMain as u8 {

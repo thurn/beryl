@@ -95,7 +95,9 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
         TriggerEvent::DealsDamage => (EventKind::Damage, About::This, false),
         TriggerEvent::TurnedFaceUp => (EventKind::TurnedFaceUp, About::Either, false),
         TriggerEvent::DealsCombatDamageToPlayer => (EventKind::Damage, About::This, true),
-        TriggerEvent::Step(_) | TriggerEvent::MainPhase => (EventKind::Step, About::Nothing, true),
+        TriggerEvent::Step(_) | TriggerEvent::FirstStep(_) | TriggerEvent::MainPhase => {
+            (EventKind::Step, About::Nothing, true)
+        }
         TriggerEvent::CreatesTokens => (EventKind::Tokens, About::Filtered, true),
         TriggerEvent::Casts => (EventKind::Cast, About::Filtered, true),
         TriggerEvent::Discards => (EventKind::Discard, About::Filtered, true),
@@ -124,19 +126,25 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
     };
     let whose = match trigger.whose {
         Players::EachPlayer => Ok(()),
+        Players::Enchanted
+            if kind == EventKind::Step && !trigger.delayed && zones == ZoneSet::BATTLEFIELD =>
+        {
+            Ok(())
+        }
         ref players if has_player && reads(players) => Ok(()),
         Players::You
         | Players::EachOpponent
         | Players::Target(_)
         | Players::ControllerOf(_)
         | Players::OwnerOf(_)
+        | Players::Enchanted
         | Players::ThatPlayer
         | Players::EachOther(_) => Err(Unmatched::Whose),
     };
     subject.and(whose)?;
     match (trigger.delayed, kind) {
         (false, kind) => Ok(Some(kind)),
-        (true, EventKind::Step) => Ok(None),
+        (true, EventKind::Step) if !matches!(trigger.event, TriggerEvent::FirstStep(_)) => Ok(None),
         (true, EventKind::Leaves) if matches!(trigger.subject, Subject::This) => Ok(None),
         (true, _) => Err(Unmatched::Delayed),
     }

@@ -11,6 +11,7 @@
 //!
 //! Implements: none. Classifies and indexes rule changes described by card definitions.
 
+use beryl_card::TurnStep;
 use beryl_card::{
     Ability, AbilityKind, CardDef, Condition, Face, Filter, Governed, Named, Objects, Players,
     RuleChange, When,
@@ -179,6 +180,8 @@ pub enum RuleKind {
     BlockAnyNumber,
     /// Damage can't be prevented (see CR 615.12).
     CantPreventDamage,
+    /// The affected players skip a named step (see CR 500.11).
+    SkipStep,
 }
 
 impl RuleKind {
@@ -186,7 +189,7 @@ impl RuleKind {
         self as usize
     }
 
-    const COUNT: usize = 11;
+    const COUNT: usize = Self::SkipStep as usize + 1;
 
     /// The kind of change `rule` is, or the part of it no code reads.
     pub fn of(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
@@ -201,6 +204,13 @@ impl RuleKind {
             rule.players,
             Players::You | Players::EachOpponent | Players::EachPlayer
         );
+        let for_players = |kind| {
+            if supported_players {
+                Ok(kind)
+            } else {
+                Err(Unchecked::Players)
+            }
+        };
         match (rule.what, rule.when) {
             (Governed::CastSpells(filter), when) => {
                 if !of_a_spells_characteristics(filter) {
@@ -219,10 +229,7 @@ impl RuleKind {
                 if !of_a_spells_characteristics(spells) {
                     return Err(Unchecked::Filter);
                 }
-                if !supported_players {
-                    return Err(Unchecked::Players);
-                }
-                Ok(RuleKind::SpellCost)
+                for_players(RuleKind::SpellCost)
             }
             // Only its controller activates a permanent's abilities (see CR 606.3), so the
             // change is asked of the permanent, and is for "you" or for nobody.
@@ -251,13 +258,7 @@ impl RuleKind {
                     mana_abilities: false,
                 },
                 When::Never,
-            ) => {
-                if supported_players {
-                    Ok(RuleKind::CantActivateNamed)
-                } else {
-                    Err(Unchecked::Players)
-                }
-            }
+            ) => for_players(RuleKind::CantActivateNamed),
             // Whoever would counter it, the change is asked of the spell, and is for every
             // player or for nobody.
             (Governed::Counter(Objects::This), When::Never) => {
@@ -272,13 +273,11 @@ impl RuleKind {
             {
                 Ok(RuleKind::CantPreventDamage)
             }
-            (Governed::Player(_), When::AsUsual) => {
-                if supported_players {
-                    Ok(RuleKind::Player)
-                } else {
-                    Err(Unchecked::Players)
-                }
-            }
+            (Governed::Player(_), When::AsUsual) => for_players(RuleKind::Player),
+            (
+                Governed::TakeStep(TurnStep::Untap | TurnStep::Upkeep | TurnStep::Draw),
+                When::Never,
+            ) => for_players(RuleKind::SkipStep),
             // A change to players said with a time, other permanents' loyalty abilities, attacks
             // or blocks, a restriction to the
             // timing the rules have already, a change to when a creature attacks or blocks, mana
@@ -294,7 +293,8 @@ impl RuleKind {
                 | Governed::Counter(_)
                 | Governed::SpellCosts { .. }
                 | Governed::Player(_)
-                | Governed::PreventDamage,
+                | Governed::PreventDamage
+                | Governed::TakeStep(_),
                 _,
             ) => Err(Unchecked::Rule),
         }
@@ -311,6 +311,7 @@ impl RuleKind {
                 | RuleKind::CantActivateNamed
                 | RuleKind::Player
                 | RuleKind::CantPreventDamage
+                | RuleKind::SkipStep
         )
     }
 

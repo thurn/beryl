@@ -229,6 +229,7 @@ impl<L: Layout> Runner<L> {
             keywords: derived.keywords,
             damage: object.damage(),
             attached_to: object.attached_to().map(|host| self.snapshot_ref(host)),
+            enchanted_player: object.enchanted_player(),
             pt: derived
                 .types
                 .contains(Types::CREATURE)

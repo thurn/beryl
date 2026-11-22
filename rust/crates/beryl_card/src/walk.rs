@@ -193,7 +193,8 @@ impl Ability {
                 }
                 Governed::ActivateAbilities { .. }
                 | Governed::Player(_)
-                | Governed::PreventDamage => {}
+                | Governed::PreventDamage
+                | Governed::TakeStep(_) => {}
             }
         }
         if let Some(filter) = &self.only_if_you_control() {
@@ -312,7 +313,8 @@ impl Players {
             | Players::EachOpponent
             | Players::EachPlayer
             | Players::Target(_)
-            | Players::ThatPlayer => {}
+            | Players::ThatPlayer
+            | Players::Enchanted => {}
             Players::ControllerOf(objects) | Players::OwnerOf(objects) => objects.walk(visit),
             Players::EachOther(players) => players.walk(visit),
         }
@@ -459,6 +461,7 @@ impl Effect {
                 | Effect::LoseGame(_)
                 | Effect::ControlPlayer(_)
                 | Effect::EndTurn
+                | Effect::AdditionalStep(_)
                 | Effect::ExtraTurn(_) => {}
             }
             false

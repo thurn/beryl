@@ -261,7 +261,9 @@ impl<L: Layout> Board<'_, L> {
     pub fn attach(&mut self, slot: L::Slot, to: L::Slot) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
         debug_assert_eq!(self.0.object(to).zone, Zone::Battlefield);
-        self.0.object_mut(slot).attached_to = Some(to);
+        self.0
+            .object_mut(slot)
+            .set_attachment(Some(crate::object::Attachment::Object(to)));
         self.0.flags.derived_dirty = true;
     }
 

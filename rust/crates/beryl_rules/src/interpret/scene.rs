@@ -362,6 +362,14 @@ impl<L: Layout> Scene<'_, L> {
             Players::EachOpponent => self.s.opponents_of(self.you()),
             // See CR 102.1: "A player is one of the people in the game."
             Players::EachPlayer => self.s.players(),
+            // See CR 303.4b: "The object or player an Aura is attached to is called enchanted."
+            Players::Enchanted => self
+                .subject
+                .of
+                .source
+                .filter(|&source| self.s.is_current(source))
+                .and_then(|source| self.s.object(source.slot).enchanted_player())
+                .map_or(PlayerSet::NOBODY, PlayerSet::only),
             Players::Target(spec) => {
                 let mut who = PlayerSet::NOBODY;
                 for player in self.targets(spec).filter_map(|(_, t)| t.as_player()) {

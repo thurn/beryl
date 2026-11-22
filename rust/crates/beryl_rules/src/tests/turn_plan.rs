@@ -1,7 +1,10 @@
 //! Turn structure through custom test cards and the engine's normal advancement.
 
-use beryl_card::effect::build::{draw, gain_life, you};
-use beryl_card::{Ability, AbilityIx, CardDef, Face, Players, Replacement, Says, Trigger, Types};
+use beryl_card::effect::build::{draw, gain_life, this, untap_up_to, you};
+use beryl_card::{
+    Ability, AbilityIx, CardDef, Face, Governed, Players, Replacement, RuleChange, Says, Trigger,
+    Types, When,
+};
 use beryl_kernel::format::Format;
 use beryl_kernel::table::Capability;
 use beryl_kernel::{Placement, TurnPhase};
@@ -104,6 +107,7 @@ fn two_upkeeps_stop_and_the_last_insertion_plays_first() {
     let cards_in_library = s.library(Seat::P0).len();
     let mut x = Scratch::recording();
     let first = s.step_position();
+    assert!(s.current_step_is_first());
     let Some(Step::Decide(d)) = next_in_step(&mut s, &t, &mut x, &mut Replay, first) else {
         panic!("the active player stops in their first upkeep");
     };
@@ -131,6 +135,7 @@ fn two_upkeeps_stop_and_the_last_insertion_plays_first() {
     assert!(s.delayed().is_empty());
     assert!(!s.before_step(target));
     let second = s.step_position();
+    assert!(!s.current_step_is_first());
     assert_eq!(second.ordinal, first.ordinal + 1);
     assert!(matches!(
         next_in_step(&mut s, &t, &mut x, &mut Replay, second),
@@ -254,4 +259,105 @@ fn skipping_the_ending_phase_advances_to_the_next_turn() {
         event,
         crate::replacement::event::Event::StepBegins { turn: 3, .. }
     )));
+}
+
+static SKIP_UNTAP: CardDef = CardDef {
+    name: "Test Skip Untap",
+    shape: beryl_card::definition::Shape::Single,
+    tokens: &[],
+    faces: &[Face {
+        types: Types::ENCHANTMENT,
+        abilities: &[Ability::rule_change(&RuleChange {
+            players: Players::EachPlayer,
+            what: Governed::TakeStep(TurnStep::Untap),
+            when: When::Never,
+        })],
+        ..Face::EMPTY
+    }],
+};
+
+static SKIP_UPKEEP: CardDef = CardDef {
+    name: "Test Skip Upkeep",
+    faces: &[Face {
+        types: Types::ENCHANTMENT,
+        abilities: &[Ability::rule_change(&RuleChange {
+            players: Players::EachPlayer,
+            what: Governed::TakeStep(TurnStep::Upkeep),
+            when: When::Never,
+        })],
+        ..Face::EMPTY
+    }],
+    ..SKIP_UNTAP
+};
+
+static UNTAP_ON_UPKEEP: CardDef = CardDef {
+    name: "Test Untap Itself",
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[
+            Ability::triggered(&Trigger::first_step(TurnStep::Upkeep, Players::You))
+                .effect(&untap_up_to(you(), 1, this())),
+        ],
+        ..Face::EMPTY
+    }],
+    ..SKIP_UNTAP
+};
+
+#[test]
+fn skipping_untap_allows_an_upkeep_ability_to_untap_itself() {
+    static CARDS: CardTable = CardTable::new(&[&SKIP_UNTAP, &SKIP_UPKEEP, &UNTAP_ON_UPKEEP, &LAND]);
+    for (skip, next) in [
+        (SKIP_UPKEEP.name, TurnStep::Draw),
+        (SKIP_UNTAP.name, TurnStep::Upkeep),
+    ] {
+        let t = GameTable::new(
+            Format::CONSTRUCTED,
+            &CARDS,
+            [
+                &[(1, skip), (1, UNTAP_ON_UPKEEP.name), (5, LAND.name)],
+                &[(7, LAND.name)],
+            ],
+        )
+        .unwrap();
+        assert!(t.can(Capability::TurnStructure));
+        let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
+        s.board().begin_at(2, Seat::P1, TurnStep::End);
+        let find = |name| {
+            s.library(Seat::P0)
+                .iter()
+                .copied()
+                .find(|&slot| s.definition_name(&t, slot) == name)
+                .unwrap()
+        };
+        let rule = find(skip);
+        let artifact = find(UNTAP_ON_UPKEEP.name);
+        s.board().place(rule, Zone::Battlefield).unwrap();
+        s.board().place(artifact, Zone::Battlefield).unwrap();
+        s.board().set_tapped(artifact, true);
+        let mut x = Scratch::recording();
+
+        crate::turn::begin_turn(&mut s, &t, &mut x.events).unwrap();
+
+        assert_eq!(s.turn().step(), next);
+        assert!(s.current_step_is_first());
+        if next == TurnStep::Draw {
+            assert!(s.triggers().is_empty());
+            assert!(!s.object(artifact).is_tapped());
+            continue;
+        }
+        assert!(s.object(artifact).is_tapped());
+        assert_eq!(s.triggers().len(), 1);
+        let upkeep = s.step_position();
+        while s.object(artifact).is_tapped() {
+            let Some(Step::Decide(d)) = next_in_step(&mut s, &t, &mut x, &mut Replay, upkeep)
+            else {
+                panic!("the first upkeep's trigger can untap the artifact");
+            };
+            let untap = (0..d.len())
+                .map(|index| Choice(u16::try_from(index).unwrap()))
+                .find(|&choice| d.candidates.option(choice) == Some(Opt::Object(artifact)));
+            apply(&mut s, &t, &mut x, &mut Replay, untap.unwrap_or(Choice(0)));
+        }
+        assert_eq!(s.step_position(), upkeep);
+    }
 }

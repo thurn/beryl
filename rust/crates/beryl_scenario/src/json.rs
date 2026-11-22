@@ -269,6 +269,11 @@ struct PermanentStateDef {
     damage: u8,
     #[serde(serialize_with = "optional")]
     attached_to: Option<SnapshotRef>,
+    #[serde(
+        serialize_with = "optional_seat",
+        skip_serializing_if = "Option::is_none"
+    )]
+    enchanted_player: Option<Seat>,
     pt: Option<(i8, i8)>,
 }
 

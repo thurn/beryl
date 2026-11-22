@@ -141,6 +141,9 @@ pub struct Permanent {
     /// The permanent it is attached to, by its place in [`Checkpoint::battlefield`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attached_to: Option<u16>,
+    /// The seat it enchants.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enchanted_player: Option<u8>,
     /// Cast for its impending cost
     /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)).
     #[serde(default, skip_serializing_if = "is_default")]
@@ -414,8 +417,17 @@ impl Checkpoint {
                 .ok_or_else(|| format!("no permanent {i}"))
         };
         for (b, &slot) in self.battlefield.iter().zip(&slots) {
-            if let Some(i) = b.attached_to {
-                s.board().attach(slot, permanent(i)?);
+            match (b.attached_to, b.enchanted_player) {
+                (Some(i), None) => s.board().attach(slot, permanent(i)?),
+                (None, Some(seat)) => {
+                    let player = Seat::try_new(seat).ok_or_else(|| format!("no player {seat}"))?;
+                    let aura = s
+                        .permanent_at(slot)
+                        .ok_or("an attachment must be on the battlefield")?;
+                    s.attach_to_player(aura, player);
+                }
+                (None, None) => {}
+                (Some(_), Some(_)) => return Err("an attachment has more than one host".to_owned()),
             }
         }
         for (p, side) in Seat::BOTH.into_iter().zip(&self.players) {
@@ -619,6 +631,7 @@ fn permanent<L: Layout>(
         counters: Counter::on(s, slot),
         damage: o.damage(),
         attached_to: o.attached_to().and_then(place),
+        enchanted_player: o.enchanted_player().map(Seat::get),
         impending: s.paid(slot, CastingKind::Impending),
         morphed: s.morphed(slot),
         known: if face == Face::Down {

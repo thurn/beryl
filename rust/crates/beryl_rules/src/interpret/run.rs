@@ -230,6 +230,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
+            | Effect::AdditionalStep(_)
             | Effect::ExtraTurn(_) => self.carry_out_instruction(effect)?,
         };
         Ok(())
@@ -401,6 +402,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::ControlPlayer(players) => {
                 continuous::control_player_instruction(self, players)?
             }
+            Effect::AdditionalStep(step) => crate::turn::additional_step(self.game(), step)?,
             Effect::ExtraTurn(players) => continuous::extra_turn_instruction(self, players)?,
             Effect::GainFlashback(cards) => flashback::instruction(self, cards)?,
             Effect::PermitCast {

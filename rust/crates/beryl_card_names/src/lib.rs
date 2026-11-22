@@ -210,7 +210,15 @@ pub mod decks {
                 names::TEFERIS_PROTECTION,
             ],
         ),
-        ("turn", &[names::TIME_STOP, names::SUNDIAL_OF_THE_INFINITE]),
+        (
+            "turn",
+            &[
+                names::TIME_STOP,
+                names::SUNDIAL_OF_THE_INFINITE,
+                names::PARADOX_HAZE,
+                names::STASIS,
+            ],
+        ),
         ("sagas", &[names::THE_ELDEST_REBORN]),
         (
             "decisions",

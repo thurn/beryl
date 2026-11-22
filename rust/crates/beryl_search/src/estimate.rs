@@ -159,7 +159,10 @@ pub(crate) fn features(def: &CardDef) -> CardFeatures {
 
 /// Whether a trigger on `event` happens again every turn.
 fn recurs(event: TriggerEvent) -> bool {
-    matches!(event, TriggerEvent::Step(_) | TriggerEvent::MainPhase)
+    matches!(
+        event,
+        TriggerEvent::Step(_) | TriggerEvent::FirstStep(_) | TriggerEvent::MainPhase
+    )
 }
 
 /// The counts one ability's effect gives.

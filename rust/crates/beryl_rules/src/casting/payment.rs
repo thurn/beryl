@@ -278,6 +278,7 @@ fn unless_discards<L: Layout>(
         | Effect::LoseGame(_)
         | Effect::ControlPlayer(_)
         | Effect::EndTurn
+        | Effect::AdditionalStep(_)
         | Effect::ExtraTurn(_) => None,
     };
     let (game, resolution) = run.resolving();

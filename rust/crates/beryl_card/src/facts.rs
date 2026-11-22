@@ -152,6 +152,7 @@ impl Effect {
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
             | Effect::EndTurn
+            | Effect::AdditionalStep(_)
             | Effect::ExtraTurn(_) => false,
         })
     }

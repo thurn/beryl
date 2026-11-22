@@ -19,7 +19,7 @@ use crate::event::{Event, Recipient};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Table};
-use crate::object::{AttackTarget, CombatRole, Flag, ObjectFlags, ObjectRef, SlotSet};
+use crate::object::{Attachment, AttackTarget, CombatRole, Flag, ObjectFlags, ObjectRef, SlotSet};
 use crate::query::Copiable;
 use crate::reference::{Permanent, Spell};
 use crate::state::State;
@@ -47,10 +47,10 @@ pub struct Arrival<L: Layout> {
     ///
     /// [CR 122.6]: https://yawgatog.com/resources/magic-rules/#R1226
     pub counters: Option<(CounterKind, u8)>,
-    /// The object an Aura attaches to as it enters (see [CR 608.3c]).
+    /// The object or player an Aura attaches to as it enters (see [CR 608.3c]).
     ///
     /// [CR 608.3c]: https://yawgatog.com/resources/magic-rules/#R6083c
-    pub attach: Option<L::Slot>,
+    pub attach: Option<Attachment<L::Slot>>,
 }
 
 impl<L: Layout> State<L> {
@@ -208,10 +208,18 @@ impl<L: Layout> State<L> {
     /// [CR 701.3c]: https://yawgatog.com/resources/magic-rules/#R7013c
     #[inline]
     pub fn attach(&mut self, attachment: Permanent<L>, host: Permanent<L>) {
-        let (slot, host) = (attachment.slot(), host.slot());
+        self.attach_to(attachment, Attachment::Object(host.slot()));
+    }
+
+    /// Attaches an Aura to a player. The rules decide that it may.
+    pub fn attach_to_player(&mut self, attachment: Permanent<L>, player: Seat) {
+        self.attach_to(attachment, Attachment::Player(player));
+    }
+
+    fn attach_to(&mut self, attachment: Permanent<L>, host: Attachment<L::Slot>) {
         let timestamp = self.take_timestamp();
-        let o = self.object_mut(slot);
-        o.attached_to = Some(host);
+        let o = self.object_mut(attachment.slot());
+        o.set_attachment(Some(host));
         o.timestamp = timestamp;
         self.flags.derived_dirty = true;
     }
@@ -224,7 +232,7 @@ impl<L: Layout> State<L> {
     /// [CR 704.5n]: https://yawgatog.com/resources/magic-rules/#R7045n
     #[inline]
     pub fn unattach(&mut self, permanent: Permanent<L>) {
-        self.object_mut(permanent.slot()).attached_to = None;
+        self.object_mut(permanent.slot()).set_attachment(None);
         self.flags.derived_dirty = true;
     }
 
@@ -349,7 +357,7 @@ impl<L: Layout> State<L> {
             o.base_controller = controller;
         }
         if let Some(host) = how.attach {
-            o.attached_to = Some(host);
+            o.set_attachment(Some(host));
         }
         match how.counters {
             Some((kind, n)) => self.set_counters(slot, kind, n),

@@ -14,7 +14,9 @@ pub(super) fn players(player: Players) -> Neighbours<Players> {
             .collect(),
         Players::ControllerOf(o) => vec![("Players::OwnerOf".to_owned(), Players::OwnerOf(o))],
         Players::OwnerOf(o) => vec![("Players::ControllerOf".to_owned(), Players::ControllerOf(o))],
-        Players::Target(_) | Players::ThatPlayer | Players::EachOther(_) => Vec::new(),
+        Players::Target(_) | Players::ThatPlayer | Players::EachOther(_) | Players::Enchanted => {
+            Vec::new()
+        }
     }
 }
 

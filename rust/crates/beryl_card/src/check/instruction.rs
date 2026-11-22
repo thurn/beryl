@@ -219,6 +219,7 @@ impl Scope<'_> {
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
             | Effect::EndTurn
+            | Effect::AdditionalStep(_)
             | Effect::ExtraTurn(_) => Ok(()),
         };
         both(entry, self.operands(effect.operands()))

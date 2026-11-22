@@ -164,6 +164,7 @@ impl Ctx {
                 | Players::Target(_)
                 | Players::ControllerOf(_)
                 | Players::OwnerOf(_)
+                | Players::Enchanted
                 | Players::ThatPlayer
                 | Players::EachOther(_)) => self.player(other),
             };

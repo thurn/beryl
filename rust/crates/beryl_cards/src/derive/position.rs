@@ -159,7 +159,9 @@ fn triggers_before_main(face: &Face) -> bool {
             !trigger.delayed
                 && !matches!(trigger.whose, Players::EachOpponent)
                 && match trigger.event {
-                    TriggerEvent::Step(step) => (step as u8) < TurnStep::PrecombatMain as u8,
+                    TriggerEvent::Step(step) | TriggerEvent::FirstStep(step) => {
+                        (step as u8) < TurnStep::PrecombatMain as u8
+                    }
                     TriggerEvent::MainPhase => true,
                     _ => false,
                 }

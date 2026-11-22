@@ -11,26 +11,27 @@
 
 use beryl_card::Prompt;
 use beryl_card::prompt::Purpose;
+use beryl_kernel::Attachment;
 
 use super::{answer, selected_copy};
 use crate::actions::attach;
 use crate::bitboard::Bitboard;
 use crate::card::{Subtype, Words};
 use crate::continuous::layers;
-use crate::decision::{Decision, DecisionKind};
+use crate::decision::{Candidates, Decision, DecisionKind, Opt};
 use crate::fixed::Full;
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::replacement::event::{Entry, Sink};
 use crate::state::{State, Zone};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
 /// What an object entering the battlefield as `entry` says, attached to nothing, enchants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Enchants<S> {
     /// It is no Aura.
     NotAnAura,
-    /// The object its controller chose.
-    Object(S),
+    /// The object or player its controller chose.
+    Host(Attachment<S>),
     /// Nothing is legal for it to enchant, so it does not enter ([CR 303.4g]): "If an Aura is
     /// entering the battlefield and there is no legal object or player for it to enchant, the
     /// Aura remains in its current zone, unless that zone is the stack. In that case, the Aura
@@ -42,8 +43,7 @@ pub(crate) enum Enchants<S> {
 
 /// What the object in `slot`, entering the battlefield as `entry` says with nothing it is to
 /// enchant, enchants ([CR 303.4f]): its controller chooses, through `sink`'s record of answers,
-/// an object its enchant abilities allow on the battlefield or in a graveyard
-/// ([`attach::may_enchant`]). Whether it is an Aura, and what it may enchant, are asked of it
+/// a player or an object on the battlefield or in a graveyard that its enchant abilities allow. Whether it is an Aura, and what it may enchant, are asked of it
 /// as it would exist on the battlefield ([`layers::entered`]): a new object, which no ability
 /// of its own put anything onto the battlefield with. It is not a target, so a creature with
 /// shroud may be chosen.
@@ -80,19 +80,47 @@ pub(crate) fn enchants<L: Layout>(
         let mut within: Bitboard<L::Slot> = copy.in_zone(Zone::Battlefield);
         within |= copy.in_zone(Zone::Graveyard);
         within.remove(slot);
-        Some(within.filter(|host| attach::may_enchant(copy, t, slot, host)))
+        let objects = within.filter(|host| attach::may_enchant(copy, t, slot, host));
+        let players = if t.can(Capability::PlayerAttachments) {
+            copy.players()
+                .filter(|player| attach::may_enchant_player(copy, t, slot, player))
+        } else {
+            crate::PlayerSet::NOBODY
+        };
+        Some((objects, players))
     })?;
-    let Some(candidates) = found else {
+    let Some((objects, players)) = found else {
         return Ok(Enchants::NotAnAura);
     };
-    if candidates.is_empty() {
+    if objects.is_empty() && players.is_empty() {
         return Ok(Enchants::Nothing);
     }
     let controller = entry.controller.unwrap_or(s.object(slot).owner());
     let prompt = Prompt::new(Purpose::Choose).most(1);
-    let d = Decision::objects(controller, DecisionKind::ChooseObject, candidates, prompt);
-    let c = answer(s, sink, &d)?;
-    Ok(d.candidates
-        .object(c)
-        .map_or(Enchants::Nothing, Enchants::Object))
+    let mut options = Default::default();
+    let decision = if players.is_empty() {
+        Decision::objects(controller, DecisionKind::ChooseObject, objects, prompt)
+    } else {
+        for player in players.in_seat_order() {
+            Queue::push(&mut options, Opt::Player(player))?;
+        }
+        for host in Candidates::<L>::Objects(objects).objects() {
+            Queue::push(&mut options, Opt::Object(host))?;
+        }
+        Decision::options(controller, DecisionKind::ChooseObject, options, prompt)
+    };
+    let choice = answer(s, sink, &decision)?;
+    let host = if players.is_empty() {
+        decision.candidates.object(choice).map(Attachment::Object)
+    } else {
+        let option = decision.candidates.option(choice);
+        if let Some(Opt::Player(player)) = option {
+            Some(Attachment::Player(player))
+        } else if let Some(Opt::Object(slot)) = option {
+            Some(Attachment::Object(slot))
+        } else {
+            None
+        }
+    };
+    Ok(host.map_or(Enchants::Nothing, Enchants::Host))
 }

@@ -546,12 +546,13 @@ fn enter_battlefield<L: Layout>(
         attach: if mutating(face, entry) {
             None
         } else {
-            entry
-                .targets
-                .as_slice()
-                .first()
-                .and_then(|target| target.as_object())
-                .map(|r| r.slot)
+            entry.targets.as_slice().first().and_then(|target| {
+                use beryl_kernel::Attachment;
+                target
+                    .as_object()
+                    .map(|r| Attachment::Object(r.slot))
+                    .or_else(|| target.as_player().map(Attachment::Player))
+            })
         },
         ..Entry::default()
     };

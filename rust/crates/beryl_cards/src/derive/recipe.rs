@@ -88,7 +88,9 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         TriggerEvent::DealsCombatDamageToPlayer => on(event, |recipient| {
             Recipe::Attack(if recipient == P0 { P1 } else { P0 })
         }),
-        TriggerEvent::Step(step) => on(event, |player| Recipe::Step(player, step)),
+        TriggerEvent::Step(step) | TriggerEvent::FirstStep(step) => {
+            on(event, |player| Recipe::Step(player, step))
+        }
         TriggerEvent::MainPhase => on(event, |player| {
             Recipe::Step(player, TurnStep::PostcombatMain)
         }),

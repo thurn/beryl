@@ -98,6 +98,7 @@ impl Effect {
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
             | Effect::EndTurn
+            | Effect::AdditionalStep(_)
             | Effect::ExtraTurn(_) => Branches::Single,
         }
     }
@@ -171,6 +172,7 @@ impl Effect {
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
             | Effect::EndTurn
+            | Effect::AdditionalStep(_)
             | Effect::ExtraTurn(_) => &[],
         }
     }
@@ -305,6 +307,7 @@ impl Effect {
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
             | Effect::EndTurn
+            | Effect::AdditionalStep(_)
             | Effect::ExtraTurn(_) => None,
         }
     }

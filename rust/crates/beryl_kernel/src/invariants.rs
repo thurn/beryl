@@ -109,6 +109,15 @@ impl<L: Layout> State<L> {
                 "attached to an object off the battlefield and out of the graveyards",
                 at,
             )?;
+            if let Some(player) = o.enchanted_player() {
+                check(
+                    o.attached_to.is_none()
+                        && self.players().contains(player)
+                        && o.zone == Zone::Battlefield,
+                    "a player attachment must be on the battlefield and have a single host",
+                    at,
+                )?;
+            }
             // What is attached to a permanent phases out with it (see CR 702.26g).
             check(
                 o.flags.has(Flag::PhasedOut)

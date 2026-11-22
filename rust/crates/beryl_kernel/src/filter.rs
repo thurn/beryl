@@ -294,6 +294,7 @@ pub fn is_for(players: &Players, player: Seat, you: Seat) -> bool {
         Players::Target(_)
         | Players::ControllerOf(_)
         | Players::OwnerOf(_)
+        | Players::Enchanted
         | Players::ThatPlayer
         | Players::EachOther(_) => {
             unreachable!("the card table refuses these players outside a resolution")

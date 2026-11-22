@@ -812,8 +812,20 @@ instructions or giving priority for a normal resolution. Time Stop and Sundial
 of the Infinite use this effect.
 
 **Skipping a turn** is a replacement of beginning the turn (Time Vault), in the
-replacement pipeline, which already asks optional replacements. Stasis skips a
-step by removing it from the plan as the turn begins.
+replacement pipeline, which already asks optional replacements. A continuous
+rule that skips a beginning-phase step removes it just before it would begin.
+Stasis removes untap at the start of each turn while its rule is in force.
+
+**Enchanting a player.** Paradox Haze adds an upkeep immediately after the
+enchanted player's first upkeep. The turn plan records whether the step that
+just began is a repeat, including when another rule removed an earlier step. An
+Aura can attach to a player when it resolves or enters without being cast.
+Protection can make the attachment illegal, and the same state-based action that
+handles illegal object attachments puts the Aura into its owner's graveyard. In
+two-player Constructed, a player leaving ends the game immediately under
+[CR 104.2a](https://yawgatog.com/resources/magic-rules/#R1042a). If a future
+format can continue when a player leaves, the attachment check already rejects a
+player outside the game's player set.
 
 **Restarting** ([CR 728.1](https://yawgatog.com/resources/magic-rules/#R7281)).
 `State::restart(table, starter, carried)` builds a new state as `State::deal`

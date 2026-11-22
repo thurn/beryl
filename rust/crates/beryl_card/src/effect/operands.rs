@@ -119,6 +119,7 @@ impl Effect {
             Effect::Sequence(_)
             | Effect::If { .. }
             | Effect::ChangeRule { .. }
+            | Effect::AdditionalStep(_)
             | Effect::EndTurn => Operands::NONE,
             Effect::May { player, .. }
             | Effect::ForEachPlayer {

@@ -565,6 +565,10 @@ impl Ctx {
             Effect::LoseGame(player) => {
                 vec![self.stated(player, ("lose", "loses"), |_| "the game".to_owned())]
             }
+            Effect::AdditionalStep(step) => vec![format!(
+                "that player gets an additional {} after this step",
+                super::words::step_noun(step),
+            )],
             Effect::EndTurn => vec!["end the turn".to_owned()],
             Effect::ExtraTurn(player) => vec![self.stated(player, ("take", "takes"), |_| {
                 "an extra turn after this one".to_owned()
@@ -592,6 +596,7 @@ impl Ctx {
             | Players::Target(_)
             | Players::ControllerOf(_)
             | Players::OwnerOf(_)
+            | Players::Enchanted
             | Players::ThatPlayer
             | Players::EachOther(_)) => self.player(other),
         };

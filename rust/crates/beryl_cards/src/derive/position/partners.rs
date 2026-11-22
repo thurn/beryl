@@ -121,6 +121,7 @@ fn matches(filter: Filter, seat: Seat, printed: &impl Fn(Filter) -> Option<bool>
             Players::EachOpponent => Some(seat == P1),
             Players::EachPlayer => Some(true),
             Players::ThatPlayer
+            | Players::Enchanted
             | Players::EachOther(_)
             | Players::ControllerOf(_)
             | Players::OwnerOf(_)

@@ -194,6 +194,8 @@ def test_what_resolving_a_card_does_picks_the_questions_xmage_asks() -> None:
     )
     assert cards.targets_in_cast("Gadget")
     assert cards.unless_pays("Gadget")
+    upkeep = gadget(ability(0, "Triggered", pays, trigger="Step(Upkeep)"))
+    assert not upkeep.unless_pays("Gadget")
     assert cards.scries("Gadget")
     assert not cards.untaps_up_to("Gadget")
     assert cards.may_choose("Gadget") is None

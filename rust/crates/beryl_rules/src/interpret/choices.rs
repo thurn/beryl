@@ -496,6 +496,7 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::LoseGame(_)
         | Effect::ControlPlayer(_)
         | Effect::EndTurn
+        | Effect::AdditionalStep(_)
         | Effect::ExtraTurn(_)
         | Effect::Wish { .. } => (MAY, Bitboard::EMPTY),
     };

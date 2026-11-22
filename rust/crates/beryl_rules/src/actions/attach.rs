@@ -6,7 +6,7 @@ use beryl_card::{AbilityKind, Objects, TargetKind, TargetSpec};
 
 use crate::card::{Subtype, Types};
 use crate::filter::Evaluate;
-use crate::game::Game;
+use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::replacement::protection;
@@ -33,7 +33,40 @@ pub(crate) fn may_enchant<L: Layout>(
     aura: L::Slot,
     host: L::Slot,
 ) -> bool {
-    if aura == host || s.derived(aura).types.contains(Types::CREATURE) {
+    if aura == host {
+        return false;
+    }
+    may_enchant_host(s, t, aura, |spec| enchantable(s, t, spec, aura, host))
+}
+
+/// Whether an Aura can enchant a player. Enchant abilities govern the attachment
+/// (see [CR 702.5a]): "The enchant ability restricts what an Aura spell can target
+/// and what an Aura can enchant." Protection also restricts the attachment, even
+/// if the Aura entered without targeting (see [CR 702.16j]): "Such a permanent or
+/// player can't be targeted by spells or abilities and can't be enchanted by Auras."
+///
+/// [CR 702.5a]: https://yawgatog.com/resources/magic-rules/#R7025a
+/// [CR 702.16j]: https://yawgatog.com/resources/magic-rules/#R70216j
+pub(crate) fn may_enchant_player<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    aura: L::Slot,
+    player: Seat,
+) -> bool {
+    s.players().contains(player)
+        && !crate::continuous::rule_change::protected_from_everything(s, t, player)
+        && may_enchant_host(s, t, aura, |spec| {
+            !spec.put_with_this && crate::casting::player_matches(spec, player, s.controller(aura))
+        })
+}
+
+fn may_enchant_host<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    aura: L::Slot,
+    allows: impl Fn(&TargetSpec) -> bool,
+) -> bool {
+    if s.derived(aura).types.contains(Types::CREATURE) {
         return false;
     }
     s.abilities(t, aura)
@@ -42,7 +75,7 @@ pub(crate) fn may_enchant<L: Layout>(
             crate::coverage::hit(ability);
             ability.targets()
         })
-        .all(|spec| enchantable(s, t, spec, aura, host))
+        .all(allows)
 }
 
 /// Whether one enchant ability, the target spec of an Aura's spell ability, allows the Aura in
@@ -65,8 +98,7 @@ fn enchantable<L: Layout>(
             zone == crate::state::Zone::Battlefield
         }
         TargetKind::GraveyardCard => zone == crate::state::Zone::Graveyard,
-        // An Aura that enchants a player, or something on the stack, is not built: the
-        // object it is attached to is never one.
+        // This host is an object. The engine has no attachment to a spell or ability.
         TargetKind::Player
         | TargetKind::Spell
         | TargetKind::Ability
@@ -94,15 +126,10 @@ fn enchantable<L: Layout>(
 /// [CR 701.3b](https://yawgatog.com/resources/magic-rules/#R7013b): "If an effect tries to
 /// attach an object that isn't an Aura, Equipment, or Fortification to another object or
 /// player, the effect does nothing and the first object doesn't move." An Aura is asked
-/// [`may_enchant`] instead.
+/// whether its enchant abilities allow the host instead.
 ///
 /// See [CR 702.16d](https://yawgatog.com/resources/magic-rules/#R70216d): "A permanent with
 /// protection can’t be equipped by Equipment that have the stated quality".
-pub(crate) fn may_equip<L: Layout>(game: &Game<'_, L>, equipment: L::Slot, host: L::Slot) -> bool {
-    may_equip_in(game.state, game.table, equipment, host)
-}
-
-/// [`may_equip`], in a state and its table.
 pub(crate) fn may_equip_in<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -149,9 +176,9 @@ pub(crate) fn instruction<L: Layout>(
     let may = if aura {
         may_enchant(s, t, attached, host)
     } else {
-        may_equip(game, attached, host)
+        may_equip_in(s, t, attached, host)
     };
-    if game.state.object(attached).attached_to() == Some(host) || !may {
+    if s.object(attached).attached_to() == Some(host) || !may {
         return Outcome::NOTHING;
     }
     let attachment = s.permanent_at(attached).expect("a selected attachment");

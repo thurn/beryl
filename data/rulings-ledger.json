@@ -1279,6 +1279,39 @@
     }
   ],
   "Palace Guard": [],
+  "Paradox Haze": [
+    {
+      "published_at": "2006-09-25",
+      "hash": "e365882f1bc2",
+      "scenario": [
+        "the other player gets two upkeeps and a trigger in each"
+      ]
+    },
+    {
+      "published_at": "2006-09-25",
+      "hash": "849ca308f82a",
+      "untestable": "No Echo ability is implemented. A card such as Avalanche Riders would be needed to exercise its intervening condition."
+    },
+    {
+      "published_at": "2006-09-25",
+      "hash": "abe520d979bb",
+      "scenario": [
+        "two Auras give one player three upkeeps"
+      ]
+    },
+    {
+      "published_at": "2006-09-25",
+      "hash": "26245a7b6011",
+      "scenario": [
+        "the other player gets two upkeeps and a trigger in each"
+      ]
+    },
+    {
+      "published_at": "2006-09-25",
+      "hash": "fb420d20422b",
+      "covered": "Trigger::first_step"
+    }
+  ],
   "Phantasmal Image": [
     {
       "published_at": "2017-03-14",
@@ -1502,6 +1535,22 @@
     }
   ],
   "Spell Snare": [],
+  "Stasis": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "8c6dd3518edd",
+      "scenario": [
+        "a skipped untap leaves phased-out permanents phased out"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "8f18858d0e04",
+      "scenario": [
+        "the skipped untap leaves lands tapped but a delayed ability untaps them"
+      ]
+    }
+  ],
   "Stifle": [
     {
       "published_at": "2004-10-04",

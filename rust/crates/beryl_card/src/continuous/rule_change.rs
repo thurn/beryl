@@ -31,6 +31,8 @@ pub struct RuleChange {
 pub enum Governed {
     /// Casting the spells a filter accepts, read of each spell's own characteristics.
     CastSpells(Filter),
+    /// Taking a named step. With [`When::Never`], each affected player skips that step.
+    TakeStep(crate::TurnStep),
     /// Activating the loyalty abilities of these permanents.
     ActivateLoyaltyAbilities(Objects),
     /// Blocking with these creatures, as "This creature can't block." says
@@ -281,6 +283,10 @@ impl RuleChange {
                     (false, false) => "with no change to themselves",
                 }
                 .to_owned()
+            }
+            (Governed::TakeStep(step), When::Never) => format!("skipping their {step:?} steps"),
+            (Governed::TakeStep(step), When::OnlyAsSorcery | When::AsInstant) => {
+                format!("taking their {step:?} steps at a changed time")
             }
             (_, When::AsUsual) => "with a rule changed in no way".to_owned(),
         }

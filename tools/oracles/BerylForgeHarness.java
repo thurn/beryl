@@ -1115,8 +1115,12 @@ public final class BerylForgeHarness {
             });
             snapshotEquals("keywords", Set.copyOf(strings(state.getAsJsonArray("keywords"))), keywords);
             snapshotEquals("damage marked", state.get("damage").getAsInt(), card.getDamage());
-            Card host = state.get("attached_to").isJsonNull()
-                    ? null : snapshotObject(state.getAsJsonObject("attached_to"));
+            GameEntity host = null;
+            if (!state.get("attached_to").isJsonNull()) {
+                host = snapshotObject(state.getAsJsonObject("attached_to"));
+            } else if (state.has("enchanted_player")) {
+                host = game.getRegisteredPlayers().get(state.get("enchanted_player").getAsInt());
+            }
             if (!java.util.Objects.equals(host, card.getEntityAttachedTo())) {
                 throw new StepFailed("attached to " + card.getEntityAttachedTo() + ", expected " + host);
             }

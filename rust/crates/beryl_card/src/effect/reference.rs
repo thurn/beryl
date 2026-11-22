@@ -192,6 +192,10 @@ pub enum Players {
     /// "Each player other than [players]", "each other player": everyone in the game (CR
     /// 102.1) but them.
     EachOther(&'static Players),
+    /// "Enchanted player": the player the source Aura is attached to (see [CR 303.4b]).
+    ///
+    /// [CR 303.4b]: https://yawgatog.com/resources/magic-rules/#R3034b
+    Enchanted,
 }
 
 /// What damage is dealt to
@@ -267,7 +271,9 @@ impl Players {
     /// done for.
     pub const fn needs_a_resolution(&self) -> bool {
         match self {
-            Players::You | Players::EachOpponent | Players::EachPlayer => false,
+            Players::You | Players::EachOpponent | Players::EachPlayer | Players::Enchanted => {
+                false
+            }
             Players::Target(_) | Players::ThatPlayer => true,
             Players::ControllerOf(objects) | Players::OwnerOf(objects) => {
                 objects.needs_a_resolution()
@@ -287,7 +293,8 @@ impl Players {
             | Players::EachOpponent
             | Players::EachPlayer
             | Players::Target(_)
-            | Players::ThatPlayer => false,
+            | Players::ThatPlayer
+            | Players::Enchanted => false,
         }
     }
 }

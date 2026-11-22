@@ -78,6 +78,19 @@ impl Ctx {
                 };
             }
             Governed::PreventDamage => return "damage can't be prevented".to_owned(),
+            Governed::TakeStep(step) => {
+                let step = super::words::step_noun(step);
+                if rule.players == Players::EachPlayer {
+                    return format!("players skip their {step}s");
+                }
+                let whose = self.possessive(rule.players);
+                let verb = if rule.players == Players::You {
+                    "skip"
+                } else {
+                    "skips"
+                };
+                return format!("{who} {verb} {whose} {step}s");
+            }
             Governed::Player(changes) => return self.player_rules(rule.players, changes),
             Governed::SpellCosts { spells, change } => {
                 return self.spell_cost_change(spells, change, rule.players, &who);
@@ -111,6 +124,7 @@ impl Ctx {
             Players::Target(_)
             | Players::ControllerOf(_)
             | Players::OwnerOf(_)
+            | Players::Enchanted
             | Players::ThatPlayer
             | Players::EachOther(_) => format!(" {who} casts"),
         };

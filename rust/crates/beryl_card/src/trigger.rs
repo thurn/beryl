@@ -130,6 +130,10 @@ pub enum TriggerEvent {
     /// "Whenever [subject] becomes the target of a spell." Like `BecomesTarget`, but the
     /// object the trigger records is the targeting spell and the player is its controller.
     BecomesTargetOfSpell,
+    /// "At the beginning of [whose] first [step] each turn" (see [CR 500.6]).
+    ///
+    /// [CR 500.6]: https://yawgatog.com/resources/magic-rules/#R5006
+    FirstStep(TurnStep),
 }
 
 impl PartialEq for TriggerEvent {
@@ -138,6 +142,7 @@ impl PartialEq for TriggerEvent {
             TriggerEvent::Chapter { first, last } => {
                 matches!(other, TriggerEvent::Chapter { first: a, last: b } if first == a && last == b)
             }
+            TriggerEvent::FirstStep(a) => matches!(other, TriggerEvent::FirstStep(b) if a == b),
             TriggerEvent::Step(a) => matches!(other, TriggerEvent::Step(b) if a == b),
             TriggerEvent::State(a) => {
                 matches!(other, TriggerEvent::State(b) if std::ptr::eq(*a, *b))
@@ -172,7 +177,7 @@ impl std::hash::Hash for TriggerEvent {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         std::mem::discriminant(self).hash(h);
         match self {
-            TriggerEvent::Step(step) => step.hash(h),
+            TriggerEvent::Step(step) | TriggerEvent::FirstStep(step) => step.hash(h),
             TriggerEvent::Chapter { first, last } => (first, last).hash(h),
             TriggerEvent::Enters
             | TriggerEvent::Dies
@@ -251,6 +256,14 @@ impl Trigger {
     /// "At the beginning of [whose] [step]."
     pub const fn step(step: TurnStep, whose: Players) -> Trigger {
         Trigger::of(TriggerEvent::Step(step), Subject::A(Filter::Any)).whose(whose)
+    }
+
+    /// "At the beginning of [whose] first [step] each turn." A skipped step never begins
+    /// and does not trigger the ability (see [CR 614.10a]).
+    ///
+    /// [CR 614.10a]: https://yawgatog.com/resources/magic-rules/#R61410a
+    pub const fn first_step(step: TurnStep, whose: Players) -> Trigger {
+        Trigger::of(TriggerEvent::FirstStep(step), Subject::A(Filter::Any)).whose(whose)
     }
 
     /// "At the beginning of [whose] main phase."

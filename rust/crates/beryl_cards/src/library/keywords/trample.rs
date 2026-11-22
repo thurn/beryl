@@ -27,6 +27,7 @@ pub(in crate::library) const fn two_damage(player: beryl_engine::Seat) -> Action
             keywords: Keywords::TRAMPLE,
             damage: 2,
             attached_to: None,
+            enchanted_player: None,
             pt: Some((6, 6)),
         },
     })

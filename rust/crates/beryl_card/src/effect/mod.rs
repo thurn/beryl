@@ -648,6 +648,11 @@ pub enum Effect {
     /// time, in APNAP order (see rule 101.4). The most recently created turn will be taken
     /// first."
     ExtraTurn(Players),
+    /// "That player gets an additional [step] after this step."
+    /// Adds a step to the active player's current phase (see [CR 500.9]).
+    ///
+    /// [CR 500.9]: https://yawgatog.com/resources/magic-rules/#R5009
+    AdditionalStep(crate::TurnStep),
     /// "End the turn" ([CR 725.1]): stop resolving, exile the stack and go to cleanup.
     /// The skipped steps trigger nothing. An ability still waiting for the next end step
     /// waits for the next one that actually begins. Triggers from the turn-ending process
@@ -758,6 +763,7 @@ impl Effect {
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
             | Effect::EndTurn
+            | Effect::AdditionalStep(_)
             | Effect::ExtraTurn(_) => false,
         }
     }

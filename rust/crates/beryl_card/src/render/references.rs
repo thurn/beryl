@@ -20,6 +20,7 @@ impl Ctx {
             Players::You => "you".to_owned(),
             Players::EachOpponent => "each opponent".to_owned(),
             Players::EachPlayer => "each player".to_owned(),
+            Players::Enchanted => "enchanted player".to_owned(),
             Players::Target(n) => self.target(n).unwrap_or_else(|| "that player".to_owned()),
             Players::ControllerOf(objects) => {
                 format!("{} controller", self.objects_possessive(objects))
@@ -36,6 +37,7 @@ impl Ctx {
                 | Players::Target(_)
                 | Players::ControllerOf(_)
                 | Players::OwnerOf(_)
+                | Players::Enchanted
                 | Players::ThatPlayer
                 | Players::EachOther(_)) => {
                     format!("each player other than {}", self.player(other))
@@ -62,6 +64,7 @@ impl Ctx {
             | Players::Target(_)
             | Players::ControllerOf(_)
             | Players::OwnerOf(_)
+            | Players::Enchanted
             | Players::ThatPlayer
             | Players::EachOther(_)) => format!("{}'s", self.player(other)),
         }
@@ -377,7 +380,10 @@ impl Ctx {
             | TriggerEvent::DealsDamage
             | TriggerEvent::TurnedFaceUp
             | TriggerEvent::DealsCombatDamageToPlayer => "that creature",
-            TriggerEvent::Step(_) | TriggerEvent::MainPhase | TriggerEvent::State(_) => "it",
+            TriggerEvent::Step(_)
+            | TriggerEvent::FirstStep(_)
+            | TriggerEvent::MainPhase
+            | TriggerEvent::State(_) => "it",
         }
         .to_owned()
     }
@@ -452,6 +458,7 @@ impl Ctx {
                     | Players::Target(_)
                     | Players::ControllerOf(_)
                     | Players::OwnerOf(_)
+                    | Players::Enchanted
                     | Players::EachOther(_)) => {
                         if self.subject == Some(other) {
                             "they".to_owned()

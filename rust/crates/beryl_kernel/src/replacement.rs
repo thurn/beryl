@@ -58,6 +58,7 @@ pub fn instead_of_drawing(ability: &Ability) -> Result<Instead, Unreplaced> {
         Players::Target(_)
         | Players::ControllerOf(_)
         | Players::OwnerOf(_)
+        | Players::Enchanted
         | Players::ThatPlayer
         | Players::EachOther(_) => Err(Unreplaced::Players),
     }

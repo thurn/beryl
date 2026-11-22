@@ -119,7 +119,7 @@ pub(crate) fn fire_step<L: Layout>(
     s.fire_delayed(|d| {
         match trigger::ability(t, d.of.card, d.of.face, d.of.ability.get()).trigger() {
             Some(trigger) if trigger.delayed => {
-                trigger::begins(trigger.event, step)
+                trigger::begins(trigger.event, step, || false)
                     && is_for(&trigger.whose, active, d.of.controller)
             }
             _ => unreachable!("a delayed trigger's ability is a delayed one"),

@@ -65,6 +65,15 @@ impl Flag {
     }
 }
 
+/// What an Aura, Equipment, or Fortification is attached to (see [CR 701.3a]).
+///
+/// [CR 701.3a]: https://yawgatog.com/resources/magic-rules/#R7013a
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Attachment<S> {
+    Object(S),
+    Player(Seat),
+}
+
 /// An object's statuses, one bit per [`Flag`]. Combat is no flag: it is the object's
 /// [`CombatRole`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -72,6 +81,22 @@ pub struct ObjectFlags(u8);
 
 impl ObjectFlags {
     pub(crate) const NONE: ObjectFlags = ObjectFlags(0);
+
+    // The seat plus one occupies two spare bits. Zero means no player, and taking
+    // the attachment off the battlefield clears both bits with the other flags.
+    const PLAYER_SHIFT: u32 = 5;
+    const PLAYER_MASK: u8 = 0b11 << Self::PLAYER_SHIFT;
+
+    fn attached_player(self) -> Option<Seat> {
+        let seat = (self.0 & Self::PLAYER_MASK) >> Self::PLAYER_SHIFT;
+        seat.checked_sub(1).and_then(Seat::try_new)
+    }
+
+    fn set_attached_player(&mut self, player: Option<Seat>) {
+        let seat = player.map_or(0, |player| player.get() + 1);
+        debug_assert!(seat <= Self::PLAYER_MASK >> Self::PLAYER_SHIFT);
+        self.0 = (self.0 & !Self::PLAYER_MASK) | (seat << Self::PLAYER_SHIFT);
+    }
 
     #[inline]
     pub fn has(self, flag: Flag) -> bool {
@@ -521,6 +546,37 @@ impl<L: Layout> Object<L> {
     #[inline]
     pub fn attached_to(&self) -> Option<L::Slot> {
         self.attached_to
+    }
+
+    /// The player this object enchants (see [CR 303.4b]).
+    ///
+    /// [CR 303.4b]: https://yawgatog.com/resources/magic-rules/#R3034b
+    pub fn enchanted_player(&self) -> Option<Seat> {
+        self.flags.attached_player()
+    }
+
+    /// The object or player this object is attached to.
+    pub fn attachment(&self) -> Option<Attachment<L::Slot>> {
+        self.attached_to()
+            .map(Attachment::Object)
+            .or_else(|| self.enchanted_player().map(Attachment::Player))
+    }
+
+    pub(crate) fn set_attachment(&mut self, host: Option<Attachment<L::Slot>>) {
+        match host {
+            Some(Attachment::Object(slot)) => {
+                self.attached_to = Some(slot);
+                self.flags.set_attached_player(None);
+            }
+            Some(Attachment::Player(player)) => {
+                self.attached_to = None;
+                self.flags.set_attached_player(Some(player));
+            }
+            None => {
+                self.attached_to = None;
+                self.flags.set_attached_player(None);
+            }
+        }
     }
 
     /// When it entered the battlefield or last turned face up, among the layers' timestamps

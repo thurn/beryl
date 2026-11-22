@@ -123,6 +123,23 @@ fn governs_a_cast_of(t: &GameTable, rules: Rules, face: &Face) -> bool {
     rules.iter().any(|id| accepts(spells_of(t.rule(id)), face))
 }
 
+/// Whether the active player skips the given step under a rule in force
+/// (see [CR 500.11]): "To skip a step, phase, or turn is to proceed past it as though
+/// it didn’t exist."
+///
+/// [CR 500.11]: https://yawgatog.com/resources/magic-rules/#R50011
+pub(crate) fn skips_step<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    step: crate::state::TurnStep,
+) -> bool {
+    let active = s.turn().active();
+    s.rules_for(active)
+        .common(t.rules_of(RuleKind::SkipStep))
+        .iter()
+        .any(|id| matches!(t.rule(id).what, Governed::TakeStep(at) if at == step))
+}
+
 /// The spells a rule change that governs casting is about.
 ///
 /// # Panics
@@ -140,6 +157,7 @@ fn spells_of(rule: &RuleChange) -> Filter {
         | Governed::Counter(_)
         | Governed::SpellCosts { .. }
         | Governed::PreventDamage
+        | Governed::TakeStep(_)
         | Governed::Player(_) => unreachable!("a rule change about casting"),
     }
 }

@@ -383,6 +383,7 @@ pub struct PermanentState {
     pub keywords: Keywords,
     pub damage: u8,
     pub attached_to: Option<SnapshotRef>,
+    pub enchanted_player: Option<Seat>,
     /// Power and toughness of a creature.
     pub pt: Option<(i8, i8)>,
 }
