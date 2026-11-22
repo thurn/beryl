@@ -49,7 +49,9 @@ impl PaintBand {
             {
                 Self::Moving
             }
-            Some(_) if node.state.has(StateBits::SHOWN) => Self::ShownObjects,
+            Some(_) if node.state.has(StateBits::SHOWN) || node.state.has(StateBits::RAISED) => {
+                Self::ShownObjects
+            }
             Some(_) => Self::Table,
             None if node.role == Role::Arrow => Self::Overlays,
             None => Self::ScreenPanels,
@@ -262,6 +264,9 @@ impl Frame {
     }
 
     pub(super) fn depth_card_band(&self, index: u32) -> Option<Band> {
+        if self.resolved[index as usize].state.has(StateBits::RAISED) {
+            return None;
+        }
         self.scratch
             .card_bands
             .get(index as usize)
@@ -340,7 +345,11 @@ impl FrameBuilder<'_> {
         let band = self.node_band(at).records(resting);
         let bands = &mut self.frame.scratch.card_bands;
         bands.resize(bands.len().max(at as usize + 1), None);
-        bands[at as usize] = Some(band);
+        // The pointer uses the depth pass of the card in the fan when it swaps in the rest pose.
+        let raised = self.frame.resolved[at as usize]
+            .state
+            .has(StateBits::RAISED);
+        bands[at as usize] = Some(if raised { resting } else { band });
         self.draw(band, draw);
     }
 }

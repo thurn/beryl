@@ -207,6 +207,9 @@ impl StateBits {
     /// A card moving within its resting arrangement, such as a hand closing a gap.
     pub const LAYOUT_MOTION: u32 = 1 << 16;
 
+    /// A hand card rising out of the fan, held up to read, or easing back into the fan.
+    pub const RAISED: u32 = 1 << 17;
+
     /// Whether every bit of `bits` is set.
     #[must_use]
     pub fn has(self, bits: u32) -> bool {
@@ -275,7 +278,7 @@ pub enum Band {
     Moving,
     /// The flat layer, in the order of its tree.
     Layer,
-    /// Cards shown inside flat-layer elements, such as a card browser, with their marks.
+    /// Raised hand cards and cards shown inside flat-layer elements, with their marks.
     LayerCards,
     /// Flat-layer elements that must cover those cards, such as a tooltip.
     LayerCover,

@@ -353,6 +353,10 @@ pub fn look(
     let lift = pointer.lift(slot, now, tuning);
     if lift > 0.0 {
         look.pose = between(&look.pose, &raised(&look.pose, camera, tuning), lift);
+        // The web client's raised copy paints over the life orb and the step icons until it lands.
+        if look.interactive {
+            look.state |= StateBits::RAISED;
+        }
     }
     let shaken = pointer.shaken(slot, now);
     let points_per_millimetre = camera.points_per_millimetre(look.pose.position);
@@ -481,6 +485,7 @@ fn hover_under(
             corners,
             depth,
             pose: Some(pose),
+            raised: false,
         });
     }
     pointer.pile = None;

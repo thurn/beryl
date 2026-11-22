@@ -3,7 +3,7 @@
 
 use glam::{Mat4, Vec2, Vec3};
 
-use super::{ABILITIES, Frame, OBJECTS};
+use super::{ABILITIES, Frame, OBJECTS, StateBits};
 use kit_base::{geometry::Size, paint::Shadow, pose::Pose};
 
 /// The most hand cards the pointer can have up out of the fan at once. One is raised at a time,
@@ -72,10 +72,12 @@ pub struct Lifted {
     pub depth: f32,
     /// Its pose resting in the fan, used to sample depth across its face.
     pub pose: Option<Pose>,
+    /// Whether the raised paint order belongs to this pose.
+    pub raised: bool,
 }
 
 impl Frame {
-    /// Exchanges each lifted card's drawn geometry in `resolved` with its resting geometry.
+    /// Exchanges each lifted card's drawn pose and paint order with its place in the fan.
     /// Called twice, it leaves the frame as it was.
     pub fn swap_lifted(&mut self) {
         if self.lifted.is_empty() {
@@ -86,6 +88,12 @@ impl Frame {
             std::mem::swap(&mut element.corners, &mut lifted.corners);
             std::mem::swap(&mut element.depth, &mut lifted.depth);
             std::mem::swap(&mut element.pose, &mut lifted.pose);
+            let raised = element.state.has(StateBits::RAISED);
+            element.state.0 &= !StateBits::RAISED;
+            if lifted.raised {
+                element.state.0 |= StateBits::RAISED;
+            }
+            lifted.raised = raised;
         }
         self.order_nodes();
     }

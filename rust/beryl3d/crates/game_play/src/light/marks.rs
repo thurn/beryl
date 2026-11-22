@@ -377,6 +377,7 @@ impl MarkNode<'_> {
                             & (StateBits::MOVING
                                 | StateBits::HELD
                                 | StateBits::SHOWN
+                                | StateBits::RAISED
                                 | StateBits::LAYOUT_MOTION),
                 ),
                 face: None,

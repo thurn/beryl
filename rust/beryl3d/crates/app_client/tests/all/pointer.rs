@@ -95,6 +95,67 @@ fn a_hovered_hand_card_rises_and_falls_back() {
 }
 
 #[test]
+fn a_hovered_hand_card_paints_over_the_life_hud_until_it_lands() {
+    let mut page = page(&[sample()]).with_scale(2.0);
+    page.set_looking(true);
+    let locator = "card \"Plains\" #6";
+    let check = |frame: &Frame, lifted: bool| {
+        use super::flat_layer::find;
+
+        let card = frame
+            .resolved
+            .iter()
+            .position(|node| node.role == Role::Card && node.id.0 == 6)
+            .expect("Plains in hand");
+        let orb = find(frame, Role::Region, "your orb");
+        let total = find(frame, Role::Player, "You 20");
+        let step = find(frame, Role::Icon, "Your draw");
+        let card_draw = frame
+            .owners
+            .iter()
+            .position(|&owner| owner as usize == card)
+            .expect("the hand card draws its face");
+
+        for hud in [orb, total, step] {
+            let node = &frame.resolved[hud];
+            let name = frame.name(node.name);
+            if lifted {
+                let bounds =
+                    kit_frame::frame::picking::Area::Quad(frame.resolved[card].corners, None);
+                assert!(
+                    bounds.contains(node.corners.iter().copied().sum::<Vec2>() * 0.25),
+                    "the card overlaps {name}"
+                );
+            }
+            let mut draws = frame
+                .owners
+                .iter()
+                .enumerate()
+                .filter(|&(_, &owner)| owner as usize == hud)
+                .map(|(index, _)| index)
+                .peekable();
+            assert!(draws.peek().is_some(), "{name} draws records");
+            assert!(
+                draws.all(|draw| (card_draw > draw) == lifted),
+                "wrong paint order for {name} and the hand card"
+            );
+        }
+    };
+
+    check(page.frame(), false);
+    page.hover(locator);
+    page.step(ms(60));
+    check(page.frame(), true);
+    page.step(ms(100));
+    check(page.frame(), true);
+    page.move_to(Vec2::new(WINDOW.width / 2.0, 4.0));
+    page.step(ms(15));
+    check(page.frame(), true);
+    page.step(ms(160));
+    check(page.frame(), false);
+}
+
+#[test]
 fn a_rise_is_where_its_time_says_however_many_frames_were_drawn() {
     let card = "card \"Memory Lapse\"";
     let mut every = page(&[sample()]);

@@ -14,7 +14,8 @@ use crate::table::Place;
 use kit_base::data::BadgeTuning;
 use kit_base::tokens::{badge, symbol};
 use kit_frame::frame::{
-    Draw, ElementId, FrameBuilder, NameRef, RECORDS_PER_OBJECT, Resolved, Role, Sprite, StateBits,
+    Band, Draw, ElementId, FrameBuilder, NameRef, RECORDS_PER_OBJECT, Resolved, Role, Sprite,
+    StateBits,
 };
 use kit_text::text::fonts::Font;
 use kit_text::text::{Block, Glyphs, Text, TypeStyle, glyph_key};
@@ -187,7 +188,14 @@ impl Badges {
                 interactive: false,
                 // A press goes through the cost to the card under it, as the web's
                 // `.hand-cost` takes no pointer events.
-                state: StateBits(StateBits::PASSES),
+                state: StateBits(
+                    StateBits::PASSES
+                        | if on.band == Band::LayerCards {
+                            StateBits::RAISED
+                        } else {
+                            0
+                        },
+                ),
                 face: None,
                 count: 1,
                 annotations: Default::default(),

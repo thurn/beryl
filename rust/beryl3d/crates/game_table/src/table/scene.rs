@@ -635,12 +635,13 @@ impl Table {
         (dress.badges).write_cost(cost, (&held, &self.camera), builder);
     }
 
-    /// The badges share the card's paint band while it moves or is dragged.
+    /// The badges share the card's paint band while it moves, is raised or is dragged.
     fn badges_on(&self, look: &Look, band: PaintBand) -> badges::On {
         badges::On {
             pose: look.pose,
             band: match band {
                 PaintBand::Moving | PaintBand::Dragged => band.records(Band::TableMarks),
+                _ if look.state & StateBits::RAISED != 0 => band.records(Band::TableMarks),
                 _ => Band::TableMarks,
             },
             opacity: look.pose.opacity,
