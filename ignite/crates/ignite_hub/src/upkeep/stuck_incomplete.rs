@@ -31,6 +31,7 @@ use ignite_core::protocol::hub::{IncompleteReason, IncompleteReport};
 use ignite_core::protocol::tickets::{TicketFields, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
+use ignite_store::hub::tips;
 
 use super::super::filing::{self, Author, Filed, Filing};
 use super::super::regressions::OUTPUT_LINES;
@@ -105,8 +106,15 @@ pub fn incomplete(
             fields: fields(cause.title.clone(), body(report, &cause, &checks)),
             signature: cause.signature,
             deps: Vec::new(),
-            released: report.holds_tip,
+            released: false,
         }
+    };
+    let filing = if report.holds_tip {
+        let tip = report.commit.as_str();
+        tips::seen(conn, tip, now)?;
+        filing.holding_tip(tip)
+    } else {
+        filing
     };
     filing::file(conn, author, &filing, now)
 }
@@ -140,7 +148,7 @@ fn overflow(
             body,
         ),
         deps: Vec::new(),
-        released: report.holds_tip,
+        released: false,
     }
 }
 

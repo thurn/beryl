@@ -1,12 +1,21 @@
 //! What a paused machine is still offered, driven through `POST /next` and `POST /pause`.
 
+use std::collections::BTreeMap;
+
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
+use ignite_core::config::Os;
 use ignite_core::ids::TicketId;
+use ignite_core::protocol::hub::{
+    IncompleteReason, IncompleteReport, TipState, TipVerified, TipWaiting,
+};
+use ignite_core::protocol::tickets::Status;
+use ignite_core::time::Timestamp;
 use ignite_store::hub;
 
 use crate::routes::dispatch::tests::{at, file, free, post, start};
+use crate::upkeep::{filing::UPKEEP, stuck};
 
 fn pause(conn: &mut Connection, machine: &Value, paused: bool) {
     let body = json!({"machine": machine, "paused": paused});
@@ -25,6 +34,183 @@ fn regression(conn: &Connection, check: &str, ticket: &TicketId, state: &str) {
 
 fn offered(reply: &Value) -> Option<&str> {
     reply["ticket"].as_str()
+}
+
+fn register_windows(conn: &mut Connection, id: &str, name: &str) {
+    let register = json!({
+        "machine": id, "name": name, "os": "windows", "cores": 8,
+        "memory_mb": 16000, "families": [], "version": "d97ed0e"
+    });
+    assert_eq!(post(conn, "/machines/register", &register, start()).0, 200);
+}
+
+fn windows_incomplete(commit: &str, check: &str, holds_tip: bool) -> IncompleteReport {
+    IncompleteReport {
+        check: check.parse().unwrap(),
+        machine: "m-win".parse().unwrap(),
+        host: "windows-host".to_owned(),
+        platform: Some(Os::Windows),
+        attempts: 2,
+        reason: IncompleteReason::Hung,
+        commit: commit.parse().unwrap(),
+        output: format!("{check} hung"),
+        checks: Vec::new(),
+        count: 1,
+        product: None,
+        holds_tip,
+    }
+}
+
+fn approve(conn: &mut Connection, ticket: &str, now: Timestamp) {
+    use ignite_core::protocol::tickets::{BatchRequest, Operation, TicketFields};
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops: vec![Operation::Update {
+            id: ticket.to_owned(),
+            set: Some(TicketFields {
+                status: Some(Status::Open),
+                ..TicketFields::default()
+            }),
+            add_labels: Vec::new(),
+            remove_labels: Vec::new(),
+            set_meta: BTreeMap::new(),
+            unset_meta: Vec::new(),
+        }],
+    };
+    assert!(matches!(
+        hub::batch::apply(conn, &request, "operator", "m-1", now).unwrap(),
+        hub::batch::BatchOutcome::Applied(_)
+    ));
+}
+
+#[test]
+fn checks_only_takes_one_tip_repair_with_no_worker_room() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register_windows(&mut conn, "m-win", "windows-host");
+    register_windows(&mut conn, "m-other", "other-host");
+    pause(&mut conn, &json!("m-win"), true);
+    let ordinary = stuck::incomplete(
+        &mut conn,
+        UPKEEP,
+        &windows_incomplete("aa11", "rust:ordinary", false),
+        at(1.0),
+    )
+    .unwrap()
+    .ticket;
+    approve(&mut conn, &ordinary, at(2.0));
+    let mut ask = free("m-win", &[]);
+    ask["os"] = json!("windows");
+    ask["free_cores"] = json!(0);
+    ask["room"] = json!({"start": 0, "providers": [{"name": "claude", "tiers": ["sonnet"]}]});
+    assert_eq!(post(&mut conn, "/next", &ask, at(3.0)).1, Value::Null);
+
+    let first = stuck::incomplete(
+        &mut conn,
+        UPKEEP,
+        &windows_incomplete("abcd", "build:first", true),
+        at(4.0),
+    )
+    .unwrap()
+    .ticket;
+    assert_ne!(first, ordinary);
+    let second = stuck::incomplete(
+        &mut conn,
+        UPKEEP,
+        &windows_incomplete("abcd", "native:second", true),
+        at(5.0),
+    )
+    .unwrap()
+    .ticket;
+    let mut wrong_host = ask.clone();
+    wrong_host["machine"] = json!("m-other");
+    assert_eq!(
+        post(&mut conn, "/next", &wrong_host, at(6.0)).1,
+        Value::Null
+    );
+    let (_, reservation) = post(&mut conn, "/next", &ask, at(7.0));
+    assert_eq!(offered(&reservation), Some(first.as_str()), "{reservation}");
+    assert_eq!(reservation["master_blocker"], true);
+    assert!(
+        hub::fleet::reservation_for_worker(
+            &conn,
+            "m-win",
+            reservation["session"].as_str().unwrap()
+        )
+        .unwrap()
+        .unwrap()
+        .master_blocker
+    );
+    assert!(
+        hub::fleet::reservation_of(&conn, &second)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(post(&mut conn, "/next", &ask, at(8.0)).1, Value::Null);
+
+    hub::tips::verified(
+        &conn,
+        &TipVerified {
+            commit: "dcba".parse().unwrap(),
+            machine: "m-win".parse().unwrap(),
+            state: TipState::Verified,
+            regression_passes: None,
+            failure: None,
+        },
+        at(9.0),
+    )
+    .unwrap();
+    assert_eq!(post(&mut conn, "/next", &ask, at(10.0)).1, Value::Null);
+
+    let wait = TipWaiting {
+        commit: "ef01".parse().unwrap(),
+        machine: "m-other".parse().unwrap(),
+        platform: Os::Windows,
+        checks: vec!["rust:ordinary".parse().unwrap()],
+        waited_s: 3_600.0,
+        unrunnable: Vec::new(),
+    };
+    let filed = stuck::tip_waiting(&mut conn, UPKEEP, &wait, at(11.0)).unwrap();
+    assert_eq!(filed.len(), 2);
+    ask["explain"] = json!(true);
+    let (_, repair) = post(&mut conn, "/next", &ask, at(12.0));
+    assert_eq!(offered(&repair), Some(ordinary.as_str()), "{repair}");
+    assert_eq!(repair["master_blocker"], true);
+    let mut other = free("m-other", &["local_b"]);
+    other["os"] = json!("windows");
+    pause(&mut conn, &json!("m-other"), true);
+    let (_, platform_repair) = post(&mut conn, "/next", &other, at(13.0));
+    assert!(
+        filed
+            .iter()
+            .any(|result| Some(result.ticket.as_str()) == offered(&platform_repair))
+    );
+    assert_eq!(platform_repair["master_blocker"], true);
+}
+
+#[test]
+fn retrying_a_reservation_reflects_a_later_blocking_sighting_of_the_same_cause() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register_windows(&mut conn, "m-win", "windows-host");
+    let mut report = windows_incomplete("abcd", "rust:paths", false);
+    let filed = stuck::incomplete(&mut conn, UPKEEP, &report, at(1.0)).unwrap();
+    approve(&mut conn, &filed.ticket, at(2.0));
+    let mut ask = free("m-win", &["local_a"]);
+    ask["os"] = json!("windows");
+    let (_, ordinary) = post(&mut conn, "/next", &ask, at(3.0));
+    assert_eq!(
+        offered(&ordinary),
+        Some(filed.ticket.as_str()),
+        "{ordinary}"
+    );
+    assert_ne!(ordinary["master_blocker"], true);
+    report.holds_tip = true;
+    let promoted = stuck::incomplete(&mut conn, UPKEEP, &report, at(4.0)).unwrap();
+    assert_eq!(promoted.ticket, filed.ticket);
+    pause(&mut conn, &json!("m-win"), true);
+    let (_, retry) = post(&mut conn, "/next", &ask, at(5.0));
+    assert_eq!(offered(&retry), Some(filed.ticket.as_str()), "{retry}");
+    assert_eq!(retry["code"], ordinary["code"]);
+    assert_eq!(retry["master_blocker"], true);
 }
 
 #[test]
@@ -120,19 +306,7 @@ fn a_daemon_paused_on_its_own_asks_only_for_tickets_holding_master_back() {
 fn checks_only_takes_a_windows_regression_while_an_active_mac_is_heard_from() {
     let mut conn = hub::open_in_memory().unwrap();
     crate::routes::dispatch::tests::register(&mut conn);
-    assert_eq!(
-        post(
-            &mut conn,
-            "/machines/register",
-            &json!({
-                "machine": "m-win", "name": "windows-host", "os": "windows",
-                "cores": 8, "memory_mb": 16000, "families": [], "version": "d97ed0e"
-            }),
-            start()
-        )
-        .0,
-        200
-    );
+    register_windows(&mut conn, "m-win", "windows-host");
     let ids = file(
         &mut conn,
         &[

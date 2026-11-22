@@ -46,6 +46,7 @@ fn ticket(name: &str, epic: Option<&str>) -> ReadyTicket {
     ReadyTicket {
         id: id(name),
         kind: TicketKind::Ordinary,
+        holds_tip: false,
         epic: epic.map(id),
         priority: 2,
         chain: 0,

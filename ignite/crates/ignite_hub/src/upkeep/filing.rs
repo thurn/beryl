@@ -3,8 +3,8 @@
 //! - An open ticket with the same signature gets a comment instead of a second ticket.
 //!   Exploration reports share a small set of tickets while they wait for approval.
 //! - Each report carries an `evidence` string that names the sighting, such as a commit or an
-//!   input hash. A report whose evidence the ticket already holds changes nothing, so a pass of
-//!   upkeep that sees the same fault again, or a daemon that sends a report twice, adds nothing.
+//!   input hash. A report whose evidence the ticket already holds changes nothing unless it
+//!   names a tip the ticket was not known to block.
 //! - A fault that returns within [`REOPEN_SECONDS`] of upkeep closing its ticket because the
 //!   fault had cleared ([`super::clearing`]) reopens that ticket in the status it had. A fault
 //!   that returns after a person closed its ticket, or later, gets a new ticket that names the
@@ -29,6 +29,7 @@ use std::collections::BTreeMap;
 use rusqlite::{Connection, TransactionBehavior, params};
 use serde_json::Value;
 
+use ignite_core::config::Os;
 use ignite_core::pins::{from_labels, machine_label};
 
 use ignite_core::protocol::tickets::{
@@ -36,7 +37,7 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{feed, fleet};
+use ignite_store::hub::{feed, fleet, tickets};
 use ignite_store::{Result, StoreError};
 
 use super::signature::Signature;
@@ -59,6 +60,9 @@ pub const SIGHTED_KEY: &str = "ignite_sighted_at";
 /// The ticket metadata key that holds the checks a fault keeps from a result. A filing sets it
 /// in its fields' metadata; each later sighting adds its checks to the ticket's list.
 pub const CHECKS_KEY: &str = "ignite_checks";
+
+/// The tips a report says this repair holds back. Dispatch ignores tips that have finished.
+pub(crate) const BLOCKED_TIPS_KEY: &str = "ignite_blocked_tips";
 
 /// The ticket metadata key that holds when upkeep closed the ticket because its fault cleared.
 pub const AUTO_CLOSED_KEY: &str = "ignite_auto_closed";
@@ -111,10 +115,21 @@ pub struct Filing {
     /// The new ticket's fields. Its body is also the comment on a matching open ticket.
     pub fields: TicketFields,
     pub deps: Vec<Dependency>,
-    /// Whether the fault holds `master` back, so that its ticket is filed `open` for the pool
-    /// to take at once instead of waiting for a person to release it. A sighting with this set
-    /// also releases a matching ticket that is still `pending_approval`.
+    /// File the ticket `open` so the pool can take it. A sighting with this set also releases a
+    /// matching ticket that is still `pending_approval`.
     pub released: bool,
+}
+
+impl Filing {
+    /// Records that the fault holds this tip back and releases its ticket for dispatch.
+    pub(super) fn holding_tip(mut self, tip: &str) -> Self {
+        self.released = true;
+        self.fields
+            .metadata
+            .get_or_insert_with(BTreeMap::new)
+            .insert(BLOCKED_TIPS_KEY.to_owned(), Value::from(vec![tip]));
+        self
+    }
 }
 
 /// What filing did.
@@ -210,7 +225,10 @@ fn file_with(
             matches.iter().find(|m| !m.closed)
         };
         let (ops, change) = match live {
-            Some(open) if open.sightings.contains(&filing.evidence) => {
+            Some(open)
+                if open.sightings.contains(&filing.evidence)
+                    && new_blocked_tips(open, filing).is_none() =>
+            {
                 return Ok(Some(Filed {
                     ticket: open.id.clone(),
                     change: Change::Unchanged,
@@ -312,24 +330,23 @@ pub fn sighted(conn: &Connection, labels: &[&str], evidence: &str) -> Result<usi
     Ok(usize::try_from(count).unwrap_or(0))
 }
 
-/// Releases each ticket the hub filed that still waits for a person (`pending_approval`) and
-/// holds back one of `checks`, which a tip now waits on, so that `master` does not wait for a
-/// person to release it. Returns the tickets released.
-///
-/// The release is written by [`UPKEEP`] and changes nothing but the status, so
-/// [`super::clearing`] counts it as it counts a person's release and still closes the ticket
-/// once its fault clears.
+/// Records that `tip` waits on repairs for these checks on `platform`, including portable
+/// checks. Releases any of those tickets still waiting for approval in the same transaction.
 pub fn release_holding(
     conn: &mut Connection,
     checks: &[&str],
+    platform: Os,
+    tip: &str,
     now: Timestamp,
-) -> Result<Vec<String>> {
+) -> Result<()> {
     let wanted = serde_json::to_string(checks)
         .map_err(|error| StoreError::Invalid(format!("checks {checks:?}: {error}")))?;
+    let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let ids = {
-        let mut select = conn.prepare(
+        let mut select = tx.prepare(
             "SELECT t.id FROM tickets t
-             WHERE t.status = 'pending_approval'
+             WHERE t.status IN ('pending_approval', 'open', 'in_progress')
+               AND (t.needs_os IS NULL OR t.needs_os = ?3)
                AND EXISTS (SELECT 1 FROM json_each(t.labels) l WHERE l.value = ?1)
                AND EXISTS (
                  SELECT 1 FROM json_each(t.metadata, '$.ignite_checks') held
@@ -337,27 +354,48 @@ pub fn release_holding(
              ORDER BY t.id",
         )?;
         select
-            .query_map(params![HUB_LABEL, wanted], |row| row.get::<_, String>(0))?
+            .query_map(params![HUB_LABEL, wanted, platform.as_str()], |row| {
+                row.get::<_, String>(0)
+            })?
             .collect::<rusqlite::Result<Vec<_>>>()?
     };
-    for id in &ids {
+    let mut ops = Vec::new();
+    for id in ids {
+        let Some(ticket) = tickets::load(&tx, &id)? else {
+            continue;
+        };
+        let mut tips = strings(&ticket.metadata, BLOCKED_TIPS_KEY);
+        let release = ticket.status == Status::PendingApproval;
+        if !release && tips.iter().any(|held| held == tip) {
+            continue;
+        }
+        tips = union(tips, vec![tip.to_owned()]);
+        ops.push(Operation::Update {
+            id,
+            set: release.then(|| TicketFields {
+                status: Some(Status::Open),
+                ..TicketFields::default()
+            }),
+            add_labels: Vec::new(),
+            remove_labels: Vec::new(),
+            set_meta: BTreeMap::from([(BLOCKED_TIPS_KEY.to_owned(), Value::from(tips))]),
+            unset_meta: Vec::new(),
+        });
+    }
+    if !ops.is_empty() {
         let request = BatchRequest {
             preconditions: Vec::new(),
-            ops: vec![Operation::Update {
-                id: id.clone(),
-                set: Some(TicketFields {
-                    status: Some(Status::Open),
-                    ..TicketFields::default()
-                }),
-                add_labels: Vec::new(),
-                remove_labels: Vec::new(),
-                set_meta: BTreeMap::new(),
-                unset_meta: Vec::new(),
-            }],
+            ops,
         };
-        batch::apply(conn, &request, UPKEEP.actor, UPKEEP.machine, now)?;
+        if let BatchOutcome::Conflict(conflict) =
+            batch::apply_automatic_in(&mut tx, &request, UPKEEP.actor, UPKEEP.machine, now)?
+        {
+            return Err(StoreError::Invalid(format!(
+                "recording a tip wait: {conflict:?}"
+            )));
+        }
     }
-    Ok(ids)
+    Ok(tx.commit()?)
 }
 
 /// The pin for the machine that filed a report, if it is registered.
@@ -452,6 +490,18 @@ fn union(mut list: Vec<String>, more: Vec<String>) -> Vec<String> {
     list
 }
 
+/// The merged tips if this report adds a tip the ticket did not already block.
+fn new_blocked_tips(ticket: &Match, filing: &Filing) -> Option<Vec<String>> {
+    let incoming = strings(filing.fields.metadata.as_ref()?, BLOCKED_TIPS_KEY);
+    if incoming.is_empty() {
+        return None;
+    }
+    let previous = strings(&ticket.metadata, BLOCKED_TIPS_KEY);
+    let count = previous.len();
+    let tips = union(previous, incoming);
+    (tips.len() > count).then_some(tips)
+}
+
 /// The metadata a new sighting writes on a ticket that already exists: the sighting, its filer,
 /// its time, its checks and, on a ticket filed before tickets recorded it, the fault.
 fn sighting_meta(
@@ -481,6 +531,9 @@ fn sighting_meta(
     }
     if !ticket.metadata.contains_key(FAULT_KEY) {
         meta.insert(FAULT_KEY.to_owned(), fault_value(&filing.signature));
+    }
+    if let Some(tips) = new_blocked_tips(ticket, filing) {
+        meta.insert(BLOCKED_TIPS_KEY.to_owned(), Value::from(tips));
     }
     meta
 }

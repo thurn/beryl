@@ -35,6 +35,7 @@ fn ticket(name: &str, cores: f64) -> ReadyTicket {
     ReadyTicket {
         id: TicketId::new(name).unwrap(),
         kind: TicketKind::Ordinary,
+        holds_tip: false,
         epic: None,
         priority: 2,
         chain: 0,

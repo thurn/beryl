@@ -5,6 +5,7 @@ fn ready() -> ReadyTicket {
     ReadyTicket {
         id: "ticket".parse().unwrap(),
         kind: TicketKind::Ordinary,
+        holds_tip: false,
         epic: None,
         priority: 2,
         chain: 0,

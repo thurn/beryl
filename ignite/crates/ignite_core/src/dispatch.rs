@@ -48,6 +48,8 @@ pub enum TicketKind {
 pub struct ReadyTicket {
     pub id: TicketId,
     pub kind: TicketKind,
+    /// A repair that tip verification reported as blocking an unfinished tip.
+    pub holds_tip: bool,
     /// The group it shares workers in ([`crate::shares::group_of`]).
     pub epic: Group,
     /// 0 is the highest.
@@ -140,7 +142,9 @@ pub fn platform_fits(free: &MachineFree, ticket: &ReadyTicket) -> bool {
 
 /// Whether the scheduler admits the ticket's expected core use.
 pub fn cores_fit(free: &MachineFree, ticket: &ReadyTicket) -> bool {
-    ticket.kind == TicketKind::Regression || admission::fits(free.free_cores, ticket.expected_cores)
+    ticket.kind == TicketKind::Regression
+        || ticket.holds_tip
+        || admission::fits(free.free_cores, ticket.expected_cores)
 }
 
 fn machine_fits(free: &MachineFree, ticket: &ReadyTicket) -> bool {

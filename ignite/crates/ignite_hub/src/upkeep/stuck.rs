@@ -30,7 +30,7 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
-use ignite_store::hub::{checks, fleet, fleet_settings, session_titles, tickets};
+use ignite_store::hub::{checks, fleet, fleet_settings, session_titles, tickets, tips};
 
 use super::filing::{self, Author, Filed, Filing, UPKEEP};
 use super::regressions::OUTPUT_LINES;
@@ -149,9 +149,14 @@ pub fn tips_waiting(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>>
                 ..TicketFields::default()
             },
             deps: Vec::new(),
-            released: true,
+            released: false,
         };
-        filed.push(filing::file(conn, UPKEEP, &filing, now)?);
+        filed.push(filing::file(
+            conn,
+            UPKEEP,
+            &filing.holding_tip(&commit),
+            now,
+        )?);
     }
     Ok(filed)
 }
@@ -174,8 +179,8 @@ fn listed_checks(checks: &[CheckName]) -> String {
 /// saying no such machine is registered, or, when the report names families no machine of the
 /// platform runs, one naming those families. A machine shares its ticket with [`tips_waiting`], so
 /// a machine that is silent and needed has one ticket. Each of these tickets is filed released,
-/// since the tip holds `master` back, and so is any ticket still waiting for a person that holds
-/// back one of the checks the tip waits on ([`filing::release_holding`]).
+/// since the tip holds `master` back. Repairs for checks the tip waits on also become blockers
+/// and are released if they still wait for approval ([`filing::release_holding`]).
 pub fn tip_waiting(
     conn: &mut Connection,
     author: Author,
@@ -186,6 +191,8 @@ pub fn tip_waiting(
     if fleet_settings::off_machines(conn, &settings)?.contains_key(&report.platform) {
         return Ok(Vec::new());
     }
+    let tip = report.commit.as_str();
+    tips::seen(conn, tip, now)?;
     let os = report.platform.as_str();
     let listed = listed_checks(&report.checks);
     let waited = format!(
@@ -226,7 +233,7 @@ pub fn tip_waiting(
                 ..TicketFields::default()
             },
             deps: Vec::new(),
-            released: true,
+            released: false,
         }]
     } else if machines.iter().any(|m| working.contains(&m.id)) {
         // A machine of this system stored a result within the hour, so it is running the
@@ -250,7 +257,7 @@ pub fn tip_waiting(
                 ..TicketFields::default()
             },
             deps: Vec::new(),
-            released: true,
+            released: false,
         }]
     } else {
         machines
@@ -275,16 +282,16 @@ pub fn tip_waiting(
                     ..TicketFields::default()
                 },
                 deps: Vec::new(),
-                released: true,
+                released: false,
             })
             .collect()
     };
     let mut filed = Vec::with_capacity(filings.len());
-    for filing in &filings {
-        filed.push(filing::file(conn, author, filing, now)?);
+    for filing in filings {
+        filed.push(filing::file(conn, author, &filing.holding_tip(tip), now)?);
     }
     let names: Vec<&str> = report.checks.iter().map(CheckName::as_str).collect();
-    filing::release_holding(conn, &names, now)?;
+    filing::release_holding(conn, &names, report.platform, tip, now)?;
     Ok(filed)
 }
 

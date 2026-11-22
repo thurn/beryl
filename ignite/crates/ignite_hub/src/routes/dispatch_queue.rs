@@ -380,6 +380,7 @@ struct Snapshot {
     /// For each ticket, the live tickets that depend on it.
     dependents: HashMap<String, Vec<String>>,
     requirements: Requirements,
+    tip_blockers: HashSet<String>,
     ready: Vec<TicketId>,
     /// The names, in lower case, of machines heard from within the fallback interval.
     heard: HashSet<String>,
@@ -440,6 +441,7 @@ impl Snapshot {
             reserved,
             dependents,
             requirements: Requirements::load(conn)?,
+            tip_blockers: held::tip_blockers(conn)?,
             // A ticket released by two sessions waits for a justiciar (see `releases`).
             ready: releases::offerable(conn, tickets::ready(conn, now)?)?,
             heard,
@@ -601,6 +603,7 @@ impl Snapshot {
             pins,
             needs_os: ticket.needs_os,
             kind,
+            holds_tip: self.tip_blockers.contains(ticket.id.as_str()),
             epic: self.group(&ticket.id),
             priority: ticket.priority,
             chain: self.chain(ticket.id.as_str(), memo, &mut HashSet::new()),

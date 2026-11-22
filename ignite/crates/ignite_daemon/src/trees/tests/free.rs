@@ -70,6 +70,7 @@ fn a_handoff_waiting_for_disk_sweeps_free_trees_while_builds_are_held() {
     let waiting = ReadyTicket {
         id: TicketId::new("T.3").unwrap(),
         kind: TicketKind::Ordinary,
+        holds_tip: false,
         epic: None,
         priority: 0,
         chain: 0,

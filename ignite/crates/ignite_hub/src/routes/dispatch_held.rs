@@ -16,10 +16,28 @@ use ignite_store::Result;
 use ignite_store::hub::{capacity, fleet, provider_usage, tickets};
 
 use crate::routes::dispatch::mix as dispatch_mix;
+use crate::upkeep::filing::BLOCKED_TIPS_KEY;
 use crate::upkeep::regressions;
 
 /// The states of a regression whose check still fails, so that its ticket holds `master` back.
 pub const FAILING: [&str; 2] = ["open", ignite_store::hub::tips::REOPENED];
+
+// A finished tip, including one superseded by a later round, no longer gives its repairs
+// precedence.
+const HOLDS_TIP: &str = "EXISTS (
+    SELECT 1 FROM json_each(t.metadata, '$.' || ?1) blocked
+    JOIN tips ON tips.commit_sha = blocked.value
+    WHERE tips.state IN ('seen', 'verifying')
+)";
+
+pub(super) fn tip_blockers(conn: &Connection) -> Result<HashSet<String>> {
+    let mut select = conn.prepare_cached(&format!(
+        "SELECT t.id FROM tickets t WHERE t.status = 'open' AND {HOLDS_TIP}"
+    ))?;
+    Ok(select
+        .query_map([BLOCKED_TIPS_KEY], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?)
+}
 
 /// How far a pause limits what a machine is offered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -163,10 +181,25 @@ impl<'a> Fallback<'a> {
     }
 }
 
-/// Whether the ticket holds `master` back: a justiciar ticket, or the ticket of a failing
-/// regression.
+/// Whether the ticket holds `master` back: a justiciar ticket, a failing regression, or a
+/// repair reported by tip verification.
 pub fn holds_master(ticket: &ReadyTicket) -> bool {
-    ticket.kind == TicketKind::Regression || ticket.labels.iter().any(|l| l == JUSTICIAR)
+    ticket.holds_tip
+        || ticket.kind == TicketKind::Regression
+        || ticket.labels.iter().any(|l| l == JUSTICIAR)
+}
+
+fn has_blocker(conn: &Connection, filter: &str, key: &str) -> Result<bool> {
+    let mut query = conn.prepare_cached(&format!(
+        "SELECT EXISTS (SELECT 1 FROM tickets t WHERE ({filter})
+         AND ({HOLDS_TIP}
+           OR t.id IN (SELECT ticket FROM regressions WHERE state IN (?2, ?3))
+           OR EXISTS (SELECT 1 FROM json_each(t.labels) WHERE value = ?4)))"
+    ))?;
+    Ok(query.query_row(
+        params![BLOCKED_TIPS_KEY, FAILING[0], FAILING[1], JUSTICIAR, key],
+        |row| row.get(0),
+    )?)
 }
 
 /// Replays a reservation whose reply was lost. If the requester is limited to master blockers,
@@ -178,7 +211,7 @@ pub(super) fn retry_reservation(
 ) -> Result<Option<Reservation>> {
     let machine = free.machine.as_str();
     for worker in &free.idle_workers {
-        let Some(reservation) =
+        let Some(mut reservation) =
             fleet::reservation_for_worker(conn, machine, worker.session.as_str())?
         else {
             continue;
@@ -189,20 +222,16 @@ pub(super) fn retry_reservation(
             fleet::release_reservation(conn, reservation.ticket.as_str())?;
             continue;
         }
-        if paused == Paused::No
-            || conn.query_row(
-                "SELECT EXISTS (SELECT 1 FROM tickets t WHERE t.id = ?1
-             AND (t.id IN (SELECT ticket FROM regressions WHERE state IN (?2, ?3))
-                  OR EXISTS (SELECT 1 FROM json_each(t.labels) WHERE value = ?4)))",
-                params![
-                    reservation.ticket.as_str(),
-                    FAILING[0],
-                    FAILING[1],
-                    JUSTICIAR
-                ],
-                |row| row.get(0),
-            )?
-        {
+        let ticket = reservation.ticket.as_str();
+        let master_blocker = has_blocker(conn, "t.id = ?5", ticket)?;
+        if reservation.master_blocker != master_blocker {
+            conn.execute(
+                "UPDATE reservations SET master_blocker = ?1 WHERE ticket = ?2",
+                params![master_blocker, ticket],
+            )?;
+            reservation.master_blocker = master_blocker;
+        }
+        if paused == Paused::No || master_blocker {
             return Ok(Some(reservation));
         }
     }
@@ -212,15 +241,12 @@ pub(super) fn retry_reservation(
 /// Whether `machine` already works or has reserved a ticket that holds `master` back, so that
 /// a paused machine gives such tickets to one worker at a time.
 pub fn holds_one(conn: &Connection, machine: &str) -> Result<bool> {
-    Ok(conn.query_row(
-        "SELECT EXISTS (SELECT 1 FROM tickets t
-           WHERE ((t.status = 'in_progress' AND t.machine = ?1)
-                  OR t.id IN (SELECT ticket FROM reservations WHERE machine = ?1))
-             AND (t.id IN (SELECT ticket FROM regressions WHERE state IN (?2, ?3))
-                  OR EXISTS (SELECT 1 FROM json_each(t.labels) WHERE value = ?4)))",
-        params![machine, FAILING[0], FAILING[1], JUSTICIAR],
-        |row| row.get(0),
-    )?)
+    has_blocker(
+        conn,
+        "(t.status = 'in_progress' AND t.machine = ?5)
+         OR t.id IN (SELECT ticket FROM reservations WHERE machine = ?5)",
+        machine,
+    )
 }
 
 #[cfg(test)]
