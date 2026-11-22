@@ -94,7 +94,7 @@ fn a_two_row_hand_displaces_the_docks_preferred_slot() {
 }
 
 #[test]
-fn a_payment_button_reports_its_layout_owner_and_ink_token() {
+fn a_payment_button_reports_widget_defaults_and_the_dock_override() {
     let args = &["pay-default", "--at", "prompt:2", "button \"Auto Pay\""];
     let value = explain(args);
     assert_eq!(value["place"]["layout"]["policy"], "flexbox");
@@ -104,23 +104,62 @@ fn a_payment_button_reports_its_layout_owner_and_ink_token() {
         "rust/beryl3d/crates/game_hud/src/prompts/bar"
     );
     let look = value["look"].as_array().unwrap();
-    let color = look
-        .iter()
-        .find(|style| style["property"] == "color")
-        .unwrap();
+    let style = |property| {
+        look.iter()
+            .find(|style| style["property"] == property)
+            .unwrap_or_else(|| panic!("missing {property} in {value}"))
+    };
+    for (property, expected) in [
+        ("background", "Some([0, 0, 0, 0])"),
+        ("text_align", "Center"),
+        ("fit", "true"),
+    ] {
+        let row = style(property);
+        assert_eq!(row["value"], expected);
+        assert_eq!(row["source"]["kind"], "widget");
+        assert_eq!(row["source"]["key"], "kit_ui::widgets::button::button");
+        assert_eq!(
+            row["source"]["file"],
+            "rust/beryl3d/crates/kit_ui/src/widgets/button.rs"
+        );
+    }
+    let minimum = style("min_width");
+    assert_eq!(minimum["value"], "Some(0.0)");
+    assert_eq!(minimum["source"]["kind"], "view");
+    assert_eq!(
+        minimum["source"]["key"],
+        "game_hud::prompts::bar::view::bar"
+    );
+    assert_eq!(
+        minimum["source"]["file"],
+        "rust/beryl3d/crates/game_hud/src/prompts/bar/view.rs"
+    );
+    let color = style("color");
     assert_eq!(color["source"]["key"], "flat.color.PRIMARY_INK");
     assert_eq!(color["source"]["file"], "data/design-tokens.json");
-    let animation = look
-        .iter()
-        .find(|style| style["property"] == "layout_slide")
-        .unwrap();
+    let animation = style("layout_slide");
     assert_eq!(animation["source"]["file"], "data/beryl3d/flat.json");
     assert_eq!(animation["source"]["key"], "transition_ms");
     assert!(look.iter().all(|style| style["source"]["file"].is_string()));
     let text = run(&[["explain"].as_slice(), args].concat());
     assert_eq!(text.code, 0, "{}", text.stderr);
     assert!(text.stdout.starts_with("just b3d explain pay-default "));
+    assert!(text.stdout.contains("kit_ui::widgets::button::button"));
     assert!(text.stdout.contains("PRIMARY_INK"));
+}
+
+#[test]
+fn a_widget_property_reset_to_the_base_style_still_reports_the_override() {
+    let mut button = kit_ui::widgets::button("Cancel");
+    button.style.fit = false;
+    let look = game_probe::explain::styles(&button, "view", "view.rs", None);
+    let fit = look
+        .iter()
+        .find(|style| style["property"] == "fit")
+        .unwrap();
+    assert_eq!(fit["value"], "false");
+    assert_eq!(fit["source"]["kind"], "view");
+    assert_eq!(fit["source"]["file"], "view.rs");
 }
 
 #[test]

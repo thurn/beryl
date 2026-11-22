@@ -1,10 +1,10 @@
-//! Compares the retained declaration with the toolkit's default style.
+//! Explains the retained declaration using the toolkit's base and widget styles.
 
 use std::fmt::Debug;
 
 use kit_base::data::profiles::FloatingPrompt;
 use kit_ui::element::{Display, Element, Style};
-use kit_ui::widgets::{button, primary, screen::supplied_timing};
+use kit_ui::widgets::{Widget, button, primary, screen::supplied_timing};
 use serde_json::{Value, json};
 
 const TOKENS: &str = "data/design-tokens.json";
@@ -48,8 +48,8 @@ fn printed(value: &impl Debug) -> String {
     value
 }
 
-/// Every declared property that differs from the toolkit default, with its supplying view,
-/// profile field or widget token.
+/// Style values that differ from the base or widget style, with their supplying widget,
+/// token, profile field or view.
 #[must_use]
 #[expect(
     clippy::float_cmp,
@@ -63,10 +63,11 @@ pub fn styles(
 ) -> Vec<Value> {
     let style = &element.style;
     let default = Style::default();
-    let button = element.action_button.then(|| {
-        let build = if element.primary { primary } else { button };
-        build("")
-    });
+    // Build the reference styles here so the live client keeps no per-property sources.
+    let ordinary_button = element.action_button.then(|| button(""));
+    let primary_button = (element.action_button && element.primary).then(|| primary(""));
+    let button = primary_button.as_ref().or(ordinary_button.as_ref());
+    let button_file = format!("rust/beryl3d/{}", Widget::Button.source());
     let variant = if element.primary {
         "PRIMARY"
     } else {
@@ -75,13 +76,28 @@ pub fn styles(
     let floating = floating.filter(|_| element.action_button);
     let mut values = Vec::new();
     macro_rules! properties {
+        (@origin $widget:expr, $file:expr; $token:expr) => {
+            source("token", $token, TOKENS)
+        };
+        (@origin $widget:expr, $file:expr) => {
+            source("widget", $widget, $file)
+        };
         ($($field:ident $(=> $token:expr)?),* $(,)?) => {
             let Style { $($field: _,)* } = style;
-            $(if style.$field != default.$field {
-                let origin = source("view", owner, file);
-                $(let origin = if button.as_ref().is_some_and(|button| style.$field == button.style.$field) {
-                    source("token", $token, TOKENS)
-                } else { origin };)?
+            $(let widget_sets_field = button.is_some_and(|button| button.style.$field != default.$field);
+            if style.$field != default.$field || widget_sets_field {
+                let origin = if widget_sets_field && button.is_some_and(|button| style.$field == button.style.$field) {
+                    properties!(@origin
+                        if ordinary_button.as_ref().is_some_and(|button| style.$field == button.style.$field) {
+                            "kit_ui::widgets::button::button"
+                        } else {
+                            "kit_ui::widgets::button::primary"
+                        },
+                        &button_file $(; $token)?
+                    )
+                } else {
+                    source("view", owner, file)
+                };
                 let origin = floating.and_then(|(metrics, profile)| {
                     let key = floating_key(style, metrics, stringify!($field))?;
                     Some(source("data", key, profile))
@@ -114,9 +130,7 @@ pub fn styles(
     if let Some(border) = values
         .iter_mut()
         .find(|value| value["property"] == "border")
-        && button
-            .as_ref()
-            .is_some_and(|button| style.border == button.style.border)
+        && border["source"]["kind"] == "widget"
     {
         border["also_from"] = json!([
             source("token", &format!("flat.color.{variant}_RIM"), TOKENS),
