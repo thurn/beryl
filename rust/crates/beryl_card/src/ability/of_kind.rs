@@ -74,6 +74,21 @@ impl Ability {
         }
     }
 
+    /// Changes what a triggered ability listens to, keeping its effect and restrictions.
+    /// Used when comparing a definition to one with a different trigger.
+    ///
+    /// # Panics
+    ///
+    /// If this is not a triggered ability.
+    #[must_use]
+    pub const fn with_trigger(self, trigger: &'static Trigger) -> Self {
+        assert!(matches!(self.kind, AbilityKind::Triggered));
+        Self {
+            of_kind: OfKind::Trigger(trigger),
+            ..self
+        }
+    }
+
     /// A triggered ability: what it triggers on.
     #[inline]
     pub const fn trigger(&self) -> Option<&'static Trigger> {

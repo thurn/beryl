@@ -190,3 +190,50 @@ fn a_lingering_effect_refuses_a_rebuild() {
     );
     assert!(reason.contains(&lingering), "{reason}");
 }
+
+#[test]
+fn class_levels_and_solved_cases_survive_checkpoint_recovery() {
+    use beryl_cards::names::{CASE_OF_THE_CRIMSON_PULSE, ISLAND, WIZARD_CLASS};
+    use beryl_engine::event::Sink;
+    use beryl_engine::profile::Profile;
+    use beryl_engine::state::{Memo, Zone, ZoneKey};
+    use beryl_engine::zone::Place;
+    use beryl_engine::{Format, GameTable, Slot, State};
+
+    let decks: [&Decklist; 2] = [
+        &[
+            (1, WIZARD_CLASS),
+            (1, CASE_OF_THE_CRIMSON_PULSE),
+            (8, ISLAND),
+        ],
+        &[(10, ISLAND)],
+    ];
+    let table = GameTable::new(Format::CONSTRUCTED, &CARDS, decks).unwrap();
+    let mut initial: State = State::deal(&table, 5, Profile::EXACT).unwrap();
+    initial.board().begin_before_turn(3, Seat::P0);
+    let mut sink = Sink::off();
+    for (name, memo) in [
+        (WIZARD_CLASS, Memo::ClassLevel(3)),
+        (CASE_OF_THE_CRIMSON_PULSE, Memo::Solved),
+    ] {
+        let library = initial.zone(ZoneKey::Of(Seat::P0, Zone::Library));
+        let slot = Slot::all()
+            .find(|&slot| library.contains(slot) && initial.definition_name(&table, slot) == name)
+            .unwrap();
+        initial
+            .move_object(&mut sink, slot, Zone::Battlefield, Place::Top)
+            .unwrap();
+        initial.remember(slot, memo).unwrap();
+    }
+
+    let saved = Checkpoint::of(&table, &initial);
+    let serialized = serde_json::to_string(&saved).unwrap();
+    let loaded: Checkpoint = serde_json::from_str(&serialized).unwrap();
+    let mut recovered = State::deal(&table, 5, Profile::EXACT).unwrap();
+    loaded.arrange(&table, &mut recovered, 5).unwrap();
+
+    let captured = Checkpoint::of(&table, &recovered);
+    assert_eq!(captured.battlefield, saved.battlefield);
+    assert_eq!(captured.battlefield[0].class_level, Some(3));
+    assert!(captured.battlefield[1].solved);
+}

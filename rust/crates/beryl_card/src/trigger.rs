@@ -136,6 +136,8 @@ pub enum TriggerEvent {
     ///
     /// [CR 500.6]: https://yawgatog.com/resources/magic-rules/#R5006
     FirstStep(TurnStep),
+    /// A permanent becomes a particular Class level (see CR 717.2a).
+    ClassLevel(u8),
 }
 
 impl PartialEq for TriggerEvent {
@@ -145,6 +147,7 @@ impl PartialEq for TriggerEvent {
                 matches!(other, TriggerEvent::Chapter { first: a, last: b } if first == a && last == b)
             }
             TriggerEvent::FirstStep(a) => matches!(other, TriggerEvent::FirstStep(b) if a == b),
+            TriggerEvent::ClassLevel(a) => matches!(other, TriggerEvent::ClassLevel(b) if a == b),
             TriggerEvent::Step(a) => matches!(other, TriggerEvent::Step(b) if a == b),
             TriggerEvent::State(a) => {
                 matches!(other, TriggerEvent::State(b) if std::ptr::eq(*a, *b))
@@ -180,6 +183,7 @@ impl std::hash::Hash for TriggerEvent {
         std::mem::discriminant(self).hash(h);
         match self {
             TriggerEvent::Step(step) | TriggerEvent::FirstStep(step) => step.hash(h),
+            TriggerEvent::ClassLevel(level) => level.hash(h),
             TriggerEvent::Chapter { first, last } => (first, last).hash(h),
             TriggerEvent::Enters
             | TriggerEvent::Dies

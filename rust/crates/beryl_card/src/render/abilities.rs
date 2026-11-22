@@ -3,6 +3,7 @@
 //! and the whole ability as one paragraph. A rule change's template is in `rules.rs`.
 
 use super::Ctx;
+use super::designations::roman;
 use super::filters::{Kind, zone_name};
 use super::words::{
     capitalized, colors, counted, keywords, list, mana_text, number, protection, pt_change,
@@ -24,7 +25,10 @@ impl Ctx {
         let away = ability.zones() == ZoneSet::GRAVEYARD && !self.in_graveyard;
         let this = away.then(|| std::mem::replace(&mut self.this, "this card".to_owned()));
         self.in_graveyard |= away;
-        let text = self.paragraph_here(ability);
+        let mut text = self.paragraph_here(ability);
+        if ability.designation() == crate::Designation::Solved {
+            text = format!("Solved — {text}");
+        }
         if let Some(this) = this {
             (self.this, self.in_graveyard) = (this, false);
         }
@@ -34,6 +38,9 @@ impl Ctx {
     fn paragraph_here(&mut self, ability: &Ability) -> String {
         self.begin(ability.targets(), ability.trigger());
         self.ability = Some(*ability);
+        if let Some(text) = self.designation_paragraph(ability) {
+            return text;
+        }
         if let Some(keyword) = Ctx::keyword_line(ability) {
             return keyword;
         }
@@ -139,6 +146,7 @@ impl Ctx {
             }
         };
         match trigger.event {
+            TriggerEvent::ClassLevel(level) => format!("when this Class becomes level {level}"),
             TriggerEvent::Chapter { first, last } => {
                 (first..=last).map(roman).collect::<Vec<_>>().join(", ")
             }
@@ -192,18 +200,14 @@ impl Ctx {
                 let step = self.whose_step(trigger, &format!("first {}", step_name(step)));
                 format!("at the beginning of {step} each turn")
             }
-            TriggerEvent::Step(step) => {
-                format!(
-                    "at the beginning of {}",
-                    self.whose_step(trigger, step_name(step))
-                )
-            }
-            TriggerEvent::MainPhase => {
-                format!(
-                    "at the beginning of {}",
-                    self.whose_step(trigger, "main phase")
-                )
-            }
+            TriggerEvent::Step(step) => format!(
+                "at the beginning of {}",
+                self.whose_step(trigger, step_name(step))
+            ),
+            TriggerEvent::MainPhase => format!(
+                "at the beginning of {}",
+                self.whose_step(trigger, "main phase")
+            ),
             TriggerEvent::CreatesTokens => {
                 let tokens = match trigger.subject {
                     Subject::A(crate::Filter::Any) | Subject::This => "tokens".to_owned(),
@@ -268,6 +272,7 @@ impl Ctx {
             | TriggerEvent::Casts
             | TriggerEvent::Discards
             | TriggerEvent::Draws
+            | TriggerEvent::ClassLevel(_)
             | TriggerEvent::Chapter { .. }
             | TriggerEvent::State(_) => String::new(),
         }
@@ -671,6 +676,9 @@ impl Ctx {
         let Some(ability) = self.face.and_then(|face| face.grants.get(ix.index())) else {
             return "[granted ability]".to_owned();
         };
+        if let Some(text) = self.designation_paragraph(ability) {
+            return text;
+        }
         if let Some(keyword) = Ctx::keyword_line(ability) {
             return super::words::uncapitalized(&keyword);
         }
@@ -761,29 +769,4 @@ pub(super) fn land_types(set: crate::BasicLandTypes, plural: bool) -> String {
         })
         .collect();
     list(&names, "and")
-}
-
-/// Chapter symbols use Roman numerals (see [CR 715.2a]).
-///
-/// [CR 715.2a]: https://yawgatog.com/resources/magic-rules/#R7152a
-fn roman(number: u8) -> String {
-    let mut number = number;
-    let mut text = String::new();
-    for (value, symbol) in [
-        (100, "C"),
-        (90, "XC"),
-        (50, "L"),
-        (40, "XL"),
-        (10, "X"),
-        (9, "IX"),
-        (5, "V"),
-        (4, "IV"),
-        (1, "I"),
-    ] {
-        while number >= value {
-            text.push_str(symbol);
-            number -= value;
-        }
-    }
-    text
 }

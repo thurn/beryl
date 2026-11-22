@@ -66,8 +66,9 @@ fn merged<L: Layout>(
     slot: L::Slot,
     ability: ObjectAbility,
 ) -> Option<(Definition<L>, FaceAbility)> {
-    let (card, face, index, _) = s.merged_ability(t, slot, ability)?;
-    Some((Definition::of_face(card, face), FaceAbility::Own(index)))
+    let (card, face, index, ability) = s.merged_ability(t, slot, ability)?;
+    crate::objects::designation::available(s, slot, ability)
+        .then_some((Definition::of_face(card, face), FaceAbility::Own(index)))
 }
 
 /// Whether `player` may cast a sorcery now

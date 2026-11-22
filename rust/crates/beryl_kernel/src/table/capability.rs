@@ -4,8 +4,9 @@
 
 use beryl_card::definition::Shape;
 use beryl_card::{
-    Ability, AbilityKind, Amount, Behavior, CardDef, Condition, Draws, Effect, FACE_DOWN, Face,
-    Modification, Node, Objects, Replaced, Replacement, Rewrite, Subtype, Words, Zone,
+    Ability, AbilityKind, Amount, Behavior, CardDef, Condition, Designation, Draws, Effect,
+    FACE_DOWN, Face, Modification, Node, Objects, Replaced, Replacement, Rewrite, Subtype, Words,
+    Zone,
 };
 
 use crate::event::Listens;
@@ -119,10 +120,12 @@ pub enum Capability {
     AttachmentStateChecks,
     /// A card has two halves with combined characteristics off the stack.
     Split,
+    /// An ability depends on its permanent's Class level or solved designation.
+    DesignatedAbilities,
 }
 
 // The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::Split as u32) < u32::BITS);
+const _: () = assert!((Capability::DesignatedAbilities as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -226,6 +229,12 @@ impl Capability {
                 .is_some_and(|rule| matches!(rule.what, beryl_card::Governed::TakeStep(_)))
             {
                 found |= Capability::TurnStructure.bit();
+            }
+            if matches!(
+                a.designation(),
+                Designation::LevelUp(_) | Designation::AtLevel(_) | Designation::Solved
+            ) {
+                found |= Capability::DesignatedAbilities.bit();
             }
             found |= body_capabilities(a.body());
             if a.cost().is_loyalty() {

@@ -145,10 +145,10 @@
 //! ## Stores
 //!
 //! A struct field holds what the Comprehensive Rules give a player, an object or the turn.
-//! What a card creates lives in a store: **Effects**, the continuous effects of
-//! resolved spells and abilities; **Memos**, what an object remembers of how it was cast or
-//! entered; **Trackers**, what happened this turn that a card reads. [`State::signature`]
-//! compares the entries a slot holds across those stores and [`counters`].
+//! What a card creates lives in a store. **Effects** holds continuous effects from resolved
+//! spells and abilities. **Memos** holds how an object was cast or entered, its Class level
+//! and whether it was solved. **Trackers** holds what happened this turn that a card reads.
+//! [`State::signature`] compares a slot's entries in these stores and [`counters`].
 //!
 //! ### Where everything goes
 //!

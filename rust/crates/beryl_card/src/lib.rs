@@ -50,7 +50,7 @@ pub mod trigger;
 mod walk;
 pub mod words;
 
-pub use ability::{Ability, AbilityKind, Behavior, Custom, Says, Timing};
+pub use ability::{Ability, AbilityKind, Behavior, Custom, Designation, Says, Timing};
 pub use characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
 pub use check::Malformed;
 pub use continuous::{

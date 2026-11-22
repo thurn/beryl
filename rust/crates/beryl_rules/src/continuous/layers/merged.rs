@@ -49,7 +49,9 @@ pub(super) fn list<L: Layout>(
             let Some(spec) = ability.layer() else {
                 continue;
             };
-            if omits_pt && defines_pt(ability) {
+            if (omits_pt && defines_pt(ability))
+                || !crate::objects::designation::available(s, slot, ability)
+            {
                 continue;
             }
             debug_assert!(n < MERGED, "a face of fewer than 64 abilities");

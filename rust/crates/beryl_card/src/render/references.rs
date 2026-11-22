@@ -369,9 +369,10 @@ impl Ctx {
             TriggerEvent::Discards | TriggerEvent::Draws => "that card",
             TriggerEvent::Casts | TriggerEvent::BecomesTargetOfSpell => "that spell",
             TriggerEvent::CreatesTokens => "those tokens",
-            TriggerEvent::Leaves | TriggerEvent::BecomesTarget | TriggerEvent::Chapter { .. } => {
-                "that permanent"
-            }
+            TriggerEvent::Leaves
+            | TriggerEvent::BecomesTarget
+            | TriggerEvent::ClassLevel(_)
+            | TriggerEvent::Chapter { .. } => "that permanent",
             TriggerEvent::Enters
             | TriggerEvent::Dies
             | TriggerEvent::Attacks

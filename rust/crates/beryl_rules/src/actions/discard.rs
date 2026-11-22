@@ -12,7 +12,7 @@ use crate::ids::Seat;
 use crate::interpret::choices;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
-use crate::replacement::event::Reason;
+use crate::replacement::event::{self, Entry, Reason};
 use crate::resolution::Resolution;
 use crate::state::{ObjectRef, Zone, ZoneKey};
 use crate::zones;
@@ -90,6 +90,26 @@ pub(crate) fn instruction<L: Layout>(
     players: Players,
     count: Amount,
 ) -> Result<Outcome<L>, Stop> {
+    // Discarding the whole hand requires no choice. Move all the cards together
+    // (see CR 701.9a), even in a layout that can hold more than 255 cards.
+    if players == Players::You
+        && matches!(count, Amount::Count(cards) if *cards == beryl_card::prelude::hand_of(&Players::You))
+    {
+        let cards = run
+            .scene()
+            .objects(beryl_card::prelude::hand_of(&Players::You));
+        let game = run.game();
+        event::move_batch(
+            game.state,
+            game.table,
+            game.sink,
+            cards,
+            Zone::Graveyard,
+            Reason::Discard,
+            Entry::default(),
+        )?;
+        return Ok(Outcome::acted_on(cards));
+    }
     let count = run.scene().amount(count);
     let mut discarded = Bitboard::EMPTY;
     for player in run.in_turn_order(players) {

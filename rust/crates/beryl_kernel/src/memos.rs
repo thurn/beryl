@@ -33,6 +33,9 @@ use crate::state::{State, Zone};
 use crate::store::{Duration, Ended, Store};
 use crate::table::GameTable;
 
+mod designation;
+mod value;
+
 /// The memos a [`Small`] game holds at once. One past it stalls the game into
 /// [`crate::Large`], whose store grows.
 pub const MEMOS: usize = 32;
@@ -128,115 +131,16 @@ pub enum Memo<L: Layout = Small> {
     FaceDownUnder(PlayerSet),
     /// This permanent entered by resolving a face-down spell cast for morph (see CR 702.37c).
     Morphed,
-}
-
-impl<L: Layout> Memo<L> {
-    /// The bits of its kinds in a store's [`Kinds`].
-    #[inline]
-    fn kinds(self) -> u32 {
-        match self {
-            Memo::Paid(paid) => Kinds::paid(paid),
-            Memo::X(_) => Kinds::X,
-            Memo::ExiledWith(_) => Kinds::EXILED_WITH,
-            Memo::ExiledUntil(_) => Kinds::EXILED_UNTIL,
-            Memo::Chosen(_) => Kinds::CHOSEN,
-            Memo::Really(_) => Kinds::REALLY,
-            Memo::PutOntoBattlefieldWith(_) => Kinds::PUT_WITH,
-            Memo::PhasedOutUnder(_) => Kinds::PHASED_OUT_UNDER,
-            Memo::PartOf(_) => Kinds::PART_OF,
-            Memo::FaceDownUnder(_) => Kinds::FACE_DOWN_UNDER,
-            Memo::Morphed => Kinds::MORPHED,
-        }
-    }
-
-    /// The zone of an object that remembers it: a permanent remembers its spell, a card in
-    /// exile what exiled it.
-    #[inline]
-    fn zone(self) -> Zone {
-        match self {
-            Memo::Paid(_)
-            | Memo::X(_)
-            | Memo::Chosen(_)
-            | Memo::Really(_)
-            | Memo::PutOntoBattlefieldWith(_)
-            | Memo::PhasedOutUnder(_)
-            | Memo::FaceDownUnder(_)
-            | Memo::Morphed => Zone::Battlefield,
-            Memo::ExiledWith(_) | Memo::ExiledUntil(_) => Zone::Exile,
-            Memo::PartOf(_) => Zone::Merged,
-        }
-    }
-
-    /// Whether the layers read it: a static ability may apply only while a cost was paid,
-    /// as one with impending does
-    /// (see [CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)).
-    #[inline]
-    fn layer_input(self) -> bool {
-        matches!(self, Memo::Paid(_))
-    }
-
-    /// The slot it names beside the object that remembers it: what exiled the card. A
-    /// kind that names one has its bit in [`Kinds::NAMING`], which the store's invariant
-    /// holds it to.
-    #[inline]
-    fn names(self) -> Option<L::Slot> {
-        match self {
-            Memo::Paid(_)
-            | Memo::X(_)
-            | Memo::Chosen(_)
-            | Memo::Really(_)
-            | Memo::PhasedOutUnder(_)
-            | Memo::FaceDownUnder(_)
-            | Memo::Morphed => None,
-            Memo::ExiledWith(by)
-            | Memo::ExiledUntil(by)
-            | Memo::PutOntoBattlefieldWith(by)
-            | Memo::PartOf(by) => Some(by),
-        }
-    }
-
-    /// Whether it says something, and of an exiler that is where such a memo needs it:
-    /// what the store's invariant holds each memo to, given the zone of the object in a
-    /// slot.
-    fn holds(self, zone: impl Fn(L::Slot) -> Zone) -> bool {
-        match self {
-            Memo::X(x) => x > 0,
-            Memo::Paid(paid) => !paid.is_empty(),
-            Memo::Chosen(value) => value.holds(),
-            Memo::Really(_) | Memo::PhasedOutUnder(_) | Memo::Morphed => true,
-            // Somebody knew the face-down card: at least its controller (see CR 708.5).
-            Memo::FaceDownUnder(knew) => !knew.is_empty(),
-            // What exiled it left a card or a token in its slot.
-            Memo::ExiledWith(by) | Memo::PutOntoBattlefieldWith(by) => zone(by) != Zone::Nowhere,
-            // An object exiled "until" its exiler leaves returns as it leaves (see CR 610.3).
-            Memo::ExiledUntil(by) => zone(by) == Zone::Battlefield,
-            // A card is part of a permanent only while it is on the battlefield.
-            Memo::PartOf(of) => zone(of) == Zone::Battlefield,
-        }
-    }
-
-    /// The memo in layout `M`: a slot it names at the same number.
-    fn relayout<M: Layout>(self) -> Memo<M> {
-        match self {
-            Memo::Paid(paid) => Memo::Paid(paid),
-            Memo::X(x) => Memo::X(x),
-            Memo::ExiledWith(by) => Memo::ExiledWith(slot(by)),
-            Memo::ExiledUntil(by) => Memo::ExiledUntil(slot(by)),
-            Memo::Chosen(value) => Memo::Chosen(value.relayout()),
-            Memo::Really(card) => Memo::Really(crate::relayout::card(card)),
-            Memo::PutOntoBattlefieldWith(by) => Memo::PutOntoBattlefieldWith(slot(by)),
-            Memo::PhasedOutUnder(player) => Memo::PhasedOutUnder(player),
-            Memo::PartOf(of) => Memo::PartOf(slot(of)),
-            Memo::FaceDownUnder(knew) => Memo::FaceDownUnder(knew),
-            Memo::Morphed => Memo::Morphed,
-        }
-    }
-
-    /// Whether `other` is of the same variant: an object has one memo of each.
-    #[inline]
-    fn same_variant(self, other: Memo<L>) -> bool {
-        std::mem::discriminant(&self) == std::mem::discriminant(&other)
-    }
+    /// A Class level (see [CR 717.2b]): "A level is a designation that any permanent can
+    /// have." The memo stays with the same object through copy and type changes.
+    ///
+    /// [CR 717.2b]: https://yawgatog.com/resources/magic-rules/#R7172b
+    ClassLevel(u8),
+    /// A solved designation (see [CR 720.3b]): "Once a permanent becomes solved, it stays
+    /// solved until it leaves the battlefield."
+    ///
+    /// [CR 720.3b]: https://yawgatog.com/resources/magic-rules/#R7203b
+    Solved,
 }
 
 /// The kinds of memo among a store's entries: its index by kind, so that a reader of a kind
@@ -257,6 +161,8 @@ impl Kinds {
     const PART_OF: u32 = 1 << 15;
     const FACE_DOWN_UNDER: u32 = 1 << 16;
     const MORPHED: u32 = 1 << 17;
+    const CLASS_LEVEL: u32 = 1 << 18;
+    const SOLVED: u32 = 1 << 19;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u32 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL | Kinds::PUT_WITH | Kinds::PART_OF;
     /// The kinds whose memo ends as a new object arrives in the slot it names
@@ -489,7 +395,9 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::PhasedOutUnder(_)
             | Memo::PartOf(_)
             | Memo::FaceDownUnder(_)
-            | Memo::Morphed => None,
+            | Memo::Morphed
+            | Memo::ClassLevel(_)
+            | Memo::Solved => None,
         })
     }
 
@@ -507,7 +415,9 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::PhasedOutUnder(_)
             | Memo::PartOf(_)
             | Memo::FaceDownUnder(_)
-            | Memo::Morphed => None,
+            | Memo::Morphed
+            | Memo::ClassLevel(_)
+            | Memo::Solved => None,
         })
     }
 
@@ -525,7 +435,9 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::PhasedOutUnder(_)
             | Memo::PartOf(_)
             | Memo::FaceDownUnder(_)
-            | Memo::Morphed => None,
+            | Memo::Morphed
+            | Memo::ClassLevel(_)
+            | Memo::Solved => None,
         })
     }
 }

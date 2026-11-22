@@ -90,6 +90,7 @@ fn player_rules_of<L: Layout>(
         // A permanent that lost the ability changes no rule (CR 613.1f).
         let has = if merged {
             super::merged::has_so_far(s, i)
+                && crate::objects::designation::available(s, s.battlefield()[i], ability)
         } else {
             s.has_ability_so_far(i, AbilityIx::new(n))
         };

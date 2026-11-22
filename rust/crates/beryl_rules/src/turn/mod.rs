@@ -146,7 +146,7 @@ pub(crate) fn step_actions<L: Layout>(
         TurnStep::FirstStrikeDamage | TurnStep::CombatDamage => {
             combat::begin_damage(s, t, sink)?;
         }
-        TurnStep::Cleanup => cleanup(s, t.format()),
+        TurnStep::Cleanup => cleanup(s, t),
         TurnStep::Upkeep
         | TurnStep::PrecombatMain
         | TurnStep::BeginningOfCombat
@@ -409,8 +409,9 @@ pub(crate) fn finish_planned_cleanup<L: Layout>(
 /// hand contains more cards than their maximum hand size (normally seven), they discard enough
 /// cards to reduce their hand size to that number." The discards are decisions, one card at a
 /// time; [`finish_cleanup`] follows them.
-fn cleanup<L: Layout>(s: &mut State<L>, format: Format) {
-    if s.hand_size(s.turn().active()) > format.maximum_hand() {
+fn cleanup<L: Layout>(s: &mut State<L>, t: &GameTable) {
+    let active = s.turn().active();
+    if s.hand_size(active) > crate::continuous::rule_change::maximum_hand(s, t, active) {
         s.ask(Pending::Discard);
     } else {
         finish_cleanup(s);
@@ -428,7 +429,8 @@ pub(crate) fn cleanup_discard<L: Layout>(
     slot: L::Slot,
 ) -> Result<(), Full> {
     event::move_one(s, t, sink, slot, Zone::Graveyard, Reason::Discard)?;
-    if s.hand_size(s.turn().active()) <= t.format().maximum_hand() {
+    let active = s.turn().active();
+    if s.hand_size(active) <= crate::continuous::rule_change::maximum_hand(s, t, active) {
         s.settle_question();
         finish_cleanup(s);
     }

@@ -38,6 +38,7 @@ pub(in crate::stack) fn begins(
         | TriggerEvent::Mutates
         | TriggerEvent::DealsDamage
         | TriggerEvent::TurnedFaceUp
+        | TriggerEvent::ClassLevel(_)
         | TriggerEvent::Chapter { .. }
         | TriggerEvent::State(_) => false,
     }

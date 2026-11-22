@@ -153,6 +153,9 @@ impl PlayerRules {
     /// [CR 702.16j]: https://yawgatog.com/resources/magic-rules/#R70216j
     pub const PROTECTION_FROM_EVERYTHING: PlayerRules = PlayerRules(1 << 1);
 
+    /// "You have no maximum hand size" (see CR 514.1).
+    pub const NO_MAXIMUM_HAND_SIZE: PlayerRules = PlayerRules(1 << 2);
+
     /// Both sets' changes.
     #[must_use]
     pub const fn union(self, other: PlayerRules) -> PlayerRules {
@@ -277,6 +280,9 @@ impl RuleChange {
             }
             (Governed::PreventDamage, _) => "unable to prevent damage".to_owned(),
             (Governed::Player(changes), _) => {
+                if changes == PlayerRules::NO_MAXIMUM_HAND_SIZE {
+                    return "with no maximum hand size".to_owned();
+                }
                 let life = changes.contains(PlayerRules::LIFE_CANT_CHANGE);
                 let protection = changes.contains(PlayerRules::PROTECTION_FROM_EVERYTHING);
                 match (life, protection) {

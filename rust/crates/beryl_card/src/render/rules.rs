@@ -179,6 +179,11 @@ impl Ctx {
             };
             clauses.push(format!("{who} {gain} protection from everything"));
         }
+        if changes.contains(PlayerRules::NO_MAXIMUM_HAND_SIZE) {
+            clauses.push(self.stated(players, ("have", "has"), |_| {
+                "no maximum hand size".to_owned()
+            }));
+        }
         clauses.join(" and ")
     }
 

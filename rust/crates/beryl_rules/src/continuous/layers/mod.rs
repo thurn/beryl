@@ -411,6 +411,12 @@ fn apply_layers<L: Layout>(
         };
         listed = listed.and(list_static(s, &mut list, on, ability, spec));
     }
+    if t.can(Capability::DesignatedAbilities) {
+        match crate::objects::designation::withhold(s, t) {
+            Ok(missing) => omitted |= missing,
+            Err(full) => listed = Err(full),
+        }
+    }
     // Layer 3 for the type lines, after every permanent's layer 1 values: nothing listed
     // above reads them (`apply::holds_from_base`).
     let text = if s.changes_text() {

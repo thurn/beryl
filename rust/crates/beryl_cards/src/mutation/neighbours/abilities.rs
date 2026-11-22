@@ -2,8 +2,8 @@
 
 use beryl_card::words::Words;
 use beryl_card::{
-    Ability, AbilityKind, BasicLandTypes, Behavior, Condition, Cost, Face, Filter, ManaColor,
-    ManaSet, Subject, Timing, Trigger, TriggerEvent, TurnStep,
+    Ability, AbilityKind, BasicLandTypes, Behavior, Condition, Cost, Designation, Face, Filter,
+    ManaColor, ManaSet, Subject, Timing, Trigger, TriggerEvent, TurnStep,
 };
 use beryl_kernel::listener::listens_to;
 use beryl_kernel::table::{is_sacrificed, is_simple};
@@ -48,12 +48,7 @@ pub(super) fn ability_neighbours(
             let trigger = ability.trigger().expect("triggered ability");
             for (field, kind, name, trigger) in triggers(trigger) {
                 if listens_to(&trigger, ability.zones()).is_ok() {
-                    add(
-                        field,
-                        kind,
-                        name,
-                        preserve(ability, Ability::triggered(leak(trigger))),
-                    );
+                    add(field, kind, name, ability.with_trigger(leak(trigger)));
                 }
             }
         }
@@ -120,6 +115,9 @@ pub(super) fn ability_neighbours(
 
 fn with_cost_or_product(ability: &Ability, cost: Cost, product: ManaSet) -> Ability {
     if ability.kind() == AbilityKind::Activated {
+        if let Designation::LevelUp(level) = ability.designation() {
+            return Ability::level(level, cost);
+        }
         return preserve(ability, Ability::activated(cost));
     }
     let mut changed = Ability::mana(cost, product);
@@ -141,6 +139,11 @@ pub(super) fn preserve(ability: &Ability, mut changed: Ability) -> Ability {
         Timing::Sorcery => changed.as_a_sorcery(),
         Timing::AsInstant => changed.as_an_instant(),
         Timing::Instant => changed,
+    };
+    changed = match ability.designation() {
+        Designation::AtLevel(level) => changed.at_class_level(level),
+        Designation::Solved => changed.solved(),
+        _ => changed,
     };
     if ability.shares_paragraph() {
         changed = changed.in_paragraph_before();
@@ -223,6 +226,11 @@ fn triggers(trigger: &Trigger) -> Vec<(&'static str, Kind, String, Trigger)> {
         Event::Step(TurnStep::Upkeep) | Event::Draws => Event::Step(TurnStep::Draw),
         Event::Step(_) => Event::Step(TurnStep::Upkeep),
         Event::MainPhase => Event::Step(TurnStep::PrecombatMain),
+        Event::ClassLevel(level) => Event::ClassLevel(if level == u8::MAX {
+            level - 1
+        } else {
+            level + 1
+        }),
         Event::Chapter { first, last } if last < u8::MAX => Event::Chapter {
             first: first + 1,
             last: last + 1,

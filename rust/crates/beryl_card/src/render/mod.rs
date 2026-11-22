@@ -27,6 +27,7 @@ mod card;
 mod clauses;
 mod conditions;
 mod copies;
+mod designations;
 mod effects;
 mod filters;
 mod modify;
@@ -209,6 +210,7 @@ fn self_reference(face: &Face, name: &str) -> String {
         (Subtype::Aura, "Aura"),
         (Subtype::Equipment, "Equipment"),
         (Subtype::Vehicle, "Vehicle"),
+        (Subtype::Case, "Case"),
     ] {
         if face.subtypes.read(&Words::NONE).contains(subtype) {
             return format!("this {noun}");

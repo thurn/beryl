@@ -448,6 +448,16 @@ pub(super) fn spent_by_cost<S: SlotId>(slot: S, a: &Ability) -> Bitboard<S> {
     b
 }
 
+/// A level bar can only be activated from the preceding level (see CR 717.2a).
+#[cold]
+fn at_previous_level<L: Layout>(s: &State<L>, slot: L::Slot, a: &Ability) -> bool {
+    if let beryl_card::Designation::LevelUp(level) = a.designation() {
+        s.class_level(slot) == level - 1
+    } else {
+        true
+    }
+}
+
 /// Whether `player` may activate `ability` now, after selecting sources they can activate.
 ///
 /// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025): "A player can't begin to
@@ -514,7 +524,10 @@ fn activatable<L: Layout, const TARGETS: bool>(
         // CR 602.5d: "Activated abilities that read 'Activate only as a sorcery' mean the
         // player must follow the timing rules for casting a sorcery spell".
         match a.timing() {
-            Timing::Sorcery => sorcery_timing(s, player),
+            Timing::Sorcery => {
+                sorcery_timing(s, player)
+                    && (!t.can(Capability::DesignatedAbilities) || at_previous_level(s, slot, a))
+            }
             // CR 602.5: "A player can't begin to activate an ability that's prohibited
             // from being activated." The restriction follows the player taking the turn.
             Timing::YourTurn => s.turn().active() == player,

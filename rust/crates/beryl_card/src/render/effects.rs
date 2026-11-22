@@ -274,7 +274,13 @@ impl Ctx {
             }
             Effect::Draw { player, count } => vec![self.cards(player, ("draw", "draws"), count)],
             Effect::Discard { player, count } => {
-                let clause = self.cards(player, ("discard", "discards"), count);
+                let clause = if player == Players::You
+                    && matches!(count, Amount::Count(cards) if *cards == crate::effect::build::hand_of(&Players::You))
+                {
+                    self.clause(player, ("discard", "discards"), |_| "your hand".to_owned())
+                } else {
+                    self.cards(player, ("discard", "discards"), count)
+                };
                 self.discarded = Some(self.plural);
                 self.those_named = None;
                 vec![clause]

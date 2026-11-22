@@ -106,6 +106,7 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
         TriggerEvent::BecomesTarget | TriggerEvent::BecomesTargetOfSpell => {
             (EventKind::Targeted, About::Either, true)
         }
+        TriggerEvent::ClassLevel(_) => (EventKind::ClassLevel, About::This, false),
         TriggerEvent::Chapter { .. } if zones == ZoneSet::BATTLEFIELD => {
             (EventKind::Chapter, About::This, false)
         }

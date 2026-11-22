@@ -464,6 +464,13 @@ fn body<L: Layout>(
     } else {
         // An instant or sorcery without a spell ability does nothing.
         if let Some(ability) = ability {
+            let designation = ability.designation();
+            if matches!(
+                designation,
+                beryl_card::Designation::LevelUp(_) | beryl_card::Designation::ToSolve
+            ) {
+                crate::objects::designation::resolve(s, t, sink, entry.source(), designation)?;
+            }
             let answers = answers.as_mut().map(|a| &mut **a as &mut dyn Answers<L>);
             let mut resolution = Resolution::new(entry.clone(), ability, legal, answers);
             let mut game = Game::new(s, t, sink);

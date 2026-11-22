@@ -67,7 +67,10 @@ pub(super) fn match_given<L: Layout>(
         }
         for (card, face) in values.merged_faces(t) {
             for l in t.listeners(card, face, k) {
-                if let Some(info) = fires(s, t, l.trigger, Some(slot), controller, e) {
+                let ability_def = &t.def(card).face(face).abilities[l.ability.index()];
+                if crate::objects::designation::available(s, slot, ability_def)
+                    && let Some(info) = fires(s, t, l.trigger, Some(slot), controller, e)
+                {
                     let ability = TriggeredAbility::own(l.ability);
                     for _ in 0..times(e) {
                         enqueue(s, t, Some(source), card, face, ability, controller, info)?;

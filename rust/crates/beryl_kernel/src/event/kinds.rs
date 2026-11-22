@@ -42,6 +42,7 @@ pub enum EventKind {
     TurnedFaceUp,
     /// Lore added to the source of a chapter ability, matched by the lore placement procedure.
     Chapter,
+    ClassLevel,
 }
 
 impl EventKind {
@@ -244,6 +245,7 @@ impl<L: Layout> Event<L> {
             Event::Targeted { .. } => EventKind::Targeted,
             Event::Mutated { .. } => EventKind::Mutated,
             Event::TurnedFaceUp { .. } => EventKind::TurnedFaceUp,
+            Event::ClassLevel { .. } => EventKind::ClassLevel,
             Event::ZoneChange { .. }
             | Event::DrawCard { .. }
             | Event::Scry { .. }

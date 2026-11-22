@@ -20,7 +20,7 @@ pub(in crate::derive) struct Opening {
 }
 
 impl Opening {
-    fn new(def: &'static CardDef, place: Place, label: impl Into<String>) -> Self {
+    pub(super) fn new(def: &'static CardDef, place: Place, label: impl Into<String>) -> Self {
         Self {
             label: format!("{} {}", label.into(), place.words()),
             start: start(def, place, None),
@@ -141,7 +141,7 @@ fn cast_partner(def: &CardDef, player: Seat, filter: Filter, zone: Zone) -> Opti
         .map(|partner| partner.name)
 }
 
-fn source_name(def: &CardDef, place: Place) -> &'static str {
+pub(super) fn source_name(def: &CardDef, place: Place) -> &'static str {
     match place {
         Place::Battlefield(face) => def.face(face).name,
         _ => def.name,
@@ -184,6 +184,7 @@ pub(super) fn open_recipe(def: &'static CardDef, place: Place, recipe: Recipe) -
         // Existing openings already play the source from each zone where the engine offers it.
         Recipe::PlaySource => return None,
         Recipe::Chapter(chapter) => return chapter_opening(def, place, chapter),
+        Recipe::ClassLevel(level) => return super::designation::reach_level(def, place, level),
         Recipe::Attack(_) | Recipe::AttackWithout(_) => {
             let player = match recipe {
                 Recipe::Attack(player) => player,

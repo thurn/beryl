@@ -130,5 +130,11 @@
     "card": "Time Vault",
     "scenario": "Two Vault activations grant turns without requiring skips",
     "gap": "the two activations must use distinct permanents with the same name. The harness looks up the first by name again once that copy is tapped"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Wizard Class",
+    "scenario": "Level three triggers for each card drawn",
+    "gap": "ordering two identical triggers from the same draw instruction, a choice Beryl elides"
   }
 ]

@@ -348,6 +348,11 @@ pub enum Event<L: Layout = Small> {
     TurnedFaceUp {
         object: ObjectRef<L>,
     },
+    /// A permanent became a Class level (see CR 717.2a).
+    ClassLevel {
+        object: ObjectRef<L>,
+        level: u8,
+    },
 }
 
 impl Copy for Event<Small> {}

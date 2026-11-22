@@ -33,10 +33,12 @@ pub(crate) static CASCADE: Effect = Effect::Sequence(&[
 
 mod behavior;
 mod chapter;
+mod designation;
 mod of_kind;
 mod zones;
 
 pub use behavior::{Behavior, Custom, Says};
+pub use designation::Designation;
 use of_kind::OfKind;
 
 /// What kind of ability this is ([CR 113.3](https://yawgatog.com/resources/magic-rules/#R1133)):
@@ -209,6 +211,7 @@ pub struct Ability {
     shares_paragraph: bool,
     /// The zones it works in: its kind's unless its card says otherwise ([`zones`]).
     zones: ZoneSet,
+    designation: Designation,
 }
 
 const _: () = assert!(size_of::<Ability>().is_power_of_two());
@@ -230,6 +233,7 @@ impl Ability {
             rule: None,
             shares_paragraph: false,
             zones: zones::usual_zones(kind),
+            designation: Designation::None,
         }
     }
 

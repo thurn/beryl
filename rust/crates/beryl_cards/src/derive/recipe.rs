@@ -2,15 +2,16 @@
 //! only their own starting positions, so ordinary openings keep their original setup.
 
 use beryl_card::{
-    Ability, AbilityKind, Amount, Behavior, CardDef, Comparison, Condition, CounterKind, Effect,
-    Filter, Governed, Modification, Objects, Players, Replaced, Rewrite, Seat, Subject, TargetKind,
-    Trigger, TriggerEvent,
+    Ability, AbilityKind, Amount, Behavior, CardDef, Comparison, Condition, CounterKind,
+    Designation, Effect, Filter, Governed, Modification, Objects, Players, Replaced, Rewrite, Seat,
+    Subject, TargetKind, Trigger, TriggerEvent,
 };
 use beryl_engine::{TurnStep, Zone};
 use beryl_scenario::{P0, P1};
 
 use super::position::Place;
 
+mod designation;
 mod opening;
 
 use opening::{Opening, open_recipe};
@@ -23,6 +24,7 @@ enum Recipe {
     Step(Seat, TurnStep),
     BeginTurnWithTappedSource,
     Chapter(u8),
+    ClassLevel(u8),
     Cast(Seat, Filter, Zone),
     PlayLand(Seat, Filter),
     Draw(Seat),
@@ -106,6 +108,7 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         TriggerEvent::DealsDamage => vec![Recipe::Attack(P0)],
         TriggerEvent::TurnedFaceUp => Vec::new(),
         TriggerEvent::Chapter { first, .. } => vec![Recipe::Chapter(first)],
+        TriggerEvent::ClassLevel(level) => vec![Recipe::ClassLevel(level)],
         TriggerEvent::State(condition) => vec![match *condition {
             Condition::Compare(Amount::Counters(Objects::This, kind), _, Amount::Fixed(0)) => {
                 Recipe::RemoveLastCounter(kind)
@@ -171,6 +174,11 @@ fn recipes(def: &'static CardDef, place: Place) -> Vec<Recipe> {
     };
     let mut recipes = Vec::new();
     for ability in face.abilities {
+        if let Designation::LevelUp(level) = ability.designation()
+            && matches!(place, Place::Battlefield(_))
+        {
+            recipes.push(Recipe::ClassLevel(level));
+        }
         if let Some(triggered) = ability.trigger()
             && (ability.zones().contains(zone) && !triggered.delayed
                 || place == Place::Hand
@@ -302,6 +310,7 @@ pub(super) fn openings(def: &'static CardDef) -> Vec<Opening> {
             recipes(def, place)
                 .into_iter()
                 .filter_map(move |recipe| open_recipe(def, place, recipe))
+                .chain(designation::openings(def, place))
         })
         .collect()
 }
@@ -329,6 +338,7 @@ mod tests {
             TriggerEvent::Mutates,
             TriggerEvent::State(&Condition::Did),
             TriggerEvent::Chapter { first: 1, last: 1 },
+            TriggerEvent::ClassLevel(2),
         ];
         for event in events {
             for subject in [Subject::This, Subject::A(Filter::Any)] {

@@ -412,7 +412,10 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
         Event::Win { player } => GameEvent::Win {
             player: side(player),
         },
-        Event::Targeted { .. } | Event::Mutated { .. } | Event::TurnedFaceUp { .. } => {
+        Event::Targeted { .. }
+        | Event::Mutated { .. }
+        | Event::ClassLevel { .. }
+        | Event::TurnedFaceUp { .. } => {
             unreachable!("only trigger matching reads this event")
         }
     }

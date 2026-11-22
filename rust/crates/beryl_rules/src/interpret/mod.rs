@@ -333,9 +333,15 @@ pub(crate) fn condition_holds<L: Layout>(
     subject: &PendingTrigger<L>,
     ability: &Ability,
 ) -> bool {
-    ability
-        .condition()
-        .is_none_or(|condition| holds(s, t, subject, condition))
+    ability.condition().is_none_or(|condition| {
+        // see CR 720.3a: "if [condition] and this Case is not solved".
+        let can_solve = ability.designation() != beryl_card::Designation::ToSolve
+            || subject
+                .of
+                .source
+                .is_some_and(|r| s.permanent(r).is_some() && !s.is_solved(r.slot));
+        can_solve && holds(s, t, subject, condition)
+    })
 }
 
 /// Whether `condition` holds for a triggered ability, read for its source as "this" and its

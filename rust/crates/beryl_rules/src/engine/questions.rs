@@ -70,7 +70,9 @@ pub(crate) fn decision<L: Layout>(
         },
         Pending::Discard => {
             let p = s.turn().active();
-            let count = s.hand_size(p).saturating_sub(t.format().maximum_hand());
+            let count = s
+                .hand_size(p)
+                .saturating_sub(crate::continuous::rule_change::maximum_hand(s, t, p));
             Ok(Decision::objects(
                 p,
                 DecisionKind::ChooseObject,

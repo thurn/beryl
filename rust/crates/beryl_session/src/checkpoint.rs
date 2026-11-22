@@ -151,6 +151,11 @@ pub struct Permanent {
     /// Entered by resolving a face-down spell cast for morph.
     #[serde(default, skip_serializing_if = "is_default")]
     pub morphed: bool,
+    /// The persistent designations of a Class or Case.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub class_level: Option<u8>,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub solved: bool,
     /// Who knows a face-down permanent's card.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub known: Vec<u8>,
@@ -403,6 +408,15 @@ impl Checkpoint {
             if b.morphed {
                 s.board().remember(slot, Memo::Morphed).map_err(full)?;
             }
+            if let Some(level) = b.class_level {
+                if level < 2 {
+                    return Err(format!("invalid Class level {level}"));
+                }
+                s.remember(slot, Memo::ClassLevel(level)).map_err(full)?;
+            }
+            if b.solved {
+                s.remember(slot, Memo::Solved).map_err(full)?;
+            }
             if b.face == Face::Down {
                 for p in Seat::BOTH {
                     s.board().set_known(p, slot, b.known.contains(&p.get()));
@@ -617,6 +631,7 @@ fn permanent<L: Layout>(
 ) -> Permanent {
     let o = s.object(slot);
     let face = Face::of(o.face());
+    let class_level = s.class_level(slot);
     Permanent {
         card: name(t, s, slot),
         owner: o.owner().get(),
@@ -634,6 +649,8 @@ fn permanent<L: Layout>(
         enchanted_player: o.enchanted_player().map(Seat::get),
         impending: s.paid(slot, CastingKind::Impending),
         morphed: s.morphed(slot),
+        class_level: (class_level > 1).then_some(class_level),
+        solved: s.is_solved(slot),
         known: if face == Face::Down {
             knowers(s, slot)
         } else {
@@ -766,32 +783,4 @@ fn first_difference(path: &str, a: &serde_json::Value, b: &serde_json::Value) ->
 }
 
 #[cfg(test)]
-mod tests {
-    use beryl_engine::state::CounterKind;
-
-    use super::CounterName;
-
-    /// A save names a kind of counter as the rules do, and every kind of the list is read
-    /// back from its name.
-    #[test]
-    fn every_kind_of_counter_round_trips_through_its_name_in_a_save() {
-        for &kind in CounterKind::ALL {
-            let saved = serde_json::to_string(&CounterName(kind)).unwrap();
-            assert_eq!(saved, format!("{:?}", kind.name()));
-            let read: CounterName = serde_json::from_str(&saved).unwrap();
-            assert_eq!(read, CounterName(kind));
-        }
-        assert!(serde_json::from_str::<CounterName>("\"no such\"").is_err());
-    }
-
-    /// The names saves were written with, which no change to the list may move.
-    #[test]
-    fn the_saved_names_of_the_kinds_stay() {
-        let names: Vec<&str> = CounterKind::ALL.iter().map(|k| k.name()).collect();
-        assert!(
-            ["+1/+1", "-1/-1", "loyalty", "time", "story", "chorus"]
-                .iter()
-                .all(|name| names.contains(name))
-        );
-    }
-}
+mod tests;

@@ -294,6 +294,77 @@
       ]
     }
   ],
+  "Case of the Crimson Pulse": [
+    {
+      "published_at": "2024-02-02",
+      "hash": "e7b9d400d2da",
+      "scenario": [
+        "A copy of a solved Case is unsolved"
+      ]
+    },
+    {
+      "published_at": "2024-02-02",
+      "hash": "cdbbf6893f0c",
+      "scenario": [
+        "One card in hand prevents the Case from triggering",
+        "Drawing in response prevents the Case from solving"
+      ]
+    },
+    {
+      "published_at": "2024-02-02",
+      "hash": "3b411354e3b2",
+      "untestable": "This Case has a triggered Solved ability. Its print does not contain a static Solved ability."
+    },
+    {
+      "published_at": "2024-02-02",
+      "hash": "e182b21fbf34",
+      "scenario": [
+        "The Case solves with an empty hand and draws in upkeep"
+      ]
+    },
+    {
+      "published_at": "2024-02-02",
+      "hash": "2792161876c4",
+      "scenario": [
+        "The Case solves with an empty hand and draws in upkeep",
+        "One card in hand prevents the Case from triggering"
+      ]
+    },
+    {
+      "published_at": "2024-02-02",
+      "hash": "62335ff7731a",
+      "untestable": "This Case has no activated Solved ability to test."
+    },
+    {
+      "published_at": "2024-02-02",
+      "hash": "6833a1fe3684",
+      "scenario": [
+        "The Case solves with an empty hand and draws in upkeep",
+        "One card in hand prevents the Case from triggering"
+      ]
+    },
+    {
+      "published_at": "2024-02-02",
+      "hash": "3373cc47ddf7",
+      "scenario": [
+        "The unsolved Case still draws when there is nothing to discard",
+        "The Case solves with an empty hand and draws in upkeep"
+      ]
+    },
+    {
+      "published_at": "2024-02-02",
+      "hash": "20f4b4ca00ce",
+      "covered": "Ability::solved"
+    },
+    {
+      "published_at": "2024-02-02",
+      "hash": "852d8d57d2f4",
+      "scenario": [
+        "The Case solves with an empty hand and draws in upkeep",
+        "A returned Case enters unsolved"
+      ]
+    }
+  ],
   "Cavern of Souls": [
     {
       "published_at": "2018-12-07",
@@ -2166,6 +2237,54 @@
       "hash": "6af434fc3b0c",
       "scenario": [
         "Urborg on the battlefield does not affect land cards in the library"
+      ]
+    }
+  ],
+  "Wizard Class": [
+    {
+      "published_at": "2021-07-23",
+      "hash": "9ce7464690b0",
+      "scenario": [
+        "Wizard Class gains each ability in order"
+      ]
+    },
+    {
+      "published_at": "2021-07-23",
+      "hash": "6591d568f729",
+      "scenario": [
+        "Wizard Class gains each ability in order"
+      ]
+    },
+    {
+      "published_at": "2021-07-23",
+      "hash": "b3898e1b6c3d",
+      "untestable": "The example is about Barbarian Class and dice. Wizard Class has no dice ability."
+    },
+    {
+      "published_at": "2021-07-23",
+      "hash": "e061fbad963b",
+      "scenario": [
+        "A copy of Wizard Class can start its own levels"
+      ]
+    },
+    {
+      "published_at": "2021-07-23",
+      "hash": "e5f8fda13ff9",
+      "scenario": [
+        "Wizard Class gains each ability in order"
+      ]
+    },
+    {
+      "published_at": "2021-07-23",
+      "hash": "8b3d9f28f6d0",
+      "covered": "Ability::at_class_level"
+    },
+    {
+      "published_at": "2021-07-23",
+      "hash": "db19495e8177",
+      "scenario": [
+        "Wizard Class gains each ability in order",
+        "Wizard Class removes the cleanup hand limit"
       ]
     }
   ],

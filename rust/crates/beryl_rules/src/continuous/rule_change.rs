@@ -80,6 +80,20 @@ pub(crate) fn protected_from_everything<L: Layout>(
     player_rule(s, t, player, PlayerRules::PROTECTION_FROM_EVERYTHING)
 }
 
+/// The player's hand limit for cleanup (see [CR 514.1]): "if the active player's hand
+/// contains more cards than their maximum hand size (normally seven), they discard
+/// enough cards to reduce their hand size to that number."
+///
+/// [CR 514.1]: https://yawgatog.com/resources/magic-rules/#R5141
+#[inline]
+pub(crate) fn maximum_hand<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> u32 {
+    if player_rule(s, t, player, PlayerRules::NO_MAXIMUM_HAND_SIZE) {
+        u32::MAX
+    } else {
+        t.format().maximum_hand()
+    }
+}
+
 /// Whether a rule change in force for `player` makes the change `which` to them. The card
 /// table's set of changes to players is read first, so a game whose cards make none reads
 /// nothing of the state.

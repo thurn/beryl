@@ -244,11 +244,13 @@ fn joined_by_then(before: &Effect, after: &Effect) -> bool {
         (
             Effect::Draw { .. },
             Effect::Discard { .. } | Effect::PutBack { .. }
-        ) | (Effect::ShuffleInto { .. }, Effect::Draw { .. })
-            | (
-                Effect::Exile(Objects::InZoneOf { .. }),
-                Effect::ShuffleInto { .. }
-            )
+        ) | (
+            Effect::Discard { .. } | Effect::ShuffleInto { .. },
+            Effect::Draw { .. }
+        ) | (
+            Effect::Exile(Objects::InZoneOf { .. }),
+            Effect::ShuffleInto { .. }
+        )
     )
 }
 

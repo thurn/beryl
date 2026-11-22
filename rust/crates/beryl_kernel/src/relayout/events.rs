@@ -84,6 +84,7 @@ fn library<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
         | Event::Lose { .. }
         | Event::Targeted { .. }
         | Event::Win { .. }
+        | Event::ClassLevel { .. }
         | Event::TurnedFaceUp { .. }
         | Event::Mutated { .. } => unreachable!("a library event"),
     }
@@ -337,6 +338,10 @@ impl<L: Layout> Relayout for Event<L> {
                 object: object.relayout(),
                 controller,
                 spell: spell.map(|object| object.relayout()),
+            },
+            &Event::ClassLevel { object, level } => Event::ClassLevel {
+                object: object.relayout(),
+                level,
             },
             &Event::TurnedFaceUp { object } => Event::TurnedFaceUp {
                 object: object.relayout(),

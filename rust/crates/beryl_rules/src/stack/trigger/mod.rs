@@ -200,7 +200,8 @@ fn times<L: Layout>(e: &Event<L>) -> u8 {
         | Event::Targeted { .. }
         | Event::Win { .. }
         | Event::Mutated { .. }
-        | Event::TurnedFaceUp { .. } => 1,
+        | Event::TurnedFaceUp { .. }
+        | Event::ClassLevel { .. } => 1,
     }
 }
 
@@ -235,6 +236,11 @@ fn fires<L: Layout>(
     let words = this.map_or(Words::NONE, |slot| s.words_of(slot));
     let about = |object: ObjectRef<L>| about(s, t, trigger.subject, this, you, &words, object);
     match (trigger.event, e) {
+        (TriggerEvent::ClassLevel(wanted), &Event::ClassLevel { object, level })
+            if wanted == level && about(object) =>
+        {
+            Some(info(Some(object), you, level))
+        }
         // The amount is the X its spell was cast with
         // (see [CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)): "If an object's
         // enters-the-battlefield triggered ability ... refers to X, and the spell that became
