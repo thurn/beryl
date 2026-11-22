@@ -196,6 +196,7 @@ pub fn reserve(conn: &Connection, reservation: &Reservation) -> Result<()> {
             reservation.master_blocker,
         ],
     )?;
+    super::placement_deferrals::clear(conn, &reservation.ticket)?;
     Ok(())
 }
 

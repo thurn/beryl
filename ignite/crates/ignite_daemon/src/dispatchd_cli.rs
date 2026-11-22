@@ -116,6 +116,19 @@ fn tiers(config: &Config, provider: &str) -> Vec<String> {
         .map_or_else(Vec::new, |models| models.keys().cloned().collect())
 }
 
+fn provider_offer(config: &Config, app: &str) -> ProviderOffer {
+    let tiers = tiers(config, app);
+    ProviderOffer {
+        name: app.to_owned(),
+        model_ids: tiers
+            .iter()
+            .filter_map(|tier| config.pool.model_id(app, tier).map(|id| (tier.clone(), id)))
+            .collect(),
+        tiers,
+        default_model: crate::clid::health::default_model(config, app),
+    }
+}
+
 impl Dispatcher {
     /// Connects the CLI supervisor to the worker pool.
     pub fn set_cli(&self, pool: Arc<dyn CliPool>, config: &Config) {
@@ -139,14 +152,19 @@ impl Dispatcher {
             return Vec::new();
         };
         self.cli_apps()
-            .map(|app| ProviderCapacity {
-                name: app.to_owned(),
-                tiers: tiers(&cli.config, app),
-                probed: cli.pool.probed(app),
-                hold_reason: cli
-                    .pool
-                    .held(app)
-                    .map(|hold| hold.reason.as_str().to_owned()),
+            .map(|app| {
+                let offer = provider_offer(&cli.config, app);
+                ProviderCapacity {
+                    name: offer.name,
+                    tiers: offer.tiers,
+                    probed: cli.pool.probed(app),
+                    hold_reason: cli
+                        .pool
+                        .held(app)
+                        .map(|hold| hold.reason.as_str().to_owned()),
+                    model_ids: offer.model_ids,
+                    default_model: offer.default_model,
+                }
             })
             .collect()
     }
@@ -157,23 +175,7 @@ impl Dispatcher {
         };
         self.cli_apps()
             .filter(|app| !state.refused.contains_key(*app) && cli.pool.offers(app))
-            .map(|app| {
-                let models = tiers(&cli.config, app);
-                ProviderOffer {
-                    name: app.to_owned(),
-                    model_ids: models
-                        .iter()
-                        .filter_map(|tier| {
-                            cli.config
-                                .pool
-                                .model_id(app, tier)
-                                .map(|id| (tier.clone(), id))
-                        })
-                        .collect(),
-                    tiers: models,
-                    default_model: crate::clid::health::default_model(&cli.config, app),
-                }
-            })
+            .map(|app| provider_offer(&cli.config, app))
             .collect()
     }
 

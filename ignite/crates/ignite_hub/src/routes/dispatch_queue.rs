@@ -39,7 +39,7 @@ use ignite_core::time::Timestamp;
 use ignite_store::hub::{fleet, fleet_settings, provider_usage, releases, tickets};
 use ignite_store::{Result, StoreError};
 
-use super::{mix, usage};
+use super::{mix, placement, usage};
 use crate::{rules, upkeep::regressions};
 
 /// The labels of tickets the hub files itself, which are offered whether or not an epic is
@@ -133,7 +133,6 @@ pub fn next(
         now,
         free.pressure.as_ref(),
     )?;
-    free.free_cores = dispatch::room(&free, &capacity.cores);
     let fallback = (state == MachineState::ChecksOnly)
         .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, &free))
         .transpose()?;
@@ -164,6 +163,11 @@ fn dispatch_ready(
     let epic_order = dispatch_groups(snapshot, &mut ready);
     let improvements = improvements_due(conn, machine)?;
     let holds = provider_usage::held(conn, settings, now)?;
+    let placement = placement::Placement::load(conn, free, settings, &holds, &ready, now)?;
+    let free = &MachineFree {
+        free_cores: dispatch::room(free, &capacity.cores),
+        ..free.clone()
+    };
     let room = free
         .room
         .as_ref()
@@ -178,48 +182,43 @@ fn dispatch_ready(
     } else {
         Vec::new()
     };
-    let pick = |ready: &[ReadyTicket]| {
-        if let Some((room, loads, pending)) = &room {
-            return dispatch::next_ticket_with(free, ready, &epic_order, improvements, |ticket| {
+    let candidates = dispatch::eligible_tickets(free, &ready, &epic_order, improvements)
+        .filter_map(|ticket| {
+            let (session, provider) = if let Some((room, loads, pending)) = &room {
                 if !ticket
                     .pins
                     .admits_machine(free.name.as_deref().unwrap_or(machine))
                 {
                     return None;
                 }
-                let provider = mix::choose(loads, room, *pending, ticket).ok()?;
-                Some(Candidate {
+                (
+                    None,
+                    mix::choose(loads, room, *pending, ticket).ok()?.to_owned(),
+                )
+            } else {
+                let session = dispatch::pick_worker(free, ticket, &last_files, |worker| {
+                    usage::blocking_hold(&holds, worker, ticket).is_none()
+                })?;
+                let provider = free
+                    .idle_workers
+                    .iter()
+                    .find(|worker| worker.session == session)?;
+                (Some(session), provider.app.clone())
+            };
+            Some((
+                ticket,
+                Candidate {
                     ticket: ticket.id.clone(),
                     kind: ticket.kind,
-                    session: None,
-                    provider: Some(provider.to_owned()),
+                    session,
+                    provider: Some(provider),
                     master_blocker: held::holds_master(ticket),
-                })
-            });
-        }
-        let handoff = dispatch::next_for_with(
-            free,
-            ready,
-            &epic_order,
-            improvements,
-            &last_files,
-            |worker, ticket| usage::blocking_hold(&holds, worker, ticket).is_none(),
-        )?;
-        let ticket = ready.iter().find(|ticket| ticket.id == handoff.ticket);
-        let provider = free
-            .idle_workers
-            .iter()
-            .find(|worker| worker.session == handoff.session)
-            .map(|worker| worker.app.clone());
-        Some(Candidate {
-            ticket: handoff.ticket,
-            kind: ticket.map_or(TicketKind::Ordinary, |ticket| ticket.kind),
-            session: Some(handoff.session),
-            provider,
-            master_blocker: ticket.is_some_and(held::holds_master),
-        })
-    };
-    match capacity.choose(&mut ready, pick) {
+                },
+            ))
+        });
+    match capacity.choose(candidates, |ticket, candidate| {
+        placement.defer(conn, ticket, candidate.provider.as_deref(), now)
+    })? {
         Some(Ok(handoff)) => reserve(conn, &free.machine, handoff, now).map(Ok),
         Some(Err(reason)) => Ok(Err(reason)),
         None => {

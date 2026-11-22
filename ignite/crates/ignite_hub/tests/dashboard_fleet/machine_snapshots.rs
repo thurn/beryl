@@ -41,6 +41,8 @@ fn fleet_shows_the_latest_machine_snapshot() {
             tiers: vec!["opus".into()],
             probed: true,
             hold_reason: None,
+            model_ids: std::collections::BTreeMap::new(),
+            default_model: None,
         }],
         ..CapacityReport::default()
     };

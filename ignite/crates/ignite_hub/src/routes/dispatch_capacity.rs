@@ -17,23 +17,23 @@ pub(super) struct Capacity<'a> {
 }
 
 impl Capacity<'_> {
-    /// Try the usual dispatch order, falling through to smaller tickets that still fit.
-    pub(super) fn choose(
+    /// Try dispatch order, falling through past tickets that wait for disk or another machine.
+    pub(super) fn choose<'a>(
         &self,
-        ready: &mut Vec<ReadyTicket>,
-        pick: impl Fn(&[ReadyTicket]) -> Option<Candidate>,
-    ) -> Option<std::result::Result<Candidate, HandoffWait>> {
-        let preferred = pick(ready)?;
-        if let Some(budget) = &self.disk
-            && let Some(reason) = ready
-                .iter()
-                .find(|ticket| ticket.id == preferred.ticket)
-                .and_then(|ticket| budget.blocked(ticket))
-        {
-            ready.retain(|ticket| budget.blocked(ticket).is_none());
-            return Some(pick(ready).ok_or(reason));
+        candidates: impl Iterator<Item = (&'a ReadyTicket, Candidate)>,
+        defer: impl Fn(&ReadyTicket, &Candidate) -> Result<Option<String>>,
+    ) -> Result<Option<std::result::Result<Candidate, HandoffWait>>> {
+        let mut first_wait = None;
+        for (ticket, candidate) in candidates {
+            if let Some(reason) = self.disk.as_ref().and_then(|budget| budget.blocked(ticket)) {
+                first_wait.get_or_insert(reason);
+            } else if let Some(reason) = defer(ticket, &candidate)? {
+                first_wait.get_or_insert_with(|| reason.into());
+            } else {
+                return Ok(Some(Ok(candidate)));
+            }
         }
-        Some(Ok(preferred))
+        Ok(first_wait.map(Err))
     }
 }
 

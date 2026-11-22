@@ -4,8 +4,41 @@
 
 use super::{JUSTICIAR, ReadyTicket, TicketKind, label, suits};
 use crate::admission;
+use crate::placement::{self, MachineView, PlacementTicket};
 use crate::protocol::hub::MachineFree;
 use crate::shares::Group;
+
+/// Why an eligible ticket was passed over for a better machine.
+pub fn why_placement(
+    ticket: &PlacementTicket<'_>,
+    asker: &MachineView<'_>,
+    better: &MachineView<'_>,
+) -> String {
+    let warm: Vec<_> = placement::missing_outputs(ticket.ready, asker.capacity)
+        .filter(|output| placement::holds_output(better.capacity, output))
+        .collect();
+    let reason = if warm.is_empty() {
+        let here = placement::cost(ticket, asker).expect("the asker can take the ticket");
+        let there = placement::cost(ticket, better).expect("the peer can take the ticket");
+        if !here.total_cmp(&there).is_eq() {
+            format!("its estimate is {there:.0} s and ours is {here:.0} s")
+        } else if placement::free_fraction(better.capacity)
+            > placement::free_fraction(asker.capacity)
+        {
+            "it has a larger share of its cores free".to_owned()
+        } else {
+            "the estimates and free-core shares tie, and its name comes first".to_owned()
+        }
+    } else {
+        let outputs = warm.join(", ");
+        let seconds = placement::cold_seconds(asker.capacity, warm.len());
+        format!("it holds {outputs}, and here they would build cold (about {seconds:.0} s)")
+    };
+    format!(
+        "{} is better placed on {}: {reason}",
+        ticket.ready.id, better.name
+    )
+}
 
 /// The first reason, in the order dispatch tests them, that no ready ticket went to any of
 /// `free`'s idle workers. The arguments are those [`super::next_for`] was given and returned

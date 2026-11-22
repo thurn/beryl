@@ -1,12 +1,9 @@
-//! Comparison of the machines that could take a ticket.
-//!
-//! The ticket that places work where it will build soonest implements the comparisons here.
-
-#![allow(unused_variables)]
+//! Comparison of the machines that could take a ticket, using their build outputs and core room.
 
 use crate::capacity::CapacityReport;
 use crate::config::Os;
 use crate::dispatch::ReadyTicket;
+use crate::dispatch_pressure::wants_output;
 use crate::fleet::MachineState;
 use crate::pins::Pins;
 use crate::time::Timestamp;
@@ -48,8 +45,62 @@ pub struct PlacementTicket<'a> {
     pub pins: &'a Pins,
 }
 
+/// Whether a free or leased tree can donate this output to a new lease.
+pub fn holds_output(capacity: &CapacityReport, output: &str) -> bool {
+    capacity
+        .free_trees
+        .iter()
+        .chain(capacity.leased_trees.values())
+        .any(|tree| tree.iter().any(|held| held == output))
+}
+
+pub fn missing_outputs<'a>(
+    ready: &ReadyTicket,
+    capacity: &'a CapacityReport,
+) -> impl Iterator<Item = &'a str> {
+    capacity
+        .outputs
+        .iter()
+        .filter(|output| wants_output(output, &ready.files) && !holds_output(capacity, output))
+        .map(String::as_str)
+}
+
+/// The time to build `outputs` cold on this machine at its currently free cores.
+pub fn cold_seconds(capacity: &CapacityReport, outputs: usize) -> f64 {
+    COLD_BUILD_CPU_S * outputs as f64 / capacity.free_cores.max(1.0)
+}
+
+pub fn free_fraction(capacity: &CapacityReport) -> f64 {
+    if capacity.admit_cores > 0.0 {
+        (capacity.free_cores / capacity.admit_cores).clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
 pub fn cost(ticket: &PlacementTicket<'_>, machine: &MachineView<'_>) -> Option<f64> {
-    todo!()
+    let capacity = machine.capacity;
+    if machine.state != MachineState::Active
+        || capacity.worker_room == 0
+        || capacity.memory_pressed
+        || !ticket.pins.admits_machine(machine.name)
+        || !machine
+            .provider
+            .is_some_and(|provider| ticket.pins.admits_provider(provider))
+        || ticket.needs_os.is_some_and(|os| os != machine.os)
+        || (!machine.families.is_empty()
+            && !ticket
+                .ready
+                .families
+                .iter()
+                .all(|family| machine.families.contains(family)))
+    {
+        return None;
+    }
+    Some(
+        capacity.queue_seconds
+            + cold_seconds(capacity, missing_outputs(ticket.ready, capacity).count()),
+    )
 }
 
 /// The preferred machine when the asker should defer, or `None` when the asker takes it.
@@ -60,5 +111,44 @@ pub fn takes<'a>(
     first_deferred: Option<Timestamp>,
     now: Timestamp,
 ) -> Option<&'a str> {
-    todo!()
+    preferred_machine(ticket, asker, peers, first_deferred, now).map(|machine| machine.name)
 }
+
+/// Return the selected report as well as its name so the caller can explain the comparison.
+pub fn preferred_machine<'a, 'peers>(
+    ticket: &PlacementTicket<'_>,
+    asker: &MachineView<'_>,
+    peers: &'peers [MachineView<'a>],
+    first_deferred: Option<Timestamp>,
+    now: Timestamp,
+) -> Option<&'peers MachineView<'a>> {
+    if first_deferred.is_some_and(|first| now.seconds_since(first) >= PATIENCE_S) {
+        return None;
+    }
+    let rank = |machine: &MachineView<'_>| {
+        cost(ticket, machine).map(|seconds| (seconds, free_fraction(machine.capacity)))
+    };
+    let (here, here_free) = rank(asker)?;
+    let (best, there, there_free) = peers
+        .iter()
+        .filter_map(|peer| rank(peer).map(|(seconds, free)| (peer, seconds, free)))
+        .min_by(
+            |(first, first_cost, first_free), (second, second_cost, second_free)| {
+                first_cost
+                    .total_cmp(second_cost)
+                    .then_with(|| second_free.total_cmp(first_free))
+                    .then_with(|| first.name.cmp(second.name))
+            },
+        )?;
+    // A small difference in time can start immediately. An exact tie has a stable winner.
+    let peer_wins_tie = here.total_cmp(&there).is_eq()
+        && there_free
+            .total_cmp(&here_free)
+            .then_with(|| asker.name.cmp(best.name))
+            .is_gt();
+    (here - there > MARGIN_S || peer_wins_tie).then_some(best)
+}
+
+#[cfg(test)]
+#[path = "placement_tests.rs"]
+mod tests;

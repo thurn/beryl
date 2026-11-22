@@ -433,6 +433,8 @@ mod tests {
             tiers: vec!["sonnet".into()],
             probed: true,
             hold_reason: Some("plan_limit".into()),
+            model_ids: std::collections::BTreeMap::new(),
+            default_model: None,
         };
         let expected = CapacityReport {
             logical_cores: 20,

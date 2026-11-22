@@ -71,6 +71,10 @@ pub struct ProviderCapacity {
     pub tiers: Vec<String>,
     pub probed: bool,
     pub hold_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub model_ids: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,
 }
 
 pub fn derive(facts: &MachineFacts) -> Derived {

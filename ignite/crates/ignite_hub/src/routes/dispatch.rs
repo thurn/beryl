@@ -41,6 +41,9 @@ mod queue;
 #[path = "dispatch_mix.rs"]
 mod mix;
 
+#[path = "dispatch_placement.rs"]
+mod placement;
+
 #[path = "dispatch_releases.rs"]
 mod counting;
 
@@ -363,6 +366,8 @@ fn take(
     )
     .map_err(|e| store_failure(&e))?;
     fleet::release_reservation(tx, id).map_err(|e| store_failure(&e))?;
+    ignite_store::hub::placement_deferrals::clear(tx, &claim.ticket)
+        .map_err(|e| store_failure(&e))?;
     brief(tx, id)
 }
 
@@ -755,6 +760,10 @@ mod usage_tests;
 #[cfg(test)]
 #[path = "dispatch_mix_tests.rs"]
 mod mix_tests;
+
+#[cfg(test)]
+#[path = "dispatch_placement_tests.rs"]
+mod placement_tests;
 
 #[cfg(test)]
 #[path = "dispatch_fix_outcomes_tests.rs"]

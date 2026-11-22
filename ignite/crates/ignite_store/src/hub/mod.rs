@@ -22,6 +22,7 @@ pub mod machine_snapshots;
 mod meta;
 pub mod metrics;
 pub mod pins;
+pub mod placement_deferrals;
 pub mod provider_usage;
 pub mod rates;
 pub mod records;

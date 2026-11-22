@@ -4541,35 +4541,38 @@ command. See [Machine and provider pins](#machine-and-provider-pins).
 
 ### Placement
 
-Dispatch stays a pull: a machine with room asks, and the hub answers. What
-changes is the question the hub answers, from "can this ticket run here?" to
-"should it?".
+A machine with room asks for work. The hub checks whether another machine can
+get the next ticket's first build current sooner.
 
 Once a minute, each daemon includes a machine snapshot and its capacity report
 in a heartbeat. The report includes logical and physical cores, admitted and
 free cores, worker room, total and free memory, memory pressure, free disk
 space, the trees' disk budget, and the longest wait for cores among ticket
 commands. It lists the configured build outputs, the outputs each free or leased
-ticket tree holds, and each configured provider's model tiers, probe status and
-CLI hold reason. The hub timestamps the report with the snapshot. The Fleet API
-exposes each machine's newest report for up to 60 seconds, the same window
-available to placement. The hub keeps snapshot history for 14 days.
+ticket tree holds, and each configured provider's model tiers, model IDs, probe
+status and CLI hold reason. The hub timestamps the report with the snapshot. The
+Fleet API exposes each machine's newest report for up to 60 seconds, the same
+window available to placement. The requesting machine supplies its current
+scheduler and build pressure readings with its request. The hub keeps snapshot
+history for 14 days.
 
 For a ticket and a machine, the hub estimates the seconds until the ticket's
 first build is current there. That is the machine's wait for cores, plus 1,000
 CPU-seconds for each build output the ticket's files need that no tree on the
-machine holds, divided by the machine's free cores. A cold build of one output
-measured 947 to 1,390 CPU-seconds, against about 6 after a copy from a tree that
-holds it. A leased tree counts, since a lease can copy from it. A ticket that
-compiles nothing costs only the wait.
+machine holds, divided by the machine's free cores, with a minimum divisor of
+one. A cold build of one output measured 947 to 1,390 CPU-seconds, against about
+6 after a copy from a tree that holds it. A leased tree counts, since a lease
+can copy from it. A ticket that compiles nothing costs only the wait.
 
-When a machine asks, it takes the next ticket in dispatch's order if its
-estimate is within 30 seconds of the lowest among the active machines with room,
-or if the ticket was first passed over at least 60 seconds ago, or if no other
-machine can take it. Otherwise the hub offers it the ticket after that, and the
-reason names the better machine. Ties go to the machine with more of its cores
-free. Regressions, justiciar tickets, pinned tickets and the next ticket of a
-`lane:` chain skip placement.
+Placement compares active machines with worker room, compatible platforms and
+check families, and a provider that can take the ticket. The requesting machine
+can take the ticket if the best peer saves 30 seconds or less. Exact ties go to
+the machine with the larger fraction of its admitted cores free, then by name.
+After 60 seconds from the first deferral, any eligible machine can take the
+ticket. A reservation clears the deferral. When placement defers a ticket, the
+hub tries the next ticket in dispatch order and names the preferred machine if
+it has no work to offer. Regressions, justiciar tickets, machine-pinned tickets
+and lane hand-offs to the session that landed the predecessor skip placement.
 
 Keeping similar work together needs no rule of its own. A machine already
 working an area holds that area's build outputs, so it has the lowest estimate

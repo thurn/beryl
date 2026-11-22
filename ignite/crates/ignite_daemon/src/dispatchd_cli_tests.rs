@@ -610,6 +610,11 @@ fn capacity_reports_probe_and_hold_independently() {
         tiers: ["light", "opus", "sonnet"].map(str::to_owned).into(),
         probed: true,
         hold_reason: Some("plan_limit".into()),
+        model_ids: ["light", "opus", "sonnet"]
+            .into_iter()
+            .map(|tier| (tier.to_owned(), tier.to_owned()))
+            .collect(),
+        default_model: Some("sonnet".into()),
     };
     assert_eq!(rig.dispatcher.provider_capacity(), [expected.clone()]);
     fake.set_probed("claude", false);

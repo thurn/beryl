@@ -1,6 +1,7 @@
 //! Active CLI workers as shown in the pool list and hub heartbeat.
 
 use ignite_core::capacity::{CapacityReport, MachineFacts, ProviderCapacity, start_room};
+use ignite_core::dispatch_pressure::BACKLOG_SECONDS;
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::hub::{ProviderOffer, Room};
 use ignite_core::protocol::hub::{WorkerRole, WorkerState};
@@ -175,13 +176,17 @@ pub(crate) fn capacity_report(
     queue_seconds: f64,
     providers: Vec<ProviderCapacity>,
 ) -> CapacityReport {
+    let accepts_work = !sample.draining
+        && sample.shared_failure.is_none()
+        && sample.free_ticket_trees > 0
+        && queue_seconds < f64::from(BACKLOG_SECONDS);
     CapacityReport {
         logical_cores: facts.logical_cores,
         physical_cores: facts.physical_cores,
         memory_mb: facts.memory_mb,
         admit_cores: f64::from(sample.admit_cores),
         free_cores: f64::from(status.free_cores()),
-        worker_room: sample.room.start,
+        worker_room: if accepts_work { sample.room.start } else { 0 },
         free_memory_mb: status.free_memory_mb,
         memory_pressed: status.memory_pressed,
         free_disk_gb: sample.pressure.free_gb,

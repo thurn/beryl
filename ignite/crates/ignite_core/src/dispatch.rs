@@ -129,7 +129,7 @@ fn machine_fits(free: &MachineFree, ticket: &ReadyTicket) -> bool {
 /// The idle worker that gets the ticket: of those that suit it, the one whose last ticket shared
 /// the most files with it, then the first listed. `last_files` gives each session's last
 /// ticket's files; a session missing from it shares none.
-fn pick_worker(
+pub fn pick_worker(
     free: &MachineFree,
     ticket: &ReadyTicket,
     last_files: &[(SessionId, Vec<String>)],
@@ -238,12 +238,21 @@ pub fn next_ticket_with<T>(
     improvements: Option<Unit>,
     pick: impl Fn(&ReadyTicket) -> Option<T>,
 ) -> Option<T> {
+    eligible_tickets(free, ready, epic_order, improvements).find_map(pick)
+}
+
+/// The tickets that fit this machine, in dispatch order before choosing a worker or provider.
+pub fn eligible_tickets<'a>(
+    free: &'a MachineFree,
+    ready: &'a [ReadyTicket],
+    epic_order: &[Group],
+    improvements: Option<Unit>,
+) -> impl Iterator<Item = &'a ReadyTicket> {
     order(ready, epic_order, improvements)
         .into_iter()
-        .filter(|(_, stage)| !free.justiciar_only || *stage == Stage::Justiciar)
+        .filter(move |(_, stage)| !free.justiciar_only || *stage == Stage::Justiciar)
         .map(|(ticket, _)| ticket)
-        .filter(|ticket| machine_fits(free, ticket))
-        .find_map(pick)
+        .filter(move |ticket| machine_fits(free, ticket))
 }
 
 /// Why a ticket has its place in [`order`].
@@ -315,7 +324,9 @@ pub fn chain_next<'a>(lane: &str, ready: &'a [ReadyTicket]) -> Option<&'a ReadyT
 
 #[path = "dispatch_why.rs"]
 mod why;
-pub use why::{MASTER_ONLY, blocker, blocker_with, why_nothing, why_nothing_with_room};
+pub use why::{
+    MASTER_ONLY, blocker, blocker_with, why_nothing, why_nothing_with_room, why_placement,
+};
 
 #[cfg(test)]
 #[path = "dispatch_tests.rs"]
