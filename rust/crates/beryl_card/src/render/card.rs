@@ -14,7 +14,7 @@ use crate::words::Words;
 /// A card's rules text in Oracle's style: each face's text ([`render_face`]), a blank line
 /// between faces.
 pub fn render(def: &CardDef) -> String {
-    def.face_ixs()
+    def.printed_face_ixs()
         .map(|face| render_face(def, face))
         .collect::<Vec<_>>()
         .join("\n\n")
@@ -34,6 +34,7 @@ pub fn render_face(def: &CardDef, face: FaceIx) -> String {
 ///
 /// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
 pub fn render_face_read(def: &CardDef, face: FaceIx, words: &Words) -> String {
+    let fuse = def.shape.has_fuse() && face != FaceIx::DOWN && face != FaceIx::FUSED;
     let name = def.face_name(face);
     let face = def.face(face);
     let mut ctx = Ctx::of_face(face, name);
@@ -101,6 +102,9 @@ pub fn render_face_read(def: &CardDef, face: FaceIx, words: &Words) -> String {
         if let Some(line) = casting_line(&mut ctx, option, false) {
             lines.push(line);
         }
+    }
+    if fuse {
+        lines.push("Fuse".to_owned());
     }
     lines.join("\n")
 }
@@ -186,6 +190,7 @@ fn merged(ctx: &mut Ctx, before: &Ability, ability: &Ability) -> Option<String> 
 /// [CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)).
 fn casting_line(ctx: &mut Ctx, option: CastingOption, first: bool) -> Option<String> {
     let line = match option {
+        CastingOption::Fuse => return None,
         CastingOption::Kicker { cost, min_x } => {
             let mut line = format!("Kicker {}", mana_text(cost));
             if min_x > 0 && cost.x > 0 {

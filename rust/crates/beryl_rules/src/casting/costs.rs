@@ -1,7 +1,7 @@
 //! What a spell or ability costs (CR 601.2f, CR 601.2h): its casting options, X and the total
 //! cost.
 //!
-//! Implements: CR 107.3b, CR 118.9a
+//! Implements: CR 107.3b, CR 118.9a, CR 702.102c
 
 use crate::bitboard::Bitboard;
 use crate::card::{CastingOption, Castings, FACE_DOWN, Face, ManaCost};
@@ -38,7 +38,7 @@ pub(super) fn option_sets(face: &Face, alternative: bool) -> impl Iterator<Item 
         }
         let mut alternatives = 0;
         for option in costs.paid(face) {
-            if matches!(option, CastingOption::Morph(_)) {
+            if matches!(option, CastingOption::Morph(_) | CastingOption::Fuse) {
                 return false;
             }
             alternatives += usize::from(option.is_alternative());
@@ -70,7 +70,8 @@ pub(super) fn x_range_start(face: &Face, costs: Castings, free: bool) -> Option<
                 | CastingOption::Alternative { .. }
                 | CastingOption::Escape { .. }
                 | CastingOption::Mutate { .. }
-                | CastingOption::Morph(_) => 0,
+                | CastingOption::Morph(_)
+                | CastingOption::Fuse => 0,
             };
             min = Some(min.map_or(least, |m: u8| m.max(least)));
         }
@@ -127,6 +128,8 @@ fn mana_cost(face: &Face, free: bool) -> ManaCost {
         // See CR 702.37c: "pay {3} rather than pay its mana cost."
         ManaCost::generic(3)
     } else {
+        // CR 702.102c: "The total cost of a fused split spell includes the mana cost of
+        // each half." Its combined characteristics provide that mana cost.
         face.cost
     }
 }

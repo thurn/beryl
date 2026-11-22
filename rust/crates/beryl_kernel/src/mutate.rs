@@ -239,9 +239,12 @@ impl<L: Layout> State<L> {
     /// Makes the card just put on the stack the spell its caster chose: `face` up, under their
     /// control (see [CR 601.2a]): "It has all the characteristics of the card (or the copy of a card)
     /// associated with it, and that player becomes its controller." Face-down spells use the
-    /// characteristics of [`FaceIx::DOWN`] (see CR 708.4).
+    /// characteristics of [`FaceIx::DOWN`] (see CR 708.4). A fused spell uses
+    /// [`FaceIx::FUSED`] (see [CR 702.102b]): "A fused split spell has the combined
+    /// characteristics of its two halves."
     ///
     /// [CR 601.2a]: https://yawgatog.com/resources/magic-rules/#R6012a
+    /// [CR 702.102b]: https://yawgatog.com/resources/magic-rules/#R702102b
     #[inline]
     pub fn become_spell(&mut self, spell: Spell<L>, face: FaceIx, controller: Seat) {
         let o = self.object_mut(spell.slot());

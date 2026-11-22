@@ -984,6 +984,12 @@ where they branch on it; nothing infers it from `Face::transformed`.
 | Leveler ([CR 711.2](https://yawgatog.com/resources/magic-rules/#R7112))   | Level up as an activated ability that adds a level counter; abilities and power and toughness that hold for a range of level counters, as static abilities with a condition.                                                                                                                                                                          | Student of Warfare        |
 | Prototype ([CR 719.3](https://yawgatog.com/resources/magic-rules/#R7193)) | A casting option that gives the spell, and the permanent it becomes, another cost, color, power and toughness, as copiable values.                                                                                                                                                                                                                    | Arcane Proxy              |
 
+**Fuse.** The definition supplies a combined spell alongside its two printed
+halves. A caster can choose that spell from their hand. Its stack entry keeps
+the combined characteristics index, so a spell copy uses the same
+characteristics and instructions. The combined spell announces the left half's
+targets first and uses the normal spell target checks and resolution order.
+
 **Face-down spells**
 ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)).
 `CastingOption::Morph(cost)` casts the card face down: `become_spell` takes

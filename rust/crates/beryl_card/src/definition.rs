@@ -50,6 +50,16 @@ impl Shape {
         }
     }
 
+    /// Whether the definition includes a combined spell for the fuse ability.
+    pub const fn has_fuse(self) -> bool {
+        matches!(self, Self::Split { fuse: true })
+    }
+
+    /// The number of sets of characteristics, including the fused spell if present.
+    pub const fn characteristics_count(self) -> usize {
+        self.face_count() + self.has_fuse() as usize
+    }
+
     /// Whether the card itself is double-faced, with a different face printed on each side.
     pub const fn is_double_faced(self) -> bool {
         matches!(self, Self::Transforming | Self::Modal)
@@ -73,7 +83,7 @@ impl Shape {
 pub struct CardDef {
     pub name: &'static str,
     pub shape: Shape,
-    /// The printed characteristics, front first, with the count fixed by the shape.
+    /// The printed faces, front first, followed by the combined spell for a card with fuse.
     pub faces: &'static [Face],
     /// The tokens and emblems this card can create, so a game's table holds them.
     pub tokens: &'static [&'static CardDef],
@@ -95,9 +105,14 @@ impl CardDef {
         &self.faces[usize::from(face.0)]
     }
 
-    /// Each of its faces' indices, front first.
+    /// Each set of characteristics the definition provides, starting with its printed faces.
     pub fn face_ixs(&self) -> impl Iterator<Item = FaceIx> {
         (0..self.faces.len()).map(|i| FaceIx(u8::try_from(i).expect("a few faces")))
+    }
+
+    /// The indices of the printed faces.
+    pub fn printed_face_ixs(&self) -> impl Iterator<Item = FaceIx> {
+        self.face_ixs().take(self.shape.face_count())
     }
 
     /// The name of the other printed face when one is up.
@@ -140,6 +155,8 @@ impl FaceIx {
     pub const FRONT: FaceIx = FaceIx(0);
     /// The back face of a double-faced card.
     pub const BACK: FaceIx = FaceIx(1);
+    /// The combined characteristics of a split spell cast with fuse.
+    pub const FUSED: FaceIx = FaceIx(2);
     /// Face down: a permanent whose card is turned face down
     /// ([CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105)): "A permanent's status
     /// is its physical state. There are four status categories, each of which has two possible
@@ -208,6 +225,7 @@ pub enum FaceUse {
     Playable,
     TransformingBack,
     Alternative,
+    Fused,
 }
 
 impl FaceUse {
@@ -223,6 +241,31 @@ impl FaceUse {
 }
 
 impl Face {
+    /// The combined spell of a split card with fuse. Supply its spell ability with the
+    /// left half's targets first and both halves' instructions in resolution order.
+    /// The name is the whole card's display name. Rules queries read both half names.
+    #[must_use]
+    pub const fn fused(
+        name: &'static str,
+        left: &Self,
+        right: &Self,
+        abilities: &'static [Ability],
+    ) -> Self {
+        Self {
+            name,
+            cost: left.cost.plus(right.cost),
+            supertypes: left.supertypes.union(right.supertypes),
+            types: left.types.union(right.types),
+            subtypes: left.subtypes.union(right.subtypes),
+            colors: left.colors.union(right.colors),
+            keywords: left.keywords.union(right.keywords),
+            use_of_face: FaceUse::Fused,
+            ..Self::EMPTY
+                .abilities(abilities)
+                .casting(&[CastingOption::Fuse])
+        }
+    }
+
     /// Applies the definition's generated shape to this face.
     #[must_use]
     pub const fn for_shape(self, shape: Shape, face: FaceIx) -> Self {

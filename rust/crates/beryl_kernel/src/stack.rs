@@ -328,7 +328,7 @@ impl TriggeredAbility {
 /// What a [`StackEntry`] is: a spell, an activated ability or a triggered ability.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StackItem<L: Layout = Small> {
-    /// A spell: its card, in the stack zone, who controls it, the face cast and the face's
+    /// A spell: its card, in the stack zone, who controls it, the characteristics cast and their
     /// casting options paid.
     Spell {
         object: ObjectRef<L>,

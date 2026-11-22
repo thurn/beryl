@@ -436,6 +436,7 @@ fn casting_options<L: Layout>(
             CastingOption::Escape { .. } => " with escape".to_owned(),
             CastingOption::Mutate { cost, .. } => format!(" with mutate {}", mana_text(cost)),
             CastingOption::Morph(_) => " face down".to_owned(),
+            CastingOption::Fuse => String::new(),
         })
         .collect()
 }

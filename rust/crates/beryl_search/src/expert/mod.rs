@@ -1364,6 +1364,7 @@ impl<L: Layout> Expert<'_, L> {
                 | CastingOption::Escape { cost: c, .. }
                 | CastingOption::Mutate { cost: c, .. } => cost = i32::from(c.mana_value()),
                 CastingOption::Morph(_) => cost = 3,
+                CastingOption::Fuse => (),
             }
         }
         self.mana(self.me()) - cost

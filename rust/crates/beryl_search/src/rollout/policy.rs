@@ -253,7 +253,7 @@ impl<L: Layout> Policy<'_, L> {
                 | CastingOption::Offspring(_)
                 | CastingOption::Escape { .. }
                 | CastingOption::Mutate { .. } => 10,
-                CastingOption::Morph(_) => 0,
+                CastingOption::Morph(_) | CastingOption::Fuse => 0,
                 CastingOption::Impending { .. } | CastingOption::Overload { .. } => -10,
                 // Evoke trades the permanent for its enters ability
                 // ([CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a)):

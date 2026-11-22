@@ -294,7 +294,8 @@ fn casting_capabilities(face: &Face) -> u32 {
                 | CastingOption::Overload { .. }
                 | CastingOption::Evoke { .. }
                 | CastingOption::Alternative { .. }
-                | CastingOption::Escape { .. } => 0,
+                | CastingOption::Escape { .. }
+                | CastingOption::Fuse => 0,
             }
     })
 }

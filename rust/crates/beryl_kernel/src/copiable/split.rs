@@ -72,6 +72,15 @@ impl<L: Layout> Copiable<L> {
     /// [CR 709.4a]: https://yawgatog.com/resources/magic-rules/#R7094a
     #[must_use]
     pub fn names(self, t: &GameTable) -> [Option<&'static str>; 2] {
+        // CR 709.4d: "The characteristics of a fused split spell on the stack are also
+        // those of its two halves combined".
+        if self.face == FaceIx::FUSED {
+            let def = t.def(self.card);
+            return [
+                Some(def.face_name(FaceIx::FRONT)),
+                Some(def.face_name(FaceIx::BACK)),
+            ];
+        }
         let first = self.name(t);
         [
             (!first.is_empty()).then_some(first),

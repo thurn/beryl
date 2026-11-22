@@ -68,9 +68,9 @@ CASES: list[CastingCase] = [
     CastingCase(
         "Wear",
         "Wear // Tear",
-        ("Wear", "Tear"),
+        ("Wear", "Tear", "Wear // Tear"),
         "Split",
-        0,
+        2,
         ("Mountain", "Mountain", "Plains"),
         "fused Wear // Tear",
         cost="Fuse",
@@ -169,7 +169,10 @@ def scenario(case: CastingCase) -> Json:
             }
         ]
     if case.cost is not None:
-        faces[0]["casting"] = [{"bit": 0, "keyword": case.cost, "alternative": True}]
+        index = 0 if case.face == FACE_DOWN else case.face
+        faces[index]["casting"] = [
+            {"bit": 0, "keyword": case.cost, "alternative": True}
+        ]
     actions: list[Json] = [
         {
             "action": "Cast",

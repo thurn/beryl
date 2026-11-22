@@ -370,6 +370,11 @@ impl SubtypeWords {
         SubtypeWords(subtypes)
     }
 
+    /// The subtype words printed on either half of a split card.
+    pub(crate) const fn union(self, other: Self) -> Self {
+        Self(self.0.union(other.0))
+    }
+
     /// The subtypes these words name on an object with `words`.
     #[inline]
     pub fn read(self, words: &Words) -> Subtypes {

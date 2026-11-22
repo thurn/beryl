@@ -541,7 +541,7 @@ def spell_cast(cards: Cards, card: str, face: int, costs: int) -> SpellCast:
             raise Unsupported(f"casting option {costs:#b} of {card}")
         if keyword == "Fuse":
             printed = cards.printed_name(card)
-            return SpellCast(f"fused {printed}", printed, None, 0)
+            return SpellCast(f"fused {printed}", printed, face, 0)
         selected = FACE_DOWN if keyword == "Morph" else face
         return SpellCast(name + SPELL_SUFFIX[keyword], name, selected, 0)
     return SpellCast(command, name, face, costs)

@@ -647,6 +647,7 @@ pub enum CastingName {
     Escape,
     Mutate,
     Morph,
+    Fuse,
 }
 
 impl From<CastingOption> for CastingName {
@@ -661,6 +662,7 @@ impl From<CastingOption> for CastingName {
             CastingOption::Escape { .. } => CastingName::Escape,
             CastingOption::Mutate { .. } => CastingName::Mutate,
             CastingOption::Morph(_) => CastingName::Morph,
+            CastingOption::Fuse => CastingName::Fuse,
         }
     }
 }

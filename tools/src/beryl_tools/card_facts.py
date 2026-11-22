@@ -371,7 +371,7 @@ class Cards:
     def printed_name(self, card: str) -> str:
         """The name used to load a card, including both halves of a split card."""
         if self.shapes.get(card) == "Split":
-            return " // ".join(cast(str, face["name"]) for face in self.faces[card])
+            return " // ".join(cast(str, face["name"]) for face in self.faces[card][:2])
         return card
 
     def cast_face(self, card: str, face: int) -> str:

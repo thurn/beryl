@@ -492,6 +492,8 @@ pub enum CastingOption {
     ///
     /// [CR 702.37a]: https://yawgatog.com/resources/magic-rules/#R70237a
     Morph(Cost),
+    /// Choose both halves of a split card when casting it from hand.
+    Fuse,
 }
 
 /// The part of a granted escape cost that is not mana ([`CastingOption::Escape`]): "exile
@@ -602,12 +604,13 @@ impl CastingOption {
             | CastingOption::Evoke { .. }
             | CastingOption::Alternative { .. }
             | CastingOption::Escape { .. }
-            | CastingOption::Morph(_) => None,
+            | CastingOption::Morph(_)
+            | CastingOption::Fuse => None,
         }
     }
 
-    /// The cost paid by choosing this option on the spell's face. Morph changes the face
-    /// itself, whose characteristics have no casting options.
+    /// The kind of cost paid by choosing this option. Morph and fuse select a different
+    /// set of spell characteristics, which supply the base cost.
     pub const fn kind(self) -> Option<CastingKind> {
         Some(match self {
             CastingOption::Kicker { .. } => CastingKind::Kicker,
@@ -618,7 +621,7 @@ impl CastingOption {
             CastingOption::Alternative { .. } => CastingKind::Alternative,
             CastingOption::Escape { .. } => CastingKind::Escape,
             CastingOption::Mutate { .. } => CastingKind::Mutate,
-            CastingOption::Morph(_) => return None,
+            CastingOption::Morph(_) | CastingOption::Fuse => return None,
         })
     }
 
@@ -650,6 +653,7 @@ impl CastingOption {
             | CastingOption::Escape { cost, .. }
             | CastingOption::Mutate { cost, .. } => cost,
             CastingOption::Morph(_) => ManaCost::generic(3),
+            CastingOption::Fuse => ManaCost::NONE,
         }
     }
 
@@ -664,7 +668,8 @@ impl CastingOption {
             | CastingOption::Impending { .. }
             | CastingOption::Overload { .. }
             | CastingOption::Mutate { .. }
-            | CastingOption::Morph(_) => &[],
+            | CastingOption::Morph(_)
+            | CastingOption::Fuse => &[],
         }
     }
 }
@@ -678,6 +683,8 @@ pub struct Castings(u8);
 
 impl Castings {
     pub const NONE: Castings = Castings(0);
+    /// The fuse option of the combined spell characteristics.
+    pub const FUSE: Castings = Castings::only(0);
 
     /// The most options a face lists: the last bit is [`Castings::ESCAPE`].
     pub const MOST: usize = 7;

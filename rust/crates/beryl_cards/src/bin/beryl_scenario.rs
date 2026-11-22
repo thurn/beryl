@@ -221,7 +221,10 @@ fn inventory() -> ExitCode {
         .iter()
         .chain(table.from_store())
         .map(|def| {
-            let faces: Vec<_> = def.face_ixs().map(|face| def.face_name(face)).collect();
+            let faces: Vec<_> = def
+                .printed_face_ixs()
+                .map(|face| def.face_name(face))
+                .collect();
             serde_json::json!({"name": def.name, "faces": faces})
         })
         .collect();
@@ -249,7 +252,7 @@ fn render(args: &[String]) -> ExitCode {
     if json {
         for def in defs {
             let faces: Vec<String> = def
-                .face_ixs()
+                .printed_face_ixs()
                 .map(|face| {
                     let text = beryl_card::render::render_face(def, face);
                     format!(
@@ -270,7 +273,7 @@ fn render(args: &[String]) -> ExitCode {
     let texts: Vec<String> = defs
         .iter()
         .map(|def| {
-            def.face_ixs()
+            def.printed_face_ixs()
                 .map(|face| {
                     let text = beryl_card::render::render_face(def, face);
                     format!("{}\n{text}", def.face_name(face))

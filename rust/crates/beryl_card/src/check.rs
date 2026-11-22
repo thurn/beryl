@@ -68,18 +68,23 @@ impl CardDef {
     ///
     /// The first mistake found ([`Malformed`]).
     pub const fn check(&self) -> Checked {
-        let expected = self.shape.face_count();
+        let expected = self.shape.characteristics_count();
         if self.faces.len() != expected {
-            return Err(if expected == 1 {
-                Malformed::ExpectedOneFace
-            } else {
-                Malformed::ExpectedTwoFaces
+            return Err(match expected {
+                1 => Malformed::ExpectedOneFace,
+                2 => Malformed::ExpectedTwoFaces,
+                _ => Malformed::ExpectedFusedFace,
             });
         }
         let mut i = 0;
         while i < self.faces.len() {
             let face = &self.faces[i];
-            if face.use_of_face as u8 != FaceUse::of(self.shape, i == 0) as u8 {
+            let expected_use = if i == 2 {
+                FaceUse::Fused
+            } else {
+                FaceUse::of(self.shape, i == 0)
+            };
+            if face.use_of_face as u8 != expected_use as u8 {
                 return Err(Malformed::FaceUse);
             }
             if let Err(malformed) = both(

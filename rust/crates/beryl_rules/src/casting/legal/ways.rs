@@ -1,10 +1,10 @@
 //! Casting permissions and other ways a player can cast a card at priority.
 //!
-//! Implements: none. Looks up ways to cast under the casting procedure.
+//! Implements: CR 702.102a
 
 use beryl_kernel::reference::Graveyard;
 
-use crate::card::{Castings, Face, FaceIx};
+use crate::card::{CardDef, CastingOption, Castings, Face, FaceIx};
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::state::{State, Zone};
@@ -101,5 +101,25 @@ impl Ways {
             .into_iter()
             .flatten()
             .chain(escape.into_iter().flatten())
+    }
+}
+
+/// A player announces fuse during casting. [CR 702.102a]: "If a player casts a split card
+/// with fuse from their hand, the player may choose to cast both halves of that split card
+/// rather than choose one half."
+/// The source zone, rather than the way a cast is paid for, determines whether fuse applies.
+///
+/// [CR 702.102a]: https://yawgatog.com/resources/magic-rules/#R702102a
+pub(super) fn can_fuse<L: Layout>(
+    s: &State<L>,
+    def: &CardDef,
+    player: Seat,
+    slot: L::Slot,
+) -> bool {
+    def.shape.has_fuse() && {
+        let object = s.object(slot);
+        object.zone() == Zone::Hand
+            && object.owner() == player
+            && matches!(def.face(FaceIx::FUSED).casting, [CastingOption::Fuse])
     }
 }

@@ -112,6 +112,9 @@ pub mod decks {
             "split",
             &[
                 names::FIRE_ICE,
+                names::WEAR_TEAR,
+                names::LIQUIMETAL_COATING,
+                names::BLOOD_MOON,
                 names::FORK,
                 names::FORCE_OF_WILL,
                 names::SPELL_SNARE,

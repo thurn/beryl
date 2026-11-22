@@ -1098,6 +1098,22 @@
       ]
     }
   ],
+  "Liquimetal Coating": [
+    {
+      "published_at": "2011-01-01",
+      "hash": "b89d562dda07",
+      "scenario": [
+        "Liquimetal Coating leaves a creature's color unchanged"
+      ]
+    },
+    {
+      "published_at": "2011-01-01",
+      "hash": "479d92399071",
+      "scenario": [
+        "Liquimetal Coating can target an artifact"
+      ]
+    }
+  ],
   "Lord of Atlantis": [],
   "Mind Bend": [
     {
@@ -2394,6 +2410,78 @@
       "scenario": [
         "Urborg on the battlefield does not affect land cards in the library"
       ]
+    }
+  ],
+  "Wear // Tear": [
+    {
+      "published_at": "2013-04-15",
+      "hash": "b514535b5614",
+      "scenario": [
+        "Fused Wear // Tear can target the same permanent twice"
+      ]
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "c1e50a215e03",
+      "scenario": [
+        "Flashback offers only the individual halves of Wear // Tear"
+      ]
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "2ddbe087aac9",
+      "scenario": [
+        "Pithing Needle can name Tear"
+      ]
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "633eb0b65462",
+      "scenario": [
+        "Wear destroys only the artifact",
+        "Tear destroys only the enchantment"
+      ]
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "90d2d1e0b767",
+      "scenario": [
+        "Fused Wear // Tear destroys the enchantment when its artifact target leaves"
+      ]
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "fc5d960a1d64",
+      "scenario": [
+        "Fused Wear // Tear destroys an artifact before its enchantment target"
+      ]
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "0f20ba1a30ac",
+      "scenario": [
+        "Wear destroys only the artifact",
+        "Tear destroys only the enchantment",
+        "Fused Wear // Tear destroys an artifact before its enchantment target"
+      ]
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "62c99205c121",
+      "scenario": [
+        "Fused Wear // Tear destroys an artifact before its enchantment target",
+        "Mana Drain reads fused Wear // Tear as mana value three"
+      ]
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "ade680b24362",
+      "untestable": "Electrodominance, which can cast a spell without paying its mana cost from hand, is unimplemented."
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "937eecf8e93b",
+      "untestable": "Wear and Tear are both monocolored. This ruling describes split cards such as Catch // Release with two multicolored halves."
     }
   ],
   "Wizard Class": [

@@ -11,7 +11,7 @@
 //! and it runs again from the start. An inline answer source runs every body once on the
 //! state itself.
 //!
-//! Implements: CR 608.2b, CR 608.2m, CR 608.2n, CR 608.3
+//! Implements: CR 608.2b, CR 608.2m, CR 608.2n, CR 608.3, CR 702.102d
 
 use crate::bitboard::Bitboard;
 use beryl_card::definition::Shape;
@@ -434,6 +434,9 @@ fn body<L: Layout>(
     ability: Option<&'static Ability>,
 ) -> Result<Option<Decision<L>>, Full> {
     let def = t.def(entry.card());
+    // CR 702.102d: "the controller of the spell follows the instructions of the
+    // left half and then follows the instructions of the right half." A fused entry's
+    // combined spell ability already puts the instructions in that order.
     let face = def.face(entry.face());
     // CR 608.2b: "If all its targets, for every instance of the word "target," are now
     // illegal, the spell or ability doesn't resolve." One that chose no targets is not

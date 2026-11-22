@@ -561,9 +561,11 @@ fn part_facts(part: &CostPart) -> PartFacts {
 fn casting_facts(bit: usize, option: CastingOption) -> CastingFacts {
     CastingFacts {
         bit,
-        keyword: option
-            .kind()
-            .map_or_else(|| "Morph".to_owned(), |kind| variant(&kind)),
+        keyword: match option {
+            CastingOption::Fuse => "Fuse".to_owned(),
+            CastingOption::Morph(_) => "Morph".to_owned(),
+            _ => variant(&option.kind().expect("a casting cost kind")),
+        },
         alternative: option.is_alternative(),
         cost: CostFacts {
             mana: mana_text(option.cost()),

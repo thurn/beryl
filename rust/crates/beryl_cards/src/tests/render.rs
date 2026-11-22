@@ -9,7 +9,7 @@ use crate::CARDS;
 #[test]
 fn every_card_renders_to_rules_text() {
     for def in CARDS.cards().iter().chain(CARDS.from_store()) {
-        for face in def.face_ixs() {
+        for face in def.printed_face_ixs() {
             let text = beryl_card::render::render_face(def, face);
             assert!(
                 !text.contains('[') && !text.lines().any(str::is_empty),

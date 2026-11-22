@@ -9,8 +9,8 @@ use beryl_kernel::reference::Graveyard;
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, CastingOption, Castings, CostAction, CostPart, FACE_DOWN,
-    Face, FaceIx, Keywords, ManaCost, ObjectAbility, Timing, Types,
+    Ability, AbilityIx, AbilityKind, CastingOption, Castings, CostAction, CostPart, Face, FaceIx,
+    Keywords, ManaCost, ObjectAbility, Timing, Types,
 };
 use crate::continuous::rule_change;
 use crate::decision::{Candidates, OPTIONS, Opt, Refusal};
@@ -30,9 +30,10 @@ use super::parts;
 use super::targets::{Itself, targetable};
 use super::timing::{activated, instant_speed, sorcery_timing};
 
+mod special;
 mod ways;
 
-use ways::Ways;
+use ways::{Ways, can_fuse};
 
 /// What every check of one player's options reads, found once for all of them: the mana they
 /// could pay with and whether an opponent limits them to sorcery speed, each found at the first
@@ -305,6 +306,23 @@ pub(crate) fn refusal<L: Layout>(
             most = Some(r);
         }
     }
+    if can_fuse(s, def, player, slot) {
+        let Some(r) = refused(
+            s,
+            t,
+            &now,
+            slot,
+            FaceIx::FUSED,
+            Castings::FUSE,
+            From::Priority,
+            ways.increase,
+        ) else {
+            return Ok(None);
+        };
+        if most.is_none_or(|m| progress(r) > progress(m)) {
+            most = Some(r);
+        }
+    }
     // Only sorcery speed, where a face could be cast at instant speed but for the limit.
     if most == Some(Refusal::Timing { by: None }) {
         let instant = (def.face_ixs().map(|f| def.face(f)))
@@ -361,7 +379,7 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool, const SEARCH: bool>(
     // Cards no face of which may be cast now are left out before collapsing, which saves
     // comparing them: whether one may depends only on its card, which interchangeable cards
     // share, so the cards kept are the same.
-    let morph = t.can(Capability::Morph);
+    let special = !SEARCH && t.can_either(Capability::Morph, Capability::Split);
     let cards = cards.filter(|slot| {
         s.card_def(t, slot).is_some_and(|def| {
             def.face_ixs().any(|f| {
@@ -369,10 +387,7 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool, const SEARCH: bool>(
                 face.playable()
                     && (!SEARCH || face.permits_cast_while_searching())
                     && in_time(s, t, now, face, from)
-            }) || (!SEARCH
-                && morph
-                && has_morph(def.front())
-                && in_time(s, t, now, &FACE_DOWN, from))
+            }) || (special && special::in_time(s, t, now, slot, def, from))
         })
     });
     // Each card cast during a search leaves its own place in the library.
@@ -407,12 +422,8 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool, const SEARCH: bool>(
                 escape_options(s, t, now, slot, f, from, out)?;
             }
         }
-        if !SEARCH && morph && ways.plain && !ways.alternative && has_morph(def.front()) {
-            let face = FaceIx::DOWN;
-            let costs = Castings::NONE;
-            if refused(s, t, now, slot, face, costs, from, ways.increase).is_none() {
-                out.push(Opt::Cast { slot, face, costs })?;
-            }
+        if special {
+            special::options(s, t, now, slot, def, ways, from, out)?;
         }
         Ok(())
     })

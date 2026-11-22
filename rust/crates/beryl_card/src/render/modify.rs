@@ -7,6 +7,7 @@
 use super::Ctx;
 use super::abilities::{a_types, land_types, other_types, possessive};
 use super::words::{colors, keywords, list, protection, pt_change, types, with_article};
+use crate::characteristics::Types;
 use crate::continuous::Modification;
 use crate::effect::{Objects, Players};
 
@@ -136,9 +137,7 @@ impl Ctx {
             Modification::SwitchPt => {
                 return Said::Clause(format!("switch {} power and toughness", possessive(who)));
             }
-            Modification::AddTypes(set) => {
-                format!("{} {}", verb("becomes", "become"), a_types(set))
-            }
+            Modification::AddTypes(set) => add_card_types(set, plural),
             Modification::RemoveTypes(set) => {
                 format!("{} {}", verb("stops being", "stop being"), a_types(set))
             }
@@ -210,6 +209,19 @@ impl Ctx {
             }
         })
     }
+}
+
+/// Adding card types keeps the object's existing types.
+fn add_card_types(set: Types, plural: bool) -> String {
+    let (verb, possessive) = if plural {
+        ("become", "their")
+    } else {
+        ("becomes", "its")
+    };
+    format!(
+        "{verb} {} in addition to {possessive} other types",
+        a_types(set)
+    )
 }
 
 /// Whether the effect sets the card types and something more that a card says in the same

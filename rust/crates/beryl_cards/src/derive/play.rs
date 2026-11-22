@@ -558,6 +558,9 @@ fn label(action: Action, def: &CardDef) -> Option<String> {
             costs,
             ..
         } if card(c) => {
+            if face == FaceIx::FUSED {
+                return Some("cast fused".to_owned());
+            }
             let face = if face == FaceIx::FRONT {
                 String::new()
             } else {

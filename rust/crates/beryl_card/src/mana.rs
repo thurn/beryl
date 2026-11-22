@@ -54,11 +54,13 @@ impl ManaCost {
     /// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)) totals as "the mana
     /// cost or alternative cost ..., plus all additional costs and cost increases".
     #[must_use]
-    pub fn plus(self, other: ManaCost) -> ManaCost {
+    pub const fn plus(self, other: ManaCost) -> ManaCost {
         let mut sum = self;
         sum.generic = sum.generic.saturating_add(other.generic);
-        for (a, b) in sum.symbols.iter_mut().zip(other.symbols) {
-            *a = a.saturating_add(b);
+        let mut index = 0;
+        while index < sum.symbols.len() {
+            sum.symbols[index] = sum.symbols[index].saturating_add(other.symbols[index]);
+            index += 1;
         }
         sum.x = sum.x.saturating_add(other.x);
         sum

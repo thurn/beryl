@@ -17,6 +17,8 @@ pub enum Malformed {
     ExpectedOneFace,
     /// A card with an alternate set of printed characteristics lacks exactly two faces.
     ExpectedTwoFaces,
+    /// A split card with fuse must define its combined spell after its printed halves.
+    ExpectedFusedFace,
     /// A face's generated use does not agree with its definition.
     FaceUse,
     /// [`Objects::Target`] or [`Players::Target`] of a target its ability does not have, or
@@ -126,6 +128,9 @@ impl Malformed {
             }
             Malformed::ExpectedTwoFaces => {
                 "this printed shape requires two faces in the card definition, front first"
+            }
+            Malformed::ExpectedFusedFace => {
+                "a split card with fuse requires its two printed faces and its fused spell"
             }
             Malformed::FaceUse => "use this card's generated printed faces in front-to-back order",
             Malformed::Target => {

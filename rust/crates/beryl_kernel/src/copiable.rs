@@ -368,7 +368,9 @@ impl<L: Layout> Copiable<L> {
     #[inline]
     #[must_use]
     pub fn turned(self, t: &GameTable, face: FaceIx) -> Copiable<L> {
-        debug_assert!(face == FaceIx::DOWN || usize::from(face.get()) < self.shape(t).face_count());
+        debug_assert!(
+            face == FaceIx::DOWN || usize::from(face.get()) < self.shape(t).characteristics_count()
+        );
         Copiable {
             face,
             off_stack: false,
