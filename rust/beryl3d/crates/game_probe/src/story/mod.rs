@@ -2,14 +2,17 @@
 //! protocol views; captured moments keep the messages needed to reconstruct the client state.
 
 mod capture;
+mod source;
 mod table;
 
 use std::fmt::Write;
+use std::sync::Arc;
 
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
 use kit_probe::story::{Header, parse_header};
 
+pub use source::Source;
 #[cfg(feature = "stories")]
 pub use table::TableStory;
 pub use table::placeholder_records;
@@ -38,6 +41,8 @@ pub struct Capture {
     pub scale: f32,
     pub catch_up: bool,
     pub messages: Vec<FixtureMessage>,
+    /// The story sources supplied by the host. Older captures omit this input.
+    pub story_catalog: Option<Arc<[Source]>>,
     /// Driver actions taken at the captured moment before drawing the story.
     pub actions: Vec<String>,
 }
@@ -165,8 +170,19 @@ impl Capture {
                 "line {index}: write capture <source> <nanoseconds> <seat> <scale> <catch-up|real-time>"
             ));
         };
-        let (actions, messages) = lines[1..].split_at(
-            lines[1..]
+        let mut inputs = &lines[1..];
+        let story_catalog = if let Some((&(index, line), rest)) = inputs.split_first()
+            && let Some(json) = line.strip_prefix("story-catalog ")
+        {
+            inputs = rest;
+            let sources: Vec<Source> =
+                serde_json::from_str(json).map_err(|error| format!("line {index}: {error}"))?;
+            Some(sources.into())
+        } else {
+            None
+        };
+        let (actions, messages) = inputs.split_at(
+            inputs
                 .iter()
                 .take_while(|(_, line)| line.starts_with("action "))
                 .count(),
@@ -183,6 +199,7 @@ impl Capture {
             scale,
             catch_up,
             messages,
+            story_catalog,
             actions,
         })
     }
@@ -192,7 +209,7 @@ impl Capture {
     ///
     /// # Errors
     ///
-    /// When a recorded message cannot be written as JSON.
+    /// When the catalog or a recorded message cannot be written as JSON.
     pub fn write(
         &self,
         header: Header,
@@ -222,6 +239,13 @@ impl Capture {
             "capture {} {} {seat} {} {pace}",
             self.source, self.at, self.scale
         );
+        if let Some(sources) = &self.story_catalog {
+            let _ = writeln!(
+                text,
+                "story-catalog {}",
+                serde_json::to_string(sources.as_ref())?
+            );
+        }
         for action in &self.actions {
             let _ = writeln!(text, "action {action}");
         }

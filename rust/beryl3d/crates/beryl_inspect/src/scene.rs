@@ -96,7 +96,7 @@ impl Scene {
                 Body::Replay(_) => {
                     let recording = pages::story_recording(&story.body)
                         .expect("table and feature stories have replay inputs");
-                    return pages::page_with_messages(name, recording, seat, data, window)
+                    return pages::page_with_messages(name, recording, seat, data, window, None)
                         .map(|page| Self::Recording(Box::new(page)));
                 }
                 Body::Table(table) => {
@@ -106,6 +106,7 @@ impl Scene {
                         seat,
                         Arc::clone(&data),
                         window,
+                        None,
                     )?;
                     page.story_actions(&table.actions)?;
                     if let Some(id) = table.feature.as_deref() {
@@ -128,6 +129,7 @@ impl Scene {
                         capture.seat,
                         Arc::clone(&data),
                         window,
+                        capture.story_catalog.clone(),
                     )?
                     .with_catch_up(capture.catch_up);
                     let moment = Moment::At(Duration(capture.at));

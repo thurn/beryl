@@ -74,6 +74,7 @@ script {script}
         scale: 1.0,
         catch_up: true,
         messages: table.messages(),
+        story_catalog: None,
         actions: Vec::new(),
     };
     assert_eq!(capture.messages.len(), 3);

@@ -9,7 +9,7 @@ use app_client::driver::{Duration, Page, RECORDINGS, Recording, TICK};
 use beryl_protocol::Seat;
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
-use game_probe::story::Body;
+use game_probe::story::{Body, Source};
 use kit_probe::agent::Layout;
 use kit_ui::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size};
 
@@ -194,7 +194,7 @@ pub(crate) fn page_with_profile(
     profile: Option<&InspectionProfile>,
 ) -> Result<Page, String> {
     let (data, window) = scene_window(size, scale, layout, profile)?;
-    page_with_messages(name, recording(name, seat)?, seat, data, window)
+    page_with_messages(name, recording(name, seat)?, seat, data, window, None)
 }
 
 pub(crate) fn scene_window(
@@ -237,6 +237,7 @@ pub(crate) fn page_with_messages(
     seat: Side,
     data: Arc<Data>,
     window: Window,
+    story_catalog: Option<Arc<[Source]>>,
 ) -> Result<Page, String> {
     let compact = window.size_class == Some(kit_scene::SizeClass::Compact);
     let drive = Board::parse(name).map(Board::drive).unwrap_or_default();
@@ -250,11 +251,16 @@ pub(crate) fn page_with_messages(
     let mut page = Page::in_window(data, recording.into(), seat, window)
         .map_err(|error| format!("{name}: {error}"))?
         .named(name);
-    if matches!(
-        stories::recording_story(name),
-        Some("story/app_screens/gallery" | "story/app_screens/testing")
-    ) {
-        page = page.with_stories(crate::gallery_sources()?);
+    match story_catalog {
+        Some(sources) => page = page.with_stories(sources),
+        None if matches!(
+            stories::recording_story(name),
+            Some("story/app_screens/gallery" | "story/app_screens/testing")
+        ) =>
+        {
+            page = page.with_stories(crate::gallery_sources()?);
+        }
+        None => {}
     }
     if drive.pointer_over_hand {
         let moves = pointer_moves(page.frame());

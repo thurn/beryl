@@ -83,6 +83,9 @@ impl Playback {
                 let mut page = base(capture.messages, capture.seat)?
                     .named(&capture.source)
                     .with_catch_up(capture.catch_up);
+                if let Some(stories) = capture.story_catalog {
+                    page = page.with_stories(stories);
+                }
                 page.seek(&Moment::At(Duration(capture.at)))
                     .map_err(|why| why.to_string())?;
                 page.story_actions(&capture.actions)?;

@@ -1,4 +1,10 @@
-use beryl_inspect::cli;
+use app_client::driver::Moment;
+use app_client::stories::Source;
+use beryl_inspect::{cli, data, pages};
+use beryl_protocol::protocol::Side;
+use kit_probe::agent::{Layout, TreeOptions, tree};
+use kit_probe::story::Header;
+use kit_ui::input::Size;
 
 fn command(words: &[&str]) -> cli::Ran {
     let args: Vec<String> = words.iter().map(ToString::to_string).collect();
@@ -156,6 +162,54 @@ fn a_written_story_preserves_motion_and_the_selected_seat() {
     ]);
     round_trip(&["stress-stack", "--at", "end"]);
     round_trip(&["verbs-zones", "--at", "end", "--profile", "wide-compact"]);
+}
+
+#[test]
+fn screen_captures_replay_their_saved_story_catalog() {
+    let window = Size {
+        width: 1600.0,
+        height: 900.0,
+    };
+    let header = Header {
+        layout: Layout::for_size(&data::checkout().unwrap().profiles, window),
+        window,
+    };
+    let saved = Source::owned(
+        "story/kit_ui/captured-catalog-example".to_owned(),
+        "story element 600x400 desktop\nbutton \"Saved\" #1 24,24 160x48 interactive | widget=button\n"
+            .to_owned(),
+        Some("captured-controls".to_owned()),
+    );
+    for screen in ["screen/gallery", "screen/testing"] {
+        let source = [screen, "--at", "end"];
+        let path = capture(&source, None);
+        let checkout_tree = tree_body(&source);
+        assert_eq!(tree_body(&[&path]), checkout_tree);
+        assert!(!checkout_tree.contains(saved.name.as_ref()));
+
+        // Give the driver a catalog that differs from the inspector's checkout.
+        for sources in [vec![saved.clone()], Vec::new()] {
+            let mut page = pages::page(screen, Side::You, header.layout, header.window)
+                .unwrap()
+                .with_stories(sources.clone().into());
+            page.seek(&"end".parse::<Moment>().unwrap()).unwrap();
+            let expected = tree(
+                page.frame(),
+                &TreeOptions {
+                    full: true,
+                    ..TreeOptions::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(expected.contains(saved.name.as_ref()), !sources.is_empty());
+            assert_ne!(expected.trim_end(), checkout_tree);
+
+            let text = page.capture().write(header, None, None).unwrap();
+            std::fs::write(&path, text).unwrap();
+            assert_eq!(tree_body(&[&path]), expected.trim_end(), "{screen}");
+        }
+        std::fs::remove_file(path).unwrap();
+    }
 }
 
 #[test]

@@ -89,6 +89,7 @@ mod playback {
                 scale: self.scale,
                 catch_up: self.catch_up,
                 messages: self.recording.0.clone(),
+                story_catalog: Some(self.stories.clone()),
                 actions: Vec::new(),
             }
         }

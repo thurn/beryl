@@ -1844,6 +1844,7 @@ dependencies = [
  "kit_space",
  "kit_text",
  "kit_ui",
+ "serde",
  "serde_json",
 ]
 

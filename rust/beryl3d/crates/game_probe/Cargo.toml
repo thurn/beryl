@@ -15,6 +15,8 @@ stories = ["beryl_protocol/testing"]
 [dependencies]
 beryl_protocol.workspace = true
 glam.workspace = true
+# Writes captured story catalogs with the same JSON codec as recording messages.
+serde.workspace = true
 serde_json.workspace = true
 kit_base.workspace = true
 kit_text.workspace = true

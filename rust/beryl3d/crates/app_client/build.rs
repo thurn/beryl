@@ -100,6 +100,7 @@ fn compile(name: &str, text: String) -> Result<(String, bool), String> {
         scale: 1.0,
         catch_up: false,
         messages: table.messages(),
+        story_catalog: None,
         actions: table.actions,
     };
     capture
