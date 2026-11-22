@@ -368,6 +368,57 @@ fn active_memory_pressure_still_escalates_when_a_full_build_quota_explains_idle_
 }
 
 #[test]
+fn idle_workers_at_the_build_slot_limit_do_not_escalate() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    machine(&conn, "m-slots", Os::Windows);
+    let idle = MachineSnapshot {
+        free_disk_gib: Some(89),
+        swap_used_mb: None,
+        active_memory_pressure: None,
+        next_ticket_disk_gib: None,
+        idle_workers: 37,
+        working_workers: 3,
+        ready_tickets: 2,
+        ..healthy()
+    };
+    record(
+        &conn,
+        "m-slots",
+        0..=10,
+        MachineSnapshot {
+            start_block: Some(StartBlock::Trees),
+            start_reason: Some("Tabcd waits for a build slot on m-slots: 2 of 2 held".to_owned()),
+            ..idle.clone()
+        },
+    );
+    assert!(
+        upkeep
+            .pass(&mut conn, at(10))
+            .unwrap()
+            .tickets_filed
+            .is_empty()
+    );
+
+    record(
+        &conn,
+        "m-slots",
+        11..=21,
+        MachineSnapshot {
+            start_block: Some(StartBlock::Trees),
+            start_reason: Some("No ticket tree is free".to_owned()),
+            ..idle
+        },
+    );
+    let filed = upkeep.pass(&mut conn, at(21)).unwrap().tickets_filed;
+    assert_eq!(filed.len(), 1);
+    assert_eq!(
+        ticket(&conn, &filed[0]).title,
+        "Workers idle with work on m-slots"
+    );
+}
+
+#[test]
 fn an_idle_escalation_needs_healthy_dispatch_samples_to_clear() {
     let mut conn = hub::open_in_memory().unwrap();
     let mut upkeep = Upkeep::new(None).unwrap();
@@ -500,7 +551,7 @@ fn cleanup_with_slot_based_admission_uses_observed_free_disk() {
         free_disk_gib: Some(10),
         next_ticket_disk_gib: None,
         start_block: Some(StartBlock::Trees),
-        start_reason: Some("Waiting for a build slot".to_owned()),
+        start_reason: Some("Tabcd waits for a build slot on m-slots: 2 of 2 held".to_owned()),
         ..healthy()
     };
     record(&conn, "m-slots", 0..=4, blocked.clone());
@@ -517,7 +568,7 @@ fn cleanup_with_slot_based_admission_uses_observed_free_disk() {
     assert_eq!(filed.len(), 1);
     let report = ticket(&conn, &filed[0]);
     assert!(report.body.contains("free disk stayed at or below 10 GiB"));
-    assert!(report.body.contains("Waiting for a build slot"));
+    assert!(report.body.contains("waits for a build slot"));
 
     record(
         &conn,

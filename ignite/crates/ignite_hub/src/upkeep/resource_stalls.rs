@@ -2,7 +2,7 @@
 
 use ignite_core::capacity::BYTES_PER_GIB;
 use ignite_core::config::Os;
-use ignite_core::dispatch_pressure::BUILD_LIMIT_WAIT;
+use ignite_core::dispatch_pressure::{BUILD_LIMIT_WAIT, BUILD_SLOT_WAIT};
 use ignite_core::protocol::machine_state::{MachineSnapshot, StartBlock};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
@@ -111,7 +111,7 @@ pub(super) fn file(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> 
                     sample.start_block,
                     Some(StartBlock::Pacing | StartBlock::Memory)
                 ) && over_limit(sample, &machine);
-                dispatch_observable(sample) && idle_with_work(sample) && !pressure_blocked
+                idle_dispatch_observable(sample) && idle_with_work(sample) && !pressure_blocked
             })
         };
         let disk = if cleanup.is_some() {
@@ -148,7 +148,7 @@ pub(super) fn recovered(
         return Ok(false);
     };
     let healthy = |sample: &MachineSnapshot| match invariant {
-        Invariant::Idle => dispatch_observable(sample) && !idle_with_work(sample),
+        Invariant::Idle => idle_dispatch_observable(sample) && !idle_with_work(sample),
         Invariant::Disk => {
             dispatch_observable(sample)
                 && !disk_blocked(sample)
@@ -228,6 +228,17 @@ fn dispatch_observable(sample: &MachineSnapshot) -> bool {
 
 fn idle_with_work(sample: &MachineSnapshot) -> bool {
     sample.idle_workers > 0 && sample.ready_tickets > 0
+}
+
+fn idle_dispatch_observable(sample: &MachineSnapshot) -> bool {
+    // The queue counts eligible build tickets even while other trees hold every build slot.
+    // Disk upkeep can still use these samples to detect a failed cleanup.
+    let build_slots_held = sample.start_block == Some(StartBlock::Trees)
+        && sample
+            .start_reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains(BUILD_SLOT_WAIT));
+    dispatch_observable(sample) && !build_slots_held
 }
 
 fn disk_blocked(sample: &MachineSnapshot) -> bool {

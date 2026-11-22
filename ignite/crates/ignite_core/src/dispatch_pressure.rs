@@ -16,6 +16,8 @@ use crate::time::Timestamp;
 pub const BACKLOG_SECONDS: u32 = 120;
 /// Identifies the build limit in machine snapshots that record the reason as text.
 pub const BUILD_LIMIT_WAIT: &str = "waits for shared build cores";
+/// Identifies a build-slot wait in snapshots, which also use `Trees` for ticket-tree waits.
+pub const BUILD_SLOT_WAIT: &str = "waits for a build slot";
 /// At 90% CPU, an 18-core host has about two cores left. On that host the queue often
 /// reached two minutes with much more headroom, while grants were still counted in full.
 const BACKLOG_BUSY_PERCENT: u32 = 90;
@@ -202,7 +204,7 @@ impl<'a> Budget<'a> {
             let total = self.pressure.build_slots;
             waits.push(HandoffWait {
                 block: Some(StartBlock::Trees),
-                reason: format!("waits for a build slot on {machine}: {total} of {total} held"),
+                reason: format!("{BUILD_SLOT_WAIT} on {machine}: {total} of {total} held"),
             });
         }
         if ticket.kind != TicketKind::Regression {
