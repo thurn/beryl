@@ -792,5 +792,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     }
 }
 
+mod chosen;
+
 #[cfg(test)]
 mod tests;

@@ -111,6 +111,23 @@ fn a_memo_ends_as_its_permanent_changes_zones() {
 }
 
 #[test]
+fn chosen_names_omit_unknown_names_and_phased_out_permanents() {
+    let (t, mut s, slots) = bears(2);
+    let card = t.index_of(&BEAR).unwrap();
+    let known = ChosenValue::Name(Some(card));
+    s.remember(slots[0], Memo::Chosen(known)).unwrap();
+    s.remember(slots[1], Memo::Chosen(ChosenValue::Name(None)))
+        .unwrap();
+    derive(&t, &mut s);
+
+    assert_eq!(s.chosen_names().collect::<Vec<_>>(), [(slots[0], card)]);
+    s.phase_out(s.permanents_in(Bitboard::single(slots[0])))
+        .unwrap();
+    assert_eq!(s.chosen(slots[0]), Some(known));
+    assert_eq!(s.chosen_names().next(), None);
+}
+
+#[test]
 fn signature_tells_two_permanents_apart_by_a_memo() {
     let (t, mut s, slots) = bears(2);
     let (a, b) = (slots[0], slots[1]);

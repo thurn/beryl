@@ -14,7 +14,6 @@
 //! Implements: none. Reads rule changes after continuous effects have applied.
 
 use beryl_card::{Governed, ManaCost, PlayerRules, RuleChange, SpellCost};
-use beryl_kernel::chosen::ChosenValue;
 
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityKind, Face, ObjectAbility, Words};
@@ -205,7 +204,7 @@ fn accepts_composed(filter: Filter, face: &Face) -> bool {
 /// prohibition beats a permission (see [CR 101.2]): "When a rule or effect allows or directs
 /// something to happen, and another effect states that it can't happen, the "can't" effect
 /// takes precedence." While none is in force, one AND and nothing else to ask; while one is,
-/// [`named_by_a_maker`] says which sources it stops.
+/// [`unprohibited`] says which sources it stops.
 ///
 /// [CR 602.5]: https://yawgatog.com/resources/magic-rules/#R6025
 /// [CR 101.2]: https://yawgatog.com/resources/magic-rules/#R1012
@@ -220,8 +219,19 @@ pub(crate) fn prohibitions<L: Layout>(s: &State<L>, t: &GameTable, player: Seat)
 }
 
 /// Of `objects`, those whose activated abilities `player` may activate as far as `rules`
-/// ([`prohibitions`]) say: those no maker of one of them named ([`named_by_a_maker`]). Out of
-/// line, so that the list of activations is the same code while no such rule is in force.
+/// ([`prohibitions`]) say. Find the permanents that named a card once for all candidate
+/// sources. A rule change is numbered once for the game, so each permanent that makes it
+/// can choose a different name.
+///
+/// A source's name comes from its copiable values (see [CR 707.2]). A face-down permanent
+/// "becomes a 2/2 face-down creature with no text, no name, no subtypes, and no mana cost"
+/// (see [CR 708.2a]). The choice of a card outside this game has no name to match here.
+/// "Each opponent" and "you" are read for the maker's controller (see [CR 109.5]): "For a
+/// static ability, this is the current controller of the object it's on."
+///
+/// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+/// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
+/// [CR 109.5]: https://yawgatog.com/resources/magic-rules/#R1095
 #[cold]
 #[inline(never)]
 pub(crate) fn unprohibited<L: Layout>(
@@ -231,46 +241,23 @@ pub(crate) fn unprohibited<L: Layout>(
     player: Seat,
     objects: Bitboard<L::Slot>,
 ) -> Bitboard<L::Slot> {
-    objects.filter(|slot| !named_by_a_maker(s, t, rules, player, slot))
-}
-
-/// Whether a permanent whose static ability makes one of `rules` ([`prohibitions`]) for
-/// `player` chose the name of the object in `slot`, so that `player` can't activate its
-/// activated abilities other than mana abilities. A rule change is numbered once for the
-/// game, and what it stops depends on the name each permanent that makes it chose, so the
-/// makers are found and their names read. The source's name is read from its copiable
-/// values (see [CR 707.2]): a token copy of a card has the card's name, and a face-down permanent
-/// has none (see [CR 708.2a]): it "becomes a 2/2 face-down creature with no text, no name, no
-/// subtypes, and no mana cost." A permanent that chose "another card" names no card of the
-/// game. "Each opponent" and "you" are read for the
-/// maker's controller (see [CR 109.5]): "For a static ability, this is the current controller of
-/// the object it's on."
-///
-/// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
-/// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
-/// [CR 109.5]: https://yawgatog.com/resources/magic-rules/#R1095
-fn named_by_a_maker<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    rules: Rules,
-    player: Seat,
-    slot: L::Slot,
-) -> bool {
-    let name = s.definition(slot).name(t);
-    if name.is_empty() {
-        return false;
+    if objects.is_empty() {
+        return objects;
     }
-    s.permanents_with_derived().any(|(maker, d)| {
-        let Some(ChosenValue::Name(Some(card))) = s.chosen(maker) else {
-            return false;
-        };
+    let mut allowed = objects;
+    for (maker, card) in s.chosen_names() {
+        let name = t.def(card).name;
         let made = player_rules_of(s, t, maker).common(rules);
-        t.def(card).name == name
+        if !name.is_empty()
             && made.iter().any(|id| {
-                filter::is_for(&t.rule(id).players, player, d.controller)
+                filter::is_for(&t.rule(id).players, player, s.derived(maker).controller)
                     && maker_of(s, t, maker, id).is_some()
             })
-    })
+        {
+            allowed = allowed.filter(|slot| s.definition(slot).name(t) != name);
+        }
+    }
+    allowed
 }
 
 /// Whether the loyalty abilities of the permanent in `slot` may be activated any time its
