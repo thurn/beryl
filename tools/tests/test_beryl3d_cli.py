@@ -15,8 +15,22 @@ from beryl_tools.beryl3d import cli
 
 def test_tests_run_the_workspace_or_the_named_crates() -> None:
     assert cli.test_command([], [], nextest=False) == ["test", "-q", "--workspace"]
-    plain = cli.test_command(["a", "b"], ["pose"], nextest=False)
-    assert plain == ["test", "-q", "-p", "a", "-p", "b", "pose"]
+    assert cli.test_command([], ["pose", "turn"], nextest=False) == [
+        "test",
+        "-q",
+        "--workspace",
+        "--",
+        "pose",
+        "turn",
+    ]
+    plain = cli.test_command(["a", "b"], ["pose", "turn"], nextest=False)
+    assert plain == [
+        "test",
+        "-q",
+        "--workspace",
+        "--no-run",
+        "--message-format=json-render-diagnostics",
+    ]
     fast = cli.test_command(["a"], [], nextest=True)
     assert fast[:2] == ["nextest", "run"] and "--no-tests=pass" in fast
     assert fast[-3:] == ["--workspace", "-E", "(package(=a))"]
@@ -59,7 +73,14 @@ def test_text_commands_hand_every_argument_to_the_b3d_program(
     assert cli.main(["tree", "verbs-zones", "--at", "1500ms", "--help"]) == 0
     build, run = ran
     assert build == ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"]
-    assert run == ["/linked/b3d", "tree", "verbs-zones", "--at", "1500ms", "--help"]
+    assert run == [
+        str(Path("/linked/b3d")),
+        "tree",
+        "verbs-zones",
+        "--at",
+        "1500ms",
+        "--help",
+    ]
     # The one-thread program is told to use one thread.
     _build_env, run_env = envs
     assert run_env[cli.CORES_ENV] == "1"
@@ -71,7 +92,7 @@ def test_map_includes_every_launcher_command_with_its_source(
     def program(
         command: list[str], env: dict[str, str], **_kwargs: object
     ) -> subprocess.CompletedProcess[str]:
-        assert command == ["/linked/b3d", "map", "commands", "--json"]
+        assert command == [str(Path("/linked/b3d")), "map", "commands", "--json"]
         entries = json.loads(env["BERYL3D_LAUNCHER_COMMANDS"])
         assert {entry["name"] for entry in entries} == {
             command.name for command in cli.COMMANDS
@@ -106,7 +127,7 @@ def test_interface_tests_run_the_shared_builds_b3d(
     monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
     monkeypatch.setattr(cli, "program", lambda name: Path("/built") / name)
     assert cli.main(["test"]) == 0
-    assert ran == [cli.SHARED_BUILD, ["/built/b3d", "test"]]
+    assert ran == [cli.SHARED_BUILD, [str(Path("/built/b3d")), "test"]]
 
 
 def test_a_missing_pack_is_recorded_and_the_command_run_again(
@@ -130,10 +151,10 @@ def test_a_missing_pack_is_recorded_and_the_command_run_again(
     assert cli.main(["tree", "verbs-zones"]) == 0
     assert ran == [
         ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"],
-        ["/linked/b3d", "tree", "verbs-zones"],
+        [str(Path("/linked/b3d")), "tree", "verbs-zones"],
         cli.SHARED_BUILD,
-        ["/linked/record"],
-        ["/linked/b3d", "tree", "verbs-zones"],
+        [str(Path("/linked/record"))],
+        [str(Path("/linked/b3d")), "tree", "verbs-zones"],
     ]
 
 
@@ -212,7 +233,7 @@ def test_picture_commands_hand_every_argument_to_the_b3d_render_program(
     build, run = ran
     assert build == ["build", "-q", "-p", "beryl_pictures", "--bin", "b3d-render"]
     assert run == [
-        "/linked/b3d-render",
+        str(Path("/linked/b3d-render")),
         "png",
         "verbs-zones",
         "--at",
@@ -361,7 +382,7 @@ def test_a_named_spec_uses_a_cached_local_pack(
     name = "counterspell/cast"
     args = ["tree", "--seat", "opponent", name]
     assert cli.run_program("b3d", args) == 0
-    assert launched == [["/linked/b3d", *args]]
+    assert launched == [[str(Path("/linked/b3d")), *args]]
     assert recorded == [("--prefix", f"{name}/")]
     assert cli.pack_selection(["test", "b3d:counterspell/"]) == (
         "--prefix",

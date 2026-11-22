@@ -1,12 +1,13 @@
 """Exercise the native Cargo profiles across a separate workspace's path dependencies."""
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from beryl_tools.beryl3d import paths
+from beryl_tools.beryl3d import cli, paths
 
 
 def crate(root: Path, name: str, dependencies: dict[str, Path], source: str) -> Path:
@@ -20,6 +21,46 @@ def crate(root: Path, name: str, dependencies: dict[str, Path], source: str) -> 
     (directory / "Cargo.toml").write_text("\n".join(lines) + "\n")
     (directory / "src" / "lib.rs").write_text(source)
     return directory
+
+
+@pytest.mark.parametrize("nextest", [False, True])
+def test_cargo_test_selects_packages_and_either_name_filter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, nextest: bool
+) -> None:
+    nextest_path = shutil.which("cargo-nextest") if nextest else None
+    if nextest and nextest_path is None:
+        pytest.skip("cargo-nextest is not installed")
+    monkeypatch.setattr(cli.shutil, "which", lambda _name: nextest_path)
+    monkeypatch.setattr(cli, "record", lambda: 0)
+    monkeypatch.setattr(paths, "WORKSPACE", tmp_path)
+    monkeypatch.setenv("CARGO_TARGET_DIR", str(tmp_path / "target"))
+    (tmp_path / "Cargo.toml").write_text(
+        '[workspace]\nresolver = "3"\nmembers = ["crates/*"]\n'
+    )
+    selected = """
+        #[test]
+        fn pose_one() { std::fs::write("pose-ran", "").unwrap(); }
+        #[test]
+        fn turn_two() { std::fs::write("turn-ran", "").unwrap(); }
+        #[test]
+        fn other() { panic!("name filter leaked"); }
+    """
+    host = crate(tmp_path, "beryl_host", {}, selected)
+    space = crate(tmp_path, "kit_space", {}, selected)
+    crate(
+        tmp_path,
+        "ignored",
+        {},
+        '#[test] fn pose_three() { panic!("package filter leaked"); }\n',
+    )
+
+    assert (
+        cli.main(["cargo-test", "-p", "beryl_host", "-p", "kit_space", "pose", "turn"])
+        == 0
+    )
+    for directory in (host, space):
+        assert (directory / "pose-ran").is_file()
+        assert (directory / "turn-ran").is_file()
 
 
 @pytest.mark.parametrize("profile", ["dev", "test"])

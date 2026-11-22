@@ -27,6 +27,7 @@ from . import (
     app,
     bug,
     camera,
+    cargo_tests,
     clear_save,
     compare,
     corpus,
@@ -86,23 +87,16 @@ def run_cargo(args: argparse.Namespace) -> int:
 
 
 def test_command(packages: list[str], filters: list[str], nextest: bool) -> list[str]:
-    """The cargo arguments that test `packages` (the whole workspace for none) and the tests
-    whose names contain any of `filters`: cargo-nextest where it is installed, else cargo
-    test, as `just test-rust` chooses.
-
-    Under nextest the command always builds the whole workspace, as `SHARED_BUILD` does just
-    before it, and picks the packages and names with a filterset. Cargo resolves features for
-    the packages a command names, so `nextest run -p beryl_host -p beryl_scene` compiled 61
-    units a second time, with other features, after the shared build had compiled them.
-    """
+    """Build the workspace as `SHARED_BUILD` does so selecting tests preserves features."""
     if nextest:
         return [
             *["nextest", "run", "--cargo-quiet", "--no-fail-fast", "--no-tests=pass"],
             *["--status-level=fail", "--final-status-level=fail", "--workspace"],
             *filterset(packages, filters),
         ]
-    scope = [x for p in packages for x in ("-p", p)] or ["--workspace"]
-    return ["test", "-q", *scope, *filters]
+    if packages:
+        return cargo_tests.BUILD
+    return ["test", "-q", "--workspace", *(["--", *filters] if filters else [])]
 
 
 def filterset(packages: list[str], filters: list[str]) -> list[str]:
@@ -132,7 +126,10 @@ def run_cargo_test(args: argparse.Namespace) -> int:
     recorded = record()
     if recorded != 0:
         return recorded
-    return cargo(test_command(args.package, args.filter, nextest))
+    command = test_command(args.package, args.filter, nextest)
+    if not nextest and args.package:
+        return cargo_tests.run(command, args.package, args.filter)
+    return cargo(command)
 
 
 # The one build that the tests, `record` and `gate` share: every target that `cargo nextest run
