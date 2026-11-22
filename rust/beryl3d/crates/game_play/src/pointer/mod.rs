@@ -402,7 +402,7 @@ fn raised(rest: &Pose, camera: &Camera, tuning: &PointerTuning) -> Pose {
 
 /// Finds the card under the pointer in `frame`, the frame just built at `now`, and marks it
 /// `HOVERED`. As the web interface's hand does, the hit test finds hand cards by their resting
-/// places in the fan, which `rest` gives as each card's corners and depth by its slot, so that a
+/// places in the fan, which `rest` gives as each card's pose by its slot, so that a
 /// pointer over the part of the fan a raised card has left still finds that card. An element of
 /// the flat layer under the pointer is marked `HOVERED` instead. A card a script is moving is
 /// not hovered until it arrives, and nothing is hovered while a card is held.
@@ -420,13 +420,7 @@ pub(crate) fn update(
         .lifts
         .retain(|lift| lift.to > 0.0 || !lift.done(now, tuning));
     let clicked = let_go(pointer, &rest, in_tray, (now, camera), tuning);
-    hover_under(
-        pointer,
-        frame,
-        |slot| rest(slot).map(|pose| camera.card_box(&pose)),
-        now,
-        tuning,
-    );
+    hover_under(pointer, frame, rest, (now, camera), tuning);
     clicked
 }
 
@@ -555,23 +549,24 @@ pub(crate) fn hand_over(
 }
 
 /// Finds the card under the pointer in `frame` and marks it `HOVERED`, as `update` says, with
-/// `rest` giving each card's resting corners and depth by its slot.
+/// `rest` giving each card's resting pose by its slot.
 fn hover_under(
     pointer: &mut Pointer,
     frame: &mut Frame,
-    rest: impl Fn(usize) -> Option<([Vec2; 4], f32)>,
-    now: u64,
+    rest: impl Fn(usize) -> Option<Pose>,
+    (now, camera): (u64, &Camera),
     tuning: &PointerTuning,
 ) {
     for lift in &pointer.lifts {
-        let (Some(index), Some((corners, depth))) = (card(frame, lift.slot), rest(lift.slot))
-        else {
+        let (Some(index), Some(pose)) = (card(frame, lift.slot), rest(lift.slot)) else {
             continue;
         };
+        let (corners, depth) = camera.card_box(&pose);
         frame.lifted.push(Lifted {
             element: u32::try_from(index).expect("a frame holds far fewer than 2^32 elements"),
             corners,
             depth,
+            pose: Some(pose),
         });
     }
     pointer.pile = None;

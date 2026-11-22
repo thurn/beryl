@@ -17,8 +17,7 @@ use super::commands::seat_of;
 use game_table::table::{Camera, Layout};
 use kit_base::data::flat::DropTarget;
 use kit_base::tokens::{color, ratio, type_style};
-use kit_frame::frame::{Frame, Place, Role, StateBits};
-use kit_scene::hit::within;
+use kit_frame::frame::{Frame, Place, Resolved, Role, StateBits};
 use kit_ui::element::{Align, Anchor, Element, Justify, column, text};
 use kit_ui::input::Rect;
 
@@ -73,52 +72,49 @@ pub fn destination_at(
 /// The pile or card under `at` that a card lands in, the topmost first, leaving out the held
 /// cards themselves.
 fn under(frame: &Frame, at: Vec2, held: &[ObjectId], view: &PlayerView) -> Option<Destination> {
-    for index in frame.paint_order().rev() {
-        let element = &frame.resolved[index as usize];
+    let eligible = |element: &Resolved| {
         let Place::Card { zone, side, row } = element.place else {
-            continue;
+            return None;
         };
-        if !matches!(element.role, Role::Card | Role::Pile)
-            || element.state.0 & StateBits::HELD != 0
-            || !within(element, at)
-        {
-            continue;
+        if !matches!(element.role, Role::Card | Role::Pile) || element.state.has(StateBits::HELD) {
+            return None;
         }
-        let rect = bounds(&element.corners);
         let slot = u16::try_from(element.id.0).ok().map(ObjectId);
-        let found = |area| Destination {
+        let area = match zone {
+            ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile => Area::Pile(zone),
+            _ if element.role == Role::Pile || slot.is_some_and(|slot| held.contains(&slot)) => {
+                return None;
+            }
+            ZoneName::Battlefield => Area::Row(row.unwrap_or(RowName::Creatures)),
+            ZoneName::Hand => Area::Hand,
+            ZoneName::Stack => Area::Stack,
+            _ => return None,
+        };
+        Some((area, side, slot))
+    };
+    let index = frame.pick(at, |element| eligible(element).is_some())?;
+    let element = &frame.resolved[index as usize];
+    let (area, side, slot) = eligible(element)?;
+    let on = match area {
+        Area::Row(_) => slot,
+        _ => None,
+    };
+    let side = match area {
+        Area::Stack => Side::You,
+        _ => on
+            .and_then(|slot| object(view, slot))
+            .map_or(side, |object| object.controller),
+    };
+    Some(located(
+        Destination {
             area,
             side,
-            rect,
+            rect: bounds(&element.corners),
             end: None,
-            on: None,
-        };
-        match zone {
-            ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile => {
-                return Some(located(found(Area::Pile(zone)), at));
-            }
-            _ if element.role == Role::Pile => {}
-            _ if slot.is_some_and(|slot| held.contains(&slot)) => {}
-            ZoneName::Battlefield => {
-                let object = slot.and_then(|slot| object(view, slot));
-                let row = row.unwrap_or(RowName::Creatures);
-                return Some(Destination {
-                    side: object.map_or(side, |object| object.controller),
-                    on: slot,
-                    ..found(Area::Row(row))
-                });
-            }
-            ZoneName::Hand => return Some(found(Area::Hand)),
-            ZoneName::Stack => {
-                return Some(Destination {
-                    side: Side::You,
-                    ..found(Area::Stack)
-                });
-            }
-            _ => {}
-        }
-    }
-    None
+            on,
+        },
+        at,
+    ))
 }
 
 /// The area of the table under `at`: each side's hand along its edge of the window, and on the

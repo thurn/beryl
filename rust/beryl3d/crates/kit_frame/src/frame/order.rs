@@ -92,6 +92,8 @@ pub(super) struct Scratch {
     keys: Vec<u64>,
     draws: Vec<Draw>,
     nodes: Vec<u64>,
+    /// The render band of each registered card or ability's face, by node index.
+    card_bands: Vec<Option<Band>>,
     batching: Batching,
     /// The call key of the first record pushed to each band, by `Band` value.
     first_calls: [Option<u8>; BANDS],
@@ -119,6 +121,7 @@ impl Scratch {
             keys: Vec::with_capacity(draws),
             draws: Vec::with_capacity(draws),
             nodes: Vec::with_capacity(nodes),
+            card_bands: Vec::with_capacity(nodes),
             batching: Batching {
                 rects: Vec::with_capacity(draws),
                 additive: Vec::with_capacity(draws),
@@ -135,6 +138,7 @@ impl Scratch {
         self.keys.clear();
         self.draws.clear();
         self.nodes.clear();
+        self.card_bands.clear();
         self.first_calls = [None; BANDS];
         self.mixed = 0;
     }
@@ -242,7 +246,9 @@ impl Frame {
 
     /// Node indexes in back-to-front paint order. The tree's registration order is retained
     /// separately for walking parent and child relationships.
-    pub fn paint_order(&self) -> impl DoubleEndedIterator<Item = u32> + ExactSizeIterator + '_ {
+    pub fn paint_order(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = u32> + ExactSizeIterator + Clone + '_ {
         self.scratch
             .nodes
             .iter()
@@ -253,6 +259,15 @@ impl Frame {
     #[must_use]
     pub fn compare_paint(&self, a: u32, b: u32) -> std::cmp::Ordering {
         node_key(a, &self.resolved[a as usize]).cmp(&node_key(b, &self.resolved[b as usize]))
+    }
+
+    pub(super) fn depth_card_band(&self, index: u32) -> Option<Band> {
+        self.scratch
+            .card_bands
+            .get(index as usize)
+            .copied()
+            .flatten()
+            .filter(|&band| band < Band::Layer)
     }
 
     /// Keeps only the records of a finished, `looking` frame whose element (`Frame::owners`)
@@ -323,6 +338,9 @@ impl FrameBuilder<'_> {
     /// opaque card writes depth, while a fading or dissolving one blends with its marks.
     pub fn draw_card(&mut self, at: u32, resting: Band, draw: Draw) {
         let band = self.node_band(at).records(resting);
+        let bands = &mut self.frame.scratch.card_bands;
+        bands.resize(bands.len().max(at as usize + 1), None);
+        bands[at as usize] = Some(band);
         self.draw(band, draw);
     }
 }
@@ -380,7 +398,7 @@ fn depth(draw: &Draw, view_projection: Mat4) -> f32 {
 
 /// `value`'s bits, rearranged so that comparing them as unsigned integers orders the floats
 /// as `f32::total_cmp` does.
-fn ordered(value: f32) -> u32 {
+pub(super) fn ordered(value: f32) -> u32 {
     let bits = value.to_bits();
     if bits & (1 << 31) == 0 {
         bits | (1 << 31)

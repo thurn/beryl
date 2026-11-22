@@ -52,92 +52,135 @@ fn written(output: &Output) -> (PathBuf, (u32, u32)) {
 }
 
 #[test]
-fn a_press_reaches_the_card_that_paints_an_opaque_depth_tie() {
-    use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
-    use glam::{Mat4, Vec2, Vec3};
-    use kit_base::{
-        atlas::{FaceSize, Tier},
-        pose::Pose,
-    };
-    use kit_frame::frame::{
-        Band, Draw, ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role,
-    };
+fn a_press_reaches_the_card_that_paints_the_pixel() {
+    use beryl_render::{Limits, Renderer, Target};
+    use glam::{Vec2, camera::rh::proj::directx};
+    use kit_base::atlas::Tier;
+    use kit_frame::frame::{ElementId, Frame, FrameBuilder};
 
     let card = Vec2::new(63.0, 88.0);
-    let pose = Pose {
-        position: Vec3::Z * 0.5,
-        scale: 1.0 / card.y,
-        ..Pose::default()
-    };
-    let point = Vec2::splat(32.5);
+    let projection = directx::perspective(std::f32::consts::FRAC_PI_2, 1.0, 1.0, 10.0);
     let lighting = beryl_inspect::data::checkout().expect("tuning").lighting;
     let mut renderer = Renderer::headless(Limits::Default, lighting).expect("a GPU");
     let format = beryl_assets::Format::choose(&renderer.formats());
     renderer.set_faces(&["", "Island", "Plains"], format);
     let mut target = Target::offscreen(&renderer, 64, 64);
-    let cards = [("Island", [255, 0, 0, 255]), ("Plains", [0, 0, 255, 255])];
-    let at = (32 * 64 + 32) * 4;
     for (tier, state) in [
         (Tier::Baseline, 0),
         (Tier::Baseline, StateBits::MOVING),
         (Tier::Enhanced, 0),
         (Tier::Enhanced, StateBits::MOVING),
     ] {
-        let mut frame = Frame::with_capacity(2, 2, 64);
-        let mut builder = FrameBuilder::new(&mut frame, tier, card);
-        builder.camera(Mat4::IDENTITY);
-        for (index, (name, tint)) in cards.into_iter().enumerate() {
-            let half = card * (pose.scale * 16.0);
-            let corners = [
-                Vec2::new(-half.x, -half.y),
-                Vec2::new(half.x, -half.y),
-                Vec2::new(half.x, half.y),
-                Vec2::new(-half.x, half.y),
-            ]
-            .map(|corner| Vec2::splat(32.0) + corner);
-            let element = builder.resolved(
-                name,
-                Resolved {
-                    id: ElementId(index as u32),
-                    parent: u32::MAX,
-                    role: Role::Card,
-                    name: NameRef::default(),
-                    place: Place::Revealed,
-                    pose: Some(pose),
-                    corners,
-                    depth: 0.5,
-                    opacity: 1.0,
-                    clip: None,
-                    interactive: true,
-                    state: StateBits(state),
-                    face: None,
-                    copies: 1,
-                    really: NameRef::default(),
-                    note: NameRef::default(),
-                },
-            );
-            builder.draw_card(
-                element,
-                Band::Opaque,
-                Draw::card(
-                    pose.transform(),
-                    tint,
-                    FaceSize::Board,
-                    index as u16 + 1,
-                    BACK_LAYER,
-                    0.0,
-                    0.0,
-                ),
-            );
+        for (angle, red_alpha, expected) in [
+            (0.0, 255, [1, 1]),  // Coplanar opaque cards, later registration wins.
+            (0.45, 255, [0, 1]), // Crossing opaque cards, nearer at each point wins.
+            (0.0, 224, [0, 0]),  // The blended card paints over equal opaque depth.
+            (0.45, 224, [0, 1]), // Opaque depth hides the blended card on one side only.
+        ] {
+            let mut frame = Frame::with_capacity(2, 2, 64);
+            let mut builder = FrameBuilder::new(&mut frame, tier, card);
+            builder.camera(projection);
+            crossing_cards(&mut builder, projection, state, angle, red_alpha);
+            let frame = builder.finish();
+            renderer.render(frame, &mut target);
+            let pixels = renderer.read(&target);
+            for (x, expected) in [24, 39].into_iter().zip(expected) {
+                let point = Vec2::new(x as f32 + 0.5, 32.5);
+                let at = (32 * 64 + x) * 4;
+                let pixel = &pixels[at..at + 4];
+                let painted = usize::from(pixel[2] > pixel[0]);
+                assert_ne!(pixel[0], pixel[2], "a card paints {point}");
+                assert_eq!(
+                    painted, expected,
+                    "{tier:?} state {state}, angle {angle}, alpha {red_alpha}: pixel at {point}"
+                );
+                let hit = hit::hit(frame, point).expect("a card at the press") as usize;
+                assert_eq!(
+                    frame.resolved[hit].id,
+                    ElementId(painted as u32),
+                    "{tier:?} state {state}, angle {angle}, alpha {red_alpha}: pick at {point}"
+                );
+            }
         }
-        let frame = builder.finish();
-        let hit = hit::hit(frame, point).expect("a card at the press") as usize;
-        assert_eq!(frame.name(frame.resolved[hit].name), "Plains");
-        renderer.render(frame, &mut target);
-        let pixels = renderer.read(&target);
-        assert!(
-            pixels[at + 2] > pixels[at],
-            "{tier:?} state {state}: Plains paints the press point"
+    }
+}
+
+fn crossing_cards(
+    builder: &mut kit_frame::frame::FrameBuilder<'_>,
+    projection: glam::Mat4,
+    state: u32,
+    angle: f32,
+    red_alpha: u8,
+) {
+    use beryl_render::BACK_LAYER;
+    use glam::{Quat, Vec2, Vec3};
+    use kit_base::{atlas::FaceSize, pose::Pose};
+    use kit_frame::frame::{Band, Draw, ElementId, NameRef, Place, Resolved, Role};
+
+    let card = builder.card();
+    let cards = [
+        ("Island", [255, 0, 0, red_alpha]),
+        ("Plains", [0, 0, 255, 255]),
+    ];
+    for (index, (name, tint)) in cards.into_iter().enumerate() {
+        let pose = Pose {
+            position: Vec3::NEG_Z * 2.0,
+            rotation: Quat::from_rotation_y(if index == 0 { angle } else { -angle }),
+            scale: 2.0 / card.y,
+            opacity: f32::from(tint[3]) / 255.0,
+            ..Pose::default()
+        };
+        let transform = pose.transform();
+        let half = card * 0.5;
+        let corners = [
+            (-half.x, -half.y),
+            (half.x, -half.y),
+            (half.x, half.y),
+            (-half.x, half.y),
+        ]
+        .map(|(x, y)| {
+            let projected =
+                projection.project_point3(transform.transform_point3(Vec3::new(x, y, 0.0)));
+            (Vec2::ONE + projected.truncate() * Vec2::new(1.0, -1.0)) * 32.0
+        });
+        let element = builder.resolved(
+            name,
+            Resolved {
+                id: ElementId(index as u32),
+                parent: u32::MAX,
+                role: Role::Card,
+                name: NameRef::default(),
+                place: Place::Revealed,
+                pose: Some(pose),
+                corners,
+                depth: 2.0,
+                opacity: pose.opacity,
+                clip: None,
+                interactive: true,
+                state: StateBits(state),
+                face: None,
+                copies: 1,
+                really: NameRef::default(),
+                note: NameRef::default(),
+            },
+        );
+        let resting = if tint[3] == 255 {
+            Band::Opaque
+        } else {
+            Band::RaisedMarks
+        };
+        builder.draw_card(
+            element,
+            resting,
+            Draw::card(
+                transform,
+                tint,
+                FaceSize::Board,
+                index as u16 + 1,
+                BACK_LAYER,
+                0.0,
+                0.0,
+            ),
         );
     }
 }

@@ -5,7 +5,7 @@ use glam::{Mat4, Vec2, Vec3};
 
 use super::{ABILITIES, Frame, OBJECTS};
 use beryl_protocol::script::Mark;
-use kit_base::{geometry::Size, paint::Shadow};
+use kit_base::{geometry::Size, paint::Shadow, pose::Pose};
 
 /// The most hand cards the pointer can have up out of the fan at once. One is raised at a time,
 /// and a pointer swept across a hand leaves each card it crossed falling for a moment; past this
@@ -71,10 +71,12 @@ pub struct Lifted {
     pub corners: [Vec2; 4],
     /// Its depth resting in the fan.
     pub depth: f32,
+    /// Its pose resting in the fan, used to sample depth across its face.
+    pub pose: Option<Pose>,
 }
 
 impl Frame {
-    /// Exchanges each lifted card's drawn box in `resolved` with its resting box in `lifted`.
+    /// Exchanges each lifted card's drawn geometry in `resolved` with its resting geometry.
     /// Called twice, it leaves the frame as it was.
     pub fn swap_lifted(&mut self) {
         if self.lifted.is_empty() {
@@ -84,6 +86,7 @@ impl Frame {
             let element = &mut self.resolved[lifted.element as usize];
             std::mem::swap(&mut element.corners, &mut lifted.corners);
             std::mem::swap(&mut element.depth, &mut lifted.depth);
+            std::mem::swap(&mut element.pose, &mut lifted.pose);
         }
         self.order_nodes();
     }

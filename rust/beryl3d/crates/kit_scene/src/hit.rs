@@ -1,15 +1,12 @@
 //! Hit testing: which element a press at a point reaches, and where an element can be pressed
 //! (docs/beryl-3d.md, "The test driver" and the "Reachable" rule of "Interface checks").
 //!
-//! The frame provides the paint order for both spaces. Hit testing visits the frontmost
-//! nodes first, testing the part of each projected quadrilateral inside its clip.
+//! The frame picks the frontmost node at each point, taking its clip and the depth of
+//! overlapping cards into account.
 
 use glam::Vec2;
 
-use kit_frame::frame::{
-    Frame, Place, Resolved, Role, StateBits,
-    picking::{Area, hit_test},
-};
+use kit_frame::frame::{Frame, Place, Resolved, Role, StateBits, picking::Area};
 use kit_ui::input::{Rect, Size};
 
 /// The index of the element a press at `point` (in logical points) reaches, if any.
@@ -25,42 +22,23 @@ pub(crate) fn hit_where(
     point: Vec2,
     accepts: impl Fn(&Resolved) -> bool,
 ) -> Option<u32> {
-    hit_in(
-        frame,
-        point,
-        frame
-            .paint_order()
-            .rev()
-            .filter(|&index| accepts(&frame.resolved[index as usize])),
-    )
+    let index = frame.pick(point, |element| {
+        catches_anywhere(element) && accepts(element)
+    })?;
+    Some(redirect(frame, point, index))
 }
 
-fn hit_in(frame: &Frame, point: Vec2, mut front_first: impl Iterator<Item = u32>) -> Option<u32> {
-    hit_test(
-        point,
-        |test| {
-            front_first.find_map(|index| {
-                let element = &frame.resolved[index as usize];
-                if catches_anywhere(element) {
-                    test(Area::Quad(element.corners, element.clip), index)
-                } else {
-                    None
-                }
-            })
-        },
-        |index| {
-            let element = &frame.resolved[index as usize];
-            // A shown card is the picture of its screen element. When that element has its
-            // own input action, find it through the picture, within both of their clips.
-            let host = element
-                .state
-                .has(StateBits::SHOWN)
-                .then(|| frame.show_host(element.id))
-                .flatten()
-                .filter(|&host| within(&frame.resolved[host as usize], point));
-            Some(host.unwrap_or(index))
-        },
-    )
+fn redirect(frame: &Frame, point: Vec2, index: u32) -> u32 {
+    let element = &frame.resolved[index as usize];
+    // A shown card is the picture of its screen element. When that element has its
+    // own input action, find it through the picture, within both of their clips.
+    let host = element
+        .state
+        .has(StateBits::SHOWN)
+        .then(|| frame.show_host(element.id))
+        .flatten()
+        .filter(|&host| within(&frame.resolved[host as usize], point));
+    host.unwrap_or(index)
 }
 
 /// The first element of the flat layer that is drawn over element `index` at `point` on a
@@ -308,7 +286,7 @@ impl Overlaps {
     }
 }
 
-/// The elements drawn over element `index` that share part of its box and can catch a press,
+/// The elements that can be drawn over element `index`, share part of its box and catch a press,
 /// other than its own descendants, in index order: what can keep a press from reaching it.
 /// `overlaps` must have been built from `frame`.
 #[must_use]
@@ -317,7 +295,7 @@ pub fn covering(frame: &Frame, overlaps: &Overlaps, index: u32) -> Vec<u32> {
     over.retain(|&other| {
         !is_within(frame, other, index)
             && catches_anywhere(&frame.resolved[other as usize])
-            && covers(frame, other, index)
+            && frame.may_paint_over(other, index)
     });
     over
 }
@@ -429,11 +407,6 @@ pub fn within(element: &Resolved, point: Vec2) -> bool {
     Area::Quad(element.corners, element.clip).contains(point)
 }
 
-/// Whether element `a` is drawn over element `b`.
-fn covers(frame: &Frame, a: u32, b: u32) -> bool {
-    frame.compare_paint(a, b).is_gt()
-}
-
 /// Every element of `frame` other than those that never catch a press, in index order.
 fn everything(frame: &Frame) -> Vec<u32> {
     (0..frame.resolved.len() as u32)
@@ -527,7 +500,7 @@ impl Grid {
                 continue;
             }
             let inside = is_within(frame, other, index);
-            if inside && covers(frame, lowest, other) {
+            if inside && frame.compare_paint(lowest, other).is_gt() {
                 lowest = other;
             }
             overlapping.push((other, inside));
@@ -535,7 +508,7 @@ impl Grid {
         let mut candidates = Vec::with_capacity(overlapping.len());
         let mut alone = true;
         for (other, inside) in overlapping {
-            if !inside && !covers(frame, other, lowest) {
+            if !inside && !frame.may_paint_over(other, lowest) {
                 continue;
             }
             alone &= inside;
@@ -669,8 +642,9 @@ impl Grid {
     /// descendants.
     fn reaches(&self, frame: &Frame, index: u32, point: Vec2) -> bool {
         let point = self.shear.to_screen(point);
-        hit_in(frame, point, self.candidates.iter().copied())
-            .is_some_and(|at| is_within(frame, at, index))
+        frame
+            .pick_from(point, self.candidates.iter().copied(), catches_anywhere)
+            .is_some_and(|at| is_within(frame, redirect(frame, point, at), index))
     }
 
     /// Whether each cell is free, row by row. With `whole`, a press at the cell's centre and

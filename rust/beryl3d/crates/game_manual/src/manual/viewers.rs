@@ -357,10 +357,9 @@ pub fn opens_on_press(zone: ZoneName) -> bool {
 /// viewer lies in its pile as far as the view goes, so `target_at` would name the pile.
 #[must_use]
 pub fn card_at(frame: &Frame, point: Vec2, shown: impl Fn(ObjectId) -> bool) -> Option<Target> {
-    (frame.resolved.iter().rev())
-        .filter(|element| element.role == Role::Card && kit_scene::hit::within(element, point))
-        .find_map(|element| {
-            let slot = ObjectId(u16::try_from(element.id.0).ok()?);
-            shown(slot).then_some(Target::Card(slot))
-        })
+    let slot = |id| u16::try_from(id).ok().map(ObjectId);
+    let at = frame.pick(point, |element| {
+        element.role == Role::Card && slot(element.id.0).is_some_and(&shown)
+    })?;
+    slot(frame.resolved[at as usize].id.0).map(Target::Card)
 }
