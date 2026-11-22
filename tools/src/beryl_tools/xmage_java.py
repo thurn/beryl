@@ -14,7 +14,7 @@ from typing import cast
 
 from . import xmage_classes
 from .cards import listed
-from .card_facts import FACE_DOWN, Cards, Json, Unsupported
+from .card_facts import FACE_DOWN, Cards, Json, Unsupported, setup_face
 
 PACKAGE = "org.mage.test.beryl"
 BASE: Path = Path(__file__).parent / "BerylScenarioTest.java"
@@ -434,6 +434,50 @@ def setup_cards(entry: Json) -> Iterable[str]:
         yield from cast(list[str], setup.get("sideboard", []))
         for permanent in cast(list[Json], setup["battlefield"]):
             yield cast(str, permanent["card"])
+
+
+def battlefield_card(
+    faces: Faces, cards: Cards, who: str, permanent: Json, start: str, index: int
+) -> list[str]:
+    """The setup commands for one permanent and the counters it starts with."""
+    lines: list[str] = []
+    card = cast(str, permanent["card"])
+    name = faces.back[card] if setup_face(permanent) else card
+    quoted = java_string(name)
+    # XMage plays turn 1 from its untap step, which untaps player A's permanents.
+    retap = permanent["tapped"] and who == "playerA" and start != "Untap"
+    tapped = "true" if permanent["tapped"] and not retap else "false"
+    counters = cast("Json | None", permanent["counters"])
+    lore = (
+        cast(int, counters["count"])
+        if counters is not None and counters["kind"] == "Lore"
+        else None
+    )
+    if lore is not None or name in faces.sagas:
+        alias = f"beryl_lore_{who}_{index}"
+        aliased = java_string(f"{name}@{alias}")
+        lines.append(f"addCard(Zone.BATTLEFIELD, {who}, {aliased}, 1, {tapped});")
+        lines.append(f"setLoreAtStart({who}, {java_string(alias)}, {lore or 0});")
+    else:
+        lines.append(f"addCard(Zone.BATTLEFIELD, {who}, {quoted}, 1, {tapped});")
+    if retap:
+        lines.append(f"tapAtStart({who}, PhaseStep.{STEPS[start]}, {quoted});")
+    if cards.chooses_as_it_enters(name, "card name"):
+        lines.append(f"setChoice({who}, {java_string(ANOTHER_CARD)});")
+    elif cards.chooses_as_it_enters(name, "color", "creature type"):
+        lines.append(f'setChoice({who}, "[choice_skip]");')
+    elif cards.enters_as_copy(name):
+        # The scenario starts with the printed card already on the battlefield.
+        lines.append(f"setChoice({who}, false);")
+    if lore is not None:
+        return lines
+    kind, count = counters_to_add(faces, name, counters)
+    if count:
+        lines.append(
+            f"addCounters(1, PhaseStep.{STEPS[start]}, {who}, {quoted}, "
+            f"CounterType.{COUNTERS[kind]}, {count});"
+        )
+    return lines
 
 
 def counters_to_add(faces: Faces, name: str, counters: Json | None) -> tuple[str, int]:

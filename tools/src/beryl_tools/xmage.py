@@ -43,7 +43,7 @@ from .xmage_trace import (
 from .xmage_java import (
     ANOTHER_CARD,
     creature_type,
-    counters_to_add,
+    battlefield_card,
     CHOICE_KINDS,
     COLORS,
     YES_NO_KINDS,
@@ -307,42 +307,9 @@ class Exporter:
         self.emit("setStrictChooseMode(true);")
 
     def permanent(self, who: str, permanent: Json, start: str, index: int) -> None:
-        card = cast(str, permanent["card"])
-        name = self.faces.back[card] if card_facts.setup_face(permanent) else card
-        quoted = java_string(name)
-        # XMage plays turn 1 from its untap step, which untaps player A's permanents.
-        retap = permanent["tapped"] and who == "playerA" and start != "Untap"
-        tapped = "true" if permanent["tapped"] and not retap else "false"
-        counters = cast("Json | None", permanent["counters"])
-        lore = (
-            cast(int, counters["count"])
-            if counters is not None and counters["kind"] == "Lore"
-            else None
+        self.lines.extend(
+            battlefield_card(self.faces, self.cards, who, permanent, start, index)
         )
-        if lore is not None or name in self.faces.sagas:
-            alias = f"beryl_lore_{who}_{index}"
-            aliased = java_string(f"{name}@{alias}")
-            self.emit(f"addCard(Zone.BATTLEFIELD, {who}, {aliased}, 1, {tapped});")
-            self.emit(f"setLoreAtStart({who}, {java_string(alias)}, {lore or 0});")
-        else:
-            self.emit(f"addCard(Zone.BATTLEFIELD, {who}, {quoted}, 1, {tapped});")
-        if retap:
-            self.emit(f"tapAtStart({who}, PhaseStep.{STEPS[start]}, {quoted});")
-        if self.cards.chooses_as_it_enters(name, "card name"):
-            self.emit(f"setChoice({who}, {java_string(ANOTHER_CARD)});")
-        elif self.cards.chooses_as_it_enters(name, "color", "creature type"):
-            self.emit(f'setChoice({who}, "[choice_skip]");')
-        elif self.cards.enters_as_copy(name):
-            # The scenario starts with the printed card already on the battlefield.
-            self.emit(f"setChoice({who}, false);")
-        if lore is not None:
-            return
-        kind, count = counters_to_add(self.faces, name, counters)
-        if count:
-            self.emit(
-                f"addCounters(1, PhaseStep.{STEPS[start]}, {who}, {quoted}, "
-                f"CounterType.{COUNTERS[kind]}, {count});"
-            )
 
     def act(self, action: Json, p: Position) -> None:
         kind = cast(str, action["action"])

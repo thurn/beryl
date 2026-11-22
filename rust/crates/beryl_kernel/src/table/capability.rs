@@ -3,12 +3,13 @@
 //! Implements: none. Records which game mechanics the current card pool can use.
 
 use beryl_card::{
-    Ability, AbilityKind, Amount, Behavior, Condition, Draws, Effect, Face, Modification, Node,
-    Objects, Replaced, Replacement, Rewrite, Subtype, Words, Zone,
+    Ability, AbilityKind, Amount, Behavior, CardDef, Condition, Draws, Effect, FACE_DOWN, Face,
+    Modification, Node, Objects, Replaced, Replacement, Rewrite, Subtype, Words, Zone,
 };
 
 use crate::event::Listens;
 use crate::static_ability::Inputs;
+use crate::subtypes::SubtypeNumbers;
 
 /// Something a game's cards may make the stores keep (architecture §6.4, the crate's
 /// contract, "Stores"), found once per game from every face of every card it can contain.
@@ -119,8 +120,24 @@ pub enum Capability {
 const _: () = assert!((Capability::Equipment as u32) < u32::BITS);
 
 impl Capability {
+    /// The capabilities of every face and subtype the game can contain.
+    #[inline]
+    pub(super) fn of_game(defs: &[&CardDef], subtypes: &SubtypeNumbers) -> u32 {
+        let mut capabilities = defs
+            .iter()
+            .flat_map(|d| d.faces)
+            .fold(Self::of(&FACE_DOWN), |c, f| c | Self::of(f));
+        if subtypes.has(Subtype::Saga).possible() {
+            capabilities |= Self::Saga.bit();
+        }
+        if subtypes.has(Subtype::Equipment).possible() {
+            capabilities |= Self::Equipment.bit();
+        }
+        capabilities
+    }
+
     /// The capabilities a face gives a game that can contain it.
-    pub(super) fn of(face: &Face) -> u32 {
+    fn of(face: &Face) -> u32 {
         let mut found = casting_capabilities(face);
         if face.keywords.contains(beryl_card::Keywords::DELVE) {
             found |= Capability::Delve.bit();

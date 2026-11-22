@@ -5,7 +5,7 @@
 
 use beryl_card::{
     Ability, AbilityIx, AbilityKind, BasicLandTypes, CardDef, Condition, CostAction, CostPart,
-    FACE_DOWN, Face, FaceIx, ManaRestriction, RuleChange, Words, Zone, ZoneSet,
+    Face, FaceIx, ManaRestriction, RuleChange, Words, Zone, ZoneSet,
 };
 
 use crate::event::{Listens, Replaces};
@@ -338,16 +338,7 @@ impl GameTable {
         let face_subtypes = subtypes.of_cards(&defs);
         let names = card_names(&defs);
         let restrictions = mana_memory::number(&defs);
-        let mut capabilities = defs
-            .iter()
-            .flat_map(|d| d.faces)
-            .fold(Capability::of(&FACE_DOWN), |c, f| c | Capability::of(f));
-        if subtypes.has(beryl_card::Subtype::Saga).possible() {
-            capabilities |= Capability::Saga.bit();
-        }
-        if subtypes.has(beryl_card::Subtype::Equipment).possible() {
-            capabilities |= Capability::Equipment.bit();
-        }
+        let capabilities = Capability::of_game(&defs, &subtypes);
         Ok(Self {
             format,
             cards,
