@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use rusqlite::{Connection, params};
 
+use ignite_core::config::Os;
 use ignite_core::dispatch::{JUSTICIAR, ReadyTicket, TicketKind, label};
 use ignite_core::fleet::{FleetSettings, MachineState};
 use ignite_core::ids::MachineId;
@@ -54,7 +55,8 @@ pub(super) struct Fallback<'a> {
 
 struct ActiveMachine {
     name: String,
-    os: String,
+    os: Os,
+    families: Vec<String>,
     providers: Providers,
 }
 
@@ -106,9 +108,12 @@ impl<'a> Fallback<'a> {
                     }
                     Providers::Legacy(names)
                 };
+                let (os, families) =
+                    fleet::parse_dispatch_capabilities(&machine.os, &machine.families)?;
                 Ok(ActiveMachine {
                     name: machine.name,
-                    os: machine.os,
+                    os,
+                    families,
                     providers,
                 })
             })
@@ -121,21 +126,20 @@ impl<'a> Fallback<'a> {
         })
     }
 
-    /// Defer to an active machine that can run the ticket's OS, pins and model. Worker room and
-    /// busy cores do not affect precedence because this decision is only for master blockers.
+    /// Defer to an active machine that satisfies the ticket's OS, check families, pins and
+    /// model. Worker room and busy cores do not affect precedence for master blockers.
     pub(super) fn allows(&self, ticket: &ReadyTicket) -> bool {
-        let os_fits = |os: &str| ticket.needs_os.is_none_or(|needed| needed.as_str() == os);
         let name = self
             .free
             .name
             .as_deref()
             .unwrap_or(self.free.machine.as_str());
         holds_master(ticket)
-            && os_fits(self.free.os.as_str())
+            && ticket.platform_fits(self.free.os, &self.free.families)
             && ticket.pins.admits_machine(name)
             && !self.active.iter().any(|machine| {
                 ticket.pins.admits_machine(&machine.name)
-                    && os_fits(&machine.os)
+                    && ticket.platform_fits(machine.os, &machine.families)
                     && self.provider_fits(&machine.providers, ticket)
             })
     }

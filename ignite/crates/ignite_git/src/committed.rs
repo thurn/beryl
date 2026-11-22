@@ -1,6 +1,6 @@
 //! The tree ID of what a working tree holds, committed or not, and a commit that holds it.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ignite_core::ids::Commit;
 use ignite_core::traits::Result;
@@ -10,6 +10,40 @@ use crate::{cmd, treehash};
 /// The name and email on commits that Ignite writes itself.
 pub(crate) const IGNITE_NAME: &str = "ignite";
 pub(crate) const IGNITE_EMAIL: &str = "ignite@localhost";
+
+/// Reads regular files with an extension from one directory of a commit. The working copy
+/// may contain edits or be updating to another commit.
+pub fn text_files(
+    repo: &Path,
+    commit: &Commit,
+    dir: &Path,
+    extension: &str,
+) -> Result<Vec<(PathBuf, String)>> {
+    let dir_name = dir.to_string_lossy().replace('\\', "/");
+    let tree = if dir_name.is_empty() || dir_name == "." {
+        commit.to_string()
+    } else {
+        format!("{commit}:{dir_name}")
+    };
+    let entries = cmd::run(repo, ["ls-tree", "-z", &tree])?;
+    let mut files = Vec::new();
+    for entry in entries.split_terminator('\0') {
+        let Some((object, filename)) = entry.split_once('\t') else {
+            continue;
+        };
+        let path = dir.join(filename);
+        let Some(object) = object
+            .strip_prefix("100644 blob ")
+            .or_else(|| object.strip_prefix("100755 blob "))
+        else {
+            continue;
+        };
+        if path.extension().is_some_and(|value| value == extension) {
+            files.push((path, cmd::run(repo, ["cat-file", "blob", object])?));
+        }
+    }
+    Ok(files)
+}
 
 /// What a working tree holds: the ID of the tree a commit of all of it would have, and a commit
 /// with that tree.
@@ -77,6 +111,28 @@ mod tests {
             .unwrap();
         assert!(out.status.success(), "{args:?}: {out:?}");
         String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    }
+
+    #[test]
+    fn text_files_are_read_from_the_commit_and_only_at_the_requested_depth() {
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-committed-files-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("checks/nested")).unwrap();
+        git(&dir, &["init", "--quiet", "-b", "main"]);
+        fs::write(dir.join("checks/family.toml"), "reviewed").unwrap();
+        fs::write(dir.join("checks/nested/other.toml"), "nested").unwrap();
+        fs::write(dir.join("checks/notes.txt"), "notes").unwrap();
+        git(&dir, &["add", "-A"]);
+        git(&dir, &["commit", "--quiet", "-m", "manifests"]);
+        let commit = git(&dir, &["rev-parse", "HEAD"]).parse().unwrap();
+        fs::write(dir.join("checks/family.toml"), "local edit").unwrap();
+
+        assert_eq!(
+            text_files(&dir, &commit, Path::new("checks"), "toml").unwrap(),
+            [(PathBuf::from("checks/family.toml"), "reviewed".to_owned())]
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -2,6 +2,7 @@
 
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
+use ignite_core::config::Os;
 use ignite_core::protocol::hub::{Heartbeat, MachineRegister, Reservation};
 use ignite_core::time::Timestamp;
 
@@ -338,6 +339,37 @@ pub fn name_and_os_of(conn: &Connection, machine: &str) -> Result<Option<(String
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()?)
+}
+
+/// The hostname and capabilities last reported by this machine.
+pub fn dispatch_capabilities(
+    conn: &Connection,
+    machine: &str,
+) -> Result<Option<(String, Os, Vec<String>)>> {
+    let row: Option<(String, String, String)> = conn
+        .query_row(
+            "SELECT name, os, families FROM machines WHERE id = ?1",
+            [machine],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+    row.map(|(name, os, families)| {
+        let (os, families) = parse_dispatch_capabilities(&os, &families)?;
+        Ok((name, os, families))
+    })
+    .transpose()
+}
+
+/// Reads the OS and family list stored for a registered machine.
+pub fn parse_dispatch_capabilities(os: &str, families: &str) -> Result<(Os, Vec<String>)> {
+    let os = match os {
+        "macos" => Os::Macos,
+        "windows" => Os::Windows,
+        _ => return Err(StoreError::Invalid(format!("unknown machine OS {os}"))),
+    };
+    let families =
+        serde_json::from_str(families).map_err(|error| StoreError::Invalid(error.to_string()))?;
+    Ok((os, families))
 }
 
 /// Turns a reservation into a claim by deleting it; returns whether it existed.

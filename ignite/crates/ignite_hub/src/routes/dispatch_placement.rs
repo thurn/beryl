@@ -83,13 +83,8 @@ impl<'a> Placement<'a> {
             if report.worker_room == 0 || report.memory_pressed {
                 continue;
             }
-            let os = match machine.os.as_str() {
-                "macos" => Os::Macos,
-                "windows" => Os::Windows,
-                _ => continue,
-            };
-            let families = serde_json::from_str(&machine.families)
-                .map_err(|error| StoreError::Invalid(error.to_string()))?;
+            let (os, families) =
+                fleet::parse_dispatch_capabilities(&machine.os, &machine.families)?;
             placement.peers.push(Peer::new(
                 machine.name,
                 os,
@@ -129,7 +124,6 @@ impl<'a> Placement<'a> {
         };
         let ticket = PlacementTicket {
             ready,
-            needs_os: ready.needs_os,
             pins: &ready.pins,
         };
         let peers: Vec<_> = self

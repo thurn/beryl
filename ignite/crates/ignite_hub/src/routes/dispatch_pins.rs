@@ -69,10 +69,9 @@ pub(super) fn allows_continuation(
     if !ticket.pins.admits_machine(name) || !ticket.pins.admits_provider(app) {
         return Ok(false);
     }
-    let Some(needed) = ticket.needs_os else {
+    if ticket.needs_os.is_none() && ticket.families.is_empty() {
         return Ok(true);
-    };
-    Ok(fleet::machines(conn)?
-        .iter()
-        .any(|row| row.id == machine.as_str() && row.os == needed.as_str()))
+    }
+    Ok(fleet::dispatch_capabilities(conn, machine.as_str())?
+        .is_some_and(|(_, os, families)| ticket.platform_fits(os, &families)))
 }

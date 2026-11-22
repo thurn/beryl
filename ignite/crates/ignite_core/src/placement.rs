@@ -41,7 +41,6 @@ pub struct MachineView<'a> {
 
 pub struct PlacementTicket<'a> {
     pub ready: &'a ReadyTicket,
-    pub needs_os: Option<Os>,
     pub pins: &'a Pins,
 }
 
@@ -87,13 +86,7 @@ pub fn cost(ticket: &PlacementTicket<'_>, machine: &MachineView<'_>) -> Option<f
         || !machine
             .provider
             .is_some_and(|provider| ticket.pins.admits_provider(provider))
-        || ticket.needs_os.is_some_and(|os| os != machine.os)
-        || (!machine.families.is_empty()
-            && !ticket
-                .ready
-                .families
-                .iter()
-                .all(|family| machine.families.contains(family)))
+        || !ticket.ready.platform_fits(machine.os, machine.families)
     {
         return None;
     }

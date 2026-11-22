@@ -32,6 +32,10 @@ use crate::upkeep::regressions;
 #[path = "dispatch_machines.rs"]
 mod machines;
 
+#[path = "dispatch_families.rs"]
+mod families;
+pub use families::publish as publish_check_families;
+
 #[path = "dispatch_usage.rs"]
 mod usage;
 
@@ -229,16 +233,17 @@ fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
         .map_err(sql_failure)?;
     fleet::lapse(&tx, now).map_err(|e| store_failure(&e))?;
     let mut free = free.clone();
-    if let Some((name, os)) =
-        fleet::name_and_os_of(&tx, free.machine.as_str()).map_err(|e| store_failure(&e))?
+    if let Some((name, os, families)) =
+        fleet::dispatch_capabilities(&tx, free.machine.as_str()).map_err(|e| store_failure(&e))?
     {
-        if os != free.os.as_str() {
+        if os != free.os {
             return Err(failure(
                 400,
                 "request OS differs from the machine's registration",
             ));
         }
         free.name = Some(name);
+        free.families = families;
     }
     if free.name.is_none() {
         free.name = Some(free.machine.to_string());

@@ -13,7 +13,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use rusqlite::Connection;
 
-use ignite_core::config::Os;
 use ignite_core::dispatch::{self, ReadyTicket, Stage, TicketKind};
 use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, Budget};
 use ignite_core::fleet::{FleetSettings, MachineState};
@@ -550,6 +549,7 @@ fn asks(
             .map(|w| w.session.clone())
             .filter(|session| !reserved_sessions.contains(session))
             .collect();
+        let (os, families) = fleet::parse_dispatch_capabilities(&machine.os, &machine.families)?;
         let ask = match machine_asks::latest(conn, &machine.id)? {
             Some(ask) => {
                 let mut free = ask.free;
@@ -561,11 +561,7 @@ fn asks(
                 MachineId::new(machine.id.as_str()).ok().map(|id| {
                     let free = MachineFree {
                         machine: id,
-                        os: if machine.os == "windows" {
-                            Os::Windows
-                        } else {
-                            Os::Macos
-                        },
+                        os,
                         idle_workers: Vec::new(),
                         free_ticket_trees: 0,
                         free_cores: 0.0,
@@ -584,9 +580,9 @@ fn asks(
             None => None,
         };
         let ask = ask.map(|(asked, mut free)| {
-            if free.name.is_none() {
-                free.name = Some(machine.name.clone());
-            }
+            free.name = Some(machine.name.clone());
+            free.os = os;
+            free.families = families;
             (asked, free)
         });
         out.push((machine.name, machine.id, ask));

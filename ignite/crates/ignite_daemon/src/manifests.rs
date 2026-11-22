@@ -24,7 +24,8 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, PoisonError, RwLock};
 
-use ignite_core::config::Config;
+use ignite_core::config::{Config, Repository};
+use ignite_core::ids::Commit;
 use ignite_core::manifest::Manifest;
 
 use crate::trees::Trees;
@@ -179,6 +180,39 @@ impl Reload {
         self.trees.reload_products(&fresh);
         self.manifest.set(fresh);
         true
+    }
+}
+
+/// Publishes the latest reviewed check declarations for dispatch. The hub runs in a separate
+/// process from the daemon that fetches staging, so this reads the locally fetched commit.
+pub struct DispatchManifest {
+    pub repo: PathBuf,
+    pub repository: Repository,
+    pub published: Option<Commit>,
+}
+
+impl DispatchManifest {
+    pub fn refresh(&mut self, conn: &rusqlite::Connection) -> Result<(), String> {
+        let config = &self.repository;
+        let commit = ignite_git::refs::cached_tip(&self.repo, &config.remote, &config.staging)
+            .or_else(|error| match error {
+                ignite_core::traits::Error::NotFound(_) => {
+                    ignite_git::refs::cached_tip(&self.repo, &config.remote, &config.master)
+                }
+                other => Err(other),
+            })
+            .map_err(|error| error.to_string())?;
+        if self.published.as_ref() == Some(&commit) {
+            return Ok(());
+        }
+        let files = ignite_git::committed::text_files(&self.repo, &commit, &config.checks, "toml")
+            .map_err(|error| error.to_string())?;
+        let (manifest, _) =
+            Manifest::from_files_with_unknown(&files).map_err(|error| error.to_string())?;
+        ignite_hub::routes::dispatch::publish_check_families(conn, &manifest)
+            .map_err(|error| error.to_string())?;
+        self.published = Some(commit);
+        Ok(())
     }
 }
 

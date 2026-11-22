@@ -4440,6 +4440,28 @@ Other eligible providers divide the work while a provider is held. A standby
 takes work when no provider with a positive share can take it. When the hold
 ends, the provider returns to the mix at its configured share.
 
+### Check families in dispatch
+
+The hub reads check manifests from the latest locally fetched staging commit. It
+refreshes the dispatch declarations without restarting when manifest changes
+land. Until staging has been fetched, it uses the locally fetched verified
+branch. A read or parse failure leaves the previous declarations in use.
+
+For ordinary work, a file named in the ticket body or acceptance makes a
+regression check family required when it matches a path in the family's
+`inputs`, `package_inputs` or `digest_inputs`. Cargo dependency patterns, build
+product inputs and paths discovered while running checks are resolved by the
+landing gate. A regression ticket requires the families of its recorded failing
+checks. A ticket's explicit `needs_os` still constrains dispatch independently
+and limits path-based requirements to families that run on that system.
+
+For each required family, the machine must support one of its declared platforms
+and include the family in its latest reported list. An empty list means every
+family supported on that machine's operating system. The hub applies the same
+eligibility when comparing placement candidates, offering a lane successor and
+deciding whether an active machine takes precedence over a checks-only machine
+for a master blocker.
+
 ### Placement
 
 Daemons pull work when they can start workers. Alongside their regular

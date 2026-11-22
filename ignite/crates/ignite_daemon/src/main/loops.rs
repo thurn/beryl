@@ -26,7 +26,7 @@ use crate::idle::{Idle, ServerJobs};
 use crate::land::Landing;
 use crate::land::env::MachineTrees;
 use crate::loop_health::{LoopHealth, LoopTicker};
-use crate::manifests::Reload;
+use crate::manifests::{DispatchManifest, Reload};
 use crate::sched::Scheduler;
 use crate::server::{Context, Server};
 use crate::supervise::SupervisedLauncher;
@@ -577,6 +577,15 @@ pub fn serve_hub_at(
     let store = |e: ignite_store::StoreError| Error::Io(e.to_string());
     let conn = ignite_store::hub::open(&database).map_err(store)?;
     ignite_hub::routes::dispatch::set_hub_version(&conn, version).map_err(store)?;
+    let mut check_families = DispatchManifest {
+        repo: repo.to_owned(),
+        repository: config.repository.clone(),
+        published: None,
+    };
+    let family_conn = ignite_store::hub::open(&database).map_err(store)?;
+    if let Err(error) = check_families.refresh(&family_conn) {
+        eprintln!("ignite hub: could not load dispatch check families: {error}");
+    }
     let wordmark = read_wordmark(repo, &config);
     let server = |listen: &str| ignite_hub::server::HubServer {
         config: config.clone(),
@@ -595,6 +604,14 @@ pub fn serve_hub_at(
         let running = retry_bind(bind_for, || server(public).start_read_only())?;
         crash::spawn_loop("ignite-hub-public-accept", move || running.wait());
     }
+    crash::spawn_loop("ignite-hub-check-families", move || {
+        loop {
+            thread::sleep(MAIN_EVERY);
+            if let Err(error) = check_families.refresh(&family_conn) {
+                eprintln!("ignite hub: could not refresh dispatch check families: {error}");
+            }
+        }
+    });
     let upkeep = ignite_hub::upkeep::Upkeep::new(Some(dir.join("backups")))
         .map_err(store)?
         .with_rules(config.rules.clone())

@@ -109,11 +109,7 @@ pub fn why_nothing(free: &MachineFree, ready: &[ReadyTicket], epic_order: &[Grou
     }
     let runnable: Vec<&ReadyTicket> = in_order
         .into_iter()
-        .filter(|t| {
-            t.needs_os.is_none_or(|os| os == free.os)
-                && (free.families.is_empty()
-                    || t.families.iter().all(|f| free.families.contains(f)))
-        })
+        .filter(|t| super::platform_fits(free, t))
         .collect();
     let Some(smallest) = runnable
         .iter()
@@ -227,7 +223,7 @@ pub fn blocker_with(
     if let Some(reason) = worker_blocker() {
         return Some(reason);
     }
-    if !free.families.is_empty() && !ticket.families.iter().all(|f| free.families.contains(f)) {
+    if !ticket.families_fit(free.os, &free.families) {
         return Some("needs check families this machine cannot run".to_owned());
     }
     if ticket.kind != TicketKind::Regression

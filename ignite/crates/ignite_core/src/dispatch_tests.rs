@@ -286,7 +286,13 @@ fn a_ticket_needs_a_suitable_worker_a_tree_and_its_families() {
     let mut limited = free.clone();
     limited.families = vec!["rust".to_owned()];
     let mut ui = sonnet.clone();
-    ui.families = vec!["rust".to_owned(), "ui".to_owned()];
+    ui.families = ["rust", "ui"]
+        .into_iter()
+        .map(|name| RequiredFamily {
+            name: name.to_owned(),
+            platforms: Platforms::Any(crate::manifest::AnyPlatform::Any),
+        })
+        .collect();
     assert_eq!(next_for(&limited, &[ui], &ALL, None, &[]), None);
 
     // A ticket pinned elsewhere is never offered here, however idle this machine is.

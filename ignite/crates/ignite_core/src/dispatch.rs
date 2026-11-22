@@ -26,6 +26,7 @@ use std::cmp::Ordering;
 use crate::admission;
 use crate::config::Os;
 use crate::ids::{SessionId, TicketId};
+use crate::manifest::Platforms;
 use crate::pins::Pins;
 use crate::protocol::hub::{IdleWorker, MachineFree};
 use crate::shares::{Group, Unit};
@@ -57,14 +58,35 @@ pub struct ReadyTicket {
     pub labels: Vec<String>,
     /// Expected cores while in progress ([`admission::expected_cores`]).
     pub expected_cores: f64,
-    /// The check families its named files could bring into its gate.
-    pub families: Vec<String>,
+    /// The check families the worker must be able to run.
+    pub families: Vec<RequiredFamily>,
     /// The files it names.
     pub files: Vec<String>,
     /// An improvement ticket's estimated saving per week.
     pub saving: Option<(Unit, f64)>,
     pub pins: Pins,
     pub needs_os: Option<Os>,
+}
+
+/// A check family needed by a ticket and the systems that can run it.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RequiredFamily {
+    pub name: String,
+    pub platforms: Platforms,
+}
+
+impl ReadyTicket {
+    /// An empty machine family list represents every family supported on its OS.
+    pub fn families_fit(&self, os: Os, families: &[String]) -> bool {
+        self.families.iter().all(|required| {
+            required.platforms.supports(os)
+                && (families.is_empty() || families.contains(&required.name))
+        })
+    }
+
+    pub fn platform_fits(&self, os: Os, families: &[String]) -> bool {
+        self.needs_os.is_none_or(|needed| needed == os) && self.families_fit(os, families)
+    }
 }
 
 /// A ticket and the idle worker it goes to.
@@ -113,8 +135,7 @@ pub fn room(free: &MachineFree, in_progress: &[f64]) -> f64 {
 
 /// Whether the machine has the operating system and check families the ticket requires.
 pub fn platform_fits(free: &MachineFree, ticket: &ReadyTicket) -> bool {
-    ticket.needs_os.is_none_or(|os| os == free.os)
-        && (free.families.is_empty() || ticket.families.iter().all(|f| free.families.contains(f)))
+    ticket.platform_fits(free.os, &free.families)
 }
 
 /// Whether the scheduler admits the ticket's expected core use.

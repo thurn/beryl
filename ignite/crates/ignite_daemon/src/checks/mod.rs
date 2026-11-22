@@ -80,7 +80,7 @@ use ignite_core::config::Os;
 use ignite_core::hash::{self, HashParts};
 use ignite_core::ids::{CheckName, Commit, InputHash, Oid, SessionId, TicketId, TreeId};
 use ignite_core::inputs::CrateGraph;
-use ignite_core::manifest::{Adapter, Family, Manifest, Platforms};
+use ignite_core::manifest::{Adapter, Family, Manifest};
 use ignite_core::protocol::hub::IncompleteReason;
 use ignite_core::protocol::hub::{CachedResult, ListingKey, ResultKey};
 use ignite_core::protocol::{Class, Outcome};
@@ -565,10 +565,7 @@ impl Checks {
                     .as_ref()
                     .is_none_or(|list| list.contains(name))
             })
-            .filter(|(_, declared)| match &declared.family.platforms {
-                Platforms::Any(_) => true,
-                Platforms::Each(list) => list.contains(&self.settings.os),
-            })
+            .filter(|(_, declared)| declared.family.platforms.supports(self.settings.os))
             .map(|(name, declared)| (name.as_str(), &declared.family))
     }
 

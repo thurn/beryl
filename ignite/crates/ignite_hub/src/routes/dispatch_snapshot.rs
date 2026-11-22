@@ -1,6 +1,5 @@
 //! Observe the next hand-off without reserving a ticket or updating the dispatch queue.
 
-use ignite_core::config::Os;
 use ignite_core::dispatch::{self, ReadyTicket};
 use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, Budget, HandoffWait};
 use ignite_core::fleet::MachineState;
@@ -68,7 +67,8 @@ fn project_next_start(
 ) -> Result<()> {
     let now = result.at;
     let machine = beat.machine.as_str();
-    let (name, os, families) = registered_machine(conn, machine)?;
+    let (name, os, families) = fleet::dispatch_capabilities(conn, machine)?
+        .ok_or_else(|| StoreError::Invalid(format!("unknown machine {machine}")))?;
     let settings = fleet_settings::settings(conn)?;
     let state = settings.machine(&name).state;
     let pause = pause_block(conn, state, sample, now)?;
@@ -158,21 +158,6 @@ fn project_next_start(
         }
     }
     Ok(())
-}
-
-fn registered_machine(conn: &Connection, machine: &str) -> Result<(String, Os, Vec<String>)> {
-    let (name, os, families): (String, String, String) = conn.query_row(
-        "SELECT name, os, families FROM machines WHERE id = ?1",
-        [machine],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-    )?;
-    let os = match os.as_str() {
-        "macos" => Os::Macos,
-        "windows" => Os::Windows,
-        _ => return Err(StoreError::Invalid(format!("unknown machine OS {os}"))),
-    };
-    let families = serde_json::from_str(&families).unwrap_or_default();
-    Ok((name, os, families))
 }
 
 fn pause_block(

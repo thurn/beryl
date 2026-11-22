@@ -8,8 +8,6 @@
 //! - A ticket names its files as backquoted paths in its body or acceptance criteria. Areas are
 //!   their first two directories, because workspace package roots are in each machine's
 //!   `ignite.toml`, not at the hub.
-//! - The hub holds no check manifests, so a ticket's families are empty and every machine can
-//!   run them.
 //! - Dispatch resolves machine and provider pins independently through the ticket's ancestors.
 //! - The backlog's ratios for the improvement share come from `crate::rules::backlog`, which
 //!   reads last week's use from `meta`, never from `metrics` inside this transaction.
@@ -39,7 +37,7 @@ use ignite_core::time::Timestamp;
 use ignite_store::hub::{fleet, fleet_settings, provider_usage, releases, tickets};
 use ignite_store::{Result, StoreError};
 
-use super::{mix, placement, usage};
+use super::{families::Requirements, mix, placement, usage};
 use crate::{rules, upkeep::regressions};
 
 /// The labels of tickets the hub files itself, which are offered whether or not an epic is
@@ -381,7 +379,7 @@ struct Snapshot {
     reserved: HashMap<String, String>,
     /// For each ticket, the live tickets that depend on it.
     dependents: HashMap<String, Vec<String>>,
-    regressions: HashSet<String>,
+    requirements: Requirements,
     ready: Vec<TicketId>,
     /// The names, in lower case, of machines heard from within the fallback interval.
     heard: HashSet<String>,
@@ -437,16 +435,11 @@ impl Snapshot {
             }
         }
         let heard = pins::heard_machines(conn, now)?;
-        let mut statement =
-            conn.prepare("SELECT ticket FROM regressions WHERE state IN (?1, ?2)")?;
-        let regressions = statement
-            .query_map(held::FAILING, |row| row.get(0))?
-            .collect::<std::result::Result<_, _>>()?;
         Ok(Snapshot {
             nodes,
             reserved,
             dependents,
-            regressions,
+            requirements: Requirements::load(conn)?,
             // A ticket released by two sessions waits for a justiciar (see `releases`).
             ready: releases::offerable(conn, tickets::ready(conn, now)?)?,
             heard,
@@ -521,7 +514,7 @@ impl Snapshot {
             {
                 continue;
             }
-            if self.regressions.contains(id.as_str())
+            if self.requirements.is_regression(id.as_str())
                 && regressions::passing(conn, &ticket)?.is_some()
             {
                 continue;
@@ -549,7 +542,7 @@ impl Snapshot {
     /// releasing it (only an `open` ticket gets here) is what asks for it to be worked. A ticket
     /// started by name skips these rules, because `/claims` does not ask the queue.
     fn offered(&self, ticket: Ticket) -> Option<Ticket> {
-        let filed_by_hub = self.regressions.contains(ticket.id.as_str())
+        let filed_by_hub = self.requirements.is_regression(ticket.id.as_str())
             || ticket.metadata.contains_key(REVERTED_KEY)
             || ticket
                 .labels
@@ -589,12 +582,15 @@ impl Snapshot {
         now: Timestamp,
     ) -> ReadyTicket {
         let files = named_files(&format!("{}\n{}", ticket.body, ticket.acceptance));
+        let families =
+            self.requirements
+                .for_ticket(ticket.id.as_str(), ticket.needs_os, &files, landed);
         let expected_cores = expected_cores(&ticket, &files, history, landed, now);
         let saving = ticket
             .saving
             .as_ref()
             .and_then(|Saving { unit, amount, .. }| Unit::parse(unit).map(|unit| (unit, *amount)));
-        let kind = if self.regressions.contains(ticket.id.as_str()) {
+        let kind = if self.requirements.is_regression(ticket.id.as_str()) {
             TicketKind::Regression
         } else if ticket.saving.is_some() {
             TicketKind::Improvement
@@ -610,7 +606,7 @@ impl Snapshot {
             chain: self.chain(ticket.id.as_str(), memo, &mut HashSet::new()),
             created_at: ticket.created_at,
             expected_cores,
-            families: Vec::new(),
+            families,
             files,
             saving,
             labels: ticket.labels,

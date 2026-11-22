@@ -11,7 +11,10 @@ fn ready() -> ReadyTicket {
         created_at: Timestamp::EPOCH,
         labels: Vec::new(),
         expected_cores: 2.0,
-        families: vec!["native".into()],
+        families: vec![crate::dispatch::RequiredFamily {
+            name: "native".into(),
+            platforms: crate::manifest::Platforms::Any(crate::manifest::AnyPlatform::Any),
+        }],
         files: vec!["engine/src/main.rs".into(), "client/src/main.rs".into()],
         saving: None,
         pins: Pins::default(),
@@ -22,7 +25,6 @@ fn ready() -> ReadyTicket {
 fn ticket(ready: &ReadyTicket) -> PlacementTicket<'_> {
     PlacementTicket {
         ready,
-        needs_os: ready.needs_os,
         pins: &ready.pins,
     }
 }

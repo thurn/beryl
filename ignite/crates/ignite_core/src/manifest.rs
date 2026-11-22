@@ -54,6 +54,14 @@ pub enum AnyPlatform {
 }
 
 impl Platforms {
+    /// Whether the family runs on this operating system.
+    pub fn supports(&self, os: Os) -> bool {
+        match self {
+            Self::Any(_) => true,
+            Self::Each(systems) => systems.contains(&os),
+        }
+    }
+
     /// Whether one pass on any operating system is enough.
     pub fn is_any(&self) -> bool {
         matches!(self, Platforms::Any(_))
