@@ -1,21 +1,9 @@
 # Beryl 3D architecture
 
-*How Beryl 3D's client code is organized, and the rules that keep it that way.
-Decided on 2026-11-20 in a question-and-answer session with the project's owner,
-from a reading of the client as it stood that day and of the 209 fixes it had
-taken in the three weeks before.*
-
-Beryl 3D is the native 3D client of Beryl (`rust/beryl3d`). Its first design,
-[Beryl 3D](beryl-3d.md), specified a client core that is a pure function of its
-inputs, a renderer, hosts, and tools that let a coding agent drive the client
-from a terminal. That design was built, and it works: the client has every
-screen, prompt shape, verb, effect and mark that the web interface has.
-
-This document replaces the parts of that design that describe how the client
-core is organized inside. Where the two disagree, this one is right. The older
-document is still the reference for what this one does not cover: the frame and
-its determinism, hosts, rendering and its two visual tiers, card faces, threads,
-sound, bug reports and the performance measurements.
+Beryl 3D is Beryl's native client (`rust/beryl3d`). This document describes the
+client core's organization and the constraints its tools check. See
+[Beryl 3D](beryl-3d.md) for the frame contract, determinism, hosts, rendering,
+card faces, threads, sound and bug reports.
 
 Terms used throughout:
 
@@ -24,7 +12,7 @@ Terms used throughout:
   moment, and **a script** is the list of animation steps that turns the
   previous view into the next. Both are defined in `beryl_protocol`.
 - **The client core** is the code that turns views, scripts and input into a
-  frame. Until this design is built it is one crate, `beryl_scene`.
+  frame.
 - **A recording** is the session's messages to one seat, saved, which the tools
   replay through the client with no rules engine running.
 - **A level** is one of the three groups of crates described below. The word
@@ -72,13 +60,11 @@ Later sections refer to these by number.
 - **A2. Three levels of crates: toolkit, game and app.** The toolkit level knows
   nothing about Magic: it names no type of `beryl_protocol`, no zone, no prompt
   and no card. A check holds the levels apart.
-- **A3. The client core is divided in a short freeze, then built out in
-  parallel.** The division into crates is a chain of changes that preserve
-  behavior, during which no other Beryl 3D work lands. Everything else is built
-  afterward on the new structure, as many changes at once as the work allows.
+- **A3. The division into crates preserved behavior.** The split landed before
+  changes to arrangement, layout profiles and features.
 - **A4. Layout profiles: any number, and two are shipped.** A profile describes
   the table and the screen for one class of window. Desktop and phone portrait
-  are the two shipped. The word `phone` appears only inside the phone profile.
+  are the two shipped. Features use the profile's slots and size class.
 - **A5. Frame cost is held to budgets, and its trend is recorded.** A board's
   work counters must stay under a fixed budget. The measured counts are not
   committed. A job at the tip of `staging` records them and files a ticket when
@@ -113,9 +99,9 @@ choosing which recordings run. The others are unchanged.
 
 ## Levels and crates
 
-The client core becomes fifteen crates in three levels, with one more that holds
-the web-parity code. A crate may depend on crates listed above it in its own
-level and on any crate of a lower level, and on nothing else in this table.
+The client core has fifteen crates in three levels, with one more that holds the
+web-parity code. A crate may depend on crates listed above it in its own level
+and on any crate of a lower level, and on nothing else in this table.
 
 | Crate          | Level    | What it holds                                                                                                           | Comes from, in `beryl_scene/src`                                                         |
 | -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -136,11 +122,10 @@ level and on any crate of a lower level, and on nothing else in this table.
 | `app_client`   | app      | `Client`: the feature registry, routing, session commands and the test driver that runs the client                      | `client/`, `command.rs`, `settings.rs`, parts of `driver/`                               |
 | `scaffold_web` | scaffold | Fitting rows and piles to the web interface's positions; deleted at the switch                                          | `table/web_fit.rs`                                                                       |
 
-The crates that are not part of the client core keep their names and jobs:
-`beryl_render`, `beryl_assets`, `beryl_host`, `beryl_inspect`, `beryl_pictures`,
-`beryl_record` and `beryl_3d`. `beryl_render` and `beryl_assets` depend on
-toolkit crates only, so an edit to a prompt no longer rebuilds the renderer.
-`beryl_scene` is deleted.
+The supporting crates are `beryl_render`, `beryl_assets`, `beryl_host`,
+`beryl_inspect`, `beryl_pictures`, `beryl_record` and `beryl_3d`. `beryl_render`
+and `beryl_assets` depend on toolkit crates only, so an edit to a prompt no
+longer rebuilds the renderer.
 
 Rules, each held by the `levels` check from `data/beryl3d/levels.json`:
 
@@ -268,11 +253,11 @@ module in `game_table` for what data cannot say.
 - **A feature asks for a slot by name**, as `slot("prompt.dock")`, and for the
   profile's **size class**, compact or regular, when its content differs by
   size. It never asks which profile is in use.
-- **The words `phone` and `desktop` appear only in the profiles** and their
-  data, which the `profile-words` check holds.
+- **Profile names belong in their definitions and data.** The `profile-words`
+  check prevents new uses outside those files and tracks remaining identifiers.
 - **Adding a profile** is adding a data file, a module and a row of the test
-  matrix. A third profile used only by tests proves that no feature needs to
-  change.
+  matrix. The wide-compact preview exercises the same features with different
+  slots.
 
 ## Features
 
@@ -337,9 +322,8 @@ emitter, a parameter of the subject's own surface (whiten, tint, dissolve,
 opacity), a shake of the picture, and a number that floats away. A layer may be
 marked for the Enhanced tier only.
 
-The 14 effects become 14 entries that draw what the code drew. A new effect is a
-data entry and a story, with no Rust and no shader change unless it needs a new
-primitive.
+The 14 effects are defined in JSON. An effect's drawing needs a data entry and a
+story. Changes to the primitive set belong in code.
 
 Each definition in `data/beryl3d/effects/` names its default anchor. The shared
 step timing supplies the effect's duration from `data/ui-conventions.json` and
@@ -439,9 +423,8 @@ an effect, a feature's state, and a table with its view and script.
 
 ## The agent interface
 
-The first design's rules for `just b3d` stand: one entry point, commands that
-are words, nothing to guess, output that can be pasted back, and bounded output.
-Four commands are added.
+The [command conventions](beryl-3d.md#the-agent-interface) apply to the
+architecture tools:
 
 - **`just b3d map [kind]`** prints the client's parts from its own registries:
   crates by level, features, containers, profiles and their slots, verbs,
@@ -473,14 +456,13 @@ say only what a program cannot.
 
 - **The interface checks** are generic, as before, with "relations hold" added.
   They run on every story and on the corpus.
-- **The corpus** holds the first recording by name for each distinct
-  **signature**, plus every fixture. A signature covers what the client can tell
-  apart in a recording: the shape of each view (how many objects in each zone,
-  grouped as the table groups them), each script's verbs and beats, each
-  prompt's shape and its numbers of candidates and buttons, and each text's
-  measured number of lines. Card names and rules text are left out.
-  `data/beryl3d/corpus.txt` names the corpus, and the recordings pack built
-  before a landing holds only those recordings.
+- **The corpus** selects recordings by distinct **signature** and includes every
+  fixture. A signature covers what the client can tell apart in a recording: the
+  shape of each view (how many objects in each zone, grouped as the table groups
+  them), each script's verbs and beats, each prompt's shape and its numbers of
+  candidates and buttons, and each text's measured number of lines. Card names
+  and rules text are left out. `data/beryl3d/corpus.txt` names the corpus, and
+  the recordings pack built before a landing holds only those recordings.
 - **At the tip**, a job with no deadline records every moment of every card,
   runs the interface checks on all of them, and files a ticket naming any
   signature the corpus lacks, with the command that adds it.
@@ -522,8 +504,8 @@ kept where one change can remove it:
 - `rust/beryl3d/crates/scaffold_web/` holds the fit of rows and piles and the
   card shear that matches the projected width of the web cards. Its
   `rust/beryl3d/crates/scaffold_web/web-fit.json` holds the copied stage
-  measurements. The switch removes the workspace member and dependency,
-  `app_client`'s default `web-fit` feature, and its installation in
+  measurements. Retiring the web client removes the workspace member and
+  dependency, `app_client`'s default `web-fit` feature, and its installation in
   `Client::new`. The `RegionFit` hook in `game_table` defaults to the layout
   profile's regions and the camera fitted to Arena.
 - `tools/src/beryl_tools/beryl3d/match/`, `data/beryl3d/match/`,
@@ -531,31 +513,8 @@ kept where one change can remove it:
   `data/beryl3d/timeline-parity.json`, `data/beryl3d/parity.json` and the
   `web-match` skill, including its link in `.claude/skills/`.
 
-The counts in `web-match.json` may only go down while this design is built. The
-change that makes the switch deletes everything in this list.
-
-## How it is built
-
-1. **The contract.** The new crates are added empty, with `levels.json`, the
-   `levels` check and Ignite's rebuild counts for the client as it stands.
-2. **The division.** No other Beryl 3D change lands during this step. First the
-   36 mutual imports between modules are removed, so that every import points
-   down the table above. Then the modules move into their crates from the bottom
-   up, with `beryl_scene` left as a crate that only re-exports them, so that
-   everything else still compiles after each move. The last move deletes
-   `beryl_scene`. Every interface test and every gate passes after each change,
-   because nothing but the paths has changed.
-3. **The build-out**, in parallel: the tree and its relations, the arrangement
-   solver and each zone's move onto it, profiles, features, the data store and
-   effects, the toolkit's capabilities, stories, the agent tools, budgets and
-   the corpus. Budgets do not touch the client core and are built during the
-   division.
-4. **The close.** The toolkit crates stop naming protocol types, the guides are
-   rewritten to their caps, and [Beryl 3D](beryl-3d.md) is cut down to what this
-   document does not replace.
-
-What a player sees does not change at any step, except that a state the old code
-got wrong is right.
+The counts in `web-match.json` may only go down. Retiring the web client removes
+this scaffold and the reference checks.
 
 ## Where a thing goes
 

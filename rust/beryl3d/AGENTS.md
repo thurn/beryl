@@ -1,8 +1,9 @@
 # Working in Beryl 3D
 
 Beryl 3D is Beryl's native client. See [Beryl 3D](../../docs/beryl-3d.md) for
-what it draws and [the architecture](../../docs/beryl-3d-architecture.md) for
-the client core's contracts and crate boundaries.
+the frame contract, rendering and hosts. See
+[Beryl 3D architecture](../../docs/beryl-3d-architecture.md) for the client
+core's crate boundaries, arrangement, layout profiles and checks.
 
 ## Client core
 

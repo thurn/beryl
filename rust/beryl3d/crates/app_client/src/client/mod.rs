@@ -1,5 +1,5 @@
 //! The client core's two entry points, `Client::handle` and `Client::frame`, and the queues a
-//! host drains after each frame (docs/beryl-3d.md, "Components" and "Hosts"). Neither entry
+//! host drains after each frame (docs/beryl-3d.md, "The frame" and "Hosts"). Neither entry
 //! point reads a clock, starts a thread, takes a lock or touches a file, so the same calls give
 //! the same frames.
 

@@ -1,5 +1,5 @@
 """`just b3d stand-in`: the desktop app plays a whole game against `expert`, with this script
-standing in for the person (docs/beryl-3d.md, "Manual QA", "A whole game on the desktop").
+standing in for the person (docs/beryl-3d.md, "Driving the running app").
 
 The script starts the debug app with no window, picks `expert` on the start screen and answers
 every prompt through the app's live socket (`just b3d live`), choosing by a fixed rule: the
