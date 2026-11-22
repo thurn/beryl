@@ -35,6 +35,11 @@ pub(super) struct HandOrder {
 }
 
 impl HandOrder {
+    /// Exchanges the arrival positions of two cards still in the hand.
+    pub(super) fn trade(&mut self, first: usize, second: usize) {
+        self.turns.swap(first, second);
+    }
+
     /// An order that knows no hand yet, its lists made room for as many objects as a table
     /// holds (`OBJECTS`), so that arranging a view allocates nothing.
     pub(super) fn new() -> Self {

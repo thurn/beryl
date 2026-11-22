@@ -28,6 +28,7 @@ mod history;
 mod hold;
 pub(crate) use compile::nanoseconds;
 mod hand_order;
+mod hand_play;
 mod index;
 mod notices;
 mod part;

@@ -24,6 +24,7 @@ pub(super) struct Fall {
     pub slot: usize,
     pub from: Pose,
     pub since: Option<u64>,
+    pub awaiting_play: bool,
 }
 
 impl Fall {

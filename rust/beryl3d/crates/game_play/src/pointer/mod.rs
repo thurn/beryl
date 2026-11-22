@@ -165,8 +165,39 @@ impl Pointer {
             slot: held.slot,
             from: held.pose(camera, &self.heft, tuning),
             since: None,
+            awaiting_play: false,
         });
         Some(held.slot)
+    }
+
+    /// Holds a just released card in place while its play is with the session.
+    pub(crate) fn await_play(&mut self, slot: usize) {
+        if let Some(fall) = self.fall.as_mut().filter(|fall| fall.slot == slot) {
+            fall.awaiting_play = true;
+        }
+    }
+
+    /// Starts the return to the fan if the session did not play the released card.
+    pub(crate) fn resume_fall(&mut self, slot: usize) {
+        if let Some(fall) = self.fall.as_mut().filter(|fall| fall.slot == slot) {
+            fall.awaiting_play = false;
+        }
+    }
+
+    /// Moves the pointer's poses to the slots that will draw them after two cards trade places.
+    pub(crate) fn trade(&mut self, first: usize, second: usize) {
+        let trade = |slot| match slot {
+            slot if slot == first => second,
+            slot if slot == second => first,
+            slot => slot,
+        };
+        self.hovered = self.hovered.map(trade);
+        for lift in &mut self.lifts {
+            lift.slot = trade(lift.slot);
+        }
+        if let Some(fall) = &mut self.fall {
+            fall.slot = trade(fall.slot);
+        }
     }
 
     /// The slot of the card being carried.
@@ -196,7 +227,9 @@ impl Pointer {
     /// last frame and forgets one that is over. The client calls this before it builds each
     /// frame.
     pub fn advance(&mut self, now: u64, tuning: &PointerTuning) {
-        if let Some(fall) = &mut self.fall {
+        if let Some(fall) = &mut self.fall
+            && !fall.awaiting_play
+        {
             fall.since.get_or_insert(now);
         }
         if let Some(held) = self.held {
@@ -283,7 +316,7 @@ impl Pointer {
             || self.held().is_some()
             || self
                 .fall
-                .is_some_and(|fall| !fall.done(now, tuning.fall_ms))
+                .is_some_and(|fall| !fall.awaiting_play && !fall.done(now, tuning.fall_ms))
             || self.shake.is_some_and(|(_, shake)| !shake.done(now))
     }
 

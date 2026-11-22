@@ -173,13 +173,17 @@ impl Client {
             Input::Reply(Reply::CardSearch(text, hits)) => self.take_token_hits(text, hits),
             Input::Reply(Reply::TableAct(reply)) => self.take_table_reply(reply),
             Input::Reply(Reply::Click(Ok(reply))) => {
-                if self.features.prompts.reply(reply, self.views, &self.show) {
+                if self
+                    .features
+                    .prompts
+                    .reply(reply, self.views, &mut self.show)
+                {
                     self.prepare_counts();
                     self.show_screen();
                 }
             }
             Input::Reply(Reply::Click(Err(_))) => {
-                self.features.prompts.rejected();
+                self.features.prompts.rejected(&mut self.show);
             }
             Input::Lobby(update) => self.take_lobby(*update),
             Input::Reply(Reply::TableLobby(lobby)) => self.take_lobby_reply(lobby),
@@ -266,7 +270,7 @@ impl Client {
         }
         self.features
             .prompts
-            .take_view(&update.view.status, self.views, &self.show);
+            .take_view(&update, self.views, &mut self.show);
         self.prepare_pill(&update.view);
         self.receive_stops(&update);
         // The same view sent again says nothing new happened.
@@ -505,7 +509,7 @@ impl Client {
     /// Clicks the open prompt, naming the decision and the prompt's state the click was made
     /// on. Does nothing while no prompt is open.
     fn click(&mut self, click: Click) {
-        if let Some(request) = self.features.prompts.click(click) {
+        if let Some(request) = self.features.prompts.click(click, &mut self.show) {
             self.commands.push_back(SessionCommand::Click(request));
         }
     }

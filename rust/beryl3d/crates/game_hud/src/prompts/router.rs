@@ -2,7 +2,8 @@
 
 use std::collections::VecDeque;
 
-use beryl_protocol::prompt::{Click, ClickReply, ClickRequest, PromptView, ShapeBody};
+use beryl_protocol::GameUpdate;
+use beryl_protocol::prompt::{Click, ClickReply, ClickRequest, PromptView, Purpose, ShapeBody};
 use beryl_protocol::protocol::{DecisionId, ObjectId, Side, Status};
 use beryl_protocol::script::{Arrow, OwnStep, OwnTimings, Subject, Verb};
 use game_play::light::Aim;
@@ -23,7 +24,9 @@ pub struct Router {
     suggesting: Suggesting,
     /// Each reply consumes the oldest click, even if its decision has closed.
     /// Keep those entries when a view opens the next decision.
-    clicks: VecDeque<DecisionId>,
+    clicks: VecDeque<ClickRequest>,
+    /// The hand card clicked or dropped at a priority, until the answer's script arrives.
+    hand_play: Option<(DecisionId, ObjectId)>,
     record: Option<Vec<prompts::OwnRecord>>,
     source: Option<ObjectId>,
     was_source: Option<ObjectId>,
@@ -207,14 +210,20 @@ impl Router {
     /// while that click's decision is still open: the session may already have sent the view
     /// of the next decision, which an `Answered` for the one before must not close. A reply
     /// with no click in flight is for the open decision.
-    pub fn reply(&mut self, reply: ClickReply, views: usize, show: &Show) -> bool {
+    pub fn reply(&mut self, reply: ClickReply, views: usize, show: &mut Show) -> bool {
         let open = self.decision();
-        let clicked = self.clicks.pop_front().or(open);
-        if clicked.is_none() || clicked != open {
+        let clicked = self.clicks.pop_front().map(|click| click.decision).or(open);
+        if open.is_none() || clicked != open {
             return false;
         }
         let next = match reply {
-            ClickReply::Open { prompt } => open.map(|decision| (decision, *prompt)),
+            ClickReply::Open { prompt } => {
+                // The choice among an offered card's ways may still play that same card.
+                if !prompt.is(Purpose::Act) {
+                    self.cancel_hand_play(show);
+                }
+                open.map(|decision| (decision, *prompt))
+            }
             // The views that follow the answer bring the next prompt.
             ClickReply::Answered => None,
         };
@@ -223,20 +232,43 @@ impl Router {
     }
 
     /// The rejected click still takes its place in the session's reply order.
-    pub fn rejected(&mut self) {
-        self.clicks.pop_front();
+    pub fn rejected(&mut self, show: &mut Show) {
+        if let Some(request) = self.clicks.pop_front()
+            && let Click::On {
+                on: Subject::Object { slot },
+            } = request.click
+            && self.hand_play == Some((request.decision, slot))
+        {
+            self.cancel_hand_play(show);
+        }
+    }
+
+    fn cancel_hand_play(&mut self, show: &mut Show) {
+        if let Some((_, slot)) = self.hand_play.take() {
+            show.cancel_hand_play(slot);
+        }
     }
 
     /// A click names the decision and revision the player saw. The reply is
     /// associated with that decision even if a newer view arrives first.
-    pub fn click(&mut self, click: Click) -> Option<ClickRequest> {
+    pub fn click(&mut self, click: Click, show: &mut Show) -> Option<ClickRequest> {
         let (decision, prompt) = self.prompt.as_ref()?;
-        self.clicks.push_back(*decision);
-        Some(ClickRequest {
+        let request = ClickRequest {
             decision: *decision,
             revision: prompt.revision,
             click,
-        })
+        };
+        if self.hand_play.is_none()
+            && prompt.is(Purpose::Priority)
+            && let Click::On {
+                on: Subject::Object { slot },
+            } = click
+            && show.begin_hand_play(slot)
+        {
+            self.hand_play = Some((*decision, slot));
+        }
+        self.clicks.push_back(request);
+        Some(request)
     }
 
     #[must_use]
@@ -246,13 +278,24 @@ impl Router {
 
     /// Accepts the prompt sent with a view. A view can replace a decision while
     /// that decision's click is still in flight.
-    pub fn take_view(&mut self, status: &Status, views: usize, show: &Show) {
-        let prompt = if let Status::Deciding { decision } = status {
+    pub fn take_view(&mut self, update: &GameUpdate, views: usize, show: &mut Show) {
+        let prompt = if let Status::Deciding { decision } = &update.view.status {
             self.source = decision.source;
             Some((decision.id, (*decision.prompt).clone()))
         } else {
             None
         };
+        let next = prompt.as_ref().map(|(decision, _)| *decision);
+        if let Some((decision, slot)) = self.hand_play
+            && next != Some(decision)
+        {
+            self.hand_play = None;
+            if update.session == decision.session {
+                show.finish_hand_play(slot, &update.view);
+            } else {
+                show.cancel_hand_play(slot);
+            }
+        }
         self.set_prompt(prompt, views, show);
     }
 
