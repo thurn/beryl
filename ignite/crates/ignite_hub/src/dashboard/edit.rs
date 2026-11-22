@@ -16,9 +16,10 @@
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
 
+use ignite_core::fleet::FleetSettings;
 use ignite_core::protocol::tickets::Status;
 
-use super::components::esc;
+use super::components::{self as c, Tone, esc};
 
 /// A 14-pixel pencil, drawn with the text color.
 const PENCIL: &str = "<svg viewBox=\"0 0 16 16\" aria-hidden=\"true\" \
@@ -82,12 +83,69 @@ pub(super) fn allocation(
     if !editable {
         return view;
     }
+    allocation_property(field, label, local, &fallback, &view)
+}
+
+/// A category heading shows the effective number, including the inherited value.
+pub(super) fn allocation_chip(
+    field: &str,
+    label: &str,
+    local: Option<u32>,
+    inherited: u32,
+    editable: bool,
+) -> String {
+    let value = local.unwrap_or(inherited);
+    let hint = match (local, value) {
+        (None, 0) => "Allocation inherited · Parked",
+        (None, _) => "Allocation inherited",
+        (Some(0), _) => "Allocation · Parked",
+        _ => "Allocation",
+    };
+    let tone = if local.is_none() || value == 0 {
+        Tone::Muted
+    } else {
+        Tone::Neutral
+    };
+    let view = c::chip(&value.to_string(), tone, Some(hint));
+    if !editable {
+        return view;
+    }
+    allocation_property(
+        field,
+        label,
+        local,
+        &format!("Inherited ({inherited})"),
+        &view,
+    )
+}
+
+fn allocation_property(
+    field: &str,
+    label: &str,
+    local: Option<u32>,
+    fallback: &str,
+    view: &str,
+) -> String {
     let raw = local.map(|n| n.to_string()).unwrap_or_default();
     let view = format!(
         "{view}<template class=\"c-edit-inherited\">{}</template>",
-        esc(&fallback)
+        esc(fallback)
     );
     property(field, label, "allocation", &view, &raw)
+}
+
+/// The settings and API address for every fleet allocation editor on the page.
+pub(super) fn fleet_allocation_context(
+    settings: &FleetSettings,
+    project: &str,
+    body: &str,
+) -> String {
+    let settings = serde_json::to_string(settings).unwrap_or_default();
+    format!(
+        r#"<div id="c-allocation-fleet" data-api="/{}/api/fleet" data-settings="{}">{body}</div>"#,
+        esc(project),
+        esc(&settings),
+    )
 }
 
 /// A dropdown whose choices are labels. An empty value removes the ticket's local pin.

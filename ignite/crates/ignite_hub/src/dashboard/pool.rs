@@ -261,12 +261,7 @@ fn allocation_controls(
     let Some(project) = editable else {
         return body;
     };
-    let settings = serde_json::to_string(settings).unwrap_or_default();
-    format!(
-        r#"<div id="c-allocation-fleet" data-api="/{}/api/fleet" data-settings="{}">{body}</div>"#,
-        esc(project),
-        esc(&settings),
-    )
+    super::edit::fleet_allocation_context(settings, project, &body)
 }
 
 /// The `epics` page: which epics are active and their worker shares, with the tickets in

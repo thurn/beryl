@@ -294,7 +294,7 @@
     let refreshing = false;
     let pendingTickets = new Set();
     let pendingStatus = false;
-    let pendingAttention = false;
+    let pendingBoard = false;
     let resync = false;
 
     // An open editor (edit.js) holds back live updates until it closes and sends
@@ -357,14 +357,14 @@
 
     async function flushChanges() {
         if (refreshing || navigating || suspended || editing()) return;
-        // Attention is at the top of the ticket board, outside the status panel.
+        // Attention and pool allocations belong to the ticket board, outside the status panel.
         const tickets = resync || (home()
-            ? pendingTickets.size > 0 || pendingAttention
+            ? pendingTickets.size > 0 || pendingBoard
             : [...pendingTickets].some(watching));
         const status = home() && pendingStatus;
         pendingTickets.clear();
         pendingStatus = false;
-        pendingAttention = false;
+        pendingBoard = false;
         if (!tickets && !status) return;
         const catchingUp = resync;
         const cursor = since;
@@ -417,10 +417,11 @@
         } else if (batch.seq > since) {
             since = batch.seq;
             const tickets = batch.changes.filter((change) => change.kind === "ticket" && change.ticket);
-            if (tickets.length) pages.clear();
+            const allocations = batch.changes.some((change) => change.kind === "allocation");
+            if (tickets.length || allocations) pages.clear();
             for (const change of tickets) pendingTickets.add(change.ticket);
             pendingStatus ||= batch.changes.some((change) => change.kind !== "ticket");
-            pendingAttention ||= batch.changes.some((change) => change.kind === "attention");
+            pendingBoard ||= allocations || batch.changes.some((change) => change.kind === "attention");
         }
         flushChanges();
     }

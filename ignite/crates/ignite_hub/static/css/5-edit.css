@@ -38,6 +38,7 @@
 }
 
 .c-section-title:hover .c-edit-button,
+.c-subsection-title:hover .c-edit-button,
 .c-title:hover .c-edit-button,
 .c-meta-item:hover .c-edit-button,
 .c-edit-button:focus-visible {
@@ -85,6 +86,16 @@
 .c-editable.c-saving {
   opacity: 0.55;
   transition: opacity var(--dur-2) var(--ease-out);
+}
+
+/* The allocation editor sits beside the category heading. Let it wrap on a phone. */
+:is(.c-section-title, .c-subsection-title):has([data-kind="allocation"]) {
+  flex-wrap: wrap;
+}
+
+:is(.c-section-title, .c-subsection-title) [data-kind="allocation"] {
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* The editors. */

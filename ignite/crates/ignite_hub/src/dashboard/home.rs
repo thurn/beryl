@@ -4,10 +4,15 @@
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
 
+use std::collections::BTreeMap;
+
 use rusqlite::Connection;
 
+use ignite_core::fleet::FleetSettings;
 use ignite_core::protocol::tickets::Status;
+use ignite_core::shares::{DEFAULT_GENERAL_ALLOCATION, Source};
 use ignite_core::time::Timestamp;
+use ignite_store::hub::fleet_settings;
 
 use super::attention;
 use super::common::{
@@ -15,6 +20,7 @@ use super::common::{
 };
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
 use super::data::{Forecasts, HomeCard, ReadError, home_data};
+use super::edit;
 use super::references::ticket_url;
 use crate::upkeep::filing::HUB_LABEL;
 use crate::upkeep::justiciar;
@@ -38,6 +44,9 @@ const AUTOMATIC: [(&str, &[&str]); 10] = [
     ("Check verdicts", &["ci-check"]),
     ("Filed by the hub", &[HUB_LABEL]),
 ];
+
+// Incidents and regressions are shown first, before the pools for ordinary work.
+const URGENT_GROUPS: usize = 2;
 
 /// The index in [`AUTOMATIC`] of the group a ticket with `labels` goes in, if any.
 fn automatic_group(labels: &[String]) -> Option<usize> {
@@ -64,6 +73,8 @@ fn page(
     forecasts: &Forecasts,
     attention_cards: Vec<String>,
     seq: &str,
+    settings: &FleetSettings,
+    editable: Option<&str>,
 ) -> PageOptions {
     let mut active: Vec<&HomeCard> = Vec::new();
     let mut epics: Vec<&HomeCard> = Vec::new();
@@ -72,6 +83,8 @@ fn page(
     let mut deferred: Vec<&HomeCard> = Vec::new();
     let mut bug_reports: Vec<&HomeCard> = Vec::new();
     let mut groups: Vec<Vec<&HomeCard>> = AUTOMATIC.iter().map(|_| Vec::new()).collect();
+    let mut upkeep_groups = groups.clone();
+    let mut sources: BTreeMap<Source, Vec<&HomeCard>> = BTreeMap::new();
 
     for ticket in cards {
         let group = automatic_group(&ticket.labels);
@@ -82,6 +95,16 @@ fn page(
             deferred.push(ticket);
         } else if ticket.labels.iter().any(|label| label == "bug-report") {
             bug_reports.push(ticket);
+        } else if let Some(group) = group.filter(|index| *index < URGENT_GROUPS) {
+            groups[group].push(ticket);
+        } else if let Some(source) = ticket.source {
+            if source == Source::Upkeep
+                && let Some(group) = group.filter(|index| AUTOMATIC[*index].1 != [HUB_LABEL])
+            {
+                upkeep_groups[group].push(ticket);
+            } else {
+                sources.entry(source).or_default().push(ticket);
+            }
         } else if let Some(group) = group {
             groups[group].push(ticket);
         } else if ticket.card.parent.is_none() {
@@ -129,48 +152,113 @@ fn page(
         }))
     };
 
-    let automatic_total: usize = groups.iter().map(Vec::len).sum();
-    let automatic_body: String = groups
+    let allocations = settings.allocations.clone().unwrap_or_default();
+    let general = allocations.general.unwrap_or(DEFAULT_GENERAL_ALLOCATION);
+    let general_chip = edit::allocation_chip(
+        "general",
+        "standalone tickets allocation",
+        allocations.general,
+        DEFAULT_GENERAL_ALLOCATION,
+        editable.is_some(),
+    );
+    let grouped = |(index, group): (usize, &Vec<&HomeCard>), level| {
+        c::subsection(
+            AUTOMATIC[index].0,
+            &grid(group, true),
+            Some(group.len()),
+            level,
+        )
+    };
+    let upkeep_total = upkeep_groups.iter().map(Vec::len).sum::<usize>();
+    let automatic_total = groups.iter().map(Vec::len).sum::<usize>()
+        + sources.values().map(Vec::len).sum::<usize>()
+        + upkeep_total;
+    let automatic_body = groups
         .iter()
+        .take(URGENT_GROUPS)
         .enumerate()
         .filter(|(_, group)| !group.is_empty())
-        .map(|(index, group)| {
-            c::subsection(AUTOMATIC[index].0, &grid(group, true), Some(group.len()), 4)
-        })
-        .collect();
+        .map(|group| grouped(group, 4))
+        .chain(Source::ALL.into_iter().map(|source| {
+            let label = if source == Source::Flaky {
+                "Flaky checks"
+            } else {
+                source.label()
+            };
+            let chip = edit::allocation_chip(
+                source.key(),
+                &format!("{label} allocation"),
+                allocations.sources.get(&source).copied(),
+                general,
+                editable.is_some(),
+            );
+            let cards = sources.get(&source).map_or(&[][..], Vec::as_slice);
+            let mut body = grid(cards, true);
+            let mut count = cards.len();
+            if source == Source::Upkeep {
+                body.extend(
+                    upkeep_groups
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, group)| !group.is_empty())
+                        .map(|group| grouped(group, 5)),
+                );
+                count += upkeep_total;
+            }
+            c::subsection_with_control(label, &body, Some(count), 4, &chip)
+        }))
+        .chain(
+            groups
+                .iter()
+                .enumerate()
+                .skip(URGENT_GROUPS)
+                .filter(|(_, group)| !group.is_empty())
+                .map(|group| grouped(group, 4)),
+        )
+        .collect::<String>();
     let sections = [
-        ("Epics", "epics", epics.len(), grid(&epics, false)),
-        ("Tickets", "tickets", tickets.len(), grid(&tickets, true)),
+        ("Epics", "epics", epics.len(), grid(&epics, false), ""),
+        (
+            "Standalone tickets",
+            "tickets",
+            tickets.len(),
+            grid(&tickets, true),
+            general_chip.as_str(),
+        ),
         (
             "Scheduled",
             "scheduled",
             scheduled.len(),
             grid(&scheduled, false),
+            "",
         ),
         (
             "Filed automatically",
             "automatic",
             automatic_total,
             automatic_body,
+            "",
         ),
         (
             "Bug reports",
             "bug-reports",
             bug_reports.len(),
             grid(&bug_reports, true),
+            "",
         ),
         (
             "Deferred",
             "deferred",
             deferred.len(),
             grid(&deferred, true),
+            "",
         ),
     ];
     let shown: Vec<_> = sections
         .iter()
-        .filter(|(_, _, count, _)| *count > 0)
+        .filter(|(_, anchor, count, _, _)| *count > 0 || matches!(*anchor, "tickets" | "automatic"))
         .collect();
-    let total: usize = shown.iter().map(|(_, _, count, _)| count).sum();
+    let total: usize = shown.iter().map(|(_, _, count, _, _)| count).sum();
     let mut entries: Vec<c::TocEntry> = Vec::new();
     let attention_part = if attention_cards.is_empty() {
         String::new()
@@ -188,11 +276,9 @@ fn page(
         ("Active".into(), "active".into(), Some(active.len()), 0),
         ("All".into(), "all".into(), Some(total), 0),
     ]);
-    entries.extend(
-        shown.iter().map(|(heading, anchor, count, _)| {
-            ((*heading).into(), (*anchor).into(), Some(*count), 1)
-        }),
-    );
+    entries.extend(shown.iter().map(|(heading, anchor, count, _, _)| {
+        ((*heading).into(), (*anchor).into(), Some(*count), 1)
+    }));
     entries.push(("Project status".into(), "project-status".into(), None, 0));
     let nav = c::toc(&entries);
 
@@ -202,16 +288,18 @@ fn page(
         grid(&active, true)
     };
     let active_part = c::part("Active", &active_body, "active", Some(active.len()));
-    let all_body: String = shown
+    let mut all_body: String = shown
         .iter()
-        .map(|(heading, anchor, count, body)| {
-            c::section(heading, body, Some(*count), Some(anchor), 3)
+        .map(|(heading, anchor, count, body, control)| {
+            c::section_with_control(heading, body, Some(*count), Some(anchor), 3, control)
         })
         .collect();
-    let all_body = if all_body.is_empty() {
-        c::empty("No open tickets.")
-    } else {
-        all_body
+    if total == 0 {
+        all_body.push_str(&c::empty("No open tickets."));
+    }
+    let all_body = match editable {
+        Some(project) => edit::fleet_allocation_context(settings, project, &all_body),
+        None => all_body,
     };
     let all_part = c::part("All", &all_body, "all", Some(total));
     let status = c::part(
@@ -250,10 +338,20 @@ pub(crate) fn options(
     root: &str,
     seq: &str,
     now: Timestamp,
+    editable: Option<&str>,
 ) -> Result<PageOptions, ReadError> {
     let (cards, forecasts) = home_data(conn)?;
     let attention_cards = attention::cards(conn, root, now)?;
-    Ok(page(root, &cards, &forecasts, attention_cards, seq))
+    let settings = fleet_settings::settings(conn)?;
+    Ok(page(
+        root,
+        &cards,
+        &forecasts,
+        attention_cards,
+        seq,
+        &settings,
+        editable,
+    ))
 }
 
 #[cfg(test)]

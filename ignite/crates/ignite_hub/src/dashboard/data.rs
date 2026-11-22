@@ -16,6 +16,7 @@ use ignite_core::work_estimate::{EstimateDefault, WorkRemaining};
 use ignite_store::hub::{edges, schedules, tickets};
 
 use super::references::{mentions, ticket_paths};
+use crate::upkeep::filing::{SOURCE_FIELDS, allocation_source};
 
 /// Why a page's data could not be read.
 #[derive(Debug)]
@@ -59,6 +60,7 @@ pub struct Card {
 pub struct HomeCard {
     pub card: Card,
     pub labels: Vec<String>,
+    pub source: Option<ignite_core::shares::Source>,
     /// The name of the machine whose worker holds the ticket, when its assignee is a worker
     /// that a machine has registered.
     pub machine: Option<String>,
@@ -245,7 +247,7 @@ pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Forecasts), ReadEr
     let mut statement = conn.prepare(&format!(
         "SELECT {CARD_FIELDS}, labels,
                 (SELECT m.name FROM workers w JOIN machines m ON m.id = w.machine
-                 WHERE w.session = tickets.assignee LIMIT 1)
+                 WHERE w.session = tickets.assignee LIMIT 1), {SOURCE_FIELDS}
          FROM tickets
          WHERE status != 'closed'
            AND (parent IS NULL OR status IN ('in_progress', 'deferred') OR labels != '[]')"
@@ -255,6 +257,7 @@ pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Forecasts), ReadEr
             card: card(row)?,
             labels: labels_of(&row.get::<_, String>(9)?),
             machine: row.get(10)?,
+            source: allocation_source(row, 11)?,
         })
     })?;
     let mut cards: Vec<HomeCard> = rows.collect::<Result<_, _>>()?;

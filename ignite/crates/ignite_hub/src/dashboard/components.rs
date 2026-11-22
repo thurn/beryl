@@ -362,11 +362,22 @@ pub fn section(
     id: Option<&str>,
     level: u8,
 ) -> String {
+    section_with_control(heading, body, count, id, level, "")
+}
+
+pub fn section_with_control(
+    heading: &str,
+    body: &str,
+    count: Option<usize>,
+    id: Option<&str>,
+    level: u8,
+    control: &str,
+) -> String {
     let title = if heading.is_empty() {
         String::new()
     } else {
         format!(
-            "<h{level} class=\"c-section-title\">{}{}</h{level}>",
+            "<h{level} class=\"c-section-title\">{}{}{control}</h{level}>",
             esc(heading),
             count_label(count)
         )
@@ -378,8 +389,18 @@ pub fn section(
 }
 
 pub fn subsection(heading: &str, body: &str, count: Option<usize>, level: u8) -> String {
+    subsection_with_control(heading, body, count, level, "")
+}
+
+pub fn subsection_with_control(
+    heading: &str,
+    body: &str,
+    count: Option<usize>,
+    level: u8,
+    control: &str,
+) -> String {
     format!(
-        "<div class=\"c-subsection\"><h{level} class=\"c-subsection-title\">{}{}</h{level}>{body}</div>",
+        "<div class=\"c-subsection\"><h{level} class=\"c-subsection-title\">{}{}{control}</h{level}>{body}</div>",
         esc(heading),
         count_label(count)
     )

@@ -36,11 +36,12 @@ use ignite_store::hub::{fleet, fleet_settings, provider_usage, releases, tickets
 use ignite_store::{Result, StoreError};
 
 use super::{families::Requirements, mix, placement, usage};
-use crate::{rules, upkeep::regressions};
+use crate::rules;
+use crate::upkeep::filing::{SOURCE_FIELDS, allocation_source};
+use crate::upkeep::regressions;
 
 #[path = "dispatch_allocation.rs"]
 mod allocation;
-use allocation::source;
 
 #[path = "dispatch_pins.rs"]
 mod pins;
@@ -439,14 +440,10 @@ impl Snapshot {
         // A meta-ticket's schedule is what asks for its copies to be worked, so one with no
         // allocation counts as an epic with an allocation of 1. Without that its copies, which
         // have a parent and so are not loose, would wait for an allocation nobody sets.
-        let mut statement = conn.prepare(
-            "SELECT id, parent, coalesce(workers, CASE type WHEN 'meta' THEN 1 END), max_workers, \
-             status, metadata -> 'ignite_fault' ->> 'category',
-             EXISTS (SELECT 1 FROM json_each(labels) WHERE value = 'flaky'),
-             saving IS NOT NULL OR EXISTS (SELECT 1 FROM json_each(labels) WHERE value = 'improvement'),
-             EXISTS (SELECT 1 FROM json_each(labels) WHERE value = 'hub')
-             FROM tickets",
-        )?;
+        let mut statement = conn.prepare(&format!(
+            "SELECT id, parent, coalesce(workers, CASE type WHEN 'meta' THEN 1 END), max_workers,
+             status, {SOURCE_FIELDS} FROM tickets"
+        ))?;
         let rows = statement.query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -454,12 +451,7 @@ impl Snapshot {
                 row.get::<_, Option<u32>>(2)?,
                 row.get::<_, Option<u32>>(3)?,
                 row.get::<_, String>(4)?,
-                source(
-                    row.get::<_, Option<String>>(5)?.as_deref(),
-                    row.get(6)?,
-                    row.get(7)?,
-                    row.get(8)?,
-                ),
+                allocation_source(row, 5)?,
             ))
         })?;
         let mut nodes = HashMap::new();

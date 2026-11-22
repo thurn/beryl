@@ -95,7 +95,7 @@ fn source_pool_and_general_pool_can_be_parked_without_stopping_a_regression() {
         &mut conn,
         &json!([
             {"op":"create","fields":{"title":"General work"}},
-            {"op":"create","fields":{"title":"Flaky check","labels":["flaky","hub"]}},
+            {"op":"create","fields":{"title":"Imported flaky check","labels":["flaky-check"]}},
             {"op":"create","fields":{"title":"Parked ticket","allocation":0}},
             {"op":"create","fields":{"title":"Broken tip","allocation":0}},
             {"op":"create","fields":{"title":"Pending flaky check","status":"pending_approval","labels":["flaky","hub"]}}

@@ -392,12 +392,17 @@ fn allocation_controls_round_trip_fleet_and_epic_weights() {
     assert!(pool.contains("data-edit=\"flaky\""));
     assert!(pool.contains("Inherited (1)"));
 
+    check_empty_ticket_category_allocations(address);
+
     let mut desired = get_fleet(address).settings;
     desired.allocations = Some(Allocations {
         general: Some(100),
         sources: [(Source::Flaky, 0)].into(),
     });
     assert_eq!(put_fleet(address, BROWSER, &desired).0, 200);
+    let (status, feed) = send(address, "GET", "/pj/api/feed?since=0", &[], "");
+    assert_eq!(status, 200);
+    assert!(feed.contains("\"kind\":\"allocation\""));
     let mut current = get_fleet(address).settings;
     assert_eq!(current.allocations, desired.allocations);
     current.allocations = None; // A client from before allocation updates an unrelated setting.
@@ -414,6 +419,7 @@ fn allocation_controls_round_trip_fleet_and_epic_weights() {
     assert!(pool.contains("Inherited (100)"));
     let (_, read_only) = send(address, "GET", "/pool", &[], "");
     assert!(!read_only.contains("data-edit=\"general\""));
+    check_ticket_category_allocations(address);
 
     let batch = |ops: Value| {
         let (status, body) = send(
@@ -463,4 +469,42 @@ fn allocation_controls_round_trip_fleet_and_epic_weights() {
 
     private.stop();
     let _ = std::fs::remove_dir_all(dir);
+}
+
+fn check_empty_ticket_category_allocations(address: SocketAddr) {
+    // All categories can be edited before there are any tickets in them.
+    let (_, tickets) = send(address, "GET", "/", &BROWSER[..1], "");
+    let standalone_header = tickets
+        .split_once("id=\"tickets\"")
+        .unwrap()
+        .1
+        .split_once("</h3>")
+        .unwrap()
+        .0;
+    assert!(standalone_header.contains("Standalone tickets"));
+    assert!(standalone_header.contains("data-edit=\"general\""));
+    assert!(standalone_header.contains(">1</span>"));
+    let automatic = tickets.split_once("id=\"automatic\"").unwrap().1;
+    for source in Source::ALL {
+        assert!(automatic.contains(&format!("data-edit=\"{}\"", source.key())));
+    }
+}
+
+fn check_ticket_category_allocations(address: SocketAddr) {
+    let (_, tickets) = send(address, "GET", "/?fragment=all", &BROWSER[..1], "");
+    let flaky_header = tickets
+        .split_once(">Flaky checks")
+        .unwrap()
+        .1
+        .split_once("</h4>")
+        .unwrap()
+        .0;
+    assert!(flaky_header.contains("data-edit=\"flaky\""));
+    assert!(flaky_header.contains("Allocation · Parked"));
+    assert!(flaky_header.contains(">0</span>"));
+    assert!(tickets.contains(">100</span>"));
+    let (_, read_only) = send(address, "GET", "/", &[], "");
+    assert!(read_only.contains("Allocation · Parked"));
+    assert!(!read_only.contains("data-edit=\"general\""));
+    assert!(!read_only.contains("id=\"c-allocation-fleet\""));
 }

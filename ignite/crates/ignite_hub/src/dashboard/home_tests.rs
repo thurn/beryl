@@ -1,3 +1,4 @@
+use ignite_core::fleet::FleetSettings;
 use ignite_core::protocol::tickets::Status;
 
 use super::super::data::{Card, Forecasts, HomeCard, by_recency};
@@ -18,6 +19,7 @@ fn ticket(id: &str, labels: &[&str]) -> HomeCard {
         },
         labels: labels.iter().map(|label| (*label).to_owned()).collect(),
         machine: None,
+        source: None,
     }
 }
 
@@ -27,7 +29,16 @@ fn a_card_names_the_machine_working_it_not_the_session() {
     cards[0].card.status = Status::InProgress;
     cards[0].card.assignee = Some("local_0123456789abcdef".to_owned());
     cards[0].machine = Some("multivac.local".to_owned());
-    let body = page("/", &cards, &Forecasts::default(), Vec::new(), "0").body;
+    let body = page(
+        "/",
+        &cards,
+        &Forecasts::default(),
+        Vec::new(),
+        "0",
+        &FleetSettings::default(),
+        None,
+    )
+    .body;
     assert!(body.contains("Multivac"), "{body}");
     assert!(!body.contains("session 012345"), "{body}");
 }
@@ -81,7 +92,16 @@ fn the_home_page_shows_justiciar_tickets_under_incidents() {
         ticket("Tr1", &["regression", "hub"]),
         ticket("Tt1", &[]),
     ];
-    let body = page("/", &cards, &Forecasts::default(), Vec::new(), "0").body;
+    let body = page(
+        "/",
+        &cards,
+        &Forecasts::default(),
+        Vec::new(),
+        "0",
+        &FleetSettings::default(),
+        None,
+    )
+    .body;
     assert!(body.contains("Filed automatically"), "{body}");
     assert!(body.contains(">Incidents"), "{body}");
     assert!(body.contains(">Regressions"), "{body}");

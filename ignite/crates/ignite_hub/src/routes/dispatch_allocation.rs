@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use ignite_core::dispatch::{self, ReadyTicket};
 use ignite_core::ids::TicketId;
 use ignite_core::protocol::tickets::{REVERTED_KEY, Ticket};
-use ignite_core::shares::{self, EpicDemand, Group, Source};
+use ignite_core::shares::{self, EpicDemand, Group};
 
 use super::Snapshot;
 
@@ -127,23 +127,5 @@ impl Snapshot {
             }
         }
         groups.into_values().collect()
-    }
-}
-
-/// Find the source of both new automatic filings and reports that predate source controls.
-pub(super) fn source(
-    category: Option<&str>,
-    flaky: bool,
-    improvement: bool,
-    upkeep: bool,
-) -> Option<Source> {
-    if flaky || matches!(category, Some("flaky" | "flaky-always" | "machine-flaky")) {
-        Some(Source::Flaky)
-    } else if category == Some("found") {
-        Some(Source::Exploration)
-    } else if improvement {
-        Some(Source::Improvement)
-    } else {
-        (category.is_some() || upkeep).then_some(Source::Upkeep)
     }
 }

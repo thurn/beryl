@@ -85,6 +85,42 @@ pub const REOPEN_SECONDS: f64 = 7.0 * 86_400.0;
 /// whether or not an epic is active, so a fault report is never left with nobody to take it.
 pub const HUB_LABEL: &str = "hub";
 
+/// The ticket columns that identify the pool it may draw workers from.
+pub(crate) const SOURCE_FIELDS: &str = "
+    metadata -> 'ignite_fault' ->> 'category',
+    EXISTS (SELECT 1 FROM json_each(labels) WHERE value IN ('flaky', 'flaky-check')),
+    saving IS NOT NULL OR EXISTS (SELECT 1 FROM json_each(labels) WHERE value = 'improvement'),
+    EXISTS (SELECT 1 FROM json_each(labels) WHERE value = 'hub')";
+
+/// Find the source of both new automatic filings and reports that predate source controls.
+pub(crate) fn allocation_source(
+    row: &rusqlite::Row<'_>,
+    index: usize,
+) -> rusqlite::Result<Option<ignite_core::shares::Source>> {
+    use ignite_core::shares::Source;
+
+    let category: Option<String> = row.get(index)?;
+    let flaky: bool = row.get(index + 1)?;
+    let improvement: bool = row.get(index + 2)?;
+    let upkeep: bool = row.get(index + 3)?;
+    Ok(
+        if flaky
+            || matches!(
+                category.as_deref(),
+                Some("flaky" | "flaky-always" | "machine-flaky")
+            )
+        {
+            Some(Source::Flaky)
+        } else if category.as_deref() == Some("found") {
+            Some(Source::Exploration)
+        } else if improvement {
+            Some(Source::Improvement)
+        } else {
+            (category.is_some() || upkeep).then_some(Source::Upkeep)
+        },
+    )
+}
+
 /// How many sightings a ticket remembers.
 const SIGHTINGS_KEPT: usize = 50;
 

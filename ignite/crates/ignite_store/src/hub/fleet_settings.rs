@@ -8,10 +8,11 @@ use ignite_core::config::Os;
 use ignite_core::fleet::{
     FleetChange, FleetSettings, MachineState, TreeSpace, TreeVolumes, absolute_trees_root, summary,
 };
+use ignite_core::protocol::tickets::FeedChange;
 use ignite_core::time::Timestamp;
 
 use super::rows;
-use super::{fleet, meta};
+use super::{feed, fleet, meta};
 use crate::{Result, StoreError};
 
 const KEY: &str = "fleet";
@@ -252,6 +253,18 @@ fn write(
             settings_json
         ],
     )?;
+    if before.allocations != proposed.allocations {
+        // The Tickets page refreshes its category headings when a pool weight changes.
+        feed::record(
+            conn,
+            &FeedChange {
+                seq: feed::next_seq(conn)?,
+                kind: "allocation".to_owned(),
+                ticket: None,
+                name: None,
+            },
+        )?;
+    }
     Ok(proposed)
 }
 

@@ -286,12 +286,9 @@
             try {
                 if (fleet) {
                     await saveFleetAllocation(fleet, field, value);
-                    unit.classList.remove("c-editing");
-                    history.replaceState({ ...history.state, scroll: scrollY }, "");
-                    location.reload();
-                    return;
+                } else {
+                    await send(operations(field, kind, raw, value, unit), version);
                 }
-                await send(operations(field, kind, raw, value, unit), version);
             } catch (failure) {
                 form.querySelectorAll("button, input, select, textarea").forEach((el) => (el.disabled = false));
                 if (kind === "choice" && failure instanceof Conflict) {

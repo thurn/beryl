@@ -342,7 +342,7 @@ fn serve_pages(
                     panel().map_or_else(|error| failed(&error), |body| fragment(&seq, body, head)),
                 );
             }
-            match home::options(conn, &root, &seq, now).map(brand) {
+            match home::options(conn, &root, &seq, now, editable.then_some(project)).map(brand) {
                 Err(error) => failed(&error),
                 Ok(options) if fragment_kind == Some("all") => match panel() {
                     Err(error) => failed(&error),
