@@ -1,6 +1,6 @@
-"""The running app (docs/beryl-3d.md, 'Driving the running app'): `just b3d app` runs
-`beryl3d`, `just b3d smoke` starts it with no window and waits for its start screen, and
-`just b3d frames` prints a frame log's summary and its worst frames.
+"""`just b3d app` runs `beryl3d`, `just b3d smoke` waits for its start screen without a
+window, and `just b3d frames` prints a frame log's summary and its worst frames. For the
+standalone release executable, run `just b3d release`.
 
 The app is built with cargo's `test` profile, as the workspace's tests are: optimized enough to
 measure frames, it shares the dependencies `just b3d cargo-test` built, and the `tools` feature
@@ -24,8 +24,11 @@ from typing import Any
 
 from .. import deps, paths as repo_paths, system
 from . import live, paths
+from .command import Command
 
-BINARY: Path = system.exe(paths.WORKSPACE / "target" / "debug" / "beryl3d")
+TARGET: Path = paths.WORKSPACE / "target"
+BINARY: Path = system.exe(TARGET / "debug" / "beryl3d")
+RELEASE_BINARY: Path = system.exe(TARGET / "release" / "beryl3d")
 # What the app prints when its first frame is shown (`FIRST_SHOWN` in beryl_3d's app.rs).
 FIRST_SHOWN = "beryl3d: first frame shown"
 # What it prints, followed by the path, when its live socket listens (`LIVE_SOCKET`).
@@ -58,6 +61,43 @@ def build() -> int:
             *["--features", "tools", "--bin", "beryl3d"],
         ]
     )
+
+
+def build_release() -> int:
+    from .cli import build as cargo_build  # cli imports this module.
+
+    return cargo_build(
+        [
+            "build",
+            "--release",
+            "--target-dir",
+            str(TARGET),
+            "-p",
+            "beryl_3d",
+            "--bin",
+            "beryl3d",
+        ]
+    )
+
+
+def run_release(_args: argparse.Namespace) -> int:
+    if build_release() != 0:
+        return deps.CANNOT_RUN
+    print(f"release: {RELEASE_BINARY}")
+    return 0
+
+
+COMMANDS = (
+    Command(
+        "release",
+        "builds the standalone release executable and prints its path",
+        (
+            ("just b3d release", "build the optimized desktop executable"),
+            ("just b3d release --help", "this text"),
+        ),
+        run_release,
+    ),
+)
 
 
 def frames_dir() -> Path:

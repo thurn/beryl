@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Callable
 
 from .. import deps
-from . import paths
 
 # How long a request may take before it gives up, in seconds.
 LIMIT_S = 10.0
@@ -154,11 +153,11 @@ def release_socket_paths(binary: Path) -> list[int]:
 
 def run_release_socket(_args: argparse.Namespace) -> int:
     """Builds the release app and fails when its binary names a live socket."""
-    from .cli import build  # cli imports this module.
+    from .app import RELEASE_BINARY, build_release  # app imports this module.
 
-    if build(["build", "--release", "-p", "beryl_3d", "--bin", "beryl3d"]) != 0:
+    if build_release() != 0:
         return deps.CANNOT_RUN
-    binary = paths.WORKSPACE / "target" / "release" / "beryl3d"
+    binary = RELEASE_BINARY
     found = release_socket_paths(binary)
     if found:
         print(
