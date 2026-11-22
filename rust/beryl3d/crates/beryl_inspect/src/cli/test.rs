@@ -7,7 +7,7 @@ use std::io::Write as _;
 use std::time::{Duration, Instant};
 
 use app_client::driver::Mode;
-use kit_probe::agent::{Context, Judged, Rule};
+use kit_probe::agent::{Judged, Rule};
 use serde_json::{Value, json};
 
 use super::options::{self, Options, Usage};
@@ -470,29 +470,28 @@ fn grouped(outcomes: &[Outcome]) -> Vec<Found> {
                 more: 0,
             });
         }
-        let context = context(test);
+        let name = test.name();
+        let mut repro = format!("just b3d tree {}", options::quote(&name));
+        if let Some(profile) = test.profile {
+            let _ = write!(repro, " --profile {}", options::quote(profile.name()));
+        }
         for fault in &outcome.faults {
             let locators: Vec<&str> = fault.elements.iter().map(|e| e.locator.as_str()).collect();
+            let printed = fault.print_repro(&name, &repro);
+            let show = printed
+                .lines()
+                .last()
+                .and_then(|line| line.trim().strip_prefix("show: "));
             add(Found {
-                text: {
-                    let printed = fault.print(&context);
-                    if let Some(profile) = test.profile {
-                        printed.replacen(
-                            "show: just b3d tree ",
-                            &format!("show: just b3d tree --profile {} ", profile.name()),
-                            1,
-                        )
-                    } else {
-                        printed
-                    }
-                },
                 row: json!({
-                    "test": test.name(),
+                    "test": name,
                     "rule": fault.rule.word(),
                     "t_ms": milliseconds(fault.at),
                     "message": fault.message,
                     "elements": locators,
+                    "show": show,
                 }),
+                text: printed,
                 key: (
                     test.recording.clone(),
                     format!("{} {}", fault.rule.word(), locators.join(" and ")),
@@ -502,28 +501,6 @@ fn grouped(outcomes: &[Outcome]) -> Vec<Found> {
         }
     }
     found
-}
-
-/// What a fault of `test`'s is printed with.
-fn context(test: &Test) -> Context {
-    Context {
-        recording: test.recording.clone(),
-        seat: test.seat,
-        layout: test.layout(),
-        audit: crate::data::checkout_ref()
-            .expect("validated test data")
-            .audit,
-        checks: test.profile.map_or_else(
-            || pages::layout_checks(test.layout(), test.size),
-            |profile| profile.definition().checks,
-        ),
-        size: test.size,
-        safe_area: test.profile.map_or_else(
-            || pages::safe_area(test.layout()),
-            |profile| profile.definition().test_safe_area(),
-        ),
-        at: 0,
-    }
 }
 
 /// The names of the tests that fail: those that errored or have a fault the list does not

@@ -20,7 +20,7 @@ use kit_frame::frame::Frame;
 use kit_probe::agent::checks;
 use kit_probe::agent::checks::{KeptArrow, arrows_held, keep_arrows, lines_hold};
 use kit_probe::agent::tree::locator_of;
-use kit_probe::agent::{self, Context, Fault, Rule, Subject};
+use kit_probe::agent::{self, Context, Fault, Layout, Rule, Subject};
 use kit_scene::hit::bounds;
 use kit_ui::input::Rect;
 
@@ -113,12 +113,14 @@ struct Judged {
 
 impl Page {
     pub(super) fn context(&self) -> Context {
+        let data = self.client.data();
+        let profile = data.profiles.for_size(self.size);
         Context {
             recording: self.name.clone(),
             seat: self.seat,
-            layout: self.layout,
-            audit: self.client.data().audit,
-            checks: self.layout.checks(&self.client.data().profiles, self.size),
+            layout: Layout::for_size_class(profile.size_class),
+            audit: data.audit,
+            checks: profile.checks,
             size: self.size,
             safe_area: self.safe_area,
             at: self.now,

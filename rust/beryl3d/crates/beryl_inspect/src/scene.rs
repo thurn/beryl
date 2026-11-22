@@ -62,7 +62,7 @@ pub struct StoryScene {
 }
 
 impl Scene {
-    /// Opens a scene from its name. The window and layout are selected by the caller.
+    /// Opens a scene from its name. The caller can override the window's automatic profile.
     ///
     /// # Errors
     ///
@@ -70,13 +70,13 @@ impl Scene {
     pub fn open(
         name: &str,
         seat: Side,
-        layout: Layout,
+        layout: Option<Layout>,
         size: Size,
         scale: f32,
     ) -> Result<Self, String> {
         if !stories::is_story(name) {
-            return pages::page(name, seat, layout, size)
-                .map(|page| Self::Recording(Box::new(page.with_scale(scale))));
+            return pages::page_with_profile(name, seat, size, scale, layout, None)
+                .map(|page| Self::Recording(Box::new(page)));
         }
         if seat != Side::You {
             return Err(format!("story {name:?} has one view; use --seat you"));
@@ -86,32 +86,27 @@ impl Scene {
             .profile()
             .map(pages::inspection_profile)
             .transpose()?;
-        let (data, safe_area) = pages::scene_data(layout, profile)?;
-        let window = Window {
-            size_class: None,
-            size,
-            scale,
-            safe_area,
-        };
+        let (data, window) = pages::scene_window(size, scale, layout, profile)?;
+        let selected = data.profiles.for_size(size);
+        let checks = selected.checks;
+        let layout = Layout::for_size_class(selected.size_class);
         let source = match source.as_ref() {
             stories::Story::Toolkit(_) => Preview::Toolkit(source),
             stories::Story::Game(story) => match &story.body {
                 Body::Replay(_) => {
                     let recording = pages::story_recording(&story.body)
                         .expect("table and feature stories have replay inputs");
-                    return pages::page_with_messages(name, recording, seat, layout, size, profile)
-                        .map(|page| Self::Recording(Box::new(page.with_scale(scale))));
+                    return pages::page_with_messages(name, recording, seat, data, window)
+                        .map(|page| Self::Recording(Box::new(page)));
                 }
                 Body::Table(table) => {
                     let mut page = pages::page_with_messages(
                         name,
                         Recording(table.messages()),
                         seat,
-                        layout,
-                        size,
-                        profile,
-                    )?
-                    .with_scale(scale);
+                        Arc::clone(&data),
+                        window,
+                    )?;
                     page.story_actions(&table.actions)?;
                     if let Some(id) = table.feature.as_deref() {
                         feature_preview(&mut page, id)?
@@ -131,11 +126,9 @@ impl Scene {
                         &capture.source,
                         Recording(capture.messages.clone()),
                         capture.seat,
-                        layout,
-                        size,
-                        profile,
+                        Arc::clone(&data),
+                        window,
                     )?
-                    .with_scale(scale)
                     .with_catch_up(capture.catch_up);
                     let moment = Moment::At(Duration(capture.at));
                     page.seek(&moment).map_err(|error| error.to_string())?;
@@ -162,12 +155,9 @@ impl Scene {
                 seat,
                 layout,
                 audit,
-                checks: profile.map_or_else(
-                    || pages::layout_checks(layout, size),
-                    |profile| profile.definition().checks,
-                ),
+                checks,
                 size,
-                safe_area,
+                safe_area: window.safe_area,
                 at: 0,
             },
             scale,

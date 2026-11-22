@@ -18,6 +18,7 @@ mod glyphs;
 mod keys;
 mod playthrough;
 mod recording;
+mod setup;
 mod story;
 
 use crate::client;
@@ -48,7 +49,7 @@ use game_table::faces::FaceList;
 use kit_frame::frame::{Frame, Sound, StateBits, Wake};
 use kit_probe::agent::checks;
 use kit_probe::agent::tree::locator_of;
-use kit_probe::agent::{Fault, Layout, locate};
+use kit_probe::agent::{Fault, locate};
 use kit_probe::driver::{moment_distance, offset_from};
 use kit_scene::hit::{bounds, uncovered};
 use kit_ui::input::{
@@ -84,7 +85,6 @@ pub struct Page {
     responses: Responses,
     name: String,
     seat: Side,
-    layout: Layout,
     size: Size,
     /// Physical pixels to a logical point, as the client is told ([`Page::with_scale`]).
     scale: f32,
@@ -129,57 +129,6 @@ pub struct Page {
 }
 
 impl Page {
-    /// The recording at its start, as `seat` sees it in a window of `size` logical points.
-    ///
-    /// # Errors
-    ///
-    /// When a view in the recording cannot be read.
-    pub fn new(
-        data: Arc<Data>,
-        recording: Arc<Recording>,
-        seat: Side,
-        layout: Layout,
-        size: Size,
-    ) -> Result<Self, DriverError> {
-        let views = recording.views().map_err(DriverError)?.into();
-        let cards = recording.card_records().map_err(DriverError)?.map(Arc::new);
-        let mut page = Self {
-            responses: Responses::shared(Arc::clone(&recording)),
-            recording,
-            views,
-            cards,
-            name: "recording".to_owned(),
-            seat,
-            layout,
-            size,
-            scale: 1.0,
-            safe_area: Insets::default(),
-            tier: Tier::Baseline,
-            tick: TICK,
-            cues: Cues::default(),
-            client: Client::new(data, Config::LARGEST),
-            now: 0,
-            #[cfg(feature = "stories")]
-            story_moment: None,
-            released: 0,
-            batch: 0,
-            rest_since: None,
-            inputs: Vec::new(),
-            given_at: Vec::new(),
-            capture: Capture::None,
-            plants: Vec::new(),
-            catch_up: true,
-            moments: None,
-            steps: None,
-            heard: Vec::new(),
-            glyphs: Vec::new(),
-            stories: Arc::default(),
-            stub_atlas: true,
-        };
-        page.begin();
-        Ok(page)
-    }
-
     /// The same page, naming its recording `name` in faults and errors.
     #[must_use]
     pub fn named(mut self, name: &str) -> Self {
@@ -760,7 +709,6 @@ impl Page {
             responses: Responses::shared(Arc::clone(&self.recording)),
             name: self.name.clone(),
             seat: self.seat,
-            layout: self.layout,
             size: self.size,
             scale: self.scale,
             safe_area: self.safe_area,

@@ -55,7 +55,7 @@ def arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--at", required=True, help="the moment, as `png` takes it")
     parser.add_argument("--seat", choices=("you", "opponent"), default=None)
-    parser.add_argument("--layout", choices=("desktop", "phone"), default="desktop")
+    parser.add_argument("--layout", choices=("desktop", "phone"), default=None)
     parser.add_argument("--size", default=None, help="<width>x<height> in points")
     parser.add_argument(
         "--scale",
@@ -75,7 +75,11 @@ def target(args: argparse.Namespace) -> tuple[str, str, str]:
     found = TEST_NAME.match(args.recording)
     if found:
         return found["name"], args.seat or found["seat"], args.size or found["size"]
-    return args.recording, args.seat or "you", args.size or DEFAULT_SIZE[args.layout]
+    return (
+        args.recording,
+        args.seat or "you",
+        args.size or DEFAULT_SIZE[args.layout or "desktop"],
+    )
 
 
 def picture_scale(args: argparse.Namespace) -> str:
@@ -195,13 +199,15 @@ def shoot(
 
 def run(args: argparse.Namespace) -> int:
     from . import cli
+    from .match.target import layout_for_size
 
     name, seat, size = target(args)
+    layout = args.layout or layout_for_size(size)
     # Beryl 3D plays every script at real time (`--no-catch-up`), as the web page does and as
     # every `just b3d match` command plays it. With catch-up its side showed a later moment:
     # at 102500 ms of `combat-attackers` the web had Counterspell on the stack and Beryl 3D
     # had blockers declared.
-    common = ["--seat", seat, "--size", size, "--layout", args.layout, "--no-catch-up"]
+    common = ["--seat", seat, "--size", size, "--layout", layout, "--no-catch-up"]
     if args.web:
         return draw(cli, name, common, args, args.web)
     tree = b3d(["tree", name, *common, "--at", args.at])
@@ -218,13 +224,11 @@ def run(args: argparse.Namespace) -> int:
         exported = work / f"{name.replace('/', '__')}.{seat}.json"
         messages = json.loads(exported.read_text())
         if ", animating," in tree and screen_of(messages) == "game":
-            animated = animated_web(args, name, seat, size)
+            animated = animated_web(args, name, seat, size, layout)
             if animated is None:
                 return 1
             return draw(cli, name, common, args, str(animated))
-        web = shoot(
-            messages, int(view[1]), args.layout, size, picture_scale(args), work
-        )
+        web = shoot(messages, int(view[1]), layout, size, picture_scale(args), work)
         if web is None:
             return 1
         # The screenshot is kept beside the picture, since `work` is deleted.
@@ -238,7 +242,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def animated_web(
-    args: argparse.Namespace, name: str, seat: str, size: str
+    args: argparse.Namespace, name: str, seat: str, size: str, layout: str
 ) -> Path | None:
     """The web picture of a moment in the middle of an animation, from `just b3d match
     snapshot`, which hands the page the views Beryl 3D was still playing live and runs its clock
@@ -255,7 +259,7 @@ def animated_web(
             recording=name,
             at=args.at,
             seat=seat,
-            layout=args.layout,
+            layout=layout,
             size=size,
             scale=picture_scale(args),
             only=None,

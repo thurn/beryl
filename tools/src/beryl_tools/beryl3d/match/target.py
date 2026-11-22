@@ -120,11 +120,15 @@ def arguments(parser: argparse.ArgumentParser, every: bool = False) -> None:
     )
 
 
-def phone_under() -> float:
-    """The points below which a window's shorter side plays the phone layout, as `b3d` reads a
-    test's name (`Layout::for_size`)."""
+def layout_for_size(size: str) -> str:
+    """Selects the shipped layout from the shorter side, as `b3d` does for a window."""
     profile = json.loads((beryl3d_paths.DATA / "profiles" / "phone.json").read_text())
-    return float(profile["shorter_side_below"])
+    width, height = (int(n) for n in size.split("x"))
+    return (
+        "phone"
+        if min(width, height) < float(profile["shorter_side_below"])
+        else "desktop"
+    )
 
 
 def only_argument(parser: argparse.ArgumentParser) -> None:
@@ -144,25 +148,21 @@ def target(args: argparse.Namespace) -> Target:
     found = TEST_NAME.match(args.recording)
     if found:
         size = args.size or found["size"]
-        width, height = (int(n) for n in size.split("x"))
-        layout = args.layout or (
-            "phone" if min(width, height) < phone_under() else "desktop"
-        )
         return Target(
             recording=found["name"],
             seat=args.seat or found["seat"],
-            layout=layout,
+            layout=args.layout or layout_for_size(size),
             size=size,
             scale=args.scale or found["scale"] or "1",
             at=args.at,
             only=only,
         )
-    layout = args.layout or "desktop"
+    size = args.size or DEFAULT_SIZE[args.layout or "desktop"]
     return Target(
         recording=args.recording,
         seat=args.seat or "you",
-        layout=layout,
-        size=args.size or DEFAULT_SIZE[layout],
+        layout=args.layout or layout_for_size(size),
+        size=size,
         scale=args.scale or DEFAULT_SCALE,
         at=args.at,
         only=only,

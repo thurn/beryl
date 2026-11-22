@@ -193,24 +193,31 @@ impl Fault {
     /// command that shows the frame.
     #[must_use]
     pub fn print(&self, context: &Context) -> String {
-        let at = milliseconds(self.at);
         let seat = match context.seat {
             Side::You => "you",
             Side::Opponent => "opponent",
         };
         let size = format!("{}x{}", context.size.width, context.size.height);
-        let mut out = format!(
-            "FAULT {}  b3d:{}/{seat}/{size} t={at}ms\n  {}\n  show: just b3d tree {} --seat {seat}",
-            self.rule.word(),
-            context.recording,
-            self.message,
-            context.recording,
-        );
+        let mut command = format!("just b3d tree {} --seat {seat}", context.recording);
         if context.layout == Layout::Phone {
-            out.push_str(" --layout phone");
+            command.push_str(" --layout phone");
         }
-        let _ = write!(out, " --size {size} --at {at}ms");
-        out
+        let _ = write!(command, " --size {size}");
+        self.print_repro(
+            &format!("b3d:{}/{seat}/{size}", context.recording),
+            &command,
+        )
+    }
+
+    /// Prints the fault with the caller's tree command for the scene it checked.
+    #[must_use]
+    pub fn print_repro(&self, test: &str, command: &str) -> String {
+        let at = milliseconds(self.at);
+        format!(
+            "FAULT {}  {test} t={at}ms\n  {}\n  show: {command} --at {at}ms",
+            self.rule.word(),
+            self.message,
+        )
     }
 }
 

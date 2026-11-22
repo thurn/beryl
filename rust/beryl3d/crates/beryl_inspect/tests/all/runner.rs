@@ -70,7 +70,6 @@ fn a_tests_name_opens_its_recording_in_tree() {
         command.starts_with("just b3d tree verbs-zones --seat opponent --size 2560x1080"),
         "{command}"
     );
-    assert!(tests.iter().all(|test| test.layout() == Layout::Desktop));
 }
 
 /// The whole matrix is the four desktop windows, one of them at the Retina scale, and the three
@@ -163,9 +162,7 @@ fn a_phone_tests_name_opens_the_same_layout_and_insets_in_test_tree_and_check() 
         scale: 1.0,
     };
     assert_eq!(test.name(), name);
-    assert_eq!(test.layout(), Layout::Phone);
-    let insets = pages::safe_area(test.layout());
-    assert_eq!(insets, pages::safe_area(Layout::Phone));
+    let insets = pages::safe_area(Layout::Phone);
     assert!(insets.top > 0.0 && insets.bottom > 0.0, "{insets:?}");
     for command in ["tree", "check"] {
         let spec = Spec {

@@ -552,7 +552,7 @@ pub fn open(options: &Options) -> Result<Scene, Usage> {
         Scene::open(
             options.name(),
             options.seat,
-            options.layout,
+            options.layout_override,
             options.size,
             options.scale,
         )
@@ -580,11 +580,12 @@ fn open_recording(options: &Options) -> Result<Page, Usage> {
     let page = pages::page_with_profile(
         options.name(),
         options.seat,
-        options.layout,
         options.size,
+        options.scale,
+        options.layout_override,
         profile,
-    );
-    let page = page.map_err(Usage)?.with_scale(options.scale);
+    )
+    .map_err(Usage)?;
     Ok(page.with_catch_up(options.pace == options::Pace::CatchUp))
 }
 

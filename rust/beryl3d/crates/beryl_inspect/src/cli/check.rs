@@ -4,7 +4,7 @@ use std::fmt::Write;
 use std::time::Instant;
 
 use app_client::driver::Mode;
-use kit_probe::agent::{Context, Fault};
+use kit_probe::agent::Fault;
 use serde_json::{Value, json};
 
 use super::options::{Options, Usage};
@@ -51,16 +51,8 @@ pub(super) fn check(options: &Options) -> Result<Printed, Usage> {
             None => found.push(Found { fault, more: 0 }),
         }
     }
-    let context = Context {
-        recording: options.name().to_owned(),
-        seat: options.seat,
-        layout: options.layout,
-        audit: crate::data::checkout_ref().map_err(Usage)?.audit,
-        checks: crate::pages::layout_checks(options.layout, options.size),
-        size: options.size,
-        safe_area: crate::pages::safe_area(options.layout),
-        at: 0,
-    };
+    let name = crate::runner::test_name(options.name(), options.seat, options.size, options.scale);
+    let repro = options.recording_command("tree");
     let seconds = started.elapsed().as_secs_f64();
     let closing = format!(
         "1 test, {} frames, lines-hold on {} pairs, {} faults in {seconds:.1}s",
@@ -73,7 +65,7 @@ pub(super) fn check(options: &Options) -> Result<Printed, Usage> {
         let rows: Vec<Value> = found
             .iter()
             .map(|f| {
-                let printed = f.fault.print(&context);
+                let printed = f.fault.print_repro(&name, &repro);
                 json!({
                     "rule": f.fault.rule.word(),
                     "t_ms": milliseconds(f.fault.at),
@@ -99,7 +91,7 @@ pub(super) fn check(options: &Options) -> Result<Printed, Usage> {
     }
     let mut out = format!("{}\n", options.command_line());
     for f in found.iter().take(MOST_FAULTS) {
-        let printed = f.fault.print(&context);
+        let printed = f.fault.print_repro(&name, &repro);
         let mut lines = printed.lines();
         let first = lines.next().unwrap_or_default();
         if f.more > 0 {

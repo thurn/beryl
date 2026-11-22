@@ -43,45 +43,39 @@ impl Test {
     /// is not 1, which every other `just b3d` command takes in place of a recording's name.
     #[must_use]
     pub fn name(&self) -> String {
-        let seat = match self.seat {
-            Side::You => "you",
-            Side::Opponent => "opponent",
-        };
-        let mut name = format!(
-            "{PREFIX}{}/{seat}/{}x{}",
-            self.recording, self.size.width, self.size.height
-        );
-        if (self.scale - 1.0).abs() > f32::EPSILON {
-            let _ = write!(name, "@{}", self.scale);
-        }
-        name
+        test_name(&self.recording, self.seat, self.size, self.scale)
     }
 
-    /// The profile's layout for this window.
-    #[must_use]
-    pub fn layout(&self) -> Layout {
-        self.profile.map_or_else(
-            || pages::layout_for_size(self.size),
-            |profile| Layout::for_size_class(profile.definition().size_class),
-        )
-    }
-
-    /// The test's recording at its start, from its seat in its window, in its layout with the
-    /// layout's safe area (`pages::safe_area`).
+    /// The test's recording at its start, from its seat in its window, with the selected
+    /// profile's safe area.
     ///
     /// # Errors
     ///
     /// When the recording cannot be read or the client cannot open it.
     pub fn page(&self) -> Result<Page, String> {
-        let page = pages::page_with_profile(
+        pages::page_with_profile(
             &self.recording,
             self.seat,
-            self.layout(),
             self.size,
+            self.scale,
+            None,
             self.profile,
-        )?;
-        Ok(page.with_scale(self.scale))
+        )
     }
+}
+
+pub(crate) fn test_name(recording: &str, seat: Side, size: Size, scale: f32) -> String {
+    use crate::cli::options::{seat_word, size_text};
+
+    let mut name = format!(
+        "{PREFIX}{recording}/{}/{}",
+        seat_word(seat),
+        size_text(size)
+    );
+    if (scale - 1.0).abs() > f32::EPSILON {
+        let _ = write!(name, "@{scale}");
+    }
+    name
 }
 
 /// What one test found.
@@ -212,14 +206,8 @@ fn play(test: Test, mode: Mode) -> Outcome {
     let started = Instant::now();
     let ran = caught(|| {
         if test.recording.starts_with(crate::stories::PREFIX) {
-            crate::scene::Scene::open(
-                &test.recording,
-                test.seat,
-                test.layout(),
-                test.size,
-                test.scale,
-            )
-            .map(|mut scene| scene.check_all(mode))
+            crate::scene::Scene::open(&test.recording, test.seat, None, test.size, test.scale)
+                .map(|mut scene| scene.check_all(mode))
         } else {
             test.page().map(|mut page| page.check_all(mode))
         }

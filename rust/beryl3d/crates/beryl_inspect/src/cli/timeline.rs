@@ -120,10 +120,10 @@ pub(super) fn timeline(options: &Options) -> Result<Printed, Usage> {
     if options.switch(ALL) {
         return all(options);
     }
-    // Opens the page to check the name and the seat, with the same messages as `info` gives.
-    open_recording(options)?;
+    let mut page = open_recording(options)?;
     let mut out = format!("{}\n", options.command_line());
-    for text in lines(options.name(), options.seat, options.layout)? {
+    for step in page.timeline() {
+        let text = line(options.name(), options.seat, &step);
         let _ = writeln!(out, "{text}");
     }
     Ok(Printed::text(out))

@@ -19,7 +19,7 @@ use crate::stress::{Board, pointer_moves};
 use crate::{recordings, stories};
 
 use kit_base::data::Data;
-use kit_base::data::profiles::{Checks, ProfileData};
+use kit_base::data::profiles::ProfileData;
 pub use kit_base::geometry::Window;
 
 fn profiles() -> &'static kit_base::data::profiles::Profiles {
@@ -33,18 +33,6 @@ fn by_layout(layout: Layout) -> &'static ProfileData {
         .iter()
         .find(|profile| profile.size_class == layout.size_class())
         .expect("the inspector's layouts have profiles")
-}
-
-/// The layout label of the profile that applies to this window.
-#[must_use]
-pub fn layout_for_size(size: Size) -> Layout {
-    Layout::for_size(profiles(), size)
-}
-
-/// The interface thresholds associated with a recording's layout.
-#[must_use]
-pub fn layout_checks(layout: Layout, size: Size) -> Checks {
-    layout.checks(profiles(), size)
 }
 
 /// The safe insets the recordings use for this layout.
@@ -202,48 +190,63 @@ impl Recorded for Page {
 ///
 /// When there is no such recording for `seat`, or it cannot be read.
 pub fn page(name: &str, seat: Side, layout: Layout, size: Size) -> Result<Page, String> {
-    page_with_profile(name, seat, layout, size, None)
+    page_with_profile(name, seat, size, 1.0, Some(layout), None)
 }
 
 pub(crate) fn page_with_profile(
     name: &str,
     seat: Side,
-    layout: Layout,
     size: Size,
+    scale: f32,
+    layout: Option<Layout>,
     profile: Option<&InspectionProfile>,
 ) -> Result<Page, String> {
-    page_with_messages(name, recording(name, seat)?, seat, layout, size, profile)
+    let (data, window) = scene_window(size, scale, layout, profile)?;
+    page_with_messages(name, recording(name, seat)?, seat, data, window)
 }
 
-pub(crate) fn scene_data(
-    layout: Layout,
+pub(crate) fn scene_window(
+    size: Size,
+    scale: f32,
+    layout: Option<Layout>,
     profile: Option<&InspectionProfile>,
-) -> Result<(Arc<Data>, Insets), String> {
-    let input = if let Some(profile) = profile {
-        (
-            Arc::clone(profile.data()?),
-            profile.definition().test_safe_area(),
-        )
+) -> Result<(Arc<Data>, Window), String> {
+    let data = if let Some(profile) = profile {
+        Arc::clone(profile.data()?)
     } else {
-        let insets = if layout == Layout::Phone {
-            safe_area(layout)
+        let data = crate::data::checkout()?;
+        let selected = data.profiles.for_size(size);
+        if let Some(requested) = layout.map(by_layout)
+            && requested.name != selected.name
+        {
+            let mut data = data.as_ref().clone();
+            data.profiles = data
+                .profiles
+                .selecting(&requested.name)
+                .ok_or_else(|| format!("unknown shipped profile {:?}", requested.name))?;
+            Arc::new(data)
         } else {
-            Insets::default()
-        };
-        (crate::data::checkout()?, insets)
+            data
+        }
     };
-    Ok(input)
+    let selected = data.profiles.for_size(size);
+    let window = Window {
+        size,
+        scale,
+        size_class: Some(selected.size_class),
+        safe_area: selected.test_safe_area(),
+    };
+    Ok((data, window))
 }
 
 pub(crate) fn page_with_messages(
     name: &str,
     recording: Recording,
     seat: Side,
-    layout: Layout,
-    size: Size,
-    profile: Option<&InspectionProfile>,
+    data: Arc<Data>,
+    window: Window,
 ) -> Result<Page, String> {
-    let (data, safe_area) = scene_data(layout, profile)?;
+    let compact = window.size_class == Some(kit_scene::SizeClass::Compact);
     let drive = Board::parse(name).map(Board::drive).unwrap_or_default();
     let delay = drive
         .rest_before_last
@@ -252,7 +255,7 @@ pub(crate) fn page_with_messages(
             Ok::<_, String>((released, Duration(frames as u64 * TICK.0)))
         })
         .transpose()?;
-    let mut page = Page::new(data, recording.into(), seat, layout, size)
+    let mut page = Page::in_window(data, recording.into(), seat, window)
         .map_err(|error| format!("{name}: {error}"))?
         .named(name);
     if matches!(
@@ -260,10 +263,6 @@ pub(crate) fn page_with_messages(
         Some("story/app_screens/gallery" | "story/app_screens/testing")
     ) {
         page = page.with_stories(crate::gallery_sources()?);
-    }
-    if safe_area != Insets::default() {
-        // Giving a page its safe area sets its client up again.
-        page = page.with_safe_area(safe_area);
     }
     if drive.pointer_over_hand {
         let moves = pointer_moves(page.frame());
@@ -274,7 +273,7 @@ pub(crate) fn page_with_messages(
     if matches!(
         name,
         "screen/table-assists" | "story/game_manual/table-assists"
-    ) && page.data().profiles.for_size(size).size_class == kit_scene::SizeClass::Compact
+    ) && compact
     {
         let toggle = page
             .try_find("button \"Show proposals\"")

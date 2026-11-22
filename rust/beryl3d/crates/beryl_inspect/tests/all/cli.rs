@@ -4,11 +4,13 @@
 
 use app_client::driver::Moment;
 use beryl_inspect::cli::line::Line;
+use beryl_inspect::cli::options::{Options, Spec};
 use beryl_inspect::cli::{Ran, main};
 use beryl_inspect::pages;
+use beryl_inspect::scene::Scene;
 use beryl_protocol::protocol::Side;
 use kit_probe::agent::Layout;
-use kit_ui::input::Size;
+use kit_ui::input::{Insets, Size};
 use serde_json::Value;
 
 const RECORDING: &str = "verbs-zones";
@@ -290,6 +292,95 @@ fn check_runs_every_tick_and_closes_with_one_line() {
     );
     let refused = refused(&["check", RECORDING, "--do", "still"]);
     assert!(refused.contains("tree or diff"), "{refused}");
+}
+
+#[test]
+fn an_explicit_shipped_layout_also_controls_placement_at_a_conflicting_size() {
+    let mut automatic = table_page(&["--size", "800x600"]);
+    let mut explicit = table_page(&["--layout", "phone", "--size", "800x600"]);
+    let profile = explicit.data().profiles.for_size(explicit.size());
+    assert_eq!(profile.name, "phone");
+    assert!((profile.checks.target_points - 44.0).abs() < f32::EPSILON);
+    let insets = profile.test_safe_area();
+    assert_ne!(insets, Insets::default());
+    assert!(explicit.inputs().iter().any(|input| matches!(
+        input,
+        app_client::Input::Device(kit_ui::input::Input::Surface { safe_area, .. })
+            if *safe_area == insets
+    )));
+    assert_ne!(automatic.tree(), explicit.tree());
+}
+
+#[test]
+fn a_compact_size_alone_uses_the_same_insets_and_checks_as_its_matrix_window() {
+    let sized = check_json(&["screen/table-left", "--size", "375x647"]);
+    let matrix = check_json(&["b3d:screen/table-left/you/375x647"]);
+    assert_eq!(sized["faults"], matrix["faults"]);
+    let mut automatic = table_page(&["--size", "375x647"]);
+    let mut inset = table_page(&["--layout", "phone", "--size", "375x647"]);
+    assert_eq!(automatic.tree(), inset.tree());
+}
+
+#[test]
+fn a_preview_fault_reopens_the_preview_at_the_checked_scale() {
+    let usual = check_json(&["screen/table-left", "--profile", "wide-compact"]);
+    assert!(
+        usual["command"]
+            .as_str()
+            .unwrap()
+            .contains("--profile wide-compact --size 759x393"),
+        "{usual}"
+    );
+    // The usual window fits the connection notice. A shorter window overlaps the notice
+    // with the life totals and lets this test exercise the command printed for a fault.
+    let checked = check_json(&[
+        "screen/table-left",
+        "--layout",
+        "desktop",
+        "--profile",
+        "wide-compact",
+        "--size",
+        "120x92",
+        "--scale",
+        "2",
+    ]);
+    let faults = checked["faults"].as_array().unwrap();
+    let show = faults
+        .iter()
+        .find(|fault| fault["rule"] == "text-overlap")
+        .unwrap_or_else(|| panic!("expected an overlap: {checked}"))["show"]
+        .as_str()
+        .unwrap();
+    assert!(show.contains("--profile wide-compact"), "{show}");
+    assert!(show.contains("--size 120x92 --scale 2"), "{show}");
+    assert!(!show.contains("--layout"), "{show}");
+    ok(&show.split_whitespace().skip(2).collect::<Vec<_>>());
+}
+
+fn table_page(args: &[&str]) -> app_client::driver::Page {
+    let args = std::iter::once("screen/table-left")
+        .chain(args.iter().copied())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    let options = Options::parse(
+        "check",
+        &args,
+        Spec {
+            recording: true,
+            ..Spec::default()
+        },
+    )
+    .unwrap();
+    let Scene::Recording(page) = beryl_inspect::cli::open(&options).unwrap() else {
+        panic!("the table screen must open as a recording");
+    };
+    *page
+}
+
+fn check_json(args: &[&str]) -> Value {
+    let ran = run(&[&["check", "--json"][..], args].concat());
+    assert!(ran.code <= 1, "{}", ran.stderr);
+    serde_json::from_str(&ran.stdout).unwrap()
 }
 
 #[test]

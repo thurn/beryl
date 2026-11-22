@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import argparse
 
+import pytest
+
 from beryl_tools.beryl3d import compare
+from beryl_tools.beryl3d.match.target import target as match_target
 
 
 def namespace(recording: str, **given: str | None) -> argparse.Namespace:
@@ -67,3 +70,20 @@ def test_retina_test_names_keep_their_recording_and_scale() -> None:
     assert compare.picture_scale(args) == "2"
     assert compare.picture_scale(namespace(args.recording, scale="1")) == "1"
     assert compare.picture_scale(namespace("opening-play")) == "1"
+
+
+def test_compact_windows_select_the_same_layout_in_compare_and_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layouts: list[str] = []
+
+    def draw(_cli: object, _name: str, flags: list[str], *_rest: object) -> int:
+        layouts.append(flags[flags.index("--layout") + 1])
+        return 0
+
+    monkeypatch.setattr(compare, "draw", draw)
+    for given, expected in [(None, "phone"), ("desktop", "desktop")]:
+        args = namespace("opening-play", size="375x647", layout=given, web="web.png")
+        assert match_target(args).layout == expected
+        assert compare.run(args) == 0
+        assert layouts[-1] == expected

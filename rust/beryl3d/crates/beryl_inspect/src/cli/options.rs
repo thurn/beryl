@@ -3,10 +3,10 @@
 //!
 //! A recording is named as `just b3d list` prints it, or by a test's name,
 //! `b3d:<recording>/<seat>/<width>x<height>[@<scale>]`, which also sets the seat, the window and
-//! the scale. The options common to every such command are `--seat`, `--layout`, `--size`,
-//! `--scale`, `--tier`, `--at`, `--do` (repeatable), `--json` and `--no-catch-up`, which plays
-//! every script at real time however many updates wait, as the web interface does. A command adds options of its
-//! own through [`Spec`], and reads them back with [`Options::value`] and [`Options::switch`].
+//! the scale. Common options are `--seat`, `--layout`, `--profile`, `--size`, `--scale`,
+//! `--tier`, `--at`, `--do` (repeatable), `--json` and `--no-catch-up`, which plays every script
+//! at real time however many updates wait, as the web interface does. A command adds options of
+//! its own through [`Spec`], and reads them back with [`Options::value`] and [`Options::switch`].
 
 use std::fmt::Write;
 
@@ -56,6 +56,8 @@ pub struct Options {
     pub rest: Vec<String>,
     pub seat: Side,
     pub layout: Layout,
+    /// A shipped profile explicitly requested by the command or saved in a story.
+    pub(super) layout_override: Option<Layout>,
     /// The window in logical points: 1600 by 900 unless `--size` or a test's name says
     /// otherwise, or 393 by 759 on the phone layout.
     pub size: Size,
@@ -124,6 +126,7 @@ impl Options {
             rest: Vec::new(),
             seat: Side::You,
             layout: Layout::Desktop,
+            layout_override: None,
             size: DESKTOP,
             scale: 1.0,
             tier: Tier::Baseline,
@@ -141,7 +144,6 @@ impl Options {
         };
         let mut positional = Vec::new();
         let mut at = 0;
-        let mut layout_given = false;
         let mut scale_given = false;
         while at < args.len() {
             let arg = &args[at];
@@ -179,7 +181,6 @@ impl Options {
                 String::new()
             };
             options.set(flag, value, takes_value)?;
-            layout_given |= flag == "--layout";
             scale_given |= flag == "--scale";
         }
         let mut positional = positional.into_iter();
@@ -196,17 +197,23 @@ impl Options {
             if stories::is_story(&scene) && !name.starts_with("b3d:") {
                 let story = stories::open(&scene).map_err(Usage)?;
                 let header = story.header();
-                if !layout_given {
+                if options.layout_override.is_none() {
                     if !options.sized {
                         options.size = header.window;
                     }
-                    options.layout = header.layout;
+                    options.layout_override = Some(header.layout);
                 }
                 if !scale_given {
                     options.scale = story.scale();
                 }
             }
             options.recording = Some(scene);
+            options.layout = if let Some(layout) = options.layout_override {
+                layout
+            } else {
+                let data = crate::data::checkout_ref().map_err(Usage)?;
+                Layout::for_size(&data.profiles, options.size)
+            };
             options.apply_profile(&name, scale_given)?;
         }
         options.rest = positional.collect();
@@ -268,33 +275,17 @@ impl Options {
     /// is shown, the seat and window always, so that it can be pasted into another command.
     #[must_use]
     pub fn command_line(&self) -> String {
-        let mut out = format!("just b3d {}", self.command);
-        if let Some(name) = &self.recording {
-            let _ = write!(out, " {}", quote(name));
-            let _ = write!(out, " --seat {}", self.seat_word());
-            if self.layout == Layout::Phone && self.value(PROFILE).is_none() {
-                out.push_str(" --layout phone");
-            } else if name.starts_with(stories::PREFIX) {
-                out.push_str(" --layout desktop");
-            }
-            let _ = write!(out, " --size {}", size_text(self.size));
-            if (self.scale - 1.0).abs() > f32::EPSILON {
-                let _ = write!(out, " --scale {}", self.scale);
-            }
-            if self.tier == Tier::Enhanced {
-                out.push_str(" --tier enhanced");
-            }
-            if self.at_given {
-                let _ = write!(out, " --at {}", self.at);
-            }
-            if self.pace == Pace::RealTime {
-                out.push_str(" --no-catch-up");
-            }
+        let mut out = self.recording_command(&self.command);
+        if self.recording.is_some() && self.at_given {
+            let _ = write!(out, " --at {}", self.at);
         }
         for arg in &self.rest {
             let _ = write!(out, " {}", quote(arg));
         }
         for (flag, value) in &self.own {
+            if flag == PROFILE && self.recording.is_some() {
+                continue;
+            }
             out.push(' ');
             out.push_str(flag);
             if let Some(value) = value {
@@ -310,6 +301,34 @@ impl Options {
         out
     }
 
+    /// The command and the options that determine how the recording plays.
+    pub(super) fn recording_command(&self, command: &str) -> String {
+        let mut out = format!("just b3d {command}");
+        let Some(name) = &self.recording else {
+            return out;
+        };
+        let _ = write!(out, " {} --seat {}", quote(name), self.seat_word());
+        let profile = self.value(PROFILE);
+        if let Some(profile) = profile {
+            let _ = write!(out, " --profile {}", quote(profile));
+        } else if self.layout == Layout::Phone {
+            out.push_str(" --layout phone");
+        } else if self.layout_override.is_some() || stories::is_story(name) {
+            out.push_str(" --layout desktop");
+        }
+        let _ = write!(out, " --size {}", size_text(self.size));
+        if profile.is_some() || (self.scale - 1.0).abs() > f32::EPSILON {
+            let _ = write!(out, " --scale {}", self.scale);
+        }
+        if self.tier == Tier::Enhanced {
+            out.push_str(" --tier enhanced");
+        }
+        if self.pace == Pace::RealTime {
+            out.push_str(" --no-catch-up");
+        }
+        out
+    }
+
     fn set(&mut self, flag: &str, value: String, takes_value: bool) -> Result<(), Usage> {
         let bad = |why: &str| Usage(format!("{flag} {value}: {why}; expected {}", form(flag)));
         match flag {
@@ -320,6 +339,7 @@ impl Options {
                     "phone" => Layout::Phone,
                     _ => return Err(bad("not a layout")),
                 };
+                self.layout_override = Some(self.layout);
                 if !self.sized {
                     self.size = match self.layout {
                         Layout::Desktop => DESKTOP,
@@ -368,7 +388,7 @@ impl Options {
     }
 
     /// The recording's name from `name`, which is either a name or a test's name, setting the
-    /// seat, the window and the layout from a test's name.
+    /// seat and window from a test's name.
     fn test_name(&mut self, name: &str) -> Result<String, Usage> {
         let Some(test) = name.strip_prefix("b3d:") else {
             return Ok(name.to_owned());
@@ -410,9 +430,6 @@ impl Options {
                 })?;
         }
         self.sized = true;
-        // The layout and its safe area follow the window, as they do in `just b3d test`.
-        let data = crate::data::checkout_ref().map_err(Usage)?;
-        self.layout = Layout::for_size(&data.profiles, self.size);
         Ok(recording.to_owned())
     }
 }
@@ -521,6 +538,8 @@ pub fn common_help() -> String {
     for (flag, form) in COMMON {
         let _ = writeln!(out, "  {}", format!("{flag} {form}").trim_end());
     }
+    out.push_str("  --profile selects a preview and takes precedence over --layout.\n");
+    out.push_str("  With neither flag, the window's shorter side selects the profile.\n");
     out
 }
 
