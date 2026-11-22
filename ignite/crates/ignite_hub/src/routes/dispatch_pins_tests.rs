@@ -3,7 +3,9 @@
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
-use ignite_store::hub::{self, tickets};
+use ignite_core::config::Os;
+use ignite_core::protocol::tickets::BatchRequest;
+use ignite_store::hub::{self, batch, tickets};
 
 use super::tests::{at, claim_reserved, file, free, landed, post, register, release, start};
 
@@ -72,6 +74,55 @@ fn whichever_machine_asks_first_can_take_an_unpinned_ticket() {
         }
         let (_, offer) = post(&mut conn, "/next", &asking, start());
         assert_eq!(offer["ticket"], id.as_str());
+    }
+}
+
+#[test]
+fn an_os_requirement_set_on_create_or_update_filters_dispatch() {
+    for set_on_create in [true, false] {
+        let mut conn = two_machines();
+        let mut fields = json!({"title": "Native work", "priority": 0});
+        if set_on_create {
+            fields["needs_os"] = json!("macos");
+        }
+        let filed: BatchRequest = serde_json::from_value(json!({"ops": [
+            {"op": "create", "fields": fields},
+            {"op": "create", "fields": {"title": "Portable work", "priority": 1}},
+        ]}))
+        .unwrap();
+        let batch::BatchOutcome::Applied(reply) =
+            batch::apply(&mut conn, &filed, "planner", "m-1", start()).unwrap()
+        else {
+            panic!("filing conflicted");
+        };
+        let native = reply.results[0].id.as_str();
+        let portable = reply.results[1].id.as_str();
+        if !set_on_create {
+            let updated: BatchRequest = serde_json::from_value(json!({"ops": [
+                {"op": "update", "id": native, "set": {"needs_os": "macos"}},
+            ]}))
+            .unwrap();
+            assert!(matches!(
+                batch::apply(&mut conn, &updated, "planner", "m-1", at(1.0)).unwrap(),
+                batch::BatchOutcome::Applied(_)
+            ));
+        }
+        let ticket = tickets::load(&conn, native).unwrap().unwrap();
+        assert_eq!(ticket.needs_os, Some(Os::Macos));
+
+        let mut windows = free("m-2", &["local_windows"]);
+        windows["os"] = json!("windows");
+        let (status, offer) = post(&mut conn, "/next", &windows, at(2.0));
+        assert_eq!(status, 200, "{offer}");
+        assert_eq!(offer["ticket"], portable);
+        windows["idle_workers"][0]["session"] = json!("local_windows_2");
+        let (status, offer) = post(&mut conn, "/next", &windows, at(3.0));
+        assert_eq!(status, 200, "{offer}");
+        assert_eq!(offer, Value::Null);
+
+        let (status, offer) = post(&mut conn, "/next", &free("m-1", &["local_mac"]), at(4.0));
+        assert_eq!(status, 200, "{offer}");
+        assert_eq!(offer["ticket"], native);
     }
 }
 

@@ -21,6 +21,13 @@ fn shared_fields(fields: &mut Fields, args: &TicketFieldArgs) -> Result<()> {
     put(fields, "workers", args.allocation);
     put(fields, "max_workers", args.max_workers);
     put(fields, "cores", args.cores);
+    put(
+        fields,
+        "needs_os",
+        args.needs_os
+            .as_deref()
+            .map(|os| json!((os != "any").then_some(os))),
+    );
     for (field, minutes) in [
         ("estimate_minutes", args.estimate_minutes),
         ("unfiled_minutes", args.unfiled_minutes),
@@ -276,6 +283,8 @@ pub fn random_key() -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::args::{Cli, Command, TicketCommand};
+    use clap::Parser;
 
     fn no_fields() -> TicketFieldArgs {
         TicketFieldArgs {
@@ -288,10 +297,52 @@ mod tests {
             allocation: None,
             max_workers: None,
             cores: None,
+            needs_os: None,
             estimate_minutes: None,
             unfiled_minutes: None,
             every: None,
             saving: None,
+        }
+    }
+
+    #[test]
+    fn create_and_update_send_the_requested_operating_system() {
+        let cli = Cli::try_parse_from([
+            "ignite",
+            "ticket",
+            "create",
+            "Native work",
+            "--needs-os",
+            "macos",
+        ])
+        .unwrap();
+        let Command::Ticket { command } = cli.command else {
+            panic!("expected a ticket command");
+        };
+        let TicketCommand::Create { fields, .. } = *command else {
+            panic!("expected ticket create");
+        };
+        let created = create("Native work", &fields, &[], &[], None).unwrap();
+        assert_eq!(created["fields"]["needs_os"], "macos");
+
+        for (argument, expected) in [("windows", json!("windows")), ("any", Value::Null)] {
+            let cli = Cli::try_parse_from([
+                "ignite",
+                "ticket",
+                "update",
+                "T1234",
+                "--needs-os",
+                argument,
+            ])
+            .unwrap();
+            let Command::Ticket { command } = cli.command else {
+                panic!("expected a ticket command");
+            };
+            let TicketCommand::Update { fields, .. } = *command else {
+                panic!("expected ticket update");
+            };
+            let updated = update("T1234", &fields, &no_changes()).unwrap();
+            assert_eq!(updated["set"], json!({"needs_os": expected}));
         }
     }
 

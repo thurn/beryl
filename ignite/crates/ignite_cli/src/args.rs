@@ -434,6 +434,9 @@ pub struct TicketFieldArgs {
     /// The cores the ticket is expected to use.
     #[arg(long)]
     pub cores: Option<f64>,
+    /// The operating system the work requires. Use `any` to clear the requirement.
+    #[arg(long, value_parser = ["macos", "windows", "any"])]
+    pub needs_os: Option<String>,
     /// Estimated agent minutes for this ticket's own work. Use 0 to clear it.
     #[arg(long)]
     pub estimate_minutes: Option<u32>,

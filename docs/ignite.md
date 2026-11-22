@@ -3739,6 +3739,11 @@ pinned ticket. On an existing ticket, `ignite ticket update --add-label` and
 with the other labels. `ignite plan check` warns when an effective pin names a
 machine or provider unknown to the fleet.
 
+File platform-specific work with `ignite ticket create --needs-os macos` or
+`--needs-os windows` so the requirement is in place when dispatch starts. Use
+`ignite ticket update <id> --needs-os <os>` to change the requirement, or
+`--needs-os any` when the work can run on either system.
+
 - `ignite ticket create --automatic` adds a machine pin for the filing machine
   unless the ticket already has one. The hub pins the tickets it files about a
   specific machine to that machine too.

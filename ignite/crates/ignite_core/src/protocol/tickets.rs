@@ -198,6 +198,7 @@ pub struct TicketFields {
         skip_serializing_if = "Option::is_none"
     )]
     pub cores: Option<Option<f64>>,
+    /// The operating system required for dispatch. Null clears the requirement.
     #[serde(
         default,
         deserialize_with = "present",
