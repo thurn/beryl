@@ -1,10 +1,10 @@
-//! Switching a check on or off by hand (`ignite flaky on|off`), the record of who did it, and the
-//! list of checks that are off, have flaked or were switched by hand.
+//! Switching a check on or off, the record of who did it, and the list that `ignite flaky`
+//! reports.
 //!
-//! The hub switches an ordinary check off after its first flake or test-only regression close.
-//! Once upkeep files the remedy, that sighting will not switch the check off again.
+//! The hub switches an ordinary check off after its first flake with a known command or a
+//! test-only regression close. Once upkeep files the remedy, that sighting is consumed.
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use ignite_core::ids::CheckName;
 use ignite_core::protocol::hub::{CheckState, FlakyCheck, HandSwitch};
@@ -12,9 +12,11 @@ use ignite_core::time::Timestamp;
 
 use crate::Result;
 use crate::hub::checks::{not_machine_fault, state_from, state_text};
+use crate::hub::flaky_triage;
+use crate::hub::meta;
 use crate::hub::results::parse;
 
-/// One switch by hand.
+/// One recorded state change.
 #[derive(Clone, Copy, Debug)]
 pub struct Switch<'a> {
     pub check: &'a str,
@@ -72,6 +74,67 @@ pub fn switch(conn: &Connection, switch: &Switch) -> Result<Option<CheckState>> 
     Ok(Some(previous))
 }
 
+/// Restores checks disabled by a filed imported verdict with no independent evidence.
+/// Upkeep used to accept verdicts that had neither a command ID nor failure output. The old
+/// importer stored a Git tree ID (or an empty hash), while native reports have a 64-digit
+/// input hash, even if they have no command ID. An automatic flaky remedy must name the check.
+/// Any native report, queued or filed test-only remedy, or recorded switch leaves it alone.
+pub fn recover_imported_flakes(
+    conn: &mut Connection,
+    actor: &str,
+    machine: &str,
+    now: Timestamp,
+) -> Result<Vec<String>> {
+    const RECOVERY: &str = "recovered_imported_flakes";
+    if meta::get::<bool>(conn, RECOVERY)? == Some(true) {
+        return Ok(Vec::new());
+    }
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    if meta::get::<bool>(&tx, RECOVERY)? == Some(true) {
+        return Ok(Vec::new());
+    }
+    let candidates: Vec<(String, String)> = {
+        let mut select = tx.prepare(
+            "SELECT f.check_name, min(f.filed) FROM flaky f
+             JOIN checks c ON c.name = f.check_name
+             JOIN tickets t ON t.id = f.filed
+             WHERE c.state = 'off' AND t.created_by = ?1
+               AND t.metadata -> 'ignite_fault' ->> 'category' IN ('flaky', ?2)
+               AND EXISTS (SELECT 1 FROM json_each(t.metadata, '$.ignite_checks')
+                           WHERE value = f.check_name)
+               AND NOT EXISTS (SELECT 1 FROM flaky other WHERE other.check_name = f.check_name
+                   AND (length(other.hash) = 64 OR other.command != ''
+                        OR other.output != '' OR other.always != 0))
+               AND NOT EXISTS (SELECT 1 FROM check_fix_outcomes o WHERE o.check_name = f.check_name
+                   AND o.remedy_ticket IS NOT NULL)
+               AND NOT EXISTS (SELECT 1 FROM check_state_changes s WHERE s.check_name = f.check_name)
+             GROUP BY f.check_name ORDER BY f.check_name",
+        )?;
+        select
+            .query_map(params![actor, flaky_triage::CATEGORY], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?
+            .collect::<rusqlite::Result<_>>()?
+    };
+    for (check, ticket) in &candidates {
+        switch(
+            &tx,
+            &Switch {
+                check,
+                state: CheckState::On,
+                actor,
+                machine,
+                note: "Restored after an imported flake verdict without command provenance.",
+                ticket: Some(ticket),
+                at: now,
+            },
+        )?;
+    }
+    meta::put(&tx, RECOVERY, &true)?;
+    tx.commit()?;
+    Ok(candidates.into_iter().map(|(check, _)| check).collect())
+}
+
 /// The newest remedy ticket for the check's own failure, excluding machine faults.
 pub fn flaky_ticket(conn: &Connection, check: &str) -> Result<Option<String>> {
     Ok(conn
@@ -92,7 +155,7 @@ pub fn flaky_ticket(conn: &Connection, check: &str) -> Result<Option<String>> {
         .optional()?)
 }
 
-/// The last switch of `check` by hand.
+/// The last recorded switch of `check`.
 fn last_switch(conn: &Connection, check: &str) -> Result<Option<HandSwitch>> {
     let row: Option<(String, String, String, String, String)> = conn
         .prepare_cached(
@@ -121,7 +184,7 @@ fn last_switch(conn: &Connection, check: &str) -> Result<Option<HandSwitch>> {
     .transpose()
 }
 
-/// Every check that is switched off, has a flaky record about itself or was switched by hand,
+/// Every check that is switched off, has a flaky record about itself or has a recorded switch,
 /// by name.
 pub fn flaky_checks(conn: &Connection) -> Result<Vec<FlakyCheck>> {
     let rows: Vec<(String, String, String, u32, Option<String>)> = {

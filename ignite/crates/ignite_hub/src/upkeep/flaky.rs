@@ -1,4 +1,5 @@
-//! An ordinary flake quarantines its check and joins the pending investigation batch.
+//! An ordinary flake with a known command quarantines its check and joins the pending
+//! investigation batch.
 //! Always-set checks stay on. When several checks flake in one command, the machine gets a
 //! separate ticket and every check in that command stays on.
 
@@ -13,6 +14,7 @@ use ignite_core::protocol::hub::FlakyEvidence;
 use ignite_core::protocol::tickets::{TicketFields, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
+use ignite_store::hub::check_state;
 use ignite_store::hub::checks::{self, MACHINE_FAULT_CHECKS};
 use ignite_store::hub::flaky_triage;
 
@@ -21,6 +23,10 @@ use super::invalid_checks::{self, Remedy, RemedyOutcome};
 use super::regressions::OUTPUT_LINES;
 use super::signature::Signature;
 use super::{machines, tail};
+
+pub(super) fn recover_imported(conn: &mut Connection, now: Timestamp) -> Result<Vec<String>> {
+    check_state::recover_imported_flakes(conn, UPKEEP.actor, UPKEEP.machine, now)
+}
 
 /// Files machine faults and always-set flakes first, then adds ordinary flakes to the batch.
 pub(super) fn handle(

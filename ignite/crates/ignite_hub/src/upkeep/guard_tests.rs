@@ -3,13 +3,13 @@
 
 use std::collections::BTreeMap;
 
-use rusqlite::Connection;
+use rusqlite::{Connection, params};
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
-    FlakyReport, MachineRegister, NewResult, ResultKey, StoreRequest,
+    CheckState, FlakyReport, MachineRegister, NewResult, ResultKey, StoreRequest,
 };
 use ignite_core::protocol::tickets::{Operation, Status, TicketFields, TicketType};
 use ignite_core::time::Timestamp;
@@ -31,6 +31,28 @@ fn flaky(check: &str, commit: &str, command: &str) -> FlakyReport {
         command: command.to_owned(),
         output: format!("{check} failed in {command}"),
     }
+}
+
+fn imported_flake(conn: &Connection, check: &str, hash: &str, filed: Option<&str>, now: Timestamp) {
+    conn.execute(
+        "INSERT INTO flaky (check_name, hash, commit_sha, machine, at, filed)
+         VALUES (?1, ?2, 'aaaa', 'legacy-host', ?3, ?4)",
+        params![check, hash, now.to_string(), filed],
+    )
+    .unwrap();
+}
+
+fn imported_remedy(conn: &Connection, id: &str, category: &str, checks: &[&str], now: Timestamp) {
+    let metadata = serde_json::json!({
+        "ignite_fault": {"category": category},
+        "ignite_checks": checks,
+    });
+    conn.execute(
+        "INSERT INTO tickets (id, title, status, created_at, updated_at, created_by, metadata, version)
+         VALUES (?1, 'Imported flakes', 'closed', ?2, ?2, 'ignite-upkeep', ?3, 0)",
+        params![id, now.to_string(), metadata.to_string()],
+    )
+    .unwrap();
 }
 
 fn register(conn: &Connection, id: &str, name: &str, os: Os, now: Timestamp) {
@@ -117,6 +139,152 @@ fn many_checks_flaking_in_one_command_switch_none_off_and_file_one_machine_ticke
 }
 
 #[test]
+fn imported_flakes_stay_visible_and_only_the_fresh_command_switches_a_check_off() {
+    let clock = start();
+    let now = clock.now();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    let names = [
+        "shots:first",
+        "shots:second",
+        "shots:third",
+        "lint:aggregate",
+    ];
+    for name in names {
+        list_check(&mut conn, name);
+        let hash = if name.starts_with("shots:") {
+            "abcd"
+        } else {
+            ""
+        };
+        imported_flake(&conn, name, hash, None, now);
+    }
+    let report = upkeep.pass(&mut conn, now).unwrap();
+    assert!(report.tickets_filed.is_empty());
+    assert!(report.checks_switched_off.is_empty());
+
+    checks::record_flaky(&conn, &flaky("shots:first", "bbbb", "m-1:run-1"), now).unwrap();
+    let report = upkeep.pass(&mut conn, now).unwrap();
+    assert_eq!(report.checks_switched_off, ["shots:first"]);
+    assert_eq!(report.tickets_filed.len(), 1);
+    let evidence = checks::filed_flakes(&conn, &report.tickets_filed[0]).unwrap();
+    assert_eq!(evidence.len(), 1);
+    assert_eq!(evidence[0].command, "m-1:run-1");
+    let history = hub::check_state::flaky_checks(&conn).unwrap();
+    assert_eq!(history.len(), names.len());
+    for entry in history {
+        if entry.check.as_str() == "shots:first" {
+            assert_eq!((entry.state, entry.flaky_records), (CheckState::Off, 2));
+        } else {
+            assert_eq!((entry.state, entry.flaky_records), (CheckState::On, 1));
+        }
+    }
+}
+
+#[test]
+fn recovery_restores_only_checks_disabled_by_the_import_and_runs_once() {
+    let clock = start();
+    let now = clock.now();
+    let mut conn = hub::open_in_memory().unwrap();
+    let names = [
+        "shots:imported",
+        "shots:hashless",
+        "shots:native",
+        "shots:native-without-command",
+        "shots:test-only",
+        "shots:pending-test-only",
+        "shots:manual",
+        "shots:unfiled",
+        "shots:unlinked",
+    ];
+    let family_ticket = "FLA01";
+    let batch_ticket = "FLA02";
+    imported_remedy(
+        &conn,
+        family_ticket,
+        "flaky",
+        &names[..names.len() - 1],
+        now,
+    );
+    imported_remedy(
+        &conn,
+        batch_ticket,
+        hub::flaky_triage::CATEGORY,
+        &names[1..2],
+        now,
+    );
+    for name in names {
+        list_check(&mut conn, name);
+        let filed = match name {
+            "shots:unfiled" => None,
+            "shots:hashless" => Some(batch_ticket),
+            _ => Some(family_ticket),
+        };
+        let hash = if name == "shots:hashless" { "" } else { "abcd" };
+        imported_flake(&conn, name, hash, filed, now);
+        if name == "shots:manual" {
+            hub::check_state::switch(
+                &conn,
+                &hub::check_state::Switch {
+                    check: name,
+                    state: CheckState::Off,
+                    actor: "operator",
+                    machine: "m-1",
+                    note: "Disabled by the operator",
+                    ticket: None,
+                    at: now,
+                },
+            )
+            .unwrap();
+        } else {
+            checks::set_state(&conn, name, CheckState::Off).unwrap();
+        }
+    }
+    for (name, command) in [
+        ("shots:native", "m-1:run-1"),
+        ("shots:native-without-command", ""),
+    ] {
+        checks::record_flaky(&conn, &flaky(name, "bbbb", command), now).unwrap();
+    }
+    for (name, remedy) in [
+        ("shots:test-only", "TEST1"),
+        ("shots:pending-test-only", ""),
+    ] {
+        conn.execute(
+            "INSERT INTO check_fix_outcomes
+                (close_seq, check_name, ticket, at, outcome, source, first_bad, fixing_commit, remedy_ticket)
+             VALUES (1, ?1, 'REG01', ?2, 'test-only', 'regression', 'aaaa', 'bbbb', ?3)",
+            params![name, now.to_string(), remedy],
+        )
+        .unwrap();
+    }
+
+    let report = Upkeep::new(None).unwrap().pass(&mut conn, now).unwrap();
+    assert_eq!(report.checks_restored, ["shots:hashless", "shots:imported"]);
+    for name in &names[2..] {
+        assert_eq!(check_state(&conn, name), "off", "{name}");
+    }
+    let history = hub::check_state::flaky_checks(&conn).unwrap();
+    for (name, prior_ticket) in names[..2].iter().zip([family_ticket, batch_ticket]) {
+        let entry = history
+            .iter()
+            .find(|entry| entry.check.as_str() == *name)
+            .unwrap();
+        assert_eq!((entry.state, entry.flaky_records), (CheckState::On, 1));
+        assert_eq!(entry.ticket.as_deref(), Some(prior_ticket));
+        let switch = entry.switched.as_ref().unwrap();
+        assert_eq!((switch.actor.as_str(), switch.at), ("ignite-upkeep", now));
+    }
+
+    // A later pass on a restarted hub makes no new changes.
+    clock.advance(60.0);
+    let mut restarted = Upkeep::new(None).unwrap();
+    let report = restarted.pass(&mut conn, clock.now()).unwrap();
+    assert!(report.checks_restored.is_empty());
+    assert_eq!(hub::check_state::flaky_checks(&conn).unwrap(), history);
+}
+
+#[test]
 fn twenty_ordinary_check_families_share_one_pending_batch() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
@@ -181,13 +349,13 @@ fn a_pending_batch_updates_its_cluster_summary_until_approval() {
         id
     };
     let first = seed(&mut conn, "ui:shape", "m-1:shared");
+    list_check(&mut conn, "unit:legacy");
+    imported_flake(&conn, "unit:legacy", "", None, clock.now());
     assert_eq!(first, seed(&mut conn, "ui:shot", "m-1:shared"));
-    assert_eq!(first, seed(&mut conn, "unit:legacy", ""));
-    assert_eq!(first, seed(&mut conn, "rust:legacy", ""));
     let frozen = ticket(&conn, &first);
     assert_eq!(frozen.body.matches("- Command ").count(), 1);
-    assert_eq!(frozen.body.matches("- Legacy evidence").count(), 1);
-    assert!(frozen.body.contains("Checks: rust:legacy, unit:legacy."));
+    assert_eq!(checks::filed_flakes(&conn, &first).unwrap().len(), 2);
+    assert_eq!(check_state(&conn, "unit:legacy"), "on");
 
     for status in [Status::Open, Status::PendingApproval] {
         apply(

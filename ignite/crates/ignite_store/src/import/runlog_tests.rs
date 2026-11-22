@@ -288,6 +288,56 @@ fn a_second_import_writes_nothing_and_a_dry_run_writes_nothing() {
 }
 
 #[test]
+fn imported_flake_clusters_and_verdicts_without_a_tree_are_kept_as_history() {
+    let folder = write_log("legacy-flakes");
+    let mut hub = hub::open_in_memory().unwrap();
+    let time = "2026-11-17T07:17:57Z";
+    let tree = "8d5bcd468ffb9d6fc13750be16d2e9c08ba868d2";
+    let verdict = format!(
+        r#"{{"time":"{time}","host":"h2","commit":"{D4}","lane":"shots","verdict":"flaky","fixed":"tree {tree}"}}"#
+    );
+    for index in 0..51 {
+        let name = format!("shots:fixture-{index}");
+        hub::checks::register(&hub, &name).unwrap();
+        add_verdict_ticket(&hub, &format!("ci{index}"), &name, &[&verdict]);
+    }
+    hub::checks::register(&hub, "lint:aggregate").unwrap();
+    add_verdict_ticket(
+        &hub,
+        "ci-untagged",
+        "lint:aggregate",
+        &[&format!(
+            r#"{{"time":"{time}","host":"h2","commit":"{D4}","lane":"lint","verdict":"flaky"}}"#
+        )],
+    );
+
+    let report = import(&mut hub, &folder, &git(), false);
+    assert_eq!(report.get("flaky").unwrap().written, 52);
+    let historical = hub::check_state::flaky_checks(&hub).unwrap();
+    assert_eq!(historical.len(), 52);
+    assert!(historical.iter().all(|entry| entry.flaky_records == 1));
+    let hashes: (i64, i64) = hub
+        .query_row(
+            "SELECT sum(hash = ?1), sum(hash = '') FROM flaky WHERE command = ''",
+            [tree],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(hashes, (51, 1));
+    let actionable: i64 = hub
+        .query_row(
+            &format!(
+                "SELECT count(*) FROM flaky WHERE {}",
+                hub::checks::counting_flaky()
+            ),
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(actionable, 0);
+}
+
+#[test]
 fn a_change_git_cannot_resolve_counts_in_the_unknown_area() {
     let folder = write_log("unknown");
     let mut hub = hub::open_in_memory().unwrap();

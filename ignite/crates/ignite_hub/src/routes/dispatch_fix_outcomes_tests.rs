@@ -136,7 +136,7 @@ fn closing_a_flaky_ticket_by_batch_records_each_grouped_check_once() {
                 commit: commit.parse().unwrap(),
                 machine: "m-1".parse().unwrap(),
                 always: true,
-                command: String::new(),
+                command: format!("m-1:{commit}"),
                 output: "flaked".to_owned(),
             };
             checks::record_flaky(&conn, &report, start()).unwrap();
@@ -176,7 +176,7 @@ fn an_ordinary_batch_records_outcomes_only_on_the_repair_ticket() {
             commit: "aaaa".parse().unwrap(),
             machine: "m-1".parse().unwrap(),
             always: false,
-            command: String::new(),
+            command: "m-1:run-1".to_owned(),
             output: "flaked".to_owned(),
         };
         checks::register(&conn, check).unwrap();

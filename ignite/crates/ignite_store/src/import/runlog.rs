@@ -15,8 +15,8 @@
 //!   failed. Flaky failures, failures without a verdict, and verdicts whose failing run is not in
 //!   the log are not counted.
 //! - `check_costs`: the CPU seconds of each check's last 20 runs, in unit `cpu_s`.
-//! - `flaky`: one row for each `flaky` verdict, with the tree it failed and passed on as the
-//!   hash.
+//! - `flaky`: one historical row for each `flaky` verdict, with the reported tree as the hash
+//!   when present. The old verdicts supply no command ID for upkeep to act on.
 //!
 //! Left out of everything: runs that were skipped or could not complete, the reruns of a
 //! bisection at older commits (script `bisect`), and runs and verdicts in exploration lanes.

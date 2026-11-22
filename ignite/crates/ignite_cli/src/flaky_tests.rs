@@ -98,20 +98,22 @@ fn flaky_commands_read_evidence_and_switch_checks() {
     };
     checks::register(&conn, check.check.as_str()).unwrap();
     checks::record_flaky(&conn, &check, now).unwrap();
+    let pass = Upkeep::new(None).unwrap().pass(&mut conn, now).unwrap();
+    assert_eq!(pass.checks_switched_off, ["unit:other"]);
+    let ticket = &pass.tickets_filed[0];
+    // A ticket filed by an earlier hub can still carry imported records without command IDs.
     for (legacy, hash) in [
         ("unit:tree-hash", "a".repeat(40)),
         ("unit:no-hash", String::new()),
     ] {
         checks::register(&conn, legacy).unwrap();
         conn.execute(
-            "INSERT INTO flaky (check_name, hash, commit_sha, machine, at)
-             VALUES (?1, ?2, 'aaaa', 'old-host', ?3)",
-            [legacy, hash.as_str(), &now.to_string()],
+            "INSERT INTO flaky (check_name, hash, commit_sha, machine, at, filed)
+             VALUES (?1, ?2, 'aaaa', 'old-host', ?3, ?4)",
+            [legacy, hash.as_str(), &now.to_string(), ticket],
         )
         .unwrap();
     }
-    let pass = Upkeep::new(None).unwrap().pass(&mut conn, now).unwrap();
-    let ticket = &pass.tickets_filed[0];
     let running = HubServer {
         config: Config::parse("ignite.toml", CONFIG).unwrap(),
         listen: "127.0.0.1:0".to_owned(),

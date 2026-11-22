@@ -109,6 +109,8 @@ pub struct UpkeepReport {
     /// Tickets closed because the fault they report cleared ([`clearing`]).
     pub tickets_closed: Vec<String>,
     pub checks_switched_off: Vec<String>,
+    /// Checks restored after they were switched off by imported flake verdicts.
+    pub checks_restored: Vec<String>,
     /// Efficiency rows deleted for being older than any reader needs.
     pub metrics_deleted: usize,
     /// Tickets whose attachment files were removed.
@@ -185,6 +187,7 @@ impl Upkeep {
             report.released_claims.extend(released);
         }));
         keep(regressions::mark_fixed(conn).map(|fixed| report.regressions_fixed = fixed));
+        keep(flaky::recover_imported(conn, now).map(|restored| report.checks_restored = restored));
         for result in [
             invalid_checks::regressions(conn, &self.rules, now),
             flaky::handle(conn, &self.rules, now),

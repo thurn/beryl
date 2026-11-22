@@ -311,11 +311,14 @@ pub fn stats(conn: &Connection, family: &str) -> Result<CheckStatsReply> {
 /// check off.
 pub const MACHINE_FAULT_CHECKS: i64 = 3;
 
-/// The SQL condition on a `flaky` row for it to count toward switching its check off: no
-/// ticket was filed for it yet, and it is not from a command in which [`MACHINE_FAULT_CHECKS`]
-/// or more checks flaked.
+/// The SQL condition on a `flaky` row for it to count toward switching its check off. Only
+/// reports with a command ID can tell a check flake from a batch on a faulty machine. Imported
+/// verdicts and other reports without that ID remain available as history.
 pub fn counting_flaky() -> String {
-    format!("filed IS NULL AND {}", not_machine_fault())
+    format!(
+        "filed IS NULL AND command != '' AND {}",
+        not_machine_fault()
+    )
 }
 
 /// The SQL condition on a `flaky` row for it to be about its own check rather than about the
