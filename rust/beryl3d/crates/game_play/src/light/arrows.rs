@@ -167,9 +167,8 @@ impl Drawn {
                 interactive: false,
                 state: StateBits(if self.moving { StateBits::MOVING } else { 0 }),
                 face: None,
-                copies: 1,
-                really: kit_frame::frame::NameRef::default(),
-                note: kit_frame::frame::NameRef::default(),
+                count: 1,
+                annotations: Default::default(),
             },
         );
         builder.decorate(

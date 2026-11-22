@@ -1,8 +1,10 @@
 //! The tree printout, locators, hit testing and the frame checks, on frames built by hand.
 
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
+use game_table::table::Place;
+use game_table::table::labels::TAPPED;
 use glam::Vec2;
-use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
+use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Resolved, Role, StateBits};
 use kit_probe::agent::checks::check;
 use kit_probe::agent::checks::{
     KeptArrow, blank_cards, duplicates, keep_arrows, lines_hold, minimum_sizes, named, on_screen,
@@ -36,7 +38,7 @@ fn element(role: Role, name: &'static str, id: u32, place: Place, rect: Rect) ->
             parent: u32::MAX,
             role,
             name: NameRef::default(),
-            place,
+            place: place.into(),
             pose: (place != Place::Layer).then(kit_base::pose::Pose::default),
             corners: [
                 Vec2::new(x, bottom),
@@ -50,9 +52,8 @@ fn element(role: Role, name: &'static str, id: u32, place: Place, rect: Rect) ->
             interactive: false,
             state: StateBits::default(),
             face: (role == Role::Card).then_some(1),
-            copies: 1,
-            really: NameRef::default(),
-            note: NameRef::default(),
+            count: 1,
+            annotations: Default::default(),
         },
     }
 }
@@ -93,6 +94,7 @@ impl Spec {
 
 fn frame(specs: Vec<Spec>) -> Frame {
     let mut frame = Frame::with_capacity(specs.len(), 0, 4096);
+    frame.labels = &game_hud::labels::GAME_LABELS;
     let mut builder = FrameBuilder::new(
         &mut frame,
         Tier::Baseline,
@@ -199,7 +201,7 @@ fn the_tree_prints_each_element_in_the_doc_format() {
 fn the_tree_prints_states_covered_and_faded() {
     let frame = frame(vec![
         card("Island", 1, LANDS, 0.0, 0.0, 10.0).with(|e| {
-            e.state.0 |= StateBits::TAPPED | StateBits::MOVING;
+            e.state.0 |= TAPPED | StateBits::MOVING;
             e.opacity = 0.75;
         }),
         // Covers the left half of the first card.

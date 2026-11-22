@@ -5,6 +5,7 @@ use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{Side, ZoneName};
 use game_hud::hud::phase::phase_box;
 use game_hud::hud::placement_scene::{Group, PlacementScene};
+use game_table::table::labels::ABILITY_ROLE;
 use game_table::table::{Camera, Objects};
 use kit_base::data::profiles::Piece;
 use kit_frame::frame::{ABILITY_IDS, ElementId, Role};
@@ -88,7 +89,7 @@ fn project(
     for (id, pose) in objects.ability_poses() {
         layout.object(
             ElementId(id_offset + ABILITY_IDS + id),
-            Role::Ability,
+            ABILITY_ROLE,
             Group::Stack,
             pose,
             camera.card_box(&pose).0,

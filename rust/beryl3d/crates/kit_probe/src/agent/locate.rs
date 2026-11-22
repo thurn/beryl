@@ -10,7 +10,7 @@
 use std::fmt;
 
 use super::tree::locator_of;
-use kit_frame::frame::{Frame, Role};
+use kit_frame::frame::{Frame, Labels, Role};
 use kit_scene::hit::is_within;
 
 /// How many elements an error lists.
@@ -91,7 +91,7 @@ impl std::error::Error for LocateError {}
 pub fn locate(frame: &Frame, locator: &str) -> Result<u32, LocateError> {
     let parts = split(locator)
         .into_iter()
-        .map(|part| parse(part).map_err(|reason| syntax(locator, reason)))
+        .map(|part| parse(part, frame.labels).map_err(|reason| syntax(locator, reason)))
         .collect::<Result<Vec<_>, _>>()?;
     // The elements the parts so far match, as a chain from the first part.
     let mut found: Vec<u32> = (0..frame.resolved.len() as u32)
@@ -171,10 +171,10 @@ fn split(locator: &str) -> Vec<&str> {
     parts
 }
 
-fn parse(text: &str) -> Result<Part, String> {
+fn parse(text: &str, labels: &Labels) -> Result<Part, String> {
     let (word, mut rest) = text.split_once(' ').unwrap_or((text, ""));
-    let role = Role::from_word(word).ok_or_else(|| {
-        let roles: Vec<&str> = Role::ALL.iter().map(|role| role.word()).collect();
+    let role = labels.role(word).ok_or_else(|| {
+        let roles: Vec<&str> = labels.roles().map(Role::word).collect();
         format!("'{word}' is not a role; the roles are {}", roles.join(", "))
     })?;
     rest = rest.trim_start();

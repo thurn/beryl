@@ -6,8 +6,7 @@ use std::fmt::Write;
 use beryl_protocol::GameUpdate;
 use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage, GAME_UPDATE};
 use beryl_protocol::protocol::{ObjectView, Side, ZoneName};
-use kit_frame::frame::Place;
-use kit_probe::agent::tree::place_word;
+use game_table::table::Place;
 use serde_json::Value;
 
 use super::table::{placeholder_records, read_capture_card};
@@ -105,13 +104,14 @@ fn write_card(text: &mut String, object: &Value) -> Result<(), serde_json::Error
     };
     let row = (card.zone == ZoneName::Battlefield).then(|| game_table::table::row_of(&card));
     let place = if card.zone == ZoneName::Stack && side == Side::Opponent {
-        "stack.theirs".to_owned()
+        "stack.theirs"
     } else {
-        place_word(Place::Card {
+        Place::Card {
             zone: card.zone,
             side,
             row,
-        })
+        }
+        .label()
     };
     let _ = write!(text, "card");
     if let Some(name) = &card.name {

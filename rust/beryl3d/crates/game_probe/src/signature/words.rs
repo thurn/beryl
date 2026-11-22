@@ -86,7 +86,7 @@ impl Words {
         widths.banded_prompt.dedup();
         Self {
             widths,
-            text: Text::new(),
+            text: Text::with_icons(Some(game_hud::mana_icons::icon)),
             name_style,
         }
     }

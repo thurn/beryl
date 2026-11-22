@@ -215,7 +215,7 @@ fn a_press_follows_paint_order_across_the_table_and_screen() {
         role: if projected { Role::Card } else { Role::Button },
         name: NameRef::default(),
         place: if projected {
-            Place::Revealed
+            Place::named("preview")
         } else {
             Place::Layer
         },
@@ -227,9 +227,8 @@ fn a_press_follows_paint_order_across_the_table_and_screen() {
         interactive: true,
         state: StateBits(state),
         face: None,
-        copies: 1,
-        really: NameRef::default(),
-        note: NameRef::default(),
+        count: 1,
+        annotations: Default::default(),
     };
     let mut frame = Frame::with_capacity(6, 0, 0);
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());

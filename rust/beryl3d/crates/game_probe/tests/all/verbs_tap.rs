@@ -14,8 +14,9 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use game_table::table::badges::{BadgeSizes, style};
+use game_table::table::labels::TAPPED;
 use glam::{Vec2, Vec3};
-use kit_frame::frame::{Frame, Material, StateBits};
+use kit_frame::frame::{Frame, Material};
 use kit_text::text::{Glyphs, Text, glyph_key};
 use kit_ui::input::{GlyphCell, GlyphKey};
 
@@ -204,7 +205,7 @@ fn drawn_tapped(frame: &Frame, slot: u16) -> bool {
         .find(|element| element.id.0 == u32::from(slot))
         .expect("the card is drawn")
         .state
-        .has(StateBits::TAPPED)
+        .has(TAPPED)
 }
 
 #[test]

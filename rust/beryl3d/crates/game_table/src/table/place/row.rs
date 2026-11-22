@@ -9,9 +9,8 @@ use super::{
     side_index,
 };
 use crate::table::rows::{Beneath, NameIds, SameName, face_up, grouped};
-use crate::table::{Camera, FittedRow, Layout, RowArea, RowWindow, RowZoom, row_area};
+use crate::table::{Camera, FittedRow, Layout, Place, RowArea, RowWindow, RowZoom, row_area};
 use glam::{Quat, Vec3};
-use kit_frame::frame::Place;
 use kit_scene::hit::CELL;
 use kit_space::arrange::row::{self as solver, Row};
 

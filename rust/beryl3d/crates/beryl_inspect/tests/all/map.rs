@@ -5,6 +5,7 @@ use std::path::Path;
 
 use beryl_inspect::cli::{Ran, main};
 use beryl_protocol::script::Verb;
+use game_hud::labels::GAME_LABELS;
 use game_table::table::Group;
 use kit_base::data::{TUNING_FILES, effect::PrimitiveKind};
 use kit_frame::frame::Role;
@@ -123,7 +124,7 @@ fn inventories_cover_their_owning_registries() {
             "policies",
             PolicyKind::ALL.iter().map(|kind| kind.word()).collect(),
         ),
-        ("roles", Role::ALL.into_iter().map(Role::word).collect()),
+        ("roles", GAME_LABELS.roles().map(Role::word).collect()),
         (
             "widgets",
             Widget::ALL.iter().map(|widget| widget.word()).collect(),

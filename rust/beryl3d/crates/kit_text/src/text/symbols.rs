@@ -1,26 +1,21 @@
-//! Mana symbols written in a text as `{...}`, such as `{1}{U}` in "Pay {1}{U}" (docs/beryl-3d.md,
-//! "Text": mana symbols are inline boxes). The web interface draws them with `RulesText` and
-//! `ManaSymbol` in `ui/src/components/Mana.tsx`, styled by `.mana-symbol` in
-//! `ui/src/design/components/mana-symbols.css`: a disc the size of the line's em in the symbol's
-//! color, with the symbol's glyph from the Mana font in dark ink on it.
+//! Named inline icons in text. The caller chooses the font, glyph and colors.
 
 use std::ops::Range;
 
-use kit_base::tokens::mana;
+use std::borrow::Cow;
+
+use kit_base::typography::fonts::Font;
 
 /// The character parley lays out an inline box at.
 pub const OBJECT: char = '\u{fffc}';
 
-/// A symbol's glyph is this many of the line's em: `.mana-symbol`'s font size is 0.82 of its
-/// text's, and its disc is 1.25 of that, so the glyph is about 0.8 of the disc.
+/// An inline icon's glyph size relative to its one-em box.
 pub const GLYPH_SIZE: f32 = 0.8;
 
-/// How far a symbol hangs below the baseline, in ems: `.mana-symbol`'s `vertical-align` of
-/// -0.12 of its own 0.82 em.
+/// How far an inline box hangs below the baseline, in ems.
 pub const DROP: f32 = 0.1;
 
-/// The byte ranges of the symbols in `text`, each with its braces: a `{`, one or more bytes
-/// that are not `}`, and a `}`, as `RulesText` matches them with `/\{[^}]+\}/`.
+/// The byte ranges of the names delimited by braces, including the braces.
 #[must_use]
 pub fn tokens(text: &str) -> Vec<Range<usize>> {
     let mut found = Vec::new();
@@ -39,58 +34,25 @@ pub fn tokens(text: &str) -> Vec<Range<usize>> {
     found
 }
 
-/// The Mana font's character for `symbol` (the text between the braces), from `CODES` in
-/// `ui/src/components/Mana.tsx`, or `None` for a symbol the font has no glyph for.
-#[must_use]
-pub fn code(symbol: &str) -> Option<char> {
-    let point = match symbol {
-        "W" => 0xe600,
-        "U" => 0xe601,
-        "B" => 0xe602,
-        "R" => 0xe603,
-        "G" => 0xe604,
-        "C" => 0xe904,
-        "X" => 0xe615,
-        "S" => 0xe619,
-        "T" => 0xe61a,
-        "Q" => 0xe61b,
-        "E" => 0xe907,
-        number => 0xe605 + number.parse::<u32>().ok().filter(|&n| n < 16)?,
-    };
-    char::from_u32(point)
+/// The glyph and colors of an inline icon.
+pub struct InlineIcon<'a> {
+    /// Glyph text and its font. With no font, it uses the font of the surrounding text.
+    pub glyph: (Cow<'a, str>, Option<Font>),
+    pub background: [u8; 4],
+    pub ink: [u8; 4],
 }
 
-/// The disc's color and the glyph's ink for `symbol`: one of the five colors or colorless, or
-/// the generic color for a number or any other symbol, as `ManaSymbol` picks its class.
-#[must_use]
-pub fn colors(symbol: &str) -> ([u8; 4], [u8; 4]) {
-    match symbol {
-        "W" => (mana::W, mana::INK),
-        "U" => (mana::U, mana::U_INK),
-        "B" => (mana::B, mana::INK),
-        "R" => (mana::R, mana::INK),
-        "G" => (mana::G, mana::INK),
-        "C" => (mana::C, mana::INK),
-        _ => (mana::GENERIC, mana::INK),
-    }
-}
+/// Resolves an inline name as an icon. A text shaper without a resolver reads braces literally.
+pub type IconResolver = fn(&str) -> InlineIcon<'_>;
 
 #[cfg(test)]
 mod tests {
-    use super::{code, tokens};
+    use super::tokens;
 
     #[test]
-    fn tokens_are_found_as_rules_text_finds_them() {
-        assert_eq!(tokens("Pay {1}{U}"), vec![4..7, 7..10]);
-        assert_eq!(tokens("{} and {T}"), vec![7..10]);
-        assert_eq!(tokens("open {U"), Vec::<std::ops::Range<usize>>::new());
-    }
-
-    #[test]
-    fn numbers_up_to_fifteen_have_glyphs() {
-        assert_eq!(code("0"), Some('\u{e605}'));
-        assert_eq!(code("15"), Some('\u{e614}'));
-        assert_eq!(code("16"), None);
-        assert_eq!(code("W/U"), None);
+    fn names_are_found_between_nonempty_braces() {
+        assert_eq!(tokens("Go {left}{up}"), vec![3..9, 9..13]);
+        assert_eq!(tokens("{} and {up}"), vec![7..11]);
+        assert!(tokens("open {up").is_empty());
     }
 }

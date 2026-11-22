@@ -458,9 +458,8 @@ fn write_effect(
                 0
             }),
             face: None,
-            copies: 1,
-            really: NameRef::default(),
-            note: NameRef::default(),
+            count: 1,
+            annotations: Default::default(),
         },
     );
     preview::write(data, effect, rect, now, plane, builder);

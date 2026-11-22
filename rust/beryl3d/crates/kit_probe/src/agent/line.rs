@@ -6,34 +6,10 @@
 //! - a group: `game`, `table` or `layer`;
 //! - a cut: `... <count> more in <place> (--within <place>)`;
 //! - an element: `<role> ["<name>"] #<id> [<place>] <x>,<y> <width>x<height> [<state>...]`,
-//!   where a name escapes `"` and `\` with a backslash and a state is a word of the closed list,
-//!   `moving`, `pile`, `covered` and `faded` taking a parenthesised value, and `copy` and
-//!   `note` a parenthesised name in quotes, escaped as an element's name is.
+//!   where names escape quotes and backslashes. A state's value, if any, is a percentage,
+//!   an element count or a quoted annotation.
 
-use kit_frame::frame::Role;
-
-/// The words a state may be.
-const STATES: [&str; 19] = [
-    "interactive",
-    "tapped",
-    "face-down",
-    "moving",
-    "hovered",
-    "held",
-    "eligible",
-    "selected",
-    "target",
-    "disabled",
-    "focused",
-    "phased-out",
-    "picked",
-    "primary",
-    "pile",
-    "copy",
-    "note",
-    "covered",
-    "faded",
-];
+use kit_frame::frame::Labels;
 
 /// One line, read.
 #[derive(Clone, Debug, PartialEq)]
@@ -74,6 +50,15 @@ impl Line {
     ///
     /// When the line does not follow the grammar, saying where.
     pub fn parse(line: &str) -> Result<Self, String> {
+        Self::parse_with_labels(line, &Labels::DEFAULT)
+    }
+
+    /// Reads one line using the scene owner's roles and states.
+    ///
+    /// # Errors
+    ///
+    /// When the line does not follow the grammar, saying where.
+    pub fn parse_with_labels(line: &str, labels: &Labels) -> Result<Self, String> {
         let body = line.trim_start_matches(' ');
         let indent = line.len() - body.len();
         if !indent.is_multiple_of(2) {
@@ -97,7 +82,7 @@ impl Line {
                 })
                 .ok_or_else(|| format!("'{line}' is not a cut line"));
         }
-        element(body)
+        element(body, labels)
             .map(|element| Self::Element { depth, element })
             .map_err(|why| format!("'{line}': {why}"))
     }
@@ -110,9 +95,9 @@ fn cut_line(cut: &str) -> Option<(usize, String)> {
     Some((count.parse().ok()?, place.to_owned()))
 }
 
-fn element(body: &str) -> Result<Element, String> {
+fn element(body: &str, labels: &Labels) -> Result<Element, String> {
     let (role, mut rest) = body.split_once(' ').ok_or("no id")?;
-    if Role::from_word(role).is_none() {
+    if labels.role(role).is_none() {
         return Err(format!("'{role}' is not a role"));
     }
     let mut name = None;
@@ -144,7 +129,7 @@ fn element(body: &str) -> Result<Element, String> {
         .and_then(|word| word.split_once('x'))
         .and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?)))
         .ok_or("no <width>x<height> size")?;
-    let states = parse_states(&words.collect::<Vec<_>>().join(" "))?;
+    let states = parse_states(&words.collect::<Vec<_>>().join(" "), labels)?;
     Ok(Element {
         role: role.to_owned(),
         name,
@@ -182,19 +167,22 @@ pub fn quoted_name(text: &str) -> Option<(String, &str)> {
 /// # Errors
 ///
 /// When a state or its value does not follow the tree's grammar.
-pub fn parse_states(text: &str) -> Result<Vec<String>, String> {
+pub fn parse_states(text: &str, labels: &Labels) -> Result<Vec<String>, String> {
     let mut states = Vec::new();
     let mut rest = text.trim();
     while !rest.is_empty() {
         let end = rest.find([' ', '(']).unwrap_or(rest.len());
         let word = &rest[..end];
-        if !STATES.contains(&word) {
+        let percent = matches!(word, "moving" | "covered" | "faded");
+        let annotation = labels.annotations.contains(&Some(word));
+        let count = labels.count == Some(word);
+        if !(percent || count || annotation || word == "interactive" || labels.has_state(word)) {
             return Err(format!("'{word}' is not a state"));
         }
         let mut state = word.to_owned();
         rest = &rest[end..];
         if let Some(quoted) = rest.strip_prefix("(\"")
-            && matches!(word, "copy" | "note")
+            && annotation
         {
             let (text, after) = quoted_name(quoted).ok_or("a state's name is not closed")?;
             let after = after
@@ -205,20 +193,18 @@ pub fn parse_states(text: &str) -> Result<Vec<String>, String> {
             rest = after.trim_start();
             continue;
         }
-        if matches!(word, "copy" | "note") {
+        if annotation {
             return Err(format!("the state '{word}' takes a name in quotes"));
         }
         if let Some(value) = rest.strip_prefix('(') {
-            if !matches!(word, "moving" | "pile" | "covered" | "faded") {
+            if !(percent || count) {
                 return Err(format!("the state '{word}' takes no value"));
             }
             let close = value.find(')').ok_or("a state's value is not closed")?;
             let inner = &value[..close];
-            if word == "pile" {
+            if count {
                 if !inner.parse::<u16>().is_ok_and(|count| count > 1) {
-                    return Err(format!(
-                        "'{word}({inner})' needs a pile size of two or more"
-                    ));
+                    return Err(format!("'{word}({inner})' needs a count of two or more"));
                 }
             } else if !inner.ends_with('%') {
                 return Err(format!("'{word}({inner})' is not a percentage"));

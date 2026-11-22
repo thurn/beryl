@@ -3,8 +3,9 @@
 use beryl_protocol::DecisionId;
 use beryl_protocol::prompt::{PromptView, Purpose};
 use beryl_protocol::protocol::{ObjectId, PlayerView, RefusalView, Refused, Side, ZoneName};
+use game_table::table::Place;
 use game_table::{faces::FaceList, profiles::Profile};
-use kit_frame::frame::{Anchor, ElementId, Frame, Place, Role, StateBits};
+use kit_frame::frame::{Anchor, ElementId, Frame, Role, StateBits};
 use kit_scene::{Context, Feature, StateUpdate};
 use kit_ui::element::{Element, FloatId, floats};
 use kit_ui::input::{FaceId, Rect};
@@ -277,7 +278,7 @@ impl Inspector {
         let id = ElementId(u32::from(slot.0));
         let element = (frame.resolved.iter())
             .find(|element| element.role == Role::Card && element.id == id)?;
-        let Place::Card { zone, side, .. } = element.place else {
+        let Some(Place::Card { zone, side, .. }) = Place::in_frame(element.place) else {
             return None;
         };
         let face_down = element.state.has(StateBits::FACE_DOWN);
@@ -324,11 +325,11 @@ fn marked(prompt: Option<&PromptView>, frame: &Frame) -> Vec<Rect> {
             element.role == Role::Card
                 && element.state.0 & marks != 0
                 && matches!(
-                    element.place,
-                    Place::Card {
+                    Place::in_frame(element.place),
+                    Some(Place::Card {
                         zone: ZoneName::Battlefield,
                         ..
-                    }
+                    })
                 )
         })
         .map(|element| {

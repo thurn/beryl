@@ -1,13 +1,14 @@
 //! The abilities on the stack, which the table draws as cards: each wears its source's picture
 //! with a plate that says the ability.
 
+use crate::table::labels::ABILITY_ROLE;
 use beryl_protocol::protocol::{PlayerView, StackItem, ZoneName};
 use beryl_protocol::script::{Act, Subject};
 
-use super::{ABILITY_IDS, Motion, SceneObject, Table, ability_track};
+use super::{ABILITY_IDS, Motion, Place, SceneObject, Table, ability_track};
 use crate::faces::Faces;
 use crate::table::look::{Dress, Look};
-use kit_frame::frame::{ElementId, FrameBuilder, Place, Role, StateBits};
+use kit_frame::frame::{ElementId, FrameBuilder, StateBits};
 use kit_fx::effects;
 
 impl Table {
@@ -164,7 +165,7 @@ impl Table {
         self.write_shadow((None, object.place), &look.pose, under_way, builder);
         self.write_look(
             name,
-            (ElementId(ABILITY_IDS + id % ABILITY_IDS), Role::Ability, 1),
+            (ElementId(ABILITY_IDS + id % ABILITY_IDS), ABILITY_ROLE, 1),
             object.place,
             &look,
             back,

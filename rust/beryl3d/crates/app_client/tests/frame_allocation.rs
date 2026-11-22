@@ -37,9 +37,10 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_hud::hud::anchors::spot_of;
 use game_play::light::{MarkSpan, Span};
 use game_play::verbs::Interval;
+use game_table::table::Place;
 use game_table::table::Table;
 use glam::Vec2;
-use kit_frame::frame::{Frame, FrameBuilder, Material, Place, Role, StateBits};
+use kit_frame::frame::{Frame, FrameBuilder, Material, Role, StateBits};
 use kit_ui::element::{Anchor, floats, row, text};
 use kit_ui::input::{
     AssetReady, Button, GlyphCell, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
@@ -499,11 +500,11 @@ fn a_rising_hand_card_allocates_nothing() {
         .filter(|element| element.role == Role::Card && element.interactive)
         .filter(|element| {
             matches!(
-                element.place,
-                Place::Card {
+                Place::in_frame(element.place),
+                Some(Place::Card {
                     zone: ZoneName::Hand,
                     ..
-                }
+                })
             )
         })
         .map(|element| element.corners[3] + (element.corners[1] - element.corners[3]) * 0.1)

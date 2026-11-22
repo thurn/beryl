@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use beryl_inspect::stress::{Board, stress};
 use beryl_protocol::script::{Table, failure};
+use game_table::table::labels::ABILITY_ROLE;
 
 const BOARDS: [(&str, usize); 2] = [("stress-255", 255), ("stress-1024", 1024)];
 
@@ -155,7 +156,8 @@ fn verbs_play_in_one_beat_with_live_timings() {
 fn the_pointer_crosses_the_hand_and_back() {
     use beryl_inspect::gate;
     use beryl_protocol::protocol::{Side, ZoneName};
-    use kit_frame::frame::{Place, Role, StateBits};
+    use game_table::table::Place;
+    use kit_frame::frame::{Role, StateBits};
 
     let mut first = None;
     let mut middle = None;
@@ -168,12 +170,12 @@ fn the_pointer_crosses_the_hand_and_back() {
             .filter(|element| {
                 element.role == Role::Card
                     && matches!(
-                        element.place,
-                        Place::Card {
+                        Place::in_frame(element.place),
+                        Some(Place::Card {
                             zone: ZoneName::Hand,
                             side: Side::You,
                             ..
-                        }
+                        })
                     )
             })
             .collect();
@@ -217,7 +219,7 @@ fn fifty_arrows_hold_for_two_seconds_then_the_top_ability_resolves() {
         let abilities = frame
             .resolved
             .iter()
-            .filter(|element| element.role == Role::Ability)
+            .filter(|element| element.role == ABILITY_ROLE)
             .count();
         if arrows == 50 && moment.phase == Phase::Rest {
             assert_eq!(abilities, 25);

@@ -119,13 +119,15 @@ impl Client {
     #[must_use]
     pub fn new(data: Arc<Data>, config: Config) -> Self {
         let window = data.profiles.resolve_window(Window::default());
-        let layer = Layer::with_tuning(data.flat);
+        let layer = Layer::with_icons(data.flat, Some(game_hud::mana_icons::icon));
+        let mut frame = Frame::with_capacity(config.elements, config.draws, config.name_bytes);
+        frame.labels = &game_hud::labels::GAME_LABELS;
         #[cfg(feature = "web-fit")]
         let table = Table::with_region_fit(data, window, scaffold_web::FIT);
         #[cfg(not(feature = "web-fit"))]
         let table = Table::new(data, window);
         Self {
-            frame: Frame::with_capacity(config.elements, config.draws, config.name_bytes),
+            frame,
             probe: None,
             stories: story::Stories::default(),
             window,

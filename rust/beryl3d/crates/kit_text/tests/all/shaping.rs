@@ -1,7 +1,7 @@
 //! Font weights, styled spans and inline symbols in shaped text.
 
 use kit_text::text::fonts::Font;
-use kit_text::text::{Block, Glyphs, Span, Text, TypeStyle, shaped_words};
+use kit_text::text::{Block, Glyphs, Span, Text, TypeStyle};
 
 const BODY: TypeStyle = TypeStyle {
     font: Font::OpenSans,
@@ -55,34 +55,37 @@ fn a_bold_span_lays_out_its_glyphs_at_the_bold_weight() {
     assert!(glyphs.drain_wanted().any(|key| key.weight == 700));
 }
 
-/// The lines and symbols of "Pay {1}{U}" in the body style, broken at `max_width`.
-fn pay(text: &mut Text, max_width: Option<f32>) -> Block {
-    text.block("Pay {1}{U}", BODY, &[], max_width).clone()
+/// The lines and symbols of "Mix {A}{B}" in the body style, broken at `max_width`.
+fn mix(text: &mut Text, max_width: Option<f32>) -> Block {
+    text.block("Mix {A}{B}", BODY, &[], max_width).clone()
 }
 
 #[test]
-fn mana_symbols_are_inline_boxes_an_em_wide_that_wrap_whole() {
-    let mut text = Text::new();
-    let line = pay(&mut text, None);
+fn icons_are_inline_boxes_an_em_wide_that_wrap_whole() {
+    let mut text = Text::with_icons(Some(super::icon));
+    let line = mix(&mut text, None);
     assert_eq!(line.lines.len(), 1);
-    let [one, blue] = line.symbols[..] else {
+    let [first, second] = line.symbols[..] else {
         panic!("two symbols, not {:?}", line.symbols);
     };
-    let (word, _) = text.measure("Pay", BODY, &[], None);
+    let (word, _) = text.measure("Mix", BODY, &[], None);
     let em = BODY.size;
-    for symbol in [one, blue] {
+    for symbol in [first, second] {
         assert!((symbol.rect.width - em).abs() < 1e-3, "{symbol:?}");
     }
-    assert!(one.rect.x >= word, "{one:?} after 'Pay' ({word})");
-    assert!((blue.rect.x - (one.rect.x + em)).abs() < 0.01, "{blue:?}");
-    assert_ne!(one.color, blue.color, "a blue symbol is not a generic one");
-    // A glyph on each symbol, besides those of 'Pay' and the space after it.
-    assert_eq!(line.glyphs.len(), "Pay ".len() + 2);
+    assert!(first.rect.x >= word, "{first:?} after 'Mix' ({word})");
+    assert!(
+        (second.rect.x - (first.rect.x + em)).abs() < 0.01,
+        "{second:?}"
+    );
+    assert_ne!(first.color, second.color);
+    // A glyph on each symbol, besides those of 'Mix' and the space after it.
+    assert_eq!(line.glyphs.len(), "Mix ".len() + 2);
 
-    // Too narrow for 'Pay' and a symbol: the line breaks before the first symbol, and each
+    // Too narrow for 'Mix' and a symbol: the line breaks before the first symbol, and each
     // symbol lies whole inside one line.
     let narrow = word + em / 2.0;
-    let wrapped = pay(&mut text, Some(narrow));
+    let wrapped = mix(&mut text, Some(narrow));
     assert!(wrapped.lines.len() >= 2, "{:?}", wrapped.lines);
     let first = wrapped.symbols[0].rect;
     assert!(first.x.abs() < 0.01, "{first:?} starts a line");
@@ -101,15 +104,24 @@ fn mana_symbols_are_inline_boxes_an_em_wide_that_wrap_whole() {
     }
     // The lines' words, end to end, are the text as it was shaped, each symbol one object
     // character, and each baseline lies inside its line.
-    let words = shaped_words("Pay {1}{U}");
+    let words = text.shaped_words("Mix {A}{B}");
     let joined: String = wrapped
         .lines
         .iter()
         .map(|line| line.words(&words))
         .collect();
     assert_eq!(joined, words);
-    assert_eq!(wrapped.lines[0].words(&words).trim_end(), "Pay");
+    assert_eq!(wrapped.lines[0].words(&words).trim_end(), "Mix");
     for line in &wrapped.lines {
         assert!(line.baseline > line.rect.y && line.baseline < line.rect.y + line.rect.height);
     }
+}
+
+#[test]
+fn plain_text_leaves_braces_in_the_line() {
+    let mut text = Text::new();
+    let words = "Use {braces}";
+    let block = text.block(words, BODY, &[], None);
+    assert!(block.symbols.is_empty());
+    assert_eq!(block.lines[0].words(words), words);
 }

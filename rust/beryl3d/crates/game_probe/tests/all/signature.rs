@@ -80,6 +80,15 @@ fn renaming_a_card_without_changing_the_layout_keeps_the_signature() {
 }
 
 #[test]
+fn mana_symbols_with_different_names_take_the_same_prompt_space() {
+    let prompt = |symbol| format!("Pay {}", [symbol; 12].join(" "));
+    assert_eq!(
+        signature(&moment("Island", &prompt("{1}"), &[0], false)),
+        signature(&moment("Island", &prompt("{W/U}"), &[0], false)),
+    );
+}
+
+#[test]
 fn another_candidate_a_wrapped_title_and_a_tapped_card_each_change_the_signature() {
     let title = "Choose a card";
     let base = signature(&moment("Island", title, &[0], false));

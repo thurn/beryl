@@ -12,7 +12,10 @@ pub use player::{NumberLook, TextLook, text};
 
 use std::sync::Arc;
 
-use beryl_protocol::{protocol::ObjectId, script::Subject};
+use beryl_protocol::{
+    protocol::{ObjectId, Side},
+    script::Subject,
+};
 use glam::{Vec2, Vec3};
 use kit_frame::frame::FrameBuilder;
 
@@ -84,5 +87,22 @@ impl EffectRun {
             curve: Curve::LINEAR,
             step: 0,
         }
+    }
+}
+
+/// Names a subject in effect comparison records.
+fn effect_target(subject: Subject) -> kit_frame::frame::EffectTarget {
+    use kit_frame::frame::{EffectTarget, ElementId};
+
+    match subject {
+        Subject::Object { slot } => EffectTarget::Key(ElementId(u32::from(slot.0))),
+        Subject::Ability { id } => EffectTarget::Numbered {
+            prefix: "a",
+            number: id,
+        },
+        Subject::Player { player: Side::You } => EffectTarget::Label("you"),
+        Subject::Player {
+            player: Side::Opponent,
+        } => EffectTarget::Label("opponent"),
     }
 }

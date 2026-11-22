@@ -3,9 +3,9 @@
 use beryl_protocol::protocol::{ObjectId, RowName, Side, ZoneName};
 use beryl_protocol::script::Subject;
 use game_probe::explain::{self, Probe};
-use game_table::table::{PileShown, Placement, RowDecision, Scroller};
-use kit_frame::frame::{ABILITY_IDS, Place, Resolved, Role};
-use kit_probe::agent::tree::place_word;
+use game_table::table::labels::ABILITY_ROLE;
+use game_table::table::{PileShown, Place, Placement, RowDecision, Scroller};
+use kit_frame::frame::{ABILITY_IDS, Place as FramePlace, Resolved, Role};
 use kit_space::arrange::Overflow;
 use serde_json::{Value, json};
 
@@ -21,7 +21,7 @@ impl Client {
     pub(crate) fn explain(&self, element: &Resolved) -> Value {
         let profile = self.show.table().profile();
         let profile_file = format!("data/beryl3d/profiles/{}.json", profile.data().name);
-        if element.place == Place::Layer
+        if element.place == FramePlace::Layer
             && let Some(node) = self.layer.node_style(element.id)
         {
             return self.explain_screen(element, &node, profile, &profile_file);
@@ -136,7 +136,7 @@ impl Client {
             _ => None,
         };
         let subject = match element.role {
-            Role::Ability => element
+            ABILITY_ROLE => element
                 .id
                 .0
                 .checked_sub(ABILITY_IDS)
@@ -155,11 +155,12 @@ impl Client {
                     .map(str::to_owned)
             }))
             .collect();
-        let mut place = match element.place {
-            Place::Card { zone, side, row } => {
+        let location = Place::in_frame(element.place);
+        let mut place = match location {
+            Some(table_location @ Place::Card { zone, side, row }) => {
                 let placement = self.show.placement_for_probe(slot, zone);
                 table_place(
-                    element.place,
+                    table_location,
                     (zone, side, row),
                     placement.as_ref(),
                     (profile_file, banded),
@@ -170,7 +171,7 @@ impl Client {
                         .count(),
                 )
             }
-            _ => json!({"space": "screen", "container": place_word(element.place)}),
+            _ => json!({"space": "screen", "container": element.place.label()}),
         };
         if let Some(index) = self
             .frame
@@ -185,21 +186,23 @@ impl Client {
         {
             place["anchor"] = format!("{:?}", decoration.anchor).into();
         }
-        let (feature, directory) = match element.place {
-            Place::Card { row: Some(_), .. } => ("battlefield rows", "game_table/src/table/place"),
-            Place::Card {
+        let (feature, directory) = match location {
+            Some(Place::Card { row: Some(_), .. }) => {
+                ("battlefield rows", "game_table/src/table/place")
+            }
+            Some(Place::Card {
                 zone: ZoneName::Hand,
                 ..
-            } => ("hand", "game_table/src/table"),
-            Place::Card {
+            }) => ("hand", "game_table/src/table"),
+            Some(Place::Card {
                 zone: ZoneName::Stack,
                 ..
-            } => ("stack", "game_table/src/table"),
-            Place::Card { .. } | Place::Revealed => ("piles", "game_table/src/table"),
-            Place::Layer if matches!(element.role, Role::Arrow | Role::Mark) => {
+            }) => ("stack", "game_table/src/table"),
+            Some(Place::Card { .. } | Place::Revealed) => ("piles", "game_table/src/table"),
+            _ if matches!(element.role, Role::Arrow | Role::Mark) => {
                 ("table marks", "game_play/src/light")
             }
-            Place::Layer => ("table HUD", "game_hud/src/hud"),
+            _ => ("table HUD", "game_hud/src/hud"),
         };
         let mut styles = Vec::new();
         if let Some(pose) = element.pose {
@@ -316,7 +319,7 @@ fn table_place(
         stages.push("full size");
     }
     json!({
-        "space": "table", "container": place_word(place), "policy": policy,
+        "space": "table", "container": place.label(), "policy": policy,
         "items": items, "stage": stages.last(), "stages": stages, "limits": limits,
         "region": {"key": key, "file": file},
     })

@@ -7,12 +7,11 @@
 
 use beryl_protocol::protocol::{Side, ZoneName};
 
-use super::{SceneObject, Table};
+use super::{Place, SceneObject, Table};
 use crate::table::place::{row_index, side_index};
 use crate::table::{RowWindow, Rows, Scroller};
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose};
-use kit_frame::frame::Place;
 
 /// Nanoseconds in a millisecond.
 const MILLISECOND: f32 = 1_000_000.0;

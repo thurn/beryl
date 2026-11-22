@@ -1,10 +1,9 @@
 //! The placement groups and their policies in a fitted layout.
 
 use beryl_protocol::protocol::{Side, ZoneName};
-use kit_frame::frame::Place;
 use kit_space::arrange::PolicyKind;
 
-use game_table::table::{Group, Layout};
+use game_table::table::{Group, Layout, Place};
 
 /// The container that places one group's objects in this layout.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

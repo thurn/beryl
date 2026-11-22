@@ -5,12 +5,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use beryl_protocol::script::Verb;
+use game_hud::labels::GAME_LABELS;
 use game_table::profiles::Profile;
 use kit_base::data::TUNING_FILES;
 use kit_base::data::effect::PrimitiveKind;
 use kit_base::data::profiles::{self, ProfileData, Profiles};
 use kit_frame::frame::Role;
-use kit_probe::agent::{Rule, tree::place_word};
+use kit_probe::agent::Rule;
 use kit_scene::Keys;
 use kit_space::arrange::PolicyKind;
 use kit_ui::widgets::Widget;
@@ -195,7 +196,7 @@ pub(super) fn containers() -> Result<Vec<Entry>, String> {
         let layout = Profile::for_window(source.layouts, profile.usual_window()).layout();
         entries.extend(game_probe::explain::containers(&layout).map(|info| {
             Entry::new(
-                format!("{} {}", profile.name, place_word(info.place)),
+                format!("{} {}", profile.name, info.place.label()),
                 crate_path(&format!("game_table/src/table/{}", info.source)),
                 format!("{}  {}", info.container, info.policy.word()),
             )
@@ -261,7 +262,12 @@ pub(super) fn policies() -> Vec<Entry> {
 }
 
 pub(super) fn roles() -> Vec<Entry> {
-    named(Role::ALL.map(Role::word), "kit_frame/src/frame.rs")
+    let mut entries = named(Role::ALL.map(Role::word), "kit_frame/src/frame.rs");
+    entries.extend(named(
+        GAME_LABELS.roles.iter().copied().map(Role::word),
+        "game_hud/src/labels.rs",
+    ));
+    entries
 }
 
 pub(super) fn widgets() -> Vec<Entry> {
