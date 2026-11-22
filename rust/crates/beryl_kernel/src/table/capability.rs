@@ -4,9 +4,9 @@
 
 use beryl_card::definition::Shape;
 use beryl_card::{
-    Ability, AbilityKind, Amount, Behavior, CardDef, Condition, Designation, Draws, Effect,
-    FACE_DOWN, Face, Modification, Node, Objects, Replaced, Replacement, Rewrite, Subtype, Words,
-    Zone,
+    Ability, AbilityKind, Amount, Behavior, CardDef, Condition, CostAction, CostPart, Designation,
+    Draws, Effect, FACE_DOWN, Face, Modification, Node, Objects, Replaced, Replacement, Rewrite,
+    Subtype, Words, Zone,
 };
 
 use crate::event::Listens;
@@ -122,10 +122,12 @@ pub enum Capability {
     Split,
     /// An ability depends on its permanent's Class level or solved designation.
     DesignatedAbilities,
+    /// A spell can require sacrificing a permanent as part of its casting cost.
+    SacrificeToCast,
 }
 
 // The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::DesignatedAbilities as u32) < u32::BITS);
+const _: () = assert!((Capability::SacrificeToCast as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -155,6 +157,14 @@ impl Capability {
     /// The capabilities a face gives a game that can contain it.
     fn of(face: &Face) -> u32 {
         let mut found = casting_capabilities(face);
+        if face
+            .additional_cost
+            .iter()
+            .chain(face.casting.iter().flat_map(|option| option.parts()))
+            .any(|part| matches!(part, CostPart::Chosen(CostAction::Sacrifice, _)))
+        {
+            found |= Capability::SacrificeToCast.bit();
+        }
         if face.keywords.contains(beryl_card::Keywords::DELVE) {
             found |= Capability::Delve.bit();
         }

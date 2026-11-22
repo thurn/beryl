@@ -1,15 +1,16 @@
 //! The mana solver (architecture §10, decision D7): payability, plans, and which payments are
 //! decisions.
 
-use super::cast::{Game, cast};
+use super::LAND;
+use super::cast::{Game, TREASURE, cast};
 use crate::bitboard::Bitboard;
-use crate::card::{ManaColor, ManaCost};
+use crate::card::{Ability, CardDef, CostPart, Face, ManaColor, ManaCost, Types};
 use crate::ids::Slot;
 use crate::mana::{self, Units};
 use crate::replacement::event::Sink;
 use crate::rng::SplitMix64;
 use crate::state::{ManaPool, TurnStep, Zone};
-use crate::{DecisionKind, Opt, Payment, Profile};
+use crate::{CardTable, DecisionKind, Opt, Payment, Profile};
 
 fn tapped(g: &Game, slot: Slot) -> bool {
     g.s.object(slot).is_tapped()
@@ -442,6 +443,56 @@ fn a_treasure_adds_no_priority_option_of_its_own() {
         let without = priority_options(&mut g);
         g.give(g.me, "Test Treasure", Zone::Battlefield);
         assert_eq!(priority_options(&mut g), without, "{payment:?}");
+    }
+}
+
+#[test]
+fn mana_payment_leaves_an_artifact_for_the_sacrifice_cost() {
+    static SPELL: CardDef = beryl_card::definition::card(
+        "Test Artifact Sacrifice",
+        &[Face {
+            cost: ManaCost::new(1, [1, 0, 0, 0, 0, 0]),
+            types: Types::INSTANT,
+            additional_cost: &[CostPart::sacrifice(beryl_card::Filter::Types(
+                Types::ARTIFACT,
+            ))],
+            abilities: &[Ability::spell()],
+            ..Face::EMPTY
+        }],
+    );
+    static CARDS: CardTable = CardTable::new(&[&SPELL, &LAND, &TREASURE]);
+    let deck = &[(8, LAND.name), (2, TREASURE.name), (1, SPELL.name)];
+    for payment in [Payment::KeepMostPayable, Payment::Greedy, Payment::Manual] {
+        let mut game = Game::with(
+            &CARDS,
+            deck,
+            Profile {
+                payment,
+                ..Profile::EXACT
+            },
+        );
+        let spell = game.give(game.me, SPELL.name, Zone::Hand);
+        let land = game.give(game.me, LAND.name, Zone::Hand);
+        let first = game.give(game.me, TREASURE.name, Zone::Battlefield);
+        let second = game.give(game.me, TREASURE.name, Zone::Battlefield);
+        assert!(
+            !priority_options(&mut game).contains(&cast(spell)),
+            "{payment:?}"
+        );
+
+        game.pick(Opt::PlayLand(land));
+        game.pick(cast(spell));
+        if payment == Payment::Manual {
+            game.pick(Opt::Mana {
+                slot: first.min(second),
+                color: ManaColor::White,
+            });
+        }
+
+        assert_eq!(game.s.object(spell).zone(), Zone::Stack, "{payment:?}");
+        assert_eq!(game.s.object(first).zone(), Zone::Graveyard, "{payment:?}");
+        assert_eq!(game.s.object(second).zone(), Zone::Graveyard, "{payment:?}");
+        assert!(tapped(&game, land), "{payment:?}");
     }
 }
 

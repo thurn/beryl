@@ -26,6 +26,7 @@ use crate::state::{
 use crate::table::{Capability, GameTable};
 
 use super::costs::{spent_by_entry, total_cost, x_range_start};
+use super::mana_payment::{self, SacrificeCost};
 use super::parts;
 use super::start;
 use super::targets::{TargetSet, target_options};
@@ -274,16 +275,7 @@ pub(super) fn pay_mana<L: Layout>(
             Ok(())
         }
         payment @ (Payment::Manual | Payment::KeepMostPayable | Payment::Greedy) => {
-            let plans = mana::plans(
-                s,
-                t,
-                sink,
-                c.player,
-                cost,
-                Bitboard::EMPTY,
-                payment == Payment::Greedy,
-                mana::Paying::entry(t, entry),
-            )?;
+            let plans = mana_payment::plans(s, t, sink, entry, cost, payment == Payment::Greedy)?;
             debug_assert!(!plans.is_empty(), "a spell offered is payable");
             if plans.len() > 1 {
                 c.step = CastStep::Plan;
@@ -466,14 +458,13 @@ fn x_options<L: Layout>(
     for x in least..(least.saturating_add(64)) {
         let mut probe = entry.clone();
         probe.x = x;
-        if !mana::payable(
-            s,
-            t,
-            c.player,
-            total_cost(s, t, &probe, c),
-            exclude,
-            mana::Paying::entry(t, entry),
-        )? {
+        let cost = total_cost(s, t, &probe, c);
+        let paying = mana::Paying::entry(t, entry);
+        let available = match SacrificeCost::of_entry(t, entry) {
+            Some(other) => other.payable(s, t, cost, paying)?,
+            None => mana::payable(s, t, c.player, cost, exclude, paying)?,
+        };
+        if !available {
             break;
         }
         out.push(Opt::Number(x))?;
@@ -531,16 +522,7 @@ pub(crate) fn decision<L: Layout>(
         CastStep::Plan => {
             let entry = top(s);
             let cost = total_cost(s, t, entry, c);
-            let plans = mana::plans(
-                s,
-                t,
-                sink,
-                c.player,
-                cost,
-                Bitboard::EMPTY,
-                false,
-                mana::Paying::entry(t, entry),
-            )?;
+            let plans = mana_payment::plans(s, t, sink, entry, cost, false)?;
             let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
             for i in 0..plans.len() {
                 list.push(Opt::Plan(index::<L>(i)))?;
@@ -550,14 +532,7 @@ pub(crate) fn decision<L: Layout>(
         }
         CastStep::Manual { remaining } => options(
             DecisionKind::ManaPayment,
-            mana::manual_options(
-                s,
-                t,
-                c.player,
-                remaining,
-                Bitboard::EMPTY,
-                mana::Paying::entry(t, top(s)),
-            )?,
+            mana_payment::options(s, t, top(s), remaining)?,
             Prompt::new(Purpose::Mana).cost(remaining),
         ),
         CastStep::Objects(_) => parts::decision(s, t, c)?,
@@ -640,7 +615,7 @@ pub(crate) fn perform<L: Layout>(
             let entry = top(s);
             let cost = total_cost(s, t, entry, &c);
             let paying = mana::Paying::entry(t, entry);
-            let plans = mana::plans(s, t, sink, c.player, cost, Bitboard::EMPTY, false, paying)?;
+            let plans = mana_payment::plans(s, t, sink, entry, cost, false)?;
             mana::pay(
                 s,
                 t,

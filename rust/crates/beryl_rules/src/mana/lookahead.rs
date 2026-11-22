@@ -479,6 +479,7 @@ pub(super) fn looking_ahead<L: Layout>(
     cost: ManaCost,
     sources: &Sources<L>,
     kept: &mut [Plan<L>],
+    mut accepted: impl FnMut(&Plan<L>) -> bool,
 ) -> Result<(), Full> {
     let ahead = ahead(s, t, player);
     let mut creatures: Taps<L> = Table::filled(0);
@@ -498,7 +499,7 @@ pub(super) fn looking_ahead<L: Layout>(
             (kept.iter()).position(|k| k.left == p.left && sources.outcome(k) == outcome)
         {
             let o = outlook(sources, p, &ahead, &creatures);
-            if o > best.as_slice()[i] {
+            if o > best.as_slice()[i] && accepted(p) {
                 best.as_mut_slice()[i] = o;
                 kept[i] = p.clone();
             }

@@ -1,4 +1,4 @@
-//! The strict runner: plays a scenario through `next` and `apply` only (architecture §17.1).
+//! The strict runner: plays a scenario through the public engine API (architecture §17.1).
 
 use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::event::{Event, Tag};

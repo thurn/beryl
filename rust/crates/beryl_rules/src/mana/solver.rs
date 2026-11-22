@@ -2,6 +2,8 @@
 //!
 //! Implements: none. Enumerates mana payments for the engine to offer.
 
+use std::cell::Cell;
+
 use crate::bitboard::Bitboard;
 use crate::card::ManaCost;
 use crate::fixed::Full;
@@ -368,19 +370,57 @@ pub(crate) fn plans<L: Layout>(
     greedy: bool,
     paying: Paying<L>,
 ) -> Result<L::Queue<Plan<L>, 64>, Full> {
+    plans_accepting::<L, false>(s, t, sink, player, cost, exclude, greedy, paying, |_| {
+        Ok(true)
+    })
+}
+
+/// Discards a plan that consumes permanents needed for the rest of the casting cost
+/// before scoring or deduplicating it. Plans that consume no sources need no such check.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
+    s: &State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    player: Seat,
+    cost: ManaCost,
+    exclude: Bitboard<L::Slot>,
+    greedy: bool,
+    paying: Paying<L>,
+    mut accept: impl FnMut(&Plan<L>) -> Result<bool, Full>,
+) -> Result<L::Queue<Plan<L>, 64>, Full> {
     sink.work.solver_runs += 1;
     let sources = Sources::of(s, t, player, exclude, paying)?;
+    let failed = Cell::new(false);
+    let mut accepted = |p: &Plan<L>| {
+        if !CHECK || sources.sacrificed(p) == 0 {
+            return true;
+        }
+        match accept(p) {
+            Ok(allowed) => allowed,
+            Err(Full) => {
+                failed.set(true);
+                false
+            }
+        }
+    };
     let pool = s.player(player).mana().amounts();
     let mut out: L::Queue<Plan<L>, 64> = Default::default();
     if greedy {
         let mut best: Option<(u8, Plan<L>)> = None;
         each_plan(cost, pool, &sources, &mut |p| {
+            if !accepted(p) {
+                return true;
+            }
             let sacrificed = sources.sacrificed(p);
             if best.as_ref().is_none_or(|&(fewest, _)| sacrificed < fewest) {
                 best = Some((sacrificed, p.clone()));
             }
             sacrificed > 0
         });
+        if failed.get() {
+            return Err(Full);
+        }
         if let Some((_, p)) = best {
             out.push(p)?;
         }
@@ -400,16 +440,20 @@ pub(crate) fn plans<L: Layout>(
     // without testing for it at each one.
     if sources.has_memory() {
         each_plan(cost, pool, &sources, &mut |p| {
-            full |= offer::<L, true>(&sources, &mut out, &mut scores, &mut score, p);
+            if accepted(p) {
+                full |= offer::<L, true>(&sources, &mut out, &mut scores, &mut score, p);
+            }
             !full
         });
     } else {
         each_plan(cost, pool, &sources, &mut |p| {
-            full |= offer::<L, false>(&sources, &mut out, &mut scores, &mut score, p);
+            if accepted(p) {
+                full |= offer::<L, false>(&sources, &mut out, &mut scores, &mut score, p);
+            }
             !full
         });
     }
-    if full {
+    if full || failed.get() {
         return Err(Full);
     }
     // A plan is dominated only by one sacrificing fewer, so with one number sacrificed among
@@ -458,7 +502,10 @@ pub(crate) fn plans<L: Layout>(
             .sort_by_key(|p| (sources.sacrificed(p), floating(p), p.left));
     }
     if s.profile().taps_mana == Some(player) {
-        looking_ahead(s, t, player, cost, &sources, kept.as_mut_slice())?;
+        looking_ahead(s, t, player, cost, &sources, kept.as_mut_slice(), accepted)?;
+        if failed.get() {
+            return Err(Full);
+        }
     }
     Ok(kept)
 }

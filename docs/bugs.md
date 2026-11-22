@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A spell could use the same artifact for mana and for its sacrifice cost.**
+  Casting checked the two costs independently, then offered a payment that spent
+  all the available artifacts as mana sources. The casting check and mana
+  options now test whether the rest of the cost is payable after consuming those
+  sources. The Shrapnel Blast scenario checks that two Treasures cannot pay both
+  costs, and that adding a land makes the cast possible.
+
 - **A spell copy could target a creature without triggering its ability.**
   Copying a spell put its targets on the stack without announcing them to
   trigger listeners. Copies now use the same target announcement as spells that

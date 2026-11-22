@@ -18,6 +18,7 @@ mod costs;
 mod delve;
 pub(crate) mod land;
 mod legal;
+mod mana_payment;
 pub(crate) mod parts;
 pub mod payment;
 mod stack;

@@ -25,6 +25,7 @@ use crate::table::{Capability, GameTable};
 
 use super::costs::{From, option_sets, spell_cost, x_range_start};
 use super::delve;
+use super::mana_payment;
 use super::parts;
 use super::targets::{Itself, targetable};
 use super::timing::{activated, instant_speed, sorcery_timing};
@@ -209,7 +210,12 @@ fn refused<L: Layout, const TARGETS: bool>(
         return Some(Refusal::Mana);
     }
     // CR 601.2h: the player pays the total cost, including any parts funded by earlier parts.
-    match parts::spell_payable(s, t, player, slot, face, costs) {
+    let payable = if t.can(Capability::SacrificeToCast) {
+        mana_payment::whole_cost_payable(s, t, player, slot, face_index, face, costs, cost)
+    } else {
+        parts::spell_payable(s, t, player, slot, face, costs)
+    };
+    match payable {
         Ok(true) => {}
         Ok(false) => return Some(Refusal::Cost),
         Err(Full) => {

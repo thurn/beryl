@@ -39,9 +39,7 @@ pub(crate) use pay::{
 };
 pub(crate) use pool::{Funds, payable};
 pub(crate) use remembered::Paying;
-#[cfg(test)]
-pub(crate) use solver::Plan;
-pub(crate) use solver::plans;
+pub(crate) use solver::{Plan, plans, plans_accepting};
 pub use sources::mana_contribution;
 #[cfg(test)]
 pub(crate) use units::Units;
