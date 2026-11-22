@@ -513,6 +513,104 @@ fn every_crowded_pick_and_put_back_card_keeps_a_press_target() {
     }
 }
 
+#[test]
+fn a_crowded_boxed_split_scrolls_and_lands_a_drag_between_groups() {
+    use app_client::driver::Recording;
+    use beryl_protocol::script::Subject;
+    use game_probe::story::{Body, Story};
+    use kit_scene::hit::{bounds, free_rect};
+    use kit_ui::input::PointerKind;
+
+    let catalog = app_client::stories::embedded();
+    let story = catalog
+        .iter()
+        .find(|source| source.name == "story/game_hud/crowded-split")
+        .expect("the crowded split story");
+    let Body::Capture { capture, .. } = Story::parse(&story.text).unwrap().body else {
+        panic!("the embedded table story is a capture");
+    };
+    let view = Recording(capture.messages).views().unwrap().pop().unwrap();
+    let Status::Deciding { decision } = &view.view.status else {
+        panic!("the story opens the split prompt");
+    };
+    let ShapeBody::Split { piles } = &decision.prompt.body else {
+        panic!("the story has two boxed piles");
+    };
+
+    for (size, kind) in [
+        (SIZE, PointerKind::Mouse),
+        (
+            Size {
+                width: 375.0,
+                height: 647.0,
+            },
+            PointerKind::Touch,
+        ),
+    ] {
+        let mut client = client();
+        client.handle(Input::Device(DeviceInput::Surface {
+            size,
+            scale: 1.0,
+            safe_area: Insets::default(),
+        }));
+        client.handle(Input::Update(Box::new(view.clone())));
+        client.frame(0);
+        client.frame(MS);
+        client.frame(5_000 * MS);
+        let mut now = 10_000 * MS;
+        let side = client.table().profile().data().checks.target_points;
+        let press_target = Size {
+            width: side,
+            height: side,
+        };
+        for pile in piles {
+            let ids = pile.cards.iter().map(|slot| u32::from(slot.0)).collect();
+            assert_tray_press_targets(
+                &mut client,
+                &mut now,
+                press_target,
+                ids,
+                pile.cards[0],
+                kind,
+            );
+        }
+
+        let frame = client.frame(now);
+        let source = *piles[0].cards.last().unwrap();
+        let destination = *piles[1].cards.last().unwrap();
+        let card = |slot: ObjectId| {
+            frame
+                .resolved
+                .iter()
+                .position(|item| item.role == Role::Card && item.id.0 == u32::from(slot.0))
+                .expect("the last card is visible after scrolling")
+        };
+        let start = free_rect(frame, card(source) as u32, press_target)
+            .expect("the first group is still scrolled");
+        let end = bounds(&frame.resolved[card(destination)]);
+        drag_tray_card(
+            &mut client,
+            kind,
+            Vec2::new(start.x + start.width / 2.0, start.y + start.height / 2.0),
+            Vec2::new(end.x + end.width / 2.0 - 1.0, end.y + end.height / 2.0),
+        );
+        client.frame(now + MS);
+        assert_eq!(
+            client.next_command(),
+            Some(SessionCommand::Click(ClickRequest {
+                decision: decision.id,
+                revision: decision.prompt.revision,
+                click: Click::Drop {
+                    on: Subject::Object { slot: source },
+                    pile: 1,
+                    at: u16::try_from(piles[1].cards.len() - 1).unwrap(),
+                },
+            })),
+            "{kind:?} drop before the last card in the scrolled destination"
+        );
+    }
+}
+
 fn assert_tray_press_targets(
     client: &mut Client,
     now: &mut u64,
@@ -611,15 +709,7 @@ fn assert_scrolled_reorder(
         target.x + target.width / 2.0,
         target.y + target.height / 2.0,
     );
-    // A sideways touch picks up the card. A vertical swipe scrolls.
-    for (phase, position) in [
-        (PointerPhase::Down, start),
-        (PointerPhase::Move, start + Vec2::new(30.0, 2.0)),
-        (PointerPhase::Move, end),
-        (PointerPhase::Up, end),
-    ] {
-        tray_pointer(client, kind, phase, position);
-    }
+    drag_tray_card(client, kind, start, end);
     client.frame(now + MS);
     let command = client.next_command();
     assert!(
@@ -629,6 +719,18 @@ fn assert_scrolled_reorder(
     })) if slot == into[0]),
         "{kind:?} drop queued {command:?}"
     );
+}
+
+fn drag_tray_card(client: &mut Client, kind: kit_ui::input::PointerKind, start: Vec2, end: Vec2) {
+    // A sideways touch picks up the card. A vertical swipe scrolls.
+    for (phase, position) in [
+        (PointerPhase::Down, start),
+        (PointerPhase::Move, start + Vec2::new(30.0, 2.0)),
+        (PointerPhase::Move, end),
+        (PointerPhase::Up, end),
+    ] {
+        tray_pointer(client, kind, phase, position);
+    }
 }
 
 fn tray_pointer(

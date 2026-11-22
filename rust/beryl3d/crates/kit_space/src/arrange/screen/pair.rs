@@ -10,6 +10,8 @@ use super::{FanShape, Grid, ScreenFit, ScreenLayout, gaps, inset};
 pub struct CascadeFan {
     pub cascade_step: f32,
     pub cascade_turns: Vec2,
+    /// The rise of the base behind the cascade, as a fraction of item height.
+    pub cascade_rise: f32,
     pub separation: f32,
     pub fan: FanShape,
     pub fan_min_step: f32,
@@ -23,6 +25,10 @@ pub struct Paired {
     pub fan: ScreenLayout,
     /// The cascade's reserved positions, deepest first, including empty slots.
     pub slots: Vec<Rect>,
+    /// The raised base behind the first slot.
+    pub base: Rect,
+    /// The outer drop regions, in cascade and fan order.
+    pub bounds: [Rect; 2],
 }
 
 impl CascadeFan {
@@ -35,6 +41,71 @@ impl CascadeFan {
         counts: [usize; 2],
         capacity: [usize; 2],
     ) -> Paired {
+        let (cascade, fan, slots) = self.arrange(fit, band, second, counts, capacity);
+        let first = slots[0];
+        let base = Rect {
+            y: first.y - self.cascade_rise * first.height,
+            ..first
+        };
+        let last = slots[slots.len() - 1];
+        let cascade_band = clamp_band(
+            base.y - self.heading,
+            bottom(last).min(bottom(cascade.viewport)) + fit.gap,
+            band,
+        );
+        let fan_band = clamp_band(
+            fan.viewport.y - self.heading - fit.gap,
+            bottom(fan.viewport) + fit.gap,
+            second.unwrap_or(band),
+        );
+        let drop_region = |(y, end), span: Rect| Rect {
+            y,
+            height: end - y,
+            ..span
+        };
+        let bounds = if second.is_some() {
+            [drop_region(cascade_band, band), drop_region(fan_band, band)]
+        } else {
+            let split = (base.x + base.width + fan.viewport.x) / 2.0;
+            let both = (
+                cascade_band.0.min(fan_band.0),
+                cascade_band.1.max(fan_band.1),
+            );
+            [
+                drop_region(
+                    both,
+                    Rect {
+                        width: split - band.x,
+                        ..band
+                    },
+                ),
+                drop_region(
+                    both,
+                    Rect {
+                        x: split,
+                        width: band.x + band.width - split,
+                        ..band
+                    },
+                ),
+            ]
+        };
+        Paired {
+            cascade,
+            fan,
+            slots,
+            base,
+            bounds,
+        }
+    }
+
+    fn arrange(
+        self,
+        fit: ScreenFit,
+        band: Rect,
+        second: Option<Rect>,
+        counts: [usize; 2],
+        [depth, room]: [usize; 2],
+    ) -> (ScreenLayout, ScreenLayout, Vec<Rect>) {
         let gap = fit.gap.min(band.width / 4.0).min(band.height / 4.0);
         let area = inset(band, gap);
         let hand = second.map_or(area, |second| {
@@ -56,7 +127,8 @@ impl CascadeFan {
             most: fit.most.min(width_limit),
             ..fit
         };
-        let [depth, room] = capacity;
+        // The cascade has a base even when no item is reserved above it.
+        let depth = depth.max(1);
         for width in fit.widths().take_while(|&width| width >= fit.press) {
             let item = fit.size(width);
             let deck_step = (self.cascade_step * item.y)
@@ -101,19 +173,17 @@ impl CascadeFan {
                     ..hand
                 }
             };
-            let mut paired = self.column(counts[0], depth, item, deck_step, deck, false);
+            let (mut cascade, slots) = self.column(counts[0], depth, item, deck_step, deck, false);
             // Include the rotation of the deepest visible cards in the fit. Use the
             // band for this test so the turns may extend into the reserved padding.
-            paired.cascade.viewport = band;
+            cascade.viewport = band;
             let mut fan = self.fan.row(counts[1], item, fan_step, fan_region);
             let largest_fan = self.fan.row(room, item, fan_step, fan_region);
-            if paired.cascade.fits(fit.press) && fan.fits(fit.press) && largest_fan.fits(fit.press)
-            {
+            if cascade.fits(fit.press) && fan.fits(fit.press) && largest_fan.fits(fit.press) {
                 let height = item.y + self.fan.drop * width;
                 fan.viewport.y += (fan.viewport.height - height) / 2.0;
                 fan.viewport.height = height;
-                paired.fan = fan;
-                return paired;
+                return (cascade, fan, slots);
             }
         }
         self.scrolling(fit, area, hand, second.is_some(), counts, depth)
@@ -127,7 +197,7 @@ impl CascadeFan {
         stacked: bool,
         [count, hand_count]: [usize; 2],
         depth: usize,
-    ) -> Paired {
+    ) -> (ScreenLayout, ScreenLayout, Vec<Rect>) {
         let width = fit.least.min(fit.most);
         let item = fit.size(width);
         let x = if stacked {
@@ -146,7 +216,7 @@ impl CascadeFan {
             width,
             height,
         };
-        let mut paired = self.column(count, depth, item, step, deck, true);
+        let (cascade, slots) = self.column(count, depth, item, step, deck, true);
         let hand = if stacked {
             hand
         } else {
@@ -157,13 +227,13 @@ impl CascadeFan {
                 ..hand
             }
         };
-        paired.fan = ScreenFit {
+        let fan = ScreenFit {
             most: width,
             least: width,
             ..fit
         }
         .scrolling_rows(hand_count, hand);
-        paired
+        (cascade, fan, slots)
     }
 
     fn column(
@@ -174,7 +244,7 @@ impl CascadeFan {
         step: f32,
         region: Rect,
         straight: bool,
-    ) -> Paired {
+    ) -> (ScreenLayout, Vec<Rect>) {
         let grid = Grid::new(1, item, Vec2::new(0.0, step - item.y));
         let mut cascade = ScreenLayout::grid(grid, count, region, false);
         if !straight {
@@ -184,10 +254,15 @@ impl CascadeFan {
                 }
             }
         }
-        Paired {
-            cascade,
-            fan: ScreenLayout::grid(grid, 0, region, false),
-            slots: grid.boxes(depth, region, false).collect(),
-        }
+        (cascade, grid.boxes(depth, region, false).collect())
     }
+}
+
+fn bottom(rect: Rect) -> f32 {
+    rect.y + rect.height
+}
+
+fn clamp_band(top: f32, end: f32, region: Rect) -> (f32, f32) {
+    let bottom = bottom(region);
+    (top.clamp(region.y, bottom), end.clamp(region.y, bottom))
 }

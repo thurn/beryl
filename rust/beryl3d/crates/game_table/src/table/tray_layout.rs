@@ -29,7 +29,7 @@ use super::Camera;
 use kit_base::data::Card;
 use kit_base::data::profiles::TrayTuning;
 use kit_base::pose::Pose;
-use kit_space::arrange::screen::{FanShape, ScreenFit, ScreenLayout};
+use kit_space::arrange::screen::{FanShape, ScreenFit, ScreenGroup, ScreenLayout};
 use kit_ui::input::{Rect, Size};
 
 mod put_back;
@@ -154,14 +154,14 @@ pub(super) struct TrayGrid {
 /// in its column, the deepest first, as many as the library's pile can come to hold.
 struct Laid {
     spots: Vec<Spot>,
-    boxes: Vec<Area>,
-    library: Option<Area>,
+    boxes: Vec<Rect>,
+    library: Option<Rect>,
     column: Vec<f32>,
     grids: Vec<TrayGrid>,
 }
 
 impl Laid {
-    fn of(spots: Vec<Spot>, boxes: Vec<Area>) -> Self {
+    fn of(spots: Vec<Spot>, boxes: Vec<Rect>) -> Self {
         Self {
             spots,
             boxes,
@@ -169,24 +169,6 @@ impl Laid {
             column: Vec::new(),
             grids: Vec::new(),
         }
-    }
-}
-
-/// A rectangle of the stage, in stage pixels.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Area {
-    x: f32,
-    y: f32,
-    width: f32,
-    height: f32,
-}
-
-impl Area {
-    fn contains(&self, point: Vec2) -> bool {
-        self.width > 0.0
-            && self.height > 0.0
-            && (self.x..=self.x + self.width).contains(&point.x)
-            && (self.y..=self.y + self.height).contains(&point.y)
     }
 }
 
@@ -277,106 +259,6 @@ impl Laid {
     }
 }
 
-/// Each side-by-side box reserves room for its pile before any cards are dealt into it.
-#[expect(clippy::cast_precision_loss, reason = "a tray holds a few dozen cards")]
-fn boxes(counts: &[usize], rooms: &[usize], space: &TraySpace, (left, wide): (f32, f32)) -> Laid {
-    let mut laid = Laid::of(
-        Vec::with_capacity(counts.iter().sum()),
-        Vec::with_capacity(counts.len()),
-    );
-    if counts.is_empty() {
-        return laid;
-    }
-    let piles = counts.len() as f32;
-    let between: usize = rooms.iter().map(|&room| room.saturating_sub(1)).sum();
-    let edges = 3.0 * piles - 1.0;
-    let gap = space
-        .gap
-        .min(wide / (edges + piles))
-        .min(space.height / 3.0)
-        .max(0.0);
-    let heading = space.heading.min((space.height - 2.0 * gap).max(0.0));
-    let fit = ScreenFit { gap, ..space.fit() };
-    let (width, step) = fit.parallel(
-        Vec2::new(wide - edges * gap, space.height - heading - 2.0 * gap),
-        counts.len(),
-        between,
-    );
-    let card_height = fit.size(width).y;
-    let height = card_height + heading + 2.0 * gap;
-    let whole = piles * width + between as f32 * step + edges * gap;
-    let y = space.y + ((space.height - height) / 2.0).max(0.0);
-    let mut x = left + (wide - whole) / 2.0;
-    for (&count, &room) in counts.iter().zip(rooms) {
-        let inner = width + room.saturating_sub(1) as f32 * step;
-        let region = Rect {
-            x: x + gap,
-            y: y + heading + gap,
-            width: inner,
-            height: card_height,
-        };
-        laid.grid(fit.reserved(count, region, width, step));
-        let box_width = inner + 2.0 * gap;
-        laid.boxes.push(Area {
-            x,
-            y,
-            width: box_width,
-            height,
-        });
-        x += box_width + gap;
-    }
-    laid
-}
-
-/// Each stacked box takes the full width in its own band.
-fn stacked(
-    counts: &[usize],
-    rooms: &[usize],
-    space: &TraySpace,
-    second: Second,
-    (left, wide): (f32, f32),
-) -> Laid {
-    let height_limit = space.height.min(second.height).max(0.0);
-    let gap = space.gap.min(wide / 3.0).min(height_limit / 3.0).max(0.0);
-    let heading = space.heading.min(height_limit - 2.0 * gap);
-    let inner = wide - 2.0 * gap;
-    let most_room = rooms.iter().copied().max().unwrap_or(1);
-    let fit = ScreenFit { gap, ..space.fit() };
-    let width = fit.stacked_width(
-        Vec2::new(inner, height_limit - heading - 2.0 * gap),
-        most_room,
-    );
-    let card_height = fit.size(width).y;
-    let height = card_height + heading + 2.0 * gap;
-    let bands = [(space.y, space.height), (second.y, second.height)];
-    let mut laid = Laid::of(
-        Vec::with_capacity(counts.iter().sum()),
-        Vec::with_capacity(counts.len()),
-    );
-    for ((&count, &room), (band_y, band_height)) in counts.iter().zip(rooms).zip(bands) {
-        let y = band_y + ((band_height - height) / 2.0).max(0.0);
-        let region = Rect {
-            x: left + gap,
-            y: y + heading + gap,
-            width: inner,
-            height: card_height,
-        };
-        laid.grid(fit.reserved(
-            count,
-            region,
-            width,
-            fit.reserved_pitch(region, width, room),
-        ));
-        laid.boxes.push(Area {
-            x: left,
-            y,
-            width: wide,
-            height,
-        });
-    }
-    laid
-}
-
 /// The dealt order sets the placement and draw order. The result follows pile order.
 fn fan(piles: &[Vec<ObjectId>], order: &[ObjectId], space: &TraySpace, span: (f32, f32)) -> Laid {
     let mut laid = Laid::of(Vec::with_capacity(order.len()), Vec::new());
@@ -434,13 +316,26 @@ fn laid_piles(
         return rows(counts[0], space, span);
     }
     let total = counts.iter().sum();
-    let rooms: Vec<usize> = (0..counts.len())
-        .map(|pile| rooms.get(pile).copied().flatten().unwrap_or(total))
+    let groups: Vec<_> = counts
+        .iter()
+        .enumerate()
+        .map(|(index, &count)| ScreenGroup {
+            count,
+            room: rooms.get(index).copied().flatten().unwrap_or(total),
+        })
         .collect();
-    match space.second {
-        Some(second) if counts.len() == 2 => stacked(counts, &rooms, space, second, span),
-        _ => boxes(counts, &rooms, space, span),
+    let band = space.region(span);
+    let second = space.second.map(|second| Rect {
+        y: second.y,
+        height: second.height.max(0.0),
+        ..band
+    });
+    let mut laid = Laid::of(Vec::with_capacity(total), Vec::with_capacity(groups.len()));
+    for group in space.fit().groups(&groups, band, second, space.heading) {
+        laid.boxes.push(group.bounds);
+        laid.grid(group.layout);
     }
+    laid
 }
 
 /// `held` laid out in `space` on a stage `stage_width` wide, as the web's `laidOut`.
@@ -517,7 +412,12 @@ pub(super) fn landing_at(
     let (per_point, _) = stage_of(&space, size);
     let mut point = point * per_point;
     let laid = laid_out(held, space, size);
-    let pile = laid.boxes.iter().position(|area| area.contains(point))?;
+    let pile = laid.boxes.iter().position(|area| {
+        area.width > 0.0
+            && area.height > 0.0
+            && (area.x..=area.x + area.width).contains(&point.x)
+            && (area.y..=area.y + area.height).contains(&point.y)
+    })?;
     let grid = &laid.grids[pile];
     if grid.region.width <= 0.0 || grid.region.height <= 0.0 {
         return None;

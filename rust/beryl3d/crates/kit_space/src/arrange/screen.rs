@@ -129,56 +129,6 @@ impl ScreenFit {
         ScreenLayout::grid(grid, count, region, true)
     }
 
-    /// Uniform widths for parallel reserved strips. Only the preferred room is
-    /// compressed. The actual items can wrap without changing the reservation.
-    #[must_use]
-    pub fn parallel(self, usable: Vec2, strips: usize, between: usize) -> (f32, f32) {
-        let strips = strips.max(1) as f32;
-        let between = between as f32;
-        let limit = (usable.x / strips).min(usable.y / self.aspect).max(0.0);
-        let fit = Self {
-            most: self.most.min(limit),
-            ..self
-        };
-        for width in fit.widths() {
-            let pitch = width + self.gap;
-            if strips * width + between * pitch <= usable.x {
-                return (width, pitch);
-            }
-        }
-        let width = fit.least.min(fit.most);
-        let pitch = (width + self.gap).min((usable.x - strips * width) / between.max(1.0));
-        (width, pitch.max(0.0))
-    }
-
-    /// Shared width for strips with the same horizontal span in separate bands.
-    #[must_use]
-    pub fn stacked_width(self, usable: Vec2, room: usize) -> f32 {
-        (usable.x - self.press * gaps(room))
-            .clamp(self.least, self.most)
-            .min(usable.x.min(usable.y / self.aspect).max(0.0))
-    }
-
-    /// A reserved strip wraps at the press target. The original width stays
-    /// fixed while items move in and out of the reservation.
-    #[must_use]
-    pub fn reserved(self, count: usize, region: Rect, width: f32, pitch: f32) -> ScreenLayout {
-        let grid = Grid::reserved_row(
-            count,
-            region.width,
-            self.size(width),
-            pitch,
-            self.gap,
-            self.press.min(width),
-        );
-        ScreenLayout::grid(grid, count, region, false)
-    }
-
-    #[must_use]
-    pub fn reserved_pitch(self, region: Rect, width: f32, capacity: usize) -> f32 {
-        Grid::pitch(region.width, width, capacity.max(2), self.gap)
-    }
-
     /// Fits a fan when every rotated item has a press square. A flat grid wraps
     /// and scrolls when that fan would hide a card.
     #[must_use]
@@ -248,5 +198,7 @@ pub fn inset(region: Rect, gap: f32) -> Rect {
     }
 }
 
+mod groups;
 mod pair;
+pub use groups::{ScreenGroup, ScreenGroupLayout};
 pub use pair::{CascadeFan, Paired};
