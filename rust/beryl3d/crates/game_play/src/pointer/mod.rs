@@ -25,8 +25,7 @@ pub use game_table::table::takes_pointer;
 use game_table::table::{Camera, Look, PILE_IDS};
 use held::{Fall, Lean};
 use kit_base::data::pointer::PointerTuning;
-use kit_base::pose::between;
-use kit_base::pose::{Curve, Pose, Segment};
+use kit_base::pose::{Pose, Segment, between};
 use kit_frame::frame::{ElementId, Frame, Lifted, Role, StateBits};
 use kit_scene::hit::hit;
 use kit_ui::input::{self, PointerKind, PointerPhase};
@@ -82,14 +81,15 @@ impl Lift {
         (self.to - self.from).abs() * full * MILLISECOND
     }
 
-    /// How far up the card is at `now`, easing out toward `to`.
+    /// How far up the card is at `now`, with the cubic ease out from web's `raisedAt`.
     fn at(&self, now: u64, tuning: &PointerTuning) -> f32 {
         let length = self.length(tuning);
         if length <= 0.0 {
             return self.to;
         }
-        let share = now.saturating_sub(self.since) as f32 / length;
-        self.from + (self.to - self.from) * Curve::EASE_OUT.ease(share)
+        let elapsed = (now.saturating_sub(self.since) as f32 / length).min(1.0);
+        let eased = 1.0 - (1.0 - elapsed).powi(3);
+        self.from + (self.to - self.from) * eased
     }
 
     /// Whether the move has arrived by `now`.
@@ -352,7 +352,13 @@ pub fn look(
     }
     let lift = pointer.lift(slot, now, tuning);
     if lift > 0.0 {
-        look.pose = between(&look.pose, &raised(&look.pose, camera, tuning), lift);
+        let raised = raised(&look.pose, camera, tuning);
+        // The raised pose is closer to the camera. Weight the interpolation by the two
+        // projection divisors so the ease describes progress on screen, as on the web.
+        let divisor = |pose: &Pose| (camera.view_projection * pose.position.extend(1.0)).w;
+        let lifted = lift * divisor(&look.pose);
+        let resting = (1.0 - lift) * divisor(&raised);
+        look.pose = between(&look.pose, &raised, lifted / (lifted + resting));
         // The web client's raised copy paints over the life orb and the step icons until it lands.
         if look.interactive {
             look.state |= StateBits::RAISED;

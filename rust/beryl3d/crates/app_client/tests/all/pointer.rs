@@ -9,7 +9,7 @@ use beryl_protocol::protocol::{CardType, Side, Why, ZoneName};
 use beryl_protocol::script::Act;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
 use glam::Vec2;
-use kit_frame::frame::{Frame, Role, StateBits};
+use kit_frame::frame::{Frame, Material, Role, StateBits};
 use kit_probe::agent::checks::reachable;
 use kit_probe::agent::fault::Context;
 use kit_ui::input::Input as DeviceInput;
@@ -113,7 +113,10 @@ fn a_hovered_hand_card_paints_over_the_life_hud_until_it_lands() {
         let card_draw = frame
             .owners
             .iter()
-            .position(|&owner| owner as usize == card)
+            .zip(&frame.draws)
+            .position(|(&owner, draw)| {
+                owner as usize == card && draw.material == Material::Card as u8
+            })
             .expect("the hand card draws its face");
 
         for hud in [orb, total, step] {
@@ -159,17 +162,24 @@ fn a_hovered_hand_card_paints_over_the_life_hud_until_it_lands() {
 fn a_rise_is_where_its_time_says_however_many_frames_were_drawn() {
     let card = "card \"Memory Lapse\"";
     let mut every = page(&[sample()]);
+    let rest = every.find(card).rect();
     every.hover(card);
-    every.step(ms(50));
+    every.step(ms(33));
     let mut none = page(&[sample()]);
-    none.set_tick(ms(50));
+    none.set_tick(ms(33));
     none.hover(card);
-    none.step(ms(50));
+    none.step(ms(33));
     let (a, b) = (every.find(card).rect(), none.find(card).rect());
     assert!(same(a, b), "{a:?} drawn every tick, {b:?} drawn once");
+
+    every.step(ms(67));
+    let raised = every.find(card).rect();
+    let share = (rest.y - a.y) / (rest.y - raised.y);
+    // The web's cubic ease-out has covered 70% at 33 ms. The card's changing tilt
+    // also moves its upper edge, so allow for the projected box's shape.
     assert!(
-        a.y < every.find("card \"Counterspell\"").rect().y,
-        "it is part way up"
+        (0.60..0.80).contains(&share),
+        "lifted {share:.2} of the way"
     );
 }
 
