@@ -35,7 +35,7 @@ edition = "2024"
 license = "Apache-2.0"
 
 [workspace.dependencies]
-# The protocol types still carried by the scene and its frame records.
+# The protocol types game and app crates adapt to the toolkit.
 beryl_protocol = { path = "../crates/beryl_protocol" }
 # Stores a bounded track without initializing or cloning its unused segment slots.
 arrayvec = "0.7.8"

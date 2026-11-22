@@ -67,8 +67,6 @@ fn frame_in(window: Window, view: &ViewBuilder) -> Frame {
 
 fn context(window: Window) -> Context {
     Context {
-        recording: "phone".to_owned(),
-        seat: Side::You,
         layout: Layout::Phone,
         audit: crate::test_data::data().audit,
         checks: Layout::Phone.checks(&crate::test_data::data().profiles, window.size),

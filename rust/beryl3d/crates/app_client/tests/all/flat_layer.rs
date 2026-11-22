@@ -9,9 +9,7 @@ use beryl_protocol::prompt::Purpose;
 use beryl_protocol::prompt::{
     ButtonId, Click, ClickReply, ClickRequest, PartName, PromptButton, PromptView, ShapeBody, Words,
 };
-use beryl_protocol::protocol::{
-    DecisionId, DecisionView, Kind, SessionId, Side, Status, Why, ZoneName,
-};
+use beryl_protocol::protocol::{DecisionId, DecisionView, Kind, SessionId, Status, Why, ZoneName};
 use beryl_protocol::script::Act;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
 use game_hud::prompts::bar::Message as BarMessage;
@@ -161,8 +159,6 @@ pub(super) fn centre(frame: &Frame, index: usize) -> Vec2 {
 
 pub(super) fn context() -> Context {
     Context {
-        recording: "flat-layer".to_owned(),
-        seat: Side::You,
         layout: crate::REGULAR,
         audit: crate::test_data::data().audit,
         checks: crate::REGULAR.checks(

@@ -76,7 +76,11 @@ fn an_effect_at_the_end_of_a_step_begins_as_the_step_ends() {
     }]);
     assert_eq!(runs(&show), vec![("settle", 500.0, 830.0)]);
     let run = &show.effects()[0];
-    assert_eq!(run.on, card, "on the step's subject");
+    assert_eq!(
+        run.on,
+        game_table::effect::target(card),
+        "on the step's subject"
+    );
     assert_eq!(run.step, 0);
     let record: Vec<EffectRun> = show.history()[1].effects.clone();
     assert_eq!(
@@ -112,7 +116,7 @@ fn an_effect_on_something_else_is_on_that_and_one_on_nothing_named_is_dropped() 
         },
     ]);
     assert_eq!(runs(&show), vec![("loss", 100.0, 500.0)]);
-    assert_eq!(show.effects()[0].on, player);
+    assert_eq!(show.effects()[0].on, game_table::effect::target(player));
 }
 
 #[test]

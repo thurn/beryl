@@ -52,7 +52,7 @@ pub fn pools(view: &PlayerView, window: Window, profile: Profile<'_>) -> Element
             (Side::Opponent, bands.opponent_strip),
         ];
         let buttons = strips.into_iter().filter_map(|(side, strip)| {
-            let at = Vec2::new(window.size.width / 2.0 - metrics.mana_right, strip.middle());
+            let at = Vec2::new(window.size.width / 2.0 - metrics.pool_right, strip.middle());
             mana_button(
                 player(view, side),
                 side,
@@ -109,7 +109,7 @@ fn mana_button(
     element.role = kit_frame::frame::Role::Button;
     let mut element = element
         .name(&format!("{whose} mana: {total}"))
-        .width(metrics.mana_width)
+        .width(metrics.pool_width)
         .min_height(size::ICON_BUTTON.max(target))
         .align_items(Align::Center)
         .justify_content(Justify::Center)
@@ -136,7 +136,7 @@ fn mana_button(
 /// every screen element and would show through a sheet over the viewer's strip.
 #[must_use]
 pub fn sheet(view: &PlayerView, side: Side, profile: Profile<'_>) -> Option<Element> {
-    let rect = profile.slot("manual.mana")?.rect;
+    let rect = profile.slot("manual.pool")?.rect;
     let metrics = profile.data().manual?;
     let adjust = adjustable(view, side);
     let heading = row()
@@ -145,7 +145,7 @@ pub fn sheet(view: &PlayerView, side: Side, profile: Profile<'_>) -> Option<Elem
         .child(text("Mana").style(type_style::TITLE))
         .child(
             button("Done")
-                .min_width(metrics.mana_done_width)
+                .min_width(metrics.pool_done_width)
                 .on_press(TableMessage::ManaSheet(None)),
         );
     let mut grid = Element::new(kit_frame::frame::Role::Region)

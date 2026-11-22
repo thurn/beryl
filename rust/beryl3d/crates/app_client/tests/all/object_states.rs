@@ -164,8 +164,6 @@ fn a_picked_card_lies_apart_from_its_hand_face_up_only_for_its_player() {
 fn the_board_passes_the_interface_checks() {
     let (frame, _) = frame();
     let context = Context {
-        recording: "object-states".to_owned(),
-        seat: Side::You,
         layout: crate::REGULAR,
         audit: crate::test_data::data().audit,
         checks: crate::REGULAR.checks(

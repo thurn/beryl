@@ -1,5 +1,5 @@
-//! The sizes of the badges a permanent wears and of a hand card's mana cost, from
-//! `data/beryl3d/badges.json`. Lengths are in the web card's em, a share of a battlefield card's
+//! The sizes of object badges and the cost symbols on a hand card, from
+//! `data/beryl3d/badges.json`. Lengths are in the web card's em, a share of a table card's
 //! width (`em`), unless a field says otherwise. Sizes in points are the sizes text is shaped at,
 //! so a change to one reshapes the badges' text.
 
@@ -11,7 +11,7 @@ use super::tuning::{nonnegative, positive, read};
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct BadgeTuning {
-    /// The web card's em, as a share of a battlefield card's width.
+    /// The web card's em, as a share of a table card's width.
     #[serde(deserialize_with = "positive")]
     pub em: f32,
     /// How far a badge's panel lies above the card's face; its text lies twice as far.
@@ -136,7 +136,7 @@ pub struct CountBadge {
     pub numerals: f32,
 }
 
-/// A hand card's mana cost, at its top right. Its sizes are in its own em.
+/// A hand card's cost symbols, at its top right. Its sizes are in its own em.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct CostBadge {

@@ -331,7 +331,7 @@ fn draw_name(
     let cost = cost.map(|cost| {
         // `.mana-cost .mana-symbol`'s font is 0.66em, so its glyph is 0.82 of that.
         let style = TextStyle {
-            font: Font::Mana,
+            font: Font::Symbols,
             weight: 400.0,
             size: 0.66 * em,
             line_height: 1.0,
@@ -655,7 +655,7 @@ fn draw_loyalty(canvas: &mut Canvas, text: &mut Typesetter, g: &Geometry, loyalt
     let shield = text.set(
         &LOYALTY_SHIELD.to_string(),
         TextStyle {
-            font: Font::Mana,
+            font: Font::Symbols,
             weight: 400.0,
             size: 3.7 * l,
             line_height: 1.0,

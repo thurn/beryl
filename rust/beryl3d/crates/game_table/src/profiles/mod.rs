@@ -270,7 +270,7 @@ impl<'a> Profile<'a> {
                         top: bands.opponent_strip.top,
                         height: bands.your_creatures.top - bands.opponent_strip.top,
                     },
-                    Region::Battlefield => Band {
+                    Region::PlayArea => Band {
                         top: bands.opponent_back.top,
                         height: bands.your_strip.top - bands.opponent_back.top,
                     },

@@ -103,7 +103,7 @@ fn a_light_follows_its_card_in_flight() {
     let mut centres = Vec::new();
     for now in [210 * MS, 270 * MS, 340 * MS] {
         let frame = frame(&mut show, &mut buffer, now);
-        let card = show.effects()[0].on;
+        let card = game_table::effect::subject(show.effects()[0].on).expect("a game subject");
         let reach = show.reach(card, now).expect("the card is on the table");
         for model in lights(&frame) {
             let off = centre(&model) - reach.pose.position;
@@ -130,7 +130,7 @@ fn a_light_lies_just_over_its_card() {
         let mut buffer = empty_frame();
         let now = 250 * MS;
         let frame = frame(&mut show, &mut buffer, now);
-        let card = show.effects()[0].on;
+        let card = game_table::effect::subject(show.effects()[0].on).expect("a game subject");
         let height = show
             .reach(card, now)
             .expect("the card is on the table")
@@ -186,7 +186,7 @@ fn a_beam_runs_from_the_side_of_its_card_toward_its_left() {
     let mut buffer = empty_frame();
     let now = 300 * MS;
     let frame = frame(&mut show, &mut buffer, now);
-    let card = show.effects()[0].on;
+    let card = game_table::effect::subject(show.effects()[0].on).expect("a game subject");
     let pose = show
         .reach(card, now)
         .expect("the card is on the table")

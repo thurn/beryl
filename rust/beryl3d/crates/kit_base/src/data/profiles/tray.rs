@@ -44,7 +44,7 @@ pub struct PutBack {
     #[serde(deserialize_with = "vector")]
     pub column_turns: Vec2,
     #[serde(deserialize_with = "nonnegative")]
-    pub library_rise: f32,
+    pub pile_rise: f32,
     pub deck_backs: usize,
     #[serde(deserialize_with = "vector")]
     pub deck_offset: Vec2,

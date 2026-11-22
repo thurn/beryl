@@ -7,7 +7,7 @@ use kit_ui::element::{Element, column, text};
 use kit_ui::input::Tier;
 use kit_ui::layout::Layer;
 
-const LONG: &str = "Return target creature an opponent controls to its owner's hand";
+const LONG: &str = "Return the selected documents to the folder where you originally found them";
 
 /// The frame `layer` writes, with the words of each line kept.
 fn write(layer: &mut Layer) -> Frame {

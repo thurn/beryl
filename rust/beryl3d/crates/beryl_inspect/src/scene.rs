@@ -10,7 +10,7 @@ use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
 use game_probe::story::Body;
 use kit_frame::frame::Frame;
-use kit_probe::agent::{Context, Judged, Layout, checks, locate};
+use kit_probe::agent::{Context, Layout, locate};
 use kit_probe::story::Player;
 use kit_scene::hit::bounds;
 use kit_ui::element::Element as Widget;
@@ -54,6 +54,7 @@ fn feature_preview(page: &mut Page, id: &str) -> Result<Preview, String> {
 
 /// A toolkit or feature preview and its context for the interface tools.
 pub struct StoryScene {
+    name: String,
     source: Preview,
     player: Player,
     context: Context,
@@ -150,11 +151,10 @@ impl Scene {
         player.stub_atlas();
         let audit = player.data().audit;
         Ok(Self::Story(Box::new(StoryScene {
+            name: name.to_owned(),
             source,
             player,
             context: Context {
-                recording: name.to_owned(),
-                seat,
                 layout,
                 audit,
                 checks,
@@ -180,7 +180,7 @@ impl Scene {
             Self::Recording(page) => page.explain(element),
             Self::Story(story) => {
                 let node = story.player.node_style(element.id);
-                let source = &story.context.recording;
+                let source = &story.name;
                 json!({
                     "place": {
                         "space": "screen",
@@ -467,35 +467,8 @@ impl Scene {
 
 impl StoryScene {
     fn check(&mut self, mode: Mode) -> Checked {
-        let mut checked = Checked {
-            faults: Vec::new(),
-            frames: 0,
-            line_pairs: 0,
-            judged: Judged::default(),
-        };
-        let times = times(self.player.end(), mode);
-        let mut kept = Vec::new();
-        for time in times {
-            self.player.seek(time);
-            self.context.at = time;
-            let frame = self.player.frame();
-            checked.frames += 1;
-            checked.judged.frame(frame, self.context.layout);
-            checked.judged.lines(&kept, frame);
-            for fault in checks::check(frame, &self.context)
-                .into_iter()
-                .chain(checks::lines_hold(&kept, frame, &self.context))
-            {
-                if !checked.faults.iter().any(|previous| {
-                    previous.rule == fault.rule && previous.elements == fault.elements
-                }) {
-                    checked.faults.push(fault);
-                }
-            }
-            checked.line_pairs += usize::from(checks::arrows_held(&kept, frame) != 0);
-            checks::keep_arrows(frame, &mut kept);
-        }
-        checked
+        self.player
+            .check(times(self.player.end(), mode), &self.context)
     }
 }
 

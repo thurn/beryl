@@ -258,8 +258,6 @@ fn the_viewers_cards_at_rest_are_interactive_and_judged_reachable() {
     assert_eq!(cards.len(), 3 + 5 * 2 + 1, "{cards:?}");
     assert!(!cards.contains(&"Brainstorm"), "a graveyard is a pile");
     let context = Context {
-        recording: "sample".to_owned(),
-        seat: Side::You,
         layout: crate::REGULAR,
         audit: crate::test_data::data().audit,
         checks: crate::REGULAR.checks(&crate::test_data::data().profiles, WINDOW),
@@ -276,8 +274,6 @@ fn a_raised_hand_card_leaves_its_neighbours_reachable() {
     let card = "card \"Memory Lapse\"";
     let mut page = page(&[sample()]);
     let context = Context {
-        recording: "sample".to_owned(),
-        seat: Side::You,
         layout: crate::REGULAR,
         audit: crate::test_data::data().audit,
         checks: crate::REGULAR.checks(&crate::test_data::data().profiles, WINDOW),

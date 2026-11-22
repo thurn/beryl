@@ -36,6 +36,14 @@ use kit_ui::element::{Border, Extent, Filter, Gradient, Length, Shadow, Shape};
 use kit_ui::input::Size;
 use serde_json::{Map, Value, json};
 
+/// The family recorded by the web interface for each embedded font.
+fn font_family(font: kit_base::typography::fonts::Font) -> &'static str {
+    match font {
+        kit_base::typography::fonts::Font::Symbols => "Mana",
+        font => font.family(),
+    }
+}
+
 /// Rounds `value` to hundredths, as the web side rounds its boxes.
 fn round(value: f32) -> Value {
     json!((f64::from(value) * 100.0).round() / 100.0)
@@ -248,7 +256,7 @@ fn style(
     );
     if let Some(look) = look {
         style.insert("color".into(), color(look.color));
-        style.insert("font-family".into(), look.text.font.family().into());
+        style.insert("font-family".into(), font_family(look.text.font).into());
         style.insert("font-size".into(), round(look.text.size));
         style.insert("font-weight".into(), look.text.weight.into());
     }
@@ -492,7 +500,7 @@ pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
                 .map(|line| {
                     json!({
                         "string": frame.name(line.words).replace('\u{fffc}', ""),
-                        "family": look.map(|look| look.text.font.family()),
+                        "family": look.map(|look| font_family(look.text.font)),
                         "size": round(line.size),
                         "weight": look.map(|look| look.text.weight),
                         "color": look.map(|look| color(look.color)),

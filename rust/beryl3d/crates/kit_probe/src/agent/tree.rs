@@ -17,7 +17,7 @@ const SHOWN: usize = 3;
 /// What `tree` prints.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TreeOptions {
-    /// Only this part, whole: a place (`battlefield.yours.lands`) or a locator.
+    /// Only this part, whole: a place (`panels.left`) or a locator.
     pub within: Option<String>,
     /// Only elements of this role, whole.
     pub role: Option<Role>,

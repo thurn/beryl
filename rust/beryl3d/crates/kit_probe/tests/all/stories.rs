@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use kit_base::data::effect::Effects;
 use kit_base::geometry::{Insets, Window};
-use kit_probe::agent::{TreeOptions, tree};
+use kit_probe::agent::{Context, Layout, Rule, TreeOptions, tree};
 use kit_probe::story::{Player, Story};
 
 const ELEMENT: &str = concat!(
@@ -17,6 +17,40 @@ const CONTAINER: &str = concat!(
     "item 44x56 group=first\n",
 );
 const EFFECT: &str = "story effect 360x240 desktop\neffect glow 114,60 132x120\n";
+
+#[test]
+fn standalone_rectangles_are_checked_without_a_game() {
+    let story: Story = concat!(
+        "story element 360x240 desktop\n",
+        "button \"First\" #1 12,12 80x50 interactive | fill=#272b32ff\n",
+        "button \"Second\" #2 32,32 80x50 interactive | fill=#272b32ff\n",
+    )
+    .parse()
+    .expect("two overlapping rectangles");
+    let window = window_for(&story);
+    let data = crate::test_data::data();
+    let profile = data.profiles.for_size(window.size);
+    let context = Context {
+        layout: Layout::for_size_class(profile.size_class),
+        checks: profile.checks,
+        audit: data.audit,
+        size: window.size,
+        safe_area: window.safe_area,
+        at: 0,
+    };
+    let mut player = Player::new(&story, window, data).unwrap();
+    player.stub_atlas();
+    let checked = player.check([0], &context);
+    assert_eq!(checked.frames, 1);
+    assert_eq!(checked.judged.of(Rule::Overlap).elements, 2);
+    assert!(
+        checked
+            .faults
+            .iter()
+            .any(|fault| fault.rule == Rule::Overlap)
+    );
+    assert_eq!(checked.judged.of(Rule::BlankCard).elements, 0);
+}
 
 #[test]
 fn every_kind_round_trips_as_text() {

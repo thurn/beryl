@@ -152,16 +152,17 @@ impl Table {
         let mut look = Look::new(object.pose, face, full, state, false);
         let on = Subject::Ability { id };
         let effects = &self.data.effects;
+        let target = crate::effect::target(on);
         effects::card::look(
             builder.tier(),
             dress.effects,
-            on,
+            target,
             dress.now,
             face,
             &mut look,
         );
         (dress.marks)(on, &mut look);
-        effects::card::write(effects, dress.effects, on, dress.now, &look, builder);
+        effects::card::write(effects, dress.effects, target, dress.now, &look, builder);
         self.write_shadow((None, object.place), &look.pose, under_way, builder);
         self.write_look(
             name,

@@ -64,16 +64,19 @@ fn of(checked: &Checked, rule: Rule) -> Vec<&Fault> {
 }
 
 fn printed(fault: &Fault) -> String {
-    fault.print(&Context {
-        recording: "three-beats".to_owned(),
-        seat: Side::You,
-        layout: crate::REGULAR,
-        audit: crate::test_data::data().audit,
-        checks: crate::REGULAR.checks(&crate::test_data::data().profiles, SIZE),
-        size: SIZE,
-        safe_area: Insets::default(),
-        at: fault.at,
-    })
+    game_probe::agent::print_fault(
+        fault,
+        "three-beats",
+        Side::You,
+        &Context {
+            layout: crate::REGULAR,
+            audit: crate::test_data::data().audit,
+            checks: crate::REGULAR.checks(&crate::test_data::data().profiles, SIZE),
+            size: SIZE,
+            safe_area: Insets::default(),
+            at: fault.at,
+        },
+    )
 }
 
 /// The three-beat script with `kind` planted at `at`, checked at the check times.

@@ -113,8 +113,8 @@ fn write_serif(out_dir: &std::path::Path) {
 /// The modules of `src/tokens.rs` from `design-tokens.json`, each as its name and its
 /// constants. `color` holds a constant for every token of kind `color`, named for the token in
 /// upper case with `_` for `-`, then the colors of `flat.color`. `space`, `type_style` and
-/// `size` and `ratio` hold the entries of `flat` under the same names, `mana` the colors of
-/// `flat.mana`, `shadow` the shadow lists of `flat.shadow`, and `gradient` the gradients of
+/// `size` and `ratio` hold the entries of `flat` under the same names, `symbol` the colors of
+/// `flat.symbol`, `shadow` the shadow lists of `flat.shadow`, and `gradient` the gradients of
 /// `flat.gradient` (`build/gradients.rs`). A number in `flat` is a `value`, or the `token` of kind `length` whose pixels it
 /// takes; a `note` becomes the doc comment.
 fn write_tokens(json: &serde_json::Value) -> Vec<(&'static str, String)> {
@@ -141,7 +141,7 @@ fn write_tokens(json: &serde_json::Value) -> Vec<(&'static str, String)> {
         ("size", size),
         ("ratio", ratio),
         ("color", write_colors(&tokens)),
-        ("mana", write_mana(&tokens)),
+        ("symbol", write_symbols(&tokens)),
         ("shadow", write_shadows(&tokens)),
         ("gradient", gradients::write_gradients(&tokens)),
     ]
@@ -232,16 +232,16 @@ fn parse_shadow<'a>(text: &str, find: &dyn Fn(&str) -> &'a serde_json::Value) ->
     )
 }
 
-/// The module `mana`: each entry of `flat.mana`, a mana symbol's disc or ink as the hex color
+/// The module `symbol`: each entry of `flat.symbol`, a symbol's disc or ink as the hex color
 /// in its `value`.
-fn write_mana(tokens: &Tokens) -> String {
+fn write_symbols(tokens: &Tokens) -> String {
     let mut out = String::new();
-    for (key, entry) in tokens.entries("mana") {
+    for (key, entry) in tokens.entries("symbol") {
         let value = entry["value"]
             .as_str()
-            .unwrap_or_else(|| panic!("`flat.mana.{key}` has a color `value`"));
+            .unwrap_or_else(|| panic!("`flat.symbol.{key}` has a color `value`"));
         let rgba = parse_color(value, &|name| tokens.find(name));
-        let doc = entry["note"].as_str().unwrap_or("A mana symbol's color.");
+        let doc = entry["note"].as_str().unwrap_or("A symbol's color.");
         writeln!(out, "/// {doc}\npub const {key}: [u8; 4] = {rgba:?};").unwrap();
     }
     out

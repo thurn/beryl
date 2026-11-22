@@ -7,8 +7,21 @@
 use std::ops::AddAssign;
 
 use super::checks::{KeptArrow, arrows_held};
-use super::fault::{Layout, Rule};
+use super::fault::{Fault, Layout, Rule};
 use kit_frame::frame::{Frame, Material, Place, Role, StateBits};
+
+/// The result of checking a scene.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Checked {
+    /// Each fault once, in order of discovery.
+    pub faults: Vec<Fault>,
+    /// How many frames were drawn, including frames drawn to sample motion or name a fault.
+    pub frames: usize,
+    /// Pairs of consecutive checked frames sharing an arrow for "lines hold".
+    pub line_pairs: usize,
+    /// How much each rule judged.
+    pub judged: Judged,
+}
 
 /// What one rule judged.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -50,16 +63,8 @@ impl Judged {
         // Flat-layer targets other than cards, which "phone sizes" holds to a finger's size.
         let mut targets = 0;
         let mut moving = false;
-        let mut face_up = 0;
         for element in &frame.resolved {
             moving |= element.state.has(StateBits::MOVING) || element.state.has(StateBits::HELD);
-            if element.role == Role::Card
-                && element.opacity > 0.0
-                && !element.state.has(StateBits::FACE_DOWN)
-                && !frame.name(element.name).is_empty()
-            {
-                face_up += 1;
-            }
             if !element.interactive {
                 continue;
             }
@@ -93,7 +98,6 @@ impl Judged {
             .count();
         self.add(Rule::Drawn, atlas + frame.undrawn.len());
         self.add(Rule::Named, interactive);
-        self.add(Rule::BlankCard, face_up);
         self.add(
             Rule::LayerDrawn,
             frame.draws.len().saturating_sub(frame.layer as usize),

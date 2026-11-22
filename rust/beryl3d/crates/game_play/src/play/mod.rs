@@ -648,7 +648,8 @@ impl Show {
         light::marks::write(&self.lit, now, &scene, builder);
         builder.clear_owner();
         light::streaks::write(&self.lit, now, &scene, builder);
-        let light_target = |subject, ago| {
+        let light_target = |target, ago| {
+            let subject = game_table::effect::subject(target)?;
             let mut reach = scene.reach_before(subject, ago)?;
             if ago == 0 && matches!(subject, Subject::Player { .. }) {
                 let table = scene.table();

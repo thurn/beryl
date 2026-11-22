@@ -31,7 +31,12 @@ fn records(effect: &str, data: &Effects) -> String {
     };
     let runs = [EffectRun {
         definition: data.get(effect).unwrap().clone(),
-        on,
+        on: game_table::effect::target(on),
+        on_point: matches!(on, Subject::Player { .. }),
+        particle_seed: match on {
+            Subject::Object { slot } => Some(u32::from(slot.0)),
+            _ => None,
+        },
         start: 1_000,
         duration: 10_000,
         curve: if effect == "glow" {
@@ -59,8 +64,8 @@ fn records(effect: &str, data: &Effects) -> String {
             };
             let mut builder =
                 FrameBuilder::new(&mut frame, tier, crate::test_data::data().card.size());
-            card::look(tier, &runs, on, now, None, &mut surface);
-            card::write(data, &runs, on, now, &surface, &mut builder);
+            card::look(tier, &runs, runs[0].on, now, None, &mut surface);
+            card::write(data, &runs, runs[0].on, now, &surface, &mut builder);
             light::write(data, &runs, now, |_, _| Some(reach), Vec3::Z, &mut builder);
             particles::write(data, &runs, now, |_| Some(reach), &mut builder);
             let frame = builder.finish();
@@ -102,7 +107,12 @@ fn remaining_records(effect: &str, on: Subject, moving: bool, data: &Effects) ->
     const MS: u64 = 1_000_000;
     let run = EffectRun {
         definition: data.get(effect).unwrap().clone(),
-        on,
+        on: game_table::effect::target(on),
+        on_point: matches!(on, Subject::Player { .. }),
+        particle_seed: match on {
+            Subject::Object { slot } => Some(u32::from(slot.0)),
+            _ => None,
+        },
         start: 100 * MS,
         duration: 1_000 * MS,
         curve: Curve::LINEAR,
@@ -131,8 +141,8 @@ fn remaining_records(effect: &str, on: Subject, moving: bool, data: &Effects) ->
             surface.tint = [190, 210, 230];
             let mut builder =
                 FrameBuilder::new(&mut frame, tier, crate::test_data::data().card.size());
-            card::look(tier, runs, on, now, Some(4), &mut surface);
-            card::write(data, runs, on, now, &surface, &mut builder);
+            card::look(tier, runs, run.on, now, Some(4), &mut surface);
+            card::write(data, runs, run.on, now, &surface, &mut builder);
             effects::write(
                 data,
                 runs,

@@ -2044,7 +2044,7 @@ Text is laid out by `parley` in the client core and rasterized by
   paragraph, and inline boxes. Mana symbols and other icons in rules text are
   inline boxes, so `{1}{U}` flows and wraps with the words around it. A symbol's
   box is as wide as its line's em. It is drawn as a disc in the symbol's color
-  (`flat.mana` in `data/design-tokens.json`, from the web interface's
+  (`flat.symbol` in `data/design-tokens.json`, from the web interface's
   `mana-symbols.css`) with the symbol's glyph from the Mana font on it.
 
 - **Layout results are cached** by text, style, spans and width. A prompt's text

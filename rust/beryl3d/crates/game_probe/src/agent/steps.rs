@@ -8,7 +8,7 @@
 //! sample of the step's subject from each frame evaluated while the step plays.
 
 use beryl_protocol::script::Verb;
-use glam::{Quat, Vec2};
+use glam::Vec2;
 
 use game_play::play::record::{Cause, ScriptRecord, SegmentRecord, StepRecord};
 use game_table::table::Camera;
@@ -16,6 +16,7 @@ use game_table::table::Place;
 use kit_base::data::Audit;
 use kit_base::pose::{Pose, Segment};
 use kit_frame::frame::{Frame, Role};
+use kit_probe::agent::motion::{self, Jump, same, seen};
 use kit_probe::agent::{Judged, Rule};
 use kit_scene::hit::{bounds, covered, hit};
 use kit_space::motion::pose_at;
@@ -37,9 +38,6 @@ pub struct Found {
 /// One frame at 60 Hz, in nanoseconds: how far apart two frames can fall, which a measured time
 /// is allowed to be off by.
 const FRAME: u64 = 16_666_667;
-/// Two poses closer than these are the same.
-const SAME_MILLIMETRES: f32 = 0.01;
-const SAME_FRACTION: f32 = 1e-3;
 
 /// `audit.step_ms` in nanoseconds: the shortest motion the eye takes as motion.
 #[must_use]
@@ -82,44 +80,26 @@ pub fn no_jumps(script: &ScriptRecord) -> Vec<Found> {
     for slot in script.slots() {
         let track = script.track(slot);
         let segments: Vec<Segment> = track.iter().map(|record| record.segment).collect();
-        for (index, record) in track.iter().enumerate() {
-            let segment = record.segment;
-            let what = cause_text(script, record);
-            if index > 0 {
-                let before = pose_at(&segments[..index], segment.start);
-                if !same(before, segment.from) && seen(before) && seen(segment.from) {
-                    found.push(Found {
-                        rule: Rule::Jump,
-                        slots: vec![slot],
-                        at: real(script, segment.start),
-                        message: format!(
-                            "jumped {} mm as {what} began",
-                            distance(before, segment.from)
-                        ),
-                    });
+        let allows_instant = |index: usize| match track[index].cause {
+            Cause::Hold | Cause::Change(_) => true,
+            Cause::Verb(step) => !travels(script.steps[step].verb),
+            Cause::Slide(_) | Cause::Planted => false,
+        };
+        for (index, jump) in motion::jumps(&segments, allows_instant) {
+            let record = track[index];
+            let what = cause_text(script, &record);
+            let message = match jump {
+                Jump::Start(distance) => format!("jumped {distance} mm as {what} began"),
+                Jump::ZeroDuration(distance) => {
+                    format!("moved {distance} mm in no time, with no path, in {what}")
                 }
-            }
-            let exempt = match record.cause {
-                Cause::Hold | Cause::Change(_) => true,
-                Cause::Verb(step) => !travels(script.steps[step].verb),
-                Cause::Slide(_) | Cause::Planted => false,
             };
-            if segment.duration == 0
-                && !exempt
-                && !same(segment.from, segment.to)
-                && seen(segment.from)
-                && seen(segment.to)
-            {
-                found.push(Found {
-                    rule: Rule::Jump,
-                    slots: vec![slot],
-                    at: real(script, segment.start),
-                    message: format!(
-                        "moved {} mm in no time, with no path, in {what}",
-                        distance(segment.from, segment.to)
-                    ),
-                });
-            }
+            found.push(Found {
+                rule: Rule::Jump,
+                slots: vec![slot],
+                at: real(script, record.segment.start),
+                message,
+            });
         }
     }
     found
@@ -547,32 +527,6 @@ fn cause_text(script: &ScriptRecord, record: &SegmentRecord) -> String {
 /// The real time of `t` on `script`'s clock. Only scripts that have started are checked.
 fn real(script: &ScriptRecord, t: u64) -> u64 {
     script.real(t).unwrap_or_default()
-}
-
-/// Whether two poses are the same to the eye.
-fn same(a: Pose, b: Pose) -> bool {
-    if !seen(a) && !seen(b) {
-        return true;
-    }
-    a.position.distance(b.position) < SAME_MILLIMETRES
-        && turned(a.rotation, b.rotation) < SAME_FRACTION
-        && (a.scale - b.scale).abs() < SAME_FRACTION
-        && (a.opacity - b.opacity).abs() < SAME_FRACTION
-        && (a.turn - b.turn).abs() < SAME_FRACTION
-}
-
-/// The angle between two rotations, in radians. `Quat::angle_between` takes the arc cosine of a
-/// dot product near 1, which reads two equal rotations as about a thousandth of a radian apart
-/// in `f32`; the sine of half the angle, the length of the vector part of the rotation from one
-/// to the other, keeps its precision for small angles.
-fn turned(a: Quat, b: Quat) -> f32 {
-    let half = (b * a.inverse()).xyz().length().min(1.0);
-    2.0 * half.asin()
-}
-
-/// Whether a pose can be seen at all.
-fn seen(pose: Pose) -> bool {
-    pose.opacity > SAME_FRACTION
 }
 
 /// How far apart two poses' positions are, in whole millimetres.

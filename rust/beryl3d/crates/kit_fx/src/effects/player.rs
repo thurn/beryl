@@ -175,7 +175,7 @@ fn write_quad(
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
 ) {
-    let record = if run.on_point() {
+    let record = if run.on_point {
         quad.point_record.as_ref().or(quad.record.as_ref())
     } else {
         quad.record.as_ref()

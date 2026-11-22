@@ -300,8 +300,6 @@ fn two_notices_at_once_do_not_overlap() {
         || pill.1.y <= banner.0.y;
     assert!(apart, "the banner {banner:?} and the pill {pill:?} overlap");
     let context = Context {
-        recording: "notices".to_owned(),
-        seat: Side::You,
         layout: crate::REGULAR,
         audit: crate::test_data::data().audit,
         checks: crate::REGULAR.checks(

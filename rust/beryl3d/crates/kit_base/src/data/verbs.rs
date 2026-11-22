@@ -62,7 +62,7 @@ pub struct Bowing {
     pub back: f32,
 }
 
-/// The height, scale and timing of a spell resolving onto the battlefield.
+/// The height, scale and timing of an object settling onto the table.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Thrown {
@@ -174,13 +174,13 @@ pub struct Showcase {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Lift {
-    pub library: LiftLibrary,
+    pub pile: LiftPile,
     pub hand: LiftHand,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct LiftLibrary {
+pub struct LiftPile {
     #[serde(deserialize_with = "vector")]
     pub beside: Vec2,
     #[serde(deserialize_with = "nonnegative")]

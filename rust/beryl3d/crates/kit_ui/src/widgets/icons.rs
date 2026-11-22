@@ -25,7 +25,7 @@ pub const WHOLE: IconId = IconId(40);
 pub const MENU: IconId = IconId(41);
 /// The lock a permanent that doesn't untap wears in its corner (`table::badges`).
 pub const LOCK: IconId = IconId(42);
-/// The atlas size of the lock, in logical points: large enough that a battlefield card drawn
+/// The atlas size of the lock, in logical points: large enough that a table card drawn
 /// big on a Retina display still samples it at about one texel a pixel.
 pub const LOCK_SIDE: u16 = 24;
 

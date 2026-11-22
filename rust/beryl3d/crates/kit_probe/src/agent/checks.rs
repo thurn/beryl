@@ -9,8 +9,8 @@ use glam::{Vec2, Vec4};
 use super::fault::{Context, Fault, Rule, Subject};
 use super::tree::locator_of;
 use kit_frame::frame::{
-    AnchorBox, Draw, Frame, Missing, NodeRef, Place, REVEALED_FACE, Ring, Role, ShapeAnchor,
-    StateBits, outline_corners,
+    AnchorBox, Draw, Frame, Missing, NodeRef, Place, Ring, Role, ShapeAnchor, StateBits,
+    outline_corners,
 };
 use kit_scene::hit::{
     Overlaps, bounds, contains, covering, has_free_rect, hit, intersection, is_within,
@@ -32,7 +32,6 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults.extend(super::text_overlap::text_overlap(frame, context));
     faults.extend(drawn(frame, context));
     faults.extend(named(frame, context));
-    faults.extend(blank_cards(frame, context));
     faults.extend(clips(frame, context));
     faults.extend(layer_drawn(frame, context));
     faults.extend(relations_hold(frame, context));
@@ -295,35 +294,16 @@ pub fn reachable(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults
 }
 
-/// The kinds of element whose ids `duplicates` counts apart.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum Kind {
-    Layer,
-    Card,
-    /// A card's face in the Revealed Cards pile.
-    Revealed,
-}
-
-/// No duplicates: no two elements share an id, so no game object has two cards, and no two
-/// sibling elements of the flat layer share a role and a name. A card's id is its object's
-/// slot and a flat-layer element's is given by the layer, so the two kinds are counted apart.
-/// A card id at or above `REVEALED_FACE` is the face of the card in slot `id - REVEALED_FACE`
-/// in the Revealed Cards pile, which a card held up to be read has beside itself: it is no
-/// second card of that object, and is counted apart from the cards.
-/// Arrows are not held to the sibling rule: a spell with two targets of one kind has two arrows
-/// named alike, told apart by their ids.
+/// Checks for reused IDs and flat-layer siblings with the same role and name. IDs of framed
+/// surfaces have their own namespace. Line and outline siblings may share names.
 #[must_use]
 pub fn duplicates(frame: &Frame, context: &Context) -> Vec<Fault> {
     let mut faults = Vec::new();
-    let mut ids: BTreeMap<(Kind, u32), u32> = BTreeMap::new();
+    let mut ids: BTreeMap<(bool, u32), u32> = BTreeMap::new();
     let mut siblings: BTreeMap<(u32, &str, &str), u32> = BTreeMap::new();
     for (index, element) in frame.resolved.iter().enumerate() {
         let index = index as u32;
-        let key = match element.role {
-            Role::Card if element.id.0 >= REVEALED_FACE => (Kind::Revealed, element.id.0),
-            Role::Card => (Kind::Card, element.id.0),
-            _ => (Kind::Layer, element.id.0),
-        };
+        let key = (element.role == Role::Card, element.id.0);
         if let Some(&first) = ids.get(&key) {
             let (a, b) = (subject(frame, first), subject(frame, index));
             faults.push(fault(
@@ -487,34 +467,6 @@ pub fn minimum_sizes(frame: &Frame, context: &Context) -> Vec<Fault> {
 /// How much less than a size, in logical points, an element may measure and still have it:
 /// far below a pixel on any screen, and far above `f32`'s error at a window's coordinates.
 const SIZE_TOLERANCE: f32 = 0.01;
-
-/// No blank card: every card drawn face up, whose name the viewer knows, has a face layer of
-/// its own.
-#[must_use]
-pub fn blank_cards(frame: &Frame, context: &Context) -> Vec<Fault> {
-    (0..frame.resolved.len() as u32)
-        .filter(|&index| {
-            let element = &frame.resolved[index as usize];
-            element.role == Role::Card
-                && element.opacity > 0.0
-                && !element.state.has(StateBits::FACE_DOWN)
-                && !frame.name(element.name).is_empty()
-                && element.face.is_none()
-        })
-        .map(|index| {
-            let subject = subject(frame, index);
-            fault(
-                Rule::BlankCard,
-                context,
-                format!(
-                    "{} is drawn face up with no face of its own",
-                    subject.describe()
-                ),
-                vec![subject],
-            )
-        })
-        .collect()
-}
 
 /// Layer drawn: a frame whose flat layer has records draws at least one of them inside the
 /// window. Each record is placed for the table's camera (`Camera::layer_transform`) and the

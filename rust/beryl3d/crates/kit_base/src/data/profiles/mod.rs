@@ -109,7 +109,7 @@ fn corners<'de, D: Deserializer<'de>>(de: D) -> Result<[Vec2; 2], D::Error> {
     <[[f32; 2]; 2]>::deserialize(de).map(|pair| pair.map(Vec2::from_array))
 }
 
-/// The edges and depth of a battlefield row in millimetres on the table.
+/// The edges and depth of a table row in millimetres on the table.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Row {
@@ -118,7 +118,7 @@ pub struct Row {
     pub y: f32,
 }
 
-/// Dimensions for layouts that divide the window into player strips and a battlefield.
+/// Dimensions for layouts that divide the window into player strips and a central play area.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Bands {
@@ -263,7 +263,7 @@ pub enum Region {
     LogArea,
     PromptArea,
     Catalog,
-    Battlefield,
+    PlayArea,
     AboveViewerRows,
 }
 
@@ -320,11 +320,11 @@ pub struct ManualControls {
     #[serde(deserialize_with = "nonnegative")]
     pub label_overlap: f32,
     #[serde(deserialize_with = "nonnegative")]
-    pub mana_right: f32,
+    pub pool_right: f32,
     #[serde(deserialize_with = "positive")]
-    pub mana_width: f32,
+    pub pool_width: f32,
     #[serde(deserialize_with = "positive")]
-    pub mana_done_width: f32,
+    pub pool_done_width: f32,
 }
 
 /// A layout profile before it is fitted to a window.
@@ -490,7 +490,7 @@ impl ProfileData {
             ("log.toggle", self.hud.overlays.contains(&Piece::LogColumn)),
             ("manual.connection", compact),
             ("manual.log", compact),
-            ("manual.mana", compact),
+            ("manual.pool", compact),
             ("manual.menu", compact),
             ("manual.next", compact),
             ("manual.proposals", compact),

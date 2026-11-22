@@ -374,7 +374,7 @@ impl Typesetter {
         let symbol_size = style.size * SYMBOL_SCALE;
         for (range, disc) in &symbols {
             builder.push(
-                StyleProperty::FontFamily(family(Font::Mana, &families)),
+                StyleProperty::FontFamily(family(Font::Symbols, &families)),
                 range.clone(),
             );
             builder.push(StyleProperty::FontSize(symbol_size), range.clone());

@@ -33,7 +33,6 @@ def root(tmp_path: Path) -> Path:
                 },
                 "cap_lines": 5,
                 "cap_allowances": {},
-                "protocol": {"kit_base": 0},
             }
         ),
     )
@@ -51,13 +50,11 @@ def test_drawing_crates_can_only_use_toolkit_members(root: Path, name: str) -> N
     assert purity.levels(root) == [f"{manifest}: {name} depends upward on app_client"]
 
 
-def test_comments_and_literals_do_not_create_references(root: Path) -> None:
+def test_system_font_path_is_not_a_game_zone(root: Path) -> None:
     write(
         root,
-        f"{KIT}/src/pose.rs",
-        "// use beryl_protocol;\n/* /* nested */ use beryl_protocol; */\n"
-        'const TEXT: &str = r#"beryl_protocol"#;\n'
-        'const WARNING: &str = "beryl_protocol"; // beryl_protocol\n',
+        f"{KIT}/build.rs",
+        'const PATH: &str = "/System/Library/Fonts/Supplemental";\n',
     )
     assert purity.levels(root) == []
 
@@ -147,20 +144,46 @@ def test_only_app_client_can_use_the_web_scaffold(root: Path) -> None:
     assert found == f"{GAME}/Cargo.toml: game_table depends upward on scaffold_web"
 
 
-def test_update_only_lowers_recorded_protocol_counts(root: Path) -> None:
-    path = root / purity.LEVELS_FILE
-    config = json.loads(path.read_text())
-    config["protocol"]["kit_base"] = 1
-    path.write_text(json.dumps(config))
-    write(root, f"{KIT}/src/pose.rs", "use beryl_protocol::types as beryl_protocol;\n")
+@pytest.mark.parametrize(
+    "manifest",
+    (
+        "[dependencies]\nberyl_protocol.workspace = true\n",
+        '[build-dependencies]\nprotocol = { package = "beryl_protocol", path = "x" }\n',
+        "[target.'cfg(unix)'.dev-dependencies]\nprotocol.workspace = true\n",
+    ),
+)
+def test_toolkit_manifest_cannot_depend_on_protocol(root: Path, manifest: str) -> None:
+    write(
+        root,
+        "rust/beryl3d/Cargo.toml",
+        '[workspace.dependencies]\nprotocol = { package = "beryl_protocol", path = "x" }\n',
+    )
+    write(root, f"{KIT}/Cargo.toml", manifest)
+    assert purity.levels(root, update=True) == [
+        f"{KIT}/Cargo.toml: toolkit crate kit_base depends on beryl_protocol"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("path", "source", "word"),
+    (
+        ("src/pose.rs", 'const PLACE: &str = "battlefield.yours";', "battlefield"),
+        ("src/pose.rs", "enum Zone { Graveyard }", "graveyard"),
+        ("src/pose.rs", "let your_library = 3;", "library"),
+        ("src/pose.rs", "use beryl_protocol::protocol::Side;", "beryl_protocol"),
+        ("tests/all/story.rs", "// Look for mana counters.", "mana"),
+        ("stories/check.story", 'button "View Battlefield"', "battlefield"),
+    ),
+)
+def test_toolkit_content_cannot_name_game_terms(
+    root: Path, path: str, source: str, word: str
+) -> None:
+    write(root, f"{GAME}/{path}", source)
     assert purity.levels(root) == []
-    (root / f"{KIT}/src/pose.rs").unlink()
-    assert purity.levels(root, update=True) == []
-    assert json.loads(path.read_text())["protocol"] == {"kit_base": 0}
-    write(root, f"{KIT}/src/pose.rs", "use beryl_protocol::types;\n")
-    (found,) = purity.levels(root, update=True)
-    assert "protocol.kit_base measured 1, above 0" in found
-    assert json.loads(path.read_text())["protocol"] == {"kit_base": 0}
+    write(root, f"{KIT}/{path}", "\n" + source)
+    assert purity.levels(root, update=True) == [
+        f"{KIT}/{path}:2: toolkit source names {word}"
+    ]
 
 
 def test_web_source_citations_can_only_grow_in_the_scaffold(root: Path) -> None:

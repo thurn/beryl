@@ -1,5 +1,6 @@
 //! A toolkit scene authored as text, played with no client or game state.
 
+mod check;
 mod parse;
 mod player;
 mod style;

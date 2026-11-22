@@ -12,12 +12,8 @@ pub use player::{NumberLook, TextLook, text};
 
 use std::sync::Arc;
 
-use beryl_protocol::{
-    protocol::{ObjectId, Side},
-    script::Subject,
-};
 use glam::{Vec2, Vec3};
-use kit_frame::frame::FrameBuilder;
+use kit_frame::frame::{EffectTarget, ElementId, FrameBuilder};
 
 use kit_base::data::effect::{Definition, Effects};
 use kit_base::pose::{Curve, Pose};
@@ -35,7 +31,7 @@ pub fn write(
     effects: &Effects,
     runs: &[EffectRun],
     now: u64,
-    reach: impl Fn(Subject, u64) -> Option<Reach>,
+    reach: impl Fn(EffectTarget, u64) -> Option<Reach>,
     (eye, scale): (Vec3, f32),
     builder: &mut FrameBuilder<'_>,
 ) {
@@ -49,7 +45,11 @@ pub fn write(
 #[derive(Clone, Debug, PartialEq)]
 pub struct EffectRun {
     pub definition: Arc<Definition>,
-    pub on: Subject,
+    pub on: EffectTarget,
+    /// Whether light expands from an anchor point instead of following a surface.
+    pub on_point: bool,
+    /// Seed for particle emitters. A run with no seed emits no particles.
+    pub particle_seed: Option<u32>,
     pub start: u64,
     pub duration: u64,
     pub curve: Curve,
@@ -72,37 +72,17 @@ impl EffectRun {
         Some(fraction)
     }
 
-    /// Whether the anchor represents a point, such as a life total.
-    fn on_point(&self) -> bool {
-        matches!(self.on, Subject::Player { .. })
-    }
-
     /// Runs one effect on the preview's single surface, using the same drawing code as play.
     fn preview(definition: Arc<Definition>, duration: u64) -> Self {
         Self {
             definition,
-            on: Subject::Object { slot: ObjectId(0) },
+            on: EffectTarget::Key(ElementId(0)),
+            on_point: false,
+            particle_seed: Some(0),
             start: 0,
             duration,
             curve: Curve::LINEAR,
             step: 0,
         }
-    }
-}
-
-/// Names a subject in effect comparison records.
-fn effect_target(subject: Subject) -> kit_frame::frame::EffectTarget {
-    use kit_frame::frame::{EffectTarget, ElementId};
-
-    match subject {
-        Subject::Object { slot } => EffectTarget::Key(ElementId(u32::from(slot.0))),
-        Subject::Ability { id } => EffectTarget::Numbered {
-            prefix: "a",
-            number: id,
-        },
-        Subject::Player { player: Side::You } => EffectTarget::Label("you"),
-        Subject::Player {
-            player: Side::Opponent,
-        } => EffectTarget::Label("opponent"),
     }
 }

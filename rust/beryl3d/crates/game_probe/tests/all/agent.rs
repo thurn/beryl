@@ -1,14 +1,15 @@
 //! The tree printout, locators, hit testing and the frame checks, on frames built by hand.
 
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
+use game_probe::agent::blank_cards;
 use game_table::table::Place;
 use game_table::table::labels::TAPPED;
 use glam::Vec2;
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Resolved, Role, StateBits};
 use kit_probe::agent::checks::check;
 use kit_probe::agent::checks::{
-    KeptArrow, blank_cards, duplicates, keep_arrows, lines_hold, minimum_sizes, named, on_screen,
-    overlap, reachable,
+    KeptArrow, duplicates, keep_arrows, lines_hold, minimum_sizes, named, on_screen, overlap,
+    reachable,
 };
 use kit_probe::agent::locate::LocateError;
 use kit_probe::agent::text_overlap::text_overlap;
@@ -119,8 +120,6 @@ fn context(layout: Layout) -> Context {
         },
     };
     Context {
-        recording: "pay-default".to_owned(),
-        seat: Side::You,
         layout,
         audit: crate::test_data::data().audit,
         checks: layout.checks(&crate::test_data::data().profiles, size),
@@ -518,7 +517,12 @@ fn overlapping_buttons_are_a_fault() {
         )
     );
     assert_eq!(
-        faults[0].print(&context(Layout::Phone)),
+        game_probe::agent::print_fault(
+            &faults[0],
+            "pay-default",
+            Side::You,
+            &context(Layout::Phone)
+        ),
         "FAULT overlap  b3d:pay-default/you/375x647 t=850ms\n  \
          button \"Auto Pay\" #1 (188,598 96x44) overlaps button \"Cancel\" #2 (270,598 80x44)\n  \
          show: just b3d tree pay-default --seat you --layout phone --size 375x647 --at 850ms"

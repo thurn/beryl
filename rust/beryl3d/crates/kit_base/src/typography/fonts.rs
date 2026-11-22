@@ -5,7 +5,7 @@
 //! Cinzel, Crimson Pro and Open Sans are variable fonts committed in `fonts/`, from which
 //! parley selects any weight; each file's licence lies beside it. The web interface's serif
 //! face, `--font-serif`, is Times New Roman, which no licence lets the repository hold. The
-//! build script embeds the copy every Mac has in `/System/Library/Fonts/Supplemental/` when it
+//! build script embeds the copy every Mac has among its supplemental fonts when it
 //! builds for macOS, and Crimson Pro in its place where that copy is missing, such as on
 //! Windows ([`Font::Serif`]).
 
@@ -31,8 +31,8 @@ pub enum Font {
     CrimsonPro,
     /// Open Sans, for interface text.
     OpenSans,
-    /// The mana symbol font.
-    Mana,
+    /// The font for inline symbols.
+    Symbols,
     /// The web's serif face (`--font-serif`), for titles, buttons and captions: Times New
     /// Roman on macOS, or Crimson Pro where the build found no Times New Roman. Times New Roman
     /// is not variable, so it has a regular, a bold, an italic and a bold italic file, and
@@ -55,7 +55,7 @@ impl Font {
             Self::Cinzel => "Cinzel",
             Self::CrimsonPro => "Crimson Pro",
             Self::OpenSans => "Open Sans",
-            Self::Mana => "Mana",
+            Self::Symbols => "Symbols",
             Self::Serif => SERIF_FAMILY,
         }
     }
@@ -110,9 +110,9 @@ pub static ALL: [FontFile; 8] = [
         data: include_bytes!("../../fonts/OpenSans.ttf"),
     },
     FontFile {
-        font: Font::Mana,
-        file: "mana.ttf",
-        data: include_bytes!("../../fonts/mana.ttf"),
+        font: Font::Symbols,
+        file: "symbols.ttf",
+        data: include_bytes!("../../fonts/symbols.ttf"),
     },
     FontFile {
         font: Font::Serif,

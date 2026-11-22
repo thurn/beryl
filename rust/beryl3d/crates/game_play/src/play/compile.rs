@@ -628,7 +628,12 @@ fn effects_of(
         }
         runs.push(EffectRun {
             definition: Arc::clone(definition),
-            on,
+            on: game_table::effect::target(on),
+            on_point: matches!(on, Subject::Player { .. }),
+            particle_seed: match on {
+                Subject::Object { slot } => Some(u32::from(slot.0)),
+                _ => None,
+            },
             start,
             duration: end - start,
             curve: named_curve(effect.curve),

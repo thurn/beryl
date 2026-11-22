@@ -126,7 +126,7 @@ pub fn free_rect(frame: &Frame, index: u32, min: Size) -> Option<Rect> {
 /// been built from `frame`. It stops at the first such rectangle, which is what the "reachable"
 /// check asks.
 ///
-/// Upright, it is whether `free_rect` would find one. A battlefield card leans toward the web's
+/// Upright, it is whether `free_rect` would find one. A table card leans toward the web's
 /// vanishing point (`Pose::shear`), and a narrow one near a window's edge holds no upright
 /// square of `min` though a press across most of its width reaches it. So when no upright
 /// rectangle is found, the same search runs in the element's own leaning frame, where its sides

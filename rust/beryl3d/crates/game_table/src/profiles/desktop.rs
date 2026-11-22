@@ -20,7 +20,7 @@ pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
         gap: table.gap,
         pile_step: table.pile_step,
         beneath_step: table.beneath_step,
-        piles: piles.map(|pile| [pile.library, pile.graveyard, pile.exile]),
+        piles: piles.map(|pile| [pile.outer, pile.middle, pile.inner]),
         pile_scale: piles.map(|pile| pile.scale),
         tray: tray(
             data.tray,

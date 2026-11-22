@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use kit_base::tokens::mana;
+use kit_base::tokens::symbol;
 use kit_base::typography::fonts::Font;
 use kit_text::text::InlineIcon;
 
@@ -13,7 +13,7 @@ pub fn icon(name: &str) -> InlineIcon<'_> {
     InlineIcon {
         glyph: code(name).map_or_else(
             || (Cow::Borrowed(name), None),
-            |glyph| (Cow::Owned(glyph.to_string()), Some(Font::Mana)),
+            |glyph| (Cow::Owned(glyph.to_string()), Some(Font::Symbols)),
         ),
         background,
         ink,
@@ -45,13 +45,13 @@ fn code(symbol: &str) -> Option<char> {
 #[must_use]
 fn colors(symbol: &str) -> ([u8; 4], [u8; 4]) {
     match symbol {
-        "W" => (mana::W, mana::INK),
-        "U" => (mana::U, mana::U_INK),
-        "B" => (mana::B, mana::INK),
-        "R" => (mana::R, mana::INK),
-        "G" => (mana::G, mana::INK),
-        "C" => (mana::C, mana::INK),
-        _ => (mana::GENERIC, mana::INK),
+        "W" => (symbol::W, symbol::INK),
+        "U" => (symbol::U, symbol::U_INK),
+        "B" => (symbol::B, symbol::INK),
+        "R" => (symbol::R, symbol::INK),
+        "G" => (symbol::G, symbol::INK),
+        "C" => (symbol::C, symbol::INK),
+        _ => (symbol::GENERIC, symbol::INK),
     }
 }
 

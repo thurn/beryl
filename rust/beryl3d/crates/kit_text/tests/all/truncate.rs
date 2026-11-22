@@ -12,7 +12,7 @@ const BODY: TypeStyle = TypeStyle {
     letter_spacing: 0.0,
 };
 
-const LONG: &str = "Return target creature an opponent controls to its owner's hand";
+const LONG: &str = "Return the selected documents to the folder where you originally found them";
 
 /// The words each line of `block`, laid out from `source`, shows.
 fn lines(block: &Block, source: &str) -> Vec<String> {

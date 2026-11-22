@@ -17,10 +17,9 @@ use game_probe::agent::steps::{self, Found, Sample, card_of, sample, step_nanose
 use game_table::table::Camera;
 use kit_base::data::Audit;
 use kit_frame::frame::Frame;
-use kit_probe::agent::checks;
 use kit_probe::agent::checks::{KeptArrow, arrows_held, keep_arrows, lines_hold};
 use kit_probe::agent::tree::locator_of;
-use kit_probe::agent::{self, Context, Fault, Layout, Rule, Subject};
+use kit_probe::agent::{self, Checked, Context, Fault, Layout, Rule, Subject};
 use kit_scene::hit::bounds;
 use kit_ui::input::Rect;
 
@@ -77,22 +76,6 @@ pub enum Mode {
     EveryTick,
 }
 
-/// What checking a whole recording found.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Checked {
-    /// Every fault, each once: a fault a frame check finds again in a later frame, about the same
-    /// elements, is not repeated.
-    pub faults: Vec<Fault>,
-    /// How many frames were drawn: those the frame checks ran on, those in which a step's
-    /// subject was only sampled, and those that name the objects of a fault.
-    pub frames: usize,
-    /// How many pairs of consecutive checked frames "lines hold" compared, each sharing at least
-    /// one arrow.
-    pub line_pairs: usize,
-    /// How much each rule judged.
-    pub judged: agent::Judged,
-}
-
 /// One step of one script that "every step shown" judges, with what the frames showed of it.
 struct Judged {
     script: usize,
@@ -116,8 +99,6 @@ impl Page {
         let data = self.client.data();
         let profile = data.profiles.for_size(self.size);
         Context {
-            recording: self.name.clone(),
-            seat: self.seat,
             layout: Layout::for_size_class(profile.size_class),
             audit: data.audit,
             checks: profile.checks,
@@ -181,8 +162,9 @@ impl Page {
             let size = page.size;
             let frame = page.frame();
             if checked.contains(&t) {
-                faults.extend(checks::check(frame, &context));
+                faults.extend(game_probe::agent::check(frame, &context));
                 tally.frame(frame, context.layout);
+                game_probe::agent::count_frame(&mut tally, frame);
                 tally.lines(&kept, frame);
                 if arrows_held(&kept, frame) > 0 {
                     line_pairs += 1;
@@ -260,14 +242,17 @@ impl Page {
     ) -> bool {
         let context = self.context();
         let frame = self.frame();
-        let mut faults = checks::check(frame, &context);
+        let mut faults = game_probe::agent::check(frame, &context);
         let held = arrows_held(kept, frame) > 0;
         if held {
             faults.extend(lines_hold(kept, frame, &context));
         }
         keep_arrows(frame, kept);
         if faults.iter().any(|fault| !allowed(fault)) {
-            let printed: Vec<String> = faults.iter().map(|fault| fault.print(&context)).collect();
+            let printed: Vec<String> = faults
+                .iter()
+                .map(|fault| game_probe::agent::print_fault(fault, &self.name, self.seat, &context))
+                .collect();
             panic!("{}", self.error(&printed.join("\n")));
         }
         held

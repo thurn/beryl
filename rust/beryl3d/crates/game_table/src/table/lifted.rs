@@ -158,7 +158,7 @@ pub(crate) fn lay(
         .collect();
     let (fan, plane, band, backs) = match group {
         Group::Pile { side, .. } => {
-            let library = lift.library;
+            let library = lift.pile;
             let scale = super::pile::nominal_scale(layout, side);
             let (direction, band) = match side {
                 Side::You => (1.0, -1.0..0.0),

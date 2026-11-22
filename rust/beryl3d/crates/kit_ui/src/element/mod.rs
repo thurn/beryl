@@ -325,15 +325,14 @@ pub mod floats {
     pub const LIFE: [FloatId; 2] = [FloatId(4), FloatId(5)];
     /// The number that floats off a life total when it changes.
     pub const LIFE_CHANGE: [FloatId; 2] = [FloatId(6), FloatId(7)];
-    /// A player's mana pool.
+    /// A resource counter.
     pub const POOL: [FloatId; 2] = [FloatId(8), FloatId(9)];
-    /// The count on a pile, by side, then library, graveyard and exile.
+    /// The pile counts, grouped by side.
     pub const PILE_COUNT: [[FloatId; 3]; 2] = [
         [FloatId(10), FloatId(11), FloatId(12)],
         [FloatId(13), FloatId(14), FloatId(15)],
     ];
-    /// The count of cards scrolled off one end of a battlefield row: by side, then by row in
-    /// `RowName`'s order (creatures, others, lands), then the left end and the right end.
+    /// The count of objects scrolled off the left or right end of a row, grouped by side and row.
     pub const ROW_COUNT: [[[FloatId; 2]; 3]; 2] = [
         [
             [FloatId(16), FloatId(17)],

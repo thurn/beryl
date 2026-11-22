@@ -28,11 +28,11 @@ pub struct Piles {
 #[serde(deny_unknown_fields)]
 pub struct Pile {
     #[serde(deserialize_with = "vector")]
-    pub library: Vec2,
+    pub outer: Vec2,
     #[serde(deserialize_with = "vector")]
-    pub graveyard: Vec2,
+    pub middle: Vec2,
     #[serde(deserialize_with = "vector")]
-    pub exile: Vec2,
+    pub inner: Vec2,
     #[serde(deserialize_with = "positive")]
     pub scale: f32,
 }

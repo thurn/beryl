@@ -5,9 +5,9 @@ use app_client::Input;
 use app_client::{Client, Config};
 use beryl_card_records::{CardRecords, TokenMakers, card_records_among};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
+use game_probe::agent::blank_cards;
 use game_table::faces::{CARD_BACK, FaceList};
 use kit_frame::frame::{Frame, Material, Role, TextureArray};
-use kit_probe::agent::checks::blank_cards;
 use kit_probe::agent::{Context, Rule};
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{AssetReady, FaceId, FaceSize, Insets, Lifecycle, Size, Tier};
@@ -71,8 +71,6 @@ fn layers(frame: &Frame, name: &str, layer: u16) -> (Vec<Option<u16>>, usize) {
 
 fn blank(frame: &Frame) -> Vec<String> {
     let context = Context {
-        recording: "sample".to_owned(),
-        seat: beryl_protocol::protocol::Side::You,
         layout: crate::REGULAR,
         audit: crate::test_data::data().audit,
         checks: crate::REGULAR.checks(&crate::test_data::data().profiles, SIZE),

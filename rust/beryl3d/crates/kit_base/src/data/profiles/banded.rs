@@ -17,7 +17,7 @@ pub struct Banded {
     pub dock_gap: f32,
     #[serde(deserialize_with = "positive")]
     pub button_height: f32,
-    /// The mana pool's offset from its player's life total, in logical points.
+    /// The resource pool's offset from the adjacent score, in logical points.
     #[serde(default, deserialize_with = "vector")]
     pub pool_offset: glam::Vec2,
 }

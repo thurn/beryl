@@ -2331,7 +2331,6 @@ dependencies = [
 name = "kit_fx"
 version = "0.1.0"
 dependencies = [
- "beryl_protocol",
  "glam",
  "kit_base",
  "kit_frame",
@@ -2344,7 +2343,6 @@ dependencies = [
 name = "kit_probe"
 version = "0.1.0"
 dependencies = [
- "beryl_protocol",
  "beryl_test_files",
  "glam",
  "kit_base",

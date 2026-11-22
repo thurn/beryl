@@ -82,9 +82,8 @@ impl Track {
     }
 
     /// Whether a step's own act holds the object still at `t` between two of the segments it
-    /// moves the object along, as a strike holds its creature at its poise and where its blow
-    /// lands. The object is drawn at rest there, but it is still in the middle of its verb, so
-    /// the checks that judge only cards at rest skip it. A pause between two steps, or after a
+    /// moves the object along, for example when a motion pauses before continuing.
+    /// Checks for settled objects skip it because its motion is still underway. A pause between two steps, or after a
     /// step's last move, does not count.
     #[must_use]
     pub fn paused(&self, t: u64) -> bool {

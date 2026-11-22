@@ -195,12 +195,12 @@ fn tint(stream: Stream) -> [u8; 4] {
     match stream {
         Stream::Damage => color::DAMAGE,
         Stream::Mana { color: mana } => match mana {
-            Mana::White => color::MANA_WHITE,
-            Mana::Blue => color::MANA_BLUE,
-            Mana::Black => color::MANA_BLACK,
-            Mana::Red => color::MANA_RED,
-            Mana::Green => color::MANA_GREEN,
-            Mana::Colorless => color::MANA_COLORLESS,
+            Mana::White => color::STREAK_WHITE,
+            Mana::Blue => color::STREAK_BLUE,
+            Mana::Black => color::STREAK_BLACK,
+            Mana::Red => color::STREAK_RED,
+            Mana::Green => color::STREAK_GREEN,
+            Mana::Colorless => color::STREAK_COLORLESS,
         },
     }
 }

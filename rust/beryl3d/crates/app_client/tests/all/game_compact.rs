@@ -85,8 +85,6 @@ fn press(client: &mut Client, now: u64, role: Role, name: &str) {
 /// places are the table's.
 fn layer_faults(frame: &Frame, window: Window) -> Vec<String> {
     let context = Context {
-        recording: "game-phone".to_owned(),
-        seat: Side::You,
         layout: crate::COMPACT,
         audit: crate::test_data::data().audit,
         checks: crate::COMPACT.checks(&crate::test_data::data().profiles, window.size),
@@ -204,8 +202,6 @@ fn stacked_buttons_stand_in_the_middle_band_when_a_permanent_lies_under_them() {
     );
     let window = window(size.0, size.1);
     let context = Context {
-        recording: "game-phone".to_owned(),
-        seat: Side::You,
         layout: crate::COMPACT,
         audit: crate::test_data::data().audit,
         checks: crate::COMPACT.checks(&crate::test_data::data().profiles, window.size),

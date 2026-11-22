@@ -588,10 +588,11 @@ impl Table {
             dress.effects
         };
         let effects = &self.data.effects;
+        let target = crate::effect::target(on);
         effects::card::look_with_face(
             builder.tier(),
             effects_on_card,
-            on,
+            target,
             dress.now,
             earlier_face,
             &mut look,
@@ -599,7 +600,7 @@ impl Table {
         (dress.marks)(on, &mut look);
         (dress.pointer)(slot, &self.camera, &mut look);
         let held = held_at.map_or(look, |pose| Look { pose, ..look });
-        effects::card::write(effects, dress.effects, on, dress.now, &held, builder);
+        effects::card::write(effects, dress.effects, target, dress.now, &held, builder);
         self.write_shadow((Some(slot), object.place), &look.pose, under_way, builder);
         let at = self.write_look(
             name,

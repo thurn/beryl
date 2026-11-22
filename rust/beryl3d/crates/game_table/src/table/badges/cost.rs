@@ -12,7 +12,7 @@ use super::{Badges, On, faded};
 use crate::faces::{FaceList, ListedFace};
 use crate::table::Place;
 use kit_base::data::BadgeTuning;
-use kit_base::tokens::{badge, mana};
+use kit_base::tokens::{badge, symbol};
 use kit_frame::frame::{
     Draw, ElementId, FrameBuilder, NameRef, RECORDS_PER_OBJECT, Resolved, Role, Sprite, StateBits,
 };
@@ -259,7 +259,7 @@ impl Badges {
                 on.band,
                 Draw::glyph(
                     quad(at, size, raise),
-                    faded(run.color.unwrap_or(mana::INK), on.opacity),
+                    faded(run.color.unwrap_or(symbol::INK), on.opacity),
                     Sprite {
                         page: placed.page,
                         rect: placed.rect,

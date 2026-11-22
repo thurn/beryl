@@ -1665,7 +1665,7 @@
         "note": "The faint line before the gallery's second and third scry captions: their left border."
       }
     },
-    "mana": {
+    "symbol": {
       "W": {
         "value": "#f6f2c8",
         "note": "A white mana symbol's disc: `.mana-w` in `ui/src/design/components/mana-symbols.css`."

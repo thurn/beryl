@@ -7,10 +7,11 @@ pub mod fault;
 pub mod judged;
 pub mod line;
 pub mod locate;
+pub mod motion;
 pub mod text_overlap;
 pub mod tree;
 
 pub use fault::{Context, Fault, Layout, Rule, Subject};
-pub use judged::{Count, Judged};
+pub use judged::{Checked, Count, Judged};
 pub use locate::{LocateError, locate};
 pub use tree::{TreeOptions, tree};

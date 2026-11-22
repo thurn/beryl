@@ -547,7 +547,7 @@ impl Layer {
         }
         // A child that entered or changed size takes its new box at once, since sizes do not
         // transition, so siblings that slide toward their new places would start inside it: in
-        // a row of mana counters, the blue counter growing from "{U}" to "{U}2" ran 5 points
+        // a row of counters, the blue counter growing from "{U}" to "{U}2" ran 5 points
         // into the black counter as that slid right. Every child of the flow moves at once
         // instead, as the web's flex rows do. An anchored child stands apart from the flow.
         let reflowed = node.children.iter().any(|child| {

@@ -57,7 +57,7 @@ pub(super) fn put_back(held: &Held, space: &TraySpace, span: (f32, f32)) -> Laid
     let base = pair.slots[0];
     let library = Area {
         x: base.x,
-        y: base.y - shape.library_rise * base.height,
+        y: base.y - shape.pile_rise * base.height,
         width: base.width,
         height: base.height,
     };

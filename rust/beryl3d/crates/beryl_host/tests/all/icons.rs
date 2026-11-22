@@ -356,10 +356,10 @@ fn prepared_then_demanded(scale: f32) -> (Vec<u16>, Vec<GlyphCell>, usize, Vec<G
     worker.icons(scale);
     worker.prepare(prepare_latin(scale));
     let size = (32.0 * scale) as u16;
-    let mana = FontRef::from_index(Font::Mana.file().data, 0).expect("the Mana font parses");
+    let mana = FontRef::from_index(Font::Symbols.file().data, 0).expect("the Mana font parses");
     let mut demanded = vec![GlyphKey {
         blur: 0,
-        font: Font::Mana as u8,
+        font: Font::Symbols as u8,
         weight: 400,
         glyph: mana.charmap().map('\u{e601}'),
         size,

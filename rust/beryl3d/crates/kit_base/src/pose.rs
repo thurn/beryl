@@ -65,7 +65,7 @@ pub struct Pose {
     /// How far the object's far side moves across the table (along `x`) for each millimetre
     /// along it (along `y`) from its centre, after it is rotated and skewed: a shear in the
     /// table's plane rather than the card's, so that a tapped card leans as an untapped one
-    /// does. It is nought except on a battlefield row fitted to the web interface, whose cards
+    /// does. It is nought except on a table row fitted to the web interface, whose cards
     /// lean toward the web's vanishing point as the web's skewed cards do (`web_fit::lean`).
     pub shear: f32,
 }
@@ -219,7 +219,7 @@ pub enum Shape {
     /// so that it is upright again by then. Its size on the screen, its scale over its distance
     /// from the eye, stays at its start pose's until it is edge-on, then changes to its end
     /// pose's along a smoothstep over the rest of its time, so that it turns over at about the
-    /// size it had on the library. `eye` is how far along `bow.axis` the camera's eye is, so
+    /// size it had on the pile. `eye` is how far along `bow.axis` the camera's eye is, so
     /// that a position `p` is `eye - p · bow.axis` from it.
     Held { bow: Bow, lean: f32, eye: f32 },
     /// A permanent's flight off the stack onto its place, as the web interface's `lifted`

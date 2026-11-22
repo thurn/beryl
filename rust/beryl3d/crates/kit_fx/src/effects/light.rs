@@ -1,12 +1,11 @@
 //! Draws additive light just above each subject, following its pose as it moves.
 
-use beryl_protocol::script::Subject;
 use glam::{Affine3A, Vec2, Vec3};
 
 use super::{EffectRun, Reach, player};
 use kit_base::data::effect::Effects;
 use kit_base::pose::Pose;
-use kit_frame::frame::{Draw, FrameBuilder, Sprite, sprites};
+use kit_frame::frame::{Draw, EffectTarget, FrameBuilder, Sprite, sprites};
 
 /// Writes the table-space light layers. `reach_at` supplies the subject's current pose or
 /// its pose a given number of nanoseconds earlier.
@@ -14,7 +13,7 @@ pub fn write(
     effects: &Effects,
     runs: &[EffectRun],
     now: u64,
-    reach_at: impl Fn(Subject, u64) -> Option<Reach>,
+    reach_at: impl Fn(EffectTarget, u64) -> Option<Reach>,
     eye: Vec3,
     builder: &mut FrameBuilder<'_>,
 ) {
@@ -41,7 +40,7 @@ pub(super) fn record_as(
     let model = Affine3A::from_scale_rotation_translation(size, pose.rotation, above(pose, lift));
     builder.effect(
         &run.definition.name,
-        Some(super::effect_target(run.on)),
+        Some(run.on),
         Draw::glow(model, [0; 4], sprites::HALO, 0.0).model,
         opacity,
     );

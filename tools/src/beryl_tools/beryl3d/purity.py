@@ -348,6 +348,16 @@ def scene_literals(root: Path) -> list[str]:
 
 LEVELS_FILE = "data/beryl3d/levels.json"
 PROTOCOL = "beryl_protocol"
+# These Magic-specific names belong at the game level. Match words and identifier parts
+# so the rule covers types, fields, labels, test data and comments.
+MAGIC_WORDS = {
+    "battlefield",
+    "graveyard",
+    "library",
+    "mana",
+    "creature",
+    "planeswalker",
+}
 DEPENDENCY_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
 
 
@@ -365,7 +375,6 @@ class Levels(TypedDict):
     crates: dict[str, CrateLevel]
     cap_lines: int
     cap_allowances: dict[str, CapAllowance]
-    protocol: dict[str, int]
     protocol_literals: dict[str, int]
     profile_words: NotRequired[dict[str, int]]
     web_citations: NotRequired[dict[str, int]]
@@ -410,6 +419,11 @@ def rust_tokens(source: str, *, comments: bool = False) -> list[RustToken]:
 def upwards(config: Levels, source: str, target: str) -> bool:
     """Apply the dependency order and the dedicated consumer of the web scaffold."""
     order = config["crates"]
+    if source in order and order[source]["level"] == "toolkit":
+        if target.startswith(("game_", "app_")) or (
+            target in order and order[target]["level"] in {"game", "app"}
+        ):
+            return True
     if source in {"beryl_assets", "beryl_render"} and target in order:
         return order[target]["level"] != "toolkit"
     if target == "scaffold_web":
@@ -421,14 +435,6 @@ def upwards(config: Levels, source: str, target: str) -> bool:
         and target in order
         and order[target]["order"] > order[source]["order"]
     )
-
-
-def named_lines(tokens: list[RustToken], starts: list[int]) -> set[int]:
-    return {
-        bisect.bisect_right(starts, token.offset)
-        for token in tokens
-        if token.text.removeprefix("r#") == PROTOCOL
-    }
 
 
 def line_starts(source: str) -> list[int]:
@@ -596,10 +602,26 @@ def check_cap(config: Levels, name: str, lines: int, update: bool) -> str | None
     return None
 
 
-def crate_levels(
-    root: Path, config: Levels, protocol: dict[str, int], found: list[str], update: bool
-) -> None:
-    """Check manifest edges and source sizes, and add the protocol lines in the new crates."""
+def toolkit_words(root: Path, path: Path, source: str) -> list[str]:
+    """Report names the toolkit source or story obtains from game concepts."""
+    found: list[str] = []
+    for number, line in enumerate(source.splitlines(), 1):
+        # This is the standard macOS location for supplemental system fonts.
+        line = line.replace("/System/Library/Fonts/Supplemental", "")
+        words = {word.lower() for word in IDENTIFIER_PART.findall(line)}
+        for word in sorted(words & MAGIC_WORDS):
+            found.append(
+                f"{path.relative_to(root)}:{number}: toolkit source names {word}"
+            )
+        if re.search(r"\bberyl_protocol\b", line):
+            found.append(
+                f"{path.relative_to(root)}:{number}: toolkit source names {PROTOCOL}"
+            )
+    return found
+
+
+def crate_levels(root: Path, config: Levels, found: list[str], update: bool) -> None:
+    """Check dependency edges, source budgets and toolkit vocabulary."""
     base = crates(root)
     workspace = base.parent / "Cargo.toml"
     inherited = (
@@ -625,27 +647,28 @@ def crate_levels(
             if upwards(config, name, dependency):
                 found.append(f"{relative}: {name} depends upward on {dependency}")
         if name not in order:
+            if name.startswith("kit_"):
+                found.append(f"{relative}: register {name} as toolkit in {LEVELS_FILE}")
             continue
+        toolkit = order[name]["level"] == "toolkit"
+        if name.startswith("kit_") and not toolkit:
+            found.append(f"{relative}: register {name} as toolkit in {LEVELS_FILE}")
+        if toolkit and PROTOCOL in dependencies:
+            found.append(f"{relative}: toolkit crate {name} depends on {PROTOCOL}")
         lines = 0
-        protocol_lines = 0
         src = manifest.parent / "src"
-        sources = manifest.parent if name in protocol else src
+        sources = manifest.parent if toolkit else src
         for path in sorted(sources.rglob("*.rs")):
             source = path.read_text()
             if path.is_relative_to(src):
                 lines += len(source.splitlines())
-            if name in protocol:
-                protocol_lines += len(
-                    named_lines(rust_tokens(source), line_starts(source))
-                )
+            if toolkit:
+                found.extend(toolkit_words(root, path, source))
+        if toolkit:
+            for path in sorted((manifest.parent / "stories").rglob("*.story")):
+                found.extend(toolkit_words(root, path, path.read_text()))
         if problem := check_cap(config, name, lines, update):
             found.append(f"{src.relative_to(root)}: {problem}")
-        if name in protocol:
-            protocol[name] += protocol_lines
-            if PROTOCOL in dependencies and not (
-                protocol_lines and config["protocol"].get(name)
-            ):
-                found.append(f"{relative}: toolkit crate {name} depends on {PROTOCOL}")
 
 
 def compare_levels(
@@ -678,21 +701,14 @@ def levels(root: Path, *, update: bool = False, verbose: bool = False) -> list[s
     config = cast(Levels, json.loads(path.read_text()))
     before = json.dumps(config, indent=2) + "\n"
     found: list[str] = []
-    protocol = {
-        name: 0
-        for name, entry in config["crates"].items()
-        if entry["level"] == "toolkit"
-    }
-    crate_levels(root, config, protocol, found, update)
+    if "protocol" in config:
+        found.append(f"{LEVELS_FILE}: remove the toolkit protocol allowance")
+    crate_levels(root, config, found, update)
     if verbose:
-        print("Protocol lines by toolkit crate")
-        for name, count in protocol.items():
-            print(f"  {name}  {count}")
         for name, allowance in sorted(config["cap_allowances"].items()):
             print(
                 f"Cap allowance for {name}: {allowance.get('lines')} lines. {allowance.get('reason', '')}"
             )
-    found.extend(compare_levels("protocol", protocol, config["protocol"], update))
     if "profile_words" in config:
         found.extend(
             compare_levels(

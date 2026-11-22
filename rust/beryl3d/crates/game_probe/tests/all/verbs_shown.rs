@@ -130,8 +130,6 @@ fn card(frame: &Frame, id: u32) -> Option<&kit_frame::frame::Resolved> {
 
 fn context() -> Context {
     Context {
-        recording: "verbs-shown".to_owned(),
-        seat: Side::You,
         layout: Layout::Desktop,
         audit: crate::test_data::data().audit,
         checks: Layout::Desktop.checks(

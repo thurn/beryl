@@ -515,8 +515,6 @@ fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
     let lines = printed.lines().filter(|line| line.contains("ability"));
     assert_eq!(lines.count(), 2, "{printed}");
     let context = Context {
-        recording: "abilities".to_owned(),
-        seat: Side::You,
         layout: crate::REGULAR,
         audit: crate::test_data::data().audit,
         checks: crate::REGULAR.checks(
@@ -637,8 +635,6 @@ fn every_card_of_a_hand_of_any_size_can_be_pressed() {
             client.handle(Input::Update(Box::new(view.update())));
             let frame = client.frame(0).clone();
             let context = Context {
-                recording: format!("{count} cards"),
-                seat: Side::You,
                 layout: crate::REGULAR,
                 audit: crate::test_data::data().audit,
                 checks: crate::REGULAR.checks(&crate::test_data::data().profiles, size),
@@ -782,8 +778,6 @@ fn every_item_of_a_stack_of_any_size_can_be_pressed() {
             }));
             client.handle(Input::Update(Box::new(builder.update())));
             let context = Context {
-                recording: "stack".to_owned(),
-                seat: Side::You,
                 layout: crate::REGULAR,
                 audit: crate::test_data::data().audit,
                 checks: crate::REGULAR.checks(&crate::test_data::data().profiles, size),

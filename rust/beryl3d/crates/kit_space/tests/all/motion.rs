@@ -107,9 +107,8 @@ fn a_track_keeps_its_segments_in_start_order() {
     assert_eq!(starts, [100, 100, 200, 300]);
 }
 
-/// A step's own act that holds its card still between two of its moves, as a strike holds its
-/// creature where the blow lands, pauses the card there: the checks that judge only cards at
-/// rest skip it. A pause between two steps, or after a step's last move, does not.
+/// A hold between two moves of the same step pauses the object. A hold between different
+/// steps, or after the last move, does not.
 #[test]
 fn a_card_held_within_its_steps_act_is_paused() {
     let of = |number, mut segment: Segment| {

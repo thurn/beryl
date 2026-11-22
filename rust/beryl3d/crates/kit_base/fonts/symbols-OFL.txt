@@ -1,4 +1,4 @@
-mana.ttf is the Mana font by Andrew Gioia, from the mana-font npm package (version 1.18.0).
+symbols.ttf is the Mana font by Andrew Gioia, from the mana-font npm package (version 1.18.0).
 https://github.com/andrewgioia/mana
 
 The package's README says:

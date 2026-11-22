@@ -2,12 +2,10 @@
 
 use std::sync::Arc;
 
-use beryl_protocol::script::Subject;
-
 use super::{EffectRun, Reach, player};
 use kit_base::data::effect::{Effects, Primitive, Surface};
 use kit_base::pose::Pose;
-use kit_frame::frame::{Draw, FrameBuilder, sprites};
+use kit_frame::frame::{Draw, EffectTarget, FrameBuilder, sprites};
 use kit_ui::input::Tier;
 
 /// How one card is drawn in a frame: made from its pose, face and state, and then changed in
@@ -26,7 +24,7 @@ pub struct Look {
     /// The full-size layers of the same face and of the card back, drawn in place of the
     /// board-size ones where the web interface draws a card's full frame (in a hand, on the
     /// stack), once both have landed (`Faces::full_layers`). A face's board-size picture is the
-    /// battlefield frame, without the cost, type line or rules text.
+    /// face used on the table, without the cost, type line or rules text.
     pub full: Option<[u16; 2]>,
     /// `StateBits`.
     pub state: u32,
@@ -59,7 +57,7 @@ impl Look {
 /// The timed layers whose run plays on this surface.
 fn layers(
     runs: &[EffectRun],
-    on: Subject,
+    on: EffectTarget,
     now: u64,
     tier: Tier,
 ) -> impl Iterator<Item = (&EffectRun, &Primitive, f32)> {
@@ -76,7 +74,7 @@ fn layers(
 pub fn look(
     tier: Tier,
     runs: &[EffectRun],
-    on: Subject,
+    on: EffectTarget,
     now: u64,
     earlier_face: Option<u16>,
     look: &mut Look,
@@ -88,7 +86,7 @@ pub fn look(
 pub fn look_with_face(
     tier: Tier,
     runs: &[EffectRun],
-    on: Subject,
+    on: EffectTarget,
     now: u64,
     earlier_face: impl FnOnce() -> Option<u16>,
     look: &mut Look,
@@ -126,7 +124,7 @@ pub fn look_with_face(
 pub fn write(
     effects: &Effects,
     runs: &[EffectRun],
-    on: Subject,
+    on: EffectTarget,
     now: u64,
     look: &Look,
     builder: &mut FrameBuilder<'_>,
@@ -165,7 +163,7 @@ pub fn write(
 fn record(
     builder: &mut FrameBuilder<'_>,
     name: &Arc<str>,
-    on: Subject,
+    on: EffectTarget,
     look: &Look,
     strength: f32,
 ) {
@@ -175,7 +173,7 @@ fn record(
     );
     builder.effect(
         name,
-        Some(super::effect_target(on)),
+        Some(on),
         Draw::glow(face, [0; 4], sprites::BURST, 0.0).model,
         strength * look.pose.opacity,
     );

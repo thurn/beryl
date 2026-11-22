@@ -170,10 +170,6 @@ Rules, each held by the `levels` check from `data/beryl3d/levels.json`:
   rows of plain rectangles and trees of plain elements, so a change to the
   protocol cannot break them.
 
-During the division, `levels.json` lists the toolkit crates that still name a
-protocol type, with a count for each that may only go down. The division is
-finished when every count is zero.
-
 ## The scene: one tree
 
 Everything on screen is a **node**: a card, a pile, a row, a prompt bar, a

@@ -186,12 +186,12 @@ fn a_rescale_batch_is_rasterized_off_the_thread_that_asks() {
 fn a_mana_symbol_is_inked() {
     let (out, results) = mpsc::channel();
     let worker = GlyphWorker::spawn(out, || {}, || {}, IconSet::default());
-    let font = FontRef::from_index(Font::Mana.file().data, 0).expect("the Mana font parses");
+    let font = FontRef::from_index(Font::Symbols.file().data, 0).expect("the Mana font parses");
     let glyph = font.charmap().map('\u{e601}');
     assert_ne!(glyph, 0, "the Mana font has the blue symbol");
     let key = GlyphKey {
         blur: 0,
-        font: Font::Mana as u8,
+        font: Font::Symbols as u8,
         weight: 400,
         glyph,
         size: 32,

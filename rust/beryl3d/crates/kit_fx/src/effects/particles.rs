@@ -3,12 +3,11 @@
 //! The subject's pose puts the particles just above its surface. If the emitters together
 //! request more records than the frame holds, they each get an equal share of the budget.
 
-use beryl_protocol::script::Subject;
 use glam::{Affine3A, Vec2, Vec3};
 
 use super::{EffectRun, Reach, player};
 use kit_base::data::effect::{Effects, Emitter, Primitive, Vortex};
-use kit_frame::frame::{Band, Draw, FrameBuilder, PARTICLES, sprites};
+use kit_frame::frame::{Band, Draw, EffectTarget, FrameBuilder, PARTICLES, sprites};
 use kit_ui::input::Tier;
 
 #[derive(Clone, Copy)]
@@ -30,14 +29,11 @@ fn emitters(
     runs: &[EffectRun],
     now: u64,
     tier: Tier,
-) -> impl Iterator<Item = (Subject, Seeds, Kind<'_>, f32)> {
+) -> impl Iterator<Item = (EffectTarget, Seeds, Kind<'_>, f32)> {
     runs.iter()
         .filter_map(|run| {
-            let Subject::Object { slot } = run.on else {
-                return None;
-            };
             let seeds = Seeds {
-                object: slot.0,
+                target: run.particle_seed?,
                 step: run.step,
             };
             Some((run, seeds))
@@ -59,7 +55,7 @@ pub fn write(
     effects: &Effects,
     runs: &[EffectRun],
     now: u64,
-    reach_at: impl Fn(Subject) -> Option<Reach>,
+    reach_at: impl Fn(EffectTarget) -> Option<Reach>,
     builder: &mut FrameBuilder<'_>,
 ) {
     let tier = builder.tier();
@@ -91,11 +87,11 @@ pub fn write(
     }
 }
 
-/// What a run's particles take their randomness from: the object's id and the step that
+/// What a run's particles take their randomness from: the target's seed and the step that
 /// wrote the run.
 #[derive(Clone, Copy)]
 struct Seeds {
-    object: u16,
+    target: u32,
     step: usize,
 }
 
@@ -108,7 +104,7 @@ impl Seeds {
                       their bits feed the hash"
         )]
         let (step, index) = (self.step as u32, index as u32);
-        let mut hash = mix(u32::from(self.object) ^ 0x9e37_79b9);
+        let mut hash = mix(self.target ^ 0x9e37_79b9);
         hash = mix(hash ^ step);
         hash = mix(hash ^ index);
         hash = mix(hash ^ k);

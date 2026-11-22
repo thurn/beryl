@@ -1,21 +1,13 @@
 //! A fault: one broken interface rule, with the elements it concerns and the moment, printed as
 //! docs/beryl-3d.md's "What is printed" gives it.
 
-use std::fmt::Write;
-
-use beryl_protocol::protocol::Side;
-
 use kit_base::data::Audit;
 use kit_base::data::profiles::{Checks, Profiles, SizeClass};
 use kit_ui::input::{Insets, Rect, Size};
 
-/// Which window a frame was drawn for, and the moment, as the caller of a check knows them.
-/// A fault's `show:` line is built from it.
+/// The window, audit settings and time for a frame check.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Context {
-    /// The recording's name, as `just b3d list` prints it.
-    pub recording: String,
-    pub seat: Side,
     pub layout: Layout,
     pub checks: Checks,
     pub audit: Audit,
@@ -189,26 +181,6 @@ pub struct Fault {
 }
 
 impl Fault {
-    /// The fault in three lines: the rule, the test and the moment; what is wrong; and the
-    /// command that shows the frame.
-    #[must_use]
-    pub fn print(&self, context: &Context) -> String {
-        let seat = match context.seat {
-            Side::You => "you",
-            Side::Opponent => "opponent",
-        };
-        let size = format!("{}x{}", context.size.width, context.size.height);
-        let mut command = format!("just b3d tree {} --seat {seat}", context.recording);
-        if context.layout == Layout::Phone {
-            command.push_str(" --layout phone");
-        }
-        let _ = write!(command, " --size {size}");
-        self.print_repro(
-            &format!("b3d:{}/{seat}/{size}", context.recording),
-            &command,
-        )
-    }
-
     /// Prints the fault with the caller's tree command for the scene it checked.
     #[must_use]
     pub fn print_repro(&self, test: &str, command: &str) -> String {

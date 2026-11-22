@@ -162,8 +162,6 @@ fn on_edge(point: Vec2, (low, high): (Vec2, Vec2)) -> bool {
 
 fn desktop() -> Context {
     Context {
-        recording: "point".to_owned(),
-        seat: Side::You,
         layout: Layout::Desktop,
         audit: crate::test_data::data().audit,
         checks: Layout::Desktop.checks(

@@ -68,7 +68,7 @@ mod playback {
     use game_table::profiles::Profile;
     use kit_base::{data::Data, geometry::Window};
     #[cfg(feature = "stories")]
-    use kit_probe::agent::{Judged, checks};
+    use kit_probe::agent::Judged;
     use kit_scene::Feature;
     use kit_ui::element::Element;
 
@@ -117,8 +117,9 @@ mod playback {
             let frame = self.frame();
             let mut judged = Judged::default();
             judged.frame(frame, context.layout);
+            game_probe::agent::count_frame(&mut judged, frame);
             Some(Checked {
-                faults: checks::check(frame, &context),
+                faults: game_probe::agent::check(frame, &context),
                 frames: 1,
                 line_pairs: 0,
                 judged,

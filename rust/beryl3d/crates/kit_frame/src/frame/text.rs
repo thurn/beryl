@@ -1,4 +1,4 @@
-//! Writing laid-out text into a frame: a panel record for the disc of each mana symbol, then a
+//! Writing laid-out text into a frame: a panel record for the disc of each inline symbol, then a
 //! glyph record for each glyph of a block that an atlas page holds (docs/beryl-3d.md, "Text").
 //! A glyph no page holds at its size is drawn from the nearest size a page holds, scaled, and
 //! one no page holds at all draws nothing; nothing else moves when its page arrives. It

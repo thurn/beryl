@@ -77,20 +77,20 @@ pub mod color {
     pub const BLOCK_LINE_CORE: [u8; 4] = [255, 247, 204, 255];
     pub const SOURCE_LINE_CORE: [u8; 4] = [255, 242, 217, 255];
 
-    /// The glow of a streak of white mana: `white` in `TONES` (`ui/src/stage/light.ts`).
-    pub const MANA_WHITE: [u8; 4] = [255, 230, 158, 255];
-    /// The glow of a streak of blue mana: `blue` in `TONES`.
-    pub const MANA_BLUE: [u8; 4] = [64, 168, 245, 255];
-    /// The glow of a streak of black mana: `black` in `TONES`.
-    pub const MANA_BLACK: [u8; 4] = [153, 92, 214, 255];
-    /// The glow of a streak of red mana: `red` in `TONES`.
-    pub const MANA_RED: [u8; 4] = [242, 84, 43, 255];
-    /// The glow of a streak of green mana: `green` in `TONES`.
-    pub const MANA_GREEN: [u8; 4] = [64, 191, 79, 255];
-    /// The glow of a streak of colorless mana: `pale` in `TONES`, which `TONE` in
+    /// The tint of a white streak: `white` in `TONES` (`ui/src/stage/light.ts`).
+    pub const STREAK_WHITE: [u8; 4] = [255, 230, 158, 255];
+    /// The tint of a blue streak: `blue` in `TONES`.
+    pub const STREAK_BLUE: [u8; 4] = [64, 168, 245, 255];
+    /// The tint of a black streak: `black` in `TONES`.
+    pub const STREAK_BLACK: [u8; 4] = [153, 92, 214, 255];
+    /// The tint of a red streak: `red` in `TONES`.
+    pub const STREAK_RED: [u8; 4] = [242, 84, 43, 255];
+    /// The tint of a green streak: `green` in `TONES`.
+    pub const STREAK_GREEN: [u8; 4] = [64, 191, 79, 255];
+    /// The tint of a colorless streak: `pale` in `TONES`, which `TONE` in
     /// `ui/src/stage/flare.ts` falls back to for a look it does not name.
-    pub const MANA_COLORLESS: [u8; 4] = [219, 184, 117, 255];
-    /// The glow of a streak of damage: `ember` in `TONES`, which `TONE` names for damage.
+    pub const STREAK_COLORLESS: [u8; 4] = [219, 184, 117, 255];
+    /// The tint of a damage streak: `ember` in `TONES`, which `TONE` names for damage.
     pub const DAMAGE: [u8; 4] = [255, 38, 10, 255];
 
     /// The outline of what may be picked: the `--tone` of `.stage-mark-eligible` in
@@ -129,11 +129,10 @@ pub mod color {
     pub const OUTLINE: [u8; 4] = STOLEN;
 }
 
-/// The colors of mana symbols in text (`text::symbols`): each symbol's disc, and the ink of its
-/// glyph, from `flat.mana`.
+/// The colors of symbol discs and their glyphs, from `flat.symbol`.
 #[allow(clippy::doc_markdown)]
-pub mod mana {
-    include!(concat!(env!("OUT_DIR"), "/tokens/mana.rs"));
+pub mod symbol {
+    include!(concat!(env!("OUT_DIR"), "/tokens/symbol.rs"));
 }
 
 /// The colors of the badges on a permanent (`table::badges`), from the web interface's CSS
@@ -160,8 +159,7 @@ pub mod badge {
     pub const COUNT: [u8; 4] = [0xec, 0xda, 0xb9, 0xff];
     pub const COUNT_BORDER: [u8; 4] = [0xb8, 0x92, 0x4e, 0xff];
     pub const COUNT_INK: [u8; 4] = [0x1d, 0x1b, 0x19, 0xff];
-    /// The dark ring around each symbol of a card's cost, `.mana-cost .mana-symbol`'s
-    /// `box-shadow` in `mana-symbols.css`.
+    /// The dark outline around a cost symbol.
     pub const COST_RING: [u8; 4] = [0x10, 0x16, 0x1c, 0xff];
     /// The panel under a permanent's note or chosen value, `.card-note`'s `background` in
     /// `card-frame.css`, whose text is `color::TYPE`.

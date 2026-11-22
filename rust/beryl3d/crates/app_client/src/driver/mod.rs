@@ -35,11 +35,12 @@ use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Verb;
 use glam::Vec2;
 
-pub use check::{Checked, Mode, StepMoment, TimelineStep};
+pub use check::{Mode, StepMoment, TimelineStep};
 pub use game_probe::driver::{
     Action, Duration, Element, KeyChord, Moment, Name, OPEN, Offset, ParseError, RECORDINGS,
     REPLY_DELAY, TICK, key_code, plays_on, point,
 };
+pub use kit_probe::agent::Checked;
 pub use recording::{Answer, Recording, Responses};
 pub use story::settings_element;
 
@@ -47,7 +48,6 @@ use self::cues::Cues;
 use game_play::play::record::Plant;
 use game_table::faces::FaceList;
 use kit_frame::frame::{Frame, Sound, StateBits, Wake};
-use kit_probe::agent::checks;
 use kit_probe::agent::tree::locator_of;
 use kit_probe::agent::{Fault, locate};
 use kit_probe::driver::{moment_distance, offset_from};
@@ -286,7 +286,7 @@ impl Page {
     /// The faults every interface check finds in the present frame.
     pub fn faults(&mut self) -> Vec<Fault> {
         let context = self.context();
-        checks::check(self.frame(), &context)
+        game_probe::agent::check(self.frame(), &context)
     }
 
     /// Runs every interface check on the present frame.
@@ -300,7 +300,10 @@ impl Page {
             return;
         }
         let context = self.context();
-        let printed: Vec<String> = faults.iter().map(|fault| fault.print(&context)).collect();
+        let printed: Vec<String> = faults
+            .iter()
+            .map(|fault| game_probe::agent::print_fault(fault, &self.name, self.seat, &context))
+            .collect();
         panic!("{}", self.error(&printed.join("\n")));
     }
 

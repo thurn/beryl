@@ -2,19 +2,18 @@
 //! `dim`, `blanch` and `cover` change how the card is drawn, and `shake` moves the whole
 //! picture and nothing that the checks or the pointer see.
 
-use beryl_protocol::protocol::ObjectId;
-use beryl_protocol::script::{Edge, StepEffect, Subject};
+use beryl_protocol::script::{Edge, StepEffect};
 use game_table::table::Look;
 use glam::Vec2;
 use kit_base::pose::{Curve, Pose};
-use kit_frame::frame::{Frame, Material};
+use kit_frame::frame::{EffectTarget, ElementId, Frame, Material};
 use kit_fx::effects::{EffectRun, card, shake};
 use kit_ui::input::Tier;
 
 use crate::common::{MS, empty_frame, frame};
 use crate::effects::{effect, started};
 
-const ON: Subject = Subject::Object { slot: ObjectId(7) };
+const ON: EffectTarget = EffectTarget::Key(ElementId(7));
 /// The faces of the record before and after a covered card changes.
 const EARLIER: Option<u16> = Some(3);
 const LATER: Option<u16> = Some(4);
@@ -28,6 +27,8 @@ fn run(effect: &str) -> EffectRun {
             .unwrap()
             .clone(),
         on: ON,
+        on_point: false,
+        particle_seed: Some(7),
         start: 1_000 * MS,
         duration: 1_000 * MS,
         curve: Curve::LINEAR,
@@ -167,7 +168,8 @@ fn a_run_on_another_card_or_outside_its_time_changes_nothing() {
     assert!(plain.whiten <= 0.0, "after its run");
     let mut look = look_at("settle", 2.0);
     let elsewhere = EffectRun {
-        on: Subject::Object { slot: ObjectId(8) },
+        on: EffectTarget::Key(ElementId(8)),
+        particle_seed: Some(8),
         ..run("blanch")
     };
     card::look(
