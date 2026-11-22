@@ -250,6 +250,8 @@ pub enum Event<L: Layout = Small> {
     Cast {
         spell: ObjectRef<L>,
         controller: Seat,
+        /// Where the card was before the player put it on the stack (see CR 601.2a).
+        from: Zone,
         targets: L::Queue<Target<L>, TARGETS>,
         x: u8,
         costs: Castings,

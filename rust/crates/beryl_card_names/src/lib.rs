@@ -125,6 +125,8 @@ pub mod decks {
             "casting",
             &[
                 names::BLOODBRAID_ELF,
+                names::KNOWLEDGE_POOL,
+                names::POSSIBILITY_STORM,
                 names::BONECRUSHER_GIANT,
                 names::PANGLACIAL_WURM,
                 names::TRINKET_MAGE,

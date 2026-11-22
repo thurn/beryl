@@ -143,6 +143,7 @@ pub(super) fn preserve(ability: &Ability, mut changed: Ability) -> Ability {
     changed = match ability.designation() {
         Designation::AtLevel(level) => changed.at_class_level(level),
         Designation::Solved => changed.solved(),
+        Designation::Imprint => changed.imprint(),
         _ => changed,
     };
     if ability.shares_paragraph() {
@@ -214,7 +215,9 @@ fn triggers(trigger: &Trigger) -> Vec<(&'static str, Kind, String, Trigger)> {
     let event = match trigger.event {
         Event::Enters | Event::Dies => Event::Leaves,
         Event::Leaves | Event::BecomesTarget | Event::Attacks => Event::Dies,
-        Event::PlayerAttacks | Event::CreatesTokens | Event::Discards => Event::Casts,
+        Event::PlayerAttacks | Event::CreatesTokens | Event::Discards | Event::CastsFrom(_) => {
+            Event::Casts
+        }
         Event::Casts if matches!(trigger.subject, Subject::This) => Event::BecomesTarget,
         Event::Casts => Event::Discards,
         Event::BecomesTargetOfSpell

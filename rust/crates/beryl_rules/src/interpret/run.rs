@@ -9,7 +9,7 @@
 //!
 //! Implements: CR 608.2f
 
-use beryl_card::{Amount, Effect, Filter, Objects, Players};
+use beryl_card::{Effect, ExileMatch, Objects, Players, Types};
 use beryl_kernel::reference::{Permanent, Permanents};
 
 use crate::actions::{
@@ -300,10 +300,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::Exile(objects) => exile::instruction(self, objects)?,
             Effect::ExileUntil {
                 player,
-                filter,
-                below,
+                matching,
                 when_found,
-            } => self.exile_until(player, filter, below, when_found)?,
+            } => self.exile_until(player, matching, when_found)?,
             Effect::ExileUntilThisLeaves(objects) => {
                 one_shot::exile_until_this_leaves_instruction(self, objects)?
             }
@@ -526,21 +525,35 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     fn exile_until(
         &mut self,
         player: Players,
-        filter: Filter,
-        below: Amount,
+        matching: ExileMatch,
         when_found: &'static Effect,
     ) -> Result<Outcome<L>, Stop> {
         let Some(player) = self.one(player) else {
             return Ok(Outcome::NOTHING);
         };
-        let below = self.scene().amount(below);
-        let words = self.resolving.words(self.game);
-        let you = self.resolving.entry.controller();
-        let x = self.resolving.entry.x;
-        let (cards, found) = exile::from_top_until(self.game, player, |game, slot| {
-            game.state.mana_value(game.table, slot) < below
-                && filter.matches_x(game.state, game.table, slot, you, &words, x)
-        })?;
+        let mut original = None;
+        let (cards, found) = match matching {
+            ExileMatch::ManaValueBelow { filter, below } => {
+                let below = self.scene().amount(below);
+                let words = self.resolving.words(self.game);
+                let you = self.resolving.entry.controller();
+                let x = self.resolving.entry.x;
+                exile::from_top_until(self.game, player, |game, slot| {
+                    game.state.mana_value(game.table, slot) < below
+                        && filter.matches_x(game.state, game.table, slot, you, &words, x)
+                })?
+            }
+            ExileMatch::SharesTypeWithTriggeringSpell => {
+                let types = self.triggering_spell_types();
+                original = exile::instruction(self, Objects::TriggeredOnIn(Zone::Stack))?
+                    .objects
+                    .sole()
+                    .map(|slot| self.state().object_ref(slot));
+                exile::from_top_until(self.game, player, |game, slot| {
+                    game.state.types(game.table, slot).intersects(types)
+                })?
+            }
+        };
         if let Some(found) = found {
             self.registers.outcome = Outcome::acted_on(Bitboard::single(found));
             self.carry_out(when_found)?;
@@ -548,10 +561,29 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         Ok(Outcome::acted_on(
             cards
                 .iter()
-                .filter(|card| self.state().is_current(**card))
+                .copied()
+                .chain(original)
+                .filter(|&card| self.state().is_current(card))
                 .map(|card| card.slot)
                 .collect(),
         ))
+    }
+
+    /// Reads the spell as it is on the stack or as it last was there (see [CR 608.2h]):
+    /// "if it’s no longer in that zone ... the effect uses the object’s last known information."
+    ///
+    /// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
+    fn triggering_spell_types(&self) -> Types {
+        let Some(spell) = self.subject.info.object else {
+            return Types::NONE;
+        };
+        let s = self.state();
+        if s.spell(spell).is_some() {
+            s.types(self.game.table, spell.slot)
+        } else {
+            s.departed_spell(spell)
+                .map_or(Types::NONE, |known| known.types)
+        }
     }
 
     /// Notes who controls each of `leaving`, and what is known of the targets among them,

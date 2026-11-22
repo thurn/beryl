@@ -1,4 +1,4 @@
-//! Class level bars and the two Case keywords.
+//! Class level bars, Case keywords and ability words.
 
 use super::{Ability, AbilityKind};
 use crate::cost::Cost;
@@ -15,6 +15,10 @@ pub enum Designation {
     AtLevel(u8),
     ToSolve,
     Solved,
+    /// The imprint ability word ([CR 207.2c]): ability words "have no special rules meaning".
+    ///
+    /// [CR 207.2c]: https://yawgatog.com/resources/magic-rules/#R2072c
+    Imprint,
 }
 
 const YOUR_END_STEP: Trigger = Trigger::step(TurnStep::End, Players::You);
@@ -89,7 +93,21 @@ impl Ability {
         }
     }
 
-    /// The Class or Case rule attached to this ability, if any.
+    /// Marks this as an imprint ability (see CR 207.2c).
+    ///
+    /// # Panics
+    ///
+    /// If it already has a designation.
+    #[must_use]
+    pub const fn imprint(self) -> Self {
+        assert!(matches!(self.designation, Designation::None));
+        Self {
+            designation: Designation::Imprint,
+            ..self
+        }
+    }
+
+    /// The designation or ability word attached to this ability, if any.
     #[inline]
     pub const fn designation(&self) -> Designation {
         self.designation

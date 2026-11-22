@@ -72,6 +72,7 @@ fn cast_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) ->
         x,
         costs,
         flashback,
+        ..
     } = e.clone()
     else {
         unreachable!("a cast's event");

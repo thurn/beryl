@@ -151,6 +151,7 @@ impl<L: Layout> Relayout for DepartedSpell<L> {
         DepartedSpell {
             entry: self.entry.relayout(),
             copiable: self.copiable.relayout(),
+            types: self.types,
         }
     }
 }
@@ -405,6 +406,7 @@ impl<L: Layout> Relayout for Pending<L> {
                 },
                 spec: c.spec,
                 substituted: c.substituted,
+                from: c.from,
             }),
             Pending::Resolving(r) => Pending::Resolving(r.relayout()),
             Pending::StepActions(r) => Pending::StepActions(r.relayout()),

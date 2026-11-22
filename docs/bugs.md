@@ -6,6 +6,11 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Linked exile could leave a spell's entry on the stack.** Linked exile moved
+  a card directly to exile without removing its spell. It now uses the same
+  stack removal as other exile effects. The Knowledge Pool scenarios check that
+  the exiled spell is gone and only the offered spell resolves.
+
 - **A spell could use the same artifact for mana and for its sacrifice cost.**
   Casting checked the two costs independently, then offered a payment that spent
   all the available artifacts as mana sources. The casting check and mana

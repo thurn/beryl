@@ -73,6 +73,16 @@ pub const fn exiled_with_this() -> Objects {
     Objects::ExiledWithThis
 }
 
+/// The top `count` cards of each named player's library.
+pub const fn top_of_library(players: &'static Players, count: u8) -> Objects {
+    Objects::LibraryTop { players, count }
+}
+
+/// The set minus the objects the preceding instruction acted on.
+pub const fn except_those(objects: &'static Objects) -> Objects {
+    Objects::ExceptThose(objects)
+}
+
 /// The `n`th target, counting from 0.
 pub const fn nth_target(n: u8) -> Objects {
     Objects::Target(SpecIx::new(n))

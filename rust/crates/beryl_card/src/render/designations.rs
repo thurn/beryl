@@ -19,7 +19,10 @@ impl Ctx {
                     capitalized(&self.condition(*condition))
                 ))
             }
-            Designation::None | Designation::AtLevel(_) | Designation::Solved => None,
+            Designation::None
+            | Designation::AtLevel(_)
+            | Designation::Solved
+            | Designation::Imprint => None,
         }
     }
 }

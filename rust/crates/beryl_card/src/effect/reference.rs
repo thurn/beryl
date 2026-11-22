@@ -53,6 +53,13 @@ pub enum Objects {
     /// instruction to exile them in the first ability." Known whether or not this is still
     /// where it was.
     ExiledWithThis,
+    /// The top `count` cards of each named player's library.
+    LibraryTop {
+        players: &'static Players,
+        count: u8,
+    },
+    /// Objects in the set except those the preceding instruction acted on.
+    ExceptThose(&'static Objects),
     /// "That creature" of an Aura that put a creature onto the battlefield: the permanents an
     /// ability of this object put there and said so ([`crate::effect::PutOnto::linked`]), as
     /// Animate Dead's delayed ability sacrifices. Known whether or not this is still where it
@@ -130,7 +137,8 @@ impl Objects {
     pub const fn names_paid(&self) -> bool {
         match self {
             Objects::Paid(_) => true,
-            Objects::Other(objects) => objects.names_paid(),
+            Objects::Other(objects) | Objects::ExceptThose(objects) => objects.names_paid(),
+            Objects::LibraryTop { players, .. } => players.names_paid(),
             Objects::This
             | Objects::Target(_)
             | Objects::AttachedTo
@@ -187,7 +195,7 @@ pub enum Players {
     /// in the game is the player who started the game with it in their deck."
     OwnerOf(Objects),
     /// "That player", "they": the player an [`crate::Effect::ForEachPlayer`] is being done
-    /// for.
+    /// for, or the player who cast the spell that triggered this ability.
     ThatPlayer,
     /// "Each player who doesn't win the subgame": the nonwinners recorded by the previous
     /// instruction, [`crate::Effect::Subgame`]. Every player is included when it ends in a draw.
@@ -255,7 +263,9 @@ impl Objects {
             | Objects::Paid(_)
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
-            | Objects::Carried => true,
+            | Objects::Carried
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_) => true,
             Objects::All { filter, .. } | Objects::Everywhere(filter) => {
                 filter.needs_a_resolution()
             }

@@ -182,6 +182,8 @@ impl<L: Layout> Scene<'_, L> {
             | Objects::TriggeredOnIn(_)
             | Objects::Carried
             | Objects::ExiledWithThis
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
@@ -252,6 +254,10 @@ impl<L: Layout> Scene<'_, L> {
                 .and_then(|source| s.object(source.slot).attached_to())
                 .map_or(Bitboard::EMPTY, Bitboard::single),
             Objects::Those => self.registers.outcome.objects,
+            Objects::ExceptThose(objects) => {
+                self.objects(*objects) & !self.registers.outcome.objects
+            }
+            Objects::LibraryTop { players, count } => self.library_top(*players, count),
             Objects::TriggeredOn => (self.subject.info.object)
                 .filter(|&object| s.is_current(object))
                 .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
@@ -337,6 +343,22 @@ impl<L: Layout> Scene<'_, L> {
                 others
             }
         }
+    }
+
+    /// The top cards of each player's library, in their original zone. See [CR 401.2]:
+    /// "Each library must be kept in a single face-down pile."
+    ///
+    /// [CR 401.2]: https://yawgatog.com/resources/magic-rules/#R4012
+    fn library_top(&self, players: Players, count: u8) -> Bitboard<L::Slot> {
+        let mut cards = Bitboard::EMPTY;
+        for player in self.players(players).in_seat_order() {
+            cards |= self
+                .s
+                .library_cards_from_top(player)
+                .take(usize::from(count))
+                .collect();
+        }
+        cards
     }
 
     /// The permanents these players control, or the cards in their own zones.
@@ -450,15 +472,13 @@ impl<L: Layout> Scene<'_, L> {
                 who
             }
             Players::SubgameNonwinners => self.registers.outcome.subgame_nonwinners,
-            Players::ThatPlayer => {
-                debug_assert!(
-                    self.registers.that_player.is_some(),
-                    "\"that player\" outside \"each player\""
-                );
+            // An instruction under "each player" uses that player. Otherwise a cast
+            // trigger refers to the player who cast the spell (see CR 601.2a).
+            Players::ThatPlayer => PlayerSet::only(
                 self.registers
                     .that_player
-                    .map_or(PlayerSet::NOBODY, PlayerSet::only)
-            }
+                    .unwrap_or(self.subject.info.player),
+            ),
         }
     }
 

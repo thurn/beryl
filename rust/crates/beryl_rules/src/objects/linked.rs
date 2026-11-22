@@ -5,14 +5,13 @@
 
 use beryl_card::Objects;
 
+use crate::actions::exile;
 use crate::bitboard::Bitboard;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
-use crate::replacement::event::Reason;
 use crate::state::{Memo, ObjectRef, State, Zone};
-use crate::zones;
 
 /// Exiles a card, linked to `source`, the object whose ability exiles it, so that the
 /// source's other abilities can find it among the cards "exiled with" it
@@ -29,9 +28,20 @@ pub fn exile_linked<L: Layout>(
     if !game.state.is_current(object) {
         return Ok(());
     }
-    zones::move_to(game, object, Zone::Exile, Reason::Exile)?;
-    if game.state.is_current(source) && game.state.object(object.slot).zone() == Zone::Exile {
-        (game.state).remember(object.slot, Memo::ExiledWith(source.slot))?;
+    exile_and_link(game, Bitboard::single(object.slot), source)
+}
+
+fn exile_and_link<L: Layout>(
+    game: &mut Game<'_, L>,
+    objects: Bitboard<L::Slot>,
+    source: ObjectRef<L>,
+) -> Result<(), Full> {
+    exile::exile(game, objects)?;
+    if game.state.is_current(source) {
+        let exiled = objects & game.state.in_zone(Zone::Exile);
+        for &slot in game.state.in_game_order(game.table, exiled)?.iter() {
+            game.state.remember(slot, Memo::ExiledWith(source.slot))?;
+        }
     }
     Ok(())
 }
@@ -44,8 +54,7 @@ pub fn exiled_with<L: Layout>(s: &State<L>, source: ObjectRef<L>) -> Bitboard<L:
 }
 
 /// [`Effect::ExileLinked`](beryl_card::Effect::ExileLinked): "Exile [cards]", linked to the
-/// object the ability is on (CR 607.2a): [`exile_linked`], each in the order the game lists
-/// them. The outcome is the cards that are in exile.
+/// object the ability is on (CR 607.2a). The outcome is the cards that are in exile.
 ///
 /// # Panics
 ///
@@ -57,9 +66,6 @@ pub(crate) fn exile_instruction<L: Layout>(
     let cards = run.elsewhere_than(cards, Zone::Exile);
     run.remember(cards)?;
     let source = run.resolution().source();
-    for &slot in run.in_game_order(cards)?.iter() {
-        let card = run.state().object_ref(slot);
-        exile_linked(run.game(), card, source)?;
-    }
+    exile_and_link(run.game(), cards, source)?;
     Ok(run.now_in(cards, Zone::Exile))
 }

@@ -3,7 +3,7 @@
 
 use crate::effect::{Condition, Players};
 use crate::filter::Filter;
-use crate::ids::TurnStep;
+use crate::ids::{TurnStep, Zone};
 
 /// What a triggered ability triggers on
 /// ([CR 603.2](https://yawgatog.com/resources/magic-rules/#R6032)): "Whenever a game event
@@ -138,6 +138,20 @@ pub enum TriggerEvent {
     FirstStep(TurnStep),
     /// A permanent becomes a particular Class level (see CR 717.2a).
     ClassLevel(u8),
+    /// "Whenever [whose] cast [subject] from [zone]", the zone it occupied before casting.
+    CastsFrom(Zone),
+}
+
+impl TriggerEvent {
+    /// Whether this trigger listens for a player finishing the cast of a spell.
+    pub const fn is_cast(self) -> bool {
+        matches!(self, Self::Casts | Self::CastsFrom(_))
+    }
+
+    /// Whether this cast trigger accepts a spell cast from `origin`.
+    pub fn matches_cast_from(self, origin: Zone) -> bool {
+        self == Self::Casts || matches!(self, Self::CastsFrom(zone) if zone == origin)
+    }
 }
 
 impl PartialEq for TriggerEvent {
@@ -146,6 +160,7 @@ impl PartialEq for TriggerEvent {
             TriggerEvent::Chapter { first, last } => {
                 matches!(other, TriggerEvent::Chapter { first: a, last: b } if first == a && last == b)
             }
+            TriggerEvent::CastsFrom(a) => matches!(other, TriggerEvent::CastsFrom(b) if a == b),
             TriggerEvent::FirstStep(a) => matches!(other, TriggerEvent::FirstStep(b) if a == b),
             TriggerEvent::ClassLevel(a) => matches!(other, TriggerEvent::ClassLevel(b) if a == b),
             TriggerEvent::Step(a) => matches!(other, TriggerEvent::Step(b) if a == b),
@@ -184,6 +199,7 @@ impl std::hash::Hash for TriggerEvent {
         match self {
             TriggerEvent::Step(step) | TriggerEvent::FirstStep(step) => step.hash(h),
             TriggerEvent::ClassLevel(level) => level.hash(h),
+            TriggerEvent::CastsFrom(zone) => zone.hash(h),
             TriggerEvent::Chapter { first, last } => (first, last).hash(h),
             TriggerEvent::Enters
             | TriggerEvent::Dies
@@ -291,6 +307,11 @@ impl Trigger {
     /// "Whenever [whose] cast a spell" that `spell` accepts.
     pub const fn casts(whose: Players, spell: Filter) -> Trigger {
         Trigger::of(TriggerEvent::Casts, Subject::A(spell)).whose(whose)
+    }
+
+    /// "Whenever [whose] cast a spell" that `spell` accepts, from `zone`.
+    pub const fn casts_from(whose: Players, spell: Filter, zone: Zone) -> Trigger {
+        Trigger::of(TriggerEvent::CastsFrom(zone), Subject::A(spell)).whose(whose)
     }
 
     /// "Whenever [whose] discard a card."

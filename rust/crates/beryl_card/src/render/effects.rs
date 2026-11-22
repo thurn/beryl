@@ -28,17 +28,7 @@ impl Ctx {
                 condition,
                 then,
                 otherwise,
-            } => {
-                let condition = self.condition(condition);
-                let mut clauses = self.effect(then);
-                prefix(&mut clauses, &format!("if {condition}, "));
-                if let Some(otherwise) = otherwise {
-                    let mut more = self.effect(otherwise);
-                    prefix(&mut more, "otherwise, ");
-                    clauses.extend(more);
-                }
-                clauses
-            }
+            } => self.conditional(condition, then, otherwise),
             Effect::May { player, effect } => {
                 self.may = true;
                 let mut clauses = self.effect(effect);
@@ -139,9 +129,7 @@ impl Ctx {
                 let (first, second) = (self.objects(first), self.objects(second));
                 vec![format!("exchange control of {first} and {second}")]
             }
-            Effect::Exile(objects) | Effect::ExileLinked(objects) => {
-                vec![self.acts(("exile", "exiles"), objects, "")]
-            }
+            Effect::Exile(objects) | Effect::ExileLinked(objects) => self.exile_clauses(objects),
             Effect::ExileUntilThisLeaves(objects) => {
                 let until = format!(" until {} leaves the battlefield", self.this);
                 vec![self.acts(("exile", "exiles"), objects, &until)]
@@ -206,21 +194,9 @@ impl Ctx {
             }
             Effect::ExileUntil {
                 player,
-                filter,
-                below,
+                matching,
                 when_found,
-            } => {
-                let exile = self.clause(player, ("exile", "exiles"), |c| {
-                    let kind = Kind::Card(None);
-                    let matched = with_article(&c.noun(filter, kind).singular(kind));
-                    let library = c.possessive(player);
-                    let limit = c.amount(below);
-                    format!("cards from the top of {library} library until you exile {matched} whose mana value is less than {limit}")
-                });
-                let mut clauses = vec![exile];
-                clauses.extend(self.effect(when_found));
-                clauses
-            }
+            } => self.exile_until_clauses(player, matching, when_found),
             Effect::Dig {
                 player,
                 look,
@@ -512,22 +488,7 @@ impl Ctx {
                 card,
                 free,
                 free_below,
-            } => {
-                self.may = true;
-                vec![self.clause(player, ("cast", "casts"), |c| {
-                    let card = c.objects(card);
-                    let mut cast = card;
-                    if free {
-                        cast.push_str(" without paying its mana cost");
-                    }
-                    if let Some(below) = free_below {
-                        let limit = c.amount(below);
-                        format!("{cast} if the resulting spell's mana value is less than {limit}")
-                    } else {
-                        cast
-                    }
-                })]
-            }
+            } => self.cast_offer(player, card, free, free_below),
             Effect::UntapUpTo {
                 player,
                 count,

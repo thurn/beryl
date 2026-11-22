@@ -25,7 +25,10 @@ pub(crate) fn available<L: Layout>(s: &State<L>, slot: L::Slot, ability: &Abilit
     match ability.designation() {
         Designation::AtLevel(level) => s.class_level(slot) >= level,
         Designation::Solved => s.is_solved(slot),
-        Designation::None | Designation::LevelUp(_) | Designation::ToSolve => true,
+        Designation::None
+        | Designation::Imprint
+        | Designation::LevelUp(_)
+        | Designation::ToSolve => true,
     }
 }
 
@@ -91,6 +94,7 @@ pub(crate) fn resolve<L: Layout>(
         Designation::None
         | Designation::LevelUp(_)
         | Designation::AtLevel(_)
-        | Designation::Solved => Ok(()),
+        | Designation::Solved
+        | Designation::Imprint => Ok(()),
     }
 }

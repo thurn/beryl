@@ -3,8 +3,11 @@
 //! ("destroy target creature"), and two instructions joined by ", then".
 
 use super::Ctx;
+use super::filters::Kind;
 use crate::cost::Cost;
-use crate::effect::{Amount, Effect, Objects, Players};
+use crate::effect::{Amount, Condition, Effect, ExileMatch, LibraryPosition, Objects, Players};
+use crate::ids::Zone;
+use crate::trigger::{Subject, Trigger};
 
 impl Ctx {
     /// A clause about `player`: "draw a card" for you, "you may draw a card" after a "may",
@@ -79,9 +82,120 @@ impl Ctx {
         clauses
     }
 
+    /// A conditional instruction, followed by its alternative when it has one.
+    pub(super) fn conditional(
+        &mut self,
+        condition: Condition,
+        then: &Effect,
+        otherwise: Option<&Effect>,
+    ) -> Vec<String> {
+        let cast_trigger = self.trigger.is_some_and(|trigger| trigger.event.is_cast());
+        let did = matches!(condition, Condition::Did);
+        let condition = self.condition(condition);
+        let mut clauses = self.effect(then);
+        if did
+            && cast_trigger
+            && let Effect::MayCast {
+                player: Players::ThatPlayer,
+                ..
+            } = then
+            && let Some(clause) = clauses.first_mut()
+            && let Some(cast) = clause.strip_prefix("that player ")
+        {
+            *clause = format!("if the player does, they {cast}");
+        } else {
+            prefix(&mut clauses, &format!("if {condition}, "));
+        }
+        if let Some(otherwise) = otherwise {
+            let mut more = self.effect(otherwise);
+            prefix(&mut more, "otherwise, ");
+            clauses.extend(more);
+        }
+        clauses
+    }
+
+    /// A player casts a spell, optionally specifying its previous zone.
+    pub(super) fn cast_trigger_text(
+        &mut self,
+        trigger: &Trigger,
+        cast: &str,
+        from: Option<Zone>,
+    ) -> String {
+        let spell = match trigger.subject {
+            Subject::A(filter) => self.noun(filter, Kind::Spell).indefinite(Kind::Spell),
+            Subject::This => self.this.clone(),
+        };
+        if let Some(zone) = from {
+            let name = super::filters::zone_name(zone);
+            if zone == Zone::Hand {
+                let whose = if trigger.whose == Players::You {
+                    "your"
+                } else {
+                    "their"
+                };
+                format!("whenever {cast} {spell} from {whose} {name}")
+            } else {
+                format!("whenever {cast} {spell} from {name}")
+            }
+        } else {
+            format!("whenever {cast} {spell}")
+        }
+    }
+
+    /// An optional cast from the cards the previous instruction made available.
+    pub(super) fn cast_offer(
+        &mut self,
+        player: Players,
+        card: Objects,
+        free: bool,
+        free_below: Option<Amount>,
+    ) -> Vec<String> {
+        self.may = true;
+        vec![self.clause(player, ("cast", "casts"), |c| {
+            let name = c.objects(card);
+            let mut cast = if matches!(card, Objects::ExceptThose(&Objects::ExiledWithThis)) {
+                format!("a spell from among {name}")
+            } else {
+                name
+            };
+            if free {
+                cast.push_str(" without paying its mana cost");
+            }
+            if let Some(below) = free_below {
+                let limit = c.amount(below);
+                format!("{cast} if the resulting spell's mana value is less than {limit}")
+            } else {
+                cast
+            }
+        })]
+    }
+
     /// Each instruction's clauses in turn, two that Oracle text joins with ", then" joined
     /// so: "draw a card, then discard a card".
     pub(super) fn sequence(&mut self, effects: &[Effect]) -> Vec<String> {
+        if let [
+            Effect::ExileUntil {
+                player: Players::ThatPlayer,
+                matching: ExileMatch::SharesTypeWithTriggeringSpell,
+                when_found,
+            },
+            Effect::PutIntoLibrary {
+                objects: Objects::Those,
+                position: LibraryPosition::BottomRandom,
+            },
+        ] = effects
+        {
+            let mut clauses = self.exile_until_clauses(
+                Players::ThatPlayer,
+                ExileMatch::SharesTypeWithTriggeringSpell,
+                when_found,
+            );
+            clauses.push(format!(
+                "then they put all cards exiled with {} on the bottom of their library in a random order",
+                self.this,
+            ));
+            return clauses;
+        }
         if let Some(clause) = self.chosen_sacrifice(effects) {
             return vec![clause];
         }
@@ -240,6 +354,8 @@ impl Ctx {
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
             | Objects::ExiledWithThis
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
             | Objects::Carried
             | Objects::All { .. }

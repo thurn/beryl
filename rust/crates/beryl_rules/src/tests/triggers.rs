@@ -178,6 +178,7 @@ fn cast(t: &GameTable, s: &State, player: Seat, name: &str) -> Event {
         x: 0,
         costs: Castings::default(),
         flashback: false,
+        from: Zone::Hand,
     }
 }
 

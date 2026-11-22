@@ -26,8 +26,13 @@ impl Ctx {
         let this = away.then(|| std::mem::replace(&mut self.this, "this card".to_owned()));
         self.in_graveyard |= away;
         let mut text = self.paragraph_here(ability);
-        if ability.designation() == crate::Designation::Solved {
-            text = format!("Solved — {text}");
+        match ability.designation() {
+            crate::Designation::Solved => text = format!("Solved — {text}"),
+            crate::Designation::Imprint => text = format!("Imprint — {text}"),
+            crate::Designation::None
+            | crate::Designation::LevelUp(_)
+            | crate::Designation::AtLevel(_)
+            | crate::Designation::ToSolve => {}
         }
         if let Some(this) = this {
             (self.this, self.in_graveyard) = (this, false);
@@ -218,12 +223,9 @@ impl Ctx {
                 };
                 format!("whenever {} one or more {tokens}", player_verb("create"))
             }
-            TriggerEvent::Casts => {
-                let spell = match trigger.subject {
-                    Subject::A(filter) => self.noun(filter, Kind::Spell).indefinite(Kind::Spell),
-                    Subject::This => self.this.clone(),
-                };
-                format!("whenever {} {spell}", player_verb("cast"))
+            TriggerEvent::Casts => self.cast_trigger_text(trigger, &player_verb("cast"), None),
+            TriggerEvent::CastsFrom(zone) => {
+                self.cast_trigger_text(trigger, &player_verb("cast"), Some(zone))
             }
             TriggerEvent::Discards => format!("whenever {} a card", player_verb("discard")),
             TriggerEvent::Draws => format!("whenever {} a card", player_verb("draw")),
@@ -271,6 +273,7 @@ impl Ctx {
             | TriggerEvent::MainPhase
             | TriggerEvent::CreatesTokens
             | TriggerEvent::Casts
+            | TriggerEvent::CastsFrom(_)
             | TriggerEvent::Discards
             | TriggerEvent::Draws
             | TriggerEvent::ClassLevel(_)

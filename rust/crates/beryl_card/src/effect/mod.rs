@@ -41,8 +41,8 @@ pub use condition::{Comparison, Condition};
 pub use operands::Operands;
 pub use reference::{Objects, Players, Recipients};
 pub use terms::{
-    CastTerms, CopyChange, CopyException, Found, LibraryOrder, LibraryPosition, Prevention,
-    PutOnto, Taken,
+    CastTerms, CopyChange, CopyException, ExileMatch, Found, LibraryOrder, LibraryPosition,
+    Prevention, PutOnto, Taken,
 };
 pub(crate) use traversal::Branches;
 
@@ -216,13 +216,12 @@ pub enum Effect {
     /// object, move it to the exile zone from wherever it is."
     Exile(Objects),
     /// Exile cards one at a time from the top of the player's library, stopping after
-    /// exiling a card that passes `filter` with mana value below `below`, or when the
-    /// library is empty. If a card matched, run `when_found` with that card as
-    /// [`Objects::Those`]. The outcome is the cards from this instruction still in exile.
+    /// exiling a card that satisfies `matching`, or when the library is empty.
+    /// If a card matched, run `when_found` with that card as [`Objects::Those`].
+    /// The outcome is the cards from this instruction still in exile.
     ExileUntil {
         player: Players,
-        filter: Filter,
-        below: Amount,
+        matching: ExileMatch,
         when_found: &'static Effect,
     },
     /// "Exile [objects] until this leaves the battlefield"

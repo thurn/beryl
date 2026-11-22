@@ -304,8 +304,10 @@ impl Objects {
                 players.walk(visit);
                 filter.walk(visit);
             }
-            Objects::CardsIn { players, .. } => players.walk(visit),
-            Objects::Other(objects) => objects.walk(visit),
+            Objects::CardsIn { players, .. } | Objects::LibraryTop { players, .. } => {
+                players.walk(visit);
+            }
+            Objects::Other(objects) | Objects::ExceptThose(objects) => objects.walk(visit),
         }
     }
 }

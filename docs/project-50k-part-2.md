@@ -913,9 +913,13 @@ total cost, pay) become functions that take each answer from an answer source:
   `interpret::choices::search_pick` offers `Opt::Cast` for each payable cast a
   card in the player's own library permits. The search reads the library again
   after each cast. Finding the first card ends the casting window.
-- **Knowledge Pool** and **Possibility Storm** are triggers on a spell cast from
-  a hand that exile it and cast another, free. They need the cast trigger to
-  know the zone the spell was cast from.
+- **Knowledge Pool** and **Possibility Storm** trigger only on casts from a
+  hand. The cast event carries the card's zone before it moved to the stack.
+  Knowledge Pool offers another card linked to that Pool only if it exiles the
+  original spell. Possibility Storm uses the original spell's card types, or its
+  last known types if it already left the stack. Either order leaves at least
+  the Storm's cast available if it finds a legal match. If the Pool resolves
+  first, it may also offer a cast.
 
 **Who assigns combat damage.** `combat::assigner` gives the controller of the
 creature assigning damage. When a blocker can block several attackers, the

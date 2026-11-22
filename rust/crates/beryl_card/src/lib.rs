@@ -68,7 +68,7 @@ pub use definition::{
     card_with_shape,
 };
 pub use effect::{
-    Amount, CastTerms, Comparison, Condition, CopyChange, CopyException, Effect, Found,
+    Amount, CastTerms, Comparison, Condition, CopyChange, CopyException, Effect, ExileMatch, Found,
     LibraryOrder, LibraryPosition, Objects, Players, Prevention, PutOnto, Recipients, Regeneration,
     Taken,
 };
@@ -95,8 +95,8 @@ pub mod prelude {
     pub use crate::{
         Ability, Amount, BasicLandTypes, CardDef, CastTerms, CastingKind, CastingOption, Castings,
         ChosenKind, Colors, Comparison, Condition, CopyChange, CopyException, Cost, CostAction,
-        CostPart, CounterKind, Duration, Effect, ExceptIx, Face, FaceIx, Filter, Found, Governed,
-        GrantIx, Keywords, LayerSpec, LibraryOrder, LibraryPosition, ManaColor, ManaCost,
+        CostPart, CounterKind, Duration, Effect, ExceptIx, ExileMatch, Face, FaceIx, Filter, Found,
+        Governed, GrantIx, Keywords, LayerSpec, LibraryOrder, LibraryPosition, ManaColor, ManaCost,
         ManaRestriction, ManaSet, Modification, Named, Objects, Place, PlayerRules, Players,
         Prevention, Prompt, Protection, Purpose, PutOnto, Recipients, Replacement, RuleChange,
         SpellCost, Subtype, Subtypes, Supertypes, Taken, TargetKind, TargetSpec, TextWord, Trigger,

@@ -4,7 +4,7 @@
 //!
 //! Implements: none. Stores game actions and resolutions that are waiting for a decision.
 
-use beryl_card::{ManaCost, SpecIx};
+use beryl_card::{ManaCost, SpecIx, Zone};
 
 use crate::bitboard::Bitboard;
 use crate::decision::Decision;
@@ -95,7 +95,7 @@ pub enum CastKind {
 }
 
 /// A spell being cast or an ability being activated.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Casting<L: Layout = Small> {
     pub player: Seat,
     pub kind: CastKind,
@@ -105,6 +105,25 @@ pub struct Casting<L: Layout = Small> {
     /// Generic mana of the cost that a part paid with objects rather than with mana
     /// ([`beryl_card::Measure::ForGeneric`]). The steps after that part read it.
     pub substituted: u8,
+    /// Where a spell was before it moved to the stack (see CR 601.2a).
+    pub from: Zone,
+}
+
+// Preserve the state hash for ordinary casts and activations in saved rollout corpora.
+impl<L: Layout> std::hash::Hash for Casting<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        (
+            self.player,
+            self.kind,
+            self.step,
+            self.spec,
+            self.substituted,
+        )
+            .hash(h);
+        if !matches!(self.from, Zone::Nowhere | Zone::Hand) {
+            self.from.hash(h);
+        }
+    }
 }
 
 impl<L: Layout> Casting<L> {
@@ -116,6 +135,7 @@ impl<L: Layout> Casting<L> {
             step,
             spec: SpecIx::default(),
             substituted: 0,
+            from: Zone::Nowhere,
         }
     }
 

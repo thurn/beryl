@@ -31,6 +31,7 @@ pub(in crate::stack) fn begins(
         | TriggerEvent::DealsCombatDamageToPlayer
         | TriggerEvent::CreatesTokens
         | TriggerEvent::Casts
+        | TriggerEvent::CastsFrom(_)
         | TriggerEvent::Discards
         | TriggerEvent::Draws
         | TriggerEvent::BecomesTarget

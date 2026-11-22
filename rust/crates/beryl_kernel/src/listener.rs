@@ -99,7 +99,9 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
             (EventKind::Step, About::Nothing, true)
         }
         TriggerEvent::CreatesTokens => (EventKind::Tokens, About::Filtered, true),
-        TriggerEvent::Casts => (EventKind::Cast, About::Filtered, true),
+        TriggerEvent::Casts | TriggerEvent::CastsFrom(_) => {
+            (EventKind::Cast, About::Filtered, true)
+        }
         TriggerEvent::Discards => (EventKind::Discard, About::Filtered, true),
         TriggerEvent::Draws => (EventKind::Draw, About::Nothing, true),
         TriggerEvent::State(_) => (EventKind::State, About::Nothing, false),
@@ -116,7 +118,7 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
     if !AWAY.union(ZoneSet::BATTLEFIELD).includes(zones) {
         return Err(Unmatched::Zone);
     }
-    let cast_on_the_stack = trigger.event == TriggerEvent::Casts && zones.contains(Zone::Stack);
+    let cast_on_the_stack = trigger.event.is_cast() && zones.contains(Zone::Stack);
     let subject = match (about, trigger.subject) {
         (About::Filtered, Subject::This) if cast_on_the_stack => Ok(()),
         (About::This | About::Either, Subject::This)

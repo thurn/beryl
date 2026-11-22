@@ -3,10 +3,22 @@
 use crate::characteristics::{Colors, Subtype, Supertypes};
 #[cfg(doc)]
 use crate::effect::Effect;
-use crate::effect::{Objects, Players};
+use crate::effect::{Amount, Objects, Players};
 use crate::filter::Filter;
 use crate::index::GrantIx;
 use crate::words::ColorWords;
+
+/// What stops an [`Effect::ExileUntil`] instruction.
+#[derive(Clone, Copy, Debug)]
+pub enum ExileMatch {
+    /// Stop at a card accepted by `filter` with mana value less than `below` (see CR 702.85a).
+    ManaValueBelow { filter: Filter, below: Amount },
+    /// Exile the spell that caused the cast trigger first, if it is still on the stack.
+    /// Stop at a card sharing at least one card type with that spell, using its last known
+    /// types if it already left the stack. The original spell joins the instruction's outcome
+    /// if still in exile.
+    SharesTypeWithTriggeringSpell,
+}
 
 /// Where in a library a card is put.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

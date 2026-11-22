@@ -109,6 +109,8 @@ impl Moved {
             Objects::Target(_)
             | Objects::Those
             | Objects::ExiledWithThis
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
@@ -130,6 +132,8 @@ impl Moved {
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
             | Objects::ExiledWithThis
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
             | Objects::Carried
             | Objects::All { .. }

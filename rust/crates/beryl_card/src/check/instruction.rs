@@ -107,6 +107,12 @@ impl Scope<'_> {
                 player: Players::EachPlayer | Players::EachOpponent | Players::EachOther(_),
                 ..
             } => Err(Malformed::ExilePlayer),
+            Effect::ExileUntil {
+                matching: crate::ExileMatch::SharesTypeWithTriggeringSpell,
+                ..
+            } if !matches!(self.ability.trigger(), Some(trigger) if trigger.event.is_cast()) => {
+                Err(Malformed::TriggeredOn)
+            }
             Effect::MayCast {
                 free: false,
                 free_below: Some(_),
@@ -158,6 +164,8 @@ impl Scope<'_> {
                                 | Objects::InZoneOf { .. }
                                 | Objects::CardsIn { .. }
                                 | Objects::ExiledWithThis
+                                | Objects::LibraryTop { .. }
+                                | Objects::ExceptThose(_)
                         )
                     );
                 if delayed {

@@ -3,9 +3,9 @@
 
 use super::Ctx;
 use super::filters::{Kind, zone_name};
-use super::words::{number, ordinal};
+use super::words::{number, ordinal, with_article};
 use crate::effect::{
-    Amount, Effect, LibraryOrder, LibraryPosition, Objects, Players, PutOnto, Taken,
+    Amount, Effect, ExileMatch, LibraryOrder, LibraryPosition, Objects, Players, PutOnto, Taken,
 };
 use crate::ids::{Zone, ZoneSet};
 
@@ -100,6 +100,53 @@ impl Ctx {
             format!("{them} on the bottom of {} library", c.possessive(library))
         });
         vec![looks, puts]
+    }
+
+    /// Exile objects, with the affected player stated for a cast trigger or a library top.
+    pub(super) fn exile_clauses(&mut self, objects: Objects) -> Vec<String> {
+        let clause = if let Objects::LibraryTop { players, .. } = objects {
+            self.clause(*players, ("exile", "exiles"), |c| c.objects(objects))
+        } else if objects == Objects::TriggeredOnIn(Zone::Stack)
+            && self.trigger.is_some_and(|trigger| trigger.event.is_cast())
+        {
+            "that player exiles it".to_owned()
+        } else {
+            self.acts(("exile", "exiles"), objects, "")
+        };
+        vec![clause]
+    }
+
+    /// Exile from the top of a library and describe what happens to the matching card.
+    pub(super) fn exile_until_clauses(
+        &mut self,
+        player: Players,
+        matching: ExileMatch,
+        when_found: &Effect,
+    ) -> Vec<String> {
+        let exile = self.clause(player, ("exile", "exiles"), |c| {
+            let library = c.possessive(player);
+            match matching {
+                ExileMatch::ManaValueBelow { filter, below } => {
+                    let kind = Kind::Card(None);
+                    let matched = with_article(&c.noun(filter, kind).singular(kind));
+                    let limit = c.amount(below);
+                    format!("cards from the top of {library} library until you exile {matched} whose mana value is less than {limit}")
+                }
+                ExileMatch::SharesTypeWithTriggeringSpell => {
+                    format!("it, then exiles cards from the top of {library} library until they exile a card that shares a card type with it")
+                }
+            }
+        });
+        self.plural = false;
+        let mut clauses = vec![exile];
+        let mut found = self.effect(when_found);
+        if matches!(matching, ExileMatch::SharesTypeWithTriggeringSpell)
+            && let Some(clause) = found.first_mut()
+        {
+            *clause = clause.replacen("cast it", "cast that card", 1);
+        }
+        clauses.extend(found);
+        clauses
     }
 
     /// "The top card of your library", "the top four cards of target player's library".

@@ -142,5 +142,125 @@
     "card": "Wizard Class",
     "scenario": "Level three triggers for each card drawn",
     "gap": "ordering two identical triggers from the same draw instruction, a choice Beryl elides"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "Only the first Pool to resolve offers its own cards",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "A countered spell gives the Pool no cast to offer",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "A free cast still pays its mandatory additional cost",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "A free cast can still be kicked",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "When the Storm resolves first the Pool has nothing to exile",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "Imprint takes three cards and the caster can use an opponent's card",
+    "gap": "XMage asks for a separate card choice after accepting the cast offer. The exporter only queues acceptance for this offer."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "An exiled spell can be cast on a later trigger",
+    "gap": "XMage asks whether to cast when no other card can be cast. Beryl omits that choice, so the exporter has no answer to send."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "A spell cast with flashback bypasses the Pool",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "The original spell's cascade trigger still resolves",
+    "gap": "XMage asks whether to cast when no other card can be cast. Beryl omits that choice, so the exporter has no answer to send."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "generated 2: cast a sorcery on the battlefield",
+    "gap": "XMage asks whether to cast when no other card can be cast. Beryl omits that choice, so the exporter has no answer to send."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "generated 3: cast a sorcery on the battlefield",
+    "gap": "XMage asks whether to cast when no other card can be cast. Beryl omits that choice, so the exporter has no answer to send."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "generated 4: cast a matching spell on the battlefield",
+    "gap": "XMage asks whether to cast when no other card can be cast. Beryl omits that choice, so the exporter has no answer to send."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
+    "scenario": "generated 5: cast a matching spell on the battlefield",
+    "gap": "XMage asks whether to cast when no other card can be cast. Beryl omits that choice, so the exporter has no answer to send."
+  },
+  {
+    "oracle": "forge",
+    "card": "Knowledge Pool",
+    "scenario": "Only the first Pool to resolve offers its own cards",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "forge",
+    "card": "Knowledge Pool",
+    "scenario": "A countered spell gives the Pool no cast to offer",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "forge",
+    "card": "Knowledge Pool",
+    "scenario": "A free cast still pays its mandatory additional cost",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "forge",
+    "card": "Knowledge Pool",
+    "scenario": "A free cast can still be kicked",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "forge",
+    "card": "Knowledge Pool",
+    "scenario": "When the Storm resolves first the Pool has nothing to exile",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Possibility Storm",
+    "scenario": "The Storm still finds a match after the Pool exiles the spell",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "forge",
+    "card": "Possibility Storm",
+    "scenario": "The Storm still finds a match after the Pool exiles the spell",
+    "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
   }
 ]

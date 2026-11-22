@@ -230,13 +230,13 @@ impl Effect {
                 ..Operands::of_players(player).objects(card)
             },
             Effect::ExileUntil {
-                player,
-                filter,
-                below,
-                ..
-            } => Operands::of_players(player)
-                .amount(below)
-                .filter(Some(filter)),
+                player, matching, ..
+            } => match matching {
+                super::ExileMatch::ManaValueBelow { filter, below } => Operands::of_players(player)
+                    .amount(below)
+                    .filter(Some(filter)),
+                super::ExileMatch::SharesTypeWithTriggeringSpell => Operands::of_players(player),
+            },
             Effect::Dig {
                 player, look, take, ..
             } => Operands::of_players(player)

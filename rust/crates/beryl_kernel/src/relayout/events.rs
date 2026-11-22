@@ -100,6 +100,7 @@ fn cast<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
         x,
         costs,
         flashback,
+        from,
     } = e
     else {
         unreachable!("a cast's event");
@@ -111,6 +112,7 @@ fn cast<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
         x: *x,
         costs: *costs,
         flashback: *flashback,
+        from: *from,
     }
 }
 

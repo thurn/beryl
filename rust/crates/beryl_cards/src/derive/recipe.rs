@@ -70,7 +70,9 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         Subject::A(filter) => filter,
     };
     match event.event {
-        TriggerEvent::Enters | TriggerEvent::Casts if matches!(event.subject, Subject::This) => {
+        TriggerEvent::Enters | TriggerEvent::Casts | TriggerEvent::CastsFrom(Zone::Hand)
+            if matches!(event.subject, Subject::This) =>
+        {
             vec![Recipe::PlaySource]
         }
         TriggerEvent::Enters => {
@@ -98,7 +100,9 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
             Recipe::Step(player, TurnStep::PostcombatMain)
         }),
         TriggerEvent::CreatesTokens => on(event, Recipe::CreateTokens),
-        TriggerEvent::Casts => on(event, |player| Recipe::Cast(player, filter, Zone::Stack)),
+        TriggerEvent::Casts | TriggerEvent::CastsFrom(Zone::Hand) => {
+            on(event, |player| Recipe::Cast(player, filter, Zone::Stack))
+        }
         TriggerEvent::Discards => on(event, |player| Recipe::Discard(player, filter)),
         TriggerEvent::Draws => on(event, Recipe::Draw),
         TriggerEvent::BecomesTarget | TriggerEvent::BecomesTargetOfSpell => {
@@ -106,7 +110,7 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         }
         TriggerEvent::Mutates => vec![Recipe::Mutate],
         TriggerEvent::DealsDamage => vec![Recipe::Attack(P0)],
-        TriggerEvent::TurnedFaceUp => Vec::new(),
+        TriggerEvent::TurnedFaceUp | TriggerEvent::CastsFrom(_) => Vec::new(),
         TriggerEvent::Chapter { first, .. } => vec![Recipe::Chapter(first)],
         TriggerEvent::ClassLevel(level) => vec![Recipe::ClassLevel(level)],
         TriggerEvent::State(condition) => vec![match *condition {

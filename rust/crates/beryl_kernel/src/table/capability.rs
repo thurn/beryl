@@ -126,10 +126,12 @@ pub enum Capability {
     SacrificeToCast,
     /// A card can be cast from its owner's library while they search it.
     CastWhileSearching,
+    /// A cast trigger reads the card types of the spell that caused it to trigger.
+    ReadsDepartedTriggeringSpell,
 }
 
 // The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::CastWhileSearching as u32) < u32::BITS);
+const _: () = assert!((Capability::ReadsDepartedTriggeringSpell as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -305,6 +307,17 @@ fn body_capabilities(body: Behavior) -> u32 {
     match body {
         Behavior::Data(effect) => {
             let mut found = 0;
+            if effect.any(&|instruction| {
+                matches!(
+                    instruction,
+                    Effect::ExileUntil {
+                        matching: beryl_card::ExileMatch::SharesTypeWithTriggeringSpell,
+                        ..
+                    }
+                )
+            }) {
+                found |= Capability::ReadsDepartedTriggeringSpell.bit();
+            }
             if copies_itself(effect) {
                 found |= Capability::ReadsDepartedSpell.bit();
             }

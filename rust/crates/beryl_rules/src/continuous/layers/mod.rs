@@ -544,6 +544,8 @@ fn list_static<L: Layout>(
         | Objects::TriggeredOn
         | Objects::TriggeredOnIn(_)
         | Objects::ExiledWithThis
+        | Objects::LibraryTop { .. }
+        | Objects::ExceptThose(_)
         | Objects::PutOntoBattlefieldWithThis
         | Objects::Carried
         | Objects::All { .. }

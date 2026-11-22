@@ -69,9 +69,10 @@ pub(crate) fn begin_cast<L: Layout>(
     // CR 702.37c: "Put it onto the stack (as a face-down spell with the same characteristics)".
     // CR 708.4: "Objects that are cast face down are turned face down before they are put
     // onto the stack". The stack record carries only the public characteristics.
-    let down = (face == FaceIx::DOWN).then(|| (s.object(slot).zone(), s.who_knows(slot)));
+    let from = s.object(slot).zone();
+    let down = (face == FaceIx::DOWN).then(|| s.who_knows(slot));
     event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;
-    let card = if let Some((from, knew)) = down {
+    let card = if let Some(knew) = down {
         if from == Zone::Hand {
             s.hide_choice_from_hand(slot);
             s.look(sink, player, Bitboard::single(slot));
@@ -116,7 +117,10 @@ pub(crate) fn begin_cast<L: Layout>(
     } else {
         CastStep::TargetCount
     };
-    let c = Casting::new(player, kind, step);
+    let c = Casting {
+        from,
+        ..Casting::new(player, kind, step)
+    };
     advance(s, t, sink, c)
 }
 
@@ -370,6 +374,7 @@ pub(super) fn finish<L: Layout>(
                 x: entry.x,
                 costs,
                 flashback: flashback::paid(s, spell),
+                from: c.from,
             },
         )?;
     } else {

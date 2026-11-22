@@ -16,7 +16,7 @@
 //! between priorities ([`State::forget_last_known`]).
 //!
 //! A second, smaller table keeps what a spell was as it left the stack without resolving,
-//! for abilities of its own that copy it or read what it was ([`DepartedSpell`]).
+//! for abilities that copy it or read what it was ([`DepartedSpell`]).
 //!
 //! [CR 603.10a]: https://yawgatog.com/resources/magic-rules/#R60310a
 //! [CR 603.10]: https://yawgatog.com/resources/magic-rules/#R60310
@@ -67,8 +67,8 @@ impl<L: Layout> LastKnown<L> {
 pub const DEPARTED_SPELLS: usize = 2;
 
 /// What a spell was as it last existed on the stack, kept as it left without resolving
-/// (countered, bounced, exiled) while an ability of its own that copies it or reads its
-/// mana value waits or is on the stack. That ability reads this snapshot
+/// (countered, bounced, exiled) while an ability that copies it or reads its mana value
+/// or types waits or is on the stack. That ability reads this snapshot
 /// (see [CR 113.7a]): "Once activated or triggered, an ability exists on the stack
 /// independently of its source." see [CR 608.2h]: "If an effect requires information from the
 /// game (such as the number of creatures on the battlefield), the answer is determined only
@@ -87,6 +87,8 @@ pub const DEPARTED_SPELLS: usize = 2;
 pub struct DepartedSpell<L: Layout = Small> {
     pub entry: StackEntry<L>,
     pub copiable: Copiable<L>,
+    /// The spell's card types, including continuous effects, if a cast trigger can read them.
+    pub types: beryl_card::Types,
 }
 
 impl Copy for DepartedSpell<Small> {}
@@ -144,26 +146,41 @@ impl<L: Layout> State<L> {
     }
 
     /// Keeps `entry`, a spell's, just taken off the stack while its card is still in the stack
-    /// zone, if a game whose abilities may read their departed spell has a waiting trigger or a stack
-    /// entry whose source is that spell. In any other game, one AND.
+    /// zone, when a waiting trigger or a stack entry can read its characteristics after it
+    /// leaves. Only a game with an ability that reads a departed spell needs a snapshot.
     pub(crate) fn keep_departed_spell(
         &mut self,
         t: &GameTable,
         spell: Spell<L>,
         entry: &StackEntry<L>,
     ) -> Result<(), Full> {
-        if !t.can(Capability::ReadsDepartedSpell) {
+        if !t.can_either(
+            Capability::ReadsDepartedSpell,
+            Capability::ReadsDepartedTriggeringSpell,
+        ) {
             return Ok(());
         }
-        let object = spell.into();
-        let named = self.triggers.iter().any(|tr| tr.of.source == Some(object))
-            || self.stack.iter().any(|e| e.source() == Some(object));
+        let own = t.can(Capability::ReadsDepartedSpell);
+        let triggering = t.can(Capability::ReadsDepartedTriggeringSpell);
+        let object = Some(spell.into());
+        let named =
+            self.triggers.iter().any(|tr| {
+                (own && tr.of.source == object) || (triggering && tr.info.object == object)
+            }) || self.stack.iter().any(|entry| {
+                (own && entry.source() == object)
+                    || (triggering && entry.info().is_some_and(|info| info.object == object))
+            });
         if !named {
             return Ok(());
         }
         let row = DepartedSpell {
             entry: entry.clone(),
             copiable: self.copiable(spell.slot()),
+            types: if triggering {
+                self.types(t, spell.slot())
+            } else {
+                beryl_card::Types::NONE
+            },
         };
         self.departed_spells.push(row)
     }
@@ -180,7 +197,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Forgets the rows that no waiting trigger, stack entry or delayed trigger names, and
-    /// the kept spells no waiting trigger or stack entry has as its source: the rules call it
+    /// the kept spells no waiting trigger or stack entry names: the rules call it
     /// as a player would receive priority, when no resolution is under way. With no row, two
     /// comparisons.
     #[inline]
@@ -199,8 +216,13 @@ impl<L: Layout> State<L> {
         let mut kept: L::Queue<DepartedSpell<L>, DEPARTED_SPELLS> = Default::default();
         for row in self.departed_spells.iter() {
             let spell = row.entry.spell();
-            if self.triggers.iter().any(|tr| tr.of.source == spell)
-                || self.stack.iter().any(|e| e.source() == spell)
+            if self
+                .triggers
+                .iter()
+                .any(|tr| tr.of.source == spell || tr.info.object == spell)
+                || self.stack.iter().any(|e| {
+                    e.source() == spell || e.info().is_some_and(|info| info.object == spell)
+                })
             {
                 // A subset of a queue of the same capacity.
                 kept.push_bounded(row.clone());

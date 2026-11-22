@@ -5,7 +5,9 @@ use crate::continuous::{Duration, LayerSpec, Modification, Replacement, RuleChan
 use crate::cost::{CastingKind, Cost, CostPart};
 use crate::counter::CounterKind;
 use crate::effect::build::create_copy_except;
-use crate::effect::{Amount, Comparison, Condition, Effect, LibraryPosition, Objects, Players};
+use crate::effect::{
+    Amount, Comparison, Condition, Effect, ExileMatch, LibraryPosition, Objects, Players,
+};
 use crate::filter::Filter;
 use crate::ids::{TurnStep, Zone, ZoneSet};
 use crate::index::{ExceptIx, SpecIx};
@@ -16,8 +18,10 @@ use crate::trigger::Trigger;
 pub(crate) static CASCADE: Effect = Effect::Sequence(&[
     Effect::ExileUntil {
         player: Players::You,
-        filter: Filter::Not(&Filter::Types(Types::LAND)),
-        below: Amount::ManaValue(Objects::This),
+        matching: ExileMatch::ManaValueBelow {
+            filter: Filter::Not(&Filter::Types(Types::LAND)),
+            below: Amount::ManaValue(Objects::This),
+        },
         when_found: &Effect::MayCast {
             player: Players::You,
             card: Objects::Those,

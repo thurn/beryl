@@ -1041,6 +1041,73 @@
       ]
     }
   ],
+  "Knowledge Pool": [
+    {
+      "published_at": "2011-06-01",
+      "hash": "1da31525d52e",
+      "covered": "Effect::MayCast"
+    },
+    {
+      "published_at": "2011-06-01",
+      "hash": "c2b05269e83a",
+      "scenario": [
+        "Only the first Pool to resolve offers its own cards"
+      ]
+    },
+    {
+      "published_at": "2011-06-01",
+      "hash": "77f0270e17e4",
+      "scenario": [
+        "A free cast still pays its mandatory additional cost"
+      ]
+    },
+    {
+      "published_at": "2011-06-01",
+      "hash": "e98d73f26416",
+      "scenario": [
+        "The original spell's cascade trigger still resolves"
+      ]
+    },
+    {
+      "published_at": "2011-06-01",
+      "hash": "ed37e0de433e",
+      "covered": "Effect::MayCast"
+    },
+    {
+      "published_at": "2011-06-01",
+      "hash": "f1f27e0da507",
+      "covered": "Effect::ExileLinked"
+    },
+    {
+      "published_at": "2011-06-01",
+      "hash": "fec56032cdbf",
+      "scenario": [
+        "A countered spell gives the Pool no cast to offer"
+      ]
+    },
+    {
+      "published_at": "2011-06-01",
+      "hash": "a144f285b687",
+      "scenario": [
+        "Imprint takes three cards and the caster can use an opponent's card",
+        "An exiled spell can be cast on a later trigger"
+      ]
+    },
+    {
+      "published_at": "2011-06-01",
+      "hash": "0aea9d04487f",
+      "scenario": [
+        "An exiled spell can be cast on a later trigger"
+      ]
+    },
+    {
+      "published_at": "2011-06-01",
+      "hash": "de63830c2872",
+      "scenario": [
+        "A free cast can still be kicked"
+      ]
+    }
+  ],
   "Life from the Loam": [
     {
       "published_at": "2024-01-12",
@@ -1635,6 +1702,47 @@
         "Pithing Needle can name a card with only a triggered ability",
         "Pithing Needle leaves Thalia's spell tax in effect"
       ]
+    }
+  ],
+  "Possibility Storm": [
+    {
+      "published_at": "2013-04-15",
+      "hash": "24b4aa2d6eb3",
+      "scenario": [
+        "Declining returns the original and matching card to the library",
+        "The Storm bottoms the original spell when no card matches"
+      ]
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "51bbba44b6ce",
+      "scenario": [
+        "Shares one card type and the cast is from exile"
+      ]
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "88f6294ce545",
+      "untestable": "Miracle has no implemented card. Trigger::casts_from uses the actual zone the spell was cast from, independent of the cost."
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "2475b5fda922",
+      "scenario": [
+        "The Storm casts a matching sorcery with X equal to zero"
+      ]
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "ef8f7cd656fe",
+      "scenario": [
+        "The Storm still finds a match after the Pool exiles the spell"
+      ]
+    },
+    {
+      "published_at": "2013-04-15",
+      "hash": "8a6fc6a32ccd",
+      "covered": "Effect::MayCast"
     }
   ],
   "Quicksilver Gargantuan": [

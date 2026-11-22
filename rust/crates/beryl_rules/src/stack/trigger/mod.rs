@@ -292,11 +292,14 @@ fn fires<L: Layout>(
             (matching > 0).then(|| info(None, controller, counted(matching)))
         }
         (
-            TriggerEvent::Casts,
+            event,
             &Event::Cast {
-                spell, controller, ..
+                spell,
+                controller,
+                from,
+                ..
             },
-        ) if whose(controller) && about(spell) => Some(info(
+        ) if event.matches_cast_from(from) && whose(controller) && about(spell) => Some(info(
             Some(spell),
             controller,
             crate::casting::cast_before(s),

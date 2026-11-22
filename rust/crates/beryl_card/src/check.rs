@@ -335,6 +335,8 @@ impl Scope<'_> {
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
             | Objects::ExiledWithThis
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
             | Objects::Carried
             | Objects::All { .. }
@@ -467,6 +469,8 @@ impl Scope<'_> {
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
             | Objects::ExiledWithThis
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
             | Objects::Carried
             | Objects::All { .. }
@@ -509,9 +513,11 @@ impl Scope<'_> {
                 }
                 Zone::Exile | Zone::Stack | Zone::Nowhere | Zone::Merged => Err(Malformed::ZoneOf),
             },
-            Objects::CardsIn { players, .. } => self.players(players),
+            Objects::CardsIn { players, .. } | Objects::LibraryTop { players, .. } => {
+                self.players(players)
+            }
             Objects::Everywhere(_) => Err(Malformed::Everywhere),
-            Objects::Other(objects) => self.objects(objects),
+            Objects::Other(objects) | Objects::ExceptThose(objects) => self.objects(objects),
         }
     }
 
@@ -540,7 +546,10 @@ impl Scope<'_> {
             }
             Players::EachOther(players) => self.players(players),
             Players::ThatPlayer if self.for_a_player => Ok(()),
-            Players::ThatPlayer => Err(Malformed::ThatPlayer),
+            Players::ThatPlayer => match self.ability.trigger() {
+                Some(trigger) if trigger.event.is_cast() => Ok(()),
+                _ => Err(Malformed::ThatPlayer),
+            },
         }
     }
 

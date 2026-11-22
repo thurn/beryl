@@ -663,7 +663,7 @@ impl<L: Layout> State<L> {
     /// of the entries above it are repaired, as [`Target`] says. The entry says where
     /// such a spell goes, which is the rules' to read; its card leaves the stack zone with
     /// the move that must follow. The sink is told it left.
-    /// What an ability of the spell's own that copies it needs of it is kept
+    /// What a waiting ability can read of the departed spell is kept
     /// ([`State::departed_spell`]). [`Full`] if that table has no room.
     #[inline]
     pub fn take_off_stack(

@@ -114,6 +114,15 @@ impl Ctx {
                 format!("{} from {}", self.triggered_on(), owners_zone(zone))
             }
             Objects::ExiledWithThis => format!("the cards exiled with {}", self.this),
+            Objects::LibraryTop { players, count } => {
+                self.top_cards(*players, Amount::Fixed(count))
+            }
+            Objects::ExceptThose(&Objects::ExiledWithThis) => {
+                format!("other cards exiled with {}", self.this)
+            }
+            Objects::ExceptThose(objects) => {
+                format!("{} other than those", self.objects(*objects))
+            }
             Objects::PutOntoBattlefieldWithThis => "that creature".to_owned(),
             Objects::Carried => "that card".to_owned(),
             Objects::All { zone, filter } => {
@@ -204,6 +213,8 @@ impl Ctx {
                 format!("another {}", self.noun(filter, kind).singular(kind))
             }
             Objects::Other(_)
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_)
             | Objects::Everywhere(_)
             | Objects::This
             | Objects::Target(_)
@@ -262,6 +273,8 @@ impl Ctx {
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
             | Objects::ExiledWithThis
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
             | Objects::Carried
             | Objects::CardsIn { .. }
@@ -292,6 +305,8 @@ impl Ctx {
             other @ (Objects::This
             | Objects::AttachedTo
             | Objects::ExiledWithThis
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
             | Objects::Carried
             | Objects::All { .. }
@@ -310,7 +325,9 @@ impl Ctx {
             Objects::All { .. }
             | Objects::InZoneOf { .. }
             | Objects::CardsIn { .. }
-            | Objects::ExiledWithThis => true,
+            | Objects::ExiledWithThis
+            | Objects::ExceptThose(_) => true,
+            Objects::LibraryTop { count, .. } => count != 1,
             // "Each nonland card in your graveyard has": one at a time.
             Objects::Everywhere(filter) => zone_of(filter).is_none(),
             // "Each other creature is": one at a time.
@@ -370,7 +387,9 @@ impl Ctx {
             // "When this creature becomes the target of a spell or ability, sacrifice it."
             TriggerEvent::BecomesTarget if matches!(trigger.subject, Subject::This) => "it",
             TriggerEvent::Discards | TriggerEvent::Draws => "that card",
-            TriggerEvent::Casts | TriggerEvent::BecomesTargetOfSpell => "that spell",
+            TriggerEvent::Casts
+            | TriggerEvent::CastsFrom(_)
+            | TriggerEvent::BecomesTargetOfSpell => "that spell",
             TriggerEvent::CreatesTokens => "those tokens",
             TriggerEvent::Leaves
             | TriggerEvent::BecomesTarget
@@ -573,6 +592,8 @@ impl Ctx {
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
             | Objects::ExiledWithThis
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
             | Objects::Carried
             | Objects::CardsIn { .. }

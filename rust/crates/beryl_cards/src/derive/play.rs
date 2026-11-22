@@ -269,7 +269,7 @@ fn awaited(def: &'static CardDef, f: FaceIx) -> Vec<(String, Vec<Stimulus>)> {
                     }
                 }
             }
-            TriggerEvent::Casts => {
+            TriggerEvent::Casts | TriggerEvent::CastsFrom(Zone::Hand) => {
                 let cast = Stimulus::Act(Action::cast(P0, props::SORCERY.card));
                 out.push(("cast a sorcery".to_owned(), vec![cast]));
             }

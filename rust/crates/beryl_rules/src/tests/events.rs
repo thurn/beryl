@@ -1167,6 +1167,7 @@ fn an_emblem_triggers_from_the_command_zone() {
             x: 0,
             costs: Castings::default(),
             flashback: false,
+            from: Zone::Hand,
         },
     )
     .unwrap();
@@ -1177,6 +1178,7 @@ fn an_emblem_triggers_from_the_command_zone() {
         x: 0,
         costs: Castings::default(),
         flashback: false,
+        from: Zone::Hand,
     };
     event::settle(&mut s, &t, &mut x.events, them).unwrap();
     assert_eq!(s.triggers().len(), 1, "only its owner's spells");

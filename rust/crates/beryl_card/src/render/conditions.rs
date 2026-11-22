@@ -32,6 +32,8 @@ impl Ctx {
                     | Objects::TriggeredOn
                     | Objects::TriggeredOnIn(_)
                     | Objects::ExiledWithThis
+                    | Objects::LibraryTop { .. }
+                    | Objects::ExceptThose(_)
                     | Objects::PutOntoBattlefieldWithThis
                     | Objects::Carried
                     | Objects::All { .. }
@@ -100,6 +102,8 @@ impl Ctx {
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
             | Objects::ExiledWithThis
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
             | Objects::Carried
             | Objects::All { .. }
@@ -366,6 +370,8 @@ fn whole_zone(objects: Objects) -> Option<(Players, Zone)> {
         | Objects::TriggeredOn
         | Objects::TriggeredOnIn(_)
         | Objects::ExiledWithThis
+        | Objects::LibraryTop { .. }
+        | Objects::ExceptThose(_)
         | Objects::PutOntoBattlefieldWithThis
         | Objects::Carried
         | Objects::All { .. }

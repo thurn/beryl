@@ -26,7 +26,8 @@ pub enum Malformed {
     /// targets an object ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)).
     Target,
     /// [`Players::ThatPlayer`] outside an [`Effect::ForEachPlayer`] and the body (not the
-    /// condition) of a replacement of draws: no player the instruction is being done for.
+    /// condition) of a replacement of draws, or a cast trigger: no player the
+    /// instruction is being done for.
     ThatPlayer,
     /// [`Condition::Paid`] of a kind of cost its face has no [`crate::CastingOption`] for:
     /// it could never have been paid.
