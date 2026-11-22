@@ -1187,7 +1187,7 @@ buttons: Array<PromptButton>,
  */
 body: ShapeBody, };
 
-export type Purpose = "priority" | "target" | "choose" | "discard" | "cleanup" | "put-on-bottom" | "legend-rule" | "look" | "search" | "untap" | "manifest-dread" | "exile-cost" | "combat-damage" | "trigger-order" | "scry" | "arrange" | "put-back" | "may" | "may-search" | "move" | "fateseal" | "top-or-bottom" | "mutate" | "explore" | "unless-pays" | "pay-life" | "x" | "play-or-draw" | "mulligan" | "cast-offer" | "act" | "color" | "creature-type" | "card-name" | "replace-word" | "new-word" | "divide-damage" | "distribute-counters" | "mana" | "crew" | "waterbend" | "delve" | "attack" | "block" | "enter-order" | "replace";
+export type Purpose = "priority" | "target" | "choose" | "discard" | "cleanup" | "put-on-bottom" | "legend-rule" | "look" | "search" | "untap" | "manifest-dread" | "exile-cost" | "combat-damage" | "trigger-order" | "scry" | "arrange" | "put-back" | "may" | "may-search" | "move" | "fateseal" | "top-or-bottom" | "mutate" | "explore" | "unless-pays" | "pay-life" | "x" | "play-or-draw" | "mulligan" | "cast-offer" | "act" | "color" | "creature-type" | "card-name" | "replace-word" | "new-word" | "divide-damage" | "distribute-counters" | "mana" | "crew" | "waterbend" | "delve" | "attack" | "block" | "enter-order" | "replace" | "wish";
 
 export type ObjectId = number;
 
