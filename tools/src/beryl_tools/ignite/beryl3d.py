@@ -69,14 +69,7 @@ FRAME_LIMITS = "frame-limits"
 FRAME_COUNTS = "b3d-frame-counts:boards"
 
 SOURCE_RULES: dict[str, Callable[[Path], list[str]]] = {
-    "scene-purity": purity.scene_purity,
-    "levels": purity.levels,
-    "lints-match": purity.lints_match,
-    "data-names": purity.data_names,
-    "b3d-data": purity.b3d_data,
-    "scene-literals": purity.scene_literals,
-    "protocol-literals": purity.protocol_literals,
-    "profile-words": purity.profile_words,
+    **purity.SOURCE_RULES,
     "corpus": pack.check_corpus,
 }
 

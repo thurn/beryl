@@ -177,7 +177,8 @@ pub struct Audit {
     pub crowded: f32,
 }
 
-pub(super) fn read<T: DeserializeOwned>(file: &str, text: &str) -> Result<T, String> {
+/// Parses a tuning file and attaches its name and the failing key to a parse error.
+pub fn read<T: DeserializeOwned>(file: &str, text: &str) -> Result<T, String> {
     let mut json = serde_json::Deserializer::from_str(text);
     let data = serde_path_to_error::deserialize(&mut json).map_err(|error| {
         let path = error.path().to_string();
@@ -243,15 +244,18 @@ fn number<'de, D: Deserializer<'de>>(
     )))
 }
 
-pub(super) fn finite<'de, D: Deserializer<'de>>(de: D) -> Result<f32, D::Error> {
+/// Deserializes a finite number.
+pub fn finite<'de, D: Deserializer<'de>>(de: D) -> Result<f32, D::Error> {
     number(de, |_| true, "a finite number")
 }
 
-pub(super) fn nonnegative<'de, D: Deserializer<'de>>(de: D) -> Result<f32, D::Error> {
+/// Deserializes a finite number greater than or equal to zero.
+pub fn nonnegative<'de, D: Deserializer<'de>>(de: D) -> Result<f32, D::Error> {
     number(de, |v| v >= 0.0, "a finite nonnegative number")
 }
 
-pub(super) fn positive<'de, D: Deserializer<'de>>(de: D) -> Result<f32, D::Error> {
+/// Deserializes a finite number greater than zero.
+pub fn positive<'de, D: Deserializer<'de>>(de: D) -> Result<f32, D::Error> {
     number(de, |v| v > 0.0, "a finite positive number")
 }
 
@@ -263,7 +267,8 @@ pub(super) fn before_end<'de, D: Deserializer<'de>>(de: D) -> Result<f32, D::Err
     number(de, |v| (0.0..1.0).contains(&v), "a number from 0 up to 1")
 }
 
-pub(super) fn positive_fraction<'de, D: Deserializer<'de>>(de: D) -> Result<f32, D::Error> {
+/// Deserializes a number greater than zero and at most one.
+pub fn positive_fraction<'de, D: Deserializer<'de>>(de: D) -> Result<f32, D::Error> {
     number(de, |v| v > 0.0 && v <= 1.0, "a positive number up to 1")
 }
 

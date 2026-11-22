@@ -1,8 +1,7 @@
 //! The reference stage dimensions for fitting the table to the web interface.
 
+use kit_base::data::{finite, nonnegative, positive, positive_fraction, read};
 use serde::Deserialize;
-
-use super::super::tuning::{finite, nonnegative, positive, positive_fraction};
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -26,9 +25,23 @@ pub struct WebFit {
     pub zoom_least: f32,
     #[serde(deserialize_with = "positive_fraction")]
     pub back_row_pull: f32,
+    #[serde(deserialize_with = "positive_fraction")]
+    pub least_back_zoom: f32,
     pub you: SideRows,
     pub opponent: SideRows,
     pub piles: Piles,
+}
+
+impl WebFit {
+    pub fn shipped() -> Self {
+        let fit: Self =
+            read("web-fit.json", include_str!("../web-fit.json")).expect("bundled web fit");
+        assert!(
+            (fit.stage.least..=fit.stage.most).contains(&fit.stage.base),
+            "invalid web-fit.json stage width range"
+        );
+        fit
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

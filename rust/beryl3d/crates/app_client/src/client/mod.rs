@@ -116,10 +116,14 @@ impl Client {
     pub fn new(data: Arc<Data>, config: Config) -> Self {
         let window = data.profiles.resolve_window(Window::default());
         let layer = Layer::with_tuning(data.flat);
+        #[cfg(feature = "web-fit")]
+        let table = Table::with_region_fit(data, window, scaffold_web::FIT);
+        #[cfg(not(feature = "web-fit"))]
+        let table = Table::new(data, window);
         Self {
             frame: Frame::with_capacity(config.elements, config.draws, config.name_bytes),
             window,
-            show: Show::new(Table::new(data, window)),
+            show: Show::new(table),
             layer,
             features: features::Features::default(),
             routes: input::Routes::default(),

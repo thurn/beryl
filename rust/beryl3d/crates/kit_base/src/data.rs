@@ -16,4 +16,7 @@ pub mod verbs;
 
 pub use badges::BadgeTuning;
 pub use card::Card;
-pub use tuning::{Audit, Data, TUNING_FILE_NAMES, TUNING_FILES, TuningFile};
+pub use tuning::{
+    Audit, Data, TUNING_FILE_NAMES, TUNING_FILES, TuningFile, finite, nonnegative, positive,
+    positive_fraction, read,
+};

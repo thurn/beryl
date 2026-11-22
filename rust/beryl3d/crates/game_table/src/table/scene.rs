@@ -20,20 +20,19 @@ use super::shadows::Floors;
 use super::shown::Shown;
 use super::tray::TrayMotion;
 use super::tray_layout::Held;
-use super::{Camera, Layout, PlayerAnchor, Window, takes_pointer};
+use super::{Camera, Layout, PlayerAnchor, takes_pointer};
 use crate::faces::{CARD_BACK, Faces};
-use crate::profiles::Profile;
 use kit_base::data::Data;
 use kit_base::pose::{Interval, Pose};
 use kit_frame::frame::{
-    Band, Draw, ElementId, FrameBuilder, OBJECTS, PaintBand, Place, Resolved, Role, ScreenClip,
-    StateBits,
+    Band, Draw, ElementId, FrameBuilder, PaintBand, Place, Resolved, Role, ScreenClip, StateBits,
 };
 use kit_fx::effects;
 use kit_space::motion::Track;
 use kit_ui::input::FaceSize;
 
 mod abilities;
+mod layout;
 mod motion;
 mod objects;
 mod placement;
@@ -169,36 +168,6 @@ impl PartialEq for Placed {
 }
 
 impl Table {
-    #[must_use]
-    pub fn new(data: Arc<Data>, window: Window) -> Self {
-        let window = data.profiles.resolve_window(window);
-        let layout = Profile::for_window(&data.profiles, window).layout();
-        let camera = layout.fit(window);
-        Self {
-            data,
-            layout,
-            row_fits: RowFits::new(&layout, &camera),
-            camera,
-            scroll: Scroll::default(),
-            slide: scroll::Slide::default(),
-            objects: Objects::default(),
-            placed: Placed::default(),
-            revealed: Vec::new(),
-            fights: Fights::with_capacity(OBJECTS),
-            held: None,
-            tray: TrayMotion::new(),
-            shown: Shown::default(),
-            prompt_covers: false,
-            hand_away: false,
-        }
-    }
-
-    /// The selected profile before its table geometry is fitted.
-    #[must_use]
-    pub fn profile(&self) -> Profile<'_> {
-        Profile::for_window(&self.data.profiles, self.camera.window)
-    }
-
     pub fn data(&self) -> &Arc<Data> {
         &self.data
     }
@@ -245,24 +214,6 @@ impl Table {
         let hand = &self.layout.hand;
         self.camera
             .screen_pose(anchor, hand.depth, Quat::IDENTITY, hand.height)
-    }
-
-    /// Fits the camera to a window of a new shape, in the layout that shape takes, and
-    /// recomputes every resting place.
-    pub fn resize(&mut self, window: Window, view: Option<&PlayerView>) {
-        let window = self.data.profiles.resolve_window(window);
-        self.layout = Profile::for_window(&self.data.profiles, window).layout();
-        if self.hand_away {
-            // The stage fills the height of the window, so two normalized device units span
-            // its full height in stage points.
-            self.layout.hand.edge -=
-                2.0 * self.layout.style.hand_away / self.layout.tray.stage_height;
-        }
-        self.camera = self.layout.fit(window);
-        self.row_fits = RowFits::new(&self.layout, &self.camera);
-        if let Some(view) = view {
-            self.apply(view);
-        }
     }
 
     /// Whether the viewer's hand waits below the window (`set_hand_away`).

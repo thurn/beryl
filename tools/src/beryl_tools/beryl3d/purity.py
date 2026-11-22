@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
-from typing import NotRequired, NamedTuple, TypedDict, cast
+from typing import Callable, NamedTuple, NotRequired, TypedDict, cast
 
 from .. import paths
 
@@ -417,6 +417,7 @@ class Levels(TypedDict):
     protocol: dict[str, int]
     protocol_literals: dict[str, int]
     profile_words: NotRequired[dict[str, int]]
+    web_citations: NotRequired[dict[str, int]]
 
 
 class RustToken(NamedTuple):
@@ -433,8 +434,8 @@ RUST_TOKEN: re.Pattern[str] = re.compile(
 BLOCK_DELIMITER: re.Pattern[str] = re.compile(r"/\*|\*/")
 
 
-def rust_tokens(source: str) -> list[RustToken]:
-    """Keep path syntax and identifiers, skipping Rust comments and treating literals as opaque."""
+def rust_tokens(source: str, *, comments: bool = False) -> list[RustToken]:
+    """Keep path syntax and identifiers, treating literals and optional comments as opaque."""
     tokens: list[RustToken] = []
     offset = 0
     while match := RUST_TOKEN.search(source, offset):
@@ -448,7 +449,9 @@ def rust_tokens(source: str) -> list[RustToken]:
                     break
             else:
                 break
-        elif match.lastgroup != "comment":
+            if comments:
+                tokens.append(RustToken(source[match.start() : offset], match.start()))
+        elif comments or match.lastgroup != "comment":
             tokens.append(RustToken(match[0], match.start()))
     return tokens
 
@@ -568,6 +571,25 @@ def profile_words(root: Path) -> list[str]:
         config.get("profile_words", {}),
         False,
     )
+
+
+def web_citation_counts(root: Path) -> dict[str, int]:
+    """Count web source references in comments and strings outside the scaffold."""
+    counts: dict[str, int] = {}
+    for crate in sorted(crates(root).iterdir()):
+        if crate.name == "scaffold_web":
+            continue
+        count = 0
+        for path in crate.rglob("*.rs"):
+            source = path.read_text()
+            if "ui/src" in source:
+                count += sum(
+                    len(re.findall(r"(?<![\w.-])ui/src(?![\w.-])", token.text))
+                    for token in rust_tokens(source, comments=True)
+                )
+        if count:
+            counts[crate.name] = count
+    return counts
 
 
 def dependency_names(
@@ -729,6 +751,14 @@ def levels(root: Path, *, update: bool = False, verbose: bool = False) -> list[s
                 update,
             )
         )
+    found.extend(
+        compare_levels(
+            "web_citations",
+            web_citation_counts(root),
+            config.get("web_citations", {}),
+            update,
+        )
+    )
     after = json.dumps(config, indent=2) + "\n"
     if update and after != before:
         path.write_text(after)
@@ -748,51 +778,22 @@ def report(name: str, found: list[str]) -> int:
     return 1 if found else 0
 
 
-def scene_purity_step(*_args: str) -> int:
-    """The `scene-purity` check."""
-    return report("scene-purity", scene_purity(paths.REPO))
-
-
-def lints_match_step(*_args: str) -> int:
-    """The `lints-match` check."""
-    return report("lints-match", lints_match(paths.REPO))
-
-
-def data_names_step(*_args: str) -> int:
-    """The `data-names` check."""
-    return report("data-names", data_names(paths.REPO))
-
-
-def scene_literals_step(*_args: str) -> int:
-    """The `scene-literals` check."""
-    return report("scene-literals", scene_literals(paths.REPO))
-
-
-def protocol_literals_step(*_args: str) -> int:
-    """The `protocol-literals` check."""
-    return report("protocol-literals", protocol_literals(paths.REPO))
-
-
-def profile_words_step(*_args: str) -> int:
-    """The `profile-words` check."""
-    return report("profile-words", profile_words(paths.REPO))
-
-
-def b3d_data_step(*_args: str) -> int:
-    """The `b3d-data` check."""
-    return report("b3d-data", b3d_data(paths.REPO))
-
-
-STEPS = {
-    "b3d-data": b3d_data_step,
-    "scene-purity": scene_purity_step,
-    "levels": levels_step,
-    "lints-match": lints_match_step,
-    "data-names": data_names_step,
-    "scene-literals": scene_literals_step,
-    "protocol-literals": protocol_literals_step,
-    "profile-words": profile_words_step,
+SOURCE_RULES: dict[str, Callable[[Path], list[str]]] = {
+    "b3d-data": b3d_data,
+    "scene-purity": scene_purity,
+    "levels": levels,
+    "lints-match": lints_match,
+    "data-names": data_names,
+    "scene-literals": scene_literals,
+    "protocol-literals": protocol_literals,
+    "profile-words": profile_words,
 }
 
 if __name__ == "__main__":
-    sys.exit(STEPS[sys.argv[1]](*sys.argv[2:]))
+    name: str = sys.argv[1]
+    found: int = (
+        levels_step(*sys.argv[2:])
+        if name == "levels"
+        else report(name, SOURCE_RULES[name](paths.REPO))
+    )
+    sys.exit(found)

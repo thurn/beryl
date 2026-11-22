@@ -310,7 +310,6 @@ fn table_profiles_reject_unknown_geometry_fields() {
     for (index, key, section) in [
         (0, "beneath_step", "table"),
         (0, "deck_backs", "table.tray_tuning.put_back"),
-        (1, "vanishing_y", "table.anchored.web.perspective"),
         (1, "bias_degrees", "table.anchored.hand"),
         (1, "spare", "table.anchored.stack"),
         (1, "narrow_step", "table.inspector"),

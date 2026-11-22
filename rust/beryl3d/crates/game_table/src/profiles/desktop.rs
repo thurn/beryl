@@ -1,13 +1,11 @@
-//! An anchored table, optionally fitted to the web stage's projected rows and piles.
+//! The profile geometry of an anchored table.
 
+use super::row;
+use crate::table::{
+    Across, HandData, Layout, PlayerAnchor, RegionFit, StackData, StackPlacement, TraySpace,
+};
 use kit_base::data::Card;
 use kit_base::data::profiles::{Anchored, ProfileData, TrayTuning, anchored};
-use kit_space::arrange::row::ScaleLimit;
-
-use super::{row, web_fit};
-use crate::table::{
-    Across, HandData, Layout, PlayerAnchor, RowZoom, StackData, StackPlacement, TraySpace, Window,
-};
 
 /// The profile's table before any window-specific fitting.
 pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
@@ -43,6 +41,7 @@ pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
         camera_area: None,
         life_dock: None,
         revealed: None,
+        region_fit: RegionFit::default(),
         row_zoom: None,
         bands: None,
         fitted: None,
@@ -104,24 +103,4 @@ fn stack(data: anchored::Stack) -> StackData {
         lean: data.lean,
         spare: data.spare,
     }
-}
-
-/// Fits the rows and piles to their projected stage positions when there is a reference stage.
-pub(super) fn layout(profile: &ProfileData, window: Window, data: &Anchored) -> Layout {
-    let mut layout = reference(profile, data);
-    if let Some(web) = &data.web {
-        layout.row_zoom = Some(RowZoom {
-            minimum: web.zoom_least,
-            back: ScaleLimit {
-                minimum: data.least_back_zoom,
-                shared_minimum: web.back_row_pull,
-            },
-        });
-        let camera = layout.fit(window);
-        let piles = web_fit::piles(window, &camera, web);
-        layout.fitted = Some(web_fit::rows(window, &camera, web));
-        layout.fitted_piles = Some(piles);
-        layout.pile_scale = piles.scale;
-    }
-    layout
 }

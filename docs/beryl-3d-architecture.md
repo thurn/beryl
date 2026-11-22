@@ -149,8 +149,10 @@ Rules, each held by the `levels` check from `data/beryl3d/levels.json`:
   crate hands the toolkit plain values: an opaque key for each object, a label
   for the tree printout, a size.
 - **A game crate does not depend on an app crate.**
-- **Only `scaffold_web` may cite `ui/src`** or hold a value copied from the web
-  interface. No crate but `app_client` depends on it.
+- **Only `scaffold_web` may add citations to `ui/src`** or hold new values
+  copied from the web interface. The `web_citations` allowance counts the
+  remaining citations per crate and may only go down. The check restricts
+  dependencies on the scaffold to `app_client`.
 - **At 12,000 source lines, look for a natural seam in a client-core crate.**
   Keeping a crate small makes it cheaper to rebuild after an edit and lets its
   `AGENTS.md` describe the whole crate in at most 60 lines. Crate boundaries
@@ -512,15 +514,17 @@ for, because they draw nothing.
 Until the switch, Beryl 3D is fitted to the web interface (A1). All of that is
 kept where one change can remove it:
 
-- `scaffold_web`: the fit of rows and piles to the web stage's positions, the
-  shear that makes a card's box as wide as the web's, and the values copied from
-  the web interface's source. `game_table` exposes one hook, the fit of a
-  container's region, which `scaffold_web` implements. Without it the regions
-  come from the profile alone, with the camera fitted to Arena.
+- `rust/beryl3d/crates/scaffold_web/` holds the fit of rows and piles and the
+  card shear that matches the projected width of the web cards. Its
+  `rust/beryl3d/crates/scaffold_web/web-fit.json` holds the copied stage
+  measurements. The switch removes the workspace member and dependency,
+  `app_client`'s default `web-fit` feature, and its installation in
+  `Client::new`. The `RegionFit` hook in `game_table` defaults to the layout
+  profile's regions and the camera fitted to Arena.
 - `tools/src/beryl_tools/beryl3d/match/`, `data/beryl3d/match/`,
   `data/beryl3d/web-match.json`, `data/beryl3d/timeline/`,
-  `data/beryl3d/timeline-parity.json` and `data/beryl3d/parity.json`.
-- The `web-match` skill, which documents those tools.
+  `data/beryl3d/timeline-parity.json` and `data/beryl3d/parity.json`. The b3d
+  skill's matching instructions go with these tools.
 
 The counts in `web-match.json` may only go down while this design is built. The
 change that makes the switch deletes everything in this list.

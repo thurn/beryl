@@ -655,12 +655,12 @@ fn a_resize_in_mid_flight_into_and_between_phone_layouts_keeps_the_pose() {
 }
 
 #[test]
-fn a_desktop_window_keeps_the_desktop_layout_with_its_rows_fitted() {
+fn a_desktop_window_uses_its_profile_geometry() {
     let table = Table::new(crate::test_data::data(), Window::default());
-    let fitted = layout(Window::default());
-    assert_eq!(*table.layout(), fitted);
-    assert!(fitted.bands.is_none() && fitted.fitted.is_some());
-    assert_eq!(fitted.camera, table.profile().data().table.camera);
+    let anchored = layout(Window::default());
+    assert_eq!(*table.layout(), anchored);
+    assert_eq!(Some(anchored), table.profile().reference_layout());
+    assert_eq!(anchored.camera, table.profile().data().table.camera);
     assert!(layout(phone(393.0, 759.0)).bands.is_some());
 }
 

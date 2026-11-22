@@ -84,10 +84,26 @@
     "beryl_inspect": 107,
     "beryl_pictures": 7,
     "beryl_render": 0,
-    "game_probe": 112,
+    "game_probe": 111,
     "kit_base": 0,
     "kit_probe": 12,
     "kit_space": 0,
     "kit_ui": 0
+  },
+  "web_citations": {
+    "app_client": 26,
+    "app_screens": 17,
+    "beryl_3d": 8,
+    "beryl_assets": 8,
+    "beryl_inspect": 5,
+    "beryl_render": 1,
+    "game_hud": 78,
+    "game_manual": 55,
+    "game_play": 47,
+    "game_probe": 6,
+    "game_table": 49,
+    "kit_base": 17,
+    "kit_text": 3,
+    "kit_ui": 21
   }
 }

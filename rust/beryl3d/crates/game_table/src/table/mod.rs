@@ -19,6 +19,7 @@ mod look;
 mod own;
 pub(crate) mod pile;
 mod place;
+mod region_fit;
 mod revealed;
 mod rows;
 mod scene;
@@ -32,7 +33,6 @@ use beryl_protocol::protocol::{Side, ZoneName};
 use glam::Vec2;
 
 use crate::profiles::TableBands;
-pub use crate::profiles::{FittedPiles, FittedRow, FittedRows};
 pub use clearance::row_area;
 use kit_base::data::profiles::Play;
 pub use kit_base::data::profiles::TableStyle;
@@ -45,6 +45,10 @@ pub use place::{
     Group, NO_GROUP, PileRules, Zones, Zooms, arrival, blocked, blocking_rows, host_slot,
 };
 pub use place::{names_host, prepare_row, row_of, stack_slots, zone_members};
+pub use region_fit::{
+    FittedPiles, FittedRegions, FittedRow, FittedRows, RegionFit, RegionPolicy, RowProjection,
+    RowZoom,
+};
 pub use rows::{Beneath, Groups, NameIds, RowChange, SameName, grouped, reposed};
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};
 pub use scene::{Objects, PileCount, ability_track};
@@ -216,19 +220,12 @@ pub struct Layout {
     /// Revealed cards' centre in normalized device coordinates and height as a fraction of
     /// the window's height.
     pub(crate) revealed: Option<(Vec2, f32)>,
-    /// Battlefield rows fitted to a screen reference, if the profile supplies one.
+    pub(crate) region_fit: RegionFit,
     pub(crate) row_zoom: Option<RowZoom>,
+    /// Row regions, if a projection fit supplies them.
     pub fitted: Option<FittedRows>,
-    /// On the desktop layout fitted to a window, the piles fitted to where the web interface
-    /// draws them (`web_fit::piles`), which replace `piles` and set `pile_scale`; none
-    /// otherwise.
+    /// Piles anchored at the projected centre of the top card.
     pub fitted_piles: Option<FittedPiles>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct RowZoom {
-    pub minimum: f32,
-    pub back: kit_space::arrange::row::ScaleLimit,
 }
 
 /// Space for raising the life total over a hand that spills out of its band.

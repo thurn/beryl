@@ -3647,20 +3647,13 @@ dependencies = [
 name = "scaffold_web"
 version = "0.1.0"
 dependencies = [
- "app_screens",
- "game_hud",
- "game_manual",
- "game_play",
- "game_probe",
+ "beryl_protocol",
+ "beryl_test_files",
  "game_table",
+ "glam",
  "kit_base",
- "kit_frame",
- "kit_fx",
- "kit_probe",
- "kit_scene",
  "kit_space",
- "kit_text",
- "kit_ui",
+ "serde",
 ]
 
 [[package]]

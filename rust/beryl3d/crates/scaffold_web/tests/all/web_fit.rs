@@ -1,5 +1,5 @@
 //! The desktop's battlefield rows, fitted to where the web interface draws them
-//! (`table::web_fit`): each card's box on the window against the web's box of the same card.
+//! (`scaffold_web`): each card's box on the window against the web's box of the same card.
 
 use beryl_protocol::protocol::{CardType, Combat, ObjectId, Side, ZoneName};
 use beryl_protocol::testing::ViewBuilder;
@@ -17,7 +17,7 @@ const YOUR_FIRST_TAPPED: [f32; 4] = [235.0, 570.0, 138.3, 92.5];
 const YOUR_SECOND_TAPPED: [f32; 4] = [377.9, 570.0, 135.7, 92.5];
 
 #[test]
-fn desktop_cards_land_on_the_web_interfaces_boxes() {
+fn cards_land_on_the_web_interfaces_boxes() {
     let data = crate::test_data::data();
     let window = data.profiles.fallback().usual_window();
     let mut builder = ViewBuilder::new();
@@ -35,7 +35,9 @@ fn desktop_cards_land_on_the_web_interfaces_boxes() {
         (land(Side::You, "Plains", true), YOUR_SECOND_TAPPED),
     ];
     let view = builder.build();
-    let layout = Profile::for_window(&data.profiles, window).layout();
+    let layout = Profile::for_window(&data.profiles, window)
+        .with_region_fit(scaffold_web::FIT)
+        .layout();
     let camera = layout.fit(window);
     let placement = place(
         &view,
@@ -86,7 +88,9 @@ fn desktop_cards_land_on_the_web_interfaces_boxes() {
 fn a_blocker_stands_across_from_its_attacker() {
     let data = crate::test_data::data();
     let window = data.profiles.fallback().usual_window();
-    let layout = Profile::for_window(&data.profiles, window).layout();
+    let layout = Profile::for_window(&data.profiles, window)
+        .with_region_fit(scaffold_web::FIT)
+        .layout();
     let camera = layout.fit(window);
     for defender in [Side::Opponent, Side::You] {
         let attacker_side = if defender == Side::You {

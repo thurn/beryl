@@ -132,16 +132,14 @@ fn the_windows_use_the_supplied_table_and_screen_tuning() {
 }
 
 #[test]
-fn the_reference_and_fitted_tables_read_the_supplied_geometry() {
+fn the_reference_and_window_layouts_read_the_supplied_geometry() {
     use kit_base::data::profiles::Profiles;
 
     let shipped = Profiles::parse(&SHIPPED, crate::test_data::data().card).unwrap();
     let window = shipped.fallback().usual_window();
-    let original = Profile::for_window(&shipped, window).layout();
     let modified = SHIPPED[1]
         .1
         .replace("\"pitch_degrees\": 27.0", "\"pitch_degrees\": 29.0")
-        .replace("\"land_width\": 100", "\"land_width\": 96")
         .replace("\"depth\": 300", "\"depth\": 306");
     let profiles = Profiles::parse(
         &[SHIPPED[0], (SHIPPED[1].0, &modified)],
@@ -150,13 +148,11 @@ fn the_reference_and_fitted_tables_read_the_supplied_geometry() {
     .unwrap();
     let profile = Profile::for_window(&profiles, window);
     let reference = profile.reference_layout().unwrap();
-    let fitted = profile.layout();
+    let layout = profile.layout();
 
     assert_eq!(reference.camera.pitch_degrees.to_bits(), 29.0_f32.to_bits());
     assert_eq!(reference.hand.depth.to_bits(), 306.0_f32.to_bits());
-    assert_eq!(fitted.camera, reference.camera);
-    assert_eq!(fitted.hand, reference.hand);
-    assert!(fitted.fitted.unwrap()[0][1].width < original.fitted.unwrap()[0][1].width);
+    assert_eq!(layout, reference);
 }
 
 #[test]

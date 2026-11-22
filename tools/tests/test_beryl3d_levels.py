@@ -161,3 +161,35 @@ def test_update_only_lowers_recorded_protocol_counts(root: Path) -> None:
     (found,) = purity.levels(root, update=True)
     assert "protocol.kit_base measured 1, above 0" in found
     assert json.loads(path.read_text())["protocol"] == {"kit_base": 0}
+
+
+def test_web_source_citations_can_only_grow_in_the_scaffold(root: Path) -> None:
+    path = root / purity.LEVELS_FILE
+    config = json.loads(path.read_text())
+    config["web_citations"] = {"game_table": 2}
+    path.write_text(json.dumps(config))
+    write(
+        root,
+        f"{GAME}/src/table.rs",
+        "/* /* nested */ ui/src/game/table.ts */\n"
+        'const REFERENCE: &str = r#"ui/src/game/Stage.tsx"#;\n'
+        "// Look up the widget in crates/kit_ui/src/widgets.\n"
+        "fn ratio(ui: f32, src: f32) -> f32 { ui/src }\n",
+    )
+    write(
+        root,
+        "rust/beryl3d/crates/scaffold_web/src/lib.rs",
+        "// ui/src/game/Stage.tsx\n",
+    )
+    assert purity.levels(root) == []
+
+    write(root, f"{GAME}/tests/extra.rs", "// ui/src/game/Stage.tsx\n")
+    (extra,) = purity.levels(root, update=True)
+    assert "web_citations.game_table measured 3, above 2" in extra
+    assert json.loads(path.read_text())["web_citations"] == {"game_table": 2}
+
+    (root / f"{GAME}/src/table.rs").unlink()
+    (stale,) = purity.levels(root)
+    assert "web_citations.game_table measured 1, below 2" in stale
+    assert purity.levels(root, update=True) == []
+    assert json.loads(path.read_text())["web_citations"] == {"game_table": 1}

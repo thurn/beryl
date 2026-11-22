@@ -36,8 +36,8 @@ use glam::{Vec2, Vec3};
 
 use super::row;
 use crate::table::{
-    Across, Camera, CentredStack, HandData, Layout, LifeDock, PlayerAnchor, Second, StackPlacement,
-    TraySpace, Window,
+    Across, Camera, CentredStack, HandData, Layout, LifeDock, PlayerAnchor, RegionFit, Second,
+    StackPlacement, TraySpace, Window,
 };
 use kit_base::data::Card;
 use kit_base::data::profiles::{Banded, Bands, ProfileData, TrayTuning};
@@ -410,6 +410,7 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
         play: profile.play,
         target,
         bands: Some(bands),
+        region_fit: RegionFit::default(),
         row_zoom: None,
         fitted: None,
         fitted_piles: None,

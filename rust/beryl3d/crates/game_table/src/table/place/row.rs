@@ -8,7 +8,6 @@ use super::{
     Group, PileRules, Placement, ROWS, Rest, Rules, Zones, host_slot, lay, members, row_index,
     side_index,
 };
-use crate::profiles::web_fit;
 use crate::table::rows::{Beneath, NameIds, SameName, face_up, grouped};
 use crate::table::{Camera, FittedRow, Layout, RowArea, RowWindow, RowZoom, row_area};
 use glam::{Quat, Vec3};
@@ -51,7 +50,7 @@ impl RowFits {
     }
 }
 
-/// How far each battlefield row's cards are shrunk from the size `web_fit` fits them at, by
+/// How far each battlefield row's cards are shrunk from their fitted size, by
 /// side, the viewer's first, each in the order of `ROWS`. On the desktop layout fitted to a
 /// window, a crowded row zooms the whole battlefield out, as the web interface's
 /// `battlefieldZoom` (`ui/src/game/battlefield.ts`) does; on any other layout every row keeps
@@ -186,8 +185,8 @@ pub fn prepared<'a, 'b>(
     (permanents, under, None)
 }
 
-/// The chosen web fit, its display scale, and the container expressed in units of an
-/// unscaled item. The web fit applies that display scale about the row's left end.
+/// The projected row, its scale, and the container measured in units of an unscaled card.
+/// The cards are scaled about the row's left end.
 fn row_rules(
     (layout, fit): (&Layout, RowFit),
     (side, row): (Side, RowName),
@@ -294,7 +293,9 @@ pub(super) fn battlefield_row(
             // it, so it keeps its pose: sheared, its pose would change with every card that
             // joins and give it a track for nothing.
             if placed.visible {
-                pose = web_fit::lean((&fitted, zoom), camera, pose, object.tapped);
+                pose = layout
+                    .region_fit
+                    .row_pose(&fitted, zoom, camera, pose, object.tapped);
             }
         }
         (object, pose)

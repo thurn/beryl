@@ -535,7 +535,7 @@ OWN_COMMANDS: tuple[Command, ...] = (
                 "lower counts after removing imports or protocol names",
             ),
         ),
-        lambda args: purity.STEPS["levels"](*(["--update"] if args.update else [])),
+        lambda args: purity.levels_step(*(["--update"] if args.update else [])),
         lambda p: p.add_argument(
             "--update", action="store_true", help="lower the recorded counts"
         ),

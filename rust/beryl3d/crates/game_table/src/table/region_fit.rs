@@ -1,0 +1,133 @@
+//! Optional fitting of a profile's table regions and card poses to a screen projection.
+
+use glam::Vec2;
+use kit_base::data::{Card, profiles::ProfileData};
+use kit_base::pose::Pose;
+use kit_space::arrange::row::ScaleLimit;
+
+use super::{Camera, Layout, RowArea, Window};
+
+/// The profile's region fit. The default preserves the profile's geometry and card poses.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RegionFit(Option<&'static RegionPolicy>);
+
+/// Computes the regions for the current profile and window, and adjusts each visible row card
+/// to that projection. A policy can leave a profile's regions unchanged.
+#[derive(Debug)]
+pub struct RegionPolicy {
+    pub regions: fn(&ProfileData, &Layout, Window) -> Option<FittedRegions>,
+    pub row_pose: fn(&FittedRow, f32, &Camera, Pose, bool) -> Pose,
+}
+
+impl RegionFit {
+    #[must_use]
+    pub const fn new(policy: &'static RegionPolicy) -> Self {
+        Self(Some(policy))
+    }
+
+    pub(crate) fn apply(self, profile: &ProfileData, window: Window, layout: &mut Layout) {
+        layout.region_fit = self;
+        if let Some(policy) = self.0
+            && let Some(fit) = (policy.regions)(profile, layout, window)
+        {
+            layout.fitted = Some(fit.rows);
+            layout.row_zoom = Some(fit.zoom);
+            layout.fitted_piles = Some(fit.piles);
+            layout.pile_scale = fit.piles.scale;
+        }
+    }
+
+    pub(crate) fn row_pose(
+        self,
+        row: &FittedRow,
+        zoom: f32,
+        camera: &Camera,
+        pose: Pose,
+        tapped: bool,
+    ) -> Pose {
+        self.0.map_or(pose, |policy| {
+            (policy.row_pose)(row, zoom, camera, pose, tapped)
+        })
+    }
+}
+
+impl PartialEq for RegionFit {
+    fn eq(&self, other: &Self) -> bool {
+        match (self.0, other.0) {
+            // Policies live in statics. Compare the policy's identity without comparing
+            // function addresses, which can differ between compilation units.
+            (Some(left), Some(right)) => std::ptr::eq(left, right),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+}
+
+/// Projected regions that override the profile's row and pile placement.
+pub struct FittedRegions {
+    pub rows: FittedRows,
+    pub zoom: RowZoom,
+    pub piles: FittedPiles,
+}
+
+/// Each side's creatures, lands and other permanents rows, the viewer's first.
+pub type FittedRows = [[FittedRow; 3]; 2];
+
+/// One row projected onto the table, with sizes and gaps in units of an unscaled card.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FittedRow {
+    /// The row's centre line and horizontal limits, in table millimetres.
+    pub area: RowArea,
+    /// Card scale when the row has room for every card at full size.
+    pub scale: f32,
+    pub gap: f32,
+    /// The gap before the first tapped card, at full size.
+    pub tapped_gap: f32,
+    /// How far the row's plane leans up from the table, in radians.
+    pub tilt: f32,
+    /// Signed table distance an attacker steps out of the row, untapped then tapped.
+    pub advance: [f32; 2],
+    /// Projected width of an untapped card in logical points, at full size.
+    pub width: f32,
+    pub projection: RowProjection,
+}
+
+/// The reference image's coordinates and vanishing point, used to fit row card outlines.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RowProjection {
+    /// The offset added to a reference point before scaling it to window points.
+    pub offset: Vec2,
+    /// Window points per reference point.
+    pub scale: f32,
+    /// The vanishing point in reference coordinates.
+    pub vanishing_point: Vec2,
+}
+
+impl FittedRow {
+    /// The height of the row's plane at `y`, hinged on the near edge of an untapped card.
+    #[must_use]
+    pub fn height(&self, y: f32, card: Card) -> f32 {
+        let half = card.height / 2.0 * self.scale;
+        half * self.tilt.sin() + (y - self.area.y) * self.tilt.tan()
+    }
+}
+
+/// How far a crowded row can zoom the battlefield out and shrink its own cards.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RowZoom {
+    pub minimum: f32,
+    pub back: ScaleLimit,
+}
+
+/// Piles placed by the projection of their top cards. Each array starts with the viewer's side.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FittedPiles {
+    /// The top card's centre in logical points, ordered library, graveyard and exile.
+    pub tops: [[Vec2; 3]; 2],
+    pub scale: [f32; 2],
+    pub tilt: [f32; 2],
+    /// The skew of each pile's cards, ordered as `tops`.
+    pub skew: [[f32; 3]; 2],
+    /// Scales the offsets of exposed card edges into the current window.
+    pub rim_scale: Vec2,
+}

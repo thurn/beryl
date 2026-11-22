@@ -1386,56 +1386,57 @@ flight start exactly where the card was.
   long for its room first zooms the battlefield out, as the web's
   `battlefieldZoom` does (`place::zooms`): the creatures' rows of both sides
   share the zoom of the most crowded row, down to the web's `ZOOM_LEAST`, and a
-  back row shrinks further alone, down to the desktop profile's
-  `least_back_zoom`, which keeps each card large enough to press. A zoomed-out
-  row keeps its edge toward the lane between the creatures' rows, or a back row
-  its edge toward its player.
+  back row shrinks further alone, down to the scaffold's `least_back_zoom`,
+  which keeps each card large enough to press. A zoomed-out row keeps its edge
+  toward the lane between the creatures' rows, or a back row its edge toward its
+  player.
 - **Rows stand as the web interface's do.** The creatures' row is centred; the
   lands run from the table's edge inward and the other permanents from the
   middle outward, so a permanent that leaves one of those rows moves only the
   cards to its right.
-- **Rows follow the web's stage (desktop).** `Profile::layout` fits each side's
-  three battlefield rows to the window from `table.anchored.web` in the desktop
-  profile (`profiles::web_fit`). It uses the web interface's stage positions,
-  including the `ROWS` and `ROOM` values in `ui/src/game/tableRows.ts` and the
-  frame widths and gaps of `ui/src/game/battlefield.ts`, with the stage fitted
-  to the window as `ui/src/game/Stage.tsx` fits it. Each row gets the line of
-  the table under the centres of the web's untapped cards, its ends, and the
-  scale at which a card is as wide on screen as the web's. It is laid out in
-  millimetres of a card at its printed size, then scaled about its left end. A
-  card lying flat under the camera's pitch is shorter on screen than the web's
-  upright one, so a row's cards lean back toward the camera until an untapped
-  card is as tall as the web's (at 1600 by 900, 11 to 15 degrees on the viewer's
-  rows and 20 to 23 on the opponent's). Every card of a row lies in one plane,
-  which rises at that angle from the near edge of an untapped card, and every
-  card's centre lies on the row's line, so a card placed later lies nearer the
-  camera than one placed before it, as the hit test needs. The web lines a row's
-  cards up by their tops instead, so a tapped card stands about 18 points lower
-  than the web's. The lands' row leaves the web's wider `TAPPED_GAP` before its
-  first tapped land. An attacking card stands out of its row toward the other
-  side where the web's attacker stands, `ADVANCE` (16 stage pixels) from the row
-  and, when tapped, with its top on the row's top as the web lines it up; it
-  moves there as its tap plays, and a card that starts or stops attacking lays
-  its row out again. The piles are fitted the same way (`web_fit::piles`, from
-  `PILES` and `pileLook` in `ui/src/game/pileLook.ts`): each pile's top card is
-  as wide as the web's and leans back until it is as tall, and the pile stands
-  wherever puts its top card's middle under the web's, however many cards it
-  holds. Near the bottom of the window a card grows taller as it leans back only
-  for a few degrees, until it faces the camera, so a fit never leans a card past
-  that. The cards lifted beside a library and the pile counts follow the pile
-  where it stands. Decided on 2026-11-19 instead of refitting the camera: no
-  camera fit could move rows that stood 25 to 80 points off while the hand
-  already matched. Untapped card centres now land within about 3 points of the
-  web's on the reference targets. The web leans a card by skewing it into a
-  parallelogram, where a card lying in perspective is a trapezoid with a
-  narrower box, so each fitted row's card also carries a shear in the table's
-  plane (`Pose::shear`, solved per card by `web_fit::lean`) that makes its box
-  on screen as wide as the web's and centres it there. Decided on 2026-11-20
-  instead of comparing the two cards' corners in the matcher: a trapezoid's
-  corners miss a parallelogram's by as much as their boxes differ, so only a
-  shear closes the difference. Near the screen's middle, where the web's card
-  barely leans, the trapezoid's near edge alone is up to 3 points wider than the
-  web's card, and no shear narrows it. The phone layout keeps its own rows
+- **Rows follow the web's stage (desktop).** The app installs `scaffold_web`
+  through the default `web-fit` feature. Its `RegionFit` uses the stage
+  measurements embedded from `scaffold_web/web-fit.json` to fit each side's
+  three battlefield rows to the window. Those measurements include the `ROWS`
+  and `ROOM` values in `ui/src/game/tableRows.ts` and the frame widths and gaps
+  of `ui/src/game/battlefield.ts`, with the stage fitted to the window as
+  `ui/src/game/Stage.tsx` fits it. Each row gets the line of the table under the
+  centres of the web's untapped cards, its ends, and the scale at which a card
+  is as wide on screen as the web's. It is laid out in millimetres of a card at
+  its printed size, then scaled about its left end. A card lying flat under the
+  camera's pitch is shorter on screen than the web's upright one, so a row's
+  cards lean back toward the camera until an untapped card is as tall as the
+  web's (at 1600 by 900, 11 to 15 degrees on the viewer's rows and 20 to 23 on
+  the opponent's). Every card of a row lies in one plane, which rises at that
+  angle from the near edge of an untapped card, and every card's centre lies on
+  the row's line, so a card placed later lies nearer the camera than one placed
+  before it, as the hit test needs. The web lines a row's cards up by their tops
+  instead, so a tapped card stands about 18 points lower than the web's. The
+  lands' row leaves the web's wider `TAPPED_GAP` before its first tapped land.
+  An attacking card stands out of its row toward the other side where the web's
+  attacker stands, `ADVANCE` (16 stage pixels) from the row and, when tapped,
+  with its top on the row's top as the web lines it up; it moves there as its
+  tap plays, and a card that starts or stops attacking lays its row out again.
+  The piles are fitted the same way (`web_fit::piles`, from `PILES` and
+  `pileLook` in `ui/src/game/pileLook.ts`): each pile's top card is as wide as
+  the web's and leans back until it is as tall, and the pile stands wherever
+  puts its top card's middle under the web's, however many cards it holds. Near
+  the bottom of the window a card grows taller as it leans back only for a few
+  degrees, until it faces the camera, so a fit never leans a card past that. The
+  cards lifted beside a library and the pile counts follow the pile where it
+  stands. Decided on 2026-11-19 instead of refitting the camera: no camera fit
+  could move rows that stood 25 to 80 points off while the hand already matched.
+  Untapped card centres now land within about 3 points of the web's on the
+  reference targets. The web leans a card by skewing it into a parallelogram,
+  where a card lying in perspective is a trapezoid with a narrower box, so each
+  fitted row's card also carries a shear in the table's plane (`Pose::shear`,
+  solved per card by `web_fit::lean`) that makes its box on screen as wide as
+  the web's and centres it there. Decided on 2026-11-20 instead of comparing the
+  two cards' corners in the matcher: a trapezoid's corners miss a
+  parallelogram's by as much as their boxes differ, so only a shear closes the
+  difference. Near the screen's middle, where the web's card barely leans, the
+  trapezoid's near edge alone is up to 3 points wider than the web's card, and
+  no shear narrows it. The phone layout keeps its own rows
   (`game_table::profiles`), and has not been fitted to the web's.
 - **Some cards lie under a permanent, in its row**, as the web interface tucks
   them: the other cards of a merged permanent and the cards a permanent holds in

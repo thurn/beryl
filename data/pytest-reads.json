@@ -291,6 +291,12 @@
     "tools/tests/test_beryl3d_profiles.py": [
       "rust/beryl3d/Cargo.toml"
     ],
+    "tools/tests/test_beryl3d_web_seam.py": [
+      "data/beryl3d",
+      "docs/beryl-3d-architecture.md",
+      "rust/beryl3d",
+      "tools/src/beryl_tools/beryl3d/match"
+    ],
     "tools/tests/test_card.py": [
       "rust/crates/beryl_card/src/effect/build.rs",
       "rust/crates/beryl_card/src/effect/mod.rs",

@@ -6,7 +6,7 @@
 //! the stage it lies and leaned toward a vanishing point over the stage's middle
 //! (`ui/src/game/perspective.ts`). Its rows are stage positions: `ROWS` in
 //! `ui/src/game/tableRows.ts` and `sideRows` in `ui/src/game/battlefield.ts`, copied into
-//! the desktop profile.
+//! `web-fit.json`.
 //!
 //! Beryl 3D keeps its own camera, fitted to Arena (the profile's `table.camera`), and lays its cards
 //! flat on a table. For each row it finds the line of the table under the web's cards' centres,
@@ -23,65 +23,41 @@
 
 use glam::{Vec2, Vec3};
 
-use crate::table::{Camera, RowArea, Window};
+use crate::tuning::{Perspective, StageSize, WebFit};
+use game_table::table::{
+    Camera, FittedPiles, FittedRegions, FittedRow, Layout, RowArea, RowProjection, RowZoom, Window,
+};
 use kit_base::data::Card;
-use kit_base::data::profiles::{Perspective, StageSize, WebFit};
+use kit_base::data::profiles::ProfileData;
 use kit_base::pose::Pose;
-use kit_space::arrange::Pile;
+use kit_space::arrange::{Pile, row::ScaleLimit};
+
+pub(crate) fn regions(
+    profile: &ProfileData,
+    layout: &Layout,
+    window: Window,
+) -> Option<FittedRegions> {
+    profile.table.anchored.as_ref()?;
+    let camera = &layout.fit(window);
+    let data = &WebFit::shipped();
+    let stage = Stage::of(window, data.stage, data.perspective);
+    Some(FittedRegions {
+        rows: [false, true].map(|opponent| side_rows(&stage, camera, data, opponent)),
+        zoom: RowZoom {
+            minimum: data.zoom_least,
+            back: ScaleLimit {
+                minimum: data.least_back_zoom,
+                shared_minimum: data.back_row_pull,
+            },
+        },
+        piles: piles(&stage, camera, data),
+    })
+}
 
 /// A card's width over its height, as the web interface's `CARD_ASPECT` is.
 fn aspect(card: Card) -> f32 {
     card.width / card.height
 }
-
-/// One battlefield row of one side fitted to the web's: its area on the table, the scale its
-/// cards are drawn at, and the gaps between them in millimetres before that scale.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct FittedRow {
-    stage: Stage,
-    /// The row's band, in millimetres of the table. Its `y` is the line the centres of its
-    /// untapped cards lie on, signed for its side, and its `left` and `right` are where the
-    /// edges of its first and last cards may reach along that line.
-    pub area: RowArea,
-    /// How large its cards are against a card's printed size while the row has room for them
-    /// at full size (`place::zooms`).
-    pub scale: f32,
-    /// How far apart its cards stand, before `scale`.
-    pub gap: f32,
-    /// How far its first tapped card stands from the untapped card before it, before `scale`:
-    /// the web's `TAPPED_GAP` in the lands' row, and `gap` in the others.
-    pub tapped_gap: f32,
-    /// How far its cards lean back from lying flat, toward the camera, in radians: as far as
-    /// makes an untapped card as tall on screen as the web's upright one, which a card lying flat
-    /// under the camera's pitch is not. Every card of the row lies in one plane, which rises
-    /// toward the far side of the table at this angle from the near edge of an untapped card
-    /// (`FittedRow::height`), so that a card placed later lies over one placed before it,
-    /// wherever they overlap.
-    pub tilt: f32,
-    /// How far along the table an attacking card's centre moves from the row's line, signed,
-    /// untapped then tapped. The web moves an attacker `ADVANCE` stage pixels toward the other
-    /// side (`permanentRow` in `ui/src/game/battlefield.ts`), and lines a tapped card up with
-    /// the row by its top, where Beryl 3D keeps it centred on the row's line, so a tapped
-    /// attacker moves as far again as makes its centre the web's. Cards that do not attack keep
-    /// to the line, for the hit test's sake (`place::row`): an attacker stands out of its row.
-    pub advance: [f32; 2],
-    /// How wide the web draws an untapped card of the row on the window, before its lean, in
-    /// logical points: its frame's width shrunk by the row's depth (`depthScale`).
-    pub width: f32,
-}
-
-impl FittedRow {
-    /// How high above the table the row's plane lies over `y`, at its cards' scale, for cards of
-    /// `card`'s size.
-    #[must_use]
-    pub fn height(&self, y: f32, card: Card) -> f32 {
-        let half = card.height / 2.0 * self.scale;
-        half * self.tilt.sin() + (y - self.area.y) * self.tilt.tan()
-    }
-}
-
-/// Each side's three rows, the viewer's first, each in the order of `place::ROWS`.
-pub type FittedRows = [[FittedRow; 3]; 2];
 
 /// The web interface's stage as it is fitted to a window (`fit` in `ui/src/game/Stage.tsx`).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -238,7 +214,6 @@ fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec, forward: f32) -> Fitt
     // A gap of the web's, against its card's frame, is the same share of a card here.
     let gap = |pixels: f32| camera.data.card.width * pixels / spec.frame;
     let row = FittedRow {
-        stage: *stage,
         area: RowArea {
             y: stand.y,
             left: across(centre_of(spec.start), lift) - camera.data.card.width * scale / 2.0,
@@ -251,6 +226,11 @@ fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec, forward: f32) -> Fitt
         tilt: stand.tilt,
         advance: [0.0; 2],
         width: width * stage.scale,
+        projection: RowProjection {
+            offset: stage.offset,
+            scale: stage.scale,
+            vanishing_point: Vec2::new(stage.width / 2.0, stage.perspective.vanishing_y),
+        },
     };
     // A tapped card's centre lies half the difference of its height and width higher on the
     // web's stage than an untapped one's, both tops on the row's top.
@@ -382,8 +362,8 @@ impl Stand {
 /// trapezoid's near edge alone can be wider than the web's box, and no shear narrows it: such a
 /// card is only moved, to centre its box on the web's.
 #[must_use]
-pub fn lean((row, zoom): (&FittedRow, f32), camera: &Camera, pose: Pose, tapped: bool) -> Pose {
-    let stage = row.stage;
+pub(crate) fn lean(row: &FittedRow, zoom: f32, camera: &Camera, pose: Pose, tapped: bool) -> Pose {
+    let reference = row.projection;
     // A card at rest is face up or face down, which outlines the same shape. It is measured face
     // up, so that a card placed face up and turned over later gets the shear it would have been
     // placed with face down, to the last bit.
@@ -416,14 +396,15 @@ pub fn lean((row, zoom): (&FittedRow, f32), camera: &Camera, pose: Pose, tapped:
     let centre = camera.to_screen(pose.position).x;
     // The web's lean is taken at the middle of its card's top edge, which lies the lean's
     // tangent times half the card's height from the card's centre.
-    let on_stage = |point: f32, offset: f32| point / stage.scale - offset;
+    let on_stage = |point: f32, offset: f32| point / reference.scale - offset;
     let (middle, top) = (
-        on_stage(centre, stage.offset.x),
-        on_stage(top, stage.offset.y),
+        on_stage(centre, reference.offset.x),
+        on_stage(top, reference.offset.y),
     );
-    let half_tall = tall / stage.scale / 2.0;
-    let rough = stage.lean(middle, top);
-    let tangent = stage.lean(middle - rough * half_tall, top);
+    let half_tall = tall / reference.scale / 2.0;
+    let lean = |x: f32| (x - reference.vanishing_point.x) / (top - reference.vanishing_point.y);
+    let rough = lean(middle);
+    let tangent = lean(middle - rough * half_tall);
     // The row places a card's centre where an untapped card's leaned centre lies, half the
     // tangent times its height from its top's middle; a tapped card is less tall, so the web's
     // centre lies nearer its top's middle.
@@ -479,45 +460,22 @@ const CLOSE: f32 = 0.25;
 /// The step in `Pose::shear` by which `lean` measures how the box's ends follow the shear.
 const SHEAR_STEP: f32 = 0.01;
 
-/// Every row of the desktop layout fitted to `window` through `camera`.
-pub(super) fn rows(window: Window, camera: &Camera, data: &WebFit) -> FittedRows {
-    let stage = Stage::of(window, data.stage, data.perspective);
-    [false, true].map(|opponent| side_rows(&stage, camera, data, opponent))
-}
-
-/// The library, graveyard and exile piles of the desktop layout fitted to a window, so that
-/// each pile's top card lands where the web interface draws it (`pileLook` in
-/// `ui/src/game/pileLook.ts`). The web keeps a pile's top card at its anchor however many cards
-/// the pile holds, so a pile here stands wherever puts its top card's centre under `tops`.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct FittedPiles {
-    /// The middle of each pile's top card on the window, in logical points: by side, the
-    /// viewer's first, then library, graveyard and exile.
-    pub tops: [[Vec2; 3]; 2],
-    /// How large each side's pile cards are against a card's printed size, the viewer's first.
-    pub scale: [f32; 2],
-    /// How far each side's pile cards lean back from lying flat toward the camera, in radians,
-    /// as a fitted row's do (`FittedRow::tilt`), so that a top card is as tall on screen as the
-    /// web's upright one.
-    pub tilt: [f32; 2],
-    /// How far each pile's cards are sheared, by side (the viewer's first) then library,
-    /// graveyard and exile: the tangent of the web's `lean` of the pile's top card, as
-    /// `Pose::skew` takes it.
-    pub skew: [[f32; 3]; 2],
-}
-
 /// Every pile of the desktop layout fitted to `window` through `camera`. The web draws a pile's
 /// top card as it draws a permanent: upright, shrunk by how far up the stage its anchor lies and
 /// leaned toward the vanishing point by a skew about its top left corner (`PileButton` in
 /// `ui/src/game/Piles.tsx`).
-pub(super) fn piles(window: Window, camera: &Camera, data: &WebFit) -> FittedPiles {
+fn piles(stage: &Stage, camera: &Camera, data: &WebFit) -> FittedPiles {
     let piles = &data.piles;
-    let stage = Stage::of(window, data.stage, data.perspective);
+    let window = camera.window.size;
     let mut fitted = FittedPiles {
         tops: [[Vec2::ZERO; 3]; 2],
         scale: [1.0; 2],
         tilt: [0.0; 2],
         skew: [[0.0; 3]; 2],
+        rim_scale: Vec2::new(
+            window.width / data.stage.base,
+            window.height / data.stage.height,
+        ),
     };
     for side in 0..2 {
         // The anchor's height on the stage, the card's unscaled width, the anchors' x, and how

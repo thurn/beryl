@@ -8,15 +8,13 @@ use kit_base::geometry::{Rect, Window};
 use kit_scene::{SizeClass, Slot};
 use kit_ui::widgets::screen::ScreenColumn;
 
-use crate::table::{Camera, Layout, RowArea, TraySpace};
+use crate::table::{Camera, Layout, RegionFit, RowArea, TraySpace};
 
 mod desktop;
 mod phone;
-pub(crate) mod web_fit;
 pub mod wide_compact;
 pub use kit_base::geometry::Band;
 pub use phone::TableBands;
-pub use web_fit::{FittedPiles, FittedRow, FittedRows};
 
 /// The layout selected for a window. A feature uses its slots and size class to fit its content.
 #[derive(Clone, Copy, Debug)]
@@ -24,6 +22,7 @@ pub struct Profile<'a> {
     data: &'a ProfileData,
     fallback: &'a ProfileData,
     window: Window,
+    region_fit: RegionFit,
 }
 
 impl<'a> Profile<'a> {
@@ -34,6 +33,7 @@ impl<'a> Profile<'a> {
             data: profiles.for_size(window.size),
             fallback: profiles.fallback(),
             window,
+            region_fit: RegionFit::default(),
         }
     }
 
@@ -47,16 +47,25 @@ impl<'a> Profile<'a> {
         self.data.size_class
     }
 
+    /// Supplies a policy for fitting the table's regions.
+    #[must_use]
+    pub fn with_region_fit(mut self, fit: RegionFit) -> Self {
+        self.region_fit = fit;
+        self
+    }
+
     /// Fits the table's containers for this window.
     #[must_use]
     pub fn layout(self) -> Layout {
         let table = &self.data.table;
-        if let Some(banded) = table.banded {
+        let mut layout = if let Some(banded) = table.banded {
             phone::layout(self.data, self.window, banded)
         } else {
             let anchored = table.anchored.as_ref().expect("validated anchored table");
-            desktop::layout(self.data, self.window, anchored)
-        }
+            desktop::reference(self.data, anchored)
+        };
+        self.region_fit.apply(self.data, self.window, &mut layout);
+        layout
     }
 
     /// Builds an anchored table without fitting it to the window or the web stage.

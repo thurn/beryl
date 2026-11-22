@@ -16,7 +16,6 @@ mod banded;
 mod gallery;
 mod hud;
 mod tray;
-mod web;
 pub use anchored::Anchored;
 pub use banded::Banded;
 pub use gallery::GalleryLayout;
@@ -24,7 +23,6 @@ pub use hud::{
     FloatingPrompt, Hud, Incoming, Inspector, Piece, ResultLayout, SingleRow, WrappedHand,
 };
 pub use tray::{PutBack, TrayTuning};
-pub use web::{Perspective, StageSize, WebFit};
 
 /// The space a feature has for its content.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -454,11 +452,6 @@ impl ProfileData {
                 }
                 if anchored.stack.foot >= anchored.stack.top {
                     return Err("table.anchored.stack.foot must be below top".to_owned());
-                }
-                if let Some(web) = &anchored.web
-                    && !(web.stage.least..=web.stage.most).contains(&web.stage.base)
-                {
-                    return Err("invalid table.anchored.web.stage width range".to_owned());
                 }
             }
             (None, Some(banded)) => {

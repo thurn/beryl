@@ -4,13 +4,10 @@ use glam::Vec2;
 use serde::Deserialize;
 
 use super::super::tuning::{finite, nonnegative, positive, positive_fraction, vector};
-use super::WebFit;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Anchored {
-    #[serde(deserialize_with = "positive_fraction")]
-    pub least_back_zoom: f32,
     pub piles: Piles,
     pub tray: Tray,
     pub hand: Hand,
@@ -18,7 +15,6 @@ pub struct Anchored {
     pub stack: Stack,
     /// The player anchors in normalized device coordinates, the viewer's first.
     pub players: [Player; 2],
-    pub web: Option<WebFit>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

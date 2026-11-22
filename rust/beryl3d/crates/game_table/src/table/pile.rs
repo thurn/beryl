@@ -13,7 +13,7 @@
 //!   its top card's. The client shows its count as a float beside it (`hud::piles`).
 //! - Where a pile lies is a point of the screen, copied from the web interface's `PILES`
 //!   (`ui/src/game/pileLook.ts`), which keeps each side's piles in their corner of the window
-//!   at any window shape. On the desktop fitted to a window (`web_fit::piles`), that point is
+//!   at any window shape. When a region fit supplies a projected anchor, that point is
 //!   where the web draws the middle of the pile's top card, which stays there however many
 //!   cards the pile holds: the pile stands wherever puts its top card under it, and its cards
 //!   are as wide as the web's and lean back toward the camera until they are as tall. Otherwise
@@ -208,16 +208,17 @@ pub(super) fn lay_pile(
     let card = camera.data.card;
     let layers = Pile::vertical(card);
     let bottom = bottom_pose(card, pile.base, pile.scale, pile.tilt, pile.skew);
+    let rim_scale = layout.fitted_piles.map(|fit| fit.rim_scale);
     for (height, object) in objects.iter().enumerate() {
         let mut pose = Pose {
             turn: turn(object),
             ..layers.pose(bottom, height)
         };
-        if layout.fitted_piles.is_some() && height + 2 == count {
+        if let Some(rim_scale) = rim_scale
+            && height + 2 == count
+        {
             let top = layers.pose(bottom, count - 1).position;
-            let window = camera.window.size;
-            let offset = spread(side, thickness(1.0))
-                * Vec2::new(window.width / 1600.0, window.height / 900.0);
+            let offset = spread(side, thickness(1.0)) * rim_scale;
             let point = camera.to_screen(top) + offset;
             let z = pose.position.z;
             pose.position = camera.on_plane(point, z).truncate().extend(z);

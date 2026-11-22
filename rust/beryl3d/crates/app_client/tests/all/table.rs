@@ -223,7 +223,7 @@ fn a_permanent_targeted_on_the_stack_stands_apart_from_its_twins() {
 }
 
 /// 255 permanents of different names, a third of them in each of the viewer's rows.
-fn crowded() -> PlayerView {
+fn crowded() -> ViewBuilder {
     let mut builder = ViewBuilder::new();
     for index in 0..255 {
         let types = match index % 3 {
@@ -239,19 +239,23 @@ fn crowded() -> PlayerView {
             )
             .types = types;
     }
-    builder.build()
+    builder
 }
 
 #[test]
 fn a_crowded_battlefield_keeps_its_cards_in_the_table_with_their_strips_uncovered() {
-    let view = crowded();
-    let layout = game_table::profiles::Profile::for_window(
-        &crate::test_data::data().profiles,
-        window(1440.0, 900.0),
-    )
-    .layout();
-    let camera = layout.fit(window(1440.0, 900.0));
-    let placement = place(&view, &[], &layout, &camera, &Scroll::default());
+    let builder = crowded();
+    let view = builder.build();
+    let mut client = client();
+    let frame = frame_of(&mut client, &builder);
+    let table = client.table();
+    let placement = place(
+        &view,
+        &[],
+        table.layout(),
+        table.camera(),
+        &Scroll::default(),
+    );
     let [low, high] = reference().camera.required;
     let mut drawn = 0;
     for object in &view.objects {
@@ -273,18 +277,6 @@ fn a_crowded_battlefield_keeps_its_cards_in_the_table_with_their_strips_uncovere
     }
     assert!(drawn < 255, "some cards are scrolled out of view");
 
-    let mut builder = ViewBuilder::new();
-    for object in &view.objects {
-        builder
-            .card(
-                ZoneName::Battlefield,
-                Side::You,
-                object.name.as_deref().unwrap(),
-            )
-            .types
-            .clone_from(&object.types);
-    }
-    let frame = frame_of(&mut client(), &builder);
     assert_eq!(
         (frame.resolved.iter())
             .filter(|element| element.role == Role::Card)
