@@ -16,7 +16,7 @@
 //! between priorities ([`State::forget_last_known`]).
 //!
 //! A second, smaller table keeps what a spell was as it left the stack without resolving,
-//! for an ability of its own that copies it ([`DepartedSpell`]).
+//! for abilities of its own that copy it or read what it was ([`DepartedSpell`]).
 //!
 //! [CR 603.10a]: https://yawgatog.com/resources/magic-rules/#R60310a
 //! [CR 603.10]: https://yawgatog.com/resources/magic-rules/#R60310
@@ -67,8 +67,8 @@ impl<L: Layout> LastKnown<L> {
 pub const DEPARTED_SPELLS: usize = 2;
 
 /// What a spell was as it last existed on the stack, kept as it left without resolving
-/// (countered, bounced, exiled) while an ability of its own that copies it waits or is on the
-/// stack, as a storm trigger is. That ability copies it from this
+/// (countered, bounced, exiled) while an ability of its own that copies it or reads its
+/// mana value waits or is on the stack. That ability reads this snapshot
 /// (see [CR 113.7a]): "Once activated or triggered, an ability exists on the stack
 /// independently of its source." see [CR 608.2h]: "If an effect requires information from the
 /// game (such as the number of creatures on the battlefield), the answer is determined only
@@ -131,7 +131,7 @@ impl<L: Layout> State<L> {
     }
 
     /// What `spell`, a spell that left the stack without resolving, was there, if an ability
-    /// of its own that copies it was waiting or on the stack as it left ([`DepartedSpell`]).
+    /// that reads it was waiting or on the stack as it left ([`DepartedSpell`]).
     #[inline]
     pub fn departed_spell(&self, spell: ObjectRef<L>) -> Option<&DepartedSpell<L>> {
         (self.departed_spells.iter()).find(|row| row.entry.spell() == Some(spell))
@@ -144,7 +144,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Keeps `entry`, a spell's, just taken off the stack while its card is still in the stack
-    /// zone, if a game whose cards may copy their own spells has a waiting trigger or a stack
+    /// zone, if a game whose abilities may read their departed spell has a waiting trigger or a stack
     /// entry whose source is that spell. In any other game, one AND.
     pub(crate) fn keep_departed_spell(
         &mut self,
@@ -152,7 +152,7 @@ impl<L: Layout> State<L> {
         spell: Spell<L>,
         entry: &StackEntry<L>,
     ) -> Result<(), Full> {
-        if !t.can(Capability::CopiesItself) {
+        if !t.can(Capability::ReadsDepartedSpell) {
             return Ok(());
         }
         let object = spell.into();

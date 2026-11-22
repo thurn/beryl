@@ -650,7 +650,9 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                 );
             }
         }
-        Effect::MayCast { player, card, free } => {
+        Effect::MayCast {
+            player, card, free, ..
+        } => {
             add(
                 Kind::FreeCast,
                 format!("free: {}", !free),
@@ -658,6 +660,7 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                     player,
                     card,
                     free: !free,
+                    free_below: None,
                 },
             );
         }
@@ -757,6 +760,7 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
             }
         }
         Effect::ExileLinked(_)
+        | Effect::ExileUntil { .. }
         | Effect::ReturnTransformed(_)
         | Effect::Explore(_)
         | Effect::Mutate(_)

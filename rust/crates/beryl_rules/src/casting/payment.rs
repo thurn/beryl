@@ -238,6 +238,7 @@ fn unless_discards<L: Layout>(
         | Effect::PutBack { .. }
         | Effect::ShuffleInto { .. }
         | Effect::Dig { .. }
+        | Effect::ExileUntil { .. }
         | Effect::Fateseal { .. }
         | Effect::Search { .. }
         | Effect::Draw { .. }

@@ -15,6 +15,8 @@ pub enum LibraryPosition {
     Top,
     /// "On the bottom of".
     Bottom,
+    /// "On the bottom of, in a random order".
+    BottomRandom,
     /// "On their choice of the top or bottom of": each card's owner chooses as the
     /// instruction is reached (CR 608.2d).
     TopOrBottom,

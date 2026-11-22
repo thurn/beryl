@@ -9,7 +9,7 @@
 //!
 //! Implements: CR 608.2f
 
-use beryl_card::{Effect, Objects, Players};
+use beryl_card::{Amount, Effect, Filter, Objects, Players};
 use beryl_kernel::reference::{Permanent, Permanents};
 
 use crate::actions::{
@@ -19,6 +19,7 @@ use crate::actions::{
 use crate::bitboard::Bitboard;
 use crate::card::{Flow, Stop};
 use crate::casting::{payment, start};
+use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::game::{ending, life};
@@ -190,6 +191,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::PutBack { .. }
             | Effect::ShuffleInto { .. }
             | Effect::Dig { .. }
+            | Effect::ExileUntil { .. }
             | Effect::Fateseal { .. }
             | Effect::Search { .. }
             | Effect::Draw { .. }
@@ -285,6 +287,12 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             } => damage::prevent_instruction(self, to, prevention, from)?,
             Effect::Attach { objects, to } => attach::instruction(self, objects, to),
             Effect::Exile(objects) => exile::instruction(self, objects)?,
+            Effect::ExileUntil {
+                player,
+                filter,
+                below,
+                when_found,
+            } => self.exile_until(player, filter, below, when_found)?,
             Effect::ExileUntilThisLeaves(objects) => {
                 one_shot::exile_until_this_leaves_instruction(self, objects)?
             }
@@ -397,9 +405,12 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 duration,
                 terms,
             } => start::permit_instruction(self, player, cards, duration, terms)?,
-            Effect::MayCast { player, card, free } => {
-                start::may_cast_instruction(self, player, card, free)?
-            }
+            Effect::MayCast {
+                player,
+                card,
+                free,
+                free_below,
+            } => start::may_cast_instruction(self, player, card, free, free_below)?,
             Effect::UntapUpTo {
                 player,
                 count,
@@ -489,6 +500,42 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     pub(crate) fn elsewhere_than(&self, objects: Objects, zone: Zone) -> Bitboard<L::Slot> {
         let s = &*self.game.state;
         (self.scene().objects(objects)).filter(|slot| s.object(slot).zone() != zone)
+    }
+
+    /// Runs the instruction for the matching card, then restores the outcome to the
+    /// original exiled cards that are still there. See [CR 702.85a]: "all cards exiled this
+    /// way that weren’t cast".
+    ///
+    /// [CR 702.85a]: https://yawgatog.com/resources/magic-rules/#R70285a
+    fn exile_until(
+        &mut self,
+        player: Players,
+        filter: Filter,
+        below: Amount,
+        when_found: &'static Effect,
+    ) -> Result<Outcome<L>, Stop> {
+        let Some(player) = self.one(player) else {
+            return Ok(Outcome::NOTHING);
+        };
+        let below = self.scene().amount(below);
+        let words = self.resolving.words(self.game);
+        let you = self.resolving.entry.controller();
+        let x = self.resolving.entry.x;
+        let (cards, found) = exile::from_top_until(self.game, player, |game, slot| {
+            game.state.mana_value(game.table, slot) < below
+                && filter.matches_x(game.state, game.table, slot, you, &words, x)
+        })?;
+        if let Some(found) = found {
+            self.registers.outcome = Outcome::acted_on(Bitboard::single(found));
+            self.carry_out(when_found)?;
+        }
+        Ok(Outcome::acted_on(
+            cards
+                .iter()
+                .filter(|card| self.state().is_current(**card))
+                .map(|card| card.slot)
+                .collect(),
+        ))
     }
 
     /// Notes who controls each of `leaving`, and what is known of the targets among them,

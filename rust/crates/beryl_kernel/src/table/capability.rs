@@ -3,8 +3,8 @@
 //! Implements: none. Records which game mechanics the current card pool can use.
 
 use beryl_card::{
-    AbilityKind, Amount, Behavior, Condition, Draws, Effect, Face, Modification, Node, Objects,
-    Replaced, Replacement, Rewrite, Subtype, Words, Zone,
+    Ability, AbilityKind, Amount, Behavior, Condition, Draws, Effect, Face, Modification, Node,
+    Objects, Replaced, Replacement, Rewrite, Subtype, Words, Zone,
 };
 
 use crate::event::Listens;
@@ -86,11 +86,11 @@ pub enum Capability {
     /// definition, so trigger matching looks at the exceptions of copies (`beryl_rules`'
     /// `trigger`).
     GivesTriggers,
-    /// A card has an ability that copies its own spell ([`Effect::CopySpell`] of
-    /// [`Objects::This`]), as storm does, so a spell that leaves the stack while such an
-    /// ability waits or is on the stack keeps what a copy of it takes
+    /// An ability copies its spell ([`Effect::CopySpell`] of [`Objects::This`]) or reads its
+    /// mana value from the stack. A spell that leaves while such an ability waits or is on
+    /// the stack keeps the information the ability uses
     /// ([`crate::last_known::DepartedSpell`]).
-    CopiesItself,
+    ReadsDepartedSpell,
     /// A card has mutate ([`beryl_card::CastingOption::Mutate`]), so a permanent may be made
     /// of several cards, and has the abilities of the faces of the cards under its top one
     /// ([`crate::query::Copiable::merged_faces`]), whose triggered abilities trigger matching
@@ -188,23 +188,7 @@ impl Capability {
             {
                 found |= Capability::ActivatesFromGraveyardOrExile.bit();
             }
-            // Wherever the ability holds the amount or condition that reads it: its own
-            // condition, one its effect reads, its continuous effect's.
-            a.walk(&mut |node| {
-                found |= match node {
-                    Node::Condition(Condition::EnteredThisTurn(_)) => {
-                        Capability::EnteredThisTurn.bit()
-                    }
-                    Node::Amount(Amount::SpellsCast(_) | Amount::SpellsCastBefore) => {
-                        Capability::SpellsCast.bit()
-                    }
-                    Node::Amount(Amount::CardsDrawn(_)) => Capability::CardsDrawn.bit(),
-                    Node::Condition(Condition::DrewInDrawStep(_)) => {
-                        Capability::DrewInDrawStep.bit()
-                    }
-                    Node::Filter(_) | Node::Amount(_) | Node::Condition(_) | Node::Objects(_) => 0,
-                };
-            });
+            found |= facts_read_by(a);
         }
         found
     }
@@ -241,7 +225,7 @@ fn body_capabilities(body: Behavior) -> u32 {
         Behavior::Data(effect) => {
             let mut found = 0;
             if copies_itself(effect) {
-                found |= Capability::CopiesItself.bit();
+                found |= Capability::ReadsDepartedSpell.bit();
             }
             if effect.any(&|instruction| matches!(instruction, Effect::EndTurn)) {
                 found |= Capability::TurnStructure.bit();
@@ -253,6 +237,28 @@ fn body_capabilities(body: Behavior) -> u32 {
         }
         Behavior::Custom(_) => 0,
     }
+}
+
+/// The facts an ability reads, whether they appear in its body or in its conditions.
+fn facts_read_by(ability: &Ability) -> u32 {
+    let mut found = 0;
+    let works_on_stack =
+        ability.kind() == AbilityKind::Triggered && ability.zones().contains(Zone::Stack);
+    ability.walk(&mut |node| {
+        found |= match node {
+            Node::Condition(Condition::EnteredThisTurn(_)) => Capability::EnteredThisTurn.bit(),
+            Node::Amount(Amount::SpellsCast(_) | Amount::SpellsCastBefore) => {
+                Capability::SpellsCast.bit()
+            }
+            Node::Amount(Amount::ManaValue(Objects::This)) if works_on_stack => {
+                Capability::ReadsDepartedSpell.bit()
+            }
+            Node::Amount(Amount::CardsDrawn(_)) => Capability::CardsDrawn.bit(),
+            Node::Condition(Condition::DrewInDrawStep(_)) => Capability::DrewInDrawStep.bit(),
+            Node::Filter(_) | Node::Amount(_) | Node::Condition(_) | Node::Objects(_) => 0,
+        };
+    });
+    found
 }
 
 /// Whether `effect`, or an instruction it holds, copies the spell whose ability it is.

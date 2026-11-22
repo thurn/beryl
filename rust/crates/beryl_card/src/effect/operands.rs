@@ -202,11 +202,6 @@ impl Effect {
                 player,
                 cards: objects,
             }
-            | Effect::MayCast {
-                player,
-                card: objects,
-                ..
-            }
             | Effect::PermitCast {
                 player,
                 cards: objects,
@@ -221,6 +216,23 @@ impl Effect {
                 among: objects,
                 ..
             } => Operands::of_players(player).objects(objects),
+            Effect::MayCast {
+                player,
+                card,
+                free_below,
+                ..
+            } => Operands {
+                amount: free_below.as_ref(),
+                ..Operands::of_players(player).objects(card)
+            },
+            Effect::ExileUntil {
+                player,
+                filter,
+                below,
+                ..
+            } => Operands::of_players(player)
+                .amount(below)
+                .filter(Some(filter)),
             Effect::Dig {
                 player, look, take, ..
             } => Operands::of_players(player)
@@ -317,7 +329,8 @@ impl Effect {
             }
             Branches::May(effect)
             | Branches::Unless(effect, _)
-            | Branches::ForEachPlayer(effect) => effect.names_paid(),
+            | Branches::ForEachPlayer(effect)
+            | Branches::WhenFound(effect) => effect.names_paid(),
             Branches::Single => false,
         }
     }

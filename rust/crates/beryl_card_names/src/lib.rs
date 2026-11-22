@@ -98,14 +98,21 @@ pub mod decks {
     ];
 
     /// The rules keystones (`docs/rules-coverage.md`, "The keystone cards") by family, each a name
-    /// and the keystones and partners played together in it. The names are those of the
-    /// present-cost benchmark's families (`beryl_bench::family`) where they exist. The
-    /// `decisions` and `turn` families have no present-cost benchmark. Random and agent games deal fuzz decks
+    /// and the keystones and partners played together in it. The names match the
+    /// present-cost benchmarks where those exist. Random and agent games deal fuzz decks
     /// from one family's cards and the basic lands (`beryl_cards::decks::fuzz_deck_from`), so that
     /// the cards of a family meet each other far more often than in decks drawn from every card.
     pub const KEYSTONE_FAMILIES: &[(&str, &[&str])] = &[
         ("combat", &[names::PALACE_GUARD, names::FENCING_ACE]),
         ("face-down", &[names::EXALTED_ANGEL, names::GATHAN_RAIDERS]),
+        (
+            "casting",
+            &[
+                names::BLOODBRAID_ELF,
+                names::LIGHTNING_BOLT,
+                names::COUNTERSPELL,
+            ],
+        ),
         (
             "attachments",
             &[names::SWIFT_RECONFIGURATION, names::LEONIN_SCIMITAR],

@@ -237,6 +237,16 @@ pub(crate) fn put_instruction<L: Layout>(
     let place = match position {
         LibraryPosition::Top | LibraryPosition::FromTop(0 | 1) => Place::Top,
         LibraryPosition::Bottom => Place::Bottom,
+        LibraryPosition::BottomRandom => {
+            let cards = run.elsewhere_than(objects, Zone::Library);
+            if !cards.is_empty() {
+                run.remember(cards)?;
+                let game = run.game();
+                let rest = crate::stack::unstack(game, cards, Zone::Library)?;
+                put_on_bottom_in_random_order(game, rest)?;
+            }
+            return Ok(run.now_in(cards, Zone::Library));
+        }
         // CR 401.7: with "fewer than N cards in it, the player puts that card on the bottom
         // of that library."
         LibraryPosition::FromTop(n) => Place::UnderTop(n - 1),

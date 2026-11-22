@@ -6,6 +6,12 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A split card in a library reported only the mana value of its first half.**
+  Cascade could stop at a split card whose combined mana value was too high. The
+  mana-value query now reads both halves outside the stack.
+  `cascade_uses_combined_split_cost_and_offers_each_half` checks the value of
+  the card in exile and of the chosen half on the stack.
+
 - **A compact enum tag changed the benchmark's position hashes.** Removing the
   old cast offer preserved the numbers of the remaining `Pending` variants. The
   new representation also changed the tag that Rust's derived hash wrote from a

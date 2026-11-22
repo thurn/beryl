@@ -419,6 +419,7 @@ impl Effect {
                 | Effect::PutBack { .. }
                 | Effect::ShuffleInto { .. }
                 | Effect::Dig { .. }
+                | Effect::ExileUntil { .. }
                 | Effect::Fateseal { .. }
                 | Effect::Search { .. }
                 | Effect::Draw { .. }
@@ -494,7 +495,8 @@ impl Effect {
             }
             Branches::May(effect)
             | Branches::Unless(effect, _)
-            | Branches::ForEachPlayer(effect) => {
+            | Branches::ForEachPlayer(effect)
+            | Branches::WhenFound(effect) => {
                 effect.walk(visit);
             }
             Branches::Single => {

@@ -402,6 +402,15 @@ impl Ctx {
         {
             return Some(format!("Dredge {n}"));
         }
+        // Cascade's whole ability (CR 702.85a).
+        if let Behavior::Data(effect) = ability.body()
+            && std::ptr::eq(effect, &raw const crate::ability::CASCADE)
+            && ability
+                .trigger()
+                .is_some_and(|trigger| trigger.is_this(TriggerEvent::Casts))
+        {
+            return Some("Cascade".to_owned());
+        }
         // Storm's whole ability (CR 702.40a).
         if let Behavior::Data(Effect::CopySpell {
             spells: Objects::This,

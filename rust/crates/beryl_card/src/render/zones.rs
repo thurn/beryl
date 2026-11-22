@@ -130,6 +130,11 @@ impl Ctx {
                 objects,
                 &format!(" on the bottom of {library}"),
             )],
+            LibraryPosition::BottomRandom => vec![self.acts(
+                ("put", "puts"),
+                objects,
+                &format!(" on the bottom of {library} in a random order"),
+            )],
             LibraryPosition::FromTop(n) => vec![self.acts(
                 ("put", "puts"),
                 objects,

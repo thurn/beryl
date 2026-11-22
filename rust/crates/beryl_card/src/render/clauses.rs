@@ -241,6 +241,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::PutBack { player, .. }
         | Effect::ShuffleInto { player, .. }
         | Effect::Dig { player, .. }
+        | Effect::ExileUntil { player, .. }
         | Effect::Fateseal { player, .. }
         | Effect::Search { player, .. }
         | Effect::Draw { player, .. }

@@ -211,6 +211,16 @@ pub enum Effect {
     /// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an
     /// object, move it to the exile zone from wherever it is."
     Exile(Objects),
+    /// Exile cards one at a time from the top of the player's library, stopping after
+    /// exiling a card that passes `filter` with mana value below `below`, or when the
+    /// library is empty. If a card matched, run `when_found` with that card as
+    /// [`Objects::Those`]. The outcome is the cards from this instruction still in exile.
+    ExileUntil {
+        player: Players,
+        filter: Filter,
+        below: Amount,
+        when_found: &'static Effect,
+    },
     /// "Exile [objects] until this leaves the battlefield"
     /// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "Some one-shot
     /// effects cause an object to change zones 'until' a specified event occurs. A second
@@ -563,11 +573,13 @@ pub enum Effect {
     /// so by following the steps in rules 601.2a-i, except no player receives priority after
     /// it's cast." The player may choose one cast from the cards the expression names.
     /// Without its mana cost the card is cast for an alternative cost
-    /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)).
+    /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)). The free cast can
+    /// require the resulting spell's mana value to be less than `free_below`.
     MayCast {
         player: Players,
         card: Objects,
         free: bool,
+        free_below: Option<Amount>,
     },
     /// "[Player] untaps up to [count] [permanents]", of their choice as the instruction is
     /// reached
@@ -702,6 +714,7 @@ impl Effect {
             | Effect::PutBack { .. }
             | Effect::ShuffleInto { .. }
             | Effect::Dig { .. }
+            | Effect::ExileUntil { .. }
             | Effect::Fateseal { .. }
             | Effect::Search { .. }
             | Effect::GainLife { .. }

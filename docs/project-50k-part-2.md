@@ -879,9 +879,11 @@ total cost, pay) become functions that take each answer from an answer source:
 
 - **Cascade**
   ([CR 702.85a](https://yawgatog.com/resources/magic-rules/#R70285a)) is then
-  effect data: exile from the top until a nonland card of lesser mana value,
-  cast it without paying its mana cost, put the rest on the bottom in a random
-  order.
+  effect data. Exile from the top until a nonland card of lesser mana value.
+  Offer a cast without paying its mana cost, limited to faces whose resulting
+  spell also has lesser mana value. Put the cards still in exile on the bottom
+  in a random order. Read the spell's last known mana value if it has left the
+  stack.
 - **Panglacial Wurm** adds a way to cast to the search's own question.
   `interpret::choices::pick_or_end` offers `Opt::Cast` for a card of the
   searched library whose definition says it may be cast while its owner

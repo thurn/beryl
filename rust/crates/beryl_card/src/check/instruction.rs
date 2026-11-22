@@ -70,6 +70,15 @@ impl Scope<'_> {
                 player: Players::EachPlayer | Players::EachOpponent | Players::EachOther(_),
                 ..
             } => Err(Malformed::CastPlayer),
+            Effect::ExileUntil {
+                player: Players::EachPlayer | Players::EachOpponent | Players::EachOther(_),
+                ..
+            } => Err(Malformed::ExilePlayer),
+            Effect::MayCast {
+                free: false,
+                free_below: Some(_),
+                ..
+            } => Err(Malformed::CastLimit),
             Effect::PermitCast {
                 duration: Duration::UntilYourNextTurn,
                 ..
@@ -148,6 +157,7 @@ impl Scope<'_> {
             | Effect::PutBack { .. }
             | Effect::ShuffleInto { .. }
             | Effect::Dig { .. }
+            | Effect::ExileUntil { .. }
             | Effect::Search { .. }
             | Effect::Draw { .. }
             | Effect::Discard { .. }

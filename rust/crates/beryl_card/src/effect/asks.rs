@@ -56,6 +56,7 @@ impl Effect {
                     }
             }
             Effect::ForEachPlayer { effect, .. } => effect.asks(),
+            Effect::ExileUntil { when_found, .. } => when_found.asks(),
             // The copies' new targets are chosen as they are made (CR 707.10c).
             Effect::CopySpell { new_targets, .. } => new_targets,
             // A source of the controller's choice is chosen as the shield begins.
@@ -163,6 +164,7 @@ impl Effect {
             | Effect::PutBack { .. }
             | Effect::ShuffleInto { .. }
             | Effect::Dig { .. }
+            | Effect::ExileUntil { .. }
             | Effect::Fateseal { .. }
             | Effect::Search { .. }
             | Effect::Draw { .. }

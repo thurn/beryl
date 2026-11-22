@@ -365,6 +365,7 @@ fn prevention_filter(effect: &'static Effect) -> Option<&'static Filter> {
         | Effect::PutBack { .. }
         | Effect::ShuffleInto { .. }
         | Effect::Dig { .. }
+        | Effect::ExileUntil { .. }
         | Effect::Fateseal { .. }
         | Effect::Search { .. }
         | Effect::Draw { .. }

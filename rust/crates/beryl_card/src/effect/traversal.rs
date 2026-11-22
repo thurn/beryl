@@ -15,6 +15,7 @@ pub(crate) enum Branches<'a> {
     May(&'static Effect),
     Unless(&'static Effect, &'a Cost),
     ForEachPlayer(&'static Effect),
+    WhenFound(&'static Effect),
     Single,
 }
 
@@ -36,6 +37,7 @@ impl Effect {
             Effect::May { effect, .. } => Branches::May(effect),
             Effect::Unless { effect, cost, .. } => Branches::Unless(effect, cost),
             Effect::ForEachPlayer { effect, .. } => Branches::ForEachPlayer(effect),
+            Effect::ExileUntil { when_found, .. } => Branches::WhenFound(when_found),
             Effect::Choose { .. }
             | Effect::LookAt { .. }
             | Effect::Counter(_)
@@ -128,6 +130,7 @@ impl Effect {
             | Effect::PutBack { .. }
             | Effect::ShuffleInto { .. }
             | Effect::Dig { .. }
+            | Effect::ExileUntil { .. }
             | Effect::Fateseal { .. }
             | Effect::Search { .. }
             | Effect::Draw { .. }
@@ -181,7 +184,8 @@ impl Effect {
             } => then.any(test) || otherwise.is_some_and(|otherwise| otherwise.any(test)),
             Branches::May(effect)
             | Branches::Unless(effect, _)
-            | Branches::ForEachPlayer(effect) => effect.any(test),
+            | Branches::ForEachPlayer(effect)
+            | Branches::WhenFound(effect) => effect.any(test),
             Branches::Single => false,
         }
     }
@@ -222,7 +226,8 @@ impl Effect {
             },
             Branches::May(effect)
             | Branches::Unless(effect, _)
-            | Branches::ForEachPlayer(effect) => effect.starts(),
+            | Branches::ForEachPlayer(effect)
+            | Branches::WhenFound(effect) => effect.starts(),
             Branches::Single => self.started_rule(),
         }
     }
@@ -257,6 +262,7 @@ impl Effect {
             | Effect::PutBack { .. }
             | Effect::ShuffleInto { .. }
             | Effect::Dig { .. }
+            | Effect::ExileUntil { .. }
             | Effect::Fateseal { .. }
             | Effect::Search { .. }
             | Effect::Draw { .. }

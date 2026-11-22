@@ -732,6 +732,7 @@ pub const fn may_cast_free(player: Players, card: Objects) -> Effect {
         player,
         card,
         free: true,
+        free_below: None,
     }
 }
 

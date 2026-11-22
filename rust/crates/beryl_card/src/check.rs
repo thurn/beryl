@@ -176,9 +176,10 @@ const fn rule_changes(effect: &Effect) -> usize {
                     None => 0,
                 }
         }
-        Branches::May(effect) | Branches::Unless(effect, _) | Branches::ForEachPlayer(effect) => {
-            rule_changes(effect)
-        }
+        Branches::May(effect)
+        | Branches::Unless(effect, _)
+        | Branches::ForEachPlayer(effect)
+        | Branches::WhenFound(effect) => rule_changes(effect),
         Branches::Single => {
             if effect.started_rule().is_some() {
                 1
@@ -379,7 +380,7 @@ impl Scope<'_> {
                     None => Ok(then),
                 }
             }
-            Branches::May(effect) => self.effect(effect),
+            Branches::May(effect) | Branches::WhenFound(effect) => self.effect(effect),
             Branches::Unless(effect, cost) => {
                 if let Err(malformed) = self.resolution_cost(cost) {
                     return Err(malformed);

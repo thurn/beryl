@@ -1,6 +1,6 @@
 //! Queries: what the rules ask about an object, answered once.
 //!
-//! Implements: CR 108.4a, CR 202.3, CR 712.6d
+//! Implements: CR 108.4a, CR 202.3, CR 709.4b, CR 712.6d
 //!
 //! A slot holds the game index of a definition and the face that is up. Neither is an answer:
 //! a token's definition is no card, a face-down permanent's says nothing of what it is, a
@@ -11,14 +11,15 @@
 //! [`crate::Observation::card`] is the other door, for a player's view: nothing when the
 //! viewer does not know the card.
 
-use beryl_card::{AbilityIx, CardDef, Colors, Keywords, Subtype, Supertypes, Types, Zone};
+use beryl_card::definition::Shape;
+use beryl_card::{AbilityIx, CardDef, Colors, FaceIx, Keywords, Subtype, Supertypes, Types, Zone};
 
 use crate::bitboard::Bitboard;
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::object::{AbilityMask, CombatRole, Flag};
 use crate::reference::Permanent;
-use crate::state::State;
+use crate::state::{StackEntry, State};
 use crate::table::GameTable;
 
 pub(crate) mod defined_power;
@@ -105,7 +106,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The mana value of the object in `slot` ([CR 202.3]): "The mana value of an object is a
-    /// number equal to the total amount of mana in its mana cost, regardless of color." A spell's
+    /// number equal to the total amount of mana in its mana cost, regardless of color." A spell
     /// counts its X ([CR 202.3e]): "X is treated as the number chosen for it while the object is on
     /// the stack."
     ///
@@ -128,12 +129,22 @@ impl<L: Layout> State<L> {
             && let Some(spell) = self.spell(self.object_ref(slot))
             && let Some(entry) = self.spell_entry(spell)
         {
-            let cost = t.def(entry.card()).face(entry.face()).cost;
-            return cost
-                .mana_value()
-                .saturating_add(cost.x.saturating_mul(entry.x));
+            return spell_mana_value(t, entry);
         }
-        let up = t.def(o.card).face(o.face);
+        let definition = t.def(o.card);
+        // CR 709.4b: "A split card’s colors and mana value are determined from its combined
+        // mana cost." A spell on the stack used its chosen face above.
+        if matches!(definition.shape, Shape::Split { .. })
+            && o.zone != Zone::Stack
+            && o.face != FaceIx::DOWN
+        {
+            return definition
+                .front()
+                .cost
+                .mana_value()
+                .saturating_add(definition.face(FaceIx::BACK).cost.mana_value());
+        }
+        let up = definition.face(o.face);
         if !up.uses_front_mana_value() {
             up.cost.mana_value()
         } else if o.is_token() || self.has_copied_face(slot) {
@@ -542,4 +553,14 @@ impl<L: Layout> State<L> {
         }
         named
     }
+}
+
+/// Mana value from a spell's chosen face and X, even when the entry is a snapshot.
+/// See CR 202.3e: "X is treated as the number chosen for it while the object is on the stack."
+#[must_use]
+#[inline]
+pub fn spell_mana_value<L: Layout>(table: &GameTable, entry: &StackEntry<L>) -> u8 {
+    let cost = table.def(entry.card()).face(entry.face()).cost;
+    cost.mana_value()
+        .saturating_add(cost.x.saturating_mul(entry.x))
 }

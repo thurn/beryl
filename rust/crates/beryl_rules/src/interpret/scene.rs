@@ -527,6 +527,17 @@ impl<L: Layout> Scene<'_, L> {
                 |scene, slot| i32::from(scene.s.toughness(scene.t, slot)),
                 |known| i32::from(known.toughness),
             ),
+            // See CR 608.2h: "if it’s no longer in that zone ... the effect uses the
+            // object’s last known information." The original spell's chosen face and X
+            // survive when an ability still needs them after it has left the stack.
+            Amount::ManaValue(Objects::This) if self.objects(Objects::This).is_empty() => self
+                .subject
+                .of
+                .source
+                .and_then(|source| self.s.departed_spell(source))
+                .map_or(0, |spell| {
+                    i32::from(beryl_kernel::query::spell_mana_value(self.t, &spell.entry))
+                }),
             Amount::ManaValue(objects) => self.total(
                 objects,
                 |scene, slot| i32::from(scene.s.mana_value(scene.t, slot)),

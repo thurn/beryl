@@ -82,6 +82,10 @@ pub enum Malformed {
     /// A cast offer names multiple players. Use [`Effect::ForEachPlayer`] to give each
     /// player a separate offer in turn order.
     CastPlayer,
+    /// A mana-value limit requires a cast without paying its mana cost.
+    CastLimit,
+    /// Exiling from the top until a match only reads one library.
+    ExilePlayer,
     /// [`Effect::Unless`] of a cost the engine cannot take as an effect resolves: one other
     /// than mana alone or the discard of one card from a hand.
     Cost,
@@ -168,6 +172,8 @@ impl Malformed {
                 "a permission to cast lasts neither this turn nor while the card stays put"
             }
             Malformed::CastPlayer => "a cast offer names more than one player",
+            Malformed::CastLimit => "a mana-value limit requires a free cast",
+            Malformed::ExilePlayer => "exile until names more than one player",
             Malformed::ChosenColor => {
                 "a resolving effect adds a chosen color, which only a permanent has"
             }

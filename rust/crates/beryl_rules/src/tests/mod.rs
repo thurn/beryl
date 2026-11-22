@@ -12,6 +12,7 @@ mod abilities_away;
 mod ability_removal;
 mod any_target;
 mod banned;
+mod cascade;
 mod cast;
 mod casting;
 mod chosen;

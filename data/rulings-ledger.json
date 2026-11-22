@@ -67,6 +67,62 @@
       ]
     }
   ],
+  "Bloodbraid Elf": [
+    {
+      "published_at": "2021-06-18",
+      "hash": "6370f845511c",
+      "scenario": [
+        "Cascade casts a spell with X equal to zero"
+      ]
+    },
+    {
+      "published_at": "2021-06-18",
+      "hash": "310add0d8891",
+      "covered": "Effect::ExileUntil"
+    },
+    {
+      "published_at": "2021-06-18",
+      "hash": "3a39776ad165",
+      "covered": "Effect::ExileUntil"
+    },
+    {
+      "published_at": "2021-06-18",
+      "hash": "7df6a706e98f",
+      "covered": "Effect::MayCast"
+    },
+    {
+      "published_at": "2021-06-18",
+      "hash": "67269c9454f9",
+      "scenario": [
+        "Cascade resolves even when the Elf is countered"
+      ]
+    },
+    {
+      "published_at": "2021-06-18",
+      "hash": "9bfe7245f08f",
+      "covered": "Effect::MayCast"
+    },
+    {
+      "published_at": "2021-06-18",
+      "hash": "21718e1226db",
+      "scenario": [
+        "Cascade casts a targeted instant above the Elf"
+      ]
+    },
+    {
+      "published_at": "2021-06-18",
+      "hash": "89a34a5db444",
+      "covered": "Amount::ManaValue"
+    },
+    {
+      "published_at": "2021-06-18",
+      "hash": "d0e7fd4f0aa4",
+      "scenario": [
+        "Declining the cast puts the matching card on the bottom",
+        "Cascade bottoms the whole library when no card qualifies"
+      ]
+    }
+  ],
   "Brain Freeze": [
     {
       "published_at": "2022-12-08",

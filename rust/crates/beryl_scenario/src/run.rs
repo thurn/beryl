@@ -5,7 +5,7 @@ use beryl_engine::event::{Event, Tag};
 use beryl_engine::state::{CastStep, ObjectRef, Pending};
 use beryl_engine::{
     Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Profile, Replay,
-    Scratch, Seat, State, Step, Stops, Zone, ZoneKey, apply, next,
+    Scratch, Seat, State, Step, Stops, Zone, ZoneKey, apply, next, view,
 };
 
 mod answer;
@@ -519,12 +519,16 @@ impl<L: Layout> Runner<L> {
             ),
             Step::Over(_) => (None, None, None, None),
         };
-        // A target asked while a spell or ability resolves is a copy's new target, whose
-        // first option is the target it has.
+        // A copy's first target option keeps its existing target. A spell cast during
+        // resolution asks for a fresh target, with the cast visible in the replayed state.
         let kept = match step {
             Step::Decide(d)
                 if d.kind == DecisionKind::Target
-                    && matches!(self.s.pending(), Pending::Resolving(_)) =>
+                    && matches!(self.s.pending(), Pending::Resolving(_))
+                    && !matches!(
+                        view(&self.s, &self.t, &mut self.x).pending(),
+                        Pending::Casting(_)
+                    ) =>
             {
                 self.pick_for(d, Choice(0))
             }

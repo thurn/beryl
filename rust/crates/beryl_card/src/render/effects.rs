@@ -202,6 +202,23 @@ impl Ctx {
                     format!("{cards} into {} library", c.possessive(player))
                 })]
             }
+            Effect::ExileUntil {
+                player,
+                filter,
+                below,
+                when_found,
+            } => {
+                let exile = self.clause(player, ("exile", "exiles"), |c| {
+                    let kind = Kind::Card(None);
+                    let matched = with_article(&c.noun(filter, kind).singular(kind));
+                    let library = c.possessive(player);
+                    let limit = c.amount(below);
+                    format!("cards from the top of {library} library until you exile {matched} whose mana value is less than {limit}")
+                });
+                let mut clauses = vec![exile];
+                clauses.extend(self.effect(when_found));
+                clauses
+            }
             Effect::Dig {
                 player,
                 look,
@@ -457,14 +474,24 @@ impl Ctx {
                 }
                 clauses
             }
-            Effect::MayCast { player, card, free } => {
+            Effect::MayCast {
+                player,
+                card,
+                free,
+                free_below,
+            } => {
                 self.may = true;
                 vec![self.clause(player, ("cast", "casts"), |c| {
                     let card = c.objects(card);
+                    let mut cast = card;
                     if free {
-                        format!("{card} without paying its mana cost")
+                        cast.push_str(" without paying its mana cost");
+                    }
+                    if let Some(below) = free_below {
+                        let limit = c.amount(below);
+                        format!("{cast} if the resulting spell's mana value is less than {limit}")
                     } else {
-                        card
+                        cast
                     }
                 })]
             }

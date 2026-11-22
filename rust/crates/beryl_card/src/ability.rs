@@ -5,13 +5,31 @@ use crate::continuous::{Duration, LayerSpec, Modification, Replacement, RuleChan
 use crate::cost::{CastingKind, Cost, CostPart};
 use crate::counter::CounterKind;
 use crate::effect::build::create_copy_except;
-use crate::effect::{Amount, Comparison, Condition, Effect, Objects, Players};
+use crate::effect::{Amount, Comparison, Condition, Effect, LibraryPosition, Objects, Players};
 use crate::filter::Filter;
 use crate::ids::{TurnStep, Zone, ZoneSet};
 use crate::index::{ExceptIx, SpecIx};
 use crate::mana::{ManaCost, ManaSet};
 use crate::target::{Takes, TargetKind, TargetSpec};
 use crate::trigger::Trigger;
+
+pub(crate) static CASCADE: Effect = Effect::Sequence(&[
+    Effect::ExileUntil {
+        player: Players::You,
+        filter: Filter::Not(&Filter::Types(Types::LAND)),
+        below: Amount::ManaValue(Objects::This),
+        when_found: &Effect::MayCast {
+            player: Players::You,
+            card: Objects::Those,
+            free: true,
+            free_below: Some(Amount::ManaValue(Objects::This)),
+        },
+    },
+    Effect::PutIntoLibrary {
+        objects: Objects::Those,
+        position: LibraryPosition::BottomRandom,
+    },
+]);
 
 mod behavior;
 mod of_kind;
@@ -366,6 +384,18 @@ impl Ability {
         Ability::triggered(&Trigger::CAST)
             .on_the_stack()
             .effect(&COPY)
+    }
+
+    /// Cascade ([CR 702.85a]): "When you cast this spell, exile cards from the top of your
+    /// library until you exile a nonland card whose mana value is less than this spell’s
+    /// mana value." The eligible spell can be cast for free, then the remaining cards
+    /// go on the bottom at random.
+    ///
+    /// [CR 702.85a]: https://yawgatog.com/resources/magic-rules/#R70285a
+    pub const fn cascade() -> Ability {
+        Ability::triggered(&Trigger::CAST)
+            .on_the_stack()
+            .effect(&CASCADE)
     }
 
     /// Impending's static ability (CR 702.176a): "As long as this permanent's impending cost

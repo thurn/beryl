@@ -8,7 +8,7 @@
 //!
 //! Implements: CR 608.2g
 
-use beryl_card::{CastTerms, Filter, Objects, Players, Types, Words};
+use beryl_card::{Amount, CastTerms, Filter, Objects, Players, Types, Words};
 
 use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose, Stop};
@@ -47,10 +47,38 @@ pub fn offer<L: Layout>(
     player: Seat,
     free: bool,
 ) -> Result<Option<L::Slot>, Stop> {
+    offer_spell(game, resolution, cards, player, free, None)
+}
+
+fn offer_spell<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &mut Resolution<'_, L>,
+    cards: Bitboard<L::Slot>,
+    player: Seat,
+    free: bool,
+    below: Option<u8>,
+) -> Result<Option<L::Slot>, Stop> {
     if cards.is_empty() {
         return Ok(None);
     }
-    let options = stack::offer_options(game.state, game.table, cards, player, free)?;
+    let mut options = stack::offer_options(game.state, game.table, cards, player, free)?;
+    if let Some(below) = below {
+        // See CR 702.85a: "if the resulting spell’s mana value is less than this spell’s mana
+        // value." Each option names the face that would be on the stack. See CR 107.3b: "the
+        // only legal choice for X is 0" when casting without paying its mana cost.
+        options.retain(|option| {
+            if let Opt::Cast { slot, face, .. } = *option {
+                game.state
+                    .card_def(game.table, slot)
+                    .is_some_and(|def| def.face(face).cost.mana_value() < below)
+            } else {
+                matches!(option, Opt::Pass)
+            }
+        });
+        if options.len() == 1 {
+            return Ok(None);
+        }
+    }
     let question = Decision::options(
         player,
         DecisionKind::CastOffer,
@@ -218,17 +246,18 @@ pub(crate) fn may_cast_instruction<L: Layout>(
     player: Players,
     card: Objects,
     free: bool,
+    free_below: Option<Amount>,
 ) -> Result<Outcome<L>, Stop> {
     let cards = run.scene().objects(card);
+    let below = free_below.map(|amount| run.scene().amount(amount));
     let Some(player) = run.one(player) else {
         return Ok(Outcome::NOTHING);
     };
     let (game, resolution) = run.resolving();
-    Ok(
-        offer(game, resolution, cards, player, free)?.map_or(Outcome::NOTHING, |slot| {
+    Ok(offer_spell(game, resolution, cards, player, free, below)?
+        .map_or(Outcome::NOTHING, |slot| {
             Outcome::acted_on(Bitboard::single(slot))
-        }),
-    )
+        }))
 }
 
 /// [`Effect::PermitCast`](beryl_card::Effect::PermitCast): "[Player] may cast [cards]

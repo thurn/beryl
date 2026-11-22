@@ -458,6 +458,7 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::PutBack { .. }
         | Effect::ShuffleInto { .. }
         | Effect::Dig { .. }
+        | Effect::ExileUntil { .. }
         | Effect::Fateseal { .. }
         | Effect::Draw { .. }
         | Effect::Discard { .. }
