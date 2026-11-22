@@ -145,7 +145,15 @@ impl Checks {
         let hashes = self.listing_hashes(ctx, tree, among);
         run.slow(ctx, "hashing the families' inputs", hashing);
         let reading = Stopwatch::start(ctx);
-        let mut kept = self.kept_for(hashes.clone());
+        // A published measurement listing can tell other verifiers what this OS must pass.
+        // A runner must list locally to observe its own current calibration.
+        let mut reusable = hashes.clone();
+        for &(name, family) in among {
+            if family.machine_relative {
+                reusable.remove(name);
+            }
+        }
+        let mut kept = self.kept_for(reusable);
         run.slow(ctx, "reading kept listings", reading);
         // A `nextest` family that misses its kept listing may reuse its newest listing for the
         // packages whose test names cannot have changed (see `package_listings`).

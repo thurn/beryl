@@ -190,6 +190,8 @@ pub struct Built {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CheckRun {
     pub outcomes: Vec<(CheckName, Outcome)>,
+    /// Measurement keys, so a tip round can match a verdict to the calibration it listed.
+    pub(crate) measurement_hashes: HashMap<CheckName, InputHash>,
     pub from_cache: u32,
     /// Checks run at least once.
     pub ran: u32,
@@ -248,6 +250,20 @@ impl CheckRun {
     fn finish(&mut self, check: &CheckName, outcome: Outcome, failure: Option<Failure>) {
         self.outcomes.push((check.clone(), outcome));
         self.failures.extend(failure);
+    }
+
+    fn finish_keyed(
+        &mut self,
+        keyed: &Keyed,
+        family: &Family,
+        outcome: Outcome,
+        failure: Option<Failure>,
+    ) {
+        if family.machine_relative {
+            self.measurement_hashes
+                .insert(keyed.key.check.clone(), keyed.key.hash.clone());
+        }
+        self.finish(&keyed.key.check, outcome, failure);
     }
 }
 
@@ -662,12 +678,21 @@ impl Checks {
         digest: Option<&str>,
         platform: Option<Os>,
     ) -> InputHash {
-        let commands = hash::commands(family, &self.settings.manifest);
+        let mut commands = hash::commands(family, &self.settings.manifest);
+        if family.machine_relative {
+            commands.push("ignite machine-relative check".to_owned());
+        }
+        // The measurement digest already records the verifier's toolchain.
+        let toolchain = if family.machine_relative {
+            ""
+        } else {
+            &self.settings.toolchain
+        };
         hash::input_hash(&HashParts {
             inputs: ids,
             digest,
             commands: &commands,
-            toolchain: &self.settings.toolchain,
+            toolchain,
             platform,
         })
     }

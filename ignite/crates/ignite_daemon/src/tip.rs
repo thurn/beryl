@@ -113,12 +113,16 @@ pub struct TipCheck {
     pub runnable: bool,
     /// False when the hub no longer trusts the check's cached results, so it runs every time.
     pub reuse: bool,
+    /// The check's calibration and results belong to the verifier that listed it.
+    pub machine_relative: bool,
 }
 
 /// One check's outcome from a run at one commit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TipRun {
     pub check: CheckName,
+    /// The key of the calibration the run used, for checks that depend on it.
+    pub measurement_hash: Option<ignite_core::ids::InputHash>,
     pub outcome: Outcome,
     /// The file or reference that holds a failure's output.
     pub output: Option<String>,
@@ -472,6 +476,7 @@ impl TipVerifier {
 fn verdict(check: &TipCheck, outcome: Outcome, output: Option<String>) -> TipRun {
     TipRun {
         check: check.check.clone(),
+        measurement_hash: check.machine_relative.then(|| check.key.hash.clone()),
         outcome,
         output,
         reason: None,
@@ -489,7 +494,11 @@ fn settle_runs(
 ) {
     for run in runs {
         own.extend(run.output.clone());
-        if let Some(check) = checks.iter().find(|c| c.runnable && c.check == run.check) {
+        if let Some(check) = checks.iter().find(|c| c.runnable && c.check == run.check)
+            && (!check.machine_relative
+                || run.outcome == Outcome::Incomplete
+                || run.measurement_hash.as_ref() == Some(&check.key.hash))
+        {
             verdicts.insert(check.key.clone(), run);
         }
     }

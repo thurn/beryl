@@ -54,8 +54,8 @@ struct Round<'a> {
     /// with work under way: the next round is what moves `master` now, and the checks left
     /// over are in the next tip's set.
     after_master: bool,
-    /// Platform-specific families claim separate batches on each operating system.
-    platforms: BTreeMap<&'a str, Os>,
+    /// Claim names for checks scoped to an OS or to an individual verifier.
+    claim_scopes: BTreeMap<&'a str, (Os, bool)>,
     queue: Mutex<VecDeque<FamilyBatches>>,
     /// How many families have been started.
     started: Mutex<usize>,
@@ -134,8 +134,9 @@ impl Round<'_> {
     fn ask(&self, family: &str, batch: u32) -> bool {
         let claim = TipClaim {
             commit: self.tip.clone(),
-            family: match self.platforms.get(family) {
-                Some(os) => format!("{family}@{os}"),
+            family: match self.claim_scopes.get(family) {
+                Some((os, true)) => format!("{family}@{os}@{}", self.ctx.machine),
+                Some((os, false)) => format!("{family}@{os}"),
                 None => family.to_owned(),
             },
             batch,
@@ -199,9 +200,14 @@ impl TipVerifier {
             ctx,
             tip,
             after_master,
-            platforms: to_run
+            claim_scopes: to_run
                 .iter()
-                .filter_map(|check| Some((check.family.as_str(), check.key.platform?)))
+                .filter_map(|check| {
+                    Some((
+                        check.family.as_str(),
+                        (check.key.platform?, check.machine_relative),
+                    ))
+                })
                 .collect(),
             queue: Mutex::new(by_family(batches(&self.listed, to_run, &costs)).into()),
             started: Mutex::new(0),

@@ -16,10 +16,10 @@
 //!
 //! An empty listing is never kept. A package selection can list no tests, but a whole `nextest`
 //! family must list tests, and a `jsonl` family that listed checks before must still list some.
-//! Listings with refused checks are also never kept. A listing with check digests is kept only
-//! when the family declares `digest_inputs`. The digest may otherwise stand for something no
-//! file holds, such as the commit subjects since staging, so the listing hash cannot say when
-//! it changes.
+//! Listings with refused checks are also never kept. A listing with check digests is reused
+//! when the family declares `digest_inputs`, which says what determines those digests. A
+//! machine-relative listing is published for other tip verifiers at its commit, and the
+//! machine running those checks lists them afresh to observe its calibration.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
@@ -32,6 +32,7 @@ use ignite_core::hash::{self, HashParts};
 use ignite_core::ids::InputHash;
 use ignite_core::inputs;
 use ignite_core::manifest::{Adapter, Family, InputPattern};
+use ignite_core::protocol::Class;
 use ignite_core::protocol::hub::ListingKey;
 
 use super::observed::{self, Reads};
@@ -220,15 +221,31 @@ impl Checks {
             return HashMap::new();
         };
         let ids: HashMap<String, _> = ids.into_iter().collect();
+        let tip = among
+            .iter()
+            .any(|(_, family)| family.machine_relative)
+            .then(|| self.trees.head(&tree.path).ok())
+            .flatten();
         resolved
             .into_iter()
-            .map(|(name, family, paths)| {
+            .filter_map(|(name, family, paths)| {
                 let own: Vec<_> = paths
                     .iter()
                     .filter_map(|p| ids.get(p).map(|oid| (p.clone(), oid.clone())))
                     .collect();
                 let own = Self::listing_ids(ctx, tree, family, own);
-                (name.to_owned(), self.listing_hash(family, &own))
+                let hash = if family.machine_relative {
+                    // A foreign verifier needs an observation of the calibration at this tip.
+                    self.hash_for(
+                        family,
+                        &own,
+                        Some(tip.as_ref()?.as_str()),
+                        Some(self.settings.os),
+                    )
+                } else {
+                    self.listing_hash(family, &own)
+                };
+                Some((name.to_owned(), hash))
             })
             .collect()
     }
@@ -402,7 +419,8 @@ impl Checks {
             _ => Vec::new(),
         };
         let scoped = !packages.is_empty();
-        let key = key.filter(|_| !scoped);
+        let key =
+            key.filter(|_| !scoped && (!family.machine_relative || options.class == Class::Tip));
         let who = execute::build_for(options);
         let _products = super::products::hold_build_products(
             &tree.path,
@@ -471,18 +489,33 @@ impl Checks {
                 };
                 // A package selection can contain only libraries without test harnesses.
                 // A whole nextest family must still list checks, even if its command exits 0.
-                let Some(listed) = listed.filter(|listed| {
+                let Some(mut listed) = listed.filter(|listed| {
                     scoped || !listed.is_empty() || !self.cannot_be_empty(name, family)
                 }) else {
                     let _ = crate::supervise::keep(&result.output);
                     continue;
                 };
                 self.note_listed(name, &listed);
+                if family.machine_relative {
+                    for check in &mut listed {
+                        if let Some(digest) = check.digest.as_deref().filter(|d| !d.is_empty()) {
+                            check.digest = Some(
+                                serde_json::json!([ctx.machine, self.settings.toolchain, digest])
+                                    .to_string(),
+                            );
+                        } else if check.refused.is_none() {
+                            check.refused =
+                                Some(format!("{} has no calibration digest", check.check));
+                        }
+                    }
+                }
                 let digests_from_files = !family.digest_inputs.is_empty();
                 let keepable = !listed.is_empty()
-                    && listed
-                        .iter()
-                        .all(|l| (l.digest.is_none() || digests_from_files) && l.refused.is_none());
+                    && listed.iter().all(|l| l.refused.is_none())
+                    && (family.machine_relative
+                        || listed
+                            .iter()
+                            .all(|l| l.digest.is_none() || digests_from_files));
                 let key = key.filter(|key| {
                     if !keepable {
                         let mut not_kept =
@@ -587,6 +620,7 @@ impl Checks {
     /// Other families must once they have listed checks.
     fn cannot_be_empty(&self, name: &str, family: &Family) -> bool {
         family.adapter == Adapter::Nextest
+            || family.machine_relative
             || self
                 .listed_before
                 .lock()

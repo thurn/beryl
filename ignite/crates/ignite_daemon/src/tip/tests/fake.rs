@@ -255,7 +255,8 @@ impl TipWork for FakeWork {
                 .get(&(at.clone(), check.clone()))
                 .copied()
                 .unwrap_or(Outcome::Pass);
-            if let Some(listed) = listed.iter().find(|c| c.runnable && c.check == *check)
+            let listed = listed.iter().find(|c| c.runnable && c.check == *check);
+            if let Some(listed) = listed
                 && matches!(outcome, Outcome::Pass | Outcome::Fail)
             {
                 let output = (outcome == Outcome::Fail).then(|| format!("{check} failed"));
@@ -273,6 +274,9 @@ impl TipWork for FakeWork {
             }
             runs.push(TipRun {
                 check: check.clone(),
+                measurement_hash: listed
+                    .filter(|c| c.machine_relative)
+                    .map(|c| c.key.hash.clone()),
                 outcome,
                 output: (outcome == Outcome::Fail).then(|| {
                     let scripted = self.outputs.lock().unwrap().get(check).cloned();

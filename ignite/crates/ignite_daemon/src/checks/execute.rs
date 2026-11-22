@@ -109,7 +109,7 @@ impl Checks {
                         output: hit.output.clone(),
                         reason: None,
                     });
-                    run.finish(&keyed.listed.check, hit.outcome, failure);
+                    run.finish_keyed(&keyed, family, hit.outcome, failure);
                 }
                 None => pending.push(keyed),
             }
@@ -408,8 +408,8 @@ impl Checks {
         let areas = self.change_areas(ctx, tree);
         for (keyed, outcome, failure, output, cost, record) in finals {
             let inputs_moved = keyed.inputs.iter().any(|(path, _)| moved.contains(path));
-            if outcome == Outcome::Flaky && inputs_moved {
-                // The failure and pass may have checked different versions of the files.
+            if inputs_moved && (outcome == Outcome::Flaky || family.machine_relative) {
+                // These verdicts need the same inputs throughout the run.
                 let check = &keyed.listed.check;
                 let error = Error::Io("inputs changed during the run; run the check again".into());
                 run.finish(check, Outcome::Incomplete, Some(incomplete(check, &error)));
@@ -453,7 +453,7 @@ impl Checks {
                 }
                 Outcome::Incomplete => {}
             }
-            run.finish(&keyed.listed.check, outcome, failure);
+            run.finish_keyed(&keyed, family, outcome, failure);
         }
         self.cache.flaky(&flaky);
         self.cache.store(&stored);
@@ -684,6 +684,7 @@ impl Checks {
         options: &RunOptions,
     ) -> (RunResult, Option<RecordId>, Option<CompileSpan>) {
         env.push((CLASS_ENV.to_owned(), options.class.as_str().to_owned()));
+        env.push(("IGNITE_MACHINE".to_owned(), ctx.machine.to_string()));
         let spec_env = env.clone();
         let slowest = self.cache.slowest_pass(name, command);
         let result = ctx.launcher.run(&CommandSpec {

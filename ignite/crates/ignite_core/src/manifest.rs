@@ -1,12 +1,8 @@
 //! Check manifests: the check families and build products a repository declares.
 //!
-//! Each file in the manifest directory (`repository.checks` in `ignite.toml`) holds
-//! `[family.<name>]` and `[product.<name>]` tables. A family is a group of checks that one
-//! command runs; a build product is a named build that families need, with the command that
-//! makes it, what it reads and the directories it writes. The file's stem is the family's group.
-//!
-//! This module parses text the caller has read; it does no I/O. Errors name the file and the
-//! key at fault.
+//! Each file in `repository.checks` declares families (groups of checks run by one command)
+//! and products (builds those checks need). The file's stem is the family's group.
+//! This module parses text and reports errors with the file and key.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -110,6 +106,10 @@ pub struct Family {
     pub kind: Kind,
     pub adapter: Adapter,
     pub platforms: Platforms,
+    /// A JSONL regression check's digest identifies the current calibration. Results are
+    /// scoped to the registered verifier, and each required OS supplies its own listing.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub machine_relative: bool,
     /// Build products that must be current before the checks run.
     #[serde(default)]
     pub needs: Vec<String>,
@@ -143,21 +143,15 @@ pub struct Family {
     /// when these files change.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub package_inputs: BTreeMap<String, Vec<InputPattern>>,
-    /// The files the `digest` of each listed check is computed from, beyond `inputs` and the
-    /// inputs of the products in `needs`. A family that declares them says its digests hold
-    /// nothing these files do not, so its listing is kept under a hash that covers them, and a
-    /// change that touches none of them leaves it out of the gate. Without them a listing whose
-    /// checks carry a digest is never kept, as the digest may stand for something no file holds.
+    /// Files beyond the family and product inputs that fully determine an ordinary listing's
+    /// digests. Declaring them lets Ignite cache the listing and use it to scope the gate.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub digest_inputs: Vec<InputPattern>,
     /// Blocks every landing its inputs touch.
     #[serde(default)]
     pub always: bool,
-    /// Path patterns that narrow `always`: when there are any, the family is in the always set
-    /// only for a change that touches one of them, and for any other change its checks are
-    /// scored like those of any other family. A lint over one workspace that reads a second
-    /// workspace only through the packages it depends on declares the first workspace here,
-    /// so a change to the second does not spend its run on every landing.
+    /// Path patterns that narrow `always`. On changes that match none of the patterns, the
+    /// gate scores these checks like any others.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub always_when: Vec<String>,
     /// The family's checks fail when the code does not compile or type-check. A tip round runs
@@ -258,12 +252,8 @@ pub struct DeclaredFamily {
 pub struct Manifest {
     pub families: BTreeMap<String, DeclaredFamily>,
     pub products: BTreeMap<String, Product>,
-    /// `covered_by` of each family that has one: the family whose checks find every fault this
-    /// family's checks find, so tip verification runs the covering family only (see "How long
-    /// a round takes" in `docs/ignite.md`). The landing gate ignores it.
-    ///
-    /// It is kept here rather than on [`Family`] because the field is read only by tip
-    /// verification, and every place that builds a `Family` by hand would otherwise name it.
+    /// Each family's `covered_by`, if set. Tip verification runs the covering family's checks,
+    /// which detect every fault the covered family's checks detect.
     pub covered_by: BTreeMap<String, String>,
 }
 
@@ -455,6 +445,16 @@ fn check_covers(manifest: &Manifest) -> Result<(), (String, String)> {
 /// The field at fault, after `family.<name>.`, and what is wrong with it.
 fn check_family(family: &Family) -> Result<(), (String, String)> {
     let fail = |field: &str, message: &str| Err((field.to_owned(), message.to_owned()));
+    if family.machine_relative
+        && (family.adapter != Adapter::Jsonl
+            || family.kind != Kind::Regression
+            || family.platforms.is_any())
+    {
+        return fail(
+            "machine_relative",
+            "requires a JSONL regression family with named platforms",
+        );
+    }
     if let Platforms::Each(list) = &family.platforms
         && list.is_empty()
     {

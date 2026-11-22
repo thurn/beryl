@@ -46,8 +46,9 @@ impl Checks {
         let local: Vec<_> = among
             .iter()
             .copied()
-            .filter(|(_, family)| {
+            .filter(|(name, family)| {
                 listing_platforms(family).is_none_or(|os| os.contains(&self.settings.os))
+                    && (!family.machine_relative || self.families().any(|(own, _)| own == *name))
             })
             .collect();
         let options = RunOptions {
@@ -63,14 +64,14 @@ impl Checks {
         let prepared = self.prepare_among(ctx, tree, &local, &options, &mut run);
         self.add_regression_checks(&local, prepared, Some(&run), &mut set);
         for os in [Os::Macos, Os::Windows] {
-            if os == self.settings.os {
-                continue;
-            }
             let remote: Vec<_> = among
                 .iter()
                 .copied()
-                .filter(|(_, family)| {
+                .filter(|(name, family)| {
                     listing_platforms(family).is_some_and(|list| list.contains(&os))
+                        && (os != self.settings.os
+                            || (family.machine_relative
+                                && !local.iter().any(|(own, _)| own == name)))
                 })
                 .collect();
             if !remote.is_empty() {
@@ -245,6 +246,7 @@ impl Checks {
                         inputs: inputs.clone(),
                         runnable,
                         reuse: state == CheckState::On,
+                        machine_relative: family.machine_relative,
                     };
                     match (off, runnable) {
                         (false, _) => set.checks.push(check),
@@ -257,14 +259,15 @@ impl Checks {
     }
 }
 
-/// The platforms that must supply their own listing. A buildless JSONL list can still
-/// enumerate its checks on any host, including listings whose digests cannot be cached.
+/// The platforms that must supply their own listing. A buildless JSONL list can enumerate
+/// its checks on any host when it doesn't use a machine's calibration.
 fn listing_platforms(family: &Family) -> Option<&[Os]> {
     let Platforms::Each(platforms) = &family.platforms else {
         return None;
     };
     let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
-    (family.adapter == Adapter::Nextest || !needs.is_empty()).then_some(platforms)
+    (family.machine_relative || family.adapter == Adapter::Nextest || !needs.is_empty())
+        .then_some(platforms)
 }
 
 /// A local listing has a command or build failure to report. For a foreign listing, the

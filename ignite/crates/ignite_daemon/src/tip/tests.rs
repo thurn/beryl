@@ -65,6 +65,7 @@ fn check(text: &str, hash: char) -> TipCheck {
         inputs: vec![format!("src/{text}")],
         runnable: true,
         reuse: true,
+        machine_relative: false,
     }
 }
 

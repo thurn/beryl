@@ -20,6 +20,57 @@ fn windows_check(hash: char, runnable: bool) -> TipCheck {
 }
 
 #[test]
+fn a_tip_can_claim_its_measurement_after_a_same_platform_peer_stops() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let mut measurement = windows_check('b', true);
+    measurement.machine_relative = true;
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    world.work.set_checks(&tip, vec![measurement]);
+    assert!(
+        world
+            .hub
+            .tip_claim(&TipClaim {
+                commit: tip.clone(),
+                family: "unit@windows@m-2".to_owned(),
+                batch: 0,
+                machine: MachineId::new("m-2").unwrap(),
+            })
+            .unwrap()
+            .granted
+    );
+    assert_eq!(
+        world.verifier().verify(&ctx, &tip).unwrap(),
+        TipOutcome::Verified
+    );
+    assert!(
+        world
+            .hub
+            .tip_claims()
+            .iter()
+            .any(|claim| claim.family == "unit@windows@m-1")
+    );
+    assert_eq!(world.master(), tip);
+}
+
+#[test]
+fn a_run_cannot_pass_a_tip_listing_for_a_different_calibration() {
+    let mut measurement = windows_check('b', true);
+    measurement.machine_relative = true;
+    let mut run = verdict(&measurement, Outcome::Pass, None);
+    run.measurement_hash = Some(InputHash::new("c".repeat(64)).unwrap());
+    let mut outcomes = HashMap::new();
+    settle_runs(
+        &[measurement],
+        vec![run],
+        &mut outcomes,
+        &mut HashSet::new(),
+    );
+    assert!(outcomes.is_empty());
+}
+
+#[test]
 fn an_off_platform_defers_its_checks_then_verifies_the_tip_already_on_master() {
     let world = World::new();
     let path = ignite_core::test_files::temp_dir().join("macos.db");

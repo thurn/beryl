@@ -76,12 +76,14 @@ fn check(name: &str, hash: char) -> TipCheck {
         inputs: Vec::new(),
         runnable: true,
         reuse: true,
+        machine_relative: false,
     }
 }
 
 fn incomplete(check: &TipCheck, reason: IncompleteReason) -> TipRun {
     TipRun {
         check: check.check.clone(),
+        measurement_hash: None,
         outcome: Outcome::Incomplete,
         output: Some("the run's output".to_owned()),
         reason: Some(reason),

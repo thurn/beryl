@@ -58,6 +58,7 @@ impl CheckRun {
         // Taken apart field by field, so a field added to `CheckRun` cannot be forgotten here.
         let CheckRun {
             outcomes,
+            measurement_hashes,
             from_cache,
             ran,
             failures,
@@ -77,6 +78,7 @@ impl CheckRun {
             slow_steps,
         } = other;
         self.outcomes.extend(outcomes);
+        self.measurement_hashes.extend(measurement_hashes);
         self.from_cache += from_cache;
         self.ran += ran;
         self.failures.extend(failures);

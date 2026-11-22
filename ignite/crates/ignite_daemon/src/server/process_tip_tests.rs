@@ -37,6 +37,7 @@ fn the_check(platform: Option<Os>) -> TipCheck {
         inputs: vec!["src/a".to_owned()],
         runnable: true,
         reuse: true,
+        machine_relative: false,
     }
 }
 
@@ -94,6 +95,7 @@ impl TipWork for OneCheck {
             .iter()
             .map(|check| TipRun {
                 check: check.clone(),
+                measurement_hash: None,
                 outcome,
                 output: None,
                 reason: None,

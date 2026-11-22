@@ -11,6 +11,9 @@
 //!   download this machine lacks stops the check; the check is then not run again here. A tool
 //!   that judges a check in several steps marks each line but the last `"partial": true`, so a
 //!   check whose last line is a partial pass is `incomplete`: its later steps never reported.
+//!   Both commands receive `IGNITE_MACHINE`, the daemon's registered machine ID. With
+//!   `machine_relative = true`, every list line needs a nonempty digest of the measurement
+//!   environment and calibration used by its run.
 //! - `nextest`: cargo-nextest's own output. `cargo nextest list --message-format json` gives the
 //!   tests of each test binary, and `cargo nextest run --message-format libtest-json-plus` one
 //!   JSON line per test event. A test's check is named `<family>:<binary id>::<test>`, so a

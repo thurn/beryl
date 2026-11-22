@@ -323,6 +323,7 @@ mod tests {
             inputs: Vec::new(),
             runnable: true,
             reuse: true,
+            machine_relative: false,
         }
     }
 

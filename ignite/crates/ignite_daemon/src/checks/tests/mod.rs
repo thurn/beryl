@@ -185,6 +185,7 @@ impl Launcher for ScriptLauncher {
 
 struct FakeTrees {
     dir: PathBuf,
+    head: Commit,
     changed: Vec<String>,
     /// The tracked files; the default three when empty.
     tracked: Vec<String>,
@@ -195,6 +196,7 @@ impl FakeTrees {
     fn new(dir: &Path, changed: &[&str]) -> FakeTrees {
         FakeTrees {
             dir: dir.to_path_buf(),
+            head: Commit::new("abc1234").unwrap(),
             changed: changed.iter().map(|s| (*s).to_owned()).collect(),
             tracked: Vec::new(),
             graph: CrateGraph::default(),
@@ -228,7 +230,7 @@ impl TreeSource for FakeTrees {
     }
 
     fn head(&self, _path: &Path) -> Result<Commit> {
-        Ok(Commit::new("abc1234").unwrap())
+        Ok(self.head.clone())
     }
 
     fn changed(&self, _path: &Path, _base: &str) -> Result<Vec<String>> {

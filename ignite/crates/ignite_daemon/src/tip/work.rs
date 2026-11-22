@@ -267,6 +267,7 @@ pub(super) fn tip_runs(run: &CheckRun, needs: &HashMap<String, Vec<String>>) -> 
             if unbuilt && let Some((product, build_output)) = build_of(&check) {
                 return TipRun {
                     check,
+                    measurement_hash: None,
                     outcome,
                     output: Some(build_output),
                     reason: None,
@@ -287,6 +288,7 @@ pub(super) fn tip_runs(run: &CheckRun, needs: &HashMap<String, Vec<String>>) -> 
                     .unwrap_or(IncompleteReason::Unreported)
             });
             TipRun {
+                measurement_hash: run.measurement_hashes.get(&check).cloned(),
                 check,
                 outcome,
                 output,
@@ -302,6 +304,7 @@ fn not_run<'a>(checks: impl Iterator<Item = &'a CheckName>, error: &Error) -> Ve
     checks
         .map(|check| TipRun {
             check: check.clone(),
+            measurement_hash: None,
             outcome: Outcome::Incomplete,
             output: Some(error.to_string()),
             reason: None,

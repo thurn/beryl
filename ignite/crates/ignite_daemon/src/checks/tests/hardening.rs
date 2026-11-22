@@ -186,6 +186,146 @@ fn a_tip_waits_for_a_foreign_build_listing_without_building_it() {
     assert_eq!(world.launcher.commands("lister").len(), commands);
 }
 
+fn measurement_world() -> World {
+    let manifest = [
+        family("meter", "[\"macos\"]", "lister", "machine_relative = true"),
+        family("unit", "\"any\"", "lister", ""),
+    ]
+    .join("\n");
+    let world = world(&manifest, &[], FakeHistory::default());
+    measurement_listing(&world, "calibration-1");
+    world
+}
+
+fn measurement_listing(world: &World, digest: &str) {
+    *world.launcher.listing.lock().unwrap() =
+        format!("{{\"check\":\"meter:a\",\"digest\":\"{digest}\"}}\n{{\"check\":\"unit:a\"}}\n");
+}
+
+fn measurement_peer(world: &World, machine: &str, os: Os) -> (Context, Checks) {
+    let mut ctx = world.ctx.clone();
+    ctx.machine = MachineId::new(machine).unwrap();
+    let mut settings = world.checks.settings.clone();
+    settings.os = os;
+    let cache = ResultCache::new(
+        ignite_store::local::open_in_memory().unwrap(),
+        world.hub.clone(),
+        ctx.machine.clone(),
+        ctx.clock.clone(),
+    );
+    let checks = Checks::new(
+        settings,
+        cache,
+        Box::new(FakeTrees::new(&world.dir, &[])),
+        Box::new(FakeHistory::default()),
+    );
+    (ctx, checks)
+}
+
+#[test]
+fn a_measurement_pass_is_reusable_only_on_its_verifier_and_calibration() {
+    let world = measurement_world();
+    let names = [name("meter:a"), name("unit:a")];
+    let original = run(&world, &["meter:a", "unit:a"]);
+    assert!(original.passed(), "{original:?}");
+    assert_eq!(run(&world, &["meter:a", "unit:a"]).from_cache, 2);
+    // Publish a tip listing so the second Mac also has a listing it must bypass.
+    world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+
+    let (other, peer) = measurement_peer(&world, "m-2", Os::Macos);
+    world
+        .launcher
+        .script("meter:a", &[Some("fail"), Some("fail")]);
+    let second = peer.run(&other, &tree(), &names, &options(false));
+    assert_eq!(second.from_cache, 1);
+    assert_eq!(outcome(&second, "unit:a"), Outcome::Pass);
+    assert_eq!(outcome(&second, "meter:a"), Outcome::Fail);
+    assert_ne!(original.measurement_hashes, second.measurement_hashes);
+    let specs = world.launcher.runs.lock().unwrap();
+    for program in ["lister", "runner"] {
+        assert!(specs.iter().any(|spec| {
+            spec.args[0] == program
+                && spec
+                    .env
+                    .iter()
+                    .any(|(key, value)| key == "IGNITE_MACHINE" && value == "m-2")
+        }));
+    }
+    drop(specs);
+
+    measurement_listing(&world, "calibration-2");
+    let recalibrated = run(&world, &["meter:a", "unit:a"]);
+    assert_eq!(recalibrated.from_cache, 1);
+    assert!(recalibrated.passed(), "{recalibrated:?}");
+    assert_ne!(original.measurement_hashes, recalibrated.measurement_hashes);
+}
+
+#[test]
+fn a_foreign_tip_uses_the_published_measurement_key_without_listing_locally() {
+    let world = measurement_world();
+    let (windows, mut peer) = measurement_peer(&world, "m-2", Os::Windows);
+    peer.settings.toolchain = "2.0".to_owned();
+    let cold = peer.regression_checks(&windows, &tree()).unwrap();
+    assert_eq!(cold.checks.len(), 1);
+    assert_eq!(cold.unlisted.len(), 1);
+    assert_eq!(cold.unlisted[0].name, name("meter:listing"));
+    assert_eq!(cold.unlisted[0].platforms, vec![Os::Macos]);
+    assert!(!cold.unlisted[0].reportable);
+
+    let (secondary, second_mac) = measurement_peer(&world, "m-3", Os::Macos);
+    let secondary_plan = second_mac.regression_checks(&secondary, &tree()).unwrap();
+    // The second Mac stops after listing. The first Mac can verify the OS with its own key.
+    let mac = world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+    assert!(mac.unlisted.is_empty());
+    assert_eq!(mac.checks.len(), 2);
+    assert_ne!(mac.checks[0].key, secondary_plan.checks[0].key);
+    assert!(mac.checks[0].runnable);
+    let local = run(&world, &["meter:a"]);
+    assert!(local.passed(), "{local:?}");
+
+    let lists = world.launcher.commands("lister").len();
+    let warm = peer.regression_checks(&windows, &tree()).unwrap();
+    assert_eq!(world.launcher.commands("lister").len(), lists);
+    assert!(warm.unlisted.is_empty());
+    let foreign = warm.checks.iter().find(|c| c.family == "meter").unwrap();
+    assert_eq!(foreign.key, mac.checks[0].key);
+    assert!(!foreign.runnable);
+    let hits = world
+        .hub
+        .lookup(std::slice::from_ref(&foreign.key))
+        .unwrap();
+    assert_eq!(hits[0].as_ref().unwrap().machine, world.ctx.machine);
+
+    let mut next = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        FakeTrees {
+            head: Commit::new("def5678").unwrap(),
+            ..FakeTrees::new(&world.dir, &[])
+        },
+    );
+    Arc::get_mut(&mut next).unwrap().settings.os = Os::Windows;
+    let next = next.regression_checks(&world.ctx, &tree()).unwrap();
+    assert_eq!(next.checks.len(), 1);
+    assert_eq!(next.unlisted[0].name, name("meter:listing"));
+}
+
+#[test]
+fn a_measurement_check_without_a_calibration_digest_is_incomplete() {
+    let world = measurement_world();
+    measurement_listing(&world, "");
+    let check = run(&world, &["meter:a"]);
+    assert_eq!(outcome(&check, "meter:a"), Outcome::Incomplete);
+    assert!(
+        check.failures[0]
+            .message
+            .as_ref()
+            .unwrap()
+            .contains("no calibration digest")
+    );
+    assert!(world.launcher.commands("runner").is_empty());
+}
+
 #[test]
 fn a_check_whose_inputs_cannot_be_resolved_is_unlisted_and_the_rest_are_kept() {
     let manifest = family("unit", "\"any\"", "lister", "");
