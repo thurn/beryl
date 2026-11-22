@@ -212,7 +212,7 @@ pub struct Cloth {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct TableStyle {
-    pub show_exile: bool,
+    pub show_optional_piles: bool,
     pub show_pile_sides: bool,
     pub show_copy_labels: bool,
     pub full_card_faces: bool,

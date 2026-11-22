@@ -267,7 +267,7 @@ impl Layout {
     /// Whether this zone has its own visible pile in the layout.
     #[must_use]
     pub fn pile_visible(&self, zone: ZoneName) -> bool {
-        zone != ZoneName::Exile || self.style.show_exile
+        zone != ZoneName::Exile || self.style.show_optional_piles
     }
 
     /// The window line the horizontal stack scrolls along, in logical points from the top.

@@ -168,6 +168,7 @@ def test_toolkit_manifest_cannot_depend_on_protocol(root: Path, manifest: str) -
     ("path", "source", "word"),
     (
         ("src/pose.rs", 'const PLACE: &str = "battlefield.yours";', "battlefield"),
+        ("src/pose.rs", "const EXILE_ZONE_AUDIT: bool = true;", "exile"),
         ("src/pose.rs", "enum Zone { Graveyard }", "graveyard"),
         ("src/pose.rs", "let your_library = 3;", "library"),
         ("src/pose.rs", "use beryl_protocol::protocol::Side;", "beryl_protocol"),

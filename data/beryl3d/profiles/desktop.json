@@ -154,7 +154,7 @@
     }
   },
   "table_style": {
-    "show_exile": true,
+    "show_optional_piles": true,
     "show_pile_sides": true,
     "show_copy_labels": true,
     "full_card_faces": true,

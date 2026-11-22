@@ -358,6 +358,7 @@ PROTOCOL = "beryl_protocol"
 # so the rule covers types, fields, labels, test data and comments.
 MAGIC_WORDS = {
     "battlefield",
+    "exile",
     "graveyard",
     "library",
     "mana",
