@@ -119,6 +119,7 @@ def test_generated_scenarios_are_marked() -> None:
 
 
 SCENARIOS: list[dict[str, object]] = [
+    {"card": "Bonecrusher Giant", "name": "casts both faces"},
     {"card": "Counterspell", "name": "counters a spell"},
     {"card": "Ponder", "name": "looks at three"},
 ]
@@ -177,7 +178,15 @@ def test_no_sim_skips_forge_s_games_and_cards_narrow_the_scenarios(
     assert played == [["Ponder"], ["Ponder"]]
     played.clear()
     assert oracles.oracle(oracle_args()) == 0
-    assert played == [["Counterspell", "Ponder"]] * 2 + [["sim"]]
+    assert played == [["Bonecrusher Giant", "Counterspell", "Ponder"]] * 2 + [["sim"]]
+
+
+def test_an_adventure_cards_full_name_selects_its_scenarios(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    played = fake_oracles(monkeypatch)
+    assert oracles.oracle(oracle_args("Bonecrusher Giant // Stomp", no_sim=True)) == 0
+    assert played == [["Bonecrusher Giant"], ["Bonecrusher Giant"]]
 
 
 def test_a_run_waiting_past_the_lock_wait_cannot_run(

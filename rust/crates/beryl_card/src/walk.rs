@@ -191,7 +191,9 @@ impl Ability {
                         filter.walk(visit);
                     }
                 }
-                Governed::ActivateAbilities { .. } | Governed::Player(_) => {}
+                Governed::ActivateAbilities { .. }
+                | Governed::Player(_)
+                | Governed::PreventDamage => {}
             }
         }
         if let Some(filter) = &self.only_if_you_control() {

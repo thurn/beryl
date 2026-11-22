@@ -80,6 +80,13 @@ pub enum Governed {
     ///
     /// [CR 701.6a]: https://yawgatog.com/resources/magic-rules/#R7016a
     Counter(Objects),
+    /// Preventing damage. With `When::Never` for each player, "Damage can't be prevented"
+    /// (see [CR 615.12]). This also stops protection from preventing damage. Protection's
+    /// targeting restrictions still apply (see [CR 702.16b]).
+    ///
+    /// [CR 615.12]: https://yawgatog.com/resources/magic-rules/#R61512
+    /// [CR 702.16b]: https://yawgatog.com/resources/magic-rules/#R70216b
+    PreventDamage,
     /// What casting the spells a filter accepts costs, read of each spell's own
     /// characteristics, as "Noncreature spells cost {1} more to cast." says. It changes the
     /// total cost ([CR 601.2f]): "The total cost is the mana cost or alternative cost (as
@@ -261,6 +268,7 @@ impl RuleChange {
                     SpellCost::AtLeast(n) => format!("paying at least {n} for {spells}"),
                 }
             }
+            (Governed::PreventDamage, _) => "unable to prevent damage".to_owned(),
             (Governed::Player(changes), _) => {
                 let life = changes.contains(PlayerRules::LIFE_CANT_CHANGE);
                 let protection = changes.contains(PlayerRules::PROTECTION_FROM_EVERYTHING);

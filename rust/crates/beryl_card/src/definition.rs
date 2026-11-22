@@ -21,6 +21,11 @@ pub enum Shape {
     Split {
         fuse: bool,
     },
+    /// An adventurer card. Its resolving Adventure exiles it, and that permission lets its
+    /// controller cast the normal face when they could normally cast a spell of its type
+    /// ([CR 716.3d]).
+    ///
+    /// [CR 716.3d]: https://yawgatog.com/resources/magic-rules/#R7163d
     Adventure,
     Prepared,
     Flip,

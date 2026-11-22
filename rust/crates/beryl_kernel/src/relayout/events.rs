@@ -329,9 +329,14 @@ impl<L: Layout> Relayout for Event<L> {
                 cause: cause.relayout(),
             },
             &Event::Win { player } => Event::Win { player },
-            &Event::Targeted { object, controller } => Event::Targeted {
+            &Event::Targeted {
+                object,
+                controller,
+                spell,
+            } => Event::Targeted {
                 object: object.relayout(),
                 controller,
+                spell: spell.map(|object| object.relayout()),
             },
             &Event::TurnedFaceUp { object } => Event::TurnedFaceUp {
                 object: object.relayout(),

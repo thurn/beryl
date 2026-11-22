@@ -269,6 +269,13 @@ impl Ctx {
     pub(super) fn objects_possessive(&mut self, objects: Objects) -> String {
         match objects {
             Objects::Those => if self.plural { "their" } else { "its" }.to_owned(),
+            Objects::TriggeredOn
+                if self.trigger.is_some_and(|trigger| {
+                    matches!(trigger.event, TriggerEvent::BecomesTargetOfSpell)
+                }) =>
+            {
+                "that spell's".to_owned()
+            }
             Objects::TriggeredOn | Objects::TriggeredOnIn(_) | Objects::Paid(_) => "its".to_owned(),
             Objects::This if self.this_is_it => "its".to_owned(),
             Objects::Target(n) => match self.target(n) {
@@ -357,7 +364,7 @@ impl Ctx {
             // "When this creature becomes the target of a spell or ability, sacrifice it."
             TriggerEvent::BecomesTarget if matches!(trigger.subject, Subject::This) => "it",
             TriggerEvent::Discards | TriggerEvent::Draws => "that card",
-            TriggerEvent::Casts => "that spell",
+            TriggerEvent::Casts | TriggerEvent::BecomesTargetOfSpell => "that spell",
             TriggerEvent::CreatesTokens => "those tokens",
             TriggerEvent::Leaves | TriggerEvent::BecomesTarget | TriggerEvent::Chapter { .. } => {
                 "that permanent"

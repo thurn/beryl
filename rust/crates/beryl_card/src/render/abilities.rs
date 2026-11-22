@@ -147,6 +147,7 @@ impl Ctx {
             | TriggerEvent::Leaves
             | TriggerEvent::Attacks
             | TriggerEvent::BecomesTarget
+            | TriggerEvent::BecomesTargetOfSpell
             | TriggerEvent::Mutates
             | TriggerEvent::DealsDamage
             | TriggerEvent::TurnedFaceUp
@@ -158,6 +159,7 @@ impl Ctx {
                             TriggerEvent::Attacks
                                 | TriggerEvent::DealsCombatDamageToPlayer
                                 | TriggerEvent::DealsDamage
+                                | TriggerEvent::BecomesTargetOfSpell
                                 | TriggerEvent::Mutates
                         ) {
                             "whenever"
@@ -234,6 +236,7 @@ impl Ctx {
             TriggerEvent::Leaves => "leaves the battlefield".to_owned(),
             TriggerEvent::Attacks => "attacks".to_owned(),
             TriggerEvent::BecomesTarget => "becomes the target of a spell or ability".to_owned(),
+            TriggerEvent::BecomesTargetOfSpell => "becomes the target of a spell".to_owned(),
             TriggerEvent::Mutates => "mutates".to_owned(),
             TriggerEvent::DealsDamage => "deals damage".to_owned(),
             TriggerEvent::TurnedFaceUp => "is turned face up".to_owned(),

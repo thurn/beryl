@@ -6,6 +6,12 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A spell copy could target a creature without triggering its ability.**
+  Copying a spell put its targets on the stack without announcing them to
+  trigger listeners. Copies now use the same target announcement as spells that
+  are cast. A scenario where Fork copies a spell targeting Bonecrusher Giant
+  checks that the copy triggers the Giant again.
+
 - **A subgame could offer the suspended game's sideboard.** Both games use the
   same card table. Sideboard choices now require the main game, while cards
   already in its library can enter a subgame from their pool slots.

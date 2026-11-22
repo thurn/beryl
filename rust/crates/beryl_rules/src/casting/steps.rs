@@ -39,7 +39,10 @@ use super::timing::{activated, entry_ability};
 ///
 /// See [CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b): "A player casting a modal
 /// double-faced card ... chooses which face they are casting before putting it onto the
-/// stack."
+/// stack." See [CR 716.3b]: "While on the stack as an Adventure, the spell has only its
+/// alternative characteristics."
+///
+/// [CR 716.3b]: https://yawgatog.com/resources/magic-rules/#R7163b
 pub(crate) fn begin_cast<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -55,7 +58,7 @@ pub(crate) fn begin_cast<L: Layout>(
     // A cast for escape uses its own alternative cost (see CR 118.9a), so a flashback
     // permission the card also has does nothing to it.
     let permission = if resolving.is_none() && !costs.escapes() {
-        start::permission(s, player, slot)
+        start::permission(s, player, slot, face)
     } else {
         None
     };
@@ -395,9 +398,10 @@ pub(super) fn finish<L: Layout>(
 /// [CR 603.2e]: https://yawgatog.com/resources/magic-rules/#R6032e
 #[cold]
 #[inline(never)]
-fn targeted<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
+pub(crate) fn targeted<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
     let entry = top(s);
     let controller = entry.controller();
+    let spell = entry.spell();
     let objects: Bitboard<L::Slot> = (entry.targets.iter())
         .filter_map(|target| target.as_object())
         .filter(|&object| s.is_current(object))
@@ -405,9 +409,29 @@ fn targeted<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
         .collect();
     for &slot in s.in_game_order(t, objects)?.iter() {
         let object = s.object_ref(slot);
-        trigger::match_event(s, t, &Event::Targeted { object, controller })?;
+        trigger::match_event(
+            s,
+            t,
+            &Event::Targeted {
+                object,
+                controller,
+                spell,
+            },
+        )?;
     }
     Ok(())
+}
+
+/// The number of other spells cast before the spell just cast this turn, by every player, which
+/// a "when you cast" ability keeps as it triggers, for storm (see [CR 702.40a]): "copy it for each
+/// other spell that was cast before it this turn." The spell itself was counted as it became
+/// cast, before its Cast event. Zero in a game that keeps no count of spells cast.
+///
+/// [CR 702.40a]: https://yawgatog.com/resources/magic-rules/#R70240a
+pub(crate) fn cast_before<L: Layout>(s: &State<L>) -> u8 {
+    let players = s.players().in_seat_order();
+    let counted = players.map(|p| s.counted(Count::SpellsCast, p));
+    counted.fold(0u8, u8::saturating_add).saturating_sub(1)
 }
 
 /// The [`Event::Ability`] that says `entry`, an ability on the stack. It goes straight to the

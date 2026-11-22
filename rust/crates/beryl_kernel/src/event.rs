@@ -329,6 +329,7 @@ pub enum Event<L: Layout = Small> {
     Targeted {
         object: ObjectRef<L>,
         controller: Seat,
+        spell: Option<ObjectRef<L>>,
     },
     Win {
         player: Seat,

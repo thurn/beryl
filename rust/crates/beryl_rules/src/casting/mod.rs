@@ -12,6 +12,7 @@
 //! Spells that cannot be paid for or targeted are never offered, and every step offers only
 //! answers that leave the rest completable, so the machine never has to rewind.
 
+mod adventure;
 mod announced;
 mod costs;
 mod delve;
@@ -25,11 +26,12 @@ mod steps;
 mod targets;
 mod timing;
 
+pub(crate) use adventure::finish_adventure;
 pub use announced::target_takes;
 pub use costs::cost_being_cast;
 pub use legal::{payable_responses, pointless};
 pub(crate) use legal::{priority_options, refusal};
 pub(crate) use stack::{leave_stack, unstack};
-pub(crate) use steps::{begin_activate, begin_cast, decision, perform};
+pub(crate) use steps::{begin_activate, begin_cast, cast_before, decision, perform, targeted};
 pub(crate) use targets::{TargetSet, new_targets, spells, still_legal, target_trigger};
 pub(crate) use timing::{entry_ability, sorcery_timing};

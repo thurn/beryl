@@ -30,6 +30,7 @@ pub fn grant<L: Layout>(
     let terms = Permission {
         player,
         increase: 0,
+        on_adventure: false,
         replacement: Some(MoveReplacement::Flashback),
     };
     start::permit(game, resolution, object, terms, Duration::EndOfTurn)

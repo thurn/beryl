@@ -12,6 +12,8 @@ use beryl_card::{Amount, CastTerms, Filter, Objects, Players, Types, Words};
 
 use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose, Stop};
+use beryl_card::FaceIx;
+
 use crate::decision::{Decision, DecisionKind, Opt};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
@@ -175,6 +177,7 @@ pub fn allow<L: Layout>(
     let terms = Permission {
         player,
         increase: extra,
+        on_adventure: false,
         replacement: exile.then_some(MoveReplacement::ExileInsteadOfGraveyard),
     };
     // It lasts while the card stays where it is, which is no duration: the entry ends
@@ -208,9 +211,10 @@ pub(crate) fn permission<L: Layout>(
     s: &State<L>,
     player: Seat,
     slot: L::Slot,
+    face: FaceIx,
 ) -> Option<Permitted<L>> {
     s.cast_permissions()
-        .find(|p| p.card.slot == slot && p.terms.player == player)
+        .find(|p| p.card.slot == slot && p.terms.player == player && p.terms.allows_face(face))
 }
 
 /// Starts, on the spell now in `slot`, the terms of the permission it was cast under: its

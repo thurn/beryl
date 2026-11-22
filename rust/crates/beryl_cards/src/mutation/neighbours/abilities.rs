@@ -211,7 +211,8 @@ fn triggers(trigger: &Trigger) -> Vec<(&'static str, Kind, String, Trigger)> {
         Event::PlayerAttacks | Event::CreatesTokens | Event::Discards => Event::Casts,
         Event::Casts if matches!(trigger.subject, Subject::This) => Event::BecomesTarget,
         Event::Casts => Event::Discards,
-        Event::DealsCombatDamageToPlayer
+        Event::BecomesTargetOfSpell
+        | Event::DealsCombatDamageToPlayer
         | Event::DealsDamage
         | Event::Mutates
         | Event::TurnedFaceUp => Event::BecomesTarget,

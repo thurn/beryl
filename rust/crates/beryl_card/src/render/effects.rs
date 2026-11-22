@@ -423,6 +423,11 @@ impl Ctx {
                 duration_suffix(duration)
             )],
             Effect::ChangeRule { rule, duration } => {
+                if matches!(rule.what, crate::Governed::PreventDamage)
+                    && duration == Duration::EndOfTurn
+                {
+                    return vec![format!("{} this turn", self.rule_change(rule))];
+                }
                 let prefix = match duration {
                     Duration::EndOfTurn => "until end of turn, ",
                     Duration::UntilYourNextTurn => "until your next turn, ",

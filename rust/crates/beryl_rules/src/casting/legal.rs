@@ -26,9 +26,12 @@ use crate::table::{Capability, GameTable};
 use super::costs::{From, option_sets, spell_cost, x_range_start};
 use super::delve;
 use super::parts;
-use super::start;
 use super::targets::{Itself, targetable};
 use super::timing::{activated, instant_speed, sorcery_timing};
+
+mod ways;
+
+use ways::Ways;
 
 /// What every check of one player's options reads, found once for all of them: the mana they
 /// could pay with and whether an opponent limits them to sorcery speed, each found at the first
@@ -165,12 +168,17 @@ fn pays_otherwise<L: Layout>(
 /// [CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013): "A player can begin to cast
 /// a spell only if a rule or effect allows that player to cast it and no rule or effect
 /// prohibits that player from casting it."
+/// See [CR 716.3a]: "When casting an adventurer card as an Adventure, only the alternative
+/// characteristics are evaluated to see if it can be cast."
+///
+/// [CR 716.3a]: https://yawgatog.com/resources/magic-rules/#R7163a
 #[expect(
     clippy::inline_always,
     reason = "with the escape casts a second caller, the compiler called it out of line from \
               the priority decision's casts, which cost the rollout benchmark 0.25%"
 )]
 #[inline(always)]
+#[allow(clippy::too_many_arguments)]
 fn refused<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
@@ -179,21 +187,14 @@ fn refused<L: Layout, const TARGETS: bool>(
     face_index: FaceIx,
     costs: Castings,
     from: From,
+    increase: u8,
 ) -> Option<Refusal<L>> {
     let player = now.player;
     let face = s.copiable(slot).turned(t, face_index).face(t);
     if !in_time(s, t, now, face, from) {
         return Some(Refusal::Timing { by: None });
     }
-    let (increase, free) = match from {
-        // A cast for escape is under no permission's terms.
-        From::Priority if !costs.escapes() => (
-            start::permission(s, player, slot).map_or(0, |p| p.terms.increase),
-            false,
-        ),
-        From::Priority => (0, false),
-        From::Resolution { free } => (0, free),
-    };
+    let free = matches!(from, From::Resolution { free: true });
     // The checks are pure, so their order changes nothing but their cost: the mana, found
     // once for the decision, first, and the targets, which read the battlefield, last.
     // [CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183): "A player can't pay a
@@ -265,8 +266,15 @@ pub(crate) fn refusal<L: Layout>(
         if !face.playable() || face.types.intersects(Types::LAND) {
             continue;
         }
+        let ways = if ways.on_adventure && f == FaceIx::BACK {
+            ways.back(s, player, slot)
+        } else {
+            ways
+        };
         for costs in ways.option_sets(face) {
-            let Some(r) = refused(s, t, &now, slot, f, costs, From::Priority) else {
+            // A cast for escape is under no permission's terms.
+            let increase = if costs.escapes() { 0 } else { ways.increase };
+            let Some(r) = refused(s, t, &now, slot, f, costs, From::Priority, increase) else {
                 return Ok(None);
             };
             if most.is_none_or(|m| progress(r) > progress(m)) {
@@ -283,6 +291,7 @@ pub(crate) fn refusal<L: Layout>(
             FaceIx::DOWN,
             Castings::NONE,
             From::Priority,
+            ways.increase,
         ) else {
             return Ok(None);
         };
@@ -333,63 +342,6 @@ fn escaping<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L:
     })
 }
 
-/// How `player` may cast one card now, apart from its face's own options: for free during a
-/// resolution, under a flashback permission, under another permission or from their hand,
-/// and with escape.
-#[derive(Clone, Copy)]
-struct Ways {
-    /// Without escape, and so with or without the face's own alternative cost: from a hand or
-    /// under a permission, or during a resolution.
-    plain: bool,
-    /// With an alternative cost no face lists: free, or flashback's. Then the face's own
-    /// alternative costs can't be paid (see CR 118.9a).
-    alternative: bool,
-    /// With the escape an effect grants a card in a graveyard ([`Castings::ESCAPE`]).
-    escape: bool,
-}
-
-impl Ways {
-    fn of<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, slot: L::Slot, from: From) -> Ways {
-        match from {
-            From::Resolution { free } => Ways {
-                plain: true,
-                alternative: free,
-                escape: false,
-            },
-            From::Priority => {
-                let permission = start::permission(s, player, slot);
-                // See CR 702.138a: escape "functions while the card with escape is in a player's
-                // graveyard", and lets its owner cast it from there.
-                let escape = s.reaches_elsewhere() && {
-                    let o = s.object(slot);
-                    o.owner() == player
-                        && s.card_in(s.object_ref(slot), Graveyard)
-                            .is_some_and(|card| s.escape_from(t, card).is_some())
-                };
-                Ways {
-                    plain: !escape || permission.is_some() || s.object(slot).zone() == Zone::Hand,
-                    alternative: permission.is_some_and(|p| p.terms.is_flashback()),
-                    escape,
-                }
-            }
-        }
-    }
-
-    /// The sets of casting options of `face` these ways allow: each set the face's own
-    /// options allow, and with escape, each of those that pays none of the face's own
-    /// alternative costs, with [`Castings::ESCAPE`].
-    fn option_sets(self, face: &Face) -> impl Iterator<Item = Castings> + '_ {
-        let plain = self.plain.then(|| option_sets(face, self.alternative));
-        let escape = self
-            .escape
-            .then(|| option_sets(face, true).map(Castings::with_escape));
-        plain
-            .into_iter()
-            .flatten()
-            .chain(escape.into_iter().flatten())
-    }
-}
-
 /// Appends the spells `player` can cast now, by card, face and casting options.
 pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
     s: &State<L>,
@@ -422,9 +374,14 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
             if !face.playable() {
                 continue;
             }
+            let ways = if ways.on_adventure && f == FaceIx::BACK {
+                ways.back(s, player, slot)
+            } else {
+                ways
+            };
             if ways.plain {
                 for costs in option_sets(face, ways.alternative) {
-                    if refused(s, t, now, slot, f, costs, from).is_none() {
+                    if refused(s, t, now, slot, f, costs, from, ways.increase).is_none() {
                         out.push(Opt::Cast {
                             slot,
                             face: f,
@@ -440,7 +397,7 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
         if morph && ways.plain && !ways.alternative && has_morph(def.front()) {
             let face = FaceIx::DOWN;
             let costs = Castings::NONE;
-            if refused(s, t, now, slot, face, costs, from).is_none() {
+            if refused(s, t, now, slot, face, costs, from, ways.increase).is_none() {
                 out.push(Opt::Cast { slot, face, costs })?;
             }
         }
@@ -474,7 +431,7 @@ fn escape_options<L: Layout, const TARGETS: bool>(
 ) -> Result<(), Full> {
     let def_face = s.copiable(slot).turned(t, face).face(t);
     for costs in option_sets(def_face, true).map(Castings::with_escape) {
-        if refused(s, t, now, slot, face, costs, from).is_none() {
+        if refused(s, t, now, slot, face, costs, from, 0).is_none() {
             out.push(Opt::Cast { slot, face, costs })?;
         }
     }

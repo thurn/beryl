@@ -379,6 +379,24 @@ impl<L: Layout> Scene<'_, L> {
                         });
                         who
                     });
+                // CR 608.2h: "if it’s no longer in that zone ... the effect uses the
+                // object’s last known information." A becomes-target-of-a-spell trigger
+                // remembers that spell's controller even if the spell has been countered.
+                if who == PlayerSet::NOBODY
+                    && objects == Objects::TriggeredOn
+                    && self.subject.info.object.is_some()
+                {
+                    let of = self.subject.of;
+                    let ability = of.ability.of_face(self.t.def(of.card).face(of.face));
+                    if ability.trigger().is_some_and(|trigger| {
+                        matches!(
+                            trigger.event,
+                            beryl_card::TriggerEvent::BecomesTargetOfSpell
+                        )
+                    }) {
+                        who.insert(self.subject.info.player);
+                    }
+                }
                 for known in self.moved(objects) {
                     who.insert(known.controller);
                 }

@@ -139,6 +139,7 @@ fn spells_of(rule: &RuleChange) -> Filter {
         | Governed::ActivateAbilities { .. }
         | Governed::Counter(_)
         | Governed::SpellCosts { .. }
+        | Governed::PreventDamage
         | Governed::Player(_) => unreachable!("a rule change about casting"),
     }
 }

@@ -668,7 +668,17 @@ def oracle(args: argparse.Namespace) -> int:
             entries = dump_scenarios(
                 Path(dump) / "scenarios.json", log_dir() / "dump.log", args.cards
             )
-        entries = [e for e in entries if not args.cards or e["card"] in args.cards]
+        if args.cards:
+            # The dump uses the normal face's name for an adventurer card or a
+            # double-faced card. The card tools also accept the card store's full name.
+            names = {
+                name
+                for card in args.cards
+                for name in (card, card.partition(" // ")[0])
+            }
+            entries = [entry for entry in entries if entry["card"] in names]
+            if not entries:
+                raise RuntimeError(f"no scenarios found for {', '.join(args.cards)}")
         exports = oracle_exports.Exports.prepare(entries, checkout(XMAGE))
         try:
             with locked(args.lock_wait):

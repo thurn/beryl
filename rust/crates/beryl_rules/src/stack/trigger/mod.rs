@@ -18,8 +18,8 @@ use crate::query::Copiable;
 use crate::replacement::event::{Event, EventKind, Listens, Recipient, Sink};
 use crate::state::TriggeredAbility;
 use crate::state::{
-    AbilityRef, Count, ObjectRef, PendingTrigger, StackEntry, StackItem, State, TriggerInfo,
-    TurnStep, Zone, ZoneKey,
+    AbilityRef, ObjectRef, PendingTrigger, StackEntry, StackItem, State, TriggerInfo, TurnStep,
+    Zone, ZoneKey,
 };
 use crate::table::{Capability, GameTable};
 
@@ -232,6 +232,7 @@ pub(super) fn begins(event: TriggerEvent, step: TurnStep) -> bool {
         | TriggerEvent::Discards
         | TriggerEvent::Draws
         | TriggerEvent::BecomesTarget
+        | TriggerEvent::BecomesTargetOfSpell
         | TriggerEvent::Mutates
         | TriggerEvent::DealsDamage
         | TriggerEvent::TurnedFaceUp
@@ -312,9 +313,11 @@ fn fires<L: Layout>(
             &Event::Cast {
                 spell, controller, ..
             },
-        ) if whose(controller) && about(spell) => {
-            Some(info(Some(spell), controller, cast_before(s)))
-        }
+        ) if whose(controller) && about(spell) => Some(info(
+            Some(spell),
+            controller,
+            crate::casting::cast_before(s),
+        )),
         (TriggerEvent::Discards, &Event::ZoneChange { object, .. }) => {
             let discarder = s.object(object.slot).owner();
             (whose(discarder) && about(object)).then(|| info(Some(object), discarder, 0))
@@ -322,26 +325,28 @@ fn fires<L: Layout>(
         (TriggerEvent::Draws, &Event::Draw { player, .. }) if whose(player) => {
             Some(info(None, player, 0))
         }
-        (TriggerEvent::BecomesTarget, &Event::Targeted { object, controller })
-        | (TriggerEvent::Mutates, &Event::Mutated { object, controller })
+        (
+            event @ (TriggerEvent::BecomesTarget | TriggerEvent::BecomesTargetOfSpell),
+            &Event::Targeted {
+                object,
+                controller,
+                spell,
+            },
+        ) if whose(controller) && about(object) => {
+            let subject = if matches!(event, TriggerEvent::BecomesTargetOfSpell) {
+                spell?
+            } else {
+                object
+            };
+            Some(info(Some(subject), controller, 0))
+        }
+        (TriggerEvent::Mutates, &Event::Mutated { object, controller })
             if whose(controller) && about(object) =>
         {
             Some(info(Some(object), controller, 0))
         }
         _ => None,
     }
-}
-
-/// The number of other spells cast before the spell just cast this turn, by every player, which
-/// a "when you cast" ability keeps as it triggers, for storm (see [CR 702.40a]): "copy it for each
-/// other spell that was cast before it this turn." The spell itself was counted as it became
-/// cast, before its Cast event. Zero in a game that keeps no count of spells cast.
-///
-/// [CR 702.40a]: https://yawgatog.com/resources/magic-rules/#R70240a
-fn cast_before<L: Layout>(s: &State<L>) -> u8 {
-    let players = s.players().in_seat_order();
-    let counted = players.map(|p| s.counted(Count::SpellsCast, p));
-    counted.fold(0u8, u8::saturating_add).saturating_sub(1)
 }
 
 /// Whether `object`, which an event is about, is a trigger's subject: the object its

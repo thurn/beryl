@@ -16,7 +16,7 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::replacement::event::{Recipient, ReplacementKind};
 use crate::replacement::protection;
-use crate::state::{ChosenSource, ObjectRef, ShieldAt, State, Subject, Zone, ZoneKey};
+use crate::state::{ChosenSource, ObjectRef, RuleKind, ShieldAt, State, Subject, Zone, ZoneKey};
 use crate::table::GameTable;
 
 use beryl_card::prompt::Purpose;
@@ -185,7 +185,10 @@ fn candidates<L: Layout>(
             found.push(Some(c))
         }
     };
-    if p.preventable {
+    // CR 615.12: "Existing damage prevention shields won’t be reduced by damage that
+    // can’t be prevented." Protection and shields here have no additional effects.
+    // Damage replacements that aren't prevention still apply.
+    if p.preventable && !unpreventable(s, t) {
         let permanent_protected = |r: ObjectRef<L>| {
             protection::live(s) && protection::protected_from_cold(s, t, r.slot, p.source.slot)
         };
@@ -243,6 +246,13 @@ fn candidates<L: Layout>(
         }
     }
     Ok(found)
+}
+
+/// Whether a rule change makes damage unpreventable for everyone. It is in force for the
+/// active player whenever it is in force for any player.
+fn unpreventable<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
+    let of_kind = t.rules_of(RuleKind::CantPreventDamage);
+    !of_kind.is_empty() && !s.rules_for(s.turn().active()).common(of_kind).is_empty()
 }
 
 /// The effect of `found` to apply next, or none when none applies.

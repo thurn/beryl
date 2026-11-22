@@ -123,6 +123,111 @@
       ]
     }
   ],
+  "Bonecrusher Giant // Stomp": [
+    {
+      "published_at": "2019-10-04",
+      "hash": "0676637efaf5",
+      "scenario": [
+        "Stomp resolves and Bonecrusher Giant can be cast from exile",
+        "Bonecrusher Giant can be cast directly as a creature"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "7009dc358bab",
+      "scenario": [
+        "Stomp with an illegal target leaves damage preventable"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "5027ce28fff6",
+      "scenario": [
+        "Bonecrusher Giant damages the controller of the spell targeting it",
+        "Bonecrusher Giant damages a countered spell's controller"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "bf7e8773497e",
+      "covered": "Shape::Adventure"
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "20a2b6a60db2",
+      "scenario": [
+        "Stomp resolves and Bonecrusher Giant can be cast from exile",
+        "Bonecrusher Giant can be cast directly as a creature"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "06c075b85131",
+      "scenario": [
+        "Stomp deals damage through Circle of Protection Red",
+        "Damage can be prevented again after Stomp's turn"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "b484b72ba606",
+      "scenario": [
+        "A countered Stomp exiled by Rest in Peace grants no casting permission"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "1c08fbf7eb41",
+      "scenario": [
+        "Stomp resolves and Bonecrusher Giant can be cast from exile",
+        "A countered Stomp goes to the graveyard",
+        "Stomp with an illegal target leaves damage preventable"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "a88c9ca3992c",
+      "scenario": [
+        "A permission to cast a card for free can cast Stomp"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "f4c8e10b44dc",
+      "covered": "Governed::PreventDamage"
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "c45771fadadd",
+      "covered": "Effect::BecomeCopy"
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "1160d75863c6",
+      "untestable": "Pithing Needle is the available card-name interaction. Its choice of another card already covers Stomp because Stomp has no activated ability. No implemented effect distinguishes the Adventure name."
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "e92e4259f3b6",
+      "scenario": [
+        "A copy of Stomp resolves but leaves no card to cast"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "fe0c8e4ed229",
+      "covered": "TriggerEvent::BecomesTargetOfSpell"
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "0ad635e5716a",
+      "scenario": [
+        "Stomp resolves and Bonecrusher Giant can be cast from exile",
+        "Bonecrusher Giant can be cast directly as a creature",
+        "A countered Stomp goes to the graveyard"
+      ]
+    }
+  ],
   "Brain Freeze": [
     {
       "published_at": "2022-12-08",

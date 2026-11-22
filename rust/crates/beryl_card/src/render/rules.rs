@@ -77,6 +77,7 @@ impl Ctx {
                     }
                 };
             }
+            Governed::PreventDamage => return "damage can't be prevented".to_owned(),
             Governed::Player(changes) => return self.player_rules(rule.players, changes),
             Governed::SpellCosts { spells, change } => {
                 return self.spell_cost_change(spells, change, rule.players, &who);

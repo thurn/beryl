@@ -127,6 +127,9 @@ pub enum TriggerEvent {
     /// A single chapter threshold or a consecutive range of thresholds for the same effect.
     /// Each threshold crossed upward by putting lore counters on the source triggers separately.
     Chapter { first: u8, last: u8 },
+    /// "Whenever [subject] becomes the target of a spell." Like `BecomesTarget`, but the
+    /// object the trigger records is the targeting spell and the player is its controller.
+    BecomesTargetOfSpell,
 }
 
 impl PartialEq for TriggerEvent {
@@ -151,6 +154,7 @@ impl PartialEq for TriggerEvent {
             | TriggerEvent::Discards
             | TriggerEvent::Draws
             | TriggerEvent::BecomesTarget
+            | TriggerEvent::BecomesTargetOfSpell
             | TriggerEvent::Mutates
             | TriggerEvent::DealsDamage
             | TriggerEvent::TurnedFaceUp => {
@@ -182,6 +186,7 @@ impl std::hash::Hash for TriggerEvent {
             | TriggerEvent::Discards
             | TriggerEvent::Draws
             | TriggerEvent::BecomesTarget
+            | TriggerEvent::BecomesTargetOfSpell
             | TriggerEvent::Mutates
             | TriggerEvent::DealsDamage
             | TriggerEvent::TurnedFaceUp
@@ -216,6 +221,9 @@ impl Trigger {
     pub const ATTACKS: Trigger = Trigger::of(TriggerEvent::Attacks, Subject::This);
     /// "When this becomes the target of a spell or ability."
     pub const BECOMES_TARGET: Trigger = Trigger::of(TriggerEvent::BecomesTarget, Subject::This);
+    /// "Whenever this becomes the target of a spell."
+    pub const BECOMES_TARGET_OF_SPELL: Trigger =
+        Trigger::of(TriggerEvent::BecomesTargetOfSpell, Subject::This);
     /// "Whenever this creature mutates."
     pub const MUTATES: Trigger = Trigger::of(TriggerEvent::Mutates, Subject::This);
     /// "Whenever this deals combat damage to a player."

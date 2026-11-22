@@ -21,7 +21,7 @@
 //!
 //! Implements: none. Stores resolved effects and indexes them by what they do.
 
-use beryl_card::TextChange;
+use beryl_card::{FaceIx, TextChange};
 
 use crate::fixed::Full;
 use crate::ids::{CardId, Seat, SlotId};
@@ -258,12 +258,23 @@ pub struct Permission {
     /// Generic mana the spell costs more, as in "A spell cast this way costs {2} more to
     /// cast."
     pub increase: u8,
+    /// The permission from resolving an Adventure only allows the card's normal face
+    /// (see [CR 716.3d]): "It can’t be cast as an Adventure this way".
+    ///
+    /// [CR 716.3d]: https://yawgatog.com/resources/magic-rules/#R7163d
+    pub on_adventure: bool,
     /// Where the spell goes instead as it leaves the stack: "If that spell would be put
     /// into your graveyard, exile it instead.", or flashback's own.
     pub replacement: Option<MoveReplacement>,
 }
 
 impl Permission {
+    /// Whether this permission authorizes casting `face`.
+    #[inline]
+    pub fn allows_face(self, face: FaceIx) -> bool {
+        !self.on_adventure || face != FaceIx::BACK
+    }
+
     /// Whether the card has flashback by it, its flashback cost the card's mana cost
     /// (see [CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "'Flashback
     /// [cost]' means 'You may cast this card from your graveyard if the resulting spell is an

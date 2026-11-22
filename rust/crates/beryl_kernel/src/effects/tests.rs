@@ -266,6 +266,7 @@ fn permission(replacement: Option<MoveReplacement>) -> Permission {
     Permission {
         player: Seat::P1,
         increase: 2,
+        on_adventure: false,
         replacement,
     }
 }

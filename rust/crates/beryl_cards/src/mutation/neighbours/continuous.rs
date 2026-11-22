@@ -396,6 +396,7 @@ fn governed(what: Governed) -> Neighbours<Governed> {
             );
             out
         }
+        G::PreventDamage => Vec::new(),
         G::Player(changes) => {
             let bits = [
                 PlayerRules::LIFE_CANT_CHANGE,

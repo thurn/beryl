@@ -109,6 +109,7 @@ pub mod decks {
             "casting",
             &[
                 names::BLOODBRAID_ELF,
+                names::BONECRUSHER_GIANT,
                 names::LIGHTNING_BOLT,
                 names::COUNTERSPELL,
             ],

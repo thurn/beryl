@@ -257,9 +257,12 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     }
     for p in s.cast_permissions().filter(|p| p.terms.player == player) {
         // Only a card is cast (see CR 601.2a).
-        let faces = s.card_def(t, p.card.slot).map_or_default(|def| def.faces);
-        for face in faces {
-            if castable(face) {
+        let Some(def) = s.card_def(t, p.card.slot) else {
+            continue;
+        };
+        for face_index in def.face_ixs() {
+            let face = def.face(face_index);
+            if p.terms.allows_face(face_index) && castable(face) {
                 let cost = face.cost;
                 ahead.add(
                     ManaCost {

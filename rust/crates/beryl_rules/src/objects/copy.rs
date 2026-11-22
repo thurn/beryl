@@ -33,7 +33,7 @@ use crate::interpret::choices;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::query::Copiable;
-use crate::replacement::event::{self, Reason};
+use crate::replacement::event::{self, EventKind, Reason};
 use crate::resolution::Resolution;
 use crate::state::{AbilityTarget, ObjectRef, StackEntry, StackItem, Target, TargetPlace, Zone};
 
@@ -257,5 +257,9 @@ fn put_copy<L: Layout>(
         costs: copy.costs(),
     };
     s.put_on_stack(game.sink, copy)?;
+    // See CR 707.10c: "the copy is put onto the stack with those targets."
+    if t.listens_anywhere().hears(EventKind::Targeted) {
+        casting::targeted(s, t)?;
+    }
     Ok(slot)
 }

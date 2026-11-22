@@ -164,6 +164,89 @@ fn counter_unless_pays_asks_the_spells_controller_only_when_they_can_pay() {
 }
 
 #[test]
+fn an_adventure_permission_ends_when_the_card_is_exiled_again() {
+    use beryl_card::definition::{Shape, card_with_shape};
+
+    use crate::card::{Face, ManaCost, Types};
+
+    const TRAVELER: &str = "Test Traveler";
+    static ADVENTURER: crate::card::CardDef = card_with_shape(
+        TRAVELER,
+        Shape::Adventure,
+        &[
+            Face {
+                cost: ManaCost::generic(1),
+                types: Types::CREATURE,
+                power: Some(2),
+                toughness: Some(2),
+                ..Face::EMPTY
+            },
+            Face {
+                cost: ManaCost::generic(1),
+                types: Types::INSTANT,
+                ..Face::EMPTY.named("Test Errand")
+            },
+        ],
+    );
+    static CARDS: crate::CardTable = crate::CardTable::new(&[&super::LAND, &ADVENTURER]);
+    let mut game = Game::with(&CARDS, &[(12, "Test Land"), (1, TRAVELER)], Profile::EXACT);
+    let card = game.give(game.me, TRAVELER, Zone::Hand);
+    for _ in 0..3 {
+        game.give(game.me, "Test Land", Zone::Battlefield);
+    }
+    let adventure = Opt::Cast {
+        slot: card,
+        face: FaceIx::BACK,
+        costs: Castings::NONE,
+    };
+    game.pick(adventure);
+    game.pass_both();
+    let exiled = game.s.object_ref(card);
+    assert_eq!(game.s.object(card).zone(), Zone::Exile);
+    let priority = game.current();
+    assert!(index_of(&priority, cast(card)).is_some());
+    assert!(index_of(&priority, adventure).is_none());
+
+    // A separate permission still permits the Adventure face (see CR 716.3d).
+    let source = game.s.definition(card).record(&game.t).0;
+    game.s
+        .start_effect(
+            source,
+            crate::state::Continuous::Cast(
+                exiled,
+                crate::state::Permission {
+                    player: game.me,
+                    increase: 0,
+                    on_adventure: false,
+                    replacement: None,
+                },
+            ),
+            Duration::EndOfTurn,
+        )
+        .unwrap();
+    assert!(index_of(&game.current(), adventure).is_some());
+    game.s.expire(Duration::EndOfTurn);
+
+    game.at(game.me, TurnStep::BeginningOfCombat);
+    assert!(index_of(&game.current(), cast(card)).is_none());
+    game.main(game.me);
+
+    // See CR 406.7: re-exiling a card makes it a new object even while it stays in exile.
+    event::move_one(
+        &mut game.s,
+        &game.t,
+        &mut game.x.events,
+        card,
+        Zone::Exile,
+        Reason::Exile,
+    )
+    .unwrap();
+    assert_eq!(game.s.object(card).zone(), Zone::Exile);
+    assert!(!game.s.is_current(exiled));
+    assert!(index_of(&game.current(), cast(card)).is_none());
+}
+
+#[test]
 fn a_modal_double_faced_card_is_cast_by_its_spell_face_or_played_by_its_land_face() {
     let mut g = Game::new(Profile::EXACT);
     let stupor = g.give(g.me, "Test Stupor", Zone::Hand);

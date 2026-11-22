@@ -108,6 +108,8 @@ impl<L: Layout> State<L> {
         // the table's kinds ended with what the stores hold.
         o.counters = Counters::default();
         o.attached_to = None;
+        // See CR 716.4: "In every zone except the stack, and while on the stack not as an
+        // Adventure, an adventurer card has only its normal characteristics."
         o.face = FaceIx::FRONT;
         o.combat = CombatRole::None;
         let owner = o.owner.index();

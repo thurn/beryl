@@ -177,6 +177,8 @@ pub enum RuleKind {
     Player,
     /// The creature with this ability can block any number of attackers (see CR 509.1a).
     BlockAnyNumber,
+    /// Damage can't be prevented (see CR 615.12).
+    CantPreventDamage,
 }
 
 impl RuleKind {
@@ -184,7 +186,7 @@ impl RuleKind {
         self as usize
     }
 
-    const COUNT: usize = 10;
+    const COUNT: usize = 11;
 
     /// The kind of change `rule` is, or the part of it no code reads.
     pub fn of(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
@@ -195,15 +197,16 @@ impl RuleKind {
                 Err(Unchecked::Players)
             }
         };
+        let supported_players = matches!(
+            rule.players,
+            Players::You | Players::EachOpponent | Players::EachPlayer
+        );
         match (rule.what, rule.when) {
             (Governed::CastSpells(filter), when) => {
                 if !of_a_spells_characteristics(filter) {
                     return Err(Unchecked::Filter);
                 }
-                if !matches!(
-                    rule.players,
-                    Players::You | Players::EachOpponent | Players::EachPlayer
-                ) {
+                if !supported_players {
                     return Err(Unchecked::Players);
                 }
                 Ok(match when {
@@ -216,10 +219,7 @@ impl RuleKind {
                 if !of_a_spells_characteristics(spells) {
                     return Err(Unchecked::Filter);
                 }
-                if !matches!(
-                    rule.players,
-                    Players::You | Players::EachOpponent | Players::EachPlayer
-                ) {
+                if !supported_players {
                     return Err(Unchecked::Players);
                 }
                 Ok(RuleKind::SpellCost)
@@ -252,10 +252,7 @@ impl RuleKind {
                 },
                 When::Never,
             ) => {
-                if matches!(
-                    rule.players,
-                    Players::You | Players::EachOpponent | Players::EachPlayer
-                ) {
+                if supported_players {
                     Ok(RuleKind::CantActivateNamed)
                 } else {
                     Err(Unchecked::Players)
@@ -270,11 +267,13 @@ impl RuleKind {
                     Err(Unchecked::Players)
                 }
             }
+            (Governed::PreventDamage, When::Never)
+                if matches!(rule.players, Players::EachPlayer) =>
+            {
+                Ok(RuleKind::CantPreventDamage)
+            }
             (Governed::Player(_), When::AsUsual) => {
-                if matches!(
-                    rule.players,
-                    Players::You | Players::EachOpponent | Players::EachPlayer
-                ) {
+                if supported_players {
                     Ok(RuleKind::Player)
                 } else {
                     Err(Unchecked::Players)
@@ -294,7 +293,8 @@ impl RuleKind {
                 | Governed::ActivateAbilities { .. }
                 | Governed::Counter(_)
                 | Governed::SpellCosts { .. }
-                | Governed::Player(_),
+                | Governed::Player(_)
+                | Governed::PreventDamage,
                 _,
             ) => Err(Unchecked::Rule),
         }
@@ -310,6 +310,7 @@ impl RuleKind {
                 | RuleKind::CastAsInstant
                 | RuleKind::CantActivateNamed
                 | RuleKind::Player
+                | RuleKind::CantPreventDamage
         )
     }
 

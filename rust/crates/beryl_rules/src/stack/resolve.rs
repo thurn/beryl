@@ -14,7 +14,9 @@
 //! Implements: CR 608.2b, CR 608.2m, CR 608.2n, CR 608.3
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityKind, CastingOption, Face, Stop};
+use beryl_card::definition::Shape;
+
+use crate::card::{Ability, AbilityKind, CastingOption, Face, FaceIx, Stop};
 use crate::casting::{self, entry_ability};
 use crate::chance;
 use crate::decision::{Answers, Choice, Decision, Outcome, StallReason};
@@ -430,7 +432,8 @@ fn body<L: Layout>(
     entry: &StackEntry<L>,
     ability: Option<&'static Ability>,
 ) -> Result<Option<Decision<L>>, Full> {
-    let face = t.def(entry.card()).face(entry.face());
+    let def = t.def(entry.card());
+    let face = def.face(entry.face());
     // CR 608.2b: "If all its targets, for every instance of the word "target," are now
     // illegal, the spell or ability doesn't resolve." One that chose no targets is not
     // targeted (see CR 115.6) and resolves.
@@ -481,8 +484,12 @@ fn body<L: Layout>(
         // is put into its owner's graveyard. As the final part of an ability's resolution, the
         // ability is removed from the stack and ceases to exist." Unless its own effect moved
         // it already, as Time Spiral exiles itself.
-        if spell.is_some_and(|r| s.is_current(r)) {
-            casting::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
+        if let Some(spell) = spell.filter(|&spell| s.is_current(spell)) {
+            if entry.face() == FaceIx::BACK && def.shape == Shape::Adventure {
+                casting::finish_adventure(s, t, sink, entry, spell.slot)?;
+            } else {
+                casting::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
+            }
         }
     }
     if spell.is_none() {

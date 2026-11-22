@@ -96,7 +96,9 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         TriggerEvent::Casts => on(event, |player| Recipe::Cast(player, filter, Zone::Stack)),
         TriggerEvent::Discards => on(event, |player| Recipe::Discard(player, filter)),
         TriggerEvent::Draws => on(event, Recipe::Draw),
-        TriggerEvent::BecomesTarget => vec![Recipe::TargetSource],
+        TriggerEvent::BecomesTarget | TriggerEvent::BecomesTargetOfSpell => {
+            vec![Recipe::TargetSource]
+        }
         TriggerEvent::Mutates => vec![Recipe::Mutate],
         TriggerEvent::DealsDamage => vec![Recipe::Attack(P0)],
         TriggerEvent::TurnedFaceUp => Vec::new(),
