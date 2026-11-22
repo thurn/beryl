@@ -121,7 +121,7 @@ pub(super) fn start(client: &mut Client, pressed: Pressed) -> Option<KeyResponse
             .state_of::<TestingScreen>(TESTING)
             .recordings
             .is_empty(),
-        desktop: client.show.table().profile().screen_column().is_none(),
+        in_column: client.show.table().profile().screen_column().is_some(),
         gallery: client.features.gallery,
     };
     start::shortcut_press(pressed.index, input).map(KeyResponse::Action)

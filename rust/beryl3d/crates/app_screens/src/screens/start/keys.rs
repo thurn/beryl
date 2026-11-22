@@ -31,8 +31,9 @@ pub struct KeyInputs {
     pub session: Option<SessionId>,
     /// Whether the app lists recordings, as a tools build does.
     pub has_recordings: bool,
-    /// Whether the start screen has the desktop's layout, not a phone's column.
-    pub desktop: bool,
+    /// Whether the start screen is laid out in a fitted column (`Inputs::column`), as on a
+    /// phone, where it has no host key.
+    pub in_column: bool,
     pub gallery: GalleryState,
 }
 
@@ -46,7 +47,7 @@ pub fn press(index: usize, input: KeyInputs) -> Option<Action> {
         0 if start => Action::new(Message::Start(input.session.filter(|_| input.in_progress))),
         1 if start => Action::new(Message::Open(Screen::Gallery)),
         2 if start && input.has_recordings => Action::new(Message::Open(Screen::Testing)),
-        3 if start && input.desktop => Action::new(host_press()),
+        3 if start && !input.in_column => Action::new(host_press()),
         4 if input.screen == Screen::Gallery => gallery_escape(input.gallery),
         _ => return None,
     })
