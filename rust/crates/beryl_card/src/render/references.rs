@@ -503,9 +503,10 @@ impl Ctx {
     }
 
     fn half(&mut self, of: Amount, round_up: bool) -> String {
-        let whole = match of {
-            Amount::Life(players) => format!("{} life", self.possessive(players)),
-            other => self.amount(other),
+        let whole = if let Amount::Life(players) = of {
+            format!("{} life", self.possessive(players))
+        } else {
+            self.amount(of)
         };
         let direction = if round_up { "up" } else { "down" };
         format!("half {whole}, rounded {direction}")

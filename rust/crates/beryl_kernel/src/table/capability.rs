@@ -157,14 +157,6 @@ impl Capability {
     /// The capabilities a face gives a game that can contain it.
     fn of(face: &Face) -> u32 {
         let mut found = casting_capabilities(face);
-        if face
-            .additional_cost
-            .iter()
-            .chain(face.casting.iter().flat_map(|option| option.parts()))
-            .any(|part| matches!(part, CostPart::Chosen(CostAction::Sacrifice, _)))
-        {
-            found |= Capability::SacrificeToCast.bit();
-        }
         if face.keywords.contains(beryl_card::Keywords::DELVE) {
             found |= Capability::Delve.bit();
         }
@@ -272,11 +264,20 @@ impl Capability {
     }
 }
 
-/// The capabilities that come from a face's casting options.
+/// The capabilities that come from a face's casting options and costs.
 fn casting_capabilities(face: &Face) -> u32 {
     use beryl_card::CastingOption;
 
-    face.casting.iter().fold(0, |found, option| {
+    let mut found = 0;
+    if face
+        .additional_cost
+        .iter()
+        .chain(face.casting.iter().flat_map(|option| option.parts()))
+        .any(|part| matches!(part, CostPart::Chosen(CostAction::Sacrifice, _)))
+    {
+        found |= Capability::SacrificeToCast.bit();
+    }
+    face.casting.iter().fold(found, |found, option| {
         found
             | match option {
                 CastingOption::Mutate { .. } => Capability::Merges.bit(),

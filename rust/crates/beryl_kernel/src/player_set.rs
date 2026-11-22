@@ -40,6 +40,7 @@ impl PlayerSet {
 
     /// The players in either set.
     #[inline]
+    #[must_use]
     pub const fn union(self, other: PlayerSet) -> PlayerSet {
         PlayerSet(self.0 | other.0)
     }

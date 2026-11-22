@@ -396,12 +396,11 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
         if !CHECK || sources.sacrificed(p) == 0 {
             return true;
         }
-        match accept(p) {
-            Ok(allowed) => allowed,
-            Err(Full) => {
-                failed.set(true);
-                false
-            }
+        if let Ok(allowed) = accept(p) {
+            allowed
+        } else {
+            failed.set(true);
+            false
         }
     };
     let pool = s.player(player).mana().amounts();
