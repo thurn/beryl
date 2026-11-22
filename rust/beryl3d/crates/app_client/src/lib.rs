@@ -6,4 +6,4 @@ pub mod driver;
 pub mod settings;
 pub mod stories;
 
-pub use client::{Client, Config, FeatureInfo, Input, registered_features};
+pub use client::{Client, Config, FeatureInfo, Input, composed_features, registered_features};

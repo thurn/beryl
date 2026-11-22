@@ -10,6 +10,9 @@ use kit_frame::frame::Role;
 use kit_ui::element::{Action, Anchor, Element, Shown};
 use kit_ui::widgets::{icon_button, icons};
 
+/// The source of the phase indicator and menu button, for the client map.
+pub const SOURCE: &str = file!();
+
 /// The menu's button, at the right end of the opponent's strip: it opens the settings, which
 /// hold the log and the bug report (`MenuButton` in `ui/src/mobile/chrome.tsx`).
 #[must_use]

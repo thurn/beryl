@@ -47,6 +47,9 @@ use kit_ui::element::{Action, Align, Anchor, Element, Justify, Overflow, column,
 use kit_ui::widgets::screen::backdrop;
 use kit_ui::widgets::{button, primary};
 
+/// The source of the opening overlay, for the client map.
+pub const SOURCE: &str = file!();
+
 /// The name of the element that holds the whole opening, its backdrop and its group, which
 /// "every step shown" looks for (`game_probe::agent::steps::sample`).
 pub const SCREEN_NAME: &str = "opening screen";

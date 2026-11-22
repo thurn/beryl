@@ -12,6 +12,9 @@ use crate::prompts;
 use kit_base::data::profiles::Piece;
 use kit_ui::element::{Action, Anchor, Element, holder, row};
 
+/// The source of the game screen composition, for the client map.
+pub const SOURCE: &str = file!();
+
 /// The registered views the active profile places on the game screen.
 #[derive(Default)]
 pub struct Furniture {

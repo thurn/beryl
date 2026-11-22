@@ -110,6 +110,7 @@ fn source_lines(directory: &Path) -> Result<usize, String> {
 
 pub(super) fn features() -> Vec<Entry> {
     app_client::registered_features()
+        .chain(app_client::composed_features())
         .map(|feature| {
             let shortcuts = feature
                 .shortcuts
@@ -124,14 +125,9 @@ pub(super) fn features() -> Vec<Entry> {
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            let directory = source_path(feature.source);
             Entry::new(
                 feature.id,
-                directory
-                    .parent()
-                    .expect("feature module directory")
-                    .display()
-                    .to_string(),
+                source_path(feature.source).display().to_string(),
                 if shortcuts.is_empty() {
                     feature.placement
                 } else {

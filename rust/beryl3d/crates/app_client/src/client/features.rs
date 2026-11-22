@@ -42,7 +42,7 @@ use game_hud::hud::{
     piles::PileCounts, rows::RowCounts,
 };
 use hud::{INSPECTOR, LIFE_TOTALS, NOTICES, PILE_COUNTS, ROW_COUNTS, STEP_BANNER};
-pub use inspect::{FeatureInfo, registered_features};
+pub use inspect::{FeatureInfo, composed_features, registered_features};
 mod manual;
 mod table_input;
 use manual::{

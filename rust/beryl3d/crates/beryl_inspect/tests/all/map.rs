@@ -6,6 +6,7 @@ use std::path::Path;
 use beryl_inspect::cli::{Ran, main};
 use beryl_protocol::script::Verb;
 use game_hud::labels::GAME_LABELS;
+use game_hud::navigation::{Screen, Sheet};
 use game_table::table::Group;
 use kit_base::data::{TUNING_FILES, effect::PrimitiveKind};
 use kit_frame::frame::Role;
@@ -102,12 +103,6 @@ fn every_map_inventory_matches_its_overview_and_prints_existing_paths() {
 fn inventories_cover_their_owning_registries() {
     let data = beryl_inspect::data::checkout().unwrap();
     let checks = [
-        (
-            "features",
-            app_client::registered_features()
-                .map(|feature| feature.id)
-                .collect(),
-        ),
         ("verbs", Verb::ALL.iter().map(|verb| verb.name()).collect()),
         (
             "effects",
@@ -154,6 +149,52 @@ fn inventories_cover_their_owning_registries() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn feature_map_covers_every_route_and_the_directly_composed_hud() {
+    let features = inventory("features");
+    let names_at = |placement: &str| -> BTreeSet<&str> {
+        features
+            .iter()
+            .filter_map(|entry| {
+                let mut words = entry["detail"].as_str()?.split_whitespace();
+                words.next().filter(|&kind| kind == placement)?;
+                words.next()
+            })
+            .collect()
+    };
+    assert_eq!(
+        names_at("screen"),
+        BTreeSet::from(Screen::ALL.map(Screen::name))
+    );
+    assert_eq!(
+        names_at("sheet"),
+        BTreeSet::from(Sheet::ALL.map(Sheet::name))
+    );
+
+    let composed = [
+        ("game", "screens/game.rs", "screen game"),
+        ("opening", "screens/opening.rs", "game overlay"),
+        ("phase-indicator", "hud/phase.rs", "compact HUD"),
+        ("menu-button", "hud/phase.rs", "compact HUD"),
+    ];
+    let mut expected: BTreeSet<_> = app_client::registered_features()
+        .map(|feature| feature.id)
+        .collect();
+    for (name, source, placement) in composed {
+        assert!(expected.insert(name), "{name} is mounted");
+        let entry = features
+            .iter()
+            .find(|entry| entry["name"] == name)
+            .unwrap_or_else(|| panic!("feature map omits {name}"));
+        assert_eq!(
+            entry["path"],
+            format!("rust/beryl3d/crates/game_hud/src/{source}")
+        );
+        assert_eq!(entry["detail"], placement);
+    }
+    assert_eq!(names(&features), expected);
 }
 
 #[test]

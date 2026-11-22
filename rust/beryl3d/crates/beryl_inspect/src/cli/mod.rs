@@ -95,7 +95,7 @@ const COMMANDS: &[Command] = &[
             ("just b3d map", "list the kinds and entry counts"),
             (
                 "just b3d map features --json",
-                "list registered features as JSON",
+                "list client features as JSON",
             ),
         ],
         spec: Spec {

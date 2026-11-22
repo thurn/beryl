@@ -1,10 +1,13 @@
-//! An inspection view of the same registry that mounts and routes features.
+//! An inspection view of the mounted features and the parts composed directly into the HUD.
 
+use app_screens::screens::Screen;
+use game_hud::hud::phase;
+use game_hud::screens::{game, opening};
 use kit_scene::Shortcut;
 
 use super::{Placement, REGISTRY};
 
-/// The location, source and declared keyboard bindings of a mounted feature.
+/// The location, source and declared keyboard bindings of a client feature.
 #[derive(Clone, Debug)]
 pub struct FeatureInfo {
     pub id: &'static str,
@@ -34,5 +37,23 @@ pub fn registered_features() -> impl ExactSizeIterator<Item = FeatureInfo> {
         },
         source: entry.source,
         shortcuts: entry.shortcuts,
+    })
+}
+
+/// Lists features built directly by the game screen composition, with source paths
+/// supplied by the modules that build their views.
+pub fn composed_features() -> impl ExactSizeIterator<Item = FeatureInfo> {
+    [
+        (Screen::Game.name(), "screen game", game::SOURCE),
+        ("opening", "game overlay", opening::SOURCE),
+        ("phase-indicator", "compact HUD", phase::SOURCE),
+        ("menu-button", "compact HUD", phase::SOURCE),
+    ]
+    .into_iter()
+    .map(|(id, placement, source)| FeatureInfo {
+        id,
+        placement: placement.to_owned(),
+        source,
+        shortcuts: &[],
     })
 }
