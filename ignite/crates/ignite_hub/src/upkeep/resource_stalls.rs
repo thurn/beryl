@@ -106,7 +106,13 @@ pub(super) fn file(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> 
             None
         } else {
             tail_since(&samples, |sample| {
-                dispatch_observable(sample) && idle_with_work(sample)
+                // Admission is already responding to pressure when the block and
+                // readings agree. Idle workers in that sample still cannot confirm recovery.
+                let pressure_blocked = matches!(
+                    sample.start_block,
+                    Some(StartBlock::Pacing | StartBlock::Memory)
+                ) && over_limit(sample, &machine);
+                dispatch_observable(sample) && idle_with_work(sample) && !pressure_blocked
             })
         };
         let disk = if cleanup.is_some() {

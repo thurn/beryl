@@ -277,6 +277,95 @@ fn idle_with_work_ignores_pauses_and_ignites_own_emergency_tickets() {
 }
 
 #[test]
+fn corroborated_pacing_and_memory_blocks_file_only_a_pressure_ticket() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    machine(&conn, "m-pressure", Os::Macos);
+    let idle = MachineSnapshot {
+        idle_workers: 13,
+        ready_tickets: 37,
+        ..healthy()
+    };
+    record(
+        &conn,
+        "m-pressure",
+        0..=14,
+        MachineSnapshot {
+            start_block: Some(StartBlock::Pacing),
+            queued_cores: 9,
+            ..idle.clone()
+        },
+    );
+    let memory = MachineSnapshot {
+        start_block: Some(StartBlock::Memory),
+        swap_used_mb: Some(12_288),
+        ..idle
+    };
+    record(&conn, "m-pressure", 15..=29, memory.clone());
+    for minute in [10, 29] {
+        assert!(
+            upkeep
+                .pass(&mut conn, at(minute))
+                .unwrap()
+                .tickets_filed
+                .is_empty()
+        );
+    }
+
+    record(&conn, "m-pressure", 30..=30, memory);
+    let filed = upkeep.pass(&mut conn, at(30)).unwrap().tickets_filed;
+    assert_eq!(filed.len(), 1);
+    assert_eq!(
+        ticket(&conn, &filed[0]).title,
+        "Oversubscription persisting on m-pressure"
+    );
+    assert_eq!(all_tickets(&conn, at(30)).len(), 1);
+}
+
+#[test]
+fn an_idle_escalation_needs_healthy_dispatch_samples_to_clear() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    machine(&conn, "m-idle", Os::Macos);
+    let idle = MachineSnapshot {
+        start_block: Some(StartBlock::Pacing),
+        queued_cores: 8,
+        swap_used_mb: Some(4_096),
+        idle_workers: 1,
+        ..healthy()
+    };
+    record(&conn, "m-idle", 0..=10, idle.clone());
+    let filed = upkeep.pass(&mut conn, at(10)).unwrap().tickets_filed;
+    assert_eq!(filed.len(), 1);
+    assert_eq!(
+        ticket(&conn, &filed[0]).title,
+        "Workers idle with work on m-idle"
+    );
+
+    record(
+        &conn,
+        "m-idle",
+        11..=71,
+        MachineSnapshot {
+            queued_cores: 9,
+            ..idle
+        },
+    );
+    let report = upkeep.pass(&mut conn, at(71)).unwrap();
+    assert_eq!(report.tickets_filed.len(), 1);
+    assert_eq!(
+        ticket(&conn, &report.tickets_filed[0]).title,
+        "Oversubscription persisting on m-idle"
+    );
+    assert_eq!(ticket(&conn, &filed[0]).status, Status::Open);
+
+    record(&conn, "m-idle", 72..=132, healthy());
+    let closed = upkeep.pass(&mut conn, at(132)).unwrap().tickets_closed;
+    assert!(closed.contains(&filed[0]));
+    assert_eq!(ticket(&conn, &filed[0]).status, Status::Closed);
+}
+
+#[test]
 fn queue_and_swap_pressure_escalate_only_when_sustained_and_need_observed_recovery() {
     let mut conn = hub::open_in_memory().unwrap();
     let mut upkeep = Upkeep::new(None).unwrap();
