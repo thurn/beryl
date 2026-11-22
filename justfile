@@ -361,6 +361,11 @@ gate *args:
 blunder-hunt *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} {{ awake }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- blunder-hunt "$@"
 
+# Physical disk usage on macOS, counting APFS clones once (--details for individual paths)
+[group('checks')]
+disk-usage *args:
+    @{{ by }} disk-usage "$@"
+
 # The tools' tests
 [group('test')]
 test-py *args:

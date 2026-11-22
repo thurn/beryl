@@ -85,6 +85,9 @@
       "data/design-tokens.json",
       "ui/src/design/tokens.css"
     ],
+    "tools/src/beryl_tools/disk_usage.py": [
+      "tools/src/beryl_tools/disk_usage_apfs.cc"
+    ],
     "tools/src/beryl_tools/forge.py": [
       "data/oracle-divergences.json"
     ],
