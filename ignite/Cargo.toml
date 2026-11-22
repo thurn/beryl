@@ -26,6 +26,8 @@ toml = "1.2.0"
 serde_ignored = "0.1.14"
 # SHA-256 for input hashes; replaces shelling out to `shasum`.
 sha2 = "0.10.9"
+# Streams hub backups into Zstandard archives; replaces storing full SQLite copies.
+zstd = { version = "0.14.4", default-features = false }
 # The operating system's random numbers for write tokens and ticket IDs; replaces reading
 # /dev/urandom and calling BCryptGenRandom by hand. Already in the lock file through ureq.
 getrandom = "0.2.17"

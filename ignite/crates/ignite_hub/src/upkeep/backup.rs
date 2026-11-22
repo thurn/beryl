@@ -2,13 +2,13 @@
 //! the ticket service made them.
 //!
 //! A snapshot is a directory named after its time (`2026-11-17T14-00-00.000Z`) holding the
-//! database file and `manifest.json` with the time, the feed position and the file's SHA-256.
-//! It is written under a temporary name, checked with `PRAGMA integrity_check`, and renamed
-//! only when complete. The newest 6 snapshots are kept, and beyond them the newest of each day
-//! for 7 days. A snapshot is a whole copy of the database, several gigabytes on a busy hub, and
-//! keeping 48 hourly and 30 daily copies took over 100 GB of the hub's disk, which the build
-//! trees on the same disk needed. A 48 GiB budget for completed copies drops the oldest extra
-//! hourly copies first, then the oldest daily copies, and always keeps the newest snapshot.
+//! compressed database and `manifest.json` with the time, feed position and database SHA-256.
+//! The database is checked with `PRAGMA integrity_check` before compression. The directory is
+//! published only after the archive decompresses to the same checksum. To restore a copy into a
+//! scratch directory, run `zstd -d hub.sqlite.zst -o hub.sqlite` and compare that database's
+//! SHA-256 with the manifest. The newest 6 snapshots are kept, plus the newest of each day for
+//! 7 days. A 48 GiB budget drops extra hourly copies before daily copies and keeps the newest
+//! snapshot. Older raw SQLite backups are compressed by upkeep and keep their manifests.
 //! Every daemon's ticket mirror is the longer record. A staging directory that a restart left
 //! behind is removed with the old snapshots.
 //!
@@ -16,8 +16,8 @@
 //! are kept.
 
 use std::collections::HashSet;
-use std::fs;
-use std::io;
+use std::fs::{self, File};
+use std::io::{self, BufRead as _, BufReader, Write as _};
 use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, params};
@@ -32,6 +32,9 @@ use ignite_store::{Result, StoreError};
 /// The file name of the database inside a snapshot.
 pub const DATABASE: &str = "hub.sqlite";
 
+/// The compressed database inside a completed snapshot.
+pub(super) const ARCHIVE: &str = "hub.sqlite.zst";
+const MANIFEST: &str = "manifest.json";
 const SNAPSHOTS_KEPT: usize = 6;
 const DAILY_DAYS: f64 = 7.0;
 const SNAPSHOT_BUDGET_BYTES: u64 = 48 * 1024 * 1024 * 1024;
@@ -103,11 +106,89 @@ fn write_snapshot(conn: &Connection, staging: &Path, now: Timestamp) -> Result<(
     }
     let seq = feed::current(&copy)?;
     drop(copy);
-    let bytes = fs::read(&file).map_err(|e| io_error("reading a snapshot", &e))?;
-    let digest = super::hex(&Sha256::digest(&bytes));
+    let digest =
+        archive_database(staging, None).map_err(|e| io_error("compressing a snapshot", &e))?;
     let manifest = json!({ "timestamp": now.to_string(), "seq": seq.0, "sha256": digest });
-    fs::write(staging.join("manifest.json"), format!("{manifest}\n"))
+    fs::write(staging.join(MANIFEST), format!("{manifest}\n"))
         .map_err(|e| io_error("writing a snapshot manifest", &e))
+}
+
+/// Upgrades raw snapshots independently so one damaged copy does not hold up the others.
+pub(super) fn compress_existing(dir: &Path) -> Result<()> {
+    let mut first_error = None;
+    for (_, path) in snapshots(dir)? {
+        if let Err(error) = compress_existing_snapshot(&path) {
+            first_error.get_or_insert_with(|| {
+                io_error(&format!("compressing snapshot {}", path.display()), &error)
+            });
+        }
+    }
+    first_error.map_or(Ok(()), Err)
+}
+
+fn compress_existing_snapshot(path: &Path) -> io::Result<()> {
+    if path.join(DATABASE).try_exists()? {
+        let manifest: serde_json::Value =
+            serde_json::from_reader(File::open(path.join(MANIFEST))?)?;
+        let expected = manifest["sha256"].as_str().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "missing snapshot checksum")
+        })?;
+        archive_database(path, Some(expected))?;
+    }
+    Ok(())
+}
+
+/// Publishes the archive before removing the raw database. The raw file survives a failed copy
+/// or checksum and is picked up again on the next pass.
+fn archive_database(dir: &Path, expected: Option<&str>) -> io::Result<String> {
+    let database = dir.join(DATABASE);
+    let temporary = dir.join(".hub.sqlite.zst.partial");
+    let result = write_archive(&database, &temporary, expected).and_then(|checksum| {
+        fs::rename(&temporary, dir.join(ARCHIVE))?;
+        #[cfg(unix)]
+        File::open(dir)?.sync_all()?;
+        fs::remove_file(&database)?;
+        Ok(checksum)
+    });
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+fn write_archive(database: &Path, archive: &Path, expected: Option<&str>) -> io::Result<String> {
+    let mut reader = BufReader::with_capacity(64 * 1024, File::open(database)?);
+    let mut encoder = zstd::stream::write::Encoder::new(File::create(archive)?, 1)?;
+    let mut digest = Sha256::new();
+    loop {
+        let chunk = reader.fill_buf()?;
+        if chunk.is_empty() {
+            break;
+        }
+        digest.update(chunk);
+        encoder.write_all(chunk)?;
+        let len = chunk.len();
+        reader.consume(len);
+    }
+    let checksum = super::hex(&digest.finalize());
+    if expected.is_some_and(|expected| expected != checksum) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "database checksum differs from its manifest",
+        ));
+    }
+    encoder.finish()?.sync_all()?;
+
+    let mut decoder = zstd::stream::read::Decoder::new(File::open(archive)?)?;
+    let mut restored_digest = Sha256::new();
+    io::copy(&mut decoder, &mut restored_digest)?;
+    if super::hex(&restored_digest.finalize()) != checksum {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "archive checksum differs from its database",
+        ));
+    }
+    Ok(checksum)
 }
 
 /// Applies the count, age and byte limits to completed backups. Only one hub writes snapshots,
@@ -159,7 +240,7 @@ fn prune_snapshots(dir: &Path, now: Timestamp, budget_bytes: u64) -> Result<()> 
     Ok(())
 }
 
-/// A completed snapshot contains the database and manifest, plus any SQLite sidecar files.
+/// Counts stored bytes, including any raw database left by an upgrade that could not finish.
 fn snapshot_bytes(path: &Path) -> io::Result<u64> {
     let mut bytes = 0;
     for entry in fs::read_dir(path)? {
@@ -231,6 +312,25 @@ pub fn last_export_day(dir: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn checksum_failure_keeps_the_raw_backup() {
+        let dir = ignite_core::test_files::temp_dir().join("backup-checksum-failure");
+        let _ = fs::remove_dir_all(&dir);
+        let at = Timestamp::parse("2026-11-21T12:30:00Z").unwrap();
+        let path = dir.join(snapshot_name(at));
+        fs::create_dir_all(&path).unwrap();
+        let database = path.join(DATABASE);
+        fs::write(&database, b"changed since the snapshot").unwrap();
+        fs::write(path.join(MANIFEST), br#"{"sha256": "original"}"#).unwrap();
+
+        let error = compress_existing(&dir).unwrap_err();
+        assert!(error.to_string().contains("differs from its manifest"));
+        assert_eq!(fs::read(database).unwrap(), b"changed since the snapshot");
+        assert!(!path.join(ARCHIVE).exists());
+        assert!(!path.join(".hub.sqlite.zst.partial").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     /// Backups filled the hub's disk: 48 hourly copies of a database of several gigabytes, and
     /// staging directories that restarts left behind and nothing removed.

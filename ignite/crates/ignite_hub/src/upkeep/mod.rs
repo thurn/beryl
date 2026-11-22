@@ -219,6 +219,7 @@ impl Upkeep {
         keep(ignite_store::hub::machine_snapshots::delete_expired(conn, now).map(|_| ()));
         keep(ignite_store::hub::transcripts::delete_expired(conn, now).map(|_| ()));
         if let Some(dir) = self.backups.clone() {
+            keep(backup::compress_existing(&dir));
             keep(self.backups_due(conn, &dir, now, &mut report));
         }
         match first_error {

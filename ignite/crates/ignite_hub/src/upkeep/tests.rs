@@ -696,7 +696,12 @@ fn backups_are_hourly_and_exports_daily() {
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
     let snapshot = report.snapshot.unwrap();
     assert!(report.export.is_some());
-    let copy = Connection::open(snapshot.join(backup::DATABASE)).unwrap();
+    let archive = snapshot.join(backup::ARCHIVE);
+    let database = snapshot.join(backup::DATABASE);
+    assert!(!database.exists());
+    let restored = zstd::stream::decode_all(std::fs::File::open(&archive).unwrap()).unwrap();
+    std::fs::write(&database, &restored).unwrap();
+    let copy = Connection::open(&database).unwrap();
     let count: i64 = copy
         .query_row("SELECT count(*) FROM tickets", [], |r| r.get(0))
         .unwrap();
@@ -706,9 +711,20 @@ fn backups_are_hourly_and_exports_daily() {
     let manifest = std::fs::read_to_string(snapshot.join("manifest.json")).unwrap();
     assert!(manifest.contains("\"sha256\""));
 
+    // A snapshot from before compression is upgraded even when no new backup is due.
+    std::fs::remove_file(&archive).unwrap();
     clock.advance(1_800.0);
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
     assert!(report.snapshot.is_none() && report.export.is_none());
+    assert!(!database.exists());
+    assert_eq!(
+        zstd::stream::decode_all(std::fs::File::open(archive).unwrap()).unwrap(),
+        restored
+    );
+    assert_eq!(
+        std::fs::read_to_string(snapshot.join("manifest.json")).unwrap(),
+        manifest
+    );
 
     // A restarted hub continues from the newest backups on disk.
     let mut upkeep = Upkeep::new(Some(dir.clone())).unwrap();
