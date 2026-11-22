@@ -21,9 +21,9 @@ The design rests on five decisions:
 - **A check blocks a landing when its past failures on similar changes justify
   its cost**, however busy the machine is. Under load Ignite stops background
   work, and the set of checks stays the same.
-- **Workers are sessions in the Claude and Codex desktop apps**, where a person
-  can watch and steer them. One small, cheap session per machine hands them
-  tickets, and Ignite's daemon makes every decision.
+- **Workers run as headless coding-agent CLI sessions.** The daemon starts them
+  as the machine has room, and the hub chooses the ticket and provider. A person
+  can watch and steer a worker from the dashboard.
 - **The system repairs itself as ordinary work.** No scheduled agent fixes CI. A
   regression goes back to the ticket that caused it, and improvements to the
   workflow get a guaranteed share of the workers.
@@ -60,7 +60,7 @@ resumes.
 This section shows where time, CPU and money go today, because those numbers
 decide what Ignite is. It starts with the names the numbers use.
 
-### How work flows today
+### How work flowed on 2026-11-17
 
 - A **ticket** is one task in the project's tracker, reached with the `tk`
   command. An **epic** is a ticket that groups child tickets.
@@ -909,9 +909,9 @@ How a restart is survived:
   it reads its configuration, takes over runs or builds its parts. A request
   that arrives meanwhile waits until the daemon is ready and is then answered;
   `status` and `doctor` answer at once that it is starting. Trees left being
-  prebuilt, reset or landed without a live owner are marked `resetting` before
-  the socket is served and are reset by a background thread afterwards; a lease
-  that needs one waits for it.
+  prebuilt, reset or landed without a live lease holder are marked `resetting`
+  before the socket is served and are reset by a background thread afterwards; a
+  lease that needs one waits for it.
 - The daemon's loops start their round over, except fleet metrics, whose first
   round waits until ten minutes have passed since the last ingest.
 - A client whose connection drops after it was told the handle waits on it as
@@ -1021,7 +1021,8 @@ Ignite manages two kinds of trees:
   them edit one tree at once. Keeping a free tree built at the tip stays in the
   daemon.
 
-The daemon derives the landing-tree count from the machine's physical cores.
+The daemon derives the landing-tree count from the machine's physical cores (see
+[Derived capacity](#derived-capacity)).
 
 Rules for trees:
 
@@ -1106,12 +1107,12 @@ Rules for trees:
   at every compile and leaves it in `deps` for the binary's debug info, so a
   test binary rebuilt in place gained a full set at each compile: they were half
   of a 113 GB tree. Each codegen unit keeps its newest object.
-- The build directories may use the volume's size minus the space used outside
-  them and a reserve of 50 GB or a tenth of the volume, whichever is larger. The
-  optional Fleet dashboard cap can lower that budget. Before the daemon has
-  received a fleet notice, it sizes the budget automatically. The daemon keeps
-  its latest notice across restarts. The disk loop and `ignite doctor` name the
-  term that set the budget.
+- The automatic budget for the build directories is the volume's size minus the
+  space used outside those directories and a reserve of 50 GB or a tenth of the
+  volume, whichever is larger. The reserve is calculated in bytes and rounds a
+  tenth up to the next byte. The optional Fleet cap lowers that budget. Both the
+  cap and the 50 GB minimum reserve use decimal gigabytes. The disk loop and
+  `ignite doctor` name the term that set the budget.
 - To stay within the budget, the daemon deletes builds that a newer build of the
   same unit replaced, then the build directories of the free trees used longest
   ago. A replaced build is a top-level unit (a test binary or program) with a
@@ -1311,8 +1312,9 @@ records each unit's cost and whether it was rebuilt.
 
 ## Cores, memory and shared resources
 
-The daemon is the only place that decides which heavy command runs now. It
-replaces the Python token pool, the browser page slots and Enact's locks.
+The daemon decides which heavy command can start with the cores, memory and
+shared resources available. Its reserves and class floors follow
+[Derived capacity](#derived-capacity).
 
 A command asks for cores in one of five classes. A lower class starts nothing
 while a higher one waits:
@@ -1517,8 +1519,8 @@ bench-vm = 1
 ```
 
 Use `per_core` for a resource that scales with logical cores. The scheduler
-rounds down and keeps at least one slot on machines that can run checks using
-the resource. A resource with a fixed count goes in the machine's table.
+rounds down and keeps a capacity of at least one on machines that can run checks
+using the resource. A resource with a fixed count goes in the machine's table.
 
 A long experiment registers the same way, so the scheduler counts its cores:
 
@@ -3137,11 +3139,12 @@ nobody else wants, and what they find is product work.
 - An exploration family declares a `next` command that produces checks nobody
   has played, such as new scenario seeds.
 - Up to three P2 exploration tickets wait for approval at once. A failure joins
-  the pending ticket for its check family when one exists. If all three slots
-  are filled, a new family joins the ticket with the fewest recorded findings.
-  Each ticket carries a `found-by:<family>` label for every family it covers.
-  The description and comments record the individual findings and replay steps.
-  Approving a ticket frees a slot and fixes the set of findings for its worker.
+  the pending ticket for its check family when one exists. If three tickets are
+  already pending, a new family joins the ticket with the fewest recorded
+  findings. Each ticket carries a `found-by:<family>` label for every family it
+  covers. The description and comments record the individual findings and replay
+  steps. Approving a ticket makes room for another pending ticket and fixes the
+  set of findings for its worker.
 - No exploration failure blocks a landing, holds `master` or starts a culprit
   search.
 
@@ -3467,26 +3470,18 @@ with `ignite pool watch`. To work a ticket in a desktop session, run
 
 ### The pool
 
-- `ignite pool pause` sets the local machine to checks only. It verifies tips
-  and takes a ticket holding `master` back when no recently heard active machine
-  can take it. `ignite pool resume` sets it back to active.
-  `ignite pool pause --all` and `ignite pool resume --all` stop and resume
-  hand-offs across the fleet independently of each machine's state.
-- `ignite pool usage` names the provider of each locally observed plan window
-  and shows the fleet's holds. When a window reaches the provider's
-  `stop_percent` in fleet settings, the hub stops new hand-offs for the affected
-  models on every machine. A newer sample below the threshold or the window's
-  reset ends the hold. `ignite status` and `ignite pool list` show holds from
-  the latest hub heartbeat. Changes to fleet settings take effect at the next
-  reservation.
-- The pool carries on across epics.
+`ignite pool` provides `list`, `pause`, `resume`, `usage` and `watch`. The Pool
+page shows each machine's fleet state, providers and running workers. Use
+`ignite pool usage` for locally observed plan windows and fleet holds. On the
+private dashboard, open a worker's session to read its transcript. See
+[Fleet settings](#fleet-settings) for controls that apply across the pool.
 
-### CLI mode
+### Headless workers
 
 A provider declares its executable and optional arguments in
 `[pool.cli.<provider>]` and the tiers it offers in `[pool.models.<provider>]`.
-The daemon derives worker room from available memory, the number of workers, and
-a ceiling of twice the machine's logical cores.
+The daemon uses [worker room](#derived-capacity) to decide how many new workers
+to request.
 
 ```toml
 [pool.cli.claude]
@@ -3517,12 +3512,13 @@ tiers with the same `[pool.cli]` and `[pool.models]` tables.
 - Each new worker gets a session ID, `cli-<app>-<8 hex>`, which every turn
   carries in `IGNITE_SESSION`. The daemon takes the lowest free worker number
   for the provider and stores the worker's ticket, model, effort, turn number
-  and prompt in `cli_slots`. When the ticket ends, the worker row is removed.
-  Turn history and transcripts let a lane successor, regression or reverted
-  ticket continue an earlier transcript. A CLI landing keeps its transcript
-  available for repairs for 24 hours. Repairs from the same landing can use it
-  in sequence. If the transcript cannot be resumed, the worker starts fresh.
-  `ignite pool list` and the ticket's history show the hand-off and its reason.
+  and prompt in the local database. When the ticket ends, the daemon removes the
+  worker's row. Turn history and transcripts let a lane successor, regression or
+  reverted ticket continue an earlier transcript. A CLI landing keeps its
+  transcript available for repairs for 24 hours. Repairs from the same landing
+  can use it in sequence. If the transcript cannot be resumed, the worker starts
+  fresh. `ignite pool list` and the ticket's history show the hand-off and its
+  reason.
 - Three loops follow the pool. `ignite-cli` reads running turns and acts on
   their ends about once a second. `ignite-cli-health` runs probe turns and
   reports CLI holds. `ignite-cli-dispatch` asks the hub for tickets every ten
@@ -3635,53 +3631,54 @@ Messages, usage and repair:
   loses none. It forgets what it queued when it restarts and queues a running
   turn's lines again, which the hub stores once, keyed by session, turn and line
   number. `ignite pool list` shows each active worker's state and each CLI hold,
-  and `ignite doctor` warns when an app in CLI mode has no program on the
+  and `ignite doctor` warns when a configured provider has no program on the
   daemon's `PATH`. Transcripts can hold secrets, so the hub serves them on the
   Tailscale listener only.
 
-A CLI worker's `ignite turn-ended` follows the desktop rules with two changes. A
-live process under the session that is not an `ignite` verb does not let the
-turn end, because the supervisor ends it with the turn: the first such stop is
-blocked with a line that names `ignite run -- <command>` and `ignite wait`, and
-the second releases the ticket. Titles do not apply. `ignite start` and
+A CLI worker's `ignite turn-ended` blocks if a process under the session is
+still running outside an `ignite` verb. The supervisor ends that process with
+the turn. The first block names `ignite run -- <command>` and `ignite wait`. The
+second releases the ticket. Titles do not apply. `ignite start` and
 `ignite prime` leave out the title lines for a session whose ID starts with
 `cli-`, and name the `cli-worker` guide, which says: start no background shell
 commands, wait in the foreground with `ignite wait`, never ask a person, and end
 the turn only after `ignite land` or `ignite release`, or to wait on an `ignite`
 verb.
 
-The `cli_e2e_*` tests in `ignite_daemon` run the whole of this against a shell
-script that stands in for `claude`: real supervisors, a real database file and
-the real `decide`, with only the clock faked. They cover a daemon restart during
-a turn, a program killed mid-turn, a reboot that left no supervisor and no
-result, a crash between recording a turn and starting it, two starts of one
-turn, a row an older build wrote, a plan-limit end, a refusal with its CLI hold
-and probe, `ignite tell --now`, and the block text followed by a release.
+The `cli_e2e_*` tests in `ignite_daemon` use a script that stands in for a
+provider, a fake clock, real supervisors and a real database file. They cover a
+daemon restart during a turn, a program killed mid-turn, a reboot that left no
+supervisor and no result, a crash between recording a turn and starting it, two
+starts of one turn, a row an older build wrote, a plan-limit end, a refusal with
+its CLI hold and probe, `ignite tell --now`, and the block text followed by a
+release.
 
 ### What the daemon hands off, and when
 
-A daemon with an idle worker asks the hub for the next ticket and says what the
-machine has free. The hub answers with the first ticket, in this order, that the
-machine can take:
+A daemon asks the hub for work with its current room, provider offers and
+scheduler readings. The hub considers tickets in this order:
 
-1. An open regression ticket. It needs an idle worker and a free tree on a
-   machine that can run its check, and skips the test of expected cores below.
-2. An improvement ticket, when improvements are under their share. See
+1. A justiciar ticket for a fault in Ignite or its workflow.
+2. An open regression ticket. It needs a tree on a machine that can run its
+   check. It can bypass the ordinary worker room and expected-core limits.
+3. An improvement ticket, when improvements are under their share. See
    [Improvement tickets](#improvement-tickets). It skips its epic's allocation
    but not its `--max-workers` cap.
-3. A ready ticket from the epic that is furthest below its allocation. See
+4. A ready ticket from the epic that is furthest below its allocation. See
    [Dividing workers between epics](#dividing-workers-between-epics). Within an
    epic, the ticket of highest priority goes first, then the one with the
    longest chain of tickets waiting behind it, then the oldest.
 
 A machine can take a ticket when all of these hold:
 
-- An idle worker satisfies the ticket's
-  [machine and provider pins](#machine-and-provider-pins) and runs the model
-  named by its `tier:` label. A worker is idle when it holds no ticket.
-- A ticket tree is free.
-- The ticket's expected use of cores fits beside the tickets already in progress
-  there. See [Light and heavy tickets](#light-and-heavy-tickets).
+- Its state permits the ticket and the hub can reserve it for an eligible
+  provider. See [Fleet settings](#fleet-settings),
+  [The provider mix](#the-provider-mix) and
+  [Machine and provider pins](#machine-and-provider-pins).
+- The daemon can lease an existing ticket tree or create one.
+- For a ticket other than a regression, its expected use of cores fits beside
+  the tickets already in progress there. See
+  [Light and heavy tickets](#light-and-heavy-tickets).
 - The machine runs the ticket's required operating system, if it has one.
 - The machine can run every check family that the ticket's named files could
   bring into its gate. Cygnus never takes a ticket that names UI files.
@@ -3751,14 +3748,11 @@ File platform-specific work with `ignite ticket create --needs-os macos` or
   `--needs <os>` records the required operating system, and `--needs person`
   sets the ticket aside for a person.
 - When a ticket holds up `master` and its pinned machine has been silent for 30
-  minutes, it can run on another machine that meets its operating system
-  requirement and any provider pin.
-- The hub migrates saved owners to labels on upgrade. For example,
-  `jarvis/codex` becomes `machine:jarvis` and `provider:codex`. Existing pins
-  take precedence.
-- Each provider offers the tiers its `[pool.models.<provider>]` table names. A
-  ticket without a tier uses the provider's configured `sonnet` model when
-  present, or the model used for its health probe.
+  minutes, a ticket marked for fallback can run on another machine that meets
+  its operating system requirement and any provider pin.
+
+The choice of tier and the provider's availability are described under
+[The provider mix](#the-provider-mix).
 
 The hub reserves the ticket for that machine in the same request, so two
 machines never take one ticket. An operating system requirement is matched
@@ -3778,8 +3772,8 @@ next:
 - A session that runs a command for a ticket whose lease expired, and that
   another session has since claimed, gets exit code 3.
 
-A machine with room pulls work. The hub compares reported capacity and accounts
-for existing claims and reservations.
+For an unpinned ordinary ticket, the hub also checks whether
+[placement](#placement) favors another eligible machine.
 
 ### Dividing workers between epics
 
@@ -3810,40 +3804,44 @@ With the two settings above, nothing yet in progress and plenty of ready tickets
 in both epics:
 
 ```text
-14 idle workers                                -> 10 and 4
- 7 idle workers                                ->  5 and 2
- 7 idle workers, Project 50k has 1 ready ticket ->  6 and 1
+14 new reservations                                -> 10 and 4
+ 7 new reservations                                ->  5 and 2
+ 7 new reservations, Project 50k has 1 ready ticket ->  6 and 1
 ```
 
 ### Light and heavy tickets
 
 Tickets ask very different amounts of the machine. A fix to a Python script uses
 almost no CPU, and a change to a core crate rebuilds half the workspace many
-times. The daemon admits tickets by what each is expected to use, so cheap
-tickets run beside expensive ones.
+times. The hub admits tickets using the machine's reported capacity and the
+expected cost of each ticket, so cheap tickets can run beside expensive ones.
 
 - A ticket's **expected cores** is a figure from history: over the tickets
   landed in the last 30 days that named files in the same areas, the median of
   core-minutes used per minute worked. An area is a workspace package or a
   second-level directory.
+
 - A ticket that names files in several areas takes the largest figure. A ticket
   that names no files takes the machine's median.
+
 - A planner can state the figure directly with `--cores`.
+
 - The hub keeps a total for the tickets in progress on a machine or reserved for
   it, counting each at its expectation. It cannot see what a ticket has used so
   far.
+
 - A ticket is admitted when that total plus its own figure is within the
   machine's `admit_cores`: every core its scheduler hands out, which is its
   cores less its express reserve. On jarvis, with 18 cores and 3 express cores,
   that is 15. It is not a setting, because the scheduler already makes every
   heavy command wait for cores; admission only keeps the expected load of the
   tickets in progress within what the machine has.
-- While workers stay idle, the `pool` line of `ignite status` says why: the
-  first reason, in dispatch's order, that no ready ticket went to them. The
-  daemon asks the hub for the reason with each request for tickets
-  (`MachineFree.explain`), and the hub answers `{"nothing": "<reason>"}` instead
-  of `null`. More workers would help only when the line is about workers or
-  trees, never when it is about tickets or cores.
+
+- The `pool` line in `ignite status` and the Fleet page show the latest reason a
+  machine received no ticket. It may have no ready work, no tree or worker room,
+  or too little CPU or disk. A ready ticket may need another provider, check
+  family or machine, reach its epic's cap, or be cheaper to build elsewhere.
+
 - While a `land` or `agent` request has waited two minutes or more for cores,
   the daemon asks the hub only for tickets that hold `master` back, as a paused
   pool does. The machine then has more work than cores, and a new ticket's
@@ -3851,17 +3849,6 @@ tickets run beside expensive ones.
   history and cannot see this: on 2026-11-20 jarvis kept starting workers while
   18 commands waited. The `pool` line says
   `commands have waited 150 s for cores, so only tickets that hold master back start`.
-
-```text
-$ ignite status
-pool       3 idle workers: 2 ready tickets wait for cores: the smallest expects 2.5, and 1.0 of the machine's admitted cores are free
-```
-
-The other reasons are that no ready ticket is offered (file tickets or release
-an epic), that the ready tickets are for another machine's or model's workers,
-that their epics are at their `--max-workers` cap, that they need check families
-the machine cannot run, that no ticket tree is free, and that the last idle
-worker is kept for justiciar tickets.
 
 The machine also sends its current disk space, which build outputs are present
 in each worktree, and how long its queue has been healthy. A ticket is charged 1
@@ -3906,9 +3893,8 @@ waited five times longer than the rest:
 - A `lane:<name>` label is only for a true chain, where each ticket needs the
   previous one's result. The next ticket of a chain goes to the same session
   without clearing it.
-- Tickets that merely touch the same code are not grouped. Among idle workers
-  the daemon prefers the one whose last ticket shared the most files with this
-  one, and never waits for a particular worker.
+- Ordinary tickets that touch the same area can end up on the same machine
+  because [placement](#placement) accounts for build outputs it already has.
 
 ### Stalled workers
 
@@ -3936,45 +3922,8 @@ leased for nothing.
 - The daemon releases the ticket only when the app confirms that the session is
   gone, or that it is idle and has stayed idle for 15 minutes after the message.
   Releasing keeps the work, as [Releasing work](#releasing-work) describes.
-- A Claude worker that ends its turn while holding its ticket is caught at once,
-  without waiting for the silence above. The repository's `Stop` hook
-  (`.claude/settings.json`) runs at the end of every turn and asks
-  `ignite turn-ended`, which decides. The first stop with the ticket held is
-  blocked with a message that names the ticket and every way out: `ignite land`
-  if the work is done, `ignite release` if it is not, and `ignite justiciar`
-  followed by `ignite release` when the ticket cannot be completed as written
-  (its acceptance contradicts its body, or gates on something the worker cannot
-  control, such as a timing on a loaded machine). If the worker stops again in
-  the same turn without doing either, the daemon releases the ticket itself,
-  saving the tree as `refs/ignite/tickets/<ticket>` and using the worker's last
-  message as the release note. This applies only to a worker of the machine's
-  pool that holds a ticket. A person's own session, including one running
-  `/ignite`, ends turns to talk to the person, and is never blocked. Neither is
-  a justiciar's session, nor a worker with an `ignite` verb of its session still
-  running (the daemon wakes CLI workers when the verb ends), nor a worker with a
-  live process under the session's process, such as a background shell command
-  or monitor script, whose end wakes the worker. The hook passes its parent
-  process with `--parent`, and Ignite looks for live descendants of it (macOS
-  and Windows). With nothing running, the first stop is blocked and the next
-  releases the ticket. A released worker is refused by `ignite start`; Ignite
-  starts a worker for the next ticket. The hook names the session by the desktop
-  app's `CLAUDE_CODE_HOST_SESSION_ID`, the ID Ignite records for the lease; the
-  hook input's own `session_id` is Claude Code's internal ID, which Ignite never
-  sees. Codex has no such hook, so Codex workers rely on the silence check
-  alone, which also still catches workers that died.
-- A pool worker whose title starts with ⛔ ("stopped unfinished") when it ends a
-  turn holding its ticket is released at the first stop, without the block
-  message: a worker once kept a ticket, its tree and a running build for hours
-  under a ⛔ title. `ignite turn-ended` reads the title from the desktop app's
-  session metadata, saves the tree as `refs/ignite/tickets/<ticket>`, releases
-  the ticket with the worker's last message as the note (resetting the tree
-  stops the session's running commands, as `ignite release` does), and sends for
-  a justiciar as `ignite justiciar` does, with the reason
-  `<ticket>: worker stopped unfinished: <the first 400 characters of its last message>`.
-  The hub folds repeated reports for the same ticket into one. A title that
-  cannot be read changes nothing. A person's own session, a justiciar's session,
-  a worker with a `land`, `release` or `close` running and a ticket labelled
-  `needs:person` are left alone.
+- A worker that ends its turn while holding a ticket gets the instructions in
+  [Headless workers](#headless-workers) without waiting for the stall check.
 - The hub releases the claims of a machine that has not reported for 2 hours,
   with a comment on each ticket.
 - The hub also releases a ticket that is in progress although no Ignite session
@@ -4040,8 +3989,8 @@ Stopping a command:
   commands the process left and its handle.
 - A landing tree stays leased while the verb process that holds it still holds
   its lock, even after the daemon ended its handle. When the daemon frees a
-  landing tree whose owner has finished, it first ends any process still running
-  inside the tree.
+  landing tree whose command has finished, it first ends any process still
+  running inside the tree.
 - `ignite close` and `ignite release` first stop every command still running
   from the tree and wait for them. If one refuses or does not end, the tree
   stays leased and the command says why.
@@ -4152,7 +4101,7 @@ release ref when Ignite blocks its own landing.
   while the machine is free of memory pressure.
 - When the hub cannot be reached for 15 minutes, the daemon starts a local CLI
   justiciar without a ticket. The monitor can also start a local CLI justiciar
-  when the daemon is down. See [CLI mode](#cli-mode).
+  when the daemon is down. See [Headless workers](#headless-workers).
 - A person can also declare an emergency by invoking the `/ignite-justiciar`
   skill in any session. That session files or claims the justiciar ticket,
   declares the emergency pause (below), fixes the fault first and validates
@@ -4202,7 +4151,8 @@ enforces the pause itself.
 - `ignite wait emergency` returns when the flag clears and prints the all-clear.
 - The flag lapses two hours after it was declared unless the justiciar declares
   it again, so a justiciar that dies cannot leave the fleet stopped.
-  `ignite status` and `ignite doctor` show it with its age and owner.
+  `ignite status` and `ignite doctor` show its age and the session that declared
+  it.
 - Because Ignite enforces the pause, the justiciar sends `ignite tell --all`
   only when the fault needs something Ignite cannot enforce (for example "delete
   nothing of your own" on a full disk, or a session that must change what it is
@@ -4312,11 +4262,12 @@ How the machines divide verification:
 - A check with `platforms = "any"` needs one pass anywhere. Cygnus can therefore
   verify pure engine logic for the whole fleet.
 - A check with a platform list needs a pass on each. Only the Macs run the
-  browser, oracle and app families. The `ignite-platform` family lists both
-  `macos` and `windows`: it holds Ignite's tests of the code that behaves
-  differently on each, so a change must pass them on a Mac and on cygnus before
-  `master` moves.
-- A daemon prefers the checks only it can run, then claims portable ones.
+  browser, oracle and app families. The `ignite-platform` family covers Ignite
+  code that behaves differently across operating systems. Its manifest in
+  `ignite/checks/rest.toml` currently requires macOS.
+- A daemon prefers the checks only it can run, then claims portable ones. Fleet
+  policy controls which machines can take tickets and verify tips. See
+  [Fleet settings](#fleet-settings).
 
 On Windows the daemon uses a named pipe for the client (a client that
 disconnects ends its `ignite run`), job objects to end a tree's processes, and
@@ -4338,272 +4289,185 @@ a family it cannot build is not tried again on every tip round.
 
 ## Dynamic scaling
 
-This section is a design that is being built. The sections above describe Ignite
-as it runs today, and each is rewritten as its part of this design lands. Until
-then, where they differ, the sections above say what the code does.
+Each daemon measures what its machine has available. It uses those measurements
+to schedule
+[cores, memory and shared resources](#cores-memory-and-shared-resources) and
+size its [build trees](#build-trees). The hub uses the reports, fleet policy and
+[ticket pins](#machine-and-provider-pins) to choose which machines and providers
+take work. The daemon starts a [headless worker](#headless-workers) for each
+reservation.
 
-Before this work, a person scaled Ignite by editing `ignite.toml`: how many
-build trees, reserved cores, gigabytes and worker slots each machine has, which
-CLI a machine's workers run, and which machine and CLI each ticket belongs to.
-Each of those numbers has been wrong at least once. Twelve ticket trees ran out
-on 2026-11-18. The trees' disk limit was passed on 2026-11-18 and again on
-2026-11-20. Under this design Ignite decides those things from what it measures,
-and the few choices that are a person's to make move to the dashboard.
-
-Three words are used below. A **provider** is a coding-agent CLI that runs
-workers, such as `claude` or `codex`; older fields and tables call it an `app`.
-A **worker** is one headless CLI session holding one ticket. **Fleet settings**
-are the choices a person makes on the dashboard.
-
-### Where each kind of value lives
-
-| Kind                  | Where it lives                                   | Examples                                                                                                                  |
-| --------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| A measured fact       | The daemon measures it and reports it to the hub | Cores, memory, disk size and free space, load from outside Ignite, tree sizes, whether a provider's CLI answers           |
-| A derived value       | A pure function of the measured facts            | Core reserves, floors, tree counts, the trees' disk budget, browser page slots, how many more workers may start           |
-| A person's intent     | Fleet settings in the hub's database             | Each machine's state and disk cap; each provider's share, whether it is on, and its stop percentage                       |
-| A reviewed definition | `ignite.toml`                                    | A provider's program, arguments and models; the check families a machine can run; devices a machine has a fixed number of |
-
-Machine tables in `ignite.toml` declare operating systems, check families and
-fixed device counts such as `oracle` and `bench-vm`. Provider definitions
-declare reviewed programs, arguments and models. Older files still load and
-unknown keys produce warnings.
+The [fleet](#the-fleet) shares tickets, check results and plan usage through the
+hub. Build outputs stay on the machine that produced them. `ignite.toml`
+declares each provider's executable, arguments and models, plus machines'
+operating systems, check families and fixed resources. These definitions change
+through a reviewed landing. Operators edit policy in Fleet.
 
 ### Fleet settings
 
-`ignite fleet` shows machine and provider settings, registered machines,
-provider usage and holds, and the last 20 changes. Use
-`ignite fleet machine <name> --state active|checks-only|off` to set a machine's
-state. Add `--disk-cap-gb <n>` to set its cap or `--disk-cap-gb auto` to clear
-it. Use `ignite fleet provider <name>` with `--on` or `--off`, `--share <n>`, or
-`--stop-percent <n>` to set a provider's policy. The operator or the justiciar
-makes these edits. The dashboard's Fleet page at `/fleet` lists each registered
-machine, its recent work and trees, and the last 20 settings changes. It also
-lists configured providers and those reported by machines. Each enabled share is
-shown as a percentage of the total enabled share. An enabled provider with a
-share of zero is on standby. Workers now compares the number of tickets in
-progress with the number the configured share would give at the current fleet
-total. Each provider shows the latest usage for each plan window, with a mark at
-the stop percentage and the window's reset time. The page also shows active
-holds, where affected work goes, and each machine's CLI probe status when
-capacity reports are available.
+The dashboard's Fleet page at `/fleet` shows registered machines and their
+state, disk cap, recent work, trees, and capacity. Capacity includes worker
+count and room for more, admitted and free cores, cores busy outside Ignite,
+memory, disk, the tree budget and what set it, and the longest wait for cores.
+The page shows the latest reason the hub gave when it could offer no ticket.
+Reports older than 60 seconds are marked stale with their sample age. The
+provider section shows enabled shares as percentages, current worker counts,
+recent usage and reset times, holds and eligible alternatives, and machine CLI
+probe results when reported.
 
-Each machine's Capacity section shows the number of workers running and room to
-start more, admitted and free cores, cores busy outside Ignite, free memory and
-disk, the tree budget and what set it, free and leased ticket trees, and the
-longest wait for cores. It shows the hub's reason if the last request for work
-came back without a ticket. Reports older than 60 seconds are greyed and show
-when they were sampled.
+On the private dashboard through Tailscale, the operator or justiciar can edit
+policy. The public dashboard shows the saved settings. `ignite fleet` prints the
+fleet view, including the last 20 settings changes. Its edit commands are:
 
-On the private dashboard through Tailscale, change a machine's state or disk
-cap, or change a provider's on/off switch, share or stop percentage. Leave a
-machine's cap empty for automatic. The public dashboard shows the saved
-settings.
+- `ignite fleet machine <name> --state active|checks-only|off` changes the
+  machine's state. Add `--disk-cap-gb <n>` to cap its build-tree budget or
+  `--disk-cap-gb auto` to use the automatic budget.
+- `ignite fleet provider <name> [--on|--off] [--share <n>] [--stop-percent <n>]`
+  edits provider policy. A share is a weight from 0 to 1,000. Zero makes an
+  enabled provider a standby. The stop percentage is from 1 to 100.
 
-The hub stores settings under `fleet` in its database. With a new database, the
-hub records defaults for the machines and providers named in `ignite.toml`.
-Machines start active with automatic disk caps. Providers start enabled with
-zero share and a 99% stop percentage. When all eligible providers have zero
-share, dispatch chooses the one with the fewest tickets in progress. A hub with
-saved fleet settings keeps them across upgrades.
+An **active** machine takes tickets and verifies tips. A **checks only** machine
+verifies tips and can take one regression or justiciar ticket at a time when no
+active machine heard from in the last 30 minutes matches its operating system
+requirement, pins and provider eligibility. The hub checks probe state, tier and
+model holds from fresh reports, or checks advertised provider names and holds
+when it has no fresh report. A compatible active machine takes precedence even
+while busy. An **off** machine starts no new tickets, tip checks or idle jobs.
+Running workers and commands can finish. Its daemon still sends heartbeats and
+updates itself.
 
-`GET /fleet` under the hub's project API returns the view, which
-`ignite fleet --json` also prints. `PUT /fleet` requires a machine token with an
-actor or a private dashboard request with a Tailscale login and the
-`X-Ignite-Dashboard` header. The request carries the settings and the version
-the operator read. A successful write returns the saved settings, and HTTP 409
-returns the current settings when the supplied version is stale. The CLI
-reapplies its edit to the current settings and retries once. The dashboard
-reloads with a message when another change was saved first. Each saved change
-records who made it, when, what changed and the resulting settings.
+`ignite pool pause` and `ignite pool resume` set the local machine to checks
+only and active, respectively. The same commands with `--all` stop or resume
+hand-offs across the fleet independently of machine state. Global resume also
+clears an emergency pause.
 
-Each heartbeat reply carries this machine's state and disk cap, the fleet
-settings version, the platforms whose registered machines are all off, and the
-current provider holds. The daemon saves the policy on disk for restarts and hub
-outages. `ignite status`, `ignite pool list` and the dashboard show machine
-states and who last changed them. The hub imports any existing per-machine
-pauses into fleet settings when it starts.
+The hub stores versioned settings and an audit log. Each change records the
+actor, time, summary and resulting policy. A new database seeds the machines and
+providers named in `ignite.toml` with the standard defaults: active machines
+with automatic disk caps, and enabled providers with zero share and a 99% stop
+percentage. Missing entries use the same defaults. Saved settings persist across
+upgrades.
 
-Each machine has a state and an optional disk cap:
-
-- **Active**: the machine takes tickets and verifies tips.
-- **Checks only**: it verifies tips, and takes a ticket only when the ticket
-  holds `master` back and no active machine heard from in the last 30 minutes
-  satisfies the ticket's operating system and pins and offers a tier and model
-  that can take it. The hub uses fresh capacity reports to check CLI probes and
-  model availability, and uses advertised providers for older daemons. A machine
-  running long experiments is kept in this state.
-- **Off**: it asks for no ticket, claims no new tip check and starts no idle
-  work. Running workers and commands can finish. The daemon keeps sending
-  heartbeats and updating itself.
-- The **disk cap** is an upper bound, in gigabytes, on what the machine's build
-  trees may hold. Left empty, the derived budget below applies alone.
-
-Each provider has three settings:
-
-- **On or off.** A provider that is off gets no work.
-- **Share**, a weight. The dashboard shows it as a percentage of the total of
-  the providers that are on. A provider that is on with a share of 0 is a
-  standby: it gets work only when no provider with a share can take it.
-- **Stop percentage**: how much of a plan window may be used before the provider
-  is held (see [Usage and failover](#usage-and-failover)). It starts at 99. A
-  lower figure keeps part of the plan for a person's own sessions, which use the
-  same plan.
-
-`ignite pool pause` and `ignite pool resume` on one machine set it to checks
-only and active through the fleet API. `ignite pool pause --all` still stops
-every hand-off. `ignite pool resume --all` clears that pause and any emergency.
+`GET /fleet` under the project API returns the view also available through
+`ignite fleet --json`. `PUT /fleet` requires a machine token with an actor or an
+authenticated private dashboard request with the `X-Ignite-Dashboard` header.
+The request carries the settings and the version the operator read. On HTTP 409,
+the CLI reapplies its edit to the returned version and retries once. The
+dashboard reloads with a notice instead. Each heartbeat reply carries the
+settings version, the machine's state and cap, the platforms whose registered
+machines are all off, and the provider holds. The daemon saves the notice across
+restarts and hub outages.
 
 ### Derived capacity
 
-Reserves and counts are fractions of the machine. `P` is its physical cores and
-`L` its logical cores, which differ only on cygnus (12 and 20).
+The daemon derives these values at startup. `P` is the number of physical cores
+and `L` the number of logical cores. Round to the nearest integer with halves
+rounding up.
 
-| Value                              | Formula                   | jarvis    | multivac  | cygnus |
-| ---------------------------------- | ------------------------- | --------- | --------- | ------ |
-| Express cores                      | round(P / 6), from 2 to 4 | 3         | 2         | 2      |
-| Cores kept for tip builds          | round(P / 5), from 2 to 6 | 4         | 2         | 2      |
-| Floor of the `tip` class           | 2                         | 2         | 2         | 2      |
-| Floor of the `batch` class         | round(P / 3), at least 2  | 6 (was 8) | 3 (was 2) | 4      |
-| Landing trees                      | round(P / 6), from 2 to 4 | 3         | 2         | 2      |
-| Browser pages (`per_core = 0.5`)   | L / 2, rounded down       | 9         | 5 (was 4) | none   |
-| Most workers at once (the ceiling) | 2 × L                     | 36        | 20        | 40     |
+| Value                             | Formula                    | jarvis (18/18) | multivac (10/10) | cygnus (12/20) |
+| --------------------------------- | -------------------------- | -------------- | ---------------- | -------------- |
+| Express reserve and landing trees | round(P / 6), from 2 to 4  | 3              | 2                | 2              |
+| Cores reserved for tip builds     | round(P / 5), from 2 to 6  | 4              | 2                | 2              |
+| `tip` class floor                 | 2                          | 2              | 2                | 2              |
+| `batch` class floor               | round(P / 3), at least 2   | 6              | 3                | 4              |
+| Browser pages                     | floor(L × 0.5), at least 1 | 9              | 5                | unused         |
+| Ordinary worker ceiling           | 2 × L                      | 36             | 20               | 40             |
 
-The daemon derives the reserves, floors and landing-tree count at startup.
-Cygnus has no browser page slots because its checks do not request them. A
-resource declared with `per_core` uses the derived count on every machine that
-runs checks requiring it. The `capacity` line in `ignite status` shows the
-reserves, floors, landing tree count, disk budget and its source, worker ceiling
-and room to start. The `fleet` line shows the machine's state from its last
-fleet notice. `ignite doctor` warns if leased ticket trees alone hold more build
-data than the disk budget permits, based on the latest clone-aware measurement.
+A shared resource configured with `per_core` uses the same formula as browser
+pages with its own multiplier. Ticket trees are created on demand, up to the
+worker ceiling plus four. The daemon keeps the two most recently used free trees
+and can retire the rest after 24 hours free. See [Build trees](#build-trees) for
+disk budgets and reclamation.
 
-- **Ticket trees have no count.** A lease that finds no free tree creates one. A
-  tree that has been free for 24 hours is removed, except the newest two free
-  trees, which stay so that a new lease has a build to copy.
-- **The trees' disk budget** is the disk's size, less what the disk holds apart
-  from the trees, less a reserve of 50 GB or a tenth of the disk if that is
-  more. The machine's disk cap lowers it. Dispatch checks projected growth
-  against this budget, and the sweeps under [Build trees](#build-trees) reclaim
-  unused outputs.
-- **Worker room replaces slots.** Each time a daemon asks the hub for work it
-  says how many more workers it will start now. That is none while memory is
-  pressed (swap grew a quarter of a gigabyte in a minute, or less than 1 GB is
-  free) or while free memory is under one worker's footprint plus 1 GB.
-  Otherwise it is up to three, within the ceiling. A worker's footprint is the
-  median peak memory of the machine's last 20 measured worker turns, with a
-  default of 2,000 MB. The hub's admission by expected cores and projected disk
-  growth (see [Light and heavy tickets](#light-and-heavy-tickets)) is unchanged,
-  and is what usually decides how many tickets a machine holds.
+For ordinary tickets, worker room is the smallest of three limits:
+
+- Three starts per request cycle.
+- The worker ceiling less running workers and pending starts.
+- The number of whole worker footprints that fit in current free memory after
+  reserving 1,024 MB, less pending starts. If the machine cannot report
+  available memory, the other limits apply. A footprint is the median peak of
+  the last 20 measured worker turns on the machine, with a 2,000 MB default.
+
+Worker room is zero under memory pressure. The daemon uses that condition when
+free memory falls below 1,024 MB or swap grows by at least 256 MB within a
+minute. A regression or justiciar ticket can bypass ordinary worker room while
+memory pressure is clear. The daemon checks again before starting a reservation
+and gives it back if pressure has developed. The hub also checks expected CPU
+use, disk growth and queue pressure. See
+[Light and heavy tickets](#light-and-heavy-tickets).
+
+The `capacity` line in `ignite status` shows derived reserves, floors and tree
+count, the disk budget and its source, and worker room and ceiling. The `fleet`
+line shows the machine's last reported state. `ignite doctor` warns when the
+measured footprint of the leased trees alone exceeds the budget.
 
 ### The provider mix
 
-When a daemon reports worker room, the hub chooses the provider for each
-reservation from the CLIs that passed their probe on that machine. The
-reservation names the provider, and the claim keeps that choice until the ticket
-is released, closed or landed. Older daemons can still send idle workers and
-receive reservations for those sessions if their providers are enabled and free
-of a usage hold.
+A provider is a configured coding-agent CLI such as `claude` or `codex`. Each
+provider offers the tiers in its `[pool.models.<provider>]` table. A ticket
+without a tier uses the provider's configured `sonnet` model if present, or the
+model used for its health probe.
 
-The hub considers providers that are enabled, offered on the machine, able to
-run the ticket's tier, free of a usage hold for that model, and allowed by the
-ticket's provider pin. It counts live reservations and claimed tickets across
-every machine.
+The hub chooses a provider for each reservation. It considers providers that are
+enabled, have passed their CLI probe and are available on the requesting
+machine, offer the ticket's model tier, and satisfy the ticket's provider pin
+and current usage holds. It counts live reservations and claimed tickets across
+the fleet.
 
-1. Among providers with a positive share, the hub chooses the one with the
-   fewest tickets per unit of share. Ties go to the larger share, then by name.
-2. When only standbys can take the ticket, it chooses the one with the fewest
-   tickets, then by name.
-3. When none can take the ticket, the hub skips it on that machine and explains
-   why each provider is unavailable.
+1. Among eligible providers with a positive share, choose the fewest tickets per
+   unit of share. Break ties by larger share, then provider name.
+2. If only standbys are eligible, choose the fewest tickets, then provider name.
+3. If none are eligible, skip the ticket on this machine and report why.
 
-A machine's worker room limits its unclaimed reservations. Tickets that hold
-`master` back can bypass the limit while memory is healthy. Changing the shares
-affects the next reservation. An existing reservation keeps its provider, and a
-lane successor stays with the session that finished the previous ticket when its
-provider can still take it.
+A share edit applies to the next reservation. A reservation and its claim keep
+the chosen provider, and a lane successor stays with the session that finished
+the previous ticket if its provider remains eligible. Older daemons that offer
+particular idle workers can still receive reservations when their providers are
+enabled and clear of applicable usage holds.
 
 ### Usage and failover
 
-Every machine uses one plan per provider, so a usage sample from any machine
-counts for all of them. The hub keeps the newest sample of each provider and
-plan window, and holds a provider while a window is at or above its stop
-percentage, until a newer sample is lower or the window resets. A window named
-for one model family holds only that family's models. A turn that ends at the
-plan's limit counts as a sample of 100% for that turn's provider. A provider
-whose CLI reports no usage figures is held only by such an end. A plan-limit end
-with no known reset holds the window for one hour.
+Every machine uses one shared plan per provider. The hub keeps the newest sample
+of each provider's plan windows. A window at or above the provider's stop
+percentage holds new work until the window resets or a newer sample falls below
+the threshold. A model-family window holds only that family's models. A turn
+that ends at the plan limit records 100% usage for its provider. The daemon uses
+a future reset from the turn or the last stored sample for that window. If
+neither supplies one, it sets the reset one hour ahead. For providers that
+report no utilization, a plan-limit end is the source of usage holds.
 
-Failover is the mix's rules applied to a held provider: its share drops out, the
-other providers divide the work, and it takes its share again when the hold
-ends. With the pool at 100% Claude and Codex on as a standby, Codex takes the
-work when Claude's weekly window reaches the stop percentage, and Claude takes
-it back at the reset.
-
-Ignite does not pace a plan to last until its reset. Pacing would need a
-forecast of use that is poor on a busy day, and the share a person set would
-often not be the share in effect. Total work is about the same either way while
-another provider has room.
-
-### Pins replace owners
-
-A ticket has no owner. An unpinned ticket goes to any machine and provider that
-can run it. Two labels are hard constraints, read from the ticket or from its
-nearest ancestor that has one:
-
-- `machine:<name>`: only that machine takes the ticket.
-- `provider:<name>`: only that provider runs it. A pin outranks the shares, but
-  not a provider that is off or held.
-
-The hub pins the tickets it files about one machine's fault, such as a
-regression that only reproduces there. Such a ticket that holds `master` back
-still falls back to any machine of the same system when its machine has been
-silent for 30 minutes. `ignite release --needs <machine>` adds the pin, and
-`ignite ticket create --automatic` pins a ticket to the machine that ran the
-command. See [Machine and provider pins](#machine-and-provider-pins).
+Other eligible providers divide the work while a provider is held. A standby
+takes work when no provider with a positive share can take it. When the hold
+ends, the provider returns to the mix at its configured share.
 
 ### Placement
 
-A machine with room asks for work. The hub checks whether another machine can
-get the next ticket's first build current sooner.
+Daemons pull work when they can start workers. Alongside their regular
+heartbeats, they report capacity once a minute. The report includes scheduler
+and memory state, disk space and budget, the build outputs each free or leased
+ticket tree holds, and provider probes, tiers and models. Placement uses peer
+reports at most 60 seconds old. The Fleet API uses the same window. When
+available, the hub uses current scheduler and build information from the
+requesting machine's request. The hub keeps machine snapshots for 14 days.
 
-Once a minute, each daemon includes a machine snapshot and its capacity report
-in a heartbeat. The report includes logical and physical cores, admitted and
-free cores, worker room, total and free memory, memory pressure, free disk
-space, the trees' disk budget, and the longest wait for cores among ticket
-commands. It lists the configured build outputs, the outputs each free or leased
-ticket tree holds, and each configured provider's model tiers, model IDs, probe
-status and CLI hold reason. The hub timestamps the report with the snapshot. The
-Fleet API exposes each machine's newest report for up to 60 seconds, the same
-window available to placement. The requesting machine supplies its current
-scheduler and build pressure readings with its request. The hub keeps snapshot
-history for 14 days.
+The hub estimates how soon each eligible active machine can build the ticket.
+The estimate is the wait for cores plus 1,000 CPU-seconds per missing output,
+divided by the machine's free cores with a minimum divisor of one for the build
+cost. An output is present if a free or leased tree can donate it. A ticket with
+no build cost pays only the queue wait. The cold-build estimate comes from
+measurements of 947 to 1,390 CPU-seconds per output, compared with about 6
+seconds after copying a donor. Peers need worker room after their pending
+reservations, compatible operating systems and check families, and an eligible
+provider.
 
-For a ticket and a machine, the hub estimates the seconds until the ticket's
-first build is current there. That is the machine's wait for cores, plus 1,000
-CPU-seconds for each build output the ticket's files need that no tree on the
-machine holds, divided by the machine's free cores, with a minimum divisor of
-one. A cold build of one output measured 947 to 1,390 CPU-seconds, against about
-6 after a copy from a tree that holds it. A leased tree counts, since a lease
-can copy from it. A ticket that compiles nothing costs only the wait.
-
-Placement compares active machines with worker room, compatible platforms and
-check families, and a provider that can take the ticket. The requesting machine
-can take the ticket if the best peer saves 30 seconds or less. Exact ties go to
-the machine with the larger fraction of its admitted cores free, then by name.
-After 60 seconds from the first deferral, any eligible machine can take the
-ticket. The deferral clears when the ticket is reserved, claimed or leaves the
-open queue. When placement defers a ticket, the hub tries the next ticket in
-dispatch order and names the preferred machine if it has no work to offer.
-Regressions, justiciar tickets, machine-pinned tickets and lane hand-offs to the
-session that landed the predecessor skip placement.
-
-Keeping similar work together needs no rule of its own. A machine already
-working an area holds that area's build outputs, so it has the lowest estimate
-for the next ticket there.
-
-One figure in seconds was chosen over a weighted sum of scores so that every
-choice can be explained in a sentence and every constant can be measured.
+The requesting machine can take the ticket when no peer can take it, or when the
+best peer saves at most 30 seconds. For equal estimates, the machine with the
+larger fraction of admitted cores free wins, then the first machine by name.
+When placement defers a ticket, the hub tries the next one in order. After 60
+seconds from the first deferral, any eligible machine can take it. The wait
+clears when the ticket is reserved, claimed or leaves the open queue.
+Regressions, justiciar tickets, tickets with a machine pin, and lane
+continuations to the same session skip the comparison.
 
 ### Tip verification and machines that are off
 
@@ -4613,26 +4477,11 @@ the hub records the deferral and `master` can move. `ignite status` and the
 dashboard's first line name the first tip with deferred checks, even if more
 tips advance while the platform is off.
 
-When a machine is switched back to active or checks only, its next round
-verifies the current tip, even if `master` already points to it. A failure files
-a regression ticket whose culprit search starts at the last commit before the
-first deferral. Once the platform verifies a tip, the warning clears. The hub
-skips filing wait tickets for off machines and closes existing tickets about
-waiting for them.
-
-### Pool commands and dashboard
-
-Every worker is a headless CLI process that the daemon runs (see
-[CLI mode](#cli-mode)). `ignite pool` has five commands: `list`, `pause`,
-`resume`, `usage` and `watch`. The Pool page shows the providers configured on
-each machine, the machine's fleet state, and the workers with their current
-tickets and commands. On the private listener, the worker's session ID opens its
-transcript. A person working from a desktop session can claim a ticket with
-`ignite start <ticket>` and set their own session title.
-
-A provider is one adapter in Ignite's code, which builds a turn's command line
-and reads the CLI's event stream, plus its tables in `ignite.toml`. Adding a
-provider adds one file and those tables.
+When a machine returns to active or checks only, its next round verifies the
+current tip, even if `master` already points to it. A failure files a regression
+whose culprit search starts at the last commit before the first deferral. Once
+the platform verifies the tip, the warning clears. The hub skips filing wait
+tickets for off machines and closes existing tickets about waiting for them.
 
 ## Records and metrics
 
@@ -5155,6 +5004,16 @@ These are the choices that were weighed against measurements and set aside.
   reports comparisons and leaves settings to people.
 - **Replacing Enact in stages.** Two systems would share cores and worktrees
   without seeing each other, which is the problem Ignite exists to remove.
+- **Pacing usage to a plan's reset.** A forecast can be wrong on a busy day, and
+  pacing would make the effective shares diverge from the ones the operator set.
+  With another provider available, the pool can keep doing work when a plan
+  reaches its stop percentage.
+- **Pushing tickets from the hub.** The hub would need to know that a machine is
+  alive and has room at the instant it assigns a ticket. A request gives it the
+  machine's current readings.
+- **A weighted placement score.** Time to the first current build gives a single
+  estimate a person can check against measurements and the hub can use to
+  explain a deferral.
 
 ## Manual QA
 
@@ -5236,9 +5095,9 @@ These show that cores, trees and workers go where the rules say.
 - **Load.** Start 24 busy loops and land a change. Expect the same checks as on
   a quiet machine, a longer wall time, idle work stopped, and the record's
   instruction count within 1% of the quiet run's.
-- **No free tree.** Lease every ticket tree and run `ignite start` in one more
-  session. Expect a wait that names the reason, no new directory, and no start
-  from the pool.
+- **On-demand trees.** Lease every existing ticket tree below the machine's
+  ceiling and run `ignite start` again. Expect a new tree. Repeat at the ceiling
+  and expect the lease to wait until a tree becomes free.
 - **CLI workers.** Configure two providers with passing probes and file four
   ready light tickets. With four free trees and worker room, expect
   `ignite pool list` to show the four workers. Run `ignite pool watch <ticket>`
@@ -5250,7 +5109,7 @@ These show that cores, trees and workers go where the rules say.
 - **A CLI hold.** Make the app's program fail before its first line. Expect one
   notification and one justiciar report, no turn started for that app, a probe
   turn every 5 minutes, and every parked slot resumed after the first success.
-- **A headless justiciar.** On a machine with an app in CLI mode, stop the
+- **A headless justiciar.** On a machine with a working provider, stop the
   daemon for 15 minutes with its kickstart failing. Expect the monitor to start
   a justiciar turn and no second one while it runs.
 - **A stalled worker.** Stop a worker mid-ticket. Expect one message after 30
@@ -5279,12 +5138,10 @@ These show that cores, trees and workers go where the rules say.
 - **An inactive epic.** File an epic with ready tickets and `--allocation 0`.
   Expect no hand-off from it. Set `--allocation 1` and expect one. File another
   with no `--allocation` and expect hand-offs at once.
-- **Machine states.** Set a machine with workers busy to checks only with
-  `ignite pool pause`. Expect the workers to finish and tip verification to
-  continue. A regression can start there while no recently heard active machine
-  meets its operating system and pins. Set the machine to off and expect no new
-  ticket requests, tip claims or idle jobs after a heartbeat. Use
-  `ignite pool resume` and expect new work without restarting the daemon.
+- **Checks only.** Run `ignite pool pause` on a machine with busy workers.
+  Expect those workers to finish and verification to continue. Offer a
+  regression with no compatible active machine and expect it to be eligible
+  there. Run `ignite pool resume` and expect ordinary work to resume.
 - **A worker that only looks stalled.** Leave a worker reading for 31 minutes
   with no `ignite` command. Expect the daemon to check it, find it running, and
   send nothing.
@@ -5307,13 +5164,49 @@ These show that cores, trees and workers go where the rules say.
   `--allocation 2`, each with twenty ready tickets, and a pool of seven. Expect
   five and two in progress. Close all but one of the second epic's tickets and
   expect six and one.
-- **A light ticket on a busy machine.** Fill the machine with core-crate tickets
-  until `ignite status` shows idle workers waiting for cores. File a ticket that
-  names only a Python file. Expect it handed off at once, in the tree with the
-  oldest build, with no Rust build started.
+- **A light ticket on a busy machine.** Fill a machine with core-crate tickets
+  until another build ticket would exceed expected cores, with the queue still
+  below the two-minute hold. File a Python-only ticket whose expected cores fit.
+  Expect it to take the free tree with the oldest build and skip the Rust
+  prebuild.
 - **A plan.** Give `/ignite` a plan document. Expect an epic filed in one batch,
   a `plan check` report, and the planning session ending while the pool starts
   the ready tickets.
+
+### Fleet policy and placement
+
+Use a rehearsal hub with two eligible machines and two providers with passing
+probes. Use scripted plan samples and seeded capacity reports for the hold and
+placement cases.
+
+- **Fleet page.** On the private dashboard, set a machine's disk cap and reload.
+  Expect the cap in `ignite fleet` and a change with the editor in the audit
+  log. Clear it with `--disk-cap-gb auto` and confirm both views agree. On the
+  public dashboard, expect the same saved values and no edit controls. Compare a
+  fresh capacity sample with one older than 60 seconds and expect the older one
+  to be marked stale.
+- **Share change.** Give one provider all the share and the other zero. Reserve
+  a ticket that either can run, then swap the shares on Fleet. Expect the
+  existing reservation to keep its provider and the next one to name the new
+  provider with a positive share.
+- **Failover.** With the second provider on standby, report usage at the first
+  provider's stop percentage for an all-model window. Expect Fleet to show the
+  hold and reset and the next reservation to go to the standby. After the reset,
+  expect the first provider to take the next reservation.
+- **A machine off and on.** Use a fixture with a check that requires a pass on a
+  platform served by one machine. Switch that machine off and let the heartbeat
+  deliver its state. Expect no new ticket hand-offs, tip claims or idle jobs
+  there. Advance the tip and expect `master` to move after the other required
+  checks pass, with a warning naming the first deferred tip. Switch the machine
+  to checks only and expect it to verify the current tip without a restart.
+  After it passes, expect the warning to clear.
+- **Placement and pins.** Give one machine a build output the next unpinned
+  ticket needs and give the other a fresh cold report whose estimate is more
+  than 30 seconds slower. Have the cold machine ask first. Expect a deferral
+  naming the warm machine and expect the warm machine to take the ticket when it
+  asks. Repeat with a fresh ticket pinned to the cold machine through the
+  ticket's Machine dropdown, and expect it to take the ticket on its first
+  request.
 
 ### Restarts under load
 

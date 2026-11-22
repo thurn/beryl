@@ -33,14 +33,17 @@ owns which file. These are the contract's rules.
 - A stub module says in its header which ticket owns it, and its bodies are
   `todo!()`. The owning ticket replaces the bodies, removes the
   `#![allow(unused_variables)]` and rewrites the header.
-- Test against the fakes in `ignite_core::fakes`, never against another ticket's
-  unfinished code. Every trait in `ignite_core::traits` has one. CLI mode's
-  fakes are `FakeCliApp` and `ScriptedLauncher` in `ignite_core::fakes`, and
-  `FakeCliPool` in `ignite_daemon::clid`, whose `set_hold` and `set_probed`
-  stand in for a CLI hold and the probe turn that `clid_health.rs` runs. A
-  change to how CLI turns start, end or survive a restart also runs the
-  `cli_e2e` tests (`clid_e2e_tests.rs`), which drive real supervisors and a
-  scripted program; add a case there for a new restart or concurrency path.
+- Test against the fakes in `ignite_core::fakes`. It supplies `FakeClock`,
+  `FakeBuilds`, `FakeGit`, `FakeHub` and `FakeLauncher` for the core traits,
+  plus `FakeHost` for machine measurements. The fleet fake implements the fleet
+  and capacity calls on `FakeHub`.
+- For headless workers, use `FakeCliApp`, `ScriptedLauncher` and `ScriptedTurn`
+  in `ignite_core::fakes`, or `FakeCliPool` in `ignite_daemon::clid`. Its
+  `set_hold` and `set_probed` simulate provider health changes.
+- For changes to how worker turns start, end or recover, run
+  `cargo nextest run -p ignite_daemon -E 'test(/cli_e2e/)'` from `ignite/`.
+  `clid_e2e_tests.rs` and `clid_e2e_cases.rs` drive real supervisors with a
+  scripted provider. Add a case there for a new restart or concurrency path.
 - A verb nobody has built is listed in `NOT_BUILT` in
   `crates/ignite_cli/src/client.rs`; the ticket that builds it deletes its row
   and registers a `Verb` (`ignite_daemon::server`) with the daemon.
