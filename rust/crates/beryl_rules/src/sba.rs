@@ -48,20 +48,45 @@ pub(crate) fn check<L: Layout>(
     // State triggers are no state-based actions (see CR 603.8: "Note that state triggers aren't the
     // same as state-based actions."), but they are found at the same moments.
     crate::stack::trigger::match_states(s, t)?;
-    let (mut graveyard, tokens, legendary) = doomed(s, t);
+    let (graveyard, tokens, legendary) = doomed(s, t);
     // One table test skips both scans in games without these state-based actions.
-    let (loose, sacrifices) = if t.can_either(Capability::AttachmentStateChecks, Capability::Saga) {
-        let (loose, sacrifices) = read_equipment_and_sagas(s, t);
-        graveyard |= sacrifices;
-        (loose, sacrifices)
+    let extra = if t.can_either(Capability::AttachmentStateChecks, Capability::Saga) {
+        read_equipment_and_sagas(s, t)
     } else {
-        (Bitboard::EMPTY, Bitboard::EMPTY)
+        Extra::default()
     };
-    let legends = legend_group_in(s, t, &legendary, Bitboard::EMPTY).is_some();
-    if graveyard.is_empty() && tokens.is_empty() && loose.is_empty() && !legends {
+    // When other actions remove objects, the next check reads the new battlefield
+    // before asking which legendary permanent to keep (see CR 704.3 and 704.5j).
+    let moves = !(graveyard | tokens | extra.sacrifices).is_empty();
+    let legends = !moves && any_group(s, t, &legendary);
+    if !moves && extra.loose.is_empty() && !legends {
         s.reset_state_based_checks();
         return Ok(false);
     }
+    perform(s, t, sink, graveyard, tokens, extra, legends)
+}
+
+/// The illegal attachments to detach and the completed Sagas to sacrifice.
+#[derive(Default)]
+struct Extra<L: Layout> {
+    loose: Bitboard<L::Slot>,
+    sacrifices: Bitboard<L::Slot>,
+}
+
+/// Performs the actions collected by [`check`] as one event (see CR 704.3).
+/// Keep the mutation out of the path that checks for actions before priority.
+#[cold]
+#[inline(never)]
+fn perform<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    graveyard: Bitboard<L::Slot>,
+    tokens: Bitboard<L::Slot>,
+    Extra { loose, sacrifices }: Extra<L>,
+    legends: bool,
+) -> Result<bool, Full> {
+    let mut graveyard = graveyard | sacrifices;
     if s.count_state_based_check() > s.profile().limits.state_based_iterations {
         s.end_game(Outcome::Stalled(StallReason::StateBasedIterations));
         return Ok(true);
@@ -230,10 +255,7 @@ fn destroyed_for_damage<L: Layout>(
 /// the game changes any permanent.
 #[cold]
 #[inline(never)]
-fn read_equipment_and_sagas<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-) -> (Bitboard<L::Slot>, Bitboard<L::Slot>) {
+fn read_equipment_and_sagas<L: Layout>(s: &State<L>, t: &GameTable) -> Extra<L> {
     let loose = if t.can(Capability::AttachmentStateChecks) {
         attached_illegally(s, t)
     } else {
@@ -244,7 +266,7 @@ fn read_equipment_and_sagas<L: Layout>(
     } else {
         Bitboard::EMPTY
     };
-    (loose, sacrifices)
+    Extra { loose, sacrifices }
 }
 
 /// The Equipment attached to a permanent that may not be equipped by it
@@ -406,7 +428,7 @@ fn same_name<L: Layout>(s: &State<L>, t: &GameTable, a: L::Slot, b: L::Slot) -> 
 fn any_group<L: Layout>(s: &State<L>, t: &GameTable, legendary: &Legendary<L>) -> bool {
     legendary
         .iter()
-        .any(|&mine| mine.any_pair(|a, b| same_name(s, t, a, b)))
+        .any(|&mine| mine.count() >= 2 && mine.any_pair(|a, b| same_name(s, t, a, b)))
 }
 
 /// The legendary permanents with the same controller and name as the one in `slot`, of
@@ -458,11 +480,6 @@ fn legend_group_in<L: Layout>(
     legendary: &Legendary<L>,
     kept: Bitboard<L::Slot>,
 ) -> Option<(Seat, Bitboard<L::Slot>)> {
-    // A group needs two legendary permanents of one controller with one name, which most
-    // checks lack.
-    if legendary.iter().all(|b| b.count() < 2) || !any_group(s, t, legendary) {
-        return None;
-    }
     for player in s.players_in_turn_order(s.players()) {
         let mut seen = Bitboard::EMPTY;
         for &slot in s.battlefield() {

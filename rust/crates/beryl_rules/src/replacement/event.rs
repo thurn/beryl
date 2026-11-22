@@ -22,7 +22,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{CastingKinds, FaceIx, Subtype};
 use crate::continuous::layers;
 use crate::fixed::Full;
-use crate::ids::Seat;
+use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
 use crate::replacement;
 use crate::stack::trigger;
@@ -82,8 +82,7 @@ pub(crate) fn arrive<L: Layout>(
         },
     )?;
     if entry.saga_lore {
-        let object = s.current(ObjectRef::from(permanent)).expect("just arrived");
-        let _ = s.add_counters(object, CounterKind::Lore, 1, false)?;
+        crate::saga::place_entry_lore(s, permanent)?;
     }
     if !entry.paid.is_empty() {
         s.remember(slot, Memo::Paid(entry.paid))?;
@@ -211,31 +210,67 @@ pub(crate) fn move_batch_to<L: Layout>(
     reason: Reason,
     entry: Entry<L>,
 ) -> Result<(), Full> {
-    move_batch_with_reason(s, t, sink, objects, to, place, |_| reason, entry)
+    move_batch_with_reasons(
+        s,
+        t,
+        sink,
+        objects,
+        to,
+        place,
+        MoveReasons {
+            ordinary: reason,
+            sacrifices: None,
+        },
+        entry,
+    )
+}
+
+/// The reason the objects in a batch move. A state-based action batch can also
+/// sacrifice Sagas (see CR 704.5s), which move in the same batch (see CR 704.3).
+#[derive(Clone, Copy)]
+struct MoveReasons<'a, S: SlotId> {
+    ordinary: Reason,
+    sacrifices: Option<&'a Bitboard<S>>,
+}
+
+impl<S: SlotId> MoveReasons<'_, S> {
+    #[inline]
+    fn for_slot(self, slot: S) -> Reason {
+        if self
+            .sacrifices
+            .is_some_and(|sacrifices| sacrifices.contains(slot))
+        {
+            Reason::Sacrifice
+        } else {
+            self.ordinary
+        }
+    }
 }
 
 /// Moves objects together while preserving each object's reason for moving.
 #[allow(clippy::too_many_arguments)]
-fn move_batch_with_reason<L: Layout>(
+fn move_batch_with_reasons<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
     objects: Bitboard<L::Slot>,
     to: Zone,
     place: Place,
-    reason: impl Fn(L::Slot) -> Reason,
+    reasons: MoveReasons<'_, L::Slot>,
     entry: Entry<L>,
 ) -> Result<(), Full> {
     layers::refresh(s, t, sink)?;
     // Moving one object needs neither sorting nor scratch space for a full batch.
     if let Some(slot) = objects.sole() {
-        return move_ordered::<L, 1>(s, t, sink, &[slot], to, place, reason, entry);
+        return move_ordered::<L, 1>(s, t, sink, &[slot], to, place, reasons, entry);
     }
     let ordered = s.in_game_order(t, objects)?;
-    move_ordered::<L, 128>(s, t, sink, ordered.as_slice(), to, place, reason, entry)
+    move_ordered::<L, 128>(s, t, sink, ordered.as_slice(), to, place, reasons, entry)
 }
 
 /// Moves permanents simultaneously as state-based actions, preserving which were sacrificed.
+#[cold]
+#[inline(never)]
 pub(crate) fn move_state_based<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -243,19 +278,16 @@ pub(crate) fn move_state_based<L: Layout>(
     graveyard: Bitboard<L::Slot>,
     sacrifices: Bitboard<L::Slot>,
 ) -> Result<(), Full> {
-    move_batch_with_reason(
+    move_batch_with_reasons(
         s,
         t,
         sink,
         graveyard,
         Zone::Graveyard,
         Place::Top,
-        |slot| {
-            if sacrifices.contains(slot) {
-                Reason::Sacrifice
-            } else {
-                Reason::StateBased
-            }
+        MoveReasons {
+            ordinary: Reason::StateBased,
+            sacrifices: Some(&sacrifices),
         },
         Entry::default(),
     )
@@ -273,7 +305,7 @@ fn move_ordered<L: Layout, const N: usize>(
     ordered: &[L::Slot],
     to: Zone,
     place: Place,
-    reason: impl Fn(L::Slot) -> Reason,
+    reasons: MoveReasons<'_, L::Slot>,
     entry: Entry<L>,
 ) -> Result<(), Full> {
     // Each move as replaced: the object, where it was, where it goes and how it enters. A
@@ -290,7 +322,7 @@ fn move_ordered<L: Layout, const N: usize>(
             from: s.object(slot).zone(),
             to,
             entry,
-            cast: reason(slot) == Reason::Resolve,
+            cast: reasons.ordinary == Reason::Resolve,
         };
         let prepared = prepare_move(s, t, sink, proposal, auras)?;
         if prepared.is_some() && proposal.from == Zone::Battlefield {
@@ -323,7 +355,7 @@ fn move_ordered<L: Layout, const N: usize>(
         object,
         from,
         to,
-        reason: reason(slot),
+        reason: reasons.for_slot(slot),
         // see [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Public zones
         // are zones in which all players can see the cards' faces" including the stack.
         // Keep the end chosen for a spell, even when the library was empty.

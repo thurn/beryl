@@ -58,9 +58,7 @@ fn merged_player_rules<L: Layout>(
     let slot = s.battlefield()[i];
     for (card, face) in s.copiable(slot).merged_faces(t) {
         let what = Definition::of_face(card, face);
-        // The face's rules read whole and narrowed to those for players: asking
-        // `player_rules` here too would make the compiler stop inlining it in the scan above.
-        let made = what.rules(t).common(t.player_rules());
+        let made = what.player_rules(t);
         if !made.is_empty() {
             player_rules_of(s, t, i, what, true, made, rules);
         }

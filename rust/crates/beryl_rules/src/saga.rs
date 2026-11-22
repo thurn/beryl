@@ -12,9 +12,11 @@ use crate::query::Copiable;
 use crate::replacement::event::{Entry, Sink};
 use crate::stack::trigger;
 use crate::state::{
-    AbilityMask, AbilityRef, CounterKind, StackItem, State, TriggerInfo, TriggeredAbility,
+    AbilityMask, AbilityRef, CounterKind, ObjectRef, StackItem, State, TriggerInfo,
+    TriggeredAbility,
 };
 use crate::table::{Capability, GameTable};
+use beryl_kernel::reference::Permanent;
 
 type Chapter<L> = (<L as Layout>::Card, FaceIx, TriggeredAbility, (u8, u8));
 
@@ -93,6 +95,18 @@ pub(crate) fn match_lore<L: Layout>(
             trigger::enqueue(s, t, source, card, face, ability, controller, info)?;
         }
     }
+    Ok(())
+}
+
+/// Places the first lore counter as the Saga enters (see CR 715.3a).
+#[cold]
+#[inline(never)]
+pub(crate) fn place_entry_lore<L: Layout>(
+    s: &mut State<L>,
+    permanent: Permanent<L>,
+) -> Result<(), Full> {
+    let object = s.current(ObjectRef::from(permanent)).expect("just arrived");
+    let _ = s.add_counters(object, CounterKind::Lore, 1, false)?;
     Ok(())
 }
 

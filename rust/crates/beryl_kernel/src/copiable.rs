@@ -577,7 +577,10 @@ impl<L: Layout> Copiable<L> {
     /// ([`crate::GameTable::player_rules`]). For a card no face of which makes one, a load and an
     /// AND. The layers ask it only of a battlefield with such a card on it
     /// ([`crate::event::Replaces::PLAYER_RULE_CHANGE`]).
-    #[inline]
+    // Keep the scan's early return inline even when the named-activation check
+    // also uses this method. Most permanents in the scan change no player rules.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub fn player_rules(self, t: &GameTable) -> Rules {
         let of_players = t.player_rules();
         if t.may_have_rules(self.card).common(of_players).is_empty() {
