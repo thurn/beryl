@@ -44,6 +44,10 @@ impl Effects {
                 if !(0.0..layer.end).contains(&layer.start) || layer.end > 1.0 {
                     return Err(format!("{file}: layers[{index}] must fit within 0 to 1"));
                 }
+                layer
+                    .primitive
+                    .validate_ramps()
+                    .map_err(|why| format!("{file}: layers[{index}].{why}"))?;
             }
             if definitions
                 .insert(Arc::clone(&definition.name), Arc::new(definition))
@@ -224,6 +228,75 @@ primitives! {
         drift: Scalar,
         opacity: Scalar,
     },
+}
+
+impl Primitive {
+    // Serde loses the inner error paths of flattened layers and untagged curves.
+    fn validate_ramps(&self) -> Result<(), String> {
+        match self {
+            Self::Sprite { quad, .. } | Self::Ring { quad } | Self::Burst { quad, .. } => {
+                validate_ramps(&[
+                    ("quad.scale", &quad.scale),
+                    ("quad.fade", &quad.fade),
+                    ("quad.alpha", &quad.alpha),
+                ])?;
+                validate_record("quad.record", quad.record.as_ref())?;
+                validate_record("quad.point_record", quad.point_record.as_ref())
+            }
+            Self::Directed { sprite } => {
+                validate_ramps(&[
+                    ("sprite.length", &sprite.length),
+                    ("sprite.width", &sprite.width),
+                    ("sprite.alpha", &sprite.alpha),
+                    ("sprite.fade", &sprite.fade),
+                ])?;
+                validate_record("sprite.record", sprite.record.as_ref())
+            }
+            Self::Streak {
+                width,
+                minimum,
+                opacity,
+                record,
+                ..
+            } => {
+                validate_ramps(&[("width", width), ("minimum", minimum), ("opacity", opacity)])?;
+                validate_record("record", record.as_ref())
+            }
+            Self::Particles { emitter } => validate_ramps(&[
+                ("emitter.sweep", &emitter.sweep),
+                ("emitter.size", &emitter.size),
+                ("emitter.fall", &emitter.fall),
+                ("emitter.drift", &emitter.drift),
+                ("emitter.travel", &emitter.travel),
+            ]),
+            Self::Vortex { emitter } => validate_ramps(&[
+                ("emitter.birth", &emitter.birth),
+                ("emitter.size", &emitter.size),
+            ]),
+            Self::Surface { amount, .. } => validate_ramps(&[("amount", amount)]),
+            Self::Shake { x, y } => validate_ramps(&[("x", x), ("y", y)]),
+            Self::Number { drift, opacity, .. } => {
+                validate_ramps(&[("drift", drift), ("opacity", opacity)])
+            }
+        }
+    }
+}
+
+fn validate_ramps(curves: &[(&str, &Scalar)]) -> Result<(), String> {
+    for (path, curve) in curves {
+        if let Some(ramp) = curve.reversed_ramp() {
+            return Err(format!("{path}{ramp}: ramp start must be at or before end"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_record(path: &str, record: Option<&LightRecord>) -> Result<(), String> {
+    if let Some(record) = record {
+        validate_ramps(&[("scale", &record.scale), ("opacity", &record.opacity)])
+            .map_err(|why| format!("{path}.{why}"))?;
+    }
+    Ok(())
 }
 
 /// Sprite cells used by effect quads. The halo's empty center is sized to the subject.

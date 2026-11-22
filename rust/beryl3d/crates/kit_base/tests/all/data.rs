@@ -243,6 +243,67 @@ fn a_parameterless_surface_rejects_an_unknown_key() {
 }
 
 #[test]
+fn reversed_ramps_name_the_layer_parameter() {
+    use kit_base::data::effect::Effects;
+    use serde_json::json;
+
+    let reversed = json!({"from": 0, "by": 1, "start": 0.8, "end": 0.7});
+    let ordinary = json!({"from": 0, "by": 1});
+    for (curve, suffix) in [
+        (reversed.clone(), ""),
+        (json!({"cycles": 2, "amplitude": reversed}), ".amplitude"),
+        (json!({"rise": reversed, "fall": ordinary}), ".rise"),
+        (json!({"rise": ordinary, "fall": reversed}), ".fall"),
+    ] {
+        let mut glow: Value = serde_json::from_str(EFFECTS[0].1).unwrap();
+        glow["layers"][0]["quad"]["record"]["scale"] = curve;
+        let error = Effects::parse([("glow", glow.to_string().as_str())]).unwrap_err();
+        assert!(
+            error.starts_with(&format!(
+                "effects/glow.json: layers[0].quad.record.scale{suffix}:"
+            )),
+            "{error}"
+        );
+        assert!(error.contains("start") && error.contains("end"), "{error}");
+    }
+}
+
+#[test]
+fn the_shipped_cover_ramp_can_change_instantly() {
+    use kit_base::data::effect::Primitive;
+
+    let data = parse(None).expect("repository tuning");
+    let Primitive::Surface { amount, .. } = &data.effects.get("cover").unwrap().layers[1].primitive
+    else {
+        panic!("cover's previous face should be a surface effect");
+    };
+    assert!((amount.at(0.49) - 1.0).abs() < f32::EPSILON);
+    assert!(amount.at(0.5).abs() < f32::EPSILON);
+}
+
+#[test]
+fn invalid_camera_geometry_names_the_file_and_field() {
+    use serde_json::json;
+
+    let (file, text) = SHIPPED[0];
+    for (field, value) in [
+        ("pitch_degrees", json!(90)),
+        ("fov_degrees", json!(0)),
+        ("target", json!([0, 0, 1e39])),
+        ("required", json!([[1, 0], [0, 1]])),
+    ] {
+        let mut profile: Value = serde_json::from_str(text).unwrap();
+        profile["table"]["camera"][field] = value;
+        let error = profiles::Profiles::parse(&[(file, &profile.to_string()), SHIPPED[1]], card())
+            .unwrap_err();
+        assert!(
+            error.starts_with(&format!("{file}: table.camera.{field}:")),
+            "{error}"
+        );
+    }
+}
+
+#[test]
 fn table_profiles_reject_unknown_geometry_fields() {
     use kit_base::data::profiles::Profiles;
 

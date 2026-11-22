@@ -59,16 +59,37 @@ pub struct CameraData {
 impl CameraData {
     fn validate(self) -> Result<(), String> {
         let [lower, upper] = self.required;
-        if !(-90.0..90.0).contains(&self.pitch_degrees)
-            || !(0.0..180.0).contains(&self.fov_degrees)
-            || self.fov_degrees == 0.0
-            || !self.target.is_finite()
-            || !lower.is_finite()
-            || !upper.is_finite()
-            || lower.x >= upper.x
-            || lower.y >= upper.y
-        {
-            return Err("invalid table.camera geometry".to_owned());
+        let checks = [
+            (
+                (-90.0..90.0).contains(&self.pitch_degrees),
+                "pitch_degrees",
+                "must be at least -90 and less than 90 degrees",
+            ),
+            (
+                self.fov_degrees > 0.0 && self.fov_degrees < 180.0,
+                "fov_degrees",
+                "must be greater than 0 and less than 180 degrees",
+            ),
+            (
+                self.target.is_finite(),
+                "target",
+                "must have finite coordinates",
+            ),
+            (
+                lower.is_finite() && upper.is_finite(),
+                "required",
+                "must have finite coordinates",
+            ),
+            (
+                lower.x < upper.x && lower.y < upper.y,
+                "required",
+                "the lower corner must precede the upper corner on both axes",
+            ),
+        ];
+        for (valid, field, why) in checks {
+            if !valid {
+                return Err(format!("table.camera.{field}: {why}"));
+            }
         }
         Ok(())
     }

@@ -18,6 +18,19 @@ pub enum Scalar {
 }
 
 impl Scalar {
+    /// The path within this scalar of its first ramp with reversed endpoints.
+    pub(super) fn reversed_ramp(&self) -> Option<&'static str> {
+        let ramps: &[(&str, &Ramp)] = match self {
+            Self::Ramp(ramp) => &[("", ramp)],
+            Self::Wave(wave) => &[(".amplitude", &wave.amplitude)],
+            Self::Envelope(envelope) => &[(".rise", &envelope.rise), (".fall", &envelope.fall)],
+            Self::Constant(_) | Self::Power(_) => &[],
+        };
+        ramps
+            .iter()
+            .find_map(|&(path, ramp)| (ramp.start > ramp.end).then_some(path))
+    }
+
     #[must_use]
     pub fn at(&self, progress: f32) -> f32 {
         match self {
@@ -57,6 +70,7 @@ pub struct Ramp {
 
 impl Ramp {
     fn at(&self, progress: f32) -> f32 {
+        // When both endpoints coincide, the ramp switches to its final value at that time.
         let passed = if progress >= self.end {
             1.0
         } else if progress <= self.start {
