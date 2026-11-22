@@ -33,7 +33,7 @@
     "cloth": { "size": 4000, "depth": 0.5 },
     "pile": {
       "top_tolerance": 4,
-      "unseen_exile_layer": 0.25,
+      "hidden_pile_layer": 0.25,
       "rim_shade_layer": 0.25,
       "rim_stage": [1600, 900],
       "rim_card_width": 182,

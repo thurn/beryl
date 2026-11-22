@@ -247,7 +247,7 @@ pub(super) fn lay_unseen_exile(
     let pile = Pile { step: Vec3::ZERO };
     let card = camera.data.card;
     let bottom = Pose {
-        position: at.extend(card.layer * layout.pile.unseen_exile_layer),
+        position: at.extend(card.layer * layout.pile.hidden_pile_layer),
         scale,
         ..Pose::default()
     };

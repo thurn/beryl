@@ -13,9 +13,9 @@ pub struct PileGeometry {
     /// being on the pile.
     #[serde(deserialize_with = "nonnegative")]
     pub top_tolerance: f32,
-    /// The hidden exile stack's height above the table, in card layers.
+    /// The height of a hidden pile above the table, in card layers.
     #[serde(deserialize_with = "fraction")]
-    pub unseen_exile_layer: f32,
+    pub hidden_pile_layer: f32,
     /// The shaded edge's offset below its card, in card layers.
     #[serde(deserialize_with = "fraction")]
     pub rim_shade_layer: f32,
