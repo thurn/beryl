@@ -113,6 +113,12 @@ fn decisions() {
     family("decisions");
 }
 
+#[test]
+#[ignore = "random games of one family: `just fuzz` plays them"]
+fn turn_structure() {
+    family("turn");
+}
+
 /// Worldgorger Dragon's enters ability exiles 33 Mountains, linking each to the Dragon with a
 /// memo, one more than the 32 memos `Small` holds. The game goes on in `Large`, naming the
 /// memos as the list that filled, and plays on without running out of a capacity there.

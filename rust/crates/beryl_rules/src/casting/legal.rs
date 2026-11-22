@@ -556,7 +556,13 @@ fn activatable<L: Layout, const TARGETS: bool>(
     } else {
         // CR 602.5d: "Activated abilities that read 'Activate only as a sorcery' mean the
         // player must follow the timing rules for casting a sorcery spell".
-        a.timing() != Timing::Sorcery || sorcery_timing(s, player)
+        match a.timing() {
+            Timing::Sorcery => sorcery_timing(s, player),
+            // CR 602.5: "A player can't begin to activate an ability that's prohibited
+            // from being activated." The restriction follows the player taking the turn.
+            Timing::YourTurn => s.turn().active() == player,
+            Timing::Instant | Timing::AsInstant => true,
+        }
     };
     if !timely {
         return false;

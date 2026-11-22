@@ -55,6 +55,8 @@ pub enum Timing {
     /// [CR 117.1a]: https://yawgatog.com/resources/magic-rules/#R1171a
     /// [CR 605.3a]: https://yawgatog.com/resources/magic-rules/#R6053a
     AsInstant,
+    /// "Activate only during your turn": while its controller is the active player.
+    YourTurn,
 }
 
 /// Equip's target: "target creature you control" (CR 702.6a).
@@ -530,6 +532,19 @@ impl Ability {
         );
         Ability {
             timing: Timing::Sorcery,
+            ..self
+        }
+    }
+
+    /// "Activate only during your turn" ([`Timing::YourTurn`]).
+    #[must_use]
+    pub const fn during_your_turn(self) -> Ability {
+        assert!(
+            matches!(self.kind, AbilityKind::Activated),
+            "only an activated ability has an activation turn restriction"
+        );
+        Ability {
+            timing: Timing::YourTurn,
             ..self
         }
     }

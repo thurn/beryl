@@ -632,6 +632,13 @@ pub enum Effect {
     /// time, in APNAP order (see rule 101.4). The most recently created turn will be taken
     /// first."
     ExtraTurn(Players),
+    /// "End the turn" ([CR 725.1]): stop resolving, exile the stack and go to cleanup.
+    /// The skipped steps trigger nothing. An ability still waiting for the next end step
+    /// waits for the next one that actually begins. Triggers from the turn-ending process
+    /// go on the stack in cleanup, where priority is followed by another cleanup step.
+    ///
+    /// [CR 725.1]: https://yawgatog.com/resources/magic-rules/#R7251
+    EndTurn,
 }
 
 impl Effect {
@@ -728,6 +735,7 @@ impl Effect {
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
+            | Effect::EndTurn
             | Effect::ExtraTurn(_) => false,
         }
     }

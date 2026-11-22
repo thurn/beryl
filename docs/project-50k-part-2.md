@@ -804,10 +804,12 @@ filled from `Format::turn` as the turn begins.
 `turn::end_the_turn` follows the rule's steps: abilities that triggered and are
 not yet on the stack cease to exist, every object on the stack is exiled
 including the one resolving, state-based actions are checked with no priority,
-combat ends, and the plan is cut to the cleanup step. It is called from inside a
-resolution, so it is the first effect that removes its own stack entry mid-body:
-the replay transaction of `stack/resolve.rs` must commit a body that ends this
-way. Time Stop and Sundial of the Infinite are its cards.
+combat ends, and the plan is cut to the cleanup step. The replay transaction in
+`stack/resolve.rs` detaches the resolving entry before running its instructions.
+The resolving spell is still in the stack zone, so ending the turn exiles it
+with the other spells. The transaction commits at cleanup, without running later
+instructions or giving priority for a normal resolution. Time Stop and Sundial
+of the Infinite use this effect.
 
 **Skipping a turn** is a replacement of beginning the turn (Time Vault), in the
 replacement pipeline, which already asks optional replacements. Stasis skips a

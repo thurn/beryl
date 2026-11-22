@@ -30,6 +30,8 @@ impl Effect {
             | Effect::Fateseal { .. }
             | Effect::Search { .. }
             | Effect::MayCast { .. }
+            // State-based actions can ask which legendary permanent to keep.
+            | Effect::EndTurn
             | Effect::PutIntoLibrary {
                 position: LibraryPosition::TopOrBottom,
                 ..
@@ -197,6 +199,7 @@ impl Effect {
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
+            | Effect::EndTurn
             | Effect::ExtraTurn(_) => None,
         }
     }

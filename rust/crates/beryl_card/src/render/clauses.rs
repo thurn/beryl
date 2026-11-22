@@ -263,6 +263,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::WinGame(player)
         | Effect::LoseGame(player)
         | Effect::ExtraTurn(player) => Some(player),
+        Effect::EndTurn => None,
         Effect::ForEachPlayer { .. }
         | Effect::Counter(_)
         | Effect::CopySpell { .. }

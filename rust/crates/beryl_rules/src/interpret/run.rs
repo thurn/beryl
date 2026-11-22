@@ -164,6 +164,11 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::ForEachPlayer { players, effect } => {
                 return self.for_each_player(players, effect);
             }
+            Effect::EndTurn => {
+                let (game, resolving) = self.resolving();
+                crate::turn::end_the_turn(game, resolving)?;
+                return Err(Stop::EndTurn);
+            }
             Effect::Choose { .. }
             | Effect::LookAt { .. }
             | Effect::Counter(_)
@@ -245,7 +250,8 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     #[allow(clippy::too_many_lines)] // A line or five per entry.
     fn instruction(&mut self, effect: &'static Effect) -> Result<Outcome<L>, Stop> {
         Ok(match *effect {
-            Effect::Sequence(_)
+            Effect::EndTurn
+            | Effect::Sequence(_)
             | Effect::If { .. }
             | Effect::May { .. }
             | Effect::Unless { .. }

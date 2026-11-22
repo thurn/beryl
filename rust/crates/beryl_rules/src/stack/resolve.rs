@@ -14,7 +14,7 @@
 //! Implements: CR 608.2b, CR 608.2m, CR 608.2n, CR 608.3
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityKind, CastingOption, Face};
+use crate::card::{Ability, AbilityKind, CastingOption, Face, Stop};
 use crate::casting::{self, entry_ability};
 use crate::chance;
 use crate::decision::{Answers, Choice, Decision, Outcome, StallReason};
@@ -467,7 +467,10 @@ fn body<L: Layout>(
             let flow = interpret::resolve(&mut game, &mut resolution);
             let question = resolution.question.take();
             let paused = interpret::finish(&mut game, flow)?;
-            if s.outcome().is_some() {
+            // See CR 725.1: this process differs "from the normal process for resolving
+            // spells and abilities." The turn-ending instruction has handled the stack and
+            // started cleanup. Commit the run without normal resolution's timing or moves.
+            if flow == Err(Stop::EndTurn) || s.outcome().is_some() {
                 return Ok(None);
             }
             if paused {

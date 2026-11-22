@@ -116,7 +116,10 @@ impl Effect {
     pub const fn operands(&self) -> Operands<'_> {
         match self {
             // Its rule is the ability's own (`Ability::rule`).
-            Effect::Sequence(_) | Effect::If { .. } | Effect::ChangeRule { .. } => Operands::NONE,
+            Effect::Sequence(_)
+            | Effect::If { .. }
+            | Effect::ChangeRule { .. }
+            | Effect::EndTurn => Operands::NONE,
             Effect::May { player, .. }
             | Effect::ForEachPlayer {
                 players: player, ..

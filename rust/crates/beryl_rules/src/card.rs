@@ -34,6 +34,11 @@ pub enum Stop {
     /// A fixed capacity ran out (§12.3): the game stalls, and goes on in the layout whose
     /// lists grow.
     Full,
+    /// The effect ended the turn (see [CR 725.1]). It already exiled the resolving
+    /// spell or ability and performed the transition to cleanup.
+    ///
+    /// [CR 725.1]: https://yawgatog.com/resources/magic-rules/#R7251
+    EndTurn,
 }
 
 impl From<Full> for Stop {

@@ -1282,6 +1282,42 @@
       "covered": "TargetSpec::ability"
     }
   ],
+  "Sundial of the Infinite": [
+    {
+      "published_at": "2011-09-22",
+      "hash": "8aa02c6fcde1",
+      "scenario": [
+        "Sundial ends the turn in response to an upkeep trigger"
+      ]
+    },
+    {
+      "published_at": "2011-09-22",
+      "hash": "4cd06456657d",
+      "scenario": [
+        "Sundial ends the turn in response to an upkeep trigger"
+      ]
+    },
+    {
+      "published_at": "2011-09-22",
+      "hash": "027b14cecb6e",
+      "scenario": [
+        "Sundial ends the turn in response to an upkeep trigger",
+        "Sundial skips damage after blockers and the combat boost expires"
+      ]
+    },
+    {
+      "published_at": "2011-09-22",
+      "hash": "93214b6065c1",
+      "scenario": [
+        "Sundial leaves Flickerwisp's delayed trigger for the next turn"
+      ]
+    },
+    {
+      "published_at": "2011-09-22",
+      "hash": "893bb121b8a9",
+      "covered": "Effect::EndTurn"
+    }
+  ],
   "Tarmogoyf": [
     {
       "published_at": "2024-06-07",
@@ -1593,6 +1629,35 @@
       "scenario": [
         "it copies an opponent's Dark Depths for Marit Lage",
         "it copies what is printed on a land Blood Moon made a Mountain"
+      ]
+    }
+  ],
+  "Time Stop": [
+    {
+      "published_at": "2004-12-01",
+      "hash": "64133ce5b690",
+      "scenario": [
+        "Time Stop exiles itself and an uncounterable spell on the opponent's turn"
+      ]
+    },
+    {
+      "published_at": "2004-12-01",
+      "hash": "d569b21b6794",
+      "covered": "Effect::EndTurn"
+    },
+    {
+      "published_at": "2007-07-15",
+      "hash": "893bb121b8a9",
+      "scenario": [
+        "Time Stop gives a cleanup discard trigger a chance to resolve"
+      ]
+    },
+    {
+      "published_at": "2007-07-15",
+      "hash": "909210fcd7cd",
+      "scenario": [
+        "Time Stop exiles itself and an uncounterable spell on the opponent's turn",
+        "Time Stop gives a cleanup discard trigger a chance to resolve"
       ]
     }
   ],

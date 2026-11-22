@@ -93,6 +93,7 @@ impl Effect {
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
+            | Effect::EndTurn
             | Effect::ExtraTurn(_) => Branches::Single,
         }
     }
@@ -162,6 +163,7 @@ impl Effect {
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
+            | Effect::EndTurn
             | Effect::ExtraTurn(_) => &[],
         }
     }
@@ -290,6 +292,7 @@ impl Effect {
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
+            | Effect::EndTurn
             | Effect::ExtraTurn(_) => None,
         }
     }

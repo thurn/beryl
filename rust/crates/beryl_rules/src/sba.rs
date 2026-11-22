@@ -393,6 +393,21 @@ fn legend_group<L: Layout>(
     legendary[s.controller(slot).index()].filter(|other| name(s, t, other) == name_of)
 }
 
+/// The choice for the next legend-rule group in APNAP order (see CR 704.5j).
+pub(crate) fn legend_decision<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    kept: Bitboard<L::Slot>,
+) -> Option<crate::decision::Decision<L>> {
+    let (player, group) = unresolved_legends(s, t, kept)?;
+    Some(crate::decision::Decision::objects(
+        player,
+        crate::decision::DecisionKind::ChooseObject,
+        crate::engine::collapse(s, group),
+        crate::card::Prompt::new(crate::card::Purpose::LegendRule).most(1),
+    ))
+}
+
 /// The first legend-rule group, in APNAP order, with no permanent in `kept`: its controller
 /// and members.
 ///

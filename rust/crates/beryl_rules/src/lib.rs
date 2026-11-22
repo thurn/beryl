@@ -89,13 +89,16 @@
 //!
 //! ## How a resolution stops
 //!
-//! Two things stop a resolution before its end, and both travel as the `Err` of what was
-//! running ([`card::Stop`]):
+//! A resolution can stop before its normal end. The reason travels as the `Err` of
+//! what was running ([`card::Stop`]):
 //!
 //! - **A pause.** A question had no answer yet. The question stays on the resolution, not in
 //!   the `Err`, which is one byte.
 //! - **Full.** A fixed capacity ran out. The state is abandoned for its wider copy (§12.3),
 //!   so nothing undoes, and nothing plays on.
+//! - **End the turn.** The effect exiles the stack and enters cleanup (see CR 725.1).
+//!   The transaction commits without carrying out any remaining instructions or moving the
+//!   resolving spell to the graveyard.
 //!
 //! A function of the game alone returns `Result<T, Full>`, or its value plain when nothing it
 //! does can run out of room ([`actions::shuffle`], [`actions::reveal`]). One that may ask

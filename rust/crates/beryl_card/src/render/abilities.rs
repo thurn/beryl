@@ -47,8 +47,10 @@ impl Ctx {
             AbilityKind::Activated => {
                 let cost = self.cost_text(ability.cost());
                 let mut text = format!("{cost}: {}", sentences(&self.body(ability.body())));
-                if ability.timing() == Timing::Sorcery {
-                    text.push_str(" Activate only as a sorcery.");
+                match ability.timing() {
+                    Timing::Sorcery => text.push_str(" Activate only as a sorcery."),
+                    Timing::YourTurn => text.push_str(" Activate only during your turn."),
+                    Timing::Instant | Timing::AsInstant => {}
                 }
                 return text;
             }

@@ -220,7 +220,11 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
             && !face.types.intersects(Types::LAND)
             && (sorcery || instant_speed(s, t, face, player))
     };
-    let activatable = |a: &Ability| sorcery || a.timing() == Timing::Instant;
+    let activatable = |a: &Ability| match a.timing() {
+        Timing::Instant => true,
+        Timing::YourTurn => s.turn().active() == player,
+        Timing::Sorcery | Timing::AsInstant => sorcery,
+    };
     // The hand by card, not by slot: [`Lookahead::together`]'s search is bounded, so the order
     // it meets the costs in can decide, and the slots are where the game's randomness dealt
     // the cards.

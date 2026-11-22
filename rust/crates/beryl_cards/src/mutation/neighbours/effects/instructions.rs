@@ -734,6 +734,11 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                 add(Kind::EffectPlayers, name, Effect::ControlPlayer(player));
             }
         }
+        Effect::EndTurn => add(
+            Kind::SequenceStep,
+            "omit ending the turn".to_owned(),
+            Effect::NOTHING,
+        ),
         Effect::ExtraTurn(player) => {
             for (name, player) in players(player) {
                 add(Kind::EffectPlayers, name, Effect::ExtraTurn(player));

@@ -50,6 +50,8 @@ pub enum Malformed {
     /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)): any other ability
     /// names the kind it adds ([`Effect::AddManaOfKind`]).
     AddMana,
+    /// [`Effect::EndTurn`] in a replacement ability, where no spell or ability is resolving.
+    EndTurn,
     /// [`Effect::CounterInto`] a zone other than exile, which is the one place the engine
     /// puts a countered spell instead of its owner's graveyard.
     Countered,
@@ -140,6 +142,7 @@ impl Malformed {
                 "a copy names an exception, or an exception an ability, its face lacks"
             }
             Malformed::AddMana => "an effect adds mana outside a mana ability",
+            Malformed::EndTurn => "a replacement ability cannot end the turn",
             Malformed::Countered => "a countered spell is put somewhere other than exile",
             Malformed::Cost => "an effect names a cost the engine cannot take as it resolves",
             Malformed::Fateseal => "an effect fateseals a number of cards other than one",

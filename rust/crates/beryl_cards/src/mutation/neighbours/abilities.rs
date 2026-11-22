@@ -134,6 +134,7 @@ fn with_cost_or_product(ability: &Ability, cost: Cost, product: ManaSet) -> Abil
 pub(super) fn preserve(ability: &Ability, mut changed: Ability) -> Ability {
     changed = changed.in_zones(ability.zones());
     changed = match ability.timing() {
+        Timing::YourTurn => changed.during_your_turn(),
         Timing::Sorcery => changed.as_a_sorcery(),
         Timing::AsInstant => changed.as_an_instant(),
         Timing::Instant => changed,

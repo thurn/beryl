@@ -79,11 +79,7 @@ pub(crate) fn decision<L: Layout>(
             ))
         }
         Pending::LegendRule { kept } => {
-            let (p, group) =
-                sba::unresolved_legends(s, t, kept).expect("a legend-rule group without a keeper");
-            let keep = Prompt::new(Purpose::LegendRule).most(1);
-            let kind = DecisionKind::ChooseObject;
-            Ok(Decision::objects(p, kind, collapse(s, group), keep))
+            Ok(sba::legend_decision(s, t, kept).expect("a legend-rule group without a keeper"))
         }
         Pending::OrderEntered { group } => Ok(arrival_timestamps::decision(s, group)),
         // The question is about the land entering, for this much life.

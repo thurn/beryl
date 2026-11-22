@@ -173,16 +173,7 @@ impl Capability {
             if a.spend().is_some() {
                 found |= Capability::RemembersMana.bit();
             }
-            if let Behavior::Data(effect) = a.body()
-                && copies_itself(effect)
-            {
-                found |= Capability::CopiesItself.bit();
-            }
-            if let Behavior::Custom(body) = a.body()
-                && body.says().changes_turn_structure
-            {
-                found |= Capability::TurnStructure.bit();
-            }
+            found |= body_capabilities(a.body());
             if a.cost().is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();
             }
@@ -242,6 +233,26 @@ fn casting_capabilities(face: &Face) -> u32 {
                 | CastingOption::Escape { .. } => 0,
             }
     })
+}
+
+/// The capabilities needed by the instructions a spell or ability can carry out.
+fn body_capabilities(body: Behavior) -> u32 {
+    match body {
+        Behavior::Data(effect) => {
+            let mut found = 0;
+            if copies_itself(effect) {
+                found |= Capability::CopiesItself.bit();
+            }
+            if effect.any(&|instruction| matches!(instruction, Effect::EndTurn)) {
+                found |= Capability::TurnStructure.bit();
+            }
+            found
+        }
+        Behavior::Custom(body) if body.says().changes_turn_structure => {
+            Capability::TurnStructure.bit()
+        }
+        Behavior::Custom(_) => 0,
+    }
 }
 
 /// Whether `effect`, or an instruction it holds, copies the spell whose ability it is.

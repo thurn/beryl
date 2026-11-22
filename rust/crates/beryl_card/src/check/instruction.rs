@@ -36,6 +36,9 @@ impl Scope<'_> {
             Effect::AddMana { .. } if !matches!(self.ability.kind(), AbilityKind::Mana) => {
                 Err(Malformed::AddMana)
             }
+            Effect::EndTurn if matches!(self.ability.kind(), AbilityKind::Replacement) => {
+                Err(Malformed::EndTurn)
+            }
             Effect::Modify {
                 objects,
                 modifications,
@@ -178,6 +181,7 @@ impl Scope<'_> {
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
+            | Effect::EndTurn
             | Effect::ExtraTurn(_) => Ok(()),
         };
         both(entry, self.operands(effect.operands()))

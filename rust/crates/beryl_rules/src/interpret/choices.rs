@@ -493,6 +493,7 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::WinGame(_)
         | Effect::LoseGame(_)
         | Effect::ControlPlayer(_)
+        | Effect::EndTurn
         | Effect::ExtraTurn(_) => (MAY, Bitboard::EMPTY),
     };
     let agreed = match run.one(player) {

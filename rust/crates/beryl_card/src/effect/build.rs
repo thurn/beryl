@@ -769,6 +769,11 @@ pub const fn extra_turn(player: Players) -> Effect {
     Effect::ExtraTurn(player)
 }
 
+/// [`Effect::EndTurn`]: "End the turn".
+pub const fn end_turn() -> Effect {
+    Effect::EndTurn
+}
+
 /// [`Effect::WinGame`]: "[player] wins the game".
 pub const fn win_game(player: Players) -> Effect {
     Effect::WinGame(player)

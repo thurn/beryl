@@ -760,6 +760,12 @@ impl<L: Layout> State<L> {
         self.triggers.remove(index)
     }
 
+    /// See [CR 725.1a](https://yawgatog.com/resources/magic-rules/#R7251a): waiting
+    /// triggers "cease to exist." Delayed abilities that have yet to trigger keep waiting.
+    pub fn discard_waiting_triggers(&mut self) {
+        self.triggers.clear();
+    }
+
     /// Creates a delayed triggered ability
     /// (see [CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)): "An effect may create
     /// a delayed triggered ability that can do something at a later time."

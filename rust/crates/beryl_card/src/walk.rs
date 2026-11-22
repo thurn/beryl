@@ -453,6 +453,7 @@ impl Effect {
                 | Effect::WinGame(_)
                 | Effect::LoseGame(_)
                 | Effect::ControlPlayer(_)
+                | Effect::EndTurn
                 | Effect::ExtraTurn(_) => {}
             }
             false

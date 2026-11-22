@@ -88,5 +88,11 @@
     "card": "Snapcaster Mage",
     "scenario": "generated 4: use a casting permission from the graveyard from hand",
     "gap": "casting a spell with flashback"
+  },
+  {
+    "oracle": "forge",
+    "card": "Time Stop",
+    "scenario": "Time Stop gives a cleanup discard trigger a chance to resolve",
+    "gap": "a cleanup discard choice, which Forge asks through chooseCardsToDiscardToMaximumHandSize and the harness does not replay"
   }
 ]

@@ -5,7 +5,7 @@
 //! draw step, where the end of the step pauses ([`Pending::StepActions`]); so is a value a
 //! permanent chooses as it enters.
 
-use beryl_card::effect::build::{cards_in, gain_life, scry, sequence, you};
+use beryl_card::effect::build::{cards_in, draw, end_turn, gain_life, scry, sequence, you};
 use beryl_card::{
     Amount, CardDef, Cost, Effect, Face, Filter, ManaColor, ManaCost, ManaSet, Players, Prompt,
     Purpose, Replacement, Says, SpecIx, TargetKind, TargetSpec, Trigger, Types,
@@ -22,7 +22,7 @@ use crate::interpret::choices;
 use crate::replacement::event::{Cause, Event, StackIx};
 use crate::resolution::Resolution;
 use crate::rng::SplitMix64;
-use crate::state::{Pending, Zone};
+use crate::state::{Pending, TurnStep, Zone};
 use crate::zone::Place;
 use crate::{
     Answers, CardTable, Choice, CustomBody, Decision, DecisionKind, Decklist, GameTable, Layout,
@@ -379,6 +379,105 @@ fn a_cast_inside_a_resolution_replays_with_its_later_question() {
         after_cast > 0,
         "no replay exercised a cast with nonzero X before scrying"
     );
+}
+
+static DRAW_WATCHER: CardDef = CardDef {
+    name: "Test Draw Watcher",
+    shape: beryl_card::definition::Shape::Single,
+    tokens: &[],
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[Ability::triggered(&Trigger::draws(Players::You)).effect(&gain_life(you(), 1))],
+        ..Face::EMPTY
+    }],
+};
+
+/// The draw triggers the watcher. The last instruction must be skipped when the turn ends.
+static SCRY_THEN_END_TURN: CardDef = CardDef {
+    name: "Test Scry and End Turn",
+    shape: beryl_card::definition::Shape::Single,
+    tokens: &[],
+    faces: &[Face {
+        types: Types::INSTANT,
+        abilities: &[Ability::spell().effect(&sequence(&[
+            draw(you(), 1),
+            scry(you(), 1),
+            end_turn(),
+            gain_life(you(), 10),
+        ]))],
+        ..Face::EMPTY
+    }],
+};
+
+#[test]
+fn ending_the_turn_after_a_question_replays_to_the_same_cleanup() {
+    static CARDS: CardTable =
+        CardTable::new(&[&LAND, &CAST_THEN_SCRY, &SCRY_THEN_END_TURN, &DRAW_WATCHER]);
+    const DECK: &Decklist = &[
+        (20, "Test Land"),
+        (1, "Test Cast and Scry"),
+        (1, "Test Scry and End Turn"),
+        (1, "Test Draw Watcher"),
+    ];
+    let mut g = super::cast::Game::with(&CARDS, DECK, Profile::EXACT);
+    g.x = Scratch::recording();
+    let below = g.give(g.me, CAST_THEN_SCRY.name, Zone::Hand);
+    let ends = g.give(g.them, SCRY_THEN_END_TURN.name, Zone::Hand);
+    g.give(g.them, DRAW_WATCHER.name, Zone::Battlefield);
+    g.pick(cast(below));
+    g.pick(cast(ends));
+    g.choose(Choice(0));
+    assert_eq!(g.s.turn().priority(), g.me);
+    let mut inline = g.s;
+    let mut inline_scratch = Scratch::recording();
+    let mut answer = Inline {
+        rng: SplitMix64::new(1),
+        log: Vec::new(),
+    };
+    apply(
+        &mut inline,
+        &g.t,
+        &mut inline_scratch,
+        &mut answer,
+        Choice(0),
+    );
+    assert_eq!(answer.log.len(), 1, "the inline source answered scry");
+
+    g.choose(Choice(0));
+    assert!(g.is_paused());
+    assert_eq!(g.current().prompt.purpose, Purpose::Scry);
+    assert_eq!(g.s.object(ends).zone(), Zone::Stack);
+    assert_eq!(g.s.stack().len(), 2);
+    assert_eq!(crate::view(&g.s, &g.t, &mut g.x).triggers().len(), 1);
+    // next counts the question that appeared during the replay.
+    let _ = g.decide();
+    g.choose(Choice(answer.log[0]));
+    assert_eq!(g.s.turn().step(), TurnStep::Cleanup);
+    assert_eq!(g.s.object(below).zone(), Zone::Exile);
+    assert_eq!(g.s.object(ends).zone(), Zone::Exile);
+    assert_eq!(g.s.player(g.them).life(), 20);
+    assert!(g.s.stack().is_empty());
+    assert!(
+        g.s.triggers().is_empty(),
+        "the draw trigger ceased to exist"
+    );
+    assert_eq!(fingerprint(&g.s), fingerprint(&inline));
+
+    let events: Vec<_> = g.x.events.drain().collect();
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| matches!(e, Event::StackDeparture { .. }))
+            .count(),
+        2
+    );
+    assert!(events.iter().any(|e| matches!(
+        e,
+        Event::StepBegins {
+            step: TurnStep::Cleanup,
+            ..
+        }
+    )));
 }
 
 #[test]
