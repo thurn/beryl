@@ -6,19 +6,22 @@ use crate::reference;
 use app_client::Input;
 use app_client::command::SessionCommand;
 use app_client::{Client, Config};
+use app_screens::screens::settings::Message as SettingsMessage;
 use beryl_card_records::{TokenMakers, card_records_among};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::prompt::{
     ButtonId, Click, ClickRequest, PromptButton, PromptView, Purpose, ShapeBody,
 };
 use beryl_protocol::protocol::{
-    Candidate, CandidateView, DecisionView, Kind, ObjectId, SessionId, Side, Status, ZoneName,
+    Candidate, CandidateView, DecisionView, Kind, ObjectId, PassTo, SessionId, Side, Status, Step,
+    ZoneName,
 };
 use beryl_protocol::testing::{self, ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits};
+use kit_ui::element::Action;
 use kit_ui::input::Input as DeviceInput;
-use kit_ui::input::{Insets, PointerPhase, Size};
+use kit_ui::input::{Insets, Key, KeyCode, KeyPhase, Modifiers, PointerPhase, Size};
 
 use super::flat_layer::{centre, client, decision, find, pointer};
 
@@ -96,6 +99,130 @@ fn card_centre(frame: &Frame, slot: ObjectId) -> Vec2 {
         .position(|element| element.role == Role::Card && element.id.0 == u32::from(slot.0))
         .expect("the card is drawn");
     centre(frame, index)
+}
+
+fn priority_button(label: &str, caption: &str, enabled: bool) -> Input {
+    let mut board = ViewBuilder::new();
+    board.script(ScriptBuilder::reset().build());
+    let pass_to = if label == "Resolve" {
+        board.card(ZoneName::Stack, Side::Opponent, "Lightning Bolt");
+        PassTo::Resolve
+    } else {
+        PassTo::Step {
+            step: Step::PostcombatMain,
+        }
+    };
+    let mut primary = button(ButtonId::Decline, label, true, enabled);
+    primary.caption = caption.to_owned();
+    let prompt = prompt(Purpose::Priority, "", vec![primary], ShapeBody::Candidates);
+    let Input::Update(mut update) = deciding(&board, prompt, Vec::new()) else {
+        unreachable!("deciding is a view update");
+    };
+    update.view.turn.number = 4;
+    update.view.turn.step = Step::PrecombatMain;
+    let Status::Deciding { decision } = &mut update.view.status else {
+        unreachable!("the view has a decision");
+    };
+    decision.pass_to = Some(pass_to);
+    Input::Update(update)
+}
+
+fn key(client: &mut Client, code: KeyCode, phase: KeyPhase) {
+    client.handle(Input::Device(DeviceInput::Key(Key {
+        code,
+        phase,
+        modifiers: Modifiers::default(),
+    })));
+}
+
+#[test]
+fn space_and_enter_press_the_primary_priority_button_once() {
+    for (label, caption) in [("Next", "To Main 2"), ("Resolve", "")] {
+        for code in [KeyCode::Space, KeyCode::Enter] {
+            let mut client = client();
+            client.handle(priority_button(label, caption, true));
+            find(client.frame(0), Role::Button, label);
+            key(&mut client, code, KeyPhase::Down);
+            assert_eq!(
+                client.next_command(),
+                Some(SessionCommand::Click(ClickRequest {
+                    decision: decision(),
+                    revision: 2,
+                    click: Click::Button {
+                        button: ButtonId::Decline
+                    },
+                })),
+                "{code:?} presses {label}"
+            );
+            for phase in [KeyPhase::Repeat, KeyPhase::Up, KeyPhase::Down] {
+                key(&mut client, code, phase);
+                assert_eq!(
+                    client.next_command(),
+                    None,
+                    "{phase:?} while awaiting a reply"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn priority_button_shortcuts_require_an_enabled_button() {
+    let mut client = client();
+    client.handle(priority_button("Next", "To Main 2", false));
+    find(client.frame(0), Role::Button, "Next");
+    for code in [KeyCode::Space, KeyCode::Enter] {
+        key(&mut client, code, KeyPhase::Down);
+        assert_eq!(client.next_command(), None);
+    }
+}
+
+#[test]
+fn priority_button_shortcuts_leave_the_game_alone_while_settings_are_open() {
+    let mut client = client();
+    client.handle(priority_button("Next", "To Main 2", true));
+    find(client.frame(0), Role::Button, "Next");
+    client.dispatch(&Action::new(SettingsMessage::Open));
+    find(client.frame(MS), Role::Slider, "Music");
+    for code in [KeyCode::Space, KeyCode::Enter] {
+        key(&mut client, code, KeyPhase::Down);
+        assert_eq!(client.next_command(), None);
+    }
+}
+
+#[test]
+fn priority_button_shortcuts_press_the_focused_control() {
+    for code in [KeyCode::Space, KeyCode::Enter] {
+        let mut client = client();
+        let input = prompt(
+            Purpose::Priority,
+            "",
+            vec![
+                button(ButtonId::Decline, "Next", true, true),
+                button(ButtonId::PassOn, "To End Turn", false, true),
+            ],
+            ShapeBody::Candidates,
+        );
+        client.handle(deciding(&ViewBuilder::new(), input, Vec::new()));
+        client.frame(0);
+        key(&mut client, KeyCode::Tab, KeyPhase::Down);
+        key(&mut client, KeyCode::Tab, KeyPhase::Down);
+        let frame = client.frame(MS);
+        let pass_on = find(frame, Role::Button, "To End Turn");
+        assert!(frame.resolved[pass_on].state.has(StateBits::FOCUSED));
+        key(&mut client, code, KeyPhase::Down);
+        assert_eq!(
+            client.next_command(),
+            Some(SessionCommand::Click(ClickRequest {
+                decision: decision(),
+                revision: 2,
+                click: Click::Button {
+                    button: ButtonId::PassOn,
+                },
+            })),
+            "{code:?} presses the focused pass-on button"
+        );
+    }
 }
 
 #[test]

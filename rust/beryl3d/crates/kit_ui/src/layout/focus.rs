@@ -68,6 +68,12 @@ impl Layer {
         self.keyboard_root(open)?.input_node(self.focused?, open)
     }
 
+    /// Whether an element that currently takes input has the focus.
+    #[must_use]
+    pub fn has_focus(&self, open: bool) -> bool {
+        self.focused_node(open).is_some()
+    }
+
     /// Moves the focus to the next focusable element in tree order, or the one before if not
     /// `forward`, going round from the last to the first, among the elements of the sheet or
     /// menu that holds the focus (`focus_scope`), or else the part of the screen that takes
