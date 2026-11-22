@@ -71,7 +71,7 @@ fn sweep(path: &Path) -> Result<Printed, String> {
             Err(error) => faults.push(error),
         }
     }
-    let windows = pages::first_windows();
+    let windows = pages::Windows::All.windows();
     let tests: Vec<_> = recordings::entries()?
         .iter()
         .flat_map(|entry| {

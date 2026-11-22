@@ -2,8 +2,8 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::prompt::{PartName, PromptView, Purpose, ShapeBody, Words};
 use beryl_protocol::protocol::{
-    Candidate, CandidateView, DecisionId, DecisionView, Kind, ObjectId, SessionId, Side, Status,
-    ZoneName,
+    Candidate, CandidateView, Combat, DecisionId, DecisionView, Kind, ObjectId, PowerToughness,
+    SessionId, Side, Status, Step, ZoneName,
 };
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_probe::signature::{Measure, Signature};
@@ -139,4 +139,30 @@ fn a_notice_pill_and_a_banner_have_different_signatures() {
         notice: Notice::Shuffle,
     };
     assert_ne!(signature(&pill), signature(&banner));
+}
+
+#[test]
+fn a_wider_or_lethal_incoming_damage_badge_changes_the_signature() {
+    let mut builder = ViewBuilder::new();
+    let attacker = builder.card(ZoneName::Battlefield, Side::You, "Attacker");
+    attacker.pt = Some(PowerToughness {
+        power: 2,
+        toughness: 2,
+    });
+    attacker.combat = Some(Combat::Attacking {
+        planeswalker: None,
+        target_departed: None,
+        blocked: false,
+    });
+    let mut base = builder.update();
+    base.view.turn.step = Step::DeclareBlockers;
+    base.view.players.opponent.life = 19;
+
+    let mut wider = base.clone();
+    wider.view.objects[0].pt.as_mut().unwrap().power = 10;
+    assert_ne!(signature(&base), signature(&wider));
+
+    let mut lethal = base.clone();
+    lethal.view.objects[0].pt.as_mut().unwrap().power = 19;
+    assert_ne!(signature(&wider), signature(&lethal));
 }

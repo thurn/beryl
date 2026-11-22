@@ -124,14 +124,6 @@ pub enum Windows {
     All,
 }
 
-/// Each profile's first test window, in profile order.
-pub(crate) fn first_windows() -> Vec<Window> {
-    profiles()
-        .iter()
-        .filter_map(|profile| profile.test_windows().next())
-        .collect()
-}
-
 impl Windows {
     /// The windows, in the order tests are named in.
     #[must_use]

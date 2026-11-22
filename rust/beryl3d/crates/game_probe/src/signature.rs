@@ -12,6 +12,7 @@ use beryl_protocol::protocol::{
     ObjectView, PlayerState, PlayerView, Side, StackItem, Status, ZoneName,
 };
 use beryl_protocol::script::{Act, Notice, Script, Subject};
+use game_hud::hud::counts::players::incoming;
 use game_hud::hud::log::Logged;
 use game_hud::prompts::prompt_title;
 use game_table::table::Window;
@@ -161,8 +162,8 @@ impl Measure {
             sideboards,
             stack,
             [
-                player_shape(&view.players.you),
-                player_shape(&view.players.opponent)
+                player_shape(&view.players.you, incoming(view, Side::You)),
+                player_shape(&view.players.opponent, incoming(view, Side::Opponent))
             ],
             inspector,
             log_lines,
@@ -380,7 +381,7 @@ fn object_shape(object: &ObjectView, words: &mut Words) -> Value {
     ])
 }
 
-fn player_shape(player: &PlayerState) -> Value {
+fn player_shape(player: &PlayerState, damage: Option<i32>) -> Value {
     let mana = player.mana;
     let floating = [
         mana.white,
@@ -396,6 +397,8 @@ fn player_shape(player: &PlayerState) -> Value {
         player.emblems.len(),
         player.named_counters.len(),
         floating,
+        // The badge adds a minus sign for positive damage and a glow for lethal damage.
+        damage.map(|damage| (damage.checked_ilog10(), damage > 0 && damage >= player.life)),
     ])
 }
 
