@@ -40,6 +40,7 @@ use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::{feed, fleet, tickets};
 use ignite_store::{Result, StoreError};
 
+use super::platform_wait::{PlatformWait, WAIT_SCOPE_KEY};
 use super::signature::Signature;
 
 /// The ticket metadata key that holds a signature's key.
@@ -129,6 +130,17 @@ impl Filing {
             .get_or_insert_with(BTreeMap::new)
             .insert(BLOCKED_TIPS_KEY.to_owned(), Value::from(vec![tip]));
         self
+    }
+
+    /// Records both the tip this fault holds back and the work it is waiting for.
+    pub(super) fn holding_platform_wait(self, scope: &PlatformWait) -> Self {
+        let mut filing = self.holding_tip(scope.commit.as_str());
+        filing
+            .fields
+            .metadata
+            .get_or_insert_with(BTreeMap::new)
+            .insert(WAIT_SCOPE_KEY.to_owned(), serde_json::json!(scope));
+        filing
     }
 }
 
@@ -227,7 +239,8 @@ fn file_with(
         let (ops, change) = match live {
             Some(open)
                 if open.sightings.contains(&filing.evidence)
-                    && new_blocked_tips(open, filing).is_none() =>
+                    && new_blocked_tips(open, filing).is_none()
+                    && new_wait_scope(open, filing).is_none() =>
             {
                 return Ok(Some(Filed {
                     ticket: open.id.clone(),
@@ -502,6 +515,12 @@ fn new_blocked_tips(ticket: &Match, filing: &Filing) -> Option<Vec<String>> {
     (tips.len() > count).then_some(tips)
 }
 
+/// A platform wait report can add scope to a silent machine's ticket or update an earlier wait.
+fn new_wait_scope<'a>(ticket: &Match, filing: &'a Filing) -> Option<&'a Value> {
+    let scope = filing.fields.metadata.as_ref()?.get(WAIT_SCOPE_KEY)?;
+    (Some(scope) != ticket.metadata.get(WAIT_SCOPE_KEY)).then_some(scope)
+}
+
 /// The metadata a new sighting writes on a ticket that already exists: the sighting, its filer,
 /// its time, its checks and, on a ticket filed before tickets recorded it, the fault.
 fn sighting_meta(
@@ -534,6 +553,9 @@ fn sighting_meta(
     }
     if let Some(tips) = new_blocked_tips(ticket, filing) {
         meta.insert(BLOCKED_TIPS_KEY.to_owned(), Value::from(tips));
+    }
+    if let Some(scope) = new_wait_scope(ticket, filing) {
+        meta.insert(WAIT_SCOPE_KEY.to_owned(), scope.clone());
     }
     meta
 }

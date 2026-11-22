@@ -25,6 +25,7 @@ use ignite_store::Result;
 use ignite_store::hub::{fleet, fleet_settings, rows, tickets, tip_rounds};
 
 use super::filing::{CHECKS_KEY, FAULT_KEY, SIGHTED_KEY, strings};
+use super::platform_wait::{PlatformWait, WAIT_SCOPE_KEY};
 use super::stuck::{self, StuckNow, TIP_WAIT_SECONDS};
 use super::{justiciar, parse_time, regression_stalls, resource_stalls};
 use crate::routes::tip_rounds as rounds_route;
@@ -96,8 +97,6 @@ pub struct World {
     settings: FleetSettings,
     /// Some tip has waited [`TIP_WAIT_SECONDS`] or more for verification.
     tip_waiting: bool,
-    /// The machines that stored a check result in the last [`TIP_WAIT_SECONDS`].
-    working: BTreeSet<String>,
     master_lagging: bool,
     stalled_regressions: BTreeSet<String>,
     /// The newest rounds, newest first.
@@ -130,7 +129,6 @@ impl World {
             machines: fleet::machines(conn)?,
             settings: fleet_settings::settings(conn)?,
             tip_waiting,
-            working: stuck::working_machines(conn, now)?,
             master_lagging,
             stalled_regressions,
             rounds: tip_rounds::recent(conn, QUICK_ROUNDS)?,
@@ -190,7 +188,7 @@ pub fn verdict(
                 _ => format!("ticket {subject} is no longer in progress."),
             })
         }),
-        "unreachable" => Ok(unreachable(world, subject, sighted)),
+        "unreachable" => unreachable(conn, world, subject, ticket, sighted),
         category if category == justiciar::LABEL && subject == justiciar::MASTER_LAG_SUBJECT => {
             present_unless(world.master_lagging, &|| {
                 Ok("`master` moved: no landing has waited two hours for it since.".to_owned())
@@ -232,10 +230,15 @@ fn status_of(conn: &Connection, id: &str) -> Result<Option<Status>> {
     Ok(tickets::load(conn, id)?.map(|ticket| ticket.status))
 }
 
-/// A machine (or, for `os:<os>`, any machine of that system) has reported since the last
-/// sighting, and either no tip has waited an hour since or the machine is running checks: it
-/// stored a result within the hour, so a tip waits only because a round takes long.
-fn unreachable(world: &World, subject: &str, sighted: Timestamp) -> Verdict {
+/// A platform wait clears when its required work progresses or its tip is verified. For a
+/// report of silence only, a new heartbeat and the absence of an old wait clear the fault.
+fn unreachable(
+    conn: &Connection,
+    world: &World,
+    subject: &str,
+    ticket: &Ticket,
+    sighted: Timestamp,
+) -> Result<Verdict> {
     let named = world
         .machines
         .iter()
@@ -246,31 +249,43 @@ fn unreachable(world: &World, subject: &str, sighted: Timestamp) -> Verdict {
     let on =
         |machine: &&rows::Machine| world.settings.machine(&machine.name).state != MachineState::Off;
     if named.clone().next().is_some() && !named.clone().any(|machine| on(&machine)) {
-        return Verdict::Cleared("the machines the tip waited on were turned off.".to_owned());
-    }
-    let mut enabled = named.filter(on);
-    if let Some(machine) = enabled
-        .clone()
-        .find(|machine| world.working.contains(&machine.id))
-    {
-        return Verdict::Cleared(format!(
-            "machine {} stored a check result within the hour, so it is running the tip's \
-             checks.",
-            machine.name
+        return Ok(Verdict::Cleared(
+            "the machines the tip waited on were turned off.".to_owned(),
         ));
     }
+    let mut enabled = named.filter(on);
+    if let Some(scope) = ticket
+        .metadata
+        .get(WAIT_SCOPE_KEY)
+        .and_then(|value| serde_json::from_value::<PlatformWait>(value.clone()).ok())
+    {
+        if scope.verified(conn)? {
+            return Ok(Verdict::Cleared(format!(
+                "tip {} or a later tip verified.",
+                scope.commit
+            )));
+        }
+        if let Some(machine) = scope.working_machine(conn, enabled, world.now)? {
+            return Ok(Verdict::Cleared(format!(
+                "machine {} reported progress on the tip's {} work within the hour.",
+                machine.name,
+                scope.platform.as_str()
+            )));
+        }
+        return Ok(Verdict::Present);
+    }
     if world.tip_waiting {
-        return Verdict::Present;
+        return Ok(Verdict::Present);
     }
     let back =
         enabled.find(|machine| parse_time(&machine.last_seen).is_ok_and(|seen| seen > sighted));
-    match back {
+    Ok(match back {
         Some(machine) => Verdict::Cleared(format!(
             "machine {} reported at {} and no tip has waited an hour for verification since.",
             machine.name, machine.last_seen
         )),
         None => Verdict::Present,
-    }
+    })
 }
 
 /// Every check the fault held back has a result stored after the last sighting.

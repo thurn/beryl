@@ -10,7 +10,7 @@ use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     FoundBy, IncompleteReason, IncompleteReport, MachineRegister, NewResult, RegressionReport,
-    ResultCost, ResultKey,
+    ResultCost, ResultKey, TipState, TipVerified, TipWaiting,
 };
 use ignite_core::protocol::tickets::{
     BatchRequest, EdgeKind, Operation, Status, TicketFields, TicketType,
@@ -19,7 +19,7 @@ use ignite_core::time::Timestamp;
 use ignite_core::tipround::TipRound;
 use ignite_core::traits::Clock;
 use ignite_store::hub::batch;
-use ignite_store::hub::{self, edges, fleet, results, tickets, tip_rounds, tips};
+use ignite_store::hub::{self, edges, fleet, listings, results, tickets, tip_rounds, tips};
 
 use super::clearing::{CLOSE_PREFIX, HOLD_SECONDS, RETURNED_HOLD_SECONDS};
 use super::filing::{self, Change, FAULT_KEY, FILERS_KEY, Filing, UPKEEP};
@@ -386,51 +386,111 @@ fn a_silent_machine_ticket_closes_once_it_reports_and_no_tip_waits() {
     );
 }
 
-#[test]
-fn a_tip_wait_ticket_closes_while_its_machine_runs_checks_though_tips_wait() {
-    let clock = start();
-    let mut conn = hub::open_in_memory().unwrap();
-    let mut upkeep = Upkeep::new(None).unwrap();
-    fleet::register(&conn, &machine("m-2", "multivac"), clock.now()).unwrap();
-    tips::seen(&conn, "abcd", clock.now()).unwrap();
+fn windows_wait(conn: &mut Connection, clock: &FakeClock, name: &str) -> String {
+    let mut windows = machine("m-2", "cygnus");
+    windows.os = Os::Windows;
+    tips::seen(conn, "abcd", clock.now()).unwrap();
     clock.advance(3_700.0);
-    fleet::register(&conn, &machine("m-2", "multivac"), clock.now()).unwrap();
-    let waiting = ignite_core::protocol::hub::TipWaiting {
+    fleet::register(conn, &windows, clock.now()).unwrap();
+    let waiting = TipWaiting {
         commit: Commit::new("abcd").unwrap(),
         machine: MachineId::new("m-3").unwrap(),
-        platform: Os::Macos,
-        checks: vec![CheckName::new("app:smoke").unwrap()],
+        platform: Os::Windows,
+        checks: vec![CheckName::new(name).unwrap()],
         waited_s: 3_700.0,
         unrunnable: Vec::new(),
     };
-    let filed = stuck::tip_waiting(&mut conn, UPKEEP, &waiting, clock.now()).unwrap();
+    let filed = stuck::tip_waiting(conn, UPKEEP, &waiting, clock.now()).unwrap();
     assert_eq!(filed.len(), 1);
+    filed[0].ticket.clone()
+}
 
-    // multivac keeps storing results while the tip still waits, which is a slow round, not a
-    // fault, so the ticket closes.
-    let mut closed = Vec::new();
-    for n in 0..12_u32 {
-        clock.advance(600.0);
-        fleet::register(&conn, &machine("m-2", "multivac"), clock.now()).unwrap();
-        let result = NewResult {
-            key: ResultKey {
-                check: CheckName::new("app:smoke").unwrap(),
-                hash: InputHash::new(format!("{n:064x}")).unwrap(),
-                platform: Some(Os::Macos),
-            },
-            outcome: Outcome::Pass,
-            machine: MachineId::new("m-2").unwrap(),
-            record: RecordId(1),
-            output: None,
-            cost: ResultCost::default(),
-            areas: Vec::new(),
+#[test]
+fn platform_wait_tickets_only_close_for_progress_on_the_work_they_name() {
+    for name in ["platform:listing", "platform:wrap"] {
+        let clock = start();
+        let mut conn = hub::open_in_memory().unwrap();
+        let mut upkeep = Upkeep::new(None).unwrap();
+        let id = windows_wait(&mut conn, &clock, name);
+        let store = |conn: &mut Connection, platform| {
+            let result = NewResult {
+                key: ResultKey {
+                    check: CheckName::new("platform:wrap").unwrap(),
+                    hash: InputHash::new("a".repeat(64)).unwrap(),
+                    platform,
+                },
+                outcome: Outcome::Pass,
+                machine: MachineId::new("m-2").unwrap(),
+                record: RecordId(1),
+                output: None,
+                cost: ResultCost::default(),
+                areas: Vec::new(),
+            };
+            results::store(conn, &[result], clock.now()).unwrap();
         };
-        results::store(&mut conn, &[result], clock.now()).unwrap();
-        closed.extend(upkeep.pass(&mut conn, clock.now()).unwrap().tickets_closed);
+
+        // More than one upkeep hold period of portable work leaves either ticket open.
+        for _ in 0..12 {
+            clock.advance(600.0);
+            store(&mut conn, None);
+            assert!(
+                !upkeep
+                    .pass(&mut conn, clock.now())
+                    .unwrap()
+                    .tickets_closed
+                    .contains(&id)
+            );
+        }
+
+        let mut closed = Vec::new();
+        for _ in 0..12 {
+            clock.advance(600.0);
+            if name == "platform:listing" {
+                listings::put(
+                    &conn,
+                    "platform",
+                    "win",
+                    "[]",
+                    "m-2",
+                    &clock.now().to_string(),
+                )
+                .unwrap();
+            } else {
+                store(&mut conn, Some(Os::Windows));
+            }
+            closed.extend(upkeep.pass(&mut conn, clock.now()).unwrap().tickets_closed);
+        }
+        assert_eq!(closed, vec![id.clone()]);
+        let reason = ticket(&conn, &id).close_reason.unwrap();
+        assert!(
+            reason.contains("progress on the tip's windows work"),
+            "{reason}"
+        );
     }
-    assert_eq!(closed, vec![filed[0].ticket.clone()]);
-    let reason = ticket(&conn, &filed[0].ticket).close_reason.unwrap();
-    assert!(reason.contains("running the tip's checks"), "{reason}");
+}
+
+#[test]
+fn a_platform_wait_ticket_can_clear_when_its_tip_verifies_without_a_new_heartbeat() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    let id = windows_wait(&mut conn, &clock, "platform:listing");
+    tips::verified(
+        &conn,
+        &TipVerified {
+            commit: Commit::new("abcd").unwrap(),
+            machine: MachineId::new("m-3").unwrap(),
+            state: TipState::Verified,
+            regression_passes: None,
+            failure: None,
+        },
+        clock.now(),
+    )
+    .unwrap();
+    assert_eq!(
+        passes(&mut conn, &mut upkeep, &clock, 2.0 * HOLD_SECONDS),
+        vec![id]
+    );
 }
 
 #[test]
@@ -715,12 +775,7 @@ fn turning_off_a_machine_closes_its_waiting_ticket_while_the_tip_still_waits() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
     let mut upkeep = Upkeep::new(None).unwrap();
-    fleet::register(&conn, &machine("m-2", "multivac"), clock.now()).unwrap();
-    clock.advance(60.0);
-    tips::seen(&conn, "abcd", clock.now()).unwrap();
-    clock.advance(3_700.0);
-    let waiting = upkeep.pass(&mut conn, clock.now()).unwrap().tickets_filed;
-    assert_eq!(waiting.len(), 1);
+    let waiting = vec![windows_wait(&mut conn, &clock, "platform:listing")];
 
     fleet_settings::set_machine_state(&mut conn, "m-2", MachineState::Off, "operator", clock.now())
         .unwrap();

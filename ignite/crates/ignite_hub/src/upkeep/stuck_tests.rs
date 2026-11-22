@@ -546,3 +546,98 @@ fn upkeep_skips_waiting_tickets_for_an_off_platform() {
     );
     assert!(all_tickets(&conn, clock.now()).is_empty());
 }
+
+#[test]
+fn a_wait_report_requires_work_matching_its_platform_and_scope() {
+    use super::{filing::UPKEEP, stuck};
+    use ignite_core::config::Os;
+    use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId};
+    use ignite_core::protocol::Outcome;
+    use ignite_core::protocol::hub::{
+        MachineRegister, NewResult, ResultCost, ResultKey, TipWaiting,
+    };
+
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let windows = MachineId::new("m-w").unwrap();
+    let mac = MachineId::new("m-m").unwrap();
+    for (id, os) in [(&windows, Os::Windows), (&mac, Os::Macos)] {
+        hub::fleet::register(
+            &conn,
+            &MachineRegister {
+                machine: id.clone(),
+                name: id.to_string(),
+                os,
+                cores: 4,
+                memory_mb: 4096,
+                families: vec!["platform".to_owned()],
+                version: "v".to_owned(),
+            },
+            clock.now(),
+        )
+        .unwrap();
+    }
+    let result = |check, platform| NewResult {
+        key: ResultKey {
+            check: CheckName::new(check).unwrap(),
+            hash: InputHash::new("a".repeat(64)).unwrap(),
+            platform,
+        },
+        outcome: Outcome::Pass,
+        machine: windows.clone(),
+        record: RecordId(1),
+        output: None,
+        cost: ResultCost::default(),
+        areas: Vec::new(),
+    };
+    let waiting = |name, commit| TipWaiting {
+        commit: Commit::new(commit).unwrap(),
+        machine: mac.clone(),
+        platform: Os::Windows,
+        checks: vec![CheckName::new(name).unwrap()],
+        waited_s: 3_700.0,
+        unrunnable: Vec::new(),
+    };
+    let at = clock.now().to_string();
+    hub::results::store(
+        &mut conn,
+        &[
+            result("platform:wrap", None),
+            result("platform:other", Some(Os::Windows)),
+        ],
+        clock.now(),
+    )
+    .unwrap();
+    hub::listings::put(&conn, "unrelated", "other", "[]", windows.as_str(), &at).unwrap();
+    hub::listings::put(&conn, "platform", "mac", "[]", mac.as_str(), &at).unwrap();
+
+    let listing = waiting("platform:listing", "abcd");
+    let check = waiting("platform:wrap", "abcd");
+    let first = stuck::tip_waiting(&mut conn, UPKEEP, &listing, clock.now()).unwrap();
+    assert_eq!(first.len(), 1);
+    // A second report for the same tip must update the ticket when it names different work.
+    let second = stuck::tip_waiting(&mut conn, UPKEEP, &check, clock.now()).unwrap();
+    assert_eq!(second.len(), 1);
+    assert_eq!(first[0].ticket, second[0].ticket);
+    assert_eq!(second[0].change, super::filing::Change::Commented);
+    let duplicate = stuck::tip_waiting(&mut conn, UPKEEP, &check, clock.now()).unwrap();
+    assert_eq!(duplicate[0].change, super::filing::Change::Unchanged);
+
+    hub::listings::put(&conn, "platform", "win", "[]", windows.as_str(), &at).unwrap();
+    assert!(
+        stuck::tip_waiting(&mut conn, UPKEEP, &listing, clock.now())
+            .unwrap()
+            .is_empty()
+    );
+    hub::results::store(
+        &mut conn,
+        &[result("platform:wrap", Some(Os::Windows))],
+        clock.now(),
+    )
+    .unwrap();
+    assert!(
+        stuck::tip_waiting(&mut conn, UPKEEP, &check, clock.now())
+            .unwrap()
+            .is_empty()
+    );
+}

@@ -47,6 +47,7 @@ pub mod justiciar;
 pub mod machines;
 pub mod missed;
 pub mod offline;
+mod platform_wait;
 mod regression_stalls;
 pub mod regressions;
 mod resource_stalls;

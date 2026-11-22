@@ -33,6 +33,7 @@ use ignite_store::Result;
 use ignite_store::hub::{checks, fleet, fleet_settings, session_titles, tickets, tips};
 
 use super::filing::{self, Author, Filed, Filing, UPKEEP};
+use super::platform_wait::PlatformWait;
 use super::regressions::OUTPUT_LINES;
 use super::signature::Signature;
 use super::{parse_time, tail};
@@ -209,38 +210,12 @@ pub fn tip_waiting(
             machine.os == os && settings.machine(&machine.name).state != MachineState::Off
         })
         .collect();
-    let working = working_machines(conn, now)?;
+    let scope = PlatformWait::from(report);
     let filings: Vec<Filing> = if !report.unrunnable.is_empty() {
-        // No machine of this system is declared to run these families, so the tip can never
-        // verify, however many machines are working. Only a change to `ignite.toml` fixes it.
-        let families = report.unrunnable.join(", ");
-        vec![Filing {
-            signature: Signature::of_subject(&format!("os:{os}:{families}"), "unrunnable"),
-            evidence: report.commit.to_string(),
-            fields: TicketFields {
-                title: Some(format!("No {os} machine runs the families {families}")),
-                body: Some(format!(
-                    "Tip {} waits for checks of the families {families}, which must pass on \
-                     {os}, but no `[machine.*]` with `os = \"{os}\"` in `ignite.toml` lists \
-                     them in its `families`. `master` cannot move until a {os} machine runs \
-                     them: add each family to such a machine's `families`, or drop {os} from \
-                     the family's `platforms`. Machine {} is waiting.\n\nchecks:\n- {listed}",
-                    report.commit, report.machine
-                )),
-                ticket_type: Some(TicketType::Bug),
-                priority: Some(1),
-                labels: Some(labels),
-                ..TicketFields::default()
-            },
-            deps: Vec::new(),
-            released: false,
-        }]
-    } else if machines.iter().any(|m| working.contains(&m.id)) {
-        // A machine of this system stored a result within the hour, so it is running the
-        // tip's checks and the tip waits only because a round takes long. No worker can fix
-        // that by looking at the machine, and filing here refiled the same ticket for every
-        // new tip as soon as a worker closed the last one. A silent machine is still named by
-        // [`tips_waiting`], and a machine that reports but runs nothing is named here.
+        vec![unrunnable_filing(report, &listed)]
+    } else if scope.working_machine(conn, machines.iter(), now)?.is_some() {
+        // Recent progress on the work the tip is waiting for is evidence that the round is
+        // still moving. A silent machine can still be named by `tips_waiting`.
         Vec::new()
     } else if machines.is_empty() {
         vec![Filing {
@@ -288,20 +263,45 @@ pub fn tip_waiting(
     };
     let mut filed = Vec::with_capacity(filings.len());
     for filing in filings {
-        filed.push(filing::file(conn, author, &filing.holding_tip(tip), now)?);
+        filed.push(filing::file(
+            conn,
+            author,
+            &filing.holding_platform_wait(&scope),
+            now,
+        )?);
     }
     let names: Vec<&str> = report.checks.iter().map(CheckName::as_str).collect();
     filing::release_holding(conn, &names, report.platform, tip, now)?;
     Ok(filed)
 }
 
-/// The machines that stored a check result in the last [`TIP_WAIT_SECONDS`]: they are running
-/// checks, whether or not a tip waits on them.
-pub(super) fn working_machines(conn: &Connection, now: Timestamp) -> Result<BTreeSet<String>> {
-    let cutoff = now.plus_seconds(-TIP_WAIT_SECONDS).to_string();
-    let mut query = conn.prepare_cached("SELECT DISTINCT machine FROM results WHERE at >= ?1")?;
-    let rows = query.query_map(params![cutoff], |row| row.get::<_, String>(0))?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+/// Reports families that no machine on the required platform is configured to run.
+fn unrunnable_filing(report: &TipWaiting, listed: &str) -> Filing {
+    let os = report.platform.as_str();
+    // No machine of this system is declared to run these families, so the tip can never
+    // verify, however many machines are working. Only a change to `ignite.toml` fixes it.
+    let families = report.unrunnable.join(", ");
+    Filing {
+        signature: Signature::of_subject(&format!("os:{os}:{families}"), "unrunnable"),
+        evidence: report.commit.to_string(),
+        fields: TicketFields {
+            title: Some(format!("No {os} machine runs the families {families}")),
+            body: Some(format!(
+                "Tip {} waits for checks of the families {families}, which must pass on \
+                 {os}, but no `[machine.*]` with `os = \"{os}\"` in `ignite.toml` lists \
+                 them in its `families`. `master` cannot move until a {os} machine runs \
+                 them: add each family to such a machine's `families`, or drop {os} from \
+                 the family's `platforms`. Machine {} is waiting.\n\nchecks:\n- {listed}",
+                report.commit, report.machine
+            )),
+            ticket_type: Some(TicketType::Bug),
+            priority: Some(1),
+            labels: Some(vec!["fleet".to_owned()]),
+            ..TicketFields::default()
+        },
+        deps: Vec::new(),
+        released: false,
+    }
 }
 
 /// How long a ticket may stay in progress before a ticket reports it, in seconds.

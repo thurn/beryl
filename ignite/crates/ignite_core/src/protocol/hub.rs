@@ -410,7 +410,7 @@ pub struct TipWaiting {
     /// The machine that is waiting.
     pub machine: MachineId,
     pub platform: Os,
-    /// The checks the tip waits for.
+    /// The checks the tip waits for. A missing family listing is named `<family>:listing`.
     pub checks: Vec<CheckName>,
     /// How long the tips since the last verified commit have waited on `platform`.
     pub waited_s: f64,
