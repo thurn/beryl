@@ -37,6 +37,7 @@ struct Waiter {
     id: u64,
     request: GrantRequest,
     since: Timestamp,
+    core_wait_since: Option<Timestamp>,
 }
 
 /// A grant not released yet.
@@ -174,7 +175,15 @@ impl Ledger {
             .iter()
             .position(|waiter| waiter.since > since)
             .unwrap_or(self.waiting.len());
-        self.waiting.insert(at, Waiter { id, request, since });
+        self.waiting.insert(
+            at,
+            Waiter {
+                id,
+                request,
+                since,
+                core_wait_since: None,
+            },
+        );
         id
     }
 
@@ -287,6 +296,7 @@ impl Ledger {
         // The highest class with a request left waiting for cores; its own shrinking grants
         // that hold more than their share give a core back too.
         let mut highest_waiting = None;
+        let mut waiting_for_cores = BTreeSet::new();
         for class in Class::ALL {
             let mut usable = self.class_room(class, &reserve, free, blocked, pressed);
             let mut agent_room = if class == Class::Agent && !blocked && !pressed {
@@ -336,6 +346,9 @@ impl Ledger {
             };
             if !left.is_empty() {
                 highest_waiting.get_or_insert(class);
+                if !pressed {
+                    waiting_for_cores.extend(left.iter().copied());
+                }
             }
             if !left.is_empty() || short > 0 {
                 blocked = true;
@@ -345,6 +358,7 @@ impl Ledger {
                 }
             }
         }
+        self.record_core_waits(&waiting_for_cores, now);
         if let Some(class) = highest_blocked {
             step.resized.extend(self.shrink_below(class));
         }

@@ -94,10 +94,11 @@ impl Ledger {
 }
 
 impl super::super::Scheduler {
-    /// How long the request of `classes` that has waited longest has waited, in seconds.
-    /// Zero when none waits.
-    pub fn longest_wait(&self, classes: &[Class]) -> f64 {
-        self.lock().ledger.longest_wait(classes, self.clock.now())
+    /// The longest uninterrupted wait for cores in these classes, in seconds.
+    pub fn longest_core_wait(&self, classes: &[Class]) -> f64 {
+        self.lock()
+            .ledger
+            .longest_core_wait(classes, self.clock.now())
     }
 
     /// Recent whole-host CPU utilization for the handoff gate.

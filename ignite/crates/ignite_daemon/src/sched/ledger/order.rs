@@ -19,7 +19,7 @@
 //!   large request that arrived later waits for the build, which runs at full speed, instead of
 //!   making every build of the class shrink to one core.
 
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::BTreeSet};
 
 use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
@@ -86,13 +86,23 @@ impl Ledger {
         waiter.request.cores.clamp(1, self.limits.max_per_command())
     }
 
-    /// How long the request of `classes` that has waited longest has waited at `now`, in
-    /// seconds; zero when none waits.
-    pub fn longest_wait(&self, classes: &[Class], now: Timestamp) -> f64 {
+    pub(super) fn record_core_waits(&mut self, waiting_for_cores: &BTreeSet<u64>, now: Timestamp) {
+        for waiter in &mut self.waiting {
+            if waiting_for_cores.contains(&waiter.id) {
+                waiter.core_wait_since.get_or_insert(now);
+            } else {
+                waiter.core_wait_since = None;
+            }
+        }
+    }
+
+    /// The longest uninterrupted wait for cores in these classes, in seconds.
+    pub fn longest_core_wait(&self, classes: &[Class], now: Timestamp) -> f64 {
         self.waiting
             .iter()
             .filter(|w| classes.contains(&w.request.class))
-            .map(|w| now.seconds_since(w.since).max(0.0))
+            .filter_map(|w| w.core_wait_since)
+            .map(|since| now.seconds_since(since).max(0.0))
             .fold(0.0, f64::max)
     }
 }

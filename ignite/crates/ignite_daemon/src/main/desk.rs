@@ -409,7 +409,7 @@ impl Host for DaemonHost {
     }
 
     fn ticket_work_wait(&self) -> f64 {
-        self.scheduler.longest_wait(&[
+        self.scheduler.longest_core_wait(&[
             ignite_core::protocol::Class::Land,
             ignite_core::protocol::Class::Agent,
         ])

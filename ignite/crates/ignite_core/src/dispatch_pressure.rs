@@ -18,6 +18,10 @@ pub const BACKLOG_SECONDS: u32 = 120;
 pub const BUILD_LIMIT_WAIT: &str = "waits for shared build cores";
 /// Identifies a build-slot wait in snapshots, which also use `Trees` for ticket-tree waits.
 pub const BUILD_SLOT_WAIT: &str = "waits for a build slot";
+/// Identifies a backlog that is blocking starts in machine snapshots.
+pub const BUILD_QUEUE_WAIT: &str = "waits for the build queue";
+/// Identifies a backlog recovery wait in machine snapshots.
+pub const BUILD_QUEUE_RECOVERY_WAIT: &str = "waits for a healthy build queue";
 /// At 90% CPU, an 18-core host has about two cores left. On that host the queue often
 /// reached two minutes with much more headroom, while grants were still counted in full.
 const BACKLOG_BUSY_PERCENT: u32 = 90;
@@ -86,6 +90,13 @@ impl DispatchPressure {
             && self
                 .cpu_percent
                 .is_none_or(|busy| busy >= BACKLOG_BUSY_PERCENT)
+    }
+
+    pub fn backlog_reason(&self) -> String {
+        format!(
+            "{BUILD_QUEUE_WAIT}: ticket commands have waited {} s for cores",
+            self.queue_seconds
+        )
     }
 }
 
@@ -219,10 +230,7 @@ impl<'a> Budget<'a> {
 
     fn pacing_waits(&self, build: bool, machine: &str, waits: &mut Vec<HandoffWait>) {
         if self.pressure.queue_backlogged() {
-            let seconds = self.pressure.queue_seconds;
-            waits.push(pacing(format!(
-                "waits for the build queue: ticket commands have waited {seconds} s for cores"
-            )));
+            waits.push(pacing(self.pressure.backlog_reason()));
         }
         if !build {
             return;
@@ -238,7 +246,7 @@ impl<'a> Budget<'a> {
         if self.pressure.recovery_seconds > 0 {
             let seconds = self.pressure.recovery_seconds;
             waits.push(pacing(format!(
-                "waits for a healthy build queue: rechecking each round, up to {seconds} s \
+                "{BUILD_QUEUE_RECOVERY_WAIT}: rechecking each round, up to {seconds} s \
                  of recovery left once waits subside"
             )));
         }

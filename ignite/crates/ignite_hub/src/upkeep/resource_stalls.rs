@@ -2,7 +2,9 @@
 
 use ignite_core::capacity::BYTES_PER_GIB;
 use ignite_core::config::Os;
-use ignite_core::dispatch_pressure::{BUILD_LIMIT_WAIT, BUILD_SLOT_WAIT};
+use ignite_core::dispatch_pressure::{
+    BUILD_LIMIT_WAIT, BUILD_QUEUE_RECOVERY_WAIT, BUILD_QUEUE_WAIT, BUILD_SLOT_WAIT,
+};
 use ignite_core::protocol::machine_state::{MachineSnapshot, StartBlock};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
@@ -162,6 +164,7 @@ pub(super) fn recovered(
         Invariant::Pressure => {
             !intentionally_stopped(sample)
                 && sample.queued_cores <= cores(machine)
+                && !build_queue_blocked(sample)
                 // Windows only reports queue pressure. On macOS, old daemons
                 // and failed readings both leave memory recovery unconfirmed.
                 && sample
@@ -276,9 +279,21 @@ fn cores(machine: &rows::Machine) -> u64 {
     u64::try_from(machine.cores).unwrap_or_default().max(1)
 }
 
+fn build_queue_blocked(sample: &MachineSnapshot) -> bool {
+    // The oldest command can wait for cores even when the sum of queued cores fits the host.
+    sample.start_block == Some(StartBlock::Pacing)
+        && sample.start_reason.as_deref().is_some_and(|reason| {
+            reason.contains(BUILD_QUEUE_WAIT)
+                || reason.contains(BUILD_QUEUE_RECOVERY_WAIT)
+                || reason.starts_with("Ticket commands have waited ")
+        })
+}
+
 fn over_limit(sample: &MachineSnapshot, machine: &rows::Machine) -> bool {
     !intentionally_stopped(sample)
-        && (sample.queued_cores > cores(machine) || sample.active_memory_pressure == Some(true))
+        && (sample.queued_cores > cores(machine)
+            || sample.active_memory_pressure == Some(true)
+            || build_queue_blocked(sample))
 }
 
 fn report(
@@ -303,7 +318,8 @@ fn report(
             (None, _) => "Disk blocked starts while enough disk could be reclaimed".to_owned(),
         },
         Invariant::Pressure => format!(
-            "Queued cores exceeded the host's {} cores or macOS reported active memory pressure",
+            "The build queue blocked starts, queued cores exceeded the host's {} cores, or \
+             macOS reported active memory pressure",
             cores(machine)
         ),
     };

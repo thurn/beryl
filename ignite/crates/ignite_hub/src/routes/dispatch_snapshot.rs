@@ -216,10 +216,7 @@ fn ticket_block(
         } else if backlog {
             Some((
                 StartBlock::Pacing,
-                format!(
-                    "Ticket commands have waited {} s for cores",
-                    sample.pressure.queue_seconds
-                ),
+                format!("{} {}", ticket.id, sample.pressure.backlog_reason()),
             ))
         } else {
             Some((

@@ -326,6 +326,67 @@ fn corroborated_pacing_and_memory_blocks_file_only_a_pressure_ticket() {
 }
 
 #[test]
+fn sustained_build_queue_waits_escalate_as_pressure_even_with_few_queued_cores() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    machine(&conn, "m-queue", Os::Macos);
+    let blocked = MachineSnapshot {
+        idle_workers: 13,
+        ready_tickets: 37,
+        queued_cores: 2,
+        cpu_percent: Some(100),
+        start_block: Some(StartBlock::Pacing),
+        start_reason: Some(
+            "Tabcd waits for the build queue: ticket commands have waited 1121 s for cores"
+                .to_owned(),
+        ),
+        ..healthy()
+    };
+    record(&conn, "m-queue", 0..=10, blocked.clone());
+    let recovering = MachineSnapshot {
+        cpu_percent: Some(42),
+        start_reason: Some(
+            "Tabcd waits for a healthy build queue: rechecking each round, up to 90 s \
+             of recovery left once waits subside"
+                .to_owned(),
+        ),
+        ..blocked
+    };
+    record(&conn, "m-queue", 11..=29, recovering.clone());
+    for minute in [10, 29] {
+        assert!(
+            upkeep
+                .pass(&mut conn, at(minute))
+                .unwrap()
+                .tickets_filed
+                .is_empty()
+        );
+    }
+
+    record(&conn, "m-queue", 30..=30, recovering.clone());
+    let filed = upkeep.pass(&mut conn, at(30)).unwrap().tickets_filed;
+    assert_eq!(filed.len(), 1);
+    assert_eq!(
+        ticket(&conn, &filed[0]).title,
+        "Oversubscription persisting on m-queue"
+    );
+
+    record(&conn, "m-queue", 31..=91, recovering);
+    assert!(
+        upkeep
+            .pass(&mut conn, at(91))
+            .unwrap()
+            .tickets_closed
+            .is_empty()
+    );
+    record(&conn, "m-queue", 92..=152, healthy());
+    assert_eq!(
+        upkeep.pass(&mut conn, at(152)).unwrap().tickets_closed,
+        filed
+    );
+}
+
+#[test]
 fn active_memory_pressure_still_escalates_when_a_full_build_quota_explains_idle_workers() {
     let mut conn = hub::open_in_memory().unwrap();
     let mut upkeep = Upkeep::new(None).unwrap();

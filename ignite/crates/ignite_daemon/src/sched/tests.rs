@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use ignite_core::capacity::{Floor, MachineFacts, derive};
 use ignite_core::config::{Config, Os};
@@ -307,6 +308,29 @@ fn tip_takes_its_floor_even_while_a_higher_class_waits() {
     assert_eq!(tip_grant.cores, 2);
     // The agents take the other 22 in turn: 16 and 6, and two wait.
     assert_eq!(step.granted.len(), 3);
+}
+
+#[test]
+fn time_waiting_for_a_resource_does_not_count_as_a_wait_for_cores() {
+    let mut ledger = Ledger::new(limits());
+    let holder = ledger.adopt(Class::Tip, 24, vec!["oracle".to_owned()], None, None, false);
+    let classes = [Class::Land, Class::Agent];
+    let core_wait = |ledger: &Ledger, seconds| {
+        Duration::from_secs_f64(ledger.longest_core_wait(&classes, at(seconds)))
+    };
+    let waiting = ledger.enqueue(with_resource(Class::Agent, 2, "oracle"), T0);
+    assert!(ledger.step(T0).granted.is_empty());
+    assert_eq!(core_wait(&ledger, 130.0), Duration::ZERO);
+
+    let cpu_holder = ledger.adopt(Class::Tip, 24, Vec::new(), None, None, false);
+    assert!(ledger.release(holder));
+    assert!(ledger.step(at(130.0)).granted.is_empty());
+    assert!(ledger.step(at(135.0)).granted.is_empty());
+    assert_eq!(core_wait(&ledger, 135.0), Duration::from_secs(5));
+
+    assert!(ledger.release(cpu_holder));
+    assert_eq!(ledger.step(at(140.0)).granted[0].id, waiting);
+    assert_eq!(core_wait(&ledger, 140.0), Duration::ZERO);
 }
 
 #[test]
