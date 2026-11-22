@@ -30,7 +30,6 @@ use std::str::FromStr;
 
 use kit_base::geometry::{Rect, Size};
 use kit_frame::frame::{ElementId, Role};
-use kit_fx::effects::Effect;
 
 use crate::agent::Layout;
 use crate::agent::line::{Line, quoted_name};
@@ -383,13 +382,7 @@ fn container_header(line: &str) -> Option<Container> {
 }
 
 fn effect<'a>(mut lines: impl Iterator<Item = &'a str>) -> Result<Body, ParseError> {
-    let expected = || {
-        format!(
-            "effect <name> x,y widthxheight, with a name from {}",
-            Effect::ALL.map(Effect::name).join(", ")
-        )
-    };
-    let bad = || error(2, "invalid effect", expected());
+    let bad = || error(2, "invalid effect", "effect <name> x,y widthxheight");
     let mut words = lines.next().ok_or_else(bad)?.split(' ');
     let (Some("effect"), Some(name), Some(corner), Some(dimensions), None) = (
         words.next(),
@@ -400,7 +393,9 @@ fn effect<'a>(mut lines: impl Iterator<Item = &'a str>) -> Result<Body, ParseErr
     ) else {
         return Err(bad());
     };
-    let effect = Effect::from_name(name).ok_or_else(bad)?;
+    if name.is_empty() {
+        return Err(bad());
+    }
     let rect = rect(corner, dimensions).ok_or_else(bad)?;
     if lines.next().is_some() {
         return Err(error(
@@ -409,7 +404,7 @@ fn effect<'a>(mut lines: impl Iterator<Item = &'a str>) -> Result<Body, ParseErr
             "the end of the file",
         ));
     }
-    Ok(Body::Effect(effect, rect))
+    Ok(Body::Effect(name.to_owned(), rect))
 }
 
 pub(super) fn number(word: &str, min: f32) -> Option<f32> {

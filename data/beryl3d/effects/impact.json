@@ -1,7 +1,6 @@
 {
   "name": "impact",
   "target": "subject",
-  "length": "effect",
   "layers": [
     {
       "kind": "burst",

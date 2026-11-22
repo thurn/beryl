@@ -1,7 +1,6 @@
 {
   "name": "pulse",
   "target": "subject",
-  "length": "effect",
   "layers": [
     {
       "kind": "ring",

@@ -27,25 +27,23 @@ impl Kind<'_> {
 }
 
 fn emitters<'a>(
-    effects: &'a Effects,
     runs: &'a [EffectRun],
     now: u64,
     tier: Tier,
 ) -> impl Iterator<Item = (Subject, Seeds, Kind<'a>, f32)> {
     runs.iter()
-        .filter_map(|&run| {
+        .filter_map(|run| {
             let Subject::Object { slot } = run.on else {
                 return None;
             };
-            let definition = effects.get(run.effect.name())?;
             let seeds = Seeds {
                 object: slot.0,
                 step: run.step,
             };
-            Some((run, definition, seeds))
+            Some((run, seeds))
         })
-        .flat_map(move |(run, definition, seeds)| {
-            player::layers(definition, run, now, tier).filter_map(move |(primitive, progress)| {
+        .flat_map(move |(run, seeds)| {
+            player::layers(run, now, tier).filter_map(move |(primitive, progress)| {
                 let kind = match primitive {
                     Primitive::Particles { emitter } => Kind::Sweep(emitter),
                     Primitive::Vortex { emitter } => Kind::Vortex(emitter),
@@ -66,7 +64,7 @@ pub fn write(
 ) {
     let tier = builder.tier();
     let lift = effects.lift();
-    let emitters = || emitters(effects, runs, now, tier);
+    let emitters = || emitters(runs, now, tier);
     let (wanted, writing) = emitters().fold((0, 0), |(wanted, writing), (_, _, kind, _)| {
         (wanted + kind.count(), writing + 1)
     });

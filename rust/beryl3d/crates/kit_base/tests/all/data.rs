@@ -215,25 +215,6 @@ fn every_shipped_effect_is_required() {
 }
 
 #[test]
-fn effect_length_sources_match_the_shared_conventions() {
-    use kit_base::data::effect::Length;
-
-    let data = parse(None).expect("repository tuning");
-    let conventions: Value =
-        serde_json::from_str(include_str!("../../../../../../data/ui-conventions.json")).unwrap();
-    let shared = conventions["effects"].as_array().unwrap();
-    for (name, _) in EFFECTS {
-        let entry = shared.iter().find(|entry| entry["name"] == name).unwrap();
-        let length = if entry["values"]["duration"].is_null() {
-            Length::Step
-        } else {
-            Length::Effect
-        };
-        assert_eq!(data.effects.get(name).unwrap().length, length, "{name}");
-    }
-}
-
-#[test]
 fn effect_errors_name_the_file_and_bad_layer() {
     use kit_base::data::effect::Effects;
 

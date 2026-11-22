@@ -9,7 +9,6 @@ use beryl_protocol::script::{Act, Subject, Table as Played, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
 use kit_frame::frame::{Draw, Frame, FrameBuilder, Material, PARTICLES};
-use kit_fx::effects::Effect;
 use kit_ui::input::Tier;
 
 use crate::common::{MS, empty_frame, show};
@@ -121,13 +120,13 @@ fn particles(frame: &Frame) -> Vec<Draw> {
 }
 
 /// The one run of `effect` that `vanished` plays after `start`: its start and duration.
-fn run_of(start: &GameUpdate, vanished: &GameUpdate, effect: Effect) -> (u64, u64) {
+fn run_of(start: &GameUpdate, vanished: &GameUpdate, effect: &str) -> (u64, u64) {
     let (mut show, mut buffer) = handed(start, vanished, Tier::Enhanced);
     draw(&mut show, &mut buffer, 10 * MS, Tier::Enhanced);
     let runs: Vec<_> = show
         .effects()
         .iter()
-        .filter(|run| run.effect == effect)
+        .filter(|run| run.definition.name.as_ref() == effect)
         .map(|run| (run.start, run.duration))
         .collect();
     assert_eq!(runs.len(), 1, "one {effect:?} in {:?}", show.effects());
@@ -156,10 +155,7 @@ fn baseline_writes_no_particles() {
 #[test]
 fn a_destroyed_card_falls_to_ash_after_it_darkens_and_an_exiled_one_to_a_vortex() {
     const DARKENED: f32 = 0.3;
-    for (why, effect, most) in [
-        (Why::Destroy, Effect::Dissolve, 96),
-        (Why::Exile, Effect::Blanch, 128),
-    ] {
+    for (why, effect, most) in [(Why::Destroy, "dissolve", 96), (Why::Exile, "blanch", 128)] {
         let (start, vanished) = angel_leaves(why);
         let (from, duration) = run_of(&start, &vanished, effect);
         #[expect(
@@ -174,7 +170,7 @@ fn a_destroyed_card_falls_to_ash_after_it_darkens_and_an_exiled_one_to_a_vortex(
             assert_eq!(written.len(), frame.load.particles as usize);
             assert!(written.len() <= most, "{why:?} at {} ms", now / MS);
             let outside = now < from || now >= from + duration;
-            if outside || (effect == Effect::Dissolve && now <= darkened) {
+            if outside || (effect == "dissolve" && now <= darkened) {
                 assert!(
                     written.is_empty(),
                     "{why:?} writes {} particles at {} ms, its run {} to {} ms",

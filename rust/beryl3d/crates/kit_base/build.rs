@@ -5,12 +5,13 @@ mod gradients;
 
 use std::fmt::Write;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     write_serif(&out_dir);
+    write_effect_names(&manifest, &out_dir);
     let tokens = manifest.join("../../../../data/design-tokens.json");
     println!("cargo:rerun-if-changed={}", tokens.display());
     let tokens_json: serde_json::Value =
@@ -20,6 +21,22 @@ fn main() {
     for (module, text) in write_tokens(&tokens_json) {
         fs::write(tokens_dir.join(format!("{module}.rs")), text).unwrap();
     }
+}
+
+/// The effect definitions every installation needs, from the names shared by both clients.
+fn write_effect_names(manifest: &Path, out_dir: &Path) {
+    let path = manifest.join("../../../../data/ui-conventions.json");
+    println!("cargo:rerun-if-changed={}", path.display());
+    let text = fs::read_to_string(&path).expect("read UI conventions");
+    let data: serde_json::Value = serde_json::from_str(&text).expect("parse UI conventions");
+    let names: Vec<_> = data["effects"]
+        .as_array()
+        .expect("UI conventions list effects")
+        .iter()
+        .map(|effect| effect["name"].as_str().expect("each effect has a name"))
+        .collect();
+    fs::write(out_dir.join("effect_names.rs"), format!("&{names:?}\n"))
+        .expect("write effect names");
 }
 
 /// The folder of the fonts every Mac ships beside the system's own, which holds Times New Roman.

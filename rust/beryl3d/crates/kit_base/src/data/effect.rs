@@ -4,93 +4,20 @@ mod curve;
 pub use curve::Scalar;
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use glam::Vec2;
 use serde::Deserialize;
 
 use super::tuning::read;
 
-/// One effect, by its name in `data/ui-conventions.json`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Effect {
-    Glow,
-    Settle,
-    Dissolve,
-    Dim,
-    Blanch,
-    Cover,
-    Impact,
-    Shake,
-    Trail,
-    Flash,
-    Beam,
-    Pulse,
-    Loss,
-    Gain,
-}
-
-impl Effect {
-    /// Every effect, in the order of the data file's list.
-    pub const ALL: [Self; 14] = [
-        Self::Glow,
-        Self::Settle,
-        Self::Dissolve,
-        Self::Dim,
-        Self::Blanch,
-        Self::Cover,
-        Self::Impact,
-        Self::Shake,
-        Self::Trail,
-        Self::Flash,
-        Self::Beam,
-        Self::Pulse,
-        Self::Loss,
-        Self::Gain,
-    ];
-
-    /// Its name in `data/ui-conventions.json`.
-    #[must_use]
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::Glow => "glow",
-            Self::Settle => "settle",
-            Self::Dissolve => "dissolve",
-            Self::Dim => "dim",
-            Self::Blanch => "blanch",
-            Self::Cover => "cover",
-            Self::Impact => "impact",
-            Self::Shake => "shake",
-            Self::Trail => "trail",
-            Self::Flash => "flash",
-            Self::Beam => "beam",
-            Self::Pulse => "pulse",
-            Self::Loss => "loss",
-            Self::Gain => "gain",
-        }
-    }
-
-    /// Whether this has layers drawn with a surface, using its resolved pose.
-    pub fn on_card(self, effects: &Effects) -> bool {
-        effects.get(self.name()).is_some_and(|definition| {
-            definition.layers.iter().any(|layer| match layer.primitive {
-                Primitive::Surface { surface, .. } => !matches!(surface, Surface::TextTint { .. }),
-                Primitive::Burst { on_surface, .. } => on_surface,
-                _ => false,
-            })
-        })
-    }
-
-    /// The effect named `name` in `data/ui-conventions.json`.
-    #[must_use]
-    pub fn from_name(name: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|effect| effect.name() == name)
-    }
-}
+/// Effects in shared script timing whose definitions every installation needs.
+pub const SHIPPED: &[&str] = include!(concat!(env!("OUT_DIR"), "/effect_names.rs"));
 
 /// Definitions indexed by the names used in script timing. Hosts parse these before playback.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Effects {
-    definitions: BTreeMap<String, Definition>,
+    definitions: BTreeMap<Arc<str>, Arc<Definition>>,
     lift: f32,
 }
 
@@ -105,7 +32,7 @@ impl Effects {
         for (name, text) in files {
             let file = format!("effects/{name}.json");
             let definition: Definition = read(&file, text)?;
-            if definition.name != name {
+            if definition.name.as_ref() != name {
                 return Err(format!("{file}: name must match the filename"));
             }
             if definition.layers.is_empty() {
@@ -118,7 +45,10 @@ impl Effects {
                     return Err(format!("{file}: layers[{index}] must fit within 0 to 1"));
                 }
             }
-            if definitions.insert(name.to_owned(), definition).is_some() {
+            if definitions
+                .insert(Arc::clone(&definition.name), Arc::new(definition))
+                .is_some()
+            {
                 return Err(format!("{file}: duplicate definition"));
             }
         }
@@ -128,15 +58,9 @@ impl Effects {
         })
     }
 
-    /// Whether an effect with no named anchor can play on its step's subject.
+    /// Resolves a playback name to a definition that runs can keep across frames.
     #[must_use]
-    pub fn allows_subject(&self, name: &str) -> bool {
-        self.get(name)
-            .is_none_or(|definition| definition.target == Target::Subject)
-    }
-
-    #[must_use]
-    pub fn get(&self, name: &str) -> Option<&Definition> {
+    pub fn get(&self, name: &str) -> Option<&Arc<Definition>> {
         self.definitions.get(name)
     }
 
@@ -160,10 +84,21 @@ impl Effects {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Definition {
-    pub name: String,
+    pub name: Arc<str>,
     pub target: Target,
-    pub length: Length,
     pub layers: Vec<Layer>,
+}
+
+impl Definition {
+    /// Whether any layer draws with the subject's surface and its resolved pose.
+    #[must_use]
+    pub fn on_card(&self) -> bool {
+        self.layers.iter().any(|layer| match layer.primitive {
+            Primitive::Surface { surface, .. } => !matches!(surface, Surface::TextTint { .. }),
+            Primitive::Burst { on_surface, .. } => on_surface,
+            _ => false,
+        })
+    }
 }
 
 /// Whether the script may use its step's subject as the default anchor.
@@ -172,14 +107,6 @@ pub struct Definition {
 pub enum Target {
     Subject,
     Named,
-}
-
-/// The default length source in the shared script timing data. Individual steps can override it.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum Length {
-    Step,
-    Effect,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]

@@ -2,8 +2,7 @@
 
 use glam::{Quat, Vec2, Vec3};
 use kit_base::data::effect::{
-    Clock, Definition, DirectedSprite, Direction, Effects, LightRecord, NumberOrigin, Primitive,
-    Quad, Shape, Surface,
+    Clock, DirectedSprite, Direction, LightRecord, NumberOrigin, Primitive, Quad, Shape, Surface,
 };
 use kit_frame::frame::{Band, FrameBuilder, Sprite, sprites};
 use kit_ui::{input::Tier, layout::FloatLook};
@@ -12,14 +11,13 @@ use super::{EffectRun, Reach, light};
 
 /// Samples each visible layer at its local progress. An effect's run is half-open in time.
 pub(super) fn layers(
-    definition: &Definition,
-    run: EffectRun,
+    run: &EffectRun,
     now: u64,
     tier: Tier,
 ) -> impl Iterator<Item = (&Primitive, f32)> {
     let elapsed = run.elapsed(now);
     let eased = elapsed.map(|elapsed| run.curve.ease(elapsed));
-    definition.layers.iter().filter_map(move |layer| {
+    run.definition.layers.iter().filter_map(move |layer| {
         if layer.enhanced_only && tier != Tier::Enhanced {
             return None;
         }
@@ -55,14 +53,13 @@ fn sprite(shape: Shape) -> Sprite {
 
 /// Draws the layers that cast light where the subject is, or along its recent path.
 pub(super) fn write_light(
-    definition: &Definition,
-    run: EffectRun,
+    run: &EffectRun,
     now: u64,
     reach_at: impl Fn(u64) -> Option<Reach>,
     (eye, lift): (Vec3, f32),
     builder: &mut FrameBuilder<'_>,
 ) {
-    for (primitive, p) in layers(definition, run, now, builder.tier()) {
+    for (primitive, p) in layers(run, now, builder.tier()) {
         if !matches!(
             primitive,
             Primitive::Sprite { .. }
@@ -132,7 +129,7 @@ pub(super) fn write_light(
 pub(super) fn write_surface_burst(
     quad: &Quad,
     (progress, lift): (f32, f32),
-    run: EffectRun,
+    run: &EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
 ) {
@@ -152,14 +149,14 @@ pub(super) fn write_surface_burst(
 fn write_record(
     record: Option<&LightRecord>,
     (progress, lift): (f32, f32),
-    run: EffectRun,
+    run: &EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
 ) {
     if let Some(record) = record {
         light::record_as(
             builder,
-            &run,
+            run,
             (&reach.pose, lift),
             reach.half,
             (
@@ -174,7 +171,7 @@ fn write_quad(
     quad: &Quad,
     (sprite, size): (Sprite, Vec2),
     (progress, lift): (f32, f32),
-    run: EffectRun,
+    run: &EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
 ) {
@@ -199,7 +196,7 @@ fn write_quad(
 fn write_directed(
     directed: &DirectedSprite,
     (progress, lift): (f32, f32),
-    run: EffectRun,
+    run: &EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
 ) {
@@ -270,16 +267,9 @@ pub struct TextLook {
 /// Samples the text layers. The game supplies the base color and lays out the actual number
 /// before the frame, so starting a float needs neither formatting nor text shaping.
 #[must_use]
-pub fn text(
-    effects: &Effects,
-    run: EffectRun,
-    now: u64,
-    tier: Tier,
-    base: [u8; 4],
-) -> Option<TextLook> {
-    let definition = effects.get(run.effect.name())?;
+pub fn text(run: &EffectRun, now: u64, tier: Tier, base: [u8; 4]) -> Option<TextLook> {
     let mut look = TextLook::default();
-    for (primitive, p) in layers(definition, run, now, tier) {
+    for (primitive, p) in layers(run, now, tier) {
         match primitive {
             Primitive::Surface {
                 surface: Surface::TextTint { color },

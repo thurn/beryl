@@ -1,7 +1,6 @@
 {
   "name": "loss",
   "target": "subject",
-  "length": "step",
   "layers": [
     {
       "kind": "ring",

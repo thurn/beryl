@@ -1,7 +1,6 @@
 {
   "name": "beam",
   "target": "subject",
-  "length": "effect",
   "layers": [
     {
       "kind": "directed",

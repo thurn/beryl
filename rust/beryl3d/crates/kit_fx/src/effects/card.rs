@@ -1,11 +1,13 @@
 //! Samples the effect layers drawn with a surface and its resolved pose.
 
+use std::sync::Arc;
+
 use beryl_protocol::script::Subject;
 
-use super::{Effect, EffectRun, Reach, player};
+use super::{EffectRun, Reach, player};
 use kit_base::data::effect::{Effects, Primitive, Surface};
 use kit_base::pose::Pose;
-use kit_frame::frame::{Draw, EffectLook, FrameBuilder, sprites};
+use kit_frame::frame::{Draw, FrameBuilder, sprites};
 use kit_ui::input::Tier;
 
 /// How one card is drawn in a frame: made from its pose, face and state, and then changed in
@@ -56,20 +58,15 @@ impl Look {
 
 /// The timed layers whose run plays on this surface.
 fn layers<'a>(
-    effects: &'a Effects,
     runs: &'a [EffectRun],
     on: Subject,
     now: u64,
     tier: Tier,
-) -> impl Iterator<Item = (EffectRun, &'a Primitive, f32)> {
+) -> impl Iterator<Item = (&'a EffectRun, &'a Primitive, f32)> {
     runs.iter()
-        .copied()
         .filter(move |run| run.on == on)
         .flat_map(move |run| {
-            effects
-                .get(run.effect.name())
-                .into_iter()
-                .flat_map(move |definition| player::layers(definition, run, now, tier))
+            player::layers(run, now, tier)
                 .map(move |(primitive, progress)| (run, primitive, progress))
         })
 }
@@ -77,19 +74,19 @@ fn layers<'a>(
 /// Changes `look`, how the card `on` is drawn at `now`, for the runs in `runs` that play on it.
 /// `earlier_face` is the face the card showed before the script; `look.face` is the new face.
 pub fn look(
-    data: (&Effects, Tier),
+    tier: Tier,
     runs: &[EffectRun],
     on: Subject,
     now: u64,
     earlier_face: Option<u16>,
     look: &mut Look,
 ) {
-    look_with_face(data, runs, on, now, || earlier_face, look);
+    look_with_face(tier, runs, on, now, || earlier_face, look);
 }
 
 /// Like `look`, taking the earlier face only if a layer shows it.
 pub fn look_with_face(
-    (effects, tier): (&Effects, Tier),
+    tier: Tier,
     runs: &[EffectRun],
     on: Subject,
     now: u64,
@@ -97,7 +94,7 @@ pub fn look_with_face(
     look: &mut Look,
 ) {
     let mut earlier_face = Some(earlier_face);
-    for (_, primitive, progress) in layers(effects, runs, on, now, tier) {
+    for (_, primitive, progress) in layers(runs, on, now, tier) {
         let Primitive::Surface {
             surface, amount, ..
         } = primitive
@@ -134,7 +131,7 @@ pub fn write(
     look: &Look,
     builder: &mut FrameBuilder<'_>,
 ) {
-    for (run, primitive, progress) in layers(effects, runs, on, now, builder.tier()) {
+    for (run, primitive, progress) in layers(runs, on, now, builder.tier()) {
         match primitive {
             Primitive::Surface {
                 amount,
@@ -143,7 +140,7 @@ pub fn write(
             } => {
                 record(
                     builder,
-                    run.effect,
+                    &run.definition.name,
                     on,
                     look,
                     amount.at(progress).clamp(0.0, 1.0),
@@ -165,15 +162,21 @@ pub fn write(
 }
 
 /// Records the strength of a surface change for the match tools.
-fn record(builder: &mut FrameBuilder<'_>, effect: Effect, on: Subject, look: &Look, strength: f32) {
+fn record(
+    builder: &mut FrameBuilder<'_>,
+    name: &Arc<str>,
+    on: Subject,
+    look: &Look,
+    strength: f32,
+) {
     let face = look.pose.frame(
         builder.card().extend(1.0) * look.pose.scale,
         look.pose.position,
     );
-    builder.effect(EffectLook {
-        name: effect.name(),
-        on: Some(on),
-        model: Draw::glow(face, [0; 4], sprites::BURST, 0.0).model,
-        opacity: strength * look.pose.opacity,
-    });
+    builder.effect(
+        name,
+        Some(on),
+        Draw::glow(face, [0; 4], sprites::BURST, 0.0).model,
+        strength * look.pose.opacity,
+    );
 }

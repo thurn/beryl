@@ -605,16 +605,15 @@ impl Show {
         active.extend(
             self.effects
                 .iter()
-                .copied()
-                .filter(|run| run.start <= now && now < run.start + run.duration),
+                .filter(|run| run.start <= now && now < run.start + run.duration)
+                .cloned(),
         );
-        let definitions = &self.table.data().effects;
         self.card_effects.clear();
         self.card_effects.extend(
             active
                 .iter()
-                .copied()
-                .filter(|run| run.effect.on_card(definitions)),
+                .filter(|run| run.definition.on_card())
+                .cloned(),
         );
         let data = self.table.data();
         let (pointer, tuning) = (&self.pointer, &data.pointer);

@@ -349,7 +349,7 @@ fn effect_records(frame: &Frame, size: Size, elements: usize) -> Vec<Value> {
     (frame.looks.effects.iter().enumerate())
         .map(|(at, effect)| {
             let on = subject(effect);
-            let name = effect.name;
+            let name = effect.name.as_ref();
             json!({
                 "key": format!("effect \"{name}\" on {}", on.as_str().map_or_else(|| on.to_string(), str::to_owned)),
                 "role": "effect",

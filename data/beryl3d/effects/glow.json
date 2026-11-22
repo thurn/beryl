@@ -1,7 +1,6 @@
 {
   "name": "glow",
   "target": "subject",
-  "length": "effect",
   "layers": [
     {
       "kind": "sprite",

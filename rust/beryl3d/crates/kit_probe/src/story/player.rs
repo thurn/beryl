@@ -14,7 +14,7 @@ use kit_base::data::{
 };
 use kit_base::geometry::{Rect, Window, plane::ScreenPlane};
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
-use kit_fx::effects::{Effect, preview};
+use kit_fx::effects::{EffectRun, preview};
 use kit_ui::element::{Element, Position, holder, text};
 use kit_ui::input::AssetReady;
 use kit_ui::layout::Layer;
@@ -31,7 +31,7 @@ pub struct Player {
     window: Window,
     layer: Layer,
     nodes: BTreeMap<ElementId, PreviewNode>,
-    effect: Option<(Effect, Rect)>,
+    effect: Option<(EffectRun, Rect)>,
     frame: Frame,
     now: u64,
     tier: Tier,
@@ -48,8 +48,11 @@ struct PreviewNode {
 impl Player {
     /// Lays out the story in the given window. The caller supplies the atlas, either through
     /// the host or with [`Self::stub_atlas`] for checks that only need draw records.
-    #[must_use]
-    pub fn new(story: &Story, window: Window, data: Arc<Data>) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// The story names an effect absent from the supplied tuning.
+    pub fn new(story: &Story, window: Window, data: Arc<Data>) -> Result<Self, String> {
         let profile = data.profiles.for_size(window.size);
         let compact = if profile.size_class == SizeClass::Compact {
             profile
@@ -91,9 +94,14 @@ impl Player {
                 ));
                 authored.push(None);
             }
-            Body::Effect(kind, rect) => {
-                effect = Some((*kind, *rect));
-                preview::prepare_text(&data.effects, *kind, &mut layer);
+            Body::Effect(name, rect) => {
+                let definition = data
+                    .effects
+                    .get(name)
+                    .ok_or_else(|| format!("line 2: no loaded effect is named {name:?}"))?;
+                let run = preview::run(Arc::clone(definition));
+                preview::prepare_text(&run, &mut layer);
+                effect = Some((run, *rect));
             }
         }
         if effect.is_none() {
@@ -121,7 +129,7 @@ impl Player {
         if let Some((&id, _)) = nodes.iter().find(|(_, node)| node.edits) {
             layer.focus(Some(id));
         }
-        Self::with_layer(window, data, layer, nodes, effect)
+        Ok(Self::with_layer(window, data, layer, nodes, effect))
     }
 
     /// Plays a feature's own element through the toolkit's flat renderer.
@@ -152,7 +160,7 @@ impl Player {
         data: Arc<Data>,
         layer: Layer,
         nodes: BTreeMap<ElementId, PreviewNode>,
-        effect: Option<(Effect, Rect)>,
+        effect: Option<(EffectRun, Rect)>,
     ) -> Self {
         Self {
             data,
@@ -213,7 +221,7 @@ impl Player {
     /// A still story has a single moment. An effect plays from start to finish.
     #[must_use]
     pub fn end(&self) -> u64 {
-        self.effect.map_or(0, |_| preview::DURATION)
+        self.effect.as_ref().map_or(0, |(run, _)| run.duration)
     }
 
     /// Where the player is on its clock, in nanoseconds.
@@ -278,23 +286,16 @@ impl Player {
             builder.camera(directx::orthographic(
                 -half.x, half.x, -half.y, half.y, 0.1, 1024.0,
             ));
-            if let Some((effect, rect)) = self.effect {
+            if let Some((effect, rect)) = &self.effect {
                 write_effect(
                     &self.data.effects,
                     effect,
-                    rect,
+                    *rect,
                     self.now,
                     &plane,
                     &mut builder,
                 );
-                preview::position_text(
-                    &self.data.effects,
-                    effect,
-                    rect,
-                    self.now,
-                    self.tier,
-                    &mut self.layer,
-                );
+                preview::position_text(effect, *rect, self.now, self.tier, &mut self.layer);
             }
             self.layer.write_preview(&mut builder, &plane, &|id| {
                 self.nodes
@@ -408,7 +409,7 @@ fn placed(mut element: Element, rect: Rect, origin: Vec2) -> Element {
 
 fn write_effect(
     data: &Effects,
-    effect: Effect,
+    effect: &EffectRun,
     rect: Rect,
     now: u64,
     plane: &ScreenPlane,
@@ -419,9 +420,9 @@ fn write_effect(
         y,
         width,
         height,
-    } = preview::position(data, effect, rect, now);
+    } = preview::position(effect, rect, now);
     builder.resolved(
-        effect.name(),
+        &effect.definition.name,
         Resolved {
             id: ElementId(u32::MAX - 1),
             parent: u32::MAX,
@@ -439,7 +440,7 @@ fn write_effect(
             opacity: 1.0,
             clip: None,
             interactive: false,
-            state: StateBits(if now < preview::DURATION && preview::moves(data, effect) {
+            state: StateBits(if now < effect.duration && preview::moves(effect) {
                 StateBits::MOVING
             } else {
                 0

@@ -31,7 +31,7 @@ enum Preview {
 }
 
 impl Preview {
-    fn player(&self, window: Window, data: Arc<kit_base::data::Data>) -> Player {
+    fn player(&self, window: Window, data: Arc<kit_base::data::Data>) -> Result<Player, String> {
         match self {
             Self::Toolkit(source) => {
                 let stories::Story::Toolkit(story) = source.as_ref() else {
@@ -39,7 +39,9 @@ impl Preview {
                 };
                 Player::new(story, window, data)
             }
-            Self::Feature(element) => Player::from_element(Widget::clone(element), window, data),
+            Self::Feature(element) => {
+                Ok(Player::from_element(Widget::clone(element), window, data))
+            }
         }
     }
 }
@@ -132,7 +134,9 @@ impl Scene {
                 }
             },
         };
-        let mut player = source.player(window, data);
+        let mut player = source
+            .player(window, data)
+            .map_err(|error| format!("{name}: {error}"))?;
         player.stub_atlas();
         let audit = player.data().audit;
         Ok(Self::Story(Box::new(StoryScene {
@@ -367,15 +371,18 @@ impl Scene {
             Self::Recording(page) => Self::Recording(Box::new(page.with_host_atlas())),
             Self::Story(mut scene) => {
                 // Recreate the layer so it requests even glyphs the stub atlas already supplied.
-                scene.player = scene.source.player(
-                    Window {
-                        size_class: None,
-                        size: scene.context.size,
-                        scale: scene.scale,
-                        safe_area: scene.context.safe_area,
-                    },
-                    scene.player.data().clone(),
-                );
+                scene.player = scene
+                    .source
+                    .player(
+                        Window {
+                            size_class: None,
+                            size: scene.context.size,
+                            scale: scene.scale,
+                            safe_area: scene.context.safe_area,
+                        },
+                        scene.player.data().clone(),
+                    )
+                    .expect("this story has already opened with the same tuning");
                 scene.player.set_tier(scene.tier);
                 Self::Story(scene)
             }

@@ -8,7 +8,7 @@ use game_table::table::Look;
 use glam::Vec2;
 use kit_base::pose::{Curve, Pose};
 use kit_frame::frame::{Frame, Material};
-use kit_fx::effects::{Effect, EffectRun, card, shake};
+use kit_fx::effects::{EffectRun, card, shake};
 use kit_ui::input::Tier;
 
 use crate::common::{MS, empty_frame, frame};
@@ -20,9 +20,13 @@ const EARLIER: Option<u16> = Some(3);
 const LATER: Option<u16> = Some(4);
 
 /// A run of `effect` on `ON` from 1 s for 1 s, linear.
-fn run(effect: Effect) -> EffectRun {
+fn run(effect: &str) -> EffectRun {
     EffectRun {
-        effect,
+        definition: crate::test_data::data()
+            .effects
+            .get(effect)
+            .unwrap()
+            .clone(),
         on: ON,
         start: 1_000 * MS,
         duration: 1_000 * MS,
@@ -32,7 +36,7 @@ fn run(effect: Effect) -> EffectRun {
 }
 
 /// How a plain card showing `LATER` looks with one run of `effect` at `share` of the way through.
-fn look_at(effect: Effect, share: f32) -> Look {
+fn look_at(effect: &str, share: f32) -> Look {
     let mut look = Look {
         pose: Pose::default(),
         tint: [255, 255, 255],
@@ -49,14 +53,7 @@ fn look_at(effect: Effect, share: f32) -> Look {
         reason = "a share from 0 to 1 of a second"
     )]
     let now = 1_000 * MS + (f64::from(share) * 1e9).round() as u64;
-    card::look(
-        (&crate::test_data::data().effects, Tier::Baseline),
-        &[run(effect)],
-        ON,
-        now,
-        EARLIER,
-        &mut look,
-    );
+    card::look(Tier::Baseline, &[run(effect)], ON, now, EARLIER, &mut look);
     look
 }
 
@@ -66,7 +63,7 @@ fn near(found: f32, expected: f32) -> bool {
 }
 
 /// The card's `params` (dissolve, whiten), tint and opacity with `effect` at each of `shares`.
-fn check(effect: Effect, expected: &[(f32, f32, f32, u8, f32)]) {
+fn check(effect: &str, expected: &[(f32, f32, f32, u8, f32)]) {
     for &(share, dissolve, whiten, tint, opacity) in expected {
         let look = look_at(effect, share);
         assert!(
@@ -98,7 +95,7 @@ fn channel(share: f32) -> u8 {
 #[test]
 fn settle_is_still_then_washes_white_and_back() {
     check(
-        Effect::Settle,
+        "settle",
         &[
             (0.0, 0.0, 0.0, 255, 1.0),
             (0.071, 0.0, 0.0, 255, 1.0),
@@ -113,7 +110,7 @@ fn dissolve_darkens_holds_and_breaks_up() {
     const DARKENED: f32 = 0.3;
     let dark = channel(0.35);
     check(
-        Effect::Dissolve,
+        "dissolve",
         &[
             (0.0, 0.0, 0.0, 255, 1.0),
             (DARKENED, 0.0, 0.0, dark, 1.0),
@@ -127,7 +124,7 @@ fn dissolve_darkens_holds_and_breaks_up() {
 fn dim_darkens_and_fades() {
     let dark = channel(0.35);
     check(
-        Effect::Dim,
+        "dim",
         &[
             (0.0, 0.0, 0.0, 255, 1.0),
             (0.3, 0.0, 0.0, dark, 1.0 - 0.3),
@@ -139,7 +136,7 @@ fn dim_darkens_and_fades() {
 #[test]
 fn blanch_washes_white_then_fades() {
     check(
-        Effect::Blanch,
+        "blanch",
         &[
             (0.0, 0.0, 0.0, 255, 1.0),
             (0.5, 0.0, 1.0, 255, 1.0),
@@ -151,7 +148,7 @@ fn blanch_washes_white_then_fades() {
 #[test]
 fn cover_washes_white_while_the_face_changes_at_half_its_run() {
     check(
-        Effect::Cover,
+        "cover",
         &[
             (0.0, 0.0, 0.0, 255, 1.0),
             (0.4, 0.0, 1.0, 255, 1.0),
@@ -159,22 +156,22 @@ fn cover_washes_white_while_the_face_changes_at_half_its_run() {
             (0.999, 0.0, 0.0, 255, 1.0),
         ],
     );
-    assert_eq!(look_at(Effect::Cover, 0.49).face, EARLIER);
-    assert_eq!(look_at(Effect::Cover, 0.51).face, LATER);
-    assert_eq!(look_at(Effect::Cover, 1.0).face, LATER, "after the run");
+    assert_eq!(look_at("cover", 0.49).face, EARLIER);
+    assert_eq!(look_at("cover", 0.51).face, LATER);
+    assert_eq!(look_at("cover", 1.0).face, LATER, "after the run");
 }
 
 #[test]
 fn a_run_on_another_card_or_outside_its_time_changes_nothing() {
-    let plain = look_at(Effect::Settle, 2.0);
+    let plain = look_at("settle", 2.0);
     assert!(plain.whiten <= 0.0, "after its run");
-    let mut look = look_at(Effect::Settle, 2.0);
+    let mut look = look_at("settle", 2.0);
     let elsewhere = EffectRun {
         on: Subject::Object { slot: ObjectId(8) },
-        ..run(Effect::Blanch)
+        ..run("blanch")
     };
     card::look(
-        (&crate::test_data::data().effects, Tier::Baseline),
+        Tier::Baseline,
         &[elsewhere],
         ON,
         1_500 * MS,
@@ -270,7 +267,7 @@ fn a_shake_moves_the_picture_only_while_it_plays_and_moves_no_element() {
 
 #[test]
 fn a_shake_swings_twice_and_ends_still() {
-    let runs = [run(Effect::Shake)];
+    let runs = [run("shake")];
     let at = |share: f64| {
         #[expect(
             clippy::cast_possible_truncation,
@@ -278,13 +275,7 @@ fn a_shake_swings_twice_and_ends_still() {
             reason = "a time"
         )]
         let now = 1_000 * MS + (share * 1e9) as u64;
-        shake::offset(
-            &crate::test_data::data().effects,
-            &runs,
-            now,
-            2.0,
-            Tier::Baseline,
-        )
+        shake::offset(&runs, now, 2.0, Tier::Baseline)
     };
     assert_eq!(at(0.0), Vec2::ZERO);
     assert_eq!(at(1.0), Vec2::ZERO, "the run is over");

@@ -1,7 +1,6 @@
 {
   "name": "cover",
   "target": "subject",
-  "length": "step",
   "layers": [
     {
       "kind": "surface",

@@ -17,6 +17,15 @@ impl Show {
     /// Call `resize` next to lay out the table and compile the outstanding scripts again.
     pub fn set_data(&mut self, data: Arc<Data>) {
         self.complete();
+        // Runs can outlast their scripts. Resolve those already on the show's clock against
+        // the replacement tuning as well, keeping their anchors and times.
+        self.effects.retain_mut(|run| {
+            let Some(definition) = data.effects.get(&run.definition.name) else {
+                return false;
+            };
+            run.definition = Arc::clone(definition);
+            true
+        });
         self.table.set_data(data);
     }
 

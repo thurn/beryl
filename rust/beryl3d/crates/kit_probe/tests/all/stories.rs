@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use kit_base::data::effect::Effects;
 use kit_base::geometry::{Insets, Window};
 use kit_probe::agent::{TreeOptions, tree};
 use kit_probe::story::{Player, Story};
@@ -132,9 +135,9 @@ fn diagnoses_invalid_container_and_effect_lines() {
             "max item lines",
         ),
         (
-            "story effect 360x240 desktop\neffect spin 114,60 132x120\n",
+            "story effect 360x240 desktop\neffect  114,60 132x120\n",
             2,
-            "glow",
+            "effect <name>",
         ),
         (
             "story effect 360x240 desktop\neffect glow 114,60 132x120\nextra\n",
@@ -159,18 +162,48 @@ fn rejects<const COUNT: usize>(cases: [(&str, usize, &str); COUNT]) {
 
 fn player(text: &str) -> Player {
     let story: Story = text.parse().expect("valid story");
-    let mut player = Player::new(
-        &story,
-        Window {
-            size_class: None,
-            size: story.header.window,
-            scale: 1.0,
-            safe_area: Insets::default(),
-        },
-        crate::test_data::data(),
-    );
+    let mut player = Player::new(&story, window_for(&story), crate::test_data::data()).unwrap();
     player.stub_atlas();
     player
+}
+
+fn window_for(story: &Story) -> Window {
+    Window {
+        size_class: None,
+        size: story.header.window,
+        scale: 1.0,
+        safe_area: Insets::default(),
+    }
+}
+
+#[test]
+fn a_story_draws_an_effect_added_to_the_tuning() {
+    let source = EFFECT.replace("glow", "test-glint");
+    let story: Story = source.parse().unwrap();
+    assert_eq!(story.to_string(), source);
+    let mut data = crate::test_data::data();
+    let error = Player::new(&story, window_for(&story), Arc::clone(&data))
+        .err()
+        .unwrap();
+    assert_eq!(error, "line 2: no loaded effect is named \"test-glint\"");
+
+    let definition = include_str!("../../../../../../data/beryl3d/effects/glow.json")
+        .replace("\"glow\"", "\"test-glint\"");
+    Arc::make_mut(&mut data).effects =
+        Effects::parse([("test-glint", definition.as_str())]).unwrap();
+    let mut player = Player::new(&story, window_for(&story), data).unwrap();
+    player.look(true);
+    player.seek(player.end() / 2);
+    assert!(
+        player
+            .frame()
+            .looks
+            .effects
+            .iter()
+            .any(|look| look.name.as_ref() == "test-glint")
+    );
+    player.seek(player.end());
+    assert!(player.frame().looks.effects.is_empty());
 }
 
 #[test]

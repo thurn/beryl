@@ -1,5 +1,7 @@
 //! The effect runs a starting script adds to the show (docs/beryl-3d.md, "Effects").
 
+use std::sync::Arc;
+
 use super::relay::settle;
 use super::{LIGHTS, Playing};
 use crate::verbs::Interval;
@@ -24,7 +26,7 @@ impl Playing {
                 EffectRun {
                     start: over.from,
                     duration: over.duration(),
-                    ..*run
+                    ..run.clone()
                 },
             );
         }
@@ -37,7 +39,7 @@ impl Playing {
 /// the list is full, `run` replaces the run that ends first, so that it allocates nothing.
 fn begin(effects: &mut Vec<EffectRun>, run: EffectRun) {
     effects.retain_mut(|other| {
-        if other.effect != run.effect || other.on != run.on {
+        if !Arc::ptr_eq(&other.definition, &run.definition) || other.on != run.on {
             return true;
         }
         if other.start >= run.start {

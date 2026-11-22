@@ -8,14 +8,15 @@ mod player;
 pub mod preview;
 pub mod shake;
 
-pub use kit_base::data::effect::Effect;
 pub use player::{NumberLook, TextLook, text};
 
-use beryl_protocol::{protocol::ObjectId, script::Subject};
+use std::sync::Arc;
+
+use beryl_protocol::script::Subject;
 use glam::{Vec2, Vec3};
 use kit_frame::frame::FrameBuilder;
 
-use kit_base::data::effect::Effects;
+use kit_base::data::effect::{Definition, Effects};
 use kit_base::pose::{Curve, Pose};
 
 /// Where something is and how large, for the light drawn to or on it.
@@ -37,14 +38,14 @@ pub fn write(
 ) {
     light::write(effects, runs, now, &reach, eye, builder);
     particles::write(effects, runs, now, |subject| reach(subject, 0), builder);
-    shake::write(effects, runs, now, scale, builder);
+    shake::write(runs, now, scale, builder);
 }
 
 /// One effect played on `on`, from `start` for `duration` along `curve`, in nanoseconds since
 /// the client started once the show holds it. `step` is the number of the step that wrote it.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct EffectRun {
-    pub effect: Effect,
+    pub definition: Arc<Definition>,
     pub on: Subject,
     pub start: u64,
     pub duration: u64,
@@ -55,7 +56,7 @@ pub struct EffectRun {
 impl EffectRun {
     /// The fraction of the run elapsed at this time, from its start until its end.
     #[must_use]
-    pub fn elapsed(self, now: u64) -> Option<f32> {
+    pub fn elapsed(&self, now: u64) -> Option<f32> {
         let past = now.checked_sub(self.start)?;
         if past >= self.duration {
             return None;
@@ -69,19 +70,7 @@ impl EffectRun {
     }
 
     /// Whether the anchor represents a point, such as a life total.
-    fn on_point(self) -> bool {
+    fn on_point(&self) -> bool {
         matches!(self.on, Subject::Player { .. })
-    }
-
-    /// Runs one effect on the preview's single surface, using the same drawing code as play.
-    fn preview(effect: Effect, duration: u64) -> Self {
-        Self {
-            effect,
-            on: Subject::Object { slot: ObjectId(0) },
-            start: 0,
-            duration,
-            curve: Curve::LINEAR,
-            step: 0,
-        }
     }
 }

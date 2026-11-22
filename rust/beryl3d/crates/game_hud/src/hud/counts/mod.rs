@@ -269,7 +269,7 @@ impl CountFloats {
             let effect = effects
                 .iter()
                 .filter(|run| run.on == Subject::Player { player: side })
-                .find_map(|&run| effects::text(&data.effects, run, now, tier, color::LIFE))
+                .find_map(|run| effects::text(run, now, tier, color::LIFE))
                 .unwrap_or_default();
             let want = Shown {
                 life: counts.map(|counts| (counts.life, target, passes)),

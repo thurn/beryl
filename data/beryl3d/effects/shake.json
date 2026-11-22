@@ -1,7 +1,6 @@
 {
   "name": "shake",
   "target": "subject",
-  "length": "effect",
   "layers": [
     {
       "kind": "shake",

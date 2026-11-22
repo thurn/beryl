@@ -1,7 +1,6 @@
 {
   "name": "trail",
   "target": "subject",
-  "length": "effect",
   "layers": [
     {
       "kind": "streak",

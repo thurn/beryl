@@ -9,6 +9,8 @@
 //! share of it, or for the cards that stay in a hand for a set time from when the act is
 //! applied; or over the time the step leaves for what it opened or closed.
 
+use std::sync::Arc;
+
 use beryl_protocol::protocol::{PlayerView, StackItem};
 use beryl_protocol::script::{
     Act, Edge, Script, Step, StepTiming, Subject, Table as Played, Tally, Verb, mover_of, replay,
@@ -26,9 +28,9 @@ use crate::play::TurnChange;
 use crate::sound::{SoundRun, Sounds};
 use crate::verbs::{self, Interval};
 use game_table::table::{Objects, PileCount, Table, Turn};
-use kit_base::data::effect::Effects;
+use kit_base::data::effect::{Effects, Target};
 use kit_base::pose::Segment;
-use kit_fx::effects::{Effect, EffectRun};
+use kit_fx::effects::EffectRun;
 use kit_space::motion::Track;
 
 /// A script laid out in time, ready to start.
@@ -603,17 +605,15 @@ fn effects_of(
 ) {
     let span = laid.to - laid.from;
     for effect in &timing.effects {
+        let Some(definition) = definitions.get(&effect.name) else {
+            continue;
+        };
         let subject = || {
-            definitions
-                .allows_subject(&effect.name)
+            (definition.target == Target::Subject)
                 .then(|| lit_by(&step.act))
                 .flatten()
         };
         let Some(on) = effect.on.or_else(subject) else {
-            continue;
-        };
-        let Some(named) = Effect::from_name(&effect.name) else {
-            debug_assert!(false, "no effect is named {:?}", effect.name);
             continue;
         };
         let at = match effect.when {
@@ -627,7 +627,7 @@ fn effects_of(
             continue;
         }
         runs.push(EffectRun {
-            effect: named,
+            definition: Arc::clone(definition),
             on,
             start,
             duration: end - start,

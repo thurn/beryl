@@ -11,7 +11,6 @@ use std::fmt;
 
 use kit_base::geometry::{Rect, Size};
 use kit_frame::frame::{ElementId, Role, StateBits};
-use kit_fx::effects::Effect;
 
 use crate::agent::Layout;
 use style::Property;
@@ -59,7 +58,7 @@ impl Story {
 enum Body {
     Elements(Vec<Node>),
     Container(Container),
-    Effect(Effect, Rect),
+    Effect(String, Rect),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -149,7 +148,7 @@ impl fmt::Display for Story {
                 }
             }
             Body::Effect(effect, rect) => {
-                writeln!(out, "effect {} {}", effect.name(), BoxText(*rect))?;
+                writeln!(out, "effect {effect} {}", BoxText(*rect))?;
             }
         }
         Ok(())

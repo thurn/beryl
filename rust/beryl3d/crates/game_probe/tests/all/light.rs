@@ -6,7 +6,6 @@ use beryl_protocol::script::{Arrow, Mark, Subject, Verb};
 use game_play::light::{ArrowSpan, Lit, MarkSpan, Span};
 use game_play::play::record::{Plant, Planted};
 use game_play::verbs::{self, Interval};
-use kit_fx::effects::Effect;
 
 use crate::common::{MS, before, empty_frame, frame, show, three_beats};
 
@@ -124,22 +123,4 @@ fn a_span_a_step_begins_reaches_the_table_at_the_steps_real_time() {
         1,
         "a span outlives the script that began it"
     );
-}
-
-#[test]
-fn the_effects_are_those_of_the_data_file() {
-    let data: serde_json::Value =
-        serde_json::from_str(include_str!("../../../../../../data/ui-conventions.json"))
-            .expect("the data file parses");
-    let names: Vec<&str> = data["effects"]
-        .as_array()
-        .expect("a list of effects")
-        .iter()
-        .map(|effect| effect["name"].as_str().expect("each effect has a name"))
-        .collect();
-    let ours: Vec<&str> = Effect::ALL.iter().map(|effect| effect.name()).collect();
-    assert_eq!(ours, names);
-    for effect in Effect::ALL {
-        assert_eq!(Effect::from_name(effect.name()), Some(effect));
-    }
 }

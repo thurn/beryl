@@ -5,8 +5,9 @@
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::{Curve, Edge, StepEffect, StepTiming, Subject};
 use game_play::play::Show;
+use kit_base::data::effect::Effects;
 use kit_frame::frame::Wake;
-use kit_fx::effects::{Effect, EffectRun};
+use kit_fx::effects::EffectRun;
 
 use crate::common::{MS, before, discard, empty_frame, frame, show};
 
@@ -27,6 +28,10 @@ pub(crate) fn effect(name: &str, when: Edge) -> StepEffect {
 /// from 100 to 500 ms that begins `effects`. Both have started by the frame at 0, so that each
 /// script time is also a real time. Returns the show and the discarded card.
 pub(crate) fn started(effects: Vec<StepEffect>) -> (Show, Subject) {
+    started_with(show(), effects)
+}
+
+fn started_with(mut show: Show, effects: Vec<StepEffect>) -> (Show, Subject) {
     let (start, cards) = before();
     let (after, mut timings) = discard(&start, cards);
     timings[0] = StepTiming {
@@ -34,7 +39,6 @@ pub(crate) fn started(effects: Vec<StepEffect>) -> (Show, Subject) {
         effects,
         ..timings[0].clone()
     };
-    let mut show = show();
     show.record();
     show.push(Box::new(start), Vec::new());
     show.push(Box::new(after), timings);
@@ -49,12 +53,18 @@ pub(crate) fn started(effects: Vec<StepEffect>) -> (Show, Subject) {
 }
 
 /// Each run the show holds, as its effect and when it starts and ends in milliseconds.
-fn runs(show: &Show) -> Vec<(Effect, f64, f64)> {
+fn runs(show: &Show) -> Vec<(&str, f64, f64)> {
     #[expect(clippy::cast_precision_loss, reason = "a test's times are small")]
     let ms = |t: u64| t as f64 / 1e6;
     show.effects()
         .iter()
-        .map(|run| (run.effect, ms(run.start), ms(run.start + run.duration)))
+        .map(|run| {
+            (
+                run.definition.name.as_ref(),
+                ms(run.start),
+                ms(run.start + run.duration),
+            )
+        })
         .collect()
 }
 
@@ -64,8 +74,8 @@ fn an_effect_at_the_end_of_a_step_begins_as_the_step_ends() {
         duration: Some(330.0),
         ..effect("settle", Edge::End)
     }]);
-    assert_eq!(runs(&show), vec![(Effect::Settle, 500.0, 830.0)]);
-    let run = show.effects()[0];
+    assert_eq!(runs(&show), vec![("settle", 500.0, 830.0)]);
+    let run = &show.effects()[0];
     assert_eq!(run.on, card, "on the step's subject");
     assert_eq!(run.step, 0);
     let record: Vec<EffectRun> = show.history()[1].effects.clone();
@@ -83,7 +93,7 @@ fn an_effect_into_a_step_with_no_duration_lasts_as_long_as_the_step() {
         into: Some(0.376),
         ..effect("dissolve", Edge::Start)
     }]);
-    assert_eq!(runs(&show), vec![(Effect::Dissolve, 250.4, 650.4)]);
+    assert_eq!(runs(&show), vec![("dissolve", 250.4, 650.4)]);
 }
 
 #[test]
@@ -101,8 +111,41 @@ fn an_effect_on_something_else_is_on_that_and_one_on_nothing_named_is_dropped() 
             ..effect("glow", Edge::Start)
         },
     ]);
-    assert_eq!(runs(&show), vec![(Effect::Loss, 100.0, 500.0)]);
+    assert_eq!(runs(&show), vec![("loss", 100.0, 500.0)]);
     assert_eq!(show.effects()[0].on, player);
+}
+
+#[test]
+fn a_timed_step_draws_an_effect_added_to_the_tuning() {
+    let mut data = crate::test_data::data();
+    let source = include_str!("../../../../../../data/beryl3d/effects/glow.json")
+        .replace("\"glow\"", "\"test-glint\"");
+    let lift = data.effects.lift();
+    std::sync::Arc::make_mut(&mut data).effects = Effects::parse([("test-glint", source.as_str())])
+        .unwrap()
+        .with_lift(lift);
+    let mut show = show();
+    show.set_data(data);
+    let (mut show, on) = started_with(
+        show,
+        vec![
+            effect("test-glint", Edge::Start),
+            effect("missing", Edge::Start),
+        ],
+    );
+    assert_eq!(runs(&show), vec![("test-glint", 100.0, 500.0)]);
+    let mut buffer = empty_frame();
+    buffer.looking = true;
+    let during = frame(&mut show, &mut buffer, 250 * MS);
+    assert!(
+        during
+            .looks
+            .effects
+            .iter()
+            .any(|look| { look.name.as_ref() == "test-glint" && look.on == Some(on) })
+    );
+    let after = frame(&mut show, &mut buffer, 500 * MS);
+    assert!(after.looks.effects.is_empty());
 }
 
 #[test]
@@ -134,7 +177,7 @@ fn an_effect_outlives_its_script_and_never_holds_up_the_show() {
         show.settled(),
         "the script ended at 500 ms, so a prompt may open"
     );
-    assert_eq!(runs(&show), vec![(Effect::Glow, 500.0, 1500.0)]);
+    assert_eq!(runs(&show), vec![("glow", 500.0, 1500.0)]);
     assert_eq!(show.wake(700 * MS), Wake::Now, "it is under way");
     frame(&mut show, &mut buffer, 1500 * MS);
     assert!(show.effects().is_empty());
@@ -194,7 +237,7 @@ fn a_later_run_of_one_effect_on_one_thing_cuts_short_the_one_before() {
     ]);
     assert_eq!(
         runs(&show),
-        vec![(Effect::Glow, 100.0, 500.0), (Effect::Glow, 500.0, 700.0)]
+        vec![("glow", 100.0, 500.0), ("glow", 500.0, 700.0)]
     );
 }
 

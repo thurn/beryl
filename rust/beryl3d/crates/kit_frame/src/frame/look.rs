@@ -3,6 +3,8 @@
 //! text. A frame records these only while `Frame::looking` is set, so the app's frames do no
 //! work for them.
 
+use std::sync::Arc;
+
 use beryl_protocol::script::Subject;
 
 use super::FrameBuilder;
@@ -32,9 +34,9 @@ pub struct Looks {
 /// it (`node` in `effects::light`). For one that changes how the card is drawn, `model` is the
 /// card's face and `opacity` how far the card is washed white or darkened; it is 1 while a life
 /// total is tinted.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct EffectLook {
-    pub name: &'static str,
+    pub name: Arc<str>,
     pub on: Option<Subject>,
     pub model: [f32; 12],
     pub opacity: f32,
@@ -42,9 +44,14 @@ pub struct EffectLook {
 
 impl FrameBuilder<'_> {
     /// Records `look` while the frame is `looking`; the app's frames record nothing.
-    pub fn effect(&mut self, look: EffectLook) {
+    pub fn effect(&mut self, name: &Arc<str>, on: Option<Subject>, model: [f32; 12], opacity: f32) {
         if self.frame.looking {
-            self.frame.looks.effects.push(look);
+            self.frame.looks.effects.push(EffectLook {
+                name: Arc::clone(name),
+                on,
+                model,
+                opacity,
+            });
         }
     }
 }

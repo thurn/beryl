@@ -7,7 +7,7 @@ use test_profiles::SHIPPED;
 
 use game_table::profiles::Profile;
 use game_table::table::Window;
-use kit_base::data::effect::Effect;
+use kit_base::data::effect::SHIPPED as SHIPPED_EFFECTS;
 use kit_base::data::profiles::Region;
 use kit_base::geometry::{Rect, Size};
 use kit_scene::{SizeClass, Slot};
@@ -91,13 +91,16 @@ fn the_windows_use_the_supplied_table_and_screen_tuning() {
             "\"inset\": [0, 22, 16, 22]",
             1,
         );
-    let names = Effect::ALL.map(Effect::name);
-    let definitions = names.map(|name| {
-        beryl_test_files::read_to_string(format!("data/beryl3d/effects/{name}.json")).unwrap()
-    });
-    let effects = names
-        .into_iter()
-        .zip(definitions.each_ref().map(String::as_str));
+    let definitions: Vec<_> = SHIPPED_EFFECTS
+        .iter()
+        .map(|name| {
+            beryl_test_files::read_to_string(format!("data/beryl3d/effects/{name}.json")).unwrap()
+        })
+        .collect();
+    let effects = SHIPPED_EFFECTS
+        .iter()
+        .copied()
+        .zip(definitions.iter().map(String::as_str));
     let data = Data::parse(
         |name| {
             beryl_test_files::read_to_string(format!("data/beryl3d/{name}"))

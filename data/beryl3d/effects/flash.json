@@ -1,7 +1,6 @@
 {
   "name": "flash",
   "target": "subject",
-  "length": "effect",
   "layers": [
     {
       "kind": "burst",

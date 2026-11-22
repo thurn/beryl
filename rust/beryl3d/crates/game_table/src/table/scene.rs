@@ -636,7 +636,7 @@ impl Table {
         };
         let effects = &self.data.effects;
         effects::card::look_with_face(
-            (effects, builder.tier()),
+            builder.tier(),
             effects_on_card,
             on,
             dress.now,

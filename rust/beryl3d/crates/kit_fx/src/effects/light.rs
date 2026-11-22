@@ -6,7 +6,7 @@ use glam::{Affine3A, Vec2, Vec3};
 use super::{EffectRun, Reach, player};
 use kit_base::data::effect::Effects;
 use kit_base::pose::Pose;
-use kit_frame::frame::{Draw, EffectLook, FrameBuilder, Sprite, sprites};
+use kit_frame::frame::{Draw, FrameBuilder, Sprite, sprites};
 
 /// Writes the table-space light layers. `reach_at` supplies the subject's current pose or
 /// its pose a given number of nanoseconds earlier.
@@ -19,16 +19,13 @@ pub fn write(
     builder: &mut FrameBuilder<'_>,
 ) {
     for run in runs {
-        if let Some(definition) = effects.get(run.effect.name()) {
-            player::write_light(
-                definition,
-                *run,
-                now,
-                |ago| reach_at(run.on, ago),
-                (eye, effects.lift()),
-                builder,
-            );
-        }
+        player::write_light(
+            run,
+            now,
+            |ago| reach_at(run.on, ago),
+            (eye, effects.lift()),
+            builder,
+        );
     }
 }
 
@@ -42,12 +39,12 @@ pub(super) fn record_as(
 ) {
     let size = (half * 2.0 * scale).extend(1.0);
     let model = Affine3A::from_scale_rotation_translation(size, pose.rotation, above(pose, lift));
-    builder.effect(EffectLook {
-        name: run.effect.name(),
-        on: Some(run.on),
-        model: Draw::glow(model, [0; 4], sprites::HALO, 0.0).model,
+    builder.effect(
+        &run.definition.name,
+        Some(run.on),
+        Draw::glow(model, [0; 4], sprites::HALO, 0.0).model,
         opacity,
-    });
+    );
 }
 
 /// A glow record of `sprite`, `size` millimetres large, lying in the plane of the face of

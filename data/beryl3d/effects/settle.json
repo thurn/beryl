@@ -1,7 +1,6 @@
 {
   "name": "settle",
   "target": "subject",
-  "length": "effect",
   "layers": [
     {
       "kind": "surface",

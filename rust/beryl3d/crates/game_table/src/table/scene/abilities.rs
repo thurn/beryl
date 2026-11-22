@@ -152,7 +152,7 @@ impl Table {
         let on = Subject::Ability { id };
         let effects = &self.data.effects;
         effects::card::look(
-            (effects, builder.tier()),
+            builder.tier(),
             dress.effects,
             on,
             dress.now,

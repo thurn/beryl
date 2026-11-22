@@ -8,12 +8,12 @@ use glam::{Quat, Vec2, Vec3};
 use kit_base::data::effect::Effects;
 use kit_base::pose::{Curve, Pose};
 use kit_frame::frame::{Frame, FrameBuilder};
-use kit_fx::effects::{self, Effect, EffectRun, Reach, card, light, particles};
+use kit_fx::effects::{self, EffectRun, Reach, card, light, particles};
 use kit_ui::input::Tier;
 
-fn records(effect: Effect, data: &Effects) -> String {
+fn records(effect: &str, data: &Effects) -> String {
     let on = match effect {
-        Effect::Loss => Subject::Player { player: Side::You },
+        "loss" => Subject::Player { player: Side::You },
         _ => Subject::Object { slot: ObjectId(7) },
     };
     let pose = Pose {
@@ -23,18 +23,18 @@ fn records(effect: Effect, data: &Effects) -> String {
     };
     let reach = Reach {
         pose,
-        half: if effect == Effect::Loss {
+        half: if effect == "loss" {
             Vec2::splat(19.0)
         } else {
             Vec2::new(32.0, 44.5)
         },
     };
     let runs = [EffectRun {
-        effect,
+        definition: data.get(effect).unwrap().clone(),
         on,
         start: 1_000,
         duration: 10_000,
-        curve: if effect == Effect::Glow {
+        curve: if effect == "glow" {
             Curve::EASE_OUT
         } else {
             Curve::LINEAR
@@ -59,7 +59,7 @@ fn records(effect: Effect, data: &Effects) -> String {
             };
             let mut builder =
                 FrameBuilder::new(&mut frame, tier, crate::test_data::data().card.size());
-            card::look((data, tier), &runs, on, now, None, &mut surface);
+            card::look(tier, &runs, on, now, None, &mut surface);
             card::write(data, &runs, on, now, &surface, &mut builder);
             light::write(data, &runs, now, |_, _| Some(reach), Vec3::Z, &mut builder);
             particles::write(data, &runs, now, |_| Some(reach), &mut builder);
@@ -86,9 +86,9 @@ fn records(effect: Effect, data: &Effects) -> String {
 fn ported_effects_keep_the_original_draw_records() {
     let data = crate::test_data::data();
     for (effect, original) in [
-        (Effect::Glow, include_str!("../fixtures/glow.txt")),
-        (Effect::Dissolve, include_str!("../fixtures/dissolve.txt")),
-        (Effect::Loss, include_str!("../fixtures/loss.txt")),
+        ("glow", include_str!("../fixtures/glow.txt")),
+        ("dissolve", include_str!("../fixtures/dissolve.txt")),
+        ("loss", include_str!("../fixtures/loss.txt")),
     ] {
         let got = records(effect, &data.effects);
         assert_eq!(got.lines().count(), original.lines().count(), "{effect:?}");
@@ -98,10 +98,10 @@ fn ported_effects_keep_the_original_draw_records() {
     }
 }
 
-fn remaining_records(effect: Effect, on: Subject, moving: bool, data: &Effects) -> String {
+fn remaining_records(effect: &str, on: Subject, moving: bool, data: &Effects) -> String {
     const MS: u64 = 1_000_000;
     let run = EffectRun {
-        effect,
+        definition: data.get(effect).unwrap().clone(),
         on,
         start: 100 * MS,
         duration: 1_000 * MS,
@@ -124,17 +124,18 @@ fn remaining_records(effect: Effect, on: Subject, moving: bool, data: &Effects) 
     let mut frame = Frame::with_capacity(0, 256, 0);
     frame.looking = true;
     for tier in [Tier::Baseline, Tier::Enhanced] {
+        let runs = std::slice::from_ref(&run);
         for ms in [0, 71, 150, 250, 300, 360, 500, 660, 800, 999] {
             let now = run.start + ms * MS;
             let mut surface = card::Look::new(pose, Some(1), Some([2, 3]), 0, false);
             surface.tint = [190, 210, 230];
             let mut builder =
                 FrameBuilder::new(&mut frame, tier, crate::test_data::data().card.size());
-            card::look((data, tier), &[run], on, now, Some(4), &mut surface);
-            card::write(data, &[run], on, now, &surface, &mut builder);
+            card::look(tier, runs, on, now, Some(4), &mut surface);
+            card::write(data, runs, on, now, &surface, &mut builder);
             effects::write(
                 data,
-                &[run],
+                runs,
                 now,
                 |_, ago| {
                     let mut pose = pose;
@@ -150,7 +151,7 @@ fn remaining_records(effect: Effect, on: Subject, moving: bool, data: &Effects) 
                 &mut builder,
             );
             let frame = builder.finish();
-            let text = effects::text(data, run, now, tier, kit_base::tokens::color::LIFE);
+            let text = effects::text(&run, now, tier, kit_base::tokens::color::LIFE);
             writeln!(
                 output,
                 "{tier:?} {ms}: {surface:?} {:?} {text:?}",
@@ -171,27 +172,20 @@ fn remaining_records(effect: Effect, on: Subject, moving: bool, data: &Effects) 
 #[test]
 fn remaining_effects_keep_the_original_draw_records() {
     let data = crate::test_data::data();
-    for effect in Effect::ALL {
-        if matches!(effect, Effect::Glow | Effect::Dissolve | Effect::Loss) {
-            continue;
-        }
+    for effect in [
+        "settle", "dim", "blanch", "cover", "impact", "shake", "trail", "flash", "beam", "pulse",
+        "gain",
+    ] {
         let object = Subject::Object { slot: ObjectId(7) };
         let player = Subject::Player { player: Side::You };
-        let target = if effect == Effect::Gain {
-            player
-        } else {
-            object
-        };
+        let target = if effect == "gain" { player } else { object };
         let mut got = remaining_records(effect, target, true, &data.effects);
-        if effect == Effect::Impact {
+        if effect == "impact" {
             got += &remaining_records(effect, player, true, &data.effects);
-        } else if effect == Effect::Trail {
+        } else if effect == "trail" {
             got += &remaining_records(effect, object, false, &data.effects);
         }
-        let path = format!(
-            "rust/beryl3d/crates/game_probe/tests/fixtures/{}.txt",
-            effect.name()
-        );
+        let path = format!("rust/beryl3d/crates/game_probe/tests/fixtures/{effect}.txt");
         let original = beryl_test_files::read_to_string(path).expect("original draw records");
         assert_eq!(got.lines().count(), original.lines().count(), "{effect:?}");
         for (line, (got, original)) in got.lines().zip(original.lines()).enumerate() {
