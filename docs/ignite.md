@@ -3165,14 +3165,15 @@ numbered under it as `MAB12.3`; see [Scheduled tickets](#scheduled-tickets)),
 `A` for a root ticket that Ignite filed on its own, such as a regression, a
 flaky check or a rule's finding (`AR2D2`, whatever its type), `B` for a root
 ticket carrying the `bug-report` label that a person or session filed from a
-player's bug report (`BX9K2`; `by bugs file` adds the label), and `T` for any
-other root ticket, such as `TR2D2`. Tickets filed automatically before the `A`
-existed keep their `T`. A child takes its parent's ID, so every ticket in an
+player's bug report (`BX9K2`; `by bugs file` adds the label), `J` for a
+justiciar root, `I` for an operator-declared incident root, and `T` for any
+other root ticket, such as `TR2D2`. Existing tickets keep their IDs when a new
+prefix is introduced. A child takes its parent's ID, so every ticket in an
 epic's tree starts with `E`. The `E` records the type at creation: changing a
 ticket's type to or from epic later keeps its ID, and epics created before the
 `E` existed keep their `T`. IDs are stored and printed this way.
 
-The roots of all five letters are one space: a new root is never one already
+The roots of all seven letters are one space: a new root is never one already
 used under any letter, by a ticket or an alias. Lookups ignore case, accept a
 bare root without its letter (`q44s.7` finds `EQ44S.7` or `TQ44S.7`, whichever
 exists) and accept the spelling from before IDs were stored in capitals
@@ -3300,7 +3301,7 @@ line shows tickets marked `needs:person`, a machine with a paused pool, the
 tickets that hold `master` back while a pool is paused, an open regression that
 no worker can take, and tickets pinned to an unknown machine or provider.
 
-The dashboard is at the hub's root and a ticket's page is at `/T<id>` (for
+The dashboard is at the hub's root and a ticket's page is at `/<id>` (for
 example `/TBEJE.34`). Only the API is under the project name (`/by/api`). Page
 addresses under `/by/` redirect to the root.
 
@@ -3592,10 +3593,10 @@ Messages, usage and repair:
   `cli_messages`, and the next turn's prompt is every undelivered one in order.
   A message is marked delivered in the transaction that records the turn as
   starting, and queued again if that turn printed nothing.
-- `ignite tell --now`, and every order from the session that holds a justiciar
-  ticket, ends the running turn's processes and resumes with the message. It
-  waits while a `land` of the session has begun its push. An ordinary `tell`
-  waits for the turn's end.
+- `ignite tell --now`, and every order from the holder of an incident or
+  justiciar ticket, ends the running turn's processes and resumes with the
+  message. It waits while a `land` of the session has begun its push. An
+  ordinary `tell` waits for the turn's end.
 - Every `rate_limit_event` of a Claude turn is a sample of the plan's usage, so
   the daemon can report usage while workers run. When a Codex turn ends, the
   daemon reads the latest rate-limit snapshot from that turn in the Codex
@@ -3940,12 +3941,12 @@ Stopping a command:
   started.
 - `ignite stop <handle> --force` is for an emergency. Only the operator (a
   request from a terminal, which names no session) or a session holding an
-  `in_progress` ticket labelled `justiciar` may give it. It stops a command of
-  any session, or one with no session such as a tip round a daemon loop started.
-  It asks the command to stop, and if the command refuses or has not finished
-  within 10 seconds, it ends the command's verb process and the process's whole
-  group with `SIGTERM`, then `SIGKILL` 5 seconds later. The daemon then ends the
-  commands the process left and its handle.
+  `in_progress` ticket labelled `incident` or `justiciar` may give it. It stops
+  a command of any session, or one with no session such as a tip round a daemon
+  loop started. It asks the command to stop, and if the command refuses or has
+  not finished within 10 seconds, it ends the command's verb process and the
+  process's whole group with `SIGTERM`, then `SIGKILL` 5 seconds later. The
+  daemon then ends the commands the process left and its handle.
 - A landing tree stays leased while the verb process that holds it still holds
   its lock, even after the daemon ended its handle. When the daemon frees a
   landing tree whose command has finished, it first ends any process still
@@ -3997,19 +3998,17 @@ note.
 
 ### The justiciar
 
-Some faults stop work for everyone and no ordinary ticket fixes them: Ignite
-crashed, a loop of the daemon keeps failing, `master` has not moved for hours, a
-plan waits on a clock or on a machine that is off, an epic is deadlocked. The
-justiciar is the role that ends such an emergency. It is an ordinary worker
-session given a ticket labelled `justiciar`, which brings with it the authority
-in `ignite guide justiciar`: to repair the ticket graph, release or rewrite any
-ticket, repair the machine, and fix Ignite itself, deploying the fix through the
-release ref when Ignite blocks its own landing.
+Ignite escalates faults and impossible tickets to a justiciar. A worker holding
+the `justiciar` ticket has the authority in `ignite guide justiciar` to repair
+the ticket graph, release or rewrite tickets, repair the machine, and fix Ignite
+itself. If Ignite blocks its own landing, the justiciar can deploy the fix
+through the release ref.
 
-- The hub files justiciar tickets at P0 with `tier:opus`, matched by signature
-  so a repeated sighting adds a comment and never a second ticket. They come
-  from upkeep, when the oldest landing since the last verified tip has waited
-  two hours or a ticket has been held for six hours (30 minutes when the holding
+- The hub files justiciar tickets at P0 with the `justiciar` and `tier:opus`
+  labels and a root ID beginning with `J`. It matches reports by signature so a
+  repeated sighting adds a comment and never a second ticket. They come from
+  upkeep, when the oldest landing since the last verified tip has waited two
+  hours or a ticket has been held for six hours (30 minutes when the holding
   session's title starts with ⛔, or the daemon has reported it idle that long),
   and from `POST /justiciar`, which daemons send for a crash record or a loop
   that keeps failing, and which `ignite justiciar "<reason>"` sends for a
@@ -4061,10 +4060,6 @@ release ref when Ignite blocks its own landing.
 - When the hub cannot be reached for 15 minutes, the daemon starts a local CLI
   justiciar without a ticket. The monitor can also start a local CLI justiciar
   when the daemon is down. See [Headless workers](#headless-workers).
-- A person can also declare an emergency by invoking the `/ignite-justiciar`
-  skill in any session. That session files or claims the justiciar ticket,
-  declares the emergency pause (below), fixes the fault first and validates
-  afterwards, and ends the emergency. Only it or the person ends the emergency.
 - A worker also sends for a justiciar for one ticket it cannot complete as
   written, not only for a fleet-wide emergency. Hard work goes back to its
   worker, but an impossible ticket is the justiciar's: it relaxes the
@@ -4079,47 +4074,48 @@ release ref when Ignite blocks its own landing.
   the step that swaps in the real thing as a ticket that depends on the person's
   ticket. Nothing in the pool waits on the person. The justiciar then closes its
   ticket, and titles itself ⛔ only when no interim path exists.
-- An order is a message that starts `Message about <ticket>:`, sent through the
-  CLI worker’s daemon after an `ignite tell`, which ends the running turn and
-  resumes with it. `ignite tell` signs each comment `from <session>`, taken from
-  the session the caller's environment names. A worker checks an order with
-  `ignite ticket show <ticket>`: the ticket must be labelled `justiciar` and
-  held by the session the order names. The skill therefore reads its own session
-  ID (`mcp__ccd_session_mgmt__get_session` with `self`, or the thread ID on
-  Codex) before it declares, and uses it in the ticket comment and every order.
+- Each mitigation recorded on the justiciar ticket has exactly one outcome. Link
+  a filed root-cause ticket with evidence of why the normal handler failed, or
+  write one sentence explaining why nothing needs fixing.
 
-#### The emergency pause
+### The incident commander
 
-Asking sessions by message to stop work does not work: agents treat instructions
-that arrive as tool output as data, so during one emergency no worker paused. A
-refused command is a fact about the environment, which agents handle, so Ignite
-enforces the pause itself.
+The operator invokes `/ic` to appoint one session as incident commander for one
+emergency. That session files or claims a root ticket labelled `incident` with
+an ID beginning with `I`, records the operator's declaration, and declares the
+fleet-wide pause. The commander follows `ignite guide incident` to stop the
+harm, restore service, resume the fleet and verify the repair. The commander or
+the operator ends the emergency. Each mitigation on the incident ticket has the
+same root-cause requirement as a justiciar mitigation.
 
-- `ignite emergency declare <ticket>`, run by the justiciar's session, sets an
-  emergency flag at the hub naming the justiciar ticket and the session, and
-  pauses hand-offs on every machine. Each daemon hears the flag in its next
-  heartbeat's reply (within 10 seconds) and keeps it in its local database, so a
-  restart or a hub outage does not lift it.
+### The emergency pause
+
+- `ignite emergency declare <ticket>`, run by the holder of an incident or
+  justiciar ticket, sets an emergency flag at the hub naming the ticket and its
+  holder. It pauses hand-offs on every machine. Each daemon hears the flag in
+  its next heartbeat's reply (within 10 seconds) and keeps it in its local
+  database, so a restart or a hub outage does not lift it.
 - While the flag is in force, the verbs that start heavy work (`start`, `test`,
   `check`, `land`, `run`, `rebuild` and `audit`) refuse with exit code 6 and one
-  line naming the emergency. Verbs that only read keep working. Commands already
-  running are not stopped; the justiciar uses `ignite stop --force` for those.
-- The justiciar's session, any session working the justiciar ticket, and the
-  tickets the justiciar names with `ignite emergency allow <ticket> [<verb>]`
-  are not refused.
+  line naming the emergency. Verbs that only read keep working. To end a command
+  that is already running, use `ignite stop --force`.
+- The session that declared the emergency, any session working the emergency
+  ticket, and tickets allowed with `ignite emergency allow <ticket> [<verb>]`
+  can still run those verbs.
 - `ignite wait emergency` returns when the flag clears and prints the all-clear.
-- The flag lapses two hours after it was declared unless the justiciar declares
-  it again, so a justiciar that dies cannot leave the fleet stopped.
+- The flag lapses two hours after it was declared unless the holder renews it.
   `ignite status` and `ignite doctor` show its age and the session that declared
   it.
-- Because Ignite enforces the pause, the justiciar sends `ignite tell --all`
-  only when the fault needs something Ignite cannot enforce (for example "delete
-  nothing of your own" on a full disk, or a session that must change what it is
-  doing). It never asks sessions to pause or to retitle themselves. The
-  all-clear message is optional, since refused verbs and `ignite wait emergency`
-  already tell sessions. `ignite pool resume --all` ends it on every machine,
-  and `ignite emergency clear --local` lifts it on one machine alone, for an
-  operator stuck behind a flag nobody can end.
+- A commander or justiciar sends orders when the fault needs action beyond the
+  pause, such as stopping a running command that is causing harm. For CLI
+  workers, `ignite tell` delivers the message as
+  `Message about <recipient ticket>:` and signs the comment `from <session>`.
+  The order names the emergency ticket and the sender's session. Before acting,
+  use `ignite ticket show <emergency ticket>` to confirm the `incident` or
+  `justiciar` label and that the sender holds it.
+- `ignite pool resume --all` ends the pause on every machine. An operator stuck
+  behind a flag nobody can end can lift it on one machine with
+  `ignite emergency clear --local`.
 
 ### Planning
 
@@ -4274,9 +4270,10 @@ stale with their sample age. The provider section shows enabled shares as
 percentages, current worker counts, recent usage and reset times, holds and
 eligible alternatives, and machine CLI probe results when reported.
 
-On the private dashboard through Tailscale, the operator or justiciar can edit
-policy. The public dashboard shows the saved settings. `ignite fleet` prints the
-fleet view, including the last 20 settings changes. Its edit commands are:
+On the private dashboard through Tailscale, the operator, incident commander or
+justiciar can edit policy. The public dashboard shows the saved settings.
+`ignite fleet` prints the fleet view, including the last 20 settings changes.
+Its edit commands are:
 
 - `ignite fleet machine <name> --state active|checks-only|off` changes the
   machine's state.

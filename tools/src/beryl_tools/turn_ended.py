@@ -6,8 +6,8 @@ turn (`.claude/settings.json`, `Stop`) and relays the turn's end to `ignite turn
 decides:
 
 - `pass`: the session may stop. Only a worker of the machine's pool that holds a ticket, has no
-  `ignite` command running, has no live process under the session's process and is no
-  justiciar is ever stopped.
+  `ignite` command running, has no live process under the session's process and holds
+  neither an incident nor a justiciar ticket can be blocked.
 - `block`: the first stop with the ticket held. The hook prints Claude Code's block decision
   with Ignite's text, which names the ticket and tells the worker to land or release it.
 - `released`: the hook had already blocked once this turn (`stop_hook_active`), or the worker's

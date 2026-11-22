@@ -8,8 +8,9 @@ description: Start work through Ignite. Use /ignite with a ticket or small task 
 Ignite is the build, check and delivery system (`docs/ignite.md`). The daemon
 runs workers as headless CLI processes and starts them as capacity allows. The
 dashboard's Fleet page and `ignite fleet` show the fleet's machines, capacity
-and provider mix. The operator or justiciar can change machine and provider
-settings there. Run `ignite prime` first for the ticket workflow.
+and provider mix. The operator, incident commander or justiciar can change
+machine and provider settings there. Run `ignite prime` first for the ticket
+workflow.
 
 Pick the mode from the argument:
 

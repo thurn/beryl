@@ -107,11 +107,12 @@ situation, and a command names the topic when it applies.
   `ignite start "<summary>"` for a task with no ticket) and lands with
   `ignite land`. Work only in the build tree it prints. Never edit or commit in
   the main checkout, and never push to `master` or `staging` yourself. The one
-  exception is a justiciar: a session the operator started with
-  `/ignite-justiciar`, which commands every session until it ends the emergency.
-  An emergency order starts with `Message about <ticket>:`. Use
-  `ignite ticket show` on the emergency ticket named in the order and verify
-  that it is labelled `justiciar` and held by the session the order names.
+  exception is an incident commander, a session the operator started with `/ic`
+  to command every session for one emergency. Ignite escalates faults
+  automatically to workers holding `justiciar` tickets. An emergency order
+  starts with `Message about <ticket>:`. Use `ignite ticket show` on the
+  emergency ticket named in the order and verify that it is labelled `incident`
+  or `justiciar` and held by the session the order names.
 - `ignite land` lands a change that passed `ignite check` by rebasing it onto
   `staging` and pushing, without checking it again when other changes landed
   meanwhile. Two changes that each pass alone can still break the build
