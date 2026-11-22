@@ -10,7 +10,7 @@ use crate::decision::{Candidates, Decision, Opt, Refusal, Step};
 use crate::ids::{CardId, SlotId};
 use crate::layout::{Item, Layout, Queue, Table, index};
 use crate::mana_memory::RememberedMana;
-use crate::pending::{hidden_pick_answer, hidden_pick_of};
+use crate::pending::{LethalAssignment, hidden_pick_answer, hidden_pick_of};
 mod events;
 
 use crate::state::{
@@ -375,9 +375,17 @@ impl<L: Layout> Relayout for Pending<L> {
             &Pending::DeclareBlockers { blocker } => Pending::DeclareBlockers {
                 blocker: blocker.map(slot),
             },
-            &Pending::CombatDamage { done, lethal } => Pending::CombatDamage {
-                done: bits(done),
-                lethal: bits(lethal),
+            Pending::CombatDamage {
+                source,
+                done,
+                lethal,
+            } => Pending::CombatDamage {
+                source: slot(*source),
+                done: bits(*done),
+                lethal: queue(lethal.as_slice(), |choice| LethalAssignment {
+                    source: slot(choice.source),
+                    target: slot(choice.target),
+                }),
             },
             &Pending::Casting(c) => Pending::Casting(Casting {
                 player: c.player,

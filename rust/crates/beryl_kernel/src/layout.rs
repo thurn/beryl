@@ -15,6 +15,7 @@ use crate::bitboard::Bitboard;
 use crate::copiable::additions::{Addition, AdditionList};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardId, CardIx, LargeCardIx, LargeSlot, Seat, Slot, SlotId};
+use crate::object::Object;
 use crate::relayout::Relayout;
 use crate::state::State;
 use crate::subgame::{CompletedTurns, LargeOuter, OuterGame};
@@ -172,6 +173,8 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
     /// The abilities of a face a permanent has lost ([`crate::object::Derived::lost`]): how
     /// many of a face's abilities an effect can remove one by one.
     type AbilityMask: crate::object::AbilityMask;
+    /// The attackers a creature blocks, kept inline where search copies a state.
+    type BlockList: crate::object::BlockList<Self::Slot>;
     /// The copy exceptions an object's copiable values carry ([`crate::query::Copiable`]):
     /// how many copies of copies, each made with an exception, a game can hold.
     type Additions: AdditionList<Self::Card>;
@@ -187,6 +190,9 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
 
     /// A copy of `state`: for [`Small`], one `memcpy`.
     fn clone_state(state: &State<Self>) -> State<Self>;
+
+    /// Copies an object and its combat relations using this layout's storage.
+    fn clone_object(object: &Object<Self>) -> Object<Self>;
 
     /// Of a value written once for each layout, this layout's: how code generic over the
     /// layout reads static data, which holds one concrete value per layout.
@@ -213,6 +219,7 @@ impl Layout for Small {
     type Deck<T: Item + Default> = Fixed<T, { Slot::DECK_SLOTS }>;
     type PerPlayer<T: Item> = PerSeat<T>;
     type AbilityMask = u16;
+    type BlockList = [Option<Slot>; 3];
     type Additions = [Option<Addition<CardIx>>; 3];
     type Outer = ();
     type SubgameTurns = ();
@@ -223,6 +230,11 @@ impl Layout for Small {
     #[inline]
     fn clone_state(state: &State<Self>) -> State<Self> {
         *state
+    }
+
+    #[inline]
+    fn clone_object(object: &Object<Self>) -> Object<Self> {
+        *object
     }
 
     #[inline]
@@ -257,6 +269,7 @@ impl Layout for Large {
     type Deck<T: Item + Default> = Vec<T>;
     type PerPlayer<T: Item> = PerSeat<T>;
     type AbilityMask = u64;
+    type BlockList = Vec<LargeSlot>;
     type Additions = [Option<Addition<LargeCardIx>>; 8];
     type Outer = LargeOuter;
     type SubgameTurns = u16;
@@ -344,6 +357,14 @@ impl Layout for Large {
             turn_plan: turn_plan.clone(),
             outer: outer.clone(),
             subgame_turns: *subgame_turns,
+        }
+    }
+
+    #[inline]
+    fn clone_object(object: &Object<Self>) -> Object<Self> {
+        Object {
+            combat: object.combat.clone(),
+            ..*object
         }
     }
 

@@ -350,14 +350,16 @@ impl RolloutPolicy {
                 _ => Some(0),
             }),
             DecisionKind::BlockTarget => {
-                let blocker = p.declaring_blocker();
+                let blocker = d.about.sole();
                 pick.choose(d, |c| {
                     let attacker = c.object()?;
                     Some(blocker.and_then(|b| p.block(b, attacker)).unwrap_or(0))
                 })
             }
+            // Both sides divide for their own creatures. The options name the opposing
+            // creatures that can receive lethal damage from the source.
             DecisionKind::DamageDivision => pick.choose(d, |c| match c.option() {
-                Some(Opt::Lethal(blocker)) => Some(1 + p.value(blocker)),
+                Some(Opt::Lethal(recipient)) => Some(1 + p.value(recipient)),
                 _ => Some(0),
             }),
             DecisionKind::Target => {

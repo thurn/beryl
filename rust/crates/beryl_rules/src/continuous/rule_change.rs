@@ -135,6 +135,7 @@ fn spells_of(rule: &RuleChange) -> Filter {
         Governed::CastSpells(filter) => filter,
         Governed::ActivateLoyaltyAbilities(_)
         | Governed::Block(_)
+        | Governed::BlockAnyNumber(_)
         | Governed::Attack { .. }
         | Governed::ActivateAbilities { .. }
         | Governed::Counter(_)
@@ -295,6 +296,25 @@ pub(crate) fn loyalty_as_instant<L: Layout>(s: &State<L>, t: &GameTable, slot: L
 #[inline]
 pub(crate) fn cant_block<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
     own_rule_holds(s, t, slot, RuleKind::CantBlock)
+}
+
+/// Whether a card of this game allows a blocker to choose more than one attacker (see CR 509.1a).
+#[inline]
+pub(crate) fn multiple_blocks_possible(t: &GameTable) -> bool {
+    !t.rules_of(RuleKind::BlockAnyNumber).is_empty()
+}
+
+/// Whether the creature's static ability lets it block more than one attacker (see CR 509.1a).
+#[cold]
+pub(crate) fn can_block_any_number<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
+    let of_kind = t.rules_of(RuleKind::BlockAnyNumber);
+    if of_kind.is_empty() {
+        return false;
+    }
+    object_rules(s, t, slot).common(of_kind).iter().any(|id| {
+        (!s.abilities_may_be_lost() || maker_of(s, t, slot, id).is_some())
+            && own_condition_holds(s, t, slot, id)
+    })
 }
 
 /// Whether the creature in `slot` can't attack, because it can attack no defending player and

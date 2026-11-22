@@ -20,6 +20,7 @@ import mage.MageObject;
 import mage.ObjectColor;
 import mage.abilities.Ability;
 import mage.abilities.keyword.ChangelingAbility;
+import mage.abilities.keyword.DoubleStrikeAbility;
 import mage.abilities.keyword.DelveAbility;
 import mage.abilities.keyword.FirstStrikeAbility;
 import mage.abilities.keyword.FlashAbility;
@@ -570,6 +571,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
     private static final Map<String, Class<? extends Ability>> SNAPSHOT_KEYWORDS = new HashMap<>();
     static {
         SNAPSHOT_KEYWORDS.put("FIRST_STRIKE", FirstStrikeAbility.class);
+        SNAPSHOT_KEYWORDS.put("DOUBLE_STRIKE", DoubleStrikeAbility.class);
         SNAPSHOT_KEYWORDS.put("FLYING", FlyingAbility.class);
         SNAPSHOT_KEYWORDS.put("REACH", ReachAbility.class);
         SNAPSHOT_KEYWORDS.put("VIGILANCE", VigilanceAbility.class);

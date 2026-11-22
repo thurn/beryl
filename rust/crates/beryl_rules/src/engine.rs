@@ -636,12 +636,7 @@ fn perform<L: Layout>(
             Ok(())
         }
         DecisionKind::BlockTarget => combat::block_attacker(s, object()),
-        DecisionKind::DamageDivision => {
-            let Pending::CombatDamage { done, lethal } = *s.pending() else {
-                unreachable!("a damage division without its pending state");
-            };
-            combat::divide(s, t, sink, done, lethal, option())
-        }
+        DecisionKind::DamageDivision => combat::divide(s, t, sink, option()),
         DecisionKind::X
         | DecisionKind::TargetCount
         | DecisionKind::Target

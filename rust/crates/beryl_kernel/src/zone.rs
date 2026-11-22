@@ -72,7 +72,7 @@ impl<L: Layout> State<L> {
         // component under a merged permanent's face-up top is revealed too: its slot is known
         // to every player already, and the card it becomes is that component
         // ([`crate::Memo::FaceDownUnder`]).
-        let o = *self.object(slot);
+        let o = self.object(slot).clone();
         if o.zone == Zone::Battlefield && o.face == FaceIx::DOWN {
             for k in self.knowledge.as_mut_slice() {
                 k.insert(slot);
@@ -383,7 +383,7 @@ impl<L: Layout> State<L> {
                 incarnation: 0,
                 timestamp: 0,
                 battlefield_index: 0,
-                ..*o
+                ..o.clone()
             },
             permanent,
             self.stored(slot),
@@ -420,7 +420,7 @@ fn forget_hand<L: Layout>(s: &mut State<L>, owner: Seat, moved: L::Slot) {
 }
 
 fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
-    let o = *s.object(slot);
+    let o = s.object(slot).clone();
     let owner = o.owner.index();
     match o.zone {
         Zone::Library => remove_slot(&mut s.zones.library[owner], slot),

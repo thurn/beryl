@@ -1,5 +1,5 @@
 //! The declare shape: creatures each aimed at something, the attackers and what each attacks,
-//! or the blockers and the attacker each blocks.
+//! or the blockers and the attackers they block.
 //!
 //! [CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a): "The active player
 //! chooses which creatures that they control, if any, will attack."
@@ -14,6 +14,8 @@
 //! where there is more than one thing, then the next, then an end (architecture §11). The
 //! prompt holds the declaration in the making, changed at will until it is confirmed, and
 //! its run makes the picks as the engine asks for them ([`Aims`]).
+
+use std::collections::HashSet;
 
 use beryl_engine::card::{Part, Purpose};
 use beryl_engine::{Choice, Decision, Layout, Opt, SlotId as _, State};
@@ -37,6 +39,8 @@ pub(crate) struct Declare {
     /// The creatures that can be declared, each with what it can be aimed at: those the
     /// decision offers, in its order, then the ones that stand for one of those.
     able: Vec<(ObjectId, Vec<Subject>)>,
+    /// Blockers the engine still offers after assigning their first block.
+    repeatable: Vec<ObjectId>,
     /// The creatures declared and aimed, in the order they were.
     pairs: Vec<Pair>,
     /// The creatures declared whose aim the next click gives.
@@ -71,6 +75,7 @@ impl Declare {
             arrow,
             lined,
             able: Vec::new(),
+            repeatable: Vec::new(),
             pairs: Vec::new(),
             aiming: Vec::new(),
             aims: None,
@@ -94,14 +99,25 @@ impl Declare {
             let choice = Choice(u16::try_from(i).expect("at most 64 candidates"));
             let aim = ahead::answer(table, &mut copy, choice)
                 .filter(|next| next.prompt.purpose == purpose && next.prompt.part == Part::Aim);
-            declare
-                .able
-                .push((slot, aim.map_or_else(Vec::new, |aim| aims(table, &aim))));
+            let targets = aim.map_or_else(Vec::new, |aim| aims(table, &aim));
+            if purpose == Purpose::Block
+                && targets.len() > 1
+                && let Some(next) = ahead::answer(table, &mut copy, Choice(0))
+                && next.prompt.purpose == Purpose::Block
+                && let Some(blocker) = L::Slot::from_num(slot.0)
+                && options(&next).contains(&Opt::Block(blocker))
+            {
+                declare.repeatable.push(slot);
+            }
+            declare.able.push((slot, targets));
         }
         let offered: Vec<ObjectId> = declare.able.iter().map(|&(slot, _)| slot).collect();
         for (slot, stands_for) in table.stand_ins(&offered) {
             let aims = declare.aims_of(stands_for).to_vec();
             declare.able.push((slot, aims));
+            if declare.repeatable.contains(&stands_for) {
+                declare.repeatable.push(slot);
+            }
         }
         Some(declare)
     }
@@ -113,6 +129,14 @@ impl Declare {
             .map_or(&[], |(_, aims)| aims)
     }
 
+    /// A blocker can be aimed at each attacker only once.
+    fn available_aims(&self, slot: ObjectId) -> impl Iterator<Item = Subject> + '_ {
+        self.aims_of(slot)
+            .iter()
+            .copied()
+            .filter(move |&to| !self.pairs.contains(&Pair { from: slot, to }))
+    }
+
     /// What every creature awaiting an aim can be aimed at.
     fn open_aims(&self) -> Vec<Subject> {
         if let Some(aims) = &self.aims {
@@ -121,8 +145,11 @@ impl Declare {
         let Some((&first, rest)) = self.aiming.split_first() else {
             return Vec::new();
         };
-        (self.aims_of(first).iter().copied())
-            .filter(|aim| rest.iter().all(|&slot| self.aims_of(slot).contains(aim)))
+        self.available_aims(first)
+            .filter(|aim| {
+                rest.iter()
+                    .all(|&slot| self.available_aims(slot).any(|to| to == *aim))
+            })
             .collect()
     }
 
@@ -133,8 +160,12 @@ impl Declare {
     /// Declares the creature in `slot`: aimed at once where it has one thing to aim at, and
     /// awaiting its aim otherwise. Attackers await theirs together, a blocker alone.
     fn declare(&mut self, slot: ObjectId) {
-        match *self.aims_of(slot) {
-            [to] => self.pairs.push(Pair { from: slot, to }),
+        let first_two = {
+            let mut aims = self.available_aims(slot);
+            (aims.next(), aims.next())
+        };
+        match first_two {
+            (Some(to), None) => self.pairs.push(Pair { from: slot, to }),
             _ if self.purpose == Purpose::Block => self.aiming = vec![slot],
             _ => self.aiming.push(slot),
         }
@@ -198,6 +229,16 @@ impl Declare {
             return Clicked::Same;
         }
         if self.declared(slot) {
+            if self.repeatable.contains(&slot) {
+                if self.aiming.contains(&slot) {
+                    self.aiming.retain(|&aiming| aiming != slot);
+                    return Clicked::Changed;
+                }
+                if self.available_aims(slot).next().is_some() {
+                    self.declare(slot);
+                    return Clicked::Changed;
+                }
+            }
             self.aiming.retain(|&aiming| aiming != slot);
             self.pairs.retain(|pair| pair.from != slot);
             return Clicked::Changed;
@@ -221,8 +262,10 @@ impl Declare {
     pub(crate) fn show(&self, view: &mut PromptView) {
         let marked = |mark: Mark| move |on: Subject| Marked { on, mark };
         let card = |slot: ObjectId| Subject::Object { slot };
+        let mut marked_as_declared = HashSet::new();
         let declared = (self.pairs.iter().map(|pair| pair.from))
             .chain(self.aiming.iter().copied())
+            .filter(|&slot| marked_as_declared.insert(slot))
             .map(card);
         let able = (self.able.iter().map(|&(slot, _)| slot))
             .filter(|&slot| !self.declared(slot))
@@ -231,7 +274,7 @@ impl Declare {
             .chain(able.map(marked(Mark::Eligible)))
             .chain(self.open_aims().into_iter().map(marked(Mark::Eligible)))
             .collect();
-        let count = self.pairs.len() + self.aiming.len();
+        let count = marked_as_declared.len();
         view.buttons = if self.aims.is_some() {
             Vec::new()
         } else if count == 0 {
@@ -338,11 +381,11 @@ impl Aims {
         match d.prompt.part {
             Part::Pick => {
                 // An aim the engine did not ask had one answer: the attacker its blocker is
-                // blocking now.
+                // just blocked.
                 if let Some(pair) = self.aiming.take()
                     && let Subject::Object { slot: aimed } = pair.to
                     && let Some(blocker) = L::Slot::from_num(pair.from.0)
-                    && let Some(took) = s.object(blocker).blocked_attackers().first()
+                    && let Some(took) = s.object(blocker).blocked_attackers().iter().last()
                 {
                     self.take(aimed, ObjectId(took.num()));
                 }

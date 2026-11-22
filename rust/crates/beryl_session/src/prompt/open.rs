@@ -35,7 +35,7 @@ pub(crate) fn prompt_view<L: Layout>(
     };
     PromptView {
         about: slots(crate::protocol::slots_by_id(d.about)),
-        from: shown.map(|card| Lies {
+        from: shown.as_ref().map(|card| Lies {
             player: side(obs, card.owner()),
             zone: card.zone().into(),
         }),

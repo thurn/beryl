@@ -138,6 +138,7 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("coins", names::MANA_CRYPT, coins::SCENARIOS),
     ("combat", props::VANILLA.card, combat::DECLARATIONS),
     ("combat", names::WHITE_KNIGHT, combat::FIRST_STRIKE),
+    ("combat", names::FENCING_ACE, combat::DOUBLE_STRIKE),
     ("combat", names::GET_LOST, combat::REMOVED_BLOCKER),
     ("combat", names::GET_LOST, combat::REMOVED_PLANESWALKER),
     ("combat", names::BLOODGHAST, combat::CANNOT_BLOCK),

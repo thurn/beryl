@@ -1,15 +1,8 @@
-//! A division of combat damage among an attacker's blockers, as a pick of the blockers dealt
-//! lethal damage.
-//!
-//! [CR 510.1c](https://yawgatog.com/resources/magic-rules/#R5101c): "If two or more creatures
-//! are blocking it, it assigns its combat damage to those creatures divided as its controller
-//! chooses among them." The engine offers a division by its outcome: the blockers that die,
-//! picked one at a time while the damage left covers another, and an end once the rest of
-//! the damage has somewhere to go (architecture §11). What each pick leaves to pick is the
-//! engine's to say, so the prompt opens by playing every run of picks ahead on a copy of the
-//! game: after any picks it knows which blockers the damage still reaches, whether the
-//! division can end there, and which blocker the session would take next
-//! ([`beryl_engine::preferred_damage`]), which it marks as suggested.
+//! A combat damage division, as a pick of the creatures that receive lethal damage
+//! (see CR 510.1c and CR 510.1d). The engine supplies the legal picks and tells the prompt
+//! when it can end. The prompt plays each pick ahead on a copy of the game and stops
+//! exploring when the next question is about another creature. The recommended pick
+//! ([`beryl_engine::preferred_damage`]) is marked as suggested.
 
 use std::collections::BTreeMap;
 
@@ -28,12 +21,12 @@ use crate::script::{Mark, Subject};
 /// The state of a division of combat damage.
 #[derive(Clone, Debug)]
 pub(crate) struct Damage {
-    /// The blockers, by kind: those of one kind are interchangeable, and the engine offers
+    /// The recipients, by kind: those of one kind are interchangeable, and the engine offers
     /// one of them at a time (architecture §7.2).
     kinds: Vec<Vec<ObjectId>>,
     /// What each set of picks leaves, by the kinds picked, ascending.
     after: BTreeMap<Vec<usize>, Left>,
-    /// The blockers picked to be dealt lethal damage, in the order they were.
+    /// The recipients picked to be dealt lethal damage, in the order they were.
     picked: Vec<ObjectId>,
     confirm: String,
 }
@@ -66,7 +59,7 @@ impl Damage {
         Some(damage)
     }
 
-    /// The kind of the blocker in `slot`: that of one it is interchangeable with as the
+    /// The kind of the recipient in `slot`: that of one it is interchangeable with as the
     /// prompt opens, or a new one.
     fn kind_of<L: Layout>(&mut self, table: &Table<'_, L>, slot: L::Slot) -> usize {
         let alike = |kind: &Vec<ObjectId>| {
@@ -121,7 +114,7 @@ impl Damage {
             let Some(next) = ahead::answer(table, &mut copy, choice) else {
                 continue;
             };
-            if next.prompt.purpose == Purpose::CombatDamage {
+            if next.prompt.purpose == Purpose::CombatDamage && next.about == d.about {
                 picked.push(kind);
                 self.explore(table, &copy, &next, picked);
                 picked.pop();
@@ -133,7 +126,7 @@ impl Damage {
         self.kinds.iter().position(|kind| kind.contains(&slot))
     }
 
-    /// What the blockers picked leave.
+    /// What the selected recipients leave.
     fn left(&self) -> Option<&Left> {
         let mut key: Vec<usize> = (self.picked.iter())
             .filter_map(|&slot| self.kind(slot))
@@ -142,7 +135,7 @@ impl Damage {
         self.after.get(&key)
     }
 
-    /// The blockers of `kind` not picked.
+    /// The unpicked recipients of `kind`.
     fn unpicked(&self, kind: usize) -> impl Iterator<Item = ObjectId> + '_ {
         (self.kinds[kind].iter().copied()).filter(|slot| !self.picked.contains(slot))
     }
@@ -175,7 +168,7 @@ impl Damage {
         }
     }
 
-    /// The picks of the blockers picked, in whatever order the engine offers them, and the
+    /// The chosen recipients, in whatever order the engine offers them, and the
     /// end, where the engine asks for it.
     fn run(&self, left: &Left) -> Run {
         let picks = self.picked.iter().map(|&slot| Subject::Object { slot });

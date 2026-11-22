@@ -40,6 +40,12 @@ pub enum Governed {
     ///
     /// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
     Block(Objects),
+    /// The creature may block any number of attackers. This changes the limit of one in
+    /// [CR 509.1a], which says "For each of the chosen creatures, the defending player chooses one
+    /// creature for it to block". Use with [`When::AsUsual`] and read it during declaration.
+    ///
+    /// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
+    BlockAnyNumber(Objects),
     /// Attacking with these creatures, as "This creature can't attack." says, or with
     /// `unless_defender_controls`, "This creature can't attack unless defending player
     /// controls an Island." ([CR 508.1c]): "The active player checks each creature they
@@ -215,6 +221,9 @@ impl RuleChange {
             }
             (Governed::ActivateLoyaltyAbilities(_), When::Never) => {
                 "with loyalty abilities that can't be activated".to_owned()
+            }
+            (Governed::BlockAnyNumber(_), _) => {
+                "with creatures that can block any number of creatures".to_owned()
             }
             (Governed::Block(_), When::Never) => "with creatures that can't block".to_owned(),
             (Governed::Block(_), When::OnlyAsSorcery | When::AsInstant) => {

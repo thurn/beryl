@@ -206,6 +206,10 @@ impl Game {
 
     fn seeded(seed: u64) -> Self {
         let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [DECK, DECK]).unwrap();
+        Self::with_table(t, seed)
+    }
+
+    fn with_table(t: GameTable, seed: u64) -> Self {
         let profile = Profile {
             breakpoint: Some(Breakpoint {
                 turn: 1,
@@ -897,4 +901,5 @@ fn passing_goes_to_the_next_smart_stop() {
     ));
 }
 
+mod assignments;
 mod keywords;

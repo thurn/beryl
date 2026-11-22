@@ -888,17 +888,24 @@ total cost, pay) become functions that take each answer from an answer source:
   a hand that exile it and cast another, free. They need the cast trigger to
   know the zone the spell was cast from.
 
-**Who assigns combat damage.** `combat/assignment.rs` asks the active player to
-divide an attacker's damage, never asks about a blocker's (a creature blocking
-several attackers deals it all to the first), and has no double strike.
+**Who assigns combat damage.** `combat::assigner` gives the controller of the
+creature assigning damage. When a blocker can block several attackers, the
+defender declares each block. After the attacking creatures finish assigning
+damage, the blocker's controller chooses its assignments. Each lethal pick
+belongs to its source, so a creature can receive damage from several sources.
+Palace Guard exercises this rule. A fourth block widens the game to a layout
+that can hold as many combat relations as play requires.
 
-- `division_decision` takes its chooser from one query, `combat::assigner`,
-  which names the player the rules give for an attacker and for a blocker.
-- A blocker that blocks several attackers divides its damage (Palace Guard is
-  the partner card).
-- Double strike
-  ([CR 702.4b](https://yawgatog.com/resources/magic-rules/#R7024b)) is a keyword
-  bit and a second read of `first_strike_step` (Fencing Ace).
+Fencing Ace exercises double strike
+([CR 702.4b](https://yawgatog.com/resources/magic-rules/#R7024b)). The first
+damage step records which creatures started it with first strike or double
+strike. The second step uses that history and checks who currently has double
+strike.
+
+Lethal picks capture which creatures a source deals lethal damage to. Amounts
+would also distinguish sublethal splits, cumulative damage from multiple sources
+and a choice to keep excess trampling damage on a blocker. Banding needs amounts
+for those assignments when they affect the outcome.
 
 **Banding** ([CR 702.22j](https://yawgatog.com/resources/magic-rules/#R70222j),
 [CR 702.22k](https://yawgatog.com/resources/magic-rules/#R70222k)) is then three

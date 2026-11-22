@@ -245,7 +245,7 @@ pub enum Opt<L: Layout = Small> {
     Defender(Option<L::Slot>),
     /// Declare the creature in this slot as a blocker.
     Block(L::Slot),
-    /// Assign lethal damage to the blocker in this slot.
+    /// Assign lethal combat damage to the creature in this slot.
     Lethal(L::Slot),
     /// Cast the card in `slot` with face `face` up, paying the casting options `costs`.
     Cast {

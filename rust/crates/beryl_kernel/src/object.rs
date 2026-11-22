@@ -13,9 +13,11 @@ use std::hash::Hash;
 use beryl_card::{AbilityIx, Colors, FaceIx, GrantIx, Keywords, Supertypes, Types, Zone};
 
 use crate::counters::Counters;
-use crate::fixed::Full;
 use crate::ids::{CardId, CardIx, Seat, Slot, SlotId};
 use crate::layout::{Layout, Small};
+
+mod block_list;
+pub use block_list::{BlockList, SlotSet};
 
 /// The [`Object::battlefield_index`] of a slot not on the battlefield.
 pub(crate) const OFF_BATTLEFIELD: u16 = u16::MAX;
@@ -113,71 +115,11 @@ pub enum AttackTarget<L: Layout = Small> {
     Removed,
 }
 
-/// The attackers a blocking creature blocks, in the order it was declared to block them.
-/// A creature blocks one attacker unless an effect lets it block more (see [CR 509.1a]), and
-/// this holds up to [`SlotSet::CAPACITY`].
-///
-/// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct SlotSet<L: Layout = Small>([Option<L::Slot>; SlotSet::<Small>::CAPACITY]);
-
-impl<L: Layout> SlotSet<L> {
-    pub const CAPACITY: usize = 3;
-    pub const EMPTY: SlotSet<L> = SlotSet([None; SlotSet::<Small>::CAPACITY]);
-
-    #[inline]
-    pub fn contains(&self, slot: L::Slot) -> bool {
-        self.0.contains(&Some(slot))
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.0[0].is_none()
-    }
-
-    /// The first slot added that is still in the set.
-    #[inline]
-    pub fn first(&self) -> Option<L::Slot> {
-        self.0[0]
-    }
-
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = L::Slot> + '_ {
-        self.0.iter().map_while(|&slot| slot)
-    }
-
-    /// Adds `slot` after the others, unless it is in the set already. [`Full`] if the set
-    /// already holds [`SlotSet::CAPACITY`] slots.
-    #[inline]
-    pub(crate) fn insert(&mut self, slot: L::Slot) -> Result<(), Full> {
-        if self.contains(slot) {
-            return Ok(());
-        }
-        let free = self.0.iter_mut().find(|s| s.is_none()).ok_or(Full)?;
-        *free = Some(slot);
-        Ok(())
-    }
-
-    /// Removes `slot`, keeping the others in order.
-    #[inline]
-    pub(crate) fn remove(&mut self, slot: L::Slot) {
-        if let Some(i) = self.0.iter().position(|&s| s == Some(slot)) {
-            self.0.copy_within(i + 1.., i);
-            self.0[Self::CAPACITY - 1] = None;
-        }
-    }
-
-    #[inline]
-    fn map<M: Layout>(&self, f: impl Fn(L::Slot) -> M::Slot) -> SlotSet<M> {
-        SlotSet(self.0.map(|s| s.map(&f)))
-    }
-}
-
 /// What a permanent is doing in combat (see [CR 506.3]): "Only a creature can attack or
 /// block." A creature is attacking, blocking or neither, never both.
 ///
 /// [CR 506.3]: https://yawgatog.com/resources/magic-rules/#R5063
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum CombatRole<L: Layout = Small> {
     #[default]
     None,
@@ -193,7 +135,7 @@ pub enum CombatRole<L: Layout = Small> {
         ///
         /// [CR 509.1h]: https://yawgatog.com/resources/magic-rules/#R5091h
         blocked: bool,
-        /// Assigned its combat damage in the first-strike step (see [CR 510.4]).
+        /// Had first strike or double strike when the first damage step began (see [CR 510.4]).
         ///
         /// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
         struck_first: bool,
@@ -207,12 +149,14 @@ pub enum CombatRole<L: Layout = Small> {
     /// [CR 506.4]: https://yawgatog.com/resources/magic-rules/#R5064
     Blocking {
         attackers: SlotSet<L>,
-        /// Assigned its combat damage in the first-strike step (see [CR 510.4]).
+        /// Had first strike or double strike when the first damage step began (see [CR 510.4]).
         ///
         /// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
         struck_first: bool,
     },
 }
+
+impl<L: Layout> Copy for CombatRole<L> where L::BlockList: Copy {}
 
 impl<L: Layout> CombatRole<L> {
     /// An attacking creature that attacks `target`, not yet blocked.
@@ -258,7 +202,7 @@ impl<L: Layout> CombatRole<L> {
     /// The same role with its slots renumbered by `f`.
     #[inline]
     pub(crate) fn map<M: Layout>(&self, f: impl Fn(L::Slot) -> M::Slot) -> CombatRole<M> {
-        match *self {
+        match self {
             CombatRole::None => CombatRole::None,
             CombatRole::Attacking {
                 target,
@@ -266,19 +210,19 @@ impl<L: Layout> CombatRole<L> {
                 struck_first,
             } => CombatRole::Attacking {
                 target: match target {
-                    AttackTarget::Player(p) => AttackTarget::Player(p),
-                    AttackTarget::Planeswalker(w) => AttackTarget::Planeswalker(f(w)),
+                    AttackTarget::Player(p) => AttackTarget::Player(*p),
+                    AttackTarget::Planeswalker(w) => AttackTarget::Planeswalker(f(*w)),
                     AttackTarget::Removed => AttackTarget::Removed,
                 },
-                blocked,
-                struck_first,
+                blocked: *blocked,
+                struck_first: *struck_first,
             },
             CombatRole::Blocking {
                 attackers,
                 struck_first,
             } => CombatRole::Blocking {
                 attackers: attackers.map::<M>(f),
-                struck_first,
+                struck_first: *struck_first,
             },
         }
     }
@@ -294,25 +238,25 @@ impl<L: Layout> CombatRole<L> {
         const ATTACKS_PLANESWALKER: u32 = 1 << 10;
         const STRUCK_FIRST: u32 = 1 << 11;
         let first = |on: bool| if on { STRUCK_FIRST } else { 0 };
-        match *self {
+        match self {
             CombatRole::None => (0, None),
             CombatRole::Attacking {
                 target,
                 blocked,
                 struck_first,
             } => {
-                let blocked = if blocked { BLOCKED } else { 0 };
+                let blocked = if *blocked { BLOCKED } else { 0 };
                 let (walker, slot) = match target {
                     AttackTarget::Player(_) => (0, None),
-                    AttackTarget::Planeswalker(w) => (ATTACKS_PLANESWALKER, Some(w)),
+                    AttackTarget::Planeswalker(w) => (ATTACKS_PLANESWALKER, Some(*w)),
                     AttackTarget::Removed => (ATTACKS_PLANESWALKER, None),
                 };
-                (ATTACKING | blocked | walker | first(struck_first), slot)
+                (ATTACKING | blocked | walker | first(*struck_first), slot)
             }
             CombatRole::Blocking {
                 attackers,
                 struck_first,
-            } => (BLOCKING | first(struck_first), attackers.first()),
+            } => (BLOCKING | first(*struck_first), attackers.first()),
         }
     }
 }
@@ -327,7 +271,7 @@ impl<L: Layout> CombatRole<L> {
 /// 118,000 fewer instructions indexing a table of 24-byte objects; measured again with the
 /// engine as it is now, 22-byte objects count 0.01% fewer, and the 255 slots take 510 bytes
 /// fewer of a [`State<Small>`](crate::state::State).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 #[repr(align(2))]
 pub struct Object<L: Layout = Small> {
     /// Index into the game table: the definition its values are read from. The kernel's
@@ -359,6 +303,17 @@ pub struct Object<L: Layout = Small> {
     /// what was padding.
     pub(crate) battlefield_index: u16,
 }
+
+// A small object's clone is a copy, as with State<Small>.
+#[allow(clippy::expl_impl_clone_on_copy)]
+impl<L: Layout> Clone for Object<L> {
+    #[inline]
+    fn clone(&self) -> Self {
+        L::clone_object(self)
+    }
+}
+
+impl Copy for Object<Small> {}
 
 impl<L: Layout> Object<L> {
     pub const EMPTY: Object<L> = Object {
@@ -513,7 +468,7 @@ impl<L: Layout> Object<L> {
     /// [CR 509.1g]: https://yawgatog.com/resources/magic-rules/#R5091g
     #[inline]
     pub fn blocks(&self, attacker: L::Slot) -> bool {
-        matches!(self.combat, CombatRole::Blocking { attackers, .. } if attackers.contains(attacker))
+        matches!(&self.combat, CombatRole::Blocking { attackers, .. } if attackers.contains(attacker))
     }
 
     /// The attackers a blocking creature blocks, none for any other object (see [CR 509.1g]).
@@ -521,13 +476,13 @@ impl<L: Layout> Object<L> {
     /// [CR 509.1g]: https://yawgatog.com/resources/magic-rules/#R5091g
     #[inline]
     pub fn blocked_attackers(&self) -> SlotSet<L> {
-        match self.combat {
-            CombatRole::Blocking { attackers, .. } => attackers,
+        match &self.combat {
+            CombatRole::Blocking { attackers, .. } => attackers.clone(),
             CombatRole::None | CombatRole::Attacking { .. } => SlotSet::EMPTY,
         }
     }
 
-    /// Dealt its combat damage in the first-strike step (see [CR 510.4]).
+    /// Had first strike or double strike when the first damage step began (see [CR 510.4]).
     ///
     /// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
     #[inline]
@@ -631,6 +586,11 @@ impl<L: Layout> std::hash::Hash for Object<L> {
         crate::repeats::timestamp(*timestamp, crate::repeats::timestamp_live(*zone)).hash(h);
         face.hash(h);
         combat_slot.hash(h);
+        if let CombatRole::Blocking { attackers, .. } = combat
+            && attackers.is_multiple()
+        {
+            attackers.hash(h);
+        }
     }
 }
 

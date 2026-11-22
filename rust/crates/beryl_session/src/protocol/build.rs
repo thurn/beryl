@@ -451,7 +451,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         type_line,
         custom_colors: None,
         token_printing: None,
-        combat: match *o.combat() {
+        combat: match o.combat() {
             CombatRole::Attacking {
                 target, blocked, ..
             } => Some(Combat::Attacking {
@@ -459,8 +459,8 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
                     AttackTarget::Planeswalker(walker) => Some(ObjectId(walker.num())),
                     AttackTarget::Player(_) | AttackTarget::Removed => None,
                 },
-                target_departed: (target == AttackTarget::Removed).then_some(true),
-                blocked,
+                target_departed: (*target == AttackTarget::Removed).then_some(true),
+                blocked: *blocked,
             }),
             CombatRole::Blocking { attackers, .. } => Some(Combat::Blocking {
                 attacker: some(attackers.first()),

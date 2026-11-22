@@ -148,7 +148,7 @@ impl<L: Layout> State<L> {
         object: ObjectRef<L>,
         values: Copiable<L>,
     ) -> Result<(), Full> {
-        let o = *self.object(object.slot);
+        let o = self.object(object.slot).clone();
         if !o.is_token() && !o.flags.has(Flag::Copy) {
             self.remember(object.slot, Memo::Really(o.card))?;
         }

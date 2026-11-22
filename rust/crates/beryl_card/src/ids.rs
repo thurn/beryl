@@ -178,7 +178,7 @@ pub enum TurnStep {
     DeclareAttackers,
     DeclareBlockers,
     /// The first of two combat damage steps, which exists only when a creature in combat has
-    /// first strike ([CR 510.4](https://yawgatog.com/resources/magic-rules/#R5104)).
+    /// first strike or double strike ([CR 510.4](https://yawgatog.com/resources/magic-rules/#R5104)).
     FirstStrikeDamage,
     CombatDamage,
     EndOfCombat,

@@ -1018,7 +1018,8 @@ public final class BerylForgeHarness {
                 "SWAMPWALK", "Landwalk:Swamp", "MOUNTAINWALK", "Landwalk:Mountain",
                 "FORESTWALK", "Landwalk:Forest");
         static final Set<Keyword> SNAPSHOT_KEYWORDS = Set.of(
-                Keyword.FIRST_STRIKE, Keyword.FLYING, Keyword.REACH, Keyword.VIGILANCE,
+                Keyword.FIRST_STRIKE, Keyword.DOUBLE_STRIKE, Keyword.FLYING, Keyword.REACH,
+                Keyword.VIGILANCE,
                 Keyword.FLASH, Keyword.HASTE, Keyword.DELVE, Keyword.TRAMPLE, Keyword.LIFELINK,
                 Keyword.INDESTRUCTIBLE, Keyword.CHANGELING);
 
@@ -2048,7 +2049,8 @@ public final class BerylForgeHarness {
                 Card blocker = run.first(player, pick.get("card").getAsString(), null);
                 List<Card> attackers = new ArrayList<>();
                 for (Card candidate : combat.getAttackers()) {
-                    if (CombatUtil.canBlock(candidate, blocker, combat)) {
+                    if (!combat.getBlockers(candidate).contains(blocker)
+                            && CombatUtil.canBlock(candidate, blocker, combat)) {
                         attackers.add(candidate);
                     }
                 }
@@ -2067,11 +2069,10 @@ public final class BerylForgeHarness {
         public Map<Card, Integer> assignCombatDamage(Card attacker, CardCollectionView blockers,
                 CardCollectionView remaining, int damage, GameEntity defender, boolean overrideOrder) {
             if (blockers.size() < 2 || run.mode == Run.Mode.ADVANCE || getGame().getCombat() == null
-                    || !getGame().getCombat().getAttackers().contains(attacker)
                     || !run.isAnswer(run.peekPastAsserts(), player, DAMAGE_DIVISION)) {
                 return super.assignCombatDamage(attacker, blockers, remaining, damage, defender, overrideOrder);
             }
-            // Beryl names the blockers that receive lethal damage, then ends the
+            // Beryl names the creatures that receive lethal damage, then ends the
             // division with Done. Spend any excess as Beryl does, in battlefield order.
             JsonObject pick = run.take(player, DAMAGE_DIVISION, "divide combat damage");
             List<Card> candidates = new ArrayList<>(blockers);

@@ -175,6 +175,8 @@ pub enum RuleKind {
     /// [CR 119.8]: https://yawgatog.com/resources/magic-rules/#R1198
     /// [CR 702.16j]: https://yawgatog.com/resources/magic-rules/#R70216j
     Player,
+    /// The creature with this ability can block any number of attackers (see CR 509.1a).
+    BlockAnyNumber,
 }
 
 impl RuleKind {
@@ -182,10 +184,17 @@ impl RuleKind {
         self as usize
     }
 
-    const COUNT: usize = 9;
+    const COUNT: usize = 10;
 
     /// The kind of change `rule` is, or the part of it no code reads.
     pub fn of(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
+        let for_controller = |kind| {
+            if matches!(rule.players, Players::You) {
+                Ok(kind)
+            } else {
+                Err(Unchecked::Players)
+            }
+        };
         match (rule.what, rule.when) {
             (Governed::CastSpells(filter), when) => {
                 if !of_a_spells_characteristics(filter) {
@@ -218,20 +227,13 @@ impl RuleKind {
             // Only its controller activates a permanent's abilities (see CR 606.3), so the
             // change is asked of the permanent, and is for "you" or for nobody.
             (Governed::ActivateLoyaltyAbilities(Objects::This), When::AsInstant) => {
-                if matches!(rule.players, Players::You) {
-                    Ok(RuleKind::LoyaltyAsInstant)
-                } else {
-                    Err(Unchecked::Players)
-                }
+                for_controller(RuleKind::LoyaltyAsInstant)
             }
             // Its controller declares the block (see CR 509.1a), so the change is asked of the
             // creature, and is for "you" or for nobody.
-            (Governed::Block(Objects::This), When::Never) => {
-                if matches!(rule.players, Players::You) {
-                    Ok(RuleKind::CantBlock)
-                } else {
-                    Err(Unchecked::Players)
-                }
+            (Governed::Block(Objects::This), When::Never) => for_controller(RuleKind::CantBlock),
+            (Governed::BlockAnyNumber(Objects::This), When::AsUsual) => {
+                for_controller(RuleKind::BlockAnyNumber)
             }
             // Its controller declares the attack (see CR 508.1a), so the change is asked of the
             // creature, and is for "you" or for nobody.
@@ -241,13 +243,7 @@ impl RuleKind {
                     ..
                 },
                 When::Never,
-            ) => {
-                if matches!(rule.players, Players::You) {
-                    Ok(RuleKind::CantAttack)
-                } else {
-                    Err(Unchecked::Players)
-                }
-            }
+            ) => for_controller(RuleKind::CantAttack),
             // Mana abilities are activated while a cost is paid, which reads no rule change.
             (
                 Governed::ActivateAbilities {
@@ -293,6 +289,7 @@ impl RuleKind {
             (
                 Governed::ActivateLoyaltyAbilities(_)
                 | Governed::Block(_)
+                | Governed::BlockAnyNumber(_)
                 | Governed::Attack { .. }
                 | Governed::ActivateAbilities { .. }
                 | Governed::Counter(_)

@@ -164,7 +164,7 @@ fn settle_but<L: Layout>(
     let Some(chance) = sink.chance.as_deref_mut() else {
         return;
     };
-    let o = *s.object(slot);
+    let o = s.object(slot).clone();
     if !unknown(s, slot) || o.flags.has(Flag::Token) {
         return;
     }

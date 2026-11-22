@@ -420,8 +420,9 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
-    /// Records that a creature assigns its combat damage in the first-strike step, so it deals none
-    /// in the second unless it has double strike (see [CR 510.4]).
+    /// Records that a creature had first strike or double strike as the first combat damage
+    /// step began. It assigns damage in the second step only if it then has double strike
+    /// (see [CR 510.4]).
     ///
     /// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
     #[inline]

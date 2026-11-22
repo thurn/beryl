@@ -14,6 +14,12 @@ fixed in the same session. Newest first.
   `corpus_never_changes` and `rollouts_never_change` guard the hash of the
   benchmark's positions and results.
 
+- **A creature blocking several attackers assigned all its damage to the first
+  one.** The assignment step only asked about attacking creatures. It now asks
+  the blocker's controller and keeps each pick with its source.
+  `a_blocker_of_two_attacks_divides_for_its_controller` checks which player
+  chooses and which attacker survives.
+
 - **Returning a card transformed could put the wrong face on the battlefield.**
   The rule used the number of printed faces to identify double-faced cards. It
   now reads the generated card shape and checks that the back face can be on the

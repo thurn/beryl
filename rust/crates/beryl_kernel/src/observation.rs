@@ -92,7 +92,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// permanent is face down is public: it is part of its status
     /// (see [CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105)).
     pub fn object(&self, slot: L::Slot) -> Object<L> {
-        let mut o = *self.state.object(slot);
+        let mut o = self.state.object(slot).clone();
         if !self.knows(slot) {
             o.card = L::Card::FIRST;
             if o.face != FaceIx::DOWN {

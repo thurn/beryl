@@ -23,23 +23,8 @@ use crate::table::GameTable;
 mod assignment;
 pub mod damage;
 
-pub use assignment::preferred_damage;
+pub use assignment::{assigner, preferred_damage};
 pub(crate) use assignment::{begin_damage, divide, division_decision, first_strike_step};
-
-/// The defending player ([CR 506.2]): "During the combat phase of a two-player game, the nonactive
-/// player is the defending player".
-///
-/// The declarations here are the two-player game's: [`Opt::Defender`] names a planeswalker or
-/// "the" defending player, and one player declares every block. With more players each of the
-/// attacking player's opponents is a defending player (see CR 802.2), an attacker is declared
-/// against one of them and each declares their own blocks.
-///
-/// [CR 506.2]: https://yawgatog.com/resources/magic-rules/#R5062
-fn defender<L: Layout>(s: &State<L>) -> Seat {
-    s.defending_players()
-        .sole()
-        .expect("one defending player in a two-player game")
-}
 
 fn is_creature<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     s.derived(slot).types.contains(Types::CREATURE)
@@ -63,7 +48,7 @@ fn blockers_of<L: Layout>(s: &State<L>, attacker: L::Slot) -> Bitboard<L::Slot> 
         .collect()
 }
 
-/// Whether any creature can attack now, so that the declaration is worth starting.
+/// The active player's creatures that can still be declared as attackers.
 ///
 /// [CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a): "The active player chooses
 /// which creatures that they control, if any, will attack. The chosen creatures must be untapped,
@@ -78,23 +63,29 @@ fn blockers_of<L: Layout>(s: &State<L>, attacker: L::Slot) -> Bitboard<L::Slot> 
 /// (`restricted`, [`rule_change::attacks_restricted`]). In a two-player game every
 /// planeswalker it could attack is the one defending player's, so a restriction read for that
 /// player is the whole check.
-fn may_attack<L: Layout>(s: &State<L>, t: &GameTable, restricted: bool, slot: L::Slot) -> bool {
-    let o = s.object(slot);
-    s.controller(slot) == s.turn().active()
-        && is_creature(s, slot)
-        && !o.is_tapped()
-        && (!o.is_summoning_sick() || has(s, slot, Keywords::HASTE))
-        && !o.is_attacking()
-        && !(restricted && rule_change::cant_attack(s, t, slot))
+fn eligible_attackers<'a, L: Layout>(
+    s: &'a State<L>,
+    t: &'a GameTable,
+) -> impl Iterator<Item = L::Slot> + 'a {
+    let active = s.turn().active();
+    let restricted = rule_change::attacks_restricted(t);
+    s.permanents_with_derived()
+        .filter_map(move |(slot, derived)| {
+            let o = s.object(slot);
+            (derived.controller == active
+                && derived.types.contains(Types::CREATURE)
+                && !o.is_tapped()
+                && (!o.is_summoning_sick() || derived.keywords.contains(Keywords::HASTE))
+                && !o.is_attacking()
+                && !(restricted && rule_change::cant_attack(s, t, slot)))
+            .then_some(slot)
+        })
 }
 
 /// Whether the active player has a creature that can attack now, so that declaring attackers
 /// is a decision.
 pub(crate) fn can_declare_attackers<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
-    let restricted = rule_change::attacks_restricted(t);
-    s.battlefield()
-        .iter()
-        .any(|&slot| may_attack(s, t, restricted, slot))
+    eligible_attackers(s, t).next().is_some()
 }
 
 /// The declare attackers step's turn-based action begins ([CR 508.1]): "First, the active player
@@ -122,13 +113,7 @@ pub(crate) fn attack_decision<L: Layout>(
     let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     let (player, kind, part) = if attacker.is_none() {
         list.push(Opt::Done)?;
-        let restricted = rule_change::attacks_restricted(t);
-        let able: Bitboard<L::Slot> = s
-            .battlefield()
-            .iter()
-            .copied()
-            .filter(|&slot| may_attack(s, t, restricted, slot))
-            .collect();
+        let able = eligible_attackers(s, t).collect();
         Candidates::<L>::extend_options(&mut list, collapse(s, able), |out, slot| {
             out.push(Opt::Attack(slot))
         })?;
@@ -148,14 +133,17 @@ pub(crate) fn attack_decision<L: Layout>(
     })
 }
 
-/// What a creature can attack: the defending player, then each planeswalker they control.
+/// What a creature can attack ([CR 506.2]): "that player, planeswalkers they control, and
+/// battles they protect may be attacked." The player option comes before the planeswalkers.
 /// [`Full`] if the planeswalkers are more than a fixed layout's list of options holds.
+///
+/// [CR 506.2]: https://yawgatog.com/resources/magic-rules/#R5062
 pub(crate) fn attack_targets<L: Layout>(s: &State<L>) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
-    let defending = defender(s);
+    let defending = s.defending_players();
     let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     list.push(Opt::Defender(None))?;
-    for &slot in s.battlefield() {
-        if s.controller(slot) == defending && s.derived(slot).types.contains(Types::PLANESWALKER) {
+    for (slot, derived) in s.permanents_with_derived() {
+        if derived.types.contains(Types::PLANESWALKER) && defending.contains(derived.controller) {
             list.push(Opt::Defender(Some(slot)))?;
         }
     }
@@ -174,7 +162,9 @@ pub(crate) fn attack<L: Layout>(
             // CR 508.1k: "Each chosen creature still controlled by the active player becomes
             // an attacking creature."
             let attacker = s.permanent_at(slot).expect("a declared attacker");
-            s.declare_attacker(attacker, defender(s));
+            let mut defending = s.players_in_turn_order(s.defending_players());
+            let player = defending.next().expect("combat has a defending player");
+            s.declare_attacker(attacker, player);
             s.ask(Pending::DeclareAttackers {
                 attacker: Some(slot),
             });
@@ -187,12 +177,10 @@ pub(crate) fn attack<L: Layout>(
             else {
                 unreachable!("an attack target without an attacker");
             };
-            let target = target.map_or(
-                AttackTarget::Player(defender(s)),
-                AttackTarget::Planeswalker,
-            );
-            let attacker = s.permanent_at(attacker).expect("a declared attacker");
-            s.choose_attacked(attacker, target);
+            if let Some(target) = target {
+                let attacker = s.permanent_at(attacker).expect("a declared attacker");
+                s.choose_attacked(attacker, AttackTarget::Planeswalker(target));
+            }
             s.ask(Pending::DeclareAttackers { attacker: None });
             Ok(())
         }
@@ -356,27 +344,49 @@ fn landwalks<L: Layout>(
         })
 }
 
-/// Whether a creature may still be declared as a blocker: an untapped creature of the
-/// defending player that blocks nothing yet, that no rule change keeps from blocking
-/// ([`rule_change::cant_block`]), and that can block some attacker.
+/// Untapped creatures of the defending players that can still be assigned a block.
+/// A rule change can lift the limit of one block or prevent blocking altogether.
 ///
 /// [CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "The defending player chooses
 /// which creatures they control, if any, will block. The chosen creatures must be untapped and they
 /// can't also be battles."
-fn may_block<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
-    let o = s.object(slot);
-    s.defending_players().contains(s.controller(slot))
-        && is_creature(s, slot)
-        && !o.is_tapped()
-        && !o.is_blocking()
-        && !rule_change::cant_block(s, t, slot)
-        && s.battlefield().iter().any(|&a| can_block(s, t, slot, a))
+fn eligible_blockers<'a, L: Layout>(
+    s: &'a State<L>,
+    t: &'a GameTable,
+) -> impl Iterator<Item = L::Slot> + 'a {
+    let defending = s.defending_players();
+    s.permanents_with_derived()
+        .filter_map(move |(slot, derived)| {
+            if !defending.contains(derived.controller) || !derived.types.contains(Types::CREATURE) {
+                return None;
+            }
+            let o = s.object(slot);
+            let can = !o.is_tapped()
+                && if o.is_blocking() {
+                    rule_change::multiple_blocks_possible(t) && can_block_again(s, t, slot)
+                } else {
+                    !rule_change::cant_block(s, t, slot)
+                        && s.battlefield().iter().any(|&a| can_block(s, t, slot, a))
+                };
+            can.then_some(slot)
+        })
+}
+
+/// Whether the creature can add a block to those already declared (see CR 509.1a).
+#[cold]
+#[inline(never)]
+fn can_block_again<L: Layout>(s: &State<L>, t: &GameTable, blocker: L::Slot) -> bool {
+    rule_change::can_block_any_number(s, t, blocker)
+        && !rule_change::cant_block(s, t, blocker)
+        && s.battlefield().iter().any(|&attacker| {
+            !s.object(blocker).blocks(attacker) && can_block(s, t, blocker, attacker)
+        })
 }
 
 /// Whether the defending player has a creature that can block now, so that declaring blockers
 /// is a decision.
 pub(crate) fn can_declare_blockers<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
-    s.battlefield().iter().any(|&slot| may_block(s, t, slot))
+    eligible_blockers(s, t).next().is_some()
 }
 
 /// The declare blockers step's turn-based action begins ([CR 509.1]): "First, the defending player
@@ -396,14 +406,18 @@ pub(crate) fn block_decision<L: Layout>(
     t: &GameTable,
     blocker: Option<L::Slot>,
 ) -> Result<Decision<L>, Full> {
-    let player = defender(s);
     if let Some(blocker) = blocker {
-        let attackers = s
+        let player = s.controller(blocker);
+        let legal = s
             .battlefield()
             .iter()
             .copied()
-            .filter(|&a| can_block(s, t, blocker, a))
-            .collect();
+            .filter(|&a| can_block(s, t, blocker, a));
+        let attackers = if rule_change::multiple_blocks_possible(t) {
+            legal.filter(|&a| !s.object(blocker).blocks(a)).collect()
+        } else {
+            legal.collect()
+        };
         return Ok(Decision {
             player,
             decider: player,
@@ -414,14 +428,13 @@ pub(crate) fn block_decision<L: Layout>(
             about: Bitboard::single(blocker),
         });
     }
+    let player = s
+        .players_in_turn_order(s.defending_players())
+        .next()
+        .expect("a block declaration has a defending player");
     let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     list.push(Opt::Done)?;
-    let able = s
-        .battlefield()
-        .iter()
-        .copied()
-        .filter(|&slot| may_block(s, t, slot))
-        .collect();
+    let able = eligible_blockers(s, t).collect();
     Candidates::<L>::extend_options(&mut list, collapse(s, able), |out, slot| {
         out.push(Opt::Block(slot))
     })?;
@@ -473,8 +486,10 @@ pub(crate) fn choose_blocker<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, op
 /// [CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g): "Each chosen creature still
 /// controlled by the defending player becomes a blocking creature."
 pub(crate) fn block_with<L: Layout>(s: &mut State<L>, blocker: L::Slot) {
-    let permanent = s.permanent_at(blocker).expect("a declared blocker");
-    s.declare_blocker(permanent);
+    if !s.object(blocker).is_blocking() {
+        let permanent = s.permanent_at(blocker).expect("a declared blocker");
+        s.declare_blocker(permanent);
+    }
     s.ask(Pending::DeclareBlockers {
         blocker: Some(blocker),
     });
@@ -547,12 +562,12 @@ pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
     let defending = s.defending_players();
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
-        let (attacker, walker) = match *s.object(slot).combat() {
+        let (attacker, walker) = match s.object(slot).combat() {
             CombatRole::None => continue,
             CombatRole::Attacking {
                 target: AttackTarget::Planeswalker(walker),
                 ..
-            } => (true, Some(walker)),
+            } => (true, Some(*walker)),
             CombatRole::Attacking { .. } => (true, None),
             CombatRole::Blocking { .. } => (false, None),
         };

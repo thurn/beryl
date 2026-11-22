@@ -149,6 +149,13 @@ impl<L: Layout> State<L> {
             outer.fits::<M>(t)?;
         }
         self.fits_slots::<M>()?;
+        for &slot in self.battlefield() {
+            room(
+                "a blocker's attackers",
+                self.object(slot).blocked_attackers().len(),
+                crate::object::SlotSet::<M>::CAPACITY,
+            )?;
+        }
         room(
             "the battlefield",
             self.battlefield.len(),
@@ -214,6 +221,11 @@ impl<L: Layout> State<L> {
             Pending::Resolving(paused) | Pending::StepActions(paused) => {
                 Self::fits_paused::<M>(paused)
             }
+            Pending::CombatDamage { lethal, .. } => room(
+                "combat damage assignments",
+                lethal.len(),
+                <M::Queue<crate::pending::LethalAssignment<M>, 32> as Queue<_>>::CAPACITY,
+            ),
             Pending::None
             | Pending::PlayOrDraw { .. }
             | Pending::Mulligans
@@ -222,7 +234,6 @@ impl<L: Layout> State<L> {
             | Pending::EnterPayingLife { .. }
             | Pending::DeclareAttackers { .. }
             | Pending::DeclareBlockers { .. }
-            | Pending::CombatDamage { .. }
             | Pending::Casting(_)
             | Pending::TurningFaceUp { .. }
             | Pending::OrderEntered { .. }

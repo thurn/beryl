@@ -647,15 +647,6 @@ impl<L: Layout> Policy<'_, L> {
             .filter_map(|&a| self.block(blocker, a))
             .max()
     }
-
-    /// The creature just declared as a blocker, whose attacker is being chosen: ours,
-    /// blocking, and blocking nothing yet (CR 509.1a).
-    pub(crate) fn declaring_blocker(&self) -> Option<L::Slot> {
-        self.obs.battlefield().iter().copied().find(|&b| {
-            let o = self.obs.object(b);
-            self.obs.controller(b) == self.me && o.is_blocking() && o.blocked_attackers().is_empty()
-        })
-    }
 }
 
 fn targeted_enters(face: &Face) -> impl Iterator<Item = &'static Ability> {

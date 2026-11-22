@@ -6,8 +6,8 @@
 use crate::play;
 
 use beryl_cards::names::{
-    ADELINE_RESPLENDENT_CATHAR, ELITE_SPELLBINDER, ISLAND, OVERLORD_OF_THE_MISTMOORS,
-    SNAPCASTER_MAGE, TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR, THIEVING_SKYDIVER,
+    ADELINE_RESPLENDENT_CATHAR, ELITE_SPELLBINDER, ISLAND, OVERLORD_OF_THE_MISTMOORS, PALACE_GUARD,
+    SAVANNAH_LIONS, SNAPCASTER_MAGE, TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR, THIEVING_SKYDIVER,
     THUNDERTRAP_TRAINER, TRINKET_MAGE,
 };
 use beryl_engine::card::Purpose;
@@ -477,6 +477,43 @@ fn two_blockers_aimed_at_one_of_two_attackers_alike_block_the_same_one() {
     let left = play.named(SNAPCASTER_MAGE, ZoneName::Battlefield, Side::Opponent);
     assert_eq!(left.len(), 1);
     assert_eq!(play.view.players.you.life, 18);
+}
+
+#[test]
+fn a_multi_blocker_can_be_aimed_at_two_attackers_in_one_declaration() {
+    const BOARD: Scenario = Scenario::new("one blocker and two attackers")
+        .at(3, P1, TurnStep::PrecombatMain)
+        .battlefield(P0, &[PALACE_GUARD])
+        .battlefield(P1, &[SAVANNAH_LIONS, SNAPCASTER_MAGE])
+        .library(P0, &[ISLAND; 6])
+        .library(P1, &[ISLAND; 6]);
+
+    let mut play = blocking(&BOARD);
+    let guard = play.named(PALACE_GUARD, ZoneName::Battlefield, Side::You)[0];
+    let lions = play.named(SAVANNAH_LIONS, ZoneName::Battlefield, Side::Opponent)[0];
+    let mage = play.named(SNAPCASTER_MAGE, ZoneName::Battlefield, Side::Opponent)[0];
+    assert!(play.on(guard).is_some());
+    assert!(play.on(lions).is_some());
+    let prompt = play
+        .on(guard)
+        .expect("the blocker can be aimed at the remaining attacker");
+    assert!(prompt.contains(&format!("#{guard}>#{lions} #{guard}>#{mage}")));
+    assert!(prompt.contains("confirm[1 Blocker]"));
+    assert_eq!(play.press(ButtonId::Confirm), None);
+    pass_to(&mut play, Kind::DamageDivision);
+    assert_eq!(play.decision().source, Some(guard));
+    assert!(play.on(mage).is_some());
+    assert_eq!(play.press(ButtonId::Confirm), None);
+    assert_eq!(play.view.players.you.life, 20);
+    assert!(
+        play.named(SNAPCASTER_MAGE, ZoneName::Battlefield, Side::Opponent)
+            .is_empty()
+    );
+    assert_eq!(
+        play.named(SAVANNAH_LIONS, ZoneName::Battlefield, Side::Opponent)
+            .len(),
+        1
+    );
 }
 
 /// The human's turn with Adeline, Resplendent Cathar, whose attack makes a Human token

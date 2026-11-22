@@ -231,6 +231,14 @@ pub fn hidden_pick_of<L: Layout>(answer: L::Index) -> Option<L::Slot> {
     n.checked_sub(1).map(L::Slot::from_index)
 }
 
+/// A player chose to assign lethal combat damage from one creature to another
+/// (see CR 510.1c and see CR 510.1d).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct LethalAssignment<L: Layout = Small> {
+    pub source: L::Slot,
+    pub target: L::Slot,
+}
+
 /// The open question when it belongs to a machine step rather than to priority. Flat, like
 /// the rest of the state.
 #[allow(clippy::large_enum_variant)]
@@ -258,11 +266,12 @@ pub enum Pending<L: Layout = Small> {
     /// The defending player declares blockers (see CR 509.1), one creature at a time: `blocker`
     /// is the creature just chosen, whose attacker is still to choose, if any.
     DeclareBlockers { blocker: Option<L::Slot> },
-    /// The active player divides blocked attackers' combat damage (see CR 510.1c): `done` holds
-    /// the attackers divided so far, `lethal` the blockers chosen to be dealt lethal damage.
+    /// The controller of `source` chooses which opposing creatures take lethal damage
+    /// (see CR 510.1c and see CR 510.1d). `done` holds the sources already divided.
     CombatDamage {
+        source: L::Slot,
         done: Bitboard<L::Slot>,
-        lethal: Bitboard<L::Slot>,
+        lethal: L::Queue<LethalAssignment<L>, 32>,
     },
     /// A spell being cast or an ability being activated.
     Casting(Casting<L>),
@@ -322,7 +331,13 @@ impl<L: Layout> std::hash::Hash for Pending<L> {
             Self::EnterPayingLife { slot, life } => (5_isize, slot, life).hash(state),
             Self::DeclareAttackers { attacker } => (6_isize, attacker).hash(state),
             Self::DeclareBlockers { blocker } => (7_isize, blocker).hash(state),
-            Self::CombatDamage { done, lethal } => (8_isize, done, lethal).hash(state),
+            Self::CombatDamage {
+                source,
+                done,
+                lethal,
+            } => {
+                (8_isize, source, done, lethal).hash(state);
+            }
             Self::Casting(casting) => (9_isize, casting).hash(state),
             Self::Resolving(resolving) => (10_isize, resolving).hash(state),
             Self::StepActions(resolving) => (11_isize, resolving).hash(state),

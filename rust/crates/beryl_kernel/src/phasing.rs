@@ -77,7 +77,7 @@ impl<L: Layout> State<L> {
         // just phases out indirectly." So a permanent phases out directly when what it is
         // attached to, if anything, stays.
         for slot in all.iter() {
-            let o = *self.object(slot);
+            let o = self.object(slot).clone();
             if o.attached_to.is_some_and(|host| all.contains(host)) {
                 continue;
             }

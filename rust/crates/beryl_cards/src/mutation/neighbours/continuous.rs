@@ -332,6 +332,7 @@ fn governed(what: Governed) -> Neighbours<Governed> {
                 unless_defender_controls: None,
             },
         )],
+        G::BlockAnyNumber(o) => objects_of(o, G::BlockAnyNumber),
         G::Counter(Objects::All {
             filter: Filter::Any,
             ..

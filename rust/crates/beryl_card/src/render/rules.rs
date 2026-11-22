@@ -39,6 +39,12 @@ impl Ctx {
                     }
                 };
             }
+            Governed::BlockAnyNumber(objects) => {
+                return format!(
+                    "{} can block any number of creatures",
+                    self.objects(objects)
+                );
+            }
             // "This creature can't attack unless defending player controls an Island": of the
             // creatures, not of who declares attacks.
             Governed::Attack {
@@ -72,42 +78,8 @@ impl Ctx {
                 };
             }
             Governed::Player(changes) => return self.player_rules(rule.players, changes),
-            // Of the spells, not of who casts them: "Noncreature spells cost {1} more to
-            // cast."
             Governed::SpellCosts { spells, change } => {
-                let cast = match rule.players {
-                    Players::EachPlayer => String::new(),
-                    Players::You => " you cast".to_owned(),
-                    Players::EachOpponent => " your opponents cast".to_owned(),
-                    Players::Target(_)
-                    | Players::ControllerOf(_)
-                    | Players::OwnerOf(_)
-                    | Players::ThatPlayer
-                    | Players::EachOther(_) => format!(" {who} casts"),
-                };
-                let noun = self.noun(spells, Kind::Spell);
-                return match change {
-                    SpellCost::More(n) => {
-                        format!(
-                            "{}{cast} cost {{{n}}} more to cast",
-                            noun.plural(Kind::Spell)
-                        )
-                    }
-                    SpellCost::Less(n) => {
-                        format!(
-                            "{}{cast} cost {{{n}}} less to cast",
-                            noun.plural(Kind::Spell)
-                        )
-                    }
-                    SpellCost::AtLeast(n) => {
-                        let n = number(n);
-                        format!(
-                            "each {}{cast} that would cost less than {n} mana to cast costs \
-                             {n} mana to cast",
-                            noun.singular(Kind::Spell)
-                        )
-                    }
-                };
+                return self.spell_cost_change(spells, change, rule.players, &who);
             }
         };
         match (rule.when, rule.what) {
@@ -120,6 +92,49 @@ impl Ctx {
             }
             (When::AsInstant, _) => format!("{who} may {what} as though they had flash"),
             (When::AsUsual, _) => format!("{who} {what} as usual"),
+        }
+    }
+
+    /// Renders a cost change with the affected spells as the subject.
+    fn spell_cost_change(
+        &mut self,
+        spells: Filter,
+        change: SpellCost,
+        players: Players,
+        who: &str,
+    ) -> String {
+        let cast = match players {
+            Players::EachPlayer => String::new(),
+            Players::You => " you cast".to_owned(),
+            Players::EachOpponent => " your opponents cast".to_owned(),
+            Players::Target(_)
+            | Players::ControllerOf(_)
+            | Players::OwnerOf(_)
+            | Players::ThatPlayer
+            | Players::EachOther(_) => format!(" {who} casts"),
+        };
+        let noun = self.noun(spells, Kind::Spell);
+        match change {
+            SpellCost::More(n) => {
+                format!(
+                    "{}{cast} cost {{{n}}} more to cast",
+                    noun.plural(Kind::Spell)
+                )
+            }
+            SpellCost::Less(n) => {
+                format!(
+                    "{}{cast} cost {{{n}}} less to cast",
+                    noun.plural(Kind::Spell)
+                )
+            }
+            SpellCost::AtLeast(n) => {
+                let n = number(n);
+                format!(
+                    "each {}{cast} that would cost less than {n} mana to cast costs \
+                     {n} mana to cast",
+                    noun.singular(Kind::Spell)
+                )
+            }
         }
     }
 

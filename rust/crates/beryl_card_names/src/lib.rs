@@ -104,6 +104,7 @@ pub mod decks {
     /// from one family's cards and the basic lands (`beryl_cards::decks::fuzz_deck_from`), so that
     /// the cards of a family meet each other far more often than in decks drawn from every card.
     pub const KEYSTONE_FAMILIES: &[(&str, &[&str])] = &[
+        ("combat", &[names::PALACE_GUARD, names::FENCING_ACE]),
         (
             "attachments",
             &[names::SWIFT_RECONFIGURATION, names::LEONIN_SCIMITAR],

@@ -4,8 +4,8 @@ use beryl_engine::card::Purpose;
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{StackEntry, TurnStep};
 use beryl_engine::{
-    Candidates, Decision, DecisionKind, GameTable, Layout, NextStop, Observation, Opt, Refusal,
-    SlotId, Zone, ZoneKey, can_declare_blockers, next_step_stop, next_stop, refusal,
+    Candidates, Decision, DecisionKind, GameTable, Layout, NextStop, Observation, Refusal, SlotId,
+    Zone, ZoneKey, can_declare_blockers, next_step_stop, next_stop, refusal,
 };
 
 use super::ObjectId;
@@ -206,8 +206,8 @@ fn decision_source<L: Layout>(
     resolving: Option<&StackEntry<L>>,
 ) -> Option<ObjectId> {
     let slot = match (d.kind, d.prompt.purpose) {
-        // The land entering asks.
-        (_, Purpose::PayLife) => d.about.sole(),
+        // The source is the land entering or the creature assigning damage.
+        (_, Purpose::PayLife) | (DecisionKind::DamageDivision, _) => d.about.sole(),
         (
             DecisionKind::Priority
             | DecisionKind::Attacker
@@ -216,16 +216,6 @@ fn decision_source<L: Layout>(
             | DecisionKind::BlockTarget,
             _,
         ) => None,
-        (DecisionKind::DamageDivision, _) => {
-            // The blockers offered block the attacker being divided.
-            let Candidates::Options(opts) = &d.candidates else {
-                return None;
-            };
-            opts.iter().find_map(|&o| match o {
-                Opt::Lethal(blocker) => obs.object(blocker).blocked_attackers().first(),
-                _ => None,
-            })
-        }
         _ => resolving
             .or_else(|| obs.stack().last())
             .and_then(beryl_engine::state::StackEntry::object)

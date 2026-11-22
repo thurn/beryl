@@ -178,6 +178,7 @@ impl Ability {
                 }
                 Governed::ActivateLoyaltyAbilities(objects)
                 | Governed::Block(objects)
+                | Governed::BlockAnyNumber(objects)
                 | Governed::Counter(objects) => {
                     objects.walk(visit);
                 }

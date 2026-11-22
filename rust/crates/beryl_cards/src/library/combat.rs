@@ -98,6 +98,21 @@ pub const FIRST_STRIKE: &[Scenario] = &[
         ]),
 ];
 
+pub const DOUBLE_STRIKE: &[Scenario] =
+    &[
+        Scenario::new("Fencing Ace deals damage in both combat damage steps")
+            .battlefield(P0, &[names::FENCING_ACE])
+            .actions(&[
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(names::FENCING_ACE),
+                advance_to(1, TurnStep::FirstStrikeDamage),
+                THEM.life(19),
+                advance_to(1, TurnStep::CombatDamage),
+                THEM.life(18),
+            ]),
+    ];
+
 pub const REMOVED_BLOCKER: &[Scenario] =
     &[
         Scenario::new("an attacker without trample stays blocked when its blocker leaves")
