@@ -334,6 +334,68 @@ fn any_permanent_is_exiled_and_only_a_double_faced_one_returns_transformed() {
 }
 
 #[test]
+fn a_second_instruction_from_the_same_ability_cannot_transform_its_source_again() {
+    use crate::interpret::Run;
+    use crate::state::AbilityRef;
+    use beryl_card::FaceAbility;
+    use beryl_card::effect::build::{sequence, this, transform};
+
+    static TWICE: beryl_card::Effect = sequence(&[transform(this()), transform(this())]);
+    static ONCE: beryl_card::Effect = transform(this());
+    let t = GameTable::new(
+        Format::CONSTRUCTED,
+        &PRODIGY_CARDS,
+        [
+            &[(1, "Test Prodigy"), (5, "Test Land")],
+            &[(6, "Test Land")],
+        ],
+    )
+    .unwrap();
+    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
+    s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
+    let mut x = Scratch::new();
+    let slot = put(&t, &mut s, &mut x, Seat::P0, "Test Prodigy");
+    let source = s.object_ref(slot);
+    let timestamp = s.object(slot).timestamp();
+    let entry = StackEntry::new(StackItem::Activated {
+        of: AbilityRef {
+            source: Some(source),
+            card: s.copiable(slot).record(&t).0,
+            face: FaceIx::FRONT,
+            ability: FaceAbility::own(0),
+            controller: Seat::P0.into(),
+        },
+    });
+
+    // An earlier copy of the ability was already on the stack.
+    s.put_on_stack(&mut x.events, entry).unwrap();
+    let mut resolution = Resolution::new(entry, &ASKS, TargetPlaces::NONE, None);
+    let mut game = Game::new(&mut s, &t, &mut x.events);
+    Run::new(&mut game, &mut resolution)
+        .carry_out(&TWICE)
+        .unwrap();
+    assert_eq!(s.object(slot).face(), FaceIx::BACK);
+    assert!(s.object(slot).timestamp() > timestamp);
+    assert_eq!(s.object_ref(slot), source);
+
+    let earlier = s.stack()[0];
+    let mut resolution = Resolution::new(earlier, &ASKS, TargetPlaces::NONE, None);
+    let mut game = Game::new(&mut s, &t, &mut x.events);
+    Run::new(&mut game, &mut resolution)
+        .carry_out(&ONCE)
+        .unwrap();
+    assert_eq!(s.object(slot).face(), FaceIx::BACK);
+
+    let mut resolution = Resolution::new(entry, &ASKS, TargetPlaces::NONE, None);
+    let mut game = Game::new(&mut s, &t, &mut x.events);
+    Run::new(&mut game, &mut resolution)
+        .carry_out(&ONCE)
+        .unwrap();
+    assert_eq!(s.object(slot).face(), FaceIx::FRONT);
+    assert_eq!(s.object_ref(slot), source);
+}
+
+#[test]
 fn returning_transformed_keeps_a_flip_card_and_an_instant_back_face_in_exile() {
     use crate::card::{CardDef, CardShape, Face};
 

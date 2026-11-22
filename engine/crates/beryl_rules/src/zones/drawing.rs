@@ -173,7 +173,7 @@ fn instructions<L: Layout>(
             card,
             face,
             ability: TriggeredAbility::own(index),
-            controller: replacement.controller,
+            controller: replacement.controller.into(),
         },
         info: TriggerInfo::default(),
     };

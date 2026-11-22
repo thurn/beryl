@@ -373,6 +373,9 @@ fn prevention_filter(effect: &'static Effect) -> Option<&'static Filter> {
         | Effect::ReturnToBattlefield(_)
         | Effect::PutOntoBattlefield(_)
         | Effect::ReturnTransformed(_)
+        | Effect::Transform(_)
+        | Effect::Flip(_)
+        | Effect::Reveal(_)
         | Effect::PutIntoLibrary { .. }
         | Effect::PutBack { .. }
         | Effect::PutAnyOnBottom { .. }

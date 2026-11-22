@@ -22,7 +22,8 @@ use crate::object::ObjectRef;
 use crate::state::State;
 use crate::table::GameTable;
 
-/// Targets per stack entry (architecture §4.2).
+mod transform;
+pub use transform::AbilityController;
 pub const TARGETS: usize = 8;
 
 /// One chosen target: an object, a player or an ability on the stack, and the instance of the
@@ -281,7 +282,7 @@ pub struct AbilityRef<L: Layout = Small, A = FaceAbility> {
     /// (see [CR 603.3a]).
     ///
     /// [CR 603.3a]: https://yawgatog.com/resources/magic-rules/#R6033a
-    pub controller: Seat,
+    pub controller: AbilityController,
 }
 
 /// A triggered ability's [`FaceAbility`] in one byte, as the stack and the waiting triggers
@@ -355,7 +356,7 @@ impl<L: Layout> Default for StackItem<L> {
                 card: L::Card::default(),
                 face: FaceIx::default(),
                 ability: FaceAbility::own(0),
-                controller: Seat::default(),
+                controller: Seat::default().into(),
             },
         }
     }
@@ -452,8 +453,8 @@ impl<L: Layout> StackEntry<L> {
     pub fn controller(&self) -> Seat {
         match self.item {
             StackItem::Spell { controller, .. } => controller,
-            StackItem::Activated { of } => of.controller,
-            StackItem::Triggered { of, .. } => of.controller,
+            StackItem::Activated { of } => of.controller.seat(),
+            StackItem::Triggered { of, .. } => of.controller.seat(),
         }
     }
 
@@ -546,8 +547,7 @@ pub struct TriggerInfo<L: Layout = Small> {
 /// An ability that has triggered and waits to be put on the stack.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct PendingTrigger<L: Layout = Small> {
-    /// The ability, among the face's own or, for one a copy exception gives, its grants. Its
-    /// controller is the player who controlled the source when it triggered.
+    /// The ability, among the face's own or, for one a copy exception gives, its grants.
     pub of: AbilityRef<L, TriggeredAbility>,
     pub info: TriggerInfo<L>,
 }

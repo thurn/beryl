@@ -783,9 +783,12 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                 );
             }
         }
+        Effect::Transform(o) => add(Kind::EffectObjects, "flip".into(), Effect::Flip(o)),
+        Effect::Flip(o) => add(Kind::EffectObjects, "turn".into(), Effect::Transform(o)),
         Effect::ExileLinked(_)
         | Effect::ExileUntil { .. }
         | Effect::ReturnTransformed(_)
+        | Effect::Reveal(_)
         | Effect::Explore(_)
         | Effect::Mutate(_)
         | Effect::RemoveAllCounters(_)

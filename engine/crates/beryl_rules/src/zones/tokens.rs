@@ -220,6 +220,7 @@ pub(crate) fn create_copies_instruction<L: Layout>(
     let who = run.scene().players(players);
     let mut created = Bitboard::EMPTY;
     let mut copy = |game: &mut Game<'_, L>, what: Copiable<L>| -> Result<(), Full> {
+        let what = what.with_flipped_status(game.table, false);
         for player in game.state.players_in_turn_order(who) {
             let how = TokenEntry::default();
             created |= create(game, player, excepted(what)?, count, how)?;

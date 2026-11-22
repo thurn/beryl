@@ -149,7 +149,7 @@ pub(crate) struct Scene<'s, L: Layout> {
 
 impl<L: Layout> Scene<'_, L> {
     fn you(&self) -> Seat {
-        self.subject.of.controller
+        self.subject.of.controller.seat()
     }
 
     fn words(&self) -> Words {
@@ -529,7 +529,7 @@ impl<L: Layout> Scene<'_, L> {
     fn value_for(&self, player: Seat, amount: Amount) -> i32 {
         let subject = PendingTrigger {
             of: AbilityRef {
-                controller: player,
+                controller: player.into(),
                 ..self.subject.of
             },
             ..*self.subject

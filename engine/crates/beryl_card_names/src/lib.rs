@@ -136,6 +136,16 @@ pub mod decks {
         ),
         ("face-down", &[names::EXALTED_ANGEL, names::GATHAN_RAIDERS]),
         (
+            "turn-in-place",
+            &[
+                names::DELVER_OF_SECRETS,
+                names::ERAYO_SORATAMI_ASCENDANT,
+                names::LIGHTNING_BOLT,
+                names::HOLY_STRENGTH,
+                names::PHANTASMAL_IMAGE,
+            ],
+        ),
+        (
             "casting",
             &[
                 names::BLOODBRAID_ELF,

@@ -165,7 +165,7 @@ pub(crate) fn begin_activate<L: Layout>(
                 card,
                 face,
                 ability: index,
-                controller: player,
+                controller: player.into(),
             },
         }),
     )?;

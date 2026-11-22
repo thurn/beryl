@@ -31,6 +31,9 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::Unless { .. }
         | Effect::ForEachPlayer { .. }
         | Effect::Choose { .. }
+        | Effect::Transform(_)
+        | Effect::Flip(_)
+        | Effect::Reveal(_)
         | Effect::LookAt { .. }
         | Effect::CopySpell { .. }
         | Effect::Regenerate(_)

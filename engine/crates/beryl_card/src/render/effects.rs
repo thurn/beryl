@@ -173,6 +173,9 @@ impl Ctx {
                 vec![self.acts(("return", "returns"), objects, &rest)]
             }
             Effect::PutOntoBattlefield(onto) => vec![self.put_onto(onto)],
+            Effect::Transform(objects) => vec![self.acts(("transform", "transforms"), objects, "")],
+            Effect::Flip(objects) => vec![self.acts(("flip", "flips"), objects, "")],
+            Effect::Reveal(objects) => vec![self.acts(("reveal", "reveals"), objects, "")],
             Effect::ReturnTransformed(objects) => {
                 let control = owners(self.is_plural(objects), "control");
                 let rest = format!(" to the battlefield transformed under {control}");

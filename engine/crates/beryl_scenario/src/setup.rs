@@ -1,6 +1,7 @@
 //! A scenario's starting position (architecture §17.1): every card starts in its owner's
 //! library, in slots numbered as [`Slots`] says, and moves to its zone.
 
+use beryl_engine::card::{CardShape, FaceIx};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{CounterKind, Memo, Tracker};
 use beryl_engine::{
@@ -177,6 +178,10 @@ fn arrange<L: Layout>(
                 s.board().set_face(slot, b.face);
                 slot
             };
+            if b.face == FaceIx::BACK && s.copiable(slot).shape(t) == CardShape::Flip {
+                let permanent = s.permanent_at(slot).expect("a permanent in the scenario");
+                s.flip_permanent(permanent, true);
+            }
             s.board().set_tapped(slot, b.tapped);
             s.board().set_sick(slot, b.sick);
             // A scenario's permanents entered the battlefield the turn it begins in, as its

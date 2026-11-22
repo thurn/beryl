@@ -78,6 +78,13 @@
       "Deathmark: destroy target {+white or+} green [-or white-] creature ."
     ]
   },
+  "Delver of Secrets // Insectile Aberration": {
+    "reason": "wording",
+    "note": "The renderer calls the card just looked at \"it\", then uses \"it\" for the card the reveal instruction acted on. The conditional sees no card when the player declines.",
+    "diff": [
+      "Delver of Secrets: at the beginning of your upkeep , look at the top card of your library . you may reveal [-that card-] {+it+} . if {+it's+} an instant or sorcery card [-is revealed this way-] , transform ~ ."
+    ]
+  },
   "Elite Spellbinder": {
     "reason": "wording",
     "note": "The definition chooses a nonland card in the hand it looked at and exiles it, which is what \"you may exile a nonland card from it\" does; the renderer writes the choice and the exile as two sentences.",

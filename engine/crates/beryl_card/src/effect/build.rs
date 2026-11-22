@@ -43,6 +43,9 @@ mod turn;
 
 pub use turn::{control_player, end_turn, extra_turn, extra_turn_with_trigger, restart_game};
 
+mod faces;
+pub use faces::*;
+
 /// "This creature", "this spell": [`Objects::This`].
 pub const fn this() -> Objects {
     Objects::This
@@ -421,12 +424,6 @@ pub const fn onto_battlefield_under(objects: Objects, player: Players) -> PutOnt
         tapped: false,
         linked: false,
     }
-}
-
-/// [`Effect::ReturnTransformed`]: "return [cards] to the battlefield transformed under their
-/// owners' control".
-pub const fn return_transformed(cards: Objects) -> Effect {
-    Effect::ReturnTransformed(cards)
 }
 
 /// [`Effect::PutIntoLibrary`]: "put [objects] into their owners' libraries [position]".

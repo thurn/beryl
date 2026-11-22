@@ -22,7 +22,10 @@ use beryl_engine::card::CardDef;
 use beryl_engine::state::{Derived, Flag, StackEntry};
 use std::cell::RefCell;
 
-use beryl_engine::{CardTable, Large, LargeSlot, Layout, Relayout, Seat, SlotId, State, Step};
+use beryl_engine::layout::Table;
+use beryl_engine::{
+    Bitboard, CardTable, Large, LargeSlot, Layout, Relayout, Seat, SlotId, State, Step,
+};
 use beryl_scenario::{Failure, Scenario, outcome_with};
 
 use crate::CARDS;
@@ -89,6 +92,7 @@ struct Position {
     step: Step<Large>,
     stack: Vec<StackEntry<Large>>,
     mana: [[u8; 6]; 2],
+    knowledge: [Bitboard<LargeSlot>; 2],
     permanents: Vec<(LargeSlot, Derived<Large>, bool, u8)>,
     subgame_depth: usize,
 }
@@ -109,10 +113,17 @@ impl Position {
                 )
             })
             .collect();
+        let knowledge = state.knowledge();
         Self {
             step: step.relayout(),
             stack: state.stack().iter().map(Relayout::relayout).collect(),
             subgame_depth: state.subgame_depth(),
+            knowledge: Seat::BOTH.map(|seat| {
+                knowledge.as_slice()[seat.index()].fold(Bitboard::EMPTY, |mut known, slot| {
+                    known.insert(slot.to().expect("the slot fits in Large"));
+                    known
+                })
+            }),
             mana: Seat::BOTH.map(|seat| state.player(seat).mana().amounts()),
             permanents,
         }

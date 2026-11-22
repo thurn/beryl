@@ -601,7 +601,9 @@
     {
       "published_at": "2017-11-17",
       "hash": "62fb15ae0daf",
-      "scenario": ["a counter added in response lets the Chronicler draw"]
+      "scenario": [
+        "a counter added in response lets the Chronicler draw"
+      ]
     }
   ],
   "Circle of Protection: Red": [
@@ -746,6 +748,16 @@
       ]
     }
   ],
+  "Delver of Secrets // Insectile Aberration": [
+    {
+      "published_at": "2011-09-22",
+      "hash": "be0fba3ff0df",
+      "scenario": [
+        "a land can be revealed and stays on top",
+        "keeping an instant hidden leaves Delver untransformed"
+      ]
+    }
+  ],
   "Dress Down": [
     {
       "published_at": "2021-06-18",
@@ -811,6 +823,35 @@
       "published_at": "2021-03-19",
       "hash": "79ab914c1f56",
       "untestable": "The vocabulary only grants flash timing to spells. Land plays have no permission for Scout's Warning or Teferi, Mage of Zhalfir to change their timing."
+    }
+  ],
+  "Erayo, Soratami Ascendant // Erayo's Essence": [
+    {
+      "published_at": "2005-06-01",
+      "hash": "c2203a4c3f0b",
+      "scenario": [
+        "the legend rule applies separately to the two Erayo names",
+        "two copies of Erayo's Essence invoke the legend rule"
+      ]
+    },
+    {
+      "published_at": "2005-06-01",
+      "hash": "e89b40ed4901",
+      "scenario": [
+        "the fourth spell flips Erayo and Essence counters only a new first spell"
+      ]
+    },
+    {
+      "published_at": "2005-06-01",
+      "hash": "c15e1db2ce14",
+      "scenario": [
+        "the fourth spell flips Erayo and Essence counters only a new first spell"
+      ]
+    },
+    {
+      "published_at": "2005-06-01",
+      "hash": "c0826b7c5dd5",
+      "covered": "CastNumber::ByCaster"
     }
   ],
   "Exalted Angel": [
@@ -976,7 +1017,9 @@
     {
       "published_at": "2004-10-04",
       "hash": "bed98cd27789",
-      "scenario": ["Fork targets itself with a copy of Counterspell"]
+      "scenario": [
+        "Fork targets itself with a copy of Counterspell"
+      ]
     },
     {
       "published_at": "2004-10-04",

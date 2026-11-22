@@ -189,6 +189,27 @@ def test_an_adventure_cards_full_name_selects_its_scenarios(
     assert played == [["Bonecrusher Giant"], ["Bonecrusher Giant"]]
 
 
+def test_a_double_faced_store_name_selects_the_front_faces_scenarios(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    played = fake_oracles(monkeypatch)
+    monkeypatch.setattr(
+        oracles,
+        "dump_scenarios",
+        lambda path, log, cards: [
+            *SCENARIOS,
+            {"card": "Jace, Vryn's Prodigy", "name": "returns transformed"},
+        ],
+    )
+    assert (
+        oracles.oracle(
+            oracle_args("Jace, Vryn's Prodigy // Jace, Telepath Unbound", no_sim=True)
+        )
+        == 0
+    )
+    assert played == [["Jace, Vryn's Prodigy"]] * 2
+
+
 def test_a_run_waiting_past_the_lock_wait_cannot_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

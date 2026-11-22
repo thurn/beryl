@@ -266,7 +266,7 @@ mod tests {
                 card: beryl_engine::CardIx::default(),
                 face: FaceIx::default(),
                 ability: FaceAbility::own(0),
-                controller: Seat::default(),
+                controller: Seat::default().into(),
             },
         })
     }

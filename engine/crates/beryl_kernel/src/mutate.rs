@@ -11,6 +11,7 @@
 
 mod merge;
 
+use beryl_card::definition::Shape;
 use beryl_card::{CounterKind, FaceIx, Types, Zone};
 
 use crate::copiable::additions::Addition;
@@ -180,19 +181,59 @@ impl<L: Layout> State<L> {
     /// Every player has seen it (see CR 701.40b), and it gets a new timestamp (see [CR 613.7f]): "A
     /// permanent receives a new timestamp each time it turns face up or face down."
     ///
+    /// A flipped card's alternative characteristics apply again (see [CR 710.2]): "Once a
+    /// permanent is flipped, its normal name, text box, type line, power, and toughness don’t
+    /// apply and the alternative versions of those characteristics apply instead."
+    ///
     /// [CR 708.8]: https://yawgatog.com/resources/magic-rules/#R7088
     /// [CR 613.7f]: https://yawgatog.com/resources/magic-rules/#R6137f
+    /// [CR 710.2]: https://yawgatog.com/resources/magic-rules/#R7102
     #[inline]
-    pub fn turn_face_up(&mut self, permanent: Permanent<L>) {
+    pub fn turn_face_up(&mut self, t: &GameTable, permanent: Permanent<L>) {
         let slot = permanent.slot();
         let timestamp = self.take_timestamp();
         let o = self.object_mut(slot);
-        o.face = FaceIx::FRONT;
+        o.face = if o.flags.has(Flag::Flipped) && t.def(o.card).shape == Shape::Flip {
+            FaceIx::BACK
+        } else {
+            FaceIx::FRONT
+        };
         o.timestamp = timestamp;
         for k in self.knowledge.as_mut_slice() {
             k.insert(slot);
         }
         self.flags.derived_dirty = true;
+    }
+
+    /// Changes the face of the same permanent (see [CR 701.27c]): "A permanent that transforms
+    /// doesn’t become a new object. Any effects that applied to that permanent will continue to
+    /// apply to it." It gets a new timestamp (see [CR 613.7g]): "A double-faced permanent receives
+    /// a new timestamp each time it transforms or converts."
+    ///
+    /// [CR 701.27c]: https://yawgatog.com/resources/magic-rules/#R70127c
+    /// [CR 613.7g]: https://yawgatog.com/resources/magic-rules/#R6137g
+    pub fn transform_permanent(&mut self, t: &GameTable, permanent: Permanent<L>, face: FaceIx) {
+        let timestamp = self.take_timestamp();
+        let object = self.object_mut(permanent.slot());
+        object.face = face;
+        object.timestamp = timestamp;
+        self.mark_source_transformed(t, permanent);
+        self.flags.derived_dirty = true;
+    }
+
+    /// Sets flipped status and selects the alternative characteristics when the permanent has
+    /// them (see [CR 710.2]): "Once a permanent is flipped, its normal name, text box, type line,
+    /// power, and toughness don’t apply and the alternative versions of those characteristics
+    /// apply instead."
+    ///
+    /// [CR 710.2]: https://yawgatog.com/resources/magic-rules/#R7102
+    pub fn flip_permanent(&mut self, permanent: Permanent<L>, use_alternative: bool) {
+        let object = self.object_mut(permanent.slot());
+        object.flags.set(Flag::Flipped, true);
+        if use_alternative {
+            object.face = FaceIx::BACK;
+            self.flags.derived_dirty = true;
+        }
     }
 
     /// Attaches the Equipment in `slot` to the permanent in `host`, both on the battlefield

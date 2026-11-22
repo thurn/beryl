@@ -77,7 +77,7 @@ fn run(
             card: s.copiable(source.slot).record(t).0,
             face: FaceIx::default(),
             ability: FaceAbility::own(0),
-            controller: s.object(source.slot).owner(),
+            controller: s.object(source.slot).owner().into(),
         },
     });
     for &target in targets {

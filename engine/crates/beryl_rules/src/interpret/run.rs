@@ -55,7 +55,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 card: entry.card(),
                 face: entry.face(),
                 ability: TriggeredAbility::of(entry.ability().unwrap_or_default()),
-                controller: entry.controller(),
+                controller: entry.controller().into(),
             },
             info: entry.info().copied().unwrap_or_default(),
         };
@@ -194,6 +194,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::ReturnToBattlefield(_)
             | Effect::PutOntoBattlefield(_)
             | Effect::ReturnTransformed(_)
+            | Effect::Transform(_)
+            | Effect::Flip(_)
+            | Effect::Reveal(_)
             | Effect::PutIntoLibrary { .. }
             | Effect::PutBack { .. }
             | Effect::PutAnyOnBottom { .. }
@@ -320,6 +323,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             }
             Effect::ReturnToBattlefield(cards) => zones::return_instruction(self, cards)?,
             Effect::PutOntoBattlefield(onto) => zones::put_onto_instruction(self, onto)?,
+            Effect::Reveal(cards) => crate::actions::reveal::instruction(self, cards)?,
+            Effect::Transform(objects) => transform::instruction(self, objects)?,
+            Effect::Flip(objects) => crate::actions::flip::instruction(self, objects)?,
             Effect::ReturnTransformed(cards) => transform::return_instruction(self, cards)?,
             Effect::PutIntoLibrary { objects, position } => {
                 library::put_instruction(self, objects, position)?

@@ -138,7 +138,11 @@ fn an_ability_that_works_in_a_graveyard_triggers_only_there() {
     draw(&t, &mut s, &mut x, p);
     assert_eq!(s.triggers().len(), 1);
     assert_eq!(s.triggers()[0].of.source, Some(s.object_ref(ghost)));
-    assert_eq!(s.triggers()[0].of.controller, p, "its owner controls it");
+    assert_eq!(
+        s.triggers()[0].of.controller.seat(),
+        p,
+        "its owner controls it"
+    );
     let life = s.player(p).life();
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.player(p).life(), life + 1);

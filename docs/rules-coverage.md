@@ -294,13 +294,13 @@ then counters (7c), then the rules static abilities change (CR 613.11)
   its layer. The cards' characteristic-defining abilities are all in layer 7a,
   where nothing else applies, so CR 613.8a's (c) needs no code.
 - **Timestamps** (CR 613.7). An Aura or Equipment gets a new one as it becomes
-  attached, and a permanent as it turns face up (both already built). The `u16`
-  counter is renumbered by rank, out of line, before it would run out
-  (`State::take_timestamp`). Not built: transforming permanents, which the
-  engine does not yet turn, and the order of objects that enter together (CR
-  613.7m), which is still the order they move in; a decision is needed only when
-  two of them have effects in one layer that the dependency search's prefilter
-  says could interact.
+  attached, and a permanent as it turns face up or transforms. Flipping keeps
+  the old timestamp. Transforming and flipping preserve the permanent's
+  incarnation, so counters, attachments and ongoing effects stay on it. The
+  `u16` counter is renumbered by rank before it would run out
+  (`State::take_timestamp`). Objects that enter together still use their
+  movement order (CR 613.7m). A choice matters when two of their effects can
+  interact in one layer.
 - **As it would exist** (CR 614.12). `layers::entering::as_it_would_exist`
   copies the state, moves the entering object onto the battlefield in the copy
   as its entry says, and runs the recompute there, so every effect finds the

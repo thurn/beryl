@@ -158,6 +158,7 @@ pub(super) fn player_count(
     }
 }
 
+/// Neighbours of an instruction whose operand names objects.
 pub(super) fn objects_of(
     which: Objects,
     build: impl Fn(Objects) -> Effect,

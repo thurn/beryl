@@ -563,7 +563,7 @@ pub(super) fn with_game(
         of: AbilityRef {
             source: Some(s.object_ref(slot)),
             card: s.copiable(slot).record(t).0,
-            controller: s.controller(slot),
+            controller: s.controller(slot).into(),
             ..AbilityRef::default()
         },
         ..PendingTrigger::default()
@@ -803,7 +803,7 @@ fn an_ability_finds_the_cards_exiled_with_its_source_until_a_new_object_is_there
         of: AbilityRef {
             source: Some(s.object_ref(bear)),
             card: s.copiable(bear).record(&t).0,
-            controller: p,
+            controller: p.into(),
             ..AbilityRef::default()
         },
         ..PendingTrigger::default()
@@ -1092,7 +1092,7 @@ fn triggers_of_twins_are_equivalent_while_the_waiting_triggers_name_both_alike()
         of: AbilityRef {
             source: Some(s.object_ref(source)),
             card: s.copiable(source).record(&t).0,
-            controller: p,
+            controller: p.into(),
             ..AbilityRef::default()
         },
         info: TriggerInfo {
@@ -1134,7 +1134,7 @@ fn triggers_of_twins_are_equivalent_while_the_waiting_triggers_name_both_alike()
             &mut Sink::off(),
             StackEntry::new(StackItem::Triggered {
                 of: AbilityRef {
-                    controller: p,
+                    controller: p.into(),
                     ..tr.of
                 },
                 info: tr.info,
@@ -1403,7 +1403,7 @@ fn a_stolen_creatures_dies_trigger_belongs_to_its_last_controller() {
         destroy(game, game.state().permanent(r).unwrap()).unwrap();
     });
     assert_eq!(s.triggers().len(), 1);
-    assert_eq!(s.triggers()[0].of.controller, p);
+    assert_eq!(s.triggers()[0].of.controller.seat(), p);
     assert!(s.zone(ZoneKey::Of(q, Zone::Graveyard)).contains(sphinx));
     resolve_all(&t, &mut s, &mut x);
     let copy = *s
@@ -1620,7 +1620,7 @@ fn a_permanent_a_triggered_ability_names_is_not_interchangeable_with_its_twin() 
         of: AbilityRef {
             source: Some(s.object_ref(source)),
             card: s.copiable(source).record(&t).0,
-            controller: p,
+            controller: p.into(),
             ..AbilityRef::default()
         },
         info: TriggerInfo {

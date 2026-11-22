@@ -11,6 +11,7 @@ pub mod discard;
 pub mod exile;
 pub mod explore;
 pub mod fateseal;
+pub mod flip;
 pub mod manifest;
 pub mod manifest_dread;
 pub mod mill;

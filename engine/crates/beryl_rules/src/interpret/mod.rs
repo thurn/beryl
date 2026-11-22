@@ -121,7 +121,7 @@ pub(crate) fn mana_ability<L: Layout>(
     {
         debug_assert!(mana.includes(color));
         let activation = activation();
-        let (player, source) = (activation.of.controller, activation.of.source);
+        let (player, source) = (activation.of.controller.seat(), activation.of.source);
         let added = s.add_mana(player, source, color, mana.amount);
         sink.note_from(source, added);
         return layers::refresh(s, t, sink);
@@ -212,7 +212,7 @@ pub(crate) fn static_condition_holds<L: Layout>(
             card,
             face,
             ability: TriggeredAbility::own(index),
-            controller: s.controller(slot),
+            controller: s.controller(slot).into(),
         },
         info: TriggerInfo::default(),
     };
@@ -240,7 +240,7 @@ pub(crate) fn names_nothing<L: Layout>(
             card,
             face,
             ability: TriggeredAbility::default(),
-            controller: s.controller(slot),
+            controller: s.controller(slot).into(),
         },
         info: TriggerInfo::default(),
     };

@@ -2,9 +2,9 @@
 //! only their own starting positions, so ordinary openings keep their original setup.
 
 use beryl_card::{
-    Ability, AbilityKind, Amount, Behavior, CardDef, Comparison, Condition, CounterKind,
-    Designation, Effect, Filter, Governed, Modification, Objects, Players, Replaced, Rewrite, Seat,
-    Subject, TargetKind, Trigger, TriggerEvent,
+    Ability, AbilityKind, Amount, Behavior, CardDef, CastNumber, Comparison, Condition,
+    CounterKind, Designation, Effect, Filter, Governed, Modification, Objects, Players, Replaced,
+    Rewrite, Seat, Subject, TargetKind, Trigger, TriggerEvent,
 };
 use beryl_engine::{TurnStep, Zone};
 use beryl_scenario::{P0, P1};
@@ -25,7 +25,7 @@ enum Recipe {
     BeginTurnWithTappedSource,
     Chapter(u8),
     ClassLevel(u8),
-    Cast(Seat, Filter, Zone),
+    Cast(Seat, Filter, Zone, u8),
     PlayLand(Seat, Filter),
     Draw(Seat),
     DrawFromShortLibrary(Seat),
@@ -78,7 +78,7 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         TriggerEvent::Enters => {
             let mut recipes = on(event, |player| Recipe::PlayLand(player, filter));
             recipes.extend(on(event, |player| {
-                Recipe::Cast(player, filter, Zone::Battlefield)
+                Recipe::Cast(player, filter, Zone::Battlefield, 1)
             }));
             recipes
         }
@@ -101,7 +101,13 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         }),
         TriggerEvent::CreatesTokens => on(event, Recipe::CreateTokens),
         TriggerEvent::Casts | TriggerEvent::CastsFrom(Zone::Hand) => {
-            on(event, |player| Recipe::Cast(player, filter, Zone::Stack))
+            let count = match event.cast_number {
+                None => 1,
+                Some(CastNumber::InTurn(count) | CastNumber::ByCaster(count)) => count,
+            };
+            on(event, |player| {
+                Recipe::Cast(player, filter, Zone::Stack, count)
+            })
         }
         TriggerEvent::Discards => on(event, |player| Recipe::Discard(player, filter)),
         TriggerEvent::Draws => on(event, Recipe::Draw),
@@ -145,9 +151,9 @@ fn replacement(event: Replaced) -> Vec<Recipe> {
             ],
             Zone::Library => vec![Recipe::GainLife(P0), Recipe::GainLife(P1)],
             Zone::Hand => vec![Recipe::RemoveSource, Recipe::Draw(P0)],
-            Zone::Battlefield => vec![Recipe::Cast(P0, *filter, zone), Recipe::ReturnCreature],
+            Zone::Battlefield => vec![Recipe::Cast(P0, *filter, zone, 1), Recipe::ReturnCreature],
             Zone::Exile => vec![Recipe::ExileCreature],
-            Zone::Stack => vec![Recipe::Cast(P0, *filter, zone)],
+            Zone::Stack => vec![Recipe::Cast(P0, *filter, zone, 1)],
             Zone::Nowhere | Zone::Merged => vec![],
         },
         Replaced::Enters { not_cast: true, .. } => vec![Recipe::ReturnCreature],
@@ -155,7 +161,7 @@ fn replacement(event: Replaced) -> Vec<Recipe> {
             objects,
             not_cast: false,
         } => vec![
-            Recipe::Cast(P0, *objects, Zone::Battlefield),
+            Recipe::Cast(P0, *objects, Zone::Battlefield, 1),
             Recipe::PlayLand(P0, *objects),
             Recipe::ReturnCreature,
         ],

@@ -91,7 +91,10 @@ impl Place {
     /// The places a scenario of `def` starts from.
     pub(super) fn of(def: &'static CardDef) -> Vec<Place> {
         let mut places = vec![Place::Hand, Place::Battlefield(FaceIx::FRONT)];
-        if def.shape == beryl_card::definition::Shape::Transforming {
+        if matches!(
+            def.shape,
+            beryl_card::definition::Shape::Transforming | beryl_card::definition::Shape::Flip
+        ) {
             places.push(Place::Battlefield(FaceIx::BACK));
         }
         places.push(Place::Graveyard);

@@ -70,7 +70,7 @@ impl<L: Layout> State<L> {
             let knew = self.who_knows(onto.slot());
             self.remember(onto.slot(), Memo::FaceDownUnder(knew))?;
         }
-        self.become_copy(definition, onto.into(), values)?;
+        self.set_copy(definition, onto.into(), values)?;
         if hidden {
             for k in self.knowledge.as_mut_slice() {
                 k.insert(onto.slot());

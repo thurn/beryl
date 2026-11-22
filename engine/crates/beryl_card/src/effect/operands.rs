@@ -157,6 +157,9 @@ impl Effect {
             | Effect::PutIntoGraveyard(objects)
             | Effect::ReturnToBattlefield(objects)
             | Effect::ReturnTransformed(objects)
+            | Effect::Transform(objects)
+            | Effect::Flip(objects)
+            | Effect::Reveal(objects)
             | Effect::GainFlashback(objects)
             | Effect::PutIntoLibrary { objects, .. }
             | Effect::Explore(objects)

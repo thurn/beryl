@@ -385,7 +385,9 @@ pub(crate) fn become_copy_instruction<L: Layout>(
     let mut copies = run.permanents(objects);
     let mut became = Bitboard::EMPTY;
     while let Some(copy) = run.next_permanent(&mut copies) {
-        run.game().state.become_copy(source, copy.into(), values)?;
+        let game = run.game();
+        game.state
+            .become_copy(game.table, source, copy.into(), values)?;
         became.insert(copy.slot());
     }
     let game = run.game();

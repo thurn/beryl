@@ -207,6 +207,9 @@ impl Scope<'_> {
             | Effect::ReturnToBattlefield(_)
             | Effect::PutOntoBattlefield(_)
             | Effect::ReturnTransformed(_)
+            | Effect::Transform(_)
+            | Effect::Flip(_)
+            | Effect::Reveal(_)
             | Effect::PutIntoLibrary { .. }
             | Effect::PutBack { .. }
             | Effect::PutAnyOnBottom { .. }

@@ -232,5 +232,17 @@
     "card": "Possibility Storm",
     "scenario": "The Storm still finds a match after the Pool exiles the spell",
     "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Delver of Secrets",
+    "scenario": "transforming keeps the counter and Aura",
+    "gap": "the scenario starts after Delver's upkeep on turn one, which XMage still plays and asks about"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Delver of Secrets",
+    "scenario": "a single-faced copy of Delver cannot transform",
+    "gap": "the scenario starts after Delver's upkeep on turn one, which XMage still plays and asks about"
   }
 ]

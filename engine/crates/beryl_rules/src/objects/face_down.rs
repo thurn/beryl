@@ -453,7 +453,7 @@ fn pay_other_parts<L: Layout>(
     }
     s.settle_question();
     if let Some(permanent) = s.permanent_at(slot) {
-        s.turn_face_up(permanent);
+        s.turn_face_up(t, permanent);
         layers::refresh(s, t, sink)?;
         trigger::match_event(
             s,

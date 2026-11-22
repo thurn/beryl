@@ -352,6 +352,12 @@ fn body_capabilities(body: Behavior) -> u32 {
 /// The facts an ability reads, whether they appear in its body or in its conditions.
 fn facts_read_by(ability: &Ability) -> u32 {
     let mut found = 0;
+    if ability
+        .trigger()
+        .is_some_and(|trigger| trigger.cast_number.is_some())
+    {
+        found |= Capability::SpellsCast.bit();
+    }
     let works_on_stack =
         ability.kind() == AbilityKind::Triggered && ability.zones().contains(Zone::Stack);
     ability.walk(&mut |node| {

@@ -532,6 +532,16 @@ class Cards:
             for choose, exile in pairwise(instructions)
         )
 
+    def refuse_flipped_setup(self, setup: Json) -> None:
+        """The oracle setup formats do not set a flip card's flipped status."""
+        for player in cast(list[Json], setup["players"]):
+            for permanent in cast(list[Json], player["battlefield"]):
+                card = cast(str, permanent["card"])
+                if self.shapes.get(card) == "Flip" and setup_face(permanent):
+                    raise Unsupported(
+                        "a flip card that starts on the battlefield already flipped"
+                    )
+
     def refuse_identical_damage_replacements(self, setup: Json) -> None:
         """Refuses a scenario that starts with two permanents of one card whose replacement
         effect modifies damage, as two Furnaces of Rath: XMage asks the player dealt the damage

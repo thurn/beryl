@@ -6,6 +6,11 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Flipping a permanent could make it appear attached to a player.** The flip
+  flag overlapped the bits that record which player an Aura enchants. The flag
+  now uses a separate bit, and a compile-time assertion checks that the two
+  fields remain disjoint.
+
 - **Narrowing a `Large` game into `Small` could panic instead of refusing it.**
   `State::try_relayout` promises a `Misfit` for a game the target layout cannot
   hold, but `State::fits` checked only the lists it named. It missed the steps

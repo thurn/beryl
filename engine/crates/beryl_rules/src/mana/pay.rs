@@ -415,7 +415,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     let activation = || PendingTrigger {
         of: AbilityRef {
             source: Some(source),
-            controller,
+            controller: controller.into(),
             ability: TriggeredAbility::own(index),
             card,
             face,

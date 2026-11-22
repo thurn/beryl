@@ -52,6 +52,8 @@ pub enum Unmatched {
     /// It is delayed and waits for an event other than the beginning of a step or phase, or
     /// its own source leaving the battlefield.
     Delayed,
+    /// A cast number was set on another kind of event, or is zero.
+    CastNumber,
     /// It works in a zone the engine matches no ability in ([`AWAY`]): a library or a hand.
     Zone,
 }
@@ -86,6 +88,16 @@ enum About {
 ///
 /// [CR 113.6k]: https://yawgatog.com/resources/magic-rules/#R1136k
 pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>, Unmatched> {
+    if let Some(number) = trigger.cast_number
+        && (!matches!(trigger.event, TriggerEvent::Casts)
+            || matches!(
+                number,
+                beryl_card::trigger::CastNumber::InTurn(0)
+                    | beryl_card::trigger::CastNumber::ByCaster(0)
+            ))
+    {
+        return Err(Unmatched::CastNumber);
+    }
     let (kind, about, has_player) = match trigger.event {
         TriggerEvent::Enters => (EventKind::Enters, About::Either, false),
         TriggerEvent::Dies => (EventKind::Dies, About::Either, false),

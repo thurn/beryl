@@ -36,6 +36,18 @@ pub struct Trigger {
     pub delayed: bool,
     /// Whether this delayed ability can trigger only in the extra turn an effect schedules.
     pub exact_turn: bool,
+    /// The ordinal and scope of a cast event, if this trigger counts spells this turn.
+    pub cast_number: Option<CastNumber>,
+}
+
+/// Which cast this turn a trigger listens for. In both cases all spells count, even ones
+/// that don't pass the trigger's filter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CastNumber {
+    /// "The fourth spell of a turn": count the casts of every player together.
+    InTurn(u8),
+    /// "Their first spell each turn": count the event's caster's spells separately.
+    ByCaster(u8),
 }
 
 /// The event of a trigger: one of the kinds of event the engine raises. An entry names what
@@ -268,6 +280,7 @@ impl Trigger {
             whose: Players::EachPlayer,
             delayed: false,
             exact_turn: false,
+            cast_number: None,
         }
     }
 
@@ -312,6 +325,15 @@ impl Trigger {
     /// "Whenever [whose] cast a spell" that `spell` accepts, from `zone`.
     pub const fn casts_from(whose: Players, spell: Filter, zone: Zone) -> Trigger {
         Trigger::of(TriggerEvent::CastsFrom(zone), Subject::A(spell)).whose(whose)
+    }
+
+    /// This cast trigger only matches the specified spell number in the turn.
+    #[must_use]
+    pub const fn numbered(self, cast_number: CastNumber) -> Trigger {
+        Trigger {
+            cast_number: Some(cast_number),
+            ..self
+        }
     }
 
     /// "Whenever [whose] discard a card."

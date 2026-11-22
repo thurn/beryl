@@ -1,12 +1,13 @@
 //! Cards put onto the battlefield transformed
 //! ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a)).
 //!
-//! Implements: CR 712.11a, CR 712.11b
+//! Implements: CR 701.27a, CR 701.27c, CR 701.27d, CR 701.27e, CR 701.27g, CR 712.11a, CR 712.11b
 
 use beryl_card::Objects;
 
 use crate::bitboard::Bitboard;
 use crate::card::{FaceIx, Types};
+use crate::continuous::layers;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
@@ -14,6 +15,74 @@ use crate::layout::{Layout, Queue};
 use crate::replacement::event::{self, Entry, Reason};
 use crate::state::{ObjectRef, Zone};
 use crate::zones;
+use beryl_card::definition::Shape;
+use beryl_kernel::reference::Permanent;
+
+/// Turns a permanent to its other face ([CR 701.27a]): "To transform a permanent, turn
+/// it over so that its other face is up." A single-faced card that copies a double-faced
+/// card cannot transform ([CR 701.27d]): "If a spell or ability instructs a player to
+/// transform a permanent that isn’t represented by a double-faced token or a double-faced
+/// card, nothing happens." A face-down permanent cannot transform (see CR 712.12a).
+///
+/// [CR 701.27a]: https://yawgatog.com/resources/magic-rules/#R70127a
+/// [CR 701.27d]: https://yawgatog.com/resources/magic-rules/#R70127d
+fn other_face<L: Layout>(game: &Game<'_, L>, permanent: Permanent<L>) -> Option<FaceIx> {
+    let slot = permanent.slot();
+    let printed = game.table.def(game.state.card_really_is(slot));
+    let visible = game.state.copiable(slot);
+    if printed.shape != Shape::Transforming || visible.shape(game.table) != Shape::Transforming {
+        return None;
+    }
+    let face = match game.state.object(slot).face() {
+        FaceIx::FRONT => FaceIx::BACK,
+        FaceIx::BACK => FaceIx::FRONT,
+        _ => return None,
+    };
+    // CR 701.27e: "If a spell or ability instructs a player to transform a permanent,
+    // and the face that permanent would transform into is an instant or sorcery face,
+    // nothing happens." https://yawgatog.com/resources/magic-rules/#R70127e
+    (!printed
+        .face(face)
+        .types
+        .intersects(Types::INSTANT.union(Types::SORCERY)))
+    .then_some(face)
+}
+
+/// Carries out a transform and refreshes the layers before the next instruction reads
+/// characteristics. The affected object stays the same (CR 701.27c).
+pub(crate) fn instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    objects: Objects,
+) -> Result<Outcome<L>, Full> {
+    let mut affected = Bitboard::EMPTY;
+    let objects = run.scene().objects(objects);
+    for &slot in run.in_game_order(objects)?.iter() {
+        let (game, resolution) = run.resolving();
+        let object = game.state.object_ref(slot);
+        let own_source = resolution.entry.source() == Some(object);
+        // CR 701.27g: "In both cases, if the permanent has already transformed or
+        // converted, an instruction to do either is ignored."
+        // https://yawgatog.com/resources/magic-rules/#R70127g
+        if own_source && resolution.entry.source_has_transformed() {
+            continue;
+        }
+        let Some(permanent) = game.state.permanent(object) else {
+            continue;
+        };
+        if let Some(face) = other_face(game, permanent) {
+            game.state.transform_permanent(game.table, permanent, face);
+            if own_source {
+                resolution.entry.mark_source_transformed();
+            }
+            affected.insert(slot);
+        }
+    }
+    if !affected.is_empty() {
+        let game = run.game();
+        layers::refresh(game.state, game.table, game.sink)?;
+    }
+    Ok(Outcome::acted_on(affected))
+}
 
 /// Exiles a permanent, then returns it to the battlefield transformed under its owner's
 /// control. It returns as a new object

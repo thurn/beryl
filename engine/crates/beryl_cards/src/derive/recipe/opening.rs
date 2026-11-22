@@ -253,13 +253,31 @@ pub(super) fn open_recipe(def: &'static CardDef, place: Place, recipe: Recipe) -
                 .extend([Stimulus::PassUntil(TURN, TurnStep::Upkeep), Stimulus::Keep]);
             out
         }
-        Recipe::Cast(player, filter, zone) => {
+        Recipe::Cast(player, filter, zone, count) => {
             let card = cast_partner(def, player, filter, zone)?;
-            let mut out = new("cast a matching spell");
+            let mut out = if count == 1 {
+                new("cast a matching spell")
+            } else {
+                Opening::new(def, place, format!("cast {count} spells"))
+            };
             out.own_turn(player);
             out.cast(def, player, card);
             let cost = CARDS.get(card)?.front().cost;
-            for (land, count) in [
+            if count > 1 {
+                let copies = usize::from(count - 1);
+                let setup = &mut out.start.setup.players[player.index()];
+                let mut hand = setup.hand.to_vec();
+                hand.extend(std::iter::repeat_n(card, copies));
+                setup.hand = hand.leak();
+                out.stimuli.extend(std::iter::repeat_n(
+                    Stimulus::Try(Action::cast(player, card)),
+                    copies,
+                ));
+                for _ in 0..usize::from(cost.generic) * copies {
+                    out.permanent(player, names::ISLAND);
+                }
+            }
+            for (land, symbols) in [
                 names::PLAINS,
                 names::ISLAND,
                 names::SWAMP,
@@ -270,7 +288,7 @@ pub(super) fn open_recipe(def: &'static CardDef, place: Place, recipe: Recipe) -
             .into_iter()
             .zip(cost.symbols)
             {
-                for _ in 0..count {
+                for _ in 0..u16::from(count) * u16::from(symbols) {
                     out.permanent(player, land);
                 }
             }

@@ -53,7 +53,7 @@ pub(crate) fn source<L: Layout>(
         card: entry.card(),
         face: entry.face(),
         ability: TriggeredAbility::own(ability),
-        controller: entry.controller(),
+        controller: entry.controller().into(),
     }
 }
 
@@ -142,7 +142,7 @@ pub(crate) fn fire_step<L: Layout>(
         match trigger::ability(t, d.of.card, d.of.face, d.of.ability.get()).trigger() {
             Some(trigger) if trigger.delayed => {
                 trigger::begins(trigger.event, step, || false)
-                    && is_for(&trigger.whose, active, d.of.controller)
+                    && is_for(&trigger.whose, active, d.of.controller.seat())
             }
             _ => unreachable!("a delayed trigger's ability is a delayed one"),
         }

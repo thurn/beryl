@@ -478,7 +478,7 @@ fn five_land_word_changes_compose_in_live_and_captured_text() {
             of: AbilityRef {
                 source: Some(source),
                 card,
-                controller: Seat::P0,
+                controller: Seat::P0.into(),
                 ..AbilityRef::default()
             },
             info: TriggerInfo::default(),

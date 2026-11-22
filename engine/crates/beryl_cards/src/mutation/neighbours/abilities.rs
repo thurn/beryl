@@ -253,7 +253,11 @@ fn triggers(trigger: &Trigger) -> Vec<(&'static str, Kind, String, Trigger)> {
             "trigger event",
             Kind::TriggerEvent,
             format!("{event:?}"),
-            Trigger { event, ..*trigger },
+            Trigger {
+                event,
+                cast_number: None,
+                ..*trigger
+            },
         ),
         (
             "trigger subject",
@@ -265,6 +269,19 @@ fn triggers(trigger: &Trigger) -> Vec<(&'static str, Kind, String, Trigger)> {
             },
         ),
     ];
+    if let Some(number) = trigger.cast_number {
+        use beryl_card::CastNumber;
+        let other = match number {
+            CastNumber::InTurn(n) => CastNumber::ByCaster(n),
+            CastNumber::ByCaster(n) => CastNumber::InTurn(n),
+        };
+        out.push((
+            "cast number",
+            Kind::TriggerFrequency,
+            format!("{other:?}"),
+            trigger.numbered(other),
+        ));
+    }
     if !trigger.delayed {
         out.push((
             "trigger frequency",

@@ -83,7 +83,12 @@ fn a_card_copying_a_transformed_back_face_has_mana_value_zero() {
     });
     let source = state.card_behind(copy).unwrap();
     state
-        .become_copy(source, state.object_ref(copy), state.copiable(original))
+        .become_copy(
+            &table,
+            source,
+            state.object_ref(copy),
+            state.copiable(original),
+        )
         .unwrap();
     assert_eq!(
         [original, copy].map(|slot| state.mana_value(&table, slot)),
@@ -111,7 +116,12 @@ fn a_card_copying_a_transformed_back_face_has_mana_value_zero() {
 
     // Copying the merged original still copies its back face.
     state
-        .become_copy(source, state.object_ref(copy), state.copiable(original))
+        .become_copy(
+            &table,
+            source,
+            state.object_ref(copy),
+            state.copiable(original),
+        )
         .unwrap();
     assert_eq!(state.mana_value(&table, copy), 0);
 }

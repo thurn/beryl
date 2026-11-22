@@ -470,6 +470,13 @@ pub(crate) fn may_instruction<L: Layout>(
             (MAY_EXILE, cards)
         }
         Effect::Search { .. } => (MAY_SEARCH, Bitboard::EMPTY),
+        Effect::Reveal(cards) => {
+            let cards = run.scene().objects(cards);
+            if cards.is_empty() {
+                return run.carry_out_or_nothing(None);
+            }
+            (MAY, cards)
+        }
         Effect::Sequence(_)
         | Effect::If { .. }
         | Effect::May { .. }
@@ -492,6 +499,8 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::ReturnToBattlefield(_)
         | Effect::PutOntoBattlefield(_)
         | Effect::ReturnTransformed(_)
+        | Effect::Transform(_)
+        | Effect::Flip(_)
         | Effect::PutIntoLibrary { .. }
         | Effect::PutBack { .. }
         | Effect::PutAnyOnBottom { .. }

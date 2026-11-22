@@ -180,6 +180,15 @@ impl Permanent {
         }
     }
 
+    /// With the alternative characteristics of a flipped permanent.
+    #[must_use]
+    pub const fn flipped(self) -> Permanent {
+        Permanent {
+            face: FaceIx::BACK,
+            ..self
+        }
+    }
+
     /// Face down, as a manifested permanent (CR 701.40a): a 2/2 creature with no name or
     /// text, which only its controller knows.
     #[must_use]

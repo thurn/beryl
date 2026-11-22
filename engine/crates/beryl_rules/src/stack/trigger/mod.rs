@@ -22,6 +22,7 @@ use crate::state::{
 };
 use crate::table::{Capability, GameTable};
 
+mod cast_number;
 mod other_zones;
 mod step;
 
@@ -299,11 +300,10 @@ fn fires<L: Layout>(
                 from,
                 ..
             },
-        ) if event.matches_cast_from(from) && whose(controller) && about(spell) => Some(info(
-            Some(spell),
-            controller,
-            crate::casting::cast_before(s),
-        )),
+        ) if event.matches_cast_from(from) && whose(controller) && about(spell) => {
+            cast_number::matches(s, controller, trigger.cast_number)
+                .then(|| info(Some(spell), controller, crate::casting::cast_before(s)))
+        }
         (TriggerEvent::Discards, &Event::ZoneChange { object, .. }) => {
             let discarder = s.object(object.slot).owner();
             (whose(discarder) && about(object)).then(|| info(Some(object), discarder, 0))
@@ -574,7 +574,7 @@ fn state_trigger<L: Layout>(
             card,
             face,
             ability,
-            controller,
+            controller: controller.into(),
         },
         info: TriggerInfo {
             object: None,
@@ -610,7 +610,7 @@ pub(crate) fn enqueue<L: Layout>(
             card,
             face,
             ability,
-            controller,
+            controller: controller.into(),
         },
         info,
     };
@@ -629,13 +629,14 @@ pub(crate) fn enqueue<L: Layout>(
 pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, L::Queue<L::Index, 64>)> {
     let player = s
         .players_in_turn_order(s.players())
-        .find(|&p| s.triggers().iter().any(|tr| tr.of.controller == p))?;
+        .find(|&p| s.triggers().iter().any(|tr| tr.of.controller.seat() == p))?;
     let mut kept: L::Queue<L::Index, 64> = Default::default();
     let mut firsts: L::Queue<PendingTrigger<L>, 64> = Default::default();
     // Found only once two triggers of one ability have different sources or objects.
     let named = OnceCell::new();
     for (i, tr) in s.triggers().iter().enumerate() {
-        if tr.of.controller != player || firsts.iter().any(|k| equivalent(s, &named, k, tr)) {
+        if tr.of.controller.seat() != player || firsts.iter().any(|k| equivalent(s, &named, k, tr))
+        {
             continue;
         }
         // The waiting triggers never exceed the capacity of these lists, and the layout's

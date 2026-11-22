@@ -33,6 +33,7 @@ pub mod build;
 mod condition;
 mod operands;
 mod reference;
+mod takes;
 mod terms;
 mod traversal;
 
@@ -52,10 +53,9 @@ use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::filter::Filter;
 use crate::ids::Zone;
-use crate::index::{AbilityIx, ExceptIx, SpecIx};
+use crate::index::{AbilityIx, ExceptIx};
 use crate::mana::{ManaColor, ManaSet};
 use crate::prompt::Prompt;
-use crate::target::Takes;
 
 /// Whether a destroyed permanent may be regenerated
 /// ([CR 701.19c](https://yawgatog.com/resources/magic-rules/#R70119c)): "Effects that say that a
@@ -267,6 +267,12 @@ pub enum Effect {
     /// that isn't a double-faced card onto the battlefield transformed or converted, that
     /// card stays in its current zone." The cards an instruction before exiled.
     ReturnTransformed(Objects),
+    /// Turns a transforming permanent to its other face in place (CR 701.27a).
+    Transform(Objects),
+    /// Changes a permanent's status to flipped (CR 710.4).
+    Flip(Objects),
+    /// Shows cards to every player without moving them (CR 701.20a).
+    Reveal(Objects),
     /// "Put [objects] into their owners' libraries [position]" (CR 400.3).
     PutIntoLibrary {
         objects: Objects,
@@ -688,113 +694,4 @@ pub enum Effect {
 impl Effect {
     /// No instruction: what an ability that never resolves does, such as a static ability.
     pub const NOTHING: Effect = Effect::Sequence(&[]);
-
-    /// Whether this takes what was chosen for the `target`th instance of the word "target"
-    /// from where it is in the way `how` names, whatever else it does and whatever it asks
-    /// first: a removal destroys, exiles, sacrifices or returns it, or puts it into a
-    /// library, and a counter counters it. A player is told as they choose the target
-    /// ([`crate::Ability::takes_target`]).
-    pub const fn takes(&self, target: SpecIx, how: Takes) -> bool {
-        match *self {
-            Effect::Destroy { objects, .. }
-            | Effect::Exile(objects)
-            | Effect::ExileUntilThisLeaves(objects)
-            | Effect::ExileLinked(objects)
-            | Effect::Sacrifice(objects)
-            | Effect::ReturnToHand(objects)
-            | Effect::PutIntoGraveyard(objects)
-            | Effect::PutIntoLibrary { objects, .. } => {
-                matches!(how, Takes::Removal) && is_target(objects, target)
-            }
-            Effect::Counter(objects)
-            | Effect::CounterInto {
-                spells: objects, ..
-            } => matches!(how, Takes::Counter) && is_target(objects, target),
-            Effect::Sequence(effects) => {
-                let mut i = 0;
-                while i < effects.len() {
-                    if effects[i].takes(target, how) {
-                        return true;
-                    }
-                    i += 1;
-                }
-                false
-            }
-            Effect::If {
-                then, otherwise, ..
-            } => {
-                then.takes(target, how)
-                    || match otherwise {
-                        Some(otherwise) => otherwise.takes(target, how),
-                        None => false,
-                    }
-            }
-            Effect::May { effect, .. }
-            | Effect::Unless { effect, .. }
-            | Effect::ForEachPlayer { effect, .. } => effect.takes(target, how),
-            Effect::Attach { .. }
-            | Effect::Mutate(_)
-            | Effect::CopySpell { .. }
-            | Effect::ExchangeControl(..)
-            | Effect::Regenerate(_)
-            | Effect::Tap(_)
-            | Effect::PhaseOut(_)
-            | Effect::SetPrepared { .. }
-            | Effect::PreventDamage { .. }
-            | Effect::Draw { .. }
-            | Effect::Discard { .. }
-            | Effect::Mill { .. }
-            | Effect::Scry { .. }
-            | Effect::PutBack { .. }
-            | Effect::PutAnyOnBottom { .. }
-            | Effect::ShuffleInto { .. }
-            | Effect::Dig { .. }
-            | Effect::ExileUntil { .. }
-            | Effect::Fateseal { .. }
-            | Effect::Wish { .. }
-            | Effect::Search { .. }
-            | Effect::GainLife { .. }
-            | Effect::LoseLife { .. }
-            | Effect::CreateTokens { .. }
-            | Effect::CreateCopies { .. }
-            | Effect::BecomeCopy { .. }
-            | Effect::AddCounters { .. }
-            | Effect::RemoveCounters { .. }
-            | Effect::RemoveAllCounters(_)
-            | Effect::AddMana { .. }
-            | Effect::AddManaOfKind { .. }
-            | Effect::Modify { .. }
-            | Effect::ChangeText { .. }
-            | Effect::Explore(_)
-            | Effect::Choose { .. }
-            | Effect::LookAt { .. }
-            | Effect::ManifestDread(_)
-            | Effect::CreateAttackingTokens { .. }
-            | Effect::ReturnToBattlefield(_)
-            | Effect::PutOntoBattlefield(_)
-            | Effect::ReturnTransformed(_)
-            | Effect::GainFlashback(_)
-            | Effect::PermitCast { .. }
-            | Effect::Subgame
-            | Effect::FlipCoin(_)
-            | Effect::DealDamage { .. }
-            | Effect::ChangeRule { .. }
-            | Effect::MayCast { .. }
-            | Effect::UntapUpTo { .. }
-            | Effect::Delay { .. }
-            | Effect::GetEmblem { .. }
-            | Effect::WinGame(_)
-            | Effect::LoseGame(_)
-            | Effect::ControlPlayer(_)
-            | Effect::RestartGame { .. }
-            | Effect::EndTurn
-            | Effect::AdditionalStep(_)
-            | Effect::ExtraTurn(..) => false,
-        }
-    }
-}
-
-/// Whether `objects` is what was chosen for the `target`th instance of the word "target".
-const fn is_target(objects: Objects, target: SpecIx) -> bool {
-    matches!(objects, Objects::Target(n) if n.get() == target.get())
 }

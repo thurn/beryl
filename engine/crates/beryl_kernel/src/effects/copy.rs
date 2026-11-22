@@ -31,6 +31,7 @@ use crate::object::{Flag, ObjectRef};
 use crate::query::Copiable;
 use crate::state::State;
 use crate::store::Duration;
+use crate::table::GameTable;
 
 /// A copy effect as the zone move carries it to an object's next incarnation: all of its
 /// entry but the object it affects.
@@ -162,9 +163,9 @@ impl<L: Layout> State<L> {
     /// Makes the permanent `object` become a copy with the copiable values `values`, by an
     /// effect of the card `source` (see [CR 707.2]): "When copying an object, the copy acquires
     /// the copiable values of the original object's characteristics". It is not entering: its
-    /// counters, status and memos stay. Its face up is the one it copied. The effect lasts
-    /// until the permanent leaves the battlefield, and ends with what the stores hold about it
-    /// then; a card is then the card it really is again ([`Memo::Really`]).
+    /// counters, status and memos stay. Flip characteristics use the copy's own flipped status.
+    /// The effect lasts until the permanent leaves the battlefield and its stored values expire.
+    /// The card then uses its original definition again ([`Memo::Really`]).
     ///
     /// A copy effect already on the permanent is ended first: it lasts as long, and the new
     /// effect, applied after it in layer 1, replaces every value it gives (see [CR 613.2a]):
@@ -177,6 +178,18 @@ impl<L: Layout> State<L> {
     #[cold]
     #[inline(never)]
     pub fn become_copy(
+        &mut self,
+        t: &GameTable,
+        source: L::Card,
+        object: ObjectRef<L>,
+        values: Copiable<L>,
+    ) -> Result<(), Full> {
+        let flipped = self.object(object.slot).flags.has(Flag::Flipped);
+        self.set_copy(source, object, values.with_flipped_status(t, flipped))
+    }
+
+    /// Records the copy after the caller determines which face its values come from.
+    pub(crate) fn set_copy(
         &mut self,
         source: L::Card,
         object: ObjectRef<L>,

@@ -42,7 +42,7 @@ fn ability_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>
                 card,
                 face,
                 ability,
-                controller,
+                controller: controller.into(),
             },
         },
         targets,

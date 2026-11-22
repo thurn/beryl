@@ -57,6 +57,8 @@ pub enum Flag {
     ///
     /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
     Copy = 1 << 4,
+    /// Flipped, a status independent of which side of a card is face up (see CR 110.5).
+    Flipped = 1 << 7,
 }
 
 impl Flag {
@@ -78,6 +80,8 @@ pub enum Attachment<S> {
 /// [`CombatRole`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ObjectFlags(u8);
+
+const _: () = assert!(Flag::Flipped.bit() & ObjectFlags::PLAYER_MASK == 0);
 
 impl ObjectFlags {
     pub(crate) const NONE: ObjectFlags = ObjectFlags(0);

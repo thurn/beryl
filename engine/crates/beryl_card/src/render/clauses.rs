@@ -121,6 +121,20 @@ impl Ctx {
         cast: &str,
         from: Option<Zone>,
     ) -> String {
+        use super::words::ordinal;
+        use crate::trigger::CastNumber;
+
+        if let Some(number) = trigger.cast_number {
+            return match number {
+                CastNumber::InTurn(n) => {
+                    format!("whenever the {} spell of a turn is cast", ordinal(n))
+                }
+                CastNumber::ByCaster(n) => {
+                    format!("whenever {cast} their {} spell each turn", ordinal(n))
+                }
+            };
+        }
+
         let spell = match trigger.subject {
             Subject::A(filter) => self.noun(filter, Kind::Spell).indefinite(Kind::Spell),
             Subject::This => self.this.clone(),
@@ -503,6 +517,9 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::ReturnToBattlefield(_)
         | Effect::PutOntoBattlefield(_)
         | Effect::ReturnTransformed(_)
+        | Effect::Transform(_)
+        | Effect::Flip(_)
+        | Effect::Reveal(_)
         | Effect::PutIntoLibrary { .. }
         | Effect::Explore(_)
         | Effect::Mutate(_)

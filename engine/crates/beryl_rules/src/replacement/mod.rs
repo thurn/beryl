@@ -572,7 +572,7 @@ fn copy_to_enter<L: Layout>(
         return Ok(None);
     };
     crate::coverage::hit(ability);
-    let mut copy = s.copiable(copied).recorded(t);
+    let mut copy = s.copiable(copied).recorded(t).with_flipped_status(t, false);
     if let Some(except) = except {
         let (card, face) = values.record(t);
         copy = copy.with_addition(Addition::new(card, face, except))?;
