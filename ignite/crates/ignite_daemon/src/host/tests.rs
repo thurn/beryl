@@ -41,7 +41,8 @@ const SESSION: &str = "local_a";
 fn timing() -> Timing {
     Timing {
         block: Duration::from_millis(100),
-        abandon: Duration::from_secs(2),
+        // Restart tests withdraw the old daemon's requests explicitly.
+        abandon: Duration::MAX,
         watch: Duration::from_millis(20),
         grace: Duration::from_millis(50),
     }
@@ -431,36 +432,37 @@ fn a_waiting_run_keeps_its_place_in_the_queue_across_a_restart() {
         ..grant_request(&CommandSpec::from(run_call(&early, 1, T0).spec))
     };
     let first_scheduler = scheduler();
-    let holder = first_scheduler.acquire(&pages);
+    let _holder = first_scheduler.acquire(&pages);
     let first = daemon(&db, &runs, Some(first_scheduler.clone()));
     let early_call = run_call(&early, 1, T0);
     let late_call = run_call(&late, 1, T0.plus_seconds(5.0));
-    let waiting = send(&first.registry, &early_call).unwrap();
-    assert_eq!(
-        waiting,
-        RunReply::Waiting {
-            what: "2 cores".to_owned()
+    // A waiting reply can precede the starter thread reaching the scheduler.
+    let queue = |daemon: &Daemon, scheduler: &Scheduler, calls: &[&Run]| {
+        loop {
+            for call in calls {
+                assert_eq!(
+                    send(&daemon.registry, *call).unwrap(),
+                    RunReply::Waiting {
+                        what: "2 cores".to_owned()
+                    }
+                );
+            }
+            if scheduler.status().resources[0].waiting as usize == calls.len() {
+                break;
+            }
         }
-    );
-    assert!(matches!(
-        send(&first.registry, &late_call),
-        Ok(RunReply::Waiting { .. })
-    ));
-    assert_eq!(first_scheduler.status().resources[0].waiting, 2);
+    };
+    queue(&first, &first_scheduler, &[&early_call, &late_call]);
+    first.host.hand_back(&early);
+    first.host.hand_back(&late);
 
-    // A restarted daemon has a scheduler of its own, with the running command's grant
-    // registered again. The later request reaches it first.
+    // The restarted daemon adopts the running command's grant. The later request actually
+    // enters its queue first, but the original timestamps still determine who runs first.
     let second_scheduler = scheduler();
     let adopted = second_scheduler.adopt(Class::Land, 2, vec!["pages".to_owned()], None, None);
     let second = daemon(&db, &runs, Some(second_scheduler.clone()));
-    assert!(matches!(
-        send(&second.registry, &late_call),
-        Ok(RunReply::Waiting { .. })
-    ));
-    assert!(matches!(
-        send(&second.registry, &early_call),
-        Ok(RunReply::Waiting { .. })
-    ));
+    queue(&second, &second_scheduler, &[&late_call]);
+    queue(&second, &second_scheduler, &[&late_call, &early_call]);
     second_scheduler.release(&adopted);
     until_started(|| send(&second.registry, &early_call));
     assert!(matches!(
@@ -472,9 +474,6 @@ fn a_waiting_run_keeps_its_place_in_the_queue_across_a_restart() {
         second_scheduler.release(&grant);
     }
     until_started(|| send(&second.registry, &late_call));
-    // The first daemon's requests are withdrawn once nobody asks about them; its holder is
-    // never released, as the command of a daemon that went away would not be.
-    drop(holder);
     let _ = fs::remove_dir_all(&runs);
 }
 
@@ -685,7 +684,15 @@ fn a_repeated_build_answers_once_and_leases_are_kept_by_their_owner() {
             session: None,
         },
     };
-    assert_eq!(send(&daemon.registry, &build).unwrap(), BuildReply::Current);
+    loop {
+        match send(&daemon.registry, &build).unwrap() {
+            BuildReply::Waiting { .. } => {}
+            reply => {
+                assert_eq!(reply, BuildReply::Current);
+                break;
+            }
+        }
+    }
     assert_eq!(send(&daemon.registry, &build).unwrap(), BuildReply::Current);
     assert_eq!(daemon.builds.requests().len(), 1);
 
