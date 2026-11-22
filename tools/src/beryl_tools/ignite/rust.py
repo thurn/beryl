@@ -507,12 +507,12 @@ def card_text_results(
 
 
 def card_text_run(checks: list[str]) -> list[Result]:
-    from .. import card_files, card_store, card_text, render_diff
+    from .. import card_files, card_store, card_text, render_diff, system
 
     wanted = [c for c in checks if c.startswith("card-text:")]
     if not wanted:
         return []
-    texts = render_diff.rendered([], paths.RUST / SCENARIO_BINARY)
+    texts = render_diff.rendered([], system.exe(paths.RUST / SCENARIO_BINARY))
     if isinstance(texts, str):
         print(f"card-text: {texts}", file=sys.stderr)
         return []

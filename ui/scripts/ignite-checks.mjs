@@ -22,7 +22,7 @@ import { testInputs } from "./test-inputs.mjs";
 
 const ui = join(dirname(fileURLToPath(import.meta.url)), "..");
 const root = join(ui, "..");
-const bin = (name) => join(ui, "node_modules", ".bin", name);
+const tool = (entry) => join(ui, "node_modules", entry);
 
 function unitFiles() {
     return readdirSync(join(ui, "scripts"))
@@ -33,11 +33,11 @@ function unitFiles() {
 const families = {
     "ui-format": {
         checks: () => [{ name: "prettier", inputs: [] }],
-        command: () => [bin("prettier"), ["--check", "."]],
+        command: () => [tool("prettier/bin/prettier.cjs"), "--check", "."],
     },
     "ui-types": {
         checks: () => [{ name: "tsc", inputs: [] }],
-        command: () => [bin("tsc"), ["-b"]],
+        command: () => [tool("typescript/bin/tsc"), "-b"],
     },
     "ui-unit": {
         checks: () =>
@@ -45,10 +45,7 @@ const families = {
                 name: file.replace(/\.test\.mjs$/, ""),
                 inputs: testInputs(join(ui, "scripts", file), ui, root),
             })),
-        command: (name) => [
-            process.execPath,
-            ["--test", join("scripts", `${name}.test.mjs`)],
-        ],
+        command: (name) => ["--test", join("scripts", `${name}.test.mjs`)],
     },
 };
 
@@ -80,8 +77,10 @@ if (unknown.length) {
 
 let failed = false;
 for (const name of wanted) {
-    const [program, args] = spec.command(name);
-    const run = spawnSync(program, args, { cwd: ui, encoding: "utf8" });
+    const run = spawnSync(process.execPath, spec.command(name), {
+        cwd: ui,
+        encoding: "utf8",
+    });
     const pass = run.status === 0;
     failed ||= !pass;
     const output =

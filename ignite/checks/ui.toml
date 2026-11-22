@@ -2,9 +2,9 @@
 # Formatting and types are in the always set (docs/ignite.md, "The always set").
 
 [product.ui-deps]
-build = "npm ci"
+build = "node scripts/npm-ci.mjs"
 dir = "ui"
-inputs = ["ui/package-lock.json"]
+inputs = ["ui/package-lock.json", "ui/package.json", "ui/scripts/npm-ci.mjs"]
 outputs = ["ui/node_modules"]
 
 [family.ui-format]

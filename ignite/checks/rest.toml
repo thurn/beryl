@@ -202,13 +202,13 @@ inputs = [
 ]
 
 # The iroh transport: building `beryl_link_iroh` and playing its tests over loopback with the
-# relay off, as the nightly did. Only the Mac ran it. It is a family of its own, and every other
+# relay off, as the nightly did. It is a family of its own, and every other
 # Rust build product excludes the package, because a cold build of the iroh dependency alone
 # outlasted the old fast check's whole budget.
 [family.iroh]
 kind = "regression"
 adapter = "nextest"
-platforms = ["macos"]
+platforms = "any"
 needs = ["iroh-tests"]
 list = "cargo nextest list --locked -p beryl_link_iroh --message-format json"
 # Test names do not depend on comments, so a change that edits only comments keeps the
@@ -342,14 +342,14 @@ outputs = ["rust/target"]
 # The test binaries of the fuzzers, optimized with debug assertions and overflow checks on (the
 # build `just fuzz` makes). They land in rust/target/release.
 [product.fuzz-tests]
-build = "env CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release --locked --no-run -p beryl_search -p beryl_session"
+build = "cargo test --release --config profile.release.debug-assertions=true --config profile.release.overflow-checks=true --locked --no-run -p beryl_search -p beryl_session"
 dir = "rust"
 inputs = ["crate:beryl_search", "crate:beryl_session", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
 outputs = ["rust/target"]
 
 # The exhaustive search's test binary, built the same way.
 [product.exhaust-tests]
-build = "env CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release --locked --no-run -p beryl_cards --test exhaust"
+build = "cargo test --release --config profile.release.debug-assertions=true --config profile.release.overflow-checks=true --locked --no-run -p beryl_cards --test exhaust"
 dir = "rust"
 inputs = ["crate:beryl_cards", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
 outputs = ["rust/target"]
