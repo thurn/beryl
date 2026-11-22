@@ -179,14 +179,8 @@ wordmark = "ignite/wordmark.html"
 threshold = 2.85e-4 # expected failures per billion instructions
 seconds = 60        # of running checks per landing
 
-[improvement]
-min_share = 0.15
-max_share = 0.30
-backlog_low = 0.05
-backlog_high = 0.20
-window = 20
-
 # Improvement rules (docs/ignite.md, "Improvement tickets"). A report-only rule files nothing.
+# Set the Efficiency improvements allocation on the dashboard's Pool page to manage dispatch.
 # Upkeep leaves protected checks on when it files a remedy. The never-caught rule skips them.
 # The oracle families play product scenarios against independent rules engines.
 [rules]

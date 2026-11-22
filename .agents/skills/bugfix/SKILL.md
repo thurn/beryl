@@ -74,11 +74,10 @@ reproduces it.
 ## Planning the run
 
 1. **File them.** `just bugs` lists open and filed reports. `just bugs file`
-   files a ticket for each open one (type bug, label `bug-report`, priority 1)
+   files a ticket for each open one (type bug, label `bug-report`, allocation zero)
    holding the report's path and the player's words, and saves the issue ID in
-   the report's front matter. Each is filed `pending_approval`, so no worker
-   starts on a report before this run has deduplicated and grouped it; moving it
-   under the run's epic (step 4) means releasing the epic releases it. For closed history and work left in progress, use
+   the report's front matter. Zero keeps the report parked until this run has
+   deduplicated and grouped it. For closed history and work left in progress, use
    `ignite ticket list --label bug-report --all --json`. Reconcile the local reports with
    the tickets and establish the reports in scope for this run; do not silently
    omit blocked, deferred, or interrupted work. Leave out tickets labeled
@@ -105,12 +104,9 @@ reproduces it.
    once and verified against each report. Group only on a cause you can see from the
    reports themselves (the same prompt misbehaving the same way, one animation
    reported twice), not because two fixes might touch the same files or
-   directory: merge conflicts are cheap, and a chain costs parallelism. Within a
-   group, make the other tickets depend on the first
-   (`ignite ticket dep add <dependent> <prerequisite>`) and note the shared
-   cause on each; the worker who lands the fix verifies and closes the others
-   against it. Add any other edge only where one fix changes how another report
-   must be judged.
+   directory: merge conflicts are cheap, and a chain costs parallelism. Pick
+   one ticket per group to lead the fix and note the shared cause on each. The
+   worker who lands the fix verifies and closes the others against it.
 
    Then give every ticket a tier, since Beryl assigns models by label
    (AGENTS.md, Ignite):
@@ -124,17 +120,22 @@ reproduces it.
    Never use `tier:fable` unless the user asked for it.
 
 4. **File the epic.** Follow the `/ignite` skill's Plan mode for filing: one
-   epic titled `Bug reports <date>`, whose description lists the reports in
-   scope and the tier policy above, with each ticket moved under it, then check
-   the graph. A bug-report ticket that already sits under the open epic of an
-   earlier `/bugfix` run with claimed children belongs to that epic: leave it.
-   Under any other parent, move it into the new epic and note the old parent on
-   the ticket. File no review tickets unless the invocation asks; each worker's
-   verification below is the review.
+   epic titled `Bug reports <date>` at allocation zero. List the reports in
+   scope and the tier policy above. Leave reports under the open epic of an
+   earlier `/bugfix` run when that epic already has claimed children.
+   Move the other reports into the new epic and note any old parent on the
+   ticket. Using the IDs returned by the move, clear each report's local zero
+   by setting `allocation` to `null` in an `ignite ticket batch` update. The epic's zero
+   keeps the reports parked until the operator sets its Allocation. Once the
+   tickets share the epic, make the other tickets in each group depend on its
+   lead (`ignite ticket dep add <dependent> <prerequisite>`). Add any other
+   edge only where one fix changes how another report must be judged. Run
+   `ignite plan check` on the epic. File no review tickets unless the
+   invocation asks. Each worker's verification below is the review.
 
-5. **Report.** Give the reporter a concise list: each report in scope with its
-   ticket and group, and each report left out with the reason. Then stop: the
-   pool works the tickets, and a later `/bugfix` run reconciles `just bugs` with
+5. **Report.** List each report in scope with its ticket and group, and each
+   report left out with the reason. End the planning session. The operator
+   activates the epic, and a later `/bugfix` run reconciles `just bugs` with
    the tickets' final states.
 
 ## Worker: fixing one report

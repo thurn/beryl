@@ -268,7 +268,7 @@ def ignite_ticket(*args: str) -> Any:
         raise TicketError(f"ignite ticket {args[0]}: not JSON: {error}") from error
 
 
-def file_bead(report: Report, priority: str) -> str:
+def file_bead(report: Report) -> str:
     """Files a ticket for `report` and returns its ID, or the ID of the one already filed for
     it, such as by an earlier attempt that failed before the report recorded the ID."""
     filed = filed_beads()
@@ -287,15 +287,13 @@ def file_bead(report: Report, priority: str) -> str:
             report.title or report.id,
             "--type",
             "bug",
-            "--priority",
-            f"P{int(priority)}",
             "--labels",
             ",".join(labels),
             "--body-file",
             str(body),
-            # A player's report waits for the `bugfix` planner to deduplicate and group it
-            # before any worker starts on it, so it is held for release like an epic.
-            "--pending",
+            # The `bugfix` planner deduplicates and groups reports before workers start.
+            "--allocation",
+            "0",
             *[arg for path, _ in images(report) for arg in ("--attach", str(path))],
         )
     return str(created["results"][0]["id"])
@@ -403,7 +401,7 @@ def file_reports(args: argparse.Namespace, root: Path) -> int:
             print(f"would file {r.id}: {r.title}")
             continue
         try:
-            bead = file_bead(r, args.priority)
+            bead = file_bead(r)
             update(r, status="filed", bead=bead)
         except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
             print(f"bugs: {error}", file=sys.stderr)
@@ -570,7 +568,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     v.set_defaults(func=list_cmd)
     v = verbs.add_parser("file", help="file a ticket for each open report")
     v.add_argument("reports", nargs="*", help="report ids (default: every open one)")
-    v.add_argument("--priority", default="1", help="the tickets' priority (0-4)")
     v.add_argument("--dry-run", action="store_true")
     v.set_defaults(func=file_cmd)
     v = verbs.add_parser(

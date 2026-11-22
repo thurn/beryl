@@ -133,13 +133,14 @@ situation, and a command names the topic when it applies.
   `ignite guide cli-worker`.
 - File tickets freely and in parallel with `ignite ticket create`, and record
   plans, designs and decisions on their tickets. Merge conflicts are cheap:
-  `ignite land` rebases, and you fix and land again. A single ticket is filed
-  `open`, so the pool can pick it up within minutes: land what it depends on
-  first or give it the dependency. An epic, and every ticket filed under a
-  pending epic, is filed `pending_approval`, and the pool is never offered its
-  tickets until the user releases it (`ignite ticket update <epic> --release`);
-  agents never pass `--release`. Player bug reports (`just bugs file`) are filed
-  pending too, so the `bugfix` planner reviews them first.
+  `ignite land` rebases, and you fix and land again. A standalone ticket is
+  filed `open`, so the pool can pick it up within minutes if its allocation
+  allows: land what it depends on first or give it the dependency. File new
+  plans with epic allocation zero. The operator activates them through
+  Allocation on the dashboard or
+  `ignite ticket update <epic> --allocation <weight>`. The user can authorize
+  activation of this session's tickets with `/release`. Player bug reports
+  (`just bugs file`) also start at zero for `/bugfix` to review.
 - A ticket's acceptance names a deterministic result that someone can observe:
   what was built, a decision, a file. A timing measured on a shared machine is
   recorded as information, never the gate. File a ticket whose acceptance is

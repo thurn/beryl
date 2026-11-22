@@ -35,8 +35,7 @@ command prints and `ignite prime`.
 ## Plan
 
 Settle the design, file the whole graph in one `ignite ticket batch`, check it,
-and stop. The pool takes the tickets; this session never works them or waits on
-them.
+and stop. The operator sets the epic's Allocation when the pool should start.
 
 ### Before filing
 
@@ -141,7 +140,7 @@ record why.
    ```json
    {"ops": [
      {"op": "create", "fields": {"title": "Replay import", "type": "epic",
-       "body": "...", "acceptance": "..."}},
+       "allocation": 0, "body": "...", "acceptance": "..."}},
      {"op": "create", "parent": "$0", "fields": {"title": "Replay types",
        "body": "...", "acceptance": "...", "estimate_minutes": 45,
        "labels": ["tier:opus"]}},
@@ -156,21 +155,21 @@ record why.
    tickets listed under `needs estimate`. Fix the graph and file-reference
    findings with `ignite ticket update` and `ignite ticket dep`, and run it
    again.
-4. A released epic gets the default allocation of 3 unless it already has an
-   allocation. Use `ignite ticket update <epic> --allocation <n>` only when the
-   person supplied a weight. Add `--max-workers` only for an epic whose
-   tickets conflict when too many run at once.
-5. Summarize the epic, milestones, estimated agent hours (including unfiled
-   work) and anything that would stop it. Do not wait for approval.
+4. Keep the epic parked at zero. The operator can set a positive weight in
+   the epic's Allocation field or with `ignite ticket update <epic> --allocation <weight>`.
+   Record any requested starting weight in the epic. Add `--max-workers` only
+   for an epic whose tickets conflict when too many run at once.
+5. Summarize the parked epic, milestones, estimated agent hours (including
+   unfiled work) and anything that would stop it.
 
 ## Sweep
 
 `/ignite sweep [older than N days] [dry]` triages the open tickets that nothing
 will work.
 
-- A ticket is stale when it is open and unclaimed, under an epic with zero or
-  no allocation or under no epic. `older than N days` narrows the list to
-  tickets of that age.
+- Review unclaimed, unfinished tickets that are parked by their allocation or
+  pool, and unclaimed standalone tickets that may have been left behind.
+  `older than N days` narrows the list to tickets of that age.
 - Give each one a verdict with one line of evidence:
   - **done**: cite the commit or the code that did it;
   - **obsolete**: cite what replaced it;
@@ -188,6 +187,7 @@ will work.
   evidence as the reason (`ignite ticket close <id> "<reason>"`). On a kept
   ticket, comment what in it is now wrong, such as renamed files or steps
   already done. Ask the person about each `person` ticket now, one at a time,
-  and label the unresolved ones `needs:person`. Then activate what is kept:
-  give its epic a positive `--allocation` or file it under an active epic.
+  and label the unresolved ones `needs:person`. For kept work that should run,
+  clear a ticket's zero in the Allocation editor or move the ticket under a
+  suitable active epic as needed. Leave new plans for the operator to activate.
 - `dry` shows the table and closes, comments on and activates nothing.

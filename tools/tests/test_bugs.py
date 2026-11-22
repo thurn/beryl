@@ -79,7 +79,7 @@ def test_lists_games_per_day_without_reports(
 
 class Ignite:
     """A stand-in for the `ignite` command: lists `issues` and creates tickets, recording each
-    created ticket's title, labels, priority and body."""
+    created ticket's title, labels, allocation and body."""
 
     def __init__(self, issues: Sequence[dict[str, Any]], created: str) -> None:
         self.issues: list[dict[str, Any]] = list(issues)
@@ -110,10 +110,9 @@ class Ignite:
                 {
                     "title": rest[0],
                     "type": option("--type"),
-                    "priority": option("--priority"),
+                    "allocation": int(option("--allocation")),
                     "labels": option("--labels").split(","),
                     "body": Path(option("--body-file")).read_text(),
-                    "pending": "--pending" in rest,
                     "attach": [
                         rest[i + 1] for i, a in enumerate(rest) if a == "--attach"
                     ],
@@ -145,9 +144,9 @@ def test_file_and_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     body = calls[0]["body"]
     assert "The arrow\njumps." in body and "seed 77, turn 5" in body
     assert calls[0]["title"] == "Arrow jumps: on block"
-    assert calls[0]["type"] == "bug" and calls[0]["priority"] == "P1"
+    assert calls[0]["type"] == "bug"
     assert calls[0]["labels"] == ["bug-report", f"bug-report:{folder.name}"]
-    assert calls[0]["pending"], "a report waits for the planner's review"
+    assert calls[0]["allocation"] == 0, "a report waits for the planner's review"
     filed = bugs.load(folder)
     assert filed is not None and filed.status == "filed" and filed.bead == "by-x1"
     # Filed once only.

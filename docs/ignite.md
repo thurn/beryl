@@ -25,8 +25,8 @@ The design rests on five decisions:
   as the machine has room, and the hub chooses the ticket and provider. A person
   can watch and steer a worker from the dashboard.
 - **The system repairs itself as ordinary work.** No scheduled agent fixes CI. A
-  regression goes back to the ticket that caused it, and improvements to the
-  workflow get a guaranteed share of the workers.
+  regression goes back to the ticket that caused it. The operator can give
+  workflow improvements a share of the workers through Allocation.
 
 Enact and the old check tools are removed in one switch. All other work on Beryl
 is halted until then, so everything this document describes is built before work
@@ -3307,14 +3307,17 @@ addresses under `/by/` redirect to the root.
 On the private listener, a person edits a ticket from its page. The public
 listener shows no edit controls and refuses every write.
 
-- Pencils beside the title, each text section and the rail's status, priority,
-  labels and, for an epic, workers and max workers open an editor in place.
-  Buttons at the top of the rail release a ticket that is pending approval,
-  close an open one with a reason, or reopen a closed one. A box under the
+- The **Allocation** field in the ticket's rail sets an epic's worker share or a
+  ticket's weight in its queue. The Pool page has the same editor for the
+  General pool, Flaky test investigations, Exploration findings, Efficiency
+  improvements and Other upkeep tickets. A blank field uses the inherited or
+  default value shown in the editor. Zero parks ordinary work. See
+  [Allocating workers](#allocating-workers).
+- Pencils beside the title, text sections, status and labels open editors in
+  place. The rail also has controls to close or reopen work. A box under the
   comments adds a comment.
-- Each edit is one `POST /by/api/batch`, so it is recorded and relayed like any
-  other ticket write. A released ticket reaches dispatch through the change feed
-  within about a second when a worker is idle.
+- Ticket edits use `POST /by/api/batch`. Pool allocation edits use the fleet
+  settings API. Both are recorded and relayed to dispatch.
 - The browser holds no token. `tailscale serve` replaces any
   `Tailscale-User-Login` header a client sends with the Tailscale user's login,
   and Funnel requests carry none, so the hub accepts a batch from a request with
@@ -3408,8 +3411,9 @@ saw.
   `![alt](attachment:<name>)` shows that ticket's own image. An external image
   URL stays a link.
 - **Bug reports.** `by bugs file` attaches a report's `screenshot.png` and
-  `window.png` and embeds them in the ticket's body. `by bugs attach` does the
-  same for tickets filed earlier that have no attachment.
+  `window.png` and embeds them in the ticket's body. It files the report with
+  allocation zero for the `bugfix` planner to review. `by bugs attach` adds
+  images to tickets filed earlier that have no attachment.
 
 ### Scheduled tickets
 
@@ -3649,15 +3653,17 @@ A daemon asks the hub for work with its current room, provider offers and
 scheduler readings. The hub considers tickets in this order:
 
 1. A justiciar ticket for a fault in Ignite or its workflow.
-2. An open regression ticket. It needs a tree on a machine that can run its
-   check. It can bypass the ordinary worker room and expected-core limits.
-3. An improvement ticket, when improvements are under their share. See
-   [Improvement tickets](#improvement-tickets). It skips its epic's allocation
-   but not its `--max-workers` cap.
-4. A ready ticket from the epic that is furthest below its allocation. See
-   [Dividing workers between epics](#dividing-workers-between-epics). Within an
-   epic, the ticket of highest priority goes first, then the one with the
-   longest chain of tickets waiting behind it, then the oldest.
+2. A repair blocking tip verification, then other open regression tickets. These
+   go ahead of allocation-controlled work, even when their Allocation is zero.
+   They still need a tree on a machine that can run the check and can bypass the
+   ordinary worker room and expected-core limits.
+3. An eligible improvement ticket when improvements are under their default
+   share of recent hand-offs. This applies to improvements outside the
+   explicitly weighted Efficiency improvements pool. See
+   [Improvement tickets](#improvement-tickets).
+4. A ready ticket from the pool furthest below its allocation. Within that pool,
+   the highest ticket allocation goes first, then the longest chain of tickets
+   waiting behind it, then the oldest.
 
 A machine can take a ticket when all of these hold:
 
@@ -3675,38 +3681,20 @@ A machine can take a ticket when all of these hold:
 
 Not every ticket is offered:
 
-- An epic is scheduled only once a person releases it. A ticket filed with no
-  status takes one from the hub: an epic, and any ticket filed under a pending
-  ticket (a parent created earlier in the same batch included), is filed with
-  the status `pending_approval`; any other ticket is filed `open`, so a single
-  ticket under no epic is offered to the pool at once. The pool is never offered
-  a pending ticket. The hub's own improvements and fault reports are filed
-  pending as well, so a person decides which of them to work. The exception is a
-  ticket for anything that holds `master` back, which the hub files already
-  released: a regression (a check that tip verification found failing on
-  `staging`), every justiciar ticket, a machine a tip has waited an hour for,
-  and checks left incomplete that the tip being verified waits on. A ticket for
-  incomplete checks that no tip waits on stays pending, and the hub releases it
-  when a later tip waits on them. `ignite ticket update <id> --release`, or the
-  Release button on the dashboard, makes the ticket and every descendant still
-  pending `open`: the hub adds the descendants to any update that releases a
-  pending ticket. `ignite ticket create --release` files a ticket `open` even
-  when it is an epic or sits under a pending one. `--pending` files any ticket
-  pending, as `just bugs file` does for a player's bug report, so an agent can
-  deduplicate and group the reports before any of them runs. A session may still
-  start a pending ticket by name.
-- An epic is worked only once it is active, which means it has an `--allocation`
-  above 0. An epic filed without one gets an allocation of 3, so releasing it is
-  enough; an allocation is a weight bounded by the pool, so it reserves nothing.
-  An epic that has no allocation, such as one imported from Enact, gets the same
-  allocation when it is released, so releasing one epic inside a larger project
-  works it even when the project's epic has no allocation either. File it with
-  `--allocation 0`, or set that later, to park a backlog: its tickets then wait,
-  however ready they are. A ticket under no epic has nothing to activate, so
-  releasing it is enough.
-- Once released, tickets that the hub files itself are always offered:
-  regressions, improvements and repairs to a machine. So is a ticket that a
-  session starts by name.
+- File new plans with epic allocation zero. The operator activates a plan by
+  setting a positive weight in Allocation or running
+  `ignite ticket update <epic> --allocation <weight>`. A new epic and tickets
+  filed under a pending epic start in `pending_approval` by default. Setting a
+  positive allocation opens a pending epic and its pending descendants. A
+  descendant with its own zero stays parked until its allocation changes.
+- Standalone tickets are normally filed `open`. Setting a ticket's Allocation to
+  zero parks it for automatic dispatch, as does a zero on its effective pool. A
+  source set to zero parks its work even if one of its tickets sits under an
+  epic. Setting an allocation affects future hand-offs. A session can still
+  start a parked ticket by name if it meets the claim rules.
+- The hub can file improvements and fault reports pending for an operator to
+  review. It files work holding `master` back open and can open an existing
+  report when a later tip begins waiting on it.
 - A ticket marked `needs:person` is never offered.
 
 ### Machine and provider pins
@@ -3765,39 +3753,31 @@ next:
 For an unpinned ordinary ticket, the hub also checks whether
 [placement](#placement) favors another eligible machine.
 
-### Dividing workers between epics
+### Allocating workers
 
-A person decides how much of the fleet each epic gets by giving the epic an
-allocation:
+Pool allocations divide concurrent workers across epics, the General pool and
+separately weighted automated sources. For two epics, run
+`ignite ticket update <id> --allocation 200` on the first and use
+`--allocation 100` on the second.
 
-```sh
-ignite ticket update TQ44S --allocation 5   # Beryl 3D
-ignite ticket update TW8GV --allocation 2   # Project 50k
-```
-
-- An allocation is a weight, not a reservation. The hub gives the next free
-  worker to the epic with the fewest tickets in progress per unit of allocation,
-  counted across every machine.
-- An allocation by itself never leaves a worker idle. An epic with fewer ready
-  tickets than its allocation takes what it can use, and the others divide the
-  rest in proportion.
-- `--max-workers` is a hard cap, for an epic whose tickets conflict when too
-  many run at once. It is the one setting here that can leave a worker idle.
-- An epic with no allocation counts as 1. Tickets under no epic form one group
-  with an allocation of 1.
-- The allocation may sit on any ticket that has children. A ticket belongs to
-  the nearest ancestor that has one.
-- `--workers` is the flag's old name and still works. The hub stores the
-  allocation in the `workers` column and sends it as the `workers` field.
-
-With the two settings above, nothing yet in progress and plenty of ready tickets
-in both epics:
-
-```text
-14 new reservations                                -> 10 and 4
- 7 new reservations                                ->  5 and 2
- 7 new reservations, Project 50k has 1 ready ticket ->  6 and 1
-```
+- The hub offers the next free worker to the eligible pool with the fewest
+  claims and outstanding reservations per unit of allocation, counted across the
+  fleet. If these are the only two eligible pools and both have enough ready
+  work, the first six worker slots split four to two. When a worker in the
+  100-weight epic lands a ticket, the next free slot goes to that epic to
+  restore the split.
+- A positive allocation is a relative weight. If one pool runs out of ready
+  work, other eligible pools can use the free slots. Use `--max-workers` for a
+  hard cap on an epic's concurrent workers. The cap can leave slots idle when
+  there is no other eligible work.
+- A blank epic or milestone allocation lets work use the nearest ancestor with a
+  worker weight. Ordinary work in an epic with no weight in its line stays
+  parked. Standalone tickets use the General pool, whose default weight is 1. A
+  blank source allocation lets its standalone tickets share the General pool. An
+  explicit positive source weight gives them a separate pool.
+- A ticket's allocation orders it within its pool without changing the pool's
+  share. A blank ticket allocation uses the default queue weight of 100. Clear
+  an override in the dashboard or set `allocation` to `null` in a batch update.
 
 ### Light and heavy tickets
 
@@ -4599,7 +4579,13 @@ Rules for filing:
   rules. They are cheap, and what they guard is too basic to give up for want of
   a recent failure.
 
-Rules for the share:
+Set **Efficiency improvements** on the Pool page to give standalone improvements
+their own worker share. Zero parks that source. With the field blank, standalone
+improvements share the General pool and remain eligible for the default
+preference based on recent hand-offs. Setting a positive source allocation gives
+that pool the same concurrent-worker balancing as any other.
+
+The default preference follows these rules.
 
 - Improvement tickets get at least 15% of the last 20 hand-offs to each machine,
   not counting hand-offs of regression tickets or hand-offs whose reservation
@@ -5102,9 +5088,9 @@ These show that cores, trees and workers go where the rules say.
 - **A ticket that needs a person.** Release a ticket with `--needs person`.
   Expect it on the dashboard's first line, never handed off, and handed off
   again once the label is removed.
-- **An inactive epic.** File an epic with ready tickets and `--allocation 0`.
-  Expect no hand-off from it. Set `--allocation 1` and expect one. File another
-  with no `--allocation` and expect hand-offs at once.
+- **A parked epic.** File an epic with tickets and allocation zero. Expect no
+  hand-off from it. Set `--allocation 100` and expect the next eligible ticket
+  to be offered. A ticket with its own zero stays parked.
 - **Checks only.** Run `ignite pool pause` on a machine with busy workers.
   Expect those workers to finish and verification to continue. Offer a
   regression with no compatible active machine and expect it to be eligible
@@ -5121,24 +5107,25 @@ These show that cores, trees and workers go where the rules say.
 - **A late hand-off.** Give a hand-off's prompt to a session after its
   reservation has lapsed. Expect `ignite start` to exit with code 3 and claim
   nothing.
-- **Improvement share.** File several improvement tickets and twenty product
-  tickets. Expect at least three of the next twenty hand-offs to be improvement
-  tickets, largest saving first.
+- **Improvement share.** With a blank Efficiency improvements allocation, file
+  eligible improvement and product tickets. Expect the default preference to
+  offer improvement tickets while they are under their share of recent
+  hand-offs. Set the source to zero and expect its work to stay parked.
 - **A batch job.** Start a tournament with `ignite run --class batch` on cygnus
   and then several landings. Expect the tournament to keep its floor of cores
   and the landings to take the rest.
-- **Allocations between epics.** Give one epic `--allocation 5` and another
-  `--allocation 2`, each with twenty ready tickets, and a pool of seven. Expect
-  five and two in progress. Close all but one of the second epic's tickets and
-  expect six and one.
+- **Allocations between epics.** Give one epic allocation 200 and another 100,
+  each with enough ready tickets for six workers. Expect four and two across
+  claims and reservations. Land a claimed ticket in the 100-weight epic and
+  expect the next hand-off to restore the split.
 - **A light ticket on a busy machine.** Fill a machine with core-crate tickets
   until another build ticket would exceed expected cores, with the queue still
   below the two-minute hold. File a Python-only ticket whose expected cores fit.
   Expect it to take the free tree with the oldest build and skip the Rust
   prebuild.
-- **A plan.** Give `/ignite` a plan document. Expect an epic filed in one batch,
-  a `plan check` report, and the planning session ending while the pool starts
-  the ready tickets.
+- **A plan.** Give `/ignite` a plan document. Expect an epic filed in one batch
+  at allocation zero and a `plan check` report. The pool starts the ready
+  tickets once the operator sets a positive allocation for the epic.
 
 ### Fleet policy and placement
 
