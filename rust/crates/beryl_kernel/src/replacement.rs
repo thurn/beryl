@@ -60,6 +60,7 @@ pub fn instead_of_drawing(ability: &Ability) -> Result<Instead, Unreplaced> {
         | Players::OwnerOf(_)
         | Players::Enchanted
         | Players::ThatPlayer
+        | Players::SubgameNonwinners
         | Players::EachOther(_) => Err(Unreplaced::Players),
     }
 }

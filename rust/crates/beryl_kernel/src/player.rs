@@ -225,8 +225,10 @@ impl<L: Layout> State<L> {
     /// (see [CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)).
     #[inline]
     #[must_use]
-    pub fn lose_life(&mut self, player: Seat, amount: u8) -> Event<L> {
-        self.player_mut(player).life -= i16::from(amount);
+    pub fn lose_life(&mut self, player: Seat, amount: i16) -> Event<L> {
+        debug_assert!(amount >= 0);
+        let life = &mut self.player_mut(player).life;
+        *life = life.saturating_sub(amount);
         self.life_changed();
         Event::LifeLoss { player, amount }
     }

@@ -260,6 +260,7 @@ impl Ctx {
                     | Players::OwnerOf(_)
                     | Players::Enchanted
                     | Players::ThatPlayer
+                    | Players::SubgameNonwinners
                     | Players::EachOther(_)) => self.player(other),
                 };
                 format!("deals combat damage to {whom}")
@@ -290,6 +291,7 @@ impl Ctx {
             | Players::OwnerOf(_)
             | Players::Enchanted
             | Players::ThatPlayer
+            | Players::SubgameNonwinners
             | Players::EachOther(_)) => (self.player(other), true),
         }
     }
@@ -563,6 +565,7 @@ impl Ctx {
                     | Amount::ThoseOf(_)
                     | Amount::Count(_)
                     | Amount::Times(..)
+                    | Amount::Half { .. }
                     | Amount::Plus(..)
                     | Amount::CardTypesAmong(_)
                     | Amount::Power(_)

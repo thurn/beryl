@@ -69,6 +69,7 @@ impl Effect {
             | Effect::Scry { .. }
             | Effect::Explore(_)
             | Effect::ManifestDread(_)
+            | Effect::Subgame
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::PreventDamage { .. }
@@ -101,6 +102,36 @@ impl Effect {
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
             | Effect::ExtraTurn(..) => Branches::Single,
+        }
+    }
+
+    /// Whether any branch can suspend resolution to play a subgame.
+    pub(crate) const fn starts_subgame(&self) -> bool {
+        match self.branches() {
+            Branches::Sequence(effects) => {
+                let mut index = 0;
+                while index < effects.len() {
+                    if effects[index].starts_subgame() {
+                        return true;
+                    }
+                    index += 1;
+                }
+                false
+            }
+            Branches::If {
+                then, otherwise, ..
+            } => {
+                then.starts_subgame()
+                    || match otherwise {
+                        Some(effect) => effect.starts_subgame(),
+                        None => false,
+                    }
+            }
+            Branches::May(effect)
+            | Branches::Unless(effect, _)
+            | Branches::ForEachPlayer(effect)
+            | Branches::WhenFound(effect) => effect.starts_subgame(),
+            Branches::Single => matches!(self, Effect::Subgame),
         }
     }
 
@@ -145,6 +176,7 @@ impl Effect {
             | Effect::Scry { .. }
             | Effect::Explore(_)
             | Effect::ManifestDread(_)
+            | Effect::Subgame
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::PreventDamage { .. }
@@ -281,6 +313,7 @@ impl Effect {
             | Effect::Scry { .. }
             | Effect::Explore(_)
             | Effect::ManifestDread(_)
+            | Effect::Subgame
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::PreventDamage { .. }

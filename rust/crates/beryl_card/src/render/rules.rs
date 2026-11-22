@@ -132,6 +132,7 @@ impl Ctx {
             | Players::OwnerOf(_)
             | Players::Enchanted
             | Players::ThatPlayer
+            | Players::SubgameNonwinners
             | Players::EachOther(_) => format!(" {who} casts"),
         };
         let noun = self.noun(spells, Kind::Spell);

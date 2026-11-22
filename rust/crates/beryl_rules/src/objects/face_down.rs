@@ -426,7 +426,9 @@ fn pay_other_parts<L: Layout>(
     let player = s.controller(slot);
     for (part, &part_cost) in (from..).zip(cost.parts().iter().skip(usize::from(from))) {
         match part_cost {
-            CostPart::Life(amount) => life::lose(&mut Game::new(s, t, sink), player, amount)?,
+            CostPart::Life(amount) => {
+                life::lose(&mut Game::new(s, t, sink), player, i16::from(amount))?
+            }
             CostPart::Chosen(_, chosen) => {
                 let Measure::Count(count) = chosen.measure else {
                     unreachable!("the card table refuses unsupported morph costs");

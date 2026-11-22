@@ -124,6 +124,7 @@ impl Effect {
             | Effect::Scry { .. }
             | Effect::Explore(_)
             | Effect::ManifestDread(_)
+            | Effect::Subgame
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::PreventDamage { .. }

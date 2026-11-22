@@ -20,6 +20,7 @@ impl Ctx {
             Players::You => "you".to_owned(),
             Players::EachOpponent => "each opponent".to_owned(),
             Players::EachPlayer => "each player".to_owned(),
+            Players::SubgameNonwinners => "each player who doesn't win the subgame".to_owned(),
             Players::Enchanted => "enchanted player".to_owned(),
             Players::Target(n) => self.target(n).unwrap_or_else(|| "that player".to_owned()),
             Players::ControllerOf(objects) => {
@@ -39,6 +40,7 @@ impl Ctx {
                 | Players::OwnerOf(_)
                 | Players::Enchanted
                 | Players::ThatPlayer
+                | Players::SubgameNonwinners
                 | Players::EachOther(_)) => {
                     format!("each player other than {}", self.player(other))
                 }
@@ -66,6 +68,7 @@ impl Ctx {
             | Players::OwnerOf(_)
             | Players::Enchanted
             | Players::ThatPlayer
+            | Players::SubgameNonwinners
             | Players::EachOther(_)) => format!("{}'s", self.player(other)),
         }
     }
@@ -407,6 +410,7 @@ impl Ctx {
             Amount::Count(objects) => format!("the number of {}", self.counted_objects(*objects)),
             Amount::Times(n, amount) => format!("{n} times {}", self.amount(*amount)),
             Amount::Plus(n, amount) => format!("{} plus {n}", self.amount(*amount)),
+            Amount::Half { of, round_up } => self.half(*of, round_up),
             Amount::CardTypesAmong(objects) => format!(
                 "the number of card types among {}",
                 self.counted_objects(*objects)
@@ -460,6 +464,7 @@ impl Ctx {
                     | Players::ControllerOf(_)
                     | Players::OwnerOf(_)
                     | Players::Enchanted
+                    | Players::SubgameNonwinners
                     | Players::EachOther(_)) => {
                         if self.subject == Some(other) {
                             "they".to_owned()
@@ -480,6 +485,7 @@ impl Ctx {
             ),
             other @ (Amount::Carried
             | Amount::Times(..)
+            | Amount::Half { .. }
             | Amount::Plus(..)
             | Amount::CardTypesAmong(_)
             | Amount::Power(_)
@@ -496,6 +502,15 @@ impl Ctx {
         }
     }
 
+    fn half(&mut self, of: Amount, round_up: bool) -> String {
+        let whole = match of {
+            Amount::Life(players) => format!("{} life", self.possessive(players)),
+            other => self.amount(other),
+        };
+        let direction = if round_up { "up" } else { "down" };
+        format!("half {whole}, rounded {direction}")
+    }
+
     /// An amount of something measured: "3 life", "X damage", "that much life", "2 damage
     /// for each card in your hand", "damage equal to its power".
     pub(super) fn quantity(&mut self, amount: Amount, unit: &str) -> String {
@@ -509,8 +524,13 @@ impl Ctx {
             Amount::Times(n, Amount::Count(objects)) => {
                 format!("{n} {unit} for each {}", self.one_of_counted(**objects))
             }
+            Amount::Half {
+                of: Amount::Life(_),
+                ..
+            } if unit == "life" => self.amount(amount),
             other @ (Amount::ThoseOf(_)
             | Amount::Times(..)
+            | Amount::Half { .. }
             | Amount::Plus(..)
             | Amount::CardTypesAmong(_)
             | Amount::Power(_)

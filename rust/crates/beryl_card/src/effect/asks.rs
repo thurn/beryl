@@ -97,6 +97,7 @@ impl Effect {
             | Effect::AddManaOfKind { .. }
             | Effect::ExchangeControl(..)
             | Effect::Attach { .. }
+            | Effect::Subgame
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::ChangeRule { .. }
@@ -179,6 +180,7 @@ impl Effect {
             | Effect::Scry { .. }
             | Effect::Explore(_)
             | Effect::ManifestDread(_)
+            | Effect::Subgame
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::PreventDamage { .. }

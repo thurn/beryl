@@ -61,13 +61,13 @@ impl Scope<'_> {
             Effect::AddMana { .. } if !matches!(self.ability.kind(), AbilityKind::Mana) => {
                 Err(Malformed::AddMana)
             }
-            Effect::RestartGame { .. }
+            Effect::RestartGame { .. } | Effect::Subgame
                 if matches!(
                     self.ability.kind(),
                     AbilityKind::Replacement | AbilityKind::Mana
                 ) =>
             {
-                Err(Malformed::RestartGame)
+                Err(Malformed::NewGame)
             }
             Effect::EndTurn if matches!(self.ability.kind(), AbilityKind::Replacement) => {
                 Err(Malformed::EndTurn)
@@ -129,6 +129,7 @@ impl Scope<'_> {
                 | Amount::ThoseOf(_)
                 | Amount::Count(_)
                 | Amount::Times(..)
+                | Amount::Half { .. }
                 | Amount::Plus(..)
                 | Amount::CardTypesAmong(_)
                 | Amount::Power(_)
@@ -210,6 +211,7 @@ impl Scope<'_> {
             | Effect::Scry { .. }
             | Effect::Explore(_)
             | Effect::ManifestDread(_)
+            | Effect::Subgame
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::PreventDamage { .. }

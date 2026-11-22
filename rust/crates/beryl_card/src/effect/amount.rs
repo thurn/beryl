@@ -48,6 +48,8 @@ pub enum Amount {
     Times(u8, &'static Amount),
     /// "[amount] plus [n]", as "its toughness is equal to that number plus 1".
     Plus(u8, &'static Amount),
+    /// "Half [amount], rounded up" (or "rounded down" when `round_up` is false).
+    Half { of: &'static Amount, round_up: bool },
     /// "The number of card types among [objects]": each card type ([CR 300.1]) counted once,
     /// however many of the cards have it. Tokens are not cards and count for nothing.
     ///
@@ -114,7 +116,9 @@ impl Amount {
             Amount::Count(objects) | Amount::CardTypesAmong(objects) => {
                 objects.needs_a_resolution()
             }
-            Amount::Times(_, amount) | Amount::Plus(_, amount) => amount.needs_a_resolution(),
+            Amount::Times(_, amount)
+            | Amount::Plus(_, amount)
+            | Amount::Half { of: amount, .. } => amount.needs_a_resolution(),
             Amount::Life(players) | Amount::SpellsCast(players) | Amount::CardsDrawn(players) => {
                 players.needs_a_resolution()
             }
@@ -139,7 +143,9 @@ impl Amount {
             | Amount::Carried
             | Amount::SpellsCastBefore => false,
             Amount::Count(objects) | Amount::CardTypesAmong(objects) => objects.names_paid(),
-            Amount::Times(_, amount) | Amount::Plus(_, amount) => amount.names_paid(),
+            Amount::Times(_, amount)
+            | Amount::Plus(_, amount)
+            | Amount::Half { of: amount, .. } => amount.names_paid(),
             Amount::Life(players)
             | Amount::ThoseOf(players)
             | Amount::SpellsCast(players)

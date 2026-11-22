@@ -107,6 +107,14 @@ impl<L: Layout> State<L> {
             Amount::Plus(n, amount) => self
                 .defined(t, amount, you, words)
                 .saturating_add(usize::from(n)),
+            Amount::Half { of, round_up } => {
+                let whole = self.defined(t, of, you, words);
+                if round_up {
+                    whole.div_ceil(2)
+                } else {
+                    whole / 2
+                }
+            }
             Amount::Count(&Objects::All {
                 zone: Zone::Battlefield,
                 filter,

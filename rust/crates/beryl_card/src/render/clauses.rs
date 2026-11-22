@@ -53,6 +53,32 @@ impl Ctx {
         }
     }
 
+    /// "Each player shuffles ...": the players as the subject of each clause about one of
+    /// them, or "for each opponent, ..." when the clauses are about someone else.
+    pub(super) fn for_each_player(&mut self, players: Players, effect: &Effect) -> Vec<String> {
+        if subject_of(effect) == Some(Players::ThatPlayer) {
+            let saved = self.group.replace(players);
+            let clauses = self.effect(effect);
+            self.group = saved;
+            return clauses;
+        }
+        let each = match players {
+            Players::EachOpponent => "opponent".to_owned(),
+            Players::EachPlayer => "player".to_owned(),
+            other @ (Players::You
+            | Players::Target(_)
+            | Players::ControllerOf(_)
+            | Players::OwnerOf(_)
+            | Players::Enchanted
+            | Players::ThatPlayer
+            | Players::SubgameNonwinners
+            | Players::EachOther(_)) => self.player(other),
+        };
+        let mut clauses = self.effect(effect);
+        prefix(&mut clauses, &format!("for each {each}, "));
+        clauses
+    }
+
     /// Each instruction's clauses in turn, two that Oracle text joins with ", then" joined
     /// so: "draw a card, then discard a card".
     pub(super) fn sequence(&mut self, effects: &[Effect]) -> Vec<String> {
@@ -338,7 +364,10 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::WinGame(player)
         | Effect::LoseGame(player)
         | Effect::ExtraTurn(player, _) => Some(player),
-        Effect::EndTurn | Effect::AdditionalStep(_) | Effect::RestartGame { .. } => None,
+        Effect::Subgame
+        | Effect::EndTurn
+        | Effect::AdditionalStep(_)
+        | Effect::RestartGame { .. } => None,
         Effect::ForEachPlayer { .. }
         | Effect::Counter(_)
         | Effect::CopySpell { .. }

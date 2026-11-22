@@ -130,6 +130,7 @@ impl Ctx {
             | Players::OwnerOf(_)
             | Players::Enchanted
             | Players::ThatPlayer
+            | Players::SubgameNonwinners
             | Players::EachOther(_)) => self.player(players),
         };
         let mut instead = self.body(ability.body());

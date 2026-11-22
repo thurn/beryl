@@ -161,7 +161,7 @@ pub enum Event<L: Layout = Small> {
     },
     LifeLoss {
         player: Seat,
-        amount: u8,
+        amount: i16,
     },
     CountersAdded {
         object: ObjectRef<L>,

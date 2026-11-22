@@ -6,7 +6,7 @@
 //! with the type's fields and the dump's attributes. The compiler holds a mirror to its type:
 //! it reads every field it lists by name, and matches an enum's variants exhaustively.
 
-use crate::{Live, Position, facts, trace};
+use crate::{Position, facts, outcome, trace};
 use beryl_engine::card::{
     Castings, Colors, FaceIx, Keywords, ManaColor, ObjectAbility, Purpose, Subtype, Subtypes, Types,
 };
@@ -181,6 +181,10 @@ pub(crate) enum ActionDef {
         card: &'static str,
     },
     Resolve,
+    Concede {
+        #[serde(serialize_with = "seat")]
+        player: Seat,
+    },
     Answer {
         #[serde(serialize_with = "seat")]
         player: Seat,
@@ -593,17 +597,7 @@ pub fn to_json(table: &'static CardTable, cards: &[(&str, &[Scenario])]) -> Stri
 /// of the first; unchanged where Beryl fails it, which [`trace`] then reports. The longer list
 /// of actions is leaked: the dump is written once.
 fn with_snapshot(table: &'static CardTable, scenario: &Scenario) -> (Scenario, Option<usize>) {
-    let snapshot = || -> Result<Vec<Assertion>, String> {
-        let mut live = Live::new(table, scenario).map_err(|f| f.message)?;
-        // Assertions only check: the positions the others begin from are the same without.
-        for &action in scenario.actions {
-            if !matches!(action, Action::Assert { .. }) {
-                live.act(action)?;
-            }
-        }
-        live.snapshot()
-    };
-    match snapshot() {
+    match outcome(table, scenario) {
         Ok(facts) if !facts.is_empty() => {
             let actions: Vec<Action> = scenario
                 .actions

@@ -210,6 +210,7 @@ impl Ctx {
             | Players::OwnerOf(_)
             | Players::Enchanted
             | Players::ThatPlayer
+            | Players::SubgameNonwinners
             | Players::EachOther(_)) => (self.player(other), true),
         };
         match (does, third) {
@@ -292,6 +293,7 @@ impl Ctx {
             | Players::OwnerOf(_)
             | Players::Enchanted
             | Players::ThatPlayer
+            | Players::SubgameNonwinners
             | Players::EachOther(_)) => self.possessive(other),
         }
     }

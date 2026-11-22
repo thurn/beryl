@@ -13,7 +13,7 @@ use std::fmt::Write;
 use crate::{Action, Permanent, Pick, Scenario};
 
 /// The action that takes candidate `c` of `d` in a scenario, where the scenario vocabulary
-/// can name it: play-or-draw and spending floating mana have no
+/// can name it: choosing play or draw and spending floating mana have no
 /// action. A pick by name takes the first candidate of that name, which need not be `c`:
 /// compare [`answer`](crate::answer) of the result with `c` to tell.
 pub fn script<L: Layout>(
@@ -169,6 +169,7 @@ pub fn source(action: &Action) -> String {
             )
         }
         Action::Resolve => "Action::Resolve".to_owned(),
+        Action::Concede { player } => format!("Action::Concede {{ player: {} }}", seat(player)),
         Action::AdvanceTo { turn, step } => {
             format!("Action::AdvanceTo {{ turn: {turn}, step: TurnStep::{step:?} }}")
         }

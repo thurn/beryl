@@ -1665,6 +1665,35 @@
       ]
     }
   ],
+  "Shahrazad": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "02c1aaf36656",
+      "scenario": [
+        "A player with fewer than seven library cards loses the subgame",
+        "Both players lose half their life when the subgame is a draw"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "187469b5ab23",
+      "scenario": [
+        "Only libraries enter the subgame and even exiled cards return to them"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "25f0813b1ced",
+      "untestable": "CR 730.2 now randomly determines who goes first. There is no play-or-draw choice. The two short-library scenarios use seeds that make different players start."
+    },
+    {
+      "published_at": "2007-07-15",
+      "hash": "39599507dd09",
+      "scenario": [
+        "Only libraries enter the subgame and even exiled cards return to them"
+      ]
+    }
+  ],
   "Show and Tell": [
     {
       "published_at": "2004-10-04",

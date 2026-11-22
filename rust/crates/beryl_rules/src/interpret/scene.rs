@@ -6,7 +6,7 @@
 //! nothing, so the same reader serves an ability as it triggers, where there is no
 //! resolution yet, and as it resolves.
 //!
-//! Implements: CR 107.1b, CR 109.5, CR 608.2h
+//! Implements: CR 107.1a, CR 107.1b, CR 109.5, CR 608.2h
 
 use beryl_card::{Amount, CastingKind, Condition, Objects, Players, SpecIx, Types, Words};
 
@@ -33,6 +33,7 @@ pub(crate) struct Outcome<L: Layout> {
     pub(crate) objects: Bitboard<L::Slot>,
     pub(crate) number: u8,
     pub(crate) did: bool,
+    pub(crate) subgame_nonwinners: PlayerSet,
 }
 
 impl<L: Layout> Outcome<L> {
@@ -41,6 +42,7 @@ impl<L: Layout> Outcome<L> {
         objects: Bitboard::EMPTY,
         number: 0,
         did: false,
+        subgame_nonwinners: PlayerSet::NOBODY,
     };
 
     /// The outcome of an instruction that acted on `objects`.
@@ -54,6 +56,7 @@ impl<L: Layout> Outcome<L> {
             objects,
             number: u8::try_from(number).unwrap_or(u8::MAX),
             did: number > 0,
+            ..Self::NOTHING
         }
     }
 
@@ -64,6 +67,7 @@ impl<L: Layout> Outcome<L> {
             objects: self.objects | other.objects,
             number: self.number.saturating_add(other.number),
             did: self.did || other.did,
+            subgame_nonwinners: self.subgame_nonwinners.union(other.subgame_nonwinners),
         }
     }
 }
@@ -445,6 +449,7 @@ impl<L: Layout> Scene<'_, L> {
                 }
                 who
             }
+            Players::SubgameNonwinners => self.registers.outcome.subgame_nonwinners,
             Players::ThatPlayer => {
                 debug_assert!(
                     self.registers.that_player.is_some(),
@@ -523,7 +528,7 @@ impl<L: Layout> Scene<'_, L> {
     }
 
     /// The value of `amount` before it is used, which may be below zero.
-    fn value(&self, amount: Amount) -> i32 {
+    pub(crate) fn value(&self, amount: Amount) -> i32 {
         match amount {
             Amount::Fixed(n) => i32::from(n),
             Amount::X => i32::from(self.x),
@@ -545,6 +550,7 @@ impl<L: Layout> Scene<'_, L> {
             Amount::Count(objects) => self.objects(*objects).count().cast_signed(),
             Amount::Times(n, amount) => i32::from(n) * self.value(*amount),
             Amount::Plus(n, amount) => self.value(*amount) + i32::from(n),
+            Amount::Half { of, round_up } => round_half(self.value(*of), round_up),
             // See CR 300.1: each card type once, among the cards: a token is none (see CR 108.2).
             // A union of types, the same in any order the cards are read.
             Amount::CardTypesAmong(objects) => {
@@ -707,4 +713,13 @@ impl<L: Layout> Scene<'_, L> {
         }
         kind != CastingKind::Overload && entered_with(self.s, self.subject, kind)
     }
+}
+
+/// Under [CR 107.1a], "If a spell or ability could generate a fractional number, the spell
+/// or ability will tell you whether to round up or down."
+///
+/// [CR 107.1a]: https://yawgatog.com/resources/magic-rules/#R1071a
+fn round_half(value: i32, round_up: bool) -> i32 {
+    let half = value.div_euclid(2);
+    half + i32::from(round_up && value.rem_euclid(2) != 0)
 }

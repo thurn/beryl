@@ -128,6 +128,7 @@ pub mod decks {
             ],
         ),
         ("outside-the-game", &[names::BURNING_WISH]),
+        ("subgames", &[names::SHAHRAZAD]),
         (
             "attachments",
             &[names::SWIFT_RECONFIGURATION, names::LEONIN_SCIMITAR],

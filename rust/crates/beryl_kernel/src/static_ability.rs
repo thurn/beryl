@@ -205,7 +205,9 @@ fn reads_graveyards(amount: &Amount) -> bool {
             zone: Zone::Graveyard,
             ..
         }) => true,
-        Amount::Times(_, amount) | Amount::Plus(_, amount) => reads_graveyards(amount),
+        Amount::Times(_, amount) | Amount::Plus(_, amount) | Amount::Half { of: amount, .. } => {
+            reads_graveyards(amount)
+        }
         Amount::Fixed(_)
         | Amount::X
         | Amount::ThatMany
@@ -415,7 +417,9 @@ fn is_its_mana_value(amount: &Amount) -> bool {
 /// cards in graveyards, which no layer changes.
 fn read_as_the_layer_applies(amount: &Amount) -> Result<(), Unapplied> {
     match *amount {
-        Amount::Times(_, amount) | Amount::Plus(_, amount) => read_as_the_layer_applies(amount),
+        Amount::Times(_, amount) | Amount::Plus(_, amount) | Amount::Half { of: amount, .. } => {
+            read_as_the_layer_applies(amount)
+        }
         Amount::Count(&Objects::All {
             zone: Zone::Battlefield,
             filter,
@@ -605,6 +609,7 @@ fn counted(amount: &Amount) -> Option<Counted> {
         | Amount::ThoseOf(_)
         | Amount::Count(_)
         | Amount::Times(..)
+        | Amount::Half { .. }
         | Amount::Plus(..)
         | Amount::CardTypesAmong(_)
         | Amount::Power(_)
@@ -684,6 +689,7 @@ pub fn holds<L: Layout>(
                 | Players::OwnerOf(_)
                 | Players::Enchanted
                 | Players::ThatPlayer
+                | Players::SubgameNonwinners
                 | Players::EachOther(_) => s.opponents_of(controller),
             };
             who.in_seat_order()

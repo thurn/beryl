@@ -387,7 +387,7 @@ impl<'a> Builder<'a> {
             } => self.counters(slot, counter, -i16::from(amount), cause),
             &GameEvent::LifeGain { player, amount } => self.life(player, i16::from(amount), cause),
             &GameEvent::LifeLoss { player, amount } => {
-                self.life(player, -i16::from(amount), cause);
+                self.life(player, -amount, cause);
             }
             GameEvent::Damage {
                 source,

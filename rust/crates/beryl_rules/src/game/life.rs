@@ -37,7 +37,7 @@ pub fn gain<L: Layout>(game: &mut Game<'_, L>, player: Seat, amount: u8) -> Resu
 ///
 /// [CR 119.8]: https://yawgatog.com/resources/magic-rules/#R1198
 #[inline]
-pub fn lose<L: Layout>(game: &mut Game<'_, L>, player: Seat, amount: u8) -> Result<(), Full> {
+pub fn lose<L: Layout>(game: &mut Game<'_, L>, player: Seat, amount: i16) -> Result<(), Full> {
     if !rule_change::life_can_change(game.state, game.table, player) {
         return Ok(());
     }
@@ -63,7 +63,13 @@ pub(crate) fn gain_instruction<L: Layout>(
     players: Players,
     amount: Amount,
 ) -> Result<Outcome<L>, Full> {
-    change(run, players, amount, gain)
+    let amount = run.scene().amount(amount);
+    change(
+        run,
+        players,
+        |game, player| gain(game, player, amount),
+        amount == 0,
+    )
 }
 
 /// [`Effect::LoseLife`](beryl_card::Effect::LoseLife): "[Player] loses [amount] life." The
@@ -73,7 +79,13 @@ pub(crate) fn lose_instruction<L: Layout>(
     players: Players,
     amount: Amount,
 ) -> Result<Outcome<L>, Full> {
-    change(run, players, amount, lose)
+    let amount = i16::try_from(run.scene().value(amount).max(0)).unwrap_or(i16::MAX);
+    change(
+        run,
+        players,
+        |game, player| lose(game, player, amount),
+        amount == 0,
+    )
 }
 
 /// Each of `players` gains or loses `amount` life with `change`, in turn order (see CR 101.4).
@@ -81,18 +93,17 @@ pub(crate) fn lose_instruction<L: Layout>(
 fn change<L: Layout>(
     run: &mut Run<'_, '_, L>,
     players: Players,
-    amount: Amount,
-    change: impl Fn(&mut Game<'_, L>, Seat, u8) -> Result<(), Full>,
+    change: impl Fn(&mut Game<'_, L>, Seat) -> Result<(), Full>,
+    zero: bool,
 ) -> Result<Outcome<L>, Full> {
-    let amount = run.scene().amount(amount);
-    if amount == 0 {
+    if zero {
         return Ok(Outcome::NOTHING);
     }
     let mut total = 0;
     for player in run.in_turn_order(players) {
         let game = run.game();
         let before = game.state.player(player).life();
-        change(game, player, amount)?;
+        change(game, player)?;
         total += u32::from(game.state.player(player).life().abs_diff(before));
     }
     Ok(Outcome::of(Bitboard::EMPTY, total))

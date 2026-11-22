@@ -512,9 +512,11 @@ impl Scope<'_> {
 
     const fn players(self, players: &Players) -> Checked {
         match players {
-            Players::You | Players::EachOpponent | Players::EachPlayer | Players::Enchanted => {
-                Ok(())
-            }
+            Players::You
+            | Players::EachOpponent
+            | Players::EachPlayer
+            | Players::Enchanted
+            | Players::SubgameNonwinners => Ok(()),
             Players::Target(target) => match self.target(*target) {
                 Some(TargetKind::Player | TargetKind::PermanentOrPlayer) => Ok(()),
                 Some(
@@ -557,7 +559,9 @@ impl Scope<'_> {
                 _ => Err(Malformed::CastBefore),
             },
             Amount::Count(objects) | Amount::CardTypesAmong(objects) => self.objects(objects),
-            Amount::Times(_, amount) | Amount::Plus(_, amount) => self.amount(amount),
+            Amount::Times(_, amount)
+            | Amount::Plus(_, amount)
+            | Amount::Half { of: amount, .. } => self.amount(amount),
             Amount::Life(players)
             | Amount::ThoseOf(players)
             | Amount::SpellsCast(players)

@@ -318,6 +318,7 @@ impl Players {
             | Players::EachPlayer
             | Players::Target(_)
             | Players::ThatPlayer
+            | Players::SubgameNonwinners
             | Players::Enchanted => {}
             Players::ControllerOf(objects) | Players::OwnerOf(objects) => objects.walk(visit),
             Players::EachOther(players) => players.walk(visit),
@@ -336,7 +337,9 @@ impl Amount {
             | Amount::Carried
             | Amount::SpellsCastBefore => {}
             Amount::Count(objects) | Amount::CardTypesAmong(objects) => objects.walk(visit),
-            Amount::Times(_, amount) | Amount::Plus(_, amount) => amount.walk(visit),
+            Amount::Times(_, amount)
+            | Amount::Plus(_, amount)
+            | Amount::Half { of: amount, .. } => amount.walk(visit),
             Amount::Life(players)
             | Amount::ThoseOf(players)
             | Amount::SpellsCast(players)
@@ -438,6 +441,7 @@ impl Effect {
                 | Effect::Scry { .. }
                 | Effect::Explore(_)
                 | Effect::ManifestDread(_)
+                | Effect::Subgame
                 | Effect::FlipCoin(_)
                 | Effect::DealDamage { .. }
                 | Effect::PreventDamage { .. }

@@ -140,6 +140,7 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
         | Players::OwnerOf(_)
         | Players::Enchanted
         | Players::ThatPlayer
+        | Players::SubgameNonwinners
         | Players::EachOther(_) => Err(Unmatched::Whose),
     };
     subject.and(whose)?;

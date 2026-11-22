@@ -113,6 +113,7 @@ impl Ctx {
             | Amount::ThoseOf(_)
             | Amount::Count(_)
             | Amount::Times(..)
+            | Amount::Half { .. }
             | Amount::Plus(..)
             | Amount::CardTypesAmong(_)
             | Amount::Power(_)

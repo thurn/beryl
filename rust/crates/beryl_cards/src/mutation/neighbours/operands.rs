@@ -12,6 +12,10 @@ pub(super) fn players(player: Players) -> Neighbours<Players> {
             .filter(|&p| p != player)
             .map(|p| (format!("Players::{p:?}"), p))
             .collect(),
+        Players::SubgameNonwinners => SIMPLE
+            .into_iter()
+            .map(|p| (format!("Players::{p:?}"), p))
+            .collect(),
         Players::ControllerOf(o) => vec![("Players::OwnerOf".to_owned(), Players::OwnerOf(o))],
         Players::OwnerOf(o) => vec![("Players::ControllerOf".to_owned(), Players::ControllerOf(o))],
         Players::Target(_) | Players::ThatPlayer | Players::EachOther(_) | Players::Enchanted => {
@@ -56,6 +60,13 @@ pub(super) fn amounts(amount: Amount) -> Neighbours<Amount> {
             }
             out
         }
+        Amount::Half { of, round_up } => vec![(
+            if round_up { "round down" } else { "round up" }.to_owned(),
+            Amount::Half {
+                of,
+                round_up: !round_up,
+            },
+        )],
         _ => Vec::new(),
     }
 }

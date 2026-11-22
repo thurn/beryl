@@ -189,6 +189,9 @@ pub enum Players {
     /// "That player", "they": the player an [`crate::Effect::ForEachPlayer`] is being done
     /// for.
     ThatPlayer,
+    /// "Each player who doesn't win the subgame": the nonwinners recorded by the previous
+    /// instruction, [`crate::Effect::Subgame`]. Every player is included when it ends in a draw.
+    SubgameNonwinners,
     /// "Each player other than [players]", "each other player": everyone in the game (CR
     /// 102.1) but them.
     EachOther(&'static Players),
@@ -274,7 +277,7 @@ impl Players {
             Players::You | Players::EachOpponent | Players::EachPlayer | Players::Enchanted => {
                 false
             }
-            Players::Target(_) | Players::ThatPlayer => true,
+            Players::Target(_) | Players::ThatPlayer | Players::SubgameNonwinners => true,
             Players::ControllerOf(objects) | Players::OwnerOf(objects) => {
                 objects.needs_a_resolution()
             }
@@ -294,6 +297,7 @@ impl Players {
             | Players::EachPlayer
             | Players::Target(_)
             | Players::ThatPlayer
+            | Players::SubgameNonwinners
             | Players::Enchanted => false,
         }
     }

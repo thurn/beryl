@@ -120,6 +120,7 @@ impl Effect {
             | Effect::If { .. }
             | Effect::ChangeRule { .. }
             | Effect::AdditionalStep(_)
+            | Effect::Subgame
             | Effect::EndTurn => Operands::NONE,
             Effect::RestartGame { filter } => Operands::NONE.filter(Some(filter)),
             Effect::May { player, .. }

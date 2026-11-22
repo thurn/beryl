@@ -309,6 +309,7 @@ fn own_amount<L: Layout>(s: &State<L>, you: Seat, amount: Amount) -> Option<u8> 
         | Amount::ThoseOf(_)
         | Amount::Count(_)
         | Amount::Times(..)
+        | Amount::Half { .. }
         | Amount::Plus(..)
         | Amount::CardTypesAmong(_)
         | Amount::Power(_)

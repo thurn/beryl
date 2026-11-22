@@ -18,6 +18,7 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
     let mut out: Vec<(Kind, String, Effect)> = Vec::new();
     let mut add = |kind, name: String, changed: Effect| out.push((kind, name, changed));
     match *effect {
+        Effect::Subgame => add(Kind::SequenceStep, "skip".to_owned(), Effect::NOTHING),
         Effect::Sequence(effects) => {
             for i in 0..effects.len() {
                 let mut steps = effects.to_vec();

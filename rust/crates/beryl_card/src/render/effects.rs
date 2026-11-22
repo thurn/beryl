@@ -3,7 +3,7 @@
 //! of the spell or ability follows its instructions in the order written."
 
 use super::Ctx;
-use super::clauses::{prefix, subject_of};
+use super::clauses::prefix;
 use super::filters::Kind;
 use super::words::{mana_set, number, symbol, with_article};
 use super::zones::owners;
@@ -310,6 +310,9 @@ impl Ctx {
                     }),
                 ]
             }
+            Effect::Subgame => vec![
+                "players play a Magic subgame, using their libraries as their decks".to_owned(),
+            ],
             Effect::FlipCoin(player) => {
                 vec![self.clause(player, ("flip", "flips"), |_| "a coin".to_owned())]
             }
@@ -408,6 +411,7 @@ impl Ctx {
                 | Amount::ThoseOf(_)
                 | Amount::Count(_)
                 | Amount::Times(..)
+                | Amount::Half { .. }
                 | Amount::Plus(..)
                 | Amount::CardTypesAmong(_)
                 | Amount::Power(_)
@@ -537,6 +541,7 @@ impl Ctx {
                     | Amount::ThoseOf(_)
                     | Amount::Count(_)
                     | Amount::Times(..)
+                    | Amount::Half { .. }
                     | Amount::Plus(..)
                     | Amount::CardTypesAmong(_)
                     | Amount::Power(_)
@@ -596,31 +601,6 @@ impl Ctx {
                 self.player(player)
             )],
         }
-    }
-
-    /// "Each player shuffles ...": the players as the subject of each clause about one of
-    /// them, or "for each opponent, ..." when the clauses are about someone else.
-    fn for_each_player(&mut self, players: Players, effect: &Effect) -> Vec<String> {
-        if subject_of(effect) == Some(Players::ThatPlayer) {
-            let saved = self.group.replace(players);
-            let clauses = self.effect(effect);
-            self.group = saved;
-            return clauses;
-        }
-        let each = match players {
-            Players::EachOpponent => "opponent".to_owned(),
-            Players::EachPlayer => "player".to_owned(),
-            other @ (Players::You
-            | Players::Target(_)
-            | Players::ControllerOf(_)
-            | Players::OwnerOf(_)
-            | Players::Enchanted
-            | Players::ThatPlayer
-            | Players::EachOther(_)) => self.player(other),
-        };
-        let mut clauses = self.effect(effect);
-        prefix(&mut clauses, &format!("for each {each}, "));
-        clauses
     }
 
     /// "Two 2/1 white Insect creature tokens with flying", "a Treasure token"

@@ -366,6 +366,13 @@ pub enum Effect {
     /// wins the flip. Otherwise, the player loses the flip." Whether they won is what
     /// [`Condition::WonFlip`] then reads.
     FlipCoin(Players),
+    /// "Players play a Magic subgame, using their libraries as their decks." The players
+    /// who did not win are available to the next instruction as [`Players::SubgameNonwinners`].
+    /// Under [CR 730.1a], "The main game is temporarily discontinued while the subgame is in
+    /// progress. It resumes when the subgame ends."
+    ///
+    /// [CR 730.1a]: https://yawgatog.com/resources/magic-rules/#R7301a
+    Subgame,
     /// "This deals [amount] damage to [recipients]", to each of them
     /// ([CR 120.1](https://yawgatog.com/resources/magic-rules/#R1201)): "Objects can deal
     /// damage to battles, creatures, planeswalkers, and players." The source is the object
@@ -760,6 +767,7 @@ impl Effect {
             | Effect::ReturnTransformed(_)
             | Effect::GainFlashback(_)
             | Effect::PermitCast { .. }
+            | Effect::Subgame
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::ChangeRule { .. }

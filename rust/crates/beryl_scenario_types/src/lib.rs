@@ -236,6 +236,8 @@ pub enum Action {
     /// is not a priority decision (a question its resolution asks). The game then stops at
     /// the active player's next priority, even where passing is all they can do.
     Resolve,
+    /// `player` concedes the active game. A suspended game resumes normally.
+    Concede { player: Seat },
     /// `player` answers the open decision, which must be of this kind.
     Answer {
         player: Seat,

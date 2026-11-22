@@ -4,7 +4,7 @@
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{CounterKind, Memo, Tracker};
 use beryl_engine::{
-    CardId, CardTable, Format, GameTable, Large, Layout, Profile, Seat, State, Zone,
+    CardId, CardTable, Format, GameTable, Large, LargeCardIx, Layout, Profile, Seat, State, Zone,
 };
 
 use crate::{Failure, Scenario};
@@ -63,8 +63,8 @@ pub(crate) fn setup(
     Ok((t, s))
 }
 
-/// Starts in the small layout where the deal fits, or deals and sets up the scenario in
-/// the large layout. Setup errors in a dealt game are reported to the caller.
+/// Starts in Small if the deal fits and the cards cannot start a subgame. Scenarios can
+/// inspect decisions in a subgame by starting in Large.
 pub(crate) fn with_layout<T>(
     cards: &'static CardTable,
     scenario: &Scenario,
@@ -74,7 +74,9 @@ pub(crate) fn with_layout<T>(
 ) -> Result<T, Failure> {
     let t = table(cards, scenario)?;
     let seed = scenario.setup.seed;
-    if let Ok(s) = State::new(&t, seed, Profile::EXACT) {
+    if !has_subgame_card(&t)
+        && let Ok(s) = State::new(&t, seed, Profile::EXACT)
+    {
         let s = arrange(&t, s, scenario, slots)?;
         small(t, s)
     } else {
@@ -83,6 +85,16 @@ pub(crate) fn with_layout<T>(
         let s = arrange(&t, s, scenario, slots)?;
         large(t, s)
     }
+}
+
+fn has_subgame_card(table: &GameTable) -> bool {
+    table.indices::<LargeCardIx>().any(|card| {
+        table.def(card).faces.iter().any(|face| {
+            face.abilities
+                .iter()
+                .any(beryl_engine::card::Ability::starts_subgame)
+        })
+    })
 }
 
 fn setup_failure(scenario: &Scenario, message: String) -> Failure {

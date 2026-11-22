@@ -665,7 +665,7 @@ impl Ability {
     pub const fn starts_subgame(&self) -> bool {
         match self.body {
             Behavior::Custom(custom) => custom.says().starts_subgame,
-            Behavior::Data(_) => false,
+            Behavior::Data(effect) => effect.starts_subgame(),
         }
     }
 

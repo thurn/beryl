@@ -20,7 +20,9 @@ use std::collections::BTreeSet;
 
 use beryl_engine::card::CardDef;
 use beryl_engine::state::{Derived, Flag, StackEntry};
-use beryl_engine::{CardTable, Seat, Slot, State, Step};
+use std::cell::RefCell;
+
+use beryl_engine::{CardTable, Large, LargeSlot, Layout, Relayout, Seat, SlotId, State, Step};
 use beryl_scenario::{Failure, Scenario, outcome_with};
 
 use crate::CARDS;
@@ -84,14 +86,15 @@ const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
 /// resolves earlier, or mana that a player spends before the scenario ends.
 #[derive(PartialEq, Eq)]
 struct Position {
-    step: Step,
-    stack: Vec<StackEntry>,
+    step: Step<Large>,
+    stack: Vec<StackEntry<Large>>,
     mana: [[u8; 6]; 2],
-    permanents: Vec<(Slot, Derived, bool, u8)>,
+    permanents: Vec<(LargeSlot, Derived<Large>, bool, u8)>,
+    subgame_depth: usize,
 }
 
 impl Position {
-    fn of(state: &State, step: &Step) -> Self {
+    fn of<L: Layout>(state: &State<L>, step: &Step<L>) -> Self {
         let permanents = state
             .battlefield()
             .iter()
@@ -99,16 +102,17 @@ impl Position {
             .map(|slot| {
                 let object = state.object(slot);
                 (
-                    slot,
-                    *state.derived(slot),
+                    slot.to().expect("the slot fits in Large"),
+                    state.derived(slot).relayout(),
                     object.flags().has(Flag::Tapped),
                     object.damage(),
                 )
             })
             .collect();
         Self {
-            step: *step,
-            stack: state.stack().to_vec(),
+            step: step.relayout(),
+            stack: state.stack().iter().map(Relayout::relayout).collect(),
+            subgame_depth: state.subgame_depth(),
             mana: Seat::BOTH.map(|seat| state.player(seat).mana().amounts()),
             permanents,
         }
@@ -122,13 +126,16 @@ struct ScenarioResult {
 }
 
 fn result(cards: &'static CardTable, scenario: &Scenario) -> Result<ScenarioResult, Failure> {
-    let mut positions = Vec::new();
-    let snapshot = outcome_with(cards, scenario, |state, step| {
-        positions.push(Position::of(state, step));
-    })?;
+    let positions = RefCell::new(Vec::new());
+    let snapshot = outcome_with(
+        cards,
+        scenario,
+        |state, step| positions.borrow_mut().push(Position::of(state, step)),
+        |state, step| positions.borrow_mut().push(Position::of(state, step)),
+    )?;
     Ok(ScenarioResult {
         snapshot: format!("{snapshot:?}"),
-        positions,
+        positions: positions.into_inner(),
     })
 }
 

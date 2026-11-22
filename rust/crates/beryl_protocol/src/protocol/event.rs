@@ -61,7 +61,7 @@ pub enum GameEvent {
     },
     LifeLoss {
         player: Side,
-        amount: u8,
+        amount: i16,
     },
     CountersAdded {
         slot: ObjectId,

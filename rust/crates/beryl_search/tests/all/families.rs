@@ -27,6 +27,7 @@ fn family_with_sideboard(name: &str, sideboard: &Decklist) {
     let mut widened: BTreeMap<&str, u64> = BTreeMap::new();
     let mut kinds: HashMap<String, u64> = HashMap::new();
     let mut decisions = 0u64;
+    let mut entered_subgame = 0;
     for seed in seeds(n) {
         let decks = [
             fuzz_deck_from(seed, &cards),
@@ -52,6 +53,7 @@ fn family_with_sideboard(name: &str, sideboard: &Decklist) {
             compares_layouts(seed),
         );
         decisions += u64::from(played.decisions);
+        entered_subgame += u32::from(played.entered_subgame);
         if let Some(list) = played.filled {
             *widened.entry(list).or_default() += 1;
         }
@@ -64,7 +66,7 @@ fn family_with_sideboard(name: &str, sideboard: &Decklist) {
         }
     }
     println!(
-        "{name}: {n} games, {decisions} decisions; stalls by reason {stalls:?}; \
+        "{name}: {n} games, {decisions} decisions; {entered_subgame} entered a subgame; stalls by reason {stalls:?}; \
          {} left Small, by the list that filled: {widened:?}",
         widened.values().sum::<u64>()
     );
@@ -128,6 +130,12 @@ fn turn_structure() {
 #[ignore = "random games of one family: `just fuzz` plays them"]
 fn outside_the_game() {
     family_with_sideboard("outside-the-game", &[(1, beryl_cards::names::BURNING_WISH)]);
+}
+
+#[test]
+#[ignore = "random games of one family: `just fuzz` plays them"]
+fn subgames() {
+    family("subgames");
 }
 
 /// Worldgorger Dragon's enters ability exiles 33 Mountains, linking each to the Dragon with a

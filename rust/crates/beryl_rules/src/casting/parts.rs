@@ -380,7 +380,7 @@ pub(super) fn pay<L: Layout>(
                 // total; in other words, the player loses that much life". The player who
                 // pays is the one casting the spell or activating the ability.
                 let player = top(s).controller();
-                life::lose(&mut Game::new(s, t, sink), player, n)?;
+                life::lose(&mut Game::new(s, t, sink), player, i16::from(n))?;
             }
             // Only a mana ability activated as an instant discards its controller's hand,
             // and it never goes on the stack (`mana::activate` pays it).

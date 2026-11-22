@@ -166,6 +166,7 @@ impl Ctx {
                 | Players::OwnerOf(_)
                 | Players::Enchanted
                 | Players::ThatPlayer
+                | Players::SubgameNonwinners
                 | Players::EachOther(_)) => self.player(other),
             };
             let than = match comparison {
@@ -227,6 +228,7 @@ impl Ctx {
                 | Amount::Carried
                 | Amount::ThoseOf(_)
                 | Amount::Times(..)
+                | Amount::Half { .. }
                 | Amount::Plus(..)
                 | Amount::CardTypesAmong(_)
                 | Amount::Power(_)
@@ -291,6 +293,7 @@ impl Ctx {
             | Amount::ThoseOf(_)
             | Amount::Count(_)
             | Amount::Times(..)
+            | Amount::Half { .. }
             | Amount::Plus(..)
             | Amount::CardTypesAmong(_)
             | Amount::Power(_)

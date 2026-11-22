@@ -22,7 +22,7 @@ use crate::casting::{payment, start};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
-use crate::game::{ending, life, restart};
+use crate::game::{ending, life, restart, subgame};
 use crate::ids::Seat;
 use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::keywords::flashback;
@@ -207,6 +207,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::Scry { .. }
             | Effect::Explore(_)
             | Effect::ManifestDread(_)
+            | Effect::Subgame
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::PreventDamage { .. }
@@ -349,6 +350,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::Explore(objects) => explore::instruction(self, objects)?,
             Effect::Mutate(objects) => crate::objects::mutate::instruction(self, objects)?,
             Effect::ManifestDread(players) => manifest_dread::instruction(self, players)?,
+            Effect::Subgame => subgame::instruction(self)?,
             Effect::FlipCoin(players) => coins::instruction(self, players)?,
             Effect::DealDamage { to, amount } => damage::instruction(self, to, amount)?,
             Effect::GainLife { player, amount } => life::gain_instruction(self, player, amount)?,

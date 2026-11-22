@@ -38,6 +38,12 @@ impl PlayerSet {
         self.0 &= !(1 << player.get());
     }
 
+    /// The players in either set.
+    #[inline]
+    pub const fn union(self, other: PlayerSet) -> PlayerSet {
+        PlayerSet(self.0 | other.0)
+    }
+
     /// The set without `player`.
     #[inline]
     #[must_use]

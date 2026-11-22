@@ -4,8 +4,8 @@ use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::event::{Event, Tag};
 use beryl_engine::state::{CastStep, ObjectRef, Pending};
 use beryl_engine::{
-    Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Profile, Replay,
-    Scratch, Seat, State, Step, Stops, Zone, ZoneKey, apply, next, view,
+    Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Opt, Profile,
+    Replay, Scratch, Seat, Small, State, Step, Stops, Zone, ZoneKey, apply, concede, next, view,
 };
 
 mod answer;
@@ -45,7 +45,7 @@ pub fn trace(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Posit
 /// after its last action (§17.2), empty after the game ends. Two definitions of a card that
 /// pass the same scenario still differ when their snapshots do.
 pub fn outcome(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Assertion>, Failure> {
-    outcome_with(cards, scenario, |_, _| {})
+    outcome_with(cards, scenario, |_, _| {}, |_, _| {})
 }
 
 /// The oracle snapshot, with each scripted decision and its state available for comparisons
@@ -53,9 +53,23 @@ pub fn outcome(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Ass
 pub fn outcome_with(
     cards: &'static CardTable,
     scenario: &Scenario,
-    mut observe: impl FnMut(&State, &Step),
+    small: impl FnMut(&State<Small>, &Step<Small>),
+    large: impl FnMut(&State<Large>, &Step<Large>),
 ) -> Result<Vec<Assertion>, Failure> {
-    let mut runner = Runner::new(cards, scenario, Slots::Dealt)?;
+    with_layout(
+        cards,
+        scenario,
+        Slots::Dealt,
+        |t, s| snapshot_from(Runner::from_position(t, s), scenario, small),
+        |t, s| snapshot_from(Runner::from_position(t, s), scenario, large),
+    )
+}
+
+fn snapshot_from<L: Layout>(
+    mut runner: Runner<L>,
+    scenario: &Scenario,
+    mut observe: impl FnMut(&State<L>, &Step<L>),
+) -> Result<Vec<Assertion>, Failure> {
     let failed = |action, message| Failure {
         scenario: scenario.name,
         action,
@@ -288,7 +302,7 @@ impl<L: Layout> Runner<L> {
         let breakpoint = match self.upcoming {
             Some(Action::AdvanceTo { turn, step }) => Some(Breakpoint { turn, step }),
             // The active player's next priority in this step, after the resolution.
-            Some(Action::Resolve) => {
+            Some(Action::Resolve | Action::Concede { .. }) => {
                 let now = self.s.turn();
                 Some(Breakpoint {
                     turn: now.number(),
@@ -368,6 +382,7 @@ impl<L: Layout> Runner<L> {
             Action::Resolve => {
                 // Waiting triggers go on the stack first.
                 self.decision()?;
+                let game_depth = self.s.subgame_depth();
                 let depth = self.s.stack().len();
                 let Some(top) = self.s.stack().last().cloned() else {
                     return Err("nothing on the stack to resolve".to_string());
@@ -378,7 +393,10 @@ impl<L: Layout> Runner<L> {
                         return Ok(());
                     };
                     let stack = self.s.stack();
-                    if stack.len() < depth || stack[depth - 1] != top {
+                    if self.s.subgame_depth() != game_depth
+                        || stack.len() < depth
+                        || stack[depth - 1] != top
+                    {
                         return Ok(());
                     }
                     if d.kind != DecisionKind::Priority {
@@ -387,6 +405,13 @@ impl<L: Layout> Runner<L> {
                     let pass = option_index(&d, |o| o == Opt::Pass).expect("passing is offered");
                     self.answer(pass);
                 }
+            }
+            Action::Concede { player } => {
+                if self.s.outcome().is_some() {
+                    return Err("the active game has already ended".to_owned());
+                }
+                concede(&mut self.s, &self.t, &mut self.x, player);
+                self.position = None;
             }
             Action::Answer { player, kind, pick } => {
                 let d = self.expect(player, kind)?;
@@ -564,6 +589,7 @@ impl<L: Layout> Runner<L> {
             }
         }
         Position {
+            subgame_depth: self.s.subgame_depth(),
             forced: std::mem::take(&mut self.forced),
             creatures,
             flashback,

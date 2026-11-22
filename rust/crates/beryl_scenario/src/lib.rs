@@ -61,6 +61,9 @@ impl std::error::Error for Failure {}
 /// this (§17.2).
 #[derive(Clone, Debug, Serialize)]
 pub struct Position {
+    /// Which game these turn and step numbers belong to.
+    #[serde(skip_serializing_if = "is_main_game")]
+    pub subgame_depth: usize,
     pub turn: u16,
     #[serde(serialize_with = "json::variant")]
     pub step: TurnStep,
@@ -131,6 +134,11 @@ pub struct Position {
     /// them, as overloaded Winds of Abandon's searches, does anything, where an oracle asks
     /// regardless of the count.
     pub creatures: [u8; 2],
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde requires a reference
+fn is_main_game(depth: &usize) -> bool {
+    *depth == 0
 }
 
 /// One mana that a permanent or a spell made ([CR 106.4]): "When an effect instructs a player

@@ -13,6 +13,7 @@ use crate::decision::{Answers, Candidates, Decision, DecisionKind, Outcome, Stal
 use crate::fixed::Full;
 use crate::game::{Game, start};
 use crate::ids::Seat;
+use crate::interpret::{Outcome as InstructionOutcome, Run};
 use crate::layout::{Layout, index};
 use crate::replacement::event::Sink;
 use crate::resolution::Resolution;
@@ -68,6 +69,23 @@ impl<L: Layout> Resolution<'_, L> {
         );
         Err(Stop::Pause)
     }
+}
+
+/// Delivers the result to the next instruction in the suspended effect. Under
+/// [CR 730.5], "the spell or ability that created the subgame finishes resolving".
+///
+/// [CR 730.5]: https://yawgatog.com/resources/magic-rules/#R7305
+pub(crate) fn instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+) -> Result<InstructionOutcome<L>, Stop> {
+    let (game, resolution) = run.resolving();
+    let result = resolution.play_subgame(game)?;
+    let players = game.state.players();
+    Ok(InstructionOutcome {
+        subgame_nonwinners: players.filter(|player| result != Outcome::Win(player)),
+        did: true,
+        ..InstructionOutcome::NOTHING
+    })
 }
 
 /// Starts the new game from the state at the instruction. The committed game is stored

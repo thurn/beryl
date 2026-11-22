@@ -630,7 +630,7 @@ pub(crate) fn pay_life_to_enter<L: Layout>(
         //
         // [CR 614.1c]: https://yawgatog.com/resources/magic-rules/#R6141c
         sink.enter_source(|| s.object_ref(slot));
-        let lost = life::lose(&mut Game::new(s, t, sink), player, n);
+        let lost = life::lose(&mut Game::new(s, t, sink), player, i16::from(n));
         sink.leave();
         lost?;
     }

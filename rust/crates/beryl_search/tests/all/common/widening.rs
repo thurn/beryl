@@ -18,6 +18,7 @@ pub struct Widened {
     pub outcome: Outcome,
     pub decisions: u32,
     pub filled: Option<&'static str>,
+    pub entered_subgame: bool,
 }
 
 /// The engine call a game makes next: advancing to the next decision, or applying a choice.
@@ -105,6 +106,7 @@ pub fn play_widening(
                     outcome,
                     decisions,
                     filled: None,
+                    entered_subgame: false,
                 };
             }
             Some(Step::Decide(d)) => {
@@ -120,11 +122,13 @@ pub fn play_widening(
         };
     };
     // The game in `Large`, from the call that ran out, starting with the step it reached.
+    let mut entered_subgame = large.in_subgame();
     let outcome = loop {
-        match step
+        let next_step = step
             .take()
-            .unwrap_or_else(|| next(&mut large, t, &mut xl, &mut Replay))
-        {
+            .unwrap_or_else(|| next(&mut large, t, &mut xl, &mut Replay));
+        entered_subgame |= large.in_subgame();
+        match next_step {
             Step::Over(outcome) => break outcome,
             Step::Decide(d) => {
                 seen(&large, t, &d, seed, kinds);
@@ -140,6 +144,7 @@ pub fn play_widening(
         outcome,
         decisions,
         filled: Some(filled),
+        entered_subgame,
     }
 }
 
@@ -165,6 +170,7 @@ fn filled(large: &State<Large>, t: &GameTable) -> &'static str {
     match large.fits::<Small>(t) {
         Err(Misfit::ListTooLong { list, .. }) => list,
         Err(Misfit::PoolTooSmall { .. }) => "the token and copy pool",
+        Err(Misfit::Subgame) => "a subgame",
         Err(_) => "another limit",
         Ok(()) => "a list, during one call",
     }

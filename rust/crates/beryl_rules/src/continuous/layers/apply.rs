@@ -514,6 +514,14 @@ fn defined<L: Layout>(
             usize::from(s.mana_value(t, member))
         }
         Amount::Plus(n, amount) => defined(s, t, amount, by, member).saturating_add(usize::from(n)),
+        Amount::Half { of, round_up } => {
+            let whole = defined(s, t, of, by, member);
+            if round_up {
+                whole.div_ceil(2)
+            } else {
+                whole / 2
+            }
+        }
         Amount::Count(&Objects::All { filter, .. }) => (0..s.battlefield().len())
             .filter(|&i| passes(s, t, filter, i, by))
             .count(),
@@ -628,7 +636,9 @@ pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, change: LayerChange) ->
             Amount::Fixed(_) | Amount::ManaValue(Objects::Those) | Amount::CardTypesAmong(_) => {
                 Characteristics::NONE
             }
-            Amount::Times(_, amount) | Amount::Plus(_, amount) => of(amount),
+            Amount::Times(_, amount)
+            | Amount::Plus(_, amount)
+            | Amount::Half { of: amount, .. } => of(amount),
             Amount::Count(&Objects::All { filter, .. }) => filter_reads(filter),
             Amount::X
             | Amount::ThatMany
