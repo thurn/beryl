@@ -835,22 +835,22 @@ subgame is a second state, played to its end while the main game waits.
 - The engine's `next` and `apply` act on the innermost game. When it ends, the
   engine takes `outer` back, shuffles each main-game library (its cards never
   left it, [CR 730.5](https://yawgatog.com/resources/magic-rules/#R7305)), and
-  gives the subgame's result to the paused resolution as an entry in its
-  replay record. The library shuffle happens at that instruction when the
-  effect replays, so any earlier instructions read the original position.
-  Shahrazad's body can then read the result and have each player who did not
-  win lose half their life.
-- The state hash, size checks, layout conversion and cloning cover `outer`.
-  A determinization samples hidden cards in the active and suspended games
-  while keeping each game's recorded knowledge. For an ordinary subgame, it
-  samples the cards that entered it from the parent deck with the evidence
-  available in either game.
-- The turn limit counts turns across the active, completed and suspended
-  games. Entering a subgame spends one decision from the parent turn, and
-  the subgame's opening decisions share that budget until its first turn.
+  gives the subgame's result to the paused resolution as an entry in its replay
+  record. The library shuffle happens at that instruction when the effect
+  replays, so any earlier instructions read the original position. Shahrazad's
+  body can then read the result and have each player who did not win lose half
+  their life.
+- The state hash, size checks, layout conversion and cloning cover `outer`. A
+  determinization samples hidden cards in the active and suspended games while
+  keeping each game's recorded knowledge. For an ordinary subgame, it samples
+  the cards that entered it from the parent deck with the evidence available in
+  either game.
+- The turn limit counts turns across the active, completed and suspended games.
+  Entering a subgame spends one decision from the parent turn, and the subgame's
+  opening decisions share that budget until its first turn.
 - Saves record the subgame's random starting player and the board of every
-  suspended game at a checkpoint. Recovery within a subgame replays the log
-  to that checkpoint to recover the suspended resolution and its answers.
+  suspended game at a checkpoint. Recovery within a subgame replays the log to
+  that checkpoint to recover the suspended resolution and its answers.
 
 ### H. Casting and combat exceptions
 

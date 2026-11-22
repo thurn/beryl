@@ -235,7 +235,7 @@ pub fn hidden_pick_of<L: Layout>(answer: L::Index) -> Option<L::Slot> {
 /// the rest of the state.
 #[allow(clippy::large_enum_variant)]
 #[repr(u8)]
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Pending<L: Layout = Small> {
     /// Priority, or nothing to ask.
     #[default]
@@ -278,7 +278,7 @@ pub enum Pending<L: Layout = Small> {
     /// The controller of the face-down permanent in `slot` turns it face up, a special action
     /// (see CR 116.2b), and chooses how to pay its mana cost: among payment plans, or under manual
     /// payment one source at a time, `remaining` being what is left to pay.
-    // Keep the hash discriminants after the former post-resolution cast offer.
+    // Leave the tag of the former post-resolution cast offer unassigned.
     TurningFaceUp { slot: L::Slot, remaining: ManaCost } = 13,
     /// Permanents that entered the battlefield together, whose controllers choose the order
     /// of their timestamps (see [CR 613.7m]): "Objects controlled by the active player ... have an
@@ -307,6 +307,37 @@ pub enum Pending<L: Layout = Small> {
         slot: L::Slot,
         ability: beryl_card::ObjectAbility,
     },
+}
+
+// The original derived hash wrote each variant's tag as an isize. The enum now has a
+// byte-sized tag in memory, but the benchmark pins still read the original hash format.
+impl<L: Layout> std::hash::Hash for Pending<L> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::None => 0_isize.hash(state),
+            Self::PlayOrDraw { chooser } => (1_isize, chooser).hash(state),
+            Self::Mulligans => 2_isize.hash(state),
+            Self::Discard => 3_isize.hash(state),
+            Self::LegendRule { kept } => (4_isize, kept).hash(state),
+            Self::EnterPayingLife { slot, life } => (5_isize, slot, life).hash(state),
+            Self::DeclareAttackers { attacker } => (6_isize, attacker).hash(state),
+            Self::DeclareBlockers { blocker } => (7_isize, blocker).hash(state),
+            Self::CombatDamage { done, lethal } => (8_isize, done, lethal).hash(state),
+            Self::Casting(casting) => (9_isize, casting).hash(state),
+            Self::Resolving(resolving) => (10_isize, resolving).hash(state),
+            Self::StepActions(resolving) => (11_isize, resolving).hash(state),
+            Self::TurningFaceUp { slot, remaining } => (13_isize, slot, remaining).hash(state),
+            Self::OrderEntered { group } => (14_isize, group).hash(state),
+            Self::EnterChoosing {
+                slot,
+                kind,
+                pay_life,
+            } => {
+                (15_isize, slot, kind, pay_life).hash(state);
+            }
+            Self::ManaColor { slot, ability } => (16_isize, slot, ability).hash(state),
+        }
+    }
 }
 
 impl Copy for Pending<Small> {}

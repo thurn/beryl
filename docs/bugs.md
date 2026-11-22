@@ -6,6 +6,14 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A compact enum tag changed the benchmark's position hashes.** Removing the
+  old cast offer preserved the numbers of the remaining `Pending` variants. The
+  new representation also changed the tag that Rust's derived hash wrote from a
+  machine word to one byte. The benchmark pins then failed even though play was
+  the same. `Pending` now hashes the original word-sized tags explicitly.
+  `corpus_never_changes` and `rollouts_never_change` guard the hash of the
+  benchmark's positions and results.
+
 - **Returning a card transformed could put the wrong face on the battlefield.**
   The rule used the number of printed faces to identify double-faced cards. It
   now reads the generated card shape and checks that the back face can be on the
