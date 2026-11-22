@@ -27,6 +27,7 @@ impl CustomBody for Subgame {
 
 static SPELL: CardDef = CardDef {
     name: "Test Subgame Spell",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::SORCERY,
         abilities: &[Ability::spell().custom(custom_body::<Subgame>())],
@@ -37,6 +38,7 @@ static SPELL: CardDef = CardDef {
 
 static LAND: CardDef = CardDef {
     name: "Test Subgame Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         ..Face::EMPTY

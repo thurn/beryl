@@ -42,6 +42,7 @@ impl CustomBody for PlaySubgame {
 
 static SUBGAME: CardDef = CardDef {
     name: "Test Subgame Sorcery",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::SORCERY,
