@@ -135,8 +135,7 @@ pub(super) fn start(state: &State, input: &Inputs) -> Element {
         .justify_content(Justify::Center)
         .child(panel)
         .child(corner());
-    let screen = whole_window(input.window.size, screen);
-    screen
+    whole_window(input.window.size, screen)
 }
 
 /// What the screen's fields and choices allow, which both layouts read the same way.

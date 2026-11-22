@@ -177,10 +177,11 @@ impl Client {
                 mac,
                 first,
             };
-            if asked(shortcut) && presses(&self.settings.bindings, shortcut.keys, pressed) {
-                if let Some(response) = on_key(self, pressed) {
-                    return Some(response);
-                }
+            if asked(shortcut)
+                && presses(&self.settings.bindings, shortcut.keys, pressed)
+                && let Some(response) = on_key(self, pressed)
+            {
+                return Some(response);
             }
         }
         None
