@@ -323,7 +323,9 @@ def vm_command(script: str, vm: str = VM, workdir: str | None = None) -> list[st
 
 
 def vm_shell(script: str, vm: str = VM, workdir: str | None = None) -> int:
-    return subprocess.run(vm_command(script, vm, workdir), check=False).returncode
+    return subprocess.run(
+        vm_command(script, vm, workdir), cwd=vm_host.shell_host_cwd(), check=False
+    ).returncode
 
 
 def locked(script: str, background: bool | None = None, *, wait: bool = True) -> str:
@@ -424,17 +426,6 @@ def wsl_ensure(vm: str = VM) -> int:
     ).returncode
 
 
-def vm_size(vm: str) -> tuple[int, int] | None:
-    """The Lima machine `vm`'s CPUs and memory in GiB, or `None` if there is none."""
-    for line in output(
-        "limactl", "list", "--format", "{{.Name}} {{.CPUs}} {{.Memory}}"
-    ).splitlines():
-        fields = line.split()
-        if len(fields) == 3 and fields[0] == vm:
-            return int(fields[1]), int(fields[2]) >> 30
-    return None
-
-
 def vm_ensure(vm: str = VM, cpus: int = 4, memory_gib: int = 4) -> int:
     """Creates the machine `vm` with `cpus` CPUs and `memory_gib` GiB, or starts it. A stopped
     machine smaller than that grows first. A running one is left as it is, since stopping it
@@ -454,15 +445,21 @@ def vm_ensure(vm: str = VM, cpus: int = 4, memory_gib: int = 4) -> int:
         log(f"creating the {vm} VM (downloads Ubuntu once; a few minutes)")
         cmd = ["limactl", "start", f"--name={vm}", "--tty=false", *size]
         cmd += ["--containerd=none", f"--mount-only={checkout}"]
-        code = subprocess.run([*cmd, "template:ubuntu-lts"], check=False).returncode
+        code = subprocess.run(
+            [*cmd, "template:ubuntu-lts"], cwd=vm_host.LIMA_HOST_CWD, check=False
+        ).returncode
     elif status != "Running":
-        now = vm_size(vm)
+        now = vm_host.size(vm)
         if now is not None and (now[0] < cpus or now[1] < memory_gib):
             log(f"growing the {vm} VM from {now[0]} CPUs and {now[1]} GiB")
             edit = ["limactl", "edit", "--tty=false", *size, vm]
             if subprocess.run(edit, check=False).returncode != 0:
                 return 2
-        code = subprocess.run(["limactl", "start", "--tty=false", vm]).returncode
+        code = subprocess.run(
+            ["limactl", "start", "--tty=false", vm],
+            cwd=vm_host.LIMA_HOST_CWD,
+            check=False,
+        ).returncode
     else:
         code = 0
     if code == 0:
@@ -494,6 +491,7 @@ def run_count(
     if mounted:
         run = subprocess.run(
             vm_command(script),
+            cwd=vm_host.shell_host_cwd(),
             stdout=subprocess.PIPE if capture else None,
             text=True,
             check=False,

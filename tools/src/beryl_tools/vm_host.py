@@ -82,6 +82,16 @@ def live_users(vm: str) -> list[int]:
     return live
 
 
+# Lima's host agent and SSH multiplexer outlive the command that launches them. Start them
+# outside the checkout so Ignite can clean or recycle a leased tree after a benchmark.
+LIMA_HOST_CWD = "/"
+
+
+def shell_host_cwd() -> str | None:
+    """Host working directory for a guest shell. WSL keeps the caller's directory."""
+    return None if system.WINDOWS else LIMA_HOST_CWD
+
+
 def lima_home() -> Path:
     return Path(os.environ.get("LIMA_HOME") or Path.home() / ".lima")
 
@@ -224,6 +234,21 @@ def status(vm: str) -> str | None:
     return None
 
 
+def size(vm: str) -> tuple[int, int] | None:
+    """The Lima machine `vm`'s CPUs and memory in GiB, or `None` if there is none."""
+    listed = subprocess.run(
+        ["limactl", "list", "--format", "{{.Name}} {{.CPUs}} {{.Memory}}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    for line in listed.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 3 and fields[0] == vm:
+            return int(fields[1]), int(fields[2]) >> 30
+    return None
+
+
 def vm_mounts(vm: str) -> list[Path]:
     """The host directories Lima mounts in `vm`, from the `location:` lines of its
     lima.yaml; empty when the file cannot be read."""
@@ -298,6 +323,7 @@ def run_with_sources(
         archive.seek(0)
         return subprocess.run(
             command,
+            cwd=shell_host_cwd(),
             stdin=archive,
             stdout=subprocess.PIPE if capture else None,
             text=True,

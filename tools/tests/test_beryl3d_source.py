@@ -77,7 +77,9 @@ def test_a_file_list_longer_than_a_pipe_holds_is_sent(
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     limactl = bin_dir / "limactl"
-    limactl.write_text('#!/bin/sh\necho "read $(wc -c | tr -d " ")"\n')
+    limactl.write_text(
+        '#!/bin/sh\n[ "$PWD" = / ] || exit 1\necho "read $(wc -c | tr -d " ")"\n'
+    )
     limactl.chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setattr(source, "sources", lambda: names)

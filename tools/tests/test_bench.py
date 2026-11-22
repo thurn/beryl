@@ -396,6 +396,7 @@ def test_the_gate_counts_the_current_files_of_an_unmounted_worktree(
     def count(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
         if cmd[0] != "limactl":
             return original_run(cmd, **kwargs)
+        assert kwargs["cwd"] == "/"
         assert cmd[:5] == ["limactl", "shell", "--workdir", "/", bench.VM]
         script = cmd[-1]
         assert (
@@ -420,6 +421,31 @@ def test_the_gate_counts_the_current_files_of_an_unmounted_worktree(
     measure = tmp_path / "measure.json"
     assert bench.count_gate(argparse.Namespace(family=None, measure=str(measure))) == 0
     assert json.loads(measure.read_text())["measured"] == GATE.instructions
+
+
+@pytest.mark.parametrize("status", [None, "Stopped"])
+def test_lima_starts_outside_the_worktree(
+    status: str | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(bench.system, "WINDOWS", False)
+    monkeypatch.setattr(bench, "output", lambda *_cmd: "/usr/bin/limactl")
+    monkeypatch.setattr(bench.paths, "main_checkout", lambda: bench.paths.REPO)
+    monkeypatch.setattr(bench.vm_host, "join", lambda _vm: None)
+    monkeypatch.setattr(bench.vm_host, "status", lambda _vm: status)
+    monkeypatch.setattr(bench.vm_host, "prioritize", lambda _vm: None)
+    monkeypatch.setattr(bench.vm_host, "size", lambda _vm: (4, 4))
+    starts: list[list[str]] = []
+
+    def start(
+        cmd: list[str], *, cwd: str, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert cwd == "/"
+        starts.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(subprocess, "run", start)
+    assert bench.vm_ensure() == 0
+    assert [cmd[:2] for cmd in starts] == [["limactl", "start"]]
 
 
 def test_a_vm_that_stopped_mid_count_cannot_run(

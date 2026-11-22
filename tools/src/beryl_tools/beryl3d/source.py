@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 from .. import paths as repo_paths
+from .. import vm_host
 from . import paths, vm
 
 # What the builds read, relative to the checkout.
@@ -123,7 +124,11 @@ def stream_sources(
         stream_script(script),
     ]
     shell = subprocess.Popen(
-        command, stdin=tar.stdout, stdout=subprocess.PIPE, text=True
+        command,
+        cwd=vm_host.LIMA_HOST_CWD,
+        stdin=tar.stdout,
+        stdout=subprocess.PIPE,
+        text=True,
     )
     # Only the shell may hold the pipe's read end. If this process kept it open too, a script
     # that stopped before reading the whole stream would leave tar blocked on a full pipe, and
@@ -176,5 +181,8 @@ def send_pack(pack: Path | None = None) -> bool:
         "-c",
         f'mkdir -p "$HOME/{directory}"',
     ]
-    copy = ["limactl", "copy", str(pack), f"{vm.NAME}:{directory}/"]
-    return all(subprocess.run(cmd, check=False).returncode == 0 for cmd in (make, copy))
+    copy = ["limactl", "copy", str(pack.absolute()), f"{vm.NAME}:{directory}/"]
+    return all(
+        subprocess.run(cmd, cwd=vm_host.LIMA_HOST_CWD, check=False).returncode == 0
+        for cmd in (make, copy)
+    )
