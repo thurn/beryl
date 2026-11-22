@@ -39,46 +39,37 @@ fn write_effect_names(manifest: &Path, out_dir: &Path) {
         .expect("write effect names");
 }
 
-/// The folder of the fonts every Mac ships beside the system's own, which holds Times New Roman.
-const MAC_SUPPLEMENTAL_FONTS: &str = "/System/Library/Fonts/Supplemental";
-
-/// Writes the files that draw the web's serif face, `--font-serif` (`"Times New Roman", Times,
-/// serif`), as the constants `src/typography/fonts.rs` includes. When the build is for macOS and the
-/// building Mac has Times New Roman's regular, bold, italic and bold italic files, they are
-/// embedded from the system's font folder, so the client draws the face the web's CSS names.
-/// Elsewhere, such as on Windows, every face is the bundled Crimson Pro, the nearest serif the
-/// repository holds, which has no italic: its italics are drawn upright.
-fn write_serif(out_dir: &std::path::Path) {
-    let folder = std::path::Path::new(MAC_SUPPLEMENTAL_FONTS);
-    let faces = [
-        (
-            "REGULAR",
-            "SERIF_REGULAR",
-            folder.join("Times New Roman.ttf"),
+/// Writes the installed Times New Roman faces the web uses, or bundled Crimson Pro if the
+/// build host has no complete set. The client shapes and rasterizes from the same bytes.
+fn write_serif(out_dir: &Path) {
+    let (folder, files) = match std::env::var("CARGO_CFG_TARGET_OS").as_deref() {
+        Ok("macos") => (
+            Some(PathBuf::from("/System/Library/Fonts/Supplemental")),
+            [
+                "Times New Roman.ttf",
+                "Times New Roman Bold.ttf",
+                "Times New Roman Italic.ttf",
+                "Times New Roman Bold Italic.ttf",
+            ],
         ),
-        (
-            "BOLD",
-            "SERIF_BOLD_DATA",
-            folder.join("Times New Roman Bold.ttf"),
-        ),
-        (
-            "ITALIC",
-            "SERIF_ITALIC_DATA",
-            folder.join("Times New Roman Italic.ttf"),
-        ),
-        (
-            "BOLD_ITALIC",
-            "SERIF_BOLD_ITALIC_DATA",
-            folder.join("Times New Roman Bold Italic.ttf"),
-        ),
-    ];
-    for (_, _, path) in &faces {
-        println!("cargo:rerun-if-changed={}", path.display());
+        Ok("windows") => {
+            println!("cargo:rerun-if-env-changed=WINDIR");
+            (
+                std::env::var_os("WINDIR").map(|root| PathBuf::from(root).join("Fonts")),
+                ["times.ttf", "timesbd.ttf", "timesi.ttf", "timesbi.ttf"],
+            )
+        }
+        _ => (None, [""; 4]),
+    };
+    let paths = folder.map(|folder| files.map(|file| folder.join(file)));
+    if let Some(paths) = &paths {
+        for path in paths {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
     }
-    let for_mac = std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "macos");
-    let found = for_mac && faces.iter().all(|(_, _, path)| path.is_file());
+    let installed = paths.filter(|paths| paths.iter().all(|path| path.is_file()));
     let mut text = String::from("/// The family the serif face is drawn in.\n");
-    if found {
+    if installed.is_some() {
         text.push_str(
             "pub const SERIF_FAMILY: &str = \"Times New Roman\";\n\
              /// Whether the serif face has italic files of its own.\n\
@@ -91,8 +82,14 @@ fn write_serif(out_dir: &std::path::Path) {
              pub const SERIF_HAS_ITALIC: bool = false;\n",
         );
     }
-    for (name, data, path) in &faces {
-        if found {
+    let faces = [
+        ("REGULAR", "SERIF_REGULAR"),
+        ("BOLD", "SERIF_BOLD_DATA"),
+        ("ITALIC", "SERIF_ITALIC_DATA"),
+        ("BOLD_ITALIC", "SERIF_BOLD_ITALIC_DATA"),
+    ];
+    for (index, (name, data)) in faces.into_iter().enumerate() {
+        if let Some(path) = installed.as_ref().map(|paths| &paths[index]) {
             let path = path.display().to_string();
             writeln!(
                 text,

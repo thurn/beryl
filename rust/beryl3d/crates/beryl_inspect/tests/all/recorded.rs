@@ -9,7 +9,7 @@ use app_client::Input;
 use app_client::driver::{Duration, Moment, Page, TICK};
 use app_client::{Client, Config};
 use beryl_inspect::pages::{Recorded, check_recording, recording};
-use beryl_inspect::{recordings, stress};
+use beryl_inspect::{recordings, runner, stress};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::{Side, ZoneName};
 use beryl_protocol::script::Verb;
@@ -104,17 +104,10 @@ fn verbs_zones_sounds_as_its_steps_begin_and_end() {
 #[test]
 fn every_recorded_script_finds_what_its_steps_name() {
     let names = recordings::names().unwrap_or_else(|why| panic!("{why}"));
-    let threads = std::thread::available_parallelism().map_or(1, usize::from);
-    let failed: Vec<String> = std::thread::scope(|scope| {
-        let workers: Vec<_> = names
-            .chunks(names.len().div_ceil(threads).max(1))
-            .map(|chunk| scope.spawn(move || chunk.iter().filter_map(unplaced).collect::<Vec<_>>()))
-            .collect();
-        workers
-            .into_iter()
-            .flat_map(|worker| worker.join().expect("a worker finishes"))
-            .collect()
-    });
+    let failed: Vec<_> = runner::each(&names, unplaced)
+        .into_iter()
+        .flatten()
+        .collect();
     assert_eq!(
         failed,
         Vec::<String>::new(),

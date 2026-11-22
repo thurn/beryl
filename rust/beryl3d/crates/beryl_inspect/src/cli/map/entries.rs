@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use beryl_protocol::script::Verb;
 use game_hud::labels::GAME_LABELS;
@@ -31,21 +31,26 @@ pub(super) fn crate_path(path: &str) -> String {
 }
 
 fn relative(path: &Path) -> String {
-    path.strip_prefix(recordings::root())
-        .unwrap_or(path)
-        .display()
-        .to_string()
+    let path = path.strip_prefix(recordings::root()).unwrap_or(path);
+    let text = path.to_string_lossy();
+    if path.is_absolute() {
+        text.into_owned()
+    } else {
+        text.replace('\\', "/")
+    }
 }
 
 fn data_path(file: impl AsRef<Path>) -> String {
     relative(&tuning::directory().join(file))
 }
 
-fn source_path(source: &str) -> PathBuf {
-    if let Some(path) = source.strip_prefix("crates/") {
-        PathBuf::from(crate_path(path))
+fn source_path(source: &str) -> String {
+    // The compiler emits workspace-relative source paths with native separators.
+    let source = Path::new(source);
+    if let Ok(path) = source.strip_prefix("crates") {
+        crate_path(&relative(path))
     } else {
-        PathBuf::from(relative(Path::new(source)))
+        relative(source)
     }
 }
 
@@ -127,7 +132,7 @@ pub(super) fn features() -> Vec<Entry> {
                 .join(", ");
             Entry::new(
                 feature.id,
-                source_path(feature.source).display().to_string(),
+                source_path(feature.source),
                 if shortcuts.is_empty() {
                     feature.placement
                 } else {
@@ -272,7 +277,7 @@ pub(super) fn widgets() -> Vec<Entry> {
         .map(|widget| {
             Entry::new(
                 widget.word(),
-                source_path(widget.source()).display().to_string(),
+                source_path(widget.source()),
                 widget.role().word(),
             )
         })

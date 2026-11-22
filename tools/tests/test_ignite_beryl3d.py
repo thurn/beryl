@@ -61,13 +61,11 @@ def test_each_jsonl_family_is_listed_and_run_by_its_own_name() -> None:
 
 
 def test_the_programs_that_reread_their_grant_ask_for_one_that_grows() -> None:
-    """`record` (the end of the `b3d` build) and `b3d test` start more threads when the file
-    `IGNITE_CORES_FILE` names rises, so they ask for grants that grow; the others do not.
-    """
+    """The recorder, replay checks and Nextest's parallel replay tests follow growing grants."""
     loaded = manifest()
     assert loaded["product"]["b3d"].get("grows") is True
     growing = {n for n, f in loaded["family"].items() if f.get("grows")}
-    assert growing == {"b3d-interface", "b3d-every-tick"}
+    assert growing == {"b3d-interface", "b3d-every-tick", "b3d-test"}
 
 
 def test_the_validations_use_the_shared_build_and_source_checks_run_anywhere() -> None:
@@ -77,7 +75,7 @@ def test_the_validations_use_the_shared_build_and_source_checks_run_anywhere() -
     source_checks = {entry.check for entry in adapter.LISTS["b3d-source"]()}
     assert "b3d-source:data-names" in source_checks
     assert source_checks.isdisjoint({"b3d-source:b3d-data", "b3d-source:corpus"})
-    assert families["b3d-validation"]["platforms"] == ["macos"]
+    assert families["b3d-validation"]["platforms"] == ["macos", "windows"]
     assert families["b3d-validation"]["needs"] == ["python-env", "b3d"]
     assert {entry.check for entry in adapter.LISTS["b3d-validation"]()} == {
         "b3d-validation:tuning",
@@ -167,6 +165,7 @@ def test_interface_results_follow_each_tests_outcome() -> None:
             {"test": "b3d:b/you/1440x900", "outcome": "fail"},
         ],
         "faults": [{"test": "b3d:b/you/1440x900", "rule": "reachable"}],
+        "deferred": 0,
         "over_limits": ["a/you/1440x900 drew 900 frames, over `most_frames` 800"],
     }
     wanted = ["a/you/1440x900", "b/you/1440x900", "c/you/1440x900", "frame-limits"]
@@ -178,6 +177,21 @@ def test_interface_results_follow_each_tests_outcome() -> None:
         "b3d-interface:frame-limits": "fail",
     }
     assert "reachable" in results[1].message
+
+
+def test_frame_limits_need_a_complete_replay() -> None:
+    wanted = [adapter.FRAME_LIMITS]
+    family = "b3d-interface"
+    output: dict[str, object] = {
+        "results": [{"test": "b3d:a/you/1440x900", "outcome": "pass"}],
+        "deferred": 1,
+        "over_limits": [],
+    }
+    assert adapter.interface_results(output, family, wanted) == []
+    output["deferred"] = 0
+    assert adapter.interface_results(output, family, wanted) == [
+        adapter.Result("b3d-interface:frame-limits", "pass")
+    ]
 
 
 def test_a_run_of_some_tests_plays_only_their_common_prefix() -> None:

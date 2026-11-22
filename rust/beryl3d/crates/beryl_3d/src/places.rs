@@ -27,7 +27,7 @@ pub(crate) fn frames_dir() -> PathBuf {
 
 /// `$BERYL_CACHE/b3d/out`, where the pictures of `just b3d live png` go, as those of
 /// `just b3d png` do.
-#[cfg(all(feature = "tools", unix))]
+#[cfg(all(feature = "tools", any(unix, windows)))]
 pub(crate) fn out_dir() -> PathBuf {
     cache_dir().join("b3d").join("out")
 }

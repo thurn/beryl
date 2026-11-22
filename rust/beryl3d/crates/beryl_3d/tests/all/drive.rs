@@ -145,7 +145,8 @@ fn load_threads_are_in_the_class_they_were_given() {
     assert!(load::parse("4:urgent").is_err());
     for class in [Class::Utility, Class::Default, Class::Interactive] {
         let load = load::start(2, class);
-        let expected = cfg!(target_os = "macos").then_some(class);
+        let expected =
+            cfg!(any(target_vendor = "apple", windows, target_os = "android")).then_some(class);
         assert_eq!(load.classes, [expected, expected], "{class:?}");
     }
 }

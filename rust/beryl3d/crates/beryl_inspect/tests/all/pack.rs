@@ -261,6 +261,29 @@ fn a_changed_byte_in_the_fixture_definitions_changes_the_hash() {
 }
 
 #[test]
+fn the_every_tick_replay_reports_a_recordings_failure() {
+    let dir = scratch("broken-replay");
+    let pack = pack::ensure(&dir, "broken", &Counting::default()).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_b3d"))
+        .args(["test", "broken/you/1440x900", "--every-tick", "--json"])
+        .env(beryl_inspect::recordings::PACK_ENV, &pack)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        result["results"],
+        serde_json::json!([{"test": "b3d:broken/you/1440x900", "outcome": "fail"}]),
+    );
+    assert!(
+        result["faults"]
+            .to_string()
+            .contains("the game ended before its stop"),
+        "{result}"
+    );
+}
+
+#[test]
 fn the_corpus_and_an_on_demand_pack_are_separate() {
     use std::collections::BTreeSet;
 
@@ -272,7 +295,7 @@ fn the_corpus_and_an_on_demand_pack_are_separate() {
         .unwrap()
         .to_owned();
     let record = |arguments: &[&str]| {
-        let output = Command::new(debug.join("record"))
+        let output = Command::new(debug.join(format!("record{}", std::env::consts::EXE_SUFFIX)))
             .args(arguments)
             .output()
             .unwrap();
@@ -318,7 +341,7 @@ fn the_corpus_and_an_on_demand_pack_are_separate() {
             .collect::<Vec<_>>(),
         [(name, Seat::P0), (name, Seat::P1)]
     );
-    let output = Command::new(debug.join("b3d"))
+    let output = Command::new(env!("CARGO_BIN_EXE_b3d"))
         .args(["tree", name])
         .env(beryl_inspect::recordings::PACK_ENV, selected)
         .output()

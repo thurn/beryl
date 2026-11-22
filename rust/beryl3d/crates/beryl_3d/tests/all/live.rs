@@ -1,13 +1,17 @@
 //! The live socket: an app paused on the first frame of `pay-default` answers `tree` with
 //! the table, `do` with the result of the action, and `png` with the path of a picture.
 
-#![cfg(unix)]
+#![cfg(any(unix, windows))]
 
 use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(unix)]
 use std::os::unix::net::UnixStream;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use beryl_3d::app::{FIRST_SHOWN, LIVE_SOCKET};
+#[cfg(windows)]
+use socket2::{Domain, SockAddr, Socket as UnixStream, Type};
 
 const CARD: &str = "card \"Staff of the Storyteller\"";
 
@@ -21,10 +25,22 @@ impl Drop for App {
     }
 }
 
+#[cfg(unix)]
+fn connect(path: &Path) -> std::io::Result<UnixStream> {
+    UnixStream::connect(path)
+}
+
+#[cfg(windows)]
+fn connect(path: &Path) -> std::io::Result<UnixStream> {
+    let stream = UnixStream::new(Domain::UNIX, Type::STREAM, None)?;
+    stream.connect(&SockAddr::unix(path)?)?;
+    Ok(stream)
+}
+
 /// Sends `request` to the socket at `path` and reads the answer through the end of the
 /// connection.
 fn exchange(path: &str, request: &str) -> String {
-    let mut stream = UnixStream::connect(path).expect("the socket accepts");
+    let mut stream = connect(Path::new(path)).expect("the socket accepts");
     writeln!(stream, "{request}").expect("the request is sent");
     let mut answer = String::new();
     stream
@@ -44,7 +60,12 @@ fn ask(path: &str, request: &str) -> (String, String) {
 fn a_running_app_answers_tree_do_and_png() {
     // Short, because a socket's path may not be much over 100 bytes, and a temporary folder
     // on macOS is already half that.
-    let folder = std::path::PathBuf::from(format!("/tmp/b3d-live-{}", std::process::id()));
+    let temp = if cfg!(windows) {
+        std::env::temp_dir()
+    } else {
+        PathBuf::from("/tmp")
+    };
+    let folder = temp.join(format!("b3d-live-{}", std::process::id()));
     std::fs::create_dir_all(&folder).expect("a folder for the socket and pictures");
     let mut child = Command::new(env!("CARGO_BIN_EXE_beryl3d"))
         .args(["--fixture", "pay-default", "--pause-at", "0ms"])
@@ -65,10 +86,7 @@ fn a_running_app_answers_tree_do_and_png() {
                 .map(str::to_owned)
         })
         .expect("the app names its socket");
-    assert!(
-        path.starts_with(folder.to_str().expect("a UTF-8 path")),
-        "{path}"
-    );
+    assert_eq!(Path::new(&path).parent(), Some(folder.as_path()));
 
     // The socket opens before the renderer is ready. The first frame shows the fixture's
     // initial board, even if the host misses ticks while starting up.

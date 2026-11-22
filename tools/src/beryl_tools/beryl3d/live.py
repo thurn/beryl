@@ -10,13 +10,15 @@ contains no such path.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import os
 import re
+import select
 import socket
 import sys
 import tempfile
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
 
 from .. import deps, system
 
@@ -33,9 +35,15 @@ SOCKET_NAME: re.Pattern[bytes] = re.compile(rb"beryl3d-.{0,16}?\.sock", re.DOTAL
 
 
 def socket_dir() -> Path:
+    override = os.environ.get("TMPDIR")
     if system.WINDOWS:
-        return Path(tempfile.gettempdir())
-    return Path(os.environ.get("TMPDIR") or "/tmp")
+        return Path(
+            override
+            or os.environ.get("TMP")
+            or os.environ.get("TEMP")
+            or tempfile.gettempdir()
+        )
+    return Path(override or "/tmp")
 
 
 def sockets(
@@ -83,15 +91,53 @@ def choose(
     return next(iter(found.values()))
 
 
+# The Windows Winsock family number. The project's Windows Python can send and receive
+# through this socket but does not expose AF_UNIX or marshal its path addresses.
+WINDOWS_AF_UNIX = 1
+
+
+def windows_address(
+    connection: socket.socket, operation: Literal["connect", "bind"], path: Path
+) -> int:
+    """Call Winsock with a Windows sockaddr_un and return its error code, or zero."""
+
+    class Address(ctypes.Structure):
+        _fields_ = [("family", ctypes.c_ushort), ("path", ctypes.c_char * 108)]
+
+    encoded = os.fsencode(path)
+    if len(encoded) >= 108 or b"\0" in encoded:
+        raise OSError(f"invalid Unix socket path: {path}")
+    address = Address(WINDOWS_AF_UNIX, encoded)
+    winsock = ctypes.windll.ws2_32  # pyre-ignore[16]: Windows only
+    call = getattr(winsock, operation)
+    size = ctypes.sizeof(ctypes.c_ushort) + len(encoded) + 1
+    if call(ctypes.c_size_t(connection.fileno()), ctypes.byref(address), size) == 0:
+        return 0
+    return int(winsock.WSAGetLastError())
+
+
+def connect(connection: socket.socket, path: Path, limit: float) -> None:
+    if not system.WINDOWS:
+        connection.connect(str(path))
+        return
+    error = windows_address(connection, "connect", path)
+    if error == 10035:  # WSAEWOULDBLOCK: the nonblocking connect is pending.
+        _, ready, failed = select.select([], [connection], [connection], limit)
+        if not ready and not failed:
+            raise TimeoutError(f"connect: {path}")
+        error = connection.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+    if error:
+        raise OSError(error, f"connect: {path}")
+
+
 def request(path: Path, line: str, limit: float = LIMIT_S) -> tuple[bool, str]:
     """Sends `line` to the socket at `path`. Gives whether the app said `ok` and the rest of
     its answer. Raises OSError, including TimeoutError, when the app does not answer in time.
     """
-    if not hasattr(socket, "AF_UNIX"):
-        raise OSError("this Python build cannot connect to the app's Unix socket")
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+    family = WINDOWS_AF_UNIX if system.WINDOWS else socket.AF_UNIX
+    with socket.socket(family, socket.SOCK_STREAM) as connection:
         connection.settimeout(limit)
-        connection.connect(str(path))
+        connect(connection, path, limit)
         return exchange(connection, line)
 
 

@@ -1,5 +1,5 @@
 //! The web's serif face, `--font-serif` (`"Times New Roman", Times, serif`): Times New Roman
-//! where the build found the Mac's copy, and Crimson Pro in its place elsewhere.
+//! where the build found the system's copy, and Crimson Pro in its place elsewhere.
 
 use kit_text::text::fonts::{ALL, Font};
 use kit_text::text::{Text, TypeStyle};
@@ -17,10 +17,29 @@ fn serif(weight: u16) -> TypeStyle {
 }
 
 #[test]
-fn the_serif_face_is_times_new_roman_on_a_mac() {
-    let on_mac = cfg!(target_os = "macos")
-        && std::path::Path::new("/System/Library/Fonts/Supplemental/Times New Roman.ttf").is_file();
-    let expected = if on_mac {
+fn the_serif_face_uses_the_installed_times_new_roman() {
+    let times = match std::env::consts::OS {
+        "macos" => [
+            "Times New Roman.ttf",
+            "Times New Roman Bold.ttf",
+            "Times New Roman Italic.ttf",
+            "Times New Roman Bold Italic.ttf",
+        ]
+        .iter()
+        .all(|file| {
+            std::path::Path::new("/System/Library/Fonts/Supplemental")
+                .join(file)
+                .is_file()
+        }),
+        "windows" => std::env::var_os("WINDIR").is_some_and(|root| {
+            let folder = std::path::PathBuf::from(root).join("Fonts");
+            ["times.ttf", "timesbd.ttf", "timesi.ttf", "timesbi.ttf"]
+                .iter()
+                .all(|file| folder.join(file).is_file())
+        }),
+        _ => false,
+    };
+    let expected = if times {
         "Times New Roman"
     } else {
         "Crimson Pro"
@@ -31,7 +50,7 @@ fn the_serif_face_is_times_new_roman_on_a_mac() {
         &ALL[usize::from(Font::Serif.face(400, false))],
         &ALL[usize::from(Font::Serif.face(700, false))],
     );
-    assert_eq!(std::ptr::eq(regular.data, bold.data), !on_mac);
+    assert_eq!(std::ptr::eq(regular.data, bold.data), !times);
     assert_eq!(Font::Serif.face(600, false), Font::Serif.face(700, false));
     assert_eq!(Font::Serif.face(500, false), Font::Serif as u8);
 }
@@ -55,11 +74,10 @@ fn a_serif_weight_draws_from_the_file_its_glyph_keys_name() {
 }
 
 #[test]
-fn a_serif_italic_draws_from_an_italic_file_on_a_mac() {
+fn a_serif_italic_draws_from_its_own_file_when_available() {
     // The web sets its captions in italic Times New Roman, which is narrower than upright (much
-    // narrower at 400, a little at 700). On a Mac each italic draws from its own file, and
-    // parley shapes it with that file, so the italic is narrower; where the serif face is Crimson Pro, which has no italic, an italic
-    // draws from the upright file and is shaped as wide.
+    // narrower at 400, a little at 700). Each Times New Roman italic shapes and draws from
+    // its own file. With Crimson Pro both styles use the same file and width.
     let italic = |weight| TypeStyle {
         italic: true,
         ..serif(weight)
@@ -72,7 +90,17 @@ fn a_serif_italic_draws_from_an_italic_file_on_a_mac() {
         );
         assert_eq!(upright != slanted, times, "weight {weight}");
         if times {
-            assert!(ALL[usize::from(slanted)].file.ends_with("Italic.ttf"));
+            let file = ALL[usize::from(slanted)].file;
+            let expected = if cfg!(windows) {
+                if weight == 700 {
+                    "timesbi.ttf"
+                } else {
+                    "timesi.ttf"
+                }
+            } else {
+                "Italic.ttf"
+            };
+            assert!(file.ends_with(expected), "{file}");
         }
         let mut text = Text::new();
         let words = "Serif \u{b7} titles and actions";

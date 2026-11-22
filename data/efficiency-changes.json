@@ -855,5 +855,10 @@
     "label": "Bug-report triage assigns one lead to investigate a likely shared cause and gives that worker the original cases to verify.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D replay tests follow Ignite's core grant, and Windows limits concurrent heavy replays and renderer readbacks to fit verifier memory.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

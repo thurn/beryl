@@ -5,9 +5,8 @@
 //! Cinzel, Crimson Pro and Open Sans are variable fonts committed in `fonts/`, from which
 //! parley selects any weight; each file's licence lies beside it. The web interface's serif
 //! face, `--font-serif`, is Times New Roman, which no licence lets the repository hold. The
-//! build script embeds the copy every Mac has among its supplemental fonts when it
-//! builds for macOS, and Crimson Pro in its place where that copy is missing, such as on
-//! Windows ([`Font::Serif`]).
+//! build script embeds the installed copy on macOS and Windows, with Crimson Pro as
+//! the fallback ([`Font::Serif`]).
 
 include!(concat!(env!("OUT_DIR"), "/serif.rs"));
 
@@ -34,7 +33,7 @@ pub enum Font {
     /// The font for inline symbols.
     Symbols,
     /// The web's serif face (`--font-serif`), for titles, buttons and captions: Times New
-    /// Roman on macOS, or Crimson Pro where the build found no Times New Roman. Times New Roman
+    /// Roman where the build finds it, or Crimson Pro otherwise. Times New Roman
     /// is not variable, so it has a regular, a bold, an italic and a bold italic file, and
     /// [`Font::face`] picks one.
     Serif,

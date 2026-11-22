@@ -1,6 +1,8 @@
 """`just b3d live`: which socket a request goes to, and how it is sent and answered."""
 
 import argparse
+import ctypes
+import select
 import socket
 import tempfile
 import threading
@@ -56,29 +58,37 @@ def test_a_socket_whose_app_has_ended_is_removed_and_not_chosen(
 
 
 def ask(path: Path, line: str, answer: bytes, asked: list[str]) -> tuple[bool, str]:
-    # The app uses Unix sockets. Windows Python exercises the same framing
-    # over a local TCP stream since its socket module has no AF_UNIX.
-    family = socket.AF_INET if system.WINDOWS else socket.AF_UNIX
+    family: int = live.WINDOWS_AF_UNIX if system.WINDOWS else socket.AF_UNIX
     listener: socket.socket = socket.socket(family, socket.SOCK_STREAM)
     with listener:
         listener.settimeout(live.LIMIT_S)
-        listener.bind(("127.0.0.1", 0) if system.WINDOWS else str(path))
+        if system.WINDOWS:
+            error = live.windows_address(listener, "bind", path)
+            assert error == 0, error
+        else:
+            listener.bind(str(path))
         listener.listen(1)
 
         def run() -> None:
-            connection, _ = listener.accept()
+            if system.WINDOWS:
+                # Winsock can omit the peer address, which Python cannot decode for AF_UNIX.
+                ready, _, _ = select.select([listener], [], [], live.LIMIT_S)
+                assert ready, "the client did not connect"
+                accept = ctypes.windll.ws2_32.accept  # pyre-ignore[16]: Windows only
+                accept.restype = ctypes.c_size_t
+                handle = accept(ctypes.c_size_t(listener.fileno()), None, None)
+                assert handle != ctypes.c_size_t(-1).value
+                connection = socket.socket(family, socket.SOCK_STREAM, fileno=handle)
+            else:
+                connection, _ = listener.accept()
             with connection, connection.makefile() as incoming:
+                connection.settimeout(live.LIMIT_S)
                 asked.append(incoming.readline().strip())
                 connection.sendall(answer)
 
         thread = threading.Thread(target=run)
         thread.start()
         try:
-            if system.WINDOWS:
-                with socket.create_connection(
-                    listener.getsockname(), timeout=live.LIMIT_S
-                ) as connection:
-                    return live.exchange(connection, line)
             return live.request(path, line)
         finally:
             thread.join()

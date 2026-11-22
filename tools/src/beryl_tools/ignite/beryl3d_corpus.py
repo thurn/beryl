@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from ..beryl3d import corpus
+from ..system import exe
 from . import Listed, Result, listed, report
 from .rust import asked
 
@@ -32,7 +33,9 @@ def main(arguments: list[str], debug: Path) -> int:
             failed = False
             try:
                 parts = corpus.parts(asked(FAMILY, checks))
-                for part, sweep in corpus.sweep(parts, debug / "b3d", debug / "record"):
+                for part, sweep in corpus.sweep(
+                    parts, exe(debug / "b3d"), exe(debug / "record")
+                ):
                     message = sweep.message()
                     report(
                         [

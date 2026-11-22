@@ -26,7 +26,7 @@ use crate::bugs::Bugs;
 use crate::fixture::Fixture;
 use crate::frame_log::{FrameLog, Run, Summary};
 use crate::options::{Options, Window};
-#[cfg(all(feature = "tools", unix))]
+#[cfg(all(feature = "tools", any(unix, windows)))]
 use crate::places::out_dir;
 use crate::places::{checkout, frames_dir, now_ms};
 use crate::session::{self, Commands, Live};
@@ -100,7 +100,7 @@ struct AppFeed {
     /// moves into the frame log.
     tier: crate::tier::Pending,
     /// The socket `just b3d live` speaks to, in a build that has one.
-    #[cfg(all(feature = "tools", unix))]
+    #[cfg(all(feature = "tools", any(unix, windows)))]
     live: Option<crate::live::Live>,
 }
 
@@ -128,7 +128,7 @@ impl AppFeed {
     /// live socket in a build that has one.
     fn attach(&mut self, options: &Options, inbox: Inbox) -> Result<(), String> {
         self.bugs.attach(inbox.clone());
-        #[cfg(all(feature = "tools", unix))]
+        #[cfg(all(feature = "tools", any(unix, windows)))]
         {
             self.live = start_live(inbox.clone());
         }
@@ -233,7 +233,7 @@ impl Feed for AppFeed {
                 log.sound(sound.id);
             }
         }
-        #[cfg(all(feature = "tools", unix))]
+        #[cfg(all(feature = "tools", any(unix, windows)))]
         if let Some(live) = &mut self.live {
             live.trees(client, ticked.clock);
         }
@@ -339,7 +339,7 @@ impl Feed for AppFeed {
     }
 
     fn wake(&self) -> Wake {
-        #[cfg(all(feature = "tools", unix))]
+        #[cfg(all(feature = "tools", any(unix, windows)))]
         if self.live.as_ref().is_some_and(crate::live::Live::has_work) {
             return Wake::Now;
         }
@@ -350,24 +350,24 @@ impl Feed for AppFeed {
     }
 
     fn capture_wanted(&mut self) -> bool {
-        #[cfg(all(feature = "tools", unix))]
+        #[cfg(all(feature = "tools", any(unix, windows)))]
         let live = (self.live.as_mut()).is_some_and(crate::live::Live::picture_wanted);
-        #[cfg(not(all(feature = "tools", unix)))]
+        #[cfg(not(all(feature = "tools", any(unix, windows))))]
         let live = false;
         self.bugs.capture_wanted(live)
     }
 
     fn captured(&mut self, picture: beryl_render::Picture) {
         let picture = self.bugs.captured(picture);
-        #[cfg(all(feature = "tools", unix))]
+        #[cfg(all(feature = "tools", any(unix, windows)))]
         if let (Some(live), Some(picture)) = (&mut self.live, picture) {
             live.picture(picture);
         }
-        #[cfg(not(all(feature = "tools", unix)))]
+        #[cfg(not(all(feature = "tools", any(unix, windows))))]
         drop(picture);
     }
 
-    #[cfg(all(feature = "tools", unix))]
+    #[cfg(all(feature = "tools", any(unix, windows)))]
     fn scripts(&mut self) -> Vec<(u64, beryl_host::Drive)> {
         self.live
             .as_mut()
@@ -375,7 +375,7 @@ impl Feed for AppFeed {
             .unwrap_or_default()
     }
 
-    #[cfg(all(feature = "tools", unix))]
+    #[cfg(all(feature = "tools", any(unix, windows)))]
     fn script_done(&mut self, id: u64, result: Result<(), String>) {
         if let Some(live) = &mut self.live {
             live.script_done(id, result);
@@ -383,7 +383,7 @@ impl Feed for AppFeed {
     }
 
     fn ended(&self) -> bool {
-        #[cfg(all(feature = "tools", unix))]
+        #[cfg(all(feature = "tools", any(unix, windows)))]
         if self.live.as_ref().is_some_and(crate::live::Live::quit) {
             return true;
         }
@@ -489,7 +489,7 @@ fn surface_app_feed(
         bugs,
         clock: 0,
         tier: Rc::default(),
-        #[cfg(all(feature = "tools", unix))]
+        #[cfg(all(feature = "tools", any(unix, windows)))]
         live: None,
     })
 }
@@ -540,7 +540,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         bugs: Bugs::for_installed_app(),
         clock: 0,
         tier,
-        #[cfg(all(feature = "tools", unix))]
+        #[cfg(all(feature = "tools", any(unix, windows)))]
         live: None,
     };
     let mut client = Client::new(data, Config::LARGEST);
@@ -774,7 +774,7 @@ fn pause_at(options: &Options) -> Result<Option<u64>, String> {
 
 /// Opens the live socket for this process, and says where it is. A socket that cannot be made
 /// leaves the app running without one.
-#[cfg(all(feature = "tools", unix))]
+#[cfg(all(feature = "tools", any(unix, windows)))]
 fn start_live(inbox: Inbox) -> Option<crate::live::Live> {
     let pid = std::process::id();
     let dir = crate::live::socket_dir();

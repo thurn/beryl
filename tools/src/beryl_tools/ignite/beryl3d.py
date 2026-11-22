@@ -1,22 +1,9 @@
-"""The adapter for Beryl 3D's families in `ignite/checks/beryl3d.toml`, and the command that makes
-its `b3d` build product.
+"""Lists and runs the Beryl 3D families in ignite/checks/beryl3d.toml.
 
-`python -m beryl_tools.ignite.beryl3d <family> list` prints the family's checks, and
-`python -m beryl_tools.ignite.beryl3d <family> run <check>...` runs those named and reports one
-result per check (`beryl_tools.ignite.report`). `build` makes the `b3d` product: the build that
-the tests, `record` and `gate` share, then the recordings pack.
-
-The programs run are the ones the product built, in rust/beryl3d/target/debug, never through
-`just b3d`, whose commands build again and take CPU tokens from the pool Ignite replaces. Ignite
-gives each command its grant in `IGNITE_CORES` (and `IGNITE_CORES_FILE` when it changes while the
-command runs), which `beryl_inspect::runner::threads` and `granted` read.
-
-The interface tests, the gate and timeline parity all read the recordings pack, so every check
-of theirs reads what a recording reads: the crates the recorder and `b3d` are built from, which
-the manifest names (a test holds that list to [`main_crates`]), and the card files its own
-recording plays ([`recording_cards`]), which each check lists as inputs of its own. A card file
-that a recording does not play is not among that recording's checks' inputs, so editing it
-reruns none of them.
+The b3d product builds the workspace in the test profile and makes its recordings pack.
+Checks run the binaries it built. The recorder and the inspector read the core grant from
+IGNITE_CORES and IGNITE_CORES_FILE. Each replay check hashes the card files its recording
+plays, alongside the shared inputs declared in the manifest.
 """
 
 from __future__ import annotations
@@ -33,6 +20,7 @@ from pathlib import Path
 from .. import card_files, card_store, paths, set_groups
 from ..beryl3d import gate, pack, purity, timeline
 from ..beryl3d import paths as b3d_paths
+from ..system import WINDOWS, exe
 from . import Listed, Result, beryl3d_validation, listed, report
 from .rust import asked, parse_packages, unformatted
 from .rust import clippy_run as run_clippy
@@ -49,13 +37,19 @@ SHARED_BUILD: list[str] = [
     *["--tests", "--bins", "--examples"],
 ]
 
-# Clippy's own target directory (`cli.CLIPPY_TARGET` says why), and clippy with every lint
-# capped at a warning, as the Rust family runs it (`rust.CLIPPY` says why): every unit then
-# succeeds, cargo keeps its result, and a run after an unchanged one compiles nothing.
+# Keep Clippy out of the shared build directory and cap lints so Cargo caches diagnostics.
+# The Windows target sets its own rustflags in rust/.cargo/config.toml.
+CLIPPY_FLAGS = (
+    "target.x86_64-pc-windows-msvc.rustflags" if WINDOWS else "build.rustflags"
+)
 CLIPPY: list[str] = [
     *["cargo", "clippy", "--locked", "--workspace", "--all-targets"],
-    *["--target-dir", "target/clippy"],
-    *["--config", 'build.rustflags=["--cap-lints=warn"]'],
+    *[
+        "--target-dir",
+        "target/clippy",
+        "--config",
+        f'{CLIPPY_FLAGS}=["--cap-lints=warn"]',
+    ],
 ]
 
 # The crates the recordings and the programs that read them are built from: `record`, and `b3d`
@@ -74,7 +68,12 @@ def run_out(
     command: list[str], cwd: Path = WORKSPACE
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        command, cwd=cwd, capture_output=True, text=True, errors="replace", check=False
+        command,
+        cwd=cwd,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
     )
 
 
@@ -88,7 +87,7 @@ def build(to_stderr: bool = False) -> int:
     if built.returncode != 0:
         return built.returncode
     return subprocess.run(
-        [str(DEBUG / "record")], cwd=WORKSPACE, stdout=out, check=False
+        [str(exe(DEBUG / "record"))], cwd=WORKSPACE, stdout=out, check=False
     ).returncode
 
 
@@ -223,7 +222,7 @@ def recording_cards(
 
 def pack_path() -> Path:
     """The present recordings pack, whose path `record` prints last."""
-    done = run_out([str(DEBUG / "record")])
+    done = run_out([str(exe(DEBUG / "record"))])
     if done.returncode != 0:
         raise SystemExit(done.stderr.strip() or f"record: exit {done.returncode}")
     return Path(done.stdout.strip().splitlines()[-1])
@@ -245,7 +244,9 @@ def cards_by_recording() -> dict[str, list[str]]:
     kept = b3d_paths.cache() / f"ignite-cards-{path.name}.json"
     if kept.exists():
         return json.loads(kept.read_text())
-    defined = json.loads((paths.REPO / "ui" / "fixtures.json").read_text())["fixtures"]
+    defined = json.loads(
+        (paths.REPO / "ui" / "fixtures.json").read_text(encoding="utf-8")
+    )["fixtures"]
     decks = {d.name: d.read_text(encoding="utf-8") for d in sorted(DECKS.glob("*.txt"))}
     decks["wu-control"] = WU_CONTROL.read_text(encoding="utf-8")
     names = card_names()
@@ -262,7 +263,7 @@ def cards_by_recording() -> dict[str, list[str]]:
 
 
 def b3d_text(arguments: list[str]) -> str:
-    done = run_out([str(DEBUG / "b3d"), *arguments])
+    done = run_out([str(exe(DEBUG / "b3d")), *arguments])
     if done.returncode != 0:
         raise SystemExit(
             done.stderr.strip() or f"b3d {arguments[0]}: exit {done.returncode}"
@@ -276,7 +277,7 @@ def b3d_text(arguments: list[str]) -> str:
 def test_names(*switches: str) -> list[str]:
     """Every interface test's name, `<recording>/<seat>/<window>` (`b3d test --list` prints each
     with a `b3d:` prefix)."""
-    done = run_out([str(DEBUG / "b3d"), "test", "--list", *switches])
+    done = run_out([str(exe(DEBUG / "b3d")), "test", "--list", *switches])
     if done.returncode != 0:
         raise SystemExit(
             done.stderr.strip() or f"b3d test --list: exit {done.returncode}"
@@ -343,8 +344,15 @@ def interface_results(
     for name in wanted:
         check = f"{family}:{name}"
         if name == FRAME_LIMITS:
-            over = [str(o) for o in rows("over_limits")]
-            results.append(Result(check, "fail" if over else "pass", "\n".join(over)))
+            if (
+                outcomes
+                and output.get("deferred") == 0
+                and isinstance(output.get("over_limits"), list)
+            ):
+                over = [str(o) for o in rows("over_limits")]
+                results.append(
+                    Result(check, "fail" if over else "pass", "\n".join(over))
+                )
         elif name in outcomes:
             text = "\n".join(messages.get(name, []))
             if outcomes[name] == "fail" and not text:
@@ -375,7 +383,7 @@ def interface_run(family: str, checks: list[str], switches: list[str]) -> list[R
     prefixes = [""] if FRAME_LIMITS in wanted else prefix_groups(tests)
     results: list[Result] = []
     for prefix in prefixes:
-        command = [str(DEBUG / "b3d"), "test", "--json", *switches]
+        command = [str(exe(DEBUG / "b3d")), "test", "--json", *switches]
         command[2:2] = [prefix] if prefix else []
         done = run_out(command)
         try:
@@ -391,7 +399,7 @@ def interface_run(family: str, checks: list[str], switches: list[str]) -> list[R
 
 
 def gate_boards() -> list[str]:
-    done = run_out([str(DEBUG / "gate"), "--list"])
+    done = run_out([str(exe(DEBUG / "gate")), "--list"])
     if done.returncode != 0:
         raise SystemExit(done.stderr.strip())
     return done.stdout.split()
@@ -431,7 +439,7 @@ def gate_run(checks: list[str]) -> list[Result]:
     wanted = asked("b3d-gate", checks)
     if not wanted:
         return []
-    command = [str(DEBUG / "gate")]
+    command = [str(exe(DEBUG / "gate"))]
     for name in wanted:
         command += ["--board", name]
     done = run_out(command)
@@ -465,7 +473,9 @@ def gate_run(checks: list[str]) -> list[Result]:
 
 
 def fixtures() -> list[str]:
-    defined = json.loads((paths.REPO / "ui" / "fixtures.json").read_text())
+    defined = json.loads(
+        (paths.REPO / "ui" / "fixtures.json").read_text(encoding="utf-8")
+    )
     return [str(f["name"]) for f in defined["fixtures"]]
 
 
@@ -648,11 +658,7 @@ def source_run(checks: list[str]) -> list[Result]:
     return results
 
 
-# The families whose `list` runs `record` or reads the recordings pack, which the `b3d` product
-# makes. An Ignite daemon builds a family's `needs` before its `list`, but daemons older than
-# that ran `list` first, and in a freshly leased tree it failed because
-# rust/beryl3d/target/debug/record did not exist. So `main` makes the product first when
-# `record` is missing.
+# A manual listing or an older daemon may list before building its product.
 LIST_NEEDS_BUILD: frozenset[str] = frozenset(
     {
         "b3d-interface",
@@ -762,14 +768,14 @@ def main(args: list[str]) -> int:
 
             return corpus_main(rest, DEBUG)
         case [family, "list"] if family in LISTS:
-            if family in LIST_NEEDS_BUILD and not (DEBUG / "record").is_file():
+            if family in LIST_NEEDS_BUILD and not exe(DEBUG / "record").is_file():
                 built = build(to_stderr=True)
                 if built != 0:
                     return built
             listed(LISTS[family]())
             return 0
         case [("b3d-web-drift" | "b3d-timeline-drift") as family, "next"]:
-            if not (DEBUG / "record").is_file():
+            if not exe(DEBUG / "record").is_file():
                 built = build(to_stderr=True)
                 if built != 0:
                     return built

@@ -197,6 +197,22 @@ fn draw_lights(name: &str, side: Side, times: &BTreeSet<u64>) -> (Vec<String>, V
     (kinds, faults)
 }
 
+/// Windows runs the replay scan and renderer readbacks with up to three workers. At ten
+/// workers on the shared verifier, memory pressure drove the same check past its hang limit.
+fn each_replay<T: Sync, R: Send>(items: &[T], check: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    if !cfg!(windows) {
+        return runner::each(items, check);
+    }
+    let per_worker = items.len().div_ceil(3).max(1);
+    let groups: Vec<_> = items.chunks(per_worker).collect();
+    runner::each(&groups, |group| {
+        group.iter().map(&check).collect::<Vec<_>>()
+    })
+    .into_iter()
+    .flatten()
+    .collect()
+}
+
 #[test]
 fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn() {
     let tests: Vec<(String, Side)> = recordings::names()
@@ -213,7 +229,7 @@ fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn() {
         })
         .collect();
     let start = std::time::Instant::now();
-    let moments = runner::each(&tests, |(name, side)| first_lights(name, *side));
+    let moments = each_replay(&tests, |(name, side)| first_lights(name, *side));
     eprintln!(
         "scanned {} recordings in {:?}",
         tests.len(),
@@ -231,7 +247,7 @@ fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn() {
         .map(|((name, side), times)| (name.as_str(), *side, times))
         .filter(|(_, _, times)| !times.is_empty())
         .collect();
-    let found = runner::each(&lit_tests, |(name, side, times)| {
+    let found = each_replay(&lit_tests, |(name, side, times)| {
         draw_lights(name, *side, times)
     });
     let mut drawn: BTreeMap<String, usize> = BTreeMap::new();

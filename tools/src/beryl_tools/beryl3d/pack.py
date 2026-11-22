@@ -32,7 +32,7 @@ def record(binary: Path, *selection: str) -> Path:
         [str(binary), *selection],
         cwd=paths.WORKSPACE,
         stdout=subprocess.PIPE,
-        text=True,
+        encoding="utf-8",
         check=False,
     )
     if done.returncode:

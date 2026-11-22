@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 from ..beryl3d import pack, paths
+from ..system import exe
 from . import Listed, Result
 from .rust import asked
 
@@ -22,11 +23,11 @@ def checks() -> list[Listed]:
 
 def tuning_problems(debug: Path) -> list[str]:
     done = subprocess.run(
-        [str(debug / "b3d"), "data"],
+        [str(exe(debug / "b3d")), "data"],
         cwd=paths.WORKSPACE,
         env={**os.environ, "BERYL3D_DATA": str(paths.DATA)},
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         errors="replace",
         check=False,
     )
@@ -43,7 +44,9 @@ def run(debug: Path, requested: list[str]) -> list[Result]:
             if name == "tuning":
                 found = tuning_problems(debug)
             elif name == "corpus":
-                found = pack.check_corpus(paths.DATA, pack.record(debug / "record"))
+                found = pack.check_corpus(
+                    paths.DATA, pack.record(exe(debug / "record"))
+                )
             else:
                 continue
         except (OSError, ValueError, subprocess.CalledProcessError) as error:

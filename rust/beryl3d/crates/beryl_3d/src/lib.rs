@@ -9,7 +9,7 @@ mod data;
 pub mod ffi;
 pub mod fixture;
 pub mod frame_log;
-#[cfg(all(feature = "tools", unix))]
+#[cfg(all(feature = "tools", any(unix, windows)))]
 pub mod live;
 pub mod load;
 pub mod options;

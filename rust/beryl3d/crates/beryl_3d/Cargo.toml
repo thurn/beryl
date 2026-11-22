@@ -23,7 +23,7 @@ path = "src/main.rs"
 # instead of playing a game, `--pause-at`, `--drive`, `--load`, `--slow-gpu`, and `--agent`
 # with its `--opponent`, `--seed` and `--search-class`. A release build leaves it off, and with it the
 # pack.
-tools = ["dep:beryl_inspect", "beryl_host/drive", "beryl_host/headless"]
+tools = ["dep:beryl_inspect", "beryl_host/drive", "beryl_host/headless", "dep:socket2"]
 
 [dependencies]
 app_client.workspace = true
@@ -78,6 +78,10 @@ rodio = { version = "0.23.0", default-features = false, features = ["playback", 
 [target.'cfg(target_os = "android")'.dependencies]
 jni-sys = "0.3.1"
 ndk-sys = "0.6.0"
+
+[target.'cfg(windows)'.dependencies]
+# The debug app's local Unix socket, which the Windows Rust standard library does not expose.
+socket2 = { version = "0.6.5", optional = true }
 
 [build-dependencies]
 # Compiles tests/c/header.c, the C program that tests include/beryl3d.h, for the test targets

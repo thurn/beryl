@@ -9,16 +9,16 @@
 # object per check, with the inputs of its own, and its `run` appends one JSON line per check to
 # $IGNITE_RESULTS.
 #
-# Beryl 3D is built and tested on macOS only, so every family that builds it needs a pass there.
-# The pure source checks are `any`.
+# The native build and replay checks run on macOS and Windows.
+# The pure source checks run on any platform.
 #
-# Programs that spread their work over threads (`record`, `b3d test`) size them by the grant:
+# Programs that spread their work over threads (the recorder and replay checks) size them by the grant:
 # `IGNITE_CORES` when they start, and the file `IGNITE_CORES_FILE` names while they run
 # (`runner::threads` and `runner::granted` in rust/beryl3d/crates/beryl_inspect/src/runner.rs).
 # A grant fixed when such a program started made it run on one or two threads after the cores
 # freed up: `b3d test` took 150 s instead of 11-13 s. So the `b3d` product, whose build ends with
 # `record`, and the families that run `b3d test` say `grows = true`, and the scheduler gives
-# them cores as they free up.
+# them cores as they free up. Nextest also passes the growing grant to its replay tests.
 #
 # Inputs outside Beryl 3D's own crates. Beryl 3D's crates depend on main-workspace crates by
 # path, which `crate:` does not follow out of its own workspace, so the families name those
@@ -38,9 +38,12 @@
 # $BERYL_CACHE/b3d, named for a hash of what a recording reads, and is built only when missing.
 [product.b3d]
 compiles = true
-build = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d build"
+# Nextest uses the same Cargo configuration as the shared build from this directory.
+dir = "rust/beryl3d"
+build = "uv run --quiet --project ../../tools python -m beryl_tools.ignite.beryl3d build"
 grows = true
 inputs = [
+  "rust/.cargo/config.toml",
   "rust/beryl3d/**",
   "rust/crates/**",
   "rust/cards/**",
@@ -60,6 +63,7 @@ inputs = [
   "docs/sample-decks/**",
   "tools/src/beryl_tools/ignite/beryl3d.py",
   "tools/src/beryl_tools/ignite/beryl3d_validation.py",
+  "tools/src/beryl_tools/system.py",
 ]
 outputs = ["rust/beryl3d/target"]
 
@@ -124,13 +128,14 @@ inputs = [
 [family.b3d-clippy]
 kind = "regression"
 adapter = "jsonl"
-platforms = ["macos"]
+platforms = ["macos", "windows"]
 needs = ["python-env"]
 always = true
 # A build check: a failure means the code does not type-check, so `green` does not move.
 builds = true
 always_when = [
   "rust/beryl3d/**",
+  "rust/.cargo/config.toml",
   "rust-toolchain.toml",
   "ignite/checks/beryl3d.toml",
   "tools/src/beryl_tools/ignite/__init__.py",
@@ -140,6 +145,7 @@ always_when = [
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-clippy list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-clippy run {checks}"
 inputs = [
+  "rust/.cargo/config.toml",
   "rust/crates/**",
   "rust/cards/**",
   "rust/Cargo.toml",
@@ -237,12 +243,12 @@ inputs = [
 ]
 
 # The inspector validates the checkout's tuning files, and the recordings pack shows which
-# corpus names the recorder found. Both use the shared macOS build so a cold Cargo build
+# corpus names the recorder found. Both use the shared build so a cold Cargo build
 # cannot hold up the source checks.
 [family.b3d-validation]
 kind = "regression"
 adapter = "jsonl"
-platforms = ["macos"]
+platforms = ["macos", "windows"]
 needs = ["python-env", "b3d"]
 always = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-validation list"
@@ -263,6 +269,7 @@ inputs = [
   "tools/src/beryl_tools/ignite/beryl3d.py",
   "tools/src/beryl_tools/paths.py",
   "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/system.py",
 ]
 
 # Every test of the workspace that cargo-nextest runs, each hashed over the package that holds
@@ -277,14 +284,17 @@ inputs = [
 [family.b3d-test]
 kind = "regression"
 adapter = "nextest"
-platforms = ["macos"]
+platforms = ["macos", "windows"]
 needs = ["b3d"]
-list = "cargo nextest list --manifest-path rust/beryl3d/Cargo.toml --locked --cargo-quiet --workspace --message-format json"
+# The differential replay and full-pack tests use the inspector runner's growing grant.
+grows = true
+list = "cargo nextest list --locked --cargo-quiet --workspace --message-format json"
 # Test names do not depend on comments, so a change that edits only comments keeps the
 # listing and builds nothing to list (docs/ignite.md, "Declaring a family").
 listing_ignores_comments = true
-run = "cargo nextest run --manifest-path rust/beryl3d/Cargo.toml --locked --cargo-quiet --workspace --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
+run = "cargo nextest run --locked --cargo-quiet --workspace --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = [
+  "rust/.cargo/config.toml",
   "crate-closure",
   "rust/beryl3d/.config/nextest.toml",
   "rust/crates/**",
@@ -320,7 +330,7 @@ inputs = [
 [family.b3d-interface]
 kind = "regression"
 adapter = "jsonl"
-platforms = ["macos"]
+platforms = ["macos", "windows"]
 needs = ["python-env", "b3d"]
 grows = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface list"
@@ -406,8 +416,8 @@ inputs = [
 kind = "exploration"
 # The adapter reports one result per card crate as soon as its sweep finishes.
 adapter = "jsonl"
-# The sweep uses the native Beryl 3D recorder and inspector built on macOS.
-platforms = ["macos"]
+# The sweep uses the native Beryl 3D recorder and inspector.
+platforms = ["macos", "windows"]
 # The sweep needs both native binaries and starts from the corpus pack made by `b3d`.
 needs = ["python-env", "b3d"]
 # Listing needs the Python environment before either native binary is built.
@@ -499,7 +509,7 @@ inputs = [
 [family.b3d-every-tick]
 kind = "regression"
 adapter = "jsonl"
-platforms = ["macos"]
+platforms = ["macos", "windows"]
 needs = ["python-env", "b3d"]
 grows = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-every-tick list"

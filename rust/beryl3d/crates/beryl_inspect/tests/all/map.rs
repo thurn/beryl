@@ -75,8 +75,12 @@ fn every_map_inventory_matches_its_overview_and_prints_existing_paths() {
     );
     let root = beryl_inspect::recordings::root();
     let path_exists = |entry: &Value| {
-        let path = Path::new(entry["path"].as_str().unwrap());
-        assert!(root.join(path).exists(), "missing source path in {entry}");
+        let path = entry["path"].as_str().unwrap();
+        assert!(!path.contains('\\'), "nonportable source path in {entry}");
+        assert!(
+            root.join(Path::new(path)).exists(),
+            "missing source path in {entry}"
+        );
     };
     for kind in kinds {
         path_exists(kind);

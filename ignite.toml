@@ -260,6 +260,7 @@ families = [
   "repository", "commit", "black", "pytest", "pyre", "b3d-format", "b3d-source", "ignite-platform",
   "counts", "allocations", "card-text", "script", "scale", "iroh", "fuzz", "exhaust",
   "oracle", "oracle-generated", "ui-format", "ui-types", "ui-unit",
+  "b3d-clippy", "b3d-validation", "b3d-test", "b3d-interface", "b3d-every-tick", "b3d-corpus",
 ]
 
 [machine.cygnus.resources]

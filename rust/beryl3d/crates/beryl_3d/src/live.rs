@@ -10,6 +10,7 @@
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
+#[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Sender, channel};
@@ -20,6 +21,8 @@ use app_client::Input;
 use beryl_host::{Drive, Inbox};
 use beryl_render::Picture;
 use kit_probe::agent::{TreeOptions, tree};
+#[cfg(windows)]
+use socket2::{Domain, SockAddr, Socket as UnixListener, Socket as UnixStream, Type};
 
 /// What a request is answered with: the text after `ok`, or the reason for `error`.
 type Answer = Result<String, String>;
@@ -35,16 +38,38 @@ enum Request {
     Quit(UnixStream),
 }
 
-/// The folder a socket is made in: `$TMPDIR`, or `/tmp`.
+/// The socket folder: the TMPDIR override, /tmp on Unix or the user temp directory on Windows.
 #[must_use]
 pub fn socket_dir() -> PathBuf {
-    std::env::var_os("TMPDIR").map_or_else(|| PathBuf::from("/tmp"), PathBuf::from)
+    std::env::var_os("TMPDIR").map_or_else(
+        || {
+            if cfg!(windows) {
+                std::env::temp_dir()
+            } else {
+                PathBuf::from("/tmp")
+            }
+        },
+        PathBuf::from,
+    )
 }
 
 /// The socket path of the process `pid` in `dir`.
 #[must_use]
 pub fn socket_path(dir: &Path, pid: u32) -> PathBuf {
     dir.join(format!("beryl3d-{pid}.sock"))
+}
+
+#[cfg(unix)]
+fn listen(path: &Path) -> std::io::Result<UnixListener> {
+    UnixListener::bind(path)
+}
+
+#[cfg(windows)]
+fn listen(path: &Path) -> std::io::Result<UnixListener> {
+    let socket = UnixListener::new(Domain::UNIX, Type::STREAM, None)?;
+    socket.bind(&SockAddr::unix(path)?)?;
+    socket.listen(8)?;
+    Ok(socket)
 }
 
 /// The server, and the requests the frame thread is working on.
@@ -78,14 +103,17 @@ impl Live {
         let path = socket_path(dir, pid);
         // A socket left by a process that died with the same id.
         let _ = std::fs::remove_file(&path);
-        let listener = UnixListener::bind(&path)
+        let listener = listen(&path)
             .map_err(|error| format!("the live socket {}: {error}", path.display()))?;
         let queue = Arc::new(Mutex::new(VecDeque::new()));
         let shared = Arc::clone(&queue);
         std::thread::Builder::new()
             .name("live socket".to_owned())
             .spawn(move || {
-                for stream in listener.incoming().flatten() {
+                loop {
+                    let Ok((stream, _)) = listener.accept() else {
+                        continue;
+                    };
                     let queue = Arc::clone(&shared);
                     let inbox = inbox.clone();
                     // A thread for each connection, so that a slow answer holds up no other.

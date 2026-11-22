@@ -130,7 +130,7 @@ def inspect(
         env={**os.environ, pack.PACK_ENV: str(selected)},
         cwd=paths.REPO,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -151,7 +151,7 @@ def sweep(
         for part in pending:
             kept = b3d_paths.cache() / f"corpus-{part.digest}.json"
             if kept.is_file():
-                yield part, Sweep(**json.loads(kept.read_text()))
+                yield part, Sweep(**json.loads(kept.read_text(encoding="utf-8")))
                 continue
             if not baseline.is_file():
                 corpus_pack = pack.record(recorder)
@@ -167,7 +167,7 @@ def sweep(
             body = output(done, (0, 1))
             result = Sweep(**json.loads(body))
             temporary = kept.with_suffix(f".{os.getpid()}.tmp")
-            temporary.write_text(body)
+            temporary.write_text(body, encoding="utf-8")
             os.replace(temporary, kept)
             yield part, result
 

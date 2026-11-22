@@ -176,7 +176,10 @@ fn reload_detects_equal_length_and_timestamp_edits_and_keeps_the_last_valid_tuni
     let effect_bytes = fs::read(&effect).unwrap();
     fs::remove_file(&effect).unwrap();
     let error = watch.poll().unwrap().unwrap_err();
-    assert!(error.contains("effects/beam.json"), "{error}");
+    assert!(
+        error.replace('\\', "/").contains("effects/beam.json"),
+        "{error}"
+    );
     client.handle(Input::DataError(error));
     assert!(client.data().effects.get("beam").is_some());
     assert!(watch.poll().is_none());
