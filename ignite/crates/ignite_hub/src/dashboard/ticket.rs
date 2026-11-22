@@ -10,6 +10,7 @@ use rusqlite::Connection;
 use serde_json::Value;
 
 use ignite_core::protocol::tickets::Status;
+use ignite_core::work_estimate::duration;
 
 use super::common::{
     PRIORITY_NAMES, SITE_ICONS, brand, person, priority_chip, status_dot, ticket_heading,
@@ -67,7 +68,7 @@ pub fn page(
         let mut templates = templates.borrow_mut();
         if !templates.iter().any(|(name, _)| *name == key) {
             let remaining = forecasts.get(&card.id).map_or_else(String::new, |work| {
-                format!("<span>{}</span>", esc(&work.breakdown()))
+                format!("<span>{}</span>", esc(&work.breakdown(forecasts.default)))
             });
             let html = c::template(
                 &key,
@@ -141,7 +142,8 @@ pub fn page(
         );
         c::row(
             &label,
-            &(work_progress(forecasts.get(&card.id)) + &priority_chip(i64::from(card.priority))),
+            &(work_progress(forecasts.get(&card.id), forecasts.default)
+                + &priority_chip(i64::from(card.priority))),
             Some(&ticket_url(root, &card.id)),
         )
     };
@@ -367,8 +369,38 @@ pub fn page(
         ),
     ];
     properties.extend(pin_properties);
-    if let Some(work) = data.forecasts.get(&card.id) {
-        properties.push(("Complete".into(), work_progress(Some(work))));
+    if let Some(work) = forecasts.get(&card.id) {
+        properties.push((
+            "Complete".into(),
+            work_progress(Some(work), forecasts.default),
+        ));
+    }
+    if !matches!(card.ticket_type.as_str(), "epic" | "milestone") {
+        let (view, raw) = ticket.estimate_minutes.map_or_else(
+            || {
+                (
+                    c::tip(
+                        &format!("≈{}", duration(u64::from(forecasts.default.minutes()))),
+                        &format!(
+                            "{} per ticket (agent time)",
+                            forecasts.default.description()
+                        ),
+                    ),
+                    String::new(),
+                )
+            },
+            |minutes| (duration(u64::from(minutes)), minutes.to_string()),
+        );
+        properties.push((
+            "Work estimate".into(),
+            editable_value(
+                "estimate_minutes",
+                "Work estimate (minutes)",
+                "count",
+                view,
+                &raw,
+            ),
+        ));
     }
     if editable && card.ticket_type == "epic" {
         for (label, field, value) in [

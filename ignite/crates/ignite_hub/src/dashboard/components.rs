@@ -452,9 +452,29 @@ pub fn progress(done: u64, total: u64, tip: Option<&str>) -> String {
         percentage.round()
     };
     format!(
-        "<span class=\"c-progress\"{}><span class=\"c-progress-track\"><span class=\"c-progress-fill\" \
-         style=\"width:{share}%\"></span></span><span class=\"c-progress-label\">{done}/{total}</span></span>",
-        tip_attrs(tip)
+        "<span class=\"c-progress\"{}>{}<span class=\"c-progress-label\">{done}/{total}</span></span>",
+        tip_attrs(tip),
+        progress_track(share)
+    )
+}
+
+fn progress_track(share: impl std::fmt::Display) -> String {
+    format!(
+        r#"<span class="c-progress-track"><span class="c-progress-fill" style="width:{share}%"></span></span>"#
+    )
+}
+
+/// A green completion bar whose text and hover details use estimated effort.
+pub fn estimate_progress(percent: u64, approximate: bool, tip: &str) -> String {
+    let (prefix, spoken) = if approximate {
+        ("≈", "Approximately ")
+    } else {
+        ("", "")
+    };
+    format!(
+        r#"<span class="c-progress c-work-progress"{}>{}<span class="c-progress-label" aria-label="{spoken}{percent}% complete">{prefix}{percent}%</span></span>"#,
+        tip_attrs(Some(tip)),
+        progress_track(percent)
     )
 }
 

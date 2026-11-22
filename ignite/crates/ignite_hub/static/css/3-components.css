@@ -248,6 +248,10 @@ a.c-row:hover {
   background: var(--accent);
 }
 
+.c-work-progress .c-progress-fill {
+  background: var(--tone-green);
+}
+
 /* Prose */
 
 .c-prose {

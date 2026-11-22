@@ -136,12 +136,13 @@
             case "status":
                 return select(STATUSES, raw);
             case "count": {
+                const estimate = unit.dataset.field === "estimate_minutes";
                 const input = element("input", {
                     type: "number",
-                    min: "0",
+                    min: estimate ? "1" : "0",
                     step: "1",
                     value: raw,
-                    placeholder: "None",
+                    placeholder: estimate ? "Use default" : "None",
                 });
                 input.setAttribute("aria-label", label);
                 return input;

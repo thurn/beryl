@@ -12,7 +12,7 @@ use serde_json::Value;
 use ignite_core::protocol::tickets::{EdgeKind, Status};
 use ignite_core::schedule;
 use ignite_core::time::Timestamp;
-use ignite_core::work_estimate::WorkRemaining;
+use ignite_core::work_estimate::{EstimateDefault, WorkRemaining};
 use ignite_store::hub::{edges, schedules, tickets};
 
 use super::references::{mentions, ticket_paths};
@@ -64,8 +64,19 @@ pub struct HomeCard {
     pub machine: Option<String>,
 }
 
-/// The forecast for each ticket with a reserve or descendants.
-pub type Forecasts = HashMap<String, WorkRemaining>;
+/// The forecast for each ticket with a reserve or descendants, and the default effort
+/// shared by tickets without explicit estimates.
+#[derive(Default)]
+pub struct Forecasts {
+    pub default: EstimateDefault,
+    by_ticket: HashMap<String, WorkRemaining>,
+}
+
+impl Forecasts {
+    pub fn get(&self, id: &str) -> Option<&WorkRemaining> {
+        self.by_ticket.get(id)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommentRow {
@@ -103,6 +114,7 @@ pub struct TicketRow {
     pub max_workers: Option<u32>,
     /// A meta-ticket's interval in hours (see `ignite_core::schedule`).
     pub every_hours: Option<u32>,
+    pub estimate_minutes: Option<u32>,
 }
 
 pub(crate) fn parse_status(text: &str) -> Status {
@@ -209,7 +221,17 @@ fn forecasts(conn: &Connection, ids: &[String]) -> Result<Forecasts, ReadError> 
             },
         ))
     })?;
-    Ok(rows.collect::<Result<_, _>>()?)
+    let by_ticket = rows.collect::<Result<_, _>>()?;
+    let repository_average = conn.query_row(
+        "SELECT CAST(ROUND(AVG(estimate_minutes)) AS INTEGER) FROM tickets
+         WHERE estimate_minutes IS NOT NULL AND type NOT IN ('epic', 'milestone', 'meta')",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(Forecasts {
+        default: EstimateDefault { repository_average },
+        by_ticket,
+    })
 }
 
 /// The open tickets the home page can show, most recently updated first, with their forecasts.
@@ -317,7 +339,7 @@ fn next_copy(conn: &Connection, ticket: &TicketRow) -> Result<Option<NextCopy>, 
 pub fn ticket_row(conn: &Connection, id: &str) -> Result<Option<TicketRow>, ReadError> {
     let mut statement = conn.prepare(&format!(
         "SELECT {CARD_FIELDS}, body, acceptance, design, notes, labels, metadata, close_reason,
-                created_at, created_by, closed_at, version, workers, max_workers, every_hours
+                created_at, created_by, closed_at, version, workers, max_workers, every_hours, estimate_minutes
          FROM tickets WHERE id = ?1"
     ))?;
     let mut rows = statement.query_map([id], |row| {
@@ -338,6 +360,7 @@ pub fn ticket_row(conn: &Connection, id: &str) -> Result<Option<TicketRow>, Read
             workers: row.get(20)?,
             max_workers: row.get(21)?,
             every_hours: row.get(22)?,
+            estimate_minutes: row.get(23)?,
         })
     })?;
     Ok(rows.next().transpose()?)

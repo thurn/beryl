@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use ignite_core::protocol::tickets::Status;
-use ignite_core::work_estimate::WorkRemaining;
+use ignite_core::work_estimate::{EstimateDefault, WorkRemaining};
 
 use super::components::{self as c, Icons, Tone};
 use super::data::Card;
@@ -198,13 +198,14 @@ fn uuid_head(name: &str) -> Option<String> {
 }
 
 /// The percentage of estimated work that is closed, with a breakdown on hover or focus.
-pub fn work_progress(forecast: Option<&WorkRemaining>) -> String {
+pub fn work_progress(forecast: Option<&WorkRemaining>, default: EstimateDefault) -> String {
     forecast.map_or_else(String::new, |work| {
-        let percent = work.percent_complete().map_or_else(
-            || r#"<span aria-label="Completion estimate unavailable">—</span>"#.to_owned(),
-            |percent| format!(r#"<span aria-label="{percent}% complete">{percent}%</span>"#),
-        );
-        c::tip(&percent, &work.breakdown())
+        let percent = work.percent_complete(default);
+        c::estimate_progress(
+            percent,
+            percent < 100 && work.uses_default(),
+            &work.breakdown(default),
+        )
     })
 }
 

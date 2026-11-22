@@ -108,7 +108,7 @@ pub fn page(root: &str, cards: &[HomeCard], forecasts: &Forecasts, seq: &str) ->
             });
             let foot = format!(
                 "{state}{kind}{}{assignee}<span class=\"c-card-time\">{}</span>",
-                work_progress(forecasts.get(&card.id)),
+                work_progress(forecasts.get(&card.id), forecasts.default),
                 c::time(Some(&card.updated_at), "")
             );
             c::card(

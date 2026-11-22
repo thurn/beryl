@@ -4,6 +4,27 @@ use std::fmt::Write as _;
 
 use crate::protocol::tickets::{Status, Ticket, TicketType};
 
+/// The default for work tickets without their own estimate.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct EstimateDefault {
+    pub repository_average: Option<u32>,
+}
+
+impl EstimateDefault {
+    pub fn minutes(self) -> u32 {
+        self.repository_average.unwrap_or(30)
+    }
+
+    pub fn description(self) -> String {
+        let source = if self.repository_average.is_some() {
+            "Repository average"
+        } else {
+            "Starting default"
+        };
+        format!("{source} of {}", duration(u64::from(self.minutes())))
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct WorkRemaining {
     /// Estimated effort on closed tickets.
@@ -34,24 +55,36 @@ impl WorkRemaining {
         }
     }
 
-    /// A display percentage based on the whole known scope. Round down so every nonzero
-    /// estimate for work left keeps the percentage below 100.
-    pub fn percent_complete(self) -> Option<u64> {
-        let remaining = self.filed_minutes + self.unfiled_minutes;
-        if remaining == 0 && self.unestimated == 0 {
-            return Some(100);
-        }
-        if self.unestimated > 0 || self.unestimated_closed > 0 {
-            return None;
-        }
-        Some(100 * self.closed_minutes / (self.closed_minutes + remaining))
+    pub fn uses_default(self) -> bool {
+        self.unestimated > 0 || self.unestimated_closed > 0
     }
 
-    pub fn breakdown(self) -> String {
+    fn forecast(self, default: EstimateDefault) -> Self {
+        let minutes = u64::from(default.minutes());
+        Self {
+            closed_minutes: self.closed_minutes + self.unestimated_closed * minutes,
+            filed_minutes: self.filed_minutes + self.unestimated * minutes,
+            ..self
+        }
+    }
+
+    /// Round down so every nonzero estimate for work left keeps the percentage below 100.
+    pub fn percent_complete(self, default: EstimateDefault) -> u64 {
+        let estimated = self.forecast(default);
+        let remaining = u128::from(estimated.filed_minutes) + u128::from(self.unfiled_minutes);
+        if remaining == 0 {
+            return 100;
+        }
+        let closed = u128::from(estimated.closed_minutes);
+        (100 * closed / (closed + remaining)) as u64
+    }
+
+    pub fn breakdown(self, default: EstimateDefault) -> String {
+        let estimated = self.forecast(default);
         let mut text = format!(
             "{} estimated closed · {}",
-            duration(self.closed_minutes),
-            self.summary()
+            duration(estimated.closed_minutes),
+            estimated.summary()
         );
         if self.unestimated_closed > 0 {
             let noun = if self.unestimated_closed == 1 {
@@ -64,6 +97,9 @@ impl WorkRemaining {
                 " · {} unestimated closed {noun}",
                 self.unestimated_closed
             );
+        }
+        if self.uses_default() {
+            let _ = write!(text, " · {} per unestimated ticket", default.description());
         }
         text.push_str(" (agent time)");
         text
