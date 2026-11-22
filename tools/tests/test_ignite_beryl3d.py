@@ -495,7 +495,7 @@ def test_web_match_has_a_check_for_each_reference_target() -> None:
         "rust/cards/a/lea/island.rs",
     ]
     # A mid-game target is named by its test and its moment, apart from the recording's end.
-    assert "b3d-web-match:combat-attackers/you/1600x900@2#102500ms" in names
+    assert "b3d-web-match:combat-attackers/you/1600x900@2#step:163.1.2+205ms" in names
     document = reference.load_ratchet()
     for target in reference.targets():
         name = reference.entry_name(target)

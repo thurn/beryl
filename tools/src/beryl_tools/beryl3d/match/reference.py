@@ -64,8 +64,10 @@ WITHOUT_REFERENCE = {
 # combat show only mid-game, and every arrow once drew nothing while each target at a
 # recording's end still matched.
 MOMENTS: tuple[tuple[str, str], ...] = (
-    # Counterspell on the stack, its arrow at Currency Converter and its line to its source.
-    ("combat-attackers", "102500ms"),
+    # Sample about 68 ms after the mana streak lands on Counterspell, with both stack
+    # lines still visible. The step keeps the sample with this cast when earlier animations
+    # change duration.
+    ("combat-attackers", "step:163.1.2+205ms"),
     # Blockers declared: an attacking token with its wedge, and the line of combat from the
     # creature that blocks it.
     ("combat-attackers", "118000ms"),
