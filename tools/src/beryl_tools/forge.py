@@ -517,6 +517,10 @@ def export(
             if "failure" in entry:
                 raise Unsupported(f"Beryl fails it: {entry['failure']}")
             described = Cards(cast(JsonObject, entry.get("cards", {})), oracle)
+            if "Prepared" in described.shapes.values():
+                raise Unsupported(
+                    "the Forge exporter does not model prepared spell copies"
+                )
             described.track_merges(cast(list[JsonObject], entry["actions"]))
             steps: list[JsonObject] = []
             unchecked = 0

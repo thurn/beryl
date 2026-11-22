@@ -230,6 +230,22 @@ def test_scenarios_outside_the_vocabulary_are_unsupported() -> None:
     ]
 
 
+def test_preparation_requires_support_for_spell_copies_in_exile() -> None:
+    entry = dumped()[0]
+    entry["cards"] = {
+        "Test Preparer": {"shape": "Prepared", "faces": [{"name": "Test Preparer"}]}
+    }
+    scenarios, skipped = forge.export([entry], card_store.STORE)
+    assert scenarios == []
+    assert skipped == [
+        {
+            "card": entry["card"],
+            "name": entry["name"],
+            "reason": "the Forge exporter does not model prepared spell copies",
+        }
+    ]
+
+
 def test_summary_applies_the_allowlist() -> None:
     results: list[Json] = [
         {"card": "A", "name": "a", "status": "pass", "failures": []},
