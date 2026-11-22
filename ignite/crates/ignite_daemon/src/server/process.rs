@@ -636,11 +636,14 @@ impl Shared {
     /// The verb process of `handle` died: ends the commands it left running, so nothing runs
     /// twice, and lets the daemon run the verb itself.
     pub(super) fn bury(&self, handle: &Handle) {
+        if let Some(activity) = self.steps.by_handle(handle) {
+            // A host-build thread can still be waiting for cleanup on behalf of the
+            // dead verb. It uses this activity's stop signal, even without a child process.
+            let _ = activity.request_stop();
+            activity.finish();
+        }
         if let Some(host) = &self.host {
             host.end_runs_of(handle);
-        }
-        if let Some(activity) = self.steps.by_handle(handle) {
-            activity.finish();
         }
         self.forget_process(handle);
     }

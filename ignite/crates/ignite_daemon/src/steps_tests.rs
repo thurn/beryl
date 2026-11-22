@@ -68,6 +68,31 @@ fn a_thread_spawned_for_the_work_can_enter_it() {
 }
 
 #[test]
+fn a_verb_update_keeps_the_daemons_build_cleanup_wait() {
+    let (clock, steps) = registry();
+    let idle = steps.begin(Kind::Verb("idle-job".to_owned()), Work::default());
+    let _entered = idle.enter();
+    let cleanup = waiting("cargo (PID 42) before cleaning build outputs in landing-3");
+    clock.advance(20.0);
+
+    idle.report(
+        None,
+        &["building product".to_owned()],
+        Some(Class::Idle),
+        None,
+    );
+
+    let view = idle.view();
+    assert_eq!(
+        view.waiting_for.as_deref(),
+        Some("cargo (PID 42) before cleaning build outputs in landing-3")
+    );
+    assert!((view.waiting_s.unwrap() - 20.0).abs() < 1e-9);
+    drop(cleanup);
+    assert_eq!(idle.view().waiting_for.as_deref(), Some("building product"));
+}
+
+#[test]
 fn a_stop_is_refused_once_the_work_says_it_may_not_be_interrupted() {
     let (_, steps) = registry();
     let landing = steps.begin(Kind::Verb("land".to_owned()), Work::default());

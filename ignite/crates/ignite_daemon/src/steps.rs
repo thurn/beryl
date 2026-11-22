@@ -56,21 +56,20 @@
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, Weak};
 use std::time::{Duration, Instant};
 
-use serde::Serialize;
-
 use ignite_core::ids::{Handle, SessionId, TicketId, TreeId};
 use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
 
-use crate::loop_health::span;
+mod view;
+
+pub use view::View;
 
 /// What kind of work an activity is.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -111,6 +110,8 @@ struct Wait {
     at: Timestamp,
     /// A wait in the scheduler's queue for cores (see [`waiting_for_cores`]).
     cores: bool,
+    /// Reported by the verb process rather than held by a guard on a daemon thread.
+    mirrored: bool,
 }
 
 struct State {
@@ -150,69 +151,6 @@ pub struct Activity {
     state: Mutex<State>,
     changed: Condvar,
     keeper: std::sync::OnceLock<Arc<dyn StopKeeper>>,
-}
-
-/// What an activity is doing, for `status`, `wait` and `doctor`.
-#[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct View {
-    /// `verb` or `loop`.
-    pub kind: &'static str,
-    /// The verb or the loop's name.
-    pub name: String,
-    pub handle: Option<String>,
-    pub ticket: Option<String>,
-    pub session: Option<String>,
-    pub tree: Option<String>,
-    pub class: Option<&'static str>,
-    pub age_s: f64,
-    pub step: Option<String>,
-    pub step_age_s: Option<f64>,
-    pub waiting_for: Option<String>,
-    pub waiting_s: Option<f64>,
-    /// What the work waits for is cores in the scheduler's queue, which work of a higher class
-    /// holds: the work is not stuck, only behind others (see [`waiting_for_cores`]).
-    pub waiting_for_cores: bool,
-    /// Seconds the work has spent in the scheduler's queue for cores, the wait still open
-    /// included.
-    pub cores_waited_s: f64,
-    /// A stop has been asked for and the work has not ended yet.
-    pub stopping: bool,
-    /// The work started under an earlier daemon, which did not tell this one its step yet.
-    pub adopted: bool,
-}
-
-impl View {
-    /// The step and what the work waits for, with how long each has lasted, such as
-    /// `building rust-tests in landing-3 (4 min), waiting for 8 cores (3 min)`.
-    pub fn doing(&self) -> String {
-        let mut text = match (&self.step, self.step_age_s) {
-            (Some(step), Some(age)) => format!("{step} ({})", span(age)),
-            _ if self.adopted => "step not reported since the daemon restarted".to_owned(),
-            _ => "no step recorded".to_owned(),
-        };
-        if let (Some(what), Some(age)) = (&self.waiting_for, self.waiting_s) {
-            let _ = write!(text, ", waiting for {what} ({})", span(age));
-        }
-        if self.stopping {
-            text.push_str(", stopping");
-        }
-        text
-    }
-
-    /// The line `ignite status` shows for a running command.
-    pub fn line(&self) -> String {
-        let mut words = vec![self.handle.clone().unwrap_or_else(|| "-".to_owned())];
-        words.push(self.name.clone());
-        words.extend(self.ticket.clone());
-        words.extend(self.tree.clone());
-        words.extend(self.class.map(str::to_owned));
-        format!(
-            "{} for {}: {}",
-            words.join(" "),
-            span(self.age_s),
-            self.doing()
-        )
-    }
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -443,6 +381,7 @@ impl Activity {
             what: what.to_owned(),
             at,
             cores,
+            mirrored: false,
         });
         let line = format!("waiting for {what}");
         state.observers.retain(|o| o.send(line.clone()).is_ok());
@@ -485,7 +424,9 @@ impl Activity {
             }
             None => state.step = None,
         }
-        let mut old = std::mem::take(&mut state.waits);
+        let (mut old, local): (Vec<_>, Vec<_>) = std::mem::take(&mut state.waits)
+            .into_iter()
+            .partition(|wait| wait.mirrored);
         for what in waiting {
             let wait = if let Some(at) = old.iter().position(|wait| wait.what == *what) {
                 old.remove(at)
@@ -499,10 +440,14 @@ impl Activity {
                     what: what.clone(),
                     at: now,
                     cores: false,
+                    mirrored: true,
                 }
             };
             state.waits.push(wait);
         }
+        // A daemon thread can be preparing a build on this verb's behalf. Its wait is
+        // inside the verb's wait for the build, and only that thread can end it.
+        state.waits.extend(local);
         if let Some(class) = class {
             state.work.class = Some(class);
         }

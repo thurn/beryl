@@ -1,6 +1,7 @@
 //! Landing trees: they stay at the tip, and a landing or a tip verification leases one so that
 //! it builds only what one change added.
 
+use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use ignite_core::ids::{Commit, Handle, TicketId, TreeId};
@@ -57,10 +58,10 @@ impl Trees {
             }
         };
         let held = kept.is_some();
-        let tree = match kept {
-            Some(tree) => tree,
+        let (tree, _reset_guard) = match kept {
+            Some(tree) => (tree, None),
             None => match self.take_free_landing(holder, owner, tip, keep_free)? {
-                Some(tree) => tree,
+                Some((tree, guard)) => (tree, Some(guard)),
                 None => return Ok(None),
             },
         };
@@ -171,11 +172,11 @@ impl Trees {
         owner: Option<&Handle>,
         tip: &Commit,
         keep_free: usize,
-    ) -> Result<Option<TreeId>> {
+    ) -> Result<Option<(TreeId, File)>> {
         let locked = self.lock();
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
         let root = self.root_in(&locked.db);
-        let free: Vec<_> = rows
+        let mut free: Vec<_> = rows
             .iter()
             .filter(|row| {
                 row.kind == Kind::Landing.as_str()
@@ -186,10 +187,22 @@ impl Trees {
         if free.len() <= keep_free {
             return Ok(None);
         }
-        let Some(row) = free.into_iter().min_by_key(|row| {
+        free.sort_by_key(|row| {
             self.distance(row.built_commit.as_deref(), tip)
                 .unwrap_or(usize::MAX)
-        }) else {
+        });
+        let mut ready = 0;
+        let mut chosen = None;
+        for row in free {
+            if let Some(guard) = self.landing_reset_guard(&locked, row)? {
+                ready += 1;
+                chosen.get_or_insert((row, guard));
+                if ready > keep_free {
+                    break;
+                }
+            }
+        }
+        let Some((row, guard)) = chosen.filter(|_| ready > keep_free) else {
             return Ok(None);
         };
         let now = self.now();
@@ -209,9 +222,31 @@ impl Trees {
         if let Some(owner) = owner {
             store::set_owner(&locked.db, &row.id, owner.as_str()).map_err(|e| store_error(&e))?;
         }
-        Ok(Some(
-            TreeId::new(row.id.clone()).map_err(|e| Error::Invalid(e.to_string()))?,
-        ))
+        Ok(Some((super::disk::id_of(row)?, guard)))
+    }
+
+    /// A verb stopped while waiting for cleanup can release its lease even while
+    /// another process still uses the tree. Keep the next checkout reset behind
+    /// the same protections as build output cleanup.
+    fn landing_reset_guard(
+        &self,
+        locked: &Locked,
+        row: &ignite_store::local::rows::Tree,
+    ) -> Result<Option<File>> {
+        let path = Path::new(&row.path);
+        let id = super::disk::id_of(row)?;
+        if Self::has_build_slot(locked, &id)
+            || super::Seeding::involves(path)
+            || Self::legacy_command_in(locked, path)
+        {
+            return Ok(None);
+        }
+        let guard = super::slots::try_exclusive(path)?;
+        if guard.is_some() && self.tree_processes_clear(&id, path)? {
+            Ok(guard)
+        } else {
+            Ok(None)
+        }
     }
 
     /// Frees every landing tree whose owner finished without freeing it, such as a verb that a
@@ -224,20 +259,27 @@ impl Trees {
                 continue;
             };
             if row.state == store::State::Landing.as_str() && !owner_alive(&locked.db, owner) {
+                let _guard = if row.ticket.as_deref() == Some(crate::idle::LANDING_HOLDER) {
+                    let Some(guard) = self.landing_reset_guard(locked, &row)? else {
+                        continue;
+                    };
+                    Some(guard)
+                } else {
+                    // Commands its owner left may still run there; end them before the next reset.
+                    let ended = Self::end_processes(Path::new(&row.path), None)?;
+                    if !ended.is_empty() {
+                        eprintln!(
+                            "ignite: ended {} process(es) {owner} left in {}",
+                            ended.len(),
+                            row.id
+                        );
+                    }
+                    None
+                };
                 eprintln!(
                     "ignite: freeing landing tree {}: {owner} finished without freeing it",
                     row.id
                 );
-                // Commands its owner left, such as those of a verb process that was killed,
-                // may still run there; the next lease resets the tree under them otherwise.
-                let ended = Self::end_processes(Path::new(&row.path), None)?;
-                if !ended.is_empty() {
-                    eprintln!(
-                        "ignite: ended {} process(es) {owner} left in {}",
-                        ended.len(),
-                        row.id
-                    );
-                }
                 store::release(&locked.db, &row.id, None, &self.now())
                     .map_err(|e| store_error(&e))?;
             }

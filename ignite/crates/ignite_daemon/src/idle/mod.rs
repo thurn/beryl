@@ -55,6 +55,8 @@ pub use rebuild::RebuildCount;
 pub use remote::RemoteIdleHost;
 use state::{Report, State};
 
+pub(crate) const LANDING_HOLDER: &str = "idle work";
+
 /// One piece of idle work.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IdleJob {
@@ -151,7 +153,7 @@ impl IdleHost for LiveHost {
     fn lease(&self, commit: &Commit) -> Result<Option<(TreeId, PathBuf)>> {
         Ok(self
             .trees
-            .lease_spare_landing("idle work", commit)?
+            .lease_spare_landing(LANDING_HOLDER, commit)?
             .map(|lease| (lease.tree, lease.path)))
     }
 
@@ -195,8 +197,6 @@ pub struct Idle {
     state: Mutex<State>,
     /// Each family's share of exploration time, as the hub gives them; equal shares until then.
     shares: Mutex<Vec<(String, f64)>>,
-    /// Held while a job runs in this process (see [`Idle::work`]).
-    work: Mutex<()>,
 }
 
 /// The number of commits the verified commit moves before each rebuild edit is measured again.
@@ -227,7 +227,6 @@ impl Idle {
             rerun,
             state: Mutex::new(state),
             shares: Mutex::new(Vec::new()),
-            work: Mutex::new(()),
         })
     }
 
@@ -303,7 +302,7 @@ impl Idle {
     /// Runs one job, after sending any reports the hub has not taken yet. A failure makes the
     /// job wait before it runs again; a job that ran and succeeded is cleared of its failures.
     pub fn run(&self, ctx: &Context, job: &IdleJob) -> Result<()> {
-        let _work = self.work();
+        let _work = self.work()?;
         self.send_reports(ctx);
         let ran = match job {
             IdleJob::Explore { family } => self.explore(ctx, family),
@@ -340,14 +339,10 @@ impl Idle {
     /// other (see the module documentation), so that `ignite rebuild`, `ignite audit` and the
     /// idle job never edit one tree at once. The state is read again once it is held, because
     /// the job that held it before may have changed it.
-    fn work(&self) -> Work<'_> {
-        let guard = lock(&self.work);
-        let file = share::lock(&self.settings.state, "job-lock");
+    fn work(&self) -> Result<share::JobLock> {
+        let file = share::lock_job(&self.settings.state)?;
         self.refresh();
-        Work {
-            _guard: guard,
-            _file: file,
-        }
+        Ok(file)
     }
 
     /// Changes the state and saves it before returning.
@@ -410,12 +405,6 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// The right to run a job, from [`Idle::work`].
-struct Work<'a> {
-    _guard: MutexGuard<'a, ()>,
-    _file: Option<share::FileLock>,
-}
-
 /// The error for idle work whose build failed with its whole output in `output`; `failed`
 /// says which build failed and how, such as "rust-tests failed to build before the edit".
 ///
@@ -426,7 +415,7 @@ struct Work<'a> {
 /// counted as a failure, and three in a row filed a justiciar report against a job that had
 /// nothing wrong with it.
 fn build_failure(failed: &str, output: &Path) -> Error {
-    if crate::supervise::ResultFile::ended_from_outside(output) {
+    if crate::steps::stop_requested() || crate::supervise::ResultFile::ended_from_outside(output) {
         Error::Conflict(format!(
             "{failed}: the build was stopped before it finished; its output is in {}",
             output.display()
@@ -472,7 +461,10 @@ impl Verb for RebuildVerb {
                 "usage: ignite rebuild <name> | --list | --last",
             );
         };
-        let _work = self.idle.work();
+        let _work = match self.idle.work() {
+            Ok(work) => work,
+            Err(error) => return error_reply(&error),
+        };
         match self.idle.rebuild(ctx, name) {
             Ok(Some(count)) => {
                 // A measurement that works clears the idle job's failures, so it runs as due.
@@ -507,7 +499,10 @@ impl Verb for AuditVerb {
         if !req.args.iter().any(|a| a == "--now") {
             return Reply::text(Exit::Usage, "usage: ignite audit --now");
         }
-        let _work = self.idle.work();
+        let _work = match self.idle.work() {
+            Ok(work) => work,
+            Err(error) => return error_reply(&error),
+        };
         self.idle.send_reports(ctx);
         match self.idle.audit(ctx, true) {
             Ok(summary) => Reply::text(Exit::Success, summary.render()),

@@ -3,21 +3,25 @@
 //! settles it, and the processes that share the state file lose none of each other's changes.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use ignite_core::fakes::FakeHost;
+use ignite_core::fakes::{FakeBuilds, FakeHost};
 use ignite_core::ids::{Commit, Handle, TreeId};
+use ignite_core::protocol::Usage;
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::host::{Hello, LeaseLandingReply, PROTOCOL_VERSION, RequestIds};
-use ignite_core::traits::Result;
+use ignite_core::protocol::hub::CompileUnit;
+use ignite_core::traits::{BuildResult, Builds, Result};
 
 use super::{Fixture, commit, request};
 use crate::idle::launch::{IdleJobVerb, JobRunner, JobWait};
 use crate::idle::state::NewCheck;
-use crate::idle::{IdleHost, IdleJob, RemoteIdleHost};
+use crate::idle::{IdleHost, IdleJob, LiveHost, RebuildVerb, RemoteIdleHost};
 use crate::server::Verb;
+use crate::steps::{Kind, Steps, Work};
+use crate::trees::{Trees, command_lock, tests::Fixture as TreeFixture};
 use crate::verbproc::{Link, Remote, Timing};
 
 /// The verb processes of every daemon in a test: they outlive each simulated restart, as the
@@ -166,6 +170,185 @@ fn a_job_that_a_stop_ended_fails_the_round_that_settles_it_and_runs_again_later(
         .drive(&f.ctx, &Runner(processes.clone()), &pool)
         .unwrap();
     assert_eq!(processes.starts(), 2);
+}
+
+struct CleanupBuild(Trees, mpsc::SyncSender<std::fs::File>);
+
+impl Builds for CleanupBuild {
+    fn ensure(&self, tree: &TreeId, _: &str, _: &[String]) -> BuildResult {
+        let command = command_lock(&self.0.path(tree).unwrap()).unwrap();
+        command.lock_shared().unwrap();
+        self.1.send(command).unwrap();
+        let stopped = self
+            .0
+            .prepare_build(tree, 10, &crate::steps::stop_requested);
+        assert!(stopped.is_err(), "cleanup must stop while the command runs");
+        BuildResult::Failed {
+            output: "stopped-cleanup.log".into(),
+            usage: Usage::default(),
+        }
+    }
+}
+
+#[test]
+fn a_rebuild_queued_across_restart_proceeds_when_idle_cleanup_stops() {
+    let f = Fixture::new();
+    let trees = TreeFixture::with_landing(0, 3, 1);
+    let tip = trees.tip();
+    let landing = trees.trees.lease_landing("setup", &tip).unwrap().unwrap();
+    let spare = trees.trees.lease_landing("setup", &tip).unwrap().unwrap();
+    trees.trees.release_landing(&spare.tree, None).unwrap();
+    trees
+        .trees
+        .release_landing(&landing.tree, Some(&tip))
+        .unwrap();
+    let output = landing.path.join("out/compiled");
+    std::fs::create_dir_all(output.parent().unwrap()).unwrap();
+    std::fs::write(&output, "over the build ceiling").unwrap();
+    let pool = crate::pool::Pool::new(ignite_store::local::open_in_memory().unwrap());
+    let processes = Arc::new(Processes::default());
+    let runner = Runner(processes.clone());
+    let idle = || {
+        let mut idle = f.idle();
+        idle.host = Box::new(LiveHost {
+            trees: Arc::new(trees.trees.clone()),
+            repo: trees.repo.clone(),
+        });
+        idle
+    };
+    let previous = idle();
+    let mut old_ctx = f.ctx.clone();
+    old_ctx.git = Arc::new({
+        let git = ignite_core::fakes::FakeGit::default();
+        git.set_tip("master", tip);
+        git
+    });
+    let (command, running) = mpsc::sync_channel(1);
+    old_ctx.builds = Arc::new(CleanupBuild(trees.trees.clone(), command));
+    let measured = measured_build(&spare.tree);
+    let mut explicit_ctx = old_ctx.clone();
+    explicit_ctx.config.rebuild[0].file = "a.txt".to_owned();
+    explicit_ctx.builds = measured.clone();
+    previous.drive(&old_ctx, &runner, &pool).unwrap();
+    let old_handle = Handle::new("I-1").unwrap();
+    let job = processes.started.lock().unwrap()[0].1.clone();
+    let steps = Steps::new(f.clock.clone());
+    let old = steps.begin(Kind::Verb("idle-job".to_owned()), Work::default());
+    old.attach_handle(&old_handle);
+    let old_progress = old.subscribe();
+    let queue = steps.begin(Kind::Verb("rebuild".to_owned()), Work::default());
+    let queue_progress = queue.subscribe();
+    let explicit = RebuildVerb {
+        idle: Arc::new(idle()),
+    };
+    let (command, stop_cleanup, queue_entered, reply, rebuilt) = thread::scope(|scope| {
+        let running_job = scope.spawn(|| {
+            let _entered = old.enter();
+            previous.run(&old_ctx, &job)
+        });
+        let command = running.recv_timeout(Duration::from_secs(15));
+        let stop_cleanup = wait_line(&old_progress, "shared tree command lock");
+
+        let restarted = idle();
+        let settled = restarted.settle(&runner);
+        let queued = scope.spawn(|| {
+            let _entered = queue.enter();
+            explicit.run(&explicit_ctx, &request("rebuild", &["core-body"]))
+        });
+        let queue_entered = wait_line(&queue_progress, "I-1 to release the idle job lock");
+
+        old.request_stop().unwrap();
+        let reply = running_job.join().unwrap();
+        let rebuilt = queued.join().unwrap();
+        assert!(settled.unwrap());
+        (
+            command.unwrap(),
+            stop_cleanup,
+            queue_entered,
+            reply,
+            rebuilt,
+        )
+    });
+
+    assert!(stop_cleanup);
+    assert!(queue_entered);
+    assert!(reply.is_err());
+    assert_eq!(rebuilt.exit, Exit::Success, "{}", rebuilt.text);
+    assert!(output.exists(), "the live command's outputs were preserved");
+    assert!(
+        measured
+            .requests()
+            .iter()
+            .all(|(tree, _, _)| tree == &spare.tree)
+    );
+    processes.finish(Reply::text(Exit::Conflict, "stopped"));
+    assert!(f.idle().settle(&runner).is_err());
+    assert!(!f.dir.join("state/idle-job.handle").exists());
+    let status = trees.trees.status().unwrap();
+    assert!(status.trees.iter().all(|tree| tree.state == "free"));
+    drop(command);
+    let leased_again = trees
+        .trees
+        .lease_spare_landing("next work", &landing.at)
+        .unwrap()
+        .unwrap();
+    assert_eq!(leased_again.tree, landing.tree);
+}
+
+fn measured_build(tree: &TreeId) -> Arc<FakeBuilds> {
+    let builds = Arc::new(FakeBuilds::default());
+    builds.script(
+        tree,
+        "build",
+        BuildResult::Built {
+            usage: Usage::default(),
+            units: vec![CompileUnit {
+                crate_name: "core".to_owned(),
+                mode: "build".to_owned(),
+                instructions: Some(100.0),
+                cpu_s: 1.0,
+                rebuilt: true,
+            }],
+        },
+    );
+    builds
+}
+
+#[test]
+fn stopping_a_rebuild_waiting_for_the_job_lock_leaves_the_owner_running() {
+    let f = Fixture::new();
+    let owner = f.idle().work().unwrap();
+    let steps = Steps::new(f.clock.clone());
+    let queue = steps.begin(Kind::Verb("rebuild".to_owned()), Work::default());
+    let progress = queue.subscribe();
+    let (done, reply) = mpsc::channel();
+    let queued = thread::scope(|scope| {
+        scope.spawn(|| {
+            let _entered = queue.enter();
+            let rebuild = RebuildVerb {
+                idle: Arc::new(f.idle()),
+            };
+            done.send(rebuild.run(&f.ctx, &request("rebuild", &["core-body"])))
+                .unwrap();
+        });
+        let saw_lock = wait_line(&progress, "to release the idle job lock");
+        queue.request_stop().unwrap();
+        let queued = reply.recv_timeout(Duration::from_secs(15));
+        drop(owner);
+        assert!(saw_lock);
+        queued.unwrap()
+    });
+    assert_eq!(queued.exit, Exit::Conflict);
+    assert!(f.host.leased.lock().unwrap().is_empty());
+}
+
+fn wait_line(progress: &mpsc::Receiver<String>, text: &str) -> bool {
+    while let Ok(line) = progress.recv_timeout(Duration::from_secs(15)) {
+        if line.contains(text) {
+            return true;
+        }
+    }
+    false
 }
 
 #[test]

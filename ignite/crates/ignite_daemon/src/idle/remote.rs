@@ -27,7 +27,7 @@ impl IdleHost for RemoteIdleHost {
     fn lease(&self, commit: &Commit) -> Result<Option<(TreeId, PathBuf)>> {
         let call = LeaseLanding {
             handle: self.remote.link.handle().clone(),
-            holder: "idle work".to_owned(),
+            holder: super::LANDING_HOLDER.to_owned(),
             commit: commit.clone(),
             keep_free: KEEP_FREE,
         };

@@ -91,7 +91,7 @@ impl Fixture {
         Fixture::with_landing(ticket_trees, 1, commits)
     }
 
-    fn with_landing(ticket_trees: u32, landing_trees: u32, commits: usize) -> Fixture {
+    pub(crate) fn with_landing(ticket_trees: u32, landing_trees: u32, commits: usize) -> Fixture {
         let root = ignite_core::test_files::temp_dir().join(format!(
             "ignite-trees-{}-{}",
             std::process::id(),
@@ -496,7 +496,13 @@ fn no_directory_outside_the_configured_trees_is_created() {
 
     assert_eq!(
         listing(&f.repo.join(".worktrees")),
-        ["landing-1", "tree-01", "tree-02"]
+        // The command lock stays beside the checkout so resetting it cannot unlink the lock.
+        [
+            ".landing-1.commands.lock",
+            "landing-1",
+            "tree-01",
+            "tree-02"
+        ]
     );
     assert_eq!(listing(&f.scratch.0), before);
 }

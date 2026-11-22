@@ -289,6 +289,43 @@ fn a_tree_kept_for_an_owner_that_finished_is_freed_by_the_next_lease() {
     assert_eq!(next.tree, owned.tree);
 }
 
+#[test]
+fn restart_keeps_a_stale_idle_lease_until_the_live_command_finishes() {
+    let f = Fixture::new(0, 1);
+    let owner = handle("I-1");
+    record_handle(&f, owner.as_str(), "running");
+    let idle = f
+        .trees
+        .lease_landing_for(crate::idle::LANDING_HOLDER, &owner, &f.tip())
+        .unwrap()
+        .unwrap();
+    let marker = mark(&idle);
+    let command = command_lock(&idle.path).unwrap();
+    command.lock_shared().unwrap();
+    record_handle(&f, owner.as_str(), "incomplete");
+
+    assert!(!reset_at_start_now(&f).contains(&idle.path));
+    f.trees.setup(&f.tip()).unwrap();
+    assert_eq!(f.state(idle.tree.as_str()), "landing");
+    assert!(
+        f.trees
+            .lease_landing("tip verification", &f.tip())
+            .unwrap()
+            .is_none()
+    );
+    assert!(marker.exists());
+
+    drop(command);
+    let next = f
+        .trees
+        .lease_landing("tip verification", &f.tip())
+        .unwrap()
+        .unwrap();
+    assert_eq!(next.tree, idle.tree);
+    assert!(!marker.exists());
+    assert!(f.trees.row(&idle.tree).unwrap().owner.is_none());
+}
+
 /// A live owner's tree is never given to anyone else.
 #[test]
 fn a_running_owners_tree_is_not_given_to_another_holder() {

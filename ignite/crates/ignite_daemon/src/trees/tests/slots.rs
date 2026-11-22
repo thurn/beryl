@@ -190,10 +190,17 @@ fn a_command_started_directly_in_the_tree_keeps_its_build_outputs() {
         .read_line(&mut ready)
         .unwrap();
     assert_eq!(ready.trim(), "ready");
+    let steps = crate::steps::Steps::new(f.clock.clone());
+    let idle = steps.begin(
+        crate::steps::Kind::Verb("idle-job".to_owned()),
+        crate::steps::Work::default(),
+    );
     let (waiting, reached) = mpsc::sync_channel(1);
     std::thread::scope(|scope| {
         let trees = &f.trees;
+        let activity = &idle;
         let build = scope.spawn(move || {
+            let _entered = activity.enter();
             let attempts = std::cell::Cell::new(0);
             trees.prepare_build(&lease.tree, 10, &|| {
                 attempts.set(attempts.get() + 1);
@@ -205,11 +212,14 @@ fn a_command_started_directly_in_the_tree_keeps_its_build_outputs() {
         });
         let observed_wait = reached.recv_timeout(Duration::from_secs(15));
         let kept = output.is_file();
+        let owner = idle.view().waiting_for;
+        let pid = command.id();
         drop(command.stdin.take());
         command.wait().unwrap();
         let result = build.join().unwrap();
         observed_wait.unwrap();
         assert!(kept);
+        assert!(owner.unwrap().contains(&format!("PID {pid}")));
         result.unwrap();
     });
     assert!(!output.exists());

@@ -13,11 +13,9 @@
 //!
 //! A landing tree leased by a verb with a handle records that handle as its owner. When the
 //! daemon restarts, a landing tree whose owner is still running ([`owner_alive`]) is kept as it
-//! is, with the commands in it, for the verb the new daemon runs again under that handle; every
-//! other tree left in the middle of something is reset ([`reset_at_start`]). The daemon marks
-//! those trees `resetting` before it serves its socket and resets them on a thread of its own
-//! afterwards ([`Trees::mark_unfinished`], [`Trees::finish_in_background`]), so a restart is not
-//! held up by `git`; a lease that needs one of them waits for it like any other.
+//! is. An idle lease whose owner stopped is reclaimed when a landing tree is next requested,
+//! after commands using that tree finish. Other unfinished trees are marked `resetting` and
+//! reset in the background ([`reset_at_start`], [`Trees::finish_in_background`]).
 //!
 //! Releasing a ticket tree saves its work first ([`ignite_git::save`]) and fails, leaving the
 //! tree leased and untouched, if that push fails. It then stops every verb still running from
@@ -326,9 +324,17 @@ pub fn owner_alive_in(db: &Connection, owner: &str, home: &Path) -> bool {
 }
 
 /// Whether a restarted daemon resets `row`'s tree: it was being prebuilt or reset, or it is a
-/// landing tree whose owner is not alive (a tip verification or idle work, which start over, or
-/// a verb that finished or will not run again). Leased ticket trees and free trees are not.
+/// landing tree whose owner is gone. Existing idle checkouts are reclaimed on the next lease.
 fn resets_at_start(db: &Connection, row: &rows::Tree) -> bool {
+    // Idle leases are reclaimed by the next landing lease. A dead verb can have
+    // been waiting for another process's build, which still owns the command lock.
+    if row.state == store::State::Landing.as_str()
+        && row.ticket.as_deref() == Some(crate::idle::LANDING_HOLDER)
+        && row.owner.is_some()
+        && Path::new(&row.path).join(".git").exists()
+    {
+        return false;
+    }
     let unfinished = [
         store::State::Prebuilding,
         store::State::Resetting,

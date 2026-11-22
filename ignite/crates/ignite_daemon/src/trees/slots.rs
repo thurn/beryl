@@ -13,7 +13,7 @@ use ignite_core::ids::{TicketId, TreeId};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 use ignite_os::Native;
-use ignite_os::occupants::Occupants as _;
+use ignite_os::occupants::{Occupant, Occupants as _};
 use ignite_os::system::{DiskSpace, disk_space};
 use ignite_store::local::{rows, trees as store};
 
@@ -150,16 +150,29 @@ impl Trees {
     }
 
     pub(super) fn legacy_command_in(locked: &Locked, tree: &Path) -> bool {
+        Self::legacy_command(locked, tree).is_some()
+    }
+
+    pub(super) fn has_build_slot(locked: &Locked, tree: &TreeId) -> bool {
+        locked.build_space.active.contains_key(tree)
+    }
+
+    fn legacy_command<'a>(locked: &'a Locked, tree: &Path) -> Option<&'a Run> {
         locked
             .build_space
             .legacy_commands
             .iter()
-            .any(|(cwd, run)| cwd.starts_with(tree) && run.is_running())
+            .find(|(cwd, run)| cwd.starts_with(tree) && run.is_running())
+            .map(|(_, run)| run)
     }
 
     pub(super) fn tree_processes_clear(&self, tree: &TreeId, path: &Path) -> io::Result<bool> {
+        Ok(self.tree_occupants(tree, path)?.is_empty())
+    }
+
+    fn tree_occupants(&self, tree: &TreeId, path: &Path) -> io::Result<Vec<Occupant>> {
         if !path.exists() {
-            return Ok(true);
+            return Ok(Vec::new());
         }
         let mut spared = caller_processes(None);
         for activity in self.inner.steps.in_tree(tree, path) {
@@ -170,8 +183,9 @@ impl Trees {
         }
         Ok(Native
             .occupants(path)?
-            .iter()
-            .all(|process| spared.contains(&process.pid)))
+            .into_iter()
+            .filter(|process| !spared.contains(&process.pid))
+            .collect())
     }
 
     pub(crate) fn build_service(&self) -> std::sync::Arc<dyn ignite_core::traits::Builds> {
@@ -475,21 +489,38 @@ impl Trees {
             return Ok(());
         }
         let path = Path::new(&row.path);
-        let waiting = crate::steps::waiting(format!(
-            "commands to finish in {tree} before cleaning its build outputs"
-        ));
+        let mut waiting = None;
         let mut guard = loop {
             if stopped() {
                 return Err(Error::Conflict(format!(
                     "stopped waiting to clean the build outputs in {tree}"
                 )));
             }
-            if !Seeding::involves(path)
-                && !Self::legacy_command_in(&self.lock(), path)
-                && let Some(guard) = try_exclusive(path)?
-                && self.tree_processes_clear(tree, path)?
-            {
-                break guard;
+            let legacy = Self::legacy_command(&self.lock(), path).cloned();
+            let blocker = if Seeding::involves(path) {
+                "a build directory copy".to_owned()
+            } else if let Some(run) = legacy {
+                format!("supervised run {}", run.dir().display())
+            } else {
+                let guard = try_exclusive(path)?;
+                let occupants = self.tree_occupants(tree, path)?;
+                match (guard, occupants.as_slice()) {
+                    (Some(guard), []) => break guard,
+                    (None, []) => "the shared tree command lock".to_owned(),
+                    (_, processes) => processes
+                        .iter()
+                        .map(describe_occupant)
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                }
+            };
+            if waiting.as_ref().is_none_or(|(old, _)| old != &blocker) {
+                let owner = row
+                    .owner
+                    .as_deref()
+                    .map_or_else(String::new, |owner| format!(", leased to {owner}"));
+                let reason = format!("{blocker} before cleaning build outputs in {tree}{owner}");
+                waiting = Some((blocker, crate::steps::waiting(reason)));
             }
             thread::sleep(std::time::Duration::from_millis(250));
         };
@@ -520,4 +551,15 @@ impl Trees {
         eprintln!("ignite: {text}");
         self.lock().build_space.last_cleanup = Some((self.inner.clock.now(), text));
     }
+}
+
+fn describe_occupant(process: &Occupant) -> String {
+    process
+        .executable
+        .as_deref()
+        .and_then(Path::file_name)
+        .map_or_else(
+            || format!("PID {}", process.pid),
+            |exe| format!("{} (PID {})", exe.to_string_lossy(), process.pid),
+        )
 }
