@@ -2,13 +2,12 @@
 
 use std::sync::Arc;
 
-use beryl_protocol::{protocol::ObjectId, script::Subject};
 use glam::{Vec2, Vec3};
 
 use super::{EffectRun, Reach, card, player};
 use kit_base::data::effect::{Definition, Effects, NumberOrigin, Primitive};
 use kit_base::geometry::{Rect, plane::ScreenPlane};
-use kit_base::pose::{Curve, Pose};
+use kit_base::pose::Pose;
 use kit_base::tokens::color;
 use kit_frame::frame::{Band, Draw, FrameBuilder};
 use kit_ui::element::{FloatId, text};
@@ -21,14 +20,7 @@ pub const DURATION: u64 = 600_000_000;
 /// Runs a resolved effect on the preview's single surface.
 #[must_use]
 pub fn run(definition: Arc<Definition>) -> EffectRun {
-    EffectRun {
-        definition,
-        on: Subject::Object { slot: ObjectId(0) },
-        start: 0,
-        duration: DURATION,
-        curve: Curve::LINEAR,
-        step: 0,
-    }
+    EffectRun::preview(definition, DURATION)
 }
 
 /// Whether the rectangle moves to show an effect that follows its path.

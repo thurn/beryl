@@ -12,7 +12,7 @@ pub use player::{NumberLook, TextLook, text};
 
 use std::sync::Arc;
 
-use beryl_protocol::script::Subject;
+use beryl_protocol::{protocol::ObjectId, script::Subject};
 use glam::{Vec2, Vec3};
 use kit_frame::frame::FrameBuilder;
 
@@ -72,5 +72,17 @@ impl EffectRun {
     /// Whether the anchor represents a point, such as a life total.
     fn on_point(&self) -> bool {
         matches!(self.on, Subject::Player { .. })
+    }
+
+    /// Runs one effect on the preview's single surface, using the same drawing code as play.
+    fn preview(definition: Arc<Definition>, duration: u64) -> Self {
+        Self {
+            definition,
+            on: Subject::Object { slot: ObjectId(0) },
+            start: 0,
+            duration,
+            curve: Curve::LINEAR,
+            step: 0,
+        }
     }
 }

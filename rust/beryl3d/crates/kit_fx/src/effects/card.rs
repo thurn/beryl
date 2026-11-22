@@ -57,12 +57,12 @@ impl Look {
 }
 
 /// The timed layers whose run plays on this surface.
-fn layers<'a>(
-    runs: &'a [EffectRun],
+fn layers(
+    runs: &[EffectRun],
     on: Subject,
     now: u64,
     tier: Tier,
-) -> impl Iterator<Item = (&'a EffectRun, &'a Primitive, f32)> {
+) -> impl Iterator<Item = (&EffectRun, &Primitive, f32)> {
     runs.iter()
         .filter(move |run| run.on == on)
         .flat_map(move |run| {

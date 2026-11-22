@@ -26,11 +26,11 @@ impl Kind<'_> {
     }
 }
 
-fn emitters<'a>(
-    runs: &'a [EffectRun],
+fn emitters(
+    runs: &[EffectRun],
     now: u64,
     tier: Tier,
-) -> impl Iterator<Item = (Subject, Seeds, Kind<'a>, f32)> {
+) -> impl Iterator<Item = (Subject, Seeds, Kind<'_>, f32)> {
     runs.iter()
         .filter_map(|run| {
             let Subject::Object { slot } = run.on else {
