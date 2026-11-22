@@ -330,6 +330,8 @@ crate::tables! {
         /// 1 when a landing was refused because the check's result at the tip was unknown.
         tip_unknown: i64,
         at: String,
+        /// The checked-out commit when the check ran.
+        head: Option<String>,
     }
 
     /// A ticket that landed from a CLI slot, with the transcript its last turn named, which a

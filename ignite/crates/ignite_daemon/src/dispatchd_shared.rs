@@ -14,7 +14,9 @@
 //!   the tip could not be found or run (the last case of `ignite guide blocked`).
 //!
 //! The outcomes come from each session's latest outcome of each check, which the result cache
-//! records on this machine ([`Host::check_sightings`]).
+//! records on this machine ([`Host::check_sightings`]). When `green` exists, a failure counts
+//! only if the tested tree included that commit. A run on an older tree can finish after
+//! `green` advances.
 //!
 //! While it lasts, the hub is asked only for tickets that hold `master` back, as it is while
 //! commands wait long for cores (see `work`); `ignite status` and `ignite pool list` say why;
@@ -30,6 +32,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
+use ignite_core::ids::Commit;
 use ignite_core::protocol::hub::JusticiarReport;
 use ignite_core::protocol::tickets::{Status, TicketQuery};
 use ignite_core::time::Timestamp;
@@ -120,11 +123,22 @@ impl SharedFailure {
 /// The first shared failure among `sightings`, each session's latest outcome of each check,
 /// oldest first. `holders` are the sessions that hold a ticket tree now.
 fn detect(
+    ctx: &Context,
     sightings: &[CheckSighting],
     holders: &BTreeSet<String>,
+    green: Option<&str>,
 ) -> Option<(String, Option<String>, Vec<String>, bool)> {
     let mut by_check: BTreeMap<&str, Vec<&CheckSighting>> = BTreeMap::new();
+    let mut includes_green = BTreeMap::new();
     for sighting in sightings {
+        let head = sighting.head.as_deref();
+        if sighting.outcome == "fail"
+            && !*includes_green
+                .entry(head)
+                .or_insert_with(|| tested_green(ctx, head, green))
+        {
+            continue;
+        }
         by_check
             .entry(sighting.check_name.as_str())
             .or_default()
@@ -174,17 +188,68 @@ fn detect(
     None
 }
 
+fn tested_green(ctx: &Context, head: Option<&str>, green: Option<&str>) -> bool {
+    let Some(green) = green else {
+        return true;
+    };
+    let Some(head) = head else {
+        return false;
+    };
+    if head == green {
+        return true;
+    }
+    match (Commit::new(green), Commit::new(head)) {
+        (Ok(green), Ok(head)) => ctx.git.is_ancestor(&green, &head).unwrap_or(false),
+        _ => false,
+    }
+}
+
 impl Dispatcher {
+    fn detect_shared(&self, ctx: &Context, state: &State, now: Timestamp) -> Option<SharedFailure> {
+        let window = now.plus_seconds(-SAME_WINDOW_S);
+        let since = match state.shared.ended_at {
+            Some(ended) if ended.plus_seconds(0.001) > window => ended.plus_seconds(0.001),
+            _ => window,
+        };
+        let sightings = self.host.check_sightings(since);
+        if !sightings.iter().any(|s| s.outcome == "fail") {
+            return None;
+        }
+        let holders: BTreeSet<String> = state.held.keys().map(ToString::to_string).collect();
+        // Read the remote branch only when the locally known revision has a candidate.
+        let known = self.host.known_green();
+        let candidate = detect(ctx, &sightings, &holders, known.as_deref())?;
+        let green = self.host.green().or_else(|| known.clone());
+        let (check, first_line, sessions, tip_unknown) = if green == known {
+            candidate
+        } else {
+            detect(ctx, &sightings, &holders, green.as_deref())?
+        };
+        eprintln!(
+            "ignite: a shared failure of {check} started; only tickets that hold master back start"
+        );
+        Some(SharedFailure {
+            check,
+            first_line,
+            sessions,
+            tip_unknown,
+            since: now,
+            green,
+            messaged: BTreeSet::new(),
+            reported: false,
+        })
+    }
+
     /// Ends the shared failure in force when its check passed, `green` moved or it lapsed;
     /// starts one when the sightings show it; and, while one lasts, sends its message to each
     /// running worker that has not had it.
-    pub(super) fn watch_shared(&self, state: &mut State, now: Timestamp) {
+    pub(super) fn watch_shared(&self, ctx: &Context, state: &mut State, now: Timestamp) {
         if let Some(current) = &state.shared.current {
             let lapsed = now.seconds_since(current.since) >= LAPSE_S;
-            let moved = match (&current.green, self.host.green()) {
-                (Some(then), Some(green)) => *then != green,
-                _ => false,
-            };
+            let green = self.host.green().or_else(|| self.host.known_green());
+            let moved = green
+                .as_deref()
+                .is_some_and(|green| current.green.as_deref() != Some(green));
             let passed = !lapsed
                 && !moved
                 && self
@@ -200,28 +265,7 @@ impl Dispatcher {
             }
         }
         if state.shared.current.is_none() {
-            let window = now.plus_seconds(-SAME_WINDOW_S);
-            let since = match state.shared.ended_at {
-                Some(ended) if ended.plus_seconds(0.001) > window => ended.plus_seconds(0.001),
-                _ => window,
-            };
-            let sightings = self.host.check_sightings(since);
-            let holders: BTreeSet<String> = state.held.keys().map(ToString::to_string).collect();
-            if let Some((check, first_line, sessions, tip_unknown)) = detect(&sightings, &holders) {
-                eprintln!(
-                    "ignite: a shared failure of {check} started; only tickets that hold master back start"
-                );
-                state.shared.current = Some(SharedFailure {
-                    check,
-                    first_line,
-                    sessions,
-                    tip_unknown,
-                    since: now,
-                    green: self.host.green(),
-                    messaged: BTreeSet::new(),
-                    reported: false,
-                });
-            }
+            state.shared.current = self.detect_shared(ctx, state, now);
         }
         let Some(current) = &state.shared.current else {
             return;

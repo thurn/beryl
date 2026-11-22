@@ -126,6 +126,7 @@ impl Host for FakeHost {
 pub(super) struct Rig {
     pub(super) ctx: Context,
     pub(super) clock: Arc<FakeClock>,
+    pub(super) git: Arc<FakeGit>,
     pub(super) hub: Arc<FakeHub>,
     pub(super) host: Arc<FakeHost>,
     pub(super) dispatcher: Arc<Dispatcher>,
@@ -166,6 +167,7 @@ pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp)
         light = "light"
     "#;
     let clock = Arc::new(FakeClock::new(now));
+    let git = Arc::new(FakeGit::default());
     let hub = Arc::new(FakeHub::default());
     let ctx = Context {
         config: Config::parse("ignite.toml", text).unwrap(),
@@ -173,7 +175,7 @@ pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp)
         machine: MachineId::new("m-1").unwrap(),
         clock: clock.clone(),
         hub: hub.clone(),
-        git: Arc::new(FakeGit::default()),
+        git: git.clone(),
         launcher: Arc::new(FakeLauncher::default()),
         builds: Arc::new(FakeBuilds::default()),
         session: None,
@@ -193,6 +195,7 @@ pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp)
     let rig = Rig {
         ctx,
         clock,
+        git,
         hub,
         host,
         dispatcher,

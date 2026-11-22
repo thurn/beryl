@@ -417,6 +417,10 @@ impl Checks {
         options: &RunOptions,
         run: &mut CheckRun,
     ) {
+        let head = options
+            .session
+            .as_ref()
+            .and_then(|_| self.trees.head(&tree.path).ok());
         let looking = Stopwatch::start(ctx);
         let hits = self.lookup(&prepared, options);
         run.slow(ctx, "looking up cached results", looking);
@@ -438,8 +442,13 @@ impl Checks {
         });
         for ((), own) in ran {
             // Each session's outcomes let the dispatcher see a failure several sessions share.
-            self.cache
-                .note_sightings(options.session.as_ref(), &options.verb, &own, &hashes);
+            self.cache.note_sightings(
+                options.session.as_ref(),
+                &options.verb,
+                &own,
+                &hashes,
+                head.as_ref(),
+            );
             run.absorb(own);
         }
     }

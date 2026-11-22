@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use rusqlite::Connection;
 
 use ignite_core::config::Os;
-use ignite_core::ids::{CheckName, MachineId, RecordId, SessionId};
+use ignite_core::ids::{CheckName, Commit, MachineId, RecordId, SessionId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     CachedResult, FlakyReport, ListingKey, NewResult, Record, ResultKey, StoredListing,
@@ -141,13 +141,14 @@ impl ResultCache {
 
     /// Records, for the dispatcher, each pass and failure in `run` as `session`'s latest outcome
     /// of the check, when `verb` is `test`, `check` or `land` (see `dispatchd_shared`). `hashes`
-    /// gives each check's input hash. A failure that cannot be written only goes unseen.
+    /// gives each check's input hash. `head` is the tested tree's checked-out commit.
     pub fn note_sightings(
         &self,
         session: Option<&SessionId>,
         verb: &str,
         run: &crate::checks::CheckRun,
         hashes: &HashMap<CheckName, String>,
+        head: Option<&Commit>,
     ) {
         let Some(session) = session else {
             return;
@@ -182,6 +183,7 @@ impl ResultCache {
                     first_line,
                     tip_unknown: 0,
                     at: at.clone(),
+                    head: head.map(ToString::to_string),
                 },
             );
         }
@@ -584,14 +586,20 @@ mod tests {
         };
         let session = SessionId::new("local_s1").unwrap();
         let hashes = HashMap::from([(CheckName::new("rust:b").unwrap(), "h".to_owned())]);
-        cache.note_sightings(Some(&session), "status", &run, &hashes);
+        let head = Commit::new("abc1234").unwrap();
+        cache.note_sightings(Some(&session), "status", &run, &hashes, Some(&head));
         assert!(
             cache.sightings_since(Timestamp::EPOCH).is_empty(),
             "not a sighted verb"
         );
-        cache.note_sightings(Some(&session), "test", &run, &hashes);
-        let seen: Vec<(String, String, Option<String>, Option<String>)> = cache
-            .sightings_since(Timestamp::EPOCH)
+        cache.note_sightings(Some(&session), "test", &run, &hashes, Some(&head));
+        let sightings = cache.sightings_since(Timestamp::EPOCH);
+        assert!(
+            sightings
+                .iter()
+                .all(|s| s.head.as_deref() == Some(head.as_str()))
+        );
+        let seen: Vec<_> = sightings
             .into_iter()
             .map(|s| (s.check_name, s.outcome, s.first_line, s.hash))
             .collect();

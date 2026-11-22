@@ -149,7 +149,7 @@ impl Dispatcher {
                 }
             }
             self.watch_silence(&mut state, now);
-            self.watch_shared(&mut state, now);
+            self.watch_shared(ctx, &mut state, now);
             self.plan_asking(&mut state)
         };
         let Some(asking) = asking else {

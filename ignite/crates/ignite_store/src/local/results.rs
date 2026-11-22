@@ -64,8 +64,8 @@ const SIGHTINGS_KEPT_S: f64 = 24.0 * 60.0 * 60.0;
 pub fn note_sighting(conn: &Connection, sighting: &rows::CheckSighting) -> Result<()> {
     conn.execute(
         "INSERT OR REPLACE INTO check_sightings \
-         (session, check_name, verb, outcome, hash, first_line, tip_unknown, at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+         (session, check_name, verb, outcome, hash, first_line, tip_unknown, at, head) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             sighting.session,
             sighting.check_name,
@@ -75,6 +75,7 @@ pub fn note_sighting(conn: &Connection, sighting: &rows::CheckSighting) -> Resul
             sighting.first_line,
             sighting.tip_unknown,
             sighting.at,
+            sighting.head,
         ],
     )?;
     if let Ok(at) = ignite_core::time::Timestamp::parse(&sighting.at) {
@@ -101,7 +102,7 @@ pub fn mark_tip_unknown(conn: &Connection, session: &str, check: &str) -> Result
 /// Every session's latest outcome of every check recorded at or after `since`, oldest first.
 pub fn sightings_since(conn: &Connection, since: &str) -> Result<Vec<rows::CheckSighting>> {
     let mut statement = conn.prepare(
-        "SELECT session, check_name, verb, outcome, hash, first_line, tip_unknown, at \
+        "SELECT session, check_name, verb, outcome, hash, first_line, tip_unknown, at, head \
          FROM check_sightings WHERE at >= ?1 ORDER BY at",
     )?;
     let rows = statement.query_map(params![since], |row| {
@@ -114,6 +115,7 @@ pub fn sightings_since(conn: &Connection, since: &str) -> Result<Vec<rows::Check
             first_line: row.get(5)?,
             tip_unknown: row.get(6)?,
             at: row.get(7)?,
+            head: row.get(8)?,
         })
     })?;
     Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
@@ -176,6 +178,7 @@ mod tests {
             first_line: Some("assertion failed".to_owned()),
             tip_unknown: 0,
             at: at.to_owned(),
+            head: Some("abc123".to_owned()),
         }
     }
 

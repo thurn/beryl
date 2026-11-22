@@ -145,6 +145,10 @@ pub trait Host: Send + Sync {
     fn check_sightings(&self, since: Timestamp) -> Vec<CheckSighting>;
     /// The commit the `green` branch points at; `None` when there is none (see `shared`).
     fn green(&self) -> Option<String>;
+    /// Where `green` pointed when last fetched.
+    fn known_green(&self) -> Option<String> {
+        self.green()
+    }
     fn ending_ticket(&self, session: &SessionId) -> bool {
         self.command(session)
             .is_some_and(|command| command.running && ends_ticket(&command.command))

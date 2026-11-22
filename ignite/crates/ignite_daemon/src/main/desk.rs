@@ -508,6 +508,15 @@ impl Host for DaemonHost {
             .map(|commit| commit.to_string())
     }
 
+    fn known_green(&self) -> Option<String> {
+        let green = self.ctx.config.repository.green.as_ref()?;
+        self.ctx
+            .git
+            .known_tip(green)
+            .ok()
+            .map(|commit| commit.to_string())
+    }
+
     fn release(
         &self,
         session: &SessionId,

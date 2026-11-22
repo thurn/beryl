@@ -2,6 +2,7 @@
 //! hand-offs, messages each running worker once, is reported once, survives a restart and ends
 //! when the check passes, `green` moves or two hours pass.
 
+use ignite_core::ids::Commit;
 use ignite_core::traits::Clock;
 
 use super::cli_tests::{cli, reserve, tick};
@@ -15,6 +16,18 @@ const CHECK: &str = "rust:alpha::tests";
 
 /// `session`'s latest outcome of [`CHECK`], recorded `ago` seconds before the rig's clock.
 fn sighting(rig: &Rig, session: &str, outcome: &str, first_line: &str, ago: f64) {
+    let head = lock(&rig.host.green).clone();
+    sighting_on(rig, session, outcome, first_line, ago, head.as_deref());
+}
+
+fn sighting_on(
+    rig: &Rig,
+    session: &str,
+    outcome: &str,
+    first_line: &str,
+    ago: f64,
+    head: Option<&str>,
+) {
     lock(&rig.host.sightings).push(CheckSighting {
         session: session.to_owned(),
         check_name: CHECK.to_owned(),
@@ -24,6 +37,7 @@ fn sighting(rig: &Rig, session: &str, outcome: &str, first_line: &str, ago: f64)
         first_line: (!first_line.is_empty()).then(|| first_line.to_owned()),
         tip_unknown: 0,
         at: rig.clock.now().plus_seconds(-ago).to_string(),
+        head: head.map(str::to_owned),
     });
 }
 
@@ -178,13 +192,13 @@ fn a_pass_of_the_check_ends_it() {
 #[test]
 fn green_moving_ends_it_and_old_failures_do_not_start_it_again() {
     let (rig, _) = pool();
-    *lock(&rig.host.green) = Some("aaa".to_owned());
+    *lock(&rig.host.green) = Some("aaaa".to_owned());
     sighting(&rig, "cli-claude-00000001", "fail", "boom", 120.0);
     sighting(&rig, "cli-claude-00000002", "fail", "boom", 60.0);
     tick(&rig);
     assert!(rig.dispatcher.shared_failure().is_some());
 
-    *lock(&rig.host.green) = Some("bbb".to_owned());
+    *lock(&rig.host.green) = Some("bbbb".to_owned());
     rig.clock.advance(10.0);
     tick(&rig);
     assert!(rig.dispatcher.shared_failure().is_none());
@@ -194,6 +208,55 @@ fn green_moving_ends_it_and_old_failures_do_not_start_it_again() {
         rig.dispatcher.shared_failure().is_none(),
         "seen before it ended"
     );
+}
+
+#[test]
+fn failures_reported_late_from_older_trees_leave_ordinary_dispatch_available() {
+    let (rig, fake) = pool();
+    let older = Commit::new("aaaa").unwrap();
+    let newer = Commit::new("bbbb").unwrap();
+    rig.git.set_not_ancestor(&newer, &older);
+    *lock(&rig.host.green) = Some(older.to_string());
+    tick(&rig);
+
+    *lock(&rig.host.green) = Some(newer.to_string());
+    tick(&rig);
+    rig.clock.advance(120.0);
+    sighting_on(
+        &rig,
+        "cli-claude-00000001",
+        "fail",
+        "boom",
+        60.0,
+        Some("aaaa"),
+    );
+    sighting_on(
+        &rig,
+        "cli-claude-00000002",
+        "fail",
+        "boom",
+        30.0,
+        Some("aaaa"),
+    );
+    assert!(!master_only(&rig, &fake));
+    assert!(rig.dispatcher.shared_failure().is_none());
+
+    sighting(&rig, "cli-claude-00000003", "fail", "boom", 0.0);
+    assert!(
+        !master_only(&rig, &fake),
+        "the old failures do not corroborate a current one"
+    );
+
+    sighting_on(
+        &rig,
+        "cli-claude-00000004",
+        "fail",
+        "boom",
+        0.0,
+        Some("cccc"),
+    );
+    assert!(master_only(&rig, &fake), "both trees include current green");
+    assert!(rig.dispatcher.shared_failure().is_some());
 }
 
 #[test]
