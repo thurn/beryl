@@ -190,7 +190,7 @@ fn tab_moves_the_focus_to_the_next_button_and_return_presses_it() {
 }
 
 #[test]
-fn cmd_b_opens_the_bug_report_and_ctrl_b_does_off_the_mac() {
+fn cmd_b_and_ctrl_b_open_the_bug_report_on_the_mac() {
     let command = Modifiers {
         command: true,
         ..Modifiers::default()
@@ -209,7 +209,7 @@ fn cmd_b_opens_the_bug_report_and_ctrl_b_does_off_the_mac() {
         std::iter::from_fn(|| client.next_request()).any(|request| request == Request::FreezeFrame)
     };
     assert!(opens(None, command), "Cmd+B on the Mac");
-    assert!(!opens(None, control), "Ctrl+B is not the Mac's chord");
+    assert!(opens(None, control), "Ctrl+B on the Mac");
     assert!(opens(Some(false), control), "Ctrl+B elsewhere");
     assert!(!opens(Some(false), command));
     assert_eq!(

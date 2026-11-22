@@ -28,22 +28,24 @@ pub(super) fn none(_: &mut Client, _: Pressed) -> Option<KeyResponse<Action>> {
     None
 }
 
-/// The bug report's keys: Cmd+B opens it on every screen but the manual table, where Cmd+B is
-/// a table command and Cmd+Shift+B opens it instead (`isBugReportShortcut` in
-/// `ui/src/components/bugReportKeys.ts`), and Cmd+Return saves the description.
-pub(super) const BUG_REPORT_KEYS: [Shortcut; 3] = [
+/// Cmd+B and Ctrl+B open the bug report. Both require Shift at the manual table, where the
+/// unshifted platform shortcut moves cards to the bottom of the library
+/// (`isBugReportShortcut` in `ui/src/components/bugReportKeys.ts`). Cmd+Return saves the report.
+pub(super) const BUG_REPORT_KEYS: [Shortcut; 5] = [
     Shortcut::binding("Cmd+B", "Report bug").on_every_screen(),
+    Shortcut::binding("Ctrl+B", "Report bug").on_every_screen(),
     Shortcut::binding("Cmd+Shift+B", "Report bug").on_every_screen(),
+    Shortcut::binding("Ctrl+Shift+B", "Report bug").on_every_screen(),
     Shortcut::binding("Cmd+Return", "Save report"),
 ];
 
 /// The index in `BUG_REPORT_KEYS` of the key that saves the description.
-const SAVE: usize = 2;
+const SAVE: usize = 4;
 
 pub(super) fn bug_report(client: &mut Client, pressed: Pressed) -> Option<KeyResponse<Action>> {
     let table = client.features.screen == Screen::Table;
     match pressed.index {
-        0 | 1 if pressed.first && table == (pressed.index == 1) => {
+        0..=3 if pressed.first && table == pressed.chord.modifiers.shift => {
             Some(KeyResponse::Action(Action::new(bug_report::Message::Open)))
         }
         SAVE if client.bug_open()

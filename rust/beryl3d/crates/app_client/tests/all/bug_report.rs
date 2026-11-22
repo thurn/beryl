@@ -1,7 +1,7 @@
-//! The bug report sheet, driven through the `Page` test driver: Cmd+B freezes the table and
-//! asks the host for its picture, a drag chooses the region, the description and the AI box go
-//! to the host with Submit, and the report closes once saved, after which the table plays on
-//! from where it froze.
+//! The bug report sheet, driven through the `Page` test driver: Cmd+B or Ctrl+B freezes the
+//! table and asks the host for its picture. A drag chooses the region, and Submit sends the
+//! description and the AI box to the host. Once saved, the report closes and the table plays
+//! on from where it froze.
 
 use app_client::Input;
 use app_client::command::Request;
@@ -225,7 +225,7 @@ fn editing_the_report_over_a_table_menu_keeps_focus_in_the_description() {
         KeyCode::B,
         Modifiers {
             shift: true,
-            command: true,
+            control: true,
             ..Modifiers::default()
         },
     ));
@@ -242,10 +242,10 @@ fn editing_the_report_over_a_table_menu_keeps_focus_in_the_description() {
 }
 
 #[test]
-fn cmd_b_freezes_the_table_then_a_drag_chooses_the_region_and_submit_sends_it() {
+fn ctrl_b_freezes_the_table_then_a_drag_chooses_the_region_and_submit_sends_it() {
     let mut page = sample();
     requests(&mut page);
-    page.chord("Cmd+B");
+    page.chord("Ctrl+B");
     assert_eq!(requests(&mut page), vec![Request::FreezeFrame]);
     page.still();
     page.find("text \"Drag to select\"");
