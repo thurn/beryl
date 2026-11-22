@@ -8,12 +8,10 @@ use beryl_protocol::protocol::{
 };
 use beryl_protocol::script::Reset;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, script};
-use game_table::table::Place;
-use game_table::table::labels::ABILITY_ROLE;
 use game_table::table::{ABILITY_IDS, Camera, Placement, Scroll, Window};
 use glam::{Vec2, Vec3};
 use kit_base::pose::Pose;
-use kit_frame::frame::{Frame, Role};
+use kit_frame::frame::{Frame, Place, Role};
 use kit_probe::agent::Context;
 use kit_probe::agent::checks::{duplicates, reachable};
 use kit_probe::agent::tree::{TreeOptions, tree};
@@ -96,7 +94,7 @@ fn every_zone_of_both_sides_gets_its_cards() {
         for (zone, row) in places {
             let place = Place::Card { zone, side, row };
             assert!(
-                frame.resolved.iter().any(|r| r.place == place.into()),
+                frame.resolved.iter().any(|r| r.place == place),
                 "{side:?} {zone:?} {row:?} has a card"
             );
         }
@@ -106,7 +104,7 @@ fn every_zone_of_both_sides_gets_its_cards() {
         side: Side::You,
         row: None,
     };
-    assert!(frame.resolved.iter().any(|r| r.place == stack.into()));
+    assert!(frame.resolved.iter().any(|r| r.place == stack));
     // Each side's library lies in its own corner of the window, as the web interface's piles
     // do: the viewer's at the bottom left, the opponent's at the top right.
     let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
@@ -303,7 +301,7 @@ fn a_crowded_battlefield_keeps_its_cards_in_the_table_with_their_strips_uncovere
         let mut lefts: Vec<f32> = frame
             .resolved
             .iter()
-            .filter(|r| r.place == place.into())
+            .filter(|r| r.place == place)
             .map(|r| r.corners.iter().map(|c| c.x).fold(f32::INFINITY, f32::min))
             .collect();
         assert!(lefts.len() > 1, "{row:?} is crowded");
@@ -486,15 +484,12 @@ fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
     let abilities: Vec<_> = frame
         .resolved
         .iter()
-        .filter(|r| r.role == ABILITY_ROLE)
+        .filter(|r| r.role == Role::Ability)
         .collect();
     let ids: Vec<u32> = abilities.iter().map(|r| r.id.0).collect();
     assert_eq!(ids, [ABILITY_IDS + 3, ABILITY_IDS + 4]);
     assert_eq!(frame.name(abilities[0].name), "Serra Angel");
-    let sides: Vec<_> = abilities
-        .iter()
-        .map(|r| Place::in_frame(r.place).unwrap())
-        .collect();
+    let sides: Vec<Place> = abilities.iter().map(|r| r.place).collect();
     let on_stack = |side| Place::Card {
         zone: ZoneName::Stack,
         side,

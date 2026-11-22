@@ -10,11 +10,11 @@ use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{Badges, On, faded};
 use crate::faces::{FaceList, ListedFace};
-use crate::table::Place;
 use kit_base::data::BadgeTuning;
 use kit_base::tokens::{badge, mana};
 use kit_frame::frame::{
-    Draw, ElementId, FrameBuilder, NameRef, RECORDS_PER_OBJECT, Resolved, Role, Sprite, StateBits,
+    Draw, ElementId, FrameBuilder, NameRef, Place, RECORDS_PER_OBJECT, Resolved, Role, Sprite,
+    StateBits,
 };
 use kit_text::text::fonts::Font;
 use kit_text::text::{Block, Glyphs, Text, TypeStyle, glyph_key};
@@ -170,7 +170,7 @@ impl Badges {
                 parent,
                 role: Role::Text,
                 name: NameRef::default(),
-                place: place.into(),
+                place,
                 pose: Some(kit_base::pose::Pose {
                     position: card.transform_point3(Vec3::new(
                         right - width / 2.0,
@@ -189,8 +189,9 @@ impl Badges {
                 // `.hand-cost` takes no pointer events.
                 state: StateBits(StateBits::PASSES),
                 face: None,
-                count: 1,
-                annotations: Default::default(),
+                copies: 1,
+                really: NameRef::default(),
+                note: NameRef::default(),
             },
         );
         let mut x = right - width;

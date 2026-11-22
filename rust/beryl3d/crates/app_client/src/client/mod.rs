@@ -115,11 +115,9 @@ impl Client {
     #[must_use]
     pub fn new(data: Arc<Data>, config: Config) -> Self {
         let window = data.profiles.resolve_window(Window::default());
-        let layer = Layer::with_icons(data.flat, Some(game_hud::mana_icons::icon));
-        let mut frame = Frame::with_capacity(config.elements, config.draws, config.name_bytes);
-        frame.labels = &game_hud::labels::GAME_LABELS;
+        let layer = Layer::with_tuning(data.flat);
         Self {
-            frame,
+            frame: Frame::with_capacity(config.elements, config.draws, config.name_bytes),
             window,
             show: Show::new(Table::new(data, window)),
             layer,

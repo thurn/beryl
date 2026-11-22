@@ -7,8 +7,9 @@ use beryl_protocol::protocol::{ObjectId, ObjectView, Side, StackItem, ZoneName};
 use glam::{Quat, Vec2};
 
 use super::place::{Placement, Rest, turn};
-use super::{Camera, Layout, Place, RowWindow, StackData, Table};
+use super::{Camera, Layout, RowWindow, StackData, Table};
 use kit_base::pose::Pose;
+use kit_frame::frame::Place;
 use kit_space::arrange::{AnchoredCascade, Cascade, CascadeLayout};
 
 /// The fitted stack's cascade region and the depth of its cards.

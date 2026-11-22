@@ -26,7 +26,7 @@ use game_manual::manual::menus::{self, Act};
 use game_manual::manual::tokens::TokenChoice;
 use game_manual::manual::viewers::{self, Look, ViewerControl};
 use game_manual::manual::{self, ActionSource, Context, Pending, Sent, Target, commands, pools};
-use game_table::table::Place;
+use kit_frame::frame::Place;
 use kit_ui::input::{Button, PointerPhase};
 
 impl Client {
@@ -173,7 +173,7 @@ impl Client {
         let Some(source) = source else {
             return Target::Table;
         };
-        match (source.node, source.container.and_then(Place::in_frame)) {
+        match (source.node, source.container) {
             (Node::Pile(Viewed::Pile(side, zone)), _) => Target::Pile(side, zone),
             (
                 Node::Card(_),

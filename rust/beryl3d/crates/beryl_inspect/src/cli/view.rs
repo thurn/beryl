@@ -1,14 +1,13 @@
 //! `tree` and `diff`: the elements on screen at one moment, and what changed between two.
 
-use game_hud::labels::GAME_LABELS;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use app_client::driver::{Duration, Moment, Name, Offset};
 use kit_frame::frame::{Frame, Role};
-use kit_probe::agent::TreeOptions;
 use kit_probe::agent::fault::rect_text;
-use kit_probe::agent::tree::{line as tree_line, tree_with_places};
+use kit_probe::agent::tree::{line as tree_line, place_word};
+use kit_probe::agent::{TreeOptions, tree as tree_text};
 use kit_scene::hit::bounds;
 use serde_json::{Value, json};
 
@@ -40,11 +39,8 @@ pub fn position_line(page: &mut Scene) -> String {
 pub(super) fn tree(options: &Options) -> Result<Printed, Usage> {
     let role = match options.value("--role") {
         None => None,
-        Some(word) => Some(game_hud::labels::GAME_LABELS.role(word).ok_or_else(|| {
-            let words: Vec<&str> = game_hud::labels::GAME_LABELS
-                .roles()
-                .map(Role::word)
-                .collect();
+        Some(word) => Some(Role::from_word(word).ok_or_else(|| {
+            let words: Vec<&str> = Role::ALL.iter().map(|role| role.word()).collect();
             Usage(format!(
                 "--role {word}: not a role; the roles are {}",
                 words.join(", ")
@@ -68,10 +64,8 @@ pub(super) fn tree(options: &Options) -> Result<Printed, Usage> {
     let now = page.now();
     let frame = page.frame();
     let elements = frame.resolved.len();
-    let body = tree_with_places(frame, &tree_options, |label| {
-        game_table::table::Place::from_label(label).is_some()
-    })
-    .map_err(|error| Usage(format!("--within: {error}")))?;
+    let body =
+        tree_text(frame, &tree_options).map_err(|error| Usage(format!("--within: {error}")))?;
     let header = position_line(&mut page);
     if options.json {
         let lines: Vec<Value> = body.lines().map(line_value).collect();
@@ -167,7 +161,7 @@ fn record_value(page: &mut Scene, options: &Options, frame: Option<u64>) -> Valu
 
 /// A tree line as JSON: its text, and its fields as the grammar reads them.
 fn line_value(text: &str) -> Value {
-    match Line::parse_with_labels(text, &GAME_LABELS) {
+    match Line::parse(text) {
         Ok(Line::Group { depth, word }) => json!({ "depth": depth, "group": word }),
         Ok(Line::Cut {
             depth,
@@ -200,7 +194,7 @@ struct Seen {
     /// Its tree line.
     line: String,
     /// Its place and box, as the tree prints them.
-    place: &'static str,
+    place: String,
     rect: String,
     /// Its states, as the tree prints them.
     states: String,
@@ -210,7 +204,7 @@ fn seen(frame: &Frame) -> BTreeMap<(String, u32), Seen> {
     let mut out = BTreeMap::new();
     for (index, element) in frame.resolved.iter().enumerate() {
         let line = tree_line(frame, index as u32);
-        let place = element.place.label();
+        let place = place_word(element.place);
         let rect = rect_text(bounds(element));
         let states = match line.find(&rect) {
             Some(at) => line[at + rect.len()..].trim().to_owned(),

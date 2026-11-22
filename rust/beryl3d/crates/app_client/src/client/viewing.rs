@@ -11,10 +11,9 @@ use game_hud::hud::steps;
 use game_hud::hud::viewer::{Playback, RevealedFace};
 use game_play::light::Span;
 use game_play::verbs::Interval;
-use game_table::table::Place;
 use game_table::table::{Moves, Relaid, Window};
 use kit_base::pose::Curve;
-use kit_frame::frame::{Place as FramePlace, ShowPlacement};
+use kit_frame::frame::{Place, ShowPlacement};
 
 /// Nanoseconds in a millisecond, as the session's step timings are written in milliseconds.
 const NS_PER_MS: f64 = 1_000_000.0;
@@ -330,12 +329,12 @@ impl Client {
 
 /// Maps a card or count to the pile whose action owns it.
 pub(super) fn pointer_pile(
-    place: FramePlace,
+    place: Place,
     screen: Screen,
     no_sheet: bool,
     manual_library: bool,
 ) -> Option<Viewed> {
-    let Some(Place::Card { zone, side, .. }) = Place::in_frame(place) else {
+    let Place::Card { zone, side, .. } = place else {
         return None;
     };
     let opens = match screen {

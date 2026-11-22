@@ -10,7 +10,6 @@ use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, PromptButton, ShapeB
 use beryl_protocol::protocol::Status;
 use beryl_protocol::script::Subject;
 use game_hud::prompts::bar::Message as BarMessage;
-use game_table::table::labels::ABILITY_ROLE;
 use glam::Vec2;
 use kit_frame::frame::{Role, StateBits};
 use kit_ui::element::Action;
@@ -129,7 +128,7 @@ fn a_carry_ended_by_cancel_leaves_the_next_press_to_press_once() {
     client.frame(0);
     let frame = client.frame(MS);
     let item = (frame.resolved.iter())
-        .position(|element| element.role == ABILITY_ROLE && element.interactive)
+        .position(|element| element.role == Role::Ability && element.interactive)
         .expect("an item of the row takes presses");
     let from = centre(frame, item);
     let cancel = centre(frame, find(frame, Role::Button, "Cancel"));
@@ -138,7 +137,7 @@ fn a_carry_ended_by_cancel_leaves_the_next_press_to_press_once() {
     client.handle(pointer(PointerPhase::Cancel, from + Vec2::new(-80.0, 0.0)));
     let frame = client.frame(2 * MS);
     let items = (frame.resolved.iter())
-        .filter(|element| element.role == ABILITY_ROLE && element.interactive)
+        .filter(|element| element.role == Role::Ability && element.interactive)
         .count();
     assert_eq!(items, 2, "the carried item is back in the row");
     client.handle(pointer(PointerPhase::Down, cancel));

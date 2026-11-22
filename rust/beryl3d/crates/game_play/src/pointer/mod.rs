@@ -20,14 +20,13 @@ use beryl_protocol::protocol::{Side, ZoneName};
 use glam::{Mat3, Quat, Vec2};
 
 use crate::play::compile::Compiled;
-use game_table::table::Place;
 pub use game_table::table::takes_pointer;
 use game_table::table::{Camera, Look, PILE_IDS};
 use held::{Fall, Lean};
 use kit_base::data::pointer::PointerTuning;
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose, Segment};
-use kit_frame::frame::{ElementId, Frame, Lifted, Role, StateBits};
+use kit_frame::frame::{ElementId, Frame, Lifted, Place, Role, StateBits};
 use kit_scene::hit::hit;
 use kit_ui::input::{self, PointerKind, PointerPhase};
 use kit_ui::layout::Shake;
@@ -517,12 +516,12 @@ fn hover_under(
     }
     element.state.0 |= StateBits::HOVERED;
     let rises = matches!(
-        Place::in_frame(element.place),
-        Some(Place::Card {
+        element.place,
+        Place::Card {
             zone: ZoneName::Hand,
             side: Side::You,
             ..
-        })
+        }
     );
     pointer.hover(Some(element.id.0 as usize), rises, now, tuning);
 }

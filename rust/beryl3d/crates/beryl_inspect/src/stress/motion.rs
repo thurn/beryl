@@ -7,8 +7,7 @@ use beryl_protocol::protocol::{Side, ZoneName};
 /// of the edge across window shapes.
 pub(crate) fn pointer_moves(frame: &kit_frame::frame::Frame) -> Vec<(u64, kit_ui::input::Pointer)> {
     use app_client::driver::TICK;
-    use game_table::table::Place;
-    use kit_frame::frame::Role;
+    use kit_frame::frame::{Place, Role};
     use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
 
     const HALF: u16 = 120;
@@ -18,12 +17,12 @@ pub(crate) fn pointer_moves(frame: &kit_frame::frame::Frame) -> Vec<(u64, kit_ui
         .filter(|element| {
             element.role == Role::Card
                 && matches!(
-                    Place::in_frame(element.place),
-                    Some(Place::Card {
+                    element.place,
+                    Place::Card {
                         zone: ZoneName::Hand,
                         side: Side::You,
                         ..
-                    })
+                    }
                 )
         })
         .map(|element| {
@@ -46,12 +45,12 @@ pub(crate) fn pointer_moves(frame: &kit_frame::frame::Frame) -> Vec<(u64, kit_ui
         let element = &frame.resolved[index as usize];
         element.role == Role::Card
             && matches!(
-                Place::in_frame(element.place),
-                Some(Place::Card {
+                element.place,
+                Place::Card {
                     zone: ZoneName::Hand,
                     side: Side::You,
                     ..
-                })
+                }
             )
     };
     let onto_hand = |point| {

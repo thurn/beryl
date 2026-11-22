@@ -11,11 +11,11 @@ use beryl_protocol::protocol::{
 use beryl_protocol::script::{Reset, Script, Table, replay, time_script};
 use beryl_protocol::testing::{self, ViewBuilder};
 use beryl_protocol::{GameUpdate, PlayerView, SessionId};
-use game_hud::labels::GAME_LABELS;
-use game_table::table::Place;
-use game_table::table::labels::{PHASED_OUT, PICKED, TAPPED};
-use kit_frame::frame::StateBits;
-use kit_probe::agent::line::{parse_states, quoted_name};
+use kit_frame::frame::{Place, StateBits};
+use kit_probe::agent::{
+    line::{parse_states, quoted_name},
+    tree::place_from_word,
+};
 
 /// The initial view and the view that arrives with each successive script.
 #[derive(Clone, Debug, PartialEq)]
@@ -364,7 +364,7 @@ impl Card {
         } else {
             (place, Side::You)
         };
-        let Some(Place::Card { zone, side, row }) = Place::from_label(place) else {
+        let Some(Place::Card { zone, side, row }) = place_from_word(place) else {
             return Err(format!("{place:?} is not a card's zone"));
         };
         if row.is_some() && zone != ZoneName::Battlefield {
@@ -411,12 +411,12 @@ impl Card {
             power_toughness,
             token,
         };
-        for state in parse_states(states, &GAME_LABELS)? {
+        for state in parse_states(states)? {
             let bit = match state.as_str() {
-                "tapped" => TAPPED,
+                "tapped" => StateBits::TAPPED,
                 "face-down" => StateBits::FACE_DOWN,
-                "phased-out" => PHASED_OUT,
-                "picked" => PICKED,
+                "phased-out" => StateBits::PHASED_OUT,
+                "picked" => StateBits::PICKED,
                 text => {
                     for (prefix, name) in
                         [("copy(\"", &mut card.really), ("note(\"", &mut card.note)]
@@ -442,9 +442,9 @@ impl Card {
             });
             let card = builder.card(self.zone, self.side, name.as_deref().unwrap_or_default());
             card.name = name;
-            card.tapped = self.states.has(TAPPED);
-            card.phased_out = self.states.has(PHASED_OUT);
-            card.hidden_pick = self.states.has(PICKED);
+            card.tapped = self.states.has(StateBits::TAPPED);
+            card.phased_out = self.states.has(StateBits::PHASED_OUT);
+            card.hidden_pick = self.states.has(StateBits::PICKED);
             card.really.clone_from(&self.really);
             card.note.clone_from(&self.note);
             card.pt = self.power_toughness;
@@ -518,7 +518,10 @@ pub(super) fn read_capture_card(text: &str) -> Result<serde_json::Value, String>
         "zone".to_owned(),
         serde_json::to_value(card.zone).map_err(|error| error.to_string())?,
     );
-    data.insert("tapped".to_owned(), card.states.has(TAPPED).into());
+    data.insert(
+        "tapped".to_owned(),
+        card.states.has(StateBits::TAPPED).into(),
+    );
     Ok(data.into())
 }
 

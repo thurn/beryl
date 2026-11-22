@@ -10,9 +10,8 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, step, timing};
 use game_play::play::Show;
 use game_play::verbs;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
-use game_table::table::Place;
 use glam::Vec2;
-use kit_frame::frame::{Frame, REVEALED_FACE, Role, StateBits};
+use kit_frame::frame::{Frame, Place, REVEALED_FACE, Role, StateBits};
 use kit_probe::agent::checks::duplicates;
 use kit_probe::agent::tree;
 use kit_probe::agent::{Context, Layout};
@@ -307,11 +306,11 @@ fn a_revealed_face_rests_in_the_revealed_pile_and_no_card_in_nowhere() {
             let element = &frame.resolved[index];
             element.role == Role::Card
                 && matches!(
-                    Place::in_frame(element.place),
-                    Some(Place::Card {
+                    element.place,
+                    Place::Card {
                         zone: ZoneName::Nowhere,
                         ..
-                    })
+                    }
                 )
         })
         .map(|index| tree::line(&frame, u32::try_from(index).expect("few elements")))

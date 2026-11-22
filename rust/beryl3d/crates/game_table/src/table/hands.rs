@@ -4,12 +4,13 @@ use beryl_protocol::protocol::{ObjectView, Side, ZoneName};
 use glam::{Quat, Vec2};
 use kit_base::data::verbs::LiftHand;
 use kit_base::pose::Pose;
+use kit_frame::frame::Place;
 use kit_space::arrange::{
     CentredFan, Container, Fan, Item, Limits, Policy, Region, Solved, arrange,
 };
 
 use super::place::{Placement, Rest, turn};
-use super::{Camera, HandData, Place, RowWindow};
+use super::{Camera, HandData, RowWindow};
 
 pub(super) fn hand(
     placement: &mut Placement,

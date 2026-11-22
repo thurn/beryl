@@ -1,7 +1,7 @@
 //! Text cut to its box with an ellipsis.
 
 use kit_text::text::fonts::Font;
-use kit_text::text::{Block, Text, Truncate, TypeStyle};
+use kit_text::text::{Block, Text, Truncate, TypeStyle, shaped_words};
 
 const BODY: TypeStyle = TypeStyle {
     font: Font::OpenSans,
@@ -16,9 +16,9 @@ const LONG: &str = "Return target creature an opponent controls to its owner's h
 
 /// The words each line of `block`, laid out from `source`, shows.
 fn lines(block: &Block, source: &str) -> Vec<String> {
-    let words = block.shown.as_deref().unwrap_or(source);
+    let words = shaped_words(block.shown.as_deref().unwrap_or(source)).into_owned();
     (block.lines.iter())
-        .map(|line| line.words(words).trim_end().to_owned())
+        .map(|line| line.words(&words).trim_end().to_owned())
         .collect()
 }
 
@@ -60,10 +60,10 @@ fn a_two_line_clamp_keeps_two_lines_and_cuts_the_second() {
 }
 
 #[test]
-fn an_inline_icon_is_cut_whole() {
-    let mut text = Text::with_icons(Some(super::icon));
+fn a_mana_symbol_is_cut_whole() {
+    let mut text = Text::new();
     let block = text.truncated(
-        "Mix {A}{B}{B}{B}",
+        "Pay {1}{U}{U}{U}",
         BODY,
         &[],
         Some(70.0),

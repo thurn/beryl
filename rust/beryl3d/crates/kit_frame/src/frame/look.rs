@@ -5,7 +5,9 @@
 
 use std::sync::Arc;
 
-use super::{ElementId, FrameBuilder};
+use beryl_protocol::script::Subject;
+
+use super::FrameBuilder;
 use kit_base::paint::{Border, Filter, Gradient, Shadow};
 use kit_text::text::TypeStyle;
 
@@ -23,14 +25,6 @@ pub struct Looks {
     pub effects: Vec<EffectLook>,
 }
 
-/// The owner-supplied name or key for the object an effect is drawn on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EffectTarget {
-    Key(ElementId),
-    Label(&'static str),
-    Numbered { prefix: &'static str, number: u32 },
-}
-
 /// One effect as a frame draws it, which `tree --records` reports as an element of role
 /// `effect`, so that `just b3d match` can measure it against the web interface's `.stage-effect`
 /// node of the same name on the same thing (docs/beryl-3d.md, "Effects"). `model` places a quad
@@ -43,20 +37,14 @@ pub enum EffectTarget {
 #[derive(Clone, Debug, PartialEq)]
 pub struct EffectLook {
     pub name: Arc<str>,
-    pub on: Option<EffectTarget>,
+    pub on: Option<Subject>,
     pub model: [f32; 12],
     pub opacity: f32,
 }
 
 impl FrameBuilder<'_> {
     /// Records `look` while the frame is `looking`; the app's frames record nothing.
-    pub fn effect(
-        &mut self,
-        name: &Arc<str>,
-        on: Option<EffectTarget>,
-        model: [f32; 12],
-        opacity: f32,
-    ) {
+    pub fn effect(&mut self, name: &Arc<str>, on: Option<Subject>, model: [f32; 12], opacity: f32) {
         if self.frame.looking {
             self.frame.looks.effects.push(EffectLook {
                 name: Arc::clone(name),

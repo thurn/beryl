@@ -4,16 +4,12 @@
 
 mod backdrop;
 mod draw;
-mod labels;
 mod look;
 mod order;
 mod paint;
-mod place;
-pub use place::Place;
 pub mod picking;
 mod relations;
 mod rings;
-pub use labels::Labels;
 pub use relations::{
     Anchor, AnchorBox, Anchored, Clearance, Decoration, Endpoint, LineEnd, NodeRef, ShapeAnchor,
     Show, ShowPlacement,
@@ -26,6 +22,7 @@ mod work;
 
 use std::sync::Arc;
 
+use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use glam::{Mat4, Vec2};
 
 pub use backdrop::{Backdrop, BackdropPanel};
@@ -33,7 +30,7 @@ pub use draw::{
     Draw, Material, Mesh, RADIAL, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, Sprite,
     TextureArray, box_shadow_reach, fixed, gradient_reach, rows, sprites,
 };
-pub use look::{EffectLook, EffectTarget, ElementLook, LookPaint, LookShadow, Looks};
+pub use look::{EffectLook, ElementLook, LookPaint, LookShadow, Looks};
 pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints, ScreenClip};
 pub use rings::{LIFTED, Lifted, RINGS, Ring, outline_corners};
 pub use undrawn::{Missing, Undrawn};
@@ -44,7 +41,11 @@ use kit_base::geometry::Rect;
 use kit_base::paint::Shadow;
 use kit_base::pose::Pose;
 
-pub use kit_base::ids::ElementId;
+/// A card's element id is its object's slot in the view, and the face of that card in the
+/// Revealed Cards pile's is `REVEALED_FACE` more. A flat-layer element's is given when it first
+/// enters the tree, and kept while it stays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ElementId(pub u32);
 
 /// The first reserved id in the range used for stack abilities, above all card and UI ids.
 pub const ABILITY_IDS: u32 = 1 << 20;
@@ -98,16 +99,25 @@ pub struct Resolved {
     /// For a card, the layer of the face-texture array its face is drawn from, or `None` when
     /// it has no face of its own yet and is drawn blank. `None` for every other role.
     pub face: Option<u16>,
-    /// The number represented by this element, when its owner supplies a count label.
-    pub count: u16,
-    /// Optional strings reported under the scene owner's annotation labels.
-    pub annotations: [NameRef; labels::ANNOTATIONS],
+    /// The size of a battlefield pile on its top card, zero on buried copies, and one elsewhere.
+    pub copies: u16,
+    /// For a card that is a copy of another card, the name of the card it really is in
+    /// `Frame::names` ([CR 707.2]), while `name` is the copied card's. Empty for every other
+    /// element.
+    ///
+    /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+    pub really: NameRef,
+    /// For a permanent, the line of text drawn on its face: its manual table note, or the
+    /// value it chose as it entered, in `Frame::names`. Empty when its face shows none.
+    pub note: NameRef,
 }
 
-/// What kind of thing an element is, as named in the tree printout.
+/// What kind of thing an element is. Closed: a new role is added here with the word the tree
+/// printout uses for it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
     Card,
+    Ability,
     Pile,
     Player,
     Region,
@@ -125,8 +135,6 @@ pub enum Role {
     Arrow,
     /// An outline or symbol drawn against another node.
     Mark,
-    /// A role named by the owner of the scene.
-    Custom(&'static str),
 }
 
 impl Role {
@@ -135,6 +143,7 @@ impl Role {
     pub fn word(self) -> &'static str {
         match self {
             Self::Card => "card",
+            Self::Ability => "ability",
             Self::Pile => "pile",
             Self::Player => "player",
             Self::Region => "region",
@@ -148,13 +157,13 @@ impl Role {
             Self::MenuItem => "menuitem",
             Self::Arrow => "arrow",
             Self::Mark => "mark",
-            Self::Custom(word) => word,
         }
     }
 
     /// Every role, in declaration order.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Card,
+        Self::Ability,
         Self::Pile,
         Self::Player,
         Self::Region,
@@ -177,11 +186,27 @@ impl Role {
     }
 }
 
+/// Where an element is: in the flat layer, for a card its zone, whose side of the table it is
+/// on and its battlefield row where it has one, or the Revealed Cards pile for the second card
+/// element that shows a revealed card's face there (`table::revealed`). The face is no game
+/// object of its own, so it names no zone: the card itself lies where the table has it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Place {
+    Layer,
+    Card {
+        zone: ZoneName,
+        side: Side,
+        row: Option<RowName>,
+    },
+    Revealed,
+}
+
 /// An element's states, one bit each.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct StateBits(pub u32);
 
 impl StateBits {
+    pub const TAPPED: u32 = 1 << 0;
     pub const FACE_DOWN: u32 = 1 << 1;
     pub const MOVING: u32 = 1 << 2;
     pub const HOVERED: u32 = 1 << 3;
@@ -192,6 +217,10 @@ impl StateBits {
     pub const TARGET: u32 = 1 << 7;
     pub const DISABLED: u32 = 1 << 8;
     pub const FOCUSED: u32 = 1 << 9;
+    /// A phased-out permanent, which stays where it lay, faded.
+    pub const PHASED_OUT: u32 = 1 << 10;
+    /// A card its player picked in a hidden pick, which lies apart from their hand.
+    pub const PICKED: u32 = 1 << 11;
     /// A flat-layer element the pointer goes through (`Style::passes`), which never catches a
     /// press. The tree printout leaves it out.
     pub const PASSES: u32 = 1 << 12;
@@ -321,8 +350,6 @@ pub const NAME_BYTES: usize = ELEMENTS * 32;
 /// What the client core hands the renderer and the checks for one moment.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Frame {
-    /// The labels its owner uses for states and reported counts.
-    pub labels: &'static Labels,
     /// Capacity set at startup, cleared each frame.
     pub resolved: Vec<Resolved>,
     /// Screen element indexes with a Show relation, in registration order, and their targets.
@@ -425,7 +452,6 @@ impl Frame {
     #[must_use]
     pub fn with_capacity(elements: usize, draws: usize, name_bytes: usize) -> Self {
         Self {
-            labels: &Labels::DEFAULT,
             resolved: Vec::with_capacity(elements),
             shows: Vec::with_capacity(elements),
             anchors: Vec::with_capacity(elements),
@@ -575,18 +601,26 @@ impl<'a> FrameBuilder<'a> {
         self.frame.corners(id)
     }
 
-    /// Gives the resolved element at `at` the text of one annotation.
-    ///
-    /// # Panics
-    ///
-    /// If `at` or `annotation` is out of bounds.
-    pub fn annotate(&mut self, at: u32, annotation: usize, text: &str) {
-        let name = NameRef {
+    /// Names the card the element at `at` in `Frame::resolved` really is, for a copy
+    /// (`Resolved::really`).
+    pub fn really(&mut self, at: u32, name: &str) {
+        let really = NameRef {
+            start: index(self.frame.names.len()),
+            len: index(name.len()),
+        };
+        self.frame.names.push_str(name);
+        self.frame.resolved[at as usize].really = really;
+    }
+
+    /// Names the line of text drawn on the face of the element at `at` in `Frame::resolved`
+    /// (`Resolved::note`).
+    pub fn note(&mut self, at: u32, text: &str) {
+        let note = NameRef {
             start: index(self.frame.names.len()),
             len: index(text.len()),
         };
         self.frame.names.push_str(text);
-        self.frame.resolved[at as usize].annotations[annotation] = name;
+        self.frame.resolved[at as usize].note = note;
     }
 
     /// Takes `records` of the frame's `TEXT_RECORDS` for the lines of text on a card's face,

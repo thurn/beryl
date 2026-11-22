@@ -16,9 +16,8 @@ use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, Marked};
 use beryl_protocol::protocol::{CardType, ObjectId, Side, Status, ZoneName};
 use beryl_protocol::script::{Mark, Subject};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, table};
-use game_table::table::Place;
 use glam::Vec2;
-use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Resolved, Role, StateBits};
+use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
 use kit_scene::hit::{hit, uncovered};
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Tier};
@@ -524,8 +523,7 @@ fn strip_card(id: u32, x: f32, depth: f32) -> Resolved {
             zone: ZoneName::Hand,
             side: Side::You,
             row: None,
-        }
-        .into(),
+        },
         pose: Some(kit_base::pose::Pose::default()),
         corners: [
             Vec2::new(x, 534.0),
@@ -539,8 +537,9 @@ fn strip_card(id: u32, x: f32, depth: f32) -> Resolved {
         interactive: true,
         state: StateBits::default(),
         face: Some(1),
-        count: 1,
-        annotations: Default::default(),
+        copies: 1,
+        really: NameRef::default(),
+        note: NameRef::default(),
     }
 }
 

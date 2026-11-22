@@ -2,7 +2,6 @@
 
 use beryl_protocol::protocol::ZoneName;
 
-use game_table::table::Place as GamePlace;
 use kit_frame::frame::{Place, Role, StateBits};
 use kit_ui::input::Rect;
 
@@ -24,9 +23,9 @@ impl Element {
     /// Cards pile.
     #[must_use]
     pub fn zone(&self) -> Option<ZoneName> {
-        match GamePlace::in_frame(self.place)? {
-            GamePlace::Card { zone, .. } => Some(zone),
-            GamePlace::Layer | GamePlace::Revealed => None,
+        match self.place {
+            Place::Card { zone, .. } => Some(zone),
+            Place::Layer | Place::Revealed => None,
         }
     }
 

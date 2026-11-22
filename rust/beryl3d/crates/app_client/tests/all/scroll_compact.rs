@@ -7,9 +7,8 @@ use app_client::driver::{Duration, Page, Recording};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
-use game_table::table::Place;
 use glam::Vec2;
-use kit_frame::frame::{Frame, Role};
+use kit_frame::frame::{Frame, Place, Role};
 use kit_probe::agent::Rule;
 use kit_scene::hit::uncovered;
 use kit_ui::input::Input as DeviceInput;
@@ -59,7 +58,7 @@ fn drawn(frame: &Frame, zone: ZoneName) -> Vec<(usize, u32)> {
         .filter(|(_, element)| {
             element.role == Role::Card
                 && element.opacity > 0.0
-                && matches!(Place::in_frame(element.place), Some(Place::Card { zone: at, side: Side::You, .. }) if at == zone)
+                && matches!(element.place, Place::Card { zone: at, side: Side::You, .. } if at == zone)
         })
         .map(|(index, element)| {
             let name = frame.name(element.name);

@@ -22,7 +22,6 @@ use glam::{Affine3A, Quat, Vec2, Vec3};
 use super::{Lit, MarkSpan, Open, Span};
 use crate::play::{LightTarget, Scene};
 use game_table::table::Look;
-use game_table::table::labels::TAPPED;
 use kit_base::data::light::Light;
 use kit_base::pose::{Curve, Pose};
 use kit_base::tokens::color;
@@ -67,7 +66,7 @@ pub fn look(light: &Light, lit: &Lit, on: Subject, now: u64, look: &mut Look) {
             Mark::Suggested => {}
             Mark::Paying => {
                 let turned = shown(open, now);
-                if look.state & TAPPED == 0 {
+                if look.state & StateBits::TAPPED == 0 {
                     look.pose.rotation *= Quat::from_rotation_z(-FRAC_PI_2 * turned);
                 }
                 look.pose.position.z += light.paying_lift * turned;
@@ -153,7 +152,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             // The symbol keeps its orientation while the paying card turns under it.
             let was_tapped = target
                 .element
-                .is_some_and(|(_, node)| node.state.has(TAPPED));
+                .is_some_and(|(_, node)| node.state.has(StateBits::TAPPED));
             let rotation = if was_tapped {
                 pose.rotation
             } else {
@@ -195,7 +194,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         let element = node.register(outline.model, sprites::OUTLINE_LINE, builder);
         builder.ring(Ring {
             element,
-            name: mark.name(),
+            mark,
             model: outline.model,
             line: sprites::OUTLINE_LINE,
             outer: sprites::OUTLINE_OUTER,
@@ -317,7 +316,7 @@ impl Outline {
         let outer = Vec2::splat(0.5) + Vec2::splat(farthest) / size.max(Vec2::splat(f32::EPSILON));
         builder.ring(Ring {
             element,
-            name: node.mark.name(),
+            mark: node.mark,
             model,
             line,
             outer: outer.to_array(),
@@ -380,8 +379,9 @@ impl MarkNode<'_> {
                                 | StateBits::LAYOUT_MOTION),
                 ),
                 face: None,
-                count: 1,
-                annotations: Default::default(),
+                copies: 1,
+                really: NameRef::default(),
+                note: NameRef::default(),
             },
         );
         let id = self.target.id;

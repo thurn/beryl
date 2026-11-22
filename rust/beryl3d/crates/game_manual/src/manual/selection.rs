@@ -15,10 +15,9 @@ use glam::Vec2;
 
 use game_play::light::{Lit, MarkSpan, Span};
 use game_play::verbs::Interval;
-use game_table::table::Place;
 use kit_base::data::flat::Selection;
 use kit_base::tokens::{color, type_style};
-use kit_frame::frame::{Frame, Role, StateBits};
+use kit_frame::frame::{Frame, Place, Role, StateBits};
 use kit_ui::element::{Align, Anchor, Element, row, text};
 use kit_ui::input::Rect;
 
@@ -57,7 +56,7 @@ pub fn sweep_box(from: Vec2, to: Vec2) -> Rect {
 pub fn swept(frame: &Frame, rect: Rect, view: &PlayerView) -> Vec<ObjectId> {
     let mut selected = Vec::new();
     for element in &frame.resolved {
-        let Some(Place::Card { zone, side, .. }) = Place::in_frame(element.place) else {
+        let Place::Card { zone, side, .. } = element.place else {
             continue;
         };
         let reachable = match zone {
@@ -163,10 +162,10 @@ pub fn highest(frame: &Frame, selection: &[ObjectId]) -> Option<ObjectId> {
     }
     let mut best: Option<(f32, ObjectId)> = None;
     for element in &frame.resolved {
-        let Some(Place::Card {
+        let Place::Card {
             zone: ZoneName::Battlefield,
             ..
-        }) = Place::in_frame(element.place)
+        } = element.place
         else {
             continue;
         };

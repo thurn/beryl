@@ -50,7 +50,7 @@ use crate::input::{Rect, Size};
 use crate::widgets::icons::Icons;
 use kit_base::geometry::Window;
 use kit_frame::frame::{ElementId, Role};
-use kit_text::text::{Block, Glyphs, IconResolver, Text, Truncate, TypeStyle};
+use kit_text::text::{Block, Glyphs, Text, Truncate, TypeStyle};
 
 /// Where the desktop layout anchors a screen: its bottom right corner this far in from the
 /// safe area's, where the web interface's action dock stands (`.dock` in
@@ -178,11 +178,6 @@ impl Layer {
 
     #[must_use]
     pub fn with_tuning(tuning: kit_base::data::flat::Flat) -> Self {
-        Self::with_icons(tuning, None)
-    }
-
-    #[must_use]
-    pub fn with_icons(tuning: kit_base::data::flat::Flat, icons: Option<IconResolver>) -> Self {
         let mut taffy = TaffyTree::new();
         // Logical points need not be whole: a box rounded smaller than its text's measured
         // width would break the text onto another line.
@@ -201,7 +196,7 @@ impl Layer {
             floats: Vec::new(),
             prepared: Vec::new(),
             next_id: FIRST_ID,
-            text: Text::with_icons(icons),
+            text: Text::new(),
             window,
             glyphs: Glyphs::default(),
             icons: Icons::default(),

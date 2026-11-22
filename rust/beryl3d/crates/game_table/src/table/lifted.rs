@@ -16,9 +16,10 @@ use beryl_protocol::script::{Act, Span, Table as Played};
 use glam::Vec2;
 
 use super::place::{Group, Placement, Zones, members};
-use super::{Camera, Layout, Place};
+use super::{Camera, Layout};
 use kit_base::data::verbs::{Lift, LiftHand};
 use kit_base::pose::Pose;
+use kit_frame::frame::Place;
 use kit_space::arrange::{LiftedFan, LiftedPlane};
 
 /// The group that holds the cards `handling` takes, if the table places any of them.

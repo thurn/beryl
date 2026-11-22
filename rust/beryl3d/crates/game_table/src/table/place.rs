@@ -27,9 +27,10 @@ use super::hands::{HandFits, hand};
 use super::pile::{PileShown, lay_pile, lay_unseen_exile};
 use super::rows::{NameIds, face_up};
 use super::stack::{OnStack, on_stack, place_stack, spells};
-use super::{Camera, Layout, Place, lifted};
+use super::{Camera, Layout, lifted};
 use kit_base::data::verbs::Lift;
 use kit_base::pose::Pose;
+use kit_frame::frame::Place;
 
 /// Where one object rests.
 #[derive(Clone, Copy, Debug, PartialEq)]

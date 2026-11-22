@@ -10,9 +10,9 @@
 use super::Motion;
 use crate::verbs::Interval;
 use beryl_protocol::protocol::ZoneName;
-use game_table::table::Place;
 use game_table::table::Rest;
 use kit_base::pose::Pose;
+use kit_frame::frame::Place;
 
 /// How far a card may move within its pile and take no segment, in millimetres: a few cards'
 /// worth of the pile's shift.

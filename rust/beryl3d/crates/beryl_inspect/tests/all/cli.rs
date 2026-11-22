@@ -7,7 +7,6 @@ use beryl_inspect::cli::line::Line;
 use beryl_inspect::cli::{Ran, main};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
-use game_hud::labels::GAME_LABELS;
 use kit_probe::agent::Layout;
 use kit_ui::input::Size;
 use serde_json::Value;
@@ -54,7 +53,7 @@ fn every_tree_line_after_the_header_follows_the_grammar() {
         assert!(header.starts_with("view "), "{header}");
         let mut elements = 0;
         for line in lines {
-            match Line::parse_with_labels(line, &GAME_LABELS) {
+            match Line::parse(line) {
                 Ok(Line::Element { .. }) => elements += 1,
                 Ok(_) => {}
                 Err(why) => panic!("{why}"),
@@ -65,10 +64,9 @@ fn every_tree_line_after_the_header_follows_the_grammar() {
     // A cut place prints a cut line, which the grammar reads too.
     let cut = ok(&["tree", RECORDING, "--at", "1500ms"]);
     assert!(
-        cut.lines().skip(2).any(|line| matches!(
-            Line::parse_with_labels(line, &GAME_LABELS),
-            Ok(Line::Cut { .. })
-        )),
+        cut.lines()
+            .skip(2)
+            .any(|line| matches!(Line::parse(line), Ok(Line::Cut { .. }))),
         "{cut}"
     );
 }
@@ -155,10 +153,7 @@ fn a_diff_of_a_moment_with_itself_prints_nothing() {
     for line in moved.lines().skip(1) {
         let element = line.rsplit_once("  (").unwrap().0;
         assert!(
-            matches!(
-                Line::parse_with_labels(element, &GAME_LABELS),
-                Ok(Line::Element { .. })
-            ),
+            matches!(Line::parse(element), Ok(Line::Element { .. })),
             "{line}"
         );
     }

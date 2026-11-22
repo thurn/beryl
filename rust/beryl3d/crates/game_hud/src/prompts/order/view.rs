@@ -13,7 +13,6 @@
 //! its reply is drawn.
 
 use super::Order;
-use game_table::table::labels::ABILITY_ROLE;
 
 use beryl_protocol::prompt::{Click, PromptView, ShapeBody};
 use beryl_protocol::protocol::{Candidate, CandidateView, PlayerView, Status};
@@ -26,6 +25,7 @@ use game_table::faces::FaceList;
 use game_table::profiles::Profile;
 use game_table::table::{TraySpace, tray_area};
 use kit_base::tokens::{color, size, space, type_style};
+use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
 use kit_ui::element::{Anchor, Element, Justify, Shown as Showing, row, text};
 use kit_ui::input::{FaceSize, Rect, Size};
@@ -87,7 +87,7 @@ fn item(
     let (name, face) = item_face(on, view, faces);
     Element {
         shows: face.map(|face| Showing::Face(face, FaceSize::Board)),
-        ..Element::new(ABILITY_ROLE)
+        ..Element::new(Role::Ability)
     }
     .name(&format!("{}. {}", place + 1, name))
     .width(cell.width)

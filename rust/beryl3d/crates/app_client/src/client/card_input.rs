@@ -14,9 +14,8 @@ use game_hud::hud::inspector::Message as Inspect;
 use game_hud::prompts;
 use game_manual::features::table::Change;
 use game_play::pointer::rows::scroller_of;
-use game_table::table::Place;
 use game_table::table::Scroller;
-use kit_frame::frame::Place as FramePlace;
+use kit_frame::frame::Place;
 use kit_scene::input::{Direction, Target};
 use kit_ui::element::Action;
 use kit_ui::input::{Button, PointerKind, PointerPhase};
@@ -209,7 +208,7 @@ impl Client {
     /// Whether a press may pick up the card in `slot`, resting at `place`: a card the open
     /// prompt marks, once the prompt is drawn, in the viewer's hand or held up in a tray of two
     /// piles. This is the web interface's `#lifts` in `ui/src/stage/prompt.ts`.
-    fn holdable(&self, slot: usize, place: FramePlace) -> bool {
+    fn holdable(&self, slot: usize, place: Place) -> bool {
         if let Some(holdable) = self.table_holdable(slot, place) {
             return holdable;
         }
@@ -222,12 +221,12 @@ impl Client {
             return false;
         };
         let in_hand = matches!(
-            Place::in_frame(place),
-            Some(Place::Card {
+            place,
+            Place::Card {
                 zone: ZoneName::Hand,
                 side: Side::You,
                 ..
-            })
+            }
         );
         let on = u16::try_from(slot).map(|slot| Subject::Object {
             slot: ObjectId(slot),

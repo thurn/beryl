@@ -4,6 +4,7 @@
 use glam::{Mat4, Vec2, Vec3};
 
 use super::{ABILITIES, Frame, OBJECTS};
+use beryl_protocol::script::Mark;
 use kit_base::{geometry::Size, paint::Shadow, pose::Pose};
 
 /// The most hand cards the pointer can have up out of the fan at once. One is raised at a time,
@@ -24,7 +25,7 @@ pub struct Ring {
     /// The mark node that owns this outline.
     pub element: u32,
     /// Which mark the outline draws, which `just b3d match` names its record by.
-    pub name: &'static str,
+    pub mark: Mark,
     pub model: [f32; 12],
     /// Half the width and height, in the units of `model`'s quad, of the rectangle the
     /// outline's line runs along.

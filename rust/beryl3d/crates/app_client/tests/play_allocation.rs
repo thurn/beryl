@@ -15,7 +15,6 @@ fn card() -> glam::Vec2 {
     test_data::data().card.size()
 }
 
-use game_table::table::labels::ABILITY_ROLE;
 use kit_ui::input::Tier;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -129,7 +128,7 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
         let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, card());
         show.frame(now, &mut builder);
         let drawn = builder.finish();
-        let ability = (drawn.resolved.iter()).any(|element| element.role == ABILITY_ROLE);
+        let ability = (drawn.resolved.iter()).any(|element| element.role == Role::Ability);
         let sounded = !drawn.sounds.is_empty();
         let after = ALLOCATIONS.load(Ordering::Relaxed);
         // The emerge's sound is listed in the frame at its start, which allocates nothing.

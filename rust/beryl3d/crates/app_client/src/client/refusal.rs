@@ -12,9 +12,8 @@ use glam::Vec2;
 use super::Client;
 use app_screens::screens::Screen;
 use game_hud::hud::inspector::{Message, RefusalNotice};
-use game_table::table::Place;
 use kit_base::tokens::size;
-use kit_frame::frame::{Anchor, ElementId, Role};
+use kit_frame::frame::{Anchor, ElementId, Place, Role};
 
 impl Client {
     /// The open decision, as the latest view sends it, while it is the one the prompt answers.
@@ -71,11 +70,11 @@ impl Client {
         let id = ElementId(u32::from(by.0));
         let element = (self.frame.resolved.iter())
             .find(|element| element.role == Role::Card && element.id == id)?;
-        let Some(Place::Card {
+        let Place::Card {
             zone: ZoneName::Battlefield,
             side: Side::Opponent,
             ..
-        }) = Place::in_frame(element.place)
+        } = element.place
         else {
             return None;
         };

@@ -11,10 +11,10 @@ use super::record::{Cause, SegmentRecord};
 use crate::beat::Laid;
 use crate::named_curve;
 use crate::verbs::{self, Interval};
-use game_table::table::Place;
 use game_table::table::lifted::Look;
 use game_table::table::{Group, HandFits, NameIds, PileRules, Placement, Rest, Table, Zones};
 use kit_base::pose::{Curve, Pose, Segment};
+use kit_frame::frame::Place;
 use kit_space::motion::Track;
 
 mod abilities;

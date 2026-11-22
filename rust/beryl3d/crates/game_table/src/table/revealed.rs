@@ -11,9 +11,8 @@ use glam::{Quat, Vec3};
 use super::look::Look;
 use super::scene::{Table, face_of};
 use crate::faces::Faces;
-use crate::table::Place;
 use kit_base::pose::{Curve, Interval, Segment, Shape};
-use kit_frame::frame::{ElementId, FrameBuilder, REVEALED_FACE, Role, StateBits};
+use kit_frame::frame::{ElementId, FrameBuilder, Place, REVEALED_FACE, Role, StateBits};
 use kit_space::arrange::Pile;
 
 impl Table {

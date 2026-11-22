@@ -41,7 +41,7 @@ pub(super) fn record_as(
     let model = Affine3A::from_scale_rotation_translation(size, pose.rotation, above(pose, lift));
     builder.effect(
         &run.definition.name,
-        Some(super::effect_target(run.on)),
+        Some(run.on),
         Draw::glow(model, [0; 4], sprites::HALO, 0.0).model,
         opacity,
     );

@@ -160,7 +160,8 @@ fn region(id: ElementId, parent: u32, rect: Rect, clip: Option<Rect>) -> Resolve
         interactive: false,
         state: StateBits(StateBits::PASSES),
         face: None,
-        count: 0,
-        annotations: Default::default(),
+        copies: 0,
+        really: NameRef::default(),
+        note: NameRef::default(),
     }
 }

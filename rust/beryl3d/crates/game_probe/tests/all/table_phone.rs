@@ -6,10 +6,9 @@ use beryl_protocol::protocol::{CardType, ObjectId, RowName, Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
 use game_table::profiles::{Band, Profile};
-use game_table::table::Place;
 use game_table::table::{Held, Table, TrayKind, Window};
 use glam::Vec2;
-use kit_frame::frame::{Frame, Resolved, Role};
+use kit_frame::frame::{Frame, Place, Resolved, Role};
 use kit_probe::agent::checks::{on_screen, reachable};
 use kit_probe::agent::{Context, Layout};
 use kit_ui::input::{Insets, Size};
@@ -109,7 +108,7 @@ fn centre(element: &Resolved) -> Vec2 {
 
 fn cards_at(frame: &Frame, place: Place) -> Vec<&Resolved> {
     (frame.resolved.iter())
-        .filter(|element| element.role == Role::Card && element.place == place.into())
+        .filter(|element| element.role == Role::Card && element.place == place)
         .filter(|element| element.opacity > 0.0)
         .collect()
 }
@@ -590,7 +589,7 @@ fn each_pile_lies_in_its_players_strip() {
             .collect();
         assert!(!piles.is_empty());
         for pile in piles {
-            let Some(Place::Card { side, .. }) = Place::in_frame(pile.place) else {
+            let Place::Card { side, .. } = pile.place else {
                 panic!("a pile has a side");
             };
             let strip = match side {

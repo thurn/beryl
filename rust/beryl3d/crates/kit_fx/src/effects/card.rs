@@ -175,7 +175,7 @@ fn record(
     );
     builder.effect(
         name,
-        Some(super::effect_target(on)),
+        Some(on),
         Draw::glow(face, [0; 4], sprites::BURST, 0.0).model,
         strength * look.pose.opacity,
     );

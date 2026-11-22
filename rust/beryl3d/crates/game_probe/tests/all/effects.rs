@@ -6,7 +6,7 @@ use beryl_protocol::protocol::Side;
 use beryl_protocol::script::{Curve, Edge, StepEffect, StepTiming, Subject};
 use game_play::play::Show;
 use kit_base::data::effect::Effects;
-use kit_frame::frame::{EffectTarget, ElementId, Wake};
+use kit_frame::frame::Wake;
 use kit_fx::effects::EffectRun;
 
 use crate::common::{MS, before, discard, empty_frame, frame, show};
@@ -134,10 +134,6 @@ fn a_timed_step_draws_an_effect_added_to_the_tuning() {
         ],
     );
     assert_eq!(runs(&show), vec![("test-glint", 100.0, 500.0)]);
-    let Subject::Object { slot } = on else {
-        panic!("the effect follows the discarded card");
-    };
-    let target = EffectTarget::Key(ElementId(u32::from(slot.0)));
     let mut buffer = empty_frame();
     buffer.looking = true;
     let during = frame(&mut show, &mut buffer, 250 * MS);
@@ -146,7 +142,7 @@ fn a_timed_step_draws_an_effect_added_to_the_tuning() {
             .looks
             .effects
             .iter()
-            .any(|look| { look.name.as_ref() == "test-glint" && look.on == Some(target) })
+            .any(|look| { look.name.as_ref() == "test-glint" && look.on == Some(on) })
     );
     let after = frame(&mut show, &mut buffer, 500 * MS);
     assert!(after.looks.effects.is_empty());

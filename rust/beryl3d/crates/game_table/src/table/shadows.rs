@@ -10,11 +10,10 @@ use glam::{Affine3A, Vec2, Vec3};
 
 use super::pile::PileShown;
 use super::scene::{SceneObject, Table};
-use crate::table::Place;
 use kit_base::data::Card;
 use kit_base::data::lighting::Shadow;
 use kit_base::pose::Pose;
-use kit_frame::frame::{Band, Draw, FrameBuilder};
+use kit_frame::frame::{Band, Draw, FrameBuilder, Place};
 use kit_ui::input::Tier;
 
 impl Table {

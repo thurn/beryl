@@ -12,9 +12,8 @@ use beryl_protocol::protocol::{CardType, ObjectId, PlayerView, RowName, Side, Wh
 use beryl_protocol::script::{Act, Script, Step, StepTiming};
 use beryl_protocol::testing::{self, ScriptBuilder, ViewBuilder, step, timing};
 use game_probe::agent::steps::rest_equals_placement;
-use game_table::table::Place;
 use glam::Vec2;
-use kit_frame::frame::{Frame, Role, StateBits};
+use kit_frame::frame::{Frame, Place, Role, StateBits};
 use kit_probe::agent::Rule;
 use kit_scene::hit::uncovered;
 use kit_ui::input::Input as DeviceInput;
@@ -71,7 +70,6 @@ fn row(frame: &Frame) -> Vec<(usize, u32)> {
                         side: Side::You,
                         row: Some(RowName::Lands),
                     }
-                    .into()
         })
         .map(|(index, element)| {
             let name = frame.name(element.name);

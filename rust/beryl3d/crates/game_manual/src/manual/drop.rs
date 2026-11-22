@@ -14,11 +14,10 @@ use glam::{Vec2, Vec3};
 use serde_json::Value;
 
 use super::commands::seat_of;
-use game_table::table::Place;
 use game_table::table::{Camera, Layout};
 use kit_base::data::flat::DropTarget;
 use kit_base::tokens::{color, ratio, type_style};
-use kit_frame::frame::{Frame, Resolved, Role, StateBits};
+use kit_frame::frame::{Frame, Place, Resolved, Role, StateBits};
 use kit_ui::element::{Align, Anchor, Element, Justify, column, text};
 use kit_ui::input::Rect;
 
@@ -68,7 +67,7 @@ pub fn destination(
 }
 
 fn on_element(element: &Resolved, at: Vec2, view: &PlayerView) -> Option<Destination> {
-    let Some(Place::Card { zone, side, row }) = Place::in_frame(element.place) else {
+    let Place::Card { zone, side, row } = element.place else {
         return None;
     };
     if !matches!(element.role, Role::Card | Role::Pile) || element.state.has(StateBits::HELD) {
@@ -406,9 +405,9 @@ fn place_in_row(
                 return None;
             }
             let element = card_element(frame, slot)?;
-            let Some(Place::Card {
+            let Place::Card {
                 row: Some(found), ..
-            }) = Place::in_frame(element.place)
+            } = element.place
             else {
                 return None;
             };
@@ -428,7 +427,7 @@ fn place_in_row(
 
 /// The row the card in `slot` lies in, as `frame` drew it.
 fn row_in(frame: &Frame, slot: ObjectId) -> Option<RowName> {
-    match Place::in_frame(card_element(frame, slot)?.place)? {
+    match card_element(frame, slot)?.place {
         Place::Card { row, .. } => row,
         Place::Layer | Place::Revealed => None,
     }

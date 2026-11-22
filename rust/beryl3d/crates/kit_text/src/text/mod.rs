@@ -11,7 +11,6 @@ pub mod glyphs;
 mod symbols;
 mod truncate;
 
-pub use symbols::{IconResolver, InlineIcon};
 pub use truncate::Truncate;
 
 use std::borrow::Cow;
@@ -79,14 +78,14 @@ pub struct Block {
     /// How the glyphs of run 0 look: the text's own style.
     pub base: Run,
     /// How the glyphs of each later run look, from run 1: each styled span's, then one for the
-    /// glyph of each inline icon. Plain text has none, and allocates nothing for them.
+    /// glyph of each mana symbol. Plain text has none, and allocates nothing for them.
     pub runs: Vec<Run>,
     pub glyphs: Vec<PlacedGlyph>,
-    /// The disc of each inline icon, drawn under its glyph.
+    /// The disc of each mana symbol, drawn under its glyph.
     pub symbols: Vec<Symbol>,
     /// The text the block was shaped from when it is not the text that was asked for: a text
     /// cut to its box and ended with an ellipsis (`Text::truncated`). Its lines' byte ranges
-    /// are in this text, written as `Text::shaped_words` writes it.
+    /// are in this text, written as `shaped_words` writes it.
     pub shown: Option<String>,
 }
 
@@ -106,8 +105,8 @@ impl Block {
 pub struct Line {
     /// Its box: as wide as its glyphs and as tall as the line.
     pub rect: Rect,
-    /// The byte range of the line in the text the block was shaped from, with each inline icon
-    /// as one object character (`Text::shaped_words`).
+    /// The byte range of the line in the text the block was shaped from, with each mana symbol
+    /// as one object character (`shaped_words`).
     pub start: u32,
     pub end: u32,
     /// The baseline's distance below the block's top, in logical points.
@@ -123,6 +122,13 @@ impl Line {
             .get(self.start as usize..self.end as usize)
             .unwrap_or("")
     }
+}
+
+/// `text` as it is shaped: each `{...}` mana symbol in it replaced by one object character
+/// (U+FFFC), which the symbol's disc stands in for.
+#[must_use]
+pub fn shaped_words(text: &str) -> Cow<'_, str> {
+    words_of(text, &symbols::tokens(text), &mut Vec::new())
 }
 
 /// `text` with each of its symbol `tokens` replaced by one object character, as
@@ -162,14 +168,14 @@ pub struct PlacedGlyph {
     pub y: f32,
 }
 
-/// The disc an inline icon is drawn on: an inline box the size of its line's em.
+/// The disc a mana symbol is drawn on: an inline box the size of its line's em.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Symbol {
     pub rect: Rect,
     pub color: [u8; 4],
 }
 
-/// A inline icon of a shaped text, before the text is broken into lines: its disc's color and
+/// A mana symbol of a shaped text, before the text is broken into lines: its disc's color and
 /// its glyph, laid out in a box `em` wide with its top left corner at the origin.
 struct ShapedSymbol {
     color: [u8; 4],
@@ -194,7 +200,6 @@ pub struct Text {
     layouts: LayoutContext<u16>,
     /// Each bundled font's family name, as parley knows it, in the order of [`Font`].
     families: Vec<String>,
-    icons: Option<IconResolver>,
     shaped: BTreeMap<TextKey, Shaped>,
     /// Texts shaped since the counter was last taken.
     runs: u32,
@@ -210,12 +215,6 @@ impl Text {
     /// A font context holding only the bundled fonts, with system fonts switched off.
     #[must_use]
     pub fn new() -> Self {
-        Self::with_icons(None)
-    }
-
-    /// A shaper with an optional resolver for named inline icons.
-    #[must_use]
-    pub fn with_icons(icons: Option<IconResolver>) -> Self {
         let mut collection = Collection::new(CollectionOptions {
             shared: false,
             system_fonts: false,
@@ -237,7 +236,6 @@ impl Text {
             },
             layouts: LayoutContext::new(),
             families,
-            icons,
             shaped: BTreeMap::new(),
             runs: 0,
         }
@@ -257,8 +255,8 @@ impl Text {
     }
 
     /// `text` in `style`, with `spans` styled apart, broken into lines at `max_width`. Each
-    /// named icon is shaped by the configured resolver. The shaped text and its line breaks
-    /// are cached.
+    /// `{...}` in it is a mana symbol (`symbols`). It is shaped the first time it is asked for,
+    /// and each width's lines are kept, so asking again does no work.
     pub fn block(
         &mut self,
         text: &str,
@@ -335,25 +333,12 @@ impl Text {
         (&mut self.fonts, &mut self.layouts)
     }
 
-    /// The text whose byte offsets a shaped line uses, with one object character per icon.
-    #[must_use]
-    pub fn shaped_words<'a>(&self, text: &'a str) -> Cow<'a, str> {
-        words_of(text, &self.icon_ranges(text), &mut Vec::new())
-    }
-
-    fn icon_ranges(&self, text: &str) -> Vec<Range<usize>> {
-        if self.icons.is_some() {
-            symbols::tokens(text)
-        } else {
-            Vec::new()
-        }
-    }
-
-    /// Shapes `text` with its spans in one paragraph. Each icon is replaced by one inline box
-    /// the size of the current em, with its glyph shaped separately.
+    /// Shapes `text` with its spans in one paragraph. Each mana symbol's `{...}` is replaced by
+    /// the object character parley lays an inline box out at, as wide as the em of the style
+    /// in force there, and the symbol's glyph is shaped apart in the Mana font.
     fn shape(&mut self, text: &str, style: TypeStyle, spans: &[Span]) -> Shaped {
         self.runs += 1;
-        let tokens = self.icon_ranges(text);
+        let tokens = symbols::tokens(text);
         // Where each symbol's object character lands in `words`.
         let mut objects = Vec::with_capacity(tokens.len());
         let words = words_of(text, &tokens, &mut objects);
@@ -386,10 +371,7 @@ impl Text {
         let mut shaped_symbols = Vec::with_capacity(tokens.len());
         let mut boxes = Vec::with_capacity(tokens.len());
         for (index, (token, &object)) in tokens.iter().zip(&objects).enumerate() {
-            let resolve = self
-                .icons
-                .expect("only a shaper with a resolver has icon ranges");
-            let symbol = resolve(&text[token.start + 1..token.end - 1]);
+            let symbol = &text[token.start + 1..token.end - 1];
             let around = style_at(token.start);
             let em = around.size;
             let run = u16::try_from(runs.len() + 1).expect("a text has fewer than 65,536 runs");
@@ -427,22 +409,30 @@ impl Text {
         }
     }
 
-    /// The disc and glyph of an icon in a line of style `around`.
-    fn shape_symbol(
-        &mut self,
-        icon: InlineIcon<'_>,
-        around: TypeStyle,
-        run: u16,
-    ) -> (ShapedSymbol, Run) {
+    /// The disc and glyph of the mana symbol `symbol` (the text between its braces) in a line
+    /// of `around`, whose glyph is run `run`, with that run's look.
+    fn shape_symbol(&mut self, symbol: &str, around: TypeStyle, run: u16) -> (ShapedSymbol, Run) {
         let em = around.size;
-        let (letters, font) = icon.glyph;
+        let (color, ink) = symbols::colors(symbol);
         let glyph_style = TypeStyle {
-            font: font.unwrap_or(around.font),
+            font: Font::Mana,
             weight: 400,
             italic: false,
             size: em * symbols::GLYPH_SIZE,
             line_height: 1.0 / symbols::GLYPH_SIZE,
             letter_spacing: 0.0,
+        };
+        // A symbol the Mana font has no glyph for shows its own letters in the font around it,
+        // as `ManaSymbol` does.
+        let (letters, glyph_style) = match symbols::code(symbol) {
+            Some(code) => (code.to_string(), glyph_style),
+            None => (
+                symbol.to_owned(),
+                TypeStyle {
+                    font: around.font,
+                    ..glyph_style
+                },
+            ),
         };
         let mut layout = self.builder_layout(&letters, glyph_style, &[]);
         layout.break_all_lines(None);
@@ -458,14 +448,10 @@ impl Text {
             });
         });
         (
-            ShapedSymbol {
-                color: icon.background,
-                em,
-                glyphs,
-            },
+            ShapedSymbol { color, em, glyphs },
             Run {
                 style: glyph_style,
-                color: Some(icon.ink),
+                color: Some(ink),
             },
         )
     }
@@ -544,7 +530,7 @@ fn for_each_glyph(layout: &Layout<u16>, mut each: impl FnMut(u16, u16, f32, f32)
 }
 
 /// The lines and glyphs of `layout`, already broken at `max_width`, every glyph in the look
-/// `base`: a text field's text as its editor laid it out, with no spans or inline icons.
+/// `base`: a text field's text as its editor laid it out, with no spans or mana symbols.
 pub fn plain_block(layout: &Layout<u16>, base: Run, max_width: Option<f32>) -> Block {
     let mut block = Block {
         max_width,

@@ -40,8 +40,7 @@ use glam::Vec2;
 use crate::features::table::Message as TableMessage;
 use bindings::Bindings;
 use commands::AppliesTo;
-use game_table::table::Place;
-use kit_frame::frame::{Frame, Role};
+use kit_frame::frame::{Frame, Place, Role};
 use kit_scene::hit::hit;
 use tokens::TokenChoice;
 
@@ -182,8 +181,8 @@ pub fn target_from_hit(frame: &Frame, hit: Option<u32>) -> Target {
     };
     loop {
         let element = &frame.resolved[index as usize];
-        match (element.role, Place::in_frame(element.place)) {
-            (Role::Card | Role::Pile, Some(Place::Card { zone, side, .. })) => {
+        match (element.role, element.place) {
+            (Role::Card | Role::Pile, Place::Card { zone, side, .. }) => {
                 return match zone {
                     ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile => {
                         Target::Pile(side, zone)

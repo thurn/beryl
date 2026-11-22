@@ -20,14 +20,14 @@ use super::shadows::Floors;
 use super::shown::Shown;
 use super::tray::TrayMotion;
 use super::tray_layout::Held;
-use super::{Camera, Layout, Place, PlayerAnchor, Window, takes_pointer};
+use super::{Camera, Layout, PlayerAnchor, Window, takes_pointer};
 use crate::faces::{CARD_BACK, Faces};
 use crate::profiles::Profile;
-use crate::table::labels::{COPY_NOTE, FACE_NOTE, PHASED_OUT, PICKED, TAPPED};
 use kit_base::data::Data;
 use kit_base::pose::{Interval, Pose};
 use kit_frame::frame::{
-    Band, Draw, ElementId, FrameBuilder, OBJECTS, PaintBand, Resolved, Role, ScreenClip, StateBits,
+    Band, Draw, ElementId, FrameBuilder, OBJECTS, PaintBand, Place, Resolved, Role, ScreenClip,
+    StateBits,
 };
 use kit_fx::effects;
 use kit_space::motion::Track;
@@ -594,13 +594,13 @@ impl Table {
             (printed.or(listed), layer.or(face))
         };
         if object.tapped {
-            state |= TAPPED;
+            state |= StateBits::TAPPED;
         }
         if object.pose.turn > 0.5 {
             state |= StateBits::FACE_DOWN;
         }
-        state |= u32::from(shown.phased_out) * PHASED_OUT;
-        state |= u32::from(shown.hidden_pick) * PICKED;
+        state |= u32::from(shown.phased_out) * StateBits::PHASED_OUT;
+        state |= u32::from(shown.hidden_pick) * StateBits::PICKED;
         // The desktop hand and stack show the full frame. The phone uses the board frame
         // (`scanOrFrame` in `ui/src/mobile/faces.tsx`).
         let full = (matches!(shown.zone, ZoneName::Hand | ZoneName::Stack)
@@ -673,12 +673,12 @@ impl Table {
             self.fights.forget(slot);
         }
         if let Some(really) = shown.really.as_deref() {
-            builder.annotate(at, COPY_NOTE, really);
+            builder.really(at, really);
         }
         let on = self.badges_on(&look, band);
         let note = (dress.badges).write((shown, listed, object.copies), &on, builder);
         if let Some(note) = note {
-            builder.annotate(at, FACE_NOTE, note);
+            builder.note(at, note);
         }
         // A hand card's cost stands over the card where the table holds it, not over its box:
         // the web's opening draws its copies of the hand without costs.
@@ -732,7 +732,7 @@ impl Table {
                 parent: u32::MAX,
                 role,
                 name: kit_frame::frame::NameRef::default(),
-                place: place.into(),
+                place,
                 pose: Some(look.pose),
                 corners: self.camera.card_corners(transform),
                 depth: self.camera.depth(look.pose.position),
@@ -741,8 +741,9 @@ impl Table {
                 interactive: look.interactive,
                 state: StateBits(look.state | if shown { StateBits::SHOWN } else { 0 }),
                 face: look.face,
-                count: copies,
-                annotations: Default::default(),
+                copies,
+                really: kit_frame::frame::NameRef::default(),
+                note: kit_frame::frame::NameRef::default(),
             },
         );
         let opacity = (look.pose.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;

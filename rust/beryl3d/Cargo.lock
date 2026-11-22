@@ -2320,6 +2320,7 @@ dependencies = [
 name = "kit_frame"
 version = "0.1.0"
 dependencies = [
+ "beryl_protocol",
  "bytemuck",
  "glam",
  "kit_base",

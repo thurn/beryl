@@ -12,10 +12,9 @@ use glam::{Quat, Vec2};
 
 use game_play::play::record::{Cause, ScriptRecord, SegmentRecord, StepRecord};
 use game_table::table::Camera;
-use game_table::table::Place;
 use kit_base::data::Audit;
 use kit_base::pose::{Pose, Segment};
-use kit_frame::frame::{Frame, Role};
+use kit_frame::frame::{Frame, Place, Role};
 use kit_probe::agent::{Judged, Rule};
 use kit_scene::hit::{bounds, covered, hit};
 use kit_space::motion::pose_at;
@@ -317,7 +316,7 @@ pub fn card_of(frame: &Frame, slot: usize) -> Option<u32> {
         .position(|element| {
             element.role == Role::Card
                 && element.id.0 == id
-                && matches!(Place::in_frame(element.place), Some(Place::Card { .. }))
+                && matches!(element.place, Place::Card { .. })
         })
         .and_then(|index| u32::try_from(index).ok())
 }
@@ -350,14 +349,14 @@ pub fn sample(frame: &Frame, slot: usize, t: u64, size: Size, audit: Audit) -> O
     });
     // A buried copy is shown by the pile when its visible top covers the copy's centre.
     // The web stage audit also counts a card under its twin as shown.
-    let shown_by_pile = element.count == 0
+    let shown_by_pile = element.copies == 0
         && hit(
             frame,
             Vec2::new(rect.x + 0.5 * rect.width, rect.y + 0.5 * rect.height),
         )
         .is_some_and(|top| {
             let top = &frame.resolved[top as usize];
-            top.count > 1
+            top.copies > 1
                 && top.place == element.place
                 && top.opacity > audit.transparent
                 && frame.name(top.name) == frame.name(element.name)
