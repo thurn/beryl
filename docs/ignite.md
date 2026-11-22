@@ -3883,12 +3883,13 @@ expected cost of each ticket, so cheap tickets can run beside expensive ones.
   or too little CPU or disk. A ready ticket may need another provider, check
   family or machine, reach its epic's cap, or be cheaper to build elsewhere.
 
-- While a `land` or `agent` request has waited two minutes or more for cores,
-  the daemon asks the hub only for tickets that hold `master` back, as a paused
-  pool does. The machine then has more work than cores, and a new ticket's
-  commands would only make every command wait longer. Expected cores come from
-  history and cannot see this: on 2026-11-20 jarvis kept starting workers while
-  18 commands waited. The `pool` line says
+- When a `land` or `agent` request has waited two minutes for cores and the host
+  is at least 90% busy, the daemon asks the hub only for tickets that hold
+  `master` back. Commands can wait while the host has CPU headroom because the
+  scheduler initially counts all the cores a grant holds. On 2026-11-21 jarvis
+  recorded a 325-second wait at 63% CPU. If the last CPU reading is missing or
+  at least five seconds old, the daemon uses the wait alone. The `pool` line
+  says
   `commands have waited 150 s for cores, so only tickets that hold master back start`.
 
 The machine also sends its current disk space, which build outputs are present

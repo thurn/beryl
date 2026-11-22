@@ -324,6 +324,8 @@ pub type IgniteRoots = dyn Fn() -> Vec<u32> + Send + Sync;
 
 struct State {
     ledger: Ledger,
+    /// When the sampler last obtained a CPU reading for dispatch.
+    cpu_sample_at: Option<ignite_core::time::Timestamp>,
     /// Grants decided but not yet collected by the thread that asked.
     ready: BTreeMap<u64, Grant>,
     /// Grants asked to stop and not yet released.
@@ -347,6 +349,7 @@ impl Scheduler {
         Self {
             state: Mutex::new(State {
                 ledger: Ledger::new(limits),
+                cpu_sample_at: None,
                 ready: BTreeMap::new(),
                 stop: BTreeSet::new(),
                 files: BTreeMap::new(),
@@ -549,6 +552,9 @@ impl Scheduler {
             state.ledger.observe_swap(now, swap);
         }
         state.ledger.observe_trees(now, trees.as_deref());
+        if busy.is_some() {
+            state.cpu_sample_at = Some(now);
+        }
         state.ledger.observe(busy, memory);
         self.advance(&mut state);
     }
@@ -685,12 +691,6 @@ impl Scheduler {
 
     pub fn status(&self) -> Status {
         self.lock().ledger.status()
-    }
-
-    /// How long the request of `classes` that has waited longest has waited, in seconds; zero
-    /// when none waits. The daemon pauses ordinary ticket starts when ticket work has waited too long.
-    pub fn longest_wait(&self, classes: &[Class]) -> f64 {
-        self.lock().ledger.longest_wait(classes, self.clock.now())
     }
 
     /// What `request` would wait for now, such as `8 cores for land work (2 land commands

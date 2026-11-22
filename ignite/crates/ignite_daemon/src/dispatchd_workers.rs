@@ -3,7 +3,6 @@
 use ignite_core::capacity::{
     BYTES_PER_GB, CapacityReport, DiskLimitSource, MachineFacts, ProviderCapacity, start_room,
 };
-use ignite_core::dispatch_pressure::BACKLOG_SECONDS;
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::hub::{ProviderOffer, Room};
 use ignite_core::protocol::hub::{WorkerRole, WorkerState};
@@ -186,7 +185,7 @@ pub(crate) fn capacity_report(
     let accepts_work = !sample.draining
         && sample.shared_failure.is_none()
         && sample.free_ticket_trees > 0
-        && queue_seconds < f64::from(BACKLOG_SECONDS);
+        && !sample.pressure.queue_backlogged();
     CapacityReport {
         logical_cores: facts.logical_cores,
         physical_cores: facts.physical_cores,

@@ -2,7 +2,7 @@
 //! Hub requests run outside the state lock so heartbeat reporting can continue.
 
 use ignite_core::config::Config;
-use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, DispatchPressure};
+use ignite_core::dispatch_pressure::DispatchPressure;
 use ignite_core::fleet::MachineState;
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::hub::{MachineFree, NextReply, Reservation, Room};
@@ -23,9 +23,6 @@ struct Asking {
     trees: u32,
     /// The pool is paused, so the hub may offer only a ticket that holds `master` back.
     master_only: bool,
-    /// Seconds the oldest request of ticket work has waited for cores, when that is at least
-    /// [`BACKLOG_SECONDS`]: the hub is then asked only for tickets that hold `master` back.
-    backlog: Option<f64>,
     /// Why only tickets that hold `master` back start while a shared failure lasts (see
     /// `shared`).
     shared: Option<String>,
@@ -209,13 +206,11 @@ impl HeadlessDispatch {
             return None;
         }
         let (room, _, _) = self.reported_room(state, providers);
-        let waited = self.host.ticket_work_wait();
         state.asking_hub = true;
         Some(Asking {
             room,
             trees,
             master_only,
-            backlog: (waited >= f64::from(BACKLOG_SECONDS)).then_some(waited),
             shared: state
                 .shared
                 .current
@@ -237,10 +232,9 @@ impl HeadlessDispatch {
             room,
             trees,
             master_only,
-            backlog,
             shared,
         } = asking;
-        let master_only = master_only || backlog.is_some() || shared.is_some();
+        let mut backlog = None;
         let mut offers = Vec::new();
         let mut why = "no ticket tree is free".to_owned();
         // At zero room the hub may still reserve a ticket that holds master back.
@@ -250,6 +244,11 @@ impl HeadlessDispatch {
                 "this machine is off".clone_into(&mut why);
                 break;
             }
+            let pressure = self.pressure(ctx.clock.now());
+            backlog = pressure
+                .as_ref()
+                .filter(|sample| sample.queue_backlogged())
+                .map(|sample| sample.queue_seconds);
             let free = MachineFree {
                 room: Some(room.clone()),
                 machine: ctx.machine.clone(),
@@ -258,11 +257,11 @@ impl HeadlessDispatch {
                 free_ticket_trees: trees - offset,
                 free_cores: self.host.free_cores(),
                 admit_cores: Some(self.host.admit_cores()),
-                pressure: self.pressure(ctx.clock.now()),
+                pressure,
                 families: self.setup.families.clone(),
                 name: None,
                 justiciar_only: false,
-                master_only,
+                master_only: master_only || backlog.is_some() || shared.is_some(),
                 explain: false,
             };
             let reservation = match ctx.hub.next_explained(&free) {
@@ -310,7 +309,7 @@ impl HeadlessDispatch {
         let reason = (remaining > 0 || offers.is_empty()).then(|| {
             if let Some(waited) = backlog {
                 why = format!(
-                    "commands have waited {waited:.0} s for cores, so only tickets that hold master \
+                    "commands have waited {waited} s for cores, so only tickets that hold master \
                      back start ({why})"
                 );
             }

@@ -794,5 +794,10 @@
     "label": "Without nextest, Beryl 3D runs the requested packages' test binaries from the shared workspace build, avoiding a separate build with package-specific dependency features.",
     "metric": "bead.core-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Ignite admits ordinary tickets when the build queue is backed up and measured CPU use allows more work.",
+    "metric": "bead.lead-minutes",
+    "expect": "down"
   }
 ]

@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use rusqlite::Connection;
 
 use ignite_core::dispatch::{self, ReadyTicket, Stage, TicketKind};
-use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, Budget};
+use ignite_core::dispatch_pressure::{Budget, DispatchPressure};
 use ignite_core::fleet::{FleetSettings, MachineState};
 use ignite_core::ids::{MachineId, TicketId};
 use ignite_core::mix::ProviderLoad;
@@ -131,7 +131,6 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
             continue;
         };
         let pressure = free.pressure.as_ref();
-        let queue_seconds = pressure.map_or(0, |p| p.queue_seconds);
         let worked = history(conn, id)?;
         let mut free = free.clone();
         let held_now = capacity::read(conn, id, &worked, &landed, now, pressure)?;
@@ -142,7 +141,7 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
         if paused == Paused::Everything || holds_one {
             free.idle_workers.clear();
         }
-        let mut master_reason = master_reason(paused, state, queue_seconds);
+        let mut master_reason = master_reason(paused, state, pressure);
         if holds_one {
             master_reason += ", and it already works one, so its idle workers wait";
         }
@@ -457,24 +456,31 @@ fn capitalized(text: &str) -> String {
 
 /// Why a machine asks only for tickets that hold `master` back, as its tickets show it; empty
 /// when it asks for every ticket. `state` is the machine's state in the fleet settings. The
-/// daemon also sets `master_only` itself: for its own pause, for a build queue whose commands
-/// have waited [`BACKLOG_SECONDS`] for cores and for a check failing in every tree. The request
-/// says the queue's wait but neither of the others.
-fn master_reason(paused: Paused, state: MachineState, queue_seconds: u32) -> String {
-    match paused {
-        Paused::No => String::new(),
-        Paused::Everything if state == MachineState::Off => "this machine is off".to_owned(),
-        Paused::Everything => "hand-offs are paused on every machine".to_owned(),
-        Paused::MasterOnly if state == MachineState::ChecksOnly => {
+/// daemon also sets `master_only` for its own pause, a backed-up build queue on a busy host,
+/// or a check failing in every tree.
+fn master_reason(
+    paused: Paused,
+    state: MachineState,
+    pressure: Option<&DispatchPressure>,
+) -> String {
+    let backlog = pressure
+        .filter(|sample| sample.queue_backlogged())
+        .map(|sample| sample.queue_seconds);
+    match (paused, backlog) {
+        (Paused::No, _) => String::new(),
+        (Paused::Everything, _) if state == MachineState::Off => "this machine is off".to_owned(),
+        (Paused::Everything, _) => "hand-offs are paused on every machine".to_owned(),
+        (Paused::MasterOnly, _) if state == MachineState::ChecksOnly => {
             "checks-only machine: only tickets that hold master back start here".to_owned()
         }
-        Paused::MasterOnly if queue_seconds >= BACKLOG_SECONDS => format!(
+        (Paused::MasterOnly, Some(queue_seconds)) => format!(
             "commands have waited {queue_seconds} s for cores, so only tickets that hold \
              master back start"
         ),
-        Paused::MasterOnly => "only tickets that hold master back start here (a pause or a \
-                               check failing in every tree)"
-            .to_owned(),
+        (Paused::MasterOnly, None) => {
+            "only tickets that hold master back start here (a pause or a check failing in every tree)"
+                .to_owned()
+        }
     }
 }
 

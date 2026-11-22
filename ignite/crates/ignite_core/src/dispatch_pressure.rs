@@ -15,8 +15,11 @@ use crate::time::Timestamp;
 
 /// The daemon starts reclaiming outputs below this much free disk space.
 pub const DISK_FLOOR_GB: u64 = 50;
-/// The existing backstop for ordinary handoffs when the build queue stays full.
+/// How long commands have to wait on a busy host before ordinary handoffs stop.
 pub const BACKLOG_SECONDS: u32 = 120;
+/// At 90% CPU, an 18-core host has about two cores left. On that host the queue often
+/// reached two minutes with much more headroom, while grants were still counted in full.
+const BACKLOG_BUSY_PERCENT: u32 = 90;
 /// Worktree build outputs can cost tens of GB to reconstruct on this machine class. Already
 /// populated outputs still need space for changed objects and incremental caches.
 const COLD_GROWTH_GB: u64 = 40;
@@ -58,12 +61,25 @@ pub struct DispatchPressure {
     pub recovery_seconds: u32,
     /// The oldest wait for a ticket command at the time of the observation.
     pub queue_seconds: u32,
+    /// Recent measured utilization of all logical cores, including work outside Ignite.
+    /// Older daemons and hosts without a fresh reading still use the wait alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu_percent: Option<u32>,
     /// Output directories from the machine's build manifests.
     pub outputs: Vec<String>,
     /// Populated outputs in each available worktree.
     pub free_trees: Vec<Vec<String>>,
     /// Populated outputs in each leased worktree. An empty list describes a cold lease.
     pub leased: BTreeMap<TicketId, Vec<String>>,
+}
+
+impl DispatchPressure {
+    pub fn queue_backlogged(&self) -> bool {
+        self.queue_seconds >= BACKLOG_SECONDS
+            && self
+                .cpu_percent
+                .is_none_or(|busy| busy >= BACKLOG_BUSY_PERCENT)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -287,7 +303,7 @@ impl<'a> Budget<'a> {
         if ticket.kind == TicketKind::Regression {
             return None;
         }
-        if self.pressure.queue_seconds >= BACKLOG_SECONDS {
+        if self.pressure.queue_backlogged() {
             let seconds = self.pressure.queue_seconds;
             return Some(pacing(format!(
                 "{} waits for the build queue: ticket commands have waited {seconds} s for cores",
@@ -331,6 +347,27 @@ fn pacing(reason: String) -> HandoffWait {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_long_queue_only_blocks_ordinary_handoffs_when_the_host_is_busy_or_unmeasured() {
+        let mut pressure = DispatchPressure {
+            queue_seconds: BACKLOG_SECONDS - 1,
+            cpu_percent: Some(100),
+            ..DispatchPressure::default()
+        };
+        assert!(!pressure.queue_backlogged());
+
+        pressure.queue_seconds = BACKLOG_SECONDS;
+        pressure.cpu_percent = Some(89);
+        assert!(!pressure.queue_backlogged());
+        pressure.cpu_percent = Some(90);
+        assert!(pressure.queue_backlogged());
+
+        let mut old_sample = serde_json::to_value(&pressure).unwrap();
+        old_sample.as_object_mut().unwrap().remove("cpu_percent");
+        let old_pressure: DispatchPressure = serde_json::from_value(old_sample).unwrap();
+        assert!(old_pressure.queue_backlogged());
+    }
 
     #[test]
     fn a_new_long_wait_restarts_the_recovery_interval() {

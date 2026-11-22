@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use serde_json::{Value, json};
 
 use ignite_core::capacity::BYTES_PER_GIB;
-use ignite_core::dispatch_pressure::{DispatchPressure, TreeCap};
+use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, DispatchPressure, TreeCap};
 use ignite_core::ids::TicketId;
 use ignite_store::hub;
 
@@ -25,6 +25,25 @@ fn classify(conn: &Connection, ticket: &TicketId, cores: f64, body: &str) {
         (ticket.as_str(), cores, body),
     )
     .unwrap();
+}
+
+#[test]
+fn polling_reserves_an_ordinary_ticket_when_the_queue_is_long_and_the_host_has_room() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let ids = file(&mut conn, &[("docs", &[], &[])]);
+    classify(&conn, &ids[0], 0.1, "Edit `docs/guide.md`");
+    let mut pressure = DispatchPressure {
+        queue_seconds: BACKLOG_SECONDS + 30,
+        recovery_seconds: 90,
+        cpu_percent: Some(90),
+        ..DispatchPressure::default()
+    };
+    let waiting = ask(&mut conn, "local_a", &pressure, 0.0);
+    assert!(waiting["nothing"].as_str().unwrap().contains("build queue"));
+
+    pressure.cpu_percent = Some(89);
+    let reserved = ask(&mut conn, "local_a", &pressure, 1.0);
+    assert_eq!(reserved["ticket"], ids[0].as_str());
 }
 
 #[test]

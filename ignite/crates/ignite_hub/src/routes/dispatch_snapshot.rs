@@ -1,7 +1,7 @@
 //! Observe the next hand-off without reserving a ticket or updating the dispatch queue.
 
 use ignite_core::dispatch::{self, ReadyTicket};
-use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, Budget, HandoffWait};
+use ignite_core::dispatch_pressure::{Budget, HandoffWait};
 use ignite_core::fleet::MachineState;
 use ignite_core::protocol::hub::{Heartbeat, MachineFree};
 use ignite_core::protocol::machine_state::{MachineSample, MachineSnapshot, StartBlock};
@@ -198,7 +198,7 @@ fn ticket_block(
     holds_one: bool,
 ) -> Option<(StartBlock, String)> {
     let master_blocker = held::holds_master(ticket);
-    let backlog = sample.pressure.queue_seconds >= BACKLOG_SECONDS;
+    let backlog = sample.pressure.queue_backlogged();
     let fallback = state == MachineState::ChecksOnly;
     if (backlog || fallback || sample.shared_failure.is_some()) && (holds_one || !master_blocker) {
         return if let Some(reason) = &sample.shared_failure {

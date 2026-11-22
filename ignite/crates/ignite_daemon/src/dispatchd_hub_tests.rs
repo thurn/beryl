@@ -189,14 +189,14 @@ fn dispatch_stops_and_resumes_on_heartbeat_without_starting_a_new_daemon() {
 }
 
 /// On 2026-11-20 jarvis kept starting workers while 16 to 18 commands waited for its cores, and
-/// every command took many times its unloaded time. While ticket work has waited two minutes or
-/// more for cores, the daemon asks only for the tickets that hold `master` back, as a paused
-/// pool does, and `ignite status` says why its workers are idle.
+/// every command took many times its unloaded time. With a busy host and a two-minute queue,
+/// the daemon asks only for tickets that hold `master` back, and `ignite status` says why.
 #[test]
-fn a_long_wait_for_cores_asks_only_for_tickets_holding_master_back() {
+fn a_long_wait_on_a_busy_host_asks_only_for_tickets_holding_master_back() {
     let rig = rig(&[]);
     let fake = cli(&rig, 2);
     *lock(&rig.host.waited) = f64::from(BACKLOG_SECONDS) + 30.0;
+    *lock(&rig.host.cpu_percent) = Some(90);
     tick(&rig);
     let asked = rig.hub.asked();
     assert!(
@@ -217,15 +217,14 @@ fn a_long_wait_for_cores_asks_only_for_tickets_holding_master_back() {
     tick(&rig);
     assert_eq!(fake.begun()[0].0.ticket.as_str(), "R");
 
-    // Once the wait is short again, ordinary tickets start.
-    *lock(&rig.host.waited) = f64::from(BACKLOG_SECONDS) - 1.0;
+    // Once CPU headroom returns, an ordinary ticket can start during the same long wait.
+    *lock(&rig.host.cpu_percent) = Some(89);
     reserve(&rig, "T.1", "reservation-2", &[]);
     let before = rig.hub.asked().len();
     tick(&rig);
     assert_eq!(fake.begun()[1].0.ticket.as_str(), "T.1");
-    assert!(
-        rig.hub.asked()[before..]
-            .iter()
-            .any(|free| !free.master_only)
-    );
+    let asked = rig.hub.asked();
+    let request = &asked[before];
+    assert!(!request.master_only);
+    assert_eq!(request.pressure.as_ref().unwrap().queue_seconds, 150);
 }

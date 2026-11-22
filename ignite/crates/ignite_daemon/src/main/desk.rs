@@ -432,10 +432,11 @@ impl Host for DaemonHost {
     fn pressure(&self, now: Timestamp) -> Option<DispatchPressure> {
         let waited = self.ticket_work_wait();
         let recovery_seconds = lock(&self.queue_recovery).observe(now, waited);
-        Some(
-            self.trees
-                .dispatch_pressure(waited.floor() as u32, recovery_seconds),
-        )
+        Some(self.trees.dispatch_pressure(
+            waited.floor() as u32,
+            recovery_seconds,
+            self.scheduler.dispatch_cpu_percent(),
+        ))
     }
 
     fn holders(&self) -> BTreeMap<SessionId, TicketId> {

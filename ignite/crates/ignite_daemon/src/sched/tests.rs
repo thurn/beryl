@@ -581,6 +581,25 @@ fn sample_reads_load_from_outside_ignite() {
 }
 
 #[test]
+fn dispatch_uses_recent_host_cpu_even_when_every_core_is_granted() {
+    let (scheduler, clock, host) = scheduler();
+    assert_eq!(scheduler.dispatch_cpu_percent(), None);
+    let first = scheduler.try_acquire(&ask(Class::Agent, 16)).unwrap();
+    let second = scheduler.try_acquire(&ask(Class::Agent, 8)).unwrap();
+    assert_eq!(first.cores + second.cores, 24);
+
+    *host.busy.lock().unwrap() = 0.65;
+    scheduler.sample();
+    assert_eq!(scheduler.status().free_cores(), 0);
+    assert_eq!(scheduler.dispatch_cpu_percent(), Some(65));
+
+    clock.set(at(5.0));
+    assert_eq!(scheduler.dispatch_cpu_percent(), None);
+    scheduler.sample();
+    assert_eq!(scheduler.dispatch_cpu_percent(), Some(65));
+}
+
+#[test]
 fn land_and_a_floor_class_get_a_core_when_outside_load_fills_the_machine() {
     let mut ledger = Ledger::new(limits());
     ledger.observe(Some(1.0), None);

@@ -19,6 +19,7 @@ pub(super) struct FakeHost {
     cores: Mutex<f64>,
     admit: Mutex<f64>,
     pub(super) waited: Mutex<f64>,
+    pub(super) cpu_percent: Mutex<Option<u32>>,
     holders: Mutex<BTreeMap<SessionId, TicketId>>,
     pub(super) commands: Mutex<BTreeMap<SessionId, SessionCommand>>,
     pub(super) quiet: Mutex<BTreeMap<SessionId, Timestamp>>,
@@ -58,6 +59,17 @@ impl Host for FakeHost {
 
     fn ticket_work_wait(&self) -> f64 {
         *lock(&self.waited)
+    }
+
+    fn pressure(
+        &self,
+        _now: Timestamp,
+    ) -> Option<ignite_core::dispatch_pressure::DispatchPressure> {
+        Some(ignite_core::dispatch_pressure::DispatchPressure {
+            queue_seconds: self.ticket_work_wait().floor() as u32,
+            cpu_percent: *lock(&self.cpu_percent),
+            ..Default::default()
+        })
     }
 
     fn worker_capacity(&self) -> (u32, bool, Option<u64>) {

@@ -8,6 +8,9 @@ use ignite_core::protocol::Class;
 use super::super::Status;
 use super::{Ledger, Origin};
 
+/// Dispatch can reuse a reading across a few missed samples before falling back to wait time.
+const CPU_SAMPLE_MAX_AGE_SECONDS: f64 = 5.0;
+
 impl Ledger {
     pub(in crate::sched) fn machine_readings(&self) -> (Option<u32>, u64, Option<u64>) {
         let queued_cores = self
@@ -90,6 +93,21 @@ impl Ledger {
 }
 
 impl super::super::Scheduler {
+    /// How long the request of `classes` that has waited longest has waited, in seconds.
+    /// Zero when none waits.
+    pub fn longest_wait(&self, classes: &[Class]) -> f64 {
+        self.lock().ledger.longest_wait(classes, self.clock.now())
+    }
+
+    /// Recent whole-host CPU utilization for the handoff gate.
+    pub(crate) fn dispatch_cpu_percent(&self) -> Option<u32> {
+        let state = self.lock();
+        state
+            .cpu_sample_at
+            .filter(|at| self.clock.now().seconds_since(*at) < CPU_SAMPLE_MAX_AGE_SECONDS)?;
+        state.ledger.cpu_percent
+    }
+
     /// CPU utilization, cores requested by queued commands, and swap in use.
     pub(crate) fn machine_readings(&self) -> (Option<u32>, u64, Option<u64>) {
         self.lock().ledger.machine_readings()

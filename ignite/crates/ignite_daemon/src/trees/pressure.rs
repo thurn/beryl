@@ -68,6 +68,7 @@ impl Trees {
         &self,
         queue_seconds: u32,
         recovery_seconds: u32,
+        cpu_percent: Option<u32>,
     ) -> DispatchPressure {
         let outputs: BTreeSet<_> = self
             .inner
@@ -91,6 +92,7 @@ impl Trees {
             tree_cap,
             queue_seconds,
             recovery_seconds,
+            cpu_percent,
             outputs: outputs.into_iter().collect(),
             ..DispatchPressure::default()
         };
