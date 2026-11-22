@@ -14,7 +14,10 @@ use beryl_assets::icons::icons_rasterized_on_this_thread;
 use beryl_assets::packer::{ATLAS_PAGES, PAGE_SIZE};
 use beryl_assets::{Prepared, Upload};
 use beryl_host::spawn_glyph_worker;
-use game_hud::art::orb::{self, FIRST_ICON};
+use game_hud::art::{
+    self,
+    orb::{self, FIRST_ICON},
+};
 use kit_base::atlas::{AssetReady, GlyphCell, GlyphKey, IconCell, IconId};
 use kit_base::data::profiles::Profiles;
 use kit_probe::driver::atlas::stub_icons;
@@ -92,10 +95,10 @@ fn every_icon_rasterizes_to_a_cell_partly_inked_on_another_thread() {
     let sharp = cells.iter().filter(|(_, cell)| cell.shadow == 0);
     let mut icons: Vec<IconId> = sharp.map(|(_, cell)| cell.icon).collect();
     icons.sort_unstable();
-    // Every icon, and the orbs' layers at each scale they are drawn at, packed tallest first.
+    // Every widget icon and the game's layered artwork, packed tallest first.
     let profiles = profiles();
-    let orbs = orb::atlas_cells(&profiles).map(|cell| cell.icon);
-    let mut expected: Vec<IconId> = (0..FIRST_ICON).map(IconId).chain(orbs).collect();
+    let layers = art::atlas_cells(&profiles).map(|cell| cell.icon);
+    let mut expected: Vec<IconId> = (0..FIRST_ICON).map(IconId).chain(layers).collect();
     expected.sort_unstable();
     assert_eq!(icons, expected);
     // And a cell of each shadow of each chain of drop shadows an icon is drawn with.
@@ -212,7 +215,20 @@ fn a_new_scale_adds_new_cells_and_the_same_scale_adds_none() {
     let worker = spawn_glyph_worker(out, || {}, Some(&profiles()));
     worker.icons(1.0);
     worker.flush();
-    let first = results.try_recv().expect("the icons at scale 1");
+    let cells = || {
+        results
+            .try_iter()
+            .flat_map(|prepared| match prepared.ready {
+                AssetReady::Icons { cells, page } => {
+                    cells.into_iter().map(move |cell| (page, cell))
+                }
+                _ => panic!("only icons were asked for"),
+            })
+            .filter(|(_, cell)| cell.shadow == 0 && cell.icon.0 < FIRST_ICON)
+            .collect::<Vec<_>>()
+    };
+    let old = cells();
+    assert_eq!(old.len(), ALL.len());
     worker.icons(1.0);
     worker.flush();
     assert!(
@@ -221,28 +237,16 @@ fn a_new_scale_adds_new_cells_and_the_same_scale_adds_none() {
     );
     worker.icons(2.0);
     worker.flush();
-    let second = results.try_recv().expect("the icons at scale 2");
-    let (
-        AssetReady::Icons {
-            cells: old,
-            page: old_page,
-        },
-        AssetReady::Icons {
-            cells: new,
-            page: new_page,
-        },
-    ) = (first.ready, second.ready)
-    else {
-        panic!("only icons were asked for");
-    };
+    let new = cells();
+    assert_eq!(new.len(), ALL.len());
     // The old cells stay where they were, since the client draws them until the new arrive.
-    let sharp = |cell: &&IconCell| cell.shadow == 0 && cell.icon.0 < FIRST_ICON;
-    for new in new.iter().filter(sharp) {
-        let Some(old) = old.iter().filter(sharp).find(|old| old.icon == new.icon) else {
-            continue;
-        };
+    for (new_page, new) in new {
+        let (old_page, old) = old
+            .iter()
+            .find(|(_, old)| old.icon == new.icon)
+            .expect("the icon was delivered at scale 1");
         assert_eq!(new.rect[2], old.rect[2] * 2, "{:?}", new.icon);
-        let apart = new_page != old_page
+        let apart = new_page != *old_page
             || new.rect[1] >= old.rect[1] + old.rect[3]
             || new.rect[0] >= old.rect[0] + old.rect[2]
             || old.rect[1] >= new.rect[1] + new.rect[3]
@@ -279,7 +283,7 @@ fn the_stub_and_worker_deliver_the_same_icon_sizes() {
     };
     for scale in [1.0, 2.0, 3.0] {
         let AssetReady::Icons { cells: stub, .. } =
-            stub_icons(scale, orb::atlas_cells(&profiles()))
+            stub_icons(scale, art::atlas_cells(&profiles()))
         else {
             panic!("the stub supplies icon cells");
         };
@@ -400,7 +404,7 @@ fn every_icon_and_demanded_glyph_fits_the_atlas_at_every_display_scale() {
         // shadows are drawn from.
         assert_eq!(
             icons,
-            ALL.len() + orb::atlas_cells(&profiles()).count() + icon_shadows::cells().count(),
+            ALL.len() + art::atlas_cells(&profiles()).count() + icon_shadows::cells().count(),
             "every icon at scale {scale}"
         );
         for key in demanded {

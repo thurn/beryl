@@ -252,7 +252,7 @@ impl NumberLook {
             anchor,
             tint,
             opacity: self.opacity,
-            scale: 1.0,
+            ..FloatLook::default()
         }
     }
 }

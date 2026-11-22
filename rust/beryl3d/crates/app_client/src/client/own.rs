@@ -67,6 +67,8 @@ impl Client {
             layer: &mut self.layer,
             coming: self.show.coming_notices(),
             held: self.show.notices(),
+            stage_fit: scaffold_web::stage_width_and_scale(self.show.table().camera().window.size),
+            size_class: self.show.table().profile().size_class(),
         });
     }
 

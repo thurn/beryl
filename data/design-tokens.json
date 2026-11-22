@@ -774,6 +774,22 @@
       }
     },
     "size": {
+      "TURN_BANNER_RING_SIZE": {
+        "value": 240,
+        "note": "The circles of a turn announcement occupy the 240-point square of `.turn-banner-rings` in `ui/src/screens/styles/turn-banner.css`. The circles inside it use the 220-unit SVG view box from `ui/src/game/TurnBanner.tsx`."
+      },
+      "TURN_BANNER_BAND_HEIGHT": {
+        "value": 128,
+        "note": "The height of the dark band behind a turn announcement, from `.turn-banner-band`."
+      },
+      "TURN_BANNER_COMPACT_WIDTH": {
+        "value": 800,
+        "note": "The width of the compact turn banner before its parent scales it, from `.phone-announce .turn-banner` in `ui/src/mobile/phone.css`."
+      },
+      "TURN_BANNER_TITLE_GLOW_BLUR": {
+        "value": 9,
+        "note": "The title's 18-point CSS text-shadow blur radius expressed as a drop-shadow blur length."
+      },
       "TURN_BANNER_SLIDE": {
         "value": 30,
         "note": "How far the turn banner slides toward the player whose turn it is by the end of its run: `.turn-banner.stage-notice`'s `translate` of 30px."
@@ -1708,6 +1724,10 @@
       }
     },
     "ratio": {
+      "TURN_BANNER_COMPACT_SCALE": {
+        "value": 0.45,
+        "note": "The fraction of desktop size at which `.phone-announce` draws a turn banner."
+      },
       "TURN_BANNER_START_SCALE": {
         "value": 0.93,
         "note": "How large the turn banner is as it starts to fade in: `.turn-banner.stage-notice`'s `scale: calc(0.93 + 0.07 * ...)` in `ui/src/stage/stage.css`."
@@ -1887,6 +1907,10 @@
       "SECONDARY": {
         "value": "linear-gradient(180deg, #2a2522, #1d1917 55%, #262120)",
         "note": "Any other action button's near-black face: `.button-secondary` in `buttons.css`."
+      },
+      "TURN_BANNER_BAND": {
+        "value": "linear-gradient(90deg, rgb(10 9 8 / 0%), rgb(10 9 8 / 78%) 22%, rgb(10 9 8 / 86%) 50%, rgb(10 9 8 / 78%) 78%, rgb(10 9 8 / 0%))",
+        "note": "The dark strip underneath a turn announcement fades out toward the sides, as `.turn-banner-band` does."
       },
       "BANNER": {
         "value": "radial-gradient(ellipse 52% 54% at 50% 45%, rgb(12 10 9 / 88%), rgb(12 10 9 / 70%) 45%, rgb(12 10 9 / 30%) 75%, transparent)",

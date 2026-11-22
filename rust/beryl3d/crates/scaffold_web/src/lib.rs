@@ -4,6 +4,7 @@ mod tuning;
 mod web_fit;
 
 use game_table::table::{RegionFit, RegionPolicy};
+pub use web_fit::stage_width_and_scale;
 
 /// The table's web projection, enabled by the app until the switch to Beryl 3D.
 pub const FIT: RegionFit = RegionFit::new(&POLICY);

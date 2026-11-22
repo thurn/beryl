@@ -5,7 +5,7 @@
 //! banner ends, and a spell left to be read is drawn focused for its step.
 
 use app_client::Input;
-use app_client::driver::{Mode, Page, Recording};
+use app_client::driver::{Duration, Mode, Moment, Page, Recording};
 use app_client::{Client, Config};
 use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::GameUpdate;
@@ -14,8 +14,9 @@ use beryl_protocol::protocol::{ObjectId, Side, StackItem, Why, ZoneName};
 use beryl_protocol::script::{Act, Notice, Subject, Table as Played, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::record::Planted;
-use glam::Vec2;
-use kit_frame::frame::{Frame, Role, StateBits, Wake};
+use glam::{Vec2, Vec3};
+use kit_base::tokens::color;
+use kit_frame::frame::{Frame, Material, Role, StateBits, Wake};
 use kit_probe::agent::checks::{duplicates, overlap};
 use kit_probe::agent::{Context, Rule};
 use kit_ui::input::Input as DeviceInput;
@@ -185,6 +186,94 @@ fn the_turn_banner_stands_centred_for_its_step_and_then_goes() {
         text_box(client.frame(to), "Your Turn").is_none(),
         "the banner has gone at its end"
     );
+}
+
+#[test]
+fn the_turn_banner_draws_counter_rotating_circles_for_both_players() {
+    for (side, words, color) in [
+        (Side::You, "Your Turn", color::CYAN),
+        (Side::Opponent, "Opponent's Turn", color::EMBER),
+    ] {
+        let [start, after] = scripted(vec![vec![turn(side)]], |_| {});
+        let mut messages = vec![
+            FixtureMessage::game_update(&start),
+            FixtureMessage::game_update(&after),
+        ];
+        messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
+        for size in [
+            Size {
+                width: 1600.0,
+                height: 900.0,
+            },
+            Size {
+                width: 393.0,
+                height: 759.0,
+            },
+        ] {
+            let mut page = Page::new(
+                crate::test_data::data(),
+                Recording(messages.clone()).into(),
+                Side::You,
+                size,
+            )
+            .unwrap();
+            let step = page.steps().pop().expect("the turn banner");
+            page.set_looking(true);
+            for share in [30, 60] {
+                let time = step.from + (step.to - step.from) * share / 100;
+                page.seek(&Moment::At(Duration(time))).unwrap();
+                let frame = page.frame();
+                let (title_min, title_max) = text_box(frame, words).expect("the banner title");
+                let (owner, circles) = (frame.resolved.iter())
+                    .enumerate()
+                    .find(|(_, item)| frame.name(item.name) == "turn banner circles")
+                    .expect("the banner circles");
+                assert!(circles.state.has(StateBits::PASSES));
+                let center = (circles.corners[0] + circles.corners[2]) / 2.0;
+                assert!((center - (title_min + title_max) / 2.0).length() < 1.0);
+                let layers: Vec<_> = (frame.draws.iter().zip(&frame.owners))
+                    .filter(|(draw, index)| {
+                        usize::try_from(**index) == Ok(owner)
+                            && draw.material == Material::Icon as u8
+                    })
+                    .map(|(draw, _)| draw)
+                    .collect();
+                assert_eq!(
+                    layers.len(),
+                    3,
+                    "two rotating groups and the stationary rims"
+                );
+                for draw in &layers {
+                    assert_eq!(draw.tint[..3], color[..3]);
+                }
+                let axes = |index: usize| {
+                    let model = layers[index].model;
+                    (
+                        Vec3::new(model[0], model[4], model[8]).normalize(),
+                        Vec3::new(model[1], model[5], model[9]).normalize(),
+                    )
+                };
+                let (rim_x, rim_y) = axes(2);
+                let degrees = if share == 30 { 24.0_f32 } else { 48.0_f32 };
+                for (stroke, angle) in [(0, -degrees), (1, degrees)] {
+                    let x = axes(stroke).0;
+                    let measured = x.dot(rim_y).atan2(x.dot(rim_x)).to_degrees();
+                    assert!(
+                        (measured - angle).abs() < 0.01,
+                        "turn at {share}%: {measured}"
+                    );
+                }
+            }
+            page.seek(&Moment::At(Duration(step.to))).unwrap();
+            let frame = page.frame();
+            assert!(
+                frame
+                    .resolved
+                    .iter()
+                    .all(|item| { frame.name(item.name) != "turn banner circles" })
+            );
+        }
+    }
 }
 
 #[test]

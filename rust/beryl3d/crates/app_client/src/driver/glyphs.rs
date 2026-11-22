@@ -11,7 +11,7 @@
 use super::Page;
 use crate::client;
 use client::Input;
-use game_hud::art::orb;
+use game_hud::art;
 use kit_base::atlas::{AssetReady, FaceId, GlyphCell, GlyphKey};
 use kit_probe::driver::atlas::{STUB_PAGE, stub_glyph, stub_icons};
 use kit_ui::input::Input as DeviceInput;
@@ -20,7 +20,7 @@ pub(super) fn stub_client_icons(
     scale: f32,
     profiles: &kit_base::data::profiles::Profiles,
 ) -> AssetReady {
-    stub_icons(scale, orb::atlas_cells(profiles))
+    stub_icons(scale, art::atlas_cells(profiles))
 }
 
 impl Page {

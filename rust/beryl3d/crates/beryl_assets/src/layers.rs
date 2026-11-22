@@ -56,7 +56,16 @@ pub(crate) fn rasterize(layer: &CoverageLayer, scale: f32) -> Bitmap {
     // The blur's standard deviation in texels.
     let sigma = layer.blur * across;
     if sigma > 0.0 {
-        blur(&mut coverage, (width, height), sigma);
+        if let Some(opacity) = layer.glow_opacity {
+            let mut softened = coverage.clone();
+            blur(&mut softened, (width, height), sigma);
+            for (stroke, glow) in coverage.iter_mut().zip(softened) {
+                let behind = f32::from(glow) * opacity * (1.0 - f32::from(*stroke) / 255.0);
+                *stroke = stroke.saturating_add(behind.round() as u8);
+            }
+        } else {
+            blur(&mut coverage, (width, height), sigma);
+        }
     }
     Bitmap {
         width,

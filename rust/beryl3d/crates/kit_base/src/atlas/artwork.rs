@@ -72,6 +72,8 @@ pub struct LayerCell {
     pub view: [f32; 4],
     /// Width in logical points, rounded to the atlas key.
     pub size: u16,
+    /// Maximum raster scale for art that can share the same resolution across displays.
+    pub max_scale: Option<f32>,
 }
 
 impl LayerCell {
@@ -79,6 +81,7 @@ impl LayerCell {
     #[must_use]
     pub fn texels(self, scale: f32) -> [u16; 2] {
         let [_, _, width, height] = self.view;
+        let scale = self.max_scale.map_or(scale, |limit| scale.min(limit));
         let scaled_width = f32::from(self.size) * scale;
         [texels(scaled_width), texels(scaled_width * height / width)]
     }
@@ -106,6 +109,8 @@ pub struct CoverageLayer {
     /// Blur deviation and downward offset, both in artwork units.
     pub blur: f32,
     pub drop: f32,
+    /// The opacity of the blur beneath the original coverage. With none, keep only the blur.
+    pub glow_opacity: Option<f32>,
 }
 
 /// How the outlines of a layer are painted into coverage.

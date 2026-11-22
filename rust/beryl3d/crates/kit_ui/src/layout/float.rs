@@ -25,6 +25,8 @@ pub struct FloatLook {
     pub tint: Option<[u8; 4]>,
     /// How much larger than laid out the float is drawn, about its centre.
     pub scale: f32,
+    /// How far through the float's animation its layered icons have turned, from 0 to 1.
+    pub icon_progress: f32,
 }
 
 impl Default for FloatLook {
@@ -36,6 +38,7 @@ impl Default for FloatLook {
             opacity: 1.0,
             tint: None,
             scale: 1.0,
+            icon_progress: 0.0,
         }
     }
 }

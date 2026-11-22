@@ -30,6 +30,7 @@ use game_table::table::{
 };
 use kit_base::data::Card;
 use kit_base::data::profiles::ProfileData;
+use kit_base::geometry::Size;
 use kit_base::pose::Pose;
 use kit_space::arrange::{Pile, row::ScaleLimit};
 
@@ -75,6 +76,18 @@ fn aspect(card: Card) -> f32 {
     card.width / card.height
 }
 
+/// The width in stage pixels, and the logical points per stage pixel, for desktop overlays.
+#[must_use]
+pub fn stage_width_and_scale(size: Size) -> (f32, f32) {
+    fit_stage(size, WebFit::shipped().stage)
+}
+
+fn fit_stage(size: Size, stage: StageSize) -> (f32, f32) {
+    let width = (stage.height * size.width / size.height).clamp(stage.least, stage.most);
+    let scale = (size.width / width).min(size.height / stage.height);
+    (width, scale)
+}
+
 /// The web interface's stage as it is fitted to a window (`fit` in `ui/src/game/Stage.tsx`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Stage {
@@ -92,8 +105,7 @@ struct Stage {
 impl Stage {
     fn of(window: Window, stage: StageSize, perspective: Perspective) -> Self {
         let size = window.size;
-        let width = (stage.height * size.width / size.height).clamp(stage.least, stage.most);
-        let scale = (size.width / width).min(size.height / stage.height);
+        let (width, scale) = fit_stage(size, stage);
         Self {
             width,
             scale,

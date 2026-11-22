@@ -16,7 +16,7 @@ use beryl_assets::{
     default_workers,
 };
 use beryl_render::Renderer;
-use game_hud::art::orb;
+use game_hud::art::{self, orb};
 use game_table::faces::FaceList;
 use kit_base::atlas::{AssetReady, FaceId, FaceSize, GlyphKey};
 use kit_base::data::{
@@ -44,7 +44,7 @@ pub fn spawn_glyph_worker(
         IconSet {
             icons: icon_artwork::ALL.to_vec(),
             shadows: &icon_shadows::CHAINS,
-            layers: profiles.map_or_else(Vec::new, orb::atlas_artwork),
+            layers: profiles.map_or_else(Vec::new, art::atlas_artwork),
         },
     )
 }
@@ -314,7 +314,7 @@ impl Assets {
         deliver: impl FnMut(AssetReady),
     ) {
         self.sync_light(renderer, data);
-        self.request_orbs(data, scale);
+        self.request_artwork(data, scale);
         self.request_glyphs(scale, wanted);
         self.glyphs.flush();
         self.upload_glyphs(renderer, deliver);
@@ -322,11 +322,11 @@ impl Assets {
 
     fn request_text(&mut self, client: &mut Client) {
         let scale = client.surface_scale();
-        self.request_orbs(client.data(), scale);
+        self.request_artwork(client.data(), scale);
         self.request_glyphs(scale, client.wanted_glyphs());
     }
 
-    fn request_orbs(&mut self, data: &Arc<Data>, scale: f32) {
+    fn request_artwork(&mut self, data: &Arc<Data>, scale: f32) {
         if self
             .tuning
             .as_ref()
@@ -338,7 +338,7 @@ impl Assets {
                     .eq(orb::atlas_scales(&data.profiles).map(f32::to_bits))
             }) {
                 self.glyphs
-                    .layers(scale, orb::atlas_artwork(&data.profiles));
+                    .layers(scale, art::atlas_artwork(&data.profiles));
             }
             self.tuning = Some(Arc::clone(data));
         }

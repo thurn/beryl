@@ -53,6 +53,7 @@ pub(super) struct Look<'a> {
     /// draws it: the boxes recorded for the frame are scaled the same way.
     pub(super) zoom: Zoom,
     departing: bool,
+    icon_progress: f32,
 }
 
 /// Paint outgoing children under their replacements; neither uses the other's layout slot.
@@ -448,8 +449,14 @@ impl Layer {
                 width,
                 height,
             };
+            let mut transform = camera.layer_transform(at);
+            if layer.rotation != 0.0 {
+                // Positive CSS angles turn clockwise on the screen, whose y points down.
+                let angle = -(layer.rotation * look.icon_progress).to_radians();
+                transform *= Affine3A::from_rotation_z(angle);
+            }
             let draw = Draw::icon(
-                camera.layer_transform(at),
+                transform,
                 faded(look.filters.color(layer.color), look.opacity),
                 sprite,
             );

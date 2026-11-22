@@ -3,26 +3,15 @@ use std::fmt::Write as _;
 use super::Inputs;
 use beryl_protocol::protocol::{Side, TablePhase};
 use beryl_protocol::script::Notice;
-use kit_base::tokens::{color, space, type_style};
-use kit_ui::element::{Align, Element, column, text};
+use kit_base::tokens::{color, gradient, size, space, type_style};
+use kit_ui::element::{Align, Element, Justify, Position, Shadow, Shown, column, holder, text};
+
+use crate::art::turn;
 
 /// What the notice shows, with names from the table it is shown over.
 pub(super) fn element(input: &Inputs<'_>) -> Element {
     match input.notice {
-        Notice::Turn { active } => {
-            // The web tints only its rosettes and glow by player; the words are cream for both
-            // (`.turn-banner-title`).
-            let words = match active {
-                Side::You => "Your Turn",
-                Side::Opponent => "Opponent's Turn",
-            };
-            banner(
-                text(words)
-                    .style(type_style::TURN_BANNER_TITLE)
-                    .color(color::TURN_BANNER_TITLE),
-                None,
-            )
-        }
+        Notice::Turn { active } => turn_banner(*active, input.turn_width),
         Notice::Scry { top, bottom, .. } => pill(&format!("Scry: {top} top, {bottom} bottom.")),
         Notice::TopOrBottom { top, .. } => pill(if *top { "Top" } else { "Bottom" }),
         Notice::Coin { player, won, .. } => {
@@ -38,6 +27,60 @@ pub(super) fn element(input: &Inputs<'_>) -> Element {
         Notice::TableTurn { name } => step_banner(&format!("{name}'s turn"), None),
         Notice::Game { number } => step_banner(&format!("Game {number}"), None),
     }
+}
+
+/// The turn banner's dark band, with circles and glow tinted for the active player.
+pub(super) fn turn_banner(side: Side, width: f32) -> Element {
+    let mut edge = turn::tint(side);
+    edge[3] = 89;
+    let mut glow = edge;
+    glow[3] = 140;
+    let words = match side {
+        Side::You => "Your Turn",
+        Side::Opponent => "Opponent's Turn",
+    };
+    let band = holder()
+        .name("turn banner band")
+        .position(Position::Absolute)
+        .inset([
+            Some((turn::SIZE - size::TURN_BANNER_BAND_HEIGHT) / 2.0),
+            None,
+            None,
+            Some(0.0),
+        ])
+        .width(width)
+        .height(size::TURN_BANNER_BAND_HEIGHT)
+        .background_image(vec![gradient::TURN_BANNER_BAND])
+        .box_shadow(vec![
+            Shadow::new(0.0, -1.0, 0.0, edge),
+            Shadow::new(0.0, 1.0, 0.0, edge),
+        ]);
+    let mut circles = holder()
+        .name("turn banner circles")
+        .position(Position::Absolute)
+        .inset([Some(0.0), None, None, Some((width - turn::SIZE) / 2.0)])
+        .width(turn::SIZE)
+        .height(turn::SIZE);
+    circles.shows = Some(Shown::Layers(turn::artwork(side)));
+    column()
+        .background([0; 4])
+        .border(([0; 4], 0.0))
+        .align_items(Align::Center)
+        .justify_content(Justify::Center)
+        .width(width)
+        .height(turn::SIZE)
+        .child(band)
+        .child(circles)
+        .child(
+            text(words)
+                .style(type_style::TURN_BANNER_TITLE)
+                .color(color::TURN_BANNER_TITLE)
+                .drop_shadow(vec![
+                    // Text shadows use blur radii. The flat layer takes drop-shadow deviations.
+                    Shadow::new(0.0, 0.0, size::TURN_BANNER_TITLE_GLOW_BLUR, glow),
+                    Shadow::new(0.0, 2.0, 2.0, [0, 0, 0, 230]),
+                ]),
+        )
 }
 
 /// "You" or "Opponent", as a banner names a player.

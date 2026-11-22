@@ -350,6 +350,9 @@ pub const fn seat(side: Orientation) -> usize {
 /// The first icon reserved for a life-orb layer, after the widget icons.
 pub const FIRST_ICON: u16 = icon_artwork::COUNT;
 
+/// The first icon after both seats' orb layers.
+pub(super) const END_ICON: u16 = icon(Orientation::Mirrored, LAYERS.len()).0;
+
 /// The icon of layer `at` of `side`'s orb.
 #[must_use]
 pub const fn icon(side: Orientation, at: usize) -> IconId {
@@ -363,6 +366,7 @@ const fn icon_layers(side: Orientation) -> [IconLayer; LAYERS.len()] {
         view: [0.0; 4],
         color: [0; 4],
         highlight: false,
+        rotation: 0.0,
     }; LAYERS.len()];
     let mut at = 0;
     while at < LAYERS.len() {
@@ -372,6 +376,7 @@ const fn icon_layers(side: Orientation) -> [IconLayer; LAYERS.len()] {
             view: layer.views[seat(side)],
             color: layer.color,
             highlight: layer.active,
+            rotation: 0.0,
         };
         at += 1;
     }
@@ -430,6 +435,7 @@ fn atlas_layers(
                     icon: icon(side, at),
                     view,
                     size: cell_width(view[2], units),
+                    max_scale: None,
                 };
                 (side, layer, cell)
             })
@@ -461,6 +467,7 @@ pub fn atlas_artwork(profiles: &Profiles) -> Vec<CoverageLayer> {
             },
             blur: layer.blur,
             drop: layer.drop,
+            glow_opacity: None,
         })
         .collect()
 }

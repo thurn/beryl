@@ -127,6 +127,8 @@ pub struct IconLayer {
     pub color: [u8; 4],
     /// Draw this layer only when the icon is highlighted.
     pub highlight: bool,
+    /// Clockwise degrees this cell turns about its center over the float's animation.
+    pub rotation: f32,
 }
 
 /// An icon whose atlas cells are drawn in order, each at its own box in the artwork.

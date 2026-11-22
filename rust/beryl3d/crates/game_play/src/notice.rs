@@ -108,6 +108,8 @@ impl Fade {
 pub struct Announced {
     pub place: Place,
     pub fade: Fade,
+    /// The active player when this notice shows the start of their turn.
+    pub turn: Option<Side>,
     pub key: u64,
     pub over: Interval,
     pub passes: bool,
