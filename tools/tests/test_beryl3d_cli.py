@@ -2,6 +2,7 @@
 
 import json
 import os
+import plistlib
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -10,7 +11,67 @@ from pathlib import Path
 import pytest
 
 from beryl_tools import paths
-from beryl_tools.beryl3d import cli
+from beryl_tools.beryl3d import app, cli
+
+
+def test_release_replaces_the_macos_app_with_a_signed_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    if sys.platform != "darwin":
+        pytest.skip("macOS app release")
+    binary = tmp_path / "release" / "beryl3d"
+    binary.parent.mkdir()
+    binary.write_bytes(b"release executable")
+    binary.chmod(0o755)
+    bundle: Path = binary.with_name("Beryl 3D.app")
+    bundle.mkdir()
+    (bundle / "old").touch()
+
+    manifest = tmp_path / "crates" / "beryl_3d" / "Cargo.toml"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text('[package]\nversion = "0.2.3"\n')
+    audio: Path = tmp_path / "public" / "audio" / "music" / "menu-0.m4a"
+    audio.parent.mkdir(parents=True)
+    audio.write_bytes(b"music")
+    icon = tmp_path / "icons" / "icon.icns"
+    icon.parent.mkdir()
+    icon.write_bytes(b"icon")
+
+    def sign(
+        command: list[str | Path], *, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert command[:-1] == ["/usr/bin/codesign", "--force", "--sign", "-"] and check
+        assert (bundle / "old").exists()
+        contents = Path(command[-1]) / "Contents"
+        assert (contents / "Resources" / "audio" / "music" / audio.name).exists()
+        (contents / "signed").touch()
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(app, "RELEASE_BINARY", binary)
+    monkeypatch.setattr(app, "build_release", lambda: 0)
+    monkeypatch.setattr(app.paths, "WORKSPACE", tmp_path)
+    monkeypatch.setattr(app.paths, "build_lock", lambda: tmp_path / "build.lock")
+    monkeypatch.setattr(paths, "APP", tmp_path)
+    monkeypatch.setattr(paths, "UI", tmp_path)
+    monkeypatch.setattr(subprocess, "run", sign)
+
+    assert cli.main(["release"]) == 0
+    assert f"release: {bundle}" in capsys.readouterr().out
+    contents = bundle / "Contents"
+    info = plistlib.loads((contents / "Info.plist").read_bytes())
+    assert info["CFBundlePackageType"] == "APPL"
+    assert info["CFBundleIdentifier"] == "ca.thurn.beryl3d"
+    assert info["CFBundleShortVersionString"] == "0.2.3"
+    executable = contents / "MacOS" / info["CFBundleExecutable"]
+    assert executable.read_bytes() == binary.read_bytes() and os.access(
+        executable, os.X_OK
+    )
+    assert (contents / "Resources" / info["CFBundleIconFile"]).read_bytes() == b"icon"
+    assert (
+        contents / "Resources" / "audio" / "music" / audio.name
+    ).read_bytes() == b"music"
+    assert (contents / "signed").exists()
+    assert not (bundle / "old").exists()
 
 
 def test_tests_run_the_workspace_or_the_named_crates() -> None:

@@ -1,6 +1,6 @@
 """`just b3d app` runs `beryl3d`, `just b3d smoke` waits for its start screen without a
-window, and `just b3d frames` prints a frame log's summary and its worst frames. For the
-standalone release executable, run `just b3d release`.
+window, and `just b3d frames` prints a frame log's summary and its worst frames.
+`just b3d release` packages the optimized app on macOS and builds it elsewhere.
 
 The app is built with cargo's `test` profile, as the workspace's tests are: optimized enough to
 measure frames, it shares the dependencies `just b3d cargo-test` built, and the `tools` feature
@@ -14,11 +14,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import plistlib
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +32,7 @@ from .command import Command
 TARGET: Path = paths.WORKSPACE / "target"
 BINARY: Path = system.exe(TARGET / "debug" / "beryl3d")
 RELEASE_BINARY: Path = system.exe(TARGET / "release" / "beryl3d")
+MAC_APP_NAME = "Beryl 3D"
 # What the app prints when its first frame is shown (`FIRST_SHOWN` in beryl_3d's app.rs).
 FIRST_SHOWN = "beryl3d: first frame shown"
 # What it prints, followed by the path, when its live socket listens (`LIVE_SOCKET`).
@@ -80,19 +84,75 @@ def build_release() -> int:
     )
 
 
+def package_macos(bundle: Path) -> None:
+    """Build and sign a complete bundle before replacing an earlier release."""
+    manifest = paths.WORKSPACE / "crates" / "beryl_3d" / "Cargo.toml"
+    version = tomllib.loads(manifest.read_text())["package"]["version"]
+    icon = repo_paths.APP / "icons" / "icon.icns"
+    with tempfile.TemporaryDirectory(prefix=".beryl3d-", dir=bundle.parent) as scratch:
+        staged = Path(scratch) / bundle.name
+        contents = staged / "Contents"
+        executable = contents / "MacOS" / RELEASE_BINARY.name
+        executable.parent.mkdir(parents=True)
+        shutil.copy(RELEASE_BINARY, executable)
+        resources = contents / "Resources"
+        shutil.copytree(
+            repo_paths.UI / "public" / "audio",
+            resources / "audio",
+            copy_function=shutil.copy,
+        )
+        shutil.copyfile(icon, resources / icon.name)
+        with (contents / "Info.plist").open("wb") as info:
+            plistlib.dump(
+                {
+                    "CFBundleExecutable": executable.name,
+                    "CFBundleIconFile": icon.name,
+                    "CFBundleIdentifier": "ca.thurn.beryl3d",
+                    "CFBundleInfoDictionaryVersion": "6.0",
+                    "CFBundleName": MAC_APP_NAME,
+                    "CFBundlePackageType": "APPL",
+                    "CFBundleShortVersionString": version,
+                    "CFBundleVersion": version,
+                    "NSHighResolutionCapable": True,
+                },
+                info,
+            )
+        subprocess.run(
+            ["/usr/bin/codesign", "--force", "--sign", "-", staged], check=True
+        )
+
+        previous = Path(scratch) / "previous.app"
+        if bundle.exists():
+            bundle.rename(previous)
+        try:
+            staged.rename(bundle)
+        finally:
+            if previous.exists() and not bundle.exists():
+                previous.rename(bundle)
+
+
 def run_release(_args: argparse.Namespace) -> int:
     if build_release() != 0:
         return deps.CANNOT_RUN
-    print(f"release: {RELEASE_BINARY}")
+    output = RELEASE_BINARY
+    if sys.platform == "darwin":
+        output = RELEASE_BINARY.with_name(f"{MAC_APP_NAME}.app")
+        try:
+            with system.file_lock(paths.build_lock()):
+                package_macos(output)
+        except (OSError, subprocess.CalledProcessError) as error:
+            print(f"release: cannot package {output}: {error}", file=sys.stderr)
+            return deps.CANNOT_RUN
+    print(f"release: {output}")
     return 0
 
 
 COMMANDS = (
     Command(
         "release",
-        "builds the standalone release executable and prints its path",
+        "builds the release app bundle on macOS and the executable on other platforms",
         (
-            ("just b3d release", "build the optimized desktop executable"),
+            ("just b3d release", "build the optimized desktop app and print its path"),
             ("just b3d release --help", "this text"),
         ),
         run_release,
