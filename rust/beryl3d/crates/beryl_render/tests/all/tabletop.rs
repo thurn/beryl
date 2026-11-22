@@ -2,13 +2,14 @@
 //! own gradient in `data/design-tokens.json`, so that the shader's copy of the stops cannot drift
 //! from it unseen.
 
-use beryl_render::Target;
+use beryl_render::{Limits, Target};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
 use kit_base::atlas::Tier;
 use kit_frame::frame::{Band, Draw, Frame, FrameBuilder};
 use serde_json::Value;
 
+use super::enhanced::enhanced;
 use super::render::{BOTH, Picture, renderer};
 
 const TOKENS: &str = include_str!("../../../../../../data/design-tokens.json");
@@ -79,12 +80,13 @@ fn camera() -> Mat4 {
 
 /// The cloth, far larger than the view, in a wide target, shaken by `shake` pixels.
 fn draw_cloth(renderer: &mut beryl_render::Renderer, size: (u32, u32), shake: Vec2) -> Picture {
-    draw_shaded_cloth(renderer, size, shake, None)
+    draw_shaded_cloth(renderer, Tier::Baseline, size, shake, None)
 }
 
 /// The cloth as `draw_cloth` draws it, with the shade's centre and both radii in pixels.
 fn draw_shaded_cloth(
     renderer: &mut beryl_render::Renderer,
+    tier: Tier,
     size: (u32, u32),
     shake: Vec2,
     ellipse: Option<(Vec2, Vec2)>,
@@ -101,7 +103,7 @@ fn draw_shaded_cloth(
         cloth = cloth.with_tabletop_shade(centre, radii);
     }
     let mut frame = Frame::with_capacity(0, 1, 0);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
+    let mut builder = FrameBuilder::new(&mut frame, tier, crate::card());
     builder.camera(camera());
     builder.shake(shake);
     builder.draw(Band::Opaque, cloth);
@@ -177,18 +179,26 @@ fn far_shade_opacity(t: f64) -> f64 {
     opacity
 }
 
-/// The shade uses both supplied radii, blends toward `rgb(10 7 5)` using the web's stops,
-/// and leaves the cloth beyond the ellipse as it was.
+/// Both tiers use the supplied radii, blend toward `rgb(10 7 5)` using the web's stops,
+/// and leave the cloth beyond the ellipse as it was.
 #[test]
 fn the_far_shade_darkens_the_cloth_by_the_webs_stops() {
     let stops = stops();
     let size = (320, 180);
     let centre = Vec2::new(160.0, 20.0);
     let radii = Vec2::new(120.0, 48.0);
-    for limits in BOTH {
-        let mut renderer = renderer(limits);
-        let plain = draw_cloth(&mut renderer, size, Vec2::ZERO);
-        let shaded = draw_shaded_cloth(&mut renderer, size, Vec2::ZERO, Some((centre, radii)));
+    for (limits, tier) in [
+        (Limits::Default, Tier::Baseline),
+        (Limits::Downlevel, Tier::Baseline),
+        (Limits::Default, Tier::Enhanced),
+    ] {
+        let mut renderer = match tier {
+            Tier::Baseline => renderer(limits),
+            Tier::Enhanced => enhanced(),
+        };
+        let plain = draw_shaded_cloth(&mut renderer, tier, size, Vec2::ZERO, None);
+        let shaded =
+            draw_shaded_cloth(&mut renderer, tier, size, Vec2::ZERO, Some((centre, radii)));
         let mut faults = Vec::new();
         for y in (0..75).step_by(3) {
             for x in (20..300).step_by(9) {
@@ -211,16 +221,24 @@ fn the_far_shade_darkens_the_cloth_by_the_webs_stops() {
                 }
             }
         }
-        assert!(faults.is_empty(), "{limits:?}: {}", faults.join("; "));
+        assert!(
+            faults.is_empty(),
+            "{tier:?} {limits:?}: {}",
+            faults.join("; ")
+        );
         assert!(
             shaded.at(160, 20)[0] < 40,
-            "{limits:?}: the centre is near black"
+            "{tier:?} {limits:?}: the centre is near black"
         );
         assert_eq!(
             shaded.at(160, 120),
             plain.at(160, 120),
-            "{limits:?}: below it"
+            "{tier:?} {limits:?}: below it"
         );
-        assert_eq!(shaded.at(10, 20), plain.at(10, 20), "{limits:?}: beside it");
+        assert_eq!(
+            shaded.at(10, 20),
+            plain.at(10, 20),
+            "{tier:?} {limits:?}: beside it"
+        );
     }
 }
