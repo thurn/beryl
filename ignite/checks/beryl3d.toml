@@ -366,6 +366,99 @@ inputs = [
   "tools/src/beryl_tools/xmage_classes.py",
 ]
 
+# Sweep all card recordings and report interface faults or signatures missing from the corpus.
+[family.b3d-corpus]
+# The landing gate checks the corpus and fixtures. The full sweep runs on idle cores.
+kind = "exploration"
+# The adapter reports one result per card crate as soon as its sweep finishes.
+adapter = "jsonl"
+# The sweep uses the native Beryl 3D recorder and inspector built on macOS.
+platforms = ["macos"]
+# The sweep needs both native binaries and starts from the corpus pack made by `b3d`.
+needs = ["python-env", "b3d"]
+# Listing needs the Python environment before either native binary is built.
+list_needs = ["python-env"]
+# List one check per card crate found in the checkout.
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-corpus list"
+# Each crate's digest changes when its cards or shared recording and interface inputs change.
+next = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-corpus next"
+# Run the named crate sweeps, reusing results already saved for those digests.
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-corpus run {checks}"
+# The sweep uses the same native code and data as the interface checks, plus its own adapter.
+# The `b3d` product covers card definitions and `next` hashes them by crate.
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_names/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_cli/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_link/**",
+  "rust/crates/beryl_link_iroh/**",
+  "rust/crates/beryl_protocol/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/crates/beryl_search/**",
+  "rust/crates/beryl_session/**",
+  "rust/crates/beryl_table/**",
+  "rust/crates/beryl_table_session/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "ui/src/generated/**",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+  "tools/src/beryl_tools/ignite/beryl3d_corpus.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/beryl3d/__init__.py",
+  "tools/src/beryl_tools/beryl3d/corpus.py",
+  "tools/src/beryl_tools/beryl3d/gate.py",
+  "tools/src/beryl_tools/beryl3d/pack.py",
+  "tools/src/beryl_tools/beryl3d/paths.py",
+  "tools/src/beryl_tools/beryl3d/purity.py",
+  "tools/src/beryl_tools/beryl3d/timeline.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
+
 # The interface tests with the checks applied on every tick (`just b3d test --every-tick`): the
 # second way to sample the same recordings, held to the same list of allowed faults.
 [family.b3d-every-tick]
