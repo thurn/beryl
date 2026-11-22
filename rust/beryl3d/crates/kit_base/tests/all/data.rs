@@ -289,7 +289,6 @@ fn invalid_camera_geometry_names_the_file_and_field() {
     for (field, value) in [
         ("pitch_degrees", json!(90)),
         ("fov_degrees", json!(0)),
-        ("target", json!([0, 0, 1e39])),
         ("required", json!([[1, 0], [0, 1]])),
     ] {
         let mut profile: Value = serde_json::from_str(text).unwrap();
@@ -301,6 +300,21 @@ fn invalid_camera_geometry_names_the_file_and_field() {
             "{error}"
         );
     }
+}
+
+#[test]
+fn an_out_of_range_camera_coordinate_names_its_index() {
+    let (file, text) = SHIPPED[0];
+    let mut profile: Value = serde_json::from_str(text).unwrap();
+    profile["table"]["camera"]["target"][2] = "1e400".into();
+    // This number overflows both f32 and f64, so both JSON decoding paths reject it.
+    let invalid = profile.to_string().replacen("\"1e400\"", "1e400", 1);
+    let error = profiles::Profiles::parse(&[(file, &invalid), SHIPPED[1]], card()).unwrap_err();
+    assert!(
+        error.starts_with(&format!("{file}: table.camera.target[2]:")),
+        "{error}"
+    );
+    assert!(error.contains("number out of range"), "{error}");
 }
 
 #[test]
