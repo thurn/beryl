@@ -20,7 +20,7 @@ set's module is its code (`m10`), and a card's is its name in lowercase ASCII wo
 underscores, accents and apostrophes dropped (`lim_duls_vault`, `fire_ice`). A module name that
 would start with a digit or be a Rust keyword takes a prefix spelled out: `set_10e`, `set_mod`,
 `card_2_mace`. The name is the one the engine knows the card by (`file_name`): a card of two
-faces is its front face (`jace_vryns_prodigy`), and a split card both halves. A card's constant
+faces is its front face (`jace_vryns_prodigy`). Split and preparation cards use both names. A card's constant
 in a `names` module is its module in capitals (`constant`). The set crates' build scripts spell
 the same rules in Rust (`beryl_card_build`'s names.rs) and find each file's card in the store
 by them, so a file out of place fails the build.
@@ -116,8 +116,8 @@ def camel(name: str) -> str:
 
 def file_name(record: Json) -> str:
     """The name a card record's file is spelled from, the one the engine knows the card by:
-    both halves of a split card ("Fire // Ice"), else its front face's."""
-    if record.get("layout") == "split":
+    both names for a split or preparation card, or the name of its front face."""
+    if record.get("layout") in ("split", "prepare"):
         return str(record["name"])
     return str(cast(list[Json], record["faces"])[0]["name"])
 

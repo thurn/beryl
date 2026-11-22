@@ -260,8 +260,8 @@ fn a_new_file_is_listed_with_no_other_edit() {
         "#[path = \"../crate/apc\"]\npub mod apc {",
         "    pub mod island;",
         "    &apc::fire_ice::CARD,\n    &lea::island::CARD,\n    &lea::plains::CARD,",
-        "    (apc::fire_ice::CARD.name, &[]),",
-        "    (lea::island::CARD.name, lea::island::scenarios::SCENARIOS),",
+        "    (names::FIRE_ICE, &[]),",
+        "    (names::ISLAND, lea::island::scenarios::SCENARIOS),",
         "    pub const FIRE_ICE: &str = \"Fire // Ice\";",
     ] {
         assert!(after.contains(line), "no {line:?} in:\n{after}");

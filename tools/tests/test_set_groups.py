@@ -83,6 +83,15 @@ def test_the_committed_groups_follow_the_rule_and_cover_every_set() -> None:
         assert all(sets[c].released[:4] in group.crate for c in group.sets)
 
 
+def test_a_preparation_card_file_uses_its_full_name() -> None:
+    record: set_groups.Json = {
+        "layout": "prepare",
+        "name": "Test Preparer // Test Inset",
+        "faces": [{"name": "Test Preparer"}, {"name": "Test Inset"}],
+    }
+    assert set_groups.file_name(record) == "Test Preparer // Test Inset"
+
+
 def test_every_card_has_a_path_of_its_own() -> None:
     records = committed_cards()
     groups = set_groups.SetGroups()
