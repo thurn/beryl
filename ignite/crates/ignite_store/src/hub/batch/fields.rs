@@ -2,6 +2,7 @@
 
 use serde_json::{Map, Value, json};
 
+use ignite_core::config::Os;
 use ignite_core::ids::TicketId;
 use ignite_core::protocol::tickets::{Status, Ticket, TicketFields, TicketType};
 use ignite_core::shares;
@@ -11,7 +12,11 @@ use super::{Run, Step, dedupe, rejected, tickets};
 impl Run<'_> {
     /// The set fields of an update or create as column changes, checked as the ticket service
     /// checked them. `parent` is left for the caller, which must resolve it.
-    pub(super) fn field_changes(fields: &TicketFields) -> Step<Map<String, Value>> {
+    pub(super) fn field_changes(
+        fields: &TicketFields,
+        edited_labels: Option<Vec<String>>,
+        existing_os: Option<Os>,
+    ) -> Step<Map<String, Value>> {
         if fields.title.as_deref() == Some("") {
             return rejected("title must have a value");
         }
@@ -48,8 +53,14 @@ impl Run<'_> {
             unreachable!("ticket fields serialize to an object")
         };
         changes.remove("parent");
-        if let Some(labels) = &fields.labels {
-            changes.insert("labels".to_owned(), json!(dedupe(labels.clone())));
+        if let Some(mut labels) = edited_labels.or_else(|| fields.labels.clone()) {
+            if let Some(os) = tickets::take_legacy_os(&mut labels)
+                && existing_os.is_none()
+                && fields.needs_os.is_none()
+            {
+                changes.insert("needs_os".to_owned(), json!(os));
+            }
+            changes.insert("labels".to_owned(), json!(dedupe(labels)));
         }
         Ok(changes)
     }

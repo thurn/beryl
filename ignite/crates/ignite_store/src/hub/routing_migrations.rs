@@ -6,6 +6,7 @@ use serde_json::Value;
 use ignite_core::config::Os;
 use ignite_core::pins::{from_labels, machine_label};
 
+use super::tickets::take_legacy_os;
 use crate::{Result, StoreError};
 
 /// Moves the routing labels into the ticket's own fields: `needs:macos` and `needs:windows`
@@ -93,8 +94,71 @@ pub(super) fn owners_to_pins(transaction: &Transaction<'_>) -> Result<()> {
     Ok(())
 }
 
+/// Converts OS labels filed after the original routing migration into native requirements.
+pub(super) fn backfill_os_requirements(transaction: &Transaction<'_>) -> Result<()> {
+    let rows = {
+        let mut statement = transaction.prepare(
+            "SELECT id, labels FROM tickets \
+             WHERE labels LIKE '%\"needs:macos\"%' OR labels LIKE '%\"needs:windows\"%'",
+        )?;
+        statement
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    for (id, labels) in rows {
+        let mut labels = serde_json::from_str(&labels)
+            .map_err(|e| StoreError::Invalid(format!("labels of {id}: {e}")))?;
+        if let Some(os) = take_legacy_os(&mut labels) {
+            transaction.execute(
+                "UPDATE tickets SET labels = ?2, needs_os = COALESCE(needs_os, ?3) WHERE id = ?1",
+                params![id, Value::from(labels).to_string(), os.as_str()],
+            )?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn os_labels_filed_after_the_original_migration_become_requirements() {
+        let mut conn = rusqlite::Connection::open_in_memory().unwrap();
+        let migrations = crate::hub::MIGRATIONS;
+        crate::migrate::apply(&mut conn, &migrations[..50]).unwrap();
+        for (id, labels, needs_os) in [
+            ("T1", r#"["needs:macos","needs:person"]"#, None),
+            ("T2", r#"["needs:windows"]"#, None),
+            ("T3", r#"["needs:macos","tier:sonnet"]"#, Some("windows")),
+        ] {
+            conn.execute(
+                "INSERT INTO tickets (id, title, status, created_at, created_by, updated_at,
+                                     version, labels, needs_os)
+                 VALUES (?1, 'test', 'open', 'now', 'test', 'now', 1, ?2, ?3)",
+                rusqlite::params![id, labels, needs_os],
+            )
+            .unwrap();
+        }
+
+        crate::migrate::apply(&mut conn, migrations).unwrap();
+
+        for (id, labels, needs_os) in [
+            ("T1", r#"["needs:person"]"#, "macos"),
+            ("T2", "[]", "windows"),
+            ("T3", r#"["tier:sonnet"]"#, "windows"),
+        ] {
+            let stored: (String, String) = conn
+                .query_row(
+                    "SELECT labels, needs_os FROM tickets WHERE id = ?1",
+                    [id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap();
+            assert_eq!((stored.0.as_str(), stored.1.as_str()), (labels, needs_os));
+        }
+    }
+
     #[test]
     fn routing_labels_move_into_the_ticket_fields() {
         let mut conn = rusqlite::Connection::open_in_memory().unwrap();

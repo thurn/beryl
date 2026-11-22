@@ -13,6 +13,7 @@ use rusqlite::types::{Value as SqlValue, ValueRef};
 use rusqlite::{Connection, OptionalExtension, Row, params_from_iter};
 use serde_json::{Map, Value, json};
 
+use ignite_core::config::Os;
 use ignite_core::ids::TicketId;
 use std::collections::BTreeMap;
 
@@ -630,6 +631,21 @@ fn collect_ids(conn: &Connection, sql: &str, args: &[&str]) -> Result<Vec<Ticket
 pub(super) fn backfill_allocation(transaction: &rusqlite::Transaction<'_>) -> Result<()> {
     transaction.execute_batch(include_str!("allocation.sql"))?;
     Ok(())
+}
+
+/// Removes legacy OS labels so the native requirement can be changed or cleared independently.
+/// When both labels are present, the last one wins, as in the original routing migration.
+pub(super) fn take_legacy_os(labels: &mut Vec<String>) -> Option<Os> {
+    let mut needs_os = None;
+    labels.retain(|label| {
+        needs_os = match label.as_str() {
+            "needs:macos" => Some(Os::Macos),
+            "needs:windows" => Some(Os::Windows),
+            _ => return true,
+        };
+        false
+    });
+    needs_os
 }
 
 /// Gives an epic filed without an allocation (the `workers` column) the default

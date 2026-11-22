@@ -127,6 +127,53 @@ fn an_os_requirement_set_on_create_or_update_filters_dispatch() {
 }
 
 #[test]
+fn batch_filing_honors_legacy_os_labels_and_explicit_requirements() {
+    let mut conn = two_machines();
+    let request = super::Request {
+        method: "POST".into(),
+        path: "/batch".into(),
+        query: Vec::new(),
+        writer: Some(crate::auth::Writer {
+            machine: "m-1".parse().unwrap(),
+            actor: "planner".into(),
+        }),
+        body: serde_json::to_vec(&json!({"ops": [
+            {"op": "create", "fields": {"title": "macOS work", "labels": ["needs:macos"]}},
+            {"op": "create", "fields": {"title": "Windows work", "labels": ["needs:macos"],
+                                        "needs_os": "windows"}},
+            {"op": "update", "id": "$1", "add_labels": ["needs:macos", "tier:sonnet"]},
+        ]}))
+        .unwrap(),
+        headers: Vec::new(),
+    };
+    let response = crate::routes::tickets::handle(&mut conn, &request, start()).unwrap();
+    let reply: Value = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(response.status, 200, "{reply}");
+    let macos = reply["results"][0]["id"].as_str().unwrap();
+    let windows = reply["results"][1]["id"].as_str().unwrap();
+    let ticket = tickets::load(&conn, macos).unwrap().unwrap();
+    assert_eq!(ticket.needs_os, Some(Os::Macos));
+    assert!(ticket.labels.is_empty());
+    let ticket = tickets::load(&conn, windows).unwrap().unwrap();
+    assert_eq!(ticket.needs_os, Some(Os::Windows));
+    assert_eq!(ticket.labels, ["tier:sonnet"]);
+
+    let mut request = free("m-2", &["local_windows"]);
+    request["os"] = json!("windows");
+    let (status, offer) = post(&mut conn, "/next", &request, at(1.0));
+    assert_eq!(status, 200, "{offer}");
+    assert_eq!(offer["ticket"], windows);
+    request["idle_workers"][0]["session"] = json!("local_windows_2");
+    let (status, offer) = post(&mut conn, "/next", &request, at(2.0));
+    assert_eq!(status, 200, "{offer}");
+    assert_eq!(offer, Value::Null);
+
+    let (status, offer) = post(&mut conn, "/next", &free("m-1", &["local_mac"]), at(3.0));
+    assert_eq!(status, 200, "{offer}");
+    assert_eq!(offer["ticket"], macos);
+}
+
+#[test]
 fn an_epics_machine_pin_applies_to_its_children() {
     let mut conn = two_machines();
     let id = file(&mut conn, &[("child", &[], &[])]).remove(0);

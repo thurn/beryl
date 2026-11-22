@@ -304,6 +304,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: "ALTER TABLE machine_snapshots ADD COLUMN fseventsd_rss_mib INTEGER;",
         code: None,
     },
+    Migration {
+        version: 51,
+        sql: "",
+        code: Some(routing_migrations::backfill_os_requirements),
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

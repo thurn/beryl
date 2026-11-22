@@ -476,7 +476,7 @@ impl<'a> Run<'a> {
         let Some(title) = fields.title.clone() else {
             return rejected("A ticket needs a title");
         };
-        let mut changes = Self::field_changes(fields)?;
+        let mut changes = Self::field_changes(fields, None, None)?;
         Self::allocation_changes(fields, fields.ticket_type.unwrap_or_default(), &mut changes);
         tickets::default_workers(fields, &mut changes);
         let parent_name = match parent {
@@ -569,7 +569,7 @@ impl<'a> Run<'a> {
         labels: Option<Vec<String>>,
         metadata: Option<BTreeMap<String, Value>>,
     ) -> Step<OperationResult> {
-        let mut changes = Self::field_changes(fields)?;
+        let mut changes = Self::field_changes(fields, labels, ticket.needs_os)?;
         let was_meta = ticket.ticket_type == TicketType::Meta;
         if fields
             .ticket_type
@@ -598,9 +598,6 @@ impl<'a> Run<'a> {
             }
             None => ticket,
         };
-        if let Some(labels) = labels {
-            changes.insert("labels".to_owned(), json!(labels));
-        }
         if let Some(metadata) = metadata {
             changes.insert("metadata".to_owned(), json!(metadata));
         }
@@ -732,7 +729,6 @@ fn edits(
         let base = set.and_then(|s| s.labels.clone());
         let mut next = base.unwrap_or_else(|| ticket.labels.clone());
         next.extend(add_labels.iter().cloned());
-        let mut next = dedupe(next);
         next.retain(|label| !remove_labels.contains(label));
         next
     });
