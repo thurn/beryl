@@ -281,31 +281,9 @@ def lints_match(root: Path) -> list[str]:
 
 
 def data_names(root: Path) -> list[str]:
-    """Match runtime verb and effect names to the shared UI conventions."""
-    directory = root / "data" / "beryl3d"
-    conventions = json.loads((root / "data" / "ui-conventions.json").read_text())
-    verb_names: set[str] = set()
-    for verb in conventions["verbs"]:
-        verb_names.add(verb["name"])
-        verb_names.update(verb.get("cases", {}))
-    verbs = json.loads((directory / "verbs.json").read_text())["verbs"]
-    found = [
-        f"data/beryl3d/verbs.json: verbs.{key} names no verb or case of "
-        "data/ui-conventions.json"
-        for key in verbs
-        if key not in verb_names
-    ]
-    effect_names = {effect["name"] for effect in conventions["effects"]}
-    effect_files = {file.stem for file in (directory / "effects").glob("*.json")}
-    found.extend(
-        f"data/beryl3d/effects/{name}.json: no such effect in data/ui-conventions.json"
-        for name in sorted(effect_files - effect_names)
-    )
-    found.extend(
-        f"data/beryl3d/effects/{name}.json: missing definition for effect in data/ui-conventions.json"
-        for name in sorted(effect_names - effect_files)
-    )
-    return found
+    from .tuning_names import data_names as check
+
+    return check(root)
 
 
 # Elements take their sizes from kit_base design tokens (docs/beryl-3d.md, "Elements").
@@ -745,6 +723,12 @@ def levels_step(*args: str) -> int:
     return report("levels", levels(paths.REPO, update="--update" in args, verbose=True))
 
 
+def guides(root: Path) -> list[str]:
+    from .guides import guides as check
+
+    return check(root)
+
+
 def report(name: str, found: list[str]) -> int:
     for line in found:
         print(f"{name}: {line}")
@@ -759,6 +743,17 @@ SOURCE_RULES: dict[str, Callable[[Path], list[str]]] = {
     "scene-literals": scene_literals,
     "protocol-literals": protocol_literals,
     "profile-words": profile_words,
+    "guides": guides,
+}
+SOURCE_INPUTS: dict[str, list[str]] = {
+    "data-names": ["tools/src/beryl_tools/beryl3d/tuning_names.py"],
+    "guides": [
+        "tools/src/beryl_tools/beryl3d/guides.py",
+        "tools/src/beryl_tools/beryl3d/new.py",
+        "tools/src/beryl_tools/beryl3d/new_files.py",
+        "tools/src/beryl_tools/beryl3d/command.py",
+        "tools/src/beryl_tools/system.py",
+    ],
 }
 
 if __name__ == "__main__":

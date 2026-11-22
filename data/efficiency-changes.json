@@ -809,5 +809,10 @@
     "label": "The Beryl 3D map gives agents source and data paths directly from client registries, shortening the search for code to change.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D scaffolds supply the first story, test and registry edits for new client parts, reducing setup time.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

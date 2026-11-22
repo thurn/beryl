@@ -289,6 +289,38 @@
     "tools/tests/test_beryl3d_camera.py": [
       "data/beryl3d/profiles/desktop.json"
     ],
+    "tools/tests/test_beryl3d_new.py": [
+      "data/beryl3d/effects/glow.json",
+      "data/beryl3d/profiles/wide-compact.json",
+      "data/ui-conventions.json",
+      "rust/beryl3d/crates/app_client/src/client/features.rs",
+      "rust/beryl3d/crates/app_client/src/client/features/prompt.rs",
+      "rust/beryl3d/crates/app_client/tests/all/main.rs",
+      "rust/beryl3d/crates/app_screens/src/screens/mod.rs",
+      "rust/beryl3d/crates/beryl_inspect/src/pages.rs",
+      "rust/beryl3d/crates/beryl_inspect/tests/all/main.rs",
+      "rust/beryl3d/crates/game_hud/src/prompts/mod.rs",
+      "rust/beryl3d/crates/game_play/src/sound.rs",
+      "rust/beryl3d/crates/game_play/src/verbs/mod.rs",
+      "rust/beryl3d/crates/game_probe/src/signature.rs",
+      "rust/beryl3d/crates/game_table/src/profiles/mod.rs",
+      "rust/beryl3d/crates/kit_probe/src/story/mod.rs",
+      "rust/beryl3d/crates/kit_probe/src/story/parse.rs",
+      "rust/beryl3d/crates/kit_probe/src/story/style.rs",
+      "rust/beryl3d/crates/kit_space/src/arrange.rs",
+      "rust/beryl3d/crates/kit_space/src/arrange/layout.rs",
+      "rust/beryl3d/crates/kit_space/tests/all/arrange.rs",
+      "rust/beryl3d/crates/kit_ui/src/widgets/catalog.rs",
+      "rust/beryl3d/crates/kit_ui/src/widgets/mod.rs",
+      "rust/beryl3d/crates/kit_ui/tests/all/main.rs",
+      "rust/crates/beryl_protocol/src/prompt/text.rs",
+      "rust/crates/beryl_protocol/src/prompt/view.rs",
+      "rust/crates/beryl_protocol/src/script/act.rs",
+      "rust/crates/beryl_protocol/src/script/table.rs",
+      "rust/crates/beryl_protocol/src/script/text.rs",
+      "rust/crates/beryl_protocol/src/script/timing.rs",
+      "rust/crates/beryl_protocol/src/script/verb.rs"
+    ],
     "tools/tests/test_beryl3d_profiles.py": [
       "rust/beryl3d/Cargo.toml"
     ],

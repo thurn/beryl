@@ -35,6 +35,7 @@ from . import (
     live,
     match,
     motion_film,
+    new,
     pack,
     parity,
     paths,
@@ -459,6 +460,7 @@ MODULES: tuple[ModuleType, ...] = (
     motion_film,
     bug,
     clear_save,
+    new,
     match,
 )
 

@@ -618,17 +618,19 @@ impl Positioner {
         .then(|| self.lines[self.active()])
     }
 
+    fn place_grid(&mut self, pack: &Pack, columns: usize, gap: Vec2) -> Vec2 {
+        let at = self
+            .grid
+            .place(pack.size(), columns, gap.max(Vec2::ZERO) * self.scale);
+        Vec2::new(
+            at.x - self.half.x - pack.low.x,
+            self.half.y - at.y - pack.high.y,
+        )
+    }
+
     fn place(&mut self, pack: &Pack, group: Option<u64>) -> Vec2 {
         match self.policy {
-            Policy::Grid { columns, gap } => {
-                let at = self
-                    .grid
-                    .place(pack.size(), columns, gap.max(Vec2::ZERO) * self.scale);
-                Vec2::new(
-                    at.x - self.half.x - pack.low.x,
-                    self.half.y - at.y - pack.high.y,
-                )
-            }
+            Policy::Grid { columns, gap } => self.place_grid(pack, columns, gap),
             Policy::Spot | Policy::Pile { .. } => Vec2::ZERO,
             _ if self.centred() && self.index == 0 => {
                 self.previous_groups = [group; 2];

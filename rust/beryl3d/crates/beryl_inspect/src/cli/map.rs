@@ -15,34 +15,57 @@ struct Kind {
     name: &'static str,
     path: &'static str,
     entries: fn() -> Result<Vec<Entry>, String>,
+    recipe: Option<&'static str>,
 }
 
 const KINDS: &[Kind] = &[
     Kind::new("crates", "data/beryl3d/levels.json", entries::crates),
-    Kind::new("features", "app_client/src/client/features.rs", || {
-        Ok(entries::features())
-    }),
+    Kind::scaffold(
+        "features",
+        "feature",
+        "app_client/src/client/features.rs",
+        || Ok(entries::features()),
+    ),
     Kind::new(
         "containers",
         "game_table/src/table/place.rs",
         entries::containers,
     ),
-    Kind::new("profiles", "data/beryl3d/profiles", entries::profiles),
-    Kind::new("verbs", "game_play/src/verbs", || Ok(entries::verbs())),
-    Kind::new("effects", "data/beryl3d/effects", entries::effects),
+    Kind::scaffold(
+        "profiles",
+        "profile",
+        "data/beryl3d/profiles",
+        entries::profiles,
+    ),
+    Kind::scaffold("verbs", "verb", "game_play/src/verbs", || {
+        Ok(entries::verbs())
+    }),
+    Kind::scaffold(
+        "effects",
+        "effect",
+        "data/beryl3d/effects",
+        entries::effects,
+    ),
     Kind::new("primitives", "kit_base/src/data/effect.rs", || {
         Ok(entries::primitives())
     }),
-    Kind::new("policies", "kit_space/src/arrange.rs", || {
+    Kind::scaffold("policies", "policy", "kit_space/src/arrange.rs", || {
         Ok(entries::policies())
     }),
     Kind::new("roles", "kit_frame/src/frame.rs", || Ok(entries::roles())),
-    Kind::new("widgets", "kit_ui/src/widgets", || Ok(entries::widgets())),
+    Kind::scaffold("widgets", "widget", "kit_ui/src/widgets", || {
+        Ok(entries::widgets())
+    }),
     Kind::new("data", "kit_base/src/data/tuning.rs", entries::data),
     Kind::new("checks", "kit_probe/src/agent/fault.rs", || {
         Ok(entries::checks())
     }),
-    Kind::new("stories", "beryl_inspect/src/stories.rs", entries::stories),
+    Kind::scaffold(
+        "stories",
+        "story",
+        "beryl_inspect/src/stories.rs",
+        entries::stories,
+    ),
     Kind::new(
         "commands",
         "beryl_inspect/src/cli/mod.rs",
@@ -60,6 +83,19 @@ impl Kind {
             name,
             path,
             entries,
+            recipe: None,
+        }
+    }
+
+    const fn scaffold(
+        name: &'static str,
+        recipe: &'static str,
+        path: &'static str,
+        entries: fn() -> Result<Vec<Entry>, String>,
+    ) -> Self {
+        Self {
+            recipe: Some(recipe),
+            ..Self::new(name, path, entries)
         }
     }
 
@@ -95,6 +131,8 @@ struct Summary {
     name: &'static str,
     count: usize,
     path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    recipe: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -138,6 +176,7 @@ fn overview(command: &str, as_json: bool) -> Result<String, Usage> {
                 name: kind.name,
                 count: (kind.entries)()?.len(),
                 path: kind.path(),
+                recipe: kind.recipe,
             })
         })
         .collect::<Result<_, String>>()

@@ -34,6 +34,13 @@ impl Registration {
     }
 }
 
+fn prompt_placement(body: &ShapeBody) -> Option<Placement> {
+    match body {
+        ShapeBody::Candidates => Some(Placement::Candidates),
+        body => Some(Placement::Shape(shape_name(body.shape()?))),
+    }
+}
+
 impl Features {
     fn draw_prompt(
         &self,
@@ -60,10 +67,7 @@ impl Features {
         if placement == Placement::PromptBar {
             return self.draw_prompt(placement, prompts::Inputs { hud, bar: None }, false);
         }
-        let shown = match &hud.prompt?.body {
-            ShapeBody::Candidates => Placement::Candidates,
-            body => Placement::Shape(shape_name(body.shape()?)),
-        };
+        let shown = prompt_placement(&hud.prompt?.body)?;
         (shown == placement)
             .then(|| self.prompt_view(hud, false))
             .flatten()
@@ -85,10 +89,7 @@ impl Features {
         let Some(prompt) = hud.prompt else {
             return Some(bar);
         };
-        let placement = match &prompt.body {
-            ShapeBody::Candidates => Placement::Candidates,
-            body => Placement::Shape(shape_name(body.shape()?)),
-        };
+        let placement = prompt_placement(&prompt.body)?;
         self.draw_prompt(
             placement,
             prompts::Inputs {

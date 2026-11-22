@@ -709,7 +709,10 @@ LISTS: dict[str, Callable[[], list[Listed]]] = {
     "b3d-clippy": lambda: [
         Listed(f"b3d-clippy:{n}", [f"crate:{n}"]) for n in packages()
     ],
-    "b3d-source": lambda: [Listed(f"b3d-source:{n}") for n in purity.SOURCE_RULES],
+    "b3d-source": lambda: [
+        Listed(f"b3d-source:{n}", purity.SOURCE_INPUTS.get(n, []))
+        for n in purity.SOURCE_RULES
+    ],
     "b3d-validation": beryl3d_validation.checks,
     "b3d-interface": lambda: interface_list("b3d-interface"),
     "b3d-every-tick": lambda: interface_list("b3d-every-tick"),

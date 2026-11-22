@@ -95,6 +95,9 @@ impl Effects {
 pub struct Definition {
     pub name: Arc<str>,
     pub target: Target,
+    /// The effect can be tried in stories before it has shared script timing.
+    #[serde(default)]
+    pub preview: bool,
     pub layers: Vec<Layer>,
 }
 

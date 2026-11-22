@@ -210,7 +210,10 @@ pub(super) fn verbs() -> Vec<Entry> {
         .map(|&verb| {
             Entry::new(
                 verb.name(),
-                crate_path(&format!("game_play/src/verbs/{}.rs", verb.name())),
+                crate_path(&format!(
+                    "game_play/src/verbs/{}.rs",
+                    verb.name().replace('-', "_")
+                )),
                 if game_play::verbs::built(verb) {
                     "motion"
                 } else {

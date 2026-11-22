@@ -65,6 +65,24 @@
       "order": 15
     }
   },
+  "guide_allowances": {
+    "rust/beryl3d/AGENTS.md": 430,
+    "rust/beryl3d/crates/app_client/AGENTS.md": null,
+    "rust/beryl3d/crates/app_screens/AGENTS.md": null,
+    "rust/beryl3d/crates/game_hud/AGENTS.md": null,
+    "rust/beryl3d/crates/game_manual/AGENTS.md": null,
+    "rust/beryl3d/crates/game_play/AGENTS.md": null,
+    "rust/beryl3d/crates/game_probe/AGENTS.md": 113,
+    "rust/beryl3d/crates/game_table/AGENTS.md": null,
+    "rust/beryl3d/crates/kit_base/AGENTS.md": null,
+    "rust/beryl3d/crates/kit_frame/AGENTS.md": null,
+    "rust/beryl3d/crates/kit_fx/AGENTS.md": null,
+    "rust/beryl3d/crates/kit_probe/AGENTS.md": 81,
+    "rust/beryl3d/crates/kit_scene/AGENTS.md": null,
+    "rust/beryl3d/crates/kit_space/AGENTS.md": null,
+    "rust/beryl3d/crates/kit_text/AGENTS.md": null,
+    "rust/beryl3d/crates/kit_ui/AGENTS.md": null
+  },
   "cap_lines": 12000,
   "cap_allowances": {},
   "protocol": {

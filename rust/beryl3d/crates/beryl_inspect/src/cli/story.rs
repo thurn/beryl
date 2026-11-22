@@ -9,7 +9,7 @@ use kit_probe::story::Header;
 use serde_json::json;
 
 use super::options::{Options, Usage, quote};
-use super::{Printed, open_recording};
+use super::{Printed, open};
 use crate::{scene::Scene, stories};
 
 pub(super) fn from(options: &Options) -> Result<Printed, Usage> {
@@ -18,8 +18,12 @@ pub(super) fn from(options: &Options) -> Result<Printed, Usage> {
             "write story from <recording> --at <moment> [--feature <id>]".to_owned(),
         ));
     }
-    let page = open_recording(options)?;
-    let mut scene = Scene::Recording(Box::new(page));
+    let mut scene = open(options)?;
+    if !matches!(scene, Scene::Recording(_)) {
+        return Err(Usage(
+            "story from needs a recording or a table story".to_owned(),
+        ));
+    }
     let time = super::time_of(&mut scene, options, &options.at)?;
     scene
         .seek(&Moment::At(Duration(time)))
@@ -32,7 +36,18 @@ pub(super) fn from(options: &Options) -> Result<Printed, Usage> {
         window: options.size,
     };
     let feature = options.value("--feature");
-    let profile = options.value(super::options::PROFILE);
+    let source_profile = if stories::is_story(options.name()) {
+        let source = stories::open(options.name()).map_err(Usage)?;
+        match source.as_ref() {
+            stories::Story::Game(story) => story.profile.clone(),
+            stories::Story::Toolkit(_) => None,
+        }
+    } else {
+        None
+    };
+    let profile = options
+        .value(super::options::PROFILE)
+        .or(source_profile.as_deref());
     let text = match feature {
         Some("settings") => page.settings_story().write(header, profile),
         Some(id) if page.feature_element(id).is_none() => {
