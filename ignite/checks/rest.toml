@@ -330,11 +330,9 @@ inputs = [
   "tools/src/beryl_tools/system.py",
 ]
 
-# The iroh transport's test binaries. The `iroh` family's commands select beryl_link_iroh alone,
-# which enables other features on 28 shared dependencies (`serde`, `libc`, `proc-macro2` among
-# them) than the `rust-tests` build does, so its listing compiled them again without reporting
-# it. Built here, that compile is a reported build that holds rust/target once. The command
-# names its package, so the build is the same whichever checks asked for it.
+# The iroh transport's test binaries. The package's dev-dependency on
+# beryl_workspace_hack gives shared dependencies the same features as the Rust tests.
+# The rest of the workspace can still build without compiling the iroh transport.
 [product.iroh-tests]
 build = "cargo nextest run --no-run --locked --cargo-quiet -p beryl_link_iroh"
 dir = "rust"

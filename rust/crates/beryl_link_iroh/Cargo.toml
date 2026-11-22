@@ -30,3 +30,5 @@ iroh_ios = { package = "iroh", git = "https://github.com/n0-computer/iroh", rev 
 [dev-dependencies]
 # Supply the JSON value type required by the table handshake's test callbacks.
 serde_json = "1"
+# Give dependencies shared with the other Rust tests the same features in this build.
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }

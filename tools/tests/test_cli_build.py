@@ -1,57 +1,90 @@
-"""The `beryl_cli` the checks run shares the tests step's build (`paths.CLI_BUILD`).
+"""The CLI and scenario products use the same workspace build as the Rust tests."""
 
-`CLI_BUILD` builds the workspace's libraries and the CLI in the same profile and over the same
-packages as the tests step's `cargo test`, so whichever runs second compiles nothing new. That
-holds only while both commands resolve the same features for every crate. `cargo test` turns
-on what the members' dev-dependencies ask for, and a plain `cargo build` does not. A feature
-that only a dev-dependency turns on, such as the old `coverage` feature of `beryl_engine`, or
-`getrandom`'s `std` that the tests' `proptest` asks for, makes the two commands compile that
-crate and every crate above it twice.
-"""
-
-import re
+import shlex
 import subprocess
+import sys
+import tomllib
 
-from beryl_tools import paths
+import pytest
+
+from beryl_tools import paths, workspace_hack
 
 
-def features(edges: str) -> dict[str, set[str]]:
-    """Each package's resolved features, as `cargo tree` resolves them over the tests step's
-    packages following `edges`."""
-    tree = subprocess.run(
-        ["cargo", "tree", "--locked", *paths.BUILD_SCOPE, "-e", edges]
-        # Deduplicated: a package Cargo resolves with another feature set is another node, so
-        # each set is printed in full once. With `--no-dedupe`, the output repeated
-        # `beryl_workspace_hack`'s Tauri dependencies under every package and took minutes.
-        + ["-f", "{p} [{f}]", "--prefix", "none"],
-        cwd=paths.RUST,
+def package_selection(command: list[str]) -> list[str]:
+    """The build arguments that also select packages and features in cargo tree."""
+    selection: list[str] = []
+    values = {"-p", "--package", "--exclude", "--features", "-F"}
+    switches = {"--workspace", "--all-features", "--no-default-features"}
+    words = iter(command)
+    for word in words:
+        flag = word.split("=", 1)[0]
+        if flag in values:
+            selection.append(word)
+            if flag == word:
+                selection.append(next(words))
+        elif word in switches:
+            selection.append(word)
+    return selection
+
+
+def cli_commands() -> dict[str, list[str]]:
+    """The Cargo invocations that build the shared CLI and scenario binaries."""
+    manifest = paths.REPO / "ignite/checks/rust.toml"
+    products = tomllib.loads(manifest.read_text())["product"]
+    review = subprocess.run(
+        ["just", "--dry-run", "review", "replay.json"],
+        cwd=paths.REPO,
         capture_output=True,
         text=True,
         check=True,
-    ).stdout
-    found: dict[str, set[str]] = {}
-    for line in tree.splitlines():
-        if m := re.match(r"(\S+ v\S+)(?: \(.*\))? \[(.*)\](?: \(\*\))?$", line.strip()):
-            found.setdefault(m[1], set()).update(f for f in m[2].split(",") if f)
-    return found
-
-
-def test_no_feature_is_turned_on_only_by_a_dev_dependency() -> None:
-    plain = features("normal,build")
-    tests = features("normal,build,dev")
-    only_dev = {p: sorted(tests[p] - f) for p, f in plain.items() if tests[p] != f}
-    assert only_dev == {}, (
-        "these features are turned on only by dev-dependencies, so the tests step and"
-        " CLI_BUILD would compile these crates and every crate above them twice; turn them"
-        f" on in a normal dependency too: {only_dev}"
     )
+    review_build = next(
+        line.strip()
+        for line in review.stderr.splitlines()
+        if line.strip().startswith("cargo build ")
+    )
+    return {
+        "cli": shlex.split(products["cli"]["build"]),
+        "scenario-dump": shlex.split(products["scenario-dump"]["build"]),
+        "CLI_BUILD": paths.CLI_BUILD,
+        "just review": shlex.split(review_build),
+    }
 
 
 def test_the_cli_builds_over_the_tests_steps_packages_in_its_profile() -> None:
-    build = paths.CLI_BUILD
-    scope = paths.BUILD_SCOPE
-    assert any(build[i : i + len(scope)] == scope for i in range(len(build)))
-    assert build[build.index("--profile") + 1] == "test"
-    assert "--lib" in build
-    # The oracle lane's dump runs this build's `beryl_scenario` (oracles.dump_scenarios).
-    assert "beryl_scenario" in build
+    product = tomllib.loads((paths.REPO / "ignite/checks/rust.toml").read_text())[
+        "product"
+    ]["rust-tests"]
+    scope = [
+        "--workspace",
+        *[flag for name in product["exclude"] for flag in ("--exclude", name)],
+    ]
+    assert scope == paths.BUILD_SCOPE
+    profile = tomllib.loads((paths.RUST / "Cargo.toml").read_text())["profile"]["test"]
+    for setting in ("opt-level", "debug"):
+        assert profile["build-override"][setting] == profile[setting], setting
+    for label, command in cli_commands().items():
+        assert package_selection(command) == paths.BUILD_SCOPE, label
+        assert command[command.index("--profile") + 1] == "test", label
+        assert "--lib" in command, label
+        binary = "beryl_scenario" if label == "scenario-dump" else "beryl_cli"
+        assert binary in command, label
+    # The oracle lane's dump also uses CLI_BUILD's scenario binary.
+    assert "beryl_scenario" in paths.CLI_BUILD
+
+
+def test_cli_products_match_the_rust_test_features_on_both_sides() -> None:
+    if sys.platform != "darwin":
+        pytest.skip("the hack crate lists macOS's dependencies")
+    whole: workspace_hack.Features = workspace_hack.feature_tree(["--workspace"])
+    found = {
+        label: diff
+        for label, command in cli_commands().items()
+        if (
+            diff := workspace_hack.compare(
+                workspace_hack.feature_tree(package_selection(command), tests=False),
+                whole,
+            )
+        )
+    }
+    assert not found, "\n".join(workspace_hack.describe(found))

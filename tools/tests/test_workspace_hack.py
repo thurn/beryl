@@ -9,16 +9,33 @@ import pytest
 
 from beryl_tools import workspace_hack
 
-# beryl_workspace_hack lists macOS's resolution of the dependencies.
-pytestmark: pytest.MarkDecorator = pytest.mark.skipif(
-    sys.platform != "darwin", reason="the hack crate lists macOS's dependencies"
-)
+
+def test_a_feature_moving_from_the_host_to_the_target_changes_the_resolution() -> None:
+    tree = """root v1.0.0|
+|-- dep v1.0.0|{target}
+|-- derive v1.0.0 (proc-macro)|
+|   `-- dep v1.0.0|{host}
+[build-dependencies]
+`-- dep v1.0.0|{host} (*)
+"""
+    whole = workspace_hack.parse_feature_tree(
+        tree.format(host="host-feature", target="target-feature")
+    )
+    swapped = tree.format(host="target-feature", target="host-feature")
+    assert workspace_hack.compare(
+        workspace_hack.parse_feature_tree(swapped), whole
+    ) == {
+        ("host", "dep v1.0.0"): ("target-feature", "host-feature"),
+        ("target", "dep v1.0.0"): ("host-feature", "target-feature"),
+    }
 
 
 def test_every_package_alone_has_the_whole_workspaces_features() -> None:
+    if sys.platform != "darwin":
+        pytest.skip("the hack crate lists macOS's dependencies")
     found = workspace_hack.differences()
     assert found == {}, (
-        "these packages, built alone, resolve features differently from the whole workspace:"
+        "these builds resolve host or target features differently from the whole workspace:"
         " run `just workspace-hack`, which lists any that are workspace packages' own"
         " features\n" + "\n".join(workspace_hack.describe(found))
     )

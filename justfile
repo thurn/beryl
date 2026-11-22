@@ -289,7 +289,7 @@ freeze-saves *args:
 play *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- play "$@"
 
-# An app game's transcript from a dev build in seconds; `--agent recorded` (or NAME) adds its searches from a search build at low priority (REPLAY.json, --turn N, --out FILE)
+# An app game's transcript from the shared test-profile build; `--agent recorded` (or NAME) adds its searches from a search build at low priority (REPLAY.json, --turn N, --out FILE)
 [group('agents')]
 [no-cd]
 review *args:
@@ -304,7 +304,11 @@ review *args:
     if $search; then
       RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path "$manifest" -p beryl_cli_main -- review "$@"
     else
-      cargo run --quiet --manifest-path "$manifest" -p beryl_cli_main -- review "$@"
+      target="${CARGO_TARGET_DIR:-${manifest%/*}/target}"
+      cargo build --locked --quiet --manifest-path "$manifest" --target-dir "$target" --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_cli
+      binary="$target/debug/beryl_cli"
+      if [[ -f "$binary.exe" ]]; then binary="$binary.exe"; fi
+      exec "$binary" review "$@"
     fi
 
 # A round robin between agents, games in parallel at low priority (--games N, --seed N, --json FILE, --check)

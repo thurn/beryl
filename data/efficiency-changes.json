@@ -784,5 +784,10 @@
     "label": "The Beryl 3D map gives agents source and data paths directly from client registries, shortening the search for code to change.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The Rust test, scenario and CLI builds share dependency features and use the same compiler settings for build and normal dependencies.",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]

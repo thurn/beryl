@@ -275,6 +275,7 @@
       "rust/crates/beryl_card/src"
     ],
     "tools/src/beryl_tools/workspace_hack.py": [
+      "rust/Cargo.lock",
       "rust/Cargo.toml",
       "rust/cards",
       "rust/crates"
@@ -307,6 +308,11 @@
     ],
     "tools/tests/test_card_store.py": [
       "data/card-store.tsv"
+    ],
+    "tools/tests/test_cli_build.py": [
+      "ignite/checks/rust.toml",
+      "justfile",
+      "rust/Cargo.toml"
     ],
     "tools/tests/test_design_tokens.py": [
       "ui/src/design/tokens.css"

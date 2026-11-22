@@ -14,7 +14,7 @@ Run from the repository's root as `python -m beryl_tools.ignite.script <verb> <f
 
 The families:
 
-- `script`: `beryl_cli script-check`, in a debug build (the `script-cli` product), where every
+- `script`: `beryl_cli script-check`, in a debug build (the `cli` product), where every
   script the session builds is held to the replay check and the rule invariants. One check per
   card, moment and seat, and one per UI fixture. The moments of a card are what `beryl_cli
   specs-check <card>` lists, which plays them. A check's own inputs are its card's file, the
@@ -162,7 +162,7 @@ def used_files(root: Path, own: str, files: dict[str, str]) -> list[str]:
 
 
 def binary(root: Path) -> Path:
-    """The debug `beryl_cli` the `script-cli` product builds."""
+    """The debug `beryl_cli` the `cli` product builds."""
     target = Path(os.environ.get("CARGO_TARGET_DIR", root / "rust" / "target"))
     return target / "debug" / ("beryl_cli.exe" if os.name == "nt" else "beryl_cli")
 

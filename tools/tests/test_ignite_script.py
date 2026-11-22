@@ -27,7 +27,7 @@ FORBIDDEN: list[str] = [
 def test_the_manifest_declares_the_three_families_and_their_product() -> None:
     manifest = tomllib.loads(MANIFEST.read_text())
     assert set(manifest["family"]) == {"script", "app", "mobile"}
-    assert manifest["product"]["script-cli"]["outputs"] == ["rust/target"]
+    assert manifest["family"]["script"]["needs"] == ["cli", "python-env"]
     for name, family in manifest["family"].items():
         assert family["adapter"] == "jsonl"
         assert family["kind"] == "regression"

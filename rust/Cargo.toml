@@ -66,6 +66,15 @@ codegen-units = 1
 # stay on, as `dev` has them.
 [profile.test]
 opt-level = 1
+debug = 2
+
+# The card build helpers and their dependencies are both build-time and normal
+# libraries in a workspace test. They can be build-only in a package test. Use the
+# same optimization and debug info for both roles so Cargo can reuse the libraries
+# and every crate that depends on them.
+[profile.test.build-override]
+opt-level = 1
+debug = 2
 
 [patch.crates-io]
 # iOS needs netwatch's fix for the routing constants libc exposes only on
