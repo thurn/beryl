@@ -76,6 +76,15 @@ pub const fn cards_in(zone: Zone, players: &'static Players, filter: Filter) -> 
     }
 }
 
+/// Permanents these players control that pass `filter`.
+pub const fn permanents_controlled_by(players: &'static Players, filter: Filter) -> Objects {
+    Objects::InZoneOf {
+        zone: Zone::Battlefield,
+        players,
+        filter,
+    }
+}
+
 /// "[Players]'s hand": every card in it.
 pub const fn hand_of(players: &'static Players) -> Objects {
     cards_in(Zone::Hand, players, Filter::Any)

@@ -28,9 +28,32 @@ pub fn add<L: Layout>(
     if amount == 0 || !game.state.object(slot).on_battlefield() {
         return Ok(());
     }
+    if kind == CounterKind::Lore {
+        return add_lore(game, object, amount);
+    }
     let layered = game.state.layers_read_counters(game.table, slot, kind);
     let e = game.state.add_counters(object, kind, amount, layered)?;
     game.settle(e)
+}
+
+/// Lore placement also matches any chapter thresholds it crosses (see CR 715.2b).
+#[cold]
+#[inline(never)]
+fn add_lore<L: Layout>(
+    game: &mut Game<'_, L>,
+    object: beryl_kernel::reference::Current<ObjectRef<L>>,
+    amount: u8,
+) -> Result<(), Full> {
+    let slot = object.reference().slot;
+    let kind = CounterKind::Lore;
+    let before = game.state.counters_of(slot, kind);
+    let layered = game.state.layers_read_counters(game.table, slot, kind);
+    let e = game.state.add_counters(object, kind, amount, layered)?;
+    game.settle(e)?;
+    if game.table.can(crate::table::Capability::Saga) {
+        crate::saga::match_lore(game.state, game.table, slot, before)?;
+    }
+    Ok(())
 }
 
 /// Removes up to `amount` counters of a kind from a permanent: as many as it has

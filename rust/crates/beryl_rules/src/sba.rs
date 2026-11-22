@@ -1,6 +1,6 @@
 //! State-based actions (architecture §8.4).
 //!
-//! Implements: CR 104.2a, CR 104.3a, CR 104.4a, CR 704.3, CR 704.5a, CR 704.5b, CR 704.5d, CR 704.5e, CR 704.5f, CR 704.5g, CR 704.5i, CR 704.5j, CR 704.5m, CR 704.5n
+//! Implements: CR 104.2a, CR 104.3a, CR 104.4a, CR 704.3, CR 704.5a, CR 704.5b, CR 704.5d, CR 704.5e, CR 704.5f, CR 704.5g, CR 704.5i, CR 704.5j, CR 704.5m, CR 704.5n, CR 704.5s
 
 use beryl_kernel::format::Format;
 
@@ -17,7 +17,7 @@ use crate::layout::{Layout, PerPlayer, Table};
 use crate::replacement;
 use crate::replacement::event::{self, Entry, Event, LossCause, Reason, Sink};
 use crate::state::{Pending, State, Zone};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 use beryl_card::Regeneration;
 
 /// Checks state-based actions and performs them, returning whether any were performed. A
@@ -48,7 +48,14 @@ pub(crate) fn check<L: Layout>(
     // same as state-based actions."), but they are found at the same moments.
     crate::stack::trigger::match_states(s, t)?;
     let (mut graveyard, tokens, legendary) = doomed(s, t);
-    let loose = loose_equipment(s, t);
+    // One table test skips both scans in games with neither subtype.
+    let (loose, sacrifices) = if t.can_either(Capability::Equipment, Capability::Saga) {
+        let (loose, sacrifices) = read_equipment_and_sagas(s, t);
+        graveyard |= sacrifices;
+        (loose, sacrifices)
+    } else {
+        (Bitboard::EMPTY, Bitboard::EMPTY)
+    };
     let legends = legend_group_in(s, t, &legendary, Bitboard::EMPTY).is_some();
     if graveyard.is_empty() && tokens.is_empty() && loose.is_empty() && !legends {
         s.reset_state_based_checks();
@@ -61,7 +68,7 @@ pub(crate) fn check<L: Layout>(
     // CR 704.3 checks all conditions before performing any actions. Detaching Equipment
     // can change a creature's toughness, so classify lethal damage before detaching it.
     let lethal = if s.has_regeneration_shields() {
-        destroyed_for_damage(s, t, graveyard)
+        destroyed_for_damage(s, t, graveyard & !sacrifices)
     } else {
         Bitboard::EMPTY
     };
@@ -93,6 +100,10 @@ pub(crate) fn check<L: Layout>(
     // "As a single event": the one batch below is every action of this check that has an
     // event, and a batch's events are kept as one group (`event::move_batch`).
     s.reclaim_tokens(tokens)?;
+    if !sacrifices.is_empty() {
+        event::move_state_based(s, t, sink, graveyard, sacrifices)?;
+        return Ok(true);
+    }
     event::move_batch(
         s,
         t,
@@ -211,23 +222,35 @@ fn destroyed_for_damage<L: Layout>(
     })
 }
 
+/// Finds illegally attached Equipment and completed Sagas only for the subtypes the game may have.
+///
+/// CR 704.5s: "... that Saga’s controller sacrifices it." Both conditions are read before
+/// the game changes any permanent.
+#[cold]
+#[inline(never)]
+fn read_equipment_and_sagas<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+) -> (Bitboard<L::Slot>, Bitboard<L::Slot>) {
+    let loose = if t.can(Capability::Equipment) {
+        attached_illegally(s, t)
+    } else {
+        Bitboard::EMPTY
+    };
+    let sacrifices = if t.can(Capability::Saga) {
+        crate::saga::completed(s, t)
+    } else {
+        Bitboard::EMPTY
+    };
+    (loose, sacrifices)
+}
+
 /// The Equipment attached to a permanent that may not be equipped by it
 /// ([CR 704.5n](https://yawgatog.com/resources/magic-rules/#R7045n)): "If an Equipment or
 /// Fortification is attached to an illegal permanent or to a player, it becomes unattached
 /// from that permanent or player. It remains on the battlefield." What may be equipped is
 /// `attach::may_equip`'s (see CR 301.5c). An Equipment whose creature left the battlefield is
 /// already attached to nothing (`zone::leave` detaches it).
-#[inline]
-fn loose_equipment<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> {
-    // A game none of whose cards is an Equipment never asks, and the engine loop, which runs
-    // this check after every action, keeps only the test inline.
-    if !t.subtypes().has(Subtype::Equipment).possible() {
-        return Bitboard::EMPTY;
-    }
-    attached_illegally(s, t)
-}
-
-/// [`loose_equipment`] in a game with an Equipment.
 #[cold]
 #[inline(never)]
 fn attached_illegally<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> {

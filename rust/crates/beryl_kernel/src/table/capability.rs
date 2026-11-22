@@ -109,10 +109,14 @@ pub enum Capability {
     ManaAbilityChoices,
     /// A card can be cast face down for morph.
     Morph,
+    /// The game may have a Saga or an ability with a chapter symbol.
+    Saga,
+    /// The game may have an Equipment that can become illegally attached.
+    Equipment,
 }
 
 // The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::Morph as u32) < u32::BITS);
+const _: () = assert!((Capability::Equipment as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities a face gives a game that can contain it.
@@ -141,6 +145,9 @@ impl Capability {
             found |= Capability::GrantsLayerEffect.bit();
         }
         for a in face.abilities.iter().chain(face.grants) {
+            if a.chapter_numbers().is_some() {
+                found |= Capability::Saga.bit();
+            }
             match a.replacement() {
                 Some(&Replacement {
                     rewrite: Rewrite::Dredge(_),

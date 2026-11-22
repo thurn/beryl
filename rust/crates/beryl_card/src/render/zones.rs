@@ -242,13 +242,24 @@ impl Ctx {
                 }
             }
         };
-        let what = self.moved_card(onto.objects);
-        let rest = format!(" to the battlefield{tapped} under {control}");
+        let mut what = self.moved_card(onto.objects);
+        let from_graveyard = matches!(onto.objects, Objects::Target(spec) if
+            self.targets.get(spec.index()).is_some_and(|target|
+                target.kind == crate::TargetKind::GraveyardCard));
+        let (verbs, destination) = if from_graveyard && onto.under.is_some() {
+            if what.ends_with(" graveyard") {
+                what = what.replacen(" in ", " from ", 1);
+            } else {
+                what.push_str(" from a graveyard");
+            }
+            (("put", "puts"), "onto")
+        } else {
+            (("return", "returns"), "to")
+        };
+        let rest = format!(" {destination} the battlefield{tapped} under {control}");
         self.discarded = None;
         self.those_named = None;
-        let clause = self.clause(Players::You, ("return", "returns"), |_| {
-            format!("{what}{rest}")
-        });
+        let clause = self.clause(Players::You, verbs, |_| format!("{what}{rest}"));
         self.plural = plural;
         clause
     }

@@ -40,6 +40,8 @@ pub enum EventKind {
     /// A mutating creature spell merging with a creature ([`crate::event::Event::Mutated`]).
     Mutated,
     TurnedFaceUp,
+    /// Lore added to the source of a chapter ability, matched by the lore placement procedure.
+    Chapter,
 }
 
 impl EventKind {

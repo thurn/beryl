@@ -341,11 +341,11 @@ fn what_the_port_entries_cannot_mean_is_refused() {
         Objects::ExiledWithThis,
         Prompt::new(Purpose::May).most(1),
     ))];
-    // The battlefield is no player's own.
+    // Exile is shared and cannot be read through this expression.
     const SHARED: &[Ability] = &[Ability::spell().effect(&look_at(
         you(),
         Objects::InZoneOf {
-            zone: Zone::Battlefield,
+            zone: Zone::Exile,
             players: &you(),
             filter: Filter::Any,
         },

@@ -32,6 +32,7 @@ pub(crate) static CASCADE: Effect = Effect::Sequence(&[
 ]);
 
 mod behavior;
+mod chapter;
 mod of_kind;
 mod zones;
 

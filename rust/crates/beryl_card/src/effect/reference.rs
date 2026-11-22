@@ -74,7 +74,8 @@ pub enum Objects {
     /// The cards in a zone each player has one of, of the players named, that pass a filter:
     /// "target opponent's hand", "a nonland card from it", "that player's graveyard"
     /// ([CR 400.1](https://yawgatog.com/resources/magic-rules/#R4001)): "Each player has their
-    /// own library, hand, and graveyard." The filter is read for the ability's controller.
+    /// own library, hand, and graveyard." On the battlefield this selects permanents the
+    /// named players control. The filter is read for the ability's controller.
     InZoneOf {
         zone: Zone,
         players: &'static Players,

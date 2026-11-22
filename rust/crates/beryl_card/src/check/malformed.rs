@@ -167,7 +167,9 @@ impl Malformed {
                 "an effect names what its trigger event was about, and its ability has none"
             }
             Malformed::Chosen => "a choice among objects is not a pick of one of them",
-            Malformed::ZoneOf => "a zone of a player's own is not a library, hand or graveyard",
+            Malformed::ZoneOf => {
+                "a zone grouped by player is not the battlefield, a library, a hand or a graveyard"
+            }
             Malformed::Permitted => {
                 "a permission to cast lasts neither this turn nor while the card stays put"
             }

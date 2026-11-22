@@ -43,6 +43,8 @@ pub(crate) struct Entry<L: Layout = Small> {
     pub face: FaceIx,
     /// Counters it enters with ("enters with N time counters").
     pub counters: Option<(CounterKind, u8)>,
+    /// The intrinsic lore counter, which can be placed alongside other entry counters.
+    pub saga_lore: bool,
     /// Its controller chose to pay the life an "unless you pay N life" replacement asks.
     pub pay_life: bool,
     /// What its spell was cast with that its abilities read, which it enters remembering
@@ -78,6 +80,10 @@ pub(crate) fn arrive<L: Layout>(
             attach: entry.attach,
         },
     )?;
+    if entry.saga_lore {
+        let object = s.current(ObjectRef::from(permanent)).expect("just arrived");
+        let _ = s.add_counters(object, CounterKind::Lore, 1, false)?;
+    }
     if !entry.paid.is_empty() {
         s.remember(slot, Memo::Paid(entry.paid))?;
     }
@@ -204,6 +210,21 @@ pub(crate) fn move_batch_to<L: Layout>(
     reason: Reason,
     entry: Entry<L>,
 ) -> Result<(), Full> {
+    move_batch_with_reason(s, t, sink, objects, to, place, |_| reason, entry)
+}
+
+/// Moves objects together while preserving each object's reason for moving.
+#[allow(clippy::too_many_arguments)]
+fn move_batch_with_reason<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    objects: Bitboard<L::Slot>,
+    to: Zone,
+    place: Place,
+    reason: impl Fn(L::Slot) -> Reason,
+    entry: Entry<L>,
+) -> Result<(), Full> {
     layers::refresh(s, t, sink)?;
     // Moving one object needs neither sorting nor scratch space for a full batch.
     if let Some(slot) = objects.sole() {
@@ -211,6 +232,32 @@ pub(crate) fn move_batch_to<L: Layout>(
     }
     let ordered = s.in_game_order(t, objects)?;
     move_ordered::<L, 128>(s, t, sink, ordered.as_slice(), to, place, reason, entry)
+}
+
+/// Moves permanents simultaneously as state-based actions, preserving which were sacrificed.
+pub(crate) fn move_state_based<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    graveyard: Bitboard<L::Slot>,
+    sacrifices: Bitboard<L::Slot>,
+) -> Result<(), Full> {
+    move_batch_with_reason(
+        s,
+        t,
+        sink,
+        graveyard,
+        Zone::Graveyard,
+        Place::Top,
+        |slot| {
+            if sacrifices.contains(slot) {
+                Reason::Sacrifice
+            } else {
+                Reason::StateBased
+            }
+        },
+        Entry::default(),
+    )
 }
 
 /// A prepared move: the slot, the old and new zones, and how it enters.
@@ -225,7 +272,7 @@ fn move_ordered<L: Layout, const N: usize>(
     ordered: &[L::Slot],
     to: Zone,
     place: Place,
-    reason: Reason,
+    reason: impl Fn(L::Slot) -> Reason,
     entry: Entry<L>,
 ) -> Result<(), Full> {
     // Each move as replaced: the object, where it was, where it goes and how it enters. A
@@ -242,7 +289,7 @@ fn move_ordered<L: Layout, const N: usize>(
             from: s.object(slot).zone(),
             to,
             entry,
-            cast: reason == Reason::Resolve,
+            cast: reason(slot) == Reason::Resolve,
         };
         let prepared = prepare_move(s, t, sink, proposal, auras)?;
         if prepared.is_some() && proposal.from == Zone::Battlefield {
@@ -271,11 +318,11 @@ fn move_ordered<L: Layout, const N: usize>(
         .filter(|&&(_, from, _, _)| from == Zone::Battlefield)
         .map(|&(slot, _, dest, _)| (slot, dest));
     trigger::match_look_back(s, t, leaving)?;
-    let changed = |object, from, to| Event::ZoneChange {
+    let changed = |slot, object, from, to| Event::ZoneChange {
         object,
         from,
         to,
-        reason,
+        reason: reason(slot),
         // see [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Public zones
         // are zones in which all players can see the cards' faces" including the stack.
         // Keep the end chosen for a spell, even when the library was empty.
@@ -309,7 +356,7 @@ fn move_ordered<L: Layout, const N: usize>(
             }
             arrived.push_bounded(slot);
         }
-        sink.push_joined(changed(s.object_ref(slot), from, dest), || {
+        sink.push_joined(changed(slot, s.object_ref(slot), from, dest), || {
             !std::ptr::eq(each, first)
         });
     }
@@ -322,7 +369,13 @@ fn move_ordered<L: Layout, const N: usize>(
         layers::refresh(s, t, sink)?;
     }
     for &(slot, from, dest, _) in moves.iter() {
-        trigger::match_event(s, t, &changed(s.object_ref(slot), from, dest))?;
+        trigger::match_event(s, t, &changed(slot, s.object_ref(slot), from, dest))?;
+    }
+    if !arrived.is_empty() && t.can(Capability::Saga) {
+        for &slot in arrived.as_slice() {
+            // See CR 122.6: "counters being put on an object" includes counters it enters with.
+            crate::saga::match_lore(s, t, slot, 0)?;
+        }
     }
     if !returning.is_empty() {
         // see CR 610.3c: "An object returned to the battlefield this way returns under its

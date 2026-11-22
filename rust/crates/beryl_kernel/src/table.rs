@@ -338,10 +338,16 @@ impl GameTable {
         let face_subtypes = subtypes.of_cards(&defs);
         let names = card_names(&defs);
         let restrictions = mana_memory::number(&defs);
-        let capabilities = defs
+        let mut capabilities = defs
             .iter()
             .flat_map(|d| d.faces)
             .fold(Capability::of(&FACE_DOWN), |c, f| c | Capability::of(f));
+        if subtypes.has(beryl_card::Subtype::Saga).possible() {
+            capabilities |= Capability::Saga.bit();
+        }
+        if subtypes.has(beryl_card::Subtype::Equipment).possible() {
+            capabilities |= Capability::Equipment.bit();
+        }
         Ok(Self {
             format,
             cards,

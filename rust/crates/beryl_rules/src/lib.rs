@@ -141,6 +141,7 @@
 //! - [`keywords`] implements flashback (see CR 702.34).
 //! - `engine.rs` and `engine/` build decisions, advance the game and apply answers
 //!   (see CR 117). `sba.rs` checks and performs state-based actions (see CR 704).
+//!   `saga.rs` matches chapter abilities, advances lore and finds completed Sagas (see CR 715).
 //! - `interpret/` reads effect data and carries out its instructions, including choices
 //!   made during resolution (see CR 608.2c, see CR 608.2d, see CR 608.2f, see CR 608.2h).
 //!
@@ -248,6 +249,7 @@ pub mod objects;
 mod reference;
 pub mod replacement;
 pub mod resolution;
+mod saga;
 mod sba;
 mod scratch;
 pub mod stack;

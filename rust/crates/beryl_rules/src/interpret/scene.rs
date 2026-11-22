@@ -271,6 +271,23 @@ impl<L: Layout> Scene<'_, L> {
                 zone: zone @ (Zone::Library | Zone::Hand | Zone::Graveyard),
                 filter: Filter::Whose(&Players::You),
             } => s.zone(ZoneKey::Of(self.you(), zone)),
+            // See CR 110.2: "Every permanent has a controller." The controller can differ
+            // from the owner, so a battlefield choice by controller cannot read the zone's
+            // membership by owner.
+            Objects::InZoneOf {
+                zone: Zone::Battlefield,
+                players,
+                filter,
+            } => {
+                let players = self.players(*players);
+                let within = s
+                    .permanents_with_derived()
+                    .filter_map(|(slot, derived)| {
+                        players.contains(derived.controller).then_some(slot)
+                    })
+                    .collect();
+                filter.select_x(s, self.t, within, self.you(), &self.words(), self.x)
+            }
             // See CR 400.1: "Each player has their own library, hand, and graveyard."
             Objects::InZoneOf {
                 zone,

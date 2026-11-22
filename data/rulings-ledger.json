@@ -1686,6 +1686,58 @@
       ]
     }
   ],
+  "The Eldest Reborn": [
+    {
+      "published_at": "2018-04-27",
+      "hash": "e97181d9df12",
+      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+    },
+    {
+      "published_at": "2018-04-27",
+      "hash": "9d3b33fef1ca",
+      "untestable": "No implemented card can remove a lore counter from a Saga. The rules test removing_lore_does_not_trigger_but_adding_it_back_does covers both threshold crossings."
+    },
+    {
+      "published_at": "2018-04-27",
+      "hash": "86a5400d3823",
+      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+    },
+    {
+      "published_at": "2018-04-27",
+      "hash": "2af0aadae8f2",
+      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+    },
+    {
+      "published_at": "2018-04-27",
+      "hash": "7f7f0179c171",
+      "untestable": "No implemented card can put multiple lore counters on a Saga at once. The rules test a_final_chapter_waiting_for_targets_prevents_sacrifice checks that crossing two different thresholds queues both chapters as a trigger order choice."
+    },
+    {
+      "published_at": "2018-04-27",
+      "hash": "a4170507af89",
+      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+    },
+    {
+      "published_at": "2018-04-27",
+      "hash": "a2cbd1fb4133",
+      "scenario": ["The third chapter resolves after the Saga leaves"]
+    },
+    {
+      "published_at": "2018-04-27",
+      "hash": "38666afa51c4",
+      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+    },
+    {
+      "published_at": "2018-04-27",
+      "hash": "70685530bd6b",
+      "untestable": "The card scenarios have two seats and cannot reproduce a player leaving a multiplayer game."
+    },
+    {
+      "published_at": "2018-04-27",
+      "hash": "559b26ebc012",
+      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+    }
+  ],
   "Thespian's Stage": [
     {
       "published_at": "2018-12-07",

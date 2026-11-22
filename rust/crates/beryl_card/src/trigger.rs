@@ -124,11 +124,17 @@ pub enum TriggerEvent {
     DealsDamage,
     /// When a face-down permanent turns face up (see CR 708.8).
     TurnedFaceUp,
+    /// A single chapter threshold or a consecutive range of thresholds for the same effect.
+    /// Each threshold crossed upward by putting lore counters on the source triggers separately.
+    Chapter { first: u8, last: u8 },
 }
 
 impl PartialEq for TriggerEvent {
     fn eq(&self, other: &TriggerEvent) -> bool {
         match self {
+            TriggerEvent::Chapter { first, last } => {
+                matches!(other, TriggerEvent::Chapter { first: a, last: b } if first == a && last == b)
+            }
             TriggerEvent::Step(a) => matches!(other, TriggerEvent::Step(b) if a == b),
             TriggerEvent::State(a) => {
                 matches!(other, TriggerEvent::State(b) if std::ptr::eq(*a, *b))
@@ -156,13 +162,15 @@ impl PartialEq for TriggerEvent {
 
 impl Eq for TriggerEvent {}
 
-/// The entry, and its step: a state trigger's condition is left out, which keeps equal events'
-/// hashes equal and the hash the same in every run.
+/// The entry, including step or chapter numbers where applicable. A state trigger's condition
+/// is left out so its address cannot change the hash between runs.
 impl std::hash::Hash for TriggerEvent {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         std::mem::discriminant(self).hash(h);
-        if let TriggerEvent::Step(step) = self {
-            step.hash(h);
+        match self {
+            TriggerEvent::Step(step) => step.hash(h),
+            TriggerEvent::Chapter { first, last } => (first, last).hash(h),
+            _ => {}
         }
     }
 }
@@ -210,6 +218,11 @@ impl Trigger {
             whose: Players::EachPlayer,
             delayed: false,
         }
+    }
+
+    /// "When lore put on this Saga crosses any chapter from `first` through `last`."
+    pub(crate) const fn chapters(first: u8, last: u8) -> Trigger {
+        Trigger::of(TriggerEvent::Chapter { first, last }, Subject::This)
     }
 
     /// "At the beginning of [whose] [step]."

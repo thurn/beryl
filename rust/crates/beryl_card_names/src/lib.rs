@@ -201,6 +201,7 @@ pub mod decks {
             ],
         ),
         ("turn", &[names::TIME_STOP, names::SUNDIAL_OF_THE_INFINITE]),
+        ("sagas", &[names::THE_ELDEST_REBORN]),
         (
             "decisions",
             &[names::SHOW_AND_TELL, names::GRISELBRAND, names::MINDSLAVER],

@@ -461,6 +461,9 @@ fn entering<L: Layout>(
     if let Some(loyalty) = face.loyalty {
         entry.counters = Some((CounterKind::Loyalty, loyalty));
     }
+    if t.can(Capability::Saga) {
+        crate::saga::entering(s, t, slot, &mut entry, copied)?;
+    }
     if let Some(values) = copied {
         sink.copies.push((slot, values))?;
         entry.face = values.record(t).1;

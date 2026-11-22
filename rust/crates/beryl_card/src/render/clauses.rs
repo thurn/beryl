@@ -56,6 +56,9 @@ impl Ctx {
     /// Each instruction's clauses in turn, two that Oracle text joins with ", then" joined
     /// so: "draw a card, then discard a card".
     pub(super) fn sequence(&mut self, effects: &[Effect]) -> Vec<String> {
+        if let Some(clause) = self.chosen_sacrifice(effects) {
+            return vec![clause];
+        }
         let mut clauses: Vec<String> = Vec::new();
         let mut previous: Option<&Effect> = None;
         let mut effects = effects.iter().peekable();
@@ -91,6 +94,40 @@ impl Ctx {
             previous = Some(effect);
         }
         clauses
+    }
+
+    /// A player chooses a permanent they control, then sacrifices the chosen permanent.
+    fn chosen_sacrifice(&mut self, effects: &[Effect]) -> Option<String> {
+        let [
+            Effect::ForEachPlayer {
+                players,
+                effect:
+                    Effect::Choose {
+                        player: Players::ThatPlayer,
+                        among:
+                            Objects::InZoneOf {
+                                zone: crate::Zone::Battlefield,
+                                players: Players::ThatPlayer,
+                                filter,
+                            },
+                        optional: false,
+                        hidden: false,
+                        ..
+                    },
+            },
+            Effect::Sacrifice(Objects::Those),
+        ] = effects
+        else {
+            return None;
+        };
+        let kind = super::filters::Kind::Permanent;
+        self.plural = true;
+        Some(self.clause(*players, ("sacrifice", "sacrifices"), |ctx| {
+            format!(
+                "{} of their choice",
+                ctx.noun(*filter, kind).indefinite(kind)
+            )
+        }))
     }
 
     /// The verb for the clause being written: `base` for you or after "may", `third`

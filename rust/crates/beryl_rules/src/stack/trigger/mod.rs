@@ -235,6 +235,7 @@ pub(super) fn begins(event: TriggerEvent, step: TurnStep) -> bool {
         | TriggerEvent::Mutates
         | TriggerEvent::DealsDamage
         | TriggerEvent::TurnedFaceUp
+        | TriggerEvent::Chapter { .. }
         | TriggerEvent::State(_) => false,
     }
 }
@@ -602,7 +603,7 @@ fn state_trigger<L: Layout>(
 ///
 /// [CR 603.4]: https://yawgatog.com/resources/magic-rules/#R6034
 #[allow(clippy::too_many_arguments)]
-fn enqueue<L: Layout>(
+pub(crate) fn enqueue<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     source: Option<ObjectRef<L>>,

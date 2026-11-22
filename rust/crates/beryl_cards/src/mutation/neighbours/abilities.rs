@@ -218,6 +218,14 @@ fn triggers(trigger: &Trigger) -> Vec<(&'static str, Kind, String, Trigger)> {
         Event::Step(TurnStep::Upkeep) | Event::Draws => Event::Step(TurnStep::Draw),
         Event::Step(_) => Event::Step(TurnStep::Upkeep),
         Event::MainPhase => Event::Step(TurnStep::PrecombatMain),
+        Event::Chapter { first, last } if last < u8::MAX => Event::Chapter {
+            first: first + 1,
+            last: last + 1,
+        },
+        Event::Chapter { first, last } => Event::Chapter {
+            first: first.saturating_sub(1).max(1),
+            last: last - 1,
+        },
         Event::State(condition) => Event::State(leak(Condition::Not(condition))),
     };
     let subject = match trigger.subject {

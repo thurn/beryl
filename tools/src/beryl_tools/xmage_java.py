@@ -74,6 +74,7 @@ COUNTERS: dict[str, str] = {
     "PlusOne": "P1P1",
     "MinusOne": "M1M1",
     "Loyalty": "LOYALTY",
+    "Lore": "LORE",
     "Time": "TIME",
     "Story": "STORY",
     "Ice": "ICE",

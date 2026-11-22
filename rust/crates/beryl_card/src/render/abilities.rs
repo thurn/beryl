@@ -37,6 +37,10 @@ impl Ctx {
         if let Some(keyword) = Ctx::keyword_line(ability) {
             return keyword;
         }
+        if let Some((first, last)) = ability.chapter_numbers() {
+            let chapters = (first..=last).map(roman).collect::<Vec<_>>().join(", ");
+            return format!("{chapters} — {}", sentences(&self.body(ability.body())));
+        }
         let clauses = match ability.kind() {
             AbilityKind::Spell => {
                 if let Some(enchant) = self.enchant(ability) {
@@ -135,6 +139,9 @@ impl Ctx {
             }
         };
         match trigger.event {
+            TriggerEvent::Chapter { first, last } => {
+                (first..=last).map(roman).collect::<Vec<_>>().join(", ")
+            }
             TriggerEvent::Enters
             | TriggerEvent::Dies
             | TriggerEvent::Leaves
@@ -250,6 +257,7 @@ impl Ctx {
             | TriggerEvent::Casts
             | TriggerEvent::Discards
             | TriggerEvent::Draws
+            | TriggerEvent::Chapter { .. }
             | TriggerEvent::State(_) => String::new(),
         }
     }
@@ -757,4 +765,29 @@ pub(super) fn land_types(set: crate::BasicLandTypes, plural: bool) -> String {
         })
         .collect();
     list(&names, "and")
+}
+
+/// Chapter symbols use Roman numerals (see [CR 715.2a]).
+///
+/// [CR 715.2a]: https://yawgatog.com/resources/magic-rules/#R7152a
+fn roman(number: u8) -> String {
+    let mut number = number;
+    let mut text = String::new();
+    for (value, symbol) in [
+        (100, "C"),
+        (90, "XC"),
+        (50, "L"),
+        (40, "XL"),
+        (10, "X"),
+        (9, "IX"),
+        (5, "V"),
+        (4, "IV"),
+        (1, "I"),
+    ] {
+        while number >= value {
+            text.push_str(symbol);
+            number -= value;
+        }
+    }
+    text
 }

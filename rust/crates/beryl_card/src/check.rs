@@ -495,12 +495,10 @@ impl Scope<'_> {
                 players,
                 filter,
             } => match zone {
-                Zone::Library | Zone::Hand | Zone::Graveyard => {
+                Zone::Battlefield | Zone::Library | Zone::Hand | Zone::Graveyard => {
                     both(self.players(players), self.filter(filter))
                 }
-                Zone::Battlefield | Zone::Exile | Zone::Stack | Zone::Nowhere | Zone::Merged => {
-                    Err(Malformed::ZoneOf)
-                }
+                Zone::Exile | Zone::Stack | Zone::Nowhere | Zone::Merged => Err(Malformed::ZoneOf),
             },
             Objects::CardsIn { players, .. } => self.players(players),
             Objects::Everywhere(_) => Err(Malformed::Everywhere),
