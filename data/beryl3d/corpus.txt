@@ -803,6 +803,8 @@ painters-servant/two-painters-servants-add-both-their-colors
 painters-servant/two-painters-servants-add-both-their-colors-3
 painters-servant/with-blue-chosen-subtletys-evoke-cost-exiles-any-card
 painters-servant/with-red-chosen-a-colorless-artifact-is-a-red-source
+palace-guard/blocks-two-attackers-and-its-controller-chooses-which-one-dies
+palace-guard/can-block-a-single-attacker
 pay-default
 pay-life
 pay-other
