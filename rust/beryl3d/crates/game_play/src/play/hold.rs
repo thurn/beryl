@@ -2,7 +2,8 @@
 //! pointer holds or let go over to a script that moves it (`crate::pointer`).
 
 use super::Show;
-use crate::pointer::{self, LetGo, Pointer};
+use crate::pointer::{self, Pointer};
+use glam::Vec2;
 use kit_frame::frame::Frame;
 
 impl Show {
@@ -12,22 +13,23 @@ impl Show {
         &self.pointer
     }
 
-    /// Finds and marks what the pointer is over in `frame`, just built at `now`, and returns what
-    /// a press on a card that ended since the last frame meant (`pointer::update`).
-    pub fn point(&mut self, frame: &mut Frame, now: u64) -> Option<LetGo> {
+    /// Updates hover against the drawn frame, including cards that move under a still mouse.
+    pub fn point(&mut self, frame: &mut Frame, now: u64) {
         let mut pointer = std::mem::replace(&mut self.pointer, Pointer::EMPTY);
-        let camera = self.table.camera();
-        let rest = |slot| self.pose(slot, now);
-        let in_tray = |slot| self.table.in_tray(slot);
-        let clicked = pointer::update(
+        pointer::update(
             &mut pointer,
             frame,
-            (rest, in_tray),
-            (now, camera),
+            |slot| self.pose(slot, now),
+            (now, self.table.camera()),
             &self.table.data().pointer,
         );
         self.pointer = pointer;
-        clicked
+    }
+
+    /// Releases the card's drawn pose before the owning feature sends a command.
+    pub fn release_card(&mut self, at: Option<Vec2>) -> Option<usize> {
+        self.pointer
+            .release(at, self.table.camera(), &self.table.data().pointer)
     }
 
     /// Hands the card the pointer holds or let go over to the script that just started, at

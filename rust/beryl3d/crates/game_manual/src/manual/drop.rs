@@ -52,49 +52,36 @@ pub struct Destination {
 /// The name of the outline of the place a held card would land.
 pub const TARGET: &str = "drop-target";
 
-/// Where cards `held` would land if let go at `at`, a point of the window, at `view`, as the
-/// module describes. `None` over nothing a card can land in.
+/// Turns the scene's drop target into a manual destination. Open table space uses the
+/// geometric table regions, even if there is no object at the release point.
 #[must_use]
-pub fn destination_at(
-    frame: &Frame,
+pub fn destination(
+    hit: Option<&Resolved>,
     (layout, camera): (&Layout, &Camera),
     at: Vec2,
-    held: &[ObjectId],
     view: &PlayerView,
     metrics: DropTarget,
-) -> Option<Destination> {
-    if let Some(found) = under(frame, at, held, view) {
-        return Some(found);
-    }
-    Some(area_at(layout, camera, at, metrics))
+) -> Destination {
+    hit.and_then(|element| on_element(element, at, view))
+        .unwrap_or_else(|| area_at(layout, camera, at, metrics))
 }
 
-/// The pile or card under `at` that a card lands in, the topmost first, leaving out the held
-/// cards themselves.
-fn under(frame: &Frame, at: Vec2, held: &[ObjectId], view: &PlayerView) -> Option<Destination> {
-    let eligible = |element: &Resolved| {
-        let Place::Card { zone, side, row } = element.place else {
-            return None;
-        };
-        if !matches!(element.role, Role::Card | Role::Pile) || element.state.has(StateBits::HELD) {
-            return None;
-        }
-        let slot = u16::try_from(element.id.0).ok().map(ObjectId);
-        let area = match zone {
-            ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile => Area::Pile(zone),
-            _ if element.role == Role::Pile || slot.is_some_and(|slot| held.contains(&slot)) => {
-                return None;
-            }
-            ZoneName::Battlefield => Area::Row(row.unwrap_or(RowName::Creatures)),
-            ZoneName::Hand => Area::Hand,
-            ZoneName::Stack => Area::Stack,
-            _ => return None,
-        };
-        Some((area, side, slot))
+fn on_element(element: &Resolved, at: Vec2, view: &PlayerView) -> Option<Destination> {
+    let Place::Card { zone, side, row } = element.place else {
+        return None;
     };
-    let index = frame.pick(at, |element| eligible(element).is_some())?;
-    let element = &frame.resolved[index as usize];
-    let (area, side, slot) = eligible(element)?;
+    if !matches!(element.role, Role::Card | Role::Pile) || element.state.has(StateBits::HELD) {
+        return None;
+    }
+    let slot = u16::try_from(element.id.0).ok().map(ObjectId);
+    let area = match zone {
+        ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile => Area::Pile(zone),
+        _ if element.role == Role::Pile => return None,
+        ZoneName::Battlefield => Area::Row(row.unwrap_or(RowName::Creatures)),
+        ZoneName::Hand => Area::Hand,
+        ZoneName::Stack => Area::Stack,
+        _ => return None,
+    };
     let on = match area {
         Area::Row(_) => slot,
         _ => None,

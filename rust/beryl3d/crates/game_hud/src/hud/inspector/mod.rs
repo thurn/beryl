@@ -77,6 +77,7 @@ impl Feature for Inspector {
                     decision: *decision,
                     refused: refused.clone(),
                     said: true,
+                    before_hover_refresh: true,
                     notice_until: None,
                     notice_done: false,
                 });
@@ -186,6 +187,7 @@ impl Inspector {
         self.judged = hovered;
         self.notice_until = until;
         if let Some(refusal) = &mut self.refusal
+            && !std::mem::take(&mut refusal.before_hover_refresh)
             && refusal.said
             && hovered != Some(refusal.refused.slot)
         {
@@ -359,6 +361,8 @@ struct Refusal {
     /// Whether the pointer has stayed on the refused card since the click, which keeps the
     /// reason under its inspector.
     said: bool,
+    /// The first frame after a click still reads the previous frame's hovered card.
+    before_hover_refresh: bool,
     /// When the word at the permanent named by a timing refusal goes, once a frame has shown
     /// it: `None` until then.
     notice_until: Option<u64>,

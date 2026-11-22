@@ -8,11 +8,48 @@ use glam::Vec2;
 
 use kit_frame::frame::{Frame, Place, Resolved, Role, StateBits, picking::Area};
 use kit_ui::input::{Rect, Size};
+use kit_ui::layout::{Layer, PointerTarget};
 
 /// The index of the element a press at `point` (in logical points) reaches, if any.
 #[must_use]
 pub fn hit(frame: &Frame, point: Vec2) -> Option<u32> {
     hit_where(frame, point, |_| true)
+}
+
+/// The route reached by one pointer pick.
+pub enum PointerHit {
+    Layer(PointerTarget),
+    Table(u32),
+    Blocked,
+    Empty,
+}
+
+/// Picks from the live screen layer and the last drawn table. Screen controls use current
+/// layout so an input that scrolls or rebuilds the screen takes effect before the next draw.
+#[must_use]
+pub fn pointer(
+    frame: &Frame,
+    layer: &Layer,
+    point: Vec2,
+    open: bool,
+    wheel: Option<(Vec2, f32)>,
+    table_accepts: impl Fn(&Resolved) -> bool,
+    region: impl Fn(&Resolved) -> bool,
+) -> PointerHit {
+    if let Some(target) = layer.pointer_target(point, open, wheel) {
+        PointerHit::Layer(target)
+    } else if layer.pointer_modal(open) {
+        PointerHit::Blocked
+    } else if let Some(index) = frame.pick(point, |node| {
+        region(node)
+            || ((node.place != Place::Layer || node.pose.is_some())
+                && catches_anywhere(node)
+                && table_accepts(node))
+    }) {
+        PointerHit::Table(index)
+    } else {
+        PointerHit::Empty
+    }
 }
 
 /// The frontmost hit accepted by a route's policy. A drag can look through the

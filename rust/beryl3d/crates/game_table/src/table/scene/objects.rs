@@ -2,10 +2,19 @@
 //! with the cards lying on the table that contact shadows fall on (`Floors`).
 
 use beryl_protocol::protocol::{PlayerView, StackItem};
+use kit_frame::frame::Place;
 
 use super::{Objects, SceneObject, Table};
 use crate::table::place::Placement;
 use crate::table::shadows::Floors;
+
+impl Objects {
+    /// The table container of a card, including when a screen box shows it.
+    #[must_use]
+    pub fn card_place(&self, slot: usize) -> Option<Place> {
+        Some(self.cards.get(slot)?.as_ref()?.place)
+    }
+}
 
 impl Table {
     /// The scene objects of `view`, whose stack's abilities `numbers` numbers, each at its

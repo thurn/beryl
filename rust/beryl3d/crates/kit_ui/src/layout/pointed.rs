@@ -6,10 +6,113 @@
 use glam::Vec2;
 
 use super::{Layer, Node};
-use crate::element::Action;
+use crate::element::{Action, Anchor};
 use crate::input::Rect;
+use crate::scroll::Viewport;
 use kit_base::geometry::plane::Zoom;
+use kit_frame::frame::picking::{Area, hit_test};
 use kit_frame::frame::{ElementId, Role, ScreenClip};
+
+/// A live screen node and the input affordances of its containing branch.
+pub struct PointerTarget {
+    pub id: ElementId,
+    pub role: Role,
+    pub press: Option<(Action, bool)>,
+    pub shown: Option<ElementId>,
+    pub focus: bool,
+    pub slider: Option<Rect>,
+    pub scroller: Option<(ElementId, Viewport)>,
+    pub menu: bool,
+    pub tooltip: Option<ElementId>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct Branch {
+    scroller: Option<(ElementId, Viewport)>,
+    menu: bool,
+    passes: bool,
+    control: bool,
+}
+
+struct Pick<'a, 'test, T> {
+    layer: &'a Layer,
+    open: bool,
+    wheel: Option<(Vec2, f32)>,
+    test: &'test dyn Fn(Area, (&'a Node, Rect, Branch)) -> Option<T>,
+}
+
+impl<'a, T> Pick<'a, '_, T> {
+    fn visit(
+        &self,
+        node: &'a Node,
+        (origin, zoom): (Vec2, Zoom),
+        clip: Option<ScreenClip>,
+        branch: Branch,
+        children: impl Iterator<Item = &'a Node>,
+    ) -> Option<T> {
+        if !node.accepts_input(self.open) {
+            return None;
+        }
+        let geometry = self
+            .layer
+            .geometry(node, origin, zoom, self.layer.state(node));
+        let masked = geometry.mask(node.mask(), clip);
+        let inside_clip = geometry.inside_clip(node, masked, clip);
+        let inside = geometry.inside(node);
+        let rect = geometry.painted;
+        let zoom = geometry.zoom;
+        let viewport = node.viewport().filter(|viewport| {
+            self.wheel
+                .is_none_or(|(delta, notch)| viewport.takes_wheel(delta, notch))
+        });
+        let ancestor_control = branch.control;
+        let branch = Branch {
+            control: ancestor_control || node.element.press.is_some() || node.element.focus,
+            scroller: viewport
+                .map(|viewport| (node.id, viewport))
+                .or(branch.scroller),
+            menu: branch.menu
+                || matches!(node.element.anchor, Some(Anchor::Menu(_) | Anchor::Submenu)),
+            passes: branch.passes || node.element.style.passes,
+        };
+        let mut children = children;
+        (children.find_map(|child| match child.element.anchor {
+            Some(_) => self.node(
+                child,
+                (child.corner()?, zoom),
+                None,
+                Branch {
+                    scroller: None,
+                    ..branch
+                },
+            ),
+            None => self.node(child, (inside, zoom), inside_clip, branch),
+        }))
+        .or_else(|| {
+            (self.test)(
+                Area::Rect(rect, masked.or(clip).map(|clip| clip.bounds)),
+                (
+                    node,
+                    rect,
+                    Branch {
+                        control: ancestor_control,
+                        ..branch
+                    },
+                ),
+            )
+        })
+    }
+
+    fn node(
+        &self,
+        node: &'a Node,
+        space: (Vec2, Zoom),
+        clip: Option<ScreenClip>,
+        branch: Branch,
+    ) -> Option<T> {
+        self.visit(node, space, clip, branch, node.children.iter().rev())
+    }
+}
 
 impl Layer {
     /// Takes `hovered`, the element a press under the pointer would reach, and `pressed`, the
@@ -34,49 +137,77 @@ impl Layer {
         open: bool,
         want: impl Fn(&Node, Rect) -> Option<T>,
     ) -> Option<T> {
-        use kit_frame::frame::picking::{Area, hit_test};
+        self.pick(point, open, None, |node, rect, _| want(node, rect))
+    }
 
-        // Visit in reverse layout tree order. An anchored child starts its own clip chain.
-        fn visit<'a, T>(
-            layer: &Layer,
-            node: &'a Node,
-            (origin, open, zoom): (glam::Vec2, bool, Zoom),
-            clip: Option<ScreenClip>,
-            test: &dyn Fn(Area, (&'a Node, Rect)) -> Option<T>,
-        ) -> Option<T> {
-            if !node.accepts_input(open) {
+    /// Picks the frontmost live input node once. Scroll and menu information follows the
+    /// winning node's ancestry, so an overlapping sibling cannot claim the same event.
+    #[must_use]
+    pub fn pointer_target(
+        &self,
+        point: Vec2,
+        open: bool,
+        wheel: Option<(Vec2, f32)>,
+    ) -> Option<PointerTarget> {
+        // Context menus own presses within their bounds, including over HUD floats.
+        let menu_only = open && self.input_modal(open).is_none() && self.menu_open();
+        self.pick(point, open, wheel, |node, rect, branch| {
+            if menu_only && !branch.menu {
                 return None;
             }
-            let geometry = layer.geometry(node, origin, zoom, layer.state(node));
-            let masked = geometry.mask(node.mask(), clip);
-            let inside_clip = geometry.inside_clip(node, masked, clip);
-            let inside = geometry.inside(node);
-            let rect = geometry.painted;
-            let zoom = geometry.zoom;
-            (node.children.iter().rev())
-                .find_map(|child| match child.element.anchor {
-                    // An anchored child's tree is laid out from (0, 0), and stands at its corner.
-                    Some(_) => visit(layer, child, (child.corner()?, open, zoom), None, test),
-                    None => visit(layer, child, (inside, open, zoom), inside_clip, test),
-                })
-                .or_else(|| {
-                    test(
-                        Area::Rect(rect, masked.or(clip).map(|clip| clip.bounds)),
-                        (node, rect),
-                    )
-                })
-        }
+            let element = &node.element;
+            let tooltip = self.tooltip_of(&element.name);
+            let menu = matches!(element.anchor, Some(Anchor::Menu(_) | Anchor::Submenu));
+            let takes_input = element.press.is_some() || element.focus || tooltip.is_some();
+            let scrolls = branch.scroller.is_some_and(|(id, _)| id == node.id);
+            let shown = element.show.map(kit_frame::frame::Show::object_id);
+            let panel = !branch.passes
+                && !branch.control
+                && (element.role == Role::Player
+                    || element.style.background.is_some_and(|color| color[3] > 0)
+                    || !element.style.backdrop_filter.is_empty());
+            if !(takes_input || scrolls || menu || panel || shown.is_some()) {
+                return None;
+            }
+            Some(PointerTarget {
+                id: node.id,
+                role: element.role,
+                press: element.press.clone().map(|press| (press, element.enabled)),
+                shown,
+                focus: element.focus,
+                slider: (element.enabled && element.role == Role::Slider).then_some(rect),
+                scroller: branch.scroller,
+                menu: branch.menu,
+                tooltip,
+            })
+        })
+    }
+
+    /// Whether an overlay owns the space outside its controls too.
+    #[must_use]
+    pub fn pointer_modal(&self, open: bool) -> bool {
+        self.input_modal(open).is_some()
+    }
+
+    fn pick<T>(
+        &self,
+        point: Vec2,
+        open: bool,
+        wheel: Option<(Vec2, f32)>,
+        want: impl Fn(&Node, Rect, Branch) -> Option<T>,
+    ) -> Option<T> {
         hit_test(
             point,
             |test| {
+                let pick = Pick {
+                    layer: self,
+                    open,
+                    wheel,
+                    test,
+                };
+                let branch = Branch::default();
                 if let Some(modal) = self.input_modal(open) {
-                    return visit(
-                        self,
-                        modal,
-                        (modal.corner()?, open, Zoom::IDENTITY),
-                        None,
-                        test,
-                    );
+                    return pick.node(modal, (modal.corner()?, Zoom::IDENTITY), None, branch);
                 }
                 let floats = |under: bool| {
                     (self.floats.iter().rev())
@@ -84,33 +215,37 @@ impl Layer {
                         .find_map(|float| {
                             let corner = float.corner()?;
                             let rect = float.node.rect;
-                            let pivot = corner + glam::Vec2::new(rect.width, rect.height) / 2.0;
+                            let pivot = corner + Vec2::new(rect.width, rect.height) / 2.0;
                             let zoom = Zoom::around(pivot, float.look.scale);
-                            visit(self, &float.node, (corner, open, zoom), None, test)
+                            pick.node(&float.node, (corner, zoom), None, branch)
                         })
                 };
-                floats(false)
+                let over_floats = self
+                    .screen
+                    .iter()
+                    .flat_map(|node| node.children.iter().rev())
+                    .filter(|child| super::write::above_floats(child))
+                    .find_map(|child| {
+                        pick.node(child, (child.corner()?, Zoom::IDENTITY), None, branch)
+                    });
+                over_floats
+                    .or_else(|| floats(false))
                     .or_else(|| {
-                        (self.screen.as_ref()).and_then(|node| match node.element.anchor {
-                            Some(_) => visit(
-                                self,
-                                node,
-                                (node.corner()?, open, Zoom::IDENTITY),
-                                None,
-                                test,
-                            ),
-                            None => visit(
-                                self,
-                                node,
-                                (glam::Vec2::ZERO, open, Zoom::IDENTITY),
-                                None,
-                                test,
-                            ),
-                        })
+                        let node = self.screen.as_ref()?;
+                        let corner = match node.element.anchor {
+                            Some(_) => node.corner()?,
+                            None => Vec2::ZERO,
+                        };
+                        let children = node
+                            .children
+                            .iter()
+                            .rev()
+                            .filter(|child| !super::write::above_floats(child));
+                        pick.visit(node, (corner, Zoom::IDENTITY), None, branch, children)
                     })
                     .or_else(|| floats(true))
             },
-            |(node, rect)| want(node, rect),
+            |(node, rect, branch)| want(node, rect, branch),
         )
     }
 

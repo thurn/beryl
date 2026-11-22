@@ -5,11 +5,10 @@
 
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use game_hud::inspect::Viewed;
-use glam::Vec2;
 
 use super::super::{
     Client, Platform,
-    input::{Node, ScenePoint},
+    input::{Node, ScenePoint, SceneTarget},
 };
 
 use app_screens::screens::Screen;
@@ -17,7 +16,7 @@ use game_manual::features::table::Change;
 use game_manual::manual::arrows::{self, Pick};
 use game_manual::manual::drop::{self, Area, End};
 use game_manual::manual::selection;
-use game_manual::manual::{Target, target_from_hit, viewers};
+use game_manual::manual::{Target, target_from_hit};
 use kit_frame::frame::{Place, Role};
 use kit_ui::input::{Button, PointerPhase};
 
@@ -40,6 +39,8 @@ impl Client {
             return false;
         }
         if pointer.phase == PointerPhase::Down {
+            self.features
+                .update_table(Change::Shift(pointer.modifiers.shift));
             // Cmd is Control off the Mac, as the web's `meta` click is.
             let meta = if self.platform == Platform::Mac {
                 pointer.modifiers.command
@@ -57,7 +58,6 @@ impl Client {
         if self.sweep(point) {
             return true;
         }
-        self.follow_landing(point);
         false
     }
 
@@ -72,7 +72,7 @@ impl Client {
             return false;
         };
         self.features.update_table(Change::Pick(None));
-        let clicked = target_from_hit(&self.frame, point.hit);
+        let clicked = self.manual_pointer_target(point);
         if pointer.button == Button::Primary
             && let Some(to) = arrows::picked(pick, clicked)
             && let Some(view) = self.show.latest().map(|update| &update.view)
@@ -80,7 +80,7 @@ impl Client {
             let actions = arrows::actions(pick, to, view, &self.features.table().selection);
             self.send_table(actions);
         }
-        self.show.pointer_mut().cancel();
+        self.end_control();
         true
     }
 
@@ -92,9 +92,7 @@ impl Client {
         if pointer.phase != PointerPhase::Down
             || pointer.button != Button::Primary
             || !self.at_table()
-            || point
-                .target
-                .is_some_and(|target| matches!(target.node, Node::Control(_)))
+            || point.on_screen()
         {
             return false;
         }
@@ -134,9 +132,10 @@ impl Client {
         match pointer.phase {
             PointerPhase::Down if pointer.button == Button::Primary => {
                 let empty = self.at_table()
-                    && point
+                    && !point.on_screen()
+                    && !point
                         .target
-                        .is_none_or(|target| !matches!(target.node, Node::Control(_)))
+                        .is_some_and(|target| matches!(target.node, Node::Card(_) | Node::Pile(_)))
                     && point.hit.is_none_or(|index| {
                         let element = &self.frame.resolved[index as usize];
                         !matches!(element.role, Role::Card | Role::Pile | Role::Player)
@@ -146,7 +145,7 @@ impl Client {
                 ));
                 false
             }
-            PointerPhase::Move => {
+            PointerPhase::Move if point.captured => {
                 let Some((from, _)) = self.features.table().sweep else {
                     return false;
                 };
@@ -157,7 +156,7 @@ impl Client {
                 }
                 true
             }
-            PointerPhase::Up => {
+            PointerPhase::Up if point.captured && pointer.button == Button::Primary => {
                 let Some((from, _)) = self.features.table().sweep else {
                     return false;
                 };
@@ -175,7 +174,7 @@ impl Client {
                 self.show_screen();
                 true
             }
-            PointerPhase::Cancel | PointerPhase::Leave => {
+            PointerPhase::Cancel | PointerPhase::Leave if point.captured => {
                 if self.features.table().sweep.is_some() {
                     self.features.update_table(Change::Sweep(None));
                     self.show_screen();
@@ -199,9 +198,9 @@ impl Client {
 
     /// While a card is held on the table, outlines where it would land under `pointer`, and
     /// stops once the press ends.
-    fn follow_landing(&mut self, point: &ScenePoint) {
+    pub(in crate::client) fn follow_landing(&mut self, point: &ScenePoint) {
         let landing = match (point.pointer.phase, self.show.pointer().held()) {
-            (PointerPhase::Move, Some(slot)) => self.landing_at(slot, point.pointer.position),
+            (PointerPhase::Move, Some(slot)) => self.landing_at(slot, point),
             _ => None,
         };
         if landing != self.features.table().landing {
@@ -212,29 +211,33 @@ impl Client {
 
     /// Where the card in `slot`, and the cards it carries, would land if let go at `at`, if
     /// they may land there.
-    fn landing_at(&self, slot: usize, at: Vec2) -> Option<drop::Destination> {
+    fn landing_at(&self, slot: usize, point: &ScenePoint) -> Option<drop::Destination> {
+        if point.on_screen() {
+            return None;
+        }
         let slot = ObjectId(u16::try_from(slot).ok()?);
         let view = &self.show.latest()?.view;
         let cards = self.carried_cards(slot);
         let table = self.show.table();
-        let to = drop::destination_at(
-            &self.frame,
+        let hit = point.hit.map(|index| &self.frame.resolved[index as usize]);
+        let to = drop::destination(
+            hit,
             (table.layout(), table.camera()),
-            at,
-            &cards,
+            point.pointer.position,
             view,
             table.data().flat.manual.drop,
-        )?;
+        );
         drop::available(view, &to, &cards).then_some(to)
     }
 
     /// The card in `slot`, held on the table, was let go at `at`: the cards it carries land
     /// where it was let go. Several put on the top of a library open the order tray instead.
     /// On a frozen table (`manual::link`) nothing moves.
-    pub(in crate::client) fn table_drop(&mut self, slot: usize, at: Vec2) {
+    pub(in crate::client) fn table_drop(&mut self, slot: usize, point: &ScenePoint) {
+        let at = point.pointer.position;
         self.features.update_table(Change::Landing(None));
         let to = (!self.table_frozen())
-            .then(|| self.landing_at(slot, at))
+            .then(|| self.landing_at(slot, point))
             .flatten();
         let Some(to) = to else {
             self.show_screen();
@@ -304,10 +307,22 @@ impl Client {
         Some(reachable && selection::actionable(view, slot))
     }
 
-    /// The card of the open viewer under `at` on the table, as a target, if there is one.
-    pub(in crate::client) fn viewer_card_at(&self, at: Vec2) -> Option<Target> {
-        self.features.viewer().open()?;
-        viewers::card_at(&self.frame, at, |slot| self.viewer_shows(slot))
+    /// The manual target at the scene pick, including the cards shown in an open viewer.
+    pub(in crate::client) fn manual_pointer_target(&self, point: &ScenePoint) -> Target {
+        self.manual_viewer_target(point.target)
+            .unwrap_or_else(|| target_from_hit(&self.frame, point.hit))
+    }
+
+    pub(in crate::client) fn manual_viewer_target(
+        &self,
+        source: Option<SceneTarget>,
+    ) -> Option<Target> {
+        let Node::Card(slot) = source?.node else {
+            return None;
+        };
+        let slot = ObjectId(u16::try_from(slot).ok()?);
+        (self.features.viewer().open().is_some() && self.viewer_shows(slot))
+            .then_some(Target::Card(slot))
     }
 
     /// On each frame at `now` on the manual table: the held card drops where it is let go, the
@@ -317,7 +332,6 @@ impl Client {
     pub(in crate::client) fn table_frame(&mut self, now: u64) {
         let table = self.features.screen == Screen::Table
             && (self.show.latest()).is_some_and(|update| update.view.table.is_some());
-        self.show.pointer_mut().drop_anywhere(table);
         if !table {
             return;
         }

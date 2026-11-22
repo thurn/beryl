@@ -37,9 +37,12 @@ impl Client {
     /// Returns whether the pointer carried an item, and so means nothing else.
     pub(super) fn carry_item(&mut self, point: &ScenePoint) -> bool {
         let pointer = &point.pointer;
+        if !point.captured {
+            return false;
+        }
         match pointer.phase {
             PointerPhase::Down if pointer.button == Button::Primary => {
-                if let Some(on) = self.order_item_at(pointer.position) {
+                if let Some(on) = self.order_item(point) {
                     let carry = Carry {
                         on,
                         start: pointer.position,
@@ -108,8 +111,8 @@ impl Client {
             })
     }
 
-    /// The item of the open order prompt's row that a press at `point` reaches, if any.
-    fn order_item_at(&self, point: Vec2) -> Option<Subject> {
+    /// The order item whose screen element received this pointer.
+    fn order_item(&self, point: &ScenePoint) -> Option<Subject> {
         let prompt = self
             .features
             .prompts
@@ -118,17 +121,27 @@ impl Client {
         if !matches!(prompt.body, ShapeBody::Order { .. }) {
             return None;
         }
-        let (_, action, enabled) = self.layer.press_at(point, self.features.layer_open)?;
-        match (order::click(&action)?, enabled) {
-            (
-                Click::Drop {
-                    on: on @ Subject::Ability { .. },
-                    ..
-                },
-                true,
-            ) => Some(*on),
+        match order::click(point.action()?)? {
+            Click::Drop {
+                on: on @ Subject::Ability { .. },
+                ..
+            } => Some(*on),
             _ => None,
         }
+    }
+
+    /// Shows the cards Auto Pay would tap while its button is under the pointer.
+    pub(super) fn suggest_payment(&mut self, point: &ScenePoint) {
+        let suggesting = match (self.features.prompts.current(), point.action()) {
+            (Some(prompt), Some(action)) if point.hovering() => {
+                matches!(action.downcast_ref(), Some(game_hud::prompts::bar::Message::Button(button))
+                    if game_hud::prompts::shows(prompt, *button))
+            }
+            _ => false,
+        };
+        self.features
+            .prompts
+            .suggest(suggesting, self.views, &self.show);
     }
 
     /// Takes the item `carry` names out of the row and shows it as the carried float, which

@@ -53,11 +53,6 @@ impl Client {
             self.features.focus_row(RowMessage::Focus(Some(row)));
             self.layer.focus(None);
         }
-        // A card that has picked up keeps its drag. Scroll and pickup use the same
-        // recognized direction when they share a press.
-        if rows && pointer.phase == PointerPhase::Move && self.show.pointer().held().is_some() {
-            self.routes.scrolling.cancel();
-        }
         let view = |target| viewport(target, &self.layer, self.show.table(), rows);
         let ScrollInput::Claimed(update) = self.routes.scrolling.pointer(
             pointer,
@@ -71,13 +66,8 @@ impl Client {
         };
         if pointer.phase != PointerPhase::Wheel {
             self.suppress_press();
-            if self.layer.edited_id().is_some() {
-                self.edit(kit_ui::layout::Edit::Up);
-            }
+            self.end_control();
             self.layer.point_at(None, None);
-            if !self.bug_open() {
-                self.show.pointer_mut().cancel();
-            }
         }
         if let Some((target, offset)) = update {
             self.apply_scroll(target, offset);
@@ -92,51 +82,37 @@ impl Client {
         wheel: Option<Vec2>,
     ) -> Option<(Target, Viewport)> {
         let pointer = &routed.pointer;
-        let point = pointer.position;
-        if let Some((id, view)) = self.layer.scroll_target_at(
-            point,
-            self.features.layer_open,
-            wheel,
-            self.data().pointer.wheel_notch_points,
-        ) {
-            // Let mouse drags select text inside a scrollable sheet.
-            if wheel.is_none()
-                && pointer.kind == PointerKind::Mouse
-                && self.layer.field_at(point, self.features.layer_open)
-            {
-                return None;
-            }
+        if let Some(flat) = &routed.flat
+            && let Some((id, view)) = flat.scroller
+            && !(wheel.is_none() && pointer.kind == PointerKind::Mouse && flat.role == Role::Field)
+        {
             return Some((Target::Element(id), view));
         }
-        if !rows
-            || routed
-                .target
-                .is_some_and(|target| matches!(target.node, Node::Control(_)))
-        {
+        if !rows || routed.on_screen() {
             return None;
         }
-        if let Some((index, viewport)) = self.show.table().tray_viewport_at(point)
+        let target = routed.target?;
+        let table = self.show.table();
+        let tray = match target.node {
+            Node::Tray(index) => Some(index),
+            Node::Card(slot) => table.tray_grid_index(slot),
+            _ => None,
+        };
+        if let Some(index) = tray
+            && let Some(viewport) = table.tray_viewport(index)
             && wheel.is_none_or(|delta| {
                 viewport.takes_wheel(delta, self.data().pointer.wheel_notch_points)
             })
         {
-            if wheel.is_none()
-                && pointer.kind == PointerKind::Mouse
-                && let Some(kit_scene::input::Target {
-                    node: Node::Card(slot),
-                    container: Some(place),
-                }) = routed.target
-                && self.holdable(slot, place)
-            {
-                return None;
-            }
             return Some((Target::Tray(index), viewport));
         }
-        let element = &self.frame.resolved[routed.hit? as usize];
-        let row = scroller_of(element.place).filter(|_| element.role == Role::Card)?;
-        if self.show.table().in_tray(element.id.0 as usize) {
+        let Node::Card(slot) = target.node else {
+            return None;
+        };
+        if table.in_tray(slot) {
             return None;
         }
+        let row = scroller_of(target.container?)?;
         let view = row_viewport(self.show.table(), row)?;
         Some((Target::Row(row), view))
     }

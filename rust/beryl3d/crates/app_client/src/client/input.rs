@@ -2,29 +2,28 @@
 //! layer or a card, a drag that scrolls or sets a slider, and the keys of shortcuts, focus and
 //! the bug report.
 
-use beryl_protocol::prompt::{Click, ShapeBody};
-use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
-use beryl_protocol::script::Subject;
+use beryl_protocol::protocol::ObjectId;
 use glam::Vec2;
 
 use super::Client;
+use super::card_input::Hold;
 use super::carry::Carry;
 use app_screens::screens::settings::{Message as SettingsMessage, slider_setting};
 use app_screens::screens::{Screen, Sheet};
 use game_hud::hud::rows::Message as RowMessage;
 use game_hud::inspect::Viewed;
-use game_hud::prompts;
-use game_play::pointer::Hold;
-use game_play::pointer::rows::scroller_of;
-use game_table::table::Scroller;
-use kit_frame::frame::{ElementId, Place, Role};
+use game_table::table::Table;
+use kit_frame::frame::{
+    ElementId, Frame, Place, Resolved, Role, StateBits, TRAY_CARD_BOX_IDS, TRAY_GRID_IDS,
+};
 use kit_scene::Reach;
+use kit_scene::hit::PointerHit;
 use kit_scene::input::{KeyResponse, Point, Router, Target, TouchPolicy};
 use kit_scene::scroll::ScrollGesture;
 use kit_ui::element::Action;
 use kit_ui::input::{Button, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
-use kit_ui::layout::{Edit, Navigation};
-use kit_ui::widgets::{STEP, level_at};
+use kit_ui::layout::{Edit, Layer, Navigation, PointerTarget};
+use kit_ui::widgets::STEP;
 
 /// The part of the scene that owns a pointer action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,10 +31,42 @@ pub(super) enum Node {
     Control(ElementId),
     Card(usize),
     Pile(Viewed),
+    Tray(usize),
     Other(ElementId),
+    Blocked,
 }
 
-pub(super) type ScenePoint = Point<Target<Node, Place>>;
+pub(super) type SceneTarget = Target<Node, Place>;
+
+pub(super) struct ScenePoint {
+    event: Point<SceneTarget>,
+    pub flat: Option<PointerTarget>,
+}
+
+impl std::ops::Deref for ScenePoint {
+    type Target = Point<SceneTarget>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.event
+    }
+}
+
+impl ScenePoint {
+    pub fn action(&self) -> Option<&Action> {
+        let (action, enabled) = self.flat.as_ref()?.press.as_ref()?;
+        enabled.then_some(action)
+    }
+
+    pub fn hovering(&self) -> bool {
+        let pointer = self.pointer;
+        !(matches!(pointer.phase, PointerPhase::Cancel | PointerPhase::Leave)
+            || (pointer.kind == PointerKind::Touch && pointer.phase == PointerPhase::Up))
+    }
+
+    pub fn on_screen(&self) -> bool {
+        on_screen(self.target)
+    }
+}
 
 /// View state used when a captured interaction changes its presentation.
 #[derive(Default)]
@@ -43,90 +74,231 @@ pub(super) enum Control {
     #[default]
     None,
     Slider(ElementId),
+    Field(ElementId),
+    Card(Hold),
     Order(Carry),
 }
 
 #[derive(Default)]
 pub(super) struct Routes {
-    router: Router<Target<Node, Place>>,
+    router: Router<SceneTarget>,
     pub scrolling: ScrollGesture<super::scrolling::Target>,
     pub control: Control,
+    action: Option<Action>,
+}
+
+/// The current screen over the last drawn table.
+struct PointerScene<'a> {
+    layer: &'a Layer,
+    frame: &'a Frame,
+    table: &'a Table,
+    open: bool,
+    screen: Screen,
+    sheet: bool,
+    manual_library: bool,
+    selection: &'a [ObjectId],
+}
+
+impl PointerScene<'_> {
+    fn pick(
+        &self,
+        at: Vec2,
+        wheel: Option<(Vec2, f32)>,
+        carried: Option<ObjectId>,
+    ) -> (Option<SceneTarget>, Option<u32>, Option<PointerTarget>) {
+        let picked = kit_scene::hit::pointer(
+            self.frame,
+            self.layer,
+            at,
+            self.open,
+            wheel,
+            |node| self.available(node, carried),
+            |node| {
+                tray_grid(node.id)
+                    .and_then(|index| self.table.tray_viewport(index))
+                    .is_some_and(|viewport| {
+                        wheel.is_none_or(|(delta, notch)| viewport.takes_wheel(delta, notch))
+                    })
+            },
+        );
+        match picked {
+            PointerHit::Layer(flat) => {
+                let (target, index) = self.screen_target(&flat, carried);
+                (Some(target), index, Some(flat))
+            }
+            PointerHit::Table(index) if !self.sheet => {
+                let element = &self.frame.resolved[index as usize];
+                (Some(self.table_target(element)), Some(index), None)
+            }
+            PointerHit::Table(_) | PointerHit::Blocked => (
+                Some(Target {
+                    node: Node::Blocked,
+                    container: None,
+                }),
+                None,
+                None,
+            ),
+            PointerHit::Empty => (None, None, None),
+        }
+    }
+
+    fn screen_target(
+        &self,
+        flat: &PointerTarget,
+        carried: Option<ObjectId>,
+    ) -> (SceneTarget, Option<u32>) {
+        if flat.press.is_none()
+            && let Some(object) = flat.shown
+            && carried.is_none_or(|card| u32::from(card.0) != object.0)
+            && let Some(place) = self.table.objects().card_place(object.0 as usize)
+        {
+            let target = Target {
+                node: Node::Card(object.0 as usize),
+                container: Some(place),
+            };
+            return (target, self.index_of(object, Role::Card));
+        }
+        let player = flat.role == Role::Player && flat.press.is_none();
+        let (node, hit) = if player {
+            (Node::Other(flat.id), self.index_of(flat.id, Role::Player))
+        } else {
+            (Node::Control(flat.id), None)
+        };
+        (
+            Target {
+                node,
+                container: Some(Place::Layer),
+            },
+            hit,
+        )
+    }
+
+    fn index_of(&self, id: ElementId, role: Role) -> Option<u32> {
+        let at = self
+            .frame
+            .resolved
+            .iter()
+            .position(|node| node.id == id && node.role == role)?;
+        u32::try_from(at).ok()
+    }
+
+    fn available(&self, node: &Resolved, carried: Option<ObjectId>) -> bool {
+        if node.state.has(StateBits::HELD) {
+            return false;
+        }
+        let Some(card) = carried.filter(|_| node.role == Role::Card) else {
+            return true;
+        };
+        let Ok(slot) = u16::try_from(node.id.0).map(ObjectId) else {
+            return true;
+        };
+        slot != card && !(self.selection.contains(&card) && self.selection.contains(&slot))
+    }
+
+    fn table_target(&self, element: &Resolved) -> SceneTarget {
+        // The top card and its pile share an input target.
+        let pile = super::viewing::pointer_pile(
+            element.place,
+            self.screen,
+            !self.sheet,
+            self.manual_library,
+        );
+        let node = match (element.role, pile) {
+            (Role::Pile, Some(pile)) => Node::Pile(pile),
+            (Role::Card, Some(pile)) if !element.interactive => Node::Pile(pile),
+            (Role::Card, _) => Node::Card(element.id.0 as usize),
+            _ => tray_grid(element.id).map_or(Node::Other(element.id), Node::Tray),
+        };
+        Target {
+            node,
+            container: Some(element.place),
+        }
+    }
 }
 
 impl Client {
+    fn pointer_scene(&self) -> PointerScene<'_> {
+        PointerScene {
+            layer: &self.layer,
+            frame: &self.frame,
+            table: self.show.table(),
+            open: self.features.layer_open,
+            screen: self.features.screen,
+            sheet: self.features.sheet.is_some(),
+            manual_library: self.at_table(),
+            selection: &self.features.table().selection,
+        }
+    }
+
+    /// The manual keyboard commands use the same scene picking as pointer input.
+    pub(super) fn manual_target_at(&self, at: Vec2) -> game_manual::manual::Target {
+        let (target, hit, _) = self.pointer_scene().pick(at, None, None);
+        self.manual_viewer_target(target)
+            .unwrap_or_else(|| game_manual::manual::target_from_hit(&self.frame, hit))
+    }
+
     pub(super) fn point(&mut self, pointer: Pointer) {
-        let open = self.features.layer_open;
         let screen = self.features.screen;
-        let no_sheet = self.features.sheet.is_none();
         let at_table = screen == Screen::Table;
-        let flat = self
-            .layer
-            .press_at(pointer.position, open)
-            .map(|(id, ..)| id);
         let manual_hold = at_table
-            && no_sheet
+            && self.features.sheet.is_none()
             && self.features.menu().is_none()
             && self
                 .show
                 .latest()
                 .is_some_and(|update| update.view.table.is_some());
         let pinned = self.features.inspector().pinned();
-        // Classify each pile once by its physical zone. A press on its top card and
-        // a release on its count reach the same pile.
-        let game = screen == Screen::Game;
-        let manual_library = self.at_table();
         let tuning = &self.show.table().data().pointer;
+        let scene = PointerScene {
+            layer: &self.layer,
+            frame: &self.frame,
+            table: self.show.table(),
+            open: self.features.layer_open,
+            screen,
+            sheet: self.features.sheet.is_some(),
+            manual_library: self.at_table(),
+            selection: &self.features.table().selection,
+        };
+        let mut flat = None;
         let routed = self
             .routes
             .router
-            .point(&self.frame, pointer, self.now, tuning, |hit| {
-                let target = if let Some(id) = flat {
-                    Some(Target {
-                        node: Node::Control(id),
-                        container: None,
-                    })
-                } else {
-                    hit.map(|element| {
-                        let pile = super::viewing::pointer_pile(
-                            element.place,
-                            screen,
-                            no_sheet,
-                            manual_library,
-                        );
-                        let node = match (element.role, pile) {
-                            (Role::Pile, Some(pile)) => Node::Pile(pile),
-                            (Role::Card, Some(pile)) if !element.interactive => Node::Pile(pile),
-                            (Role::Card, _) => Node::Card(element.id.0 as usize),
-                            _ => Node::Other(element.id),
-                        };
-                        Target {
-                            node,
-                            container: Some(element.place),
-                        }
-                    })
-                };
+            .route(pointer, self.now, tuning, |source, dragging| {
+                let carried = source
+                    .filter(|_| dragging)
+                    .and_then(|source| match source.node {
+                        Node::Card(slot) => u16::try_from(slot).ok().map(ObjectId),
+                        _ => None,
+                    });
+                let wheel = (pointer.phase == PointerPhase::Wheel)
+                    .then_some((pointer.wheel, tuning.wheel_notch_points));
+                let (target, index, screen_target) = scene.pick(pointer.position, wheel, carried);
+                flat = screen_target;
+                let game = screen == Screen::Game;
                 let game_hold = game
-                    && no_sheet
-                    && flat.is_none()
-                    && hit.is_some_and(|element| {
-                        element.role == Role::Card
-                            && game_play::pointer::takes_pointer(element.place)
+                    && target.is_some_and(|target| {
+                        matches!(target.node, Node::Card(_))
+                            && target
+                                .container
+                                .is_some_and(game_play::pointer::takes_pointer)
                     });
                 let policy = TouchPolicy {
-                    double_tap: (game || at_table) && no_sheet && hit.is_none(),
-                    hold: !pinned && (manual_hold || game_hold),
+                    double_tap: (game || at_table) && !scene.sheet && target.is_none(),
+                    hold: !pinned && (game_hold || (manual_hold && !on_screen(target))),
                     delayed_pickup: at_table,
                 };
-                (target, policy)
+                (target, index, policy)
             });
         if routed.cancelled {
             self.cancel_interaction();
         }
-        if let Some(point) = routed.point {
+        if let Some(event) = routed.point {
+            let point = ScenePoint { event, flat };
             let primary_down =
                 pointer.phase == PointerPhase::Down && pointer.button == Button::Primary;
             if primary_down {
                 self.end_control();
+                self.routes.action = point.action().cloned();
                 self.routes.scrolling.cancel();
                 self.features.focus_row(RowMessage::Focus(None));
             }
@@ -137,7 +309,7 @@ impl Client {
             } else {
                 self.deliver_point(&point);
             }
-            if ends_gesture(&pointer) {
+            if point.captured && ends_gesture(&pointer) {
                 self.end_control();
             }
         }
@@ -151,10 +323,14 @@ impl Client {
     }
 
     pub(super) fn end_control(&mut self) {
-        if let Control::Order(carry) = std::mem::take(&mut self.routes.control)
-            && carry.lifted
-        {
-            self.put_item_down();
+        self.routes.action = None;
+        match std::mem::take(&mut self.routes.control) {
+            Control::Order(carry) if carry.lifted => self.put_item_down(),
+            Control::Card(_) => self.release_card_motion(None),
+            Control::Field(_) => {
+                self.edit(Edit::Up);
+            }
+            _ => {}
         }
     }
 
@@ -164,7 +340,6 @@ impl Client {
 
     pub(super) fn cancel_gesture(&mut self) {
         self.routes.router.cancel();
-        self.show.pointer_mut().cancel();
         self.end_control();
     }
 
@@ -187,7 +362,8 @@ impl Client {
             return;
         };
         let handled = if self.features.screen == Screen::Table {
-            self.open_table_menu_at(at)
+            let target = self.manual_captured_target(source);
+            self.open_table_menu_at(at, target)
         } else if self.features.screen == Screen::Game
             && self.features.sheet.is_none()
             && let Some(Target {
@@ -209,7 +385,7 @@ impl Client {
         }
     }
 
-    fn cancel_interaction(&mut self) {
+    pub(super) fn cancel_interaction(&mut self) {
         self.routes.scrolling.cancel();
         self.cancel_gesture();
         if self.features.table().sweep.is_some() {
@@ -227,29 +403,18 @@ impl Client {
             self.bug_point(point);
             return;
         }
-        let pickup = point.drag.map(|drag| (drag.direction, drag.pickup_ready));
-        self.show.pointer_mut().handle(&pointer, pickup);
-        if pointer.phase == PointerPhase::Down {
-            self.features
-                .update_table(game_manual::features::table::Change::Shift(
-                    pointer.modifiers.shift,
-                ));
-        }
-        self.features
-            .prompts
-            .carry(self.show.pointer().held(), self.views, &self.show);
-        // A press outside an open context menu closes it and means nothing else.
+        self.show.pointer_mut().observe(&pointer);
+        // A press outside an open context menu dismisses it.
         if pointer.phase == PointerPhase::Down
             && pointer.button == Button::Primary
-            && self
-                .layer
-                .outside_menu(pointer.position, self.features.layer_open)
+            && self.features.layer_open
+            && self.layer.menu_open()
+            && !point.flat.as_ref().is_some_and(|target| target.menu)
         {
             self.suppress_press();
             self.dismiss_menu();
             return;
         }
-        // Sheets and a frozen table leave only the flat layer's controls available.
         let table = self.features.sheet.is_none() && !self.table_frozen();
         if table && self.manual_point(point) {
             if pointer.phase == PointerPhase::Down {
@@ -257,175 +422,122 @@ impl Client {
             }
             return;
         }
-        if self.scroll_pointer(point) || self.open_table_menu(&pointer) {
+        if self.open_table_menu(point) {
             return;
         }
-        if self.carry_item(point) {
-            self.routes.scrolling.cancel();
+        // An established card drag keeps its source as it crosses other features.
+        if table && self.held_card_point(point) {
             return;
         }
-        if self.slide(&pointer) {
+        if self.scroll_pointer(point) {
+            return;
+        }
+        if self.carry_item(point) || self.slide(point) {
             self.routes.scrolling.cancel();
         } else {
-            self.press_flat(point, table);
-        }
-        let hovered = self.hover_flat(&pointer);
-        // The pointer on a payment's Auto Pay, or a touch held on it, marks what it would tap.
-        let suggesting = if let (Some(prompt), Some((_, action, true))) =
-            (self.features.prompts.current(), &hovered)
-            && let Some(game_hud::prompts::bar::Message::Button(button)) = action.downcast_ref()
-        {
-            prompts::shows(prompt, *button)
-        } else {
-            false
-        };
-        self.features
-            .prompts
-            .suggest(suggesting, self.views, &self.show);
-    }
-
-    /// Tells the flat layer which element a press under `pointer` would reach, which it draws
-    /// hovered, and which one is held down, and returns the first with its press.
-    pub(super) fn hover_flat(&mut self, pointer: &Pointer) -> Option<(ElementId, Action, bool)> {
-        let gone = matches!(pointer.phase, PointerPhase::Cancel | PointerPhase::Leave)
-            || (pointer.kind == PointerKind::Touch && pointer.phase == PointerPhase::Up);
-        let hovered = (!gone)
-            .then(|| {
-                self.layer
-                    .press_at(pointer.position, self.features.layer_open)
-            })
-            .flatten();
-        let id = hovered.as_ref().map(|(id, ..)| *id);
-        let held = if ends_gesture(pointer) {
-            None
-        } else {
-            match self.routes.control {
-                Control::Slider(id) => Some(id),
-                Control::Order(carry) if carry.lifted => None,
-                _ => self
-                    .routes
-                    .router
-                    .pressed()
-                    .and_then(|target| match target.node {
-                        Node::Control(id) => Some(id),
-                        _ => None,
-                    }),
+            self.press_flat(point);
+            if table {
+                self.card_point(point);
+                self.pile_point(point);
             }
-        };
-        (self.layer).point_at(id, held);
-        let at = (!gone).then_some(pointer.position);
-        self.layer.hover(at, self.features.layer_open);
-        hovered
+        }
+        self.hover_flat(point);
+        self.suggest_payment(point);
     }
 
-    /// Sets the level of the slider the primary pointer goes down on, and of the one it drags,
-    /// to the level under the pointer, until the press ends; the slider takes the focus. Returns
-    /// whether the pointer is on a slider, and so means nothing else.
-    fn slide(&mut self, pointer: &Pointer) -> bool {
-        let primary = pointer.button == Button::Primary;
-        let at = match (pointer.phase, &self.routes.control) {
-            (PointerPhase::Down, _) if primary => {
-                let Some((id, press, rect)) = self
-                    .layer
-                    .slider_at(pointer.position, self.features.layer_open)
-                else {
+    /// Updates visual hover using the same screen node that receives the pointer.
+    pub(super) fn hover_flat(&mut self, point: &ScenePoint) {
+        let pointer = &point.pointer;
+        let flat = point.flat.as_ref().filter(|_| point.hovering());
+        let hovered = flat.filter(|flat| flat.press.is_some()).map(|flat| flat.id);
+        let held = match self.routes.control {
+            Control::Slider(id) if !ends_gesture(pointer) => Some(id),
+            Control::Order(carry) if carry.lifted => None,
+            _ => self
+                .routes
+                .router
+                .pressed()
+                .and_then(|target| match target.node {
+                    Node::Control(id) => Some(id),
+                    _ => None,
+                }),
+        };
+        self.layer.point_at(hovered, held);
+        self.layer.hover_target(
+            flat.filter(|flat| flat.role == Role::MenuItem)
+                .map(|flat| flat.id),
+            flat.and_then(|flat| Some((flat.tooltip?, flat.id))),
+        );
+    }
+
+    fn slide(&mut self, point: &ScenePoint) -> bool {
+        let pointer = &point.pointer;
+        if !point.captured {
+            return false;
+        }
+        let (press, rect) = match (pointer.phase, &self.routes.control) {
+            (PointerPhase::Down, _) if pointer.button == Button::Primary => {
+                let Some(flat) = &point.flat else {
                     return false;
                 };
-                self.routes.control = Control::Slider(id);
-                self.layer.focus(Some(id));
+                let (Some(press), Some(rect)) = (point.action().cloned(), flat.slider) else {
+                    return false;
+                };
+                self.routes.control = Control::Slider(flat.id);
+                self.layer.focus(Some(flat.id));
                 (press, rect)
             }
             (PointerPhase::Move, Control::Slider(id)) => match self.layer.slider(*id) {
                 Some(at) => at,
                 None => return true,
             },
-            (PointerPhase::Up | PointerPhase::Cancel | PointerPhase::Leave, Control::Slider(_)) => {
-                return true;
-            }
+            (_, Control::Slider(_)) => return true,
             _ => return false,
         };
-        let (press, rect) = at;
-        if let Some(setting) = slider_setting(&press)
-            && let Some(level) = setting.level()
-        {
-            let to = level_at(pointer.position.x, rect.x, rect.width);
-            if to != level {
-                self.dispatch(&Action::new(SettingsMessage::Change(setting.at_level(to))));
-            }
-        }
+        self.set_slider(&press, rect, pointer.position.x);
         true
     }
 
-    /// Applies the captured press to a control, card or pile.
-    pub(super) fn press_flat(&mut self, point: &ScenePoint, table: bool) {
+    /// Applies the captured press to the screen control that owns it.
+    pub(super) fn press_flat(&mut self, point: &ScenePoint) {
         let pointer = &point.pointer;
-        let primary = pointer.button == Button::Primary;
-        let open = self.features.layer_open;
         match pointer.phase {
-            PointerPhase::Down if primary => {
-                let focus = self
-                    .layer
-                    .focusable_at(pointer.position, open)
-                    .or_else(|| self.layer.scroller_at(pointer.position, open));
+            PointerPhase::Down if pointer.button == Button::Primary => {
+                let Some(flat) = &point.flat else {
+                    return;
+                };
+                let focus = if flat.focus {
+                    Some(flat.id)
+                } else {
+                    flat.scroller.map(|(id, _)| id)
+                };
                 if let Some(id) = focus {
                     self.layer.focus(Some(id));
                     if self.layer.edited_id() == Some(id) {
+                        self.routes.control = Control::Field(id);
                         self.press_field(pointer);
                     }
                 }
-                if table
-                    && let Some(Target {
-                        node: Node::Card(slot),
-                        container: Some(place),
-                    }) = point.target
-                {
-                    let scene = self.show.table();
-                    let in_tray = scene.in_tray(slot);
-                    let hand_scrolls = !in_tray
-                        && scroller_of(place) == Some(Scroller::Hand)
-                        && scene.row_window(Scroller::Hand).scrolls();
-                    let tray_scrolls = in_tray
-                        && pointer.kind == PointerKind::Touch
-                        && scene.tray_viewport_at(pointer.position).is_some();
-                    let hold = match (self.holdable(slot, place), hand_scrolls) {
-                        (false, _) => Hold::Never,
-                        (true, _) if tray_scrolls => Hold::Sideways,
-                        (true, false) => Hold::Drag,
-                        (true, true) => Hold::UpOrDown,
-                    };
-                    self.show
-                        .pointer_mut()
-                        .press(slot, pointer.position, hold, pointer.kind);
-                }
             }
-            PointerPhase::Move if self.layer.edited_id().is_some() => {
+            PointerPhase::Move if self.editing_pointer(point) => {
                 self.edit(Edit::Move(pointer.position));
             }
-            PointerPhase::Up if primary => {
-                if self.layer.edited_id().is_some() {
-                    self.edit(Edit::Up);
-                }
-                match point
-                    .released_by(|target| target.node)
-                    .map(|target| target.node)
+            PointerPhase::Up if pointer.button == Button::Primary => {
+                if !self.editing_pointer(point)
+                    && point.released_by(|target| target.node).is_some()
+                    && let Some(action) = point.action()
+                    && Some(action) == self.routes.action.as_ref()
                 {
-                    Some(Node::Pile(pile)) if table => {
-                        if !self.table_library_clicked(pile) {
-                            self.dispatch(&Action::new(game_hud::hud::viewer::Message::Open(pile)));
-                        }
-                    }
-                    Some(Node::Control(pressed))
-                        if let Some((id, action, true)) =
-                            self.layer.press_at(pointer.position, open)
-                            && pressed == id =>
-                    {
-                        self.dispatch(&action);
-                    }
-                    _ => {}
+                    self.dispatch(action);
                 }
             }
             _ => {}
         }
+    }
+
+    fn editing_pointer(&self, point: &ScenePoint) -> bool {
+        point.captured
+            && matches!(self.routes.control, Control::Field(id) if self.layer.edited_id() == Some(id))
     }
 
     /// Gives the open overlay and focused control the key before looking for shortcuts.
@@ -517,83 +629,16 @@ impl Client {
         };
         (to != level).then(|| Action::new(SettingsMessage::Change(setting.at_level(to))))
     }
+}
 
-    /// Whether a press may pick up the card in `slot`, resting at `place`: a card the open
-    /// prompt marks, once the prompt is drawn, in the viewer's hand or held up in a tray of two
-    /// piles. This is the web interface's `#lifts` in `ui/src/stage/prompt.ts`.
-    pub(super) fn holdable(&self, slot: usize, place: Place) -> bool {
-        if let Some(holdable) = self.table_holdable(slot, place) {
-            return holdable;
-        }
-        let Some(prompt) = self
-            .features
-            .prompts
-            .current()
-            .filter(|_| self.features.layer_open)
-        else {
-            return false;
-        };
-        let in_hand = matches!(
-            place,
-            Place::Card {
-                zone: ZoneName::Hand,
-                side: Side::You,
-                ..
-            }
-        );
-        let on = u16::try_from(slot).map(|slot| Subject::Object {
-            slot: ObjectId(slot),
-        });
-        // A card in a tray of piles is carried from pile to pile, as the web's `#piled` has it.
-        let piled = (self.show.table().held()).is_some_and(|held| held.piles.len() > 1)
-            && self.show.table().in_tray(slot);
-        (in_hand || piled) && (prompt.marks.iter()).any(|marked| Ok(marked.on) == on)
-    }
+fn tray_grid(id: ElementId) -> Option<usize> {
+    (TRAY_GRID_IDS..TRAY_CARD_BOX_IDS)
+        .contains(&id.0)
+        .then(|| (id.0 - TRAY_GRID_IDS) as usize)
+}
 
-    /// The card in `slot`, held up in the open prompt's tray of piles, was let go at `at`: if it
-    /// lands in a pile that is not closed, the prompt is told it was dropped there, before the
-    /// card it landed in front of (`Table::tray_landing`), as the web's `#dropped` does. Let go
-    /// outside every box, or in a closed pile, it goes back where it lay and nothing is sent.
-    pub(super) fn drop_held(&mut self, slot: usize, at: Vec2) {
-        let Some(prompt) = self
-            .features
-            .prompts
-            .current()
-            .filter(|_| self.features.layer_open)
-        else {
-            return;
-        };
-        let (ShapeBody::Split { piles }, Some(held)) = (&prompt.body, prompts::Piles::of(prompt))
-        else {
-            return;
-        };
-        let table = self.show.table();
-        let held = held.held(table.held());
-        let Ok(card) = u16::try_from(slot) else {
-            return;
-        };
-        let landed = table.tray_landing(&held, at, ObjectId(card));
-        let Some((pile, before)) = landed else {
-            return;
-        };
-        if piles.get(pile).is_none_or(|pile| pile.closed) {
-            return;
-        }
-        if let (Ok(slot), Ok(pile), Ok(before)) = (
-            u16::try_from(slot),
-            u8::try_from(pile),
-            u16::try_from(before),
-        ) {
-            let on = Subject::Object {
-                slot: ObjectId(slot),
-            };
-            self.click(Click::Drop {
-                on,
-                pile,
-                at: before,
-            });
-        }
-    }
+fn on_screen(target: Option<SceneTarget>) -> bool {
+    target.is_some_and(|target| matches!(target.node, Node::Control(_) | Node::Blocked))
 }
 
 /// Whether `pointer` ends what the primary pointer was doing: the primary button or a finger

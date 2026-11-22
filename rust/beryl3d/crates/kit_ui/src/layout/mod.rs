@@ -18,6 +18,7 @@ mod motion;
 mod objects;
 mod panel;
 mod pointed;
+pub use pointed::PointerTarget;
 mod reconcile;
 mod scroll;
 mod shadows;

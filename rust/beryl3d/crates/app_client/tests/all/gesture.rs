@@ -7,6 +7,7 @@ use app_client::Input;
 use app_client::command::{Request, SessionCommand};
 use app_screens::screens::settings::Message as SettingsMessage;
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, PromptButton, ShapeBody};
+use beryl_protocol::protocol::Status;
 use beryl_protocol::script::Subject;
 use game_hud::prompts::bar::Message as BarMessage;
 use glam::Vec2;
@@ -14,7 +15,9 @@ use kit_frame::frame::{Role, StateBits};
 use kit_ui::element::Action;
 use kit_ui::element::{row, text};
 use kit_ui::input::Input as DeviceInput;
-use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
+use kit_ui::input::{
+    Button, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
+};
 use kit_ui::widgets;
 
 use super::flat_layer::{centre, client, deciding, edges, find, pointer, prompt};
@@ -139,6 +142,120 @@ fn a_carry_ended_by_cancel_leaves_the_next_press_to_press_once() {
     assert_eq!(items, 2, "the carried item is back in the row");
     client.handle(pointer(PointerPhase::Down, cancel));
     client.handle(pointer(PointerPhase::Up, cancel));
+    assert_eq!(
+        clicks(&mut client),
+        vec![Click::Button {
+            button: ButtonId::Decline
+        }]
+    );
+}
+
+#[test]
+fn replacing_a_decision_cancels_the_press_on_its_retained_button() {
+    let mut client = client();
+    client.handle(deciding(prompt("Pay {1}{U}")));
+    client.frame(0);
+    let frame = client.frame(MS);
+    let cancel = find(frame, Role::Button, "Cancel");
+    let id = frame.resolved[cancel].id;
+    let at = centre(frame, cancel);
+    client.handle(pointer(PointerPhase::Down, at));
+
+    let mut next = deciding(prompt("Pay {2}{U}"));
+    let Input::Update(update) = &mut next else {
+        unreachable!()
+    };
+    let Status::Deciding { decision } = &mut update.view.status else {
+        unreachable!()
+    };
+    decision.id.seq += 1;
+    let next_id = decision.id;
+    client.handle(next);
+    let frame = client.frame(2 * MS);
+    let cancel = find(frame, Role::Button, "Cancel");
+    assert_eq!(frame.resolved[cancel].id, id, "the control was retained");
+    let at = centre(frame, cancel);
+    client.handle(pointer(PointerPhase::Up, at));
+    assert!(
+        client.next_command().is_none(),
+        "the old press reached the new prompt"
+    );
+
+    client.handle(pointer(PointerPhase::Down, at));
+    client.handle(pointer(PointerPhase::Up, at));
+    assert!(matches!(
+        client.next_command(),
+        Some(SessionCommand::Click(request))
+            if request.decision == next_id && request.click == Click::Button { button: ButtonId::Decline }
+    ));
+    assert!(client.next_command().is_none());
+}
+
+#[test]
+fn the_prompt_owns_the_press_when_its_button_covers_a_hud_control() {
+    let mut client = client();
+    client.handle(deciding(prompt("Pay {1}{U}")));
+    client.frame(0);
+    let frame = client.frame(MS);
+    let at = centre(frame, find(frame, Role::Button, "Settings"));
+    let mut overlay = text("Cancel").on_press(DECLINE).modal();
+    overlay.anchor = Some(kit_ui::element::Anchor::Point(at, Vec2::splat(0.5)));
+    client.layer_mut().show(Some(row().child(overlay)));
+    // The prompt has already laid out, but the previous frame still shows the HUD.
+    client.handle(pointer(PointerPhase::Down, at));
+    client.handle(pointer(PointerPhase::Up, at));
+    assert_eq!(
+        clicks(&mut client),
+        vec![Click::Button {
+            button: ButtonId::Decline
+        }]
+    );
+}
+
+#[test]
+fn wheel_and_key_scroll_change_which_row_takes_a_press_before_the_next_frame() {
+    let mut client = client();
+    client.handle(deciding(prompt("Pay {1}{U}")));
+    client.frame(0);
+    let rows = (0..50).map(|n| {
+        let action = if n < 25 {
+            DECLINE
+        } else {
+            BarMessage::Button(ButtonId::Auto)
+        };
+        text(&format!("Entry {n}")).height(24.0).on_press(action)
+    });
+    client
+        .layer_mut()
+        .show(Some(widgets::list("Log", rows).height(200.0).width(300.0)));
+    let frame = client.frame(MS);
+    let at = centre(frame, find(frame, Role::Text, "Entry 2"));
+    let press = |client: &mut Client| {
+        client.handle(pointer(PointerPhase::Down, at));
+        client.handle(pointer(PointerPhase::Up, at));
+    };
+    client.handle(Input::Device(DeviceInput::Pointer(Pointer {
+        id: 0,
+        kind: PointerKind::Mouse,
+        phase: PointerPhase::Wheel,
+        position: at,
+        button: Button::None,
+        wheel: Vec2::new(0.0, -10_000.0),
+        modifiers: Modifiers::default(),
+    })));
+    press(&mut client);
+    assert_eq!(
+        clicks(&mut client),
+        vec![Click::Button {
+            button: ButtonId::Auto
+        }]
+    );
+    client.handle(Input::Device(DeviceInput::Key(Key {
+        code: KeyCode::Home,
+        phase: KeyPhase::Down,
+        modifiers: Modifiers::default(),
+    })));
+    press(&mut client);
     assert_eq!(
         clicks(&mut client),
         vec![Click::Button {

@@ -48,7 +48,9 @@ pub struct Point<T> {
     pub target: Option<T>,
     pub pressed: Option<T>,
     pub drag: Option<Drag<T>>,
-    /// The latest frame's hit, in reverse paint order, if any.
+    /// Whether this pointer owns the gesture that began with the primary press.
+    pub captured: bool,
+    /// The frame index when the scene target came from the drawn table.
     pub hit: Option<u32>,
 }
 
@@ -115,14 +117,32 @@ impl<T: Copy> Router<T> {
         tuning: &PointerTuning,
         target: impl FnOnce(Option<&Resolved>) -> (Option<T>, TouchPolicy),
     ) -> Routed<T> {
-        let dragging = matches!(pointer.phase, PointerPhase::Move | PointerPhase::Up)
-            && self.active.is_some_and(|capture| {
-                capture.pointer == (pointer.kind, pointer.id) && capture.direction.is_some()
+        self.route(pointer, now, tuning, |_, dragging| {
+            let hit = hit_where(frame, pointer.position, |node| {
+                !dragging || !node.state.has(StateBits::HELD)
             });
-        let hit = hit_where(frame, pointer.position, |node| {
-            !dragging || !node.state.has(StateBits::HELD)
-        });
-        let (target, policy) = target(hit.map(|index| &frame.resolved[index as usize]));
+            let (target, policy) = target(hit.map(|index| &frame.resolved[index as usize]));
+            (target, hit, policy)
+        })
+    }
+
+    /// Recognizes a gesture using the target and touch policy supplied by the scene picker.
+    pub fn route(
+        &mut self,
+        pointer: Pointer,
+        now: u64,
+        tuning: &PointerTuning,
+        resolve: impl FnOnce(Option<T>, bool) -> (Option<T>, Option<u32>, TouchPolicy),
+    ) -> Routed<T> {
+        let active = self
+            .active
+            .filter(|active| active.pointer == (pointer.kind, pointer.id));
+        let dragging = matches!(pointer.phase, PointerPhase::Move | PointerPhase::Up)
+            && active.is_some_and(|capture| {
+                capture.direction.is_some()
+                    || (pointer.position - capture.origin).length() >= tuning.drag_threshold_points
+            });
+        let (target, hit, policy) = resolve(active.and_then(|capture| capture.source), dragging);
         let (accepted, cancelled, double_tap) = self.admit(pointer, policy, now, tuning);
         Routed {
             point: accepted.then(|| self.recognize(pointer, target, hit, policy, tuning)),
@@ -202,6 +222,7 @@ impl<T: Copy> Router<T> {
             .active
             .as_mut()
             .filter(|active| active.pointer == source);
+        let captured = active.is_some();
         let pressed = active
             .as_ref()
             .filter(|active| active.press_enabled)
@@ -226,7 +247,8 @@ impl<T: Copy> Router<T> {
             }
             _ => None,
         };
-        if matches!(pointer.phase, Cancel | Leave) || (pointer.phase == Up && primary) {
+        if captured && (matches!(pointer.phase, Cancel | Leave) || (pointer.phase == Up && primary))
+        {
             self.active = None;
         }
         Point {
@@ -234,6 +256,7 @@ impl<T: Copy> Router<T> {
             target,
             pressed,
             drag,
+            captured,
             hit,
         }
     }

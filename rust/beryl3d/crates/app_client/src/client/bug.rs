@@ -6,7 +6,7 @@ use app_screens::screens::Sheet;
 use app_screens::screens::bug_report::{BugStage, Message, whole_window};
 use kit_frame::frame::Wake;
 use kit_scene::input::KeyResponse;
-use kit_ui::input::{Button, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerPhase};
+use kit_ui::input::{Button, Key, KeyCode, KeyPhase, Modifiers, PointerPhase};
 
 impl Client {
     /// Whether the bug report is open.
@@ -113,32 +113,32 @@ impl Client {
     /// being chosen, a drag outside the tools draws it, and a release chooses it (a click, the
     /// whole window); otherwise the pointer presses the report's controls.
     pub(super) fn bug_point(&mut self, point: &ScenePoint) {
-        let pointer = &point.pointer;
         match self.features.bug().stage {
             BugStage::Capturing { .. } => return,
             BugStage::Select { .. } => {
-                if !self.drag_region(pointer) {
-                    self.press_flat(point, false);
+                if !self.drag_region(point) {
+                    self.press_flat(point);
                 }
             }
             _ => {
                 if !self.scroll_pointer(point) {
-                    self.press_flat(point, false);
+                    self.press_flat(point);
                 }
             }
         }
-        self.hover_flat(pointer);
+        self.hover_flat(point);
     }
 
     /// Draws or chooses the region `pointer` drags out, unless it went down on a tool.
     /// Returns whether it did.
-    fn drag_region(&mut self, pointer: &Pointer) -> bool {
+    fn drag_region(&mut self, point: &ScenePoint) -> bool {
+        let pointer = &point.pointer;
         if pointer.phase == PointerPhase::Down
             && pointer.button == Button::Primary
-            && self
-                .layer
-                .press_at(pointer.position, self.features.layer_open)
-                .is_some()
+            && point
+                .flat
+                .as_ref()
+                .is_some_and(|target| target.press.is_some())
         {
             return false;
         }

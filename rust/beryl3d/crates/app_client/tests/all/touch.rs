@@ -302,6 +302,28 @@ fn a_hand_card_is_carried_as_soon_as_the_finger_moves() {
 }
 
 #[test]
+fn cancelling_a_held_card_does_not_play_it_or_steal_the_next_tap() {
+    let mut client = paying();
+    let frame = client.frame(16 * MS);
+    let at = on(frame, "Counterspell");
+    let (_, slot) = card(frame, "Counterspell");
+    let out = at - Vec2::new(0.0, 200.0);
+    client.handle(finger(1, PointerPhase::Down, at));
+    client.handle(finger(1, PointerPhase::Move, out));
+    assert_eq!(client.pointer().held(), Some(slot));
+    client.handle(finger(1, PointerPhase::Cancel, out));
+    client.handle(finger(1, PointerPhase::Up, out));
+    assert!(clicks(&mut client).is_empty());
+    assert_eq!(client.pointer().held(), None);
+
+    client.frame(32 * MS);
+    client.frame(400 * MS);
+    let again = on(client.frame(416 * MS), "Counterspell");
+    tap(&mut client, 1, again);
+    assert_eq!(clicks(&mut client), vec![Click::On { on: object(slot) }]);
+}
+
+#[test]
 fn on_the_manual_table_a_finger_rests_before_it_picks_a_card_up() {
     let mut builder = ViewBuilder::sample();
     builder.script(ScriptBuilder::reset().build());

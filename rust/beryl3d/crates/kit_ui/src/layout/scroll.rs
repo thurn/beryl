@@ -131,7 +131,7 @@ impl Node {
         )
     }
 
-    fn viewport(&self) -> Option<Viewport> {
+    pub(super) fn viewport(&self) -> Option<Viewport> {
         let limit = self.most_scroll();
         (limit != Vec2::ZERO && self.element.style.display != Display::None).then(|| {
             Viewport::points(

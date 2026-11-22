@@ -39,18 +39,23 @@ impl Layer {
                 (node.element.role == Role::MenuItem).then_some(node.id)
             })
         });
-        if row != self.pointed {
-            self.pointed = row;
-            if let Some(row) = row {
-                self.point_at_row(row);
-            }
-        }
         let wanted = point.and_then(|point| {
             self.hit(point, open, |node, _| {
                 let tooltip = self.tooltip_of(&node.element.name)?;
                 Some((tooltip, node.id))
             })
         });
+        self.hover_target(row, wanted);
+    }
+
+    /// Updates hover presentation from the pointer's already resolved screen node.
+    pub fn hover_target(&mut self, row: Option<ElementId>, wanted: Option<(ElementId, ElementId)>) {
+        if row != self.pointed {
+            self.pointed = row;
+            if let Some(row) = row {
+                self.point_at_row(row);
+            }
+        }
         let current = self.tip.map(|tip| (tip.tooltip, tip.target));
         if wanted == current {
             return;
@@ -124,7 +129,7 @@ impl Layer {
     }
 
     /// The tooltip on the screen that explains the element named `name`, if any.
-    fn tooltip_of(&self, name: &str) -> Option<ElementId> {
+    pub(super) fn tooltip_of(&self, name: &str) -> Option<ElementId> {
         fn search(node: &super::Node, name: &str) -> Option<ElementId> {
             if node.element.style.display == Display::None {
                 return None;

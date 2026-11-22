@@ -1059,6 +1059,37 @@ fn dropping_a_hand_card_on_the_graveyard_sends_the_move() {
 }
 
 #[test]
+fn a_card_drag_crosses_a_panel_and_keeps_the_original_card() {
+    use kit_ui::element::{Anchor, row, text};
+    let view = table_view();
+    let (mut client, frame) = client_at_table(&view);
+    let card = slot_of(&view, ZoneName::Hand, Side::You, "Counterspell");
+    let from = corners_of(&frame, card).iter().sum::<Vec2>() / 4.0;
+    let graveyard = slot_of(&view, ZoneName::Graveyard, Side::You, "Brainstorm");
+    let to = corners_of(&frame, graveyard).iter().sum::<Vec2>() / 4.0;
+    let panel = from.lerp(to, 0.5) - Vec2::new(0.0, 130.0);
+    let mut control = text("Panel")
+        .width(100.0)
+        .height(50.0)
+        .on_press(app_screens::screens::settings::Message::Open);
+    control.anchor = Some(Anchor::Point(panel, Vec2::splat(0.5)));
+    client.layer_mut().show(Some(row().child(control)));
+    client.frame(MS);
+    client.handle(pointer(PointerPhase::Down, from, Button::Primary));
+    client.handle(pointer(PointerPhase::Move, panel, Button::None));
+    assert_eq!(client.pointer().held(), Some(usize::from(card.0)));
+    client.frame(2 * MS);
+    assert!(acts(&mut client).is_empty());
+
+    client.handle(pointer(PointerPhase::Move, to, Button::None));
+    client.handle(pointer(PointerPhase::Up, to, Button::Primary));
+    let sent = json(&acts(&mut client));
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    assert_eq!(sent[0]["move"]["to"], serde_json::json!({ "graveyard": 0 }));
+    assert_eq!(sent[0]["move"]["in"], serde_json::json!({ "hand": 0 }));
+}
+
+#[test]
 fn the_graveyard_viewer_lists_its_cards_with_their_commands() {
     let mut builder = ViewBuilder::sample();
     builder.card(ZoneName::Graveyard, Side::You, "Counterspell");

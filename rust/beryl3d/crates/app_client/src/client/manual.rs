@@ -9,7 +9,10 @@ use game_hud::inspect::Viewed;
 use glam::Vec2;
 use kit_ui::element::Action;
 
-use super::{Client, Platform};
+use super::{
+    Client, Platform,
+    input::{Node, ScenePoint, SceneTarget},
+};
 use crate::command::SessionCommand;
 
 use app_screens::screens::Screen;
@@ -23,7 +26,8 @@ use game_manual::manual::menus::{self, Act};
 use game_manual::manual::tokens::TokenChoice;
 use game_manual::manual::viewers::{self, Look, ViewerControl};
 use game_manual::manual::{self, ActionSource, Context, Pending, Sent, Target, commands, pools};
-use kit_ui::input::{Button, Pointer, PointerPhase};
+use kit_frame::frame::Place;
+use kit_ui::input::{Button, PointerPhase};
 
 impl Client {
     /// An update arrived: it keeps the session it came from, which stop and concede commands
@@ -58,20 +62,20 @@ impl Client {
     /// player counter under it, or else opens the context menu of what the pointer is on where
     /// it was clicked (`open_table_menu_at`). Returns whether it did either, and so means
     /// nothing else.
-    pub(super) fn open_table_menu(&mut self, pointer: &Pointer) -> bool {
+    pub(super) fn open_table_menu(&mut self, point: &ScenePoint) -> bool {
+        let pointer = &point.pointer;
         if pointer.phase != PointerPhase::Down || pointer.button != Button::Secondary {
             return false;
         }
         if self.features.screen == Screen::Table
-            && let Some((_, action, _)) = self
-                .layer
-                .press_at(pointer.position, self.features.layer_open)
+            && let Some(action) = point.action()
             && let Some(&TableMessage::Counter { side, at }) = action.downcast_ref()
         {
             self.adjust_counter(side, at, false, TableMessage::Counter { side, at });
             return true;
         }
-        self.open_table_menu_at(pointer.position)
+        !point.on_screen()
+            && self.open_table_menu_at(pointer.position, self.manual_pointer_target(point))
     }
 
     /// Adds one to the counter at `at` of `side`'s row of mana and player counters, or removes
@@ -143,7 +147,7 @@ impl Client {
 
     /// Opens the context menu of what is at `at` (`manual::target_at`) there, on the table
     /// screen with no sheet over it. Returns whether it did.
-    pub(super) fn open_table_menu_at(&mut self, at: Vec2) -> bool {
+    pub(super) fn open_table_menu_at(&mut self, at: Vec2, target: Target) -> bool {
         if self.features.screen != Screen::Table
             || self.features.sheet.is_some()
             || self.table_frozen()
@@ -156,12 +160,43 @@ impl Client {
         if view.table.is_none() {
             return false;
         }
-        let target =
-            (self.viewer_card_at(at)).unwrap_or_else(|| manual::target_at(&self.frame, at));
         let menu = menus::open(target, view, at, &self.table_context());
         self.update_table_menu(&context_menu::Message::Open(menu));
         self.show_screen();
         true
+    }
+
+    pub(super) fn manual_captured_target(&self, source: Option<SceneTarget>) -> Target {
+        if let Some(target) = self.manual_viewer_target(source) {
+            return target;
+        }
+        let Some(source) = source else {
+            return Target::Table;
+        };
+        match (source.node, source.container) {
+            (Node::Pile(Viewed::Pile(side, zone)), _) => Target::Pile(side, zone),
+            (
+                Node::Card(_),
+                Some(Place::Card {
+                    zone: ZoneName::Hand,
+                    side: Side::Opponent,
+                    ..
+                }),
+            ) => Target::Hand(Side::Opponent),
+            (Node::Card(slot), _) => u16::try_from(slot)
+                .ok()
+                .map_or(Target::Table, |slot| Target::Card(ObjectId(slot))),
+            (Node::Other(id), _) => self
+                .frame
+                .resolved
+                .iter()
+                .position(|node| node.id == id)
+                .and_then(|index| u32::try_from(index).ok())
+                .map_or(Target::Table, |index| {
+                    manual::target_from_hit(&self.frame, Some(index))
+                }),
+            _ => Target::Table,
+        }
     }
 
     pub(super) fn close_table_menu(&mut self) {
@@ -193,9 +228,9 @@ impl Client {
         if view.table.is_none() {
             return;
         }
-        let pointed = (self.mouse()).map_or(Target::Table, |at| {
-            (self.viewer_card_at(at)).unwrap_or_else(|| manual::target_at(&self.frame, at))
-        });
+        let pointed = self
+            .mouse()
+            .map_or(Target::Table, |at| self.manual_target_at(at));
         let on_pointer = command.id.starts_with("life.")
             || matches!(command.id, "selection.row" | "selection.column");
         let current = match self.features.table().selection.first() {

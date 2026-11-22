@@ -28,7 +28,6 @@ use game_hud::prompts;
 use game_manual::features::table::RefusalSound;
 use game_play::play::Show;
 use game_play::play::record::{Plant, ScriptRecord};
-use game_play::pointer::LetGo;
 use game_table::faces::{CARD_BACK, FaceList};
 use game_table::table::{Table, Window};
 use kit_base::data::Data;
@@ -241,6 +240,16 @@ impl Client {
         }
         self.views += 1;
         self.take_session(&update);
+        if self.features.screen == Screen::Game && self.features.sheet.is_none() {
+            // Reconciled buttons can keep their IDs when a new decision repeats their labels.
+            let next = match &update.view.status {
+                beryl_protocol::protocol::Status::Deciding { decision } => Some(decision.id),
+                _ => None,
+            };
+            if self.features.prompts.decision() != next {
+                self.cancel_interaction();
+            }
+        }
         self.features
             .prompts
             .take_view(&update.view.status, self.views, &self.show);
@@ -417,22 +426,10 @@ impl Client {
         &self.frame
     }
 
-    /// Resolves pointer actions against the drawn frame and schedules its successor.
+    /// Updates hover over the drawn frame and schedules its successor.
     fn finish_frame(&mut self, table_now: u64, transitioning: bool) {
         self.features.prompts.placed_let_go(&mut self.show);
-        // The element a press under the mouse would reach is drawn `hovered`. A press on a card
-        // that ended since the last frame and means a click on it (a press that picked nothing
-        // up, or a card carried off the hand and let go) clicks the open prompt on that card;
-        // one held up in a tray and carried is dropped where it was let go.
-        match self.show.point(&mut self.frame, table_now) {
-            Some(LetGo::Click(slot)) => self.card_clicked(slot),
-            Some(LetGo::Tap(slot)) => self.card_tapped(slot),
-            Some(LetGo::Dropped { slot, at }) if self.features.screen == Screen::Table => {
-                self.table_drop(slot, at);
-            }
-            Some(LetGo::Dropped { slot, at }) => self.drop_held(slot, at),
-            None => {}
-        }
+        self.show.point(&mut self.frame, table_now);
         // The inspector and a pile's count follow what was just found under the pointer in the
         // next frame, and a prompt whose view has just played out draws its marks in it.
         let own_due = self.features.prompts.due() && self.show.settled();

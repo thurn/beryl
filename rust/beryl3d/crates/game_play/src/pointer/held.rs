@@ -18,64 +18,12 @@ use kit_base::pose::{Curve, Pose};
 const MILLISECOND: f32 = 1_000_000.0;
 const SECOND: f32 = 1_000_000_000.0;
 
-/// A press on a card, from the button going down until it comes up.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct Grip {
-    /// The slot of the card pressed.
-    pub slot: usize,
-    /// Where the pointer is now, in logical points.
-    pub at: Vec2,
-    /// Which drags pick the card up.
-    pub hold: Hold,
-    /// Whether the press has travelled `drag_threshold_points` from where it began. A press
-    /// that has is a drag, which is never a click on its card, whether or not it picked the
-    /// card up: a drag across a battlefield row scrolls the row (`rows`).
-    pub moved: bool,
-    /// Whether the press has picked the card up: its `hold` let it, and it has `moved`.
-    pub held: bool,
-    /// What made the press.
-    pub kind: kit_ui::input::PointerKind,
-}
-
-/// Which drags of a press pick its card up.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Hold {
-    /// None: the open prompt does not let the card be picked up (`Client`'s `holdable`).
-    Never,
-    /// Any drag.
-    Drag,
-    /// A drag that first goes more up or down than sideways, since one that goes sideways
-    /// scrolls the card's hand (`rows`).
-    UpOrDown,
-    /// A drag that first goes sideways, since a vertical drag scrolls the tray.
-    Sideways,
-}
-
-impl Grip {
-    /// Applies the recognizer's direction and pickup decision to the card's motion.
-    pub fn moved(&mut self, at: Vec2, pickup: Option<(kit_scene::input::Direction, bool)>) {
-        use kit_scene::input::Direction;
-
-        self.at = at;
-        if let Some((direction, ready)) = pickup {
-            self.moved = true;
-            self.held |= ready
-                && match self.hold {
-                    Hold::Never => false,
-                    Hold::Drag => true,
-                    Hold::UpOrDown => direction == Direction::Vertical,
-                    Hold::Sideways => direction == Direction::Horizontal,
-                };
-        }
-    }
-}
-
 /// A card let go, easing from where it was held to where it rests over `FALL_MS`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Fall {
     pub slot: usize,
     pub from: Pose,
-    pub since: u64,
+    pub since: Option<u64>,
 }
 
 impl Fall {
@@ -90,7 +38,8 @@ impl Fall {
 
     /// How much of the fall is done at `now`, from 0 to 1.
     fn share(&self, now: u64, fall_ms: f32) -> f32 {
-        (now.saturating_sub(self.since) as f32 / (fall_ms * MILLISECOND)).min(1.0)
+        let elapsed = self.since.map_or(0, |since| now.saturating_sub(since));
+        (elapsed as f32 / (fall_ms * MILLISECOND)).min(1.0)
     }
 
     pub fn done(&self, now: u64, fall_ms: f32) -> bool {

@@ -33,6 +33,18 @@ impl Client {
         }
     }
 
+    pub(super) fn set_slider(&mut self, press: &Action, rect: kit_ui::input::Rect, x: f32) {
+        use app_screens::screens::settings::{Message, slider_setting};
+        if let Some(setting) = slider_setting(press)
+            && let Some(level) = setting.level()
+        {
+            let to = kit_ui::widgets::level_at(x, rect.x, rect.width);
+            if to != level {
+                self.dispatch(&Action::new(Message::Change(setting.at_level(to))));
+            }
+        }
+    }
+
     pub(super) fn dismiss_menu(&mut self) {
         if self.features.gallery.menu.take().is_some() {
             self.show_screen();

@@ -15,26 +15,6 @@ use super::super::tray_layout::{Held, TrayGrid, landing_at};
 use super::SceneObject;
 
 impl Table {
-    /// The scrolling grid at the pointer, and its viewport.
-    #[must_use]
-    pub fn tray_viewport_at(&self, point: Vec2) -> Option<(usize, Viewport)> {
-        self.tray
-            .grids
-            .iter()
-            .enumerate()
-            .find_map(|(index, grid)| {
-                let point_box = Rect {
-                    x: point.x,
-                    y: point.y,
-                    width: 0.0,
-                    height: 0.0,
-                };
-                self.tray_viewport(index)
-                    .filter(|_| contains(grid.region, point_box))
-                    .map(|viewport| (index, viewport))
-            })
-    }
-
     /// A tray grid's offset and range, through the same recognizer as other scrollers.
     #[must_use]
     pub fn tray_viewport(&self, index: usize) -> Option<Viewport> {
@@ -74,7 +54,9 @@ impl Table {
         )
     }
 
-    fn tray_grid(&self, slot: usize) -> Option<&TrayGrid> {
+    /// The grid containing this card in the tray.
+    #[must_use]
+    pub fn tray_grid_index(&self, slot: usize) -> Option<usize> {
         let index = self
             .tray
             .poses
@@ -83,7 +65,11 @@ impl Table {
         self.tray
             .grids
             .iter()
-            .find(|grid| grid.cards.contains(&index))
+            .position(|grid| grid.cards.contains(&index))
+    }
+
+    fn tray_grid(&self, slot: usize) -> Option<&TrayGrid> {
+        self.tray.grids.get(self.tray_grid_index(slot)?)
     }
 
     /// Shifts the tray destination with the scroll offset. An item entering a box that
