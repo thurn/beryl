@@ -96,6 +96,12 @@ fn the_migration_renumbers_moved_tickets_under_their_parents_and_keeps_their_old
 }
 
 #[test]
+fn a_detached_justiciar_id_keeps_its_j() {
+    assert_eq!(root_letter("JX8K2.1", false), 'J');
+    assert_eq!(root_letter("JX8K2.1", true), 'J');
+}
+
+#[test]
 fn the_migration_leaves_a_tree_that_follows_the_rule_alone() {
     let mut conn = crate::hub::open_in_memory().unwrap();
     seed(&conn, &[("EA", None, 2), ("EA.1", Some("EA"), 1)]);

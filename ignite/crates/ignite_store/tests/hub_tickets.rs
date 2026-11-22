@@ -36,6 +36,25 @@ fn an_epic_tree_starts_with_e_and_a_bare_root_finds_it() {
 }
 
 #[test]
+fn a_justiciar_root_and_its_children_resolve_with_or_without_the_j() {
+    let mut hub = Hub::new();
+    let ids = hub.ids(json!([
+        create("Emergency", None, json!({"labels": ["justiciar"]})),
+        create("Follow-up", Some("$0"), json!({})),
+    ]));
+    let (root, child) = (&ids[0], &ids[1]);
+    assert!(root.starts_with('J'), "{root}");
+    assert_eq!(*child, format!("{root}.1"));
+    for id in &ids {
+        for name in [id.to_ascii_lowercase(), id[1..].to_ascii_lowercase()] {
+            assert_eq!(hub.show(&name).ticket.id.as_str(), id);
+        }
+    }
+    let bare_root = root[1..].to_ascii_lowercase();
+    assert_eq!(hub.list(json!({"search": bare_root})), ids);
+}
+
+#[test]
 fn creates_nested_ids_resolves_aliases_and_lists_using_every_filter() {
     let mut hub = Hub::new();
     let ids = hub.ids(json!([

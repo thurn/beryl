@@ -34,6 +34,7 @@ fn a_repeated_report_comments_on_one_p0_ticket_offered_first() {
     let report = crash("m-1", "jarvis", "crash-1", false);
     let first = justiciar::report(&mut conn, UPKEEP, &report, clock.now()).unwrap();
     assert_eq!(first.change, Change::Created);
+    assert!(first.ticket.starts_with('J'), "{}", first.ticket);
     let filed = ticket(&conn, &first.ticket);
     assert_eq!(filed.priority, 0);
     // An emergency cannot wait for a person to release its ticket.
@@ -121,6 +122,7 @@ fn a_landing_that_master_lacks_for_two_hours_files_one_open_ticket() {
     let filed = justiciar::master_lag(&mut conn, clock.now()).unwrap();
     assert_eq!(filed.len(), 1);
     let lag = ticket(&conn, &filed[0].ticket);
+    assert!(lag.id.as_str().starts_with('J'), "{}", lag.id);
     assert!(lag.body.contains(&landed[0]));
     assert_eq!(lag.title, "master has not moved for 121 minutes");
     assert_eq!(lag.status, Status::Open);

@@ -14,6 +14,7 @@ use ignite_core::protocol::hub::{CheckState, CheckStateChanged, FlakyChecksReply
 use crate::client::session_from_env;
 use crate::ticket::Hub;
 use crate::ticket::http::{Failure, Result, usage};
+use crate::ticket::ids::spelled;
 
 #[derive(Debug, Subcommand)]
 pub enum FlakyCommand {
@@ -79,16 +80,6 @@ fn word(state: CheckState) -> &'static str {
         CheckState::On => "on",
         CheckState::Off => "off",
         CheckState::Uncached => "uncached",
-    }
-}
-
-/// A ticket ID as the commands print it, with its `T` (or an epic's `E`, a meta-ticket's `M`,
-/// an automatic ticket's `A`).
-fn spelled(ticket: &str) -> String {
-    if ticket.starts_with(['T', 'E', 'M', 'A', 'B']) {
-        ticket.to_owned()
-    } else {
-        format!("T{ticket}")
     }
 }
 

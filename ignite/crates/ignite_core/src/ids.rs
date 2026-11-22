@@ -136,10 +136,13 @@ fn check_shape(value: &str) -> Result<(), &'static str> {
     }
 }
 
+/// The letters that start a root ticket ID. Children inherit the letter of their root.
+pub const TICKET_ROOT_PREFIXES: [char; 6] = ['T', 'E', 'M', 'A', 'B', 'J'];
+
 string_id!(
     /// A ticket, such as `TQ44S.9.48`: an epic's ID with one dotted part per level below it.
-    /// The hub mints IDs as a `T` followed by capitals and digits; the shape check accepts any
-    /// case, since lookups by name do too.
+    /// The hub mints IDs with a root letter followed by capitals and digits. The shape check
+    /// accepts any case, since lookups by name do too.
     TicketId,
     "ticket ID",
     ticket_shape

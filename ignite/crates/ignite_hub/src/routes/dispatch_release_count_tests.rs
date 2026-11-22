@@ -123,7 +123,8 @@ fn two_sessions_releasing_a_ticket_hold_it_back_and_file_one_justiciar_ticket() 
 
     let filed = justiciar_tickets(&conn);
     assert_eq!(filed.len(), 1, "{filed:?}");
-    let (_, body, comments) = &filed[0];
+    let (justiciar, body, comments) = &filed[0];
+    assert!(justiciar.starts_with('J'), "{justiciar}");
     assert!(body.contains(id), "{body}");
     for note in ["> The fixture is missing.", "> No fixture here either."] {
         assert!(body.contains(note), "{body}");

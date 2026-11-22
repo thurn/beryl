@@ -1,7 +1,7 @@
 //! Justiciar tickets: P0 tickets for an emergency that stops work and that no ordinary ticket
-//! will fix. They carry the `justiciar` label, which the dispatch queue offers before any other
-//! ticket, and `tier:opus`, because the session that works one has to judge what is wrong and
-//! may change anything to end it (`ignite guide justiciar`).
+//! will fix. New justiciar roots get `J` IDs. The dispatch queue offers tickets carrying the
+//! `justiciar` label first. They use `tier:opus` because the session has to diagnose the problem
+//! and may change anything to end it (`ignite guide justiciar`).
 //!
 //! Three sources:
 //!
@@ -49,8 +49,7 @@ use super::{
     regression_stalls::{self, Stall},
 };
 
-/// The label of a justiciar ticket.
-pub const LABEL: &str = "justiciar";
+pub use ignite_core::protocol::tickets::JUSTICIAR_LABEL as LABEL;
 
 /// The subject of the signature [`master_lag`] files under.
 pub const MASTER_LAG_SUBJECT: &str = "master-lag";

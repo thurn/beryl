@@ -17,6 +17,7 @@ use serde_json::{Value, json};
 use ignite_hub::routes::dispatch::{named_files, resolve_named_file};
 
 use crate::args::PlanCommand;
+use crate::ticket::ids::spelled;
 use crate::ticket::{Failure, Hub};
 
 /// The width of the label column.
@@ -81,14 +82,6 @@ fn epic_name(epic: &Value) -> &str {
 
 fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, Failure> {
     serde_json::from_value(value).map_err(|error| Failure::new(Exit::Usage, error))
-}
-
-fn prefixed(id: &str) -> String {
-    if id.starts_with(['T', 'E', 'M', 'A', 'B']) {
-        id.to_owned()
-    } else {
-        format!("T{id}")
-    }
 }
 
 /// An epic's tickets and the graph around them, ready to be reported on.
@@ -174,7 +167,7 @@ impl Graphs<'_> {
         Reply {
             exit,
             text: lines.join("\n"),
-            json: Some(json!({"epic": prefixed(self.epic), "lines": lines})),
+            json: Some(json!({"epic": spelled(self.epic), "lines": lines})),
             handle: None,
         }
     }
@@ -255,9 +248,9 @@ impl Graphs<'_> {
                         "external edge",
                         &format!(
                             "{} depends on {} outside epic {}",
-                            prefixed(edge.src.as_str()),
-                            prefixed(edge.dst.as_str()),
-                            prefixed(epic)
+                            spelled(edge.src.as_str()),
+                            spelled(edge.dst.as_str()),
+                            spelled(epic)
                         ),
                     )
                 })
@@ -269,7 +262,7 @@ impl Graphs<'_> {
     fn short(&self, id: &str) -> String {
         match id.strip_prefix(self.epic) {
             Some(rest) if rest.starts_with('.') => rest.to_owned(),
-            _ => prefixed(id),
+            _ => spelled(id),
         }
     }
 
@@ -296,7 +289,7 @@ impl Graphs<'_> {
             return "0".to_owned();
         };
         let mut path = chain.iter().rev();
-        let first = path.next().map(|id| prefixed(id)).unwrap_or_default();
+        let first = path.next().map(|id| spelled(id)).unwrap_or_default();
         let rest: Vec<String> = path.map(|id| self.short(id)).collect();
         let tail = rest.iter().fold(String::new(), |mut tail, id| {
             tail.push_str(" > ");

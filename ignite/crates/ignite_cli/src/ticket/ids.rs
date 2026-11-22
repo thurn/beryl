@@ -1,10 +1,9 @@
-//! How ticket IDs are spelled in output. The hub stores an ID as it is printed, a `T` (an `E`
-//! for a root created as an epic, an `M` for a meta-ticket, an `A` for a ticket Ignite filed on
-//! its own) and then capitals (`TQ44S.7`,
-//! `EQ44S.7`), and accepts any case, with or without the letter, on input. A hub from
-//! before that stored a bare lowercase ID (`q44s.7`), so an ID without its `T` still gets one.
+//! How ticket IDs are spelled in output. The hub stores IDs with a root letter followed by
+//! capitals and digits. A hub from before that stored bare lowercase IDs such as `q44s.7`.
+//! The CLI adds a `T` to those IDs when printing them.
 //! Aliases from earlier trackers and anything a person wrote are printed as stored.
 
+use ignite_core::ids::TICKET_ROOT_PREFIXES;
 use serde_json::Value;
 
 /// Removes the long free-form fields, keeping the IDs and which tickets are selected.
@@ -34,7 +33,7 @@ pub fn brief(value: &mut Value) {
     }
 }
 
-/// Spells every ticket ID in a hub reply with its `T`.
+/// Spells every ticket ID in a hub reply with its root letter.
 pub fn display(value: &mut Value) {
     match value {
         Value::Array(rows) => rows.iter_mut().for_each(display),
@@ -88,21 +87,19 @@ pub fn display(value: &mut Value) {
     }
 }
 
-/// One ticket ID spelled with its letter: `T`, or the `E`, `M`, `A` or `B` of an epic, a
-/// meta-ticket, a ticket Ignite filed on its own or a bug report.
+/// One ticket ID spelled with its root letter.
 pub fn spelled(id: &str) -> String {
-    let mut value = Value::String(id.to_owned());
-    prefix(&mut value);
-    value.as_str().unwrap_or(id).to_owned()
+    if id.starts_with(TICKET_ROOT_PREFIXES) {
+        id.to_owned()
+    } else {
+        format!("T{id}")
+    }
 }
 
-/// Adds the `T` an ID from before IDs were stored in capitals lacks. An epic's ID may start
-/// with a capital `E` (`EQ44S`), a meta-ticket's with a capital `M` (`MAB12`) and an automatic
-/// ticket's with a capital `A` (`AR2D2`) and a bug report's with a capital `B` (`BX9K2`), which no such older ID does, since those were
-/// lowercase.
+/// Adds the `T` that an older, lowercase ID lacks.
 fn prefix(value: &mut Value) {
     if let Value::String(id) = value
-        && !id.starts_with(['T', 'E', 'M', 'A', 'B'])
+        && !id.starts_with(TICKET_ROOT_PREFIXES)
     {
         id.insert(0, 'T');
     }
@@ -116,7 +113,7 @@ mod tests {
     #[test]
     fn ids_get_a_t_and_user_text_is_left_alone() {
         let mut output = json!({
-            "id": "q44s.7", "parent": "q44s", "children": ["q44s.7.1"],
+            "id": "q44s.7", "parent": "q44s", "children": ["q44s.7.1", "JX8K2"],
             "edges": [{"src": "q44s.7", "dst": "tccc"}],
             "blocked_by": [{"id": "tccc", "rule": 2}],
             "comments": [{"ticket": "q44s.7", "text": "q44s"}],
@@ -127,7 +124,7 @@ mod tests {
         assert_eq!(
             output,
             json!({
-                "id": "Tq44s.7", "parent": "Tq44s", "children": ["Tq44s.7.1"],
+                "id": "Tq44s.7", "parent": "Tq44s", "children": ["Tq44s.7.1", "JX8K2"],
                 "edges": [{"src": "Tq44s.7", "dst": "Ttccc"}],
                 "blocked_by": [{"id": "Ttccc", "rule": 2}],
                 "comments": [{"ticket": "Tq44s.7", "text": "q44s"}],
@@ -140,6 +137,11 @@ mod tests {
     #[test]
     fn meta_ticket_ids_keep_their_m() {
         assert_eq!(spelled("MAB12.3"), "MAB12.3");
+    }
+
+    #[test]
+    fn justiciar_ticket_ids_keep_their_j() {
+        assert_eq!(spelled("JX8K2"), "JX8K2");
     }
 
     #[test]

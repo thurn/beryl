@@ -64,8 +64,8 @@ pub fn apply(
 }
 
 /// [`apply`] for a batch that Ignite files on its own, such as a regression or a flaky check
-/// found by upkeep: each new root ticket gets an `A` instead of the letter of its type
-/// ([`Filer`]). A child still takes its parent's ID.
+/// found by upkeep. Justiciar roots get `J`, other roots get `A` ([`Filer`]), and children
+/// inherit their parent's ID.
 pub fn apply_automatic(
     conn: &mut Connection,
     batch: &BatchRequest,

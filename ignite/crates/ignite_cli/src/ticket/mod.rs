@@ -3,12 +3,12 @@
 //! new `--allocation`, `--max-workers` and `--cores` flags on `create` and `update`.
 //!
 //! Every write is one `POST /batch`, so it succeeds or fails as a whole. Text output is one line
-//! per ticket; `--json` prints the hub's reply with each ticket ID spelled with its `T`.
+//! per ticket; `--json` prints the hub's reply with each ticket ID spelled with its root letter.
 
 pub mod attach;
 mod build;
 pub mod http;
-mod ids;
+pub(crate) mod ids;
 mod related;
 mod render;
 mod wait;

@@ -207,6 +207,28 @@ fn a_ticket_page_shows_its_sections_links_and_changelog() {
 }
 
 #[test]
+fn a_justiciar_id_in_a_ticket_description_links_to_its_page() {
+    let hub = seeded();
+    hub.conn
+        .execute(
+            "INSERT INTO tickets (id, title, labels, created_at, updated_at, created_by, version)
+             VALUES ('JX8K2', 'Emergency', ?1, ?2, ?2, 'Sim actor', 4992)",
+            [r#"["justiciar"]"#, NOW],
+        )
+        .unwrap();
+    hub.conn
+        .execute(
+            "UPDATE tickets SET body = 'See JX8K2 for details.' WHERE id = 'TQ44S.7.24'",
+            [],
+        )
+        .unwrap();
+
+    let page = hub.text("/TQ44S.7.24");
+    assert!(page.contains("href=\"/JX8K2\" data-hovercard="));
+    assert!(page.contains("<span class=\"c-mono\">JX8K2</span></a>"));
+}
+
+#[test]
 fn subtasks_come_before_the_description() {
     let hub = seeded();
     let page = hub.text("/TQ44S");

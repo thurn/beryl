@@ -11,6 +11,9 @@ use crate::config::Os;
 use crate::ids::{Commit, MachineId, Seq, SessionId, TicketId, TreeId};
 use crate::time::Timestamp;
 
+/// The label that marks a ticket for a justiciar.
+pub const JUSTICIAR_LABEL: &str = "justiciar";
+
 /// A ticket's type.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

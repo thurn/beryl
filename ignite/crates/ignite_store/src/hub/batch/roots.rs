@@ -1,6 +1,6 @@
 //! New root ticket IDs. A root ID is a letter, `T` for a ticket, `E` for an epic, `M` for a
-//! meta-ticket, `A` for a ticket Ignite filed on its own or `B` for a player's bug report, and
-//! then a root of at least four characters (`TQ44S`, `EQ44S`, `MAB12`, `AR2D2`, `BX9K2`).
+//! meta-ticket, `A` for a ticket Ignite filed on its own, `B` for a player's bug report or
+//! `J` for a justiciar ticket, followed by a root of at least four characters.
 //! Children add dotted numbers to their parent's ID, so a whole epic's tree shares its `E`.
 //!
 //! Four characters give 720,896 roots. As they fill, a random four-character root is more
@@ -12,7 +12,8 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-use ignite_core::protocol::tickets::{TicketFields, TicketType};
+pub(crate) use ignite_core::ids::TICKET_ROOT_PREFIXES as PREFIXES;
+use ignite_core::protocol::tickets::{JUSTICIAR_LABEL, TicketFields, TicketType};
 
 use crate::{Result, StoreError};
 
@@ -32,20 +33,16 @@ const MIN_ROOT_LENGTH: usize = 4;
 /// roots, so reaching it means `taken` is wrong, not that the space is full.
 const MAX_ROOT_LENGTH: usize = 8;
 
-/// The letters a root ID starts with: `T` for a ticket, `E` for an epic, `M` for a meta-ticket
-/// `A` for a ticket Ignite filed on its own and `B` for a player's bug report.
-pub(crate) const PREFIXES: [char; 5] = ['T', 'E', 'M', 'A', 'B'];
-
 /// The label that marks a ticket filed from a player's bug report (`by bugs file`).
 pub(crate) const BUG_REPORT_LABEL: &str = "bug-report";
 
-/// Who a batch's new root tickets are filed by, which decides their letter.
+/// Who filed a batch's new root tickets. A justiciar ticket gets `J` from either filer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Filer {
-    /// A person or a session: the letter of the ticket's type ([`prefix_for`]).
+    /// A person or a session, whose tickets use [`prefix_for`].
     Person,
-    /// Ignite on its own, such as upkeep filing a flaky check or a regression: `A` whatever
-    /// the ticket's type, so the tickets nobody asked for are told apart at a glance.
+    /// Ignite on its own, such as upkeep filing a flaky check or a regression. These tickets
+    /// usually get `A`.
     Ignite,
 }
 
@@ -54,28 +51,30 @@ impl Filer {
     pub(super) fn letter(self, fields: &TicketFields) -> char {
         match self {
             Filer::Person => prefix_for(fields),
+            Filer::Ignite if has_label(fields, JUSTICIAR_LABEL) => 'J',
             Filer::Ignite => 'A',
         }
     }
 }
 
-/// The letter a new root ID starts with: `E` for a ticket created as an epic, `M` for a
-/// meta-ticket, `B` for a ticket labelled [`BUG_REPORT_LABEL`], `T` for any other. The `E` records the type at creation: changing a ticket's
-/// type to or from epic later keeps its ID. A child takes its parent's ID whatever its own type.
+/// The letter for a root filed by a person or session. The [`JUSTICIAR_LABEL`] takes precedence.
+/// Other roots use `E` for an epic, `M` for a meta-ticket, `B` for a bug report and `T` for
+/// anything else. The letter records the fields at creation. Children inherit their parent's ID.
 pub(super) fn prefix_for(fields: &TicketFields) -> char {
     match fields.ticket_type {
+        _ if has_label(fields, JUSTICIAR_LABEL) => 'J',
         Some(TicketType::Epic) => 'E',
         Some(TicketType::Meta) => 'M',
-        _ if has_bug_report_label(fields) => 'B',
+        _ if has_label(fields, BUG_REPORT_LABEL) => 'B',
         _ => 'T',
     }
 }
 
-fn has_bug_report_label(fields: &TicketFields) -> bool {
+fn has_label(fields: &TicketFields, label: &str) -> bool {
     fields
         .labels
         .as_ref()
-        .is_some_and(|labels| labels.iter().any(|label| label == BUG_REPORT_LABEL))
+        .is_some_and(|labels| labels.iter().any(|field| field == label))
 }
 
 /// A new root ID: `prefix`, a capital letter and at least three more capitals or digits
@@ -121,12 +120,12 @@ fn taken(conn: &Connection, root: &str) -> Result<bool> {
     let ids = PREFIXES.map(|letter| format!("{letter}{root}"));
     let found: Option<i64> = conn
         .query_row(
-            "SELECT 1 FROM tickets WHERE id IN (?1, ?2, ?3, ?4, ?5) UNION ALL \
+            "SELECT 1 FROM tickets WHERE id IN (?1, ?2, ?3, ?4, ?5, ?6) UNION ALL \
              SELECT 1 FROM aliases WHERE alias IN \
-             (lower(?1), lower(?2), lower(?3), lower(?4), lower(?5)) \
+             (lower(?1), lower(?2), lower(?3), lower(?4), lower(?5), lower(?6)) \
              OR alias LIKE '%-' || lower(?1) OR alias LIKE '%-' || lower(?2) \
              OR alias LIKE '%-' || lower(?3) OR alias LIKE '%-' || lower(?4) \
-             OR alias LIKE '%-' || lower(?5) \
+             OR alias LIKE '%-' || lower(?5) OR alias LIKE '%-' || lower(?6) \
              LIMIT 1",
             ids,
             |row| row.get(0),
@@ -140,17 +139,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_root_used_under_either_letter_is_taken() {
+    fn a_root_used_under_any_letter_is_taken() {
         let conn = crate::hub::open_in_memory().unwrap();
         conn.execute_batch(
             "INSERT INTO tickets (id, title, created_at, created_by, updated_at, version)
                VALUES ('TQ44S', 'Task', 'x', 'x', 'x', 1), ('EM4K2', 'Epic', 'x', 'x', 'x', 1),
                       ('MAB12', 'Meta', 'x', 'x', 'x', 1), ('AXY34', 'Auto', 'x', 'x', 'x', 1),
-                      ('BZ8Z8', 'Bug', 'x', 'x', 'x', 1);
-             INSERT INTO aliases VALUES ('by-er2d2', 'TQ44S');",
+                      ('BZ8Z8', 'Bug', 'x', 'x', 'x', 1), ('JX8K2', 'Justiciar', 'x', 'x', 'x', 1);
+             INSERT INTO aliases VALUES ('by-er2d2', 'TQ44S'), ('by-jh2k4', 'JX8K2');",
         )
         .unwrap();
-        for root in ["Q44S", "M4K2", "AB12", "XY34", "Z8Z8", "R2D2"] {
+        for root in [
+            "Q44S", "M4K2", "AB12", "XY34", "Z8Z8", "X8K2", "R2D2", "H2K4",
+        ] {
             assert!(taken(&conn, root).unwrap(), "{root}");
         }
         assert!(!taken(&conn, "ZZZZ").unwrap());
@@ -182,6 +183,20 @@ mod tests {
         let conn = crate::hub::open_in_memory().unwrap();
         let id = allocate(&conn, 'E').unwrap();
         assert!(id.starts_with('E') && id.len() == 5, "{id}");
+    }
+
+    #[test]
+    fn the_justiciar_label_takes_precedence_for_either_filer() {
+        let fields = TicketFields {
+            ticket_type: Some(TicketType::Epic),
+            labels: Some(vec![
+                BUG_REPORT_LABEL.to_owned(),
+                JUSTICIAR_LABEL.to_owned(),
+            ]),
+            ..TicketFields::default()
+        };
+        assert_eq!(Filer::Person.letter(&fields), 'J');
+        assert_eq!(Filer::Ignite.letter(&fields), 'J');
     }
 
     /// Inserts a ticket for every four-character root, so `allocate` can only find a longer one.

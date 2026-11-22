@@ -93,13 +93,13 @@ fn collect(chars: &[char]) -> String {
     chars.iter().collect()
 }
 
-/// Whether `name` has the shape of the root ID of a meta-ticket or of a ticket Ignite filed on
-/// its own: `M`, `A` or `B` and four capitals or digits (`MAB12`, `AR2D2`, `BX9K2`), which
-/// ordinary words written in capitals rarely are. Roots grow longer once the four-character
-/// ones fill; a longer one must hold a digit (`AQ7XK2`), so words such as `ACTIVE` stay words.
+/// Whether `name` has the shape of a meta-ticket, automatic, bug-report or justiciar root:
+/// `M`, `A`, `B` or `J` and four capitals or digits, which ordinary words written in capitals
+/// rarely are. Roots can grow longer as the four-character space fills. To avoid matching
+/// words such as `ACTIVE`, this check requires a digit in a longer root (`AQ7XK2`).
 fn lettered_root(name: &str) -> bool {
     (5..=9).contains(&name.len())
-        && name.starts_with(['M', 'A', 'B'])
+        && name.starts_with(['M', 'A', 'B', 'J'])
         && name
             .chars()
             .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
@@ -108,7 +108,8 @@ fn lettered_root(name: &str) -> bool {
 
 /// Calls `replace` on each ticket-like word of `text` and keeps the result. Bare names are
 /// replaced only when they begin with `T` or `E`, begin with `<project>-`, are dotted IDs or
-/// have the shape of a meta-ticket's or an automatic ticket's root, because a lone root such as `fix` is an ordinary word.
+/// have the shape of a root ID with one of the other letters. A lone root such as `fix`
+/// can also be an ordinary word.
 pub fn mentions(project: &str, text: &str, replace: &mut dyn FnMut(&str) -> String) -> String {
     let chars: Vec<char> = text.chars().collect();
     let prefix = format!("{project}-");
