@@ -36,6 +36,7 @@ mod flat_text;
 mod game_compact;
 mod game_over;
 mod gesture;
+mod hand_cost;
 mod hud;
 mod inspect;
 mod lobby;

@@ -201,10 +201,19 @@ impl Badges {
                 annotations: Default::default(),
             },
         );
+        // The web draws the resting costs over the entire fan, including the glow of the
+        // next playable card. A moving or dragged card still takes its cost with it.
+        let on = On {
+            band: match on.band {
+                Band::TableMarks => Band::TableOverlays,
+                band => band,
+            },
+            ..*on
+        };
         let mut x = right - width;
         for block in blocks().take(shown) {
             let at = Affine3A::from_translation(Vec3::new(x, bottom + disc, height));
-            self.write_symbol(block, (card * at, disc), on, builder);
+            self.write_symbol(block, (card * at, disc), &on, builder);
             x += disc + gap;
         }
     }
@@ -230,15 +239,20 @@ impl Badges {
                     at.extend(height),
                 )
         };
+        // The web draws the ring outside the disc with a box shadow. Extend the panel so
+        // its border leaves the same space between the glyph and the ring.
+        let ring = self.tuning().cost.ring * self.cost_em();
+        let outer = disc + 2.0 * ring;
+        let size = Vec2::splat(outer);
         builder.draw(
             on.band,
             Draw::panel(
-                quad(Vec2::new(disc, -disc) / 2.0, Vec2::splat(disc), 0.0),
+                quad(Vec2::new(disc, -disc) / 2.0, size, 0.0),
                 faded(symbol.color, on.opacity),
                 faded(badge::COST_RING, on.opacity),
-                Vec2::splat(disc),
-                disc / 2.0,
-                self.tuning().cost.ring * self.cost_em(),
+                size,
+                outer / 2.0,
+                ring,
             ),
         );
         // Millimetres per point of the shaped symbol, and how far its glyphs stand above the disc.

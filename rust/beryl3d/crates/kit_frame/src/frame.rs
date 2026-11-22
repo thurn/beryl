@@ -267,6 +267,8 @@ pub enum Band {
     TableMarks,
     /// Marks on cards above the table: in flight, in a hand, on the stack, held up to be read.
     RaisedMarks,
+    /// Decorations in front of raised objects and their marks, below objects in flight.
+    TableOverlays,
     /// Glows and streaks.
     Glows,
     /// Particles, which only the Enhanced tier draws: blended, tested against the depth
