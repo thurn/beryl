@@ -447,7 +447,7 @@ fn fleet_put_turns_off_dispatch_and_the_next_heartbeat_carries_the_policy() {
                 "version": version,
                 "settings": {
                     "version": version,
-                    "machines": {"jarvis": {"state": state, "disk_cap_gb": 450}},
+                    "machines": {"jarvis": {"state": state, "tree_space_gb": 450}},
                     "providers": {}
                 }
             }))
@@ -469,7 +469,7 @@ fn fleet_put_turns_off_dispatch_and_the_next_heartbeat_carries_the_policy() {
     assert_eq!(policy["version"], 1);
     assert_eq!(policy["state"], "off");
     assert_eq!(policy["state_actor"], "operator");
-    assert_eq!(policy["disk_cap_gb"], 450);
+    assert_eq!(policy["tree_space_gb"], 450);
     assert_eq!(policy["off_platforms"], json!(["macos"]));
     assert_eq!(policy["holds"]["codex"].as_array().unwrap().len(), 1);
 

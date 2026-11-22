@@ -34,7 +34,6 @@ pub struct Allocations {
 #[serde(default)]
 pub struct MachineSetting {
     pub state: MachineState,
-    pub disk_cap_gb: Option<u32>,
     #[serde(flatten)]
     pub trees: TreeSettings,
 }
@@ -248,10 +247,7 @@ pub fn summary(before: &FleetSettings, after: &FleetSettings) -> String {
     {
         match after.machines.get(name) {
             Some(setting) if before.machines.get(name) != Some(setting) => {
-                let cap = setting
-                    .disk_cap_gb
-                    .map_or_else(|| "auto".to_owned(), |gb| format!("{gb} GB"));
-                let mut change = format!("machine {name}: {}, disk cap {cap}", setting.state);
+                let mut change = format!("machine {name}: {}", setting.state);
                 let previous = before.machine(name).trees;
                 let trees = &setting.trees;
                 if previous.trees_root != trees.trees_root {
@@ -328,7 +324,6 @@ pub struct FleetNotice {
     pub state: MachineState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state_actor: Option<String>,
-    pub disk_cap_gb: Option<u32>,
     #[serde(default, flatten)]
     pub trees: TreeSettings,
     pub off_platforms: BTreeSet<Os>,
@@ -393,7 +388,6 @@ mod tests {
         let settings = FleetSettings::default();
         assert_eq!(settings.version, 0);
         assert_eq!(settings.machine("host").state, MachineState::Active);
-        assert_eq!(settings.machine("host").disk_cap_gb, None);
         assert!(settings.provider("agent").enabled);
         assert_eq!(settings.provider("agent").share, 0);
         assert_eq!(settings.provider("agent").stop_percent, 99);

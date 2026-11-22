@@ -688,7 +688,7 @@ fn a_machine_state_edit_preserves_concurrent_fleet_changes() {
                 if body["version"] == 1 {
                     return (409, json!({
                         "version": 2, "machines": {"host": {
-                            "state": "active", "disk_cap_gb": 350,
+                            "state": "active",
                             "trees_root": "/Volumes/Builds/trees", "tree_space_gb": "auto",
                             "tree_ceiling_gb": 100
                         }},
@@ -697,7 +697,7 @@ fn a_machine_state_edit_preserves_concurrent_fleet_changes() {
                 }
                 assert_eq!(body["version"], 2);
                 assert_eq!(body["settings"]["machines"]["host"], json!({
-                    "state": "checks-only", "disk_cap_gb": 350,
+                    "state": "checks-only",
                     "trees_root": "/Volumes/Builds/trees", "tree_space_gb": "auto",
                     "tree_ceiling_gb": 100
                 }));

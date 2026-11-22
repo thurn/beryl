@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn fleet_shows_the_latest_machine_snapshot() {
-    use ignite_core::capacity::{CapacityReport, DiskLimitSource, ProviderCapacity};
+    use ignite_core::capacity::{BuildSpaceReport, CapacityReport, ProviderCapacity};
     use ignite_core::protocol::machine_state::{MachineSnapshot, ReclaimableDisk, StartBlock};
 
     let conn = seeded();
@@ -43,8 +43,12 @@ fn fleet_shows_the_latest_machine_snapshot() {
         worker_room: 2,
         free_memory_mb: Some(9000),
         free_disk_gb: Some(67),
-        disk_budget_gb: 300,
-        disk_budget_source: Some(DiskLimitSource::Cap),
+        build_space: Some(BuildSpaceReport {
+            slots: 6,
+            free: 2,
+            ceiling_gb: 100,
+            largest_tree_bytes: Some(84_500_000_000),
+        }),
         queue_seconds: 25.5,
         free_trees: vec![vec![], vec![]],
         leased_trees: [("work".parse().unwrap(), vec![])].into(),
@@ -66,7 +70,7 @@ fn fleet_shows_the_latest_machine_snapshot() {
         "15 admitted, 4 free, 6 busy outside Ignite",
         "Free memory",
         "9000 MB",
-        "67 GiB free, 300 GB budget (set by the cap)",
+        "6 build slots, 2 free, 100 GB tree ceiling, largest tree 84.5 GB",
         "1 leased, 2 free",
         "Longest wait for cores",
         "25.5 s",
@@ -90,7 +94,7 @@ fn fleet_shows_the_latest_machine_snapshot() {
 
 #[test]
 fn fleet_greys_stale_capacity_and_shows_the_last_dispatch_reason() {
-    use ignite_core::capacity::{CapacityReport, DiskLimitSource};
+    use ignite_core::capacity::CapacityReport;
     use ignite_core::config::Os;
     use ignite_core::protocol::hub::{MachineFree, NextReply};
     use ignite_core::protocol::machine_state::MachineSnapshot;
@@ -109,11 +113,7 @@ fn fleet_greys_stale_capacity_and_shows_the_last_dispatch_reason() {
         "ready_tickets": 0,
     }))
     .unwrap();
-    let report = CapacityReport {
-        disk_budget_gb: 500,
-        disk_budget_source: Some(DiskLimitSource::Disk),
-        ..CapacityReport::default()
-    };
+    let report = CapacityReport::default();
     hub::machine_snapshots::record(&conn, "m-c", &snapshot, Some(&report)).unwrap();
     snapshot.at = now.plus_seconds(-4.0);
     hub::machine_snapshots::record(&conn, "m-c", &snapshot, None).unwrap();
@@ -155,9 +155,7 @@ fn fleet_greys_stale_capacity_and_shows_the_last_dispatch_reason() {
 
     let body = page(&conn, "/fleet");
     assert!(body.contains("Stale · sampled 61 s ago"));
-    assert!(body.contains(
-        r#"<span class="c-muted">free space unknown, 500 GB budget (set by the disk)</span>"#
-    ));
+    assert!(body.contains(r#"<span class="c-muted">Build slots unreported</span>"#));
     assert!(body.contains(&format!("{reason} (asked 0 s ago)")));
     assert!(hub::capacity::latest(&conn, now).unwrap().is_empty());
 }

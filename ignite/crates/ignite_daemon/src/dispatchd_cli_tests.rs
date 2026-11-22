@@ -593,9 +593,10 @@ fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
         written_at: Some(now),
         tree: None,
     };
+    let pressure = || Ok(rig.headless_dispatch.pressure(now));
     records.write(&record).unwrap();
     assert!(matches!(
-        records.deliver(rig.ctx.hub.as_ref(), &record, Ok(None)),
+        records.deliver(rig.ctx.hub.as_ref(), &record, pressure()),
         Err(Error::Unreachable(_))
     ));
     assert_eq!(
@@ -611,7 +612,7 @@ fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
                     rig.headless_dispatch
                         .chain(&rig.ctx, &landed.ticket, next, landed.fresh);
                 },
-                || Ok(None),
+                pressure,
             )
             .unwrap();
     };

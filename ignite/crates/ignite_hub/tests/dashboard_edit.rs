@@ -359,7 +359,7 @@ families = ["rust"]
     for name in ["jarvis", "cygnus"] {
         let setting = &seeded.settings.machines[name];
         assert_eq!(setting.state, MachineState::Active);
-        assert_eq!(setting.disk_cap_gb, None);
+        assert_eq!(setting.trees, ignite_core::fleet::TreeSettings::default());
     }
     assert_eq!(seeded.settings.providers.len(), 2);
     for name in ["claude", "codex"] {
@@ -401,7 +401,12 @@ fn allocation_controls_round_trip_fleet_and_epic_weights() {
     let mut current = get_fleet(address).settings;
     assert_eq!(current.allocations, desired.allocations);
     current.allocations = None; // A client from before allocation updates an unrelated setting.
-    current.machines.get_mut("m1").unwrap().disk_cap_gb = Some(200);
+    current
+        .machines
+        .get_mut("m1")
+        .unwrap()
+        .trees
+        .tree_ceiling_gb = 200;
     assert_eq!(put_fleet(address, BROWSER, &current).0, 200);
     assert_eq!(get_fleet(address).settings.allocations, desired.allocations);
     let (_, pool) = send(address, "GET", "/pool", &BROWSER[..1], "");

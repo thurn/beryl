@@ -46,6 +46,8 @@ fn six_workers_balance_at_four_and_two_and_refill_the_pool_that_finished() {
     }
     ops.push(json!({"op":"create","parent":"$1","fields":{"title":"First narrow ticket","allocation":900}}));
     let ids = write(&mut conn, &json!(ops));
+    conn.execute("UPDATE tickets SET cores = 0.1 WHERE type = 'task'", [])
+        .unwrap();
     let wide = format!("{}.", ids[0]);
     let narrow = format!("{}.", ids[1]);
     let mut handoffs = Vec::new();
@@ -133,7 +135,11 @@ fn source_pool_and_general_pool_can_be_parked_without_stopping_a_regression() {
 fn a_database_from_before_allocation_keeps_its_eligible_and_parked_work() {
     let mut conn = Connection::open_in_memory().unwrap();
     let migrations = hub::MIGRATIONS;
-    ignite_store::migrate::apply(&mut conn, &migrations[..migrations.len() - 1]).unwrap();
+    let before_allocation = migrations
+        .iter()
+        .position(|migration| migration.version == 46)
+        .unwrap();
+    ignite_store::migrate::apply(&mut conn, &migrations[..before_allocation]).unwrap();
     conn.execute_batch(
         "INSERT INTO tickets (id, parent, type, title, workers, status, priority,
                               assignee, created_at, updated_at, created_by, version)

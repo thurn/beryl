@@ -46,7 +46,7 @@ pub(in crate::trees) fn directories(tree: &Path, outputs: &BTreeSet<String>) -> 
     dirs
 }
 
-fn size(dirs: &[PathBuf]) -> io::Result<u64> {
+pub(in crate::trees) fn size(dirs: &[PathBuf]) -> io::Result<u64> {
     dirs.iter()
         .filter(|path| {
             !dirs

@@ -198,7 +198,15 @@ pub fn migrate_pauses(conn: &mut Connection, now: Timestamp) -> Result<()> {
     Ok(())
 }
 
-/// Who last changed this machine's state. Disk cap and provider edits do not affect attribution.
+/// Re-encode the current settings using the tree-space fields and discard the retired cap.
+pub(super) fn migrate_disk_cap(conn: &rusqlite::Transaction<'_>) -> Result<()> {
+    if let Some(settings) = meta::get::<FleetSettings>(conn, KEY)? {
+        meta::put(conn, KEY, &settings)?;
+    }
+    Ok(())
+}
+
+/// Who last changed this machine's state. Tree and provider edits do not affect attribution.
 pub fn state_actor(conn: &Connection, name: &str) -> Result<Option<String>> {
     Ok(conn.query_row(
         "SELECT actor FROM (
@@ -281,7 +289,7 @@ pub fn changes(conn: &Connection, limit: u32) -> Result<Vec<FleetChange>> {
 mod tests {
     use super::*;
     use crate::hub::open_in_memory;
-    use ignite_core::fleet::{MachineSetting, MachineState, ProviderSetting};
+    use ignite_core::fleet::{MachineSetting, MachineState, ProviderSetting, TreeSettings};
 
     #[test]
     fn legacy_pauses_move_into_settings_and_leave_the_global_pause_in_force() {
@@ -298,8 +306,10 @@ mod tests {
             "host".to_owned(),
             MachineSetting {
                 state: MachineState::Active,
-                disk_cap_gb: Some(150),
-                ..MachineSetting::default()
+                trees: TreeSettings {
+                    tree_ceiling_gb: 150,
+                    ..TreeSettings::default()
+                },
             },
         );
         put(&mut conn, 0, initial, "ignite.toml", now).unwrap();
@@ -311,8 +321,10 @@ mod tests {
             stored.machine("host"),
             MachineSetting {
                 state: MachineState::ChecksOnly,
-                disk_cap_gb: Some(150),
-                ..MachineSetting::default()
+                trees: TreeSettings {
+                    tree_ceiling_gb: 150,
+                    ..TreeSettings::default()
+                }
             }
         );
         assert_eq!(
@@ -326,8 +338,13 @@ mod tests {
         migrate_pauses(&mut conn, now).unwrap();
         assert_eq!(settings(&conn).unwrap(), stored);
 
-        stored.machines.get_mut("host").unwrap().disk_cap_gb = Some(100);
-        put(&mut conn, 2, stored, "disk operator", now).unwrap();
+        stored
+            .machines
+            .get_mut("host")
+            .unwrap()
+            .trees
+            .tree_ceiling_gb = 100;
+        put(&mut conn, 2, stored, "tree operator", now).unwrap();
         assert_eq!(
             state_actor(&conn, "host").unwrap().as_deref(),
             Some("legacy pool pause")
@@ -353,8 +370,10 @@ mod tests {
             "host".to_owned(),
             MachineSetting {
                 state: MachineState::ChecksOnly,
-                disk_cap_gb: Some(200),
-                ..MachineSetting::default()
+                trees: TreeSettings {
+                    tree_ceiling_gb: 200,
+                    ..TreeSettings::default()
+                },
             },
         );
         proposed.providers.insert(
@@ -383,7 +402,7 @@ mod tests {
             seq: 1,
             at: now,
             actor: "operator".to_owned(),
-            summary: "machine host: checks-only, disk cap 200 GB | provider codex: on, share 50, stop at 99%".to_owned(),
+            summary: "machine host: checks-only, tree ceiling 200 GB | provider codex: on, share 50, stop at 99%".to_owned(),
             settings: written.clone(),
         }]);
 
@@ -454,15 +473,37 @@ mod tests {
     }
 
     #[test]
-    fn legacy_fleet_json_preserves_the_cap_and_supplies_tree_defaults() {
-        let conn = open_in_memory().unwrap();
-        conn.execute(
-            "INSERT INTO meta (key, value) VALUES ('fleet', ?1)",
-            [r#"{"version":2,"machines":{"host":{"state":"checks-only","disk_cap_gb":200}},"providers":{}}"#],
-        ).unwrap();
-        let machine = settings(&conn).unwrap().machine("host");
-        assert_eq!(machine.disk_cap_gb, Some(200));
-        assert_eq!(machine.trees, ignite_core::fleet::TreeSettings::default());
+    fn fleet_migration_drops_the_cap_and_keeps_the_other_settings() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        let migrations = super::super::MIGRATIONS;
+        let before_cap_removal = migrations
+            .iter()
+            .position(|entry| entry.version == 47)
+            .unwrap();
+        crate::migrate::apply(&mut conn, &migrations[..before_cap_removal]).unwrap();
+        let retired_key = concat!("disk_", "cap_gb");
+        let old = serde_json::json!({
+            "version": 2, "machines": {"host": {
+                "state": "checks-only", (retired_key): 200, "tree_space_gb": 350
+            }}, "providers": {"codex": {"enabled": true, "share": 3, "stop_percent": 99}}
+        });
+        meta::put(&conn, KEY, &old).unwrap();
+
+        crate::migrate::apply(&mut conn, migrations).unwrap();
+        let stored: serde_json::Value = meta::get(&conn, KEY).unwrap().unwrap();
+        assert!(stored["machines"]["host"].get(retired_key).is_none());
+        let saved = settings(&conn).unwrap();
+        assert_eq!(saved.version, 2);
+        assert_eq!(saved.machine("host").state, MachineState::ChecksOnly);
+        assert_eq!(
+            saved.machine("host").trees.tree_space_gb,
+            Some(TreeSpace::Gigabytes(350))
+        );
+        assert_eq!(
+            saved.machine("host").trees.tree_ceiling_gb,
+            ignite_core::fleet::DEFAULT_TREE_CEILING_GB
+        );
+        assert_eq!(saved.provider("codex").share, 3);
     }
 
     #[test]

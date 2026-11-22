@@ -1,6 +1,6 @@
 //! Capacity derived from machine measurements and reported to the hub.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -57,18 +57,51 @@ pub struct CapacityReport {
     pub worker_room: u32,
     pub free_memory_mb: Option<u64>,
     pub memory_pressed: bool,
-    /// Free volume space in GiB, matching the dispatch disk thresholds.
+    /// Free volume space in GiB.
     pub free_disk_gb: Option<u64>,
-    /// The trees' budget in decimal GB, matching the configured disk cap.
+    /// Kept on the wire for hubs that still require this field.
     pub disk_budget_gb: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub disk_budget_source: Option<DiskLimitSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_space: Option<BuildSpaceReport>,
+    /// Leases already included in the occupied count of the build-space report.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub slot_holders: BTreeSet<TicketId>,
     pub queue_seconds: f64,
     /// Configured build output directories, whether or not any tree holds them.
     pub outputs: Vec<String>,
     pub free_trees: Vec<Vec<String>>,
     pub leased_trees: BTreeMap<TicketId, Vec<String>>,
     pub providers: Vec<ProviderCapacity>,
+}
+
+/// Capacity and sizes of the machine's managed build trees.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuildSpaceReport {
+    pub slots: u32,
+    pub free: u32,
+    pub ceiling_gb: u32,
+    pub largest_tree_bytes: Option<u64>,
+}
+
+impl std::fmt::Display for BuildSpaceReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} build slots, {} free, {} GB tree ceiling",
+            self.slots, self.free, self.ceiling_gb
+        )?;
+        if let Some(bytes) = self.largest_tree_bytes {
+            write!(
+                f,
+                ", largest tree {:.1} GB",
+                bytes as f64 / BYTES_PER_GB as f64
+            )
+        } else {
+            f.write_str(", largest tree unmeasured")
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,7 +162,7 @@ pub fn resource_slots(logical_cores: u32, per_core: f64) -> u32 {
 
 /// Fleet tree sizes use decimal gigabytes.
 pub const BYTES_PER_GB: u64 = 1_000_000_000;
-/// Legacy handoff reports express disk space in gibibytes.
+/// Free disk readings use gibibytes.
 pub const BYTES_PER_GIB: u64 = 1 << 30;
 /// Memory left for other processes after starting a worker, in megabytes.
 const WORKER_MEMORY_RESERVE_MB: u64 = 1_024;

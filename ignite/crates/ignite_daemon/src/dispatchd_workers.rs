@@ -193,6 +193,8 @@ pub(crate) fn capacity_report(
         free_disk_gb: sample.pressure.free_gb,
         disk_budget_gb: 0,
         disk_budget_source: None,
+        build_space: None,
+        slot_holders: sample.pressure.slot_holders.clone(),
         queue_seconds,
         outputs: sample.pressure.outputs.clone(),
         free_trees: sample.pressure.free_trees.clone(),

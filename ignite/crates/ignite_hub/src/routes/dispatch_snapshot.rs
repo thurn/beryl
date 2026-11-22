@@ -132,10 +132,7 @@ fn project_next_start(
                 )
                 .is_ok()
         });
-    let budget = capacity
-        .disk
-        .as_ref()
-        .expect("sample supplied disk pressure");
+    let budget = &capacity.budget;
     let mut next = None;
     for ticket in candidates {
         result.ready_tickets += 1;
@@ -151,7 +148,6 @@ fn project_next_start(
     }
     if let Some((ticket, block)) = next {
         result.next_ticket = Some(ticket.id.clone());
-        result.next_ticket_disk_gib = Some(budget.disk_target_gib(ticket));
         if let Some((block, reason)) = block {
             result.start_block = Some(block);
             result.start_reason = Some(reason);
@@ -244,6 +240,9 @@ fn ticket_block(
         ));
     }
     budget
-        .blocked(ticket)
+        .blocked(
+            ticket,
+            free.name.as_deref().unwrap_or(free.machine.as_str()),
+        )
         .and_then(|HandoffWait { block, reason, .. }| block.map(|block| (block, reason)))
 }

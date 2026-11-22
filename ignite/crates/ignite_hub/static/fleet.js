@@ -42,7 +42,6 @@
                 ]))
                 : {
                     state: "active",
-                    disk_cap_gb: null,
                     trees_root: null,
                     tree_space_gb: null,
                     tree_ceiling_gb: Number(row.querySelector('[data-fleet-field="tree_ceiling_gb"]').defaultValue),

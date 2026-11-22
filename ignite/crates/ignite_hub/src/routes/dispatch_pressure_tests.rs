@@ -1,10 +1,9 @@
-//! The same disk and queue budget applies both to polling and to lane successors.
+//! The same build slot and queue limits applies both to polling and to lane successors.
 
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
-use ignite_core::capacity::BYTES_PER_GIB;
-use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, DispatchPressure, TreeCap};
+use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, DispatchPressure};
 use ignite_core::ids::TicketId;
 use ignite_store::hub;
 
@@ -47,41 +46,58 @@ fn polling_reserves_an_ordinary_ticket_when_the_queue_is_long_and_the_host_has_r
 }
 
 #[test]
-fn a_pending_reservation_uses_its_warm_tree_and_a_cold_ticket_waits() {
+fn a_build_ticket_waits_for_a_slot_but_a_light_ticket_can_start() {
     let mut conn = hub::open_in_memory().unwrap();
-    let ids = file(
-        &mut conn,
-        &[
-            ("first", &[], &[]),
-            ("second", &[], &[]),
-            ("docs", &[], &[]),
-        ],
-    );
+    register(&mut conn);
+    let ids = file(&mut conn, &[("build", &[], &[]), ("docs", &[], &[])]);
     classify(&conn, &ids[0], 1.0, "Edit `app/src/main.rs`");
-    classify(&conn, &ids[1], 1.0, "Edit `app/src/main.rs`");
-    classify(&conn, &ids[2], 0.1, "Edit `docs/guide.md`");
+    classify(&conn, &ids[1], 0.1, "Edit `docs/guide.md`");
     let mut pressure = DispatchPressure {
-        free_gb: Some(75),
-        outputs: vec!["app/target".to_owned()],
-        free_trees: vec![vec!["app/target".to_owned()], vec![]],
+        build_slots: 6,
+        free_gb: Some(300),
+        ..DispatchPressure::default()
+    };
+    assert_eq!(
+        ask(&mut conn, "local_a", &pressure, 0.0)["ticket"],
+        ids[1].as_str()
+    );
+    let waiting = ask(&mut conn, "local_b", &pressure, 1.0);
+    assert!(
+        waiting["nothing"]
+            .as_str()
+            .unwrap()
+            .contains("waits for a build slot on jarvis: 6 of 6 held"),
+        "{waiting}"
+    );
+
+    pressure.build_slots_free = 1;
+    assert_eq!(
+        ask(&mut conn, "local_b", &pressure, 2.0)["ticket"],
+        ids[0].as_str()
+    );
+}
+
+#[test]
+fn a_reservation_counts_until_its_claim_already_holds_a_slot() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let ids = file(&mut conn, &[("first", &[], &[]), ("second", &[], &[])]);
+    for ticket in &ids {
+        classify(&conn, ticket, 1.0, "Edit `app/src/main.rs`");
+    }
+    let mut pressure = DispatchPressure {
+        build_slots: 2,
+        build_slots_free: 1,
         ..DispatchPressure::default()
     };
     let first = ask(&mut conn, "local_a", &pressure, 0.0);
     assert_eq!(first["ticket"], ids[0].as_str());
     assert_eq!(ask(&mut conn, "local_a", &pressure, 1.0), first);
-    assert_eq!(
-        ask(&mut conn, "local_b", &pressure, 1.0)["ticket"],
-        ids[2].as_str()
-    );
-    let held = ask(&mut conn, "local_c", &pressure, 1.0);
+    let waiting = ask(&mut conn, "local_b", &pressure, 1.0);
     assert!(
-        held["nothing"]
-            .as_str()
-            .unwrap()
-            .contains("12 GB available"),
-        "{held}"
+        waiting["nothing"].as_str().unwrap().contains("2 of 2 held"),
+        "{waiting}"
     );
-    assert_eq!(held["reclaim_to_gb"], 103, "{held}");
+
     let (status, _) = post(
         &mut conn,
         "/claims",
@@ -89,59 +105,38 @@ fn a_pending_reservation_uses_its_warm_tree_and_a_cold_ticket_waits() {
         at(2.0),
     );
     assert_eq!(status, 200);
-    let warm = pressure.free_trees.remove(0);
-    pressure.leased.insert(ids[0].clone(), warm);
-    pressure.free_gb = Some(103);
+    assert!(ask(&mut conn, "local_b", &pressure, 3.0)["nothing"].is_string());
+
+    // The first ticket has taken a slot, and another slot became free in the meantime.
+    pressure.slot_holders.insert(ids[0].clone());
     assert_eq!(
-        ask(&mut conn, "local_c", &pressure, 2.0)["ticket"],
+        ask(&mut conn, "local_b", &pressure, 4.0)["ticket"],
         ids[1].as_str()
     );
 }
 
 #[test]
-fn work_waits_for_tree_budget_headroom_even_with_room_above_the_floor() {
-    for fleet_cap in [true, false] {
-        let mut conn = hub::open_in_memory().unwrap();
-        let ids = file(&mut conn, &[("first", &[], &[]), ("second", &[], &[])]);
-        for ticket in &ids {
-            classify(&conn, ticket, 1.0, "Edit `app/src/main.rs`");
-        }
-        let mut pressure = DispatchPressure {
-            free_gb: Some(if fleet_cap { 300 } else { 170 }),
-            disk_reserve_gib: Some(100),
-            tree_cap: fleet_cap.then_some(TreeCap {
-                limit_gb: 200,
-                used_bytes: 120 * BYTES_PER_GIB,
-            }),
-            ..DispatchPressure::default()
-        };
-        assert_eq!(
-            ask(&mut conn, "local_a", &pressure, 0.0)["ticket"],
-            ids[0].as_str()
-        );
-        let expected = if fleet_cap {
-            ("Fleet tree disk cap", 314)
-        } else {
-            ("automatic tree disk budget", 180)
-        };
-        for now in [1.0, 2.0] {
-            let waiting = ask(&mut conn, "local_b", &pressure, now);
-            assert!(
-                waiting["nothing"].as_str().unwrap().contains(expected.0),
-                "{waiting}"
-            );
-            assert_eq!(waiting["reclaim_to_gb"], expected.1, "{waiting}");
-        }
-        if let Some(cap) = &mut pressure.tree_cap {
-            cap.used_bytes = 106 * BYTES_PER_GIB;
-        } else {
-            pressure.free_gb = Some(180);
-        }
-        assert_eq!(
-            ask(&mut conn, "local_b", &pressure, 3.0)["ticket"],
-            ids[1].as_str()
-        );
-    }
+fn a_daemon_without_slot_fields_can_only_receive_light_work() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let ids = file(&mut conn, &[("build", &[], &[]), ("docs", &[], &[])]);
+    classify(&conn, &ids[0], 1.0, "Edit `app/src/main.rs`");
+    classify(&conn, &ids[1], 0.1, "Edit `docs/guide.md`");
+    let mut request = free("m-1", &["local_a"]);
+    request["pressure"] = json!({
+        "free_gb": 300, "recovery_seconds": 0, "queue_seconds": 0,
+        "outputs": [], "free_trees": [], "leased": {}
+    });
+    request["explain"] = json!(true);
+    let (status, reservation) = post(&mut conn, "/next", &request, at(0.0));
+    assert_eq!(status, 200, "{reservation}");
+    assert_eq!(reservation["ticket"], ids[1].as_str());
+    request["idle_workers"] = free("m-1", &["local_b"])["idle_workers"].clone();
+    let (status, waiting) = post(&mut conn, "/next", &request, at(1.0));
+    assert_eq!(status, 200, "{waiting}");
+    assert!(
+        waiting["nothing"].as_str().unwrap().contains("0 of 0 held"),
+        "{waiting}"
+    );
 }
 
 #[test]
@@ -158,7 +153,8 @@ fn build_handoffs_start_in_threes_then_wait_for_recovery_and_ramp_one_at_a_time(
         ],
     );
     let mut pressure = DispatchPressure {
-        free_gb: Some(500),
+        build_slots: 6,
+        build_slots_free: 6,
         ..DispatchPressure::default()
     };
     for (index, session) in ["local_a", "local_b", "local_c"].into_iter().enumerate() {
@@ -194,7 +190,7 @@ fn build_handoffs_start_in_threes_then_wait_for_recovery_and_ramp_one_at_a_time(
 }
 
 #[test]
-fn a_landing_can_close_while_its_lane_successor_waits_for_disk_space() {
+fn a_landing_can_close_while_its_lane_successor_waits_for_a_build_slot() {
     let mut conn = hub::open_in_memory().unwrap();
     register(&mut conn);
     let ids = file(
@@ -210,7 +206,7 @@ fn a_landing_can_close_while_its_lane_successor_waits_for_disk_space() {
     );
     assert_eq!(status, 200);
     let mut pressure = DispatchPressure {
-        free_gb: Some(55),
+        build_slots: 1,
         ..DispatchPressure::default()
     };
     let mut request = landed(ids[0].as_str(), "local_a", "Landed");
@@ -220,11 +216,75 @@ fn a_landing_can_close_while_its_lane_successor_waits_for_disk_space() {
     assert!(reply["next"].is_null(), "{reply}");
     let waiting = ask(&mut conn, "local_b", &pressure, 61.0);
     assert!(waiting["nothing"].is_string(), "{waiting}");
-    assert_eq!(waiting["reclaim_to_gb"], 90, "{waiting}");
+    assert!(
+        waiting["nothing"].as_str().unwrap().contains("1 of 1 held"),
+        "{waiting}"
+    );
 
-    pressure.free_gb = Some(100);
+    pressure.build_slots_free = 1;
     assert_eq!(
         ask(&mut conn, "local_b", &pressure, 62.0)["ticket"],
         ids[1].as_str()
     );
+}
+
+#[test]
+fn landing_reserves_the_chain_and_its_brief_carries_the_note() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    let ids = file(
+        &mut conn,
+        &[("first", &["lane:x"], &[]), ("second", &["lane:x"], &[0])],
+    );
+    let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
+    assert_eq!(reservation["ticket"], ids[0].as_str());
+    let (status, _) = post(
+        &mut conn,
+        "/claims",
+        &claim_reserved(&reservation, "local_a"),
+        at(5.0),
+    );
+    assert_eq!(status, 200);
+    let note = "Named counters draw as rows above the plaque.";
+    let (status, reply) = post(
+        &mut conn,
+        "/landed",
+        &landed(ids[0].as_str(), "local_a", note),
+        at(60.0),
+    );
+    assert_eq!(status, 200, "{reply}");
+    assert_eq!(reply["next"]["ticket"], ids[1].as_str());
+    assert_eq!(reply["next"]["session"], "local_a");
+    let first = hub::tickets::load(&conn, ids[0].as_str()).unwrap().unwrap();
+    assert_eq!(first.close_reason.as_deref(), Some(note));
+    assert_eq!(first.landed.unwrap().commits[0].as_str(), "3a9e4c1");
+    let (status, retry) = post(
+        &mut conn,
+        "/landed",
+        &landed(ids[0].as_str(), "local_a", note),
+        at(60.5),
+    );
+    assert_eq!(status, 200);
+    assert_eq!(
+        retry, reply,
+        "a lost reply must keep the same code and expiry"
+    );
+    let (status, brief) = post(
+        &mut conn,
+        "/claims",
+        &claim_reserved(&reply["next"], "local_a"),
+        at(61.0),
+    );
+    assert_eq!(status, 200, "{brief}");
+    assert_eq!(brief["needs"][0]["ticket"], ids[0].as_str());
+    assert_eq!(brief["needs"][0]["landed"]["note"], note);
+    // The claim consumed the reservation, so a replay cannot hand it off again.
+    let (status, retry) = post(
+        &mut conn,
+        "/landed",
+        &landed(ids[0].as_str(), "local_a", note),
+        at(62.0),
+    );
+    assert_eq!(status, 200);
+    assert!(retry["next"].is_null());
 }

@@ -284,6 +284,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: "ALTER TABLE tickets ADD COLUMN allocation INTEGER;",
         code: Some(tickets::backfill_allocation),
     },
+    Migration {
+        version: 47,
+        sql: "",
+        code: Some(fleet_settings::migrate_disk_cap),
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

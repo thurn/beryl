@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use rusqlite::Connection;
 
-use ignite_core::capacity::CapacityReport;
+use ignite_core::capacity::{BuildSpaceReport, CapacityReport};
 use ignite_core::protocol::hub::Heartbeat;
 use ignite_core::protocol::machine_state::MachineSample;
 use ignite_core::time::Timestamp;
@@ -71,14 +71,17 @@ impl crate::doctor::StatusSection for SnapshotSection {
         view.machines
             .into_iter()
             .map(|machine| {
+                let name = &machine.name;
+                let build_space = machine.capacity.and_then(|report| report.build_space)
+                    .map_or_else(String::new, |space| format!(" · {space}"));
                 let Some(snapshot) = machine.snapshot else {
-                    return format!("{} has no snapshot", machine.name);
+                    return format!("{name} has no snapshot{build_space}");
                 };
                 let [(_, disk), (_, cpu), (_, workers), (_, ready), (_, next)] =
                     snapshot.readings();
                 format!(
-                    "{} at {} · {disk} · {cpu} · {workers} · {ready} ready · {next}",
-                    machine.name, snapshot.at
+                    "{name} at {} · {disk} · {cpu} · {workers} · {ready} ready · {next}{build_space}",
+                    snapshot.at
                 )
             })
             .collect()
@@ -111,6 +114,7 @@ impl Parts {
             // The hub's version from the last heartbeat it answered.
             let hub_version: RefCell<Option<String>> = RefCell::new(None);
             let samples = Sampling::default();
+            let largest = RefCell::new(crate::trees::LargestTree::default());
             let beat = || {
                 // A daemon that took on a release without restarting reports that release.
                 let version = update
@@ -135,7 +139,18 @@ impl Parts {
                         cli_apps: headless_dispatch.cli_apps().map(str::to_owned).collect(),
                         families: current_families(&ctx.repo, &hostname),
                     },
-                    || headless_dispatch.machine_sample(now, &scheduler, &facts),
+                    || {
+                        let (sample, mut capacity) =
+                            headless_dispatch.machine_sample(now, &scheduler, &facts);
+                        let (_, settings) = trees.build_volume();
+                        capacity.build_space = Some(BuildSpaceReport {
+                            slots: sample.pressure.build_slots,
+                            free: sample.pressure.build_slots_free,
+                            ceiling_gb: settings.tree_ceiling_gb,
+                            largest_tree_bytes: largest.borrow_mut().sample(&trees, now),
+                        });
+                        (sample, capacity)
+                    },
                     |beat| {
                         if beat.sample.is_none() {
                             return client.heartbeat(beat);
@@ -235,7 +250,6 @@ mod tests {
                 build_slots: 6,
                 build_slots_free: 2,
                 free_gb: Some(47),
-                disk_reserve_gib: Some(60),
                 ..DispatchPressure::default()
             },
             reclaimable: Some(ReclaimableDisk {
@@ -344,18 +358,26 @@ mod tests {
         .unwrap();
         let sample = fixture_sample(start);
         let sampling = Sampling::default();
-        for (seconds, most_recent, free, admit, queue, block, reason) in [
-            (0.0, 0.0, 47, 16, 0, StartBlock::Disk, "waits for disk"),
-            (10.0, 0.0, 47, 16, 0, StartBlock::Disk, "waits for disk"),
-            (60.0, 60.0, 100, 0, 0, StartBlock::Cores, "cores, 0.0 free"),
+        let no_slot = (47, 0, 16, 0, StartBlock::Trees, "waits for a build slot");
+        for (seconds, most_recent, (free, slots, admit, queue, block, reason)) in [
+            (0.0, 0.0, no_slot),
+            (10.0, 0.0, no_slot),
+            (
+                60.0,
+                60.0,
+                (100, 2, 0, 0, StartBlock::Cores, "cores, 0.0 free"),
+            ),
             (
                 120.0,
                 120.0,
-                100,
-                16,
-                120,
-                StartBlock::Pacing,
-                "waited 120 s for cores",
+                (
+                    100,
+                    2,
+                    16,
+                    120,
+                    StartBlock::Pacing,
+                    "waited 120 s for cores",
+                ),
             ),
         ] {
             let at = start.plus_seconds(seconds);
@@ -366,6 +388,7 @@ mod tests {
                     || {
                         let mut sample = sample.clone();
                         sample.pressure.free_gb = Some(free);
+                        sample.pressure.build_slots_free = slots;
                         sample.pressure.queue_seconds = queue;
                         sample.admit_cores = admit;
                         let report = CapacityReport::default();
@@ -385,7 +408,7 @@ mod tests {
             assert_eq!(snapshot.free_disk_gib, Some(free));
             assert_eq!(snapshot.reclaimable, sample.reclaimable);
             assert_eq!(snapshot.next_ticket.unwrap().as_str(), "work");
-            assert_eq!(snapshot.next_ticket_disk_gib, Some(100));
+            assert_eq!(snapshot.next_ticket_disk_gib, None);
             assert_eq!(snapshot.start_block, Some(block));
             assert!(snapshot.start_reason.unwrap().contains(reason));
             assert_eq!(snapshot.cpu_percent, Some(79));
@@ -465,6 +488,8 @@ mod tests {
             free_disk_gb: Some(47),
             disk_budget_gb: 0,
             disk_budget_source: None,
+            build_space: None,
+            slot_holders: std::collections::BTreeSet::new(),
             queue_seconds: 14.25,
             outputs: vec![output.clone()],
             free_trees: vec![vec![output.clone()], vec![]],

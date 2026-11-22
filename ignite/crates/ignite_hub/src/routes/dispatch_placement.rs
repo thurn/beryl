@@ -1,5 +1,6 @@
 //! Compare a dispatch candidate's build time here with the fleet's recent capacity reports.
 
+use std::cell::Cell;
 use std::collections::BTreeMap;
 
 use rusqlite::Connection;
@@ -7,6 +8,7 @@ use rusqlite::Connection;
 use ignite_core::capacity::CapacityReport;
 use ignite_core::config::Os;
 use ignite_core::dispatch::{self, ReadyTicket};
+use ignite_core::dispatch_pressure::{DispatchPressure, needs_build_slot};
 use ignite_core::fleet::{FleetSettings, MachineState};
 use ignite_core::ids::IdError;
 use ignite_core::mix::{self, ProviderLoad};
@@ -18,7 +20,7 @@ use ignite_store::hub::{capacity, fleet, placement_deferrals};
 use ignite_store::{Result, StoreError};
 
 use super::mix as dispatch_mix;
-use super::queue::held;
+use super::queue::{self, held};
 
 pub(super) struct Placement<'a> {
     asker: &'a MachineFree,
@@ -27,6 +29,8 @@ pub(super) struct Placement<'a> {
 }
 
 struct Peer {
+    id: String,
+    free_slots: Cell<Option<u32>>,
     name: String,
     os: Os,
     families: Vec<String>,
@@ -86,7 +90,7 @@ impl<'a> Placement<'a> {
             let (os, families) =
                 fleet::parse_dispatch_capabilities(&machine.os, &machine.families)?;
             placement.peers.push(Peer::new(
-                machine.name,
+                (machine.id, machine.name),
                 os,
                 families,
                 report,
@@ -126,7 +130,7 @@ impl<'a> Placement<'a> {
             ready,
             pins: &ready.pins,
         };
-        let peers: Vec<_> = self
+        let mut peers: Vec<_> = self
             .peers
             .iter()
             .filter_map(|peer| peer.view(ready))
@@ -135,8 +139,24 @@ impl<'a> Placement<'a> {
             return Ok(None);
         }
         let first = placement_deferrals::first(conn, &ready.id)?;
-        let Some(best) = placement::preferred_machine(&ticket, &asker, &peers, first, now) else {
-            return Ok(None);
+        let best = loop {
+            let Some(best) = placement::preferred_machine(&ticket, &asker, &peers, first, now)
+            else {
+                return Ok(None);
+            };
+            let name = best.name;
+            if !needs_build_slot(ready.expected_cores, &ready.files)
+                || self
+                    .peers
+                    .iter()
+                    .find(|peer| peer.name == name)
+                    .expect("placement selected a peer")
+                    .free_slots(conn, now)?
+                    > 0
+            {
+                break best;
+            }
+            peers.retain(|peer| peer.name != name);
         };
         if first.is_none() {
             placement_deferrals::record(conn, &ready.id, now)?;
@@ -168,7 +188,7 @@ fn asking_capacity(asker: &MachineFree, latest: Option<CapacityReport>) -> Optio
 
 impl Peer {
     fn new(
-        name: String,
+        (id, name): (String, String),
         os: Os,
         families: Vec<String>,
         capacity: CapacityReport,
@@ -178,6 +198,8 @@ impl Peer {
         let offers = dispatch_mix::offers(&capacity);
         let loads = dispatch_mix::peer_loads(&offers, settings, holds);
         Self {
+            id,
+            free_slots: Cell::new(None),
             name,
             os,
             families,
@@ -187,7 +209,29 @@ impl Peer {
         }
     }
 
+    fn free_slots(&self, conn: &Connection, now: Timestamp) -> Result<u32> {
+        if let Some(free) = self.free_slots.get() {
+            return Ok(free);
+        }
+        let pressure = DispatchPressure {
+            build_slots_free: self.capacity.build_space.map_or(0, |space| space.free),
+            slot_holders: self.capacity.slot_holders.clone(),
+            ..DispatchPressure::default()
+        };
+        let free = queue::peer_free_build_slots(conn, &self.id, now, &pressure)?;
+        self.free_slots.set(Some(free));
+        Ok(free)
+    }
+
     fn view(&self, ticket: &ReadyTicket) -> Option<MachineView<'_>> {
+        if self
+            .capacity
+            .build_space
+            .is_none_or(|space| space.free == 0)
+            && needs_build_slot(ticket.expected_cores, &ticket.files)
+        {
+            return None;
+        }
         let tier = dispatch::label(&ticket.labels, "tier:");
         let provider = mix::choose(
             &self.loads,

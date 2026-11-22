@@ -266,10 +266,6 @@ impl HeadlessDispatch {
             };
             let reservation = match ctx.hub.next_explained(&free) {
                 Ok(NextReply::Reserved(reservation)) => reservation,
-                Ok(NextReply::ReclaimDisk { reason, .. }) => {
-                    why = reason;
-                    break;
-                }
                 Ok(NextReply::Nothing(reason)) => {
                     why = reason.unwrap_or_else(|| "the hub gave no reason".to_owned());
                     break;

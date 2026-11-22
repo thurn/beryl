@@ -189,17 +189,6 @@ fn fleet_edits_are_visible_in_the_cli_and_preserve_other_fields() {
     let saved = json(&fleet(&[
         "machine",
         "m1",
-        "--state",
-        "active",
-        "--disk-cap-gb",
-        "10",
-        "--json",
-    ]));
-    assert_eq!(saved["machines"]["m1"]["disk_cap_gb"], 10);
-
-    let saved = json(&fleet(&[
-        "machine",
-        "m1",
         "--trees-root",
         "/Volumes/Project Trees/trees",
         "--tree-space-gb",
@@ -212,12 +201,13 @@ fn fleet_edits_are_visible_in_the_cli_and_preserve_other_fields() {
     assert_eq!(machine["trees_root"], "/Volumes/Project Trees/trees");
     assert_eq!(machine["tree_space_gb"], 480);
     assert_eq!(machine["tree_ceiling_gb"], 100);
-    assert_eq!(machine["disk_cap_gb"], 10);
     let text = String::from_utf8(fleet(&[]).stdout).unwrap();
     assert!(text.contains(
         "trees root /Volumes/Project Trees/trees, tree space (GB) 480, tree ceiling 100 GB"
     ));
 
+    let help = String::from_utf8(fleet(&["machine", "--help"]).stdout).unwrap();
+    assert!(!help.contains("--disk-cap-gb"));
     let rejected = fleet(&["machine", "m1", "--tree-space-gb", "auto"]);
     assert_eq!(rejected.status.code(), Some(1));
     assert!(
@@ -234,7 +224,7 @@ fn fleet_edits_are_visible_in_the_cli_and_preserve_other_fields() {
         "--json",
     ]));
     assert_eq!(saved["machines"]["m1"]["state"], "checks-only");
-    assert_eq!(saved["machines"]["m1"]["disk_cap_gb"], 10);
+    assert_eq!(saved["machines"]["m1"]["tree_space_gb"], 480);
     assert_eq!(saved["providers"]["codex"]["share"], 50);
 
     let saved = json(&fleet(&[
@@ -242,12 +232,13 @@ fn fleet_edits_are_visible_in_the_cli_and_preserve_other_fields() {
         "m1",
         "--state",
         "active",
-        "--disk-cap-gb",
-        "auto",
+        "--trees-root",
+        "default",
         "--json",
     ]));
     assert_eq!(saved["machines"]["m1"]["state"], "active");
-    assert!(saved["machines"]["m1"]["disk_cap_gb"].is_null());
+    assert!(saved["machines"]["m1"]["trees_root"].is_null());
+    assert_eq!(saved["machines"]["m1"]["tree_ceiling_gb"], 100);
 
     running.stop();
     let _ = std::fs::remove_dir_all(dir);

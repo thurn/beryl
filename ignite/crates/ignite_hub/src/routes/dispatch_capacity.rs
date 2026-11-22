@@ -13,19 +13,20 @@ use super::{Candidate, expected_cores, named_files};
 
 pub(super) struct Capacity<'a> {
     pub cores: Vec<f64>,
-    pub disk: Option<Budget<'a>>,
+    pub budget: Budget<'a>,
 }
 
 impl Capacity<'_> {
-    /// Try dispatch order, falling through past tickets that wait for disk or another machine.
+    /// Try dispatch order, falling through past tickets that wait for a build slot or another machine.
     pub(super) fn choose<'a>(
         &self,
+        machine: &str,
         candidates: impl Iterator<Item = (&'a ReadyTicket, Candidate)>,
         defer: impl Fn(&ReadyTicket, &Candidate) -> Result<Option<String>>,
     ) -> Result<Option<std::result::Result<Candidate, HandoffWait>>> {
         let mut first_wait = None;
         for (ticket, candidate) in candidates {
-            if let Some(reason) = self.disk.as_ref().and_then(|budget| budget.blocked(ticket)) {
+            if let Some(reason) = self.budget.blocked(ticket, machine) {
                 first_wait.get_or_insert(reason);
             } else if let Some(reason) = defer(ticket, &candidate)? {
                 first_wait.get_or_insert_with(|| reason.into());
@@ -60,7 +61,7 @@ pub(super) fn read<'a>(
     })?;
     let mut capacity = Capacity {
         cores: Vec::new(),
-        disk: pressure.map(|pressure| Budget::new(pressure, now)),
+        budget: Budget::new(pressure, now),
     };
     for row in held {
         let (id, claimed, expires) = row?;
@@ -68,18 +69,16 @@ pub(super) fn read<'a>(
             let files = named_files(&format!("{}\n{}", ticket.body, ticket.acceptance));
             let cores = expected_cores(&ticket, &files, history, landed, now);
             capacity.cores.push(cores);
-            if let Some(budget) = capacity.disk.as_mut() {
-                let since = claimed
-                    .as_deref()
-                    .and_then(|text| Timestamp::parse(text).ok())
-                    .or_else(|| {
-                        expires
-                            .as_deref()
-                            .and_then(|text| Timestamp::parse(text).ok())
-                            .map(|expiry| expiry.plus_seconds(-fleet::RESERVATION_SECONDS))
-                    });
-                budget.hold(&ticket.id, cores, &files, since);
-            }
+            let since = claimed
+                .as_deref()
+                .and_then(|text| Timestamp::parse(text).ok())
+                .or_else(|| {
+                    expires
+                        .as_deref()
+                        .and_then(|text| Timestamp::parse(text).ok())
+                        .map(|expiry| expiry.plus_seconds(-fleet::RESERVATION_SECONDS))
+                });
+            capacity.budget.hold(&ticket.id, cores, &files, since);
         }
     }
     Ok(capacity)

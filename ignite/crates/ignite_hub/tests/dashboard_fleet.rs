@@ -295,10 +295,10 @@ fn assert_provider_controls(body: &str) {
 }
 
 fn assert_machine_controls(body: &str) {
-    for (name, state, cap) in [
-        ("jarvis", "active", ""),
-        ("cygnus", "checks-only", "250"),
-        ("multivac", "off", ""),
+    for (name, state) in [
+        ("jarvis", "active"),
+        ("cygnus", "checks-only"),
+        ("multivac", "off"),
     ] {
         let section = machine_settings(body, name);
         assert_eq!(section.matches(" checked").count(), 1, "{name}");
@@ -306,10 +306,7 @@ fn assert_machine_controls(body: &str) {
             section.contains(&format!(r#"value="{state}" checked"#)),
             "{name}"
         );
-        assert!(
-            section.contains(&format!(r#"value="{cap}" placeholder="Automatic""#)),
-            "{name}"
-        );
+        assert!(!section.contains("Disk cap"), "{name}");
     }
 }
 
@@ -370,135 +367,6 @@ fn fleet_renders_provider_shares_usage_holds_and_workers() {
     assert!(provider_row(&body, "codex").contains("0 of 1 by share"));
     assert!(provider_row(&body, "disabled").contains(">Off<"));
     assert!(provider_row(&body, "standby").contains(">Standby<"));
-}
-
-fn assert_cygnus_tree_fields(page: &str, editable: bool) {
-    let cygnus = machine_settings(page, "cygnus");
-    let values = if editable {
-        &[
-            r#"data-fleet-field="trees_root" aria-label="cygnus trees root" value="D:\trees""#,
-            r#"data-fleet-field="tree_space_gb" aria-label="cygnus tree space in GB" value="90""#,
-            r#"data-fleet-field="tree_ceiling_gb" aria-label="cygnus tree ceiling in GB" value="40""#,
-        ][..]
-    } else {
-        &[r">D:\trees<", ">90<", ">40<", ">250<"]
-    };
-    for value in values {
-        assert!(cygnus.contains(value), "{value} in {cygnus}");
-    }
-}
-
-#[test]
-fn fleet_settings_are_editable_only_on_the_private_listener() {
-    let config = Config::parse("ignite.toml", FLEET_CONFIG).unwrap();
-    let server = HubServer {
-        config,
-        listen: "127.0.0.1:0".to_owned(),
-        database: ignite_core::test_files::temp_dir().join("fleet.sqlite"),
-        wordmark: None,
-    };
-    let mut conn = hub::open(&server.database).unwrap();
-    seed(&conn);
-    let private = server.start().unwrap();
-    let public = server.start_read_only().unwrap();
-    let now = Timestamp::parse(NOW).unwrap();
-    let mut settings = hub::fleet_settings::settings(&conn).unwrap();
-    configure_providers(&mut settings);
-    settings.machines.extend([
-        (
-            "cygnus".to_owned(),
-            MachineSetting {
-                state: MachineState::ChecksOnly,
-                disk_cap_gb: Some(250),
-                trees: TreeSettings {
-                    trees_root: Some(r"D:\trees".to_owned()),
-                    tree_space_gb: Some(TreeSpace::Gigabytes(90)),
-                    tree_ceiling_gb: 40,
-                },
-            },
-        ),
-        (
-            "multivac".to_owned(),
-            MachineSetting {
-                state: MachineState::Off,
-                disk_cap_gb: None,
-                ..MachineSetting::default()
-            },
-        ),
-    ]);
-    let original_version = settings.version;
-    let hub::fleet_settings::PutOutcome::Stored(settings) = hub::fleet_settings::put(
-        &mut conn,
-        original_version,
-        settings,
-        "seed@example.com",
-        now,
-    )
-    .unwrap() else {
-        panic!("seeding the fleet settings conflicted");
-    };
-
-    let (status, private_page) = browser_request(private.address(), "GET", "/fleet", "");
-    assert_eq!(status, 200);
-    assert!(private_page.contains(r#"data-api="/proj/api/fleet""#));
-    assert!(private_page.contains(&format!("&quot;version&quot;:{}", settings.version)));
-    assert_provider_controls(&private_page);
-    assert_machine_controls(&private_page);
-    assert_cygnus_tree_fields(&private_page, true);
-
-    let (status, public_page) = browser_request(public.address(), "GET", "/fleet", "");
-    assert_eq!(status, 200);
-    assert_cygnus_tree_fields(&public_page, false);
-    assert!(machine_settings(&public_page, "multivac").contains(">Automatic<"));
-    assert!(!public_page.contains("data-fleet-field"));
-    assert!(!public_page.contains("data-settings="));
-
-    let mut desired = settings.clone();
-    desired.machines.get_mut("cygnus").unwrap().disk_cap_gb = None;
-    desired.providers.get_mut("codex").unwrap().share = 36;
-    let body = serde_json::to_string(&FleetUpdate {
-        version: settings.version,
-        settings: desired,
-    })
-    .unwrap();
-    let (status, reply) = browser_request(public.address(), "PUT", "/proj/api/fleet", &body);
-    assert_eq!(status, 405, "{reply}");
-    assert_eq!(fleet_view(public.address()).settings, settings);
-
-    let (status, saved) = browser_request(private.address(), "PUT", "/proj/api/fleet", &body);
-    assert_eq!(status, 200, "{saved}");
-    let saved: FleetSettings = serde_json::from_str(&saved).unwrap();
-    assert_eq!(saved.version, original_version + 2);
-    assert_eq!(saved.machine("cygnus").disk_cap_gb, None);
-    assert_eq!(
-        saved.machine("cygnus").trees,
-        settings.machine("cygnus").trees
-    );
-    assert_eq!(
-        fleet_view(public.address())
-            .settings
-            .provider("codex")
-            .share,
-        36
-    );
-    let (status, updated) = browser_request(private.address(), "GET", "/fleet", "");
-    assert_eq!(status, 200);
-    assert!(machine_settings(&updated, "cygnus").contains(r#"value="" placeholder="Automatic""#));
-    assert!(provider_row(&updated, "codex").contains(">75%<"));
-    assert!(updated.contains(
-        r#"c-timeline-actor">operator</span>machine cygnus: checks-only, disk cap auto"#
-    ));
-    assert!(updated.contains(r#"datetime="2026-11-17T12:00:00.000Z""#));
-    assert!(!updated.contains("@example.com"));
-
-    private.stop();
-    public.stop();
-}
-
-fn fleet_view(address: SocketAddr) -> FleetView {
-    let (status, reply) = browser_request(address, "GET", "/proj/api/fleet", "");
-    assert_eq!(status, 200);
-    serde_json::from_str(&reply).unwrap()
 }
 
 #[test]
@@ -817,3 +685,6 @@ fn the_first_line_names_a_provider_on_a_usage_hold() {
 
 #[path = "dashboard_fleet/machine_snapshots.rs"]
 mod machine_snapshots;
+
+#[path = "dashboard_fleet/machine_settings.rs"]
+mod machine_settings_tests;

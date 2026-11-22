@@ -3,7 +3,7 @@
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
-use ignite_core::capacity::{CapacityReport, ProviderCapacity};
+use ignite_core::capacity::{BuildSpaceReport, CapacityReport, ProviderCapacity};
 use ignite_core::dispatch_pressure::DispatchPressure;
 use ignite_core::fleet::{MachineState, ProviderSample};
 use ignite_core::ids::TicketId;
@@ -36,6 +36,12 @@ pub(super) fn capacity(warm: bool) -> CapacityReport {
             .into_iter()
             .collect(),
         worker_room: 2,
+        build_space: Some(BuildSpaceReport {
+            slots: 6,
+            free: 2,
+            ceiling_gb: 100,
+            largest_tree_bytes: None,
+        }),
         admit_cores: 20.0,
         free_cores: 10.0,
         providers: vec![ProviderCapacity {
@@ -78,6 +84,8 @@ fn request(machine: &str, report: &CapacityReport, queue_seconds: u32) -> Value 
     ask["admit_cores"] = json!(report.admit_cores);
     ask["room"] = json!({"start": 2, "providers": [{"name": "claude", "tiers": ["sonnet"]}]});
     ask["pressure"] = json!(DispatchPressure {
+        build_slots: report.build_space.map_or(0, |space| space.slots),
+        build_slots_free: report.build_space.map_or(0, |space| space.free),
         outputs: report.outputs.clone(),
         free_trees: report.free_trees.clone(),
         leased: report.leased_trees.clone(),
@@ -446,4 +454,42 @@ fn the_lane_successor_is_reserved_for_the_session_that_landed() {
     assert_eq!(reply["next"]["ticket"], ids[1].as_str());
     assert_eq!(reply["next"]["session"], session);
     assert_eq!(placement_deferrals::first(&conn, &ids[1]).unwrap(), None);
+}
+
+#[test]
+fn a_warm_peer_with_no_free_slot_cannot_defer_the_asker() {
+    let mut conn = machines();
+    let ticket = file(&mut conn, &[("build", &[], &[])])[0].clone();
+    conn.execute(
+        "UPDATE tickets SET body = 'Edit `engine/src/main.rs`' WHERE id = ?1",
+        [ticket.as_str()],
+    )
+    .unwrap();
+
+    let mut warm = capacity(true);
+    warm.build_space.as_mut().unwrap().free = 0;
+    record(&conn, "m-2", &warm, start());
+
+    let reply = ask(&mut conn, &request("m-1", &capacity(false), 0), at(1.0));
+    assert_eq!(reply["ticket"], ticket.as_str(), "{reply}");
+}
+
+#[test]
+fn a_warm_peer_cannot_defer_the_asker_after_reserving_its_last_free_slot() {
+    let mut conn = machines();
+    let ids = file(&mut conn, &[("first", &[], &[]), ("second", &[], &[])]);
+    conn.execute(
+        "UPDATE tickets SET body = 'Edit `engine/src/main.rs`' WHERE id IN (?1, ?2)",
+        [ids[0].as_str(), ids[1].as_str()],
+    )
+    .unwrap();
+
+    let mut warm = capacity(true);
+    warm.build_space.as_mut().unwrap().free = 1;
+    record(&conn, "m-2", &warm, start());
+    let reserved = ask(&mut conn, &request("m-2", &warm, 0), at(1.0));
+    assert_eq!(reserved["ticket"], ids[0].as_str(), "{reserved}");
+
+    let second = ask(&mut conn, &request("m-1", &capacity(false), 0), at(2.0));
+    assert_eq!(second["ticket"], ids[1].as_str(), "{second}");
 }

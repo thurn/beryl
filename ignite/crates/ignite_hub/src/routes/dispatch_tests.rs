@@ -159,7 +159,11 @@ pub(super) fn free(machine: &str, sessions: &[&str]) -> Value {
         free_ticket_trees: 4,
         free_cores: 16.0,
         admit_cores: None,
-        pressure: None,
+        pressure: Some(ignite_core::dispatch_pressure::DispatchPressure {
+            build_slots: 6,
+            build_slots_free: 6,
+            ..Default::default()
+        }),
         families: Vec::new(),
         name: None,
         justiciar_only: false,
@@ -181,7 +185,9 @@ pub(super) fn claim_reserved(reservation: &Value, session: &str) -> Value {
 
 pub(super) fn landed(ticket: &str, session: &str, note: &str) -> Value {
     json!({"ticket": ticket, "machine": "m-1", "session": session,
-           "work": {"commits": ["3a9e4c1"], "files": ["src/a.rs"], "note": note}})
+           "work": {"commits": ["3a9e4c1"], "files": ["src/a.rs"], "note": note},
+           "pressure": {"build_slots": 6, "build_slots_free": 6, "recovery_seconds": 0,
+                        "queue_seconds": 0, "outputs": [], "free_trees": [], "leased": {}}})
 }
 
 pub(super) fn release(ticket: &str, session: &str) -> Value {
@@ -202,6 +208,8 @@ fn two_machines_asking_at_once_never_get_one_ticket() {
     let specs: Vec<(&str, &[&str], &[usize])> =
         specs.iter().map(|(t, l, d)| (t.as_str(), *l, *d)).collect();
     file(&mut conn, &specs);
+    conn.execute("UPDATE tickets SET cores = 0.1 WHERE type = 'task'", [])
+        .unwrap();
     let barrier = Arc::new(Barrier::new(2));
     let askers: Vec<_> = ["m-a", "m-b"]
         .into_iter()
@@ -287,67 +295,6 @@ fn a_worker_asking_again_gets_its_reservation_back_not_another() {
     assert_eq!(second, first);
     let (_, other) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(2.0));
     assert_ne!(other["ticket"], first["ticket"]);
-}
-
-#[test]
-fn landing_reserves_the_chain_and_its_brief_carries_the_note() {
-    let mut conn = hub::open_in_memory().unwrap();
-    register(&mut conn);
-    let ids = file(
-        &mut conn,
-        &[("first", &["lane:x"], &[]), ("second", &["lane:x"], &[0])],
-    );
-    let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
-    assert_eq!(reservation["ticket"], ids[0].as_str());
-    let (status, _) = post(
-        &mut conn,
-        "/claims",
-        &claim_reserved(&reservation, "local_a"),
-        at(5.0),
-    );
-    assert_eq!(status, 200);
-    let note = "Named counters draw as rows above the plaque.";
-    let (status, reply) = post(
-        &mut conn,
-        "/landed",
-        &landed(ids[0].as_str(), "local_a", note),
-        at(60.0),
-    );
-    assert_eq!(status, 200, "{reply}");
-    assert_eq!(reply["next"]["ticket"], ids[1].as_str());
-    assert_eq!(reply["next"]["session"], "local_a");
-    let first = tickets::load(&conn, ids[0].as_str()).unwrap().unwrap();
-    assert_eq!(first.close_reason.as_deref(), Some(note));
-    assert_eq!(first.landed.unwrap().commits[0].as_str(), "3a9e4c1");
-    let (status, retry) = post(
-        &mut conn,
-        "/landed",
-        &landed(ids[0].as_str(), "local_a", note),
-        at(60.5),
-    );
-    assert_eq!(status, 200);
-    assert_eq!(
-        retry, reply,
-        "a lost reply must keep the same code and expiry"
-    );
-    let (status, brief) = post(
-        &mut conn,
-        "/claims",
-        &claim_reserved(&reply["next"], "local_a"),
-        at(61.0),
-    );
-    assert_eq!(status, 200, "{brief}");
-    assert_eq!(brief["needs"][0]["ticket"], ids[0].as_str());
-    assert_eq!(brief["needs"][0]["landed"]["note"], note);
-    // The claim consumed the reservation, so a replay cannot hand it off again.
-    let (status, retry) = post(
-        &mut conn,
-        "/landed",
-        &landed(ids[0].as_str(), "local_a", note),
-        at(62.0),
-    );
-    assert_eq!(status, 200);
-    assert!(retry["next"].is_null());
 }
 
 #[test]

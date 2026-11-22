@@ -24,7 +24,6 @@ pub(super) fn notice(conn: &Connection, machine: &str, now: Timestamp) -> Result
         version: settings.version,
         state: machine.state,
         state_actor: fleet_settings::state_actor(conn, &name)?,
-        disk_cap_gb: machine.disk_cap_gb,
         trees: machine.trees,
         holds: provider_usage::held(conn, &settings, now)?,
         off_platforms: fleet_settings::off_machines(conn, &settings)?

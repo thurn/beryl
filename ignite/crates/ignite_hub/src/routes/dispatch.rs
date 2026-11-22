@@ -262,13 +262,7 @@ fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
     let reply = match answer {
         Ok(reservation) => NextReply::Reserved(reservation),
         // Only a daemon that asked for the reason gets it; an older one reads `null`.
-        Err(wait) => match wait.reclaim_to_gb {
-            Some(target_gb) if free.explain => NextReply::ReclaimDisk {
-                reason: wait.reason,
-                target_gb,
-            },
-            _ => NextReply::Nothing(free.explain.then_some(wait.reason)),
-        },
+        Err(wait) => NextReply::Nothing(free.explain.then_some(wait.reason)),
     };
     tx.commit().map_err(sql_failure)?;
     Ok(Response::json(200, &json!(reply)))

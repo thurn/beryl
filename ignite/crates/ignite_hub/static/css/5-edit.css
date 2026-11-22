@@ -586,7 +586,7 @@ details[open] > summary > .c-tool-chevron {
   font-size: var(--text-sm);
 }
 
-/* Fleet settings place the state and disk cap beside each other when there is room. */
+/* Fleet settings fit controls beside each other when there is room. */
 .c-fleet-settings {
   margin-bottom: var(--space-5);
 }

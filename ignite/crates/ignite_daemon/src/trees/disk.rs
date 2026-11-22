@@ -360,4 +360,4 @@ fn newest_write(folder: &Path) -> SystemTime {
 }
 
 mod ceiling;
-pub(super) use ceiling::{Measurement, clean, directories};
+pub(super) use ceiling::{Measurement, clean, directories, size};

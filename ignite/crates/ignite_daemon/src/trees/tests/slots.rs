@@ -53,7 +53,12 @@ fn a_cold_tree_waits_for_a_slot_when_the_built_trees_are_leased() {
         .take_build_slot(&second.tree, &[], true)
         .unwrap()
         .unwrap();
-    assert_eq!(f.trees.build_slots().free, 0);
+    let pressure = f.trees.dispatch_pressure(0, 0, None);
+    assert_eq!(pressure.build_slots_free, 0);
+    assert_eq!(
+        pressure.slot_holders,
+        ["T.1".parse().unwrap(), "T.2".parse().unwrap()].into()
+    );
     assert!(
         f.trees
             .take_build_slot(&third.tree, &[], true)
@@ -67,7 +72,9 @@ fn a_cold_tree_waits_for_a_slot_when_the_built_trees_are_leased() {
     drop(guard);
 
     // A build that wrote no output returns its reservation.
-    assert_eq!(f.trees.build_slots().free, 1);
+    let pressure = f.trees.dispatch_pressure(0, 0, None);
+    assert_eq!(pressure.build_slots_free, 1);
+    assert_eq!(pressure.slot_holders, ["T.1".parse().unwrap()].into());
     assert!(
         f.trees
             .take_build_slot(&third.tree, &[], true)

@@ -33,6 +33,7 @@ mod elastic;
 pub mod head;
 mod landing;
 mod pressure;
+pub(crate) use pressure::LargestTree;
 mod reset;
 mod retire;
 pub(crate) mod root;

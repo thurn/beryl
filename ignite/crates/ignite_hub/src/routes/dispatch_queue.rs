@@ -196,9 +196,11 @@ fn dispatch_ready(
                 },
             ))
         });
-    match capacity.choose(candidates, |ticket, candidate| {
-        placement.defer(conn, ticket, candidate.provider.as_deref(), now)
-    })? {
+    match capacity.choose(
+        free.name.as_deref().unwrap_or(machine),
+        candidates,
+        |ticket, candidate| placement.defer(conn, ticket, candidate.provider.as_deref(), now),
+    )? {
         Some(Ok(handoff)) => reserve(conn, &free.machine, handoff, now).map(Ok),
         Some(Err(reason)) => Ok(Err(reason)),
         None => {
@@ -233,6 +235,19 @@ fn dispatch_groups(snapshot: &Snapshot, ready: &mut Vec<ReadyTicket>) -> Vec<Gro
             || !full.contains(&ticket.epic)
     });
     shares::epic_order(&demand)
+}
+
+/// Check live reservations and claims before deferring to a peer's heartbeat.
+pub(super) fn peer_free_build_slots(
+    conn: &Connection,
+    machine: &str,
+    now: Timestamp,
+    pressure: &DispatchPressure,
+) -> Result<u32> {
+    let worked = history(conn, machine)?;
+    let landed = landed_files(conn)?;
+    let held = capacity::read(conn, machine, &worked, &landed, now, Some(pressure))?;
+    Ok(held.budget.free_build_slots())
 }
 
 /// Lane hand-offs can start ordinary work, so only an Active machine can continue a chain.
@@ -280,17 +295,10 @@ pub fn chain_next(
     if mix::continuation_blocked(conn, machine.as_str(), &app, next, now)? {
         return Ok(None);
     }
-    if let Some(pressure) = pressure
-        && let Some(budget) = capacity::read(
-            conn,
-            machine.as_str(),
-            &history,
-            &landed,
-            now,
-            Some(pressure),
-        )?
-        .disk
-        && budget.blocked(next).is_some()
+    if capacity::read(conn, machine.as_str(), &history, &landed, now, pressure)?
+        .budget
+        .blocked(next, &name)
+        .is_some()
     {
         return Ok(None);
     }

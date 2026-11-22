@@ -121,6 +121,8 @@ fn a_warm_machine_without_the_family_cannot_defer_a_suitable_asker() {
     let mut cold = free("m-1", &[]);
     cold["room"] = json!({"start": 2, "providers": [{"name": "claude", "tiers": ["sonnet"]}]});
     cold["pressure"] = json!(DispatchPressure {
+        build_slots: 6,
+        build_slots_free: 6,
         outputs: capacity(false).outputs,
         ..DispatchPressure::default()
     });

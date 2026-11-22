@@ -4,11 +4,12 @@
 
 use rusqlite::Connection;
 
-use ignite_core::capacity::BYTES_PER_GIB;
+use ignite_core::capacity::{BuildSpaceReport, CapacityReport};
 use ignite_core::config::Os;
-use ignite_core::dispatch_pressure::{DispatchPressure, TreeCap};
+use ignite_core::dispatch_pressure::DispatchPressure;
 use ignite_core::ids::{MachineId, SessionId};
 use ignite_core::protocol::hub::{IdleWorker, MachineFree};
+use ignite_core::protocol::machine_state::MachineSnapshot;
 use ignite_core::time::Timestamp;
 use ignite_hub::dashboard::serve::serve;
 use ignite_hub::routes::Request;
@@ -48,7 +49,11 @@ fn free(machine: &str, idle: &[&str], trees: u32) -> MachineFree {
         free_ticket_trees: trees,
         free_cores: 8.0,
         admit_cores: Some(8.0),
-        pressure: None,
+        pressure: Some(DispatchPressure {
+            build_slots: 6,
+            build_slots_free: 6,
+            ..DispatchPressure::default()
+        }),
         families: Vec::new(),
         name: None,
         justiciar_only: false,
@@ -200,7 +205,7 @@ fn a_machine_whose_build_queue_is_backed_up_says_only_master_tickets_start() {
 }
 
 #[test]
-fn the_available_page_shows_a_fleet_cap_and_accounts_for_earlier_tickets() {
+fn the_available_page_shows_build_slots_and_accounts_for_earlier_tickets() {
     let conn = seeded();
     conn.execute_batch(
         "UPDATE tickets SET cores = 1.0 WHERE id = 'e1.3';
@@ -210,22 +215,38 @@ fn the_available_page_shows_a_fleet_cap_and_accounts_for_earlier_tickets() {
     .unwrap();
     let mut machine = free("m-j", &["local_idle", "local_idle2"], 3);
     let asked = Timestamp::parse("2026-11-17T11:59:00.000Z").unwrap();
-    for (limit_gb, expected) in [
-        (90, "waits for the Fleet tree disk cap"),
-        (120, "behind 1 earlier ticket"),
+    for (free, expected) in [
+        (0, "waits for a build slot on jarvis"),
+        (2, "behind 1 earlier ticket"),
     ] {
         machine.pressure = Some(DispatchPressure {
-            free_gb: Some(300),
-            tree_cap: Some(TreeCap {
-                limit_gb,
-                used_bytes: 10 * BYTES_PER_GIB,
-            }),
+            build_slots: 6,
+            build_slots_free: free,
             ..DispatchPressure::default()
         });
         machine_asks::record(&conn, &machine, Err("nothing"), asked).unwrap();
         let body = page(&conn, "/available");
         assert!(body.contains(expected), "{expected}");
     }
+    let snapshot: MachineSnapshot = serde_json::from_value(serde_json::json!({
+        "at": asked, "queued_cores": 0, "idle_workers": 2, "working_workers": 1,
+        "stalled_workers": 0, "down_workers": 0, "ready_tickets": 2,
+    }))
+    .unwrap();
+    let report = CapacityReport {
+        build_space: Some(BuildSpaceReport {
+            slots: 6,
+            free: 2,
+            ceiling_gb: 100,
+            largest_tree_bytes: Some(84_500_000_000),
+        }),
+        ..CapacityReport::default()
+    };
+    hub::machine_snapshots::record(&conn, "m-j", &snapshot, Some(&report)).unwrap();
+    assert!(
+        page(&conn, "/available")
+            .contains("6 build slots, 2 free, 100 GB tree ceiling, largest tree 84.5 GB")
+    );
 }
 
 #[test]
@@ -233,7 +254,7 @@ fn a_checks_only_machine_says_it_takes_only_tickets_that_hold_master_back() {
     let conn = seeded();
     conn.execute(
         "INSERT INTO meta (key, value) VALUES ('fleet', ?1)",
-        [r#"{"version":1,"machines":{"cygnus":{"state":"checks-only","disk_cap_gb":60}},"providers":{}}"#],
+        [r#"{"version":1,"machines":{"cygnus":{"state":"checks-only"}},"providers":{}}"#],
     )
     .unwrap();
     machine_asks::record(

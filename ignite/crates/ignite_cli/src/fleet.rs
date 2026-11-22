@@ -20,9 +20,6 @@ pub enum FleetCommand {
         name: String,
         #[arg(long, value_enum)]
         state: Option<State>,
-        /// Limit the build trees to this many gigabytes, or use "auto" for the derived cap.
-        #[arg(long, value_parser = parse_disk_cap, value_name = "GB|auto")]
-        disk_cap_gb: Option<DiskCap>,
         /// Absolute tree directory, or "default" to use the repository setting.
         #[arg(long)]
         trees_root: Option<String>,
@@ -66,29 +63,12 @@ impl From<State> for MachineState {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum DiskCap {
-    Auto,
-    Gigabytes(u32),
-}
-
-fn parse_disk_cap(raw: &str) -> std::result::Result<DiskCap, String> {
-    if raw == "auto" {
-        Ok(DiskCap::Auto)
-    } else {
-        raw.parse()
-            .map(DiskCap::Gigabytes)
-            .map_err(|_| "expected a nonnegative number of gigabytes or auto".to_owned())
-    }
-}
-
 impl FleetCommand {
     fn apply(&self, settings: &mut FleetSettings) {
         match self {
             Self::Machine {
                 name,
                 state,
-                disk_cap_gb,
                 trees_root,
                 tree_space_gb,
                 tree_ceiling_gb,
@@ -105,12 +85,6 @@ impl FleetCommand {
                 }
                 if let Some(ceiling) = tree_ceiling_gb {
                     machine.trees.tree_ceiling_gb = *ceiling;
-                }
-                if let Some(cap) = disk_cap_gb {
-                    machine.disk_cap_gb = match cap {
-                        DiskCap::Auto => None,
-                        DiskCap::Gigabytes(gb) => Some(*gb),
-                    };
                 }
                 settings.machines.insert(name.clone(), machine);
             }
@@ -206,9 +180,6 @@ fn render(view: &FleetView) -> String {
         .collect();
     for name in machines {
         let setting = view.settings.machine(name);
-        let cap = setting
-            .disk_cap_gb
-            .map_or_else(|| "auto".to_owned(), |gb| format!("{gb} GB"));
         let trees = &setting.trees;
         let root = trees.trees_root.as_deref().unwrap_or("repository default");
         let space = trees
@@ -216,7 +187,7 @@ fn render(view: &FleetView) -> String {
             .map_or_else(|| "unset".to_owned(), |space| space.to_string());
         let _ = write!(
             text,
-            "  machine {name}: {}, disk cap {cap}, trees root {root}, tree space (GB) {space}, tree ceiling {} GB",
+            "  machine {name}: {}, trees root {root}, tree space (GB) {space}, tree ceiling {} GB",
             setting.state, trees.tree_ceiling_gb,
         );
         for machine in view.machines.iter().filter(|machine| &machine.name == name) {
@@ -227,6 +198,9 @@ fn render(view: &FleetView) -> String {
                     ", {:.1} free cores, room for {} workers",
                     capacity.free_cores, capacity.worker_room
                 );
+                if let Some(build_space) = capacity.build_space {
+                    let _ = write!(text, ", {build_space}");
+                }
             }
         }
         text.push('\n');

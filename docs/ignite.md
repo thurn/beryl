@@ -3809,8 +3809,9 @@ expected cost of each ticket, so cheap tickets can run beside expensive ones.
 
 - The `pool` line in `ignite status` and the Fleet page show the latest reason a
   machine received no ticket. It may have no ready work, no tree or worker room,
-  or too little CPU or disk. A ready ticket may need another provider, check
-  family or machine, reach its epic's cap, or be cheaper to build elsewhere.
+  or no free cores or build slots. A ready ticket may need another provider,
+  check family or machine, reach its epic's cap, or be cheaper to build
+  elsewhere.
 
 - When a `land` or `agent` request has waited two minutes for cores and the host
   is at least 90% busy, the daemon asks the hub only for tickets that hold
@@ -3821,24 +3822,24 @@ expected cost of each ticket, so cheap tickets can run beside expensive ones.
   says
   `commands have waited 150 s for cores, so only tickets that hold master back start`.
 
-The machine sends free space on its tree volume, which build outputs each ticket
-tree holds, and its total and free build slots. The legacy hub handoff uses
-projected disk growth. It counts 1 GiB for light work, 12 GiB for a warm build,
-and 40 GiB for a cold build, and subtracts existing claims and reservations from
-the room above 50 GiB. It also uses a reserve and cap when reported by an older
-daemon. A warm tree can count for only one reservation. Daemon build admission
-uses [build slots](#build-trees).
+The machine reports its total and free [build slots](#build-trees), including
+slots it can reclaim from free trees. The hub deducts one free slot for each
+reserved or claimed build ticket whose tree does not hold a slot yet. A build
+ticket waits when all slots are held. Light tickets can still start. An older
+daemon that omits the counts has no free slots until it updates. The daemon can
+reclaim a slot from a free tree when a build starts.
 
-The machine can start up to three build tickets at once when the rest of its
-budget permits. With three or more active, the newest must have been held for 90
-seconds before another can start. Once a ticket command has waited 30 seconds
-for cores, new build tickets wait until the queue has stayed below that
-threshold for 90 seconds. The two-minute rule still applies to all ordinary
-handoffs. A regression can use available disk space during a queue hold, and a
-justiciar can start to free space. A lane successor shares the same pressure
-checks. If it needs to wait, the landing closes and the successor stays ready.
-Workers that already hold tickets can finish. `ignite status` names the
-condition that is holding up the next handoff.
+The machine can start up to three build tickets at once when slots and cores
+permit. With three or more active, the newest must have been held for 90 seconds
+before another can start. Once a ticket command has waited 30 seconds for cores,
+new build tickets wait until the queue has stayed below that threshold for 90
+seconds. The two-minute rule still applies to all ordinary handoffs.
+
+A regression can use a free slot during a queue hold, and a justiciar can start
+to free space. A lane successor follows the same pressure checks. If it needs to
+wait, the landing closes and the successor stays ready. Workers that already
+hold tickets can finish. `ignite status` names the condition holding up the next
+handoff.
 
 The half-core figure also decides whether `ignite start` prebuilds the tree:
 lighter tickets take an older tree.
@@ -4264,29 +4265,28 @@ through a reviewed landing. Operators edit policy in Fleet.
 ### Fleet settings
 
 The dashboard's Fleet page at `/fleet` shows registered machines and their
-state, disk cap, tree root, tree space and ceiling, recent work, trees, and
+state, tree root, tree space and ceiling, recent work, build slots, and
 capacity. Capacity includes worker count and room for more, admitted and free
-cores, cores busy outside Ignite, memory, disk, the tree budget and what set it,
-and the longest wait for cores. The page shows the latest reason the hub gave
-when it could offer no ticket. Reports older than 60 seconds are marked stale
-with their sample age. The provider section shows enabled shares as percentages,
-current worker counts, recent usage and reset times, holds and eligible
-alternatives, and machine CLI probe results when reported.
+cores, cores busy outside Ignite, memory, free disk space, the largest measured
+build tree, and the longest wait for cores. The page shows the latest reason the
+hub gave when it could offer no ticket. Reports older than 60 seconds are marked
+stale with their sample age. The provider section shows enabled shares as
+percentages, current worker counts, recent usage and reset times, holds and
+eligible alternatives, and machine CLI probe results when reported.
 
 On the private dashboard through Tailscale, the operator or justiciar can edit
 policy. The public dashboard shows the saved settings. `ignite fleet` prints the
 fleet view, including the last 20 settings changes. Its edit commands are:
 
 - `ignite fleet machine <name> --state active|checks-only|off` changes the
-  machine's state. Add `--disk-cap-gb <n>` to cap its build-tree budget or
-  `--disk-cap-gb auto` to use the automatic budget.
+  machine's state.
 - `ignite fleet machine <name> --trees-root <path> --tree-space-gb <n|auto> --tree-ceiling-gb <n>`
   edits the tree settings. The root is an absolute path. Pass
   `--trees-root default` to use `repository.trees`. The sizes are decimal GB and
   the ceiling defaults to 60 GB. Use `auto` for the size of a dedicated volume,
   after the daemon reports it. Use a number when the volume is shared. The tree
-  space and ceiling are stored for the build-slot policy. The current budget
-  still uses the disk cap.
+  space divided by the ceiling gives the number of build slots, rounded down to
+  a minimum of one.
 - `ignite fleet provider <name> [--on|--off] [--share <n>] [--stop-percent <n>]`
   edits provider policy. A share is a weight from 0 to 1,000. Zero makes an
   enabled provider a standby. The stop percentage is from 1 to 100.
@@ -4309,9 +4309,9 @@ clears an emergency pause.
 The hub stores versioned settings and an audit log. Each change records the
 actor, time, summary and resulting policy. A new database seeds the machines and
 providers named in `ignite.toml` with the standard defaults: active machines
-with automatic disk caps, and enabled providers with zero share and a 99% stop
-percentage. Missing entries use the same defaults. Saved settings persist across
-upgrades.
+with the default tree settings, and enabled providers with zero share and a 99%
+stop percentage. Missing entries use the same defaults. Saved settings persist
+across upgrades.
 
 `GET /fleet` under the project API returns the view also available through
 `ignite fleet --json`. `PUT /fleet` requires a machine token with an actor or an
@@ -5140,13 +5140,12 @@ Use a rehearsal hub with two eligible machines and two providers with passing
 probes. Use scripted plan samples and seeded capacity reports for the hold and
 placement cases.
 
-- **Fleet page.** On the private dashboard, set a machine's disk cap, tree root,
-  tree space and tree ceiling. Reload and expect those values in `ignite fleet`
-  and changes with the editor in the audit log. Clear the disk cap with
-  `--disk-cap-gb auto` and confirm both views agree. On the public dashboard,
-  expect the same saved values and no edit controls. Compare a fresh capacity
-  sample with one older than 60 seconds and expect the older one to be marked
-  stale.
+- **Fleet page.** On the private dashboard, set a machine's tree root, tree
+  space and tree ceiling. Reload and expect those values in `ignite fleet` and
+  changes with the editor in the audit log. On the public dashboard, expect the
+  same saved values and no edit controls. Compare the total and free build
+  slots, ceiling and largest measured tree on Fleet and Available. A capacity
+  sample older than 60 seconds is marked stale on Fleet.
 - **Share change.** Give one provider all the share and the other zero. Reserve
   a ticket that either can run, then swap the shares on Fleet. Expect the
   existing reservation to keep its provider and the next one to name the new

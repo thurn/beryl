@@ -9,7 +9,7 @@ use std::thread;
 
 use ignite_core::capacity::BYTES_PER_GB;
 use ignite_core::fleet::{FleetNotice, TreeSettings, TreeSpace};
-use ignite_core::ids::TreeId;
+use ignite_core::ids::{TicketId, TreeId};
 use ignite_core::traits::{Error, Result};
 use ignite_os::Native;
 use ignite_os::occupants::Occupants as _;
@@ -217,17 +217,39 @@ impl Trees {
     }
 
     pub(crate) fn build_slots(&self) -> BuildSlots {
-        let (root, settings) = self.build_volume();
-        let total = configured_slots(&root, &settings);
+        self.dispatch_slots().0
+    }
+
+    pub(super) fn dispatch_slots(&self) -> (BuildSlots, BTreeSet<TicketId>) {
         let locked = self.lock();
+        let root = self.root_in(&locked.db);
+        let settings =
+            crate::fleet_notice::read(&locked.db).map_or_else(TreeSettings::default, |n| n.trees);
+        let total = configured_slots(&root, &settings);
+        let mut holders = BTreeSet::new();
         let free = store::all(&locked.db).map_or(0, |rows| {
-            let unavailable = rows
-                .iter()
-                .filter(|row| self.occupied(&locked, row) && !Self::reclaimable(&locked, row))
-                .count();
-            total.saturating_sub(u32::try_from(unavailable).unwrap_or(u32::MAX))
+            let mut unavailable = 0_u32;
+            for row in rows {
+                if self.occupied(&locked, &row) && !Self::reclaimable(&locked, &row) {
+                    unavailable = unavailable.saturating_add(1);
+                    if let Some(ticket) = row.ticket.and_then(|id| TicketId::new(id).ok()) {
+                        holders.insert(ticket);
+                    }
+                }
+            }
+            total.saturating_sub(unavailable)
         });
-        BuildSlots { total, free }
+        (BuildSlots { total, free }, holders)
+    }
+
+    pub(super) fn build_directories(&self) -> Result<Vec<Vec<PathBuf>>> {
+        let locked = self.lock();
+        let rows = store::all(&locked.db).map_err(|error| store_error(&error))?;
+        Ok(rows
+            .iter()
+            .filter(|row| self.occupied(&locked, row))
+            .map(|row| self.directories(&locked, row))
+            .collect())
     }
 
     pub(crate) fn is_compiled_output(&self, output: &Path) -> bool {

@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use rusqlite::Connection;
 
+use ignite_core::capacity::BuildSpaceReport;
 use ignite_core::dispatch::{self, ReadyTicket, Stage, TicketKind};
 use ignite_core::dispatch_pressure::{Budget, DispatchPressure};
 use ignite_core::fleet::{FleetSettings, MachineState};
@@ -24,7 +25,7 @@ use ignite_core::protocol::tickets::{Status, TicketType};
 use ignite_core::shares::{self, Group};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
-use ignite_store::hub::{fleet, fleet_settings, machine_asks, tickets};
+use ignite_store::hub::{capacity as reports, fleet, fleet_settings, machine_asks, tickets};
 
 use super::super::{mix, usage};
 use super::held::{self, Paused};
@@ -65,8 +66,29 @@ pub struct Held {
 pub struct MachineReport {
     pub name: String,
     pub summary: String,
+    pub build_space: Option<BuildSpaceReport>,
     /// When it last asked for work, and the hub's answer.
     pub asked: Option<(Timestamp, String)>,
+}
+
+impl MachineReport {
+    fn load(
+        conn: &Connection,
+        name: &str,
+        id: &str,
+        summary: String,
+        asked: Option<(Timestamp, String)>,
+        now: Timestamp,
+    ) -> Result<Self> {
+        let build_space =
+            reports::for_machine(conn, id, now)?.and_then(|(_, report)| report.build_space);
+        Ok(Self {
+            name: name.to_owned(),
+            summary,
+            build_space,
+            asked,
+        })
+    }
 }
 
 /// The whole page's data.
@@ -85,8 +107,8 @@ struct Seat<'a> {
     start: MachineFree,
     free: MachineFree,
     ready: HashMap<TicketId, ReadyTicket>,
-    start_disk: Option<Budget<'a>>,
-    disk: Option<Budget<'a>>,
+    start_budget: Budget<'a>,
+    budget: Budget<'a>,
     /// How many tickets the page has handed it.
     taken: u32,
     /// Live room reservations before projecting any of the ready tickets.
@@ -122,11 +144,8 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
     for (name, id, ask) in &asks {
         let Some((asked, free)) = ask else {
             let said = silent_reason(conn, &settings, name, id)?;
-            page.machines.push(MachineReport {
-                name: name.clone(),
-                summary: said.clone(),
-                asked: None,
-            });
+            let report = MachineReport::load(conn, name, id, said.clone(), None, now)?;
+            page.machines.push(report);
             silent.push((name.clone(), said));
             continue;
         };
@@ -153,19 +172,15 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
             .room
             .as_ref()
             .map_or(Ok(0), |_| mix::pending(conn, id, now))?;
-        page.machines.push(MachineReport {
-            name: name.clone(),
-            summary: if asked.is_some() {
-                machine_summary(&free, &master_reason, held_now.cores.len(), pending)
-            } else {
-                format!(
-                    "every worker is busy · {} held · has not asked for work, so its free trees and \
-                     cores are not known",
-                    held_now.cores.len()
-                )
-            },
-            asked: asked.clone(),
-        });
+        let summary = machine_summary(
+            &free,
+            asked.is_some(),
+            &master_reason,
+            held_now.cores.len(),
+            pending,
+        );
+        let report = MachineReport::load(conn, name, id, summary, asked.clone(), now)?;
+        page.machines.push(report);
         let checks_only = state == MachineState::ChecksOnly;
         let fallback = checks_only
             .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, &free, now))
@@ -182,8 +197,8 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
             start: free.clone(),
             free,
             ready: ready.into_iter().map(|t| (t.id.clone(), t)).collect(),
-            start_disk: held_now.disk.clone(),
-            disk: held_now.disk,
+            start_budget: held_now.budget.clone(),
+            budget: held_now.budget,
             taken: 0,
             pending,
             providers,
@@ -328,10 +343,14 @@ fn hand_out(
     }
 }
 
-/// Why the machine cannot take the ticket, from dispatch's own tests and the disk budget.
+/// Why the machine cannot take the ticket, from dispatch's own tests and build slots.
 fn refusal(seat: &Seat, start: bool, ticket: &ReadyTicket) -> Option<String> {
     let free = if start { &seat.start } else { &seat.free };
-    let disk = if start { &seat.start_disk } else { &seat.disk };
+    let budget = if start {
+        &seat.start_budget
+    } else {
+        &seat.budget
+    };
     let blocker = if let Some(room) = &free.room {
         let pending = seat.pending + if start { 0 } else { seat.taken };
         dispatch::blocker_with(free, ticket, || {
@@ -352,15 +371,13 @@ fn refusal(seat: &Seat, start: bool, ticket: &ReadyTicket) -> Option<String> {
             }
         })
         .or_else(|| {
-            disk.as_ref()
-                .and_then(|budget| budget.blocked(ticket))
-                .map(|wait| {
-                    let prefix = format!("{} ", ticket.id);
-                    wait.reason
-                        .strip_prefix(&prefix)
-                        .unwrap_or(&wait.reason)
-                        .to_owned()
-                })
+            budget.blocked(ticket, &seat.name).map(|wait| {
+                let prefix = format!("{} ", ticket.id);
+                wait.reason
+                    .strip_prefix(&prefix)
+                    .unwrap_or(&wait.reason)
+                    .to_owned()
+            })
         })
 }
 
@@ -393,9 +410,8 @@ fn take(seat: &mut Seat, ticket: &ReadyTicket, now: Timestamp) {
     if ticket.kind != TicketKind::Regression {
         seat.free.free_cores -= ticket.expected_cores;
     }
-    if let Some(budget) = &mut seat.disk {
-        budget.hold(&ticket.id, ticket.expected_cores, &ticket.files, Some(now));
-    }
+    seat.budget
+        .hold(&ticket.id, ticket.expected_cores, &ticket.files, Some(now));
     seat.taken += 1;
 }
 
@@ -484,7 +500,18 @@ fn master_reason(
     }
 }
 
-fn machine_summary(free: &MachineFree, master_reason: &str, held: usize, pending: u32) -> String {
+fn machine_summary(
+    free: &MachineFree,
+    has_asked: bool,
+    master_reason: &str,
+    held: usize,
+    pending: u32,
+) -> String {
+    if !has_asked {
+        return format!(
+            "every worker is busy · {held} held · has not asked for work, so its free trees and cores are not known"
+        );
+    }
     let pause = if master_reason.is_empty() {
         String::new()
     } else {

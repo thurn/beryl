@@ -202,6 +202,8 @@ fn the_third_provider_takes_work_during_holds_and_yields_at_reset() {
             ("four", &[], &[]),
         ],
     );
+    conn.execute("UPDATE tickets SET cores = 0.1 WHERE type = 'task'", [])
+        .unwrap();
     let machine = machine_room("m-1", 4, &["claude", "codex", "third"]);
     assert_eq!(ask(&mut conn, &machine, start())["provider"], "claude");
     hold_provider(&conn, "claude", "5-hour", at(5.0));

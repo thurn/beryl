@@ -1,12 +1,15 @@
-//! Report current volume and output availability to the hub.
+//! Report build slots, output availability and build directory sizes to the hub.
 
 use std::collections::BTreeSet;
+use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::thread;
 
 use ignite_core::capacity::BYTES_PER_GIB;
 use ignite_core::dispatch_pressure::DispatchPressure;
 use ignite_core::ids::TicketId;
+use ignite_core::time::Timestamp;
 
-use super::{Kind, Trees, choice, volume_space};
+use super::{Kind, Trees, choice, disk, volume_space};
 
 impl Trees {
     pub(crate) fn dispatch_pressure(
@@ -25,11 +28,12 @@ impl Trees {
             .cloned()
             .collect();
         let disk = volume_space(&self.root());
-        let slots = self.build_slots();
+        let (slots, slot_holders) = self.dispatch_slots();
         let mut pressure = DispatchPressure {
             free_gb: disk.map(|disk| disk.available / BYTES_PER_GIB),
             build_slots: slots.total,
             build_slots_free: slots.free,
+            slot_holders,
             queue_seconds,
             recovery_seconds,
             cpu_percent,
@@ -66,5 +70,50 @@ impl Trees {
             }
         }
         pressure
+    }
+}
+
+/// Measuring all existing outputs can take longer than a heartbeat. Run one scan at a
+/// time and reuse its result between scans. Builds measure individual trees separately
+/// when enforcing the ceiling.
+#[derive(Default)]
+pub(crate) struct LargestTree {
+    next_scan: Option<Timestamp>,
+    pending: Option<Receiver<Option<u64>>>,
+    largest: Option<u64>,
+}
+
+impl LargestTree {
+    pub(crate) fn sample(&mut self, trees: &Trees, now: Timestamp) -> Option<u64> {
+        if let Some(pending) = &self.pending {
+            match pending.try_recv() {
+                Ok(Some(largest)) => self.largest = Some(largest),
+                Err(TryRecvError::Empty) => return self.largest,
+                Ok(None) | Err(TryRecvError::Disconnected) => {
+                    self.next_scan = Some(now.plus_seconds(60.0));
+                }
+            }
+            self.pending = None;
+        }
+        if self.next_scan.is_none_or(|next| now >= next) {
+            self.next_scan = Some(now.plus_seconds(15.0 * 60.0));
+            let (send, receive) = mpsc::channel();
+            let trees = trees.clone();
+            if thread::Builder::new()
+                .name("measure-largest-tree".to_owned())
+                .spawn(move || {
+                    let largest = trees.build_directories().ok().and_then(|trees| {
+                        trees.iter().try_fold(0, |largest, dirs| {
+                            disk::size(dirs).ok().map(|bytes| largest.max(bytes))
+                        })
+                    });
+                    let _ = send.send(largest);
+                })
+                .is_ok()
+            {
+                self.pending = Some(receive);
+            }
+        }
+        self.largest
     }
 }

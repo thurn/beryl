@@ -66,6 +66,8 @@ impl Host for FakeHost {
         _now: Timestamp,
     ) -> Option<ignite_core::dispatch_pressure::DispatchPressure> {
         Some(ignite_core::dispatch_pressure::DispatchPressure {
+            build_slots: 6,
+            build_slots_free: 6,
             queue_seconds: self.ticket_work_wait().floor() as u32,
             cpu_percent: *lock(&self.cpu_percent),
             ..Default::default()

@@ -44,13 +44,9 @@ fn state_description(state: MachineState) -> &'static str {
 }
 
 fn machine_settings(machine: &Machine, setting: MachineSetting, editable: bool) -> String {
-    let MachineSetting {
-        state,
-        disk_cap_gb,
-        trees,
-    } = setting;
+    let MachineSetting { state, trees } = setting;
     let description = state_description(state);
-    let (state_control, disk_cap) = if editable {
+    let state_control = if editable {
         let name = esc(&machine.name);
         let group = format!("fleet-state-{}", esc(&machine.id));
         let help = format!("{group}-help");
@@ -64,21 +60,11 @@ fn machine_settings(machine: &Machine, setting: MachineSetting, editable: bool) 
                 )
             })
             .collect();
-        let value = disk_cap_gb.map_or_else(String::new, |gb| gb.to_string());
-        let max = u32::MAX;
-        (
-            format!(
-                r#"<div class="c-segmented" role="radiogroup" aria-label="{name} state" aria-describedby="{help}">{choices}</div><span class="c-muted" id="{help}">{description}</span>"#
-            ),
-            format!(
-                r#"<div class="c-edit-form"><input type="number" autocomplete="off" data-fleet-field="disk_cap_gb" aria-label="{name} disk cap in GB" min="0" max="{max}" step="1" value="{value}" placeholder="Automatic"></div>"#
-            ),
+        format!(
+            r#"<div class="c-segmented" role="radiogroup" aria-label="{name} state" aria-describedby="{help}">{choices}</div><span class="c-muted" id="{help}">{description}</span>"#
         )
     } else {
-        (
-            format!("{}{}", state_label(state), c::muted(description)),
-            disk_cap_gb.map_or_else(|| "Automatic".to_owned(), |gb| gb.to_string()),
-        )
+        format!("{}{}", state_label(state), c::muted(description))
     };
     let root = trees.trees_root.as_deref().unwrap_or("");
     let space = trees
@@ -117,7 +103,6 @@ fn machine_settings(machine: &Machine, setting: MachineSetting, editable: bool) 
     };
     let items = [
         ("State".to_owned(), state_control),
-        ("Disk cap (GB)".to_owned(), disk_cap),
         ("Trees root".to_owned(), root_control),
         ("Tree space (GB)".to_owned(), space_control),
         ("Tree ceiling (GB)".to_owned(), ceiling_control),
@@ -169,7 +154,7 @@ fn snapshot_section(snapshot: Option<&MachineSnapshot>, now: Timestamp) -> Strin
     c::subsection("Latest machine snapshot", &readings, None, 3)
 }
 
-fn capacity_readings(report: &CapacityReport) -> [(&'static str, String); 6] {
+fn capacity_readings(report: &CapacityReport) -> [(&'static str, String); 7] {
     let unknown = || "unknown".to_owned();
     let workers = report
         .running_workers
@@ -184,11 +169,10 @@ fn capacity_readings(report: &CapacityReport) -> [(&'static str, String); 6] {
         || "free space unknown".to_owned(),
         |gib| format!("{gib} GiB free"),
     );
-    let budget = match report.disk_budget_source {
-        Some(source) => format!("{} GB budget (set by the {source})", report.disk_budget_gb),
-        None if report.disk_budget_gb > 0 => format!("{} GB budget", report.disk_budget_gb),
-        None => "tree budget unknown".to_owned(),
-    };
+    let build_space = report.build_space.map_or_else(
+        || "Build slots unreported".to_owned(),
+        |space| space.to_string(),
+    );
     [
         (
             "Workers",
@@ -202,7 +186,8 @@ fn capacity_readings(report: &CapacityReport) -> [(&'static str, String); 6] {
             ),
         ),
         ("Free memory", memory),
-        ("Disk", format!("{disk}, {budget}")),
+        ("Disk", disk),
+        ("Build trees", build_space),
         (
             "Ticket trees",
             format!(

@@ -24,11 +24,6 @@ pub const WORKER_MB_DEFAULT: u64 = 2_000;
 pub const FREE_TREE_KEEP: usize = 2;
 /// Retire surplus donors after a day without a lease.
 pub const FREE_TREE_RETIRE_HOURS: u32 = 24;
-/// Leave this much space for growth outside the build trees, even on small disks.
-pub const DISK_RESERVE_GB: u64 = 50;
-/// Keep more space for growth outside the trees on large disks.
-pub const DISK_RESERVE_FRACTION: f64 = 0.1;
-
 pub struct MachineView<'a> {
     pub name: &'a str,
     pub os: Os,

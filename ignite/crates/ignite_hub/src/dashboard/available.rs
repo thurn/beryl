@@ -97,9 +97,13 @@ pub(crate) fn page(
                         &format!("Answer: {answer}"),
                     )
                 });
+            let build_space = machine.build_space.map_or_else(
+                || "Build slots unreported".to_owned(),
+                |space| space.to_string(),
+            );
             c::row(
                 &(format!("<strong>{}</strong> ", esc(&machine.name))
-                    + &c::muted(&esc(&machine.summary))),
+                    + &c::muted(&esc(&format!("{} · {build_space}", machine.summary)))),
                 &asked,
                 None,
             )

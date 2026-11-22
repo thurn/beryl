@@ -75,3 +75,20 @@ fn portable_result_keys_have_no_platform() {
     assert_eq!(value["platform"], serde_json::Value::Null);
     assert_eq!(serde_json::from_value::<ResultKey>(value).unwrap(), key);
 }
+
+#[test]
+fn a_legacy_hubs_disk_target_is_read_as_a_wait_reason() {
+    let reply: NextReply = serde_json::from_value(serde_json::json!({
+        "nothing": "disk space is low",
+        "reclaim_to_gb": 100
+    }))
+    .unwrap();
+    assert_eq!(
+        reply,
+        NextReply::Nothing(Some("disk space is low".to_owned()))
+    );
+    assert_eq!(
+        serde_json::to_value(reply).unwrap(),
+        serde_json::json!({"nothing": "disk space is low"})
+    );
+}

@@ -204,7 +204,6 @@ pub struct ProviderOffer {
 pub enum NextReply {
     Reserved(Reservation),
     Nothing(Option<String>),
-    ReclaimDisk { reason: String, target_gb: u64 },
 }
 
 /// `POST /next`'s body on the wire: a reservation, `{"nothing": "<reason>"}`, or `null`.
@@ -212,11 +211,7 @@ pub enum NextReply {
 #[serde(untagged)]
 enum NextWire {
     Reserved(Reservation),
-    Nothing {
-        nothing: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        reclaim_to_gb: Option<u64>,
-    },
+    Nothing { nothing: String },
 }
 
 impl Serialize for NextReply {
@@ -226,12 +221,6 @@ impl Serialize for NextReply {
             Self::Nothing(None) => serializer.serialize_none(),
             Self::Nothing(Some(reason)) => NextWire::Nothing {
                 nothing: reason.clone(),
-                reclaim_to_gb: None,
-            }
-            .serialize(serializer),
-            Self::ReclaimDisk { reason, target_gb } => NextWire::Nothing {
-                nothing: reason.clone(),
-                reclaim_to_gb: Some(*target_gb),
             }
             .serialize(serializer),
         }
@@ -242,17 +231,7 @@ impl<'de> Deserialize<'de> for NextReply {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Ok(match Option::<NextWire>::deserialize(deserializer)? {
             Some(NextWire::Reserved(r)) => Self::Reserved(r),
-            Some(NextWire::Nothing {
-                nothing,
-                reclaim_to_gb: Some(target_gb),
-            }) => Self::ReclaimDisk {
-                reason: nothing,
-                target_gb,
-            },
-            Some(NextWire::Nothing {
-                nothing,
-                reclaim_to_gb: None,
-            }) => Self::Nothing(Some(nothing)),
+            Some(NextWire::Nothing { nothing }) => Self::Nothing(Some(nothing)),
             None => Self::Nothing(None),
         })
     }
