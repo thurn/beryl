@@ -19,7 +19,7 @@ pub trait Feature {
     type Command;
     type Request;
 
-    /// Handles a message and reports whether the state changed.
+    /// Handles a message and reports whether the cached view changed.
     fn update(
         state: &mut Self::State,
         message: &Self::Message,
@@ -71,6 +71,14 @@ impl<Command, Request> Context<'_, Command, Request> {
     }
 }
 
+/// An update supplied by a feature's owner that can borrow live inputs or return a value.
+pub trait StateUpdate<F: Feature> {
+    type Output;
+
+    /// Applies the update and reports whether the cached view changed.
+    fn apply(self, state: &mut F::State) -> (bool, Self::Output);
+}
+
 /// A feature's live state and the last element built for it.
 pub struct FeatureSlot<F: Feature> {
     state: F::State,
@@ -92,15 +100,13 @@ impl<F: Feature> FeatureSlot<F> {
         &self.state
     }
 
-    /// State used by the owner's prepared views. The view key must account for
-    /// inputs changed here, since this access leaves the cached element in place.
-    pub fn state_mut(&mut self) -> &mut F::State {
-        &mut self.state
-    }
-
-    /// Drops a cached view after a change outside the action router.
-    pub fn invalidate_view(&mut self) {
-        self.cached = None;
+    /// Applies an owner's update, invalidating the view when the update changes it.
+    pub fn apply<U: StateUpdate<F>>(&mut self, update: U) -> U::Output {
+        let (changed, output) = update.apply(&mut self.state);
+        if changed {
+            self.cached = None;
+        }
+        output
     }
 
     /// Applies one message and returns the effects to the router.

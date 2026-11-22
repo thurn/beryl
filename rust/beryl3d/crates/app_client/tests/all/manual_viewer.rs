@@ -180,6 +180,22 @@ fn closing_a_library_search_asks_whether_to_shuffle_it() {
     client.handle(Input::Reply(Reply::TableAct(TableActReply::Ok {
         ok: true,
     })));
+    let group = "Group by type";
+    let frame = client.frame(0);
+    assert!(
+        !button(frame, group)
+            .unwrap()
+            .state
+            .has(kit_frame::frame::StateBits::SELECTED)
+    );
+    press(&mut client, group);
+    let frame = client.frame(0);
+    assert!(
+        button(frame, group)
+            .unwrap()
+            .state
+            .has(kit_frame::frame::StateBits::SELECTED)
+    );
     press(&mut client, "close");
     assert!(acts(&mut client).is_empty(), "the first close only asks");
     let frame = client.frame(0).clone();

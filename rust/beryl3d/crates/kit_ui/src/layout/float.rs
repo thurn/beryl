@@ -83,6 +83,21 @@ impl Float {
 }
 
 impl Layer {
+    /// Copies the element tree currently shown in a float for inspection.
+    #[must_use]
+    pub fn float_element(&self, id: FloatId) -> Option<Element> {
+        fn copy(node: &Node) -> Element {
+            node.element
+                .clone()
+                .children(node.children.iter().map(copy))
+        }
+        let index = self
+            .floats
+            .binary_search_by_key(&id, |float| float.id)
+            .ok()?;
+        Some(copy(&self.floats[index].node))
+    }
+
     /// Shows `element` as the float `id`, or removes that float. The element is matched against
     /// the one the float had, as `show` matches a screen: an equal element keeps its layout and
     /// its laid-out text. A new float takes the default look until `set_float_look` gives it

@@ -22,9 +22,10 @@ use beryl_protocol::protocol::SessionId;
 use beryl_protocol::script::{OwnTimings, Verb, own_timings};
 
 use app_screens::screens::{Screen, bug_report, start, testing};
-use game_hud::hud::banner::Banner;
-use game_hud::hud::notices::NoticeFloats;
+use game_hud::hud::banner;
+use game_hud::hud::{counts, notices, piles, rows};
 use game_hud::prompts;
+use game_manual::features::table::RefusalSound;
 use game_play::play::Show;
 use game_play::play::record::{Plant, ScriptRecord};
 use game_play::pointer::LetGo;
@@ -253,28 +254,27 @@ impl Client {
         if !again {
             self.features.log_history.take(&update.view);
         }
-        Banner::prepare(&mut self.layer, &update.view);
+        self.features.banner(banner::Prepare {
+            layer: &mut self.layer,
+            view: &update.view,
+        });
         self.show.push_update(update);
         // Every life total and pool the scripts to come will show is laid out now, so
         // that a frame lays out none of them.
         self.prepare_counts();
         // And so is every notice they will show.
-        NoticeFloats::prepare(
-            &mut self.layer,
-            self.show.coming_notices(),
-            self.show.notices(),
-        );
+        self.prepare_notices();
         let (text, glyphs) = self.layer.text_and_glyphs();
         self.show.shape_badges(text, glyphs, self.window.scale);
         let shown = self.show.shown().map(|update| &update.view);
         let coming = self.show.coming_counts().map(|(_, view)| view);
         let table = self.show.table();
-        self.features
-            .piles_mut()
-            .prepare(&mut self.layer, table, shown.into_iter().chain(coming));
-        self.features
-            .rows_mut()
-            .prepare(&mut self.layer, self.show.coming_rows());
+        self.features.update_piles(piles::Prepare {
+            layer: &mut self.layer,
+            table,
+            views: shown.into_iter().chain(coming),
+        });
+        self.prepare_rows();
         self.show_screen();
     }
 
@@ -339,9 +339,7 @@ impl Client {
         // The flat layer is placed for the table's camera, so the frame takes it even when no
         // game view writes the table, as on the start screen (the "layer drawn" check).
         builder.camera(self.show.table().camera().view_projection);
-        if self.features.table().refused {
-            builder.sounds(self.features.table_mut().take_refusal());
-        }
+        builder.sounds(self.features.update_table(RefusalSound));
         self.show.frame(table_now, &mut builder);
         // Elements anchored to a card, an ability or a player stand where the table drew it.
         let table = self.show.table();
@@ -352,36 +350,42 @@ impl Client {
             .follow(|subject| game_hud::hud::anchors::spot_of(&builder, table, subject));
         // Each total shows what `prepare` laid out, over the opening too, as the web's does.
         let opening = self.features.opening.shown;
-        self.features.totals_mut().write(
-            &mut self.layer,
-            self.show.counts(),
-            self.show.effects(),
-            table_now,
-            (table, builder.tier()),
-            (counted, targets, opening),
-        );
-        self.features
-            .piles_mut()
-            .write(&mut self.layer, &self.show, counted && !covers);
-        self.features.notices_mut().write(
-            &mut self.layer,
-            self.show.notices(),
-            table_now,
-            self.show.table().layout(),
+        self.features.totals(counts::Draw {
+            layer: &mut self.layer,
+            counts: self.show.counts(),
+            effects: self.show.effects(),
+            now: table_now,
+            table,
+            tier: builder.tier(),
+            visible: counted,
+            targets,
+            dimmed: opening,
+        });
+        self.features.update_piles(piles::Draw {
+            layer: &mut self.layer,
+            table,
+            hovered: self.show.pointer().hovered_pile(),
+            visible: counted && !covers,
+        });
+        self.features.notices(notices::Draw {
+            layer: &mut self.layer,
+            notices: self.show.notices(),
+            now: table_now,
+            layout: table.layout(),
             visible,
-        );
-        self.features
-            .rows_mut()
-            .write(&mut self.layer, self.show.table(), rows_counted);
-        let at_rest = self.show.shown().map(|update| &update.view);
-        let banner = self.features.banner_mut();
-        banner.write(
-            &mut self.layer,
-            at_rest,
-            table_now,
+        });
+        self.features.update_rows(rows::Draw {
+            layer: &mut self.layer,
+            table,
+            visible: rows_counted,
+        });
+        self.features.banner(banner::Draw {
+            layer: &mut self.layer,
+            view: self.show.shown().map(|update| &update.view),
+            now: table_now,
             visible,
-            table.data().hud,
-        );
+            tuning: table.data().hud,
+        });
         Tree::solve_float_anchors(&mut self.layer, &builder);
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
@@ -433,12 +437,18 @@ impl Client {
         // next frame, and a prompt whose view has just played out draws its marks in it.
         let own_due = self.features.prompts.due() && self.show.settled();
         let inspecting = self.features.inspector().needs_frame(self.hovered_slot());
-        self.wake =
-            if transitioning || own_due || inspecting || self.features.piles().due(&self.show) {
-                Wake::Now
-            } else {
-                self.timed_wake(table_now)
-            };
+        self.wake = if transitioning
+            || own_due
+            || inspecting
+            || self
+                .features
+                .piles()
+                .due(self.show.pointer().hovered_pile())
+        {
+            Wake::Now
+        } else {
+            self.timed_wake(table_now)
+        };
     }
 
     /// The spans and streaks the table shows.

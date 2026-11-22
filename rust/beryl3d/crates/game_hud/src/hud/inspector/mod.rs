@@ -2,10 +2,14 @@
 
 use beryl_protocol::DecisionId;
 use beryl_protocol::prompt::{PromptView, Purpose};
-use beryl_protocol::protocol::{ObjectId, RefusalView, Refused, Side, ZoneName};
-use game_table::faces::FaceList;
-use kit_frame::frame::{ElementId, Frame, Place, Role, StateBits};
-use kit_ui::input::Rect;
+use beryl_protocol::protocol::{ObjectId, PlayerView, RefusalView, Refused, Side, ZoneName};
+use game_table::{faces::FaceList, profiles::Profile};
+use kit_frame::frame::{Anchor, ElementId, Frame, Place, Role, StateBits};
+use kit_scene::{Context, Feature, StateUpdate};
+use kit_ui::element::{Element, FloatId, floats};
+use kit_ui::input::{FaceId, Rect};
+use kit_ui::layout::{FloatLook, Layer};
+use std::convert::Infallible;
 
 mod view;
 pub use view::*;
@@ -30,47 +34,163 @@ pub struct Inspector {
 }
 
 /// Changes to which card the inspector reads.
+#[derive(Clone, Debug, PartialEq)]
 pub enum Message {
     Invalidate,
     Pin(Option<ObjectId>),
     Refused(DecisionId, Refused),
-    Observe {
-        hovered: Option<ObjectId>,
-        until: Option<u64>,
-    },
 }
 
-impl Inspector {
-    /// Marks the inspector for layout if its inputs or pinned card changed.
-    pub fn update(&mut self, message: Message) {
+pub enum Inputs<'a> {
+    Card(CardInputs<'a>),
+    Refusal,
+}
+
+#[derive(PartialEq)]
+pub enum ViewKey {
+    Card(Box<CardKey>),
+    Refusal,
+}
+
+impl Feature for Inspector {
+    type State = Self;
+    type Message = Message;
+    type Inputs<'a> = Inputs<'a>;
+    type ViewKey = ViewKey;
+    type Command = Infallible;
+    type Request = Infallible;
+
+    fn update(
+        state: &mut Self,
+        message: &Message,
+        _: &mut Context<'_, Infallible, Infallible>,
+    ) -> bool {
         match message {
-            Message::Invalidate => self.due = true,
-            Message::Pin(slot) if slot != self.pinned => {
-                self.pinned = slot;
-                self.due = true;
+            Message::Invalidate => state.due = true,
+            Message::Pin(slot) if *slot != state.pinned => {
+                state.pinned = *slot;
+                state.due = true;
             }
-            Message::Pin(_) => {}
+            Message::Pin(_) => return false,
             Message::Refused(decision, refused) => {
-                self.refusal = Some(Refusal {
-                    decision,
-                    refused,
+                state.refusal = Some(Refusal {
+                    decision: *decision,
+                    refused: refused.clone(),
                     said: true,
                     notice_until: None,
                     notice_done: false,
                 });
-                self.due = true;
+                state.due = true;
             }
-            Message::Observe { hovered, until } => {
-                self.judged = hovered;
-                self.notice_until = until;
-                if let Some(refusal) = &mut self.refusal
-                    && refusal.said
-                    && hovered != Some(refusal.refused.slot)
-                {
-                    refusal.said = false;
-                    self.due = true;
-                }
-            }
+        }
+        true
+    }
+
+    fn view_key(_: &Self, input: &Inputs<'_>) -> ViewKey {
+        match input {
+            Inputs::Card(card) => ViewKey::Card(Box::new(card.key())),
+            Inputs::Refusal => ViewKey::Refusal,
+        }
+    }
+
+    fn view(_: &Self, input: Inputs<'_>) -> Element {
+        match input {
+            Inputs::Card(card) => view::inspector(&card),
+            Inputs::Refusal => view::notice(),
+        }
+    }
+}
+
+impl super::FloatFeature for Inspector {
+    fn floats() -> impl Iterator<Item = FloatId> {
+        [floats::INSPECTOR, floats::REFUSAL].into_iter()
+    }
+}
+
+/// Uses the last frame's hovered card to update the inspector's float when needed.
+pub struct Draw<'a> {
+    pub layer: &'a mut Layer,
+    pub frame: &'a Frame,
+    pub faces: &'a FaceList,
+    pub profile: Profile<'a>,
+    pub view: Option<&'a PlayerView>,
+    pub prompt: Option<&'a PromptView>,
+    pub decision: Option<DecisionId>,
+    pub hovered: Option<ObjectId>,
+    pub until: Option<u64>,
+}
+
+impl StateUpdate<Inspector> for Draw<'_> {
+    type Output = Option<FaceId>;
+
+    fn apply(self, state: &mut Inspector) -> (bool, Self::Output) {
+        state.observe(self.hovered, self.until);
+        let inspected = self
+            .view
+            .and_then(|_| state.inspected_now(self.frame, self.faces, self.prompt, self.decision));
+        if !state.refresh(inspected) {
+            return (false, None);
+        }
+        if let Some((inspected, inputs)) =
+            state.shown().zip(self.view).and_then(|(inspected, view)| {
+                Some((
+                    inspected,
+                    CardInputs::new(inspected, self.profile, view, self.faces)?,
+                ))
+            })
+        {
+            let anchor = inputs.anchor();
+            self.layer.float(
+                floats::INSPECTOR,
+                Some(Inspector::view(state, Inputs::Card(inputs))),
+            );
+            self.layer
+                .anchor_float(floats::INSPECTOR, anchor, FloatLook::default());
+            (true, Some(inspected.face))
+        } else {
+            self.layer.float(floats::INSPECTOR, None);
+            (true, None)
+        }
+    }
+}
+
+/// Shows the temporary refusal notice at the permanent causing the timing restriction.
+pub struct RefusalNotice<'a> {
+    pub layer: &'a mut Layer,
+    pub anchor: Option<Anchor>,
+    pub now: u64,
+}
+
+impl StateUpdate<Inspector> for RefusalNotice<'_> {
+    type Output = Option<u64>;
+
+    fn apply(self, state: &mut Inspector) -> (bool, Self::Output) {
+        let until = state.refusal_until(self.anchor.is_some(), self.now);
+        let shown = until.and(self.anchor);
+        self.layer.float(
+            floats::REFUSAL,
+            shown
+                .as_ref()
+                .map(|_| Inspector::view(state, Inputs::Refusal)),
+        );
+        if let Some(anchor) = shown {
+            self.layer
+                .anchor_float(floats::REFUSAL, anchor, FloatLook::default());
+        }
+        (false, until)
+    }
+}
+
+impl Inspector {
+    fn observe(&mut self, hovered: Option<ObjectId>, until: Option<u64>) {
+        self.judged = hovered;
+        self.notice_until = until;
+        if let Some(refusal) = &mut self.refusal
+            && refusal.said
+            && hovered != Some(refusal.refused.slot)
+        {
+            refusal.said = false;
+            self.due = true;
         }
     }
 
@@ -95,7 +215,7 @@ impl Inspector {
     }
 
     /// Returns whether the float needs updating after a change of inputs.
-    pub fn refresh(&mut self, inspected: Option<Inspected>) -> bool {
+    fn refresh(&mut self, inspected: Option<Inspected>) -> bool {
         if self.shown == inspected && !self.due {
             return false;
         }
@@ -124,7 +244,7 @@ impl Inspector {
     }
 
     /// Starts the refusal notice's timer once the permanent can be seen.
-    pub fn refusal_until(&mut self, visible: bool, now: u64) -> Option<u64> {
+    fn refusal_until(&mut self, visible: bool, now: u64) -> Option<u64> {
         let refusal = self
             .refusal
             .as_mut()
@@ -141,7 +261,7 @@ impl Inspector {
     /// face down or its click was just refused; a finger, which raises no card, sees it whole. A
     /// face-down card shows its face only to a viewer who knows it, whose view names it (UI
     /// Conventions, "Inspecting a face-down manual card"): one with no name has no face to find.
-    pub fn inspected_now(
+    fn inspected_now(
         &self,
         frame: &Frame,
         faces: &FaceList,

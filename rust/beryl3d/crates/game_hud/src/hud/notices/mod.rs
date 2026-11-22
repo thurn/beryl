@@ -4,20 +4,23 @@
 //! (`floats::SCRY_PILL`), and a coin's flip (`floats::COIN`). The words are the web
 //! interface's (`ui/src/stage/notices.ts` and `ui/src/game/TurnBanner.tsx`).
 //!
-//! - `NoticeFloats::prepare` lays out the element of every notice of the playing and waiting
+//! - `Prepare` lays out the element of every notice of the playing and waiting
 //!   scripts as each update arrives, under the notice's key (`notice::key`), so that a frame
 //!   lays nothing out.
-//! - `NoticeFloats::write` shows in each float the notice under way there that began last, as
+//! - `Draw` shows in each float the notice under way there that began last, as
 //!   the web's `announced` picks one, and sets its look: it fades in and out over the shares
 //!   of its run its kind gives (`notice::Fade`).
 
 use beryl_protocol::protocol::{PlayerView, Side};
+use beryl_protocol::script::Notice;
 use glam::Vec2;
+use std::convert::Infallible;
 
 use game_play::notice::{Announced, NoticeRun, Place};
 use game_table::table::{HALF_LIFE, HudAnchor, Layout};
 use kit_base::tokens::{ratio, space};
-use kit_ui::element::{FloatId, floats};
+use kit_scene::{Context, Feature, StateUpdate};
+use kit_ui::element::{Element, FloatId, floats};
 use kit_ui::layout::{FloatLook, Layer};
 
 /// Every float a notice is shown in, with the place that shows there.
@@ -34,12 +37,131 @@ pub struct NoticeFloats {
     shown: [Option<u64>; FLOATS.len()],
 }
 
+/// Information from the notice's view needed to name the source and the seats.
+pub struct Inputs<'a> {
+    pub notice: &'a Notice,
+    pub view: &'a PlayerView,
+}
+
+impl Feature for NoticeFloats {
+    type State = Self;
+    type Message = Infallible;
+    type Inputs<'a> = Inputs<'a>;
+    type ViewKey = (Notice, Option<String>, Option<(usize, Option<String>)>);
+    type Command = Infallible;
+    type Request = Infallible;
+
+    fn update(
+        _: &mut Self,
+        message: &Infallible,
+        _: &mut Context<'_, Infallible, Infallible>,
+    ) -> bool {
+        match *message {}
+    }
+
+    fn view_key(_: &Self, input: &Inputs<'_>) -> Self::ViewKey {
+        (
+            input.notice.clone(),
+            input.coin_source().map(str::to_owned),
+            input
+                .roll_seats()
+                .map(|(seat, peer)| (seat, peer.map(str::to_owned))),
+        )
+    }
+
+    fn view(_: &Self, input: Inputs<'_>) -> Element {
+        // A notice only tells what happened. A press reaches the card beneath it.
+        view::element(&input)
+            .name(name_of(Place::of(input.notice)))
+            .passes(true)
+    }
+}
+
+impl Inputs<'_> {
+    fn coin_source(&self) -> Option<&str> {
+        let Notice::Coin { source, .. } = self.notice else {
+            return None;
+        };
+        self.view
+            .objects
+            .iter()
+            .find(|object| object.slot == *source)?
+            .name
+            .as_deref()
+    }
+
+    fn roll_seats(&self) -> Option<(usize, Option<&str>)> {
+        let Notice::Roll { outcomes, .. } = self.notice else {
+            return None;
+        };
+        let table = self
+            .view
+            .table
+            .as_ref()
+            .filter(|table| table.choosing_first && outcomes.len() == 2)?;
+        Some((
+            usize::from(table.seat.unwrap_or(0)),
+            table.peer_name.as_deref(),
+        ))
+    }
+}
+
+impl super::FloatFeature for NoticeFloats {
+    fn floats() -> impl Iterator<Item = FloatId> {
+        FLOATS.into_iter().map(|(id, _)| id)
+    }
+}
+
+/// Lays out the notices of playing and upcoming scripts.
+pub struct Prepare<'a, Coming> {
+    pub layer: &'a mut Layer,
+    pub coming: Coming,
+    pub held: &'a [Announced],
+}
+
+impl<'a, Coming> StateUpdate<NoticeFloats> for Prepare<'_, Coming>
+where
+    Coming: Iterator<Item = (usize, &'a [NoticeRun], &'a PlayerView)>,
+{
+    type Output = ();
+
+    fn apply(self, state: &mut NoticeFloats) -> (bool, ()) {
+        state.prepare(self.layer, self.coming, self.held);
+        (false, ())
+    }
+}
+
+/// Samples the prepared notices under way in a playback frame.
+pub struct Draw<'a> {
+    pub layer: &'a mut Layer,
+    pub notices: &'a [Announced],
+    pub now: u64,
+    pub layout: &'a Layout,
+    pub visible: bool,
+}
+
+impl StateUpdate<NoticeFloats> for Draw<'_> {
+    type Output = ();
+
+    fn apply(self, state: &mut NoticeFloats) -> (bool, ()) {
+        state.write(
+            self.layer,
+            self.notices,
+            self.now,
+            self.layout,
+            self.visible,
+        );
+        (false, ())
+    }
+}
+
 impl NoticeFloats {
     /// Lays out in `layer` the element of each notice in `coming` (`Show::coming_notices`),
     /// and forgets those laid out before that are neither coming nor in `held`
     /// (`Show::notices`). The client calls it as each update arrives, so that `write` lays
     /// nothing out and allocates nothing.
-    pub fn prepare<'a>(
+    fn prepare<'a>(
+        &self,
         layer: &mut Layer,
         coming: impl Iterator<Item = (usize, &'a [NoticeRun], &'a PlayerView)>,
         held: &[Announced],
@@ -50,12 +172,14 @@ impl NoticeFloats {
                 let key = game_play::notice::key(script, run.step);
                 keys.push(key);
                 let place = Place::of(&run.notice);
-                // A notice only tells what happened and takes no press, so a press on it
-                // reaches the card beneath, which it may stand over while it shows.
                 layer.prepare(float_of(place), key, || {
-                    view::element(&run.notice, view)
-                        .name(name_of(place))
-                        .passes(true)
+                    Self::view(
+                        self,
+                        Inputs {
+                            notice: &run.notice,
+                            view,
+                        },
+                    )
                 });
             }
         }
@@ -66,7 +190,7 @@ impl NoticeFloats {
 
     /// Shows in `layer` the notices of `notices` under way at `now`, placed for `layout`, or none of them unless `visible`. Lays nothing out and allocates
     /// nothing for what `prepare` laid out.
-    pub fn write(
+    fn write(
         &mut self,
         layer: &mut Layer,
         notices: &[Announced],

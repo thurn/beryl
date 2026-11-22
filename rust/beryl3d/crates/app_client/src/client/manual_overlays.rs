@@ -12,8 +12,11 @@ use beryl_protocol::protocol::{ObjectId, Side};
 use super::Client;
 use crate::command::Request;
 use game_manual::features::{
-    library_order, palette::Message as PaletteMessage, table::Message as TableMessage,
-    tokens::Message as TokenMessage,
+    ask::Message as AskMessage,
+    library_order,
+    palette::Message as PaletteMessage,
+    table::Message as TableMessage,
+    tokens::{Highlight, Message as TokenMessage},
 };
 use game_manual::manual::Target;
 use game_manual::manual::ask::{self, Ask, Confirmed};
@@ -35,7 +38,7 @@ impl Client {
         };
         let palette = Palette::open(target, view, &self.table_context(), settings);
         self.over(palette::FIELD, FieldState::default());
-        *self.features.palette_mut() = Some(palette);
+        self.update_palette(&PaletteMessage::Open(palette));
         self.show_screen();
         self.layer.focus_field(palette::FIELD);
     }
@@ -84,7 +87,7 @@ impl Client {
     pub(super) fn show_ask(&mut self, ask: Ask) {
         self.over(&ask.field, ask.field_state());
         let name = ask.field.clone();
-        *self.features.ask_mut() = Some(ask);
+        self.update_ask(&AskMessage::Open(ask));
         self.show_screen();
         self.layer.focus_field(&name);
     }
@@ -175,10 +178,8 @@ impl Client {
                 let view = self.show.latest().map(|update| &update.view);
                 if self.features.palette().is_some() {
                     self.update_palette(&PaletteMessage::Highlight(down));
-                } else if let (Some(open), Some(view)) =
-                    (&mut self.features.tokens_mut().search, view)
-                {
-                    open.move_highlight(down, view);
+                } else if let Some(view) = view {
+                    self.features.highlight_token(Highlight { down, view });
                 }
                 self.show_screen();
             }
@@ -196,20 +197,19 @@ impl Client {
     /// Runs the `at`th row the command list shows, or its shifted form if `shift`, and closes
     /// the list.
     pub(super) fn run_palette_row(&mut self, at: usize, shift: bool) {
-        let Some(open) = self.features.palette_mut().take() else {
+        let Some(open) = self.features.palette() else {
             return;
         };
         let query = self.layer.fields().get(palette::FIELD).text;
         let Some(row) = open.matched(&query).get(at).map(|row| (*row).clone()) else {
-            *self.features.palette_mut() = Some(open);
             return;
         };
         if row.command == RESET {
-            *self.features.palette_mut() = Some(open);
             self.settings.bindings.reset();
             self.bindings_changed(RESET_NOTICE.to_owned());
             return;
         }
+        self.update_palette(&PaletteMessage::Reset);
         self.layer.focus(None);
         let Some(view) = self.show.latest().map(|update| &update.view) else {
             return;
@@ -254,13 +254,13 @@ impl Client {
         match ask.confirm(text, view) {
             Some(Confirmed::Next(next)) => self.show_ask(*next),
             Some(Confirmed::Send(actions)) => {
-                *self.features.ask_mut() = None;
+                self.update_ask(&AskMessage::Reset);
                 self.layer.focus(None);
                 self.send_table(actions);
                 self.show_screen();
             }
             Some(Confirmed::Answer(answer)) => {
-                *self.features.ask_mut() = None;
+                self.update_ask(&AskMessage::Reset);
                 self.layer.focus(None);
                 self.send_answer(answer);
                 self.show_screen();
@@ -362,7 +362,7 @@ impl Client {
     /// command, with the field no longer taking keys. Nothing on the row that resets the keys,
     /// which no key can be bound to.
     fn start_capture(&mut self) {
-        let Some(open) = self.features.palette_mut() else {
+        let Some(open) = self.features.palette() else {
             return;
         };
         let query = self.layer.fields().get(palette::FIELD).text;
@@ -371,7 +371,7 @@ impl Client {
         if !bindable {
             return;
         }
-        open.capturing = true;
+        self.update_palette(&PaletteMessage::Capture(true));
         self.layer.focus(None);
         self.show_screen();
     }
@@ -416,9 +416,7 @@ impl Client {
     /// Stops waiting for a key to bind; a binding made says so in `notice`, and the bindings
     /// are saved.
     pub(super) fn stop_capture(&mut self, notice: Option<String>) {
-        if let Some(open) = self.features.palette_mut() {
-            open.capturing = false;
-        }
+        self.update_palette(&PaletteMessage::Capture(false));
         if let Some(notice) = notice {
             self.bindings_changed(notice);
         } else {
@@ -441,7 +439,7 @@ impl Client {
         });
         if let Some(Some(mut open)) = rows {
             open.notice = Some(notice);
-            *self.features.palette_mut() = Some(open);
+            self.update_palette(&PaletteMessage::Open(open));
         }
         self.requests
             .push_back(Request::SaveSettings(self.settings.clone()));

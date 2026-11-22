@@ -3,15 +3,13 @@
 use super::{Message, State};
 use crate::manual::bindings::Bindings;
 use crate::manual::commands::{COMMANDS, Scope};
-use crate::manual::drop::Destination;
 use crate::manual::pile_viewer::table_viewer;
-use crate::manual::viewers::{PileViewer, SEARCH};
+use crate::manual::viewers::SEARCH;
 use crate::manual::{assists, drop, link, opening, pools, quit, selection, turn};
-use beryl_protocol::{PlayerView, protocol::ObjectId};
+use beryl_protocol::PlayerView;
 use game_hud::hud::{HudIn, players, steps};
 use game_hud::{hud::viewer::RevealedFace, inspect::Viewed};
 use game_table::{faces::FaceList, profiles::Profile, table::Window};
-use glam::Vec2;
 use kit_base::data::profiles::ProfileData;
 use kit_scene::SizeClass;
 use kit_ui::element::{Action, Chord, Element, column};
@@ -41,19 +39,13 @@ pub struct ViewKey {
     link_error: Option<String>,
     bindings: Bindings,
     viewing: Option<Viewed>,
-    viewer: Option<(PileViewer, FieldState, Option<FaceList>, Vec<RevealedFace>)>,
-    selection: Vec<ObjectId>,
-    summary_over: Option<ObjectId>,
-    sweep: Option<(Vec2, Vec2)>,
-    landing: Option<Destination>,
-    mana_sheet: Option<beryl_protocol::protocol::Side>,
-    quitting: bool,
+    viewer: Option<(FieldState, Option<FaceList>, Vec<RevealedFace>)>,
     overlay_open: bool,
     overlays: [Option<Element>; 4],
 }
 
 impl ViewKey {
-    pub(super) fn new(state: &State, input: &Inputs<'_>) -> Self {
+    pub(super) fn new(input: &Inputs<'_>) -> Self {
         let hud = &input.hud;
         Self {
             drag_threshold: input.drag_threshold,
@@ -67,18 +59,11 @@ impl ViewKey {
             viewing: hud.viewing,
             viewer: hud.viewing.map(|_| {
                 (
-                    state.viewer.clone(),
                     input.fields.get(SEARCH),
                     hud.faces.cloned(),
                     hud.revealed.to_vec(),
                 )
             }),
-            selection: state.selection.clone(),
-            summary_over: state.summary_over,
-            sweep: state.sweep,
-            landing: state.landing,
-            mana_sheet: state.mana_sheet,
-            quitting: state.quitting,
             overlay_open: input.overlay_open,
             overlays: [
                 input.log.clone(),

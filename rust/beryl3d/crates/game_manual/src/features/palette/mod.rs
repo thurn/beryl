@@ -12,11 +12,20 @@ pub type State = Option<Palette>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
+    Open(Palette),
+    Reset,
+    Capture(bool),
     Query(String),
     Highlight(bool),
     Choose(u16),
     CancelCapture,
     Close,
+}
+
+pub enum Request {
+    Choose(u16),
+    CancelCapture,
+    ClearFocus,
 }
 
 pub struct CommandList;
@@ -27,25 +36,39 @@ impl Feature for CommandList {
     type Inputs<'a> = Inputs<'a>;
     type ViewKey = ViewKey;
     type Command = Infallible;
-    type Request = Message;
+    type Request = Request;
 
     fn update(
         state: &mut State,
         message: &Message,
         context: &mut Context<'_, Self::Command, Self::Request>,
     ) -> bool {
-        let Some(palette) = state.as_mut() else {
-            return false;
+        let palette = match message {
+            Message::Open(palette) => {
+                *state = Some(palette.clone());
+                return true;
+            }
+            Message::Reset => return state.take().is_some(),
+            _ => match state.as_mut() {
+                Some(palette) => palette,
+                None => return false,
+            },
         };
         match message {
+            Message::Open(_) | Message::Reset => unreachable!("handled above"),
+            Message::Capture(capturing) => palette.capturing = *capturing,
             Message::Query(query) => palette.set_query(query),
             Message::Highlight(down) => palette.move_highlight(*down),
             Message::Close => {
                 *state = None;
-                context.request(Message::Close);
+                context.request(Request::ClearFocus);
             }
-            Message::Choose(_) | Message::CancelCapture => {
-                context.request(message.clone());
+            Message::Choose(at) => {
+                context.request(Request::Choose(*at));
+                return false;
+            }
+            Message::CancelCapture => {
+                context.request(Request::CancelCapture);
                 return false;
             }
         }

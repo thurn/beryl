@@ -6,7 +6,7 @@ use beryl_protocol::{PlayerView, StopsSetting};
 
 use super::placement_scene::PlacementScene;
 use crate::inspect::Viewed;
-use crate::inspect::{inspector::Inspected, revealed::RevealedFace};
+use crate::inspect::revealed::RevealedFace;
 use crate::navigation::Sheet;
 use game_table::faces::FaceList;
 use game_table::profiles::Profile;
@@ -25,7 +25,6 @@ pub struct HudIn<'a> {
     /// The stops and full control preferences used to draw the game controls.
     pub stops: StopsSetting,
     pub sheet: Option<Sheet>,
-    pub inspected: Option<&'a Inspected>,
     pub faces: Option<&'a FaceList>,
     pub viewing: Option<Viewed>,
     pub revealed: &'a [RevealedFace],

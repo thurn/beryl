@@ -1,8 +1,7 @@
 use std::fmt::Write as _;
 
-use beryl_protocol::prompt::Click;
+use super::Message;
 use beryl_protocol::protocol::{ManaPool, Side};
-use beryl_protocol::script::Subject;
 use kit_base::data::profiles::LifeText;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::Role;
@@ -17,11 +16,14 @@ use kit_ui::element::{Align, Element, Span, TextAlign, holder, text};
 /// `color::LIFE`; the phone's smaller orb keeps the prompt's title size. A float's top element
 /// is drawn on a panel unless it says otherwise, and the total stands on its orb with none.
 pub(super) fn life_total(
-    (side, name): (Side, &str),
-    life: Option<i32>,
+    side: Side,
+    life: i32,
     (target, passes, style): (bool, bool, LifeText),
-) -> Option<Element> {
-    let life = life?;
+) -> Element {
+    let name = match side {
+        Side::You => "You",
+        Side::Opponent => "Opponent",
+    };
     let mut element = Element::new(Role::Player)
         .name(&format!("{name} {life}"))
         .style(style.style())
@@ -34,9 +36,7 @@ pub(super) fn life_total(
     // of the phone's hand that stands behind it.
     if target {
         element = element
-            .on_press(Click::On {
-                on: Subject::Player { player: side },
-            })
+            .on_press(Message::Target(side))
             .min_width(size::ICON_BUTTON)
             .min_height(size::ICON_BUTTON)
             .text_align(TextAlign::Center);
@@ -44,7 +44,7 @@ pub(super) fn life_total(
         element = element.passes(passes);
     }
     element.text = Some(life.to_string());
-    Some(element)
+    element
 }
 
 /// A pool of unspent mana, as the web interface's `ManaPool` (`ui/src/components/Player.tsx`)

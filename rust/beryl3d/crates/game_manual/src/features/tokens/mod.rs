@@ -4,8 +4,8 @@ mod view;
 pub use view::{Inputs, ViewKey};
 
 use crate::manual::tokens::{CustomToken, TokenSearch as Search};
-use beryl_protocol::ipc::decks::CardSearchHit;
-use kit_scene::{Context, Feature};
+use beryl_protocol::{PlayerView, ipc::decks::CardSearchHit};
+use kit_scene::{Context, Feature, StateUpdate};
 use kit_ui::element::Element;
 
 #[derive(Debug, Default)]
@@ -28,6 +28,25 @@ pub enum Message {
 }
 
 pub struct TokenSearch;
+
+/// Moves the highlight among the rows derived from the latest table view.
+pub struct Highlight<'a> {
+    pub down: bool,
+    pub view: &'a PlayerView,
+}
+
+impl StateUpdate<TokenSearch> for Highlight<'_> {
+    type Output = ();
+
+    fn apply(self, state: &mut State) -> (bool, ()) {
+        let Some(search) = &mut state.search else {
+            return (false, ());
+        };
+        let previous = search.highlight;
+        search.move_highlight(self.down, self.view);
+        (search.highlight != previous, ())
+    }
+}
 
 impl Feature for TokenSearch {
     type State = State;

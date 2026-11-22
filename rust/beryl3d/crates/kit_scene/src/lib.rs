@@ -9,7 +9,7 @@ mod slot;
 mod touch;
 mod tree;
 
-pub use feature::{Context, Effect, Feature, FeatureSlot};
+pub use feature::{Context, Effect, Feature, FeatureSlot, StateUpdate};
 pub use shortcut::{Keys, Pressed, Reach, Shortcut};
 pub use slot::{SizeClass, Slot};
 pub use tree::{

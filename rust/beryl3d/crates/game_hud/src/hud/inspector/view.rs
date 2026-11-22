@@ -15,11 +15,12 @@
 
 use std::fmt::Write as _;
 
-use beryl_protocol::protocol::{ObjectId, ObjectView, PaidCost, RefusalView, StackItem, ZoneName};
+use beryl_protocol::protocol::{
+    ObjectId, ObjectView, PaidCost, PlayerView, RefusalView, StackItem, ZoneName,
+};
 use glam::Vec2;
 
-use crate::hud::HudIn;
-use game_table::faces::FaceList;
+use game_table::{faces::FaceList, profiles::Profile};
 use kit_base::data::Card;
 use kit_base::data::profiles::Inspector;
 use kit_base::tokens::{color, size, space, type_style};
@@ -47,7 +48,7 @@ pub struct Inspected {
 
 /// The word at the permanent that holds its controller's opponents to sorcery speed: the web's
 /// `TimingRefusal`.
-pub fn notice() -> Element {
+pub(super) fn notice() -> Element {
     let mut word = row()
         .name("Sorcery speed only")
         .background(color::TIMING_REFUSAL)
@@ -66,22 +67,116 @@ pub fn notice() -> Element {
 /// The inspector's corner radius, `.inspect`'s `border-radius`.
 const RADIUS: f32 = size::INSPECTOR_RADIUS;
 
-/// What the game screen shows for it: the full-size face of the card the pointer is over, at
-/// the place `place` gives, with its state beneath it. Nothing when no card is inspected, on the
-/// phone layout, which reads a card another way, or when the view has no such card.
-#[must_use]
-pub fn inspector(input: &HudIn) -> Option<(Element, Anchor)> {
-    let inspected = input.inspected?;
-    let place = place(input)?;
-    let object = input
-        .view?
-        .objects
-        .iter()
-        .find(|object| object.slot == inspected.slot)?;
-    let name = object.name.as_deref()?;
-    let data = input.profile.data().table.inspector?;
-    let height = input.profile.slot("inspector")?.rect.height;
-    let per_point = data.stage_height / height;
+/// The card details and geometry used to build the inspector.
+pub struct CardInputs<'a> {
+    inspected: &'a Inspected,
+    object: &'a ObjectView,
+    name: &'a str,
+    data: Inspector,
+    area: Rect,
+    card: Card,
+    place: Placed,
+    costs: Option<(u8, &'a [PaidCost])>,
+    printed: Option<[i32; 2]>,
+    refused_by: Option<&'a str>,
+}
+
+/// Inputs that affect the inspector's card panel.
+#[derive(PartialEq)]
+pub struct CardKey {
+    inspected: Inspected,
+    object: ObjectView,
+    data: Inspector,
+    area: Rect,
+    card: Card,
+    place: Placed,
+    costs: Option<(u8, Vec<PaidCost>)>,
+    printed: Option<[i32; 2]>,
+    refused_by: Option<String>,
+}
+
+impl<'a> CardInputs<'a> {
+    #[must_use]
+    pub fn new(
+        inspected: &'a Inspected,
+        profile: Profile,
+        view: &'a PlayerView,
+        faces: &FaceList,
+    ) -> Option<Self> {
+        let object = view
+            .objects
+            .iter()
+            .find(|object| object.slot == inspected.slot)?;
+        let name = object.name.as_deref()?;
+        let costs = view.stack.iter().find_map(|item| match item {
+            StackItem::Spell { slot, x, paid, .. } if *slot == object.slot => {
+                Some((*x, paid.as_slice()))
+            }
+            _ => None,
+        });
+        let refused_by = match &inspected.refusal {
+            Some(RefusalView::Timing { by: Some(by) }) => view
+                .objects
+                .iter()
+                .find(|object| object.slot == *by)
+                .and_then(|object| object.name.as_deref()),
+            _ => None,
+        };
+        let data = profile.data().table.inspector?;
+        let area = profile.slot("inspector")?.rect;
+        let card = profile.card();
+        let place = stage_place(
+            area,
+            (data, card),
+            (inspected.x, inspected.origin),
+            !view.stack.is_empty() || !inspected.targets.is_empty(),
+            &inspected.targets,
+        );
+        Some(Self {
+            inspected,
+            object,
+            name,
+            data,
+            area,
+            card,
+            place,
+            costs,
+            printed: faces.find(name).and_then(|face| faces.get(face)?.printed),
+            refused_by,
+        })
+    }
+
+    pub(super) fn key(&self) -> CardKey {
+        CardKey {
+            inspected: self.inspected.clone(),
+            object: self.object.clone(),
+            data: self.data,
+            area: self.area,
+            card: self.card,
+            place: self.place,
+            costs: self.costs.map(|(x, paid)| (x, paid.to_vec())),
+            printed: self.printed,
+            refused_by: self.refused_by.map(str::to_owned),
+        }
+    }
+
+    pub(super) fn anchor(&self) -> Anchor {
+        Anchor::new(
+            ElementId(u32::from(self.inspected.slot.0)),
+            Vec2::ZERO,
+            Vec2::ZERO,
+            self.place.offset,
+        )
+    }
+}
+
+/// The full-size face and its current state.
+pub(super) fn inspector(input: &CardInputs<'_>) -> Element {
+    let inspected = input.inspected;
+    let name = input.name;
+    let place = input.place;
+    let data = input.data;
+    let per_point = data.stage_height / input.area.height;
     let pad = data.pad / per_point;
     let inner = place.width - 2.0 * pad;
     let face = Element {
@@ -90,14 +185,14 @@ pub fn inspector(input: &HudIn) -> Option<(Element, Anchor)> {
     }
     .name("face")
     .width(inner)
-    .height(inner * input.profile.card().height / input.profile.card().width);
-    let lines = state(object, input).into_iter().map(|line| {
+    .height(inner * input.card.height / input.card.width);
+    let lines = state(input).into_iter().map(|line| {
         text(&line)
             .style(type_style::BODY)
             .color(color::TEXT_DIM)
             .max_width(inner)
     });
-    let element = column()
+    column()
         .name(&format!("{name}, inspected"))
         .width(place.width)
         .padding(pad)
@@ -111,28 +206,15 @@ pub fn inspector(input: &HudIn) -> Option<(Element, Anchor)> {
             inspected
                 .refusal
                 .as_ref()
-                .map(|reason| refusal(reason, input, inner)),
-        );
-    let anchor = Anchor::new(
-        ElementId(u32::from(inspected.slot.0)),
-        Vec2::ZERO,
-        Vec2::ZERO,
-        place.offset,
-    );
-    Some((element, anchor))
+                .map(|reason| refusal(reason, input.refused_by, inner)),
+        )
 }
 
 /// The line under the state that says why a click on the card was refused, as the web's
 /// `InspectRefusal` draws it (`ui/src/game/Piles.tsx`), in the words `refusal_words` gives.
 /// The web's glyph before the words, from the Mana font, is not drawn: the flat layer has no
 /// such icons.
-fn refusal(reason: &RefusalView, input: &HudIn, inner: f32) -> Element {
-    let by = match reason {
-        RefusalView::Timing { by: Some(by) } => (input.view)
-            .and_then(|view| view.objects.iter().find(|object| object.slot == *by))
-            .and_then(|object| object.name.as_deref()),
-        _ => None,
-    };
+fn refusal(reason: &RefusalView, by: Option<&str>, inner: f32) -> Element {
     let words = refusal_words(reason, by);
     let mut line = row()
         .name(&format!("Can't play: {words}"))
@@ -171,7 +253,8 @@ pub fn refusal_words(reason: &RefusalView, by: Option<&str>) -> String {
 /// value it chose, the card a copy really is, that it is phased out, its owner when another
 /// player controls it, its power and toughness against the printed ones, its counters, its
 /// damage and summoning sickness, and on the stack, its X and the costs it was cast with.
-fn state(object: &ObjectView, input: &HudIn) -> Vec<String> {
+fn state(input: &CardInputs<'_>) -> Vec<String> {
+    let object = input.object;
     let mut lines = Vec::new();
     lines.extend(object.note.clone());
     lines.extend(
@@ -192,8 +275,7 @@ fn state(object: &ObjectView, input: &HudIn) -> Vec<String> {
             };
             lines.push(format!("Owner: {owner}"));
         }
-        let printed = object.name.as_deref().and_then(|name| printed(input, name));
-        if let (Some(pt), Some([power, toughness])) = (&object.pt, printed)
+        if let (Some(pt), Some([power, toughness])) = (&object.pt, input.printed)
             && (pt.power, pt.toughness) != (power, toughness)
         {
             lines.push(format!(
@@ -218,12 +300,7 @@ fn state(object: &ObjectView, input: &HudIn) -> Vec<String> {
         }
     }
     if object.zone == ZoneName::Stack
-        && let Some((x, paid)) = input.view.and_then(|view| {
-            view.stack.iter().find_map(|item| match item {
-                StackItem::Spell { slot, x, paid, .. } if *slot == object.slot => Some((*x, paid)),
-                _ => None,
-            })
-        })
+        && let Some((x, paid)) = input.costs
     {
         if x > 0 {
             lines.push(format!("X = {x}"));
@@ -242,12 +319,6 @@ fn state(object: &ObjectView, input: &HudIn) -> Vec<String> {
     lines
 }
 
-/// The power and toughness printed on the face of the card named `name`, when both are numbers.
-fn printed(input: &HudIn, name: &str) -> Option<[i32; 2]> {
-    let list: &FaceList = input.faces?;
-    list.get(list.find(name)?)?.printed
-}
-
 /// The name of an alternative or additional cost, as its keyword is written.
 fn paid_word(cost: PaidCost) -> &'static str {
     match cost {
@@ -258,31 +329,6 @@ fn paid_word(cost: PaidCost) -> &'static str {
         PaidCost::Evoke => "evoke",
         PaidCost::Flashback => "flashback",
     }
-}
-
-/// The inspector's width and offset from its card, in logical points. The web's
-/// `inspectorPlace` uses the side of the table away from the
-/// card, never over a life orb, which lies between the two sides. While the stack or a prompt
-/// holds the table's right (the stack is not empty or the prompt marks cards), it stands smaller
-/// in the column between the life orbs and the stack instead. It never covers a card the prompt
-/// marks: where its side would, it takes the other, and where both would, it narrows toward a
-/// side's outer edge, to no less than `least_width`, until it clears them. Failing that, it
-/// takes the side that covers the least of them.
-///
-/// `None` with no card inspected and on the phone layout.
-fn place(input: &HudIn) -> Option<Placed> {
-    let inspected = input.inspected?;
-    let area = input.profile.slot("inspector")?.rect;
-    let data = input.profile.data().table.inspector?;
-    let taken =
-        input.view.is_some_and(|view| !view.stack.is_empty()) || !inspected.targets.is_empty();
-    Some(stage_place(
-        area,
-        (data, input.profile.card()),
-        (inspected.x, inspected.origin),
-        taken,
-        &inspected.targets,
-    ))
 }
 
 /// An inspector slot described relative to its card.

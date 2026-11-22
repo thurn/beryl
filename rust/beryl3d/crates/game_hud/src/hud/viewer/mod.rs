@@ -8,7 +8,7 @@ use beryl_protocol::script::Act;
 use game_table::profiles::Profile;
 use glam::Vec2;
 use kit_base::data::presentation::Revealed;
-use kit_scene::{Context, Feature};
+use kit_scene::{Context, Feature, StateUpdate};
 use kit_ui::element::{Element, floats, row};
 use kit_ui::input::{Rect, Size};
 use kit_ui::layout::{FloatLook, Layer};
@@ -24,8 +24,15 @@ pub use view::{
 };
 
 /// Requests from the viewer and the Revealed Cards pill.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Message {
+    Show(Option<Viewed>, Vec<RevealedFace>),
+    Open(Viewed),
+    Close,
+    DismissRevealed,
+}
+
+pub enum Request {
     Open(Viewed),
     Close,
     DismissRevealed,
@@ -59,14 +66,27 @@ impl Feature for Viewer {
     type Inputs<'a> = Inputs<'a>;
     type ViewKey = (Size, Vec2, Card, Option<Viewed>, Option<usize>);
     type Command = Infallible;
-    type Request = Message;
+    type Request = Request;
 
     fn update(
-        _: &mut State,
+        state: &mut State,
         message: &Message,
-        context: &mut Context<'_, Infallible, Message>,
+        context: &mut Context<'_, Infallible, Request>,
     ) -> bool {
-        context.request(*message);
+        let request = match message {
+            Message::Show(open, revealed) => {
+                if state.open == *open && state.revealed == *revealed {
+                    return false;
+                }
+                state.open = *open;
+                state.revealed.clone_from(revealed);
+                return true;
+            }
+            Message::Open(pile) => Request::Open(*pile),
+            Message::Close => Request::Close,
+            Message::DismissRevealed => Request::DismissRevealed,
+        };
+        context.request(request);
         false
     }
 
@@ -115,6 +135,51 @@ struct RevealedControl {
 const PILL: u64 = 0;
 const PILE_BUTTON: u64 = 1;
 
+/// Updates the revealed-cards control as views arrive, the window resizes and playback advances.
+pub enum Playback<'a> {
+    Prepare {
+        layer: &'a mut Layer,
+        view: &'a PlayerView,
+        profile: Profile<'a>,
+    },
+    Resize {
+        layer: &'a mut Layer,
+        profile: Profile<'a>,
+    },
+    Draw {
+        layer: &'a mut Layer,
+        window: Size,
+        tuning: Revealed,
+        card: Card,
+        visible: bool,
+    },
+}
+
+impl StateUpdate<Viewer> for Playback<'_> {
+    type Output = ();
+
+    fn apply(self, state: &mut State) -> (bool, ()) {
+        match self {
+            Self::Prepare {
+                layer,
+                view,
+                profile,
+            } => state.prepare_pill(layer, view, profile),
+            Self::Resize { layer, profile } => state.prepare_pile(layer, profile),
+            Self::Draw {
+                layer,
+                window,
+                tuning,
+                card,
+                visible,
+            } => {
+                state.write_pill(layer, window, (tuning, card), visible);
+            }
+        }
+        (false, ())
+    }
+}
+
 impl State {
     #[must_use]
     pub fn open(&self) -> Option<Viewed> {
@@ -126,16 +191,10 @@ impl State {
         &self.revealed
     }
 
-    /// Selects a pile after the app has applied the viewer's open or close request.
-    pub fn show(&mut self, open: Option<Viewed>, revealed: Vec<RevealedFace>) {
-        self.open = open;
-        self.revealed = revealed;
-    }
-
     /// Lays the Revealed Cards pill out ahead, so that a frame only shows it, once `view`'s
     /// script holds a card up to be read (`Act::Showcase`), adding its face to the pile. It is
     /// laid out once, for the first script that reveals, and never for a game with none.
-    pub fn prepare_pill(&mut self, layer: &mut Layer, view: &PlayerView, profile: Profile) {
+    fn prepare_pill(&mut self, layer: &mut Layer, view: &PlayerView, profile: Profile) {
         let reveals = (view.script.iter())
             .flat_map(|script| script.beats.iter().flatten())
             .any(|step| matches!(step.act, Act::Showcase { .. }));
@@ -147,7 +206,7 @@ impl State {
     }
 
     /// Sizes the transparent pile button before playback and after a resize.
-    pub fn prepare_pile(&mut self, layer: &mut Layer, profile: Profile) {
+    fn prepare_pile(&mut self, layer: &mut Layer, profile: Profile) {
         let Some(control) = &mut self.control else {
             return;
         };
@@ -170,7 +229,7 @@ impl State {
     }
 
     /// Shows the prepared control while a revealed face is visible.
-    pub fn write_pill(
+    fn write_pill(
         &mut self,
         layer: &mut Layer,
         window: Size,

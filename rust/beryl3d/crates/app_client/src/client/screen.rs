@@ -40,11 +40,11 @@ impl Client {
             self.features.shown = (self.features.screen, sheet);
             self.cancel_gesture();
             self.routes.scrolling.cancel();
-            self.features.rows_mut().update(RowMessage::Focus(None));
+            self.features.focus_row(RowMessage::Focus(None));
             self.cancel_touch();
-            self.features.inspector_mut().update(Inspect::Pin(None));
+            self.features.inspect(&Inspect::Pin(None));
         }
-        self.features.inspector_mut().update(Inspect::Invalidate);
+        self.features.inspect(&Inspect::Invalidate);
         self.refresh_screen_state();
         let under_visible = sheet != Some(Sheet::Settings) && !self.bug_hides_screen();
         let furniture = self.game_furniture(under_visible);
@@ -285,7 +285,6 @@ impl Client {
                 ..self.settings.stops
             },
             sheet,
-            inspected: None,
             faces: Some(self.show.faces().list()),
             viewing: self.features.viewer().open(),
             revealed: &revealed,
@@ -302,17 +301,19 @@ impl Client {
             view,
             session: self.session,
             fields: self.layer.fields(),
+            layer: &self.layer,
             hud: &hud,
             bindings: &self.settings.bindings,
             faces: self.show.faces().list(),
             game_over: view.is_some_and(|view| matches!(view.status, Status::Over { .. })),
             settings: self.settings.screen(),
+            start: None,
+            link_error: None,
         };
         build(&mut self.features, feature_inputs, menu_face)
     }
 
-    /// Everything the screen functions read, from what the client holds now. The inspector sets
-    /// `inspected` on it; nothing else differs between the screen and the inspector.
+    /// Everything the screen functions read, from what the client holds now.
     pub(super) fn screen_in(&self) -> ScreenIn<'_> {
         ScreenIn {
             data: self.show.table().data(),
@@ -334,7 +335,6 @@ impl Client {
             sheet: self.features.sheet,
             gallery: self.features.gallery,
             fields: self.layer.fields(),
-            inspected: None,
             faces: Some(self.faces()),
             viewing: self.features.viewer().open(),
             revealed: self.features.viewer().revealed(),

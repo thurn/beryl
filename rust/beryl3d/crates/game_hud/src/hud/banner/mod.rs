@@ -6,7 +6,7 @@
 //! - The banner's duration is set by `banner_ms` in `hud.json`. It starts on the first frame
 //!   whose view at rest calls for it. It can show again after the view stops calling for it,
 //!   as in the web's `useBannerUp`.
-//! - The banner is a float (`floats::STEP_BANNER`), laid out ahead (`Banner::prepare`), so that
+//! - The banner is a float (`floats::STEP_BANNER`), laid out ahead (`Prepare`), so that
 //!   the frame that shows or hides it lays nothing out and allocates nothing.
 
 use beryl_protocol::protocol::{Combat, Kind, PlayerView, Status, Step};
@@ -14,7 +14,9 @@ use glam::Vec2;
 
 use game_table::table::HudAnchor;
 use kit_base::{data::hud::Hud, tokens::size};
-use kit_ui::element::floats;
+use kit_scene::{Context, Feature, StateUpdate};
+use kit_ui::element::{Element, FloatId, floats};
+use std::convert::Infallible;
 
 mod view;
 use kit_ui::layout::{FloatLook, Layer};
@@ -38,6 +40,74 @@ pub struct Banner {
     wanted: Option<(usize, u64)>,
     /// The detail the banner float shows, if any.
     shown: Option<usize>,
+}
+
+impl Feature for Banner {
+    type State = Self;
+    type Message = Infallible;
+    type Inputs<'a> = usize;
+    type ViewKey = usize;
+    type Command = Infallible;
+    type Request = Infallible;
+
+    fn update(
+        _: &mut Self,
+        message: &Infallible,
+        _: &mut Context<'_, Infallible, Infallible>,
+    ) -> bool {
+        match *message {}
+    }
+
+    fn view_key(_: &Self, detail: &usize) -> usize {
+        *detail
+    }
+
+    fn view(_: &Self, detail: usize) -> Element {
+        view::banner(detail)
+    }
+}
+
+impl super::FloatFeature for Banner {
+    fn floats() -> impl Iterator<Item = FloatId> {
+        std::iter::once(floats::STEP_BANNER)
+    }
+}
+
+/// Lays out the banner before its view becomes visible.
+pub struct Prepare<'a> {
+    pub layer: &'a mut Layer,
+    pub view: &'a PlayerView,
+}
+
+impl StateUpdate<Banner> for Prepare<'_> {
+    type Output = ();
+
+    fn apply(self, state: &mut Banner) -> (bool, ()) {
+        if let Some(detail) = combat_banner(self.view) {
+            self.layer.prepare(floats::STEP_BANNER, detail as u64, || {
+                Banner::view(state, detail)
+            });
+        }
+        (false, ())
+    }
+}
+
+/// Samples the banner for the view shown at rest.
+pub struct Draw<'a> {
+    pub layer: &'a mut Layer,
+    pub view: Option<&'a PlayerView>,
+    pub now: u64,
+    pub visible: bool,
+    pub tuning: Hud,
+}
+
+impl StateUpdate<Banner> for Draw<'_> {
+    type Output = ();
+
+    fn apply(self, state: &mut Banner) -> (bool, ()) {
+        state.write(self.layer, self.view, self.now, self.visible, self.tuning);
+        (false, ())
+    }
 }
 
 /// The step banner `view` calls for during combat, as the web's `combatBanner`: its detail, by
@@ -68,15 +138,6 @@ pub fn words(detail: usize) -> (&'static str, &'static str) {
 }
 
 impl Banner {
-    /// Lays out in `layer` the banner `view` will call for once the table shows it, which
-    /// `write` then shows without laying anything out. Lays out nothing that is laid out already, so a game lays out each
-    /// banner once at most.
-    pub fn prepare(layer: &mut Layer, view: &PlayerView) {
-        if let Some(detail) = combat_banner(view) {
-            layer.prepare(floats::STEP_BANNER, detail as u64, || view::banner(detail));
-        }
-    }
-
     /// Whether the banner is up at `now`.
     #[must_use]
     fn up(&self, now: u64, duration: u64) -> bool {
@@ -86,7 +147,7 @@ impl Banner {
 
     /// Shows the banner for the view at rest at the given time while the table is visible.
     /// Lays nothing out and allocates nothing.
-    pub fn write(
+    fn write(
         &mut self,
         layer: &mut Layer,
         view: Option<&PlayerView>,

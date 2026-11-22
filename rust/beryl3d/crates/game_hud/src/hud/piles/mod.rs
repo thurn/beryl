@@ -12,10 +12,11 @@
 
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerState, PlayerView, Side, ZoneName};
 
-use game_play::play::Show;
 use game_table::table::{PileShown, Table, host_slot};
-use kit_ui::element::floats;
+use kit_scene::{Context, Feature, StateUpdate};
+use kit_ui::element::{Element, FloatId, floats};
 use kit_ui::layout::{FloatLook, Layer};
+use std::convert::Infallible;
 mod view;
 use view::count_text;
 
@@ -30,6 +31,77 @@ pub struct PileCounts {
     coming: Vec<(usize, usize)>,
 }
 
+/// The pile index and number its label shows.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Inputs {
+    pub index: usize,
+    pub count: usize,
+}
+
+impl Feature for PileCounts {
+    type State = Self;
+    type Message = Infallible;
+    type Inputs<'a> = Inputs;
+    type ViewKey = Inputs;
+    type Command = Infallible;
+    type Request = Infallible;
+
+    fn update(
+        _: &mut Self,
+        message: &Infallible,
+        _: &mut Context<'_, Infallible, Infallible>,
+    ) -> bool {
+        match *message {}
+    }
+
+    fn view_key(_: &Self, input: &Inputs) -> Inputs {
+        *input
+    }
+
+    fn view(_: &Self, input: Inputs) -> Element {
+        count_text(input.index, input.count)
+    }
+}
+
+impl super::FloatFeature for PileCounts {
+    fn floats() -> impl Iterator<Item = FloatId> {
+        floats::PILE_COUNT.into_iter().flatten()
+    }
+}
+
+/// Prepares the labels for the piles on the table and in the views to come.
+pub struct Prepare<'a, Views> {
+    pub layer: &'a mut Layer,
+    pub table: &'a Table,
+    pub views: Views,
+}
+
+impl<'a, Views: Iterator<Item = &'a PlayerView>> StateUpdate<PileCounts> for Prepare<'_, Views> {
+    type Output = ();
+
+    fn apply(self, state: &mut PileCounts) -> (bool, ()) {
+        state.prepare(self.layer, self.table, self.views);
+        (false, ())
+    }
+}
+
+/// Samples the prepared label for the pile under the pointer.
+pub struct Draw<'a> {
+    pub layer: &'a mut Layer,
+    pub table: &'a Table,
+    pub hovered: Option<usize>,
+    pub visible: bool,
+}
+
+impl StateUpdate<PileCounts> for Draw<'_> {
+    type Output = ();
+
+    fn apply(self, state: &mut PileCounts) -> (bool, ()) {
+        state.write(self.layer, self.table, self.hovered, self.visible);
+        (false, ())
+    }
+}
+
 impl PileCounts {
     /// Lays out ahead, in `layer`, each count that `views`, the view the table shows and those
     /// the scripts to come lead to, give a pile, and each count `table` holds now, and forgets
@@ -41,7 +113,7 @@ impl PileCounts {
     /// no count, and once the box lets the card go, the pile shows the count the table holds,
     /// which no view still to come may give. The opening hand's boxes do this during a
     /// mulligan, while the table still holds the whole library.
-    pub fn prepare<'a>(
+    fn prepare<'a>(
         &mut self,
         layer: &mut Layer,
         table: &Table,
@@ -65,9 +137,11 @@ impl PileCounts {
         }
         for index in 0..6 {
             let id = float(index);
-            layer.forget_prepared(id, |key| coming.contains(&(index, count_of(key))));
-            for &(_, count) in coming.iter().filter(|(pile, _)| *pile == index) {
-                layer.prepare(id, key_of(count), || count_text(index, count));
+            layer.forget_prepared(id, |key| self.coming.contains(&(index, count_of(key))));
+            for &(_, count) in self.coming.iter().filter(|(pile, _)| *pile == index) {
+                layer.prepare(id, key_of(count), || {
+                    Self::view(self, Inputs { index, count })
+                });
             }
         }
     }
@@ -75,15 +149,14 @@ impl PileCounts {
     /// Whether the pointer has come onto or left a pile since the last `write`, so that the
     /// next frame shows the count that follows it.
     #[must_use]
-    pub fn due(&self, show: &Show) -> bool {
-        show.pointer().hovered_pile() != self.hovered
+    pub fn due(&self, hovered: Option<usize>) -> bool {
+        hovered != self.hovered
     }
 
-    /// Shows the count of the pile under `show`'s pointer, as found in the last frame, over its
-    /// top card as `show`'s table shows it at rest, and no other pile's, or none unless
+    /// Shows the count of the hovered pile, as found in the last frame, over its
+    /// top card on the table at rest, and no other pile's, or none unless
     /// `visible`. Lays nothing out and allocates nothing for what `prepare` laid out.
-    pub fn write(&mut self, layer: &mut Layer, show: &Show, visible: bool) {
-        let (table, hovered) = (show.table(), show.pointer().hovered_pile());
+    fn write(&mut self, layer: &mut Layer, table: &Table, hovered: Option<usize>, visible: bool) {
         self.hovered = hovered;
         for index in 0..6 {
             let pile = (visible && hovered == Some(index))
@@ -94,7 +167,10 @@ impl PileCounts {
             if want != self.shown[index] {
                 if !layer.show_prepared(id, want.map(key_of)) {
                     debug_assert!(false, "no count {want:?} is prepared for pile {index}");
-                    layer.float(id, want.map(|count| count_text(index, count)));
+                    layer.float(
+                        id,
+                        want.map(|count| Self::view(self, Inputs { index, count })),
+                    );
                 }
                 self.shown[index] = want;
             }

@@ -50,9 +50,7 @@ impl Client {
         if pointer.phase == PointerPhase::Down
             && let Some((Target::Row(row), _)) = at
         {
-            self.features
-                .rows_mut()
-                .update(RowMessage::Focus(Some(row)));
+            self.features.focus_row(RowMessage::Focus(Some(row)));
             self.layer.focus(None);
         }
         // A card that has picked up keeps its drag. Scroll and pickup use the same
@@ -194,9 +192,7 @@ impl Client {
                 )]
                 let first = offset.x as isize;
                 if self.show.scroll_row(row, first) {
-                    self.features
-                        .rows_mut()
-                        .prepare(&mut self.layer, self.show.coming_rows());
+                    self.prepare_rows();
                 }
             }
         }

@@ -4,13 +4,15 @@ mod view;
 
 pub use view::{Inputs, ViewKey, shortcut};
 
-use crate::manual::{ActionSource, Pending, arrows, drop, opening, tokens::TokenChoice, viewers};
-use beryl_protocol::protocol::{Answer, ObjectId, Side};
+use crate::manual::{
+    ActionSource, Pending, arrows, drop, opening, selection, tokens::TokenChoice, viewers,
+};
+use beryl_protocol::protocol::{Answer, ObjectId, PlayerView, Side};
 use glam::Vec2;
 use kit_frame::frame::Sound;
-use kit_scene::{Context, Feature};
+use kit_scene::{Context, Feature, StateUpdate};
 use kit_ui::element::{Action, Element};
-use kit_ui::layout::Shake;
+use kit_ui::layout::{Layer, Shake};
 
 /// A control of the table or a keyboard shortcut for a table command.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,7 +60,7 @@ pub enum Message {
 #[derive(Debug, Default)]
 pub struct State {
     pub last_token: Option<TokenChoice>,
-    pub pending: std::collections::VecDeque<Pending>,
+    pending: std::collections::VecDeque<Pending>,
     pub modifiers: PointerModifiers,
     pub selection: Vec<ObjectId>,
     pub sweep: Option<(Vec2, Vec2)>,
@@ -74,10 +76,10 @@ pub struct State {
     /// new view leaves it open, so that a player adding mana sees the count change.
     pub mana_sheet: Option<Side>,
     pub quitting: bool,
-    pub refused: bool,
+    refused: bool,
     /// The card or button sending actions, remembered until their replies arrive.
     pub clicked: Option<ActionSource>,
-    pub shaking: Option<(Action, Shake)>,
+    shaking: Option<(Action, Shake)>,
 }
 
 /// Modifiers recorded when the pointer was pressed.
@@ -88,13 +90,166 @@ pub struct PointerModifiers {
     pub meta: bool,
 }
 
-impl State {
-    /// The sound played once for a refusal since the last frame.
-    pub fn take_refusal(&mut self) -> Option<Sound> {
-        std::mem::take(&mut self.refused).then(|| Sound {
+/// Changes from table input and session updates outside the flat controls.
+pub enum Change<'a> {
+    KeepSelection(&'a PlayerView),
+    Select(Vec<ObjectId>),
+    ToggleSelection(ObjectId),
+    ClearSelection,
+    Sweep(Option<(Vec2, Vec2)>),
+    Pick(Option<arrows::Pick>),
+    Landing(Option<drop::Destination>),
+    Summary(Option<ObjectId>),
+    Meta(bool),
+    Shift(bool),
+    QuitPrompt(bool),
+    Leave,
+    ResetViewer,
+    Look(Option<viewers::Look>),
+    GroupViewer,
+    SortViewer(viewers::Sort),
+    ConfirmShuffle,
+    Clicked(Option<ActionSource>),
+    Remember(Pending),
+    Refused,
+    Shake(Action, f32),
+}
+
+impl StateUpdate<TableScreen> for Change<'_> {
+    type Output = ();
+
+    fn apply(self, state: &mut State) -> (bool, ()) {
+        match self {
+            Self::KeepSelection(view) => {
+                let previous = state.selection.len();
+                selection::keep(&mut state.selection, view);
+                if state
+                    .picking
+                    .is_some_and(|pick| !selection::actionable(view, pick.from))
+                {
+                    state.picking = None;
+                }
+                return (state.selection.len() != previous, ());
+            }
+            Self::Select(cards) => state.selection = cards,
+            Self::ToggleSelection(slot) => selection::toggle(&mut state.selection, slot),
+            Self::ClearSelection => {
+                state.selection.clear();
+                state.sweep = None;
+            }
+            Self::Sweep(sweep) => state.sweep = sweep,
+            Self::Landing(landing) => state.landing = landing,
+            Self::Summary(slot) => state.summary_over = slot,
+            Self::QuitPrompt(quitting) => {
+                if state.quitting == quitting {
+                    return (false, ());
+                }
+                state.quitting = quitting;
+            }
+            Self::Leave => {
+                state.selection.clear();
+                state.picking = None;
+                state.mana_sheet = None;
+            }
+            Self::ResetViewer => state.viewer = viewers::PileViewer::new(),
+            Self::Look(look) => state.viewer.look = look,
+            Self::GroupViewer => state.viewer.grouped = !state.viewer.grouped,
+            Self::SortViewer(sort) => state.viewer.sort = sort,
+            Self::ConfirmShuffle => state.viewer.confirming = true,
+            Self::Pick(pick) => {
+                state.picking = pick;
+                return (false, ());
+            }
+            Self::Meta(meta) => {
+                state.modifiers.meta = meta;
+                return (false, ());
+            }
+            Self::Shift(shift) => {
+                state.modifiers.shift = shift;
+                return (false, ());
+            }
+            Self::Clicked(source) => {
+                state.clicked = source;
+                return (false, ());
+            }
+            Self::Remember(pending) => {
+                // A recording driver may send actions without ever answering them.
+                const LIMIT: usize = 64;
+                if state.pending.len() >= LIMIT {
+                    state.pending.pop_front();
+                }
+                state.pending.push_back(pending);
+                return (false, ());
+            }
+            Self::Refused => {
+                state.refused = true;
+                return (false, ());
+            }
+            Self::Shake(action, duration) => {
+                state.shaking = Some((action, Shake::new(duration)));
+                return (false, ());
+            }
+        }
+        (true, ())
+    }
+}
+
+/// Acknowledges the oldest outstanding table action and remembers a successful token.
+pub struct Acknowledge {
+    pub refused: bool,
+}
+
+impl StateUpdate<TableScreen> for Acknowledge {
+    type Output = Option<Pending>;
+
+    fn apply(self, state: &mut State) -> (bool, Self::Output) {
+        state.refused |= self.refused;
+        let pending = state.pending.pop_front();
+        if !self.refused
+            && let Some(crate::manual::Sent::Token(token)) =
+                pending.as_ref().map(|pending| &pending.sent)
+        {
+            state.last_token = Some(token.clone());
+        }
+        (false, pending)
+    }
+}
+
+/// Takes the sound played once for a refusal since the last frame.
+pub struct RefusalSound;
+
+impl StateUpdate<TableScreen> for RefusalSound {
+    type Output = Option<Sound>;
+
+    fn apply(self, state: &mut State) -> (bool, Self::Output) {
+        let sound = std::mem::take(&mut state.refused).then(|| Sound {
             id: game_play::sound::id("no"),
             theirs: false,
-        })
+        });
+        (false, sound)
+    }
+}
+
+/// Advances the shake of a refused button and moves the matching flat elements.
+pub struct ShakeButton<'a> {
+    pub layer: &'a mut Layer,
+    pub now: u64,
+}
+
+impl StateUpdate<TableScreen> for ShakeButton<'_> {
+    type Output = bool;
+
+    fn apply(self, state: &mut State) -> (bool, bool) {
+        let Some((button, shake)) = &mut state.shaking else {
+            return (false, false);
+        };
+        if !shake.advance(self.now) {
+            state.shaking = None;
+            self.layer.shake(None);
+            return (false, false);
+        }
+        self.layer.shake(Some((button, shake.offset(self.now))));
+        (false, true)
     }
 }
 
@@ -180,8 +335,8 @@ impl Feature for TableScreen {
         false
     }
 
-    fn view_key(state: &State, inputs: &Inputs<'_>) -> ViewKey {
-        ViewKey::new(state, inputs)
+    fn view_key(_: &State, inputs: &Inputs<'_>) -> ViewKey {
+        ViewKey::new(inputs)
     }
 
     fn view(state: &State, inputs: Inputs<'_>) -> Element {

@@ -29,21 +29,19 @@ pub(super) const TABLE_LOG: &str = "table-log";
 pub(super) const PROPOSALS: &str = "table-proposals";
 
 impl Features {
-    fn edit_overlay<'a, F: kit_scene::Feature + 'static>(
-        slots: &'a mut super::Slots,
-        id: &'static str,
-    ) -> &'a mut F::State {
-        let slot = Self::slot::<F>(slots, id);
-        slot.invalidate_view();
-        slot.state_mut()
-    }
-
     pub(crate) fn table(&self) -> &table::State {
         self.state_of::<TableScreen>(TABLE)
     }
 
-    pub(crate) fn table_mut(&mut self) -> &mut table::State {
-        Self::slot::<TableScreen>(&mut self.slots, TABLE).state_mut()
+    pub(in crate::client) fn update_table<U: kit_scene::StateUpdate<TableScreen>>(
+        &mut self,
+        update: U,
+    ) -> U::Output {
+        Self::slot::<TableScreen>(&mut self.slots, TABLE).apply(update)
+    }
+
+    pub(in crate::client) fn highlight_token(&mut self, input: tokens::Highlight<'_>) {
+        Self::slot::<TokenSearch>(&mut self.slots, TOKENS).apply(input);
     }
 
     pub(crate) fn menu(&self) -> &context_menu::State {
@@ -58,32 +56,16 @@ impl Features {
         self.state_of::<CommandList>(PALETTE)
     }
 
-    pub(crate) fn palette_mut(&mut self) -> &mut palette::State {
-        Self::edit_overlay::<CommandList>(&mut self.slots, PALETTE)
-    }
-
     pub(crate) fn ask(&self) -> &ask::State {
         self.state_of::<AskPrompt>(ASK)
-    }
-
-    pub(crate) fn ask_mut(&mut self) -> &mut ask::State {
-        Self::edit_overlay::<AskPrompt>(&mut self.slots, ASK)
     }
 
     pub(crate) fn tokens(&self) -> &tokens::State {
         self.state_of::<TokenSearch>(TOKENS)
     }
 
-    pub(crate) fn tokens_mut(&mut self) -> &mut tokens::State {
-        Self::edit_overlay::<TokenSearch>(&mut self.slots, TOKENS)
-    }
-
     pub(crate) fn order(&self) -> &library_order::State {
         self.state_of::<OrderTray>(ORDER)
-    }
-
-    pub(crate) fn order_mut(&mut self) -> &mut library_order::State {
-        Self::edit_overlay::<OrderTray>(&mut self.slots, ORDER)
     }
 
     pub(crate) fn lobby(&self) -> &lobby::State {
@@ -100,11 +82,11 @@ impl Features {
     }
 
     pub(crate) fn close_overlay(&mut self) {
-        *self.palette_mut() = None;
-        *self.ask_mut() = None;
-        *self.tokens_mut() = tokens::State::default();
-        *self.order_mut() = None;
-        self.table_mut().quitting = false;
+        Self::slot::<CommandList>(&mut self.slots, PALETTE).update(&palette::Message::Reset);
+        Self::slot::<AskPrompt>(&mut self.slots, ASK).update(&ask::Message::Reset);
+        Self::slot::<TokenSearch>(&mut self.slots, TOKENS).update(&tokens::Message::Reset);
+        Self::slot::<OrderTray>(&mut self.slots, ORDER).update(&library_order::Message::Reset);
+        self.update_table(table::Change::QuitPrompt(false));
     }
 }
 
@@ -119,6 +101,10 @@ impl Client {
 
     pub(in crate::client) fn update_palette(&mut self, message: &palette::Message) {
         update::<CommandList>(self, PALETTE, message);
+    }
+
+    pub(in crate::client) fn update_ask(&mut self, message: &ask::Message) {
+        update::<AskPrompt>(self, ASK, message);
     }
 
     pub(in crate::client) fn update_tokens(&mut self, message: &tokens::Message) -> bool {
@@ -145,14 +131,13 @@ impl Mounted for TableScreen {
         let menu = features.view(Placement::TableMenu, inputs);
         let overlay = features.view(Placement::TableOverlay, inputs);
         let overlay_open = features.overlay_open();
-        let link_error = features.lobby().lobby.link_error.clone();
         Some(
             Features::slot::<Self>(&mut features.slots, id).view(table::Inputs {
                 drag_threshold: inputs.drag_threshold,
                 hud: *inputs.hud,
                 fields: inputs.fields,
                 bindings: inputs.bindings,
-                link_error: link_error.as_deref(),
+                link_error: inputs.link_error,
                 log,
                 proposals,
                 menu,
@@ -296,13 +281,12 @@ impl Mounted for CommandList {
         match command {}
     }
 
-    fn request(client: &mut Client, request: palette::Message) -> bool {
+    fn request(client: &mut Client, request: palette::Request) -> bool {
         let shift = client.features.table().modifiers.shift;
         match request {
-            palette::Message::Choose(at) => client.run_palette_row(usize::from(at), shift),
-            palette::Message::CancelCapture => client.stop_capture(None),
-            palette::Message::Close => client.layer.focus(None),
-            palette::Message::Query(_) | palette::Message::Highlight(_) => {}
+            palette::Request::Choose(at) => client.run_palette_row(usize::from(at), shift),
+            palette::Request::CancelCapture => client.stop_capture(None),
+            palette::Request::ClearFocus => client.layer.focus(None),
         }
         false
     }
@@ -330,12 +314,12 @@ impl Mounted for AskPrompt {
         match command {}
     }
 
-    fn request(client: &mut Client, request: ask::Message) -> bool {
+    fn request(client: &mut Client, request: ask::Request) -> bool {
         match request {
-            ask::Message::Confirm => client.confirm_ask(),
-            ask::Message::Step(up) => client.step_ask(up),
-            ask::Message::Suggestion(at) => client.ask_suggestion(at),
-            ask::Message::Close => client.layer.focus(None),
+            ask::Request::Confirm => client.confirm_ask(),
+            ask::Request::Step(up) => client.step_ask(up),
+            ask::Request::Suggestion(at) => client.ask_suggestion(at),
+            ask::Request::ClearFocus => client.layer.focus(None),
         }
         false
     }

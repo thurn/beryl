@@ -10,12 +10,21 @@ use std::convert::Infallible;
 
 pub type State = Option<Ask>;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Message {
+    Open(Ask),
+    Reset,
     Confirm,
     Step(bool),
     Suggestion(u8),
     Close,
+}
+
+pub enum Request {
+    Confirm,
+    Step(bool),
+    Suggestion(u8),
+    ClearFocus,
 }
 
 pub struct AskPrompt;
@@ -26,21 +35,30 @@ impl Feature for AskPrompt {
     type Inputs<'a> = Inputs<'a>;
     type ViewKey = ViewKey;
     type Command = Infallible;
-    type Request = Message;
+    type Request = Request;
 
     fn update(
         state: &mut State,
         message: &Message,
         context: &mut Context<'_, Self::Command, Self::Request>,
     ) -> bool {
-        if state.is_none() {
-            return false;
+        match message {
+            Message::Open(ask) => {
+                *state = Some(ask.clone());
+                return true;
+            }
+            Message::Reset => return state.take().is_some(),
+            _ if state.is_none() => return false,
+            Message::Confirm => context.request(Request::Confirm),
+            Message::Step(up) => context.request(Request::Step(*up)),
+            Message::Suggestion(at) => context.request(Request::Suggestion(*at)),
+            Message::Close => {
+                *state = None;
+                context.request(Request::ClearFocus);
+                return true;
+            }
         }
-        if matches!(message, Message::Close) {
-            *state = None;
-        }
-        context.request(*message);
-        matches!(message, Message::Close)
+        false
     }
 
     fn view_key(state: &State, inputs: &Inputs<'_>) -> ViewKey {

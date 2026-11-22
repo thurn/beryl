@@ -257,7 +257,6 @@ mod milestone_three {
             spinning: false,
             gallery: screens::GalleryState::default(),
             fields: &FIELDS,
-            inspected: None,
             faces: None,
             viewing: None,
             revealed: &[],

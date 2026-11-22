@@ -17,3 +17,8 @@ pub use counts::players;
 pub mod rows;
 pub mod steps;
 pub mod viewer;
+
+/// A feature whose elements are placed as floats, outside the screen layout.
+pub trait FloatFeature: kit_scene::Feature {
+    fn floats() -> impl Iterator<Item = kit_ui::element::FloatId>;
+}

@@ -1,13 +1,14 @@
 use std::fmt::Write as _;
 
-use beryl_protocol::protocol::{PlayerView, Side, TablePhase};
+use super::Inputs;
+use beryl_protocol::protocol::{Side, TablePhase};
 use beryl_protocol::script::Notice;
 use kit_base::tokens::{color, space, type_style};
 use kit_ui::element::{Align, Element, column, text};
 
-/// What `notice` shows, where `view` is the table it is shown over.
-pub(super) fn element(notice: &Notice, view: &PlayerView) -> Element {
-    match notice {
+/// What the notice shows, with names from the table it is shown over.
+pub(super) fn element(input: &Inputs<'_>) -> Element {
+    match input.notice {
         Notice::Turn { active } => {
             // The web tints only its rosettes and glow by player; the words are cream for both
             // (`.turn-banner-title`).
@@ -24,20 +25,13 @@ pub(super) fn element(notice: &Notice, view: &PlayerView) -> Element {
         }
         Notice::Scry { top, bottom, .. } => pill(&format!("Scry: {top} top, {bottom} bottom.")),
         Notice::TopOrBottom { top, .. } => pill(if *top { "Top" } else { "Bottom" }),
-        Notice::Coin {
-            player,
-            won,
-            source,
-        } => {
-            let title = (view.objects.iter())
-                .find(|object| object.slot == *source)
-                .and_then(|object| object.name.as_deref())
-                .unwrap_or("Coin flip");
+        Notice::Coin { player, won, .. } => {
+            let title = input.coin_source().unwrap_or("Coin flip");
             let who = who(*player);
             let result = if *won { "won" } else { "lost" };
             step_banner(title, Some(&format!("{who} {result} the flip")))
         }
-        Notice::Roll { sides, outcomes } => roll(*sides, outcomes, view),
+        Notice::Roll { sides, outcomes } => roll(*sides, outcomes, input.roll_seats()),
         Notice::Shuffle => step_banner("Shuffled", None),
         Notice::Rewind { to } => step_banner(&format!("Rewound to {to}"), None),
         Notice::Phase { phase } => step_banner(phase_name(*phase), None),
@@ -57,7 +51,7 @@ const fn who(side: Side) -> &'static str {
 /// The banner of a roll, as the web words it (`bannerWords` in `ui/src/stage/notices.ts`):
 /// a two-sided roll's outcomes are heads and tails, and the roll that decides who chooses to go
 /// first names each seat's result.
-fn roll(sides: u32, outcomes: &[u32], view: &PlayerView) -> Element {
+fn roll(sides: u32, outcomes: &[u32], seats: Option<(usize, Option<&str>)>) -> Element {
     let results: Vec<String> = (outcomes.iter())
         .map(|&outcome| match (sides, outcome) {
             (2, 0) => "Heads".to_owned(),
@@ -65,11 +59,8 @@ fn roll(sides: u32, outcomes: &[u32], view: &PlayerView) -> Element {
             _ => (u64::from(outcome) + 1).to_string(),
         })
         .collect();
-    if let Some(table) = view.table.as_ref().filter(|table| table.choosing_first)
-        && results.len() == 2
-    {
-        let you = usize::from(table.seat.unwrap_or(0));
-        let peer = table.peer_name.as_deref().unwrap_or("Opponent");
+    if let Some((you, peer)) = seats {
+        let peer = peer.unwrap_or("Opponent");
         let mut detail = String::new();
         for (seat, result) in results.iter().enumerate() {
             if seat > 0 {

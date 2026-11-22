@@ -10,10 +10,8 @@
 use beryl_protocol::protocol::ObjectId;
 
 use super::Client;
-use app_screens::screens::{Screen, ScreenIn};
-use game_hud::hud::inspector::{self, Message};
-use kit_ui::element::floats;
-use kit_ui::layout::FloatLook;
+use app_screens::screens::Screen;
+use game_hud::hud::inspector;
 
 impl Client {
     /// Whether a script plays faster while many updates wait to play (`Show::set_catch_up`).
@@ -34,29 +32,24 @@ impl Client {
         let visible = matches!(self.features.screen, Screen::Game | Screen::Table)
             && self.features.sheet.is_none();
         let decision = self.open_decision().map(|decision| decision.id);
-        let (inspector, prompt) = self.features.inspector_and_prompt();
-        inspector.update(Message::Observe { hovered, until });
-        let inspected = if visible {
-            inspector.inspected_now(&self.frame, self.show.faces().list(), prompt, decision)
-        } else {
-            None
-        };
-        if !inspector.refresh(inspected) {
-            return;
-        }
-        let input = ScreenIn {
-            inspected: self.features.inspector().shown(),
-            ..self.screen_in()
-        };
-        if let Some((element, anchor)) = inspector::inspector(&input.hud()) {
-            self.layer.float(floats::INSPECTOR, Some(element));
-            self.layer
-                .anchor_float(floats::INSPECTOR, anchor, FloatLook::default());
-            if let Some(inspected) = self.features.inspector().shown() {
-                self.show.faces_mut().want_full(inspected.face);
-            }
-        } else {
-            self.layer.float(floats::INSPECTOR, None);
+        let view = self
+            .show
+            .latest()
+            .map(|update| &update.view)
+            .filter(|_| visible);
+        let face = self.features.draw_inspector(inspector::Draw {
+            layer: &mut self.layer,
+            frame: &self.frame,
+            faces: self.show.faces().list(),
+            profile: self.show.table().profile(),
+            view,
+            prompt: None,
+            decision,
+            hovered,
+            until,
+        });
+        if let Some(face) = face {
+            self.show.faces_mut().want_full(face);
         }
     }
 

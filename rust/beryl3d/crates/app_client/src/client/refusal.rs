@@ -11,11 +11,9 @@ use glam::Vec2;
 
 use super::Client;
 use app_screens::screens::Screen;
-use game_hud::hud::inspector::{Message, notice};
+use game_hud::hud::inspector::{Message, RefusalNotice};
 use kit_base::tokens::size;
 use kit_frame::frame::{Anchor, ElementId, Place, Role};
-use kit_ui::element::floats;
-use kit_ui::layout::FloatLook;
 
 impl Client {
     /// The open decision, as the latest view sends it, while it is the one the prompt answers.
@@ -41,9 +39,10 @@ impl Client {
             return false;
         };
         let message = Message::Refused(decision.id, refused.clone());
-        self.features.inspector_mut().update(message);
-        // The manual table's refusals play the same sound (`Manual::take_refusal`).
-        self.features.table_mut().refused = true;
+        self.features.inspect(&message);
+        // The manual table shares this refusal sound.
+        self.features
+            .update_table(game_manual::features::table::Change::Refused);
         true
     }
 
@@ -52,19 +51,12 @@ impl Client {
     /// when it goes. It shows only while the decision that refused the click is open, on the
     /// game screen with the table shown.
     pub(super) fn refusal_frame(&mut self, now: u64) -> Option<u64> {
-        let place = self.notice_place();
-        let until = self
-            .features
-            .inspector_mut()
-            .refusal_until(place.is_some(), now);
-        let shown = until.and(place);
-        self.layer
-            .float(floats::REFUSAL, shown.as_ref().map(|_| notice()));
-        if let Some(anchor) = shown {
-            self.layer
-                .anchor_float(floats::REFUSAL, anchor, FloatLook::default());
-        }
-        until
+        let anchor = self.notice_place();
+        self.features.update_inspector(RefusalNotice {
+            layer: &mut self.layer,
+            anchor,
+            now,
+        })
     }
 
     /// Where the word stands, centred under the permanent the refusal names, when that is a

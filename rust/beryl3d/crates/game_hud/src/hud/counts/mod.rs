@@ -1,5 +1,6 @@
 //! Prepared life totals, mana pools and changes to life.
 
+use beryl_protocol::prompt::Click;
 use beryl_protocol::protocol::{ManaPool, PlayerView, Side};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
@@ -9,9 +10,11 @@ use kit_base::data::effect::NumberOrigin;
 use kit_base::data::profiles::{Life, LifeChange, LifeText};
 use kit_base::tokens::{color, size, type_style};
 use kit_fx::effects::{self, EffectRun, NumberLook};
+use kit_scene::{Context, Feature, StateUpdate};
 use kit_ui::element::{Element, FloatId, floats};
 use kit_ui::input::Tier;
 use kit_ui::layout::{FloatLook, Layer};
+use std::convert::Infallible;
 
 pub use game_play::hud::counts::{Count, CountChange, Counts, PlayerCounts, index};
 
@@ -39,11 +42,128 @@ pub struct CountFloats {
     /// Whether a life total no prompt can pick lets the pointer through to what lies under it:
     /// on the game screen, where the phone's hand stands behind it, but not on the manual
     /// table, whose commands act on the total under the pointer.
-    pub passes: bool,
+    passes: bool,
 
     /// Whether each player's unspent mana is shown: not on the manual table, whose own row of
     /// mana and counters stands there (`manual::pools`).
+    pools: bool,
+}
+
+/// Selects a player as the target of the open prompt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Message {
+    Target(Side),
+}
+
+/// The data needed to build one life total, life change or mana pool.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Inputs {
+    Total(Side, i32, bool, bool, LifeText),
+    Change(i32),
+    Pool(ManaPool),
+}
+
+impl Feature for CountFloats {
+    type State = Self;
+    type Message = Message;
+    type Inputs<'a> = Inputs;
+    type ViewKey = Inputs;
+    type Command = Click;
+    type Request = Infallible;
+
+    fn update(
+        _: &mut Self,
+        message: &Message,
+        context: &mut Context<'_, Click, Infallible>,
+    ) -> bool {
+        let Message::Target(player) = *message;
+        context.command(Click::On {
+            on: Subject::Player { player },
+        });
+        false
+    }
+
+    fn view_key(_: &Self, input: &Inputs) -> Inputs {
+        *input
+    }
+
+    fn view(_: &Self, input: Inputs) -> Element {
+        match input {
+            Inputs::Total(side, life, target, passes, style) => {
+                life_total(side, life, (target, passes, style))
+            }
+            Inputs::Change(by) => life_change(by),
+            Inputs::Pool(pool) => pool_text(pool),
+        }
+    }
+}
+
+impl super::FloatFeature for CountFloats {
+    fn floats() -> impl Iterator<Item = FloatId> {
+        floats::LIFE
+            .into_iter()
+            .chain(floats::LIFE_CHANGE)
+            .chain(floats::POOL)
+    }
+}
+
+/// Prepares all totals and pools that playback can show.
+pub struct Prepare<'a, Coming> {
+    pub layer: &'a mut Layer,
+    pub counts: &'a Counts,
+    pub coming: Coming,
+    pub targets: [bool; 2],
+    pub style: LifeText,
+    pub passes: bool,
     pub pools: bool,
+}
+
+impl<'a, Coming> StateUpdate<CountFloats> for Prepare<'_, Coming>
+where
+    Coming: Iterator<Item = (&'a [CountChange], &'a PlayerView)>,
+{
+    type Output = ();
+
+    fn apply(self, state: &mut CountFloats) -> (bool, ()) {
+        state.passes = self.passes;
+        state.pools = self.pools;
+        state.prepare(
+            self.layer,
+            self.counts,
+            self.coming,
+            (self.targets, self.style),
+        );
+        (false, ())
+    }
+}
+
+/// Samples prepared totals and pools for one playback frame.
+pub struct Draw<'a> {
+    pub layer: &'a mut Layer,
+    pub counts: &'a Counts,
+    pub effects: &'a [EffectRun],
+    pub now: u64,
+    pub table: &'a Table,
+    pub tier: Tier,
+    pub visible: bool,
+    pub targets: [bool; 2],
+    pub dimmed: bool,
+}
+
+impl StateUpdate<CountFloats> for Draw<'_> {
+    type Output = ();
+
+    fn apply(self, state: &mut CountFloats) -> (bool, ()) {
+        state.write(
+            self.layer,
+            self.counts,
+            self.effects,
+            self.now,
+            (self.table, self.tier),
+            (self.visible, self.targets, self.dimmed),
+        );
+        (false, ())
+    }
 }
 
 impl CountFloats {
@@ -54,7 +174,7 @@ impl CountFloats {
     ///
     /// A player marked in `targets` (the viewer's first) has each total laid out a second time,
     /// as the target a press on picks them by.
-    pub fn prepare<'a>(
+    fn prepare<'a>(
         &mut self,
         layer: &mut Layer,
         counts: &Counts,
@@ -85,7 +205,7 @@ impl CountFloats {
             state.take_view(view);
             note(&state);
         }
-        for (side, name) in [(Side::You, "You"), (Side::Opponent, "Opponent")] {
+        for side in [Side::You, Side::Opponent] {
             let at = index(side);
             let id = floats::LIFE[at];
             layer.forget_prepared(id, |key| {
@@ -102,15 +222,14 @@ impl CountFloats {
                     }
                     let passes = self.passes;
                     layer.prepare(id, total_key(life, target, passes, style), || {
-                        life_total((side, name), Some(life), (target, passes, style))
-                            .expect("a total")
+                        Self::view(self, Inputs::Total(side, life, target, passes, style))
                     });
                 }
             }
             let id = floats::LIFE_CHANGE[at];
             layer.forget_prepared(id, |key| changes[at].iter().any(|&by| life_key(by) == key));
             for &by in &changes[at] {
-                layer.prepare(id, life_key(by), || life_change(by));
+                layer.prepare(id, life_key(by), || Self::view(self, Inputs::Change(by)));
             }
             let id = floats::POOL[at];
             pools[at].retain(|pool| *pool != ManaPool::default());
@@ -118,7 +237,7 @@ impl CountFloats {
                 pools[at].iter().any(|&pool| pool_key(pool) == key)
             });
             for &pool in &pools[at] {
-                layer.prepare(id, pool_key(pool), || pool_text(pool));
+                layer.prepare(id, pool_key(pool), || Self::view(self, Inputs::Pool(pool)));
             }
         }
     }
@@ -129,7 +248,7 @@ impl CountFloats {
     /// The first visible text effect on each total supplies its tint and number.
     /// [`Self::prepare`] lays out the numbers in advance, including those whose
     /// effects begin after the count step.
-    pub fn write(
+    fn write(
         &mut self,
         layer: &mut Layer,
         counts: &Counts,
@@ -142,7 +261,7 @@ impl CountFloats {
         let data = table.data();
         let life_style = table.layout().play.life;
         let style = life_style.text;
-        for (side, name) in [(Side::You, "You"), (Side::Opponent, "Opponent")] {
+        for side in [Side::You, Side::Opponent] {
             let at = index(side);
             let target = targets[at];
             let hidden = dimmed && (life_style.opening_hides_viewer || side == Side::Opponent);
@@ -160,7 +279,7 @@ impl CountFloats {
                     .filter(|pool| *pool != ManaPool::default()),
                 change: counts.zip(effect.number).map(|(counts, _)| counts.change),
             };
-            let shown = &mut self.shown[at];
+            let shown = self.shown[at];
             if want.life != shown.life {
                 let id = floats::LIFE[at];
                 show(
@@ -168,8 +287,8 @@ impl CountFloats {
                     id,
                     want.life.map(|(life, t, p)| total_key(life, t, p, style)),
                     || {
-                        want.life.and_then(|(life, t, p)| {
-                            life_total((side, name), Some(life), (t, p, style))
+                        want.life.map(|(life, target, passes)| {
+                            Self::view(self, Inputs::Total(side, life, target, passes, style))
                         })
                     },
                 );
@@ -177,16 +296,16 @@ impl CountFloats {
             if want.pool != shown.pool {
                 let id = floats::POOL[at];
                 show(layer, id, want.pool.map(pool_key), || {
-                    want.pool.map(pool_text)
+                    want.pool.map(|pool| Self::view(self, Inputs::Pool(pool)))
                 });
             }
             if want.change != shown.change {
                 let id = floats::LIFE_CHANGE[at];
                 show(layer, id, want.change.map(life_key), || {
-                    want.change.map(life_change)
+                    want.change.map(|by| Self::view(self, Inputs::Change(by)))
                 });
             }
-            *shown = want;
+            self.shown[at] = want;
             let art_offset = orb::face_offset(side) * life_style.orb_scale;
             let offset = Vec2::new(0.0, art_offset);
             let life = HudAnchor::Life(side);

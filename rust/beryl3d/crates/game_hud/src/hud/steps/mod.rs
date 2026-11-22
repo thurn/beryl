@@ -7,7 +7,7 @@ use beryl_protocol::protocol::{DecisionId, SessionId, Side, Step, StepSet, Stops
 use beryl_protocol::script::Turn;
 use glam::Vec2;
 use kit_base::data::{hud::StepTrack, profiles::Piece};
-use kit_scene::{Context, Feature};
+use kit_scene::{Context, Feature, StateUpdate};
 use kit_ui::element::{Element, row};
 use kit_ui::layout::Layer;
 
@@ -140,10 +140,73 @@ pub fn steps(input: &HudIn<'_>) -> Option<Element> {
     game_steps(&Inputs::new(input))
 }
 
+/// Synchronizes the settings sent and acknowledged at the open decision.
+pub enum SyncStops {
+    Receive {
+        at: Option<(SessionId, DecisionId)>,
+        held: StopsSetting,
+    },
+    Send {
+        held: StopsSetting,
+        want: StopsSetting,
+    },
+}
+
+impl StateUpdate<StepRow> for SyncStops {
+    type Output = bool;
+
+    fn apply(self, state: &mut State) -> (bool, bool) {
+        let send = match self {
+            Self::Receive { at, held } => {
+                state.receive(at, held);
+                false
+            }
+            Self::Send { held, want } => state.send(held, want),
+        };
+        (false, send)
+    }
+}
+
+/// Prepares the step rows that upcoming turns can show while the game is open.
+pub struct Prepare<Coming> {
+    pub input: Option<Inputs>,
+    pub coming: Coming,
+}
+
+impl<Coming: Iterator<Item = Turn>> StateUpdate<StepRow> for Prepare<Coming> {
+    type Output = ();
+
+    fn apply(self, state: &mut State) -> (bool, ()) {
+        if let Some(input) = self.input {
+            state.prepare(&input, self.coming);
+        } else {
+            state.ahead.clear();
+        }
+        (false, ())
+    }
+}
+
+/// Samples the current turn step and replaces the step row if it changed.
+pub struct Draw<'a> {
+    pub layer: &'a mut Layer,
+    pub turn: Option<Turn>,
+    pub input: Inputs,
+    pub game: bool,
+}
+
+impl StateUpdate<StepRow> for Draw<'_> {
+    type Output = ();
+
+    fn apply(self, state: &mut State) -> (bool, ()) {
+        state.write(self.layer, self.turn, &self.input, self.game);
+        (false, ())
+    }
+}
+
 impl State {
     /// Drops acknowledged settings in send order. An update for a new
     /// decision supersedes requests made at the previous decision.
-    pub fn receive(&mut self, at: Option<(SessionId, DecisionId)>, held: StopsSetting) {
+    fn receive(&mut self, at: Option<(SessionId, DecisionId)>, held: StopsSetting) {
         if self.pending_at != at {
             self.outstanding.clear();
             self.pending_at = at;
@@ -154,7 +217,7 @@ impl State {
 
     /// A setting different from the latest send or the latest session view
     /// needs a command. Only sent settings awaiting a view are kept here.
-    pub fn send(&mut self, held: StopsSetting, want: StopsSetting) -> bool {
+    fn send(&mut self, held: StopsSetting, want: StopsSetting) -> bool {
         if self.outstanding.back().copied().unwrap_or(held) == want {
             return false;
         }
@@ -164,7 +227,7 @@ impl State {
 
     /// Builds each row that an upcoming script will show and that has no
     /// prepared row yet, and drops rows no upcoming script can reach.
-    pub fn prepare(&mut self, input: &Inputs, coming: impl Iterator<Item = Turn>) {
+    fn prepare(&mut self, input: &Inputs, coming: impl Iterator<Item = Turn>) {
         let from = input.from();
         if self.from != Some(from) {
             self.from = Some(from);
@@ -194,12 +257,8 @@ impl State {
         }
     }
 
-    pub fn clear_prepared(&mut self) {
-        self.ahead.clear();
-    }
-
     /// Changes just the step row as a script reaches a new turn step.
-    pub fn write(&mut self, layer: &mut Layer, turn: Option<Turn>, input: &Inputs, game: bool) {
+    fn write(&mut self, layer: &mut Layer, turn: Option<Turn>, input: &Inputs, game: bool) {
         if turn == self.turn {
             return;
         }

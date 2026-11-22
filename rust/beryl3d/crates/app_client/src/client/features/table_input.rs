@@ -13,6 +13,7 @@ use super::super::{
 };
 
 use app_screens::screens::Screen;
+use game_manual::features::table::Change;
 use game_manual::manual::arrows::{self, Pick};
 use game_manual::manual::drop::{self, Area, End};
 use game_manual::manual::selection;
@@ -40,11 +41,12 @@ impl Client {
         }
         if pointer.phase == PointerPhase::Down {
             // Cmd is Control off the Mac, as the web's `meta` click is.
-            self.features.table_mut().modifiers.meta = if self.platform == Platform::Mac {
+            let meta = if self.platform == Platform::Mac {
                 pointer.modifiers.command
             } else {
                 pointer.modifiers.control
             };
+            self.features.update_table(Change::Meta(meta));
         }
         if self.features.table().picking.is_some() {
             return self.pick_target(point);
@@ -66,9 +68,10 @@ impl Client {
         if pointer.phase != PointerPhase::Down {
             return matches!(pointer.phase, PointerPhase::Up);
         }
-        let Some(pick) = self.features.table_mut().picking.take() else {
+        let Some(pick) = self.features.table().picking else {
             return false;
         };
+        self.features.update_table(Change::Pick(None));
         let clicked = target_from_hit(&self.frame, point.hit);
         if pointer.button == Button::Primary
             && let Some(to) = arrows::picked(pick, clicked)
@@ -118,7 +121,8 @@ impl Client {
     /// Starts a command's wait for its target, from the card it was given to.
     pub(in crate::client) fn start_pick(&mut self, command: u16, target: Target) {
         if let Target::Card(from) = target {
-            self.features.table_mut().picking = Some(Pick { command, from });
+            self.features
+                .update_table(Change::Pick(Some(Pick { command, from })));
         }
     }
 
@@ -137,35 +141,43 @@ impl Client {
                         let element = &self.frame.resolved[index as usize];
                         !matches!(element.role, Role::Card | Role::Pile | Role::Player)
                     });
-                self.features.table_mut().sweep =
-                    empty.then_some((pointer.position, pointer.position));
+                self.features.update_table(Change::Sweep(
+                    empty.then_some((pointer.position, pointer.position)),
+                ));
                 false
             }
             PointerPhase::Move => {
                 let Some((from, _)) = self.features.table().sweep else {
                     return false;
                 };
-                self.features.table_mut().sweep = Some((from, pointer.position));
+                self.features
+                    .update_table(Change::Sweep(Some((from, pointer.position))));
                 if point.drag.is_some() {
                     self.show_screen();
                 }
                 true
             }
             PointerPhase::Up => {
-                let Some((from, _)) = self.features.table_mut().sweep.take() else {
+                let Some((from, _)) = self.features.table().sweep else {
                     return false;
                 };
+                self.features.update_table(Change::Sweep(None));
                 if point.drag.is_some()
                     && let Some(view) = self.show.latest().map(|update| &update.view)
                 {
                     let rect = selection::sweep_box(from, pointer.position);
-                    self.features.table_mut().selection = selection::swept(&self.frame, rect, view);
+                    self.features.update_table(Change::Select(selection::swept(
+                        &self.frame,
+                        rect,
+                        view,
+                    )));
                 }
                 self.show_screen();
                 true
             }
             PointerPhase::Cancel | PointerPhase::Leave => {
-                if self.features.table_mut().sweep.take().is_some() {
+                if self.features.table().sweep.is_some() {
+                    self.features.update_table(Change::Sweep(None));
                     self.show_screen();
                 }
                 false
@@ -193,7 +205,7 @@ impl Client {
             _ => None,
         };
         if landing != self.features.table().landing {
-            self.features.table_mut().landing = landing;
+            self.features.update_table(Change::Landing(landing));
             self.show_screen();
         }
     }
@@ -220,7 +232,7 @@ impl Client {
     /// where it was let go. Several put on the top of a library open the order tray instead.
     /// On a frozen table (`manual::link`) nothing moves.
     pub(in crate::client) fn table_drop(&mut self, slot: usize, at: Vec2) {
-        self.features.table_mut().landing = None;
+        self.features.update_table(Change::Landing(None));
         let to = (!self.table_frozen())
             .then(|| self.landing_at(slot, at))
             .flatten();
@@ -249,7 +261,7 @@ impl Client {
         let actionable =
             (self.show.latest()).is_some_and(|update| selection::actionable(&update.view, slot));
         if actionable {
-            selection::toggle(&mut self.features.table_mut().selection, slot);
+            self.features.update_table(Change::ToggleSelection(slot));
         }
     }
 
@@ -260,14 +272,14 @@ impl Client {
         if !self.at_table() || self.features.viewer().open().is_some() {
             return false;
         }
-        if self.features.table_mut().picking.take().is_some() {
+        if self.features.table().picking.is_some() {
+            self.features.update_table(Change::Pick(None));
             return true;
         }
         if self.features.table().selection.is_empty() && self.features.table().sweep.is_none() {
             return false;
         }
-        self.features.table_mut().selection.clear();
-        self.features.table_mut().sweep = None;
+        self.features.update_table(Change::ClearSelection);
         self.show_screen();
         true
     }
@@ -314,7 +326,7 @@ impl Client {
         // the screen is built again only when that permanent changes.
         let over = selection::highest(&self.frame, &self.features.table().selection);
         if over != self.features.table().summary_over {
-            self.features.table_mut().summary_over = over;
+            self.features.update_table(Change::Summary(over));
             self.show_screen();
         }
         if let (Some(pick), Some(mouse)) = (self.features.table().picking, self.mouse()) {

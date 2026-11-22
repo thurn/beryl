@@ -128,12 +128,11 @@ impl Client {
             if primary_down {
                 self.end_control();
                 self.routes.scrolling.cancel();
-                self.features.rows_mut().update(RowMessage::Focus(None));
+                self.features.focus_row(RowMessage::Focus(None));
             }
             if primary_down && pointer.kind == PointerKind::Touch && pinned {
                 self.features
-                    .inspector_mut()
-                    .update(game_hud::hud::inspector::Message::Pin(None));
+                    .inspect(&game_hud::hud::inspector::Message::Pin(None));
                 self.routes.router.cancel();
             } else {
                 self.deliver_point(&point);
@@ -198,8 +197,9 @@ impl Client {
             && let Ok(slot) = u16::try_from(slot)
         {
             self.features
-                .inspector_mut()
-                .update(game_hud::hud::inspector::Message::Pin(Some(ObjectId(slot))));
+                .inspect(&game_hud::hud::inspector::Message::Pin(Some(ObjectId(
+                    slot,
+                ))));
             true
         } else {
             false
@@ -212,7 +212,9 @@ impl Client {
     fn cancel_interaction(&mut self) {
         self.routes.scrolling.cancel();
         self.cancel_gesture();
-        if self.features.table_mut().sweep.take().is_some() {
+        if self.features.table().sweep.is_some() {
+            self.features
+                .update_table(game_manual::features::table::Change::Sweep(None));
             self.show_screen();
         }
         self.layer.point_at(None, None);
@@ -228,7 +230,10 @@ impl Client {
         let pickup = point.drag.map(|drag| (drag.direction, drag.pickup_ready));
         self.show.pointer_mut().handle(&pointer, pickup);
         if pointer.phase == PointerPhase::Down {
-            self.features.table_mut().modifiers.shift = pointer.modifiers.shift;
+            self.features
+                .update_table(game_manual::features::table::Change::Shift(
+                    pointer.modifiers.shift,
+                ));
         }
         self.features
             .prompts
@@ -447,7 +452,7 @@ impl Client {
             return Some(KeyResponse::Handled);
         }
         if key.code == KeyCode::Tab {
-            self.features.rows_mut().update(RowMessage::Focus(None));
+            self.features.focus_row(RowMessage::Focus(None));
             self.layer
                 .move_focus(!key.modifiers.shift, self.features.layer_open);
             return Some(KeyResponse::Handled);

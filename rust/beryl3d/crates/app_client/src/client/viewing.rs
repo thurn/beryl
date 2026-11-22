@@ -7,7 +7,8 @@ use game_hud::inspect::Viewed;
 
 use super::Client;
 use app_screens::screens::Screen;
-use game_hud::hud::viewer::RevealedFace;
+use game_hud::hud::steps;
+use game_hud::hud::viewer::{Playback, RevealedFace};
 use game_play::light::Span;
 use game_play::verbs::Interval;
 use game_table::table::{Moves, Relaid, Window};
@@ -123,7 +124,8 @@ impl Client {
                 return;
             }
         }
-        self.features.table_mut().viewer = game_manual::manual::viewers::PileViewer::new();
+        self.features
+            .update_table(game_manual::features::table::Change::ResetViewer);
         self.layer.set_field(
             game_manual::manual::viewers::SEARCH,
             kit_ui::widgets::FieldState::default(),
@@ -232,15 +234,18 @@ impl Client {
     }
 
     pub(super) fn prepare_pill(&mut self, view: &PlayerView) {
-        self.features
-            .viewer_mut()
-            .prepare_pill(&mut self.layer, view, self.show.table().profile());
+        self.features.viewer_playback(Playback::Prepare {
+            layer: &mut self.layer,
+            view,
+            profile: self.show.table().profile(),
+        });
     }
 
     pub(super) fn prepare_revealed_pile(&mut self) {
-        self.features
-            .viewer_mut()
-            .prepare_pile(&mut self.layer, self.show.table().profile());
+        self.features.viewer_playback(Playback::Resize {
+            layer: &mut self.layer,
+            profile: self.show.table().profile(),
+        });
     }
 
     /// Advances the opening and viewer after the table has reached this frame.
@@ -249,9 +254,12 @@ impl Client {
         let input = self.step_inputs();
         let turn = self.show.turn_at(table_now);
         let in_game = self.features.screen == Screen::Game;
-        self.features
-            .steps_mut()
-            .write(&mut self.layer, turn, &input, in_game);
+        self.features.update_steps(steps::Draw {
+            layer: &mut self.layer,
+            turn,
+            input,
+            game: in_game,
+        });
         if self.features.opening.land(self.now) {
             self.show_screen();
         }
@@ -271,26 +279,21 @@ impl Client {
         if !holds && self.features.viewer().open() == Some(Viewed::Revealed) {
             self.view(None);
         }
-        self.features.viewer_mut().write_pill(
-            &mut self.layer,
-            self.window.size,
-            (
-                self.show.table().data().revealed,
-                self.show.table().data().card,
-            ),
-            visible && holds,
-        );
+        self.features.viewer_playback(Playback::Draw {
+            layer: &mut self.layer,
+            window: self.window.size,
+            tuning: self.show.table().data().revealed,
+            card: self.show.table().data().card,
+            visible: visible && holds,
+        });
     }
 
     pub(super) fn prepare_steps(&mut self) {
-        if self.features.screen == Screen::Game {
-            let input = self.step_inputs();
-            self.features
-                .steps_mut()
-                .prepare(&input, self.show.coming_turns());
-        } else {
-            self.features.steps_mut().clear_prepared();
-        }
+        let input = (self.features.screen == Screen::Game).then(|| self.step_inputs());
+        self.features.update_steps(steps::Prepare {
+            input,
+            coming: self.show.coming_turns(),
+        });
     }
 
     pub(super) fn step_inputs(&self) -> game_hud::hud::steps::Inputs {

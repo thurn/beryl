@@ -12,6 +12,7 @@ pub type State = Option<LibraryOrder>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
+    Reset,
     Open(LibraryOrder),
     Card(u16),
     Nudge(bool),
@@ -40,6 +41,7 @@ impl Feature for OrderTray {
         context: &mut Context<'_, Self::Command, Self::Request>,
     ) -> bool {
         match message {
+            Message::Reset => return state.take().is_some(),
             Message::Open(order) => *state = Some(order.clone()),
             Message::Card(at) => {
                 let Some(order) = state else { return false };

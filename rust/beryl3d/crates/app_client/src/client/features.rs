@@ -11,17 +11,10 @@ use app_screens::screens::start::{self, StartScreen};
 use app_screens::screens::testing::{self, TestingScreen};
 use app_screens::screens::{self, GalleryState, Music, Screen, Sheet};
 use app_screens::settings::ScreenSettings;
-use beryl_protocol::prompt::{Click, PromptView};
 use beryl_protocol::{PlayerView, SessionId};
 use game_hud::hud::HudIn;
-use game_hud::hud::banner::Banner;
-use game_hud::hud::counts::CountFloats;
 use game_hud::hud::full_control::{self, FullControl};
-use game_hud::hud::inspector::Inspector;
 use game_hud::hud::log::{self, GameLog, Logged};
-use game_hud::hud::notices::NoticeFloats;
-use game_hud::hud::piles::PileCounts;
-use game_hud::hud::rows::RowCounts;
 use game_hud::hud::steps::{self, StepRow};
 use game_hud::hud::viewer::{self, Viewer};
 use game_hud::prompts::{self, bar::PromptBar};
@@ -29,17 +22,24 @@ use game_hud::prompts::{self, bar::PromptBar};
 mod prompt;
 use game_hud::screens::game_over::{self, GameOver};
 use game_manual::manual::bindings::Bindings;
+use game_manual::screens::table_entries::TableEntries;
 use game_table::faces::{FaceList, Faces};
 use game_table::profiles::Profile;
 use game_table::table::Window;
-use kit_scene::{Effect, Feature, FeatureSlot};
+use kit_scene::{Effect, Feature, FeatureSlot, StateUpdate};
 use kit_ui::element::{Action, Element};
-use kit_ui::layout::FieldChange;
+use kit_ui::layout::{FieldChange, Layer};
 use kit_ui::widgets::{FieldState, Fields};
 
 use super::{Client, SessionCommand};
 
+mod hud;
 mod keys;
+use game_hud::hud::{
+    banner::Banner, counts::CountFloats, inspector::Inspector, notices::NoticeFloats,
+    piles::PileCounts, rows::RowCounts,
+};
+use hud::{INSPECTOR, LIFE_TOTALS, NOTICES, PILE_COUNTS, ROW_COUNTS, STEP_BANNER};
 mod manual;
 mod table_input;
 use manual::{
@@ -52,12 +52,6 @@ const START: &str = "start";
 const TESTING: &str = "testing";
 pub(super) const BUG_REPORT: &str = "bug-report";
 const GAME_OVER: &str = "game-over";
-const TOTALS: &str = "life-totals";
-const PILES: &str = "pile-counts";
-const NOTICES: &str = "notices";
-const ROWS: &str = "row-counts";
-const BANNER: &str = "step-banner";
-const INSPECTOR: &str = "inspector";
 const STEPS: &str = "steps";
 const FULL_CONTROL: &str = "full-control";
 const VIEWER: &str = "pile-viewer";
@@ -70,12 +64,12 @@ const REGISTRY: &[Registration] = &[
     Registration::of::<BugReport>(BUG_REPORT, Placement::Sheet(Sheet::BugReport))
         .keys(&keys::BUG_REPORT_KEYS, keys::bug_report),
     Registration::of::<GameOver>(GAME_OVER, Placement::GameOver),
-    Registration::prepared::<CountFloats>(TOTALS),
-    Registration::prepared::<PileCounts>(PILES),
-    Registration::prepared::<NoticeFloats>(NOTICES),
-    Registration::prepared::<RowCounts>(ROWS),
-    Registration::prepared::<Banner>(BANNER),
-    Registration::prepared::<Inspector>(INSPECTOR),
+    Registration::floating::<CountFloats>(LIFE_TOTALS),
+    Registration::floating::<PileCounts>(PILE_COUNTS),
+    Registration::floating::<RowCounts>(ROW_COUNTS),
+    Registration::floating::<NoticeFloats>(NOTICES),
+    Registration::floating::<Banner>(STEP_BANNER),
+    Registration::floating::<Inspector>(INSPECTOR),
     Registration::routed::<StepRow>(STEPS),
     Registration::routed::<FullControl>(FULL_CONTROL),
     Registration::routed::<Viewer>(VIEWER),
@@ -131,11 +125,14 @@ pub(super) struct ViewInputs<'a> {
     pub view: Option<&'a PlayerView>,
     pub session: Option<SessionId>,
     pub fields: &'a Fields,
+    pub layer: &'a Layer,
     pub hud: &'a HudIn<'a>,
     pub bindings: &'a Bindings,
     pub faces: &'a FaceList,
     pub game_over: bool,
     pub settings: ScreenSettings,
+    pub start: Option<(bool, &'a TableEntries)>,
+    pub link_error: Option<&'a str>,
 }
 
 type Slots = BTreeMap<&'static str, Box<dyn Any>>;
@@ -146,7 +143,7 @@ struct Registration {
     create: fn() -> Box<dyn Any>,
     state: fn(&Slots, &'static str) -> String,
     route: fn(&mut Client, &'static str, &Action) -> Option<bool>,
-    view: for<'a> fn(&'a mut Features, &'static str, ViewInputs<'_>) -> Option<&'a Element>,
+    view: fn(&mut Features, &'static str, ViewInputs<'_>) -> Option<Element>,
     prompt_view: Option<prompt::Draw>,
     /// The keyboard shortcuts the feature answers, and what a press of one sends (`keys`).
     shortcuts: &'static [kit_scene::Shortcut],
@@ -167,23 +164,7 @@ impl Registration {
                 print_state(slots[id].downcast_ref::<FeatureSlot<F>>().unwrap().state())
             },
             route: route::<F>,
-            view: F::mounted_view,
-            prompt_view: None,
-            shortcuts: &[],
-            on_key: keys::none,
-        }
-    }
-
-    // Playback variants are prepared separately in Layer. The registry owns
-    // their state even though there is no single screen mount to cache.
-    const fn prepared<S: Debug + Default + 'static>(id: &'static str) -> Self {
-        Self {
-            id,
-            placement: None,
-            create: || Box::new(S::default()),
-            state: |slots, id| print_state(slots[id].downcast_ref::<S>().unwrap()),
-            route: |_, _, _| None,
-            view: |_, _, _| None,
+            view: |features, id, inputs| F::mounted_view(features, id, inputs).cloned(),
             prompt_view: None,
             shortcuts: &[],
             on_key: keys::none,
@@ -270,68 +251,12 @@ impl Features {
             .state()
     }
 
-    fn prepared<S: 'static>(&self, id: &'static str) -> &S {
-        self.slots[id].downcast_ref().expect("registered HUD state")
-    }
-
-    fn prepared_mut<S: 'static>(&mut self, id: &'static str) -> &mut S {
-        self.slots
-            .get_mut(id)
-            .and_then(|slot| slot.downcast_mut())
-            .expect("registered HUD state")
-    }
-
-    pub fn totals_mut(&mut self) -> &mut CountFloats {
-        self.prepared_mut(TOTALS)
-    }
-
-    pub fn piles(&self) -> &PileCounts {
-        self.prepared(PILES)
-    }
-
-    pub fn piles_mut(&mut self) -> &mut PileCounts {
-        self.prepared_mut(PILES)
-    }
-
-    pub fn notices_mut(&mut self) -> &mut NoticeFloats {
-        self.prepared_mut(NOTICES)
-    }
-
-    pub fn rows(&self) -> &RowCounts {
-        self.prepared(ROWS)
-    }
-
-    pub fn rows_mut(&mut self) -> &mut RowCounts {
-        self.prepared_mut(ROWS)
-    }
-
-    pub fn banner_mut(&mut self) -> &mut Banner {
-        self.prepared_mut(BANNER)
-    }
-
-    pub fn inspector(&self) -> &Inspector {
-        self.prepared(INSPECTOR)
-    }
-
-    pub fn inspector_mut(&mut self) -> &mut Inspector {
-        self.prepared_mut(INSPECTOR)
-    }
-
-    pub fn inspector_and_prompt(&mut self) -> (&mut Inspector, Option<&PromptView>) {
-        let inspector = self
-            .slots
-            .get_mut(INSPECTOR)
-            .and_then(|slot| slot.downcast_mut())
-            .expect("registered HUD state");
-        (inspector, self.prompts.current())
-    }
-
     pub fn steps(&self) -> &steps::State {
         self.state_of::<StepRow>(STEPS)
     }
 
-    pub fn steps_mut(&mut self) -> &mut steps::State {
-        Self::slot::<StepRow>(&mut self.slots, STEPS).state_mut()
+    pub fn update_steps<U: StateUpdate<StepRow>>(&mut self, update: U) -> U::Output {
+        Self::slot::<StepRow>(&mut self.slots, STEPS).apply(update)
     }
 
     pub fn step_view(&mut self, input: steps::Inputs) -> Option<Element> {
@@ -352,8 +277,8 @@ impl Features {
         self.state_of::<Viewer>(VIEWER)
     }
 
-    pub fn viewer_mut(&mut self) -> &mut viewer::State {
-        Self::slot::<Viewer>(&mut self.slots, VIEWER).state_mut()
+    pub fn viewer_playback(&mut self, update: viewer::Playback<'_>) {
+        Self::slot::<Viewer>(&mut self.slots, VIEWER).apply(update);
     }
 
     pub fn show_viewer(
@@ -361,9 +286,8 @@ impl Features {
         open: Option<game_hud::inspect::Viewed>,
         revealed: Vec<viewer::RevealedFace>,
     ) {
-        let slot = Self::slot::<Viewer>(&mut self.slots, VIEWER);
-        slot.state_mut().show(open, revealed);
-        slot.invalidate_view();
+        Self::slot::<Viewer>(&mut self.slots, VIEWER)
+            .update(&viewer::Message::Show(open, revealed));
     }
 
     pub fn viewer_view(&mut self, input: viewer::Inputs<'_>) -> Option<Element> {
@@ -405,7 +329,7 @@ impl Features {
         REGISTRY
             .iter()
             .filter(|entry| entry.placement == Some(placement))
-            .find_map(|entry| (entry.view)(self, entry.id, inputs).cloned())
+            .find_map(|entry| self.mount(entry, inputs))
     }
 
     #[cfg(feature = "stories")]
@@ -414,7 +338,34 @@ impl Features {
         if entry.prompt_view.is_some() {
             return self.named_prompt_view(entry.placement?, *inputs.hud);
         }
-        (entry.view)(self, entry.id, inputs).cloned()
+        self.mount(entry, inputs)
+    }
+
+    fn mount(&mut self, entry: &Registration, inputs: ViewInputs<'_>) -> Option<Element> {
+        let entries;
+        let link_error;
+        let inputs = match entry.placement {
+            Some(Placement::Screen(Screen::Start)) => {
+                entries = self.lobby().entries.clone();
+                let has_recordings = !self
+                    .state_of::<TestingScreen>(TESTING)
+                    .recordings
+                    .is_empty();
+                ViewInputs {
+                    start: Some((has_recordings, &entries)),
+                    ..inputs
+                }
+            }
+            Some(Placement::Screen(Screen::Table)) => {
+                link_error = self.lobby().lobby.link_error.clone();
+                ViewInputs {
+                    link_error: link_error.as_deref(),
+                    ..inputs
+                }
+            }
+            _ => inputs,
+        };
+        (entry.view)(self, entry.id, inputs)
     }
 
     #[cfg(feature = "stories")]
@@ -464,12 +415,6 @@ impl Client {
 
     /// Returns whether a registered feature handled the action and changed the view.
     pub(super) fn route_feature(&mut self, action: &Action) -> Option<bool> {
-        // Life totals come from the table's playback crate. A target on a
-        // life total enters the same session router as a shape's flat controls.
-        if let Some(&click @ Click::On { .. }) = action.downcast_ref::<Click>() {
-            self.click(click);
-            return Some(false);
-        }
         REGISTRY
             .iter()
             .find_map(|entry| (entry.route)(self, entry.id, action))
@@ -582,12 +527,8 @@ impl Mounted for StartScreen {
         id: &'static str,
         inputs: ViewInputs<'_>,
     ) -> Option<&'a Element> {
-        let has_recordings = !features
-            .state_of::<TestingScreen>(TESTING)
-            .recordings
-            .is_empty();
+        let (has_recordings, entries) = inputs.start?;
         let in_progress = start::in_progress(inputs.view);
-        let entries = features.lobby().entries.clone();
         Some(
             Features::slot::<Self>(&mut features.slots, id).view(start::Inputs {
                 tooltip: inputs.hud.data.flat.tooltip,
@@ -597,7 +538,7 @@ impl Mounted for StartScreen {
                 session: inputs.session.filter(|_| in_progress),
                 has_recordings,
                 fields: inputs.fields,
-                entries: &entries,
+                entries,
             }),
         )
     }
@@ -768,9 +709,9 @@ impl Mounted for Viewer {
 
     fn request(client: &mut Client, request: Self::Request) -> bool {
         match request {
-            viewer::Message::Open(pile) => client.view(Some(pile)),
-            viewer::Message::Close => client.dismiss_viewer(),
-            viewer::Message::DismissRevealed => client.dismiss_revealed(),
+            viewer::Request::Open(pile) => client.view(Some(pile)),
+            viewer::Request::Close => client.dismiss_viewer(),
+            viewer::Request::DismissRevealed => client.dismiss_revealed(),
         }
         false
     }

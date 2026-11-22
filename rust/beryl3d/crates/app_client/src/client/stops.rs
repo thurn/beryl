@@ -50,7 +50,8 @@ impl Client {
             .decision()
             .map(|decision| (update.session, decision));
         let held = update.view.stops;
-        self.features.steps_mut().receive(at, held);
+        self.features
+            .update_steps(steps::SyncStops::Receive { at, held });
         self.send_stops_from(held);
     }
 
@@ -67,7 +68,10 @@ impl Client {
             return;
         };
         let want = self.settings.stops;
-        if self.features.steps_mut().send(held, want) {
+        if self
+            .features
+            .update_steps(steps::SyncStops::Send { held, want })
+        {
             self.commands
                 .push_back(SessionCommand::SetStops(session, want));
         }

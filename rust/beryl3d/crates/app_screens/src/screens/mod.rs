@@ -29,7 +29,6 @@ use game_hud::inspect::Viewed;
 
 use game_hud::hud::HudIn;
 use game_hud::hud::placement_scene::PlacementScene;
-use game_hud::inspect::inspector::Inspected;
 use game_hud::inspect::revealed::RevealedFace;
 use game_table::faces::FaceList;
 use game_table::table::Window;
@@ -67,7 +66,6 @@ pub struct ScreenIn<'a> {
     /// What each text field holds, by its name.
     pub fields: &'a Fields,
     /// The card the pointer is over that the inspector shows, if any (`inspect::inspector`).
-    pub inspected: Option<&'a Inspected>,
     /// The faces of the match or, on the gallery screen, its stand-in cards.
     pub faces: Option<&'a FaceList>,
     /// The pile whose viewer is open, if any (`inspect::viewer`).
@@ -101,7 +99,6 @@ impl<'a> ScreenIn<'a> {
                 ..self.stops
             },
             sheet: self.sheet,
-            inspected: self.inspected,
             faces: self.faces,
             viewing: self.viewing,
             revealed: self.revealed,

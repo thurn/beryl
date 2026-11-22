@@ -8,7 +8,6 @@ use beryl_protocol::GameUpdate;
 use game_hud::inspect::Viewed;
 use glam::Vec2;
 use kit_ui::element::Action;
-use kit_ui::layout::Shake;
 
 use super::{Client, Platform};
 use crate::command::SessionCommand;
@@ -16,15 +15,15 @@ use crate::command::SessionCommand;
 use app_screens::screens::Screen;
 use beryl_protocol::ipc::TableActReply;
 use beryl_protocol::protocol::{Answer, LinkState, ObjectId, Side, TableAction, ZoneName};
-use game_manual::features::{context_menu, lobby, log, table::Message as TableMessage};
+use game_manual::features::{
+    context_menu, lobby, log,
+    table::{self, Change, Message as TableMessage},
+};
 use game_manual::manual::menus::{self, Act};
 use game_manual::manual::tokens::TokenChoice;
 use game_manual::manual::viewers::{self, Look, ViewerControl};
 use game_manual::manual::{self, ActionSource, Context, Pending, Sent, Target, commands, pools};
 use kit_ui::input::{Button, Pointer, PointerPhase};
-
-/// The most table actions the client remembers sending without an answer.
-const PENDING: usize = 64;
 
 impl Client {
     /// An update arrived: it keeps the session it came from, which stop and concede commands
@@ -46,15 +45,8 @@ impl Client {
         {
             self.update_lobby(&lobby::Message::LinkError(None));
         }
-        game_manual::manual::selection::keep(
-            &mut self.features.table_mut().selection,
-            &update.view,
-        );
-        if (self.features.table().picking).is_some_and(|pick| {
-            !game_manual::manual::selection::actionable(&update.view, pick.from)
-        }) {
-            self.features.table_mut().picking = None;
-        }
+        self.features
+            .update_table(Change::KeepSelection(&update.view));
         self.features.clear_menu();
         self.features.close_overlay();
         if matches!(self.features.screen, Screen::Start | Screen::Game) {
@@ -101,9 +93,10 @@ impl Client {
         let mut values = commands::Values::new();
         values.insert("text", name.into());
         let actions = commands::actions_with(command, Target::Life(side), view, &values);
-        self.features.table_mut().clicked = Some(ActionSource::Button(pressed));
+        self.features
+            .update_table(Change::Clicked(Some(ActionSource::Button(pressed))));
         self.send_table(actions);
-        self.features.table_mut().clicked = None;
+        self.features.update_table(Change::Clicked(None));
     }
 
     /// A click on the card in `slot` on the table, one that picked nothing up, as the web's
@@ -141,9 +134,10 @@ impl Client {
             ZoneName::Library => ("library.draw", Target::Pile(side, ZoneName::Library)),
             _ => return true,
         };
-        self.features.table_mut().clicked = Some(ActionSource::Card(slot));
+        self.features
+            .update_table(Change::Clicked(Some(ActionSource::Card(slot))));
         self.run_table_command(id, target);
-        self.features.table_mut().clicked = None;
+        self.features.update_table(Change::Clicked(None));
         true
     }
 
@@ -225,7 +219,7 @@ impl Client {
         if command.id == "table.leave" {
             self.features.clear_menu();
             self.features.close_overlay();
-            self.features.table_mut().quitting = true;
+            self.features.update_table(Change::QuitPrompt(true));
             self.show_screen();
             return;
         }
@@ -298,12 +292,7 @@ impl Client {
 
     /// Remembers `pending` until the table answers it.
     fn remember(&mut self, pending: Pending) {
-        // A driver that never answers, such as a recording's, would otherwise make the list
-        // grow for as long as the table is open.
-        if self.features.table().pending.len() >= PENDING {
-            self.features.table_mut().pending.pop_front();
-        }
-        self.features.table_mut().pending.push_back(pending);
+        self.features.update_table(Change::Remember(pending));
     }
 
     /// Whether the table on screen shows the guided start's opening (`manual::opening`).
@@ -325,19 +314,10 @@ impl Client {
     /// Advances the shake of a refused button to the frame at `now` and moves the flat layer's
     /// elements that take its press. Returns whether it is still shaking.
     pub(super) fn shake_button(&mut self, now: u64) -> bool {
-        if self.features.table().shaking.is_none() {
-            return false;
-        }
-        let Some((button, shake)) = &mut self.features.table_mut().shaking else {
-            return false;
-        };
-        if !shake.advance(now) {
-            self.features.table_mut().shaking = None;
-            self.layer.shake(None);
-            return false;
-        }
-        self.layer.shake(Some((button, shake.offset(now))));
-        true
+        self.features.update_table(table::ShakeButton {
+            layer: &mut self.layer,
+            now,
+        })
     }
 
     /// The table answered the oldest table action not yet answered: a token it made is the one
@@ -348,10 +328,9 @@ impl Client {
     /// the table froze since (`shakeRefusal` in `ui/src/stage/Refusal.tsx`).
     pub(super) fn take_table_reply(&mut self, reply: TableActReply) {
         let refused = matches!(reply, TableActReply::Refused(_));
-        if refused {
-            self.features.table_mut().refused = true;
-        }
-        let Some(Pending { sent, from }) = self.features.table_mut().pending.pop_front() else {
+        let Some(Pending { sent, from }) =
+            self.features.update_table(table::Acknowledge { refused })
+        else {
             return;
         };
         let refusal_ms = self.data().pointer.refusal_ms;
@@ -361,15 +340,13 @@ impl Client {
                 .pointer_mut()
                 .refuse(usize::from(slot.0), refusal_ms),
             Some(ActionSource::Button(button)) => {
-                self.features.table_mut().shaking =
-                    Some((Action::new(button), Shake::new(refusal_ms)));
+                self.features
+                    .update_table(Change::Shake(Action::new(button), refusal_ms));
             }
             None => {}
         }
         match (sent, reply) {
-            (Sent::Token(token), TableActReply::Ok { .. }) => {
-                self.features.table_mut().last_token = Some(token);
-            }
+            (Sent::Token(_), TableActReply::Ok { .. }) => {}
             (Sent::Look(look), TableActReply::Ok { .. }) => {
                 self.open_look(look);
                 return;
@@ -413,9 +390,7 @@ impl Client {
     pub(super) fn leave_table(&mut self) {
         self.features.clear_menu();
         self.features.close_overlay();
-        self.features.table_mut().selection.clear();
-        self.features.table_mut().picking = None;
-        self.features.table_mut().mana_sheet = None;
+        self.features.update_table(Change::Leave);
         self.update_lobby(&lobby::Message::Reset);
         self.features.lobby_view = None;
         self.commands.push_back(SessionCommand::TableLeave);
@@ -431,7 +406,7 @@ impl Client {
     fn open_look(&mut self, look: Look) {
         let side = look.side;
         self.view(Some(Viewed::Pile(side, ZoneName::Library)));
-        self.features.table_mut().viewer.look = Some(look);
+        self.features.update_table(Change::Look(Some(look)));
         self.show_screen();
     }
 
@@ -451,11 +426,11 @@ impl Client {
             ViewerControl::Close => self.dismiss_viewer(),
             ViewerControl::Search => self.layer.focus_field(viewers::SEARCH),
             ViewerControl::Group => {
-                self.features.table_mut().viewer.grouped = !self.features.table().viewer.grouped;
+                self.features.update_table(Change::GroupViewer);
                 self.show_screen();
             }
             ViewerControl::Sort(sort) => {
-                self.features.table_mut().viewer.sort = sort;
+                self.features.update_table(Change::SortViewer(sort));
                 self.show_screen();
             }
             ViewerControl::Finish { shuffle } => {
@@ -474,7 +449,7 @@ impl Client {
         if self.features.screen != Screen::Table || self.features.table().viewer.look.is_none() {
             self.view(None);
         } else if self.whole_library_open() && !self.features.table().viewer.confirming {
-            self.features.table_mut().viewer.confirming = true;
+            self.features.update_table(Change::ConfirmShuffle);
             self.show_screen();
         } else {
             self.close_library(false);
@@ -486,13 +461,17 @@ impl Client {
     /// the viewer.
     fn close_library(&mut self, shuffle: bool) {
         let shuffled = shuffle && self.whole_library_open();
-        let Some(look) = self.features.table_mut().viewer.look.take() else {
+        let Some(look) = &self.features.table().viewer.look else {
             return;
         };
-        let Some(view) = self.show.latest().map(|update| &update.view) else {
+        let action = self
+            .show
+            .latest()
+            .map(|update| look.close(&update.view, shuffled));
+        self.features.update_table(Change::Look(None));
+        let Some(action) = action else {
             return;
         };
-        let action = look.close(view, shuffled);
         self.send_table(vec![action]);
         self.view(None);
     }

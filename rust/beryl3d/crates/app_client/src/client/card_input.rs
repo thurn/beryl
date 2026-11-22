@@ -30,9 +30,7 @@ impl Client {
         if self.features.screen != Screen::Game || self.usable(slot) {
             self.card_clicked(slot);
         } else if let Ok(slot) = u16::try_from(slot) {
-            self.features
-                .inspector_mut()
-                .update(Inspect::Pin(Some(ObjectId(slot))));
+            self.features.inspect(&Inspect::Pin(Some(ObjectId(slot))));
         }
     }
 

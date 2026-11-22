@@ -13,6 +13,10 @@
 
 use game_table::table::{Rows, Scroller, Table};
 
+use kit_scene::{Context, Feature, StateUpdate};
+use kit_ui::element::{Element, FloatId};
+use std::convert::Infallible;
+
 mod view;
 use kit_ui::layout::{FloatLook, Layer};
 use view::{anchor, count_in, count_of, count_text, end_of, float, key_of};
@@ -32,17 +36,84 @@ pub struct RowCounts {
 }
 
 /// A keyboard focus change from a row press or a change to the active screen.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Message {
     Focus(Option<Scroller>),
 }
 
-impl RowCounts {
-    pub fn update(&mut self, message: Message) {
-        let Message::Focus(row) = message;
-        self.focus = row;
+/// The row end index and number of cards offscreen beyond it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Inputs {
+    pub index: usize,
+    pub count: usize,
+}
+
+impl Feature for RowCounts {
+    type State = Self;
+    type Message = Message;
+    type Inputs<'a> = Inputs;
+    type ViewKey = Inputs;
+    type Command = Infallible;
+    type Request = Infallible;
+
+    fn update(
+        state: &mut Self,
+        message: &Message,
+        _: &mut Context<'_, Infallible, Infallible>,
+    ) -> bool {
+        let Message::Focus(row) = *message;
+        state.focus = row;
+        // Focus belongs to the keyboard route and does not change a count label.
+        false
     }
 
+    fn view_key(_: &Self, input: &Inputs) -> Inputs {
+        *input
+    }
+
+    fn view(_: &Self, input: Inputs) -> Element {
+        count_text(input.index, input.count)
+    }
+}
+
+impl super::FloatFeature for RowCounts {
+    fn floats() -> impl Iterator<Item = FloatId> {
+        (0..COUNTS).map(float)
+    }
+}
+
+/// Prepares the labels the current and upcoming row positions can show.
+pub struct Prepare<'a, Coming> {
+    pub layer: &'a mut Layer,
+    pub rows: Coming,
+}
+
+impl<'a, Coming: Iterator<Item = &'a Rows>> StateUpdate<RowCounts> for Prepare<'_, Coming> {
+    type Output = ();
+
+    fn apply(self, state: &mut RowCounts) -> (bool, ()) {
+        state.prepare(self.layer, self.rows);
+        (false, ())
+    }
+}
+
+/// Samples the prepared labels for the rows at rest on the table.
+pub struct Draw<'a> {
+    pub layer: &'a mut Layer,
+    pub table: &'a Table,
+    pub visible: bool,
+}
+
+impl StateUpdate<RowCounts> for Draw<'_> {
+    type Output = ();
+
+    fn apply(self, state: &mut RowCounts) -> (bool, ()) {
+        state.write(self.layer, self.table, self.visible);
+        (false, ())
+    }
+}
+
+impl RowCounts {
     #[must_use]
     pub fn focus(&self) -> Option<Scroller> {
         self.focus
@@ -51,7 +122,7 @@ impl RowCounts {
     /// Lays out ahead, in `layer`, each count that `rows` give a row's end, and forgets those
     /// laid out before that none of them gives. The client calls it when a view arrives, when a
     /// row scrolls and when the window changes shape.
-    pub fn prepare<'a>(&mut self, layer: &mut Layer, rows: impl Iterator<Item = &'a Rows>) {
+    fn prepare<'a>(&mut self, layer: &mut Layer, rows: impl Iterator<Item = &'a Rows>) {
         let coming = &mut self.coming;
         coming.clear();
         for rows in rows {
@@ -64,16 +135,18 @@ impl RowCounts {
         }
         for index in 0..COUNTS {
             let id = float(index);
-            layer.forget_prepared(id, |key| coming.contains(&(index, count_of(key))));
-            for &(_, count) in coming.iter().filter(|(end, _)| *end == index) {
-                layer.prepare(id, key_of(count), || count_text(index, count));
+            layer.forget_prepared(id, |key| self.coming.contains(&(index, count_of(key))));
+            for &(_, count) in self.coming.iter().filter(|(end, _)| *end == index) {
+                layer.prepare(id, key_of(count), || {
+                    Self::view(self, Inputs { index, count })
+                });
             }
         }
     }
 
     /// Shows each row end's count as `table` shows the view at rest, or none unless `visible`.
     /// Lays nothing out and allocates nothing for what `prepare` laid out.
-    pub fn write(&mut self, layer: &mut Layer, table: &Table, visible: bool) {
+    fn write(&mut self, layer: &mut Layer, table: &Table, visible: bool) {
         for index in 0..COUNTS {
             let (scroller, right) = end_of(index);
             let want = Some(count_in(table.rows(), index)).filter(|&count| visible && count > 0);
@@ -81,7 +154,10 @@ impl RowCounts {
             if want != self.shown[index] {
                 if !layer.show_prepared(id, want.map(key_of)) {
                     debug_assert!(false, "no count {want:?} is prepared for row end {index}");
-                    layer.float(id, want.map(|count| count_text(index, count)));
+                    layer.float(
+                        id,
+                        want.map(|count| Self::view(self, Inputs { index, count })),
+                    );
                 }
                 self.shown[index] = want;
             }
