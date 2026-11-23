@@ -285,6 +285,8 @@ def family_gate(names: list[str], bars: dict[str, FamilyBar]) -> int:
             return 2
         ok, message = judge_family(bars[name], present, control, found)
         bench.log(message)
+        # One line per family that the Ignite adapter reads (`VERDICT` in ignite/rest.py).
+        bench.log(f"verdict {name}: {'pass' if ok else 'fail'}")
         failed |= not ok
     return 1 if failed else 0
 

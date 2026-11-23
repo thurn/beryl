@@ -457,28 +457,56 @@ def run_rollouts(root: Path) -> dict[str, Any]:
     return result
 
 
-def run_gate_family(name: str, root: Path) -> dict[str, Any]:
-    code, output = run_gate(["--family", name], root)
+# The line `count_gate.family_gate` prints for each family it judged.
+VERDICT: re.Pattern[str] = re.compile(
+    r"^bench: verdict (\S+): (pass|fail)$", re.MULTILINE
+)
+
+
+def run_gate_families(names: Sequence[str], root: Path) -> list[dict[str, Any]]:
+    """The results of the families `names`, counted in one run of the gate: one build and one
+    turn at the VM instead of one per family, which put a whole check run past its hang limit.
+    A family the gate did not judge gets no line, so Ignite records it as `incomplete`.
+    """
+    arguments = [argument for name in names for argument in ("--family", name)]
+    code, output = run_gate(arguments, root)
     print(output, file=sys.stderr)
     if code == CANNOT_RUN:
-        return cannot_run(f"{FAMILY_PREFIX}{name}", tail(output))
-    if code == 0:
-        return {"outcome": "pass"}
-    if code == 1:
-        return {"outcome": "fail", "message": tail(output)}
-    return {}
+        return [cannot_run(f"{FAMILY_PREFIX}{name}", tail(output)) for name in names]
+    verdicts = dict(VERDICT.findall(output))
+    results: list[dict[str, Any]] = []
+    for name in names:
+        verdict = verdicts.get(name)
+        if verdict == "pass":
+            results.append({"check": f"{FAMILY_PREFIX}{name}", "outcome": "pass"})
+        elif verdict == "fail":
+            said = [
+                t for t in output.splitlines() if t.startswith(f"bench: family {name}:")
+            ]
+            results.append(
+                {
+                    "check": f"{FAMILY_PREFIX}{name}",
+                    "outcome": "fail",
+                    "message": (
+                        clip(said[-1].removeprefix("bench: ")) if said else tail(output)
+                    ),
+                }
+            )
+    return results
 
 
 def run_counts(names: Sequence[str], root: Path, results: Path) -> None:
-    for name in names:
-        if name == ROLLOUTS:
-            result = run_rollouts(root)
-        elif name.startswith(FAMILY_PREFIX):
-            result = run_gate_family(name.removeprefix(FAMILY_PREFIX), root)
-        else:
-            continue
+    if ROLLOUTS in names:
+        result = run_rollouts(root)
         if result:
-            append(results, [{"check": name, **result}])
+            append(results, [{"check": ROLLOUTS, **result}])
+    families = [
+        name.removeprefix(FAMILY_PREFIX)
+        for name in names
+        if name.startswith(FAMILY_PREFIX)
+    ]
+    if families:
+        append(results, run_gate_families(families, root))
 
 
 def parse_fuzz(name: str) -> tuple[str, int, int]:

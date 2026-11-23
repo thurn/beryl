@@ -257,6 +257,10 @@ if sys.argv[1] == "--measure":
               "message": "ok" if ok else "over",
               "verifier": "cygnus", "calibration": "windows-digest"}
     Path(sys.argv[2]).write_text(json.dumps(result))
+if sys.argv[1] == "--family":
+    for name in sys.argv[2::2]:
+        print(f"bench: family {name}: ratio", file=sys.stderr)
+        print(f"bench: verdict {name}: {'pass' if ok else 'fail'}", file=sys.stderr)
 sys.exit(0 if ok else 1)
 """
 
@@ -330,6 +334,20 @@ def test_a_family_check_runs_the_gate_for_that_family(
     results = tmp_path / "results.jsonl"
     adapter.run_counts(["counts:family/layers"], tmp_path, results)
     assert lines(results) == [{"check": "counts:family/layers", "outcome": "pass"}]
+
+
+def test_families_are_counted_in_one_gate_run_with_a_result_each(
+    tmp_path: Path, gate: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FAKE_GATE", "fail")
+    results = tmp_path / "results.jsonl"
+    adapter.run_counts(
+        ["counts:family/layers", "counts:family/costs"], tmp_path, results
+    )
+    assert [(r["check"], r["outcome"], r["message"]) for r in lines(results)] == [
+        ("counts:family/layers", "fail", "family layers: ratio"),
+        ("counts:family/costs", "fail", "family costs: ratio"),
+    ]
 
 
 # --- the trend files its tickets through `ignite ticket` ---

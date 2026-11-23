@@ -860,5 +860,10 @@
     "label": "Beryl 3D replay tests follow Ignite's core grant, and Windows limits concurrent heavy replays and renderer readbacks to fit verifier memory.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The counts checks count every family in one run of the benchmark virtual machine instead of one run per family, so a full counts run no longer outlasts its hang limit.",
+    "metric": "ignite.gate-wait-seconds",
+    "expect": "down"
   }
 ]
