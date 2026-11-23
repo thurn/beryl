@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use app_client::Input;
 use app_client::command::SessionCommand;
-use app_client::driver::{Mode, Moment, Page};
+use app_client::driver::{Duration, Mode, Moment, Page};
 use app_client::{Client, Config};
 use beryl_inspect::pages::{page, recording};
 use beryl_protocol::prompt::{Click, ClickRequest, Marked};
@@ -258,6 +258,24 @@ fn a_card_clicked_in_the_row_while_putting_on_the_bottom_clicks_the_prompt_on_it
         "{picked:?}, {picked_turn}"
     );
     assert!(rest_faults("opening-bottom").is_empty());
+}
+
+#[test]
+fn the_mulligan_pick_travels_down_to_its_slot() {
+    let mut page = at("opening-bottom", "prompt:3");
+    let card = "card \"Stock Up\" #8";
+    let hand = page.find(card).rect.y;
+
+    page.press(card);
+    page.step(Duration::from_millis(120));
+    let in_flight = page.find(card).rect.y;
+    page.still();
+    let slot = page.find(card).rect.y;
+
+    assert!(
+        hand < in_flight && in_flight < slot,
+        "{hand} → {in_flight} → {slot}"
+    );
 }
 
 #[test]
