@@ -192,36 +192,6 @@
     "gap": "The exporter can place cards in exile but cannot seed the link between an exiled card and a specific permanent."
   },
   {
-    "oracle": "xmage",
-    "card": "Knowledge Pool",
-    "scenario": "The original spell's cascade trigger still resolves",
-    "gap": "XMage asks whether to cast when no other card can be cast. Beryl omits that choice, so the exporter has no answer to send."
-  },
-  {
-    "oracle": "xmage",
-    "card": "Knowledge Pool",
-    "scenario": "generated 2: cast a sorcery on the battlefield",
-    "gap": "XMage asks whether to cast when no other card can be cast. Beryl omits that choice, so the exporter has no answer to send."
-  },
-  {
-    "oracle": "xmage",
-    "card": "Knowledge Pool",
-    "scenario": "generated 3: cast a sorcery on the battlefield",
-    "gap": "XMage asks whether to cast when no other card can be cast. Beryl omits that choice, so the exporter has no answer to send."
-  },
-  {
-    "oracle": "xmage",
-    "card": "Knowledge Pool",
-    "scenario": "generated 4: cast a matching spell on the battlefield",
-    "gap": "XMage asks whether to cast when no other card can be cast. Beryl omits that choice, so the exporter has no answer to send."
-  },
-  {
-    "oracle": "xmage",
-    "card": "Knowledge Pool",
-    "scenario": "generated 5: cast a matching spell on the battlefield",
-    "gap": "XMage asks whether to cast when no other card can be cast. Beryl omits that choice, so the exporter has no answer to send."
-  },
-  {
     "oracle": "forge",
     "card": "Knowledge Pool",
     "scenario": "Only the first Pool to resolve offers its own cards",

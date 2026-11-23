@@ -51,6 +51,7 @@ import mage.constants.SubType;
 import mage.constants.Zone;
 import mage.counters.CounterType;
 import mage.counters.Counters;
+import mage.game.ExileZone;
 import mage.game.Game;
 import mage.game.permanent.Permanent;
 import mage.game.permanent.PermanentToken;
@@ -60,6 +61,7 @@ import mage.player.ai.PossibleTargetsSelector;
 import mage.players.Player;
 import mage.target.Target;
 import mage.target.TargetCard;
+import mage.util.CardUtil;
 import org.junit.Assert;
 import org.mage.test.player.PlayerAction;
 import org.mage.test.player.TestComputerPlayer;
@@ -280,6 +282,18 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                 String falseText, Ability source, Game game) {
             if (INFINITE_LOOP.equals(message)) {
                 return true;
+            }
+            if (outcome == Outcome.PlayForFree && message.startsWith("Cast another nonland card exiled with ")) {
+                Permanent permanent = game.getPermanentOrLKIBattlefield(source.getSourceId());
+                if (permanent != null) {
+                    UUID exileId = CardUtil.getExileZoneId(game, permanent.getId(), permanent.getZoneChangeCounter(game));
+                    ExileZone linkedExile = game.getExile().getExileZone(exileId);
+                    // XMage asks even when the only linked card is the spell it just exiled.
+                    // Beryl has no offer to script in that case. Leave the next queued choice alone.
+                    if (linkedExile != null && linkedExile.size() == 1) {
+                        return false;
+                    }
+                }
             }
             return withOptional(
                     answer -> answer.equals("Yes") || answer.equals("No"),
