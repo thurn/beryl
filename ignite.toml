@@ -31,16 +31,12 @@ saved = "refs/ignite/tickets/"
 # Paths that count as test files when Ignite classifies a landed check fix.
 # Card and rules definitions and the oracle scenario sources and data count as product code.
 test_paths = [
-  "**/tests/**",                  # Integration tests and their fixtures and expected outputs.
-  "**/*_tests.rs",                # Rust unit tests in sibling modules.
-  "**/tests.rs",                  # Rust unit tests in a standalone tests module.
-  "ui/**/*.test.ts",              # TypeScript unit tests.
-  "ui/**/*.test.tsx",             # TypeScript unit tests for React components.
-  "tools/tests/**",               # Python tests and fixtures.
-  "ui/fixtures.json",             # Saved game setups used by the UI and spec checks.
-  "ui/shots.json",                # Screens and assertions exercised by the UI checks.
-  "data/beryl3d/timeline/web/**", # Expected UI timelines captured from the web client.
-  "ignite/checks/**",             # Check family declarations and commands.
+  "**/tests/**",                # Integration tests and their fixtures and expected outputs.
+  "**/*_tests.rs",              # Rust unit tests in sibling modules.
+  "**/tests.rs",                # Rust unit tests in a standalone tests module.
+  "tools/tests/**",             # Python tests and fixtures.
+  "data/beryl3d/fixtures.json",  # Game setups for native recordings and script checks.
+  "ignite/checks/**",           # Check family declarations and commands.
 ]
 
 # Express landings (docs/ignite.md, "Express landings"). On 2026-11-18 every fix to Ignite's own
@@ -107,7 +103,7 @@ inert = ["docs/ignite.md", "data/efficiency-changes.json", ".agents/skills/cifix
 # landing"). On 2026-11-18 formatting failures found by the checks cost workers on one epic about
 # 25 minutes, one round trip at a time. The commands are those of `just fmt`; `{files}` is the
 # changed files a rule matches, relative to its `dir`. A rule whose formatter is missing from a
-# tree (no `ui/node_modules`) gives a warning and the landing goes on.
+# tree gives a warning and the landing goes on.
 [format]
 rules = [
   { paths = ["ignite/**/*.rs"], dir = "ignite", command = "cargo fmt" },
@@ -116,7 +112,6 @@ rules = [
   { paths = ["rust/**/*.rs"], dir = "rust", command = "rustfmt --edition 2024 {files}" },
   { paths = ["**/*.md"], exclude = [".agents/**"], command = "uv run --quiet --project tools mdformat {files}" },
   { paths = ["tools/**/*.py", "efficiency/**/*.py"], command = "uv run --quiet --project tools black --quiet {files}" },
-  { paths = ["ui/**"], dir = "ui", command = "node_modules/.bin/prettier --write --log-level warn --ignore-unknown {files}" },
   { paths = ["justfile"], command = "just --fmt --unstable" },
 ]
 
@@ -185,7 +180,7 @@ seconds = 60        # of running checks per landing
 # The oracle families play product scenarios against independent rules engines.
 [rules]
 report_only = ["tier-gap"]
-protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source", "oracle", "oracle-generated"]
+protected = ["native-app", "clippy", "pyre", "source", "oracle", "oracle-generated"]
 
 # A ticket's `effort:` label overrides this default. Apps without an entry use medium.
 [pool.default_effort]
@@ -246,11 +241,6 @@ args = ["--dangerously-skip-permissions"]
 claim_seconds = 60
 seconds = 300
 
-# Headless WebKit runs at a higher priority than builds, so limit pages across all trees to
-# half the logical cores on machines that run browser checks.
-[resources.browser-pages]
-per_core = 0.5
-
 # The Mac Studio that runs the hub.
 [machine.jarvis]
 os = "macos"
@@ -267,14 +257,13 @@ os = "macos"
 oracle = 1
 
 # The Windows PC (12 cores, 20 threads, 32 GB) with a 128 GB Dev Drive (ReFS) at D:.
-# Legacy browser checks still use the macOS WebKit setup. Desktop smoke uses WebView2 here.
-# The Android check uses the pinned NDK installed by `just mobile-setup`.
+# Desktop smoke runs the native client headlessly. The Android APK build uses the pinned
+# NDK installed by `just b3d mobile-setup`.
 # Oracle checks use the pinned JDK and Maven builds from `just oracle-setup`.
 # Rollout counts use the `beryl-bench` WSL distribution from `just bench-count`.
 # Frame instruction counts use the `beryl3d-bench` WSL distribution from `just b3d vm`.
 #
-# `families` holds those verified on cygnus. Pytest and the browser-free UI checks run
-# natively, and Pyre uses WSL.
+# `families` lists the checks Cygnus can run. Pytest runs natively and Pyre uses WSL.
 # `ignite-platform` must pass on Windows. Cygnus is the only Windows machine, so it must be
 # listed here: without it every tip waits on its Windows checks and `master` never moves.
 [machine.cygnus]
@@ -282,9 +271,9 @@ os = "windows"
 families = [
   "rust", "doctests", "clippy", "rust-format", "ignite", "ignite-lint", "source", "markdown",
   "repository", "commit", "black", "pytest", "pyre", "b3d-format", "b3d-source", "ignite-platform",
-  "app", "android",
+  "native-app", "native-android",
   "counts", "allocations", "card-text", "script", "scale", "iroh", "fuzz", "exhaust",
-  "oracle", "oracle-generated", "ui-format", "ui-types", "ui-unit",
+  "oracle", "oracle-generated",
   "b3d-clippy", "b3d-validation", "b3d-test", "b3d-interface", "b3d-every-tick", "b3d-corpus",
   "b3d-interface-frame-limits",
   "b3d-gate", "b3d-frame-counts", "b3d-frame-trend",

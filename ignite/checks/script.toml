@@ -1,6 +1,6 @@
-# The script checks, the desktop app's smoke test and the phone builds. Their adapter is
-# tools/src/beryl_tools/ignite/script.py, which lists each family's checks (with the inputs of
-# their own) and reports results as JSON lines. See docs/ignite.md, "Declaring a family".
+# Shared script checks validate game recordings and card scenarios.
+# tools/src/beryl_tools/ignite/script.py lists checks with their own inputs and reports JSON
+# lines. See docs/ignite.md, "Declaring a family".
 
 # One check per card, moment and seat (`script:<card>/<moment>/<seat>`), and one per UI fixture
 # recording (`script:fixtures/<fixture>/<seat>`). A card's check reads the card's own file,
@@ -52,67 +52,145 @@ inputs = [
   "data/table-commands.json",
   "data/save-breaks.json",
   "data/ui-conventions.json",
-  "ui/src/generated/**",
   "docs/sample-decks/**",
-  "ui/fixtures.json",
+  "data/beryl3d/fixtures.json",
   "tools/src/beryl_tools/ignite/script.py",
 ]
 
-# `just smoke`: builds the debug app and launches it headless until the UI reports that it
-# loaded. The native app uses WKWebView on macOS and WebView2 on Windows.
-[family.app]
+# Launch the native desktop executable headlessly and wait for its start screen.
+# The new family name gives it its own result history.
+[family.native-app]
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos", "windows"]
-needs = ["python-env", "ui-deps"]
-# The list is the one check `app:smoke`, so it needs no `npm ci`.
-list_needs = ["python-env"]
-list = "uv run --quiet --project tools python -m beryl_tools.ignite.script list app"
-run = "uv run --quiet --project tools python -m beryl_tools.ignite.script run app {checks}"
+needs = ["python-env"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.native_app list native-app"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.native_app run native-app {checks}"
 inputs = [
-  "crate:beryl_app",
-  "ui/**",
-  "data/**",
+  "rust/.cargo/config.toml",
+  "rust/beryl3d/**",
+  "rust/crates/**",
+  "rust/cards/**",
+  "rust/Cargo.toml",
+  "data/beryl3d/*.json",
+  "data/beryl3d/effects/**",
+  "data/beryl3d/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
   "docs/sample-decks/**",
-  "justfile",
-  "tools/src/beryl_tools/app.py",
+  "data/audio/**",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/android_sdk.py",
+  "tools/src/beryl_tools/audio.py",
+  "tools/src/beryl_tools/beryl3d/__init__.py",
+  "tools/src/beryl_tools/beryl3d/app.py",
+  "tools/src/beryl_tools/beryl3d/cargo.py",
+  "tools/src/beryl_tools/beryl3d/command.py",
+  "tools/src/beryl_tools/beryl3d/live.py",
+  "tools/src/beryl_tools/beryl3d/paths.py",
+  "tools/src/beryl_tools/beryl3d/phone_build.py",
+  "tools/src/beryl_tools/bugs.py",
   "tools/src/beryl_tools/deps.py",
-  "tools/src/beryl_tools/ignite/script.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/native_app.py",
+  "tools/src/beryl_tools/mobile_sdk.py",
   "tools/src/beryl_tools/paths.py",
   "tools/src/beryl_tools/system.py",
 ]
 
-# `cargo check` of the app for the iOS Simulator, which requires Xcode.
-[family.mobile]
+# Build the unsigned arm64 Simulator app with Xcode and check for its executable.
+[family.native-ios]
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env"]
-list = "uv run --quiet --project tools python -m beryl_tools.ignite.script list mobile"
-run = "uv run --quiet --project tools python -m beryl_tools.ignite.script run mobile {checks}"
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.native_app list native-ios"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.native_app run native-ios {checks}"
 inputs = [
-  "crate:beryl_app",
-  "crate:beryl-mobile",
-  "data/**",
-  "ui/src/generated/**",
+  "rust/.cargo/config.toml",
+  "rust/beryl3d/**",
+  "rust/crates/**",
+  "rust/cards/**",
+  "rust/Cargo.toml",
+  "data/beryl3d/*.json",
+  "data/beryl3d/effects/**",
+  "data/beryl3d/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
   "docs/sample-decks/**",
-  "tools/src/beryl_tools/ignite/script.py",
+  "data/audio/manifest.json",
+  "data/audio/loops.json",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/android_sdk.py",
+  "tools/src/beryl_tools/audio.py",
+  "tools/src/beryl_tools/beryl3d/__init__.py",
+  "tools/src/beryl_tools/beryl3d/app.py",
+  "tools/src/beryl_tools/beryl3d/cargo.py",
+  "tools/src/beryl_tools/beryl3d/command.py",
+  "tools/src/beryl_tools/beryl3d/live.py",
+  "tools/src/beryl_tools/beryl3d/paths.py",
+  "tools/src/beryl_tools/beryl3d/phone_build.py",
+  "tools/src/beryl_tools/bugs.py",
+  "tools/src/beryl_tools/deps.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/native_app.py",
+  "tools/src/beryl_tools/mobile_sdk.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/system.py",
 ]
 
-# `cargo check` of the arm64 Android app using the host's pinned Android NDK.
-[family.android]
+# Build the native arm64 debug APK with Gradle and the pinned Android NDK.
+[family.native-android]
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos", "windows"]
 needs = ["python-env"]
-list = "uv run --quiet --project tools python -m beryl_tools.ignite.script list android"
-run = "uv run --quiet --project tools python -m beryl_tools.ignite.script run android {checks}"
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.native_app list native-android"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.native_app run native-android {checks}"
 inputs = [
-  "crate:beryl_app",
-  "crate:beryl-mobile",
-  "data/**",
-  "ui/src/generated/**",
+  "rust/.cargo/config.toml",
+  "rust/beryl3d/**",
+  "rust/crates/**",
+  "rust/cards/**",
+  "rust/Cargo.toml",
+  "data/beryl3d/*.json",
+  "data/beryl3d/effects/**",
+  "data/beryl3d/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
   "docs/sample-decks/**",
+  "data/audio/manifest.json",
+  "data/audio/loops.json",
+  "tools/src/beryl_tools/__init__.py",
   "tools/src/beryl_tools/android_sdk.py",
-  "tools/src/beryl_tools/ignite/script.py",
+  "tools/src/beryl_tools/audio.py",
+  "tools/src/beryl_tools/beryl3d/__init__.py",
+  "tools/src/beryl_tools/beryl3d/app.py",
+  "tools/src/beryl_tools/beryl3d/cargo.py",
+  "tools/src/beryl_tools/beryl3d/command.py",
+  "tools/src/beryl_tools/beryl3d/live.py",
+  "tools/src/beryl_tools/beryl3d/paths.py",
+  "tools/src/beryl_tools/beryl3d/phone_build.py",
+  "tools/src/beryl_tools/bugs.py",
+  "tools/src/beryl_tools/deps.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/native_app.py",
+  "tools/src/beryl_tools/mobile_sdk.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/system.py",
 ]

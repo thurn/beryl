@@ -29,11 +29,6 @@
     "tools/src/beryl_tools/beryl3d/gate.py": [
       "data/beryl3d/budgets.json"
     ],
-    "tools/src/beryl_tools/beryl3d/match/reference.py": [
-      "data/beryl3d/match/web/screen_start_you_1600x900@2.json",
-      "data/beryl3d/screens.json",
-      "data/beryl3d/web-match.json"
-    ],
     "tools/src/beryl_tools/beryl3d/match/support.py": [
       "data/beryl3d/match/supported.json"
     ],
@@ -162,28 +157,6 @@
       "rust/crates/beryl_session/Cargo.toml",
       "rust/crates/beryl_table/Cargo.toml",
       "rust/crates/beryl_table_session/Cargo.toml"
-    ],
-    "tools/src/beryl_tools/ignite/beryl3d_match.py": [
-      "data/beryl3d/match/web/combat-attackers_you_1600x900@2_step_163.1.2_205ms.json",
-      "data/beryl3d/match/web/combat-attackers_you_1600x900@2_step_177.1.0.json",
-      "data/beryl3d/match/web/game-over_you_1600x900@2.json",
-      "data/beryl3d/match/web/game-over_you_393x759.json",
-      "data/beryl3d/match/web/opening-keep_you_1600x900@2.json",
-      "data/beryl3d/match/web/opening-keep_you_393x759.json",
-      "data/beryl3d/match/web/pay-default_you_1600x900@2.json",
-      "data/beryl3d/match/web/pay-default_you_393x759.json",
-      "data/beryl3d/match/web/screen_bug-report_you_1600x900@2.json",
-      "data/beryl3d/match/web/screen_bug-report_you_393x759.json",
-      "data/beryl3d/match/web/screen_gallery_you_1600x900@2.json",
-      "data/beryl3d/match/web/screen_gallery_you_393x759.json",
-      "data/beryl3d/match/web/screen_lobby_you_1600x900@2.json",
-      "data/beryl3d/match/web/screen_lobby_you_393x759.json",
-      "data/beryl3d/match/web/screen_settings_you_1600x900@2.json",
-      "data/beryl3d/match/web/screen_settings_you_393x759.json",
-      "data/beryl3d/match/web/screen_start_you_1600x900@2.json",
-      "data/beryl3d/match/web/screen_start_you_393x759.json",
-      "data/beryl3d/match/web/screen_table_you_1600x900@2.json",
-      "data/beryl3d/match/web/screen_table_you_393x759.json"
     ],
     "tools/src/beryl_tools/ignite/browser.py": [
       "data/ui-counts.json",
@@ -359,7 +332,6 @@
       "tools/tests/fixtures/scenarios-forge.json"
     ],
     "tools/tests/test_ignite_beryl3d.py": [
-      "data/beryl3d/match/web/screen_start_you_1600x900@2.json",
       "ignite.toml",
       "ignite/checks/beryl3d.toml",
       "rust/beryl3d/crates"

@@ -15,11 +15,9 @@ import pytest
 
 from beryl_tools import calibration, paths
 from beryl_tools.beryl3d import frame_profiles, gate, pack, timeline
-from beryl_tools.beryl3d.match import reference, score
-from beryl_tools.beryl3d.match.target import Target
+from beryl_tools.beryl3d.match import score
 from beryl_tools.ignite import RESULTS_ENV, Result
 from beryl_tools.ignite import beryl3d as adapter
-from beryl_tools.ignite import beryl3d_match as web_match
 
 MANIFEST: Path = paths.REPO / "ignite" / "checks" / "beryl3d.toml"
 
@@ -101,10 +99,7 @@ def test_the_families_that_read_recordings_name_every_crate_the_recorder_is_buil
         adapter.FRAME_LIMITS_FAMILY,
         "b3d-every-tick",
         "b3d-gate",
-        "b3d-timeline",
         "b3d-frame-counts",
-        "b3d-web-match",
-        "b3d-web-drift",
     ):
         inputs = manifest()["family"][name]["inputs"]
         assert isinstance(inputs, list)
@@ -603,28 +598,9 @@ def test_format_results_blame_the_package_that_holds_the_file() -> None:
     ]
 
 
-# The web-match families: Beryl 3D's look held against the web interface's.
-
-
-# What every Beryl 3D family reads under ui/: the fixtures' definitions and the generated
-# protocol types, which the recordings are made from, and the audio manifests that Beryl 3D's
-# build script and `audio/files.rs` read.
-UI_READ_BY_EVERY_FAMILY = [
-    "ui/src/generated/**",
-    "ui/fixtures.json",
-    "ui/src/audio/manifest.json",
-    "ui/src/audio/loops.json",
-]
-
-
-def test_every_file_under_ui_that_beryl_3d_embeds_or_reads_is_an_input_of_every_family() -> (
-    None
-):
-    """The `check-inputs` source rule listed these audio reads in its allowlist instead of
-    failing on them, and Beryl 3D's families name their inputs by hand, so this test compares
-    them with the files under ui/ that its sources embed with `include_str!` or its build
-    scripts read."""
-    pattern = re.compile(r"ui/[A-Za-z0-9_./-]+\.json")
+def test_native_audio_manifests_are_inputs_to_the_native_build_checks() -> None:
+    """Beryl 3D names its shared inputs by hand, including JSON read at compile time."""
+    pattern = re.compile(r"data/audio/[A-Za-z0-9_./-]+\.json")
     read: set[str] = set()
     for source in (paths.REPO / "rust" / "beryl3d" / "crates").rglob("*.rs"):
         if "target" in source.parts:
@@ -636,118 +612,23 @@ def test_every_file_under_ui_that_beryl_3d_embeds_or_reads_is_an_input_of_every_
                 or "include_bytes!" in line
             ):
                 read.update(pattern.findall(line))
-    assert read, "no read of a file under ui/ found: the scan is broken"
-    families = manifest()
-    builders = [families["product"]["b3d"], *families["family"].values()]
-    # Formatting and the source rules read Rust text, never what a build embeds.
-    reads_text_only = [
-        families["family"]["b3d-format"],
-        families["family"]["b3d-source"],
-    ]
-    for declared in builders:
-        if declared in reads_text_only:
-            continue
-        inputs = declared.get("inputs", [])
+    assert read == {"data/audio/manifest.json", "data/audio/loops.json"}
+    declared = manifest()
+    families = declared["family"]
+    assert {
+        "b3d-timeline",
+        "b3d-timeline-drift",
+        "b3d-web-match",
+        "b3d-web-drift",
+    }.isdisjoint(families)
+    for name, entry in (declared["product"] | families).items():
+        inputs = entry.get("inputs", [])
         assert isinstance(inputs, list)
-        if "rust/beryl3d/**" not in inputs and not any(
-            str(i).startswith("rust/beryl3d/crates/") for i in inputs
-        ):
+        assert not any(str(path).startswith("ui/") for path in inputs), name
+        if name in {"b3d-format", "b3d-source"}:
             continue
-        missing = sorted(
-            f for f in read if f not in inputs and not f.startswith("ui/src/generated/")
-        )
-        assert not missing, (declared.get("kind"), missing)
-
-
-def test_no_regression_family_reads_the_web_interface() -> None:
-    """A change to the web interface must run none of Beryl 3D's checks (docs/beryl-3d.md,
-    decision C17), so a regression family declares nothing under ui/ but what every Beryl 3D
-    family reads. The web side of a comparison is a committed copy under data/beryl3d/, and an
-    exploration family compares that copy with the live web interface."""
-    for name, family in manifest()["family"].items():
-        if family["kind"] != "regression":
-            continue
-        declared = family.get("inputs", [])
-        assert isinstance(declared, list)
-        under_ui = [str(i) for i in declared if str(i).startswith("ui/")]
-        assert set(under_ui) <= set(UI_READ_BY_EVERY_FAMILY), (name, under_ui)
-        assert "ui-deps" not in str(family.get("needs", [])), name
-
-
-def test_web_match_and_timeline_read_their_committed_web_copies() -> None:
-    families = manifest()["family"]
-    match = [str(i) for i in families["b3d-web-match"]["inputs"]]  # type: ignore[union-attr]
-    assert "tools/src/beryl_tools/beryl3d/match/**" in match
-    assert "data/beryl3d/match/web/**" in match
-    parity = [str(i) for i in families["b3d-timeline"]["inputs"]]  # type: ignore[union-attr]
-    assert "data/beryl3d/timeline/web/**" in parity
-
-
-def test_timeline_drift_is_an_exploration_family_that_reads_the_web_timeline() -> None:
-    family = manifest()["family"]["b3d-timeline-drift"]
-    assert family["kind"] == "exploration"
-    inputs = str(family["inputs"])
-    assert "ui/src/**" in inputs and "ui/scripts/timeline.mjs" in inputs
-    assert "tools/src/beryl_tools/ignite/beryl3d_timeline_drift.py" in inputs
-    assert str(family["next"]).endswith("beryl3d b3d-timeline-drift next")
-
-
-def test_web_drift_is_an_exploration_family_that_reads_the_web_interface() -> None:
-    family = manifest()["family"]["b3d-web-drift"]
-    assert family["kind"] == "exploration"
-    assert "browser-pages" in str(family["resources"])
-    assert "ui/src/**" in str(family["inputs"])
-    assert str(family["next"]).endswith("beryl3d b3d-web-drift next")
-
-
-def test_web_match_has_a_check_for_each_reference_target() -> None:
-    listed = web_match.list_web_match({"screen/start": ["rust/cards/a/lea/island.rs"]})
-    names = [entry.check for entry in listed]
-    assert len(names) == len(set(names)) == len(reference.targets())
-    assert "b3d-web-match:screen/start/you/1600x900@2" in names
-    assert "b3d-web-match:screen/start/you/393x759" in names
-    start = next(e for e in listed if e.check.endswith("screen/start/you/393x759"))
-    assert start.inputs == [
-        "data/beryl3d/match/web/screen_start_you_393x759.json",
-        "rust/cards/a/lea/island.rs",
-    ]
-    # A mid-game target is named by its test and its moment, apart from the recording's end.
-    assert "b3d-web-match:combat-attackers/you/1600x900@2#step:163.1.2+205ms" in names
-    document = reference.load_ratchet()
-    for target in reference.targets():
-        name = reference.entry_name(target)
-        assert reference.path(target).is_file(), name
-        assert reference.entry(document, name) is not None, name
-        assert reference.by_check_name(reference.check_name(target)) == target
-
-
-def test_web_match_fails_only_when_a_count_rises(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    chosen: Target = reference.targets()[0]
-    name = reference.check_name(chosen)
-    web = reference.load(chosen)
-    assert web is not None
-    check = f"b3d-web-match:{name}"
-
-    def entries(**counts: int) -> dict[str, object]:
-        held = {n: 0 for n in reference.COUNTS} | counts
-        return {"targets": {chosen.test_name(): held}}
-
-    monkeypatch.setattr(web_match, "b3d_records", lambda _t: [dict(e) for e in web])
-    assert web_match.match_one(name, entries()) == Result(check, "pass")
-
-    monkeypatch.setattr(
-        web_match, "b3d_records", lambda _t: [dict(e) for e in web[:-1]]
-    )
-    failed = web_match.match_one(name, entries())
-    assert failed.outcome == "fail"
-    assert "unmatched 1 > 0" in failed.message
-    assert chosen.test_name() in failed.message
-    assert web_match.match_one(name, entries(unmatched=1)).outcome == "pass"
-    missing = web_match.match_one(name, {"targets": {}})
-    assert missing.outcome == "fail" and "no entry" in missing.message
-    assert web_match.match_one("nowhere/you/1x1", entries()).outcome == "fail"
+        if any(str(path).startswith("rust/beryl3d/") for path in inputs):
+            assert read.issubset(inputs), name
 
 
 def test_a_count_below_its_entry_fails_the_score_with_the_command_to_lower_it() -> None:
@@ -789,26 +670,3 @@ def test_update_lowers_entries_and_raises_or_adds_only_with_raise() -> None:
     assert entries["kept"] == entry
     entries, refused = score.updated(measured, document, raise_=True)
     assert entries["rise"]["boxes"] == 9 and "new" in entries and not refused
-
-
-def test_the_committed_reference_is_trimmed_sorted_and_one_element_to_a_line() -> None:
-    target = reference.targets()[0]
-    text = reference.path(target).read_text()
-    parsed = json.loads(text)
-    assert parsed["target"] == target.test_name()
-    assert text.count("\n") == len(parsed["elements"]) + 2
-    assert all("z" not in e for e in parsed["elements"])
-    assert reference.document(target, parsed["elements"]) == text
-
-
-def test_a_drift_target_is_played_again_only_after_its_inputs_change(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(web_match, "web_digest", lambda: "one")
-    first = web_match.next_web_drift()
-    assert [c["check"] for c in first][0].startswith("b3d-web-drift:")
-    assert first == web_match.next_web_drift()
-    monkeypatch.setattr(web_match, "web_digest", lambda: "two")
-    second = web_match.next_web_drift()
-    assert [c["check"] for c in second] == [c["check"] for c in first]
-    assert all(a["digest"] != b["digest"] for a, b in zip(first, second, strict=True))

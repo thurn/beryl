@@ -15,12 +15,13 @@
 # Inputs outside the crates' own directories: the workspace's manifest (lints, profiles,
 # dependency versions), and the files crates embed or their tests read at run time, which
 # `crate-closure` cannot see: the card store and set groups (beryl_card_store, beryl_card_build),
-# the table commands (beryl_table), the save breaks, UI conventions and generated TypeScript
-# (beryl_session, beryl_protocol) and the sample decks (beryl_app, beryl_cli). The `jsonl`
-# families and the products list them. The `rust` family lists none of them: Ignite observes
-# what each package's build reads (`include_str!`, `include_bytes!` and build scripts'
-# `rerun-if-changed`) from Cargo's dep-info files, and what its tests open through
-# `beryl_test_files`, and hashes both into the tests of every package that depends on them
+# the table commands (beryl_table), save breaks and UI conventions (beryl_session,
+# beryl_protocol), and sample decks (beryl_cli). The protocol build also fingerprints the wire
+# envelope in beryl_link, which is outside its Cargo dependency closure. The `jsonl` families
+# and the products list those inputs where their builds read them. For the `rust` family,
+# Ignite observes build inputs (`include_str!`, `include_bytes!` and build scripts'
+# `rerun-if-changed`) from Cargo's dep-info files and test reads through `beryl_test_files`.
+# It hashes both into the tests of every package that depends on them
 # (docs/ignite.md, "Observed inputs").
 
 # Every test of the workspace that cargo-nextest runs, each hashed over the package that holds
@@ -82,6 +83,7 @@ run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust doctests
 # The package manifests decide which packages `list` looks at.
 inputs = [
   "rust/Cargo.toml",
+  "rust/crates/beryl_link/src/wire/envelope.rs",
   "rust/crates/*/Cargo.toml",
   "rust/cards/*/Cargo.toml",
   "data/card-store.tsv",
@@ -89,7 +91,6 @@ inputs = [
   "data/table-commands.json",
   "data/save-breaks.json",
   "data/ui-conventions.json",
-  "ui/src/generated/**",
   "docs/sample-decks/**",
   "data/set-groups.json",
   "tools/src/beryl_tools/ignite/__init__.py",
@@ -119,7 +120,6 @@ inputs = [
   "data/table-commands.json",
   "data/save-breaks.json",
   "data/ui-conventions.json",
-  "ui/src/generated/**",
   "docs/sample-decks/**",
   "data/set-groups.json",
   "tools/src/beryl_tools/ignite/__init__.py",
@@ -152,7 +152,6 @@ inputs = [
   "data/table-commands.json",
   "data/save-breaks.json",
   "data/ui-conventions.json",
-  "ui/src/generated/**",
   "docs/sample-decks/**",
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/rust.py",
@@ -202,7 +201,6 @@ inputs = [
   "data/table-commands.json",
   "data/save-breaks.json",
   "data/ui-conventions.json",
-  "ui/src/generated/**",
   "docs/sample-decks/**",
   "data/set-groups.json",
   "data/card-text-allowlist.json",
@@ -240,7 +238,18 @@ inputs = [
 build = "cargo nextest run --no-run --locked --cargo-quiet {packages}"
 exclude = ["beryl_link_iroh"]
 dir = "rust"
-inputs = ["crate-closure", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
+inputs = [
+  "crate-closure",
+  "rust/Cargo.toml",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "docs/sample-decks/**",
+  "data/set-groups.json",
+  "rust/crates/beryl_link/src/wire/envelope.rs",
+]
 outputs = ["rust/target"]
 
 # Clippy's pass over the workspace in its own target directory, rust/target/clippy. Cargo holds
@@ -262,14 +271,13 @@ inputs = [
   "data/table-commands.json",
   "data/save-breaks.json",
   "data/ui-conventions.json",
-  "ui/src/generated/**",
   "docs/sample-decks/**",
   "data/set-groups.json",
   "tools/src/beryl_tools/ignite/rust.py",
 ]
 outputs = ["rust/target/clippy"]
 
-# The command-line tool, which the script, browser and oracle checks run. Built over the whole
+# The command-line tool, which the script and oracle checks run. Built over the whole
 # workspace's libraries in the `test` profile, as the test binaries are, so that neither build
 # compiles a library the other did (tools/src/beryl_tools/paths.py, `CLI_BUILD`, says why): with
 # `--bin` alone, beryl_kernel, beryl_table, beryl_rules and beryl_engine compiled a second time.
@@ -278,7 +286,19 @@ outputs = ["rust/target/clippy"]
 [product.cli]
 build = "cargo build --locked --quiet --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_cli"
 dir = "rust"
-inputs = ["crate:beryl_cli_main", "crate:beryl_workspace_hack", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
+inputs = [
+  "crate:beryl_cli_main",
+  "crate:beryl_workspace_hack",
+  "rust/Cargo.toml",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "docs/sample-decks/**",
+  "data/set-groups.json",
+  "rust/crates/beryl_link/src/wire/envelope.rs",
+]
 outputs = ["rust/target"]
 
 # `beryl_scenario`, which dumps the oracle scenarios and renders the cards' rules text, built
@@ -287,5 +307,18 @@ outputs = ["rust/target"]
 [product.scenario-dump]
 build = "cargo build --locked --quiet --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_scenario"
 dir = "rust"
-inputs = ["crate:beryl_scenario", "crate:beryl_workspace_hack", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
+inputs = [
+  "crate:beryl_scenario",
+  "crate:beryl_protocol",
+  "crate:beryl_workspace_hack",
+  "rust/Cargo.toml",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "docs/sample-decks/**",
+  "data/set-groups.json",
+  "rust/crates/beryl_link/src/wire/envelope.rs",
+]
 outputs = ["rust/target"]

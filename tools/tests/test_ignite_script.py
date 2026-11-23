@@ -1,4 +1,4 @@
-"""The script, app and mobile check families: their manifest and their adapter."""
+"""The shared script and native app check declarations, and the script adapter."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 from beryl_tools import android_sdk, paths
+from beryl_tools.ignite import native_app
 from beryl_tools.ignite import script as adapter
 
 MANIFEST: Path = paths.REPO / "ignite" / "checks" / "script.toml"
@@ -29,22 +30,26 @@ FORBIDDEN: list[str] = [
 
 
 def test_the_manifest_declares_the_families_and_their_products() -> None:
-    manifest = tomllib.loads(MANIFEST.read_text())
-    assert set(manifest["family"]) == {"script", "app", "mobile", "android"}
-    assert manifest["family"]["script"]["needs"] == ["cli", "python-env"]
-    for name, family in manifest["family"].items():
+    families = tomllib.loads(MANIFEST.read_text())["family"]
+    assert set(families) == {"script", *native_app.CHECKS}
+    script = families["script"]
+    assert script["needs"] == ["cli", "python-env"]
+    assert adapter.FIXTURES in script["inputs"]
+    for name, family in families.items():
         assert family["adapter"] == "jsonl"
         assert family["kind"] == "regression"
-        assert f"list {name}" in family["list"]
-        assert "{checks}" in family["run"]
+        module = "script" if name == "script" else "native_app"
+        assert family["list"].endswith(f"beryl_tools.ignite.{module} list {name}")
+        assert family["run"].endswith(
+            f"beryl_tools.ignite.{module} run {name} {{checks}}"
+        )
         assert family["inputs"]
-    assert manifest["family"]["app"]["platforms"] == ["macos", "windows"]
-    assert manifest["family"]["mobile"]["platforms"] == ["macos"]
-    assert manifest["family"]["android"]["platforms"] == ["macos", "windows"]
+    assert families["native-app"]["platforms"] == ["macos", "windows"]
+    assert families["native-ios"]["platforms"] == ["macos"]
+    assert families["native-android"]["platforms"] == ["macos", "windows"]
     # A card is its own check's input, so the family must not read every card's file.
     assert not any(
-        p.startswith("rust/cards/") and p.count("/") >= 4
-        for p in manifest["family"]["script"]["inputs"]
+        p.startswith("rust/cards/") and p.count("/") >= 4 for p in script["inputs"]
     )
 
 
