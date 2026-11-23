@@ -52,7 +52,9 @@ impl Show {
         pointer::update(
             &mut pointer,
             frame,
-            |slot| self.pose(slot, now),
+            // An opening card rests in its screen box while the table's hand is below
+            // the window. Pick the pose before the hover lift, with that box applied.
+            |slot| self.drawn_pose(slot, now),
             (now, self.table.camera()),
             &self.table.data().pointer,
         );

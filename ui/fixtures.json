@@ -464,6 +464,14 @@
       "after": 1
     },
     {
+      "name": "opening-hover",
+      "seed": 5324511556233585976,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["random", "random"],
+      "until": "first playOrDraw decision for seat 0",
+      "clicks": ["press option 0", "press option 1"]
+    },
+    {
       "name": "opening-opponent-play",
       "seed": 15,
       "decks": ["wu-control", "wu-control"],

@@ -15,7 +15,8 @@ use beryl_protocol::protocol::{ObjectId, SessionId, Side, Status, ZoneName};
 use beryl_protocol::script::{Mark, Script, Subject};
 use glam::Vec2;
 use kit_base::data::profiles::SizeClass;
-use kit_frame::frame::{ElementId, Frame, Role, Wake};
+use kit_frame::frame::picking::Area;
+use kit_frame::frame::{AnchorBox, ElementId, Frame, Role, StateBits, Wake};
 use kit_probe::agent::fault::Rule;
 use kit_ui::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size};
 
@@ -141,6 +142,118 @@ fn assert_fan(page: &mut Page, size: Size, scale: f32, stage_top: f32) {
             "{name}: {edge:?}"
         );
     }
+}
+
+#[test]
+fn stationary_hover_on_the_opening_fan_grows_once_and_returns_once() {
+    let mut page = page(
+        "opening-hover",
+        Side::You,
+        SizeClass::Regular,
+        REPORTED_SIZE,
+    )
+    .unwrap_or_else(|why| panic!("{why}"))
+    .with_scale(2.0);
+    page.still();
+    page.press("button \"Play\"");
+    // Give the hover samples time before the replay advances automatically.
+    page.set_reply_delay(page.views_given_at().len(), Duration::from_millis(2_000));
+    page.still();
+    assert!(page.find("card \"Thirst for Discovery\" #36").interactive);
+    assert!(
+        page.find("card \"Jace, Wielder of Mysteries\" #37")
+            .interactive
+    );
+    assert_fan_hover(&mut page, ElementId(36), ElementId(37));
+
+    page.press("button \"Mulligan\"");
+    page.still();
+    page.find("button \"Keep 6\"");
+    assert_fan_hover(&mut page, ElementId(24), ElementId(34));
+}
+
+fn assert_fan_hover(page: &mut Page, middle: ElementId, neighbour: ElementId) {
+    // Play can leave the pointer over a card when the opening fan appears.
+    let away = Vec2::new(200.0, 760.0);
+    page.move_to(away);
+    page.still();
+    let corners = |page: &mut Page, card| page.frame().corners(card).expect("card in the fan");
+    let middle_rest = corners(page, middle);
+    let neighbour_rest = corners(page, neighbour);
+    page.move_to(AnchorBox::around(middle_rest).centre);
+    let raised = hover_motion(page, middle, Some(middle), true);
+    assert!(raised.half.y > AnchorBox::around(middle_rest).half.y * 1.2);
+
+    // The raised middle card covers the left edge of its neighbour. The pointer enters
+    // the neighbour's place in the fan even while the middle card is drawn in front of it.
+    let edge = Vec2::new(996.0, 469.0);
+    assert!(Area::Quad(neighbour_rest, None).contains(edge));
+    assert!(Area::Quad(corners(page, middle), None).contains(edge));
+    assert!(!Area::Quad(middle_rest, None).contains(edge));
+    page.move_to(edge);
+    let raised = hover_motion(page, neighbour, Some(neighbour), true);
+    assert!(
+        raised.half.y > AnchorBox::around(neighbour_rest).half.y * 1.2,
+        "{neighbour:?} rose from {neighbour_rest:?} to {raised:?}"
+    );
+    assert_eq!(corners(page, middle), middle_rest);
+
+    page.move_to(away);
+    let returned = hover_motion(page, neighbour, None, false);
+    assert_eq!(returned, AnchorBox::around(neighbour_rest));
+}
+
+/// Samples the hit result and the projected bounds through the ease and its settled interval.
+fn hover_motion(
+    page: &mut Page,
+    card: ElementId,
+    target: Option<ElementId>,
+    growing: bool,
+) -> AnchorBox {
+    let samples: Vec<_> = (0..=32)
+        .map(|tick| {
+            if tick > 0 {
+                page.step(Duration::from_millis(8));
+            }
+            let frame = page.frame();
+            let hovered: Vec<_> = frame
+                .resolved
+                .iter()
+                .filter(|node| node.role == Role::Card && node.state.has(StateBits::HOVERED))
+                .map(|node| node.id)
+                .collect();
+            let bounds = AnchorBox::around(frame.corners(card).expect("card in the fan"));
+            (hovered, bounds)
+        })
+        .collect();
+    let targets: Vec<_> = samples.iter().map(|(ids, _)| ids.as_slice()).collect();
+    let heights: Vec<_> = samples
+        .iter()
+        .map(|(_, bounds)| bounds.half.y * 2.0)
+        .collect();
+    assert!(
+        targets.iter().all(|ids| *ids == target.as_slice()),
+        "{card:?} should hover {target:?}, got {targets:?} with heights {heights:?}"
+    );
+    for heights in heights.windows(2) {
+        let change = heights[1] - heights[0];
+        assert!(
+            if growing {
+                change >= -0.01
+            } else {
+                change <= 0.01
+            },
+            "{card:?} changed height from {} to {}",
+            heights[0],
+            heights[1]
+        );
+    }
+    let settled = samples.last().expect("sampled bounds").1;
+    assert!(
+        samples[25..].iter().all(|(_, bounds)| *bounds == settled),
+        "{card:?} kept moving after 200 ms"
+    );
+    settled
 }
 
 /// Advances the client until the opening and its card moves have settled.
