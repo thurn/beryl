@@ -5,13 +5,20 @@
 //! step stops stand clear of it as the web's grid places them.
 
 use app_client::Input;
-use beryl_protocol::protocol::Side;
+use beryl_protocol::prompt::{Marked, Purpose, ShapeBody};
+use beryl_protocol::protocol::{CardType, Kind, ObjectId, Side, Status, ZoneName};
+use beryl_protocol::script::{Mark, Subject};
 use game_hud::art::orb::{self, LAYERS};
+use game_play::art::orb::face_id;
+use game_table::profiles::Profile;
+use game_table::table::Window;
 use glam::{Vec2, Vec4};
 use kit_base::data::profiles::Profiles;
-use kit_frame::frame::{Frame, Material, Role, StateBits};
+use kit_base::tokens::{color, size};
+use kit_frame::frame::{Band, ElementId, Frame, Material, Role, ShapeAnchor, StateBits};
+use kit_probe::agent::checks::ring_rect;
 use kit_ui::input::Input as DeviceInput;
-use kit_ui::input::{AssetReady, IconCell};
+use kit_ui::input::{AssetReady, IconCell, Insets, Size};
 
 use super::flat_layer::{client, deciding, edges, find, prompt};
 
@@ -111,4 +118,109 @@ fn each_orb_draws_the_webs_art_with_its_ring_toward_its_edge() {
     let (inner_right, ..) = edges(frame, find(frame, Role::Toggle, "Your blockers"));
     assert!((core_x - inner_left - 70.0).abs() < 1.0, "{inner_left}");
     assert!((inner_right - core_x - 70.0).abs() < 1.0, "{inner_right}");
+}
+
+/// A target prompt with one legal creature and the named players eligible.
+fn target_prompt(sides: &[Side]) -> (Input, ObjectId) {
+    let Input::Update(mut update) = deciding(prompt("Choose a target.")) else {
+        unreachable!()
+    };
+    let card = update
+        .view
+        .objects
+        .iter()
+        .find(|object| {
+            object.zone == ZoneName::Battlefield && object.types.contains(&CardType::Creature)
+        })
+        .unwrap()
+        .slot;
+    let Status::Deciding { decision } = &mut update.view.status else {
+        unreachable!()
+    };
+    decision.kind = Kind::Target;
+    decision.prompt.purpose = Purpose::Target;
+    decision.prompt.body = ShapeBody::Pick {
+        tray: Vec::new(),
+        least: 1,
+        most: 1,
+        picked: Vec::new(),
+        warned: Vec::new(),
+    };
+    decision.prompt.marks = sides
+        .iter()
+        .map(|&player| Subject::Player { player })
+        .chain([Subject::Object { slot: card }])
+        .map(|on| Marked {
+            on,
+            mark: Mark::Eligible,
+        })
+        .collect();
+    (Input::Update(update), card)
+}
+
+#[test]
+fn eligible_players_have_face_marks_and_eligible_cards_keep_their_outlines() {
+    let window = Window {
+        size: Size {
+            width: 1728.0,
+            height: 1117.0,
+        },
+        scale: 2.0,
+        ..Window::default()
+    };
+    for sides in [&[Side::You, Side::Opponent][..], &[Side::Opponent][..]] {
+        let mut client = client();
+        client.handle(Input::Device(DeviceInput::Surface {
+            size: window.size,
+            scale: window.scale,
+            safe_area: Insets::default(),
+        }));
+        let scale = Profile::for_window(&client.data().profiles, window)
+            .data()
+            .play
+            .life
+            .orb_scale;
+        let (update, card) = target_prompt(sides);
+        client.handle(Input::Device(DeviceInput::Assets(AssetReady::Icons {
+            page: 1,
+            cells: orb_cells(&client.data().profiles),
+        })));
+        client.handle(update);
+        client.frame(0);
+        client.frame(1_000_000_000);
+        let frame = client.frame(2_000_000_000);
+        let player_marks = frame.draws.iter().enumerate().filter(|(index, draw)| {
+            frame.band(*index) == Some(Band::Layer)
+                && draw.material == Material::Icon as u8
+                && draw.tint[..3] == color::MARK_ELIGIBLE[..3]
+        });
+        assert_eq!(player_marks.count(), 2 * sides.len());
+
+        for (side, name) in [(Side::You, "your orb"), (Side::Opponent, "opponent's orb")] {
+            let mark = frame.rings.iter().find(|ring| {
+                frame.decoration_of(ring.element) == Some(ShapeAnchor::Outline(face_id(side)))
+            });
+            assert_eq!(mark.is_some(), sides.contains(&side), "{name}");
+            if let Some(mark) = mark {
+                let ring = ring_rect(mark, frame.view_projection, window.size);
+                let (left, top, right, bottom) = edges(frame, find(frame, Role::Region, name));
+                let orb_middle = Vec2::new(f32::midpoint(left, right), f32::midpoint(top, bottom));
+                let face_middle = orb_middle + Vec2::Y * orb::face_offset(side) * scale;
+                let ring_middle = Vec2::new(ring.x + ring.width / 2.0, ring.y + ring.height / 2.0);
+                assert!(ring_middle.distance(face_middle) < 0.1, "{name}: {ring:?}");
+                assert!(
+                    (ring.width - (size::ORB_WIDTH + size::ORB_BEZEL + 4.0) * scale).abs() < 0.1
+                );
+                assert!(
+                    (ring.height - (size::ORB_HEIGHT + size::ORB_BEZEL + 4.0) * scale).abs() < 0.1
+                );
+                assert!(!frame.resolved[mark.element as usize].interactive);
+            }
+        }
+        let card_mark = frame.rings.iter().find(|ring| {
+            frame.decoration_of(ring.element)
+                == Some(ShapeAnchor::Outline(ElementId(u32::from(card.0))))
+        });
+        assert!(card_mark.is_some_and(|ring| !ring.shadows.is_empty()));
+    }
 }

@@ -9,12 +9,18 @@ pub const fn target_id(side: Side) -> ElementId {
     ElementId((1 << 23) + 16 + matches!(side, Side::Opponent) as u32)
 }
 
-/// The side whose life orb is registered with this id.
+/// The orb face's painted bounds, separate from the larger target box used by arrows.
+#[must_use]
+pub const fn face_id(side: Side) -> ElementId {
+    ElementId(target_id(side).0 + 2)
+}
+
+/// The side whose life orb or face is registered with this id.
 #[must_use]
 pub fn target_side(id: ElementId) -> Option<Side> {
     [Side::You, Side::Opponent]
         .into_iter()
-        .find(|&side| target_id(side) == id)
+        .find(|&side| target_id(side) == id || face_id(side) == id)
 }
 
 /// The artwork's left, top, width and height, in units relative to its origin.

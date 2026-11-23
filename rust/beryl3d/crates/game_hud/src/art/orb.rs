@@ -68,6 +68,8 @@ pub enum Shape {
 pub enum Ramp {
     /// No fading.
     None,
+    /// From clear at 55% of the core's bounding ellipse to full at its rim.
+    CoreEdge,
     /// Down the bezel's gradient (`orb-rim-*` in `LifeOrb`), which runs from the top of the
     /// core's box, 0, to its foot, 1, on the screen for both seats: none above `[0]`, rising
     /// to whole at `[1]`, whole until `[2]` and gone by `[3]`. Equal ends are a step.
@@ -84,6 +86,8 @@ pub struct Layer {
     pub ramp: Ramp,
     /// The standard deviation of the blur over it, in units, as `feGaussianBlur`'s.
     pub blur: f32,
+    /// When set, keep the sharp shape and draw its blur behind it at this opacity.
+    pub glow_opacity: Option<f32>,
     /// How far it is moved down the screen, in units, for both seats.
     pub drop: f32,
     pub color: [u8; 4],
@@ -130,6 +134,7 @@ const fn plain(shape: Shape, paint: CoveragePaint, color: [u8; 4], views: [[f32;
         paint,
         ramp: Ramp::None,
         blur: 0.0,
+        glow_opacity: None,
         drop: 0.0,
         color,
         active: false,
@@ -242,6 +247,7 @@ pub const LAYERS: [Layer; 16] = [
         },
         ramp: Ramp::None,
         blur: 1.5,
+        glow_opacity: None,
         drop: 2.0,
         color: [0, 0, 0, 153],
         active: false,
@@ -325,6 +331,71 @@ pub const LAYERS: [Layer; 16] = [
     )),
 ];
 
+/// The face mark's rim follows the bezel by one artwork unit, with a two-unit stroke.
+const MARK_RIM: Shape = Shape::Rim {
+    offset: BEZEL / 2.0 + 1.0,
+    from: 0.0,
+    to: 360.0,
+};
+const MARK_STROKE: CoveragePaint = CoveragePaint {
+    fill: false,
+    stroke: Some((2.0, false)),
+};
+
+/// The width and height covered by the solid rim, including its stroke.
+pub(crate) const MARK_HALF: Vec2 =
+    Vec2::new(CORE_RX + BEZEL / 2.0 + 2.0, CORE_RY + BEZEL / 2.0 + 2.0);
+const MARK_BLUR: f32 = 1.5;
+pub(crate) const MARK_GLOW_REACH: f32 = 3.0 * MARK_BLUR;
+
+const fn core_view(half: Vec2) -> [[f32; 4]; 2] {
+    mirrored([-half.x, CORE_CY - half.y, half.x * 2.0, half.y * 2.0])
+}
+
+/// Transparent padding keeps the antialiased ink away from the atlas cell edge.
+const MARK_PADDING: f32 = 2.0;
+
+/// The face tint and the rim with its glow from `face-mark.ts` and `.stage-mark-face`.
+/// Their coverage is symmetric around the core, so the two seats share the same masks.
+const MARK_LAYERS: [Layer; 2] = [
+    ramped(
+        plain(
+            Shape::Rim {
+                offset: 0.0,
+                from: 0.0,
+                to: 360.0,
+            },
+            FILL,
+            [255, 255, 255, 179],
+            core_view(Vec2::new(CORE_RX + MARK_PADDING, CORE_RY + MARK_PADDING)),
+        ),
+        Ramp::CoreEdge,
+    ),
+    Layer {
+        blur: MARK_BLUR,
+        glow_opacity: Some(0.7),
+        ..plain(
+            MARK_RIM,
+            MARK_STROKE,
+            [255; 4],
+            core_view(Vec2::new(
+                MARK_HALF.x + MARK_GLOW_REACH + MARK_PADDING,
+                MARK_HALF.y + MARK_GLOW_REACH + MARK_PADDING,
+            )),
+        )
+    },
+];
+
+/// The masks centred on a life total, with their artwork size and tint strength.
+pub(crate) fn mark_layers() -> impl Iterator<Item = (LayerCell, u8)> {
+    mark_atlas_layers().map(|(_, art, cell)| (cell, art.color[3]))
+}
+
+const fn mark_icon(index: usize) -> IconId {
+    #[expect(clippy::cast_possible_truncation, reason = "two mark layers fit")]
+    IconId(FIRST_ICON + ICONS + index as u16)
+}
+
 /// How many icons the art takes: one for each layer of each seat's orb.
 pub const ICONS: u16 = 2 * LAYERS.len() as u16;
 
@@ -350,8 +421,8 @@ pub const fn seat(side: Orientation) -> usize {
 /// The first icon reserved for a life-orb layer, after the widget icons.
 pub const FIRST_ICON: u16 = icon_artwork::COUNT;
 
-/// The first icon after both seats' orb layers.
-pub(super) const END_ICON: u16 = icon(Orientation::Mirrored, LAYERS.len()).0;
+/// The first icon after both seats' orb artwork and mark layers.
+pub(super) const END_ICON: u16 = mark_icon(MARK_LAYERS.len()).0;
 
 /// The icon of layer `at` of `side`'s orb.
 #[must_use]
@@ -423,11 +494,27 @@ pub fn atlas_scales(profiles: &Profiles) -> impl Iterator<Item = f32> {
     automatic.chain(preview)
 }
 
+/// All profiles share these masks. The atlas packs them at a fixed density so they fit on
+/// the same pages as the other artwork at the phone's display scale.
+fn mark_atlas_layers() -> impl Iterator<Item = (Orientation, &'static Layer, LayerCell)> {
+    MARK_LAYERS.iter().enumerate().map(|(index, layer)| {
+        let side = Orientation::Upright;
+        let view = layer.views[seat(side)];
+        let cell = LayerCell {
+            icon: mark_icon(index),
+            view,
+            size: cell_width(view[2], 1.0),
+            max_scale: Some(0.75),
+        };
+        (side, layer, cell)
+    })
+}
+
 /// Every choice of art scale, orientation and layer, in the order sent to the atlas.
 fn atlas_layers(
     profiles: &Profiles,
 ) -> impl Iterator<Item = (Orientation, &'static Layer, LayerCell)> {
-    atlas_scales(profiles).flat_map(|units| {
+    let art = atlas_scales(profiles).flat_map(|units| {
         ORIENTATIONS.into_iter().flat_map(move |side| {
             LAYERS.iter().enumerate().map(move |(at, layer)| {
                 let view = layer.views[seat(side)];
@@ -440,7 +527,8 @@ fn atlas_layers(
                 (side, layer, cell)
             })
         })
-    })
+    });
+    art.chain(mark_atlas_layers())
 }
 
 /// The atlas dimensions for every orb layer, for a driver that does not rasterize them.
@@ -458,6 +546,11 @@ pub fn atlas_artwork(profiles: &Profiles) -> Vec<CoverageLayer> {
             paint: layer.paint,
             ramp: match layer.ramp {
                 Ramp::None => CoverageRamp::None,
+                Ramp::CoreEdge => CoverageRamp::EllipticalEdge {
+                    centre: Vec2::new(0.0, core_top(side) + CORE_RY),
+                    radii: Vec2::new(CORE_RX, CORE_RY),
+                    clear_at: 0.55,
+                },
                 Ramp::Down(stops) => CoverageRamp::Vertical {
                     top: core_top(side),
                     height: 2.0 * CORE_RY,
@@ -467,7 +560,7 @@ pub fn atlas_artwork(profiles: &Profiles) -> Vec<CoverageLayer> {
             },
             blur: layer.blur,
             drop: layer.drop,
-            glow_opacity: None,
+            glow_opacity: layer.glow_opacity,
         })
         .collect()
 }
@@ -504,7 +597,14 @@ pub fn outlines(shape: Shape, side: Orientation) -> Vec<(Vec<Vec2>, bool)> {
                 .collect(),
             true,
         )],
-        Shape::Rim { offset, from, to } => vec![(rim(offset, from, to), false)],
+        Shape::Rim { offset, from, to } => {
+            let mut points = rim(offset, from, to);
+            let closed = (to - from).abs() >= 360.0;
+            if closed {
+                points.pop();
+            }
+            vec![(points, closed)]
+        }
         Shape::Ellipse {
             centre,
             radii,
@@ -572,14 +672,14 @@ fn ray_tips() -> Vec<Vec2> {
 #[cfg(test)]
 mod tests {
 
-    use super::{LAYERS, Orientation, Ramp, core_top, outlines};
+    use super::{LAYERS, MARK_LAYERS, Orientation, Ramp, core_top, outlines};
 
     /// Each layer's box holds all its ink: the outlines, half its stroke, three standard
     /// deviations of its blur and its drop, cut to the band of a bezel's gradient it shows.
     /// A box that cut the ink off would show a hard edge.
     #[test]
     fn every_layer_box_holds_its_ink() {
-        for (at, layer) in LAYERS.iter().enumerate() {
+        for (at, layer) in LAYERS.iter().chain(&MARK_LAYERS).enumerate() {
             for side in [Orientation::Upright, Orientation::Mirrored] {
                 let margin =
                     layer.paint.stroke.map_or(0.0, |(width, _)| width / 2.0) + 3.0 * layer.blur;

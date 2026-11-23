@@ -131,6 +131,12 @@ pub enum CoverageRamp {
         height: f32,
         stops: [f32; 4],
     },
+    /// Coverage rises outward from `clear_at` to the rim of an ellipse, at radius one.
+    EllipticalEdge {
+        centre: Vec2,
+        radii: Vec2,
+        clear_at: f32,
+    },
     /// Coverage is full within `whole` units of the origin, and transparent past `gone`.
     Radial {
         whole: f32,

@@ -2,8 +2,8 @@
 //! separate quads): every case of the verb in `data/ui-conventions.json` plays to its end with
 //! every object at its placement; a card wears its mark's state from the mark's begin to its
 //! end, across scripts; an outline encloses its card in flight; a mark under another card lies
-//! in the table's band; a card picked to pay turns and wears no outline; and a mark on a player
-//! lies on their anchor. The "relations hold" check faults an outline off its card.
+//! in the table's band; and a card picked to pay turns and wears no outline. The
+//! "relations hold" check faults an outline off its card.
 
 use crate::common::{MS, before, discard, empty_frame, frame, show};
 use beryl_protocol::GameUpdate;
@@ -346,25 +346,6 @@ fn a_permanent_picked_to_pay_turns_and_wears_a_tap_symbol() {
         tap.z,
         face.z
     );
-}
-
-#[test]
-fn a_mark_on_a_player_lies_on_their_anchor() {
-    let (start, _) = before();
-    let player = Subject::Player { player: Side::You };
-    let begun = marked(&start, Edge::Begin, Mark::HostileTarget, player);
-    let (show, frames) = play(&[start, begun]);
-    let anchor = show.table().player_pose(Side::You).position;
-    let (_, last) = frames.last().expect("frames");
-    let outlines = sprites_of(last, sprites::OUTLINE.rect);
-    assert_eq!(outlines.len(), 1, "one outline");
-    let middle = quad_point(outlines[0], 0.0, 0.0);
-    assert!(
-        middle.distance(anchor) < 1.0,
-        "the outline's middle {middle} is at the anchor {anchor}"
-    );
-    let width = quad_point(outlines[0], 0.5, 0.0).distance(quad_point(outlines[0], -0.5, 0.0));
-    assert!(width > 1.0, "the outline has a size: {width}");
 }
 
 /// The "relations hold" check passes an outline the table drew round its card through a

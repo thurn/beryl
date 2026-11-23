@@ -430,11 +430,25 @@ impl Client {
             back: CARD_BACK,
             layer: &face_layers,
         };
+        let table = self.show.table();
+        let plane = table.camera().screen_plane();
         self.layer.write_with(
             &mut builder,
-            &self.show.table().camera().screen_plane(),
+            &plane,
             self.features.layer_open,
             Some(&layers),
+            |builder| {
+                if visible && !manual {
+                    game_hud::hud::orb_marks::write(
+                        self.show.lit(),
+                        table_now,
+                        table,
+                        &plane,
+                        self.layer.icons(),
+                        builder,
+                    );
+                }
+            },
         );
         builder.finish();
         self.finish_frame(table_now, transitioning);

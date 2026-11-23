@@ -9,13 +9,14 @@
 //! - suggested is a thin line in the ember color a little outside the card;
 //! - paying draws no outline: the permanent turns as it would tap, and a tap symbol lies on its
 //!   middle;
-//! - a mark on a player is the outline round their life total.
+//! - the HUD paints a player's eligibility, selection and targeting marks on the orb face.
 //!
 //! Which mark a thing wears is never decided here: the session's scripts and the prompt that is
 //! open begin and end them.
 
 use std::f32::consts::FRAC_PI_2;
 
+use beryl_protocol::protocol::Side;
 use beryl_protocol::script::{Mark, Subject};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
@@ -26,6 +27,7 @@ use game_table::table::labels::TAPPED;
 use kit_base::data::light::Light;
 use kit_base::pose::{Curve, Pose};
 use kit_base::tokens::color;
+use kit_frame::frame::text::faded;
 use kit_frame::frame::{
     Band, Draw, ElementId, FrameBuilder, MARK_IDS, NameRef, Place, Resolved, Ring, Role,
     ShapeAnchor, StateBits, box_shadow_reach, outline_corners, rows, sprites,
@@ -99,10 +101,40 @@ fn tint(mark: Mark) -> [u8; 4] {
     }
 }
 
+const fn orb_face_mark(mark: Mark) -> bool {
+    matches!(
+        mark,
+        Mark::Eligible | Mark::Selected | Mark::FriendlyTarget | Mark::HostileTarget
+    )
+}
+
+/// Life-orb marks in paint order, with the same time and tone as card marks.
+/// The HUD draws them above the orb's art and beneath its number.
+pub fn player_faces(
+    lit: &Lit,
+    now: u64,
+) -> impl Iterator<Item = (usize, Side, Mark, [u8; 4])> + '_ {
+    lit.open()
+        .iter()
+        .enumerate()
+        .filter_map(move |(index, open)| {
+            let Span::Mark(MarkSpan {
+                mark,
+                on: Subject::Player { player },
+            }) = open.span
+            else {
+                return None;
+            };
+            let opacity = shown(open, now);
+            (orb_face_mark(mark) && opacity > 0.0)
+                .then(|| (index, player, mark, faded(tint(mark), opacity)))
+        })
+}
+
 /// Writes the records of the marks in `lit` as they are at `now`: for each, quads lying just
 /// over the face of the thing it is on, so that they move and turn with it. Two marks on one
-/// card or ability are both drawn over the same box, as the web's are; two on a player are
-/// drawn the later begun outside the earlier. A mark on an object shares its paint band,
+/// card or ability are both drawn over the same box, as the web's are. A mark on an object
+/// shares its paint band,
 /// so it follows the object in flight, in a screen preview, or under the pointer.
 pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
     let light = &scene.table().data().light;
@@ -111,6 +143,9 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         let Span::Mark(MarkSpan { mark, on }) = mark_open.span else {
             continue;
         };
+        if matches!(on, Subject::Player { .. }) && orb_face_mark(mark) {
+            continue;
+        }
         let shown = shown(mark_open, now);
         if shown <= 0.0 {
             continue;
@@ -120,14 +155,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         };
         let reach = target.reach;
         let pose = reach.pose;
-        let [red, green, blue, alpha] = tint(mark);
-        #[expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "an opacity from 0 to 255"
-        )]
-        let alpha = (f32::from(alpha) * shown.clamp(0.0, 1.0)).round() as u8;
-        let tint = [red, green, blue, alpha];
+        let tint = faded(tint(mark), shown);
         let position = pose.position + pose.rotation * Vec3::Z * light.lift;
         let band = target.band.records(band(light, on, &pose));
         let camera = scene.table().camera();

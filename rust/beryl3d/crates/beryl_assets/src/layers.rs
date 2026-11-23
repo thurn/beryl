@@ -97,6 +97,14 @@ fn fade(coverage: &mut [u8], layer: &CoverageLayer, (width, height): (u16, u16))
                 1.0
             }
         }),
+        CoverageRamp::EllipticalEdge {
+            centre,
+            radii,
+            clear_at,
+        } => Box::new(move |x, y| {
+            let at = ((x - centre.x) / radii.x).hypot((y - centre.y) / radii.y);
+            ((at - clear_at) / (1.0 - clear_at)).clamp(0.0, 1.0)
+        }),
         CoverageRamp::Radial { whole, gone } => Box::new(move |x, y| {
             let r = x.hypot(y);
             ((gone - r) / (gone - whole)).clamp(0.0, 1.0)

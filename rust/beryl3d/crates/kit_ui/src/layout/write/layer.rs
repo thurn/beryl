@@ -36,20 +36,22 @@ impl Layer {
     /// waits for the table to settle (`Element::waits`) unless the layer is `open`, then every
     /// other float, then the modal overlays and other children with backdrop filters.
     pub fn write(&self, builder: &mut FrameBuilder, camera: &ScreenPlane, open: bool) {
-        self.write_with(builder, camera, open, None);
+        self.write_with(builder, camera, open, None, |_| {});
     }
 
     /// `write`, drawing each face an element shows (`Shown::Face`) from the layers `faces`
-    /// gives it. With no faces, such an element draws no face.
+    /// gives it. With no faces, such an element draws no face. `decorate` paints live
+    /// decorations above the screen and beneath the floats and modal overlays.
     pub fn write_with(
         &self,
         builder: &mut FrameBuilder,
         camera: &ScreenPlane,
         open: bool,
         faces: Option<&FaceLayers<'_>>,
+        decorate: impl FnOnce(&mut FrameBuilder<'_>),
     ) {
         // The recording path specializes away the preview callback.
-        self.write_layer(builder, camera, open, faces, |_| StateBits(0));
+        self.write_layer(builder, camera, open, faces, |_| StateBits(0), decorate);
     }
 
     /// Writes a toolkit preview with authored states applied to the same widgets the app uses.
@@ -59,7 +61,7 @@ impl Layer {
         camera: &ScreenPlane,
         states: &dyn Fn(ElementId) -> StateBits,
     ) {
-        self.write_layer(builder, camera, true, None, states);
+        self.write_layer(builder, camera, true, None, states, |_| {});
     }
 
     fn write_layer(
@@ -69,6 +71,7 @@ impl Layer {
         open: bool,
         faces: Option<&FaceLayers<'_>>,
         preview: impl Fn(ElementId) -> StateBits + Copy,
+        decorate: impl FnOnce(&mut FrameBuilder<'_>),
     ) {
         let tip = Cell::new(None);
         let drawing = Drawing {
@@ -112,6 +115,7 @@ impl Layer {
                 }
             }
         }
+        decorate(builder);
         for float in (self.floats.iter()).filter(|float| !float.id.under_screen()) {
             self.write_float(float, builder, drawing, open, faces);
         }
