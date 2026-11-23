@@ -250,20 +250,31 @@ fn light_that_only_adds_is_drawn_in_one_call_where_it_overlaps() {
 }
 
 #[test]
-fn an_outline_counts_only_the_ring_its_mesh_covers() {
+fn a_glow_with_a_ring_mesh_counts_only_the_ring_it_covers() {
     let mut frame = Frame::with_capacity(0, 8, 0);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
-    builder.camera(Mat4::IDENTITY);
-    builder.draw(
-        Band::Glows,
-        Draw::glow(Affine3A::IDENTITY, tag(1), sprites::OUTLINE, 0.0),
-    );
-    let areas = builder.finish().areas();
-    // A unit quad covers a quarter of the screen; the ring is the outer rectangle less the
-    // hole, as shares of the quad.
-    let [outer, hole] = [sprites::OUTLINE_OUTER, sprites::OUTLINE_HOLE];
-    let ring = 4.0 * (outer[0] * outer[1] - hole[0] * hole[1]);
-    assert!((areas.blended - 0.25 * ring).abs() < 1e-6, "{areas:?}");
+    for (sprite, outer, hole) in [
+        (
+            sprites::OUTLINE,
+            sprites::OUTLINE_OUTER,
+            sprites::OUTLINE_HOLE,
+        ),
+        (sprites::HALO, sprites::HALO_OUTER, sprites::HALO_HOLE),
+    ] {
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
+        builder.camera(Mat4::IDENTITY);
+        builder.draw(
+            Band::Glows,
+            Draw::glow(Affine3A::IDENTITY, tag(1), sprite, 0.0),
+        );
+        let areas = builder.finish().areas();
+        // The target is two units wide and high. Each rectangle's share of the target is
+        // the product of its half sizes.
+        let expected = outer[0] * outer[1] - hole[0] * hole[1];
+        assert!(
+            (areas.blended - expected).abs() < 1e-6,
+            "{sprite:?}: {areas:?}"
+        );
+    }
 }
 
 #[test]

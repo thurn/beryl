@@ -11,7 +11,7 @@ fn tuning() -> (Light, Own) {
     )
 }
 use beryl_assets::packer::PAGE_SIZE;
-use kit_frame::frame::{Sprite, sprites};
+use kit_frame::frame::{Mesh, Sprite, sprites};
 
 const ALL: [Sprite; 16] = [
     sprites::DISC,
@@ -116,23 +116,28 @@ fn on_quad(x: u16, y: u16) -> (f32, f32) {
 }
 
 #[test]
-fn the_outline_is_empty_where_its_mesh_leaves_the_quad_out() {
+fn ring_sprites_are_empty_where_their_mesh_leaves_the_quad_out() {
     // A texel within two texels of a part the mesh leaves out is sampled there by bilinear
     // filtering, so it must be empty too.
     let page = light_page(&tuning().0, &tuning().1);
     let margin = 2.0 / f32::from(sprites::CELL);
-    let [outer, hole] = [sprites::OUTLINE_OUTER, sprites::OUTLINE_HOLE];
-    for y in 0..sprites::CELL {
-        for x in 0..sprites::CELL {
-            let (qx, qy) = on_quad(x, y);
-            let outside = qx.abs() > outer[0] - margin || qy.abs() > outer[1] - margin;
-            let inside = qx.abs() < hole[0] + margin && qy.abs() < hole[1] + margin;
-            if outside || inside {
-                assert_eq!(
-                    at(&page, sprites::OUTLINE, x, y),
-                    0,
-                    "texel ({x}, {y}) is drawn, outside the outline's mesh"
-                );
+    for (mesh, sprite) in [
+        (Mesh::Outline, sprites::OUTLINE),
+        (Mesh::Halo, sprites::HALO),
+    ] {
+        let [outer, hole] = mesh.ring().expect("ring mesh has bounds");
+        for y in 0..sprites::CELL {
+            for x in 0..sprites::CELL {
+                let (qx, qy) = on_quad(x, y);
+                let outside = qx.abs() > outer[0] - margin || qy.abs() > outer[1] - margin;
+                let inside = qx.abs() < hole[0] + margin && qy.abs() < hole[1] + margin;
+                if outside || inside {
+                    assert_eq!(
+                        at(&page, sprite, x, y),
+                        0,
+                        "texel ({x}, {y}) lies beyond the {mesh:?} mesh"
+                    );
+                }
             }
         }
     }

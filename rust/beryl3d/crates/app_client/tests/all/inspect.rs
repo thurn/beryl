@@ -189,8 +189,7 @@ fn it_asks_for_one_full_size_face_at_a_time_and_draws_it_once_it_lands() {
     let pacifism = *asked.last().expect("the last card was asked for");
     let full = |page: &mut Page| {
         (page.frame().draws.iter()).any(|draw| {
-            draw.material == Material::Card as u8
-                && draw.flags & 0b11 == TextureArray::FullFaces as u8
+            draw.material == Material::Card as u8 && draw.texture_array() == TextureArray::FullFaces
         })
     };
     assert!(

@@ -4,7 +4,7 @@
 use std::ops::Range;
 
 use glam::Vec2;
-use kit_frame::frame::Frame;
+use kit_frame::frame::{Frame, Mesh};
 
 use crate::pipeline::{Pipelines, RECORD};
 use crate::runs::{Pass, runs};
@@ -20,7 +20,7 @@ pub(crate) struct Draws<'a> {
     pub(crate) vertices: &'a wgpu::Buffer,
     pub(crate) indices: &'a wgpu::Buffer,
     /// The index range of each mesh, by `Mesh` value.
-    pub(crate) ranges: &'a [Range<u32>; 4],
+    pub(crate) ranges: &'a [Range<u32>; Mesh::COUNT],
     pub(crate) width: u32,
     pub(crate) height: u32,
 }

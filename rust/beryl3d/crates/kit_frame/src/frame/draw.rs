@@ -22,7 +22,7 @@ pub struct Draw {
     pub layer: u16,
     /// A `Material` value.
     pub material: u8,
-    /// The texture array (bits 0 to 1), the mesh (bits 2 to 3) and the clip (bits 4 to 7).
+    /// The mesh and texture array packed together (bits 0 to 3), and the clip (bits 4 to 7).
     pub flags: u8,
     /// Color and opacity, not premultiplied.
     pub tint: [u8; 4],
@@ -50,7 +50,7 @@ pub enum Material {
     Gradient = 10,
 }
 
-/// The texture array a record samples, in bits 0 to 1 of `Draw::flags`.
+/// The texture array a record samples.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextureArray {
@@ -62,7 +62,7 @@ pub enum TextureArray {
     Atlas = 2,
 }
 
-/// The mesh a record is drawn with, in bits 2 to 3 of `Draw::flags`.
+/// The mesh a record is drawn with.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mesh {
@@ -77,6 +77,22 @@ pub enum Mesh {
     /// a whole square would shade the empty card-sized middle and the empty sides of its cell
     /// too, three quarters of its pixels.
     Outline = 3,
+    /// The ring of the halo sprite, omitting the clear centre and margins of the cell.
+    Halo = 4,
+}
+
+impl Mesh {
+    pub const COUNT: usize = 5;
+
+    /// The outer and inner half sizes of a ring mesh in local coordinates.
+    #[must_use]
+    pub const fn ring(self) -> Option<[[f32; 2]; 2]> {
+        match self {
+            Self::Outline => Some([sprites::OUTLINE_OUTER, sprites::OUTLINE_HOLE]),
+            Self::Halo => Some([sprites::HALO_OUTER, sprites::HALO_HOLE]),
+            _ => None,
+        }
+    }
 }
 
 /// A rectangle of one atlas page: `rect` is `[x, y, width, height]` in texels.
@@ -233,6 +249,11 @@ pub mod sprites {
     pub const HALO_CARD: [f32; 2] = [HALO_HEIGHT * DRAWN_CARD_SHAPE, HALO_HEIGHT];
     /// `HALO_CARD`'s height.
     const HALO_HEIGHT: f32 = 0.32;
+    /// Half sizes of the halo mesh's rectangles, in fractions of the atlas cell. The
+    /// outer rectangle contains the lit texels and the inner rectangle fits inside the
+    /// clear centre, each with room for bilinear filtering.
+    pub const HALO_OUTER: [f32; 2] = [117.0 / 256.0, 127.0 / 256.0];
+    pub const HALO_HOLE: [f32; 2] = [54.0 / 256.0, 77.0 / 256.0];
 
     /// The size to scale a quad drawn with `HALO` to, so that the card it lies round is `half`
     /// from its middle across and up.
@@ -251,9 +272,10 @@ pub mod sprites {
     }
 }
 
-const MESH_SHIFT: u8 = 2;
-const MESH_BITS: u8 = 0b1100;
+const ARRAY_COUNT: u8 = 3;
 const CLIP_SHIFT: u8 = 4;
+const BATCH_MASK: u8 = (1 << CLIP_SHIFT) - 1;
+const _: () = assert!(Mesh::COUNT * ARRAY_COUNT as usize <= 1 << CLIP_SHIFT);
 
 impl Draw {
     /// A solid shape of the table material, drawn in its tint. It reads no `uv` or `layer`, and
@@ -356,16 +378,18 @@ impl Draw {
         draw
     }
 
-    /// A glow `progress` of the way through, from 0 to 1. The outline is drawn with the mesh
-    /// that leaves out the parts of its cell it leaves empty, which shades the same pixels.
+    /// A glow `progress` of the way through, from 0 to 1. The outline and halo use meshes
+    /// that skip transparent parts of their sprites.
     #[must_use]
     pub fn glow(transform: Affine3A, tint: [u8; 4], sprite: Sprite, progress: f32) -> Self {
         let mut draw = Self::sprite(transform, tint, Material::Glow, sprite);
         draw.params = [progress, 0.0, 0.0, 0.0];
-        if sprite == sprites::OUTLINE {
-            draw.flags = (draw.flags & !MESH_BITS) | ((Mesh::Outline as u8) << MESH_SHIFT);
-        }
-        draw
+        let mesh = match sprite {
+            sprites::OUTLINE => Mesh::Outline,
+            sprites::HALO => Mesh::Halo,
+            _ => Mesh::Quad,
+        };
+        draw.with_mesh(mesh)
     }
 
     /// The same glow on a quad that narrows along its length (its local x), from `start` of its
@@ -586,14 +610,13 @@ impl Draw {
     /// card drawn with the edge strip mesh, which fades from the card's outline to one pixel
     /// outside it.
     #[must_use]
-    pub fn edge(mut self) -> Self {
+    pub fn edge(self) -> Self {
         debug_assert_eq!(
             self.material,
             Material::Card as u8,
             "only a card has an edge strip"
         );
-        self.flags = (self.flags & !MESH_BITS) | ((Mesh::CardEdge as u8) << MESH_SHIFT);
-        self
+        self.with_mesh(Mesh::CardEdge)
     }
 
     /// The same record, clipped to entry `clip` (1 to 15) of the frame's clips, or unclipped
@@ -601,7 +624,7 @@ impl Draw {
     #[must_use]
     pub fn with_clip(mut self, clip: u8) -> Self {
         debug_assert!(clip < 16, "a frame has 15 clips");
-        self.flags = (self.flags & 0x0f) | (clip << CLIP_SHIFT);
+        self.flags = (self.flags & BATCH_MASK) | (clip << CLIP_SHIFT);
         self
     }
 
@@ -609,6 +632,35 @@ impl Draw {
     #[must_use]
     pub fn clip(&self) -> u8 {
         self.flags >> CLIP_SHIFT
+    }
+
+    /// The mesh selected by the record.
+    #[must_use]
+    pub fn mesh(&self) -> Mesh {
+        match (self.flags & BATCH_MASK) / ARRAY_COUNT {
+            0 => Mesh::Card,
+            1 => Mesh::CardEdge,
+            2 => Mesh::Quad,
+            3 => Mesh::Outline,
+            4 => Mesh::Halo,
+            _ => unreachable!("invalid draw mesh"),
+        }
+    }
+
+    /// The texture array selected by the record.
+    #[must_use]
+    pub fn texture_array(&self) -> TextureArray {
+        match (self.flags & BATCH_MASK) % ARRAY_COUNT {
+            0 => TextureArray::SmallFaces,
+            1 => TextureArray::FullFaces,
+            _ => TextureArray::Atlas,
+        }
+    }
+
+    fn with_mesh(mut self, mesh: Mesh) -> Self {
+        self.flags =
+            (self.flags & !BATCH_MASK) | (mesh as u8 * ARRAY_COUNT + self.texture_array() as u8);
+        self
     }
 
     fn sprite(transform: Affine3A, tint: [u8; 4], material: Material, sprite: Sprite) -> Self {
@@ -630,7 +682,7 @@ impl Draw {
             uv: [0; 4],
             layer: 0,
             material: material as u8,
-            flags: (array as u8) | ((mesh as u8) << MESH_SHIFT),
+            flags: mesh as u8 * ARRAY_COUNT + array as u8,
             tint,
             params: [0.0; 4],
         }

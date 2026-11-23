@@ -4,7 +4,7 @@
 
 use std::ops::Range;
 
-use kit_frame::frame::{Band, Draw, Frame};
+use kit_frame::frame::{Band, Frame};
 
 /// The pipeline a record is drawn with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,14 +41,6 @@ pub struct Run {
     pub clip: u8,
     /// The records drawn, as a range of `Frame::draws`.
     pub records: Range<u32>,
-}
-
-fn mesh(draw: &Draw) -> u8 {
-    (draw.flags >> 2) & 0b11
-}
-
-fn array(draw: &Draw) -> u8 {
-    draw.flags & 0b11
 }
 
 /// The draw calls of `frame`, in drawing order.
@@ -100,23 +92,20 @@ impl Iterator for Runs<'_> {
         let draws = &self.frame.draws;
         let start = self.next;
         let first = draws.get(start as usize)?;
-        let key =
-            |index: u32, draw: &Draw| (self.pass(index), mesh(draw), array(draw), draw.clip());
-        let first_key = key(start, first);
+        let pass = self.pass(start);
         let mut end = start + 1;
         while let Some(draw) = draws.get(end as usize) {
-            if key(end, draw) != first_key {
+            if draw.flags != first.flags || self.pass(end) != pass {
                 break;
             }
             end += 1;
         }
         self.next = end;
-        let (pass, mesh, array, clip) = first_key;
         Some(Run {
             pass,
-            mesh,
-            array,
-            clip,
+            mesh: first.mesh() as u8,
+            array: first.texture_array() as u8,
+            clip: first.clip(),
             records: start..end,
         })
     }
@@ -126,7 +115,7 @@ impl Iterator for Runs<'_> {
 mod tests {
     use glam::Affine3A;
     use kit_base::atlas::{FaceSize, Tier};
-    use kit_frame::frame::{FrameBuilder, Sprite};
+    use kit_frame::frame::{Draw, FrameBuilder, Sprite};
 
     use super::*;
 

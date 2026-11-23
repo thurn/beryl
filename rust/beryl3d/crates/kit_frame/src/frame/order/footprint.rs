@@ -2,7 +2,7 @@
 
 use glam::{Mat4, Vec2, Vec4};
 
-use super::super::{Draw, Mesh, sprites};
+use super::super::{Draw, Mesh};
 
 /// The most vertices a quad has after being cut by the six planes of the view volume: each
 /// plane adds at most one.
@@ -93,21 +93,21 @@ fn bounds(mesh: Mesh, card: Vec2) -> Vec2 {
     match mesh {
         Mesh::Card | Mesh::CardEdge => card / 2.0,
         Mesh::Quad => Vec2::splat(0.5),
-        Mesh::Outline => Vec2::from(sprites::OUTLINE_OUTER),
+        Mesh::Outline | Mesh::Halo => Vec2::from(mesh.ring().expect("ring mesh has bounds")[0]),
     }
 }
 
 /// The part of the screen `draw` covers, as a fraction of the screen's area. The record's
-/// footprint is the rectangle that bounds its mesh, cut to the view volume, less the outline
-/// mesh's empty middle. The rounded corners of a card are counted as covered. The edge strip is
+/// footprint is the rectangle that bounds its mesh, cut to the view volume, less a ring mesh's
+/// empty middle. The rounded corners of a card are counted as covered. The edge strip is
 /// one pixel wide, so it is counted as covering nothing. A clip rectangle is not taken into
 /// account.
 pub(super) fn screen_area(draw: &Draw, view_projection: &Mat4, card: Vec2) -> f32 {
-    match mesh_of(draw) {
+    match draw.mesh() {
         Mesh::CardEdge => 0.0,
-        Mesh::Outline => {
-            rect_area(draw, view_projection, bounds(Mesh::Outline, card))
-                - rect_area(draw, view_projection, Vec2::from(sprites::OUTLINE_HOLE))
+        mesh @ (Mesh::Outline | Mesh::Halo) => {
+            let [outer, hole] = mesh.ring().expect("ring mesh has bounds").map(Vec2::from);
+            rect_area(draw, view_projection, outer) - rect_area(draw, view_projection, hole)
         }
         mesh => rect_area(draw, view_projection, bounds(mesh, card)),
     }
@@ -119,7 +119,7 @@ pub(super) fn screen_area(draw: &Draw, view_projection: &Mat4, card: Vec2) -> f3
 /// first. Depth and a clip rectangle are not taken into account, so the rectangle may be larger
 /// than what is drawn, never smaller.
 pub(super) fn screen_rect(draw: &Draw, view_projection: &Mat4, card: Vec2) -> Rect {
-    let half = bounds(mesh_of(draw), card);
+    let half = bounds(draw.mesh(), card);
     let m = &draw.model;
     let corner = |x: f32, y: f32| {
         *view_projection
@@ -194,13 +194,4 @@ fn cut(polygon: &mut [Vec4; CLIPPED_VERTICES], count: usize, plane: Vec4) -> usi
         }
     }
     out
-}
-
-fn mesh_of(draw: &Draw) -> Mesh {
-    match (draw.flags >> 2) & 0b11 {
-        0 => Mesh::Card,
-        1 => Mesh::CardEdge,
-        2 => Mesh::Quad,
-        _ => Mesh::Outline,
-    }
 }

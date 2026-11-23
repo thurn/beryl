@@ -8,7 +8,7 @@
 use beryl_assets::{Format, Prepared, dimensions};
 use kit_base::atlas::{AssetReady, FaceSize, Tier};
 use kit_base::data::lighting::Lighting;
-use kit_frame::frame::{Frame, TextureArray, Wake};
+use kit_frame::frame::{Frame, Mesh, TextureArray, Wake};
 use wgpu::util::DeviceExt;
 
 use crate::atlas::Atlas;
@@ -75,7 +75,7 @@ pub struct Renderer {
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     /// The index range of each mesh, by `Mesh` value.
-    ranges: [std::ops::Range<u32>; 4],
+    ranges: [std::ops::Range<u32>; Mesh::COUNT],
     /// The card size the card meshes in `vertices` were built at.
     card: Vec2,
     /// The board-size and full-size card face arrays, by `FaceSize` value.

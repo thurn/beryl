@@ -1,11 +1,11 @@
-//! The Baseline tier's four meshes (docs/beryl-3d.md, "The Baseline tier"): the card, the
-//! strip that softens its edge, a unit quad, and the ring of that quad the outline sprite
-//! covers. All four live in one vertex buffer and one
+//! The Baseline tier's meshes (docs/beryl-3d.md, "The Baseline tier"): the card, the
+//! strip that softens its edge, a unit quad, and rings for the outline and halo sprites.
+//! They share one vertex buffer and one
 //! index buffer, and the indices count from the start of the vertex buffer, so a draw call
 //! needs no base vertex (OpenGL ES 3.0 has none).
 
 use glam::Vec2;
-use kit_frame::frame::{Mesh, sprites};
+use kit_frame::frame::Mesh;
 
 /// The radius of a card's rounded corners, in millimetres.
 pub const CARD_RADIUS: f32 = 3.0;
@@ -35,10 +35,10 @@ pub struct Meshes {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u16>,
     /// The range of `indices` of each mesh, by `Mesh` value.
-    pub ranges: [std::ops::Range<u32>; 4],
+    pub ranges: [std::ops::Range<u32>; Mesh::COUNT],
 }
 
-/// Builds the four meshes, with the card `size` millimetres wide and high (`Frame::card`).
+/// Builds the meshes, with the card `size` millimetres wide and high (`Frame::card`).
 /// The number of vertices and indices does not depend on the size.
 #[must_use]
 pub fn meshes(size: Vec2) -> Meshes {
@@ -47,12 +47,14 @@ pub fn meshes(size: Vec2) -> Meshes {
     let card = card(size, &mut vertices, &mut indices);
     let edge = edge(size, &mut vertices, &mut indices);
     let quad = quad(&mut vertices, &mut indices);
-    let outline_ring = outline_ring(&mut vertices, &mut indices);
-    let mut ranges = [0..0, 0..0, 0..0, 0..0];
+    let mut ranges = std::array::from_fn(|_| 0..0);
     ranges[Mesh::Card as usize] = card;
     ranges[Mesh::CardEdge as usize] = edge;
     ranges[Mesh::Quad as usize] = quad;
-    ranges[Mesh::Outline as usize] = outline_ring;
+    for mesh in [Mesh::Outline, Mesh::Halo] {
+        let bounds = mesh.ring().expect("ring mesh has bounds");
+        ranges[mesh as usize] = ring(bounds, &mut vertices, &mut indices);
+    }
     Meshes {
         vertices,
         indices,
@@ -158,15 +160,17 @@ fn quad(vertices: &mut Vec<Vertex>, indices: &mut Vec<u16>) -> std::ops::Range<u
     range(indices, start)
 }
 
-/// The part of the unit quad that the outline sprite covers: the ring between the rectangles
-/// `sprites::OUTLINE_OUTER` and `sprites::OUTLINE_HOLE`, as four trapezoids, with texture
-/// coordinates that sample the sprite's cell where the quad would.
-fn outline_ring(vertices: &mut Vec<Vertex>, indices: &mut Vec<u16>) -> std::ops::Range<u32> {
+/// The ring between two rectangles, as four trapezoids. Texture coordinates sample the
+/// sprite at the same point in the cell as a full quad would.
+fn ring(
+    bounds: [[f32; 2]; 2],
+    vertices: &mut Vec<Vertex>,
+    indices: &mut Vec<u16>,
+) -> std::ops::Range<u32> {
     let start = indices.len();
     let base = first(vertices);
-    let [outer, hole] = [sprites::OUTLINE_OUTER, sprites::OUTLINE_HOLE];
     // The outer corners and then the inner ones, each counterclockwise from the bottom left.
-    for half in [outer, hole] {
+    for half in bounds {
         for (x, y) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
             let (x, y) = (x * half[0], y * half[1]);
             vertices.push(Vertex {
