@@ -3,6 +3,7 @@
 //! when the check passes, `green` moves or two hours pass.
 
 use ignite_core::ids::Commit;
+use ignite_core::protocol::hub::OpenRegression;
 use ignite_core::traits::Clock;
 
 use super::cli_tests::{cli, reserve, tick};
@@ -331,31 +332,63 @@ fn a_release_after_the_tip_result_was_unknown_starts_it() {
 }
 
 #[test]
-fn it_is_reported_once_unless_a_regression_names_the_check() {
+fn it_is_reported_once_when_the_hub_has_no_open_regression_for_the_check() {
     let (rig, _) = pool();
+    // An open ticket may mention a check it does not cover.
+    rig.hub.insert_ticket(super::tests::detail(
+        "R.1",
+        "open",
+        None,
+        &["regression"],
+        &format!("Also ran {CHECK} while investigating another failure."),
+    ));
     sighting(&rig, "cli-claude-00000001", "fail", "boom", 120.0);
     sighting(&rig, "cli-claude-00000002", "fail", "boom", 60.0);
     tick(&rig);
+
+    // Retry after a failed lookup so the hold still has a chance to be reported.
+    rig.hub.set_unreachable(true);
+    rig.headless_dispatch.report_shared(&rig.ctx, "jarvis");
+    assert!(rig.hub.justiciar_reports().is_empty());
+    rig.hub.set_unreachable(false);
+    rig.hub.set_open_regressions(Vec::new());
     rig.headless_dispatch.report_shared(&rig.ctx, "jarvis");
     rig.headless_dispatch.report_shared(&rig.ctx, "jarvis");
     let reports = rig.hub.justiciar_reports();
     assert_eq!(reports.len(), 1);
     assert_eq!(reports[0].subject, format!("shared:{CHECK}"));
     assert!(reports[0].on_machine);
+}
 
-    let (named, _) = pool();
-    named.hub.insert_ticket(super::tests::detail(
-        "R.1",
+#[test]
+fn a_grouped_regression_suppresses_the_report_but_keeps_the_local_hold() {
+    let (rig, fake) = pool();
+    let primary = "rust:beta::tests";
+    let mut regression = super::tests::detail(
+        "R.2",
         "open",
         None,
         &["regression"],
-        &format!("{CHECK} fails at the tip"),
-    ));
-    sighting(&named, "cli-claude-00000001", "fail", "boom", 120.0);
-    sighting(&named, "cli-claude-00000002", "fail", "boom", 60.0);
-    tick(&named);
-    named.headless_dispatch.report_shared(&named.ctx, "jarvis");
-    assert!(named.hub.justiciar_reports().is_empty());
+        &format!("{primary} fails at the tip"),
+    );
+    regression.ticket.title = format!("Regression: {primary}");
+    let ticket = regression.ticket.id.clone();
+    rig.hub.insert_ticket(regression);
+    rig.hub.set_open_regressions(
+        [primary, CHECK]
+            .into_iter()
+            .map(|check| OpenRegression {
+                check: check.parse().unwrap(),
+                ticket: ticket.clone(),
+            })
+            .collect(),
+    );
+    sighting(&rig, "cli-claude-00000001", "fail", "boom", 120.0);
+    sighting(&rig, "cli-claude-00000002", "fail", "boom", 60.0);
+    tick(&rig);
+    rig.headless_dispatch.report_shared(&rig.ctx, "jarvis");
+    assert!(rig.hub.justiciar_reports().is_empty());
+    assert!(master_only(&rig, &fake));
 }
 
 #[test]

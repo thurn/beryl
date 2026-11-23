@@ -21,8 +21,8 @@
 //! While it lasts, the hub is asked only for tickets that hold `master` back, as it is while
 //! commands wait long for cores (see `work`); `ignite status` and `ignite pool list` say why;
 //! each running worker of the pool gets one message, sent the way a stall reminder is; and the
-//! failure is reported once to the hub as a justiciar report, unless an open regression ticket
-//! already names the check.
+//! failure is reported once to the hub as a justiciar report, unless the check is already
+//! assigned to an open regression ticket.
 //!
 //! It ends when the check passes for any session on this machine, when the `green` branch moves,
 //! or after [`LAPSE_S`], whichever is first. Only failures seen after the end can start the next
@@ -34,7 +34,6 @@ use serde::{Deserialize, Serialize};
 
 use ignite_core::ids::Commit;
 use ignite_core::protocol::hub::JusticiarReport;
-use ignite_core::protocol::tickets::{Status, TicketQuery};
 use ignite_core::time::Timestamp;
 use ignite_store::local::rows::CheckSighting;
 
@@ -71,7 +70,7 @@ pub(super) struct SharedFailure {
     pub(super) green: Option<String>,
     /// The workers already sent the message.
     pub(super) messaged: BTreeSet<String>,
-    /// Reported to the hub, or found already named by an open regression ticket.
+    /// Reported to the hub, or covered by an open regression ticket.
     pub(super) reported: bool,
 }
 
@@ -302,26 +301,28 @@ impl HeadlessDispatch {
             .map(SharedFailure::reason)
     }
 
-    /// Reports the shared failure in force to the hub as a justiciar report, once, unless an
-    /// open regression ticket already names its check. Runs in the sender loop after a
+    /// Reports the shared failure in force to the hub as a justiciar report, once, unless its
+    /// check is already assigned to an open regression ticket. Runs in the sender loop after a
     /// heartbeat that reached the hub (see `justiciar::Reporter`). The hub is asked with the
     /// state unlocked.
     pub fn report_shared(&self, ctx: &Context, host: &str) {
         let Some(current) = self.state().shared.current.clone().filter(|c| !c.reported) else {
             return;
         };
-        let query = TicketQuery {
-            label_any: vec!["regression".to_owned()],
-            ..Default::default()
+        let open = match ctx.hub.open_regressions() {
+            Ok(open) => open,
+            Err(error) => {
+                eprintln!(
+                    "ignite: could not look up open regressions for {}: {error}",
+                    current.check
+                );
+                return;
+            }
         };
-        let Ok(tickets) = ctx.hub.tickets(&query) else {
-            return;
-        };
-        let named = tickets.iter().any(|t| {
-            t.status != Status::Closed
-                && (t.title.contains(&current.check) || t.body.contains(&current.check))
-        });
-        if !named {
+        if !open
+            .iter()
+            .any(|entry| entry.check.as_str() == current.check)
+        {
             let report = JusticiarReport {
                 subject: format!("shared:{}", current.check),
                 title: format!(
