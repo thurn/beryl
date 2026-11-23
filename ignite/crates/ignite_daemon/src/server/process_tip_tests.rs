@@ -104,6 +104,7 @@ impl TipWork for OneCheck {
             .map(|check| TipRun {
                 check: check.clone(),
                 input_hash: None,
+                failure_key: (outcome == Outcome::Fail).then(|| the_check(self.platform).key),
                 outcome,
                 output: None,
                 reason: None,

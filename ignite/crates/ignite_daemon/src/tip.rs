@@ -141,6 +141,8 @@ pub struct TipRun {
     pub check: CheckName,
     /// The hash the runner verified for a build or calibration-dependent check.
     pub input_hash: Option<ignite_core::ids::InputHash>,
+    /// The exact key of a failure the cache or runner verified.
+    pub failure_key: Option<ResultKey>,
     pub outcome: Outcome,
     /// The file or reference that holds a failure's output.
     pub output: Option<String>,
@@ -521,6 +523,7 @@ fn verdict(check: &TipCheck, outcome: Outcome, output: Option<String>) -> TipRun
     TipRun {
         check: check.check.clone(),
         input_hash: (check.is_build() || check.machine_relative).then(|| check.key.hash.clone()),
+        failure_key: (outcome == Outcome::Fail).then(|| check.key.clone()),
         outcome,
         output,
         reason: None,

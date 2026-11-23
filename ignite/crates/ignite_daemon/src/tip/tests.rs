@@ -707,6 +707,7 @@ fn an_output_path_in_a_cached_result_is_printed_and_not_opened() {
 }
 
 mod budget;
+mod confirm;
 mod coverage;
 mod culprit;
 mod green;

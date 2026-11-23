@@ -17,7 +17,7 @@ use super::*;
 
 /// A check named `<family>:<text>` reading `src/<text>`, with an input hash that differs per
 /// family and name.
-fn in_family(text: &str, family: &str) -> TipCheck {
+pub(super) fn in_family(text: &str, family: &str) -> TipCheck {
     let mut check = check(text, 'a');
     check.check = name(&format!("{family}:{text}"));
     check.key.check = check.check.clone();

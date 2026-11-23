@@ -205,6 +205,11 @@ fn options(rerun: bool) -> RunOptions {
 /// product its own family needs that failed, so the round reports each build once instead of
 /// once for each of its checks. `needs` lists the products of each family.
 pub(super) fn tip_runs(run: &CheckRun, needs: &HashMap<String, Vec<String>>) -> Vec<TipRun> {
+    let failed: HashMap<_, _> = run
+        .failed_keys
+        .iter()
+        .map(|key| (&key.check, key))
+        .collect();
     let build_of = |check: &CheckName| -> Option<(String, String)> {
         let products = needs
             .get(check.family())
@@ -229,6 +234,7 @@ pub(super) fn tip_runs(run: &CheckRun, needs: &HashMap<String, Vec<String>>) -> 
                 return TipRun {
                     check,
                     input_hash: None,
+                    failure_key: None,
                     outcome,
                     output: Some(build_output),
                     reason: None,
@@ -239,9 +245,12 @@ pub(super) fn tip_runs(run: &CheckRun, needs: &HashMap<String, Vec<String>>) -> 
             // to run, for a failed build say, was not reported by a command.
             // A failure whose run saved no output file still has the message the check printed,
             // which the regression ticket quotes instead of an empty section.
-            if outcome == Outcome::Fail {
+            let failure_key = if outcome == Outcome::Fail {
                 output = output.take().or(failure.and_then(|f| f.message.clone()));
-            }
+                failed.get(&check).copied().cloned()
+            } else {
+                None
+            };
             let reason = (outcome == Outcome::Incomplete).then(|| {
                 output = output.take().or(failure.and_then(|f| f.message.clone()));
                 failure
@@ -250,6 +259,7 @@ pub(super) fn tip_runs(run: &CheckRun, needs: &HashMap<String, Vec<String>>) -> 
             });
             TipRun {
                 input_hash: run.input_hashes.get(&check).cloned(),
+                failure_key,
                 check,
                 outcome,
                 output,
@@ -266,6 +276,7 @@ fn not_run<'a>(checks: impl Iterator<Item = &'a CheckName>, error: &Error) -> Ve
         .map(|check| TipRun {
             check: check.clone(),
             input_hash: None,
+            failure_key: None,
             outcome: Outcome::Incomplete,
             output: Some(error.to_string()),
             reason: None,

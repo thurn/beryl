@@ -85,6 +85,7 @@ fn incomplete(check: &TipCheck, reason: IncompleteReason) -> TipRun {
     TipRun {
         check: check.check.clone(),
         input_hash: None,
+        failure_key: None,
         outcome: Outcome::Incomplete,
         output: Some("the run's output".to_owned()),
         reason: Some(reason),

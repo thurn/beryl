@@ -217,19 +217,12 @@ impl TipVerifier {
             .map(|check| &check.key)
             .collect();
         let failed = |keys: &[ResultKey]| {
-            let checks: Vec<ResultKey> = keys
+            let checks = keys
                 .iter()
                 .filter(|key| required.contains(*key))
                 .cloned()
                 .collect();
-            if !checks.is_empty()
-                && let Err(error) = ctx.hub.tip_check_failures(&TipCheckFailures {
-                    commit: tip.clone(),
-                    checks,
-                })
-            {
-                eprintln!("ignite: required failures at {tip} not recorded: {error}");
-            }
+            observe_failures(ctx, tip, checks);
         };
         // Each family's thread works for the round's activity, so its builds run in the `tip`
         // class and `ignite status` shows which family it is on.
@@ -280,6 +273,18 @@ impl TipVerifier {
             .into_inner()
             .unwrap_or_else(PoisonError::into_inner);
         Ok((superseded, runs))
+    }
+}
+
+/// Lets newer staging compete when a required check has an exact failed result.
+pub(super) fn observe_failures(ctx: &Context, tip: &Commit, checks: Vec<ResultKey>) {
+    if !checks.is_empty()
+        && let Err(error) = ctx.hub.tip_check_failures(&TipCheckFailures {
+            commit: tip.clone(),
+            checks,
+        })
+    {
+        eprintln!("ignite: required failures at {tip} not recorded: {error}");
     }
 }
 

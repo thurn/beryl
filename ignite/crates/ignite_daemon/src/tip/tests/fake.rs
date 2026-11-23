@@ -311,6 +311,9 @@ impl TipWork for FakeWork {
                 input_hash: listed
                     .filter(|c| c.is_build() || c.machine_relative)
                     .map(|c| c.key.hash.clone()),
+                failure_key: listed
+                    .filter(|_| outcome == Outcome::Fail)
+                    .map(|c| c.key.clone()),
                 outcome,
                 output: (outcome == Outcome::Fail).then(|| {
                     let scripted = self.outputs.lock().unwrap().get(check).cloned();

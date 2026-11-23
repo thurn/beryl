@@ -9,7 +9,7 @@ use ignite_core::protocol::hub::{CachedResult, ResultKey, TipFailure, TipState, 
 use ignite_core::traits::{Push, Result};
 
 use super::coverage::{Required, Scope};
-use super::families::RunPhase;
+use super::families::{RunPhase, observe_failures};
 use super::round::require_running;
 use super::state::FailedTip;
 use super::{
@@ -27,6 +27,21 @@ pub(super) struct RunPlan<'a> {
 
 fn count(len: usize) -> u32 {
     u32::try_from(len).unwrap_or(u32::MAX)
+}
+
+fn observe_failed_verdicts<'a>(
+    ctx: &Context,
+    tip: &Commit,
+    required: impl Iterator<Item = &'a TipCheck>,
+    verdicts: &HashMap<ResultKey, TipRun>,
+) {
+    let keys = required
+        .filter_map(|check| {
+            let key = verdicts.get(&check.key)?.failure_key.as_ref()?;
+            (key == &check.key).then(|| key.clone())
+        })
+        .collect();
+    observe_failures(ctx, tip, keys);
 }
 
 impl TipVerifier {
@@ -171,6 +186,9 @@ impl TipVerifier {
                 .get(&check.key)
                 .is_some_and(|run| run.outcome == Outcome::Fail)
         });
+        if last != tip {
+            observe_failed_verdicts(ctx, tip, checks.iter(), &verdicts);
+        }
         let split = self.split(
             ctx,
             last,
@@ -181,16 +199,32 @@ impl TipVerifier {
         );
         tally.budget.clone_from(&split.budget);
         if !broken {
+            // Confirm cached failures before unrelated batches so a newer tip can be
+            // selected as soon as the failure repeats.
+            let (confirm, cache_disabled): (Vec<_>, Vec<_>) =
+                split.recheck.iter().copied().partition(|check| check.reuse);
+            self.run_rechecks(ctx, tip, &checks, &confirm, &mut verdicts, tally);
+            require_running()?;
+            if last != tip {
+                observe_failed_verdicts(ctx, tip, confirm.into_iter(), &verdicts);
+            }
             let (newer, runs) =
                 self.run_families(ctx, tip, &split.within, RunPhase::BeforeMaster)?;
             if let Some(by) = newer {
                 tally.ran = tally.ran.saturating_add(count(runs.len()));
-                let left = split::unrun(split.within.iter().chain(&split.after), &runs);
+                let left = split::unrun(
+                    split
+                        .within
+                        .iter()
+                        .chain(&cache_disabled)
+                        .chain(&split.after),
+                    &runs,
+                );
                 split::note_unrun(tally, left, Some(by.clone()));
                 return Ok(TipOutcome::Superseded { by });
             }
             self.record_runs(&checks, runs, &mut verdicts, tally);
-            self.run_rechecks(ctx, tip, &checks, &split.recheck, &mut verdicts, tally);
+            self.run_rechecks(ctx, tip, &checks, &cache_disabled, &mut verdicts, tally);
         }
         Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
         require_running()?;
