@@ -301,12 +301,15 @@ fn floating_bar(
         .align_items(Align::Stretch)
         .children(controls.map(|controls| controls.element))
         .children(others.clone().map(|button| slots.button(button)));
-    let over = if held_up && dock.is_none() {
-        dock_bottom
-    } else if beside_right > 0.0 {
+    let strip_over = if beside_right > 0.0 {
         slots.strip_top() - gap
     } else {
         (dock_bottom - height).min(slots.strip_top()) - gap
+    };
+    let over = if held_up && dock.is_none() {
+        dock_bottom
+    } else {
+        strip_over
     };
     let more = (!more.children.is_empty()).then(|| {
         let (width, tall) = others
@@ -342,7 +345,7 @@ fn floating_bar(
         more
     });
     let pill = (!asks.is_empty()).then(|| {
-        let place = PillPlace::beside_controls(slots.held, over, beside_left, beside_right);
+        let place = PillPlace::beside_controls(slots.held, strip_over, beside_left, beside_right);
         pill(asks, place, slots)
     });
     // The pill comes first, so that the buttons are drawn over it where they meet.

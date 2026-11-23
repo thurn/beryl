@@ -47,28 +47,70 @@ fn exiled(play: &Play, name: &str) -> ObjectId {
     play.named(name, ZoneName::Exile, Side::You)[0]
 }
 
-/// A few cards in a zone every player sees are picked where they lie, and one click on one
-/// answers: nothing is left to confirm.
+/// Even two cards in exile are laid out in a tray, as Arena's "Choose One" browser shows
+/// cards exiled with Currency Converter: a click picks one, another click takes its place,
+/// and Submit confirms.
 #[test]
-fn one_of_a_few_exiled_cards_is_chosen_by_a_click_on_it() {
+fn two_exiled_cards_are_chosen_from_a_tray_and_confirmed() {
     let mut play = Play::scenario(&converting(&[OUST, PLAINS]));
     to_the_choice(&mut play);
     let (oust, plains) = (exiled(&play, OUST), exiled(&play, PLAINS));
     let converter = play.named(CURRENCY_CONVERTER, ZoneName::Battlefield, Side::You)[0];
+    let offered: Vec<ObjectId> = (play.decision().candidates.iter())
+        .filter_map(|c| match c.option {
+            Candidate::Object { slot } => Some(slot),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(offered.len(), 2);
+    let tray: String = offered
+        .iter()
+        .map(|slot| format!("#{slot}"))
+        .collect::<Vec<_>>()
+        .join(" ");
     let open = format!(
         "pick choose: Choose One\n\
+         tray {tray}\n\
          picked 0 of 1\n\
-         eligible {}\n",
-        cards(&[oust, plains]),
+         eligible {}\n\
+         confirm(Submit 0)\n",
+        cards(&offered),
     );
     assert_eq!(play.prompt(), open);
-    // The Converter itself is not one of them.
+    // The Converter itself is not one of them, and Submit 0 does nothing while none is picked.
     assert_eq!(play.on(converter).as_deref(), Some(open.as_str()));
-    // Oust is not a land: it goes to the graveyard and a Rogue comes.
+    assert_eq!(
+        play.press(ButtonId::Confirm).as_deref(),
+        Some(open.as_str())
+    );
+    // Picking Plains selects it; picking Oust replaces it; Submit 1 puts Oust into the graveyard
+    // and creates a Rogue token.
+    assert_eq!(
+        play.on(plains).unwrap(),
+        format!(
+            "pick choose: Choose One\n\
+             tray {tray}\n\
+             picked 1 of 1: #{plains}\n\
+             eligible #{oust}\n\
+             selected #{plains}\n\
+             confirm[Submit 1]*\n",
+        )
+    );
+    assert_eq!(
+        play.on(oust).unwrap(),
+        format!(
+            "pick choose: Choose One\n\
+             tray {tray}\n\
+             picked 1 of 1: #{oust}\n\
+             eligible #{plains}\n\
+             selected #{oust}\n\
+             confirm[Submit 1]*\n",
+        )
+    );
     let mut picked = Play::scenario(&converting(&[OUST, PLAINS]));
     to_the_choice(&mut picked);
     picked.choose(|c| *c == Candidate::Object { slot: oust });
-    assert_eq!(play.on(oust), None, "the click answers");
+    assert_eq!(play.press(ButtonId::Confirm), None, "Submit 1 answers");
     assert_eq!(play.game.state(), picked.game.state());
     assert_eq!(play.game.replay().log, picked.game.replay().log);
     assert_eq!(play.named(OUST, ZoneName::Graveyard, Side::You).len(), 1);
@@ -289,4 +331,65 @@ fn an_untap_among_many_lands_picks_them_where_they_lie() {
     let after = play.on(unpicked).unwrap();
     assert!(!after.contains("tray"), "{after}");
     assert!(after.contains(&format!("#{unpicked}")), "{after}");
+}
+
+/// Choosing one of two cards in a graveyard opens in a tray with Submit, while choosing one of
+/// two permanents on the battlefield stays on the table and answers on a click.
+#[test]
+fn a_graveyard_pick_uses_a_tray_while_a_battlefield_pick_stays_on_the_table() {
+    const GRAVEYARD_AND_BOARD: Scenario = Scenario::new("graveyard vs battlefield choose")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(MANA_CRYPT)])
+        .graveyard(P0, &[OUST, COUNTERSPELL])
+        .library(P0, &[PLAINS; 6])
+        .library(P1, &[PLAINS; 6]);
+    let (table, state) = position(&GRAVEYARD_AND_BOARD);
+
+    let graveyard = state.zone(ZoneKey::Of(Seat::P0, Zone::Graveyard));
+    let gy_decision = Decision::objects(
+        Seat::P0,
+        DecisionKind::ChooseObject,
+        graveyard,
+        Prompt::new(Purpose::Choose).most(1),
+    );
+    let gy_view = asked(&table, &state, &gy_decision);
+    let gy_held = Held::opening(&gy_view, &state, &table, Some(&gy_decision))
+        .expect("graveyard pick is held");
+    let ShapeBody::Pick { tray, .. } = &gy_held.view().body else {
+        panic!("graveyard pick has pick body");
+    };
+    assert_eq!(tray.len(), 2, "graveyard cards open in a tray: {tray:?}");
+    assert!(
+        gy_held
+            .view()
+            .buttons
+            .iter()
+            .any(|b| b.id == ButtonId::Confirm && !b.enabled),
+        "tray pick waits for Submit: {:?}",
+        gy_held.view().buttons
+    );
+
+    let permanents = (state.battlefield().iter())
+        .fold(Bitboard::EMPTY, |all, &slot| all | Bitboard::single(slot));
+    let bf_decision = Decision::objects(
+        Seat::P0,
+        DecisionKind::ChooseObject,
+        permanents,
+        Prompt::new(Purpose::Choose).most(1),
+    );
+    let bf_view = asked(&table, &state, &bf_decision);
+    let bf_held = Held::opening(&bf_view, &state, &table, Some(&bf_decision))
+        .expect("battlefield pick is held");
+    let ShapeBody::Pick { tray, .. } = &bf_held.view().body else {
+        panic!("battlefield pick has pick body");
+    };
+    assert!(
+        tray.is_empty(),
+        "battlefield permanents stay on the table: {tray:?}"
+    );
+    assert!(
+        bf_held.view().buttons.is_empty(),
+        "single battlefield pick answers by click: {:?}",
+        bf_held.view().buttons
+    );
 }

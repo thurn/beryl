@@ -23,11 +23,6 @@ use crate::protocol::ObjectId;
 use crate::protocol::{Candidate, DecisionView, ObjectView, Side, TargetRef, ZoneName};
 use crate::script::{Mark, Subject};
 
-/// The most cards in a graveyard or exile that a choice among cards picks where they lie: past
-/// it they are laid out in a tray. Permanents and spells are always picked where they lie,
-/// however many there are, since the table shows each of them.
-const ON_THE_TABLE: usize = 5;
-
 /// The state of a prompt of the pick shape.
 #[derive(Clone, Debug)]
 pub(crate) enum Pick {
@@ -273,11 +268,10 @@ impl Objects {
 
     /// A choice among cards and permanents for an effect or a rule: an untap of lands, the
     /// legend to keep, a card. Permanents and spells are picked where they lie, as Arena picks
-    /// the lands of an untap on the battlefield however many there are. Cards in a graveyard
-    /// or exile, where the table shows only the top card, are picked where they lie only when
-    /// they are few; every player sees them there ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002):
-    /// "Graveyard, battlefield, stack, exile, ante, and command are public zones"). Anything
-    /// else is picked from a tray.
+    /// the lands of an untap on the battlefield however many there are. Cards in any other zone
+    /// — a graveyard, exile, a hand or a library — are laid out in a tray so every eligible
+    /// card is shown prominently, as Arena's "Choose One" browser shows cards exiled with
+    /// Currency Converter (`WCknTZNbraE 53:53.0`, `5UHzpVvUkfI 25:17.0`, `3sEoP_s4DQE 27:06.0`).
     fn on_table<L: Layout>(
         table: &Table<'_, L>,
         purpose: Purpose,
@@ -289,16 +283,19 @@ impl Objects {
         let objects = &table.view.objects;
         let zone = |&slot: &ObjectId| object(objects, slot).map(|o| o.zone);
         let shown = |slot| matches!(zone(slot), Some(ZoneName::Battlefield | ZoneName::Stack));
-        let public =
-            |slot| shown(slot) || matches!(zone(slot), Some(ZoneName::Graveyard | ZoneName::Exile));
-        let few = offered.len() <= ON_THE_TABLE;
-        let tray = if offered.iter().all(shown) || (few && offered.iter().all(public)) {
-            Vec::new()
-        } else {
-            offered.clone()
-        };
         let mut eligible: Vec<Subject> = offered.iter().copied().map(card).collect();
         with_stand_ins(table, &mut eligible);
+        let tray = if offered.iter().all(shown) {
+            Vec::new()
+        } else {
+            eligible
+                .iter()
+                .filter_map(|&on| match on {
+                    Subject::Object { slot } => Some(slot),
+                    _ => None,
+                })
+                .collect()
+        };
         let all = u8::try_from(eligible.len()).unwrap_or(u8::MAX);
         let most = table.record.most.max(1).min(all);
         let picked = if purpose == Purpose::Untap {

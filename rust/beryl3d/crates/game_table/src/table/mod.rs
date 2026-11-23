@@ -73,15 +73,20 @@ pub const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.line_heigh
 pub use kit_base::geometry::{RowWindow, Window};
 
 /// Whether a card resting at `place` takes the pointer, once it is face up and the viewer knows
-/// its name: one on the battlefield, on the stack or in the viewer's hand. A pile is one
-/// element, so no card in it does. The table leaves out a face-up card with no name, such as a
-/// copy of a face-down creature, because every interactive element has a name.
+/// its name: one on the battlefield (including cards tucked under a permanent in exile), on the
+/// stack or in the viewer's hand. A pile is one element, so no card in it does. The table
+/// leaves out a face-up card with no name, such as a copy of a face-down creature, because
+/// every interactive element has a name.
 #[must_use]
 pub fn takes_pointer(place: Place) -> bool {
     matches!(
         place,
         Place::Card {
             zone: ZoneName::Battlefield | ZoneName::Stack,
+            ..
+        } | Place::Card {
+            zone: ZoneName::Exile,
+            row: Some(_),
             ..
         } | Place::Card {
             zone: ZoneName::Hand,

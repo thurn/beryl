@@ -169,3 +169,49 @@ fn a_player_is_picked_by_a_press_on_their_life_total() {
         "the answer closed the prompt"
     );
 }
+
+#[test]
+fn choosing_among_two_exiled_cards_opens_a_prominent_tray_in_both_layouts() {
+    let cases = [
+        (SizeClass::Regular, SIZE),
+        (
+            SizeClass::Compact,
+            Size {
+                width: 393.0,
+                height: 759.0,
+            },
+        ),
+    ];
+    for (size_class, size) in cases {
+        let mut page = page("converter-choose", Side::You, size_class, size)
+            .unwrap_or_else(|why| panic!("{why}"));
+        let moment = Moment::from_str("prompt:7").unwrap();
+        page.seek(&moment).unwrap_or_else(|why| panic!("{why}"));
+        page.step(Duration::from_millis(400));
+
+        let tundra = page.find("card \"Tundra\"");
+        let counterspell = page.find("card \"Counterspell\"");
+        for card in [&tundra, &counterspell] {
+            assert!(card.interactive, "{size_class:?}: card must be clickable");
+            assert!(
+                card.states().has(StateBits::ELIGIBLE),
+                "{size_class:?}: card must be eligible"
+            );
+            assert!(
+                card.rect().width > size.width * 0.12,
+                "{size_class:?}: card held up prominently in tray: {:?}",
+                card.rect()
+            );
+        }
+        assert!(
+            (tundra.rect().x - counterspell.rect().x).abs() > tundra.rect().width,
+            "{size_class:?}: exiled cards sit side by side without overlapping"
+        );
+        let submit = page.find("button \"Submit 0\"");
+        assert!(
+            submit.states().has(StateBits::DISABLED),
+            "{size_class:?}: Submit 0 starts disabled"
+        );
+        page.check();
+    }
+}

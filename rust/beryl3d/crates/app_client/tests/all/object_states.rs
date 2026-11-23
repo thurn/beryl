@@ -135,6 +135,61 @@ fn the_card_under_a_merged_permanent_peeks_out_to_its_left_and_away() {
 }
 
 #[test]
+fn a_card_exiled_under_a_permanent_is_interactive_and_not_the_exile_pile() {
+    let mut builder = ViewBuilder::sample();
+    let host = {
+        let card = builder.card(ZoneName::Battlefield, Side::You, "Currency Converter");
+        card.types = vec![CardType::Artifact];
+        card.slot
+    };
+    let exiled = {
+        let card = builder.card(ZoneName::Exile, Side::You, "Reprieve");
+        card.exiled_with = Some(host);
+        card.slot
+    };
+    let mut view = builder.build();
+    view.script = Some(ScriptBuilder::reset().build());
+    let mut client = client();
+    client.handle(Input::Update(Box::new(beryl_protocol::GameUpdate {
+        session: beryl_protocol::protocol::SessionId(1),
+        view,
+    })));
+    let frame = client.frame(0).clone();
+    let under = card(&frame, exiled);
+    assert_eq!(
+        under.place,
+        Place::Card {
+            zone: ZoneName::Exile,
+            side: Side::You,
+            row: Some(beryl_protocol::protocol::RowName::Others),
+        }
+        .into()
+    );
+    assert!(under.interactive, "tucked exiled card takes pointer input");
+    // Pressing the tucked card must not open the exile pile viewer.
+    let at = middle(under);
+    let pointer = |phase| {
+        Input::Device(kit_ui::input::Input::Pointer(kit_ui::input::Pointer {
+            id: 0,
+            kind: kit_ui::input::PointerKind::Mouse,
+            phase,
+            position: at,
+            button: kit_ui::input::Button::Primary,
+            wheel: glam::Vec2::ZERO,
+            modifiers: kit_ui::input::Modifiers::default(),
+        }))
+    };
+    client.handle(pointer(kit_ui::input::PointerPhase::Down));
+    client.handle(pointer(kit_ui::input::PointerPhase::Up));
+    let after = client.frame(16_000_000).clone();
+    let printed = tree(&after, &TreeOptions::default()).unwrap();
+    assert!(
+        !printed.contains("Exile"),
+        "clicking a tucked exiled card must not open the exile pile viewer:\n{printed}"
+    );
+}
+
+#[test]
 fn a_phased_out_permanent_is_faded_and_a_copy_names_its_card() {
     let (frame, slots) = frame();
     let phased = card(&frame, slots.phased);

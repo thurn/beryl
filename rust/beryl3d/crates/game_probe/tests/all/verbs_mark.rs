@@ -391,3 +391,69 @@ fn the_marks_check_faults_an_outline_moved_off_its_card_or_narrower_than_it() {
     }
     assert!(checked > 10, "the outline was drawn: {checked} frames");
 }
+
+/// On a crowded battlefield row whose scale shrinks the layer spacing below `light.lift`, a
+/// lower tucked card's mark outline must still stay strictly between its own face and the card
+/// stacked on top of it along the face normal so it never slices through the front card.
+#[test]
+fn a_tucked_cards_outline_stays_behind_the_card_stacked_over_it() {
+    use beryl_protocol::protocol::{CardType, ZoneName};
+    use beryl_protocol::testing::ViewBuilder;
+
+    let mut builder = ViewBuilder::sample();
+    let host = {
+        let card = builder.card(ZoneName::Battlefield, Side::You, "Currency Converter");
+        card.types = vec![CardType::Artifact];
+        card.tapped = true;
+        card.slot
+    };
+    let first = {
+        let card = builder.card(ZoneName::Exile, Side::You, "Plains");
+        card.exiled_with = Some(host);
+        card.slot
+    };
+    let second = {
+        let card = builder.card(ZoneName::Exile, Side::You, "Reprieve");
+        card.exiled_with = Some(host);
+        card.slot
+    };
+    let mut view = builder.build();
+    view.script = Some(ScriptBuilder::reset().build());
+    let start = GameUpdate {
+        session: beryl_protocol::protocol::SessionId(1),
+        view,
+    };
+    let begun = marked(&start, Edge::Begin, Mark::Eligible, card(second));
+    let (show, frames) = play(&[start, begun]);
+    let (_, last) = frames.last().expect("frames");
+    let first_pose = show
+        .pose(usize::from(first.0), 0)
+        .expect("front tucked card");
+    let second_pose = show
+        .pose(usize::from(second.0), 0)
+        .expect("back tucked card");
+    assert!(
+        second_pose.position.z < first_pose.position.z,
+        "second tucked card lies behind the first"
+    );
+    let normal = second_pose.rotation * Vec3::Z;
+    let ring = last
+        .rings
+        .iter()
+        .find(|ring| {
+            last.decoration_of(ring.element)
+                == Some(ShapeAnchor::Outline(ElementId(u32::from(second.0))))
+        })
+        .expect("back tucked card has an outline");
+    let mark_center = Vec3::new(ring.model[3], ring.model[7], ring.model[11]);
+    let mark_above_back = (mark_center - second_pose.position).dot(normal);
+    let front_above_back = (first_pose.position - second_pose.position).dot(normal);
+    assert!(
+        mark_above_back > 0.0,
+        "mark lies in front of its own face: {mark_above_back}"
+    );
+    assert!(
+        mark_above_back <= front_above_back * 0.5 + 1e-4,
+        "mark ({mark_above_back}) must stay strictly behind the front tucked card ({front_above_back})"
+    );
+}

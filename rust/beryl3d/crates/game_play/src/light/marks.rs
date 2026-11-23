@@ -131,6 +131,19 @@ pub fn player_faces(
         })
 }
 
+/// The centre of a mark lifted above its card's face along the face normal. Cards in a
+/// battlefield row are separated in Z by `card.layer * scale`, which is
+/// `card.layer * scale * normal.z` along the tilted normal, so table marks clamp their lift to
+/// half that spacing and never poke through a card stacked in front of them.
+fn lifted_position(pose: &Pose, band: Band, light: &Light, layer: f32) -> Vec3 {
+    let normal = pose.rotation * Vec3::Z;
+    let height = if band == Band::TableMarks && normal.z.abs() > 0.1 {
+        light.lift.min(0.5 * layer * pose.scale * normal.z.abs())
+    } else {
+        light.lift
+    };
+    pose.position + normal * height
+}
 /// Writes the records of the marks in `lit` as they are at `now`: for each, quads lying just
 /// over the face of the thing it is on, so that they move and turn with it. Two marks on one
 /// card or ability are both drawn over the same box, as the web's are. A mark on an object
@@ -156,8 +169,8 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         let reach = target.reach;
         let pose = reach.pose;
         let tint = faded(tint(mark), shown);
-        let position = pose.position + pose.rotation * Vec3::Z * light.lift;
         let band = target.band.records(band(light, on, &pose));
+        let position = lifted_position(&pose, band, light, scene.table().camera().data.card.layer);
         let camera = scene.table().camera();
         let node = MarkNode {
             index,

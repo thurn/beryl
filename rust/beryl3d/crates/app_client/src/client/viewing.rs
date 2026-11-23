@@ -370,7 +370,12 @@ pub(super) fn pointer_pile(
     no_sheet: bool,
     manual_library: bool,
 ) -> Option<Viewed> {
-    let Some(Place::Card { zone, side, .. }) = Place::in_frame(place) else {
+    let Some(Place::Card {
+        zone,
+        side,
+        row: None,
+    }) = Place::in_frame(place)
+    else {
         return None;
     };
     let opens = match screen {
