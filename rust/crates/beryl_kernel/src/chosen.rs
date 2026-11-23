@@ -36,7 +36,8 @@ pub enum ChosenValue<L: Layout = Small> {
     /// names.
     CreatureType(Option<u8>),
     /// A card name, numbered by the game table, or `None` for a name no card of the game has.
-    /// Front faces keep their card's index. Split back faces have their own numbers after them.
+    /// Front faces keep their card's index. Second faces or halves have their own numbers
+    /// after the card indices.
     Name(Option<L::Card>),
     /// A color word or a basic land type a text-changing effect names
     /// ([`beryl_card::TextWord`]), by its number, which a byte holds where the word would
@@ -74,8 +75,7 @@ impl<L: Layout> ChosenValue<L> {
         let words = (kind == ChosenKind::Word).then_some(0..TextWord::COUNT);
         let creature_types = (kind == ChosenKind::CreatureType)
             .then(|| t.subtypes().creature_types().map(|(n, _)| n));
-        // A layout whose card index is wider than a byte numbers a name past ANOTHER; no
-        // pair of decklists gives a game that many cards.
+        // The prompt uses byte values and reserves ANOTHER for the generic choice.
         let names = (kind == ChosenKind::CardName).then(|| {
             (t.names().iter()).filter_map(|&i| u8::try_from(i).ok().filter(|&n| n < ANOTHER))
         });

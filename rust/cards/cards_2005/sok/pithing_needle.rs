@@ -82,6 +82,20 @@ pub mod scenarios {
                 ME.chooses_color(Colors::RED),
                 ME.tapped(MOTHER, 1),
             ]),
+        Scenario::new("Pithing Needle can name either face of a double-faced card")
+            .interaction(&[Card::GlasspoolMimic])
+            .battlefield(P0, &[Card::Island, Card::Island])
+            .hand(P0, &[NEEDLE, NEEDLE, Card::Island, Card::GlasspoolMimic])
+            .actions(&[
+                ME.casts(NEEDLE),
+                Resolve,
+                ME.deciding(DecisionKind::ChooseObject, 5),
+                ME.names(Card::GlasspoolMimic),
+                ME.casts(NEEDLE),
+                Resolve,
+                ME.names("Glasspool Shore"),
+                ME.controls(NEEDLE, 2),
+            ]),
         // Loyalty abilities are activated abilities (CR 606.4).
         needle("naming a planeswalker stops its loyalty abilities")
             .battlefield(P0, &[Card::Island, JACE])

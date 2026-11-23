@@ -170,11 +170,9 @@ pub struct GameTable {
     pub(crate) restrictions: Vec<&'static ManaRestriction>,
     /// The subtypes the cards of the game name, numbered.
     subtypes: SubtypeNumbers,
-    /// The game index of each name a player may choose that the game has a card of: the
-    /// first index with each name among the cards that are not tokens or emblems
-    /// ([`GameTable::names`]).
+    /// Catalog numbers for the distinct names a player may choose ([`GameTable::names`]).
     names: Vec<usize>,
-    /// Names of split halves and prepare spells. Their catalog numbers start after the card indices.
+    /// Additional face names. Their catalog numbers start after the card indices.
     additional_face_names: Vec<&'static str>,
     /// Per game index, the printed subtypes of its first two faces by those numbers.
     face_subtypes: Vec<[GameSubtypes; 2]>,

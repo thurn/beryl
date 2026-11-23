@@ -6,6 +6,11 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Pithing Needle omitted the back name of a double-faced card.** The name
+  catalog added a second name only for split cards. It now also records the back
+  names of modal and transforming double-faced cards. A Pithing Needle scenario
+  chooses Glasspool Mimic and Glasspool Shore in the same game.
+
 - **Linked exile could leave a spell's entry on the stack.** Linked exile moved
   a card directly to exile without removing its spell. It now uses the same
   stack removal as other exile effects. The Knowledge Pool scenarios check that

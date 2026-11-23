@@ -7,24 +7,30 @@ use beryl_card::{CardDef, FACE_DOWN_COPY, FaceIx};
 
 use super::GameTable;
 
-/// The game index of each distinct name among `defs` that a card has ([`GameTable::names`]):
-/// not a token's or an emblem's, which some card of `defs` lists among what it creates, and
-/// not [`FACE_DOWN_COPY`]'s, which is no card's. A split card contributes each half's name
-/// (see [CR 709.4a]): "Each split card has two names." See [CR 723.5] for a preparation
-/// card: "If an effect instructs a player to choose a card name and the player wants to
-/// choose a preparation card’s alternative name, the player may do so."
+/// The catalog numbers and additional face names for the cards in `defs` ([`GameTable::names`]).
+/// The catalog skips tokens, emblems and [`FACE_DOWN_COPY`]. A split card contributes each
+/// half's name (see [CR 709.4a], "Each split card has two names.").
 ///
+/// For preparation cards, see [CR 723.5], "If an effect instructs a player to choose a card
+/// name and the player wants to choose a preparation card’s alternative name, the player may
+/// do so."
+///
+/// [CR 201.4d] says "If a player wants to choose the name of the back face of a double-faced
+/// card, the player may do so."
+///
+/// [CR 201.4d]: https://yawgatog.com/resources/magic-rules/#R2014d
 /// [CR 723.5]: https://yawgatog.com/resources/magic-rules/#R7235
 /// [CR 709.4a]: https://yawgatog.com/resources/magic-rules/#R7094a
 pub(super) fn card_names(defs: &[&'static CardDef]) -> (Vec<usize>, Vec<&'static str>) {
-    let made = |def: &CardDef| {
-        defs.iter()
-            .any(|d| d.tokens.iter().any(|&token| std::ptr::eq(token, def)))
+    let is_card = |def: &CardDef| {
+        !std::ptr::eq(def, &raw const FACE_DOWN_COPY)
+            && !defs
+                .iter()
+                .any(|d| d.tokens.iter().any(|&token| std::ptr::eq(token, def)))
     };
     let mut names: Vec<usize> = Vec::new();
     for (i, &def) in defs.iter().enumerate() {
-        let card = !std::ptr::eq(def, &raw const FACE_DOWN_COPY) && !made(def);
-        if card
+        if is_card(def)
             && !names
                 .iter()
                 .any(|&n| defs[n].face_name(FaceIx::FRONT) == def.face_name(FaceIx::FRONT))
@@ -32,23 +38,29 @@ pub(super) fn card_names(defs: &[&'static CardDef]) -> (Vec<usize>, Vec<&'static
             names.push(i);
         }
     }
-    let mut backs = Vec::new();
-    for &i in &names {
-        let def = defs[i];
-        if matches!(def.shape, Shape::Split { .. } | Shape::Prepared) {
-            let name = def.face_name(FaceIx::BACK);
-            if !name.is_empty()
-                && !backs.contains(&name)
-                && !names
-                    .iter()
-                    .any(|&n| defs[n].face_name(FaceIx::FRONT) == name)
-            {
-                backs.push(name);
-            }
+    // Keep existing split and preparation choices at their catalog numbers.
+    let split_and_prepared_cards = names
+        .iter()
+        .map(|&i| defs[i])
+        .filter(|def| matches!(def.shape, Shape::Split { .. } | Shape::Prepared));
+    let double_faced_cards = defs
+        .iter()
+        .copied()
+        .filter(|def| def.shape.is_double_faced() && is_card(def));
+    let mut additional_face_names = Vec::new();
+    for def in split_and_prepared_cards.chain(double_faced_cards) {
+        let name = def.face_name(FaceIx::BACK);
+        if !name.is_empty()
+            && !additional_face_names.contains(&name)
+            && !names
+                .iter()
+                .any(|&n| defs[n].face_name(FaceIx::FRONT) == name)
+        {
+            additional_face_names.push(name);
         }
     }
-    names.extend(defs.len()..defs.len() + backs.len());
-    (names, backs)
+    names.extend(defs.len()..defs.len() + additional_face_names.len());
+    (names, additional_face_names)
 }
 
 impl GameTable {
