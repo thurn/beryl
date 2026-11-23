@@ -177,6 +177,19 @@ impl Ctx {
         format!("the top {cards} of {whose} library")
     }
 
+    /// A fixed number of cards goes on top, or any number goes on the bottom.
+    pub(super) fn put_from_hand(&mut self, player: Players, count: Option<Amount>) -> Vec<String> {
+        vec![self.clause(player, ("put", "puts"), |c| {
+            let whose = c.possessive(player);
+            if let Some(count) = count {
+                let cards = c.count_of(count, "card", "cards");
+                format!("{cards} from {whose} hand on top of {whose} library in any order")
+            } else {
+                format!("any number of cards from {whose} hand on the bottom of {whose} library")
+            }
+        })]
+    }
+
     /// "Put [objects] into their owners' libraries [position]" (CR 400.3).
     pub(super) fn put_into_library(
         &mut self,

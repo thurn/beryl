@@ -473,6 +473,9 @@ impl Ctx {
             Amount::Fixed(n) => counted(n, singular, plural),
             Amount::X => format!("X {plural}"),
             Amount::ThatMany => format!("that many {plural}"),
+            Amount::Plus(n, Amount::ThatMany) => {
+                format!("that many {plural} plus {}", super::words::number(n))
+            }
             Amount::ThoseOf(players) => {
                 let who = match players {
                     Players::ThatPlayer => "they".to_owned(),

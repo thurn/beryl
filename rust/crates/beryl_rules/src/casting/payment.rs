@@ -238,6 +238,7 @@ fn unless_discards<L: Layout>(
         | Effect::ReturnTransformed(_)
         | Effect::PutIntoLibrary { .. }
         | Effect::PutBack { .. }
+        | Effect::PutAnyOnBottom { .. }
         | Effect::ShuffleInto { .. }
         | Effect::Dig { .. }
         | Effect::ExileUntil { .. }

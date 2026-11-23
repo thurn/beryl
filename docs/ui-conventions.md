@@ -561,6 +561,10 @@ recordings do not show them.
   player's own. Only the opponent's manifest dread, fateseal and put-back are
   seen, and games begin with the first player chosen (pE4XSNi-nZc 28:43.5,
   pE4XSNi-nZc 34:55.0, pE4XSNi-nZc 27:18.0, 0VsYGs88NXA 16:58.0).
+- **Hand cards put on the bottom.** The split prompt is headed "Put cards on the
+  bottom." The player orders any cards they put on the bottom and can press Done
+  with all their cards in hand. The opponent resolves the spell and draws cards.
+  Their choice is hidden (kvVLJ_cS_KE 21:54.5).
 - **The phone.** It plays what the desktop plays; its layout and gestures are
   Beryl's own. Every motion is one of the desktop's verbs between the phone's
   places. A card flies between your hand's fan, the stack in the middle band and

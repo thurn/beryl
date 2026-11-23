@@ -13,7 +13,8 @@ use crate::effect::build::may;
 use crate::effect::build::{
     carried_object, counter, deal_damage_to, deal_damage_to_any_target, delay_with, destroy, dig,
     discard, draw, exile, exile_until_this_leaves, flip_coin, if_then, if_you_lose_the_flip,
-    may_cast_free, put_back, return_to_battlefield, sequence, target, this, those, you,
+    may_cast_free, put_any_on_bottom, put_back, return_to_battlefield, sequence, target, this,
+    those, you,
 };
 use crate::effect::{Amount, Comparison, Condition, Effect, LibraryOrder, Objects, Players, Taken};
 use crate::filter::Filter;
@@ -44,6 +45,22 @@ fn an_effect_renders_as_its_oracle_sentence() {
         render(&JACE),
         "0: Draw three cards, then put two cards from your hand on top of your library in any \
          order."
+    );
+}
+
+#[test]
+fn any_number_from_hand_and_a_draw_of_that_many_plus_one_render_as_one_sentence() {
+    static EFFECT: Effect = sequence(&[
+        put_any_on_bottom(you()),
+        Effect::Draw {
+            player: you(),
+            count: Amount::Plus(1, &Amount::ThatMany),
+        },
+    ]);
+    assert_eq!(
+        render_ability(&Ability::spell().effect(&EFFECT)),
+        "Put any number of cards from your hand on the bottom of your library, then draw that \
+         many cards plus one."
     );
 }
 

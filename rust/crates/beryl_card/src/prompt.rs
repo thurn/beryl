@@ -223,7 +223,8 @@ purposes! {
     /// or more cards in a specific position in a library at the same time, the owner of those
     /// cards may arrange them in any order."
     Arrange = "arrange" => Split,
-    /// Cards from the hand put on top of the library in an order, the rest staying.
+    /// Cards from the hand put on top or on the bottom of the library in an order,
+    /// the rest staying.
     PutBack = "put-back" => Split,
     /// Whether to do what a "may" allows, where no purpose below names it (CR 608.2d).
     May = "may" => YesNo,

@@ -26,6 +26,7 @@ impl Effect {
             // The two words are chosen as it resolves.
             | Effect::ChangeText { .. }
             | Effect::PutBack { .. }
+            | Effect::PutAnyOnBottom { .. }
             | Effect::Dig { .. }
             | Effect::Fateseal { .. }
             | Effect::Wish { .. }
@@ -170,6 +171,7 @@ impl Effect {
             | Effect::ReturnTransformed(_)
             | Effect::PutIntoLibrary { .. }
             | Effect::PutBack { .. }
+            | Effect::PutAnyOnBottom { .. }
             | Effect::ShuffleInto { .. }
             | Effect::Dig { .. }
             | Effect::ExileUntil { .. }

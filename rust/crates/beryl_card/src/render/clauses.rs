@@ -422,7 +422,7 @@ fn joined_by_then(before: &Effect, after: &Effect) -> bool {
             Effect::Draw { .. },
             Effect::Discard { .. } | Effect::PutBack { .. }
         ) | (
-            Effect::Discard { .. } | Effect::ShuffleInto { .. },
+            Effect::Discard { .. } | Effect::ShuffleInto { .. } | Effect::PutAnyOnBottom { .. },
             Effect::Draw { .. }
         ) | (
             Effect::Exile(Objects::InZoneOf { .. }),
@@ -455,6 +455,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         Effect::Choose { player, .. }
         | Effect::LookAt { player, .. }
         | Effect::PutBack { player, .. }
+        | Effect::PutAnyOnBottom { player }
         | Effect::ShuffleInto { player, .. }
         | Effect::Dig { player, .. }
         | Effect::ExileUntil { player, .. }
