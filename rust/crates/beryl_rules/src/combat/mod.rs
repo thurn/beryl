@@ -116,10 +116,12 @@ pub(crate) fn attack_decision<L: Layout>(
     let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     let (player, kind, part) = if attacker.is_none() {
         list.push(Opt::Done)?;
+        let attackers = collapse(s, eligible_attackers(s, t).collect());
+        Candidates::<L>::extend_options(&mut list, attackers, |out, slot| {
+            out.push(Opt::attack(slot))
+        })?;
         if t.can(Capability::Banding) {
-            banding::attack_options(s, t, &mut list)?;
-        } else {
-            ordinary_attack_options(s, t, &mut list)?;
+            banding::append_attack_options(s, attackers, &mut list)?;
         }
         (s.turn().active(), DecisionKind::Attacker, Part::Pick)
     } else {
@@ -135,20 +137,6 @@ pub(crate) fn attack_decision<L: Layout>(
         prompt: Prompt::new(Purpose::Attack).part(part),
         about: attacker.map_or(Bitboard::EMPTY, Bitboard::single),
     })
-}
-
-/// Lists attackers for the declaration (see CR 508.1a). The banding path also
-/// uses the resulting set to offer the same creatures a place in a band.
-#[inline]
-fn ordinary_attack_options<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    list: &mut L::Queue<Opt<L>, OPTIONS>,
-) -> Result<Bitboard<L::Slot>, Full> {
-    let able = eligible_attackers(s, t).collect();
-    let attackers = collapse(s, able);
-    Candidates::<L>::extend_options(list, attackers, |out, slot| out.push(Opt::attack(slot)))?;
-    Ok(attackers)
 }
 
 /// What a creature can attack ([CR 506.2]): "that player, planeswalkers they control, and
@@ -596,8 +584,9 @@ pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
     // defending player to another is a change this does not see.
     let attacking = s.turn().active();
     let defending = s.defending_players();
-    for i in 0..s.battlefield().len() {
-        let slot = s.battlefield()[i];
+    let mut index = 0;
+    while let Some(&slot) = s.battlefield().get(index) {
+        index += 1;
         let (attacker, walker) = match s.object(slot).combat() {
             CombatRole::None => continue,
             CombatRole::Attacking {

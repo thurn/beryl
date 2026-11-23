@@ -411,7 +411,7 @@ fn move_ordered<L: Layout, const N: usize>(
         crate::continuous::arrival_timestamps::order(s, t, arrived.as_slice())?;
         layers::refresh(s, t, sink)?;
     }
-    if !arrived.is_empty() && t.can(Capability::Preparation) {
+    if t.can(Capability::Preparation) && !arrived.is_empty() {
         prepare_arrivals(s, t, sink, moves.as_slice())?;
     }
     for &(slot, from, dest, _) in moves.iter() {

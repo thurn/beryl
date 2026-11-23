@@ -126,6 +126,11 @@ fn perform<L: Layout>(
     // "As a single event": the one batch below is every action of this check that has an
     // event, and a batch's events are kept as one group (`event::move_batch`).
     s.reclaim_tokens(tokens)?;
+    if graveyard.is_empty() {
+        // Reclaiming a token can end a layer input even when no permanent moves.
+        layers::refresh(s, t, sink)?;
+        return Ok(true);
+    }
     if !sacrifices.is_empty() {
         event::move_state_based(s, t, sink, graveyard, sacrifices)?;
         return Ok(true);
@@ -193,24 +198,19 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
         if d.supertypes.contains(Supertypes::LEGENDARY) {
             legendary[d.controller.index()].insert(slot);
         }
-        let o = s.object(slot);
         let types = d.types;
-        // See CR 702.12b: indestructible permanents "ignore the state-based action that checks
-        // for lethal damage".
-        let dies = types.contains(Types::CREATURE)
-            && (d.toughness <= 0
-                || (o.damage() > 0
-                    && i16::from(o.damage()) >= i16::from(d.toughness)
-                    && !d.keywords.contains(Keywords::INDESTRUCTIBLE)));
-        let unattached = auras
-            && aura.of(d.subtypes)
-            && match o.attachment() {
-                None => true,
-                Some(Attachment::Object(host)) => !attach::may_enchant(s, t, slot, host),
-                Some(Attachment::Player(player)) => !attach::may_enchant_player(s, t, slot, player),
-            };
-        if dies || unattached || (types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0)
-        {
+        let dies = types.intersects(Types::CREATURE.union(Types::PLANESWALKER)) && {
+            let o = s.object(slot);
+            // See CR 702.12b: indestructible permanents "ignore the state-based action
+            // that checks for lethal damage".
+            let lethal = types.contains(Types::CREATURE)
+                && (d.toughness <= 0
+                    || (o.damage() > 0
+                        && i16::from(o.damage()) >= i16::from(d.toughness)
+                        && !d.keywords.contains(Keywords::INDESTRUCTIBLE)));
+            lethal || (types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0)
+        };
+        if dies || (auras && aura.of(d.subtypes) && illegal_aura(s, t, slot)) {
             graveyard.insert(slot);
         }
     }
@@ -221,23 +221,42 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
     // other than the stack, it ceases to exist."
     // See CR 723.3c: "This copy remains in exile for as long as the prepared permanent
     // remains on the battlefield and has the prepared designation."
-    let away = [Zone::Library, Zone::Hand, Zone::Graveyard, Zone::Exile]
-        .into_iter()
-        .fold(Bitboard::EMPTY, |away, zone| away | s.in_zone(zone));
-    let tokens = (away & L::TOKEN_POOL).filter(|slot| s.object(slot).is_token());
-    let tokens = if !tokens.is_empty() && s.has_preparations() {
-        expired_copies(s, tokens)
+    let away = s.in_zone(Zone::Library)
+        | s.in_zone(Zone::Hand)
+        | s.in_zone(Zone::Graveyard)
+        | s.in_zone(Zone::Exile);
+    let candidates = away & L::TOKEN_POOL;
+    let tokens = if candidates.is_empty() {
+        Bitboard::EMPTY
     } else {
-        tokens
+        expired_tokens(s, candidates)
     };
     (graveyard, tokens, legendary)
 }
 
-/// Excludes copies that prepared permanents are still holding in exile (see CR 723.3c).
+/// Whether an Aura is unattached or attached illegally (see CR 704.5m).
 #[cold]
 #[inline(never)]
-fn expired_copies<L: Layout>(s: &State<L>, tokens: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
-    tokens.filter(|slot| s.object(slot).zone() != Zone::Exile || s.prepare_source(slot).is_none())
+fn illegal_aura<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
+    match s.object(slot).attachment() {
+        None => true,
+        Some(Attachment::Object(host)) => !attach::may_enchant(s, t, slot, host),
+        Some(Attachment::Player(player)) => !attach::may_enchant_player(s, t, slot, player),
+    }
+}
+
+/// Tokens and spell copies outside the battlefield and stack that cease to exist
+/// (see CR 704.5d–e). A copy still linked to a prepared permanent stays in exile
+/// (see CR 723.3c).
+#[cold]
+#[inline(never)]
+fn expired_tokens<L: Layout>(s: &State<L>, candidates: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
+    let prepared = s.has_preparations();
+    candidates.filter(|slot| {
+        let object = s.object(slot);
+        object.is_token()
+            && !(prepared && object.zone() == Zone::Exile && s.prepare_source(slot).is_some())
+    })
 }
 
 /// Those of `graveyard`, the permanents [`doomed`] found, that go there only because they are

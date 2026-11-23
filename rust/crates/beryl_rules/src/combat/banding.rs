@@ -2,14 +2,13 @@
 //!
 //! Implements: CR 702.22c, CR 702.22d, CR 702.22g, CR 702.22h, CR 702.22j, CR 702.22k
 
-use super::{declare_attacker, has, ordinary_attack_options};
+use super::{declare_attacker, has};
 use crate::bitboard::Bitboard;
 use crate::card::Keywords;
 use crate::decision::{OPTIONS, Opt};
 use crate::fixed::Full;
 use crate::layout::{Layout, Queue};
 use crate::state::{Memo, Pending, State};
-use crate::table::GameTable;
 use beryl_kernel::reference::Permanent;
 
 /// Offers a new band for each bander and legal ways to join bands already declared.
@@ -22,12 +21,11 @@ use beryl_kernel::reference::Permanent;
 /// [CR 702.22c]: https://yawgatog.com/resources/magic-rules/#R70222c
 #[cold]
 #[inline(never)]
-pub(super) fn attack_options<L: Layout>(
+pub(super) fn append_attack_options<L: Layout>(
     s: &State<L>,
-    t: &GameTable,
+    attackers: Bitboard<L::Slot>,
     list: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
-    let attackers = ordinary_attack_options(s, t, list)?;
     let mut bands = Bitboard::EMPTY;
     let mut with_nonbander = Bitboard::EMPTY;
     for (member, band) in s.band_members() {

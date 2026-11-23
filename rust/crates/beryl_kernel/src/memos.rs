@@ -671,7 +671,7 @@ impl<L: Layout> State<L> {
     #[inline(never)]
     fn forget_links_to_slot(&mut self, slot: L::Slot) {
         let done = self.memos.end(|e| {
-            e.memo != Memo::ExiledWith(slot) && e.memo != Memo::PutOntoBattlefieldWith(slot)
+            !matches!(e.memo, Memo::ExiledWith(link) | Memo::PutOntoBattlefieldWith(link) if link == slot)
         });
         self.settle_ended(done);
     }
