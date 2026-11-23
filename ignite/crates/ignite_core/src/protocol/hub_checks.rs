@@ -23,6 +23,13 @@ pub struct TipFailure {
     pub unverified_commits: Vec<Commit>,
 }
 
+/// Failures observed while running required checks at one tip candidate.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TipCheckFailures {
+    pub commit: Commit,
+    pub checks: Vec<ResultKey>,
+}
+
 /// A cached outcome.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CachedResult {

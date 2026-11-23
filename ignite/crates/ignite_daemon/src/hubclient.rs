@@ -30,8 +30,8 @@ use ignite_core::protocol::hub::{
     LookupRequest, MAX_BODY_BYTES, MachineFree, MachineRegister, MachineRegistered, MetricsImport,
     NewResult, OpenRegression, OpenRegressions, Pause, Record, RecordBatch, RegressionFiled,
     RegressionReport, Release, ReportFiled, Reservation, ResultKey, RevertFiled, Reverted,
-    SessionTitle, StoreRequest, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified,
-    TipWaiting, TipWaitingFiled, Verdict, VerdictKey,
+    SessionTitle, StoreRequest, StoredListing, TicketBrief, TipCheckFailures, TipClaim,
+    TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict, VerdictKey,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, Lease, LeaseBusy, LeaseOp,
@@ -44,6 +44,9 @@ use ignite_core::tipround::{
 use ignite_core::traits::{Error, Hub, Result};
 
 use crate::update::IdentityFile;
+
+mod ticket_query;
+use ticket_query::ticket_query;
 
 /// How an error for a body too large for the hub begins; see [`too_large`].
 pub const TOO_LARGE: &str = "413 ";
@@ -571,6 +574,11 @@ impl Hub for HubClient {
         self.post("/tips/coverage/update", update)
     }
 
+    fn tip_check_failures(&self, failures: &TipCheckFailures) -> Result<()> {
+        let _: serde_json::Value = self.post("/tips/failures", failures)?;
+        Ok(())
+    }
+
     fn tip_verified(&self, verified: &TipVerified) -> Result<()> {
         let _: serde_json::Value = self.post("/tips/verified", verified)?;
         Ok(())
@@ -768,37 +776,6 @@ impl Hub for HubClient {
     fn import(&self, request: &ImportRequest) -> Result<ImportReply> {
         self.post("/import", request)
     }
-}
-
-/// The query string of `GET /tickets`, in the names the hub reads.
-fn ticket_query(query: &TicketQuery) -> Vec<(&'static str, String)> {
-    let spelled = |value: serde_json::Value| value.as_str().map(str::to_owned);
-    let mut pairs = Vec::new();
-    if let Some(status) = query.status.and_then(|s| spelled(serde_json::json!(s))) {
-        pairs.push(("status", status));
-    }
-    if let Some(kind) = query
-        .ticket_type
-        .and_then(|t| spelled(serde_json::json!(t)))
-    {
-        pairs.push(("type", kind));
-    }
-    let named = [
-        ("parent", query.parent.as_ref().map(ToString::to_string)),
-        ("ancestor", query.ancestor.as_ref().map(ToString::to_string)),
-        ("search", query.search.clone()),
-        ("assignee", query.assignee.clone()),
-        ("limit", query.limit.map(|l| l.to_string())),
-    ];
-    pairs.extend(named.into_iter().filter_map(|(k, v)| Some((k, v?))));
-    pairs.extend(query.label.iter().map(|l| ("label", l.clone())));
-    pairs.extend(query.label_any.iter().map(|l| ("label_any", l.clone())));
-    for (flag, set) in [("ready", query.ready), ("all", query.all)] {
-        if set {
-            pairs.push((flag, "1".to_owned()));
-        }
-    }
-    pairs
 }
 
 #[cfg(test)]

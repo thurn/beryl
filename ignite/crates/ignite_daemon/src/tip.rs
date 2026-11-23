@@ -199,22 +199,21 @@ pub trait TipWork: Send + Sync {
     /// results. `rerun` ignores cached results.
     fn run(&self, ctx: &Context, commit: &Commit, checks: &[CheckName], rerun: bool)
     -> Vec<TipRun>;
-    /// Runs one family's batches at `commit`, listing the family once. `claim` is asked right
-    /// before each batch, with its number, and a batch it refuses is skipped. Returns the runs
-    /// and how many batches ran.
+    /// Runs one family's batches at `commit`, listing the family once. Claims each batch
+    /// before it runs and reports its failures as soon as it finishes.
     fn run_batches(
         &self,
         ctx: &Context,
         commit: &Commit,
         family: &str,
         batches: &[(u32, Vec<CheckName>)],
-        claim: &dyn Fn(u32) -> bool,
+        callbacks: &crate::checks::BatchCallbacks<'_>,
     ) -> (Vec<TipRun>, usize) {
         let _ = family;
         let mut runs = Vec::new();
         let mut ran = 0;
         for (batch, names) in batches {
-            if claim(*batch) {
+            if (callbacks.claim)(*batch) {
                 ran += 1;
                 runs.extend(self.run(ctx, commit, names, false));
             }

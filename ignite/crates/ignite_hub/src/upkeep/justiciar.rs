@@ -40,7 +40,7 @@ use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::feed;
 use ignite_store::hub::releases::Releases;
-use ignite_store::hub::tickets;
+use ignite_store::hub::{tickets, tips};
 use ignite_store::{Result, StoreError};
 
 use super::filing::{self, Author, Change, Filed, Filing, UPKEEP};
@@ -306,7 +306,27 @@ fn recently_closed_for(conn: &Connection, landing: &str, now: Timestamp) -> Resu
     };
     Ok(filing::strings(&metadata, filing::SIGHTINGS_KEY)
         .iter()
-        .any(|seen| seen == landing))
+        .any(|seen| seen.lines().next() == Some(landing)))
+}
+
+fn tip_failure_note(conn: &Connection, landed_at: Timestamp) -> Result<String> {
+    let (report, context) = if let Some(report) = tips::candidate_failures(conn)? {
+        (report, "Required checks reported failures at candidate")
+    } else if let Some(report) = tips::latest_failure(conn, landed_at)? {
+        (report, "A completed round recorded failures at")
+    } else {
+        return Ok(String::new());
+    };
+    let mut note = format!("{context} `{}`.\n\n", report.commit);
+    for key in report.checks.iter().take(10) {
+        let platform = key.platform.map_or("portable", |os| os.as_str());
+        let _ = writeln!(note, "- `{}` ({platform})", key.check);
+    }
+    if report.checks.len() > 10 {
+        let _ = writeln!(note, "- {} more", report.checks.len() - 10);
+    }
+    note.push_str("\nAny later candidate needs results for its own check inputs.\n\n");
+    Ok(note)
 }
 
 /// Files a justiciar ticket when a landing has waited [`MASTER_LAG_SECONDS`] for `master`.
@@ -344,19 +364,23 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
     if recently_closed_for(conn, &ticket, now)? {
         return Ok(Vec::new());
     }
+    let failures = tip_failure_note(conn, landed_at)?;
     let body = format!(
         "`master` has not moved for {minutes:.0} minutes: ticket {ticket} landed at {landed_at} \
          and no tip since has been verified. Tip verification is the only thing that moves \
          `master`, so nothing reaches it, and no fix to Ignite is released from it, until \
-         this is fixed.\n\nLook at the tip loop's state in `ignite status` and the daemon \
+         this is fixed.\n\n{failures}Look at the tip loop's state in `ignite status` and the daemon \
          log on each machine, the open regression and fleet tickets, and the dashboard's \
          tips page. Read `ignite guide justiciar` before anything else."
     );
     let filing = Filing {
         signature: Signature::of_subject(MASTER_LAG_SUBJECT, LABEL),
-        // One sighting per stuck landing: a new comment only when a later landing is the
-        // oldest one waiting, which means `master` moved in between.
-        evidence: ticket.clone(),
+        // New check evidence goes on the existing ticket for this landing.
+        evidence: if failures.is_empty() {
+            ticket
+        } else {
+            format!("{ticket}\n{failures}")
+        },
         fields: fields(
             format!("master has not moved for {minutes:.0} minutes"),
             body,

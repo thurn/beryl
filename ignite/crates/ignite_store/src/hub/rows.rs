@@ -238,6 +238,8 @@ crate::tables! {
         regression_passes: Option<String>,
         /// JSON: the check keys and commits of a failed tip.
         failure: Option<String>,
+        /// JSON: the failed result keys reported by required batches during verification.
+        observed_failures: Option<String>,
     }
 
     TipClaim = "tip_claims" {

@@ -109,6 +109,9 @@ impl Checks {
                         output: hit.output.clone(),
                         reason: None,
                     });
+                    if hit.outcome == Outcome::Fail {
+                        run.failed_keys.push(keyed.key.clone());
+                    }
                     run.finish_keyed(&keyed, family, hit.outcome, failure);
                 }
                 None => pending.push(keyed),
@@ -426,16 +429,21 @@ impl Checks {
                 Outcome::Pass | Outcome::Fail if inputs_moved => {}
                 // A check whose hash does not cover what it opened says nothing about it either.
                 Outcome::Pass | Outcome::Fail if unkeyed.contains(&keyed.listed.check) => {}
-                Outcome::Pass | Outcome::Fail => stored.push(NewResult {
-                    key: keyed.key.clone(),
-                    outcome,
-                    machine: ctx.machine.clone(),
-                    // 0 when the hub has not numbered the run's record: it was queued.
-                    record: record.unwrap_or(RecordId(0)),
-                    output: output.map(|o| o.display().to_string()),
-                    cost,
-                    areas: areas.clone(),
-                }),
+                Outcome::Pass | Outcome::Fail => {
+                    if outcome == Outcome::Fail {
+                        run.failed_keys.push(keyed.key.clone());
+                    }
+                    stored.push(NewResult {
+                        key: keyed.key.clone(),
+                        outcome,
+                        machine: ctx.machine.clone(),
+                        // 0 when the hub has not numbered the run's record: it was queued.
+                        record: record.unwrap_or(RecordId(0)),
+                        output: output.map(|o| o.display().to_string()),
+                        cost,
+                        areas: areas.clone(),
+                    });
+                }
                 Outcome::Flaky => {
                     if let Ok(commit) = self.trees.head(&tree.path) {
                         flaky.push(FlakyReport {

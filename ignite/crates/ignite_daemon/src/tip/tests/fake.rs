@@ -204,7 +204,7 @@ impl TipWork for FakeWork {
         at: &Commit,
         family: &str,
         batches: &[(u32, Vec<CheckName>)],
-        claim: &dyn Fn(u32) -> bool,
+        callbacks: &crate::checks::BatchCallbacks<'_>,
     ) -> (Vec<TipRun>, usize) {
         let before = self.before_batches.lock().unwrap().get(family).cloned();
         if let Some(before) = before {
@@ -213,9 +213,18 @@ impl TipWork for FakeWork {
         let mut runs = Vec::new();
         let mut ran = 0;
         for (batch, names) in batches {
-            if claim(*batch) {
+            if (callbacks.claim)(*batch) {
                 ran += 1;
-                runs.extend(self.run(ctx, at, names, false));
+                let batch_runs = self.run(ctx, at, names, false);
+                let listed = self.listed(at);
+                let failed: Vec<_> = batch_runs
+                    .iter()
+                    .filter(|run| run.outcome == Outcome::Fail)
+                    .filter_map(|run| listed.iter().find(|c| c.runnable && c.check == run.check))
+                    .map(|c| c.key.clone())
+                    .collect();
+                (callbacks.failed)(&failed);
+                runs.extend(batch_runs);
             }
         }
         (runs, ran)

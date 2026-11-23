@@ -41,6 +41,7 @@
 
 pub mod adapters;
 mod batches;
+pub use batches::BatchCallbacks;
 mod code_ids;
 mod execute;
 mod express;
@@ -192,6 +193,8 @@ pub struct CheckRun {
     pub outcomes: Vec<(CheckName, Outcome)>,
     /// Measurement keys, so a tip round can match a verdict to the calibration it listed.
     pub(crate) measurement_hashes: HashMap<CheckName, InputHash>,
+    /// Keys of failed checks whose inputs match the cached result or the completed run.
+    pub(crate) failed_keys: Vec<ignite_core::protocol::hub::ResultKey>,
     pub from_cache: u32,
     /// Checks run at least once.
     pub ran: u32,

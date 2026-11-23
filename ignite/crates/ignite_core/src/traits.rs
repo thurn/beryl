@@ -18,8 +18,8 @@ use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, IncompleteReport,
     JusticiarReport, Landed, LandedCommit, LandedReply, ListingKey, MachineFree, MetricsImport,
     NewResult, OpenRegression, Pause, Record, RegressionFiled, RegressionReport, ReportFiled,
-    Reservation, ResultKey, SessionTitle, StoredListing, TicketBrief, TipClaim, TipClaimReply,
-    TipVerified, TipWaiting, TipWaitingFiled,
+    Reservation, ResultKey, SessionTitle, StoredListing, TicketBrief, TipCheckFailures, TipClaim,
+    TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::hub::{RevertFiled, Reverted, Verdict, VerdictKey};
 use crate::protocol::tickets::{
@@ -414,6 +414,11 @@ pub trait Hub: Send + Sync {
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply>;
     /// Sets a tip's verification state (`POST /tips/verified`).
     fn tip_verified(&self, verified: &TipVerified) -> Result<()>;
+    /// Records failures for diagnostics while a tip is still running.
+    fn tip_check_failures(&self, failures: &TipCheckFailures) -> Result<()> {
+        let _ = failures;
+        Ok(())
+    }
     /// The candidate automatic tip rounds share (`GET /tips/candidate`).
     fn tip_candidate(&self) -> Result<Option<TipCandidate>>;
     /// Replaces the candidate if it still matches (`POST /tips/candidate/update`).

@@ -1,7 +1,8 @@
 //! The result cache, check and record routes: `/results/lookup`, `/results/store`, `/flaky`, `/flaky/batch`,
 //! `/checks/stats`, `/checks/fix-outcomes`, `/tips/claim`, `/tips/verified`, `/landings/lookup`, `/regressions`, `/reverted`,
 //! `/records`, `/metrics/import`, and the reports that file tickets: `/incomplete`, `/audits`,
-//! `/finds` and `/tips/waiting`.
+//! `/finds` and `/tips/waiting`. `/tips/failures` records and reads failures observed at
+//! the selected candidate while its required checks are still running.
 //! `/results/store` also files a ticket when a pass replaces another machine's failure.
 //!
 //! The tickets a report files are written by `crate::upkeep`, which also matches them against
@@ -9,7 +10,7 @@
 //!
 //! Each route decodes its body with the types of `ignite_core::protocol::hub`, calls the store in
 //! `ignite_store::hub` and encodes the reply. Every route except `/results/lookup`,
-//! `/landings/lookup` and the check history reads writes to the database and needs an
+//! `/landings/lookup` and the GET routes writes to the database and needs an
 //! authorized writer (HTTP 401 otherwise).
 
 use std::collections::BTreeMap;
@@ -48,7 +49,9 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/regressions/open"
         | "/tips/candidate"
         | "/tips/coverage" => ("GET", false),
-        "/results/store"
+        "/tips/failures" if request.method == "GET" => ("GET", false),
+        "/tips/failures"
+        | "/results/store"
         | "/flaky"
         | "/flaky/batch"
         | "/tips/claim"
@@ -87,6 +90,14 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
         "/tips/candidate" => {
             let candidate = tips::candidate(conn).map_err(|e| store_failure(&e))?;
             Ok(Response::json(200, &json!(candidate)))
+        }
+        "/tips/failures" if request.method == "GET" => {
+            let failures = tips::candidate_failures(conn).map_err(|e| store_failure(&e))?;
+            Ok(Response::json(200, &json!(failures)))
+        }
+        "/tips/failures" => {
+            tips::note_check_failures(conn, &body(request)?).map_err(|e| store_failure(&e))?;
+            Ok(done())
         }
         "/tips/candidate/update" => {
             let updated = tips::update_candidate(conn, &body(request)?, now)

@@ -59,6 +59,7 @@ impl CheckRun {
         let CheckRun {
             outcomes,
             measurement_hashes,
+            failed_keys,
             from_cache,
             ran,
             failures,
@@ -79,6 +80,7 @@ impl CheckRun {
         } = other;
         self.outcomes.extend(outcomes);
         self.measurement_hashes.extend(measurement_hashes);
+        self.failed_keys.extend(failed_keys);
         self.from_cache += from_cache;
         self.ran += ran;
         self.failures.extend(failures);

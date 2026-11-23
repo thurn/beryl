@@ -511,10 +511,17 @@ fn batches_of_one_family_run_from_one_listing() {
         (2, vec![name("unit:a")]),
     ];
     let claim = |batch: u32| batch != 2;
-    let (run, ran) =
-        world
-            .checks
-            .run_batches(&world.ctx, &tree, "unit", &batches, &options(false), &claim);
+    let (run, ran) = world.checks.run_batches(
+        &world.ctx,
+        &tree,
+        "unit",
+        &batches,
+        &options(false),
+        &super::BatchCallbacks {
+            claim: &claim,
+            failed: &|_| {},
+        },
+    );
     assert_eq!(ran, 2);
     assert!(run.passed(), "{:?}", run.failures);
     assert_eq!(run.outcomes.len(), 2);

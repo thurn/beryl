@@ -9,7 +9,8 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use ignite_core::config::Os;
 use ignite_core::ids::{Commit, TicketId};
 use ignite_core::protocol::hub::{
-    LandedCommit, RegressionReport, TipClaim, TipClaimReply, TipState, TipVerified,
+    LandedCommit, RegressionReport, TipCheckFailures, TipClaim, TipClaimReply, TipFailure,
+    TipState, TipVerified,
 };
 use ignite_core::time::Timestamp;
 use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
@@ -60,10 +61,87 @@ pub fn update_candidate(
     if candidate(&transaction)? != update.expected {
         return Ok(false);
     }
+    if let Some(previous) = &update.expected
+        && previous.commit != update.replacement.commit
+    {
+        transaction.execute(
+            "UPDATE tips SET observed_failures = NULL WHERE commit_sha = ?1",
+            [previous.commit.as_str()],
+        )?;
+    }
     seen(&transaction, update.replacement.commit.as_str(), now)?;
     meta::put(&transaction, CANDIDATE_KEY, &update.replacement)?;
     transaction.commit()?;
     Ok(true)
+}
+
+/// Records the exact keys of required checks that failed at the selected candidate. A late
+/// report for a replaced or promoted candidate leaves the active evidence alone.
+pub fn note_check_failures(conn: &mut Connection, report: &TipCheckFailures) -> Result<()> {
+    if report.checks.is_empty() {
+        return Ok(());
+    }
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    if candidate(&tx)?.is_none_or(|candidate| candidate.commit != report.commit) {
+        return Ok(());
+    }
+    let checks = serde_json::to_string(&report.checks)
+        .map_err(|error| StoreError::Invalid(format!("observed tip failures: {error}")))?;
+    tx.execute(
+        "UPDATE tips SET observed_failures = (SELECT json_group_array(json(value)) FROM (
+             SELECT value FROM json_each(observed_failures)
+             UNION SELECT value FROM json_each(?2)
+         ))
+         WHERE commit_sha = ?1 AND state IN ('seen', 'verifying', 'failed')",
+        params![report.commit.as_str(), checks],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Reports failures observed at the selected candidate without changing its verification state.
+pub fn candidate_failures(conn: &Connection) -> Result<Option<TipCheckFailures>> {
+    let row: Option<(String, String)> = conn
+        .query_row(
+            "SELECT t.commit_sha, t.observed_failures
+             FROM tips t JOIN meta m ON t.commit_sha = json_extract(m.value, '$.commit')
+             WHERE m.key = ?1 AND t.observed_failures IS NOT NULL
+               AND t.state IN ('seen', 'verifying', 'failed')",
+            [CANDIDATE_KEY],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    row.map(|(commit, checks)| {
+        let checks = serde_json::from_str(&checks)
+            .map_err(|error| StoreError::Invalid(format!("observed tip failures: {error}")))?;
+        Ok(TipCheckFailures {
+            commit: parse("tip", &commit)?,
+            checks,
+        })
+    })
+    .transpose()
+}
+
+/// The latest completed failure in this lag episode, for context when a newer candidate is
+/// still collecting its own results.
+pub fn latest_failure(conn: &Connection, since: Timestamp) -> Result<Option<TipCheckFailures>> {
+    let row: Option<(String, String)> = conn
+        .query_row(
+            "SELECT commit_sha, failure FROM tips WHERE state = 'failed' AND verified >= ?1
+         AND failure IS NOT NULL ORDER BY verified DESC, commit_sha LIMIT 1",
+            [since.to_string()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    row.map(|(commit, failure)| {
+        let failure: TipFailure = serde_json::from_str(&failure)
+            .map_err(|error| StoreError::Invalid(format!("stored tip failure: {error}")))?;
+        Ok(TipCheckFailures {
+            commit: parse("tip", &commit)?,
+            checks: failure.checks,
+        })
+    })
+    .transpose()
 }
 
 /// Grants the claim if no unexpired claim by another machine holds the same batch. A machine
@@ -140,7 +218,8 @@ pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Re
              UNION SELECT value FROM json_each(?5)
            ))
          END,
-         failure = CASE WHEN ?2 = 'failed' THEN coalesce(?6, failure) END
+         failure = CASE WHEN ?2 = 'failed' THEN coalesce(?6, failure) END,
+         observed_failures = CASE WHEN ?2 != 'verified' THEN observed_failures END
          WHERE commit_sha = ?1",
         params![
             verified.commit.as_str(),

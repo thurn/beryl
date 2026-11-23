@@ -418,9 +418,8 @@ fn a_revert_the_hub_missed_is_sent_with_the_next_round() {
     assert!(verifier.unsent_reverts.is_empty());
 }
 
-/// Calls `hook` when the second run at `at` starts, after the round's own run there and the
-/// culprit search: the round's own run sets it up as it starts.
-fn on_second_run(world: &World, at: &Commit, hook: fake::BeforeBatches) {
+/// Arms `hook` during the first run at `at` so it fires when the second run starts.
+pub(super) fn on_second_run(world: &World, at: &Commit, hook: fake::BeforeBatches) {
     let work = world.work.clone();
     let commit = at.clone();
     let arm: fake::BeforeBatches = Arc::new(move || {

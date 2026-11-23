@@ -310,6 +310,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: "",
         code: Some(routing_migrations::backfill_os_requirements),
     },
+    Migration {
+        version: 52,
+        sql: "ALTER TABLE tips ADD COLUMN observed_failures TEXT;",
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

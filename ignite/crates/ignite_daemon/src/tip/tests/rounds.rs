@@ -3,9 +3,15 @@
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::sync::{Barrier, mpsc};
+use std::thread;
 
 use ignite_core::protocol::Usage;
+use ignite_core::protocol::hub::{MachineRegister, TipCheckFailures};
+use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
 use ignite_core::traits::RunResult;
+use ignite_hub::server::{HubServer, RunningHub};
+use ignite_store::hub::{self, tips};
 
 use super::*;
 
@@ -299,4 +305,172 @@ fn a_round_records_where_its_time_went_and_a_slow_one_files_one_ticket() {
     assert_eq!(verifier.verify(&ctx, &newer).unwrap(), TipOutcome::Verified);
     assert_eq!(world.hub.tip_rounds().len(), 2);
     assert_eq!(world.hub.round_tickets_filed(), 1);
+}
+
+fn running_hub(world: &World, name: &str) -> (RunningHub, PathBuf, Context) {
+    let mut ctx = world.ctx("m-1");
+    let database = ignite_core::test_files::temp_dir().join(format!("tip-{name}.sqlite"));
+    let hub = HubServer {
+        config: ctx.config.clone(),
+        listen: "127.0.0.1:0".to_owned(),
+        database: database.clone(),
+        wordmark: None,
+    }
+    .start()
+    .unwrap();
+    ctx.config.hub.url = format!("http://{}", hub.address());
+    let register = crate::hubclient::HubClient::new(&ctx.config.hub, "", "tip-test");
+    let machine = register
+        .register(&MachineRegister {
+            machine: ctx.machine.clone(),
+            name: "local".to_owned(),
+            os: Os::Macos,
+            cores: 1,
+            memory_mb: 1024,
+            families: Vec::new(),
+            version: "test".to_owned(),
+        })
+        .unwrap();
+    ctx.hub = Arc::new(crate::hubclient::HubClient::new(
+        &ctx.config.hub,
+        &machine.token,
+        "tip-test",
+    ));
+    (hub, database, ctx)
+}
+
+fn select(ctx: &Context, tip: &Commit) {
+    let expected = ctx.hub.tip_candidate().unwrap();
+    assert!(
+        ctx.hub
+            .update_tip_candidate(&TipCandidateUpdate {
+                expected,
+                replacement: TipCandidate {
+                    commit: tip.clone(),
+                    retry_on_new_tip: false,
+                },
+            })
+            .unwrap()
+    );
+}
+
+#[test]
+fn the_hub_sees_a_required_failure_while_another_batch_is_open() {
+    let world = World::new();
+    let (server, database, ctx) = running_hub(&world, "while-running");
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    select(&ctx, &tip);
+    let failed = in_family("a", "first");
+    let unfinished = in_family("b", "second");
+    world
+        .work
+        .set_checks(&tip, vec![failed.clone(), unfinished.clone()]);
+    world.work.set_outcome(&tip, &failed.check, Outcome::Fail);
+    world
+        .work
+        .set_outcome(&tip, &unfinished.check, Outcome::Incomplete);
+    let resume = Arc::new(Barrier::new(2));
+    let (ready, held) = mpsc::channel();
+    let release = resume.clone();
+    let finished = ready.clone();
+    super::culprit::on_second_run(
+        &world,
+        &tip,
+        Arc::new(move || {
+            ready.send(true).unwrap();
+            release.wait();
+        }),
+    );
+    let conn = hub::open(&database).unwrap();
+
+    let (observed, master_while_held, outcome) = thread::scope(|scope| {
+        let round = scope.spawn(|| {
+            let outcome = world.verifier().verify(&ctx, &tip);
+            let _ = finished.send(false);
+            outcome
+        });
+        assert!(
+            held.recv().unwrap(),
+            "round finished before the second batch ran"
+        );
+        let hub = &ctx.config.hub;
+        let observed = ureq::get(format!("{}/{}/api/tips/failures", hub.url, hub.project))
+            .call()
+            .and_then(|mut reply| reply.body_mut().read_to_vec());
+        let master_while_held = world.master();
+        resume.wait();
+        (observed, master_while_held, round.join().unwrap())
+    });
+    server.stop();
+
+    let observed: Option<TipCheckFailures> = serde_json::from_slice(&observed.unwrap()).unwrap();
+    assert_eq!(
+        observed,
+        Some(TipCheckFailures {
+            commit: tip.clone(),
+            checks: vec![failed.key.clone()],
+        })
+    );
+    assert_ne!(master_while_held, tip);
+    assert_eq!(
+        outcome.unwrap(),
+        TipOutcome::Failed {
+            checks: vec![failed.check]
+        }
+    );
+    assert_eq!(
+        tips::candidate_failures(&conn).unwrap().unwrap().checks,
+        [failed.key]
+    );
+}
+
+#[test]
+fn a_superseded_failure_cannot_blame_a_new_candidate_or_replace_a_missing_result() {
+    let world = World::new();
+    let (server, database, ctx) = running_hub(&world, "superseded");
+    let tip = commit("bbbb000");
+    let newer = commit("cccc000");
+    world.land(&tip);
+    select(&ctx, &tip);
+    let failed = check("a", 'a');
+    world.work.set_checks(&tip, vec![failed.clone()]);
+    world.work.set_outcome(&tip, &failed.check, Outcome::Fail);
+    world.git.set_changed(&tip, &newer, &["src/a"]);
+    world.land(&newer);
+
+    let mut verifier = world.verifier();
+    assert_eq!(
+        verifier.verify(&ctx, &tip).unwrap(),
+        TipOutcome::Failed {
+            checks: vec![failed.check.clone()],
+        }
+    );
+    assert!(ctx.hub.open_regressions().unwrap().is_empty());
+
+    select(&ctx, &newer);
+    ctx.hub
+        .tip_check_failures(&TipCheckFailures {
+            commit: tip,
+            checks: vec![failed.key],
+        })
+        .unwrap();
+    let missing = check("b", 'b');
+    world
+        .work
+        .set_checks(&newer, vec![check("a", 'c'), missing.clone()]);
+    world
+        .work
+        .set_outcome(&newer, &missing.check, Outcome::Incomplete);
+    let outcome = verifier.verify(&ctx, &newer);
+    let regressions = ctx.hub.open_regressions();
+    server.stop();
+
+    let conn = hub::open(&database).unwrap();
+    assert_eq!(tips::candidate_failures(&conn).unwrap(), None);
+    assert!(regressions.unwrap().is_empty());
+    assert_eq!(world.master(), commit("aaaa000"));
+    assert!(
+        matches!(outcome.unwrap(), TipOutcome::Waiting { checks, .. } if checks == [missing.check])
+    );
 }

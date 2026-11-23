@@ -112,13 +112,13 @@ impl TipWork for CheckTipWork {
         commit: &Commit,
         family: &str,
         batches: &[(u32, Vec<CheckName>)],
-        claim: &dyn Fn(u32) -> bool,
+        callbacks: &crate::checks::BatchCallbacks<'_>,
     ) -> (Vec<TipRun>, usize) {
         let options = options(false, self.reserve(ctx, [family]));
         // Families run at once, each in a tree of its own.
         let ran = self.at_for(ctx, &format!("tip {commit} {family}"), commit, |tree| {
             self.checks
-                .run_batches(ctx, tree, family, batches, &options, claim)
+                .run_batches(ctx, tree, family, batches, &options, callbacks)
         });
         match ran {
             Ok((run, ran)) => (tip_runs(&run, &self.family_needs()), ran),

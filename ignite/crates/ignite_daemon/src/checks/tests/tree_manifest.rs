@@ -184,7 +184,10 @@ fn a_tip_whose_ignite_toml_adds_a_family_to_this_machine_runs_it() {
         "unit",
         &batches,
         &options(false),
-        &|_| true,
+        &super::super::BatchCallbacks {
+            claim: &|_| true,
+            failed: &|_| {},
+        },
     );
     assert_eq!(ran, 1, "{:?}", run.failures);
     assert_eq!(outcome(&run, "unit:a"), Outcome::Pass);

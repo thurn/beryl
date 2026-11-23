@@ -26,11 +26,12 @@ use std::time::{Duration, Instant};
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit};
-use ignite_core::protocol::hub::TipClaim;
+use ignite_core::protocol::hub::{ResultKey, TipCheckFailures, TipClaim};
 use ignite_core::tipround::{self, TipCosts, TipCostsRequest};
 use ignite_core::traits::Result;
 
 use super::{Listed, TipCheck, TipRun, TipVerifier};
+use crate::checks::BatchCallbacks;
 use crate::server::Context;
 
 /// How often a running batch's claim is renewed: a third of the hub's claim
@@ -225,6 +226,27 @@ impl TipVerifier {
             runs: Mutex::new(Vec::new()),
             held: Mutex::new(BTreeMap::new()),
         };
+        // Report only matching results for checks selected to run before promotion.
+        let required: HashSet<&ResultKey> = to_run
+            .iter()
+            .filter(|_| !after_master)
+            .map(|check| &check.key)
+            .collect();
+        let failed = |keys: &[ResultKey]| {
+            let checks: Vec<ResultKey> = keys
+                .iter()
+                .filter(|key| required.contains(*key))
+                .cloned()
+                .collect();
+            if !checks.is_empty()
+                && let Err(error) = ctx.hub.tip_check_failures(&TipCheckFailures {
+                    commit: tip.clone(),
+                    checks,
+                })
+            {
+                eprintln!("ignite: required failures at {tip} not recorded: {error}");
+            }
+        };
         // Each family's thread works for the round's activity, so its builds run in the `tip`
         // class and `ignite status` shows which family it is on.
         let activity = crate::steps::current();
@@ -237,8 +259,13 @@ impl TipVerifier {
                         while let Some((family, batches)) = round.next() {
                             crate::steps::step(format!("verifying family {family}"));
                             let claim = |batch: u32| round.claim(&family, batch);
-                            let (runs, _) =
-                                self.work.run_batches(ctx, tip, &family, &batches, &claim);
+                            let callbacks = BatchCallbacks {
+                                claim: &claim,
+                                failed: &failed,
+                            };
+                            let (runs, _) = self
+                                .work
+                                .run_batches(ctx, tip, &family, &batches, &callbacks);
                             lock(&round.held).remove(&family);
                             lock(&round.runs).extend(runs);
                             round.in_flight.fetch_sub(1, Ordering::SeqCst);

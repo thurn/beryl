@@ -10,10 +10,18 @@ use std::collections::BTreeMap;
 
 use ignite_core::ids::{CheckName, TreeId};
 use ignite_core::protocol::Outcome;
+use ignite_core::protocol::hub::ResultKey;
 use ignite_core::traits::Error;
 
 use super::{CheckRun, Checks, RunOptions, incomplete};
 use crate::server::Context;
+
+pub struct BatchCallbacks<'a> {
+    /// Claims a batch immediately before it runs.
+    pub claim: &'a dyn Fn(u32) -> bool,
+    /// Receives the exact result keys of failures after each batch.
+    pub failed: &'a dyn Fn(&[ResultKey]),
+}
 
 impl Checks {
     /// Each family's `covered_by` from the manifest: the family whose checks find every fault
@@ -33,7 +41,7 @@ impl Checks {
         family: &str,
         batches: &[(u32, Vec<CheckName>)],
         options: &RunOptions,
-        claim: &dyn Fn(u32) -> bool,
+        callbacks: &BatchCallbacks<'_>,
     ) -> (CheckRun, usize) {
         let mut run = CheckRun::default();
         let (checks, tree) = match self.open(ctx, tree) {
@@ -49,7 +57,7 @@ impl Checks {
         let family_failed = run.incomplete_families.iter().any(|(f, _)| f == family);
         let mut ran = 0;
         for (batch, names) in batches {
-            if !claim(*batch) {
+            if !(callbacks.claim)(*batch) {
                 continue;
             }
             ran += 1;
@@ -71,7 +79,9 @@ impl Checks {
             for part in &mut wanted {
                 part.keep(|check| names.contains(check), &mut run);
             }
+            let previous_failures = run.failed_keys.len();
             checks.run_prepared(ctx, &tree, wanted, options, &mut run);
+            (callbacks.failed)(&run.failed_keys[previous_failures..]);
         }
         (run, ran)
     }

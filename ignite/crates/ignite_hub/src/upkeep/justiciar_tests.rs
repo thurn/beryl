@@ -2,9 +2,12 @@
 
 use ignite_core::fakes::FakeClock;
 use ignite_core::ids::{CheckName, Commit, InputHash, MachineId};
-use ignite_core::protocol::hub::{JusticiarReport, ResultKey, TipFailure, TipState, TipVerified};
+use ignite_core::protocol::hub::{
+    JusticiarReport, ResultKey, TipCheckFailures, TipFailure, TipState, TipVerified,
+};
 use ignite_core::protocol::tickets::{CULPRIT_HANDOFF_KEY, Operation, Status, TicketType};
 use ignite_core::time::Timestamp;
+use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
 use ignite_core::traits::Clock;
 use ignite_store::hub::{self, tips};
 use rusqlite::{Connection, params};
@@ -131,6 +134,89 @@ fn a_landing_that_master_lacks_for_two_hours_files_one_open_ticket() {
     let again = justiciar::master_lag(&mut conn, clock.now()).unwrap();
     assert_eq!(again[0].change, Change::Unchanged);
     assert_eq!(lag_tickets(&conn, &clock), 1);
+}
+
+#[test]
+fn master_lag_reports_candidate_failures_before_completion_and_keeps_their_commit() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let _ = landing(&mut conn, &clock);
+    let candidate = |commit| TipCandidate {
+        commit: Commit::new(commit).unwrap(),
+        retry_on_new_tip: false,
+    };
+    let tip = candidate("bbbb000");
+    assert!(
+        tips::update_candidate(
+            &mut conn,
+            &TipCandidateUpdate {
+                expected: None,
+                replacement: tip.clone(),
+            },
+            clock.now()
+        )
+        .unwrap()
+    );
+    clock.advance(MASTER_LAG_SECONDS);
+    let lag = justiciar::master_lag(&mut conn, clock.now())
+        .unwrap()
+        .remove(0);
+    assert_eq!(lag.change, Change::Created);
+
+    let report = TipCheckFailures {
+        commit: tip.commit.clone(),
+        checks: vec![ResultKey {
+            check: CheckName::new("unit:broken").unwrap(),
+            hash: InputHash::new("a".repeat(64)).unwrap(),
+            platform: None,
+        }],
+    };
+    tips::note_check_failures(&mut conn, &report).unwrap();
+    let updated = justiciar::master_lag(&mut conn, clock.now())
+        .unwrap()
+        .remove(0);
+    assert_eq!(updated.ticket, lag.ticket);
+    assert_eq!(updated.change, Change::Commented);
+    let comments = |conn: &Connection| {
+        let mut query = conn
+            .prepare("SELECT text FROM comments WHERE ticket = ?1 ORDER BY n")
+            .unwrap();
+        query
+            .query_map([&lag.ticket], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+    };
+    assert!(
+        comments(&conn)[0].contains("Required checks reported failures at candidate `bbbb000`")
+    );
+    assert!(comments(&conn)[0].contains("`unit:broken`"));
+    assert_eq!(
+        justiciar::master_lag(&mut conn, clock.now()).unwrap()[0].change,
+        Change::Unchanged
+    );
+
+    finish_tip(&conn, &clock, "bbbb000", "unit:broken", &[]);
+    assert!(
+        tips::update_candidate(
+            &mut conn,
+            &TipCandidateUpdate {
+                expected: Some(tip),
+                replacement: candidate("cccc000"),
+            },
+            clock.now()
+        )
+        .unwrap()
+    );
+    tips::note_check_failures(&mut conn, &report).unwrap();
+    let previous = justiciar::master_lag(&mut conn, clock.now())
+        .unwrap()
+        .remove(0);
+    assert_eq!(previous.ticket, lag.ticket);
+    assert_eq!(previous.change, Change::Commented);
+    let notes = comments(&conn);
+    assert!(notes[1].contains("A completed round recorded failures at `bbbb000`"));
+    assert!(notes[1].contains("Any later candidate needs results for its own check inputs."));
 }
 
 #[test]

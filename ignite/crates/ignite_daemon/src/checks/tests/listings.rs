@@ -225,10 +225,17 @@ fn tip_batches_run_from_a_kept_listing() {
     let batches = vec![(0, vec![name("unit:a")]), (1, vec![name("unit:b")])];
     let claim = |_: u32| true;
     for _ in 0..2 {
-        let (run, ran) =
-            world
-                .checks
-                .run_batches(&world.ctx, &tree, "unit", &batches, &options(true), &claim);
+        let (run, ran) = world.checks.run_batches(
+            &world.ctx,
+            &tree,
+            "unit",
+            &batches,
+            &options(true),
+            &super::super::BatchCallbacks {
+                claim: &claim,
+                failed: &|_| {},
+            },
+        );
         assert_eq!(ran, 2);
         assert!(run.passed(), "{:?}", run.failures);
     }
@@ -496,4 +503,43 @@ fn tip_verification_uses_the_nextest_checks_listed_by_each_operating_system() {
         .lookup(std::slice::from_ref(&windows_key.key))
         .unwrap();
     assert_eq!(results[0].as_ref().unwrap().outcome, Outcome::Pass);
+}
+
+#[test]
+fn a_batch_reports_only_the_exact_keys_of_its_failed_checks() {
+    let world = jsonl_world();
+    world
+        .launcher
+        .script("unit:a", &[Some("fail"), Some("fail")]);
+    world.launcher.script("unit:b", &[None, None, None]);
+    let tree = TreeId::new("tree-01").unwrap();
+    let batches = [(0, vec![name("unit:a")]), (1, vec![name("unit:b")])];
+    let keys = Mutex::new(Vec::new());
+    let callbacks = BatchCallbacks {
+        claim: &|batch| {
+            if batch == 1 {
+                assert_eq!(keys.lock().unwrap().len(), 1);
+            }
+            true
+        },
+        failed: &|reported| keys.lock().unwrap().extend_from_slice(reported),
+    };
+
+    let (run, ran) = world.checks.run_batches(
+        &world.ctx,
+        &tree,
+        "unit",
+        &batches,
+        &options(false),
+        &callbacks,
+    );
+
+    assert_eq!(ran, 2);
+    assert_eq!(outcome(&run, "unit:a"), Outcome::Fail);
+    assert_eq!(outcome(&run, "unit:b"), Outcome::Incomplete);
+    let keys = keys.into_inner().unwrap();
+    assert_eq!(keys.len(), 1);
+    assert_eq!(keys[0].check, name("unit:a"));
+    let cached = world.hub.lookup(&keys).unwrap();
+    assert_eq!(cached[0].as_ref().unwrap().outcome, Outcome::Fail);
 }
