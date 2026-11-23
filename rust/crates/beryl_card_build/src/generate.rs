@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::catalogs::Catalogs;
 use crate::complete::{self, Group, Keywords, complete_from_store};
-use crate::files::{card_files, set_crates};
+use crate::files::{CardFile, card_files, set_crates};
 use crate::names::{camel, constant, constant_of_camel};
 use crate::printed::{Subtypes, faces, shape_source};
 use crate::store::{Record, Store};
@@ -324,8 +324,16 @@ pub fn set_crate_source(
     group: &Group,
     printed: &mut Printed,
 ) -> Result<String, String> {
+    set_crate_source_for_files(&card_files(crate_dir), from_out, group, printed)
+}
+
+fn set_crate_source_for_files(
+    files: &[CardFile],
+    from_out: &str,
+    group: &Group,
+    printed: &mut Printed,
+) -> Result<String, String> {
     let store = printed.store;
-    let files = card_files(crate_dir);
     // This crate's own cards' names, and the other cards' names its files use.
     let mut constants = BTreeMap::new();
     let mut used_names = BTreeMap::new();
@@ -336,7 +344,7 @@ pub fn set_crate_source(
     let mut written = Vec::new();
     // The `Card` constants: the files' own cards, then every other card they name.
     let mut card_names: Vec<(String, String)> = Vec::new();
-    for file in &files {
+    for file in files {
         let name = store.in_set(&file.set, &file.module)?;
         written.push(name);
         let own = constant(name)?;
@@ -600,7 +608,15 @@ fn subtypes(root: &Path) -> Result<Subtypes, String> {
 /// With what is wrong, failing the build: [`set_crate_source`]'s errors.
 pub fn set_crate() {
     let crate_dir = env_path("CARGO_MANIFEST_DIR");
+    // The directory scan finds new files, but a reused build can miss removals when
+    // the remaining files are all older than its output. Watch each emitted module's
+    // source as well, so its absence invalidates the script. Use paths relative to
+    // the manifest so the watches work when the target directory is copied.
     println!("cargo:rerun-if-changed=.");
+    let files = card_files(&crate_dir);
+    for file in &files {
+        println!("cargo:rerun-if-changed={}/{}.rs", file.set, file.module);
+    }
     println!("cargo:rerun-if-changed=../../../data/set-groups.json");
     let (root, store) = repository(&crate_dir);
     let from_out = relative(&env_path("OUT_DIR"), &crate_dir);
@@ -619,8 +635,8 @@ pub fn set_crate() {
             sets: &sets,
             keywords: &keywords,
         };
-        set_crate_source(
-            &crate_dir,
+        set_crate_source_for_files(
+            &files,
             &from_out,
             &group,
             &mut Printed::new(&store, &subtypes),
