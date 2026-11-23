@@ -8,6 +8,11 @@ threads sizes them to that (or to `os.cpu_count()` when run by hand). Long
 background work that Ignite does not run, such as a tournament, runs at low
 priority (`system.utility`) instead.
 
+The public app commands in `src/beryl_tools/cli.py` reuse the native command
+parsers and runners in `src/beryl_tools/beryl3d/`. Look in `app.py` for desktop
+build, packaging and smoke, `phone_launch.py` for phone build and launch, and
+`phone.py` and `ios_smoke.py` for headless replays.
+
 The adapters in `src/beryl_tools/ignite/` list each check family's checks and
 report their results to Ignite (`ignite/checks/*.toml` names the adapter of each
 family). An adapter imports only domain modules, never a command's own

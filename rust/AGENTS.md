@@ -12,9 +12,9 @@ heavy command.
 
 ## Crates and card files
 
-- `crates/beryl_app` is the Tauri shell: the window, IPC commands,
-  `tauri.conf.json`, capabilities and icons. `docs/engine-architecture.md` §16
-  describes the other crates.
+- `crates/beryl_shell` resolves desktop data paths and named profiles.
+  `crates/beryl_session` runs the engine session and supplies each seat's view
+  and animation script. See `docs/engine-architecture.md` §16.
 - `crates/beryl_kernel/src/lib.rs` describes the state and mutator contract.
   `crates/beryl_rules/src/lib.rs` maps rules to their modules. Use
   `just citations coverage` to see which rules lack an ownership declaration.
@@ -44,9 +44,6 @@ heavy command.
   `Card::Counterspell` and import everything with `use crate::prelude::*;`; code
   outside the card files uses `beryl_card_names::names` (also re-exported as
   `beryl_cards::names`).
-- `ui/src/generated/protocol.ts` uses the shared types in `beryl_protocol`. The
-  TypeScript generation test runs in `beryl_session`. The generated file's
-  header gives the regeneration command.
 - The test decks are `decks::WU_CONTROL` and, before it,
   `decks::VINTAGE_WU_CONTROL`.
 
@@ -65,13 +62,13 @@ heavy command.
   `beryl_card_shared::props`. Each crate's integration tests are one binary,
   `tests/all/main.rs` with one module per file, because every test binary links
   the crate and its dependencies again after an edit.
-- Only leaf crates (the apps, the benchmark, the command line and Beryl 3D,
-  listed in `data/card-leaves-allowlist.json`) depend on `beryl_cards` or a set
-  crate as a normal dependency, and no `src/` file of any other crate names them
-  (the `card-leaves` check). Cargo rebuilds every dependent of a changed crate,
-  so this keeps a card edit from rebuilding the kernel, rules, search and
-  session crates. A test of another crate that needs real cards goes in its
-  `tests/` directory with `beryl_cards` as a dev-dependency.
+- Only leaf crates (the benchmark, the command line and Beryl 3D, listed in
+  `data/card-leaves-allowlist.json`) depend on `beryl_cards` or a set crate as a
+  normal dependency, and no `src/` file of any other crate names them (the
+  `card-leaves` check). Cargo rebuilds every dependent of a changed crate, so
+  this keeps a card edit from rebuilding the kernel, rules, search and session
+  crates. A test of another crate that needs real cards goes in its `tests/`
+  directory with `beryl_cards` as a dev-dependency.
 - `just oracle <card names>` plays a card's generated, rules-library and
   hand-written scenarios against XMage and Forge. It needs `just oracle-setup`
   once per machine.
@@ -127,31 +124,13 @@ heavy command.
   every UI fixture's recording, checking each animation script against its
   assertions (the `script` family in `ignite/checks/script.toml`).
 
-## The app and the phone apps
+## App checks
 
-- `just smoke` builds the debug app and launches it without a window or Dock
-  icon, and waits until the UI reports over IPC that it has loaded (about a
-  second once built). It fails on a build error or if the UI never loads.
-- `just mobile-setup` installs the phone toolchains, once per machine. On
-  Windows, install JDK 21 and set `JAVA_HOME`. Put the Android command-line
-  tools in `cmdline-tools/latest` under `ANDROID_HOME` (default
-  `%LOCALAPPDATA%\Android\sdk`). The recipe installs the pinned Android SDK
-  packages and Rust target for `ignite test android:`.
-  [Android command-line tools download](https://developer.android.com/studio#command-tools).
-- `just ios-smoke` builds the iOS app and launches it in a headless iOS
-  Simulator until the UI loads. `just ios` launches it in a simulator, which you
-  can drive with the iOS Simulator tool.
-- `just ios-device` signs the app and installs it on the paired iPhone, and with
-  `--no-install` it only builds. Agents install to the phone only when the user
-  asks for it in chat, and then pass `--user-asked`; without it the command
-  refuses to install for an agent.
-- `just android-smoke` and `just android` do the same in the Android emulator
-  (headless for agents; drive it with `adb shell input` or the WebView's
-  DevTools over `adb forward`).
-- A human runs `just dev` for the app with hot reload, or `just bundle` for a
-  release `Beryl.app`. A human runs `just table-pair` to build the debug app
-  once and open the `host` and `guest` profiles at a shared localhost table,
-  with WU Control dealt to both seats. Agents cannot run it.
+Use the [Beryl 3D workspace guide](beryl3d/AGENTS.md) for native client tests
+and packaging or launching the app. `ignite test native-app:` checks desktop
+startup, while `native-ios:` and `native-android:` build the phone packages. Use
+`just table-pair --headless` to reproduce a localhost session without opening
+windows.
 
 ## Benchmarks
 

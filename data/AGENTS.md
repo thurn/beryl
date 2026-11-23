@@ -105,26 +105,13 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   uses the requested part. `Primary` is the unlabeled group before "Move to".
   The Rust test in `beryl_table/tests/commands.rs` checks the shape of each
   action.
-- `table-appendix-map.json`: maps each carried-over row in the Cockatrice
-  appendix to a command id in `table-commands.json` or `gesture:` followed by
-  the title of a registered manual-table browser check. Rows with several
-  controls can list several targets. In the zone table, the key joins the zone
-  and Cockatrice label with `/`. Protocol rows use `Protocol / ` before the
-  label. Leave excluded rows out of the map. `ui/scripts/appendix.test.mjs`
-  checks the map against `docs/manual-multiplayer-cockatrice.md` and the
-  registry and verifies that excluded rows have no mapping.
-- `design-tokens.json`: the design tokens both clients draw with.
-  `just design-tokens` writes the web interface's `ui/src/design/tokens.css`
-  from it, and Beryl 3D's `kit_base` build script writes the constants of its
-  `tokens` module. `tokens` lists every CSS variable in order, each with a
-  `name`, a `kind` (`color`, `length`, `number`, `font`, or `css` for values
-  only CSS can use, which Beryl 3D skips), its CSS `value`, an optional `note`
-  written as a comment, and `group: true` for a blank line before it. `root` and
-  `rules` are the stylesheet's other declarations and rules. `flat` holds what
-  only Beryl 3D's flat layer uses (spacing, type styles, sizes, the panel color
-  and, under `mana`, the disc and ink colors of mana symbols in text), where a
-  number is a `value` or names the `token` whose length it takes.
-  `tools/src/beryl_tools/design_tokens.py` describes the format.
+- `table-appendix-map.json` records how the Cockatrice appendix rows map to
+  manual-table commands and gestures. Rows with several controls can list
+  several targets. Zone keys join the zone and Cockatrice label with `/`.
+  Protocol keys start with `Protocol / `. Leave excluded rows out of the map.
+- `design-tokens.json` supplies colors, lengths, numbers, fonts and the flat
+  layer's spacing, sizes and text styles. The `kit_base` build script derives
+  its `tokens` module from the file.
 - `ui-conventions.json`: the UI design rules, which `just conventions` turns
   into `docs/ui-conventions.md`. Edit the JSON, never the generated page.
 
@@ -167,5 +154,11 @@ reruns only the efficiency project's checks and the repository checks.
 
 ## Card images
 
-The app downloads card images on demand into its cache (`beryl_app`'s `art.rs`).
-No images are committed.
+The app downloads card images on demand and caches them through `beryl_art`.
+
+## Native client assets
+
+`audio/manifest.json` and `audio/loops.json` describe the files under
+`audio/assets/`. `just audio` regenerates those files from the staged source
+packs. See [Beryl 3D data](beryl3d/AGENTS.md) for game fixtures, layout profiles
+and motion tuning. No images are committed.

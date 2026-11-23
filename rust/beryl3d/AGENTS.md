@@ -1,8 +1,8 @@
 # Working in Beryl 3D
 
-Beryl 3D is Beryl's native client. See [Beryl 3D](../../docs/beryl-3d.md) for
-the frame contract, rendering and hosts. See
-[Beryl 3D architecture](../../docs/beryl-3d-architecture.md) for the client
+Beryl 3D is Beryl's native client on desktop and phones. See
+[Beryl 3D](../../docs/beryl-3d.md) for the frame contract, rendering and hosts.
+See [Beryl 3D architecture](../../docs/beryl-3d-architecture.md) for the client
 core's crate boundaries, arrangement, layout profiles and checks.
 
 ## Client core
@@ -43,7 +43,8 @@ granted.
 Use the smallest check that observes the change. `just b3d test` checks the
 corpus and standalone scenes in the desktop window matrix. Use a test name
 prefix for one scene or `--phone-only` for the phone windows. `just b3d record`
-builds the corpus pack. `just b3d corpus --sweep` checks card spec moments for
+builds the corpus pack from the fixtures in `data/beryl3d/fixtures.json` and
+card spec moments. `just b3d corpus --sweep` checks card spec moments for
 signatures the corpus lacks.
 
 ## Seeing the result
@@ -58,11 +59,15 @@ For a change in how something looks, open the picture from
 `just b3d png --scale 2` or a film of the affected span. Record the picture's
 path and what you saw on the ticket.
 
-For phone host changes, `just b3d ios-smoke` and `just b3d android-smoke` replay
-a recording headlessly and save a screenshot and frame log under
+Use `just smoke` for windowless desktop startup and `just bundle` to package a
+desktop release. Use `just table-pair --headless` for a localhost manual table
+and `just b3d live` to inspect a running debug process.
+
+For phone host changes, `just ios-smoke` and `just android-smoke` replay a
+recording headlessly and save a screenshot and frame log under
 `$BERYL_CACHE/b3d/phone`. Use the documented touch and lifecycle options for
 host input and suspend or resume. Install on a paired iPhone with
-`just b3d ios-device --user-asked` only when the user asks.
+`just ios-device --user-asked` only when the user asks.
 
 ## Frame budgets
 

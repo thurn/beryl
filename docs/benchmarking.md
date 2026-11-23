@@ -417,11 +417,12 @@ when counts and ABBA agree.
   skeptical of timing differences under about 2% that counts don't show.
 - **`just bench` builds the `search` profile** (fat LTO, `panic = "abort"`,
   `codegen-units = 1`, the M4 CPU), as the headless research binaries are built.
-  `--profile bench` inherits `release` instead, the shipped app's thin LTO;
+  `--profile bench` inherits the engine workspace's `release` profile;
   `just bench-count` uses it, since Valgrind's CPU is not the M4. Never
   benchmark a debug build.
-- **Don't time in CI.** `just ci` shares the machine with whatever else is
-  running; instruction counts could gate CI later, timing never.
+- **Use deterministic work counts in checks.** Wall-clock timings depend on what
+  else the machine is running. For native rendering, see
+  [Beryl 3D frame gates](beryl-3d.md#performance-gates).
 
 ## The Windows machine
 

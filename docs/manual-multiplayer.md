@@ -436,12 +436,9 @@ runs no game logic at all: it shows the views it is sent and sends back the
 actions its player takes. Assists are computed on the host too, for both
 players.
 
-Beryl's interface reaches its game through one interface with three
-implementations: the desktop app's own command channel, recorded games used by
-tests, and an HTTP server used for testing. The guest's app holds the link in
-Rust, behind the same commands a local table answers, and publishes the guest's
-updates with a local session ID. The table screen uses the same commands and
-update types for solo, hosted and joined play.
+The native desktop app hosts and joins tables on localhost. The guest's app
+holds the link in Rust and publishes updates under its own session ID. The table
+screen uses the same commands and update types for solo, hosted and joined play.
 
 ### The link
 
@@ -470,7 +467,11 @@ There are three implementations.
   to it. Two apps on one machine use it, and it never touches the internet.
 - **iroh:** for play between machines, described next.
 
-### Connecting over the internet
+### Shared iroh transport
+
+The shared session crate has an optional iroh transport. The native app ships
+with localhost TCP. The `iroh` check family exercises the optional transport
+over loopback with the relay disabled.
 
 iroh connects two endpoints by public key instead of by address. Each endpoint
 stays connected to a **relay**, a server that passes encrypted traffic between
@@ -499,11 +500,6 @@ An invite code is text. The second form below is the localhost link's.
 beryl:k7fq3mxdpw2a91hc…        key, relay address and table secret, encoded
 beryl-local:52114:3mxd         loopback port and table secret
 ```
-
-The app's optional `iroh` feature enables internet transport. `just dev`,
-`just bundle`, the mobile builds and standalone `just smoke` enable it. The
-regular slow app lane runs `just smoke --without-iroh`. Nightly checks exercise
-the iroh transport separately over loopback.
 
 ### Messages
 
@@ -587,32 +583,27 @@ for rejoining.
 The handshake compares `beryl_protocol::WIRE_HASH`. The build fingerprints the
 Rust definitions for table actions, game and lobby updates, and the link
 envelope, including their Serde attributes and custom serializers. It ignores
-comments and legacy TypeScript export attributes. It also includes other Rust
-tokens in those source files, so an edit in a wire module can change the hash
-even if its JSON is the same.
+comments. It also includes other Rust tokens in those source files, so an edit
+in a wire module can change the hash even if its JSON is the same.
 
-The switch from the generated TypeScript fingerprint preserves the hash for the
-transition schema. When the fingerprints differ, both players need to update to
-builds that agree. The host reports this as “Both players need the same version
-of Beryl.”
+When the fingerprints differ, both players need builds that agree. The host
+reports this as “Both players need the same version of Beryl.”
 
 ### Two apps on one machine
 
 Development and testing need a host and a guest on the same Mac.
 
-- **A profile gives an app instance its own data folder,** and so its own
-  identity, saved tables, decks and settings. Two instances started with
-  different profile names do not interfere.
+- **A profile gives an app instance its own data folder,** and so its own saved
+  tables, decks and settings. Two instances started with different profile names
+  do not interfere.
 - **The localhost link connects them,** so the pair runs with networking off.
-- **One command starts the pair** for a person: two windows, one hosting a table
-  with WU Control dealt to both seats.
-- **Automated checks use in-memory or loopback links** and open no app window.
-  Beryl's rule is that agents never open one. `just table-pair` is for a person.
-
-`just` is the command runner Beryl's developer commands are defined in.
+- **One command starts the pair** at a shared local lobby. The visible run uses
+  the `host` and `guest` profiles. The headless run uses temporary profiles and
+  exits after both clients join.
 
 ```bash
-just table-pair            # two windows on one Mac, joined over localhost
+just table-pair            # open the host and guest windows
+just table-pair --headless # verify the localhost connection
 ```
 
 ## Cards and decks
@@ -873,17 +864,16 @@ Cockatrice's set into Beryl's.
 Where Cockatrice's defaults collide with the platform, they are resolved as
 follows.
 
-| Key                        | At a manual table                                           | What gives way                                                                                           |
-| -------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Cmd+W                      | Look at top cards of library                                | Close window                                                                                             |
-| Cmd+M                      | Mulligan                                                    | Minimise window                                                                                          |
-| Cmd+,                      | Remove a −1/−1 counter                                      | The settings window                                                                                      |
-| Cmd+B                      | Move card to bottom of library                              | Beryl's bug report, which is Cmd+Shift+B at a table and stays Cmd+B everywhere else, the lobby included. |
-| Cmd+R, Cmd+P, Cmd+=, Cmd+− | Clear arrows, set power and toughness, add and remove power | The web view's reload, print and zoom                                                                    |
-| Cmd+Q                      | Quits Beryl after confirmation                              | Cockatrice's "Leave game", which it absorbs                                                              |
-| Cmd+Space                  | Stays with macOS (Spotlight)                                | "Next phase", which keeps Tab and gains Space                                                            |
-| Cmd+Z                      | Undo, which Cockatrice does not have                        | Nothing                                                                                                  |
-| F2 to F12                  | As in Cockatrice, where function keys are available         | Nothing. See below.                                                                                      |
+| Key       | At a manual table                                   | What gives way                                                                                           |
+| --------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Cmd+W     | Look at top cards of library                        | Close window                                                                                             |
+| Cmd+M     | Mulligan                                            | Minimise window                                                                                          |
+| Cmd+,     | Remove a −1/−1 counter                              | The settings window                                                                                      |
+| Cmd+B     | Move card to bottom of library                      | Beryl's bug report, which is Cmd+Shift+B at a table and stays Cmd+B everywhere else, the lobby included. |
+| Cmd+Q     | Quits Beryl after confirmation                      | Cockatrice's "Leave game", which it absorbs                                                              |
+| Cmd+Space | Stays with macOS (Spotlight)                        | "Next phase", which keeps Tab and gains Space                                                            |
+| Cmd+Z     | Undo, which Cockatrice does not have                | Nothing                                                                                                  |
+| F2 to F12 | As in Cockatrice, where function keys are available | Nothing. See below.                                                                                      |
 
 A Mac laptop's function keys are media keys unless Fn is held or the system is
 set otherwise. Every command Cockatrice puts on a function key therefore has a
@@ -1173,7 +1163,7 @@ table with one seat. Rules above that name "either player" or "the other player"
 apply to the one player there is. The far side of the table is drawn empty, and
 giving control and passing the turn to another player are unavailable.
 
-## Engine and stage boundary
+## Engine and client boundary
 
 - `beryl_table` owns state, actions, permissions, redaction, history, deck
   import and assists. `beryl_link` owns transport framing, the handshake and the
@@ -1190,11 +1180,9 @@ giving control and passing the turn to another player are unavailable.
   and receives its own redacted views. The host applies actions, completes
   prompts and saves the table. Both seats' publications are validated before the
   adapter commits a transition.
-- `ui/src/screens/Table.tsx` and `ui/src/table/` connect the table to the shared
-  stage. The manual `TableClient` and engine prompts are separate pointer
-  clients. Both use the same drawing and animation code. Manual IPC definitions
-  are in `beryl_protocol/src/ipc/table.rs` and the UI reaches them through
-  `ui/src/ipc.ts`.
+- The native client draws the table in `rust/beryl3d/crates/game_manual/`. It
+  shares the scene, table placement and script playback with engine games. The
+  table commands are defined in `beryl_protocol/src/ipc/table.rs`.
 
 ## Automated checks
 
@@ -1205,37 +1193,17 @@ giving control and passing the turn to another player are unavailable.
   assist proposals, undo and reconnection. Save tests cover a guest resuming
   after quitting and the host recovering play-or-draw, mulligan and keep prompts
   after reopening, including undo and rewind.
-- **Live browsers.** Run `just ui-test 'manual table'` for the live checks. The
-  files `ui/scripts/kept-table-*.mjs` use the HTTP harness in
-  `ui/scripts/table.mjs`. It can run a solo table or connect two pages to a live
-  host and guest over loopback TCP or an in-memory link. Those checks cover
-  lobby counts, sideboarding and score, openings, play and resolve, arrows,
-  assists, redaction, refusals, undo and reconnect. The private-hand drag check
-  verifies the shake and confirms that a revealed card can move. Phone-sized
-  browser checks cover touch controls, selection, drag, arrows, the command list
-  and a guest joining a desktop host.
-- **Recorded views.** `just ui-play` replays the solo table fixtures listed in
-  `ui/fixtures.json` on desktop, with the stage audits enabled. The `table-*`
-  recordings cover the opening, battlefield, hand, stack and piles. Live browser
-  checks exercise the menus, lobby, proposals and selection.
-- **Command inventory.** `just ui-unit` checks each carried-over appendix row
-  against a registered command or browser check. The table crate also checks the
-  registry's action templates.
-- **Offline transport and native startup.** The nightly iroh tests connect
-  loopback endpoints with the relay disabled. The feature also builds in
-  `just smoke`, `just ios-smoke` and `just android-smoke`. All three smoke
-  checks passed during delivery. The phone smoke checks launch the native apps
-  and verify startup.
+- **Recorded views.** `just b3d test table-` checks native manual-table
+  recordings from `data/beryl3d/fixtures.json` across the window matrix. Use
+  `just b3d list table-` to find a board and `just b3d tree` with `--do` to
+  inspect and drive it. The table crate checks the action templates in
+  `data/table-commands.json`.
+- **Live startup.** `just table-pair --headless` joins a native host and guest
+  over localhost. The `native-app`, `native-ios` and `native-android` Ignite
+  families check desktop startup and build the phone packages.
 
-## Manual QA
+## Manual reproduction
 
-Three paths remain unverified: iroh play between two machines on different
-networks, native shortcut handling in a real macOS window, and the iOS and
-Android apps beyond their startup smoke tests.
-
-`just table-pair` opens two windows on one Mac, with a host and guest joined
-over localhost. Use the [shortcut collision table](#keyboard-shortcuts) to check
-native keys while playing and after leaving the table. For the internet path,
-connect two machines on different networks with an invite and check the
-connection route and round trip time in the lobby. On each native phone app,
-start a solo game and join and resume a hosted game using the touch controls.
+Use `just table-pair` to exercise the [table shortcuts](#keyboard-shortcuts) in
+visible desktop windows. For a touch issue, use `just ios` or `just android` and
+reproduce the action at a solo table. The automated checks are the landing gate.

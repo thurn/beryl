@@ -1,9 +1,8 @@
 # Working on Project Beryl
 
 Project Beryl is a research project to build a Magic: The Gathering AI that
-plays as well as a strong human player. It is a Tauri 2 desktop app for Apple
-silicon Macs, with a Rust workspace behind a React and TypeScript UI. The
-repository is public.
+plays as well as a strong human player. Beryl 3D is its native Rust client for
+macOS, Windows, iOS and Android. The repository is public.
 
 The goal is to support 50,000+ different card definitions, so write modular code
 that scales to that size.
@@ -24,10 +23,10 @@ reference, `[CR 118.12a]`, and define its link at the end of the comment;
 not rules engine code: it cites a rule only where the card relies on something
 no vocabulary entry says, such as a ruling about an unusual interaction.
 
-This file holds the rules that apply to every change. `rust/`, `ui/`, `data/`
-and `tools/` each have their own `AGENTS.md` with the reference material for
-work in that directory, and `ignite/checks/` declares the checks. Read the one
-for the area you are changing.
+This file holds the rules that apply to every change. `rust/`, `data/` and
+`tools/` each have their own `AGENTS.md` with the reference material for work in
+that directory, and `ignite/checks/` declares the checks. Read the one for the
+area you are changing.
 
 ## Writing for readers
 
@@ -62,17 +61,16 @@ write:
 ## Layout
 
 - `rust/` is the Cargo workspace (`rust/AGENTS.md`).
-  - `crates/beryl_app` is the Tauri shell; `crates/beryl_mobile` supplies native
-    iOS and Android WebView snapshots, device details and sharing. Keep the
-    shell thin. Game rules and AI go in their own library crates under
-    `rust/crates/`, which build and test without Tauri.
+  - Keep game rules and AI in their own library crates under `rust/crates/`.
+    They build and test independently of the client.
   - Each card is one file, `rust/cards/<crate>/<set>/<card>.rs`. Adding a card
     means adding a file: build scripts generate every list of cards, and each
     card's mana cost, type line and header comment are generated from the card
     store.
-- `ui/` is the frontend: Vite, React and TypeScript in strict mode
-  (`ui/AGENTS.md`). Always call Rust through the typed wrappers in `src/ipc.ts`.
-  The phone uses the stage's layout in `src/stage/phone.ts` and `src/mobile/`.
+- `rust/beryl3d/` is the native client's Cargo workspace
+  (`rust/beryl3d/AGENTS.md`). The `beryl_3d` crate has the desktop entry point
+  and the Swift and Kotlin hosts. The layout and fixture data live under
+  `data/beryl3d/`.
 - `data/` holds data files, each described in `data/AGENTS.md`. The card store,
   `card-store.tsv`, is built by `just cards` and embedded in the app. The UI
   bundles no card data of its own.
@@ -178,25 +176,21 @@ runs the checks you name, and `ignite check` runs what the landing gate would.
 `ignite guide flaky-checks` holds the general rules for a ticket about a check,
 and the `cifix` skill adds Beryl's.
 
-A phone UI state is a shot in `ui/shots.json` with `?phone` in its route at both
-393×759 and 375×647. The shot checks include `phoneFaults` for text and touch
-target sizes (`ui/scripts/capture.mjs`).
+The native interface checks replay recordings and stories at the windows in
+`data/beryl3d/profiles/`. Run `just b3d test <prefix> --phone-only` for a
+focused pass over the phone windows.
 
 - A UI bug fix adds the broken state as a fixture or spec moment, so the generic
   UI checks (overlap, off-screen, reachability, duplicate objects, page errors,
   motion) cover it. If the bug is a new kind of problem, extend one of those
-  checks. Only write a custom scripted check in `ui/scripts/kept.mjs` when none
-  of the generic checks can express the property, and explain why in a comment
-  (K20 in `docs/engine-architecture.md`).
+  checks. Use a focused native integration test only when none of the generic
+  checks can express the property. Explain why in a comment (K20 in
+  `docs/engine-architecture.md`).
 - The counts in an allowlist under `data/` may only go down.
 - A check's cost is measured, and a check that costs much and catches nothing is
   replaced by a cheaper deterministic test or deleted.
-- Headless browser checks run at a higher priority than any build and share a
-  limited number of page slots across all sessions. Run only the browser checks
-  your change needs (`ignite test <check>`, `just ui-test <title>`,
-  `just specs --shots <card>`). Bare `just specs <card>` is not a check: it
-  serves the spec pages until interrupted, so a background wait on it never
-  ends.
+- Run only the interface checks your change needs. Use `just b3d spec <card>`
+  for a card or `just b3d test <prefix>` for a recording or story.
 
 ## Code structure
 
@@ -243,8 +237,8 @@ target sizes (`ui/scripts/capture.mjs`).
 
 ## Testing your work
 
-Use the cheapest test that covers your change. Agents never open a window;
-`just dev` refuses to run for them.
+Use the cheapest test that covers your change. Agents use windowless commands
+such as `just smoke` and `just b3d test`.
 
 1. Logic: `ignite test <names>` runs the Rust tests you name in your tree, and
    `just test-rust` runs the workspace's tests under cargo-nextest. Test engine
@@ -254,22 +248,16 @@ Use the cheapest test that covers your change. Agents never open a window;
    `card-writing` skill. Prefer fast tests of what a player or caller can
    observe (a decision, a protocol message, a saved file) over unit tests of
    private code, which mostly detect change rather than bugs.
-2. UI: run `just ui-typecheck`, and `just ui-unit` for the tests that need no
-   browser. Both first install `ui/node_modules` with `npm ci` when it is
-   missing or older than `ui/package-lock.json`. `ui/AGENTS.md` lists the
-   browser checks. To reproduce, debug or check a card's behavior in the UI, use
-   the `specs` skill.
-3. The app: `just smoke` builds the debug app, launches it without a window and
-   waits until the UI reports that it has loaded.
-4. Beryl 3D, the native client in `rust/beryl3d`: `just b3d tree`, `diff` and
-   `check` show and check what it draws as text, and `png` and `film` draw it
-   ("Seeing and checking" in `rust/beryl3d/AGENTS.md`).
-5. The phone apps: `just ios-smoke` and `just android-smoke` load the UI in a
-   headless simulator or emulator and require a PNG window snapshot
-   (`rust/AGENTS.md`). `just mobile-bugs` pulls their saved bug reports into the
-   Mac's bugs folder; `--device` also pulls from a paired iPhone. Agents install
-   onto the user's iPhone only when the user asks, with
-   `just ios-device --user-asked`.
+2. UI: use `just b3d tree`, `diff` and `check` to inspect the native client, and
+   `png` and `film` to see what it draws. For a card's behavior, use the `specs`
+   skill. See "Seeing the result" in `rust/beryl3d/AGENTS.md`.
+3. Desktop: `just smoke` builds the debug app and checks its first frame and
+   start screen without a window.
+4. Phone: `just ios-smoke` and `just android-smoke` replay a recording
+   headlessly and save a screenshot and frame log (`rust/beryl3d/AGENTS.md`).
+   `just mobile-bugs` pulls their saved bug reports into the Mac's bugs folder;
+   `--device` also pulls from a paired iPhone. Agents install onto the user's
+   iPhone only when the user asks, with `just ios-device --user-asked`.
 
 Benchmarks follow `docs/benchmarking.md`. Tournaments (`just tournament`,
 `just play` and `just review --agent`) use the whole machine for minutes to
@@ -286,8 +274,8 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
 
 - Animations follow Arena in what they show and when: what changed, who did it,
   where it went, in what order, and what stays still. No review is required to
-  land an animation: `just motion` checks it against its own recorded values,
-  and the `motion-review` skill runs only when the user asks for it.
+  land an animation: `just b3d check` checks motion in a replay, and the
+  `motion-review` skill runs only when the user asks for it.
 - Beryl keeps its own visual style: colors, fonts, icon artwork, card frames,
   and full-size cards that tap.
 - Beryl differs from Arena only where [UI Conventions](docs/ui-conventions.md)
@@ -334,9 +322,9 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
   enforces this). Add a body for every fix and for any change whose reason a
   reader couldn't guess from the subject. The body follows "Writing for
   readers": what was wrong as someone would have seen it, why, and what changed.
-- `just fmt` formats everything: black, rustfmt, prettier, mdformat (80 columns)
-  and the justfile. Python is typed (pyre, strict), Rust passes clippy
-  (pedantic) with `-D warnings`, and TypeScript is strict.
+- `just fmt` formats everything: black, rustfmt, mdformat (80 columns) and the
+  justfile. Python is typed (pyre, strict), Rust passes clippy (pedantic) with
+  `-D warnings`, and TypeScript is strict.
 - Scripts are Python in `tools/`, using only the standard library unless a
   dependency is clearly worth it.
 - Agents don't add Markdown files unless explicitly asked. README.md, the

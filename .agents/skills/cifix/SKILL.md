@@ -1,6 +1,6 @@
 ---
 name: cifix
-description: Beryl's guide to working a ticket about a check — a regression that tip verification found on staging, a flaky or hung check, or a check that costs much and never catches anything. Adds what is Beryl's to `ignite guide regression` and `ignite guide flaky-checks`: where to reproduce, what a fix must add, the order of remedies, protected checks and what must still cover a deleted browser check. Use when working such a ticket, or when asked to fix a failing, flaky or costly check, or to run /cifix.
+description: Beryl's guide to working a ticket about a check — a regression that tip verification found on staging, a flaky or hung check, or a check that costs much and never catches anything. Adds what is Beryl's to `ignite guide regression` and `ignite guide flaky-checks`: where to reproduce, what a fix must add, the order of remedies, protected checks and what must still cover a deleted interface check. Use when working such a ticket, or when asked to fix a failing, flaky or costly check, or to run /cifix.
 ---
 
 # Fixing a check or what it caught
@@ -57,9 +57,8 @@ nothing caught.
    environment (a timeout under load, files another process changes during the
    run, a temporary path or cache shared between trees, a download); then the
    check alone (a wall-clock threshold, a sleep, a first animation frame, a hash
-   map's order, two processes writing one file, free disk, a port, a browser
-   page). Try to reproduce it under load: run it 10 to 20 times beside a full
-   `just test-rust` or `just ui-test`. Load of 20 to 40 is this machine's normal
+   map's order, two processes writing one file, free disk, a port, an app process). Try to reproduce it under load: run it 10 to 20 times beside a full
+   `just test-rust` or `just b3d test`. Load of 20 to 40 is this machine's normal
    state, so a check has to pass under it.
 3. **Choose one remedy, in this order,** and record which and why on the
    ticket:
@@ -69,21 +68,19 @@ nothing caught.
      because of a shared file, a timeout, the disk or the network. Keep the
      step; never delete a lint.
    - **Replace it with a cheaper deterministic test** that keeps most of what
-     the check protects: a Rust unit test, a Node test with no browser, a check
-     against a recorded fixture, or a browser check on the paused clock that
-     waits for an event instead of a time. Count work instead of timing it.
+     the check protects. Use a Rust test, a recorded fixture or a story with
+     a controlled clock. Count work instead of timing it.
      Keep a timeout only to catch a hang, at about ten times the loaded
      duration. Then delete the old check.
    - **Delete it** when it has never caught a bug.
 
    Loosening a threshold, adding a retry and raising a limit are not remedies.
 4. **Never cut a protected check**: the families and checks listed under
-   `protected` in `ignite.toml` (the app starting, the `ui-smoke` checks,
-   clippy, pyre, the UI's typecheck, the source rules and the oracle families).
-5. **A browser check** you change follows `ui/AGENTS.md`. When you delete one,
-   make sure the generic UI checks (overlap, off-screen, reachability, duplicate
-   objects, page errors, motion) still cover what it showed, and that no fixture
-   or spec moment is left unused.
+   `protected` in `ignite.toml` (native app startup, Clippy, Pyre, the
+   source rules and the oracle families).
+5. **An interface check** follows `rust/beryl3d/AGENTS.md`. When you delete
+   one, verify that the recording or story still exercises the behavior and
+   that the generic interface rules cover it.
 6. **Verify.** Run a replaced or changed check 10 times under the same load as
    step 2 and record the passes on the ticket. A deleted check needs no runs.
 

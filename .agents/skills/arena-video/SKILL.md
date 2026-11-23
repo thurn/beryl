@@ -131,10 +131,11 @@ The kinds of event:
    a banner, a glow) it says so and draws what moved: crop closer or move the
    span, and where that fails, read the motion from a filmstrip.
 
-5. **Compare with Beryl.** Reach the same moment in Beryl with the `specs` skill
-   (`just specs --film`, `--motion`) or `just ui-shots`, and put the two side by
-   side: what is highlighted and when, what the prompt says, which buttons
-   exist, where things come from and go to, how long each beat lasts.
+5. **Compare with Beryl.** Use `just b3d spec <card> <moment> --film` for
+   a card or `just b3d png <recording> --at <moment> --tree` for a still.
+   Use `just b3d motion-film <verb> [case]` for a verb with Arena samples.
+   Compare what is highlighted and when, the prompt and its buttons, the
+   path of each object, and how long each beat lasts.
 
 6. **Report.** Give Arena's behavior as a numbered sequence, each step with its
    timestamp, so anyone can film it again. Then the differences from Beryl. Then

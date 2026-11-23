@@ -5,7 +5,7 @@ description: Get a verb's motion on Beryl's stage judged by an independent revie
 
 # Motion review
 
-`just motion` only holds the stage to the values a verb declares. It cannot say
+Automated replay checks measure the frames. They cannot say
 whether the motion is any good: straight glides, bare arrivals and jostling
 batches pass it. This review can.
 
@@ -20,67 +20,24 @@ a reviewer with none of your context, and report what it says.
 It is not a check: nothing here is a check family or is recorded, and no image
 is ever committed.
 
-## 1. Film
+## 1. Film the verb
 
-```sh
-just motion --film <verb> [case]
-```
+Run `just b3d motion-film <verb> [case]` and save its output for the reviewer.
+The tool selects a recording from `data/beryl3d/motion-recordings.json` or
+uses `--recording <name>`. It films the first step of each case from both
+seats in both layouts at 15 frames per second and 760 pixels wide. It cuts
+available Arena instances at the same rate and width. Use `--instances N`
+to choose how many Arena instances to cut.
 
-`<verb>` is one of `ui/verbs.json`'s; `[case]` one of its cases in
-`data/ui-conventions.json` (`just motion --values` lists them), for one case
-alone. It plays the verb's moments of the verb suite on the stage in stepped
-stage time, so the films are the same on any machine, and writes into
-`~/Library/Caches/beryl/motion/<checkout>/film/<verb>/`:
-
-- For each layout (desktop, phone), seat (yours, theirs) and case, the first
-  take of the case: `table.png` (the whole table before, as it begins, a third
-  and two thirds through, as it ends, after), `strip.png` (30 frames a second,
-  framed on everything that moves) and `ticks.png` (every tick of the 300 ms in
-  which the subject changes most). A take is a run of the verb's steps that play
-  together: one flight, or a batch. `--all` films every take.
-- `contact/<case>-<k>-<seat>.png`: Arena's instance `k` of the case
-  (`data/arena-motion.json`) over that seat's take on the desktop, both at one
-  scale of the table and the same time apart. `--instances N` takes more than
-  two a case.
-- `brief.txt`: the packet's text. The verb's prose, Beryl's values beside
-  Arena's, every sheet's path, and for each step what the tracker reads of it
-  (easing, sizes, the path's bow, turn and squash) and the stage's own pose of
-  its subject at every tick. The tracker's reading of each Arena instance is
-  beside, or why it cannot follow it.
-
-It prints every path. A verb with many cases takes minutes (fly, about eight):
-film one case while you work on it, and the whole verb for the review.
-
-A verb that plays in no moment of the suite cannot be filmed: add its moment to
-`ui/verbs.json` first (`watches`). CSS animations run on the page's time, not
-the stage's, and are stopped in every frame: an effect must play on the stage's
-clock to be seen, and reviewed.
-
-### Beryl 3D
-
-For Beryl 3D, the native client in `rust/beryl3d`, film with:
-
-```sh
-just b3d motion-film <verb> [case]
-```
-
-It finds a recording that plays the verb (the verb's entry in
-`data/beryl3d/motion-recordings.json`, or `--recording <name>`) and films the first step of
-each case from both seats in both layouts, at Arena's 15 frames a second and 760
-px wide, with `just b3d film`. Beside each case it cuts Arena's instances of it
-into `~/Library/Caches/beryl/b3d/motion-film/<verb>-<run>/arena/`, as
-`just motion --film` does. It prints each pair of paths and each film's text:
-the step, the steps playing meanwhile, the picture and what moves in each frame.
-That text is the packet; give its saved output to the reviewer in place of
-`brief.txt`. When no Arena recording is on the machine, it films Beryl 3D's side
-alone and says so. For one frame of a moment, use
+The output names each film and Arena frame folder and lists the step, any
+steps playing at the same time and what moves in each frame. The tool reports
+missing Arena recordings. For a closer look at one instant, run
 `just b3d png <recording> --at <moment> --tree`.
 
 ## 2. Hand it to a fresh reviewer
 
 One reviewer a verb, with a context of its own: a subagent (the Agent tool) or a
-session started for it, on Opus or Fable and never Sonnet, which overrides
-AGENTS.md's rule of Sonnet for subagents launched together. Never review in your
+session started for it, on Opus, or on Fable when the user explicitly asks for it. Never review in your
 own context, and never continue an earlier reviewer: each round gets a new one.
 
 Give it this and nothing else:
@@ -88,7 +45,7 @@ Give it this and nothing else:
 ```text
 Review the motion of the verb `<verb>` on Beryl's stage [, case `<case>`].
 Read <repo>/.agents/skills/motion-review/reviewer.md and follow it exactly.
-The packet is <path to brief.txt>.
+The packet is <path to the saved motion-film output>.
 Verbs already passed, for consistency: <names, or none>.
 ```
 

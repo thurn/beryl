@@ -297,7 +297,7 @@ Key Beryl 3D files to read and update together:
 
 - **Step durations, phase splits, stagger & regrouping**:
   `data/ui-conventions.json`, `rust/crates/beryl_protocol/src/script/timing.rs`
-  (and `timing/rules.rs`, `timing/tests.rs`, `ui/scripts/stage-table.mjs`).
+  (and `timing/rules.rs` and `timing/tests.rs`).
 - **Compact 3D spline & Hermite curve engine**:
   `rust/beryl3d/crates/kit_base/src/pose/spline.rs` (`Shape::Spline`,
   `HermiteCurve`, `SplineNode`) and
@@ -307,9 +307,8 @@ Key Beryl 3D files to read and update together:
   `data/beryl3d/profiles/desktop.json` and `phone.json`.
 - **Verb playback & camera projection**:
   `rust/beryl3d/crates/game_play/src/verbs/fly.rs`.
-- **Resting zone/hand order (keep both clients aligned)**:
-  `rust/beryl3d/crates/game_table/src/table/hands.rs`,
-  `ui/src/game/handLayout.ts`, `ui/src/stage/phone.ts`.
+- **Resting zone and hand order**:
+  `rust/beryl3d/crates/game_table/src/table/hands.rs`.
 - **Probe tests**: `rust/beryl3d/crates/game_probe/tests/all/verbs_fly_draw.rs`.
 
 Essential motion translation rules:
@@ -331,9 +330,8 @@ Essential motion translation rules:
   preserving true 3D depth for shadows and layering.
 - **Check resting zone order, Z-rotation symmetry, and edge-on flips**:
   - Verify which side of a zone newly arriving cards enter (e.g., opponent hand
-    cards are mirrored across the table and enter the **leftmost** slot in both
-    Beryl 3D and the web client; otherwise endpoint clamping creates an
-    end-of-flight U-turn).
+    cards are mirrored across the table and enter the **leftmost** slot.
+    Clamping to a different slot can create an end-of-flight U-turn).
   - `CentredFan` with `inverted: true` rotates opponent hand cards by `π` about
     local Z; set `start_half_turn` on symmetric face-down departures so cards do
     not spin 180° in-plane mid-flight.

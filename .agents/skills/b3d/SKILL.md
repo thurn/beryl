@@ -63,6 +63,14 @@ faults and names the seat and window where they occurred. `test --every-tick`
 checks between the usual check times. Bad names, moments, locators and options
 exit with status 2 and print the nearest available names or matching elements.
 
+## Run the app without a window
+
+Use `just smoke` for startup and `just table-pair --headless` for a local
+host and guest. For player-driven tests against the engine, use
+`just b3d play --for <duration>` and the printed `just b3d live` commands.
+The [ui-review skill](../ui-review/SKILL.md) covers live play and the
+[specs skill](../specs/SKILL.md) covers card recordings.
+
 ## What these tools cannot show
 
 A text replay supplies a stub atlas. A `tree` line confirms text layout, and

@@ -225,18 +225,17 @@ restore the old behavior.
   about 14 card widths across, on the desktop and the phone. A card's turn and
   how far it sinks follow its distance from the fan's middle, so a crowded hand
   lies nearly flat and a spread one curves, and no card turns or drops further
-  than its neighbors. In the web client, mana symbols float above the top right
-  corner so costs stay visible when cards overlap (by-c4f4, by-kgn7, by-pic0).
-  Beryl 3D shows the printed cost on the card face. Inspecting a card reveals
-  its printed cost when a neighbor covers it. Measured from whole-table frames:
-  a card's turn grows by about 0.0275° for each pixel it lies from the middle,
-  with cards 180 pixels wide on a table 1920 wide, at 5, 6, 7, 8, 10 and 18
-  cards. Its outer cards turn about 11° at 8 cards and 14° to 15° at 10 and 18.
-  Cards sit about one card's width apart until the hand reaches the turn button,
-  then close up. Each card's mana cost floats above its top right corner, over
-  the card beside it, so that every cost shows at 10 cards (nBj2ikeYCtk 1:07.0,
-  sybcO8S7x6A 24:27.0, FGsR_FGChOU 2:25.0, kvVLJ_cS_KE 6:24.0, uzg_P976qhc
-  17:20.0, \_IBqPx0gcag 12:00.0, sybcO8S7x6A 51:04.0).
+  than its neighbors. Beryl 3D shows the printed cost on the card face.
+  Inspecting a card reveals its printed cost when a neighbor covers it. Measured
+  from whole-table frames: a card's turn grows by about 0.0275° for each pixel
+  it lies from the middle, with cards 180 pixels wide on a table 1920 wide, at
+  5, 6, 7, 8, 10 and 18 cards. Its outer cards turn about 11° at 8 cards and 14°
+  to 15° at 10 and 18. Cards sit about one card's width apart until the hand
+  reaches the turn button, then close up. Each card's mana cost floats above its
+  top right corner, over the card beside it, so that every cost shows at 10
+  cards (nBj2ikeYCtk 1:07.0, sybcO8S7x6A 24:27.0, FGsR_FGChOU 2:25.0,
+  kvVLJ_cS_KE 6:24.0, uzg_P976qhc 17:20.0, \_IBqPx0gcag 12:00.0, sybcO8S7x6A
+  51:04.0).
 - **An arrow to the pointer.** While a target is chosen, an arrow runs from the
   spell or ability that asks to the mouse, thin and pale. On something that may
   be chosen it becomes the arrow the choice will draw, in that arrow's color and
@@ -655,10 +654,9 @@ ability or a player by a step of the script the session sends
 (`rust/crates/beryl_protocol/src/script`, K23). The list is closed: what Arena
 does not show is composed from these. A verb's duration, delay, stagger and
 curve, and each case's, are the values below. The session reads them to time
-each step of a script it sends (`beryl_protocol`'s `script/timing.rs`), and both
-clients play the timing they are sent; `just motion` holds the stage to them;
-Arena's measured instances are kept beside them as reference in
-`data/arena-motion.json` (K27).
+each step of the script (`beryl_protocol/src/script/timing.rs`). Beryl 3D plays
+that timing. `just b3d check` checks the motion in a recording, and
+`data/arena-motion.json` holds Arena's measured instances (K27).
 
 - **fly.** A card travels from where it is to its new place, and flashes as it
   lands on the battlefield, unless it is a land played from a hand: a land
@@ -906,11 +904,10 @@ Arena's measured instances are kept beside them as reference in
 
 An effect is light or a change of surface on one card or one player's life
 total, begun by a step of a verb as it starts, as it ends or as its blow lands
-and played on the stage's clock (`ui/src/stage/effects.ts`): it never moves a
-card and never holds up the script. The list is closed, each effect has one look
-in Beryl's skin (`ui/src/stage/effects.css`), and a verb names the effects its
-steps begin. A mark says what a player may do; an effect says what just
-happened, and is gone.
+and played on the client's script clock. Effects leave card placement and script
+timing alone. The list is closed. Each effect has one look defined under
+`data/beryl3d/effects/`, and a verb names the effects its steps begin. A mark
+says what a player may do; an effect says what just happened, and is gone.
 
 - **glow.** A halo of warm light around a card, bright at once, that spreads and
   fades: the card is new here, is leaving whole, or sends a streak. On the

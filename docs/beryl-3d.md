@@ -1,8 +1,7 @@
 # Beryl 3D
 
-Beryl 3D is the native Rust client for Beryl. It plays sessions from the same
-rules engine as the web interface and draws the game with a GPU. The native
-client runs alongside the web interface until [the switch](#the-switch).
+Beryl 3D is Beryl's native Rust client on macOS, Windows, iOS and Android. It
+draws the game with a GPU and uses Beryl's session and rules engine.
 
 [Beryl 3D architecture](beryl-3d-architecture.md) describes the client core's
 crate boundaries, scene tree, layout profiles, arrangement, features and checks.
@@ -28,8 +27,8 @@ performance.
 
 ## Decisions
 
-- **C1. Both clients stay active until the switch.** The session supplies script
-  timing so fixes to it are shared.
+- **C1. The session supplies script timing.** Every host plays the timing in the
+  script.
 - **C2. The performance floor is 2015-class hardware.**
 - **C3. Screens use a retained tree of named elements with flexbox and grid.**
   A10 extends the tree to the table and adds relations between its nodes.
@@ -37,8 +36,8 @@ performance.
   contract.
 - **C4. The table is a 3D scene with a fixed camera orientation per profile.**
   Prompts, menus and text can be drawn flat over the scene.
-- **C5. Interface checks read frame records.** The web screenshot comparisons
-  are a temporary exception for parity. Beryl maintains one renderer.
+- **C5. Interface checks read frame records.** The app and picture tools use the
+  same renderer.
 - **C6. A card face is composed into one texture per size.** Board-size faces
   serve the table, and a bounded cache holds the full-size faces being read.
 - **C7. The desktop uses `winit`.** Swift and Kotlin hosts own phone input,
@@ -50,8 +49,6 @@ performance.
 - **C10. The gate holds the worst single frame and the total.** A5 amends the
   gate to use per-board budgets and record a trend.
   [Checks](beryl-3d-architecture.md#checks) describes both.
-- **C11. The project's owner decides when to switch clients and when to delete
-  the web client.** Feature coverage is a prerequisite.
 - **C12. Beryl owns its presentation code over `wgpu`, `taffy` and `parley`.**
   This keeps the work of an animation frame under Beryl's control.
 - **C13. GPU gates count work.** When actual device performance disagrees with a
@@ -160,6 +157,19 @@ app connects it to the session and platform services.
   surface when Android recreates it.
 - **Windowless.** Text inspection can drive the client without a GPU. Offscreen
   capture uses the renderer and the asset path used by the app.
+
+`just dev`, `just bundle` and `just smoke` build the desktop client. The bundle
+includes the icon and audio on macOS and an `audio/` directory beside the
+executable on Windows. The macOS icon lives under `beryl_3d/macos/`.
+
+The phone projects live under `beryl_3d/ios/` and `beryl_3d/android/`. Both use
+the app identifier `ca.thurn.beryl3d`. The Android project includes the Gradle
+wrapper. Use `just ios` and `just android` to launch in a simulator or emulator.
+`just b3d ios-build` and `just b3d android-build` build packages without
+launching them. For Android builds on Windows, set `JAVA_HOME` to JDK 21 and
+install the Android command-line tools under
+`%LOCALAPPDATA%\Android\sdk\cmdline-tools\latest` or the equivalent under
+`ANDROID_HOME` before running `just mobile-setup`.
 
 The phone hosts call the Rust app through the C ABI in `beryl_3d/src/ffi`. The
 boundary carries surface state, logical size and safe insets, time, gestures and
@@ -475,9 +485,10 @@ before and after landing.
 
 ### Recordings
 
-The recorder builds a shared pack of named views, scripts and replies. Card
-specs supply moments that need a real session. Authored stories supply states
-directly, including the stress boards. See
+The recorder builds a shared pack of named views, scripts and replies.
+`data/beryl3d/fixtures.json` defines the named fixtures. Card specs supply
+moments that need a real session. Authored stories supply states directly,
+including the stress boards. See
 [Scenes](beryl-3d-architecture.md#scenes-recordings-and-stories) for how to
 choose between them.
 
@@ -551,19 +562,18 @@ the zero-allocation and native rank assertions.
 
 ## Checks and isolation
 
-Ignite declares the native check families in `ignite/checks/beryl3d.toml`. They
-select work on native inputs and use checked-in web references for parity. The
-web drift and timeline drift exploration checks refresh the comparison against
-the live web interface separately. This lets changes to the shipping web client
-land without waiting for native replays.
+Ignite declares source, replay, interface, corpus and frame checks in
+`ignite/checks/beryl3d.toml`. The shared script checks, windowless desktop
+startup, iOS Simulator build and Android APK build are in
+`ignite/checks/script.toml`. The gate uses automated checks.
 
 ## Sound
 
-Both clients use the same audio files and list of cues. `game_play` lists each
-due cue in `Frame::sounds`, on the script clock, so a replay can check a cue
-against its step. The host sends cues and settings to the audio service. Effects
-can be decoded ahead of play. Music is loaded as needed and uses the shared loop
-definitions. Windowless runs are silent.
+The hosts use the cues and loop definitions under `data/audio/`. `game_play`
+lists each due cue in `Frame::sounds` on the script clock so a replay can check
+a cue against its step. The host sends cues and settings to the audio service.
+Effects can be decoded ahead of play. Music is loaded as needed and uses the
+shared loop definitions. Windowless runs are silent.
 
 The app uses `rodio` for decoding and mixing. Desktop and iOS use its playback
 support. On Android the Kotlin host pulls samples into an `AudioTrack`. This
@@ -589,19 +599,28 @@ parked Ignite epic. Each report from that launch files as a child of the same
 epic. The report folder keeps the launch ID, so `just bugs file` can group
 reports saved while Ignite was unavailable and reports pulled from phones.
 
-## Migration and compatibility
+`just mobile-bugs` imports from the native app's `Documents/bugs` on iOS and
+`files/bugs` on Android. Pass `--device` to include a paired iPhone.
 
-### What the two clients share
+## Saved data and compatibility
 
-- The session, its protocol and script timing.
-- The Arena conventions and timing in `data/ui-conventions.json`, the design
-  tokens, fixtures, card specs and audio assets.
-- Art downloads and the disk cache in `beryl_art`. Both clients use shared
-  profiles, bug storage and game history.
+### Desktop data
 
-Replays and the games ledger use the shared profile folder, so either client can
-resume a saved game. Native settings are stored separately from the web
-interface's browser settings.
+`beryl_shell` resolves the desktop data paths. The data folder holds replays,
+the games ledger and the deck library.
+
+| Platform | Data folder                                    | Log folder                           |
+| -------- | ---------------------------------------------- | ------------------------------------ |
+| macOS    | `~/Library/Application Support/ca.thurn.beryl` | `~/Library/Logs/ca.thurn.beryl`      |
+| Windows  | `%APPDATA%\ca.thurn.beryl`                     | `%LOCALAPPDATA%\ca.thurn.beryl\logs` |
+
+Set `BERYL_PROFILE` to give an instance its own data under
+`<data folder>/profiles/<name>`, with `logs/` and `bugs/` inside the profile.
+The default profile writes reports to `<data folder>/bugs`. `BERYL_BUGS`
+overrides the report folder.
+
+Beryl 3D keeps the existing desktop saves and profiles. Each phone package keeps
+its data in its own application sandbox.
 
 ### Recording timelines
 
@@ -635,8 +654,6 @@ boundary so upgrades stay local.
 
 ## Alternatives considered
 
-- **Timing specified in each client.** Sharing the session's timing makes
-  changes to waits and cues one rule for both clients.
 - **A full engine such as Bevy.** Owning the loop and using `wgpu` directly keep
   the per-frame scheduler and scene transfer out of Beryl's frame path. In the
   2026-11-14 prototype, Bevy used about twenty times the CPU per frame for the

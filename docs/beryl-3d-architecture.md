@@ -338,8 +338,8 @@ The stories under `kit_fx/stories/` play the layers on sample surfaces.
 
 ## Toolkit capabilities
 
-The web platform gave the first client these for nothing. The toolkit provides
-each once, for every feature, instead of where a fix first needed it.
+The toolkit provides each once, for every feature, instead of where a fix first
+needed it.
 
 | Capability        | What the toolkit provides                                                                                               |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -374,8 +374,7 @@ no focused element took to the feature that declared it. `Client::shortcuts`
 lists every declaration, and `Shortcut::describe` gives a binding's words for a
 menu row or tooltip. `Client` matches no chord of its own.
 
-A capability's conformance is shown by stories that draw it. The web interface's
-CSS samples stay the reference for paint until the switch.
+Stories exercise each capability's drawing and layout.
 
 ## Scenes: recordings and stories
 
@@ -444,15 +443,16 @@ say only what a program cannot.
 
 ## Checks
 
-- **The interface checks** are generic, as before, with "relations hold" added.
-  They run on every story and on the corpus.
+- **The interface checks** apply the same rules to standalone stories and corpus
+  recordings, including whether the declared layout relations hold.
 - **The corpus** selects recordings by distinct **signature** and includes every
-  fixture. A signature covers what the client can tell apart in a recording: the
-  shape of each view (how many objects in each zone, grouped as the table groups
-  them), each script's verbs and beats, each prompt's shape and its numbers of
-  candidates and buttons, and each text's measured number of lines. Card names
-  and rules text are left out. `data/beryl3d/corpus.txt` names the corpus, and
-  the recordings pack built before a landing holds only those recordings.
+  fixture from `data/beryl3d/fixtures.json`. A signature covers what the client
+  can tell apart in a recording: the shape of each view (how many objects in
+  each zone, grouped as the table groups them), each script's verbs and beats,
+  each prompt's shape and its numbers of candidates and buttons, and each text's
+  measured number of lines. Card names and rules text are left out.
+  `data/beryl3d/corpus.txt` names the corpus, and the recordings pack built
+  before a landing holds only those recordings.
 - **At the tip**, a job with no deadline records every moment of every card,
   runs the interface checks on all of them, and files a ticket naming any
   signature the corpus lacks, with the command that adds it.

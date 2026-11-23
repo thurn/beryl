@@ -9,7 +9,7 @@ Find what is wrong with Beryl's UI the way a strong Magic player would find it o
 their first evening with the app, but with a QA engineer's instruments. The
 output is a ranked list of defects, each with steps to reproduce and evidence.
 
-You are judging the experience, not the code. Read `ui/src/` freely to learn
+You are judging the experience, not the code. Read `rust/beryl3d/` freely to learn
 what something is meant to do, but every finding must be something a player
 sees, waits through, or cannot do.
 
@@ -20,8 +20,8 @@ sees, waits through, or cannot do.
 - **Two reviewers find much more than one.** Tested against a set of known
   defects, a single review found about two thirds of them, and two
   independent reviews with different seeds found about five sixths. For a full
-  audit, run two, each in its own checkout: `just ui-live` records fixtures into
-  the checkout, so two runs in one checkout collide.
+  audit, run two with separate live app processes and record both opponents
+  and the game seeds when available.
 - **Reviews tend to check that something exists and stop there.** The misses
   were things reviewers saw and called "shown" or "readable" without judging
   how they looked. They also skipped checks that took manual work, such as
@@ -97,108 +97,51 @@ Arena and UI Conventions settle:
 A flow that works but breaks one of these principles is a finding. It is Major
 when it affects something players do every turn, and Design otherwise.
 
-## Harness
-
-`just ui-live` builds `beryl_cli`, serves the app's real game commands
-(`beryl_cli serve`), serves the UI against them (`?live=`), and holds a headless
-WebKit page open. It prints three lines: `app`, `drive` (a URL) and
-`screenshots` (a folder). Start it in the background and keep it running for
-the whole review. Use `--port 0` and the printed URLs so parallel reviews
-get separate ports. Keep track of the job you started.
+## Native harness
 
 ```bash
-just ui-live --port 0 > "$SCRATCH/live.log" 2>&1 &
-until grep -q "ui-live: screenshots" "$SCRATCH/live.log"; do sleep 1; done; cat "$SCRATCH/live.log"
+just b3d play --for 20m
+just b3d live tree --app <pid>
+just b3d live png --app <pid>
+just b3d live do 'press button "Keep"' --app <pid>
+just b3d frames
+just b3d live quit --app <pid>
 ```
 
-Drive the page by POSTing the body of an async JavaScript function to the
-`drive` URL. It runs in Node with Playwright's `page` and these helpers in
-scope, and returns JSON:
+- **Start** with `just b3d play --for <duration>` (at most 1h; `--opponent
+  <agent>` picks another, `mcts-hidden` by default). It opens the windowless app
+  on a fresh game, waits until the tree shows the `game` region and prints the
+  process id, the socket and the commands below. The app ends itself after
+  `--for`, so keep the review inside it.
+- **Read the table** with `live tree`: each line is a locator, with its place,
+  box and states, and the first line is the app's clock (`t=<ms>ms`). Look at
+  pictures with `live png` and read the PNG it names, before and after every
+  action.
+- **Act** with `live do '<action>'`: `press`, `hover`, `drag` and the other
+  actions in the [b3d skill](../b3d/SKILL.md). Use the tree to locate targets
+  and the picture to judge which targets a player can discover and reach.
+- **Measure** with the tree's clock for waits (take the `t=` before and after an
+  action, and until the next prompt appears), and `just b3d frames` for frame
+  times, late frames and the worst frames of the run.
+- **Quit** with `live quit`. Do it after a failed check too.
 
-```bash
-curl -s "$DRIVE" -d 'await page.getByRole("button", {name: "Start", exact: true}).click(); return await shot("started")'
-```
-
-- `probe.act(name, action, {samples?, wait?})` is how to take every action. It
-  takes a screenshot before, runs `action` (an async function), takes
-  screenshots 100 ms, 500 ms and 2 s after it ends, waits for the next decision
-  (up to `timeout`, 120 s by default) and takes one more. It returns the
-  screenshot paths, the latency to the first view and to the decision
-  (`firstViewMs`, `decisionMs`), what moved, and the game events that arrived
-  meanwhile. Read the screenshots it returns, and quote its latencies rather
-  than timing things yourself.
-- `probe.compare(name, [locators or selectors])` crops each element and lays
-  the crops side by side in one labelled image. Use it to judge whether states
-  can be told apart, or whether things that should look alike do.
-- `probe.sweep(locator, {dwell?})` moves the pointer slowly across every element
-  the locator matches, left to right, the way a player browses a row. For each
-  stop it reports anything other than the hovered card that moved, and anything
-  that became covered. Run it on every row of cards: your hand, each
-  battlefield row, the stack and each pile.
-- `shot(name)` saves a screenshot and returns its path. Read the PNG to see it.
-  Take one before and after every action, and more during waits.
-- `probe.pointAt(locator)` moves the mouse onto the visible part of an element
-  without scrolling. Use it, or `page.mouse`, for hovering and for drags
-  (`page.mouse.down()`, `move(x, y, {steps: 15})`, `up()`). Playwright's `hover`
-  and `click` scroll their target into view first, which a player's pointer
-  never does.
-- `probe.motion(selector?)` starts recording every tracked element's box each
-  frame. It returns a function: call it after your action, and it waits for N ms
-  (1000 by default), then reports what moved or resized, how far and over how
-  many frames, and which boxes scrolled.
-- `probe.covered(selector?)` lists elements that something else sits on top of.
-- `probe.truncated()` lists visible text cut off by its box.
-- `probe.timeline({since})` gives the live game's ground truth: every command
-  the page sent, and every view the engine emitted, with its turn, step,
-  priority, whether the human was asked something, and the game events in it
-  (casts, zone changes, taps, damage, attacks, and so on). `since` is a
-  `performance.now()` time on the page.
-- `probe.decision(action?, timeout?)` runs `action` (an async function), then
-  waits for the next view that asks the human something or ends the game. It
-  reports how long that took, how many views arrived, and what is being asked.
-- `errors` lists the page's errors so far. Any entry is a finding.
-
-A change to `ui/scripts/drive.mjs` needs a restart, and a change under `ui/src/`
-reloads the page (which loses the game, as it would in the app). Stop the
-harness when you finish, including after a failed check. Interrupt its
-terminal session with Ctrl-C, or send SIGTERM to your `by ui-live` process
-so it cleans up its children. Verify that its printed app and driver ports
-no longer have listeners.
-
-The page is 1600×900. Restart with `--width 1280 --height 800` once to check a
-small window. The default debug build gives the agents the same speed as
-`just dev`, which is what the player sees.
-
-Recorded fixtures reach rare states quickly: `/?fixture=<name>&at=<n>#/game`,
-named in `ui/fixtures.json`. Use them only for states that live play does not
-reach. They replay views with no real timing, so judge flow and timing live.
-
-Practical notes from earlier reviews:
-
-- **Locators.** Use `exact: true` with role names, or the cards' `data-card`
-  and `data-slot` attributes. Loose names match card text too. Menu entries may
-  not be exposed as buttons by role, so `page.locator("button", {hasText})`
-  can find what `getByRole` misses.
-- **Slow agents.** A searching agent can take several minutes per decision.
-  Your shell tool may time out before `curl` returns, so for long waits pass
-  `{wait: false}` to `probe.act`, then poll `probe.decision(null, 100000)`.
-- **Time on the slow agent.** You do not need to finish a game against the
-  slowest agent by hand. Play it until you have measured its waits on each
-  kind of moment (the opening, your turn, its turn, a response), then finish
-  coverage with faster opponents.
+Use `just b3d list` to find recordings for states live play cannot reach.
+`data/beryl3d/fixtures.json` defines the named fixtures. `just b3d check`
+reports interface faults in a recording. Use `tree`, `diff`, `png` and
+`film` to inspect its actions at specific times and test it in both layouts.
 
 ## Coverage
 
 Keep a ledger as you go and do not stop until it is full:
 
-- **Every decision kind.** `Kind` in `ui/src/generated/protocol.ts` lists what
-  the engine can ask. For each kind, meet it live if you can (or else in a
+- **Every decision kind.** The prompt shapes and purposes in
+  `rust/crates/beryl_protocol/src/protocol/` describe what the engine can ask. For each kind, meet it live if you can (or else in a
   fixture), answer it at least two different ways, and note how it was asked.
 - **Every piece of state.** `ObjectView`, `PlayerView` and `StackItem` in the
-  same file list what the engine tells the UI. For every field of those types,
+  protocol module list what the engine tells the UI. For every field of those types,
   find how the screen shows it. If you cannot find it, that is a finding. For
   each field that is drawn, give the verdict that **Legible state** below asks
-  for, citing a `probe.compare` image. "Shown" and "readable" are not
+  for, citing paired screenshots. "Shown" and "readable" are not
   verdicts.
 - **Every routine action.** Count the gestures and prompts each of these takes,
   and compare each count with Arena's:
@@ -212,8 +155,8 @@ Keep a ledger as you go and do not stop until it is full:
 - **Every multi-pick.** Meet each decision that takes several picks with at
   least three eligible choices. That includes assigning several of your
   creatures to one of theirs, as when two block one attacker. Set the state up
-  in play, or use a fixture from `ui/fixtures.json` that names it.
-- **Every row swept.** Run `probe.sweep` on each row of cards, in an early
+  in play, or use a fixture from `data/beryl3d/fixtures.json` that names it.
+- **Every row swept.** Move the pointer across each row of cards, in an early
   state and on a crowded board.
 - **Every opponent.** The start screen lists agents. Play at least one full game
   against the default and one against the slowest, searching agent. Waiting on
@@ -224,8 +167,8 @@ Keep a ledger as you go and do not stop until it is full:
 - **Long enough to get crowded.** Play past turn 8 at least once, so the board
   is busy and combat, triggers, counterspells and removal have come up.
 
-Use a seed (the start screen's field) for each game and record it, so every
-finding can be reproduced.
+Save the replay or record the game seed when available. Include the opponent,
+turn and exact action with each finding.
 
 ## The loop
 
@@ -234,20 +177,16 @@ At every step, do this:
 1. **Look.** Take a screenshot. Before you act, write down what the screen tells
    you: whose turn, what step, what just happened, what you can do now, and what
    you expect your action to do.
-2. **Check against the truth.** Compare that with `probe.timeline()` and the
-   open decision. Every disagreement is a finding: an event you could not see,
-   a highlighted card that the decision does not offer, an offered option with
-   no visible way in, a step or turn shown wrongly. For a wrong motion, read
-   the script the session sent (`just specs --script <card>`, the `specs`
-   skill): it says whether the session or the stage is at fault.
+2. **Check the state.** Use `live tree` to compare the visible board and
+   prompt with the resolved elements and their states. For a wrong motion,
+   find the same case in a recording or card spec and inspect its script
+   steps with `just b3d timeline`.
 3. **Act as a player would.** Use the pointer, at visible points, and the
    gestures the UI seems to invite (drag for cards, click for buttons). If the
    way to do something is not obvious, record that before you read the code to
    find it.
-4. **Watch what happens next.** Take the action through `probe.act`, including
-   the first click on the start screen and clicks that open menus (pass
-   `{wait: false}` when no decision will follow). Look at every screenshot it
-   returns, and note what the screen showed between them.
+4. **Watch what happens next.** Use `live do` to act. Capture the next
+   frame with `live png` and use the frame log to measure an unexpected wait.
 5. **Judge.** Did it do what you predicted? How long until the screen first
    responded, and until you could act again? Did anything move, appear or vanish
    that you did not cause?
@@ -264,7 +203,7 @@ everywhere it could occur, not just at the first place you think of.
   screens in their own right. Capture them, check that what they say is true,
   and use every control they offer.
 - **Things that happen without you.** When several views arrive between two of
-  your decisions (`views` > 1), the game moved on without you. Check that each
+  your decisions, the game moved on without you. Check that each
   event in those views was visible as it happened, in order, and long enough to
   read. It is not enough that the end state is right: each opponent action and
   automatic event must be visible as it happens.
@@ -287,16 +226,15 @@ everywhere it could occur, not just at the first place you think of.
   board or the card they are about, cut-off text, and prompts the client could
   answer itself (one sensible answer, or answers that make no difference).
   Compare each with conventions.md.
-- **Stillness.** `probe.sweep` each row of cards, and watch `probe.act`'s
-  motion report around each new view. Only what you point at, or what changed
-  in the game, should move. If other elements move, get covered, or the page
-  scrolls, report the measured distances.
-- **Reachability.** Run `probe.covered()` in several states, especially with a
-  full hand and a busy board. Every zone and every card must be visible or
+- **Stillness.** Hover across each row of cards and compare tree bounds
+  before and after. For a replay, use `diff` and `film` to see unrelated
+  objects that shift or get covered. Report the measured distances.
+- **Reachability.** Use `check` on recordings with a full hand and a busy
+  board. In the live game, try each card and zone. Every item must be visible or
   reachable, and every pile (graveyard, exile, library count) must open for
   browsing where the rules let a player look.
 - **Legible state.** Judge how each state is drawn, not only whether it is.
-  For each state in the coverage ledger, `probe.compare` the same card, or an
+  For each state in the coverage ledger, capture the same card, or an
   identical one, with and without it, at the size it has on the table. Your
   verdict must answer three questions:
   1. What exactly distinguishes the two?
@@ -315,12 +253,13 @@ everywhere it could occur, not just at the first place you think of.
 - **Accessibility basics.** Check text contrast and size at normal viewing
   distance, keyboard access to the main actions (pass, confirm, cancel), and
   visible focus.
-- **Truncation.** Run `probe.truncated()` on every prompt, overlay, tooltip and
-  badge you meet, with long card names.
+- **Truncation.** Inspect prompts, overlays, tooltips and badges with long card
+  names. Run `check` on recordings that show the same text.
 - **Abuse.** Double-click, click while waiting, drag to wrong places, press
-  Escape, reload mid-game, use the browser's back button, and start a new game
-  mid-game. The UI must never stick or lie.
-- **Errors.** Check `errors` after each step.
+  Escape, quit and resume a game, and return to the start screen during play.
+  Check that the current game and the visible controls still agree.
+- **Errors.** Inspect the app log path printed by `play` and the errors from
+  `live`.
 
 ## Report
 
@@ -355,49 +294,3 @@ with the coverage ledger:
 
 Do not count a harness failure (a crashed driver, a gesture the harness
 dropped) as a UI defect. Report it separately.
-
-## Beryl 3D
-
-Until the switch, the sections above are how to review the web interface. To
-review Beryl 3D, the native client, play it through its live socket
-(docs/beryl-3d.md, "Driving the running app"):
-
-```bash
-just b3d play --for 20m
-just b3d live tree --app <pid>
-just b3d live png --app <pid>
-just b3d live do 'press button "Keep"' --app <pid>
-just b3d frames
-just b3d live quit --app <pid>
-```
-
-- **Start** with `just b3d play --for <duration>` (at most 1h; `--opponent
-  <agent>` picks another, `mcts-hidden` by default). It opens the windowless app
-  on a fresh game, waits until the tree shows the `game` region and prints the
-  process id, the socket and the commands below. The app ends itself after
-  `--for`, so keep the review inside it.
-- **Read the table** with `live tree`: each line is a locator, with its place,
-  box and states, and the first line is the app's clock (`t=<ms>ms`). Look at
-  pictures with `live png` and read the PNG it names, before and after every
-  action.
-- **Act** with `live do '<action>'`: `press`, `hover`, `drag` and the other
-  actions of the doc's action notation, naming elements by the locators the tree
-  prints. Never act by coordinates when a locator exists.
-- **Measure** with the tree's clock for waits (take the `t=` before and after an
-  action, and until the next prompt appears), and `just b3d frames` for frame
-  times, late frames and the worst frames of the run.
-- **Quit** with `live quit`. Do it after a failed check too.
-
-Which measurements of the web harness have a command:
-
-- `probe.act` latencies to the first view and the decision: read `t=` from
-  `live tree` around the action. There is no command that takes the screenshots
-  and the waits for you yet.
-- `shot`: `live png`.
-- `probe.timeline` (the commands sent and the views the engine emitted): none yet.
-- `probe.compare`, `probe.sweep`, `probe.motion`: none yet; `just b3d film` and
-  `just b3d diff` show a recording, not the running app.
-- `probe.covered` and `probe.truncated`: none on the running app; `just b3d
-  check` runs the same overlap and text checks on recordings.
-- `errors`: the app's output, which `play` prints the path of, and `live` errors.
-- Window sizes other than the default and the phone layout: none yet.

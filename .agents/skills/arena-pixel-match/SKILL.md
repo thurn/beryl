@@ -61,8 +61,8 @@ Arena's. The causes are the traps this skill is built around:
 - **The reference prose was wrong in places.** Notes in
   `data/arena-motion.json` said where cards came from without anyone having
   filmed it whole.
-- **The checks passed.** `just motion` holds durations and staggers. No check
-  knows a route or a destination.
+- **The checks passed.** The replay checks missed the difference in placement
+  and timing that the films exposed.
 
 ## The loop
 
@@ -115,15 +115,6 @@ it cannot (several movers), read the frames.
 
 The same moment, the whole table, stepped stage time:
 
-- A verb of the stage: `just motion --film <verb> [case]`. Each take's folder
-  under `~/Library/Caches/beryl/motion/<checkout>/film/<verb>/` has `strip/`,
-  the whole table at 30 frames a second, each frame named by its stage ms, and
-  `brief.txt` has the subject's pose at every tick.
-- A card's moment: the `specs` skill (`just specs --film`, `--motion`).
-- A still (a prompt, a layout): `just ui-shots`, or `just specs --shots`.
-
-For Beryl 3D, the native client in `rust/beryl3d`:
-
 - A verb: `just b3d motion-film <verb> [case]` films the first step of each
   case from both seats in both layouts at 15 frames a second and 760 px wide,
   and cuts Arena's instances of the same case beside it. It prints each pair of
@@ -136,36 +127,31 @@ For Beryl 3D, the native client in `rust/beryl3d`:
   tree of the same frame too, with every element's place and size.
 
 Film a second situation as well as the fixture's: another hand size, the other
-seat, a card whose id sorts elsewhere, a spell on the stack. A match that
-holds in one fixture and not in a game is not a match. Where no fixture has
-the situation, add one (`ui/fixtures.json`, `beryl_cli`'s `boards.rs`).
+seat, a card whose id sorts elsewhere, a spell on the stack. Check that the behavior holds in both situations. If a fixture is missing,
+add one to `data/beryl3d/fixtures.json` using the shared Rust fixture builders,
+or use a card spec moment from the [specs skill](../specs/SKILL.md).
 
 ### 5. Pair them at one scale and one clock
 
-Put Arena's frames over Beryl's, the whole table of each at the same width,
-frame `n` of one over frame `n` of the other from the first frame of change:
+Use the whole table at the same width and sample both sides from the first
+visible change. For a span of about 400 ms at 15 frames a second:
 
 ```sh
-# Arena: one row of 7 frames, 15 a second (each 480 by 270).
-just video film <id> 17:46.1 --span 0.47 --fps 15 --cols 7 --width 480
-# Beryl: the same 7 instants from the take's strip/ (every other frame of 30).
-magick $(ls $TAKE/strip/*.jpg | awk 'NR>=4 && (NR-4)%2==0' | head -7) \
-  -resize 480x +append beryl-row.png
-magick <arena sheet> beryl-row.png -append pair.png
+just video film <id> 17:46.1 --span 0.4 --fps 15 --cols 7 --width 480
+just b3d film <recording> --from <start> --to <end> --rate 15 --frame-width 480
 ```
 
-Start Beryl's row at the frame the motion begins (the `NR>=4` above), as
-Arena's row starts at its first frame of change. For one instant, lay one over
-the other, which shows a difference in place or size at a glance:
+Use the captions to align the first frame of motion. For a still, crop or
+resize both images to the same table dimensions before overlaying them:
 
 ```sh
 magick arena-frame.png beryl-frame.png -compose blend \
   -define compose:args=50 -composite over.png
 ```
 
-Where the moment is an instance in `data/arena-motion.json`, give that instance
-a whole-table `command` (no `--crop`) and `just motion --film` makes the
-contact sheet itself (`contact/<case>-<k>-<seat>.png`).
+For a verb case, `just b3d motion-film` prints the corresponding Arena frame
+folder and Beryl film paths. Use whole-table instances in
+`data/arena-motion.json` for comparisons of overall placement.
 
 Write the images to the cache or your scratch folder. Never commit one.
 

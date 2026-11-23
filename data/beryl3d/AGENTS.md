@@ -11,9 +11,10 @@ Run `just b3d data` to validate it, including inspection-only profiles.
   and runtime for the native and Callgrind frame gates. See
   [Frame calibrations](../../docs/beryl-3d.md#frame-calibrations).
 - `levels.json` records the client-core levels, dependency order, source caps
-  and remaining protocol and web references. Look for a seam before adding a
-  `cap_allowances` entry. Record the current line count and the seams
-  considered. `just b3d levels --update` lowers obsolete allowances.
+  and the allowances for toolkit protocol references and legacy source
+  citations. Look for a seam before adding a `cap_allowances` entry. Record the
+  current line count and the seams considered. `just b3d levels --update` lowers
+  obsolete allowances.
 - `fixtures.json` defines the games, scripted boards and manual tables played by
   the native recorder and the shared script checks.
 - `corpus.txt` lists the first recording by name for each distinct signature and

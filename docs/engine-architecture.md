@@ -1125,11 +1125,10 @@ searcher optimistic, which is tuned, not fixed.
 | `beryl_scenario_types` | Scenario value types, naming `beryl_card` alone, so a card crate with its scenarios rebuilds only with the vocabulary                                                                                                                                                                                                                                                                                                                                                            |                                                                                           |
 | `beryl_search`         | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, evaluation, card values derived from definitions (`values.rs`, `estimate.rs`) and the per-deck overlay of hand-tuned values (`overlay/`)                                                                                                                                                                                                                            | `beryl_card_names`, `beryl_engine`                                                        |
 | `beryl_card_store`     | The card store embedded from `data/card-store.tsv`: a record for every card in the pool and every token, looked up by name without a scan                                                                                                                                                                                                                                                                                                                                        | nothing in the workspace                                                                  |
-| `beryl_session`        | `Sessions` and their threads, the `PlayerView` protocol and IPC names with generated TypeScript types, rendered rules text for abilities a card does not print, replay files                                                                                                                                                                                                                                                                                                     | `beryl_card`, `beryl_card_store`, `beryl_cards`, `beryl_engine`, `beryl_search`           |
+| `beryl_session`        | `Sessions` and their threads, the projection to `PlayerView` and animation scripts, rendered rules text for abilities a card does not print, replay files                                                                                                                                                                                                                                                                                                                        | `beryl_card`, `beryl_card_store`, `beryl_cards`, `beryl_engine`, `beryl_search`           |
 | `beryl_cli`            | Headless games between agents, tournaments, the ladder, transcripts, UI fixtures recorded from sessions of seeded games or of scripted boards                                                                                                                                                                                                                                                                                                                                    | `beryl_cards`, `beryl_scenario`, `beryl_search`, `beryl_session`                          |
 | `beryl_bench`          | Benchmark support and the `_counts`, `_abba` and `_timing` targets of the example and of the rollout benchmark                                                                                                                                                                                                                                                                                                                                                                   | `beryl_cards`, `beryl_engine`, `beryl_search`                                             |
-| `beryl_app`            | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                                                                                                                                                                                                                                                                                                                                                              | all of the above                                                                          |
-| `beryl_mobile`         | Native iOS and Android WebView snapshots, device details and report sharing through Swift and Kotlin                                                                                                                                                                                                                                                                                                                                                                             | Tauri                                                                                     |
+| `beryl_shell`          | Desktop data, logs and named profiles                                                                                                                                                                                                                                                                                                                                                                                                                                            | `beryl_session`                                                                           |
 
 The rules' module map is in `rust/crates/beryl_rules/src/lib.rs`. Each module
 declares the rules it implements. The kernel groups its modules by the state
@@ -1326,8 +1325,7 @@ usual next step on Linux, does not support macOS binaries.
 - Code changes are compared without PGO, by counts and ABBA; PGO applies only to
   the build behind the headline numbers.
 - The app keeps the release profile until a measured gain argues for moving it
-  over. Fat LTO and abort are whole-binary settings, so in the app they would
-  cover Tauri's dependency graph too.
+  over. Fat LTO and abort are whole-binary settings.
 
 Rules for the hot path:
 
@@ -1423,47 +1421,47 @@ from DRAM takes about 630 ns. Search can replay choices from the root, or keep
 states only in nodes visited at least twice; a state is a pure function of the
 root and the choices (§2), so either is exact.
 
-### 19.2 Sessions and IPC (D14)
+### 19.2 Sessions and the client (D14)
 
 `beryl_session` owns `Sessions`, which numbers games, starts each on a dedicated
-thread running the step/apply loop and refuses commands for a replaced one;
-`beryl_app` only wraps it in Tauri commands and events, and the CLI's fixture
-recorder drives the same API, starting a board fixture from a prepared position
-(`Sessions::start_prepared`) whose two seats play a script. The session emits a
-`PlayerView` as the game starts, as each step begins (`next_in_step`, which
-pauses `next` at a new step), before each agent decision, at each of the human's
-and at the end: a reduced, owned view built from the human's Observation (§13),
-holding only what the UI draws, rather than the 17 KiB masked state, and naming
-players relative to the viewer. Its status is the open Decision, with its
-candidates described by public slot, the opponent thinking, a step playing on, a
-stop, or the outcome; the engine events since the last view, for animation, also
-pass through the Observation, so each event is in exactly one view. Under the
-smart stops the session also halts the human at the start of their precombat
-main phase when the engine would pass their priority for them: a priority
-decision whose only candidate is to pass, which neither the engine's profile nor
-the agent sees, and which the replay records. The opponent's turn plays on to
-the human's unhalted. The session also answers four kinds of the human's
-decisions for them under the smart stops, and the replay records each answer: it
-passes their priority while their own spell or ability is on top and only their
-own entries came onto the stack or left it since their last answer in the step
-(or its start), and in combat with an empty stack after their own attack or a
-declaration of no blockers, as Arena stops a player only after the opponent's
-attack and after blocks; it orders their simultaneous triggers so that plain
-effects resolve first, then triggers with targets, then those that ask a
-question as they resolve; it searches their library where they may (Trinket
-Mage's "you may search") when they know no card in it, as declining then saves
-only a shuffle and the search may still find nothing; and it pays a waterbend
-cost with mana whenever mana can pay it. The exact stops ask all four. At the
-human's decision the session waits for one `choose(decision, index)` command,
-naming the decision id it received; the session's record of the open decision is
-the one place an answer is checked. AI decisions run on the session thread, and
-a search may use a pool, so IPC never blocks. The webview never sees a `State`.
-Every session records seed, decklists, the choice log, what chance produced and
-each turn's board as a replay file (§14), rewritten at each decision of the
-human's, and the app resumes the newest unfinished one on launch, from the
-latest turn's beginning where this build can no longer replay it to its end. The
-protocol's TypeScript types are generated from the Rust types, and
-`ui/src/ipc.ts` keeps the typed wrappers for the commands and events.
+thread running the step/apply loop and refuses commands for a replaced one. The
+native app and fixture recorder use that API. The recorder can start a board
+from a prepared position (`Sessions::start_prepared`) and run a script for both
+seats. The session emits a `PlayerView` as the game starts, as each step begins
+(`next_in_step`, which pauses `next` at a new step), before each agent decision,
+at each of the human's and at the end: a reduced, owned view built from the
+human's Observation (§13), holding only what the UI draws, rather than the 17
+KiB masked state, and naming players relative to the viewer. Its status is the
+open Decision, with its candidates described by public slot, the opponent
+thinking, a step playing on, a stop, or the outcome; the engine events since the
+last view, for animation, also pass through the Observation, so each event is in
+exactly one view. Under the smart stops the session also halts the human at the
+start of their precombat main phase when the engine would pass their priority
+for them: a priority decision whose only candidate is to pass, which neither the
+engine's profile nor the agent sees, and which the replay records. The
+opponent's turn plays on to the human's unhalted. The session also answers four
+kinds of the human's decisions for them under the smart stops, and the replay
+records each answer: it passes their priority while their own spell or ability
+is on top and only their own entries came onto the stack or left it since their
+last answer in the step (or its start), and in combat with an empty stack after
+their own attack or a declaration of no blockers, as Arena stops a player only
+after the opponent's attack and after blocks; it orders their simultaneous
+triggers so that plain effects resolve first, then triggers with targets, then
+those that ask a question as they resolve; it searches their library where they
+may (Trinket Mage's "you may search") when they know no card in it, as declining
+then saves only a shuffle and the search may still find nothing; and it pays a
+waterbend cost with mana whenever mana can pay it. The exact stops ask all four.
+At the human's decision the session waits for one `choose(decision, index)`
+command, naming the decision id it received; the session's record of the open
+decision is the one place an answer is checked. AI decisions run on the session
+thread, and a search may use a pool. The client renders the owned views it
+receives over the session channel. Every session records seed, decklists, the
+choice log, what chance produced and each turn's board as a replay file (§14),
+rewritten at each decision of the human's, and the app resumes the newest
+unfinished one on launch, from the latest turn's beginning where this build can
+no longer replay it to its end. `beryl_protocol` owns the shared Rust types used
+by the client and recorder. See
+[Beryl 3D architecture](beryl-3d-architecture.md) for the client code map.
 
 The human plays under the smart stops of §15 by default. A setting switches to
 the exact profile, which offers every priority. Milestone 1 offers a game
@@ -1518,7 +1516,7 @@ and an `Undo` entry, so a replay goes back too. The engine is untouched.
 | D11 | Distinct `Stalled(reason)` terminal scored as a draw                                                                                                          | Budgets are unavoidable; a stall must be distinguishable from a rules draw in tests and statistics                                                                                                                     |
 | D12 | Crates: card vocabulary, kernel, rules, set crates and their registry, scenario, search, session, cli, bench, app (§16)                                       | The engine knows no card; card edits do not rebuild rules tests; the AI cannot reach engine internals                                                                                                                  |
 | D13 | Scenarios as Rust-built serde values, strict runner, exported to XMage and Forge                                                                              | Typo-safe authoring with the compiler's help; one scenario, three engines                                                                                                                                              |
-| D14 | Rust `GameSession` on its own thread; Observations over IPC; replay files                                                                                     | AI thinking never blocks the window; hidden identities never reach the webview                                                                                                                                         |
+| D14 | Rust `GameSession` on its own thread, seat views over a channel and replay files                                                                              | AI thinking can run while the client renders, and the view contains only what its seat can see                                                                                                                         |
 | D15 | A scripted expert system behind an `Agent` trait over Observations                                                                                            | Plays sanely in Milestone 1 and supplies the benchmark's positions; no API change for MCTS                                                                                                                             |
 | D16 | Per-core budgets measured on rollouts as MCTS runs them; metrics first-class                                                                                  | The per-decision budget drives the layout; random games undercount the decisions search pays for; machine-wide numbers reward degenerate games                                                                         |
 | D17 | This document at `docs/engine-architecture.md`, engine plus boundaries                                                                                        | Reference material every session reads; the interfaces the UI and AI consume are written down                                                                                                                          |
@@ -1550,15 +1548,15 @@ missing from the list were about how the rebuild was run.
 | K16 | Beryl stays Apache-2.0 and takes no card data, vocabulary or design from Forge. Forge is a test oracle and, in `just census`, a count of mechanics. A card brief cites Oracle text, rulings and the MIT-licensed XMage class.                                                                    | A translator from Forge's scripts would be a second vocabulary of about 1,600 hand-mapped script entries for 83% of its cards (measurements below), at the cost of a permanent GPL.          |
 | K17 | No source file over 800 lines (the `file-length` check, with a shrinking allowlist).                                                                                                                                                                                                             | Appending to a big file is an agent's path of least resistance.                                                                                                                              |
 | K18 | Every run of every check is logged, and each failure gets an inferred verdict: flaky, stale test, caught a bug or selection miss (`verdicts.py`). `just ci-report --prune` lists the checks a fixed pruning rule deletes or moves on that record (`prune.py`).                                   | A verdict an agent must write costs tokens and drifts toward "caught a bug"; the fix's diff already says which it was.                                                                       |
-| K19 | The fast check and slow CI run the browser checks a change can affect, chosen by measured coverage (the `docs/checks.md` of that time, deleted when Ignite replaced it).                                                                                                                         | `Board.tsx` changed in a quarter of all commits, so choosing by file would choose everything.                                                                                                |
+| K19 | Ignite selects native interface checks by their declared inputs and recorded results.                                                                                                                                                                                                            | `Board.tsx` changed in a quarter of all commits, so choosing by file would choose everything.                                                                                                |
 | K20 | A UI fix adds the broken state to what the generic audits run over. A scripted check is the exception and says in a comment why no audit can express it.                                                                                                                                         | Audits found most of the real UI bugs, and scripted checks caused nearly all the stale and racy failures. Only audits scale to generated specs for every card.                               |
 | K21 | A failed check reruns once; one that passes is flaky, fails nothing, and a second flake switches it off with a ticket. A tip failure names its culprit landing before its regression ticket is filed.                                                                                            | A racy test should not charge an unrelated change.                                                                                                                                           |
 | K22 | MTG Arena is the reference for flow, motion, timing, table layout and wording; Beryl keeps its own skin. Beryl differs only by a numbered exception in [ui-conventions.md](ui-conventions.md).                                                                                                   | Prose rules were read differently each time; a recording can be measured.                                                                                                                    |
 | K23 | For each update the session builds, per seat, a script of steps of a closed list of motion verbs covering every visible change, arrows, combat lines and marks included (`beryl_session/src/script`). Engine events carry their cause and group (§8.1). The UI plays scripts and infers nothing. | The UI rebuilt a timeline from snapshots and guessed causes the engine knew.                                                                                                                 |
 | K24 | Scripts are held to invariants: replaying a script on the previous view gives the next view, and no arrow points at an object that is moving or gone. Text snapshots exist only where a person wrote the expectation.                                                                            | Invariants scale to the pool; a snapshot per card is a change detector that one verb change rewrites everywhere.                                                                             |
-| K25 | An imperative stage plays scripts over one persistent DOM node per game object, on a clock it owns and a test can step. A step ends when its animation ends.                                                                                                                                     | Fixed waits and several animation systems sharing a screen were the seams that flickered.                                                                                                    |
+| K25 | The retained native scene plays scripts on a clock the replay tools can step. A step ends when its animation ends.                                                                                                                                                                               | Fixed waits and several animation systems sharing a screen were the seams that flickered.                                                                                                    |
 | K26 | A prompt's state lives in the session. Each click is a command; the answer is marks from a closed list and the state of each button.                                                                                                                                                             | A prompt interaction becomes a Rust test, and the phone behaves identically.                                                                                                                 |
-| K27 | Each verb's motion values are Beryl's own data; `just motion` holds the stage to them and shows Arena's measured values (`data/arena-motion.json`) beside them. The user's bug reports judge the look.                                                                                           | Asking only whether something moved passed fixes the user reported again.                                                                                                                    |
+| K27 | Each verb's motion values are Beryl's own data. Replay checks measure the motion and `just b3d motion-film` films it beside available Arena samples.                                                                                                                                             | Asking only whether something moved passed fixes the user reported again.                                                                                                                    |
 | K28 | The design language is data (`data/ui-conventions.json`): each verb, each mark, the numbered exceptions and the cases Arena does not show. `docs/ui-conventions.md` is generated from it.                                                                                                        | Nothing forced the code and the prose to agree.                                                                                                                                              |
 | K29 | What the recordings do not show is composed from existing verbs and shapes and listed. The phone shares the stage and keeps its own layout.                                                                                                                                                      | 50,000 cards cannot each need a decision, and the recordings are desktop only.                                                                                                               |
 

@@ -28,10 +28,6 @@ The design rests on five decisions:
   regression goes back to the ticket that caused it. The operator can give
   workflow improvements a share of the workers through Allocation.
 
-Enact and the old check tools are removed in one switch. All other work on Beryl
-is halted until then, so everything this document describes is built before work
-resumes.
-
 ## Related information
 
 - `docs/checks.md`, deleted at the switch (read it with
@@ -1505,14 +1501,10 @@ while something else runs.
 A daemon that restarts while commands run registers their cores and resources
 again, so an exclusive resource is not handed out twice.
 
-Some things are scarce in other ways: headless browser pages, the oracle
-engines, the benchmark virtual machines. A check family names the **resources**
-it needs, and the daemon holds each to its capacity:
+Check families name shared **resources** such as the oracle engines and
+benchmark virtual machines. The daemon holds each resource to its capacity:
 
 ```toml
-[resources.browser-pages]
-per_core = 0.5
-
 [machine.jarvis.resources]
 oracle = 1
 bench-vm = 1
@@ -1598,8 +1590,14 @@ run:
 
 ### Declaring a family
 
-Each check family is declared once in the repository. The declaration says what
-the family's checks read, what must be built first and how to run them:
+Each check family is declared in `ignite/checks/*.toml`. The declaration names
+the inputs, build products, platforms and commands for the family.
+
+`ignite/checks/script.toml` declares the shared script checks and the app
+families. `native-app` starts the desktop client headlessly. `native-ios` builds
+an unsigned Simulator app on macOS, and `native-android` builds an Android APK
+on macOS and Windows. `ignite/checks/beryl3d.toml` declares the native
+workspace's build, source, replay, corpus, interface and frame checks.
 
 ```toml
 [family.rust]
@@ -1611,15 +1609,14 @@ inputs = ["crate-closure", "rust/.config/nextest.toml"]
 ```
 
 ```toml
-[family.shots]
+[family.native-app]
 kind = "regression"
 adapter = "jsonl"
-platforms = ["macos"]
-needs = ["cli", "ui-deps"]
-resources = ["browser-pages"]
-list = "node ui/scripts/capture.mjs --list"
-run = "node ui/scripts/capture.mjs {checks}"
-inputs = ["ui/src/**", "ui/shots.json", "crate:beryl_cli_main"]
+platforms = ["macos", "windows"]
+needs = ["python-env"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.native_app list native-app"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.native_app run native-app {checks}"
+# See ignite/checks/script.toml for the full inputs list.
 ```
 
 The fields:
@@ -1704,9 +1701,8 @@ The fields:
   For any other change the family's checks are scored. See
   [The always set](#the-always-set).
 - `builds = true` marks a family whose checks fail when the code does not
-  compile or type-check: Beryl's clippy, Beryl 3D's clippy, `tsc` (`ui-types`)
-  and pyre. With `repository.green` set, a tip round runs these build checks
-  first and moves `green` once they pass (see
+  compile or type-check, such as Clippy and Pyre. With `repository.green` set, a
+  tip round runs these build checks first and moves `green` once they pass (see
   [Tip verification](#tip-verification)). Formatting and the source rules are
   not build checks, and neither is Ignite's own lint: a change to Ignite's
   source lands checked on the exact tip, and `green` is not held back for it.
@@ -1728,8 +1724,8 @@ A family's `run` command writes one JSON line per check to the file named by
 `IGNITE_RESULTS`. Ignite adds the cost and the input hash itself:
 
 ```json
-{"check": "shots:stage-mode-ways/phone", "outcome": "fail",
- "at": "ui/src/stage/phone.ts:212", "message": "2 elements overlap"}
+{"check": "native-app:smoke", "outcome": "fail",
+ "message": "native desktop smoke failed"}
 ```
 
 The `nextest` adapter reads cargo-nextest's own machine-readable output, so Rust
@@ -1906,8 +1902,8 @@ What observation does not see, which stays declared:
   [Auditing the cache](#auditing-the-cache)). A read made by library code that
   tests call, which cannot depend on the helper, goes in the family's
   `package_inputs` for the package whose tests reach it.
-- Anything a `jsonl` family reads, such as a Python adapter or a browser check.
-  Those families keep their declared inputs.
+- Anything a `jsonl` family reads, including its Python adapter. Those families
+  keep their declared inputs.
 - A build that writes outside the product's first output directory: Ignite then
   observes nothing, and only the cache audits would notice.
 
@@ -2725,9 +2721,7 @@ what those checks only report, so `ignite land` runs the formatters itself.
 
 ## Tip verification
 
-Tip verification is what slow CI, the browser sweep and the nightly run become:
-the regression checks that the gate left out, run once per tip. Nothing in it
-runs on a timer.
+Tip verification runs the regression checks the gate left out once per tip.
 
 Since a change lands by the verdict it earned on its own base (see
 [Landing](#landing)), tip verification is also where two changes that each
@@ -3125,11 +3119,10 @@ soon as the evidence is in, without waiting for an agent.
   one per family.
 - A flaky record does not count toward switching a check off when three or more
   unrelated checks flaked in the same command. That is one fault of the machine,
-  such as a full disk or a stuck browser page, and it gets one ticket.
+  such as a full disk, and it gets one ticket.
 - Checks that run outside the landing gate may get few cores. Each command is
-  told its class, and a family whose checks wait on a browser or another slow
-  tool uses longer waits outside the gate. A screenshot that takes two seconds
-  once ran past a 30-second wait on a loaded machine and was filed as flaky.
+  told its class. A check that waits on a slow tool needs a hang limit that
+  allows for the cores it receives.
 
 ## Exploration checks
 
@@ -4233,8 +4226,8 @@ How the machines divide verification:
 - A check with a platform list needs a pass on each platform that lists it. The
   `counts` family checks rollout instructions and present costs in Lima on macOS
   and in WSL on Windows. The `ignite-platform` family covers Ignite code that
-  behaves differently across operating systems. The Macs run the browser and app
-  families.
+  behaves differently across operating systems. Both systems verify native
+  desktop startup and Android builds. The Macs verify iOS Simulator builds.
 - A daemon prefers the checks only it can run, then claims portable ones. Fleet
   policy controls which machines can take tickets and verify tips. See
   [Fleet settings](#fleet-settings).
@@ -4341,20 +4334,19 @@ The daemon derives these values at startup. `P` is the number of physical cores
 and `L` the number of logical cores. Round to the nearest integer with halves
 rounding up.
 
-| Value                             | Formula                    | jarvis (18/18) | multivac (10/10) | cygnus (12/20) |
-| --------------------------------- | -------------------------- | -------------- | ---------------- | -------------- |
-| Express reserve and landing trees | round(P / 6), from 2 to 4  | 3              | 2                | 2              |
-| Cores reserved for tip builds     | round(P / 5), from 2 to 6  | 4              | 2                | 2              |
-| `tip` class floor                 | 2                          | 2              | 2                | 2              |
-| `batch` class floor               | round(P / 3), at least 2   | 6              | 3                | 4              |
-| Browser pages                     | floor(L × 0.5), at least 1 | 9              | 5                | unused         |
-| Ordinary worker ceiling           | 2 × L                      | 36             | 20               | 40             |
+| Value                             | Formula                   | jarvis (18/18) | multivac (10/10) | cygnus (12/20) |
+| --------------------------------- | ------------------------- | -------------- | ---------------- | -------------- |
+| Express reserve and landing trees | round(P / 6), from 2 to 4 | 3              | 2                | 2              |
+| Cores reserved for tip builds     | round(P / 5), from 2 to 6 | 4              | 2                | 2              |
+| `tip` class floor                 | 2                         | 2              | 2                | 2              |
+| `batch` class floor               | round(P / 3), at least 2  | 6              | 3                | 4              |
+| Ordinary worker ceiling           | 2 × L                     | 36             | 20               | 40             |
 
-A shared resource configured with `per_core` uses the same formula as browser
-pages with its own multiplier. Ticket trees are created on demand, up to the
-worker ceiling plus four. The daemon keeps the two most recently used free trees
-and can retire the rest after 24 hours free. See [Build trees](#build-trees) for
-build slots and reclamation.
+A shared resource configured with `per_core` multiplies the logical core count
+by that value and rounds down, with a minimum of one. Ticket trees are created
+on demand, up to the worker ceiling plus four. The daemon keeps the two most
+recently used free trees and can retire the rest after 24 hours free. See
+[Build trees](#build-trees) for build slots and reclamation.
 
 For ordinary tickets, worker room is the smallest of three limits:
 
@@ -4587,9 +4579,9 @@ Rules for filing:
 - A rule can be listed as report-only. `tier-gap`, which compares model tiers,
   is report-only, because the choice of model stays with people.
 - `never-caught` never names a check on the protected list in `ignite.toml`: the
-  app starting, the browser smoke checks, clippy, the type checks and the source
-  rules. They are cheap, and what they guard is too basic to give up for want of
-  a recent failure.
+  native app startup, Clippy, Pyre, source rules and oracle families. They are
+  cheap, and what they guard is too basic to give up for want of a recent
+  failure.
 
 Set **Efficiency improvements** on the Pool page to give standalone improvements
 their own worker share. Zero parks that source. With the field blank, standalone
@@ -4853,13 +4845,14 @@ These go, because Ignite removes what each existed for:
   scores replace them.
 - The sweeps, the nightly run and the hourly full run. Checks run when their
   inputs change, and the cache audit catches a wrong declaration.
-- Choosing browser checks by coverage data. Scores choose them, and
-  `just coverage` stays as a tool.
+- Choosing checks by coverage data. Ignite uses inputs and scores.
 - Quarantining a test. The project's rule is to delete or replace it.
 - Light runs. A planner files the reviews a plan needs, and nothing else is
   automatic.
 
 ## The switch from Enact
+
+The following section records the original Enact cutover plan.
 
 Ignite replaces Enact in one switch, with every other kind of work halted until
 it happens. There is no period in which both run, and nothing stays for
@@ -4989,13 +4982,9 @@ These are the choices that were weighed against measurements and set aside.
 
 ## Manual QA
 
-These checks are run by hand in the rehearsal described under
-[The switch from Enact](#the-switch-from-enact), on jarvis first and then on
-multivac and cygnus. They are the condition for the switch.
-
-Windows testing never blocks work. A Windows check result, slow CI on cygnus and
-the cygnus QA ticket never gate landing, `master` or the switch. A Windows
-failure becomes a ticket that is fixed alongside other work.
+This section records the original Ignite rehearsal checklist for
+[the switch from Enact](#the-switch-from-enact). The current gate is
+`ignite check`, with check families declared in `ignite/checks/`.
 
 ### The first check
 

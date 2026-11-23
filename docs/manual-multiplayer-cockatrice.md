@@ -547,11 +547,7 @@ The Beryl column uses the action names in the
 
 ## Verification
 
-`data/table-appendix-map.json` associates each carried-over row with one or more
-command IDs or registered gesture checks. `just ui-unit` verifies that the
-associations exist and checks excluded rows for matching registry labels. The
-live browser checks exercise representative menu, shortcut and gesture routes.
-
-Use `just table-pair` for native shortcut checks and an in-window comparison
-with Cockatrice. The [manual QA notes](manual-multiplayer.md#manual-qa) list the
-native and network paths that remain unverified.
+`data/table-appendix-map.json` records the command IDs and gestures associated
+with the carried-over rows. For native table recordings, transport tests and
+shortcut reproduction, see
+[Manual multiplayer](manual-multiplayer.md#automated-checks).
