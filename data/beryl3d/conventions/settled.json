@@ -2,7 +2,7 @@
   "entries": {
     "Tokens": {
       "recording": "tokens",
-      "at": "2870ms",
+      "at": "step:3.4.0",
       "still": false,
       "shows": "card \"Map Token\" battlefield.yours.others"
     },
@@ -117,7 +117,7 @@
     },
     "Mana into what it pays for": {
       "recording": "tokens",
-      "at": "1300ms",
+      "at": "step:3.0.2",
       "still": false,
       "shows": "card \"Plains\" battlefield.yours.lands interactive tapped moving"
     },
@@ -128,20 +128,20 @@
     },
     "A card a look puts in the graveyard": {
       "recording": "abhorrent-oculus/manifests-dread-on-each-opponents-upkeep-only",
-      "at": "870ms",
+      "at": "step:7.1.0",
       "still": false,
       "shows": "card \"Counterspell\" graveyard.yours moving faded"
     },
     "A batch exile": {
       "recording": "gurmag-angler/paid-with-delve-and-cavern-of-souls-mana",
       "seat": "opponent",
-      "at": "2500ms",
+      "at": "step:4.1.1",
       "still": false,
       "shows": "card \"Island\" #2 exile.theirs"
     },
     "An opponent's spell returned to hand": {
       "recording": "stack-bounce",
-      "at": "2600ms",
+      "at": "step:3.3.0",
       "still": false,
       "shows": "card \"Stock Up\" #267 hand.theirs 1236,241 204x285 moving"
     },

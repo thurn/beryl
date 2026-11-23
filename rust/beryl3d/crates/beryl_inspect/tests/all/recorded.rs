@@ -6,7 +6,7 @@ use kit_ui::input::Input as DeviceInput;
 use std::time::Instant;
 
 use app_client::Input;
-use app_client::driver::{Duration, Moment, Page, TICK};
+use app_client::driver::{Duration, Moment, Name, Page, TICK};
 use app_client::{Client, Config};
 use beryl_inspect::pages::{Recorded, check_recording, recording};
 use beryl_inspect::{recordings, runner, stress};
@@ -493,20 +493,40 @@ fn a_trigger_that_resolves_in_its_own_script_rises_onto_the_stack() {
     };
     let mut page = beryl_inspect::pages::page("verbs-piles", Side::You, SizeClass::Regular, size)
         .expect("the recording can be read");
-    page.step(Duration(2_450 * MS));
+    let steps = page.steps();
+    let emerge = steps
+        .iter()
+        .find(|step| step.name == Name::Step(2, 3, 0))
+        .expect("the trigger emerges");
+    let vanish = steps
+        .iter()
+        .find(|step| step.name == Name::Step(2, 5, 0))
+        .expect("the trigger resolves in the same script");
+    assert_eq!(emerge.verb, Verb::Emerge);
+    assert_eq!(vanish.verb, Verb::Vanish);
+    assert_eq!(emerge.subject, vanish.subject);
+    assert!(emerge.to < vanish.from, "the trigger rests on the stack");
+
+    let ability = |line: &str| line.contains("ability \"Snapcaster Mage\"");
+    page.seek(&Moment::At(Duration(emerge.middle))).unwrap();
     let rising = page.tree();
     assert!(
         rising
             .lines()
-            .any(|line| line.contains("ability \"Snapcaster Mage\"") && line.ends_with("moving")),
+            .any(|line| ability(line) && line.ends_with("moving")),
         "{rising}"
     );
-    page.step(Duration(3_000 * MS - page.now()));
+
+    let rest = u64::midpoint(emerge.to, vanish.from);
+    page.seek(&Moment::At(Duration(rest))).unwrap();
     let resting = page.tree();
     assert!(
         resting
             .lines()
-            .any(|line| line.contains("ability \"Snapcaster Mage\"") && line.contains(" stack ")),
+            .any(|line| ability(line) && line.contains(" stack ") && !line.ends_with("moving")),
         "{resting}"
     );
+    page.seek(&Moment::At(Duration(vanish.to + MS))).unwrap();
+    let resolved = page.tree();
+    assert!(!resolved.lines().any(ability), "{resolved}");
 }

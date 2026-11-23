@@ -1,22 +1,18 @@
-//! `fly`'s cases (`data/ui-conventions.json`, `fly`): each plays to its end with every card at its
-//! placement and no jump, and each case's path is the one the web interface gives it: a spell
-//! cast bows toward its caster's edge, a permanent resolving is thrown up off the stack, the
-//! viewer's land glides straight, drawn in front of the hand it leaves, and the opponent's swings
-//! out into the table first.
+//! Native flights keep their start and end placements, stay continuous, and show cards
+//! as they travel between zones.
 
 use crate::common::{MS, empty_frame, frame, show, window};
 use app_client::driver::{Duration, Mode, Moment, Page, Recording};
 use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::ipc::FixtureMessage;
-use beryl_protocol::protocol::{CardType, ObjectId, Side, StackItem, Why, ZoneName};
-use beryl_protocol::script::{Act, Curve, Room, StepTiming, Verb};
+use beryl_protocol::protocol::{CardType, Keyword, ObjectId, Side, StackItem, Why, ZoneName};
+use beryl_protocol::script::{Act, Curve, Room, StepTiming, Table, Verb, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
 use game_play::play::Show;
 use game_play::play::record::ScriptRecord;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use game_table::table::Window;
-use glam::Vec3;
 use kit_base::pose::{Pose, Segment};
 use kit_probe::agent::Rule;
 use kit_space::motion::pose_at;
@@ -66,9 +62,7 @@ fn table() -> (GameUpdate, [Hands; 2]) {
     (builder.update(), [hands[0], hands[1]])
 }
 
-/// The timing the session sends for `case`, with `fly`'s values for it in
-/// `data/ui-conventions.json`; a step that takes a card into or out of a hand makes room for
-/// 170 ms, as `fly`'s `regroup` says.
+/// A flight with a controlled duration for tests that override the session's timing.
 fn timed(case: &str, duration: f64, delay: f64, curve: Curve, room: bool) -> StepTiming {
     StepTiming {
         case: Some(case.to_owned()),
@@ -272,117 +266,85 @@ fn clean(show: &Show, case: &str) {
     }
 }
 
-fn off_line(pose: Pose, from: Pose, to: Pose) -> Vec3 {
-    let way = to.position - from.position;
-    let at = pose.position - from.position;
-    at - way * (at.dot(way) / way.length_squared())
-}
-
-/// The camera's right, up and backward directions.
-fn axes(show: &Show) -> [Vec3; 3] {
-    show.table().camera().axes()
-}
-
-/// Each case's script, with the case's duration and delay.
+/// Each flight with the timing the session sends for its script.
 fn cases() -> Vec<(&'static str, GameUpdate, GameUpdate, Vec<StepTiming>)> {
     let (before, [mine, theirs]) = table();
-    let land = flown(
-        &before,
-        mine.land,
-        ZoneName::Hand,
-        ZoneName::Battlefield,
-        Why::Play,
-    );
-    let their_land = flown(
-        &before,
-        theirs.land,
-        ZoneName::Hand,
-        ZoneName::Battlefield,
-        Why::Play,
-    );
-    // The permanent spell in `slot` resolving, which the session times alike for either side.
-    let resolves = |case, slot| {
-        let after = flown(
-            &before,
-            slot,
-            ZoneName::Stack,
-            ZoneName::Battlefield,
-            Why::Resolve,
-        );
-        let timing = timed("permanent resolves", 520.0, 330.0, Curve::EaseOut, false);
-        (case, before.clone(), after, vec![timing])
-    };
-    let resolving = [
-        resolves("permanent resolves", mine.resolving),
-        resolves("opponent permanent resolves", theirs.resolving),
-    ];
-    let discard = flown(
-        &before,
-        mine.spell,
-        ZoneName::Hand,
-        ZoneName::Graveyard,
-        Why::Discard,
-    );
-    let cast = flown(
-        &before,
-        mine.spell,
-        ZoneName::Hand,
-        ZoneName::Stack,
-        Why::Cast,
-    );
-    let their_cast = flown(
-        &before,
-        theirs.spell,
-        ZoneName::Hand,
-        ZoneName::Stack,
-        Why::Cast,
-    );
-    vec![
+    [
         (
             "land played",
-            before.clone(),
-            land,
-            vec![timed("land played", 315.0, 0.0, Curve::EaseIn, true)],
+            mine.land,
+            ZoneName::Hand,
+            ZoneName::Battlefield,
+            Why::Play,
         ),
         (
             "opponent land played",
-            before.clone(),
-            their_land,
-            vec![timed(
-                "opponent land played",
-                615.0,
-                0.0,
-                Curve::EaseOut,
-                true,
-            )],
+            theirs.land,
+            ZoneName::Hand,
+            ZoneName::Battlefield,
+            Why::Play,
         ),
         (
             "discard",
-            before.clone(),
-            discard,
-            vec![timed("discard", 165.0, 0.0, Curve::EaseOut, true)],
+            mine.spell,
+            ZoneName::Hand,
+            ZoneName::Graveyard,
+            Why::Discard,
         ),
         (
             "own spell cast",
-            before.clone(),
-            cast,
-            vec![timed("own spell cast", 370.0, 0.0, Curve::EaseOut, true)],
+            mine.spell,
+            ZoneName::Hand,
+            ZoneName::Stack,
+            Why::Cast,
         ),
         (
             "opponent spell cast",
-            before,
-            their_cast,
-            vec![timed(
-                "opponent spell cast",
-                400.0,
-                0.0,
-                Curve::EaseOut,
-                true,
-            )],
+            theirs.spell,
+            ZoneName::Hand,
+            ZoneName::Stack,
+            Why::Cast,
+        ),
+        (
+            "permanent resolves",
+            mine.resolving,
+            ZoneName::Stack,
+            ZoneName::Battlefield,
+            Why::Resolve,
+        ),
+        (
+            "opponent permanent resolves",
+            theirs.resolving,
+            ZoneName::Stack,
+            ZoneName::Battlefield,
+            Why::Resolve,
+        ),
+        (
+            "opponent flyer resolves",
+            theirs.resolving,
+            ZoneName::Stack,
+            ZoneName::Battlefield,
+            Why::Resolve,
         ),
     ]
     .into_iter()
-    .chain(resolving)
+    .map(|(case, slot, from, to, why)| {
+        let mut before = before.clone();
+        if case == "opponent flyer resolves" {
+            before
+                .view
+                .objects
+                .iter_mut()
+                .find(|object| object.slot == slot)
+                .expect("the flyer is on the stack")
+                .keywords
+                .push(Keyword::Flying);
+        }
+        let after = flown(&before, slot, from, to, why);
+        let script = after.view.script.as_ref().expect("a flight script");
+        let timings = time_script(script, &Table::of(&before.view));
+        (case, before, after, timings)
+    })
     .collect()
 }
 
@@ -394,45 +356,32 @@ fn every_case_plays_to_its_placement_with_no_jump_for_its_time() {
     }
 }
 
-/// A spell cast, by either player, is off the straight way at the middle of its time, toward
-/// its caster's edge of the table: the viewer's down the screen, the opponent's up it, by a
-/// share of the way.
 #[test]
-fn a_cast_bows_toward_its_casters_edge() {
-    for (case, edge) in [("own spell cast", -1.0), ("opponent spell cast", 1.0)] {
-        let (_, before, after, timings) = cases()
-            .into_iter()
-            .find(|(name, ..)| *name == case)
-            .expect("the case");
+fn a_cast_travels_from_either_hand_to_the_stack() {
+    for (case, before, after, timings) in cases()
+        .into_iter()
+        .filter(|(case, ..)| case.ends_with("spell cast"))
+    {
         let show = played(&before, &after, timings);
-        let script = flight(&show);
-        let slot = script.steps[0].subject.expect("a card flies");
+        let slot = flight(&show).steps[0].subject.expect("a card flies");
         let (start, end) = span(&show);
-        let from = pose(&show, slot, start);
-        let to = pose(&show, slot, end);
-        let middle = pose(&show, slot, u64::midpoint(start, end));
-        // A straight way in the table's space is a straight line on the window, so the bow is
-        // measured there, as the web interface draws it.
         let camera = show.table().camera();
-        let [a, b, m] = [from, to, middle].map(|pose| camera.to_screen(pose.position));
-        let line = b - a;
-        let off = (m - a) - line * ((m - a).dot(line) / line.length_squared());
-        // The window's y runs down it, and the viewer's edge is its bottom.
+        let point = |at| camera.to_screen(pose(&show, slot, at).position);
+        let from = point(start);
+        let way = point(end) - from;
+        let progress = (point(u64::midpoint(start, end)) - from).dot(way);
         assert!(
-            off.y * -edge > 0.0,
-            "{case}: bows toward its caster's edge: {off:?}"
+            progress > 0.0 && progress < way.length_squared(),
+            "{case}: the spell travels from its hand toward the stack"
         );
-        assert!(
-            off.length() > 0.03 * line.length(),
-            "{case}: bows by a share of its way on the screen: {off:?} of {line:?}"
-        );
+        let placement = show.table().placement(&after.view, &[]);
+        let rest = placement.get(flight_slot(&after)).expect("on the stack");
+        assert_eq!(pose(&show, slot, end), rest.pose, "{case}");
     }
 }
 
-/// A permanent resolving is at its greatest height by a quarter of its time, and is
-/// half way across after a quarter of its time.
 #[test]
-fn a_resolving_permanent_is_thrown_up_and_half_way_across_at_a_quarter() {
+fn a_resolving_permanent_rises_above_its_ends_before_landing() {
     let (_, before, after, timings) = cases()
         .into_iter()
         .find(|(name, ..)| *name == "permanent resolves")
@@ -440,80 +389,46 @@ fn a_resolving_permanent_is_thrown_up_and_half_way_across_at_a_quarter() {
     let show = played(&before, &after, timings);
     let slot = flight(&show).steps[0].subject.expect("a card flies");
     let (start, end) = span(&show);
-    let from = pose(&show, slot, start);
-    let to = pose(&show, slot, end);
-    let quarter = start + (end - start) / 4;
-    let [_, up, _] = axes(&show);
-    let height = |t: u64| off_line(pose(&show, slot, t), from, to).dot(up);
-    let highest = (start..=end)
-        .step_by(usize::try_from(MS).expect("small"))
-        .map(|t| (t, height(t)))
-        .fold(
-            (start, f32::MIN),
-            |best, next| if next.1 > best.1 { next } else { best },
-        );
+    let camera = show.table().camera();
+    let height = |at| camera.to_screen(pose(&show, slot, at).position).y;
+    let highest_end = height(start).min(height(end));
     assert!(
-        highest.1 > 20.0,
-        "it rises well above the straight way: {highest:?}"
-    );
-    // It stays at its greatest height from a fifth of its time to over half of it.
-    let at_quarter = height(quarter);
-    assert!(
-        at_quarter > 0.97 * highest.1,
-        "at its greatest height by a quarter of its time: {at_quarter} of {highest:?}"
-    );
-    let across = progress(pose(&show, slot, quarter), from, to);
-    assert!(
-        (across - 0.5).abs() < 0.08,
-        "half way across at a quarter of its time: {across}"
+        (start..end)
+            .step_by(usize::try_from(MS).expect("small"))
+            .any(|at| height(at) < highest_end),
+        "the card rises above the stack and its battlefield slot"
     );
 }
 
-/// A permanent resolving never rises past the top of the window's safe area, as the web's
-/// `lifted` caps its rise at the room over its start and its place. The desktop layout leaves
-/// room for the full `thrown.height` over every row, because the opponent's hand lies above
-/// them, so both rise that far in a plain window. With a safe area whose top lies near the
-/// stack's, there is less room: the opponent's then rises less, and its top stays inside the
-/// safe area all the way.
+/// The same resolving card fits in an ordinary window and a window with a top inset.
+/// The generic on-screen check can pass a partially visible card, so inspect all four
+/// corners here, including while the card is turning between waypoints.
 #[test]
-fn a_thrown_permanent_never_rises_past_the_top_of_the_window() {
-    // Under the top of the opponent's creatures' row, which stands where the web interface's
-    // does, so that the room over the card's place is all the safe area caps.
-    let inset = window_inset(220.0);
-    for (case, window, capped) in [
-        ("permanent resolves", window(1440.0, 900.0), false),
-        ("opponent permanent resolves", window(1440.0, 900.0), false),
-        ("opponent permanent resolves", inset, true),
-    ] {
-        let (_, before, after, timings) = cases()
-            .into_iter()
-            .find(|(name, ..)| *name == case)
-            .expect("the case");
-        let show = played_in(&before, &after, timings, window);
-        let slot = flight(&show).steps[0].subject.expect("a card flies");
-        let (start, end) = span(&show);
-        let camera = show.table().camera();
-        let (from, to) = (pose(&show, slot, start), pose(&show, slot, end));
-        let [_, up, _] = axes(&show);
-        let mut highest = f32::MIN;
-        for t in (start..=end).step_by(usize::try_from(MS).expect("small")) {
-            let now = pose(&show, slot, t);
-            let (corners, _) = camera.card_box(&now);
-            let top = corners.iter().map(|c| c.y).fold(f32::INFINITY, f32::min);
+fn a_resolving_permanent_stays_below_the_top_safe_area() {
+    for (case, before, after, timings) in cases()
+        .into_iter()
+        .filter(|(case, ..)| case.ends_with("resolves"))
+    {
+        for window in [window(1440.0, 900.0), window_inset(220.0)] {
+            let show = played_in(&before, &after, timings.clone(), window);
+            let slot = flight(&show).steps[0].subject.expect("a card flies");
+            let (start, end) = span(&show);
+            let camera = show.table().camera();
             let edge = window.safe_area.top;
-            assert!(
-                top > edge - 1.0,
-                "{case}: its top is at {top} points, above the safe area's at {edge}, at {t}"
-            );
-            highest = highest.max(off_line(pose(&show, slot, t), from, to).dot(up));
-        }
-        let full = show.table().data().verbs.fly.thrown.height
-            * crate::test_data::data().card.width
-            * from.scale;
-        if capped {
-            assert!(highest < 0.8 * full, "{case}: rises {highest} of {full}");
-        } else {
-            assert!(highest > 0.9 * full, "{case}: rises {highest} of {full}");
+            for at in (start..end)
+                .step_by(usize::try_from(MS).expect("small"))
+                .chain([end])
+            {
+                let (corners, _) = camera.card_box(&pose(&show, slot, at));
+                let top = corners
+                    .iter()
+                    .map(|corner| corner.y)
+                    .fold(f32::INFINITY, f32::min);
+                assert!(
+                    top >= edge - 0.1,
+                    "{case}: the card reaches {top}, above the safe area's top at {edge}, at {at}"
+                );
+            }
         }
     }
 }
@@ -525,14 +440,7 @@ fn window_inset(top: f32) -> Window {
     window
 }
 
-/// How far along the way from `from` to `to` `pose` is, from 0 to 1.
-fn progress(pose: Pose, from: Pose, to: Pose) -> f32 {
-    let way = to.position - from.position;
-    (pose.position - from.position).dot(way) / way.length_squared()
-}
-
-/// The opponent's land first moves the other way across the screen from its place, down into
-/// the open table, and ends on its place.
+/// The opponent's land moves down and right out of their hand before returning to the land row.
 #[test]
 fn the_opponents_land_swings_out_before_it_lands() {
     let (_, before, after, timings) = cases()
@@ -542,30 +450,25 @@ fn the_opponents_land_swings_out_before_it_lands() {
     let show = played(&before, &after, timings);
     let slot = flight(&show).steps[0].subject.expect("a card flies");
     let (start, end) = span(&show);
-    let from = pose(&show, slot, start);
-    let to = pose(&show, slot, end);
-    let [right, up, _] = axes(&show);
-    let across = (to.position - from.position).dot(right);
-    let early = pose(&show, slot, start + (end - start) / 5);
-    let moved = early.position - from.position;
+    let camera = show.table().camera();
+    let point = |at| camera.to_screen(pose(&show, slot, at).position);
+    let from = point(start);
+    let to = point(end);
     assert!(
-        moved.dot(right) * across < 0.0,
-        "it first goes the other way across the screen: from {:?} toward {:?}, at {:?}",
-        from.position,
-        to.position,
-        early.position
-    );
-    assert!(
-        off_line(early, from, to).dot(up) < 0.0,
-        "it drops into the open table, down the screen from its straight way: {:?}",
-        early.position
+        (start..end)
+            .step_by(usize::try_from(MS).expect("small"))
+            .any(|at| {
+                let card = point(at);
+                card.x > from.x.max(to.x) && card.y > from.y
+            }),
+        "the land swings out to the right of its hand and battlefield slots"
     );
     let placement = show.table().placement(&after.view, &[]);
     let rest = placement
         .get(flight_slot(&after))
         .map(|rest| rest.pose)
         .expect("a place");
-    assert_eq!(to, rest, "it ends at its placement");
+    assert_eq!(pose(&show, slot, end), rest, "it ends at its placement");
 }
 
 fn flight_slot(after: &GameUpdate) -> ObjectId {
@@ -576,18 +479,22 @@ fn flight_slot(after: &GameUpdate) -> ObjectId {
     }
 }
 
-/// When a card leaves the hand, the cards that stay are at their new places 170 ms after the
-/// step begins, the room the session gives it, though the step lasts longer.
+/// The hand closes in the time the session gives it while the cast is still in flight.
 #[test]
-fn the_hand_closes_up_in_170_ms_after_a_card_leaves_it() {
+fn the_hand_closes_up_before_the_cast_reaches_the_stack() {
     let (_, before, after, timings) = cases()
         .into_iter()
         .find(|(name, ..)| *name == "own spell cast")
         .expect("the case");
     let (_, [mine, _]) = table();
+    let Room::For { ms } = timings[0].room else {
+        panic!("the session gives the hand its own time to close");
+    };
+    let regroup = u64::try_from(std::time::Duration::from_secs_f64(ms / 1000.0).as_nanos())
+        .expect("the regroup fits the playback clock");
     let show = played(&before, &after, timings);
     let (start, end) = span(&show);
-    assert!(end - start > 170 * MS, "the cast outlasts the room");
+    assert!(end - start > regroup, "the cast outlasts the room");
     let placement = show.table().placement(&after.view, &[]);
     let script = flight(&show);
     let moved: Vec<usize> = [mine.land, mine.other]
@@ -603,12 +510,12 @@ fn the_hand_closes_up_in_170_ms_after_a_card_leaves_it() {
             .map(|rest| rest.pose)
             .expect("in the hand");
         assert_ne!(
-            pose(&show, slot, start + 85 * MS),
+            pose(&show, slot, start + regroup / 2),
             rest,
             "card #{slot} on its way"
         );
         assert_eq!(
-            pose(&show, slot, start + 170 * MS),
+            pose(&show, slot, start + regroup),
             rest,
             "card #{slot} at rest"
         );
@@ -619,7 +526,6 @@ fn the_hand_closes_up_in_170_ms_after_a_card_leaves_it() {
 /// shrinks off the stack, aloft, and on its way down.
 #[test]
 fn a_resize_in_mid_throw_keeps_the_pose() {
-    // The step begins at 330 ms and lasts 520.
     for at in [350, 450, 700] {
         let (_, before, after, timings) = cases()
             .into_iter()

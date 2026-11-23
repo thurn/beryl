@@ -484,22 +484,52 @@ fn apex_spline(
         turn: if flips { 0.0 } else { from.turn },
         ..Pose::default()
     };
-    let clamped = clamped_to_safe_area(probe, camera);
-    let interior = [SplineNode {
-        position: clamped.position,
-        rotation,
-        seen_scale,
-        weight: 1.0 / node.rel_scale,
-    }];
-
-    Shape::Spline(Spline::new(
-        &interior,
-        1.0 / from_rel_scale,
-        &to,
-        curve,
-        (flips, false),
-        (camera.eye, camera_back),
-    ))
+    let mut apex = clamped_to_safe_area(probe, camera);
+    let build = |apex: Pose| {
+        Spline::new(
+            &[SplineNode {
+                position: apex.position,
+                rotation,
+                seen_scale,
+                weight: 1.0 / node.rel_scale,
+            }],
+            1.0 / from_rel_scale,
+            &to,
+            curve,
+            (flips, false),
+            (camera.eye, camera_back),
+        )
+    };
+    let mut spline = build(apex);
+    let top = |pose: Pose| {
+        let (corners, _) = camera.card_box(&pose);
+        corners
+            .iter()
+            .map(|corner| corner.y)
+            .fold(f32::INFINITY, f32::min)
+    };
+    let edge = camera.window.safe_area.top;
+    let apex_top = top(apex);
+    let top_room = apex_top - edge;
+    let half_height = camera.to_screen(apex.position).y - apex_top;
+    // When the apex is near the edge, check the whole card between the waypoints too.
+    // The card can project higher while it is still turning toward the apex. Lower only
+    // the waypoint so the flight curves smoothly and keeps both of its rest poses.
+    if top_room <= half_height && top(from) >= edge && top(to) >= edge {
+        for _ in 0..3 {
+            let highest = (1..LOOKS)
+                .map(|sample| spline.pose_at(&from, &to, f32::from(sample) / f32::from(LOOKS)))
+                .map(top)
+                .fold(f32::INFINITY, f32::min);
+            if highest >= edge {
+                break;
+            }
+            // Away from the apex the path receives only part of the correction.
+            camera.move_in_screen(&mut apex, Vec2::new(0.0, 2.0 * (edge - highest) + 0.5));
+            spline = build(apex);
+        }
+    }
+    Shape::Spline(spline)
 }
 
 /// Builds an endpoint-relative spline with one or two interior waypoints placed proportionally
@@ -672,7 +702,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
     out.segment(subject, segment);
 }
 
-/// How many moments of a flight `kept_in_window` looks at.
+/// The subdivisions of a flight when checking whether it fits in the window.
 const LOOKS: u16 = 24;
 
 /// How much of its bow a moment must have for `kept_in_window` to push the card from there:

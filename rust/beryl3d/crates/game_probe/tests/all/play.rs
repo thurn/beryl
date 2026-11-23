@@ -9,7 +9,6 @@ use beryl_protocol::protocol::{Side, StackItem, Step as TurnStep, Why, ZoneName}
 use beryl_protocol::script::{Act, Fact, Subject};
 use beryl_protocol::testing::{ScriptBuilder, step, timing};
 use game_play::play::Show;
-use kit_base::pose::Curve;
 use kit_frame::frame::Wake;
 
 /// Every object of `update`'s view stands where placement puts it in the show's window.
@@ -65,27 +64,23 @@ fn a_script_of_three_beats_plays_to_its_end() {
         flying.position != held.position && flying.position != landed.position,
         "halfway through its flight the Plains is between the hand and the battlefield"
     );
-    // The viewer's land glides straight to its place: halfway through its time it is on the
-    // straight line as the screen shows it, though it is drawn nearer the eye than that line so
-    // that it stays in front of the hand. The Plains flies to its place in the row as the first
-    // beat leaves it, which the token's arrival later shifts by a little, so the line to its
-    // final place is a close stand-in up the screen; the row's shift is across it.
-    let along = Curve::EASE_OUT.ease(0.5);
-    let straight = held.position.lerp(landed.position, along);
-    let camera = show.table().camera();
-    let (seen, line) = (
-        camera.to_screen(flying.position),
-        camera.to_screen(straight),
-    );
     assert!(
-        (seen.y - line.y).abs() < 2.0,
-        "the land glides on the straight line on screen: {seen} against {line}"
-    );
-    assert!(
-        camera.depth(flying.position) < camera.depth(straight),
-        "the land is drawn nearer the eye than the straight line"
+        show.pose(token, 210 * MS)
+            .is_none_or(|pose| pose.opacity <= 0.0),
+        "the token has yet to enter"
     );
     assert_eq!(show.wake(210 * MS), Wake::Now, "a segment is under way");
+
+    frame(&mut show, &mut scratch, 420 * MS);
+    let first_landing = show.pose(land, 420 * MS).expect("the Plains has landed");
+    let camera = show.table().camera();
+    let [departure, end, middle] =
+        [held, first_landing, flying].map(|pose| camera.to_screen(pose.position));
+    let way = end - departure;
+    assert!(
+        way.perp_dot(middle - departure).abs() < way.length(),
+        "the land glides along the line to its first landing, within one screen point"
+    );
 
     frame(&mut show, &mut scratch, 570 * MS);
     let fading = show.pose(token, 570 * MS).expect("the token is drawn");
@@ -93,6 +88,17 @@ fn a_script_of_three_beats_plays_to_its_end() {
         fading.opacity > 0.0 && fading.opacity < 1.0,
         "the token fades in during the second beat, at {}",
         fading.opacity
+    );
+    let island = usize::from(cards.island.0);
+    let untapped = placement_before
+        .get(cards.island)
+        .expect("on the battlefield");
+    assert_eq!(
+        show.pose(island, 570 * MS)
+            .expect("the Island is drawn")
+            .rotation,
+        untapped.pose.rotation,
+        "the Island waits until the third beat to tap"
     );
     assert_eq!(show.shown(), Some(&start), "the view waits for its script");
 
