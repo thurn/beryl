@@ -2,14 +2,18 @@
 //! permanent's outline, the attacker's wedge and the blocker's crescent.
 
 use app_client::Input;
+use app_client::driver::{Page, Recording};
 use app_client::{Client, Config};
 use beryl_protocol::protocol::{CardType, Combat, ObjectId, Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
+use game_probe::story::{Body, Story};
 use glam::{Affine3A, Vec3};
 use kit_base::tokens::{badge, color};
-use kit_frame::frame::{Band, Draw, Frame, Material, Sprite, sprites};
+use kit_frame::frame::{
+    Band, Draw, ElementId, Endpoint, Frame, Material, Role, ShapeAnchor, Sprite, sprites,
+};
 use kit_ui::input::Input as DeviceInput;
-use kit_ui::input::{Insets, Size};
+use kit_ui::input::{Insets, Size, Window};
 
 const MS: u64 = 1_000_000;
 
@@ -242,5 +246,88 @@ fn the_wedge_fades_in_and_stays_then_goes_with_the_attack() {
     assert!(
         marks(&calm, sprites::WEDGE).is_empty(),
         "no wedge once the attack is over"
+    );
+}
+
+#[test]
+fn opposing_combat_marks_leave_room_for_the_block_connector() {
+    const SIZE: Size = Size {
+        width: 1728.0,
+        height: 1117.0,
+    };
+    let catalog = app_client::stories::embedded();
+    let source = catalog
+        .iter()
+        .find(|source| source.name == "story/game_play/facing-marks")
+        .expect("the combat fixture");
+    let Body::Capture { capture, .. } = Story::parse(&source.text).unwrap().body else {
+        panic!("the embedded combat story is a capture");
+    };
+    let data = crate::test_data::data();
+    let chevron = data.own.wedge.chevron;
+    let mut page = Page::in_window(
+        data,
+        Recording(capture.messages).into(),
+        Side::You,
+        Window {
+            size: SIZE,
+            scale: 2.0,
+            ..Window::default()
+        },
+    )
+    .unwrap();
+    let line = |frame: &Frame, name, slots: [u32; 2]| {
+        let mut arrows = frame
+            .resolved
+            .iter()
+            .enumerate()
+            .filter(|(_, element)| element.role == Role::Arrow);
+        let (index, arrow) = arrows.next().expect("one combat connector");
+        assert!(arrows.next().is_none(), "one combat connector");
+        assert_eq!(frame.name(arrow.name), name);
+        let Some(ShapeAnchor::Line(ends)) = frame.decoration_of(u32::try_from(index).unwrap())
+        else {
+            panic!("the connector has two anchors");
+        };
+        assert_eq!(
+            ends.map(|end| end.target),
+            slots.map(|slot| Endpoint::Node(ElementId(slot)))
+        );
+    };
+
+    page.seek(&"view:2+150ms".parse().unwrap()).unwrap();
+    let declared = page.frame();
+    assert_eq!(marks(declared, sprites::WEDGE)[0].1.tint, color::WEDGE);
+    line(declared, "attack", [20, 293]);
+
+    page.seek(&"view:3+150ms".parse().unwrap()).unwrap();
+    let blocked = page.frame();
+    let wedge = marks(blocked, sprites::WEDGE)[0].1;
+    let crescent = marks(blocked, sprites::CRESCENT)[0].1;
+    assert_eq!(wedge.tint, color::BLOCK_LINE);
+    line(blocked, "block", [294, 20]);
+
+    let y = |draw: &Draw, local: Vec3| {
+        let point = transform(draw).transform_point3(local);
+        -blocked.view_projection.project_point3(point).y * SIZE.height / 2.0
+    };
+    // The wedge has transparent room beyond its tip and the crescent opens along +x.
+    let tip = Vec3::Y * (0.5 * chevron / (chevron + 2.0 * sprites::WEDGE_ROOM));
+    let crown = Vec3::NEG_X * 0.45;
+    assert!(y(&crescent, crown) > y(&crescent, Vec3::ZERO) + 1.0);
+    let gap = y(&wedge, tip) - y(&crescent, crown);
+    assert!(
+        gap > 2.0,
+        "the opposing marks leave a visible gap: {gap} points"
+    );
+
+    page.seek(&"end".parse().unwrap()).unwrap();
+    let done = page.frame();
+    assert!(marks(done, sprites::WEDGE).is_empty());
+    assert!(marks(done, sprites::CRESCENT).is_empty());
+    assert!(
+        done.resolved
+            .iter()
+            .all(|element| element.role != Role::Arrow)
     );
 }

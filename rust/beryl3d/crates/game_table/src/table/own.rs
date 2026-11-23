@@ -7,11 +7,9 @@
 //!   The badge sits over the art to leave the card's text and stats visible.
 //! - A token: a coin at the bottom left, where the web's `.card-counters` row puts its label.
 //! - A permanent its owner does not control: a violet outline, the web's `.card-stolen-edge`.
-//! - An attacker: a wedge past the card's edge toward the defending side, its tip `chevron`
-//!   card widths past the frame, as the web's `fighterLight` (`ui/src/stage/light.ts`) draws it
-//!   with the desktop layout's `chevron`.
-//! - A blocker: a crescent just past the card's edge toward the attacking side, as
-//!   `fighterLight` draws it.
+//! - An attacker: a wedge along the edge facing the defender. It turns gold as the creature
+//!   becomes blocked (Arena, `IEXcjBn3BXk` at 22:23).
+//! - A blocker: a gold crescent along the edge facing the attacker, opening toward the card.
 //!
 //! The wedge and the crescent fade in over `fade_ms` from the frame the record first says the
 //! creature fights. The wedge starts a little large and settles over `pop_ms`, and the crescent
@@ -123,7 +121,8 @@ pub(super) fn write(
         )]
         let age = now.saturating_sub(since) as f32 / 1e6;
         let edge = Edge::toward(look.pose.rotation, defending(record.controller), card);
-        marks.fight(fighting, &edge, age);
+        let blocked = matches!(record.combat, Some(Combat::Attacking { blocked: true, .. }));
+        marks.fight(fighting, &edge, age, blocked);
     }
 }
 
@@ -218,10 +217,9 @@ impl<'b, 'f> Marks<'b, 'f> {
     }
 
     /// The wedge of an attacker or the crescent of a blocker on `edge`, `age` milliseconds
-    /// after its record first said it fights. The wedge is two records over one quad, as the
-    /// web's `fighterLight` lights it in two colors: its body, rim and halo in the ember glow,
-    /// and its white-hot rim in the ember core.
-    fn fight(&mut self, fighting: Fighting, edge: &Edge, age: f32) {
+    /// after its record first said it fights. A block changes the attacker's color without
+    /// replaying its entrance.
+    fn fight(&mut self, fighting: Fighting, edge: &Edge, age: f32, blocked: bool) {
         let fade = (age / self.own.fade_ms).clamp(0.0, 1.0);
         let turn = edge.axis.y.atan2(edge.axis.x) - PI / 2.0;
         if fighting == Fighting::Attacks {
@@ -232,12 +230,15 @@ impl<'b, 'f> Marks<'b, 'f> {
                 edge.across * (1.0 + self.own.wedge.pop.x * pop),
                 length,
                 card_width,
-            );
-            let transform = self.past(edge, length / 2.0, size, turn);
-            for (sprite, tint) in [
-                (sprites::WEDGE, color::WEDGE),
-                (sprites::WEDGE_HOT, color::WEDGE_HOT),
-            ] {
+            ) * self.own.wedge.scale;
+            // Scale the halo as well as the wedge so it leaves room for the opposing crescent.
+            let transform = self.past(edge, length * self.own.wedge.scale.y / 2.0, size, turn);
+            let (glow, core) = if blocked {
+                (color::BLOCK_LINE, color::BLOCK_LINE_CORE)
+            } else {
+                (color::WEDGE, color::WEDGE_HOT)
+            };
+            for (sprite, tint) in [(sprites::WEDGE, glow), (sprites::WEDGE_HOT, core)] {
                 let tint = with_opacity(tint, fade * self.opacity);
                 self.builder
                     .draw(self.band, Draw::glow(transform, tint, sprite, 0.0));
@@ -247,10 +248,12 @@ impl<'b, 'f> Marks<'b, 'f> {
         let t = (age / self.own.crescent.open_ms).clamp(0.0, 1.0);
         let open = self.own.crescent.opens_from
             + (1.0 - self.own.crescent.opens_from) * (1.0 - (1.0 - t).powi(3));
-        let size = self.own.crescent.size * edge.across * open;
-        let out = self.own.crescent.gap * edge.across;
+        let card_width = self.builder.card().x;
+        let size = self.own.crescent.size * Vec2::new(edge.across, card_width) * open;
+        let out = self.own.crescent.gap * card_width;
+        // The sprite opens along +x. Turn its opening back toward the blocker.
         let draw = Draw::glow(
-            self.past(edge, out, size, turn),
+            self.past(edge, out, Vec2::new(size.y, size.x), turn - PI / 2.0),
             with_opacity(color::CRESCENT, fade * self.opacity),
             sprites::CRESCENT,
             0.0,

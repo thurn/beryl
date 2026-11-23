@@ -253,6 +253,9 @@ pub struct MoonBadge {
 pub struct Wedge {
     #[serde(deserialize_with = "positive")]
     pub chevron: f32,
+    /// Scale along and away from the card edge, including the halo.
+    #[serde(deserialize_with = "vector")]
+    pub scale: Vec2,
     #[serde(deserialize_with = "positive")]
     pub pop_ms: f32,
     #[serde(deserialize_with = "vector")]
@@ -290,6 +293,10 @@ impl Light {
 impl Own {
     /// Parses `own.json`.
     pub fn parse(text: &str) -> Result<Self, String> {
-        read("own.json", text)
+        let own: Self = read("own.json", text)?;
+        if own.wedge.scale.min_element() <= 0.0 || own.wedge.scale.max_element() > 1.0 {
+            return Err("own.json: wedge.scale: each component must be in (0, 1]".to_owned());
+        }
+        Ok(own)
     }
 }
