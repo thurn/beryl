@@ -10,12 +10,14 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import android, bugs, mobile
+from . import bugs, mobile_sdk
 
-BUGS_RELATIVE: Path = Path("Library/Application Support") / mobile.BUNDLE_ID / "bugs"
+BUGS_RELATIVE: Path = Path("Library/Application Support/ca.thurn.beryl/bugs")
+ReportCounts = tuple[int, int]
 
 
 def copy_reports(source: Path, root: Path) -> tuple[int, int]:
@@ -53,24 +55,24 @@ def copy_reports(source: Path, root: Path) -> tuple[int, int]:
     return brought, already
 
 
-def simulator_container() -> Path | None:
+def simulator_container(bundle: str = "ca.thurn.beryl") -> Path | None:
     """Returns only an already booted Beryl simulator's app data container."""
-    listed = mobile.run("xcrun", "simctl", "list", "devices", "--json")
+    listed = mobile_sdk.run("xcrun", "simctl", "list", "devices", "--json")
     if listed.returncode != 0:
         return None
     devices: dict[str, Any] = json.loads(listed.stdout).get("devices", {})
     for runtime in devices.values():
         for device in runtime:
             if (
-                device.get("name") == mobile.SIMULATOR
+                device.get("name") == mobile_sdk.SIMULATOR
                 and device.get("state") == "Booted"
             ):
-                data = mobile.run(
+                data = mobile_sdk.run(
                     "xcrun",
                     "simctl",
                     "get_app_container",
                     str(device["udid"]),
-                    mobile.BUNDLE_ID,
+                    bundle,
                     "data",
                 )
                 if data.returncode == 0:
@@ -78,7 +80,9 @@ def simulator_container() -> Path | None:
     return None
 
 
-def android_reports(root: Path) -> tuple[int, int] | None:
+def android_reports(root: Path) -> ReportCounts | None:
+    from . import android
+
     if not android.running():
         return None
     found = android.adb(
@@ -93,17 +97,29 @@ def android_reports(root: Path) -> tuple[int, int] | None:
     ]
     if not folders:
         return (0, 0)
-    command = [
+    return pull_android_archive(
+        root,
         android.tool("platform-tools", "adb"),
-        "-s",
         android.SERIAL,
+        android.PACKAGE,
+        folders[0],
+    )
+
+
+def pull_android_archive(
+    root: Path, adb: str, serial: str, package: str, source_dir: str
+) -> ReportCounts:
+    command = [
+        adb,
+        "-s",
+        serial,
         "exec-out",
         "run-as",
-        android.PACKAGE,
+        package,
         "tar",
         "c",
         "-C",
-        folders[0],
+        source_dir,
         ".",
     ]
     archived = subprocess.run(command, capture_output=True, check=False)
@@ -149,9 +165,11 @@ def android_reports(root: Path) -> tuple[int, int] | None:
         return brought, already
 
 
-def device_reports(root: Path) -> tuple[int, int] | None:
+def device_reports(
+    root: Path, bundle: str = "ca.thurn.beryl", source: Path = BUGS_RELATIVE
+) -> ReportCounts | None:
     """Copies from a paired iPhone only when the caller explicitly asked for it."""
-    device = mobile.paired_device()
+    device = mobile_sdk.paired_device()
     if device is None:
         return None
     root.mkdir(parents=True, exist_ok=True)
@@ -169,9 +187,9 @@ def device_reports(root: Path) -> tuple[int, int] | None:
                 "--domain-type",
                 "appDataContainer",
                 "--domain-identifier",
-                mobile.BUNDLE_ID,
+                bundle,
                 "--source",
-                str(BUGS_RELATIVE),
+                source.as_posix(),
                 "--destination",
                 str(destination),
             ],
@@ -189,37 +207,44 @@ def device_reports(root: Path) -> tuple[int, int] | None:
 
 
 def run(args: argparse.Namespace) -> int:
+    return pull(
+        args,
+        lambda root: simulator_reports(root, "ca.thurn.beryl", BUGS_RELATIVE),
+        android_reports,
+        device_reports,
+    )
+
+
+def simulator_reports(root: Path, bundle: str, source: Path) -> ReportCounts | None:
+    container = simulator_container(bundle)
+    return copy_reports(container / source, root) if container is not None else None
+
+
+def pull(
+    args: argparse.Namespace,
+    simulator: Callable[[Path], ReportCounts | None],
+    android: Callable[[Path], ReportCounts | None],
+    device: Callable[[Path], ReportCounts | None],
+) -> int:
     if args.bundle is not None:
         return bugs.import_cmd(argparse.Namespace(bundle=args.bundle))
     root = bugs.bugs_dir()
-    failed = False
-    try:
-        source = simulator_container()
-        if source is None:
-            print("iOS Simulator: no booted Beryl simulator or installed app")
-        else:
-            print_counts("iOS Simulator", copy_reports(source / BUGS_RELATIVE, root))
-    except (OSError, ValueError, RuntimeError, tarfile.TarError) as error:
-        print(f"mobile-bugs: iOS Simulator: {error}", file=sys.stderr)
-        failed = True
-    try:
-        android_count = android_reports(root)
-        if android_count is None:
-            print("Android emulator: not running or Beryl is not installed")
-        else:
-            print_counts("Android emulator", android_count)
-    except (OSError, ValueError, RuntimeError, tarfile.TarError) as error:
-        print(f"mobile-bugs: Android emulator: {error}", file=sys.stderr)
-        failed = True
+    sources = [
+        ("iOS Simulator", simulator, "no booted Beryl simulator or installed app"),
+        ("Android emulator", android, "not running or Beryl is not installed"),
+    ]
     if args.device:
+        sources.append(("iPhone", device, "no paired device"))
+    failed = False
+    for label, fetch, missing in sources:
         try:
-            device_count = device_reports(root)
-            if device_count is None:
-                print("iPhone: no paired device")
+            counts = fetch(root)
+            if counts is None:
+                print(f"{label}: {missing}")
             else:
-                print_counts("iPhone", device_count)
+                print_counts(label, counts)
         except (OSError, ValueError, RuntimeError, tarfile.TarError) as error:
-            print(f"mobile-bugs: iPhone: {error}", file=sys.stderr)
+            print(f"mobile-bugs: {label}: {error}", file=sys.stderr)
             failed = True
     return int(failed)
 
@@ -232,8 +257,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = sub.add_parser(
         "mobile-bugs", help="pull phone reports or import a shared ZIP"
     )
+    arguments(parser)
+    parser.set_defaults(func=run)
+
+
+def arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("bundle", nargs="?", type=Path, help="shared report ZIP")
     parser.add_argument(
         "--device", action="store_true", help="also pull from a paired iPhone"
     )
-    parser.set_defaults(func=run)

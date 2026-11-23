@@ -23,7 +23,7 @@ const VOICES: usize = 4;
 /// Every music the client asks for, in the order `Manifest::music` holds them.
 pub const MUSIC: [Music; 4] = [Music::Menu, Music::Game, Music::Win, Music::Loss];
 
-/// The audio resources in a macOS app bundle, or the checkout's `data/audio/assets`.
+/// The audio resources in a desktop release, or the checkout's `data/audio/assets`.
 #[must_use]
 pub fn folder() -> PathBuf {
     #[cfg(target_os = "macos")]
@@ -32,6 +32,13 @@ pub fn folder() -> PathBuf {
         && macos.ends_with("Contents/MacOS")
     {
         return macos.join("../Resources/audio");
+    }
+    #[cfg(target_os = "windows")]
+    if let Ok(executable) = std::env::current_exe()
+        && let Some(parent) = executable.parent()
+        && parent.join("audio").is_dir()
+    {
+        return parent.join("audio");
     }
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../data/audio/assets")
 }

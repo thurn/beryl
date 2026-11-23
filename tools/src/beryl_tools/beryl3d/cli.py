@@ -27,6 +27,7 @@ from . import (
     app,
     bug,
     camera,
+    cargo,
     cargo_tests,
     clear_save,
     compare,
@@ -41,10 +42,12 @@ from . import (
     paths,
     perf,
     phone,
+    phone_launch,
     play,
     purity,
     spec,
     stand_in,
+    table_pair,
     tiers,
     timeline,
     trend,
@@ -58,33 +61,13 @@ USAGE = 2
 CORES_ENV = "IGNITE_CORES"
 
 
-def cargo(arguments: list[str], env: dict[str, str] | None = None) -> int:
-    """Runs cargo with `arguments` in Beryl 3D's workspace, in `env` (this process's own by
-    default)."""
-    return subprocess.run(
-        ["cargo", *arguments],
-        cwd=paths.WORKSPACE,
-        env=os.environ if env is None else env,
-        check=False,
-    ).returncode
-
-
-def build(arguments: list[str], env: dict[str, str] | None = None) -> int:
-    """Runs `cargo <arguments>`, a build in the workspace's own target directory, one at a time
-    across every process of this checkout. Cargo's lock on the directory already makes a second
-    build wait while another runs. Taking a file lock first (`paths.build_lock`) makes the
-    waiting explicit and means a second build usually finds nothing left to do."""
-    with system.file_lock(paths.build_lock()):
-        return cargo(arguments, env)
-
-
 def quick_build(arguments: list[str]) -> int:
     """Runs `cargo <arguments>` as `build` does, for a program an agent waits on after an edit."""
-    return build(arguments)
+    return cargo.build(arguments)
 
 
 def run_cargo(args: argparse.Namespace) -> int:
-    return cargo(list(args.arguments))
+    return cargo.run(list(args.arguments))
 
 
 def test_command(packages: list[str], filters: list[str], nextest: bool) -> list[str]:
@@ -130,7 +113,7 @@ def run_cargo_test(args: argparse.Namespace) -> int:
     command = test_command(args.package, args.filter, nextest)
     if not nextest and args.package:
         return cargo_tests.run(command, args.package, args.filter)
-    return cargo(command)
+    return cargo.run(command)
 
 
 # The one build that the tests, `record` and `gate` share: every target that `cargo nextest run
@@ -146,7 +129,7 @@ SHARED_BUILD: list[str] = [
 
 
 def shared_build() -> int:
-    return build(SHARED_BUILD)
+    return cargo.build(SHARED_BUILD)
 
 
 def program(name: str) -> Path:
@@ -435,14 +418,14 @@ CLIPPY_TARGET: Path = paths.WORKSPACE / "target" / "clippy"
 
 
 def run_clippy(_args: argparse.Namespace) -> int:
-    return cargo(
+    return cargo.run(
         ["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"],
         {**os.environ, "CARGO_TARGET_DIR": str(CLIPPY_TARGET)},
     )
 
 
 def run_fmt(args: argparse.Namespace) -> int:
-    return cargo(["fmt", "--all", *(["--check"] if args.check else [])])
+    return cargo.run(["fmt", "--all", *(["--check"] if args.check else [])])
 
 
 # The commands of the modules that register their own, listed after this module's, in order. A
@@ -450,6 +433,8 @@ def run_fmt(args: argparse.Namespace) -> int:
 MODULES: tuple[ModuleType, ...] = (
     app,
     phone,
+    phone_launch,
+    table_pair,
     camera,
     vm,
     parity,

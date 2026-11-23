@@ -19,8 +19,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import bugs
-from . import app
+from .. import bugs, mobile_bugs
+from . import app, phone
 from .command import Command
 
 # How many lines of `tree.txt` are printed.
@@ -129,7 +129,48 @@ def run_bug(args: argparse.Namespace) -> int:
     return 0
 
 
+IOS_REPORTS = Path("Documents/bugs")
+ANDROID_REPORTS = "files/bugs"
+
+
+def android_reports(root: Path) -> mobile_bugs.ReportCounts | None:
+    if phone.adb("get-state").stdout.strip() != "device":
+        return None
+    listed = phone.adb(
+        "shell", "run-as", phone.BUNDLE, "find", ".", "-type", "d", "-name", "bugs"
+    )
+    if listed.returncode != 0:
+        return None
+    if f"./{ANDROID_REPORTS}" not in listed.stdout.splitlines():
+        return 0, 0
+    return mobile_bugs.pull_android_archive(
+        root, str(phone.adb_binary()), phone.SERIAL, phone.BUNDLE, ANDROID_REPORTS
+    )
+
+
+def run_mobile_bugs(args: argparse.Namespace) -> int:
+    return mobile_bugs.pull(
+        args,
+        lambda root: mobile_bugs.simulator_reports(root, phone.BUNDLE, IOS_REPORTS),
+        android_reports,
+        lambda root: mobile_bugs.device_reports(root, phone.BUNDLE, IOS_REPORTS),
+    )
+
+
 COMMANDS: tuple[Command, ...] = (
+    Command(
+        "mobile-bugs",
+        "pulls bug reports from native phone hosts or imports a shared ZIP",
+        (
+            (
+                "just b3d mobile-bugs",
+                "pull reports from a booted simulator and emulator",
+            ),
+            ("just b3d mobile-bugs --device", "also pull reports from a paired iPhone"),
+        ),
+        run_mobile_bugs,
+        mobile_bugs.arguments,
+    ),
     Command(
         "bug",
         "a bug report: its words, element tree, frame log and the commands that reproduce it",

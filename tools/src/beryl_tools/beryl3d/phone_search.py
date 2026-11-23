@@ -23,7 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .. import mobile, paths as repo_paths, system
+from .. import mobile_sdk as mobile
+from .. import paths as repo_paths, system
 from . import paths, phone
 from .phone_log import lines
 

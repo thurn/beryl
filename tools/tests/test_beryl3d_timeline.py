@@ -208,7 +208,7 @@ def test_parity_reuses_the_binary_built_and_leaves_no_files(
         assert command == [str(tmp_path / "b3d"), "timeline", "--all"]
         return subprocess.CompletedProcess[str](command, 0, f"command\n{native}\n", "")
 
-    monkeypatch.setattr(cli, "build", build)
+    monkeypatch.setattr(cli.cargo, "build", build)
     monkeypatch.setattr(cli, "program", lambda name: tmp_path / name)
     monkeypatch.setattr(cli, "linked", lambda name: tmp_path / name)
     monkeypatch.setattr(timeline, "out", run)

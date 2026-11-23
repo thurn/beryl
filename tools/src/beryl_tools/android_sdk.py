@@ -8,7 +8,7 @@ from pathlib import Path
 
 TARGET = "aarch64-linux-android"
 NDK_VERSION = "28.2.13676358"
-# gen/android/app/build.gradle.kts's minSdk.
+# Both Android hosts declare this minSdk.
 MIN_SDK = 24
 
 
@@ -24,23 +24,53 @@ def sdk_root() -> Path:
     return Path.home() / "Library" / "Android" / "sdk"
 
 
+def ndk_tools() -> Path:
+    host = "windows-x86_64" if sys.platform == "win32" else "darwin-x86_64"
+    return (
+        sdk_root()
+        / "ndk"
+        / NDK_VERSION
+        / "toolchains"
+        / "llvm"
+        / "prebuilt"
+        / host
+        / "bin"
+    )
+
+
 def ndk_env() -> dict[str, str]:
     """The environment for Cargo build scripts that compile C for Android."""
-    ndk = sdk_root() / "ndk" / NDK_VERSION
-    prebuilt = ndk / "toolchains" / "llvm" / "prebuilt"
+    tools = ndk_tools()
     if sys.platform == "win32":
         # Invoke clang.exe directly with the API level. The target-prefixed entry
         # point on Windows is a batch file.
-        tools = prebuilt / "windows-x86_64" / "bin"
         return {
             **os.environ,
             "CC_aarch64_linux_android": str(tools / "clang.exe"),
             "CFLAGS_aarch64_linux_android": f"--target={TARGET}{MIN_SDK}",
             "AR_aarch64_linux_android": str(tools / "llvm-ar.exe"),
         }
-    tools = prebuilt / "darwin-x86_64" / "bin"
     return {
         **os.environ,
         "CC_aarch64_linux_android": str(tools / f"{TARGET}{MIN_SDK}-clang"),
         "AR_aarch64_linux_android": str(tools / "llvm-ar"),
     }
+
+
+def native_env() -> dict[str, str]:
+    """Adds the C++ compiler and Rust linker for the native host's shared library."""
+    env = ndk_env()
+    tools = ndk_tools()
+    clang = env["CC_aarch64_linux_android"]
+    env["CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"] = clang
+    if sys.platform == "win32":
+        env.update(
+            CXX_aarch64_linux_android=str(tools / "clang++.exe"),
+            CXXFLAGS_aarch64_linux_android=env["CFLAGS_aarch64_linux_android"],
+            CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS=(
+                f"-C link-arg=--target={TARGET}{MIN_SDK}"
+            ),
+        )
+    else:
+        env["CXX_aarch64_linux_android"] = f"{clang}++"
+    return env

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from beryl_tools import paths
-from beryl_tools.beryl3d import app, cli
+from beryl_tools.beryl3d import app, cli, phone
 
 
 def test_release_replaces_the_macos_app_with_a_signed_bundle(
@@ -79,6 +79,46 @@ def test_release_replaces_the_macos_app_with_a_signed_bundle(
     assert not (bundle / "old").exists()
 
 
+def test_windows_release_carries_audio_next_to_its_executable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    binary = tmp_path / "beryl3d.exe"
+    binary.write_bytes(b"release executable")
+    audio = tmp_path / "assets"
+    audio.mkdir()
+    (audio / "sound.wav").write_bytes(b"audio")
+    monkeypatch.setattr(app, "RELEASE_BINARY", binary)
+    monkeypatch.setattr(app.audio, "OUTPUT", audio)
+
+    portable = tmp_path / "Beryl 3D"
+    app.package_windows(portable)
+    assert (portable / binary.name).read_bytes() == binary.read_bytes()
+    assert (portable / "audio" / "sound.wav").read_bytes() == b"audio"
+
+
+def test_native_iphone_build_only_does_not_contact_a_paired_device(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(paths, "is_agent", lambda: True)
+
+    def unexpected(*_args: object) -> str:
+        pytest.fail("the command contacted the paired device")
+
+    monkeypatch.setattr(phone.mobile, "paired_device", unexpected)
+    monkeypatch.setattr(phone, "devicectl", unexpected)
+    builds: list[tuple[str, bool, bool]] = []
+
+    def build(sdk: str, release: bool, sign: bool) -> Path:
+        builds.append((sdk, release, sign))
+        return tmp_path / "Beryl3D.app"
+
+    monkeypatch.setattr(phone, "ios_app", build)
+    assert cli.main(["ios-device"]) == 2
+    assert builds == []
+    assert cli.main(["ios-device", "--no-sign"]) == 0
+    assert builds == [("iphoneos", True, False)]
+
+
 def test_release_build_records_the_local_filing_tools(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -96,7 +136,7 @@ def test_release_build_records_the_local_filing_tools(
         envs.append(env)
         return 0
 
-    monkeypatch.setattr(cli, "cargo", cargo)
+    monkeypatch.setattr(cli.cargo, "run", cargo)
 
     assert app.build_release() == 0
     (env,) = envs
@@ -153,7 +193,7 @@ def test_text_commands_hand_every_argument_to_the_b3d_program(
         envs.append(env or {})
         return 0
 
-    monkeypatch.setattr(cli, "cargo", cargo)
+    monkeypatch.setattr(cli.cargo, "run", cargo)
 
     def program(
         command: list[str], env: dict[str, str] | None = None, **_kwargs: object
@@ -208,7 +248,7 @@ def test_interface_tests_run_the_shared_builds_b3d(
     start with (`cli.run_shared_b3d`)."""
     ran: list[list[str]] = []
     monkeypatch.setattr(
-        cli, "cargo", lambda arguments, env=None: ran.append(arguments) or 0
+        cli.cargo, "run", lambda arguments, env=None: ran.append(arguments) or 0
     )
 
     def program(
@@ -229,7 +269,7 @@ def test_a_missing_pack_is_recorded_and_the_command_run_again(
 ) -> None:
     ran: list[list[str]] = []
     monkeypatch.setattr(
-        cli, "cargo", lambda arguments, env=None: ran.append(arguments) or 0
+        cli.cargo, "run", lambda arguments, env=None: ran.append(arguments) or 0
     )
     codes: Iterator[int] = iter([cli.MISSING_PACK, 0, 0])
 
@@ -305,8 +345,31 @@ def test_the_listing_names_every_command_once_and_includes_the_phone_commands() 
     listed = cli.listing()
     for name in names:
         assert f"\n  {name} " in listed
-    for name in ("ios-smoke", "android-smoke", "phone-search", "ios-device"):
+    for name in (
+        "ios",
+        "ios-build",
+        "ios-smoke",
+        "ios-device",
+        "android",
+        "android-build",
+        "android-smoke",
+        "phone-search",
+        "mobile-setup",
+        "mobile-check",
+        "mobile-bugs",
+        "table-pair",
+    ):
         assert name in names
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["ios", "android", "ios-build", "android-build", "mobile-check", "mobile-setup"],
+)
+def test_native_phone_commands_have_help(command: str) -> None:
+    with pytest.raises(SystemExit) as exited:
+        cli.main([command, "--help"])
+    assert exited.value.code == 0
 
 
 def test_picture_commands_hand_every_argument_to_the_b3d_render_program(
@@ -314,7 +377,7 @@ def test_picture_commands_hand_every_argument_to_the_b3d_render_program(
 ) -> None:
     ran: list[list[str]] = []
     monkeypatch.setattr(
-        cli, "cargo", lambda arguments, env=None: ran.append(arguments) or 0
+        cli.cargo, "run", lambda arguments, env=None: ran.append(arguments) or 0
     )
 
     def program(
@@ -353,7 +416,7 @@ def test_a_build_runs_under_the_checkouts_build_lock(
             held.append(True)
         return 0
 
-    monkeypatch.setattr(cli, "cargo", cargo)
+    monkeypatch.setattr(cli.cargo, "run", cargo)
     assert cli.shared_build() == 0
     assert held == [True]
 
@@ -386,7 +449,7 @@ def cargo(arguments, env=None):
     built.write_text('ready')
     return 0
 
-cli.cargo = cargo
+cli.cargo.run = cargo
 print('started', flush=True)
 raise SystemExit(cli.shared_build())
 """

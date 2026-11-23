@@ -22,11 +22,13 @@ import tempfile
 import threading
 import time
 import tomllib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 from .. import audio, bugs, deps, paths as repo_paths, system
-from . import live, paths
+from . import cargo, live, paths
 from .command import Command
 
 TARGET: Path = paths.WORKSPACE / "target"
@@ -57,9 +59,7 @@ def record() -> int:
 
 
 def build() -> int:
-    from .cli import build as cargo_build  # cli imports this module.
-
-    return cargo_build(
+    return cargo.build(
         [
             *["build", "--profile", "test", "-p", "beryl_3d"],
             *["--features", "tools", "--bin", "beryl3d"],
@@ -68,9 +68,7 @@ def build() -> int:
 
 
 def build_release() -> int:
-    from .cli import build as cargo_build  # cli imports this module.
-
-    return cargo_build(
+    return cargo.build(
         [
             "build",
             "--release",
@@ -85,14 +83,29 @@ def build_release() -> int:
     )
 
 
+@contextmanager
+def staging(bundle: Path) -> Iterator[Path]:
+    """Replace the previous release only once the new one has been packaged."""
+    with tempfile.TemporaryDirectory(prefix=".beryl3d-", dir=bundle.parent) as scratch:
+        staged = Path(scratch) / bundle.name
+        yield staged
+        previous = Path(scratch) / "previous"
+        if bundle.exists():
+            bundle.rename(previous)
+        try:
+            staged.rename(bundle)
+        finally:
+            if previous.exists() and not bundle.exists():
+                previous.rename(bundle)
+
+
 def package_macos(bundle: Path) -> None:
     """Build and sign a complete bundle before replacing an earlier release."""
     crate = paths.WORKSPACE / "crates" / "beryl_3d"
     manifest = crate / "Cargo.toml"
     version = tomllib.loads(manifest.read_text())["package"]["version"]
     icon = crate / "macos" / "icon.icns"
-    with tempfile.TemporaryDirectory(prefix=".beryl3d-", dir=bundle.parent) as scratch:
-        staged = Path(scratch) / bundle.name
+    with staging(bundle) as staged:
         contents = staged / "Contents"
         executable = contents / "MacOS" / RELEASE_BINARY.name
         executable.parent.mkdir(parents=True)
@@ -123,28 +136,30 @@ def package_macos(bundle: Path) -> None:
             ["/usr/bin/codesign", "--force", "--sign", "-", staged], check=True
         )
 
-        previous = Path(scratch) / "previous.app"
-        if bundle.exists():
-            bundle.rename(previous)
-        try:
-            staged.rename(bundle)
-        finally:
-            if previous.exists() and not bundle.exists():
-                previous.rename(bundle)
+
+def package_windows(folder: Path) -> None:
+    with staging(folder) as staged:
+        staged.mkdir()
+        shutil.copy(RELEASE_BINARY, staged)
+        shutil.copytree(audio.OUTPUT, staged / "audio")
 
 
 def run_release(_args: argparse.Namespace) -> int:
     if build_release() != 0:
         return deps.CANNOT_RUN
     output = RELEASE_BINARY
-    if sys.platform == "darwin":
-        output = RELEASE_BINARY.with_name(f"{MAC_APP_NAME}.app")
-        try:
-            with system.file_lock(paths.build_lock()):
+    try:
+        with system.file_lock(paths.build_lock()):
+            if sys.platform == "darwin":
+                output = RELEASE_BINARY.with_name(f"{MAC_APP_NAME}.app")
                 package_macos(output)
-        except (OSError, subprocess.CalledProcessError) as error:
-            print(f"release: cannot package {output}: {error}", file=sys.stderr)
-            return deps.CANNOT_RUN
+            elif system.WINDOWS:
+                folder = RELEASE_BINARY.with_name(MAC_APP_NAME)
+                package_windows(folder)
+                output = folder / RELEASE_BINARY.name
+    except (OSError, subprocess.CalledProcessError) as error:
+        print(f"release: cannot package {output}: {error}", file=sys.stderr)
+        return deps.CANNOT_RUN
     print(f"release: {output}")
     return 0
 
@@ -152,7 +167,7 @@ def run_release(_args: argparse.Namespace) -> int:
 COMMANDS = (
     Command(
         "release",
-        "builds the release app bundle on macOS and the executable on other platforms",
+        "packages the release app on macOS and Windows",
         (
             ("just b3d release", "build the optimized desktop app and print its path"),
             ("just b3d release --help", "this text"),
@@ -320,12 +335,16 @@ def smoke_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run_smoke(args: argparse.Namespace) -> int:
+    return smoke(no_build=args.no_build)
+
+
+def smoke(*, no_build: bool = False) -> int:
     """Starts the app with no window under a profile of its own, which has no game to resume,
     waits for its first shown frame and for its live socket's tree to show the start screen (a
     region named `start`), and quits it. The app ends itself after `SMOKE_LIMIT_S` if it hangs
     before then.
     """
-    if not args.no_build and build() != 0:
+    if not no_build and build() != 0:
         return deps.CANNOT_RUN
     started = time.monotonic()
     try:
@@ -358,6 +377,11 @@ def start_screen() -> str:
     output = process.stdout
     if output is None:
         raise RuntimeError("the app's output is not a pipe")
+    # The app's own runtime limit starts after initialization. This also bounds a hang
+    # before initialization finishes or while the app is closing.
+    watchdog = threading.Timer(SMOKE_LIMIT_S + 30, process.kill)
+    watchdog.start()
+    drainer: threading.Thread | None = None
     seen: list[str] = []
     socket_path, shown, data = None, None, None
     try:
@@ -375,17 +399,27 @@ def start_screen() -> str:
                 f"the app showed no frame (exit {process.poll()}):\n" + "\n".join(seen)
             )
         # Read on, so that the app never blocks on a full pipe.
-        threading.Thread(target=output.read, daemon=True).start()
+        drainer = threading.Thread(target=output.read, daemon=True)
+        drainer.start()
         wait_for_start(socket_path)
-        live.request(socket_path, "quit")
-        process.wait(timeout=30)
+        accepted, reason = live.request(socket_path, "quit")
+        if not accepted:
+            raise SmokeError(f"the app rejected quit: {reason}")
+        if code := process.wait(timeout=30):
+            raise SmokeError(f"the app exited with status {code}")
         return shown
     except OSError as error:
         raise SmokeError(f"the live socket did not answer: {error}") from error
+    except subprocess.TimeoutExpired as error:
+        raise SmokeError("the app did not quit") from error
     finally:
+        watchdog.cancel()
         if process.poll() is None:
             process.kill()
             process.wait()
+        if drainer is not None:
+            drainer.join()
+        output.close()
         if data is not None and data.name == profile:
             shutil.rmtree(data, ignore_errors=True)
 

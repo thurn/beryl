@@ -29,9 +29,11 @@ from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Any
 
-from .. import deps, mobile, paths as repo_paths, system
-from . import app, paths
+from .. import deps, paths as repo_paths, system
+from .. import mobile_sdk as mobile
+from . import app, paths, phone_build
 from .command import Command
+from .phone_build import android_apk as android_apk, ios_app as ios_app
 from .phone_log import (
     android_touch_faults,
     lifecycle_faults,
@@ -41,7 +43,6 @@ from .phone_log import (
     surface_sizes,
 )
 
-CRATE: Path = paths.WORKSPACE / "crates" / "beryl_3d"
 # Different from the Tauri app's ca.thurn.beryl, so both can be installed.
 BUNDLE = "ca.thurn.beryl3d"
 ACTIVITY = f"{BUNDLE}/.MainActivity"
@@ -65,7 +66,6 @@ SERIAL = f"emulator-{PORT}"
 # The emulator option that hides Vulkan from the system image, so wgpu falls back to OpenGL
 # ES 3.0.
 NO_VULKAN = ("-feature", "-Vulkan")
-ANDROID: Path = CRATE / "android"
 
 
 def out_dir(kind: str) -> Path:
@@ -78,41 +78,6 @@ def out_dir(kind: str) -> Path:
 def run_name() -> str:
     """A name no other run shares: the start time and this process."""
     return f"{int(time.time() * 1000)}-{os.getpid()}"
-
-
-def library(target: str, crate_type: str, release: bool, env: dict[str, str]) -> Path:
-    """Builds beryl_3d's library for `target` as a `staticlib` or `cdylib`, and returns the
-    file. Cargo leaves a crate type the manifest does not declare in `deps`, so its path is
-    read from cargo's messages."""
-    command = [
-        *["cargo", "rustc", "-p", "beryl_3d", "--lib", "--crate-type", crate_type],
-        *["--target", target, "--message-format", "json-render-diagnostics"],
-        *(["--release"] if release else []),
-    ]
-    started = time.monotonic()
-    built = subprocess.run(
-        command, cwd=paths.WORKSPACE, env=env, stdout=subprocess.PIPE, text=True
-    )
-    if built.returncode != 0:
-        raise SystemExit(f"cargo could not build the library for {target}")
-    suffix = ".a" if crate_type == "staticlib" else ".so"
-    found = None
-    for line in built.stdout.splitlines():
-        message: dict[str, Any] = json.loads(line)
-        if (
-            message.get("reason") == "compiler-artifact"
-            and message.get("target", {}).get("name") == "beryl_3d"
-        ):
-            found = next((f for f in message["filenames"] if f.endswith(suffix)), found)
-    if found is None:
-        raise SystemExit(f"cargo built no {suffix} for {target}")
-    size = Path(found).stat().st_size / 1e6
-    print(
-        f"library: {target} {crate_type}, {size:.1f} MB,"
-        f" built in {time.monotonic() - started:.0f} s",
-        flush=True,
-    )
-    return Path(found)
 
 
 def write_fixtures(names: tuple[str, ...], folder: Path) -> list[Path]:
@@ -187,54 +152,16 @@ def finish(label: str, log: str | None, png: Path) -> int:
 # The iOS Simulator and the iPhone.
 
 
-def ios_app(sdk: str, release: bool, sign: bool, tests: bool = False) -> Path:
-    """Builds the library and the Swift host for `sdk` (iphonesimulator or iphoneos), and
-    returns the app. With `tests`, also builds the UI test bundle, and the `.xctestrun` file
-    that runs it is in the app's products folder's parent."""
-    target = (
-        "aarch64-apple-ios-sim" if sdk == "iphonesimulator" else "aarch64-apple-ios"
-    )
-    env = {**os.environ, "IPHONEOS_DEPLOYMENT_TARGET": "15.0"}
-    built = library(target, "staticlib", release, env)
-    root = out_dir("ios")
-    lib = root / sdk / "lib"
-    lib.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(built, lib / "libberyl_3d.a")
-    project = root / "project"
-    project.mkdir(exist_ok=True)
-    generated = mobile.run(
-        "xcodegen",
-        "generate",
-        "--spec",
-        str(CRATE / "ios" / "project.yml"),
-        "--project",
-        str(project),
-    )
-    if generated.returncode != 0:
-        raise SystemExit(f"xcodegen failed: {generated.stdout}{generated.stderr}")
-    signing = ["-allowProvisioningUpdates"] if sign else ["CODE_SIGNING_ALLOWED=NO"]
-    platform = "iOS Simulator" if sdk == "iphonesimulator" else "iOS"
-    started = time.monotonic()
-    code = subprocess.run(
-        [
-            *["xcodebuild", "-quiet", "-project", str(project / "Beryl3D.xcodeproj")],
-            *["-scheme", "Beryl3D", "-sdk", sdk, "-configuration", "Debug"],
-            *["-destination", f"generic/platform={platform}"],
-            *["-derivedDataPath", str(root / "derived"), *signing],
-            f"BERYL3D_LIB_DIR={lib}",
-            f"BERYL3D_CRATE_DIR={CRATE}",
-            "build-for-testing" if tests else "build",
-        ],
-        check=False,
-        timeout=DEVICE_LIMIT_S,
-    ).returncode
-    if code != 0:
-        raise SystemExit("xcodebuild failed")
-    print(f"ios: host built in {time.monotonic() - started:.0f} s")
-    return root / "derived" / "Build" / "Products" / f"Debug-{sdk}" / "Beryl3D.app"
-
-
 def ios_device_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--no-install", action="store_true", help="build and sign only")
+    parser.add_argument(
+        "--no-sign", action="store_true", help="build unsigned and skip installation"
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="launch a live app instead of replaying recordings",
+    )
     parser.add_argument(
         "--user-asked",
         action="store_true",
@@ -261,30 +188,50 @@ def devicectl(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def run_ios_device(args: argparse.Namespace) -> int:
-    if repo_paths.is_agent() and not args.user_asked:
+    install = not (args.no_install or args.no_sign)
+    if install and repo_paths.is_agent() and not args.user_asked:
         print(
             "ios-device: agents install to the phone only when the user asks"
-            " (--user-asked)",
+            " (--user-asked); otherwise use --no-install or --no-sign",
             file=sys.stderr,
         )
         return 2
-    paired = mobile.paired_device()
-    if paired is None:
+    paired = mobile.paired_device() if install else None
+    if install and paired is None:
         print("ios-device: no iPhone is paired with this Mac, so none is reachable")
         return 1
-    udid: str = paired
     try:
-        bundle = ios_app("iphoneos", release=True, sign=True)
+        bundle = ios_app("iphoneos", release=True, sign=not args.no_sign)
     except subprocess.TimeoutExpired:
-        print(f"ios-device: signing waited {DEVICE_LIMIT_S} s; not reachable")
+        print(f"ios-device: the build waited {phone_build.XCODE_LIMIT_S} s")
         return 1
-    run = out_dir("phone") / f"{run_name()}-iphone"
-    run.mkdir()
-    fixtures = write_fixtures(DEVICE_FIXTURES, run)
-    installed = devicectl("device", "install", "app", "--device", udid, str(bundle))
+    print(f"ios-device: {bundle}")
+    if paired is None:
+        return 0
+    installed = devicectl("device", "install", "app", "--device", paired, str(bundle))
     if installed.returncode != 0:
         print(f"ios-device: install failed: {installed.stderr.strip()}")
         return 1
+    if args.live:
+        launched = devicectl(
+            "device",
+            "process",
+            "launch",
+            "--device",
+            paired,
+            "--terminate-existing",
+            BUNDLE,
+        )
+        if launched.returncode != 0:
+            print(f"ios-device: launch failed: {launched.stderr.strip()}")
+        return launched.returncode
+    return replay_on_device(paired)
+
+
+def replay_on_device(udid: str) -> int:
+    run = out_dir("phone") / f"{run_name()}-iphone"
+    run.mkdir()
+    fixtures = write_fixtures(DEVICE_FIXTURES, run)
     container: list[str] = [
         *["--domain-type", "appDataContainer", "--domain-identifier", BUNDLE]
     ]
@@ -332,10 +279,14 @@ def run_ios_device(args: argparse.Namespace) -> int:
 # The Android emulator.
 
 
+def adb_binary() -> Path:
+    return system.exe(mobile.ANDROID_HOME / "platform-tools" / "adb")
+
+
 def adb(*args: str, stdin: Path | None = None) -> subprocess.CompletedProcess[str]:
     with stdin.open("rb") if stdin else open(os.devnull, "rb") as source:
         done = subprocess.run(
-            [str(mobile.ANDROID_HOME / "platform-tools" / "adb"), "-s", SERIAL, *args],
+            [str(adb_binary()), "-s", SERIAL, *args],
             stdin=source,
             capture_output=True,
             check=False,
@@ -346,53 +297,6 @@ def adb(*args: str, stdin: Path | None = None) -> subprocess.CompletedProcess[st
         done.stdout.decode(errors="replace"),
         done.stderr.decode(errors="replace"),
     )
-
-
-def android_apk() -> Path:
-    """Builds the library and the Kotlin host, and returns the APK."""
-    prebuilt = (
-        mobile.ANDROID_HOME
-        / "ndk"
-        / mobile.NDK_VERSION
-        / "toolchains"
-        / "llvm"
-        / "prebuilt"
-        / "darwin-x86_64"
-        / "bin"
-    )
-    clang = prebuilt / f"aarch64-linux-android{mobile.MIN_SDK}-clang"
-    env = {
-        **os.environ,
-        "CC_aarch64_linux_android": str(clang),
-        "CXX_aarch64_linux_android": f"{clang}++",
-        "AR_aarch64_linux_android": str(prebuilt / "llvm-ar"),
-        "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER": str(clang),
-    }
-    built = library("aarch64-linux-android", "cdylib", False, env)
-    root = out_dir("android")
-    jni = root / "jniLibs" / "arm64-v8a"
-    jni.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(built, jni / "libberyl_3d.so")
-    # The texture encoders (ctt) are C++ and link the NDK's shared C++ runtime, which an app
-    # must bundle beside its library (docs/beryl-3d.md, "Preparation").
-    runtime = prebuilt.parent / "sysroot" / "usr" / "lib" / "aarch64-linux-android"
-    shutil.copyfile(runtime / "libc++_shared.so", jni / "libc++_shared.so")
-    started = time.monotonic()
-    code = subprocess.run(
-        [
-            *[str(ANDROID / "gradlew"), "--quiet", "-p", str(ANDROID), "assembleDebug"],
-            *["--project-cache-dir", str(root / "gradle")],
-            f"-Pberyl3d.buildDir={root / 'build'}",
-            f"-Pberyl3d.jniLibs={root / 'jniLibs'}",
-            f"-Pkotlin.project.persistent.dir={root / 'kotlin'}",
-        ],
-        env=mobile.android_env(),
-        check=False,
-    ).returncode
-    if code != 0:
-        raise SystemExit("gradle failed")
-    print(f"android: host built in {time.monotonic() - started:.0f} s")
-    return root / "build" / "app" / "outputs" / "apk" / "debug" / "app-debug.apk"
 
 
 def ensure_avd() -> None:
@@ -418,14 +322,15 @@ def ensure_avd() -> None:
     )
 
 
-def start_emulator(gles: bool) -> subprocess.Popen[bytes]:
-    """Cold-boots the emulator headless, without Vulkan when `gles`, and waits for it."""
+def start_emulator(gles: bool, window: bool = False) -> subprocess.Popen[bytes]:
+    """Cold-boots the emulator, without Vulkan when `gles`, and waits for it."""
     ensure_avd()
     started = time.monotonic()
     proc = subprocess.Popen(
         [
             *[str(mobile.ANDROID_HOME / "emulator" / "emulator"), "-avd", AVD],
-            *["-port", str(PORT), "-no-window", "-no-audio", "-no-boot-anim"],
+            *["-port", str(PORT), "-no-boot-anim"],
+            *([] if window else ["-no-window", "-no-audio"]),
             "-no-snapshot",
             *(NO_VULKAN if gles else ()),
         ],
@@ -452,6 +357,10 @@ def adb_checked(*args: str) -> str:
     if result.returncode:
         raise SystemExit(f"adb {' '.join(args)}: {result.stderr or result.stdout}")
     return result.stdout.strip()
+
+
+def install_android(apk: Path) -> None:
+    adb_checked("install", "--no-streaming", "-r", str(apk))
 
 
 @contextmanager
@@ -622,9 +531,7 @@ def run_android_smoke(args: argparse.Namespace) -> int:
             time.sleep(5)
         emulator = start_emulator(args.gles)
         try:
-            installed = adb("install", "--no-streaming", "-r", str(apk))
-            if installed.returncode != 0:
-                raise SystemExit(f"android: install failed: {installed.stderr}")
+            install_android(apk)
             shell: list[str] = ["shell", "run-as", BUNDLE, "sh", "-c"]
             adb(
                 *shell,
@@ -671,7 +578,7 @@ def run_android_smoke(args: argparse.Namespace) -> int:
             png.write_bytes(
                 subprocess.run(
                     [
-                        *[str(mobile.ANDROID_HOME / "platform-tools" / "adb")],
+                        *[str(adb_binary())],
                         *["-s", SERIAL, "exec-out", "screencap", "-p"],
                     ],
                     capture_output=True,

@@ -10,7 +10,8 @@ import subprocess
 import time
 from pathlib import Path
 
-from .. import mobile, paths as repo_paths, system
+from .. import mobile_sdk as mobile
+from .. import paths as repo_paths, system
 from . import phone
 from .phone_log import ios_touch_faults, lines
 

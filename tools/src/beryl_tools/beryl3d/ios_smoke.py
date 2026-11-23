@@ -8,7 +8,8 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from .. import mobile, paths as repo_paths, system
+from .. import mobile_sdk as mobile
+from .. import paths as repo_paths, system
 from .phone import (
     BUNDLE,
     ERRORS,

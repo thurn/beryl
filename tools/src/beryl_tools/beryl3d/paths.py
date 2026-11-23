@@ -22,7 +22,7 @@ def cache() -> Path:
 
 def build_lock() -> Path:
     """The lock under which one build at a time runs in this checkout's Beryl 3D build
-    directory (`cli.build`). It lives in the cache, named for the workspace's path, so that it
+    directory (`cargo.build`). It lives in the cache, named for the workspace's path, so that it
     adds no file to the checkout."""
     digest = hashlib.sha256(str(WORKSPACE.resolve()).encode()).hexdigest()[:16]
     return cache() / f"build-{digest}.lock"

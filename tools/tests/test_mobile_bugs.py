@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import tarfile
 from pathlib import Path
 from subprocess import CompletedProcess
 
 import pytest
 
-from beryl_tools import android, bugs, mobile, mobile_bugs
+from beryl_tools import android, bugs, mobile, mobile_bugs, mobile_sdk
+from beryl_tools.beryl3d import cli
 
 ID = "20261113-102030-phone-report"
 
@@ -89,7 +91,7 @@ def test_android_tar_uses_run_as_and_adopts_report(
 def test_device_copy_command_is_only_used_on_explicit_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, nested: bool
 ) -> None:
-    monkeypatch.setattr(mobile, "paired_device", lambda: "paired-id")
+    monkeypatch.setattr(mobile_sdk, "paired_device", lambda: "paired-id")
     commands: list[list[str]] = []
 
     def fake_run(command: list[str], **_kwargs: object) -> CompletedProcess[str]:
@@ -138,7 +140,7 @@ def test_one_source_failure_does_not_stop_other_sources(
     calls: list[str] = []
     monkeypatch.setattr(bugs, "bugs_dir", lambda: tmp_path)
 
-    def failed_simulator() -> Path:
+    def failed_simulator(_bundle: str) -> Path:
         calls.append("simulator")
         raise RuntimeError("simulator copy failed")
 
@@ -156,3 +158,41 @@ def test_one_source_failure_does_not_stop_other_sources(
     monkeypatch.setattr(mobile_bugs, "device_reports", working_device)
     assert mobile_bugs.run(argparse.Namespace(bundle=None, device=True)) == 1
     assert set(calls) == {"simulator", "android", "device"}
+
+
+def test_native_mobile_bugs_adopts_from_the_simulator_documents_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    container: Path = tmp_path / "container"
+    original = report(container / "Documents" / "bugs")
+    local = tmp_path / "local"
+    monkeypatch.setattr(bugs, "bugs_dir", lambda: local)
+
+    def simctl(*args: str) -> CompletedProcess[str]:
+        if args[2] == "list":
+            devices = {
+                "devices": {
+                    "runtime": [
+                        {"name": mobile_sdk.SIMULATOR, "udid": "sim", "state": "Booted"}
+                    ]
+                }
+            }
+            return CompletedProcess(args, 0, json.dumps(devices), "")
+        assert args == (
+            "xcrun",
+            "simctl",
+            "get_app_container",
+            "sim",
+            "ca.thurn.beryl3d",
+            "data",
+        )
+        return CompletedProcess(args, 0, str(container), "")
+
+    monkeypatch.setattr(mobile_sdk, "run", simctl)
+    monkeypatch.setattr(
+        "beryl_tools.beryl3d.phone.adb",
+        lambda *args: CompletedProcess(args, 1, "", ""),
+    )
+    assert cli.main(["mobile-bugs"]) == 0
+    assert (local / ID / "window.png").read_bytes() == b"PNG"
+    assert (original / "report.md").is_file()
