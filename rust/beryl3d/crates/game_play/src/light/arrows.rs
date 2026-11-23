@@ -4,31 +4,32 @@
 //!
 //! Each arrow writes one resolved element, `Role::Arrow`, named by its kind, whose four corners
 //! are the control points of its cubic Bezier curve on the screen, and a ribbon of light along
-//! the curve, with a head at its end for the two target kinds, in the overlay band. The ribbon is
+//! the curve in the overlay band. The two target kinds taper to a point. The ribbon is
 //! `RIBBON` pieces, each two quads: its body and halo in its tone's color, and a hot core in the
 //! tone's core color, as the web's ribbon shader lights them (`ui/src/stage/glow.ts`). Its
 //! width along its length follows the web stage's `widthOf` (`ui/src/stage/light.ts`), its
 //! opacity the fade of its `Open`, and its color what it says.
-//! The values are in `data/beryl3d/light.json`: lengths in millimetres at the arrow's
-//! target, which `Camera::points_per_millimetre` turns into points, and shares as they are.
+//! Ribbon lengths in `data/beryl3d/light.json` are in reference screen points. The table's
+//! screen projection scales them once, regardless of camera depth or display density.
 
 use std::f32::consts::PI;
 
 use beryl_protocol::script::{Arrow, Subject};
 use glam::Vec2;
 
-use super::lines::{End, along, cubic, way_of};
+use super::lines::{End, aim_way, along, cubic, way_of};
 use super::{Lit, Open, Span};
-use crate::play::{Reach, Scene};
+use crate::play::Scene;
 use crate::verbs::Interval;
 use kit_base::data::light::Light;
 use kit_base::tokens::color;
 pub use kit_frame::frame::ARROW_IDS;
-use kit_frame::frame::sprites;
 use kit_frame::frame::{
     Band, Draw, ElementId, Endpoint, FrameBuilder, LineEnd, Place, Resolved, Role, ShapeAnchor,
     StateBits,
 };
+use kit_frame::frame::{Sprite, sprites};
+use kit_space::camera::Camera;
 
 /// How many pieces an arrow's ribbon is cut into, each a quad of its body and halo and a quad of
 /// its core. The cuts lie closer together where its width changes faster, so that no piece is
@@ -86,7 +87,7 @@ pub fn write(lit: &Lit, now: u64, prompt: bool, scene: &Scene<'_>, builder: &mut
             arrow: arrow.arrow,
             ends,
             targets: [Endpoint::Node(from.id), Endpoint::Node(to.id)],
-            reaches: [from.reach, to.reach],
+            depth: scene.table().camera().depth(to.reach.pose.position),
             opacity: fade(open, now),
             moving: from.moving || to.moving,
             id,
@@ -116,9 +117,8 @@ pub fn write(lit: &Lit, now: u64, prompt: bool, scene: &Scene<'_>, builder: &mut
         let drawn = Drawn {
             arrow: aim.arrow,
             ends: [start, pointer],
-            // The pointer has no size: the arrow is as wide as at what asks.
             targets: [Endpoint::Node(from.id), Endpoint::Pointer(aim.to)],
-            reaches: [from.reach, from.reach],
+            depth: scene.table().camera().depth(from.reach.pose.position),
             opacity: 1.0,
             moving: true,
             id: AIM_ID + index as u32,
@@ -133,20 +133,34 @@ struct Drawn {
     arrow: Arrow,
     ends: [End; 2],
     targets: [Endpoint; 2],
-    reaches: [Reach; 2],
+    depth: f32,
     opacity: f32,
     moving: bool,
     id: u32,
 }
 
 impl Drawn {
-    /// Writes its element and its ribbon of light, with a head for a target's arrow.
+    /// Writes its element and its ribbon of light.
     fn write(&self, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
-        let camera = scene.table().camera();
-        let [from, to] = self.reaches;
-        let light = &scene.table().data().light;
-        let sag = light.sag * camera.window.size.height;
-        let Some(way) = way_of(light, self.arrow, self.ends[0], self.ends[1], Some(sag)) else {
+        let table = scene.table();
+        let light = &table.data().light;
+        let profile = table.profile();
+        // The desktop fits a reference stage. The phone lays the stage out
+        // directly in the board's logical points.
+        let scale = if profile.data().table.anchored.is_some() {
+            profile.screen_projection().scale
+        } else {
+            1.0
+        };
+        let sag = light.sag * table.camera().window.size.height;
+        let [from, to] = self.ends;
+        let aiming = matches!(self.targets[1], Endpoint::Pointer(_));
+        let way = if aiming {
+            aim_way(light, self.arrow, from, to.middle, scale)
+        } else {
+            way_of(light, self.arrow, from, to, Some(sag))
+        };
+        let Some(way) = way else {
             return;
         };
         let points = cubic(way);
@@ -161,7 +175,7 @@ impl Drawn {
                 place: Place::Layer,
                 pose: None,
                 corners: points,
-                depth: camera.depth(to.pose.position),
+                depth: self.depth,
                 opacity,
                 clip: None,
                 interactive: false,
@@ -184,33 +198,18 @@ impl Drawn {
                 },
             ]),
         );
-        let points_per_millimetre = camera.points_per_millimetre(to.pose.position);
-        let sized = |reach: &Reach| {
-            (reach.half.x.min(reach.half.y) / light.sized.half)
+        // Target and reference-card sizes are both screen lengths. A pointer has no
+        // size, so the source alone sets the width of a line to it.
+        let sized = |end: End| {
+            (end.half.min_element() / (light.sized.half * scale))
                 .clamp(light.sized.least, light.sized.most)
         };
-        let k = sized(&from).min(sized(&to));
-        let (cut, wide, tone) = match self.arrow {
-            Arrow::FriendlyTarget => (Cut::Arrow, light.wide.target, color::FRIENDLY_TARGET),
-            Arrow::HostileTarget => (Cut::Arrow, light.wide.target, color::HOSTILE_TARGET),
-            Arrow::Source => (Cut::Swell, light.wide.source, color::SOURCE_LINE),
-            Arrow::Attack => (Cut::Beam, light.wide.attack, color::ATTACK_LINE),
-            Arrow::Block => (Cut::Beam, light.wide.block, color::BLOCK_LINE),
+        let k = if aiming {
+            sized(from)
+        } else {
+            sized(from).min(sized(to))
         };
-        let (core, gain) = match self.arrow {
-            Arrow::FriendlyTarget => (color::FRIENDLY_TARGET_CORE, light.glow.gains.target),
-            Arrow::HostileTarget => (color::HOSTILE_TARGET_CORE, light.glow.gains.target),
-            Arrow::Source => (color::SOURCE_LINE_CORE, light.glow.gains.source),
-            Arrow::Attack => (color::ATTACK_LINE_CORE, light.glow.gains.attack),
-            Arrow::Block => (color::BLOCK_LINE_CORE, light.glow.gains.block),
-        };
-        let tint = tinted(tone, opacity);
-        let shine = Shine {
-            tone,
-            core,
-            // The shapes hold their light at the gain `light.glow.gain`.
-            strength: opacity * gain / light.glow.gain,
-        };
+        let (cut, wide, shine) = ribbon_style(light, self.arrow, aiming, opacity);
         // The line to a source grows out of the source, which is where it ends, so it is cut
         // from that end.
         let ribbon = match self.arrow {
@@ -218,23 +217,12 @@ impl Drawn {
             _ => points,
         };
         let lengths = Lengths {
-            wide: wide * k * points_per_millimetre,
-            per_millimetre: points_per_millimetre,
+            wide: wide * k * scale,
+            scale,
             light,
         };
         let band = builder.node_band(index).records(Band::Glows);
         write_ribbon(scene, &ribbon, cut, lengths, (shine, band), builder);
-        if matches!(self.arrow, Arrow::FriendlyTarget | Arrow::HostileTarget) {
-            write_head(
-                light,
-                scene,
-                &points,
-                self.ends[1].half.x,
-                points_per_millimetre,
-                (tint, band),
-                builder,
-            );
-        }
     }
 }
 
@@ -271,11 +259,11 @@ fn tinted(tone: [u8; 4], opacity: f32) -> [u8; 4] {
     [tone[0], tone[1], tone[2], alpha]
 }
 
-/// A ribbon's widest half-width and a millimetre, in points on the screen.
+/// A ribbon's widest half-width and the scale of a reference point, in window points.
 #[derive(Clone, Copy)]
 struct Lengths<'a> {
     wide: f32,
-    per_millimetre: f32,
+    scale: f32,
     light: &'a Light,
 }
 
@@ -286,6 +274,61 @@ struct Shine {
     tone: [u8; 4],
     core: [u8; 4],
     strength: f32,
+}
+
+/// The cut, reference width and light for a preview or confirmed arrow.
+fn ribbon_style(light: &Light, arrow: Arrow, aiming: bool, opacity: f32) -> (Cut, f32, Shine) {
+    let (cut, wide, tone, core, gain) = match arrow {
+        Arrow::FriendlyTarget | Arrow::HostileTarget if aiming => (
+            Cut::Arrow,
+            light.wide.aim,
+            color::SOURCE_LINE,
+            color::SOURCE_LINE_CORE,
+            light.glow.gains.aim,
+        ),
+        Arrow::FriendlyTarget => (
+            Cut::Arrow,
+            light.wide.target,
+            color::FRIENDLY_TARGET,
+            color::FRIENDLY_TARGET_CORE,
+            light.glow.gains.target,
+        ),
+        Arrow::HostileTarget => (
+            Cut::Arrow,
+            light.wide.target,
+            color::HOSTILE_TARGET,
+            color::HOSTILE_TARGET_CORE,
+            light.glow.gains.target,
+        ),
+        Arrow::Source => (
+            Cut::Swell,
+            light.wide.source,
+            color::SOURCE_LINE,
+            color::SOURCE_LINE_CORE,
+            light.glow.gains.source,
+        ),
+        Arrow::Attack => (
+            Cut::Beam,
+            light.wide.attack,
+            color::ATTACK_LINE,
+            color::ATTACK_LINE_CORE,
+            light.glow.gains.attack,
+        ),
+        Arrow::Block => (
+            Cut::Beam,
+            light.wide.block,
+            color::BLOCK_LINE,
+            color::BLOCK_LINE_CORE,
+            light.glow.gains.block,
+        ),
+    };
+    let shine = Shine {
+        tone,
+        core,
+        // The shapes hold their light at the gain `light.glow.gain`.
+        strength: opacity * gain / light.glow.gain,
+    };
+    (cut, wide, shine)
 }
 
 /// Writes the `RIBBON` pieces of a ribbon along the curve `points` (`cut_ribbon`), each a quad
@@ -309,7 +352,7 @@ fn write_ribbon(
     };
     let camera = scene.table().camera();
     let light = lengths.light;
-    let pixel = light.glow.pixel * lengths.per_millimetre;
+    let pixel = lengths.scale;
     // The side the core leans to, as the web's `flip`: up the screen for a ribbon that runs
     // right, judged where the ribbon's middle is.
     let middle = (cuts[RIBBON / 2].0, cuts[RIBBON / 2 + 1].0);
@@ -322,86 +365,107 @@ fn write_ribbon(
         Cut::Arrow => light.glow.core_lean,
         Cut::Swell | Cut::Beam => 0.0,
     };
-    // Each cut: where it is, the body's half-width there, how high the halo reaches each side,
-    // and how high the core. The web fades its ribbon in over its first pixels and its halo out
-    // over its last few. A record has one opacity, which would step from piece to piece, so
-    // here the ends narrow instead, which the pieces' tapers carry on smoothly: the core over
-    // the web's fade, and the halo, with the body inside it, to a point over its last
-    // `REACH_PIXELS` at each end. The halo's profile is the one its unnarrowed height gives.
     let reach_pixels = light.glow.reach_pixels * pixel;
-    let cuttings = cuts.map(|(at, arc, half)| {
+    let body_sections = sections(cuts.map(|(at, arc, half)| {
         let reach = light.glow.reach_share * half + reach_pixels;
         let narrowed = smooth(0.0, reach_pixels, arc) * smooth(0.0, reach_pixels, whole - arc);
-        Cutting {
-            at,
-            half,
-            column: sprites::ribbon_lit_column(half / reach),
-            reach: reach * narrowed.max(0.02),
-            core: half * smooth(0.0, light.glow.fade_pixels * pixel, arc),
-            halves: Vec2::ZERO,
-        }
+        (at, reach * narrowed.max(0.02))
+    }));
+    let columns = cuts.map(|(_, _, half)| {
+        sprites::ribbon_lit_column(half / (light.glow.reach_share * half + reach_pixels))
     });
-    // The way each piece runs, and at each cut the way that halves the turn there.
-    let mut ways = [Vec2::X; RIBBON];
-    for (way, pair) in ways.iter_mut().zip(cuttings.windows(2)) {
-        *way = (pair[1].at - pair[0].at).normalize_or(Vec2::X);
-    }
-    let mut cuttings = cuttings;
-    for (number, cutting) in cuttings.iter_mut().enumerate() {
-        let before = ways[number.saturating_sub(1)];
-        let after = ways[number.min(RIBBON - 1)];
-        cutting.halves = (before + after).normalize_or(after);
-    }
-    for (number, pair) in cuttings.windows(2).enumerate() {
-        let (from, to) = (pair[0], pair[1]);
-        let long = from.at.distance(to.at);
-        if long <= 0.0 {
-            continue;
-        }
-        let way = ways[number];
-        let centre = (from.at + to.at) / 2.0;
-        // The quad's body runs from one column of `ribbon_lit` to another along its length,
-        // and the columns must rise along the quad: where they fall, the quad is turned round,
-        // which the halo and body, alike on both sides, do not show.
-        let (near, far, along) = if from.column <= to.column {
-            (from, to, way)
+    let core = sections(std::array::from_fn(|index| {
+        let (at, arc, half) = cuts[index];
+        let tangent = body_sections[index].tangent;
+        let up = Vec2::new(tangent.y, -tangent.x) * flip;
+        let fade = smooth(0.0, light.glow.fade_pixels * pixel, arc);
+        let width = half * fade * light.glow.core_reach;
+        (at + up * (lean * half * fade), width)
+    }));
+    let body_tint = tinted(shine.tone, shine.strength);
+    let core_tint = tinted(shine.core, shine.strength);
+    for index in 0..RIBBON {
+        let [near, far] = [columns[index], columns[index + 1]];
+        let ends = [body_sections[index], body_sections[index + 1]];
+        // The atlas columns increase along the quad. The halo is symmetric across it,
+        // so reversing the quad samples the same profile when the ribbon narrows.
+        let (ends, sprite) = if near <= far {
+            (ends, sprites::ribbon_lit(near, far))
         } else {
-            (to, from, -way)
+            ([ends[1], ends[0]], sprites::ribbon_lit(far, near))
         };
-        let reach = near.reach.max(far.reach);
-        builder.draw(
-            band,
-            Draw::glow(
-                camera.screen_transform(centre, Vec2::new(long, 2.0 * reach), along),
-                tinted(shine.tone, shine.strength),
-                sprites::ribbon_lit(near.column, far.column),
-                0.0,
-            )
-            .tapered(near.reach / reach, far.reach / reach)
-            .mitred(slant(along, near.halves), slant(along, far.halves)),
-        );
-        let high = from.core.max(to.core);
-        if high * light.glow.core_reach < 0.05 {
-            continue;
+        if let Some(draw) = strip_piece(camera, ends, body_tint, sprite) {
+            builder.draw(band, draw);
         }
-        let up = Vec2::new(way.y, -way.x) * flip;
-        let lean_by = lean * (from.half + to.half) / 2.0;
-        builder.draw(
-            band,
-            Draw::glow(
-                camera.screen_transform(
-                    centre + up * lean_by,
-                    Vec2::new(long, 2.0 * high * light.glow.core_reach),
-                    way,
-                ),
-                tinted(shine.core, shine.strength),
-                sprites::RIBBON_CORE,
-                0.0,
-            )
-            .tapered(from.core / high, to.core / high)
-            .mitred(slant(way, from.halves), slant(way, to.halves)),
-        );
+        let ends = [core[index], core[index + 1]];
+        if let Some(draw) = strip_piece(camera, ends, core_tint, sprites::RIBBON_CORE) {
+            builder.draw(band, draw);
+        }
     }
+}
+
+/// A shared cross-section of two quads. The half-width is measured along the normal to
+/// `tangent`, so either quad can reconstruct the same two points, even when reversed.
+#[derive(Clone, Copy)]
+struct Section {
+    at: Vec2,
+    half: f32,
+    tangent: Vec2,
+}
+
+fn sections(samples: [(Vec2, f32); RIBBON + 1]) -> [Section; RIBBON + 1] {
+    let segments: [(Vec2, f32); RIBBON] = std::array::from_fn(|index| {
+        let delta = samples[index + 1].0 - samples[index].0;
+        (delta.normalize_or(Vec2::X), delta.length())
+    });
+    std::array::from_fn(|index| {
+        let (incoming, before) = segments[index.saturating_sub(1)];
+        let (outgoing, after) = segments[index.min(RIBBON - 1)];
+        let tangent = (incoming + outgoing).normalize_or(outgoing);
+        let (at, half) = samples[index];
+        // On a short, sharp bend the outer corner can pass the next cross-section.
+        // Limit both ends to just under half the segment so its triangles cannot fold.
+        let limit = |way: Vec2, length| 0.49 * length / way.perp_dot(tangent).abs().max(1e-5);
+        Section {
+            at,
+            tangent,
+            half: half
+                .min(limit(incoming, before))
+                .min(limit(outgoing, after)),
+        }
+    })
+}
+
+fn strip_piece(
+    camera: &Camera,
+    [from, to]: [Section; 2],
+    tint: [u8; 4],
+    sprite: Sprite,
+) -> Option<Draw> {
+    let delta = to.at - from.at;
+    let long = delta.length();
+    if long <= 0.0 {
+        return None;
+    }
+    let way = delta / long;
+    let across = |section: Section| section.half * way.dot(section.tangent).abs();
+    let start = across(from);
+    let end = across(to);
+    let half = start.max(end);
+    if half < 0.05 {
+        return None;
+    }
+    let centre = from.at.lerp(to.at, 0.5);
+    Some(
+        Draw::glow(
+            camera.screen_transform(centre, Vec2::new(long, 2.0 * half), way),
+            tint,
+            sprite,
+            0.0,
+        )
+        .tapered(start / half, end / half)
+        .mitred(slant(way, from.tangent), slant(way, to.tangent)),
+    )
 }
 
 /// A point of a ribbon: where it is, how far along its curve, and its half-width there.
@@ -496,21 +560,6 @@ fn slant(along: Vec2, halves: Vec2) -> f32 {
     -across.dot(halves) / facing
 }
 
-/// A cut between two pieces of a ribbon, as `write_ribbon` draws the pieces on each side of it.
-#[derive(Clone, Copy)]
-struct Cutting {
-    at: Vec2,
-    half: f32,
-    /// The column boundary of `sprites::ribbon_lit` its body's share of the halo's height
-    /// gives.
-    column: u16,
-    reach: f32,
-    /// The body half-width the core is drawn for: the body's, narrowed where the ribbon fades in.
-    core: f32,
-    /// The way that halves the turn between the pieces on each side of it.
-    halves: Vec2,
-}
-
 /// 0 at `from` and below, 1 at `to` and above, rising smoothly between, as GLSL's `smoothstep`.
 fn smooth(from: f32, to: f32, t: f32) -> f32 {
     if to <= from {
@@ -518,32 +567,6 @@ fn smooth(from: f32, to: f32, t: f32) -> f32 {
     }
     let t = ((t - from) / (to - from)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
-}
-
-/// Writes the head of an arrow at a target: its tip where the curve `points` ends, lying along
-/// the way it arrives, as long as a share of `target_half`, half the width of what it meets on
-/// the screen.
-fn write_head(
-    light: &Light,
-    scene: &Scene<'_>,
-    points: &[Vec2; 4],
-    target_half: f32,
-    points_per_millimetre: f32,
-    (tint, band): ([u8; 4], Band),
-    builder: &mut FrameBuilder<'_>,
-) {
-    let long = (light.head.share * target_half).clamp(
-        light.head.least * points_per_millimetre,
-        light.head.most * points_per_millimetre,
-    );
-    let tip = points[3];
-    let way = (tip - points[2]).normalize_or(Vec2::X);
-    let transform = scene.table().camera().screen_transform(
-        tip - way * (long / 2.0),
-        Vec2::new(long, 2.0 * long * light.head.spread),
-        way,
-    );
-    builder.draw(band, Draw::glow(transform, tint, sprites::HEAD, 0.0));
 }
 
 /// A ribbon's half-width where it has come `arc` of the `whole` points it is long, as the web
@@ -575,16 +598,17 @@ fn width_of(cut: Cut, lengths: Lengths<'_>, arc: f32, whole: f32) -> f32 {
         }
         Cut::Arrow => {
             let arrow = lengths.light.arrow;
-            let per = lengths.per_millimetre;
+            let scale = lengths.scale;
             let ramp = (s / arrow.ramp).clamp(0.0, 1.0);
             let smooth = ramp * ramp * (3.0 - 2.0 * ramp);
             let tail = arrow.tail + (1.0 - arrow.tail) * smooth.powf(arrow.rise);
             let flare = 1.0
                 + arrow.flare
-                    * (-((left - arrow.flare_at * per) / (arrow.flare_spread * per)).powi(2)).exp();
+                    * (-((left - arrow.flare_at * scale) / (arrow.flare_spread * scale)).powi(2))
+                        .exp();
             wide * tail
                 * flare
-                * (left / (arrow.fade * per))
+                * (left / (arrow.fade * scale))
                     .clamp(0.0, 1.0)
                     .powf(arrow.fade_power)
         }

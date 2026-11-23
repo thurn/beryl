@@ -81,6 +81,52 @@ pub fn way_of(
     }
 }
 
+/// A preview ends at the pointer. Target previews can bow, but only the portion past
+/// the card's last edge belongs on the table. Declaration previews leave the edge
+/// directly toward the pointer, as the web stage's `Aim` does.
+pub(super) fn aim_way(
+    light: &Light,
+    arrow: Arrow,
+    from: End,
+    pointer: Vec2,
+    scale: f32,
+) -> Option<[Vec2; 3]> {
+    let start = edge(from, pointer)?;
+    if matches!(arrow, Arrow::Attack | Arrow::Block) {
+        return Some([start, start.lerp(pointer, 0.5), pointer]);
+    }
+    let to = End {
+        middle: pointer,
+        half: Vec2::splat(scale),
+        round: true,
+        toward: 0.0,
+    };
+    // A pointer within a reference point of the source can overlap its reach.
+    // There is still room for a preview between the source edge and the pointer.
+    let [a, control, _] =
+        arc(light, from, to).unwrap_or([start, start.lerp(pointer, 0.5), pointer]);
+    let at = |t| a.lerp(control, t).lerp(control.lerp(pointer, t), t);
+    let inside = |p| edge(from, p).is_none();
+    if let Some(last) = (0..CROSS_STEPS)
+        .rev()
+        .find(|&i| inside(at(f32::from(i) / f32::from(CROSS_STEPS))))
+    {
+        let mut before = f32::from(last) / f32::from(CROSS_STEPS);
+        let mut after = f32::from(last + 1) / f32::from(CROSS_STEPS);
+        for _ in 0..16 {
+            let middle = f32::midpoint(before, after);
+            if inside(at(middle)) {
+                before = middle;
+            } else {
+                after = middle;
+            }
+        }
+        Some([at(after), control.lerp(pointer, after), pointer])
+    } else {
+        Some([a, control, pointer])
+    }
+}
+
 /// The cubic Bezier curve that is exactly the quadratic `way`: its start, two control points and
 /// its end.
 #[must_use]
@@ -285,6 +331,30 @@ fn straight(from: End, to: End) -> Option<[Vec2; 2]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_target_preview_starts_on_the_source_edge_and_ends_at_the_pointer() {
+        let light =
+            Light::parse(include_str!("../../../../../../data/beryl3d/light.json")).unwrap();
+        let source = End {
+            middle: Vec2::new(1462.0, 526.0),
+            half: Vec2::new(126.0, 177.0),
+            round: false,
+            toward: -1.0,
+        };
+        let aim = |pointer| aim_way(&light, Arrow::FriendlyTarget, source, pointer, 1.2);
+        assert!(aim(source.middle).is_none());
+        for pointer in [Vec2::new(1310.0, 536.0), Vec2::new(900.0, 812.0)] {
+            let curve = aim(pointer).expect("the pointer is outside the source");
+            assert_eq!(curve[2], pointer);
+            let start = (curve[0] - source.middle).abs() / source.half;
+            assert!((start.max_element() - 1.0).abs() < 0.01);
+            for step in 1_u16..32 {
+                let point = along(&cubic(curve), f32::from(step) / 32.0);
+                assert!(((point - source.middle).abs() / source.half).max_element() > 1.0);
+            }
+        }
+    }
 
     /// The ends of `combat-attackers` at 102500 ms in a 1600x900 window: an ability on the stack
     /// and its tapped source on the opponent's row, up and to the left of it. Its hanging curve

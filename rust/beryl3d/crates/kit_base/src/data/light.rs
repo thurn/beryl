@@ -26,7 +26,6 @@ pub struct Light {
     pub hang: Hang,
     pub bow: Bow,
     pub onto: Onto,
-    pub head: Head,
     pub sized: Sized,
     pub wide: Wide,
     pub arrow: Arrow,
@@ -83,20 +82,6 @@ pub struct Onto {
     pub into: f32,
 }
 
-/// The `head` group of `Light`.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct Head {
-    #[serde(deserialize_with = "nonnegative")]
-    pub share: f32,
-    #[serde(deserialize_with = "nonnegative")]
-    pub least: f32,
-    #[serde(deserialize_with = "nonnegative")]
-    pub most: f32,
-    #[serde(deserialize_with = "positive")]
-    pub spread: f32,
-}
-
 /// The `sized` group of `Light`.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -113,6 +98,8 @@ pub struct Sized {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Wide {
+    #[serde(deserialize_with = "positive")]
+    pub aim: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub target: f32,
     #[serde(deserialize_with = "nonnegative")]
@@ -179,8 +166,6 @@ pub struct Beam {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Glow {
-    #[serde(deserialize_with = "positive")]
-    pub pixel: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub reach_share: f32,
     #[serde(deserialize_with = "positive")]
@@ -214,6 +199,8 @@ pub struct Glow {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct GlowGains {
+    #[serde(deserialize_with = "nonnegative")]
+    pub aim: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub target: f32,
     #[serde(deserialize_with = "nonnegative")]

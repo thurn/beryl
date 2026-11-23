@@ -10,9 +10,10 @@ use game_play::art::orb;
 use game_play::light::arrows::RIBBON;
 use game_play::play::Show;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
-use glam::Vec2;
+use glam::{Vec2, Vec3};
 use kit_base::data::profiles::SizeClass;
-use kit_frame::frame::{ElementId, Endpoint, Frame, Material, Role, ShapeAnchor};
+use kit_base::tokens::color;
+use kit_frame::frame::{Draw, ElementId, Endpoint, Frame, Material, Role, ShapeAnchor};
 use kit_probe::agent::checks::{KeptArrow, keep_arrows, lines_hold, relations_hold};
 use kit_probe::agent::{Context, TreeOptions};
 use kit_ui::input::{Insets, Size};
@@ -397,4 +398,68 @@ fn an_arrow_at_a_player_ends_inside_their_life_total() {
         "{:?} ends {inside} of the way out from {anchor:?}",
         arrow.corners
     );
+}
+
+/// The player marker sits on the HUD. A ribbon to it can use the same screen-space
+/// width limit as a ribbon to a card. It ends in its own tapered tip.
+#[test]
+fn a_target_ribbon_has_screen_sized_glow_and_one_tapered_tip() {
+    let (mut played, start, cards) = Played::new();
+    let from = card(cards.angel);
+    for to in [card(cards.island), Subject::Player { player: Side::You }] {
+        let target = |span| {
+            (
+                point(span, Arrow::FriendlyTarget, from, to),
+                point_timing(if span == Span::Begin {
+                    "target arrow"
+                } else {
+                    "end"
+                }),
+            )
+        };
+        let begun = played.play(pointed(&start, vec![target(Span::Begin)]), |_, _| {});
+        let drawn = played.last_frame();
+        let camera = played.show.table().camera();
+        let shown = arrows(&drawn);
+        let [arrow] = shown.as_slice() else {
+            panic!("expected one arrow to {to:?}, found {}", shown.len());
+        };
+        let project = |model: [f32; 12], local: Vec3| {
+            let column = |index: usize| Vec3::new(model[index], model[index + 4], model[index + 8]);
+            camera.to_screen(
+                column(3) + column(0) * local.x + column(1) * local.y + column(2) * local.z,
+            )
+        };
+        let halo: Vec<&Draw> = drawn
+            .draws
+            .iter()
+            .filter(|draw| {
+                draw.material == Material::Glow as u8
+                    && draw.tint[..3] == color::FRIENDLY_TARGET[..3]
+                    && draw.tint[3] > 0
+            })
+            .collect();
+        assert_eq!(halo.len(), RIBBON, "one strip, with no separate arrowhead");
+        let tip = arrow.corners[3];
+        let mut tip_widths = Vec::new();
+        for draw in halo {
+            let cross = project(draw.model, Vec3::Y).distance(project(draw.model, Vec3::ZERO));
+            // At a 900-point window the Web's 7.2-point body can flare by at most
+            // 1.5 and grow with the endpoint by at most 1.4. Its halo is 2.6 body
+            // widths plus 16 points to either side (less than 112 points across).
+            assert!(cross < 112.0, "glow to {to:?} spans {cross:.1} points");
+            for (local_x, taper) in [(-0.5, draw.params[1]), (0.5, draw.params[2])] {
+                let at = project(draw.model, Vec3::X * local_x);
+                if at.distance(tip) < 0.01 {
+                    tip_widths.push(cross * taper);
+                }
+            }
+        }
+        assert!(
+            matches!(tip_widths.as_slice(), [width] if *width < 0.7),
+            "ribbon to {to:?} should have one narrow tip at {tip}, found {tip_widths:?}"
+        );
+        played.play(pointed(&begun, vec![target(Span::End)]), |_, _| {});
+        assert!(arrows(&played.last_frame()).is_empty());
+    }
 }
