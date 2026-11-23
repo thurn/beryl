@@ -1142,10 +1142,17 @@ Rules for trees:
   while its build directories exist. Documentation and Python work can use a
   tree without taking a build slot. A build product with only path inputs can
   declare `compiles = true` to take a slot for its output directories.
-- A build first uses its tree's slot or takes an empty one. If all slots have
-  outputs, it clears the build directories of the free tree used longest ago.
-  This keeps the two most recent donors while other slots are available. When no
-  slot can be reclaimed, the build waits and `ignite status` shows the wait.
+- On a machine with at least two build slots, ticket trees and idle work can
+  occupy all but one. Tip verification and foreground landing gates can use that
+  last slot, so leases held between commands by ordinary tickets cannot consume
+  the whole budget. A landing gate can need a second tree while its ticket tree
+  still holds its outputs. On a one-slot machine all work shares the slot. If it
+  holds a leased tree's outputs, a cold tree waits for the lease to end.
+- A build first uses its tree's slot or takes an empty one within its limit.
+  When it needs to reclaim a slot, it clears the build directories of the oldest
+  free tree whose removal makes room under the limit. A speculative seed skips
+  the copy when there is no empty slot it can use. When no slot can be
+  reclaimed, the build waits and `ignite status` shows the wait.
 - After a build command ends, the daemon measures that tree's build directories
   in logical bytes. Before its next build, a tree over its ceiling is cleaned
   until its outputs are below 80% of the ceiling. Cleanup removes replaced
@@ -3827,12 +3834,13 @@ expected cost of each ticket, so cheap tickets can run beside expensive ones.
   says
   `commands have waited 150 s for cores, so only tickets that hold master back start`.
 
-The machine reports its total and free [build slots](#build-trees), including
-slots it can reclaim from free trees. The hub deducts one free slot for each
-reserved or claimed build ticket whose tree does not hold a slot yet. A build
-ticket waits when all slots are held. Light tickets can still start. An older
-daemon that omits the counts has no free slots until it updates. The daemon can
-reclaim a slot from a free tree when a build starts.
+The machine reports its total [build slots](#build-trees) and how many are
+available to ordinary tickets, including slots it can reclaim from free trees.
+The hub deducts one available slot for each reserved or claimed build ticket
+whose tree does not hold a slot yet. A build ticket waits when that count is
+zero. Light tickets can still start. An older daemon that omits the counts has
+no free slots until it updates. The daemon can reclaim a slot from a free tree
+when a build starts.
 
 The machine can start up to three build tickets at once when slots and cores
 permit. With three or more active, the newest must have been held for 90 seconds

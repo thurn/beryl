@@ -17,7 +17,7 @@ use ignite_os::occupants::{Occupant, Occupants as _};
 use ignite_os::system::{DiskSpace, disk_space};
 use ignite_store::local::{rows, trees as store};
 
-use super::{Inner, Locked, Seeding, Trees, disk, store_error};
+use super::{Inner, Kind, Locked, Seeding, Trees, disk, store_error};
 use crate::supervise::Run;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -94,6 +94,16 @@ fn configured_slots(root: &Path, settings: &TreeSettings) -> u32 {
         _ => volume_space(root),
     };
     slot_count(settings, disk)
+}
+
+/// Leave one slot for tip verification and foreground landing gates. A machine with
+/// only one slot shares it, so ticket work can still build there.
+fn ordinary_limit(total: u32) -> u32 {
+    total.saturating_sub(1).max(1)
+}
+
+fn uses_ordinary_slot(row: &rows::Tree) -> bool {
+    row.kind == Kind::Ticket.as_str() || row.ticket.as_deref() == Some(crate::idle::LANDING_HOLDER)
 }
 
 /// The lock stays beside the checkout, so an output cleanup or a reset cannot unlink it.
@@ -223,7 +233,7 @@ impl Trees {
         disk::directories(Path::new(&row.path), &outputs)
     }
 
-    fn occupied(&self, locked: &Locked, row: &rows::Tree) -> bool {
+    pub(super) fn occupied(&self, locked: &Locked, row: &rows::Tree) -> bool {
         disk::id_of(row).is_ok_and(|id| locked.build_space.active.contains_key(&id))
             || self
                 .directories(locked, row)
@@ -232,29 +242,53 @@ impl Trees {
     }
 
     pub(crate) fn build_slots(&self) -> BuildSlots {
-        self.dispatch_slots().0
+        self.slot_availability().0
     }
 
-    pub(super) fn dispatch_slots(&self) -> (BuildSlots, BTreeSet<TicketId>) {
+    pub(super) fn slot_availability(&self) -> (BuildSlots, u32, BTreeSet<TicketId>) {
         let locked = self.lock();
-        let root = self.root_in(&locked.db);
-        let settings =
-            crate::fleet_notice::read(&locked.db).map_or_else(TreeSettings::default, |n| n.trees);
-        let total = configured_slots(&root, &settings);
+        let total = self.configured_slots(&locked);
         let mut holders = BTreeSet::new();
-        let free = store::all(&locked.db).map_or(0, |rows| {
+        let (free, ordinary_free) = store::all(&locked.db).map_or((0, 0), |rows| {
             let mut unavailable = 0_u32;
+            let mut ordinary_unavailable = 0_u32;
             for row in rows {
                 if self.occupied(&locked, &row) && !Self::reclaimable(&locked, &row) {
                     unavailable = unavailable.saturating_add(1);
-                    if let Some(ticket) = row.ticket.and_then(|id| TicketId::new(id).ok()) {
+                    if uses_ordinary_slot(&row) {
+                        ordinary_unavailable = ordinary_unavailable.saturating_add(1);
+                    }
+                    if row.kind == Kind::Ticket.as_str()
+                        && let Some(ticket) = row.ticket.and_then(|id| TicketId::new(id).ok())
+                    {
                         holders.insert(ticket);
                     }
                 }
             }
-            total.saturating_sub(unavailable)
+            let free = total.saturating_sub(unavailable);
+            (
+                free,
+                free.min(ordinary_limit(total).saturating_sub(ordinary_unavailable)),
+            )
         });
-        (BuildSlots { total, free }, holders)
+        (BuildSlots { total, free }, ordinary_free, holders)
+    }
+
+    fn configured_slots(&self, locked: &Locked) -> u32 {
+        let root = self.root_in(&locked.db);
+        let settings =
+            crate::fleet_notice::read(&locked.db).map_or_else(TreeSettings::default, |n| n.trees);
+        configured_slots(&root, &settings)
+    }
+
+    /// Idle work can adopt a warm landing tree only if doing so keeps its slot within the
+    /// ordinary limit. Cold idle leases are checked when they first ask to build.
+    pub(super) fn idle_can_take_slot(&self, locked: &Locked, rows: &[rows::Tree]) -> bool {
+        let total = self.configured_slots(locked);
+        rows.iter()
+            .filter(|row| uses_ordinary_slot(row) && self.occupied(locked, row))
+            .count()
+            < ordinary_limit(total) as usize
     }
 
     pub(super) fn build_directories(&self) -> Result<Vec<Vec<PathBuf>>> {
@@ -368,8 +402,16 @@ impl Trees {
                     .or_default()
                     .extend(outputs.iter().cloned());
                 let held = self.occupied(&locked, row);
+                let ordinary = uses_ordinary_slot(row);
                 rows.retain(|row| self.occupied(&locked, row));
-                if held || (!locked.build_space.reclaiming && rows.len() < total as usize) {
+                let ordinary_full = ordinary
+                    && rows.iter().filter(|row| uses_ordinary_slot(row)).count()
+                        >= ordinary_limit(total) as usize;
+                if held
+                    || (!locked.build_space.reclaiming
+                        && !ordinary_full
+                        && rows.len() < total as usize)
+                {
                     *locked.build_space.active.entry(tree.clone()).or_default() += 1;
                     return Ok(Some(BuildSlot {
                         trees: self.clone(),
@@ -381,7 +423,9 @@ impl Trees {
                 }
                 rows.sort_by(|a, b| a.last_used.cmp(&b.last_used).then_with(|| a.id.cmp(&b.id)));
                 let mut candidate = None;
-                for row in rows.iter().filter(|row| Self::reclaimable(&locked, row)) {
+                for row in rows.iter().filter(|row| {
+                    (!ordinary_full || uses_ordinary_slot(row)) && Self::reclaimable(&locked, row)
+                }) {
                     if let Some(guard) = try_exclusive(Path::new(&row.path))?
                         && self.tree_processes_clear(&disk::id_of(row)?, Path::new(&row.path))?
                     {

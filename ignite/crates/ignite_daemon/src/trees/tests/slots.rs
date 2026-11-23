@@ -24,30 +24,41 @@ fn slots_use_the_configured_space_or_the_tree_volume_and_round_down() {
     assert_eq!(slot_count(&settings, volume), 1);
 }
 
-#[test]
-fn a_cold_tree_waits_for_a_slot_when_the_built_trees_are_leased() {
-    let f = Fixture::new(3, 1);
+fn set_slot_budget(f: &Fixture, slots: u32) {
     crate::fleet_notice::write(
         &f.trees.lock().db,
         &FleetNotice {
             trees: TreeSettings {
                 tree_ceiling_gb: 100,
-                tree_space_gb: Some(TreeSpace::Gigabytes(200)),
+                tree_space_gb: Some(TreeSpace::Gigabytes(100 * slots)),
                 ..TreeSettings::default()
             },
             ..FleetNotice::default()
         },
     )
     .unwrap();
+}
+
+#[test]
+fn a_cold_tip_build_gets_a_slot_when_ticket_builds_are_at_their_limit() {
+    let f = Fixture::with_landing(3, 2, 1);
+    set_slot_budget(&f, 3);
     let first = f.lease("T.1", false);
     let second = f.lease("T.2", false);
     let third = f.lease("T.3", false);
+    assert_eq!(f.trees.build_slots().free, 3);
     assert_eq!(
-        f.trees.build_slots().free,
+        f.trees.dispatch_pressure(0, 0, None).build_slots_free,
         2,
         "empty leases do not occupy a slot"
     );
+    let first_slot = f
+        .trees
+        .take_build_slot(&first.tree, &[], true)
+        .unwrap()
+        .unwrap();
     write(&first.path, "out/compiled", "first");
+    drop(first_slot);
     let guard = f
         .trees
         .take_build_slot(&second.tree, &[], true)
@@ -65,13 +76,53 @@ fn a_cold_tree_waits_for_a_slot_when_the_built_trees_are_leased() {
             .unwrap()
             .is_none()
     );
+    assert!(
+        f.trees
+            .take_build_slot(&third.tree, &[], false)
+            .unwrap()
+            .is_none(),
+        "seeding uses the same ordinary limit"
+    );
+
+    let tip = f
+        .trees
+        .lease_landing("tip verification", &f.tip())
+        .unwrap()
+        .unwrap();
+    assert!(!tip.path.join("out").exists());
+    let tip_slot = f
+        .trees
+        .take_build_slot(&tip.tree, &[], true)
+        .unwrap()
+        .expect("the cold tip build can take the reserved slot");
+    write(&tip.path, "out/compiled", "tip");
+    assert_eq!(f.trees.build_directories().unwrap().len(), 3);
+    let other = f
+        .trees
+        .lease_landing("another tip family", &f.tip())
+        .unwrap()
+        .unwrap();
+    assert!(
+        f.trees
+            .take_build_slot(&other.tree, &[], true)
+            .unwrap()
+            .is_none(),
+        "tip builds also respect the volume limit"
+    );
     assert_eq!(
         fs::read_to_string(first.path.join("out/compiled")).unwrap(),
         "first"
     );
+    assert!(
+        f.trees
+            .take_build_slot(&first.tree, &[], true)
+            .unwrap()
+            .is_some(),
+        "a ticket can keep building in the slot it already occupies"
+    );
     drop(guard);
 
-    // A build that wrote no output returns its reservation.
+    // A build that wrote no output returns its reservation even while tip holds its slot.
     let pressure = f.trees.dispatch_pressure(0, 0, None);
     assert_eq!(pressure.build_slots_free, 1);
     assert_eq!(pressure.slot_holders, ["T.1".parse().unwrap()].into());
@@ -80,6 +131,80 @@ fn a_cold_tree_waits_for_a_slot_when_the_built_trees_are_leased() {
             .take_build_slot(&third.tree, &[], true)
             .unwrap()
             .is_some()
+    );
+    drop(tip_slot);
+}
+
+#[test]
+fn a_one_slot_machine_shares_the_slot_between_ticket_and_tip_builds() {
+    let f = Fixture::new(1, 1);
+    set_slot_budget(&f, 1);
+    let ticket = f.lease("T.1", false);
+    let tip = f
+        .trees
+        .lease_landing("tip verification", &f.tip())
+        .unwrap()
+        .unwrap();
+    let slot = f
+        .trees
+        .take_build_slot(&ticket.tree, &[], true)
+        .unwrap()
+        .expect("ticket builds still run on a one-slot machine");
+    write(&ticket.path, "out/compiled", "ticket");
+    drop(slot);
+    assert!(
+        f.trees
+            .take_build_slot(&tip.tree, &[], true)
+            .unwrap()
+            .is_none()
+    );
+    assert!(ticket.path.join("out/compiled").is_file());
+    store::release(
+        &f.trees.lock().db,
+        ticket.tree.as_str(),
+        Some(f.tip().as_str()),
+        &f.trees.now(),
+    )
+    .unwrap();
+    let _tip_slot = f
+        .trees
+        .take_build_slot(&tip.tree, &[], true)
+        .unwrap()
+        .unwrap();
+    assert_eq!(f.trees.build_directories().unwrap().len(), 1);
+    assert!(!ticket.path.join("out").exists());
+}
+
+#[test]
+fn idle_work_keeps_the_warm_reserved_slot_available_to_tip() {
+    let f = Fixture::with_landing(1, 2, 1);
+    set_slot_budget(&f, 2);
+    let ticket = f.lease("T.1", false);
+    write(&ticket.path, "out/compiled", "ticket");
+    let warm = f.trees.lease_landing("tip", &f.tip()).unwrap().unwrap();
+    write(&warm.path, "out/compiled", "tip");
+    f.trees.release_landing(&warm.tree, Some(&f.tip())).unwrap();
+
+    let idle = f
+        .trees
+        .lease_spare_landing(crate::idle::LANDING_HOLDER, &f.tip())
+        .unwrap()
+        .unwrap();
+    assert_ne!(idle.tree, warm.tree);
+    assert!(
+        f.trees
+            .take_build_slot(&idle.tree, &[], true)
+            .unwrap()
+            .is_none()
+    );
+    assert!(warm.path.join("out/compiled").is_file());
+    assert_eq!(
+        f.trees
+            .lease_landing("tip", &f.tip())
+            .unwrap()
+            .unwrap()
+            .tree,
+        warm.tree
     );
 }
 
@@ -104,7 +229,7 @@ fn admission_clears_the_oldest_free_tree_and_prefers_an_empty_slot() {
         .unwrap();
     }
     let cold = &leases[3].tree;
-    let empty = f.trees.take_slot(cold, &[], true, 4).unwrap().unwrap();
+    let empty = f.trees.take_slot(cold, &[], true, 5).unwrap().unwrap();
     assert!(
         leases[..3]
             .iter()
@@ -112,7 +237,7 @@ fn admission_clears_the_oldest_free_tree_and_prefers_an_empty_slot() {
     );
     drop(empty);
 
-    assert!(f.trees.take_slot(cold, &[], true, 3).unwrap().is_some());
+    assert!(f.trees.take_slot(cold, &[], true, 4).unwrap().is_some());
     let oldest = &leases[0];
     assert!(!oldest.path.join("out").exists());
     assert_eq!(f.trees.row(&oldest.tree).unwrap().built_commit, None);

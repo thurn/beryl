@@ -240,7 +240,9 @@ fn a_waiting_ticket_shows_both_the_build_slot_and_build_queue_waits() {
     let card = &body[body.find("<template id=\"why-e1.2\"").unwrap()..];
     let card = &card[..card.find("</template>").unwrap()];
     assert!(
-        card.contains("waits for a build slot on jarvis: 6 of 6 held"),
+        card.contains(
+            "waits for a build slot on jarvis: no slot available to tickets (6 configured)"
+        ),
         "{card}"
     );
     assert!(
@@ -289,8 +291,9 @@ fn the_available_page_shows_build_slots_and_accounts_for_earlier_tickets() {
     };
     hub::machine_snapshots::record(&conn, "m-j", &snapshot, Some(&report)).unwrap();
     assert!(
-        page(&conn, "/available")
-            .contains("6 build slots, 2 free, 100 GB tree ceiling, largest tree 84.5 GB")
+        page(&conn, "/available").contains(
+            "6 build slots, 2 free for tickets, 100 GB tree ceiling, largest tree 84.5 GB"
+        )
     );
 }
 

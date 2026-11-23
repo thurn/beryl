@@ -80,6 +80,7 @@ pub struct CapacityReport {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BuildSpaceReport {
     pub slots: u32,
+    /// Slots a ticket build can use, including slots it can reclaim.
     pub free: u32,
     pub ceiling_gb: u32,
     pub largest_tree_bytes: Option<u64>,
@@ -89,7 +90,7 @@ impl std::fmt::Display for BuildSpaceReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} build slots, {} free, {} GB tree ceiling",
+            "{} build slots, {} free for tickets, {} GB tree ceiling",
             self.slots, self.free, self.ceiling_gb
         )?;
         if let Some(bytes) = self.largest_tree_bytes {

@@ -28,11 +28,11 @@ impl Trees {
             .cloned()
             .collect();
         let disk = volume_space(&self.root());
-        let (slots, slot_holders) = self.dispatch_slots();
+        let (slots, ordinary_free, slot_holders) = self.slot_availability();
         let mut pressure = DispatchPressure {
             free_gb: disk.map(|disk| disk.available / BYTES_PER_GIB),
             build_slots: slots.total,
-            build_slots_free: slots.free,
+            build_slots_free: ordinary_free,
             slot_holders,
             queue_seconds,
             recovery_seconds,

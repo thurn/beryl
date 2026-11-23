@@ -53,9 +53,10 @@ impl QueueRecovery {
 /// Capacity observed by the machine just before asking for another handoff.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DispatchPressure {
-    /// Total build slots and slots that are empty or can be reclaimed from free trees.
+    /// Total build slots, including the slot reserved for landing trees.
     #[serde(default)]
     pub build_slots: u32,
+    /// Slots available for ordinary ticket builds, including reclaimable ones.
     #[serde(default)]
     pub build_slots_free: u32,
     /// Scheduler cores shared with agent work. Carries the reading on lane successor requests,
@@ -215,7 +216,9 @@ impl<'a> Budget<'a> {
             let total = self.pressure.build_slots;
             waits.push(HandoffWait {
                 block: Some(StartBlock::Trees),
-                reason: format!("{BUILD_SLOT_WAIT} on {machine}: {total} of {total} held"),
+                reason: format!(
+                    "{BUILD_SLOT_WAIT} on {machine}: no slot available to tickets ({total} configured)"
+                ),
             });
         }
         if ticket.kind != TicketKind::Regression {

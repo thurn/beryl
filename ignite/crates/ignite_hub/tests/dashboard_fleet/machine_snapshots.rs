@@ -74,7 +74,7 @@ fn fleet_shows_the_latest_machine_snapshot() {
         "15 admitted, 4 free, 6 busy outside Ignite",
         "Free memory",
         "9000 MB",
-        "6 build slots, 2 free, 100 GB tree ceiling, largest tree 84.5 GB",
+        "6 build slots, 2 free for tickets, 100 GB tree ceiling, largest tree 84.5 GB",
         "1 leased, 2 free",
         "Longest wait for cores",
         "25.5 s",

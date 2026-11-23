@@ -116,10 +116,9 @@ fn a_build_ticket_waits_for_a_slot_but_a_light_ticket_can_start() {
     );
     let waiting = ask(&mut conn, "local_b", &pressure, 1.0);
     assert!(
-        waiting["nothing"]
-            .as_str()
-            .unwrap()
-            .contains("waits for a build slot on jarvis: 6 of 6 held"),
+        waiting["nothing"].as_str().unwrap().contains(
+            "waits for a build slot on jarvis: no slot available to tickets (6 configured)"
+        ),
         "{waiting}"
     );
 
@@ -147,7 +146,10 @@ fn a_reservation_counts_until_its_claim_already_holds_a_slot() {
     assert_eq!(ask(&mut conn, "local_a", &pressure, 1.0), first);
     let waiting = ask(&mut conn, "local_b", &pressure, 1.0);
     assert!(
-        waiting["nothing"].as_str().unwrap().contains("2 of 2 held"),
+        waiting["nothing"]
+            .as_str()
+            .unwrap()
+            .contains("(2 configured)"),
         "{waiting}"
     );
 
@@ -187,7 +189,10 @@ fn a_daemon_without_slot_fields_can_only_receive_light_work() {
     let (status, waiting) = post(&mut conn, "/next", &request, at(1.0));
     assert_eq!(status, 200, "{waiting}");
     assert!(
-        waiting["nothing"].as_str().unwrap().contains("0 of 0 held"),
+        waiting["nothing"]
+            .as_str()
+            .unwrap()
+            .contains("(0 configured)"),
         "{waiting}"
     );
 }
@@ -583,7 +588,10 @@ fn a_landing_can_close_while_its_lane_successor_waits_for_a_build_slot() {
     let waiting = ask(&mut conn, "local_b", &pressure, 61.0);
     assert!(waiting["nothing"].is_string(), "{waiting}");
     assert!(
-        waiting["nothing"].as_str().unwrap().contains("1 of 1 held"),
+        waiting["nothing"]
+            .as_str()
+            .unwrap()
+            .contains("(1 configured)"),
         "{waiting}"
     );
 

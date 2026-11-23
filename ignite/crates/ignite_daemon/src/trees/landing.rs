@@ -191,13 +191,17 @@ impl Trees {
             self.distance(row.built_commit.as_deref(), tip)
                 .unwrap_or(usize::MAX)
         });
+        let idle_can_take_slot =
+            holder != crate::idle::LANDING_HOLDER || self.idle_can_take_slot(&locked, &rows);
         let mut ready = 0;
         let mut chosen = None;
         for row in free {
             if let Some(guard) = self.landing_reset_guard(&locked, row)? {
                 ready += 1;
-                chosen.get_or_insert((row, guard));
-                if ready > keep_free {
+                if idle_can_take_slot || !self.occupied(&locked, row) {
+                    chosen.get_or_insert((row, guard));
+                }
+                if chosen.is_some() && ready > keep_free {
                     break;
                 }
             }
