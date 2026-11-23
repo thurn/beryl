@@ -11,6 +11,8 @@ use kit_frame::frame::{Frame, FrameBuilder};
 use kit_fx::effects::{self, EffectRun, Reach, card, light, particles};
 use kit_ui::input::Tier;
 
+use crate::test_draw_snapshot::DrawSnapshot;
+
 fn records(effect: &str, data: &Effects) -> String {
     let on = match effect {
         "loss" => Subject::Player { player: Side::You },
@@ -80,7 +82,7 @@ fn records(effect: &str, data: &Effects) -> String {
                 writeln!(output, "{:?} {:?}", look.model, look.opacity).unwrap();
             }
             for draw in &frame.draws {
-                writeln!(output, "{draw:?}").unwrap();
+                writeln!(output, "{:?}", DrawSnapshot(draw)).unwrap();
             }
         }
     }
@@ -172,7 +174,7 @@ fn remaining_records(effect: &str, on: Subject, moving: bool, data: &Effects) ->
                 writeln!(output, "{look:?}").unwrap();
             }
             for draw in &frame.draws {
-                writeln!(output, "{draw:?}").unwrap();
+                writeln!(output, "{:?}", DrawSnapshot(draw)).unwrap();
             }
         }
     }

@@ -14,6 +14,7 @@ use kit_probe::driver::atlas::{STUB_PAGE, stub_glyph};
 use kit_ui::input::AssetReady;
 
 use crate::common::{MS, counting};
+use crate::test_draw_snapshot::DrawSnapshot;
 
 /// A step that sets `player`'s life total to `life`.
 fn life(player: Side, life: i32) -> Act {
@@ -197,7 +198,7 @@ fn loss_draws() -> String {
         let mut glyphs = 0;
         for draw in frame.draws.iter().filter(|draw| draw.tint[..3] == LOSS_RGB) {
             glyphs += usize::from(draw.material == Material::Glyph as u8);
-            writeln!(output, "{draw:?}").unwrap();
+            writeln!(output, "{:?}", DrawSnapshot(draw)).unwrap();
         }
         assert!(glyphs > 0, "the life effect colors glyphs at {time}");
     }

@@ -2,6 +2,8 @@
 
 #[path = "../../../../test_data.rs"]
 mod test_data;
+#[path = "../../../../test_draw_snapshot.rs"]
+mod test_draw_snapshot;
 
 mod agent;
 mod badges;

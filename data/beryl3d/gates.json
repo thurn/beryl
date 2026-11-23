@@ -22,7 +22,7 @@
     },
     "card": {
       "samples": 1,
-      "expressions": 131
+      "expressions": 137
     },
     "contact_shadow": {
       "samples": 1,
@@ -54,7 +54,7 @@
     },
     "card_lit": {
       "samples": 5,
-      "expressions": 298
+      "expressions": 304
     },
     "table_lit": {
       "samples": 5,

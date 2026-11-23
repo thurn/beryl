@@ -7,6 +7,8 @@
 
 #[path = "../../../../test_data.rs"]
 mod test_data;
+#[path = "../../../../test_draw_snapshot.rs"]
+mod test_draw_snapshot;
 
 fn reference() -> &'static game_table::table::Layout {
     use game_table::{profiles::Profile, table::Layout};
