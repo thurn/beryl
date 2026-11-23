@@ -220,6 +220,7 @@ pub struct Own {
     #[serde(deserialize_with = "positive")]
     pub fade_ms: f32,
     pub moon: OwnIcon,
+    pub moon_badge: MoonBadge,
     pub coin: OwnIcon,
     pub wedge: Wedge,
     pub crescent: Crescent,
@@ -233,6 +234,17 @@ pub struct OwnIcon {
     pub size: f32,
     #[serde(deserialize_with = "vector")]
     pub at: Vec2,
+}
+
+/// The dark round badge behind the summoning-sickness moon, as shares of its diameter.
+/// The web's `.card-sick-moon` is 1.7 em wide, with a 0.1 em border and a 1.15 em icon.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct MoonBadge {
+    #[serde(deserialize_with = "interior")]
+    pub border: f32,
+    #[serde(deserialize_with = "interior")]
+    pub icon: f32,
 }
 
 /// The attacker's chevron.

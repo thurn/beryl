@@ -189,9 +189,7 @@ impl<'b, 'f> Marks<'b, 'f> {
     }
 
     fn moon(&mut self, at: Vec2, diameter: f32) {
-        // The web badge is 1.7 em wide, with a 0.1 em border and a 1.15 em icon.
-        const BORDER_SHARE: f32 = 0.1 / 1.7;
-        const ICON_SHARE: f32 = 1.15 / 1.7;
+        let badge_shares = self.own.moon_badge;
         let size = Vec2::splat(diameter);
         // Keep the backdrop between the card face and the crescent in the depth sort.
         let mut panel = self.place(at, size, 0.0);
@@ -204,10 +202,10 @@ impl<'b, 'f> Marks<'b, 'f> {
                 with_opacity(color::METAL_BRIGHT, self.opacity),
                 size,
                 diameter / 2.0,
-                diameter * BORDER_SHARE,
+                diameter * badge_shares.border,
             ),
         );
-        self.icon(sprites::MOON, at, size * ICON_SHARE, color::MOON);
+        self.icon(sprites::MOON, at, size * badge_shares.icon, color::MOON);
     }
 
     fn icon(&mut self, sprite: Sprite, at: Vec2, size: Vec2, tint: [u8; 4]) {
