@@ -13,9 +13,7 @@
   ],
   "prompt_shapes": {
     "pick": "shape-pick",
-    "pile": "shape-pile",
     "split": "shape-split",
-    "zone": "shape-zone",
     "order": "shape-order",
     "pay": "shape-pay",
     "declare": "shape-declare",

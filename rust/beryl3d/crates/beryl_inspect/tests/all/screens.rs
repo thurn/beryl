@@ -1,15 +1,22 @@
-use app_client::driver::Page;
+use std::collections::BTreeSet;
+
+use app_client::driver::{Page, Recording};
 use beryl_inspect::pages::Recorded;
 use beryl_inspect::recordings;
-use beryl_protocol::protocol::Side;
+use beryl_protocol::Seat;
+use beryl_protocol::prompt::{Purpose, shape_name};
+use beryl_protocol::protocol::{Side, Status};
 use kit_base::data::profiles::SizeClass;
+
+fn screens_file() -> serde_json::Value {
+    let text = beryl_test_files::read_to_string("data/beryl3d/screens.json")
+        .expect("the screens file is readable");
+    serde_json::from_str(&text).expect("the screens file is JSON")
+}
 
 /// The recordings `data/beryl3d/screens.json` names, in its order.
 fn listed_recordings() -> Vec<String> {
-    let text = beryl_test_files::read_to_string("data/beryl3d/screens.json")
-        .expect("the screens file is readable");
-    let file: serde_json::Value = serde_json::from_str(&text).expect("the screens file is JSON");
-    file["screens"]
+    screens_file()["screens"]
         .as_array()
         .expect("the screens file lists screens")
         .iter()
@@ -39,42 +46,36 @@ fn every_recording_the_screens_file_names_is_listed() {
     }
 }
 
-/// Every prompt shape of `ui/shapes.json` has a fixture named in the screens file's
-/// `prompt_shapes`, for the parity list to count, and that fixture is a recording of the pack.
+/// The screens file names a recording for every native prompt shape. Each recording
+/// contains that prompt body for the first seat, where the client can render it.
 #[test]
 fn the_screens_file_names_a_fixture_for_every_prompt_shape() {
-    let read = |path: &str| -> serde_json::Value {
-        let text = beryl_test_files::read_to_string(path).expect("the file is readable");
-        serde_json::from_str(&text).expect("the file is JSON")
-    };
-    let shapes = read("ui/shapes.json");
-    let screens = read("data/beryl3d/screens.json");
-    let names: Vec<String> = recordings::names()
-        .expect("the recordings pack is readable")
-        .into_iter()
-        .map(|(name, _)| name)
-        .collect();
+    let screens = screens_file();
     let listed = screens["prompt_shapes"]
         .as_object()
         .expect("the screens file has prompt_shapes");
-    let shapes = shapes["shapes"]
-        .as_object()
-        .expect("ui/shapes.json lists shapes");
+    let shapes: BTreeSet<_> = Purpose::ALL
+        .iter()
+        .map(|purpose| shape_name(purpose.shape()))
+        .collect();
     assert_eq!(
-        listed.keys().collect::<Vec<_>>(),
-        shapes.keys().collect::<Vec<_>>(),
-        "prompt_shapes names each shape of ui/shapes.json"
+        listed.keys().map(String::as_str).collect::<BTreeSet<_>>(),
+        shapes,
+        "prompt_shapes must name every native prompt shape"
     );
     for (shape, fixture) in listed {
         let fixture = fixture.as_str().expect("each shape names a fixture");
-        assert_eq!(
-            Some(fixture),
-            shapes[shape]["yours"].as_str(),
-            "{shape}'s fixture is its `yours` in ui/shapes.json"
-        );
+        let messages = recordings::messages(fixture, Seat::P0);
+        let views = Recording(messages.to_vec())
+            .views()
+            .unwrap_or_else(|why| panic!("{fixture}: {why}"));
         assert!(
-            names.iter().any(|name| name == fixture),
-            "`just b3d list` does not list {fixture:?}"
+            views.iter().any(|update| matches!(
+                &update.view.status,
+                Status::Deciding { decision }
+                    if decision.prompt.body.shape().map(shape_name) == Some(shape.as_str())
+            )),
+            "{fixture:?} contains no {shape:?} prompt for the first seat"
         );
     }
 }
@@ -101,9 +102,7 @@ fn the_start_screen_offers_resume_table_for_saved_tables() {
 
 #[test]
 fn every_built_screen_shows_in_its_recording() {
-    let text = beryl_test_files::read_to_string("data/beryl3d/screens.json")
-        .expect("the screens file is readable");
-    let file: serde_json::Value = serde_json::from_str(&text).expect("the screens file is JSON");
+    let file = screens_file();
     for screen in file["screens"]
         .as_array()
         .expect("the screens file lists screens")
