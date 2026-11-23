@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
 use beryl_link::{Invite, LinkError, TcpHost, TcpLink};
+#[cfg(feature = "iroh")]
+use beryl_link_iroh::RelayChoice;
 use beryl_protocol::ipc::{
     LobbyChange, LobbyUpdate, Platform, SavedTable, TableActReply, TableConnectionError,
     TableHostReply, TableHostRequest, TableJoinRequest, TableLink, TableLobbyRequest, TableRefused,
@@ -40,6 +42,8 @@ pub struct TableConnections {
     tables: TableSessions,
     data_dir: PathBuf,
     memory: Option<MemoryInvites>,
+    #[cfg(feature = "iroh")]
+    iroh_loopback: bool,
     // Serialize changing the current table with replacing its listener. Table
     // actions and views use the session's own locks.
     listener: Mutex<Option<Incoming>>,
@@ -56,6 +60,8 @@ impl TableConnections {
             tables: TableSessions::with_data_dir(ids, &data_dir, emit).with_events(emit_event),
             data_dir,
             memory: None,
+            #[cfg(feature = "iroh")]
+            iroh_loopback: false,
             listener: Mutex::default(),
         }
     }
@@ -65,6 +71,14 @@ impl TableConnections {
     #[must_use]
     pub fn for_server(mut self, memory: MemoryInvites) -> Self {
         self.memory = Some(memory);
+        self
+    }
+
+    /// Host iroh endpoints on loopback with discovery and relays disabled for offline tests.
+    #[cfg(feature = "iroh")]
+    #[must_use]
+    pub fn with_iroh_loopback(mut self) -> Self {
+        self.iroh_loopback = true;
         self
     }
 
@@ -160,8 +174,14 @@ impl TableConnections {
                 self.check_internet()?;
                 #[cfg(feature = "iroh")]
                 {
-                    let (host, invite) =
-                        remote::open(&self.data_dir, self.settings()?.relay).map_err(error)?;
+                    let relay = if self.iroh_loopback {
+                        RelayChoice::Disabled
+                    } else {
+                        self.settings()?
+                            .relay
+                            .map_or(RelayChoice::Default, RelayChoice::Url)
+                    };
+                    let (host, invite) = remote::open(&self.data_dir, relay).map_err(error)?;
                     let (incoming, links) = remote::incoming(host);
                     (incoming, links, ConnectionInvite::from(invite))
                 }

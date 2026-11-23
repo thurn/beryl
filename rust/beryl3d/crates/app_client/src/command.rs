@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use beryl_protocol::ipc::decks::{CardSearchHit, DeckImportReply, DeckImportRequest, SavedDeck};
 use beryl_protocol::ipc::{
-    ChooseRequest, LobbyChange, LobbyUpdate, SavedTable, TableActReply, TableRefused,
+    ChooseRequest, LobbyChange, LobbyUpdate, SavedTable, TableActReply, TableLink, TableRefused,
     TableSoloRequest,
 };
 use beryl_protocol::prompt::{ClickReply, ClickRequest};
@@ -41,11 +41,10 @@ pub enum SessionCommand {
     TableAnswer(Answer),
     /// Close the manual table (`TableConnections::leave`).
     TableLeave,
-    /// Host a linked table on this computer's network under the host's name
-    /// (`TableConnections::host` with `TableLink::Local`), as the web's browser build hosts
-    /// one. Beryl 3D's session is built without internet play.
+    /// Host a table under `name` over the chosen connection (`TableConnections::host`).
     TableHost {
         name: String,
+        link: TableLink,
     },
     /// Join the table that `invite` names, sitting under `name` (`TableConnections::join`).
     TableJoin {
@@ -109,7 +108,7 @@ pub enum Request {
         text: String,
     },
     EndTextEntry,
-    /// Put this text on the platform's clipboard: the selection of a field, copied or cut.
+    /// Put this text on the platform's clipboard.
     Copy(String),
     /// Read the platform's clipboard and hand its text back as `Input::Paste`.
     Paste,

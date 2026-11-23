@@ -4,7 +4,7 @@
 //! pasted decklist, and the sideboard swap moves cards between the main deck and sideboard.
 
 use app_client::Input;
-use app_client::command::{Reply, SessionCommand};
+use app_client::command::{Reply, Request, SessionCommand};
 use app_client::{Client, Config};
 use beryl_protocol::SessionError;
 use beryl_protocol::ipc::decks::{DeckImportReply, DeckImportRequest, SavedDeck};
@@ -202,6 +202,29 @@ fn solo_table_opens_a_lobby_that_loads_the_deck_and_starts_the_table() {
     // A game that ends there brings the lobby back.
     client.handle(Input::Lobby(Box::new(lobby(true))));
     assert!(has(&frame(&mut client), Role::Region, "lobby"));
+}
+
+#[test]
+fn copy_puts_the_full_invite_on_the_clipboard() {
+    let mut client = client_on_start();
+    press(&mut client, Role::Button, "Host a table");
+    paste(&mut client, "table name", "Host");
+    press(&mut client, Role::Button, "Host");
+
+    let invite = format!("beryl:{}", "g".repeat(150));
+    let mut update = lobby(false);
+    let view = update.view.as_mut().unwrap();
+    view.invite = Some(invite.clone());
+    let mut guest = view.seats[0].clone();
+    guest.seat.0 = 1;
+    guest.name = None;
+    view.seats.push(guest);
+    client.handle(Input::Lobby(Box::new(update)));
+    client.handle(Input::Reply(Reply::TableOpen(Ok(()))));
+
+    while client.next_request().is_some() {}
+    press(&mut client, Role::Button, "Copy");
+    assert_eq!(client.next_request(), Some(Request::Copy(invite)));
 }
 
 #[test]

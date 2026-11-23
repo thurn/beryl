@@ -25,7 +25,7 @@ use app_client::command::{Reply, SessionCommand};
 use beryl_host::{Class, Inbox};
 use beryl_protocol::AgentView;
 use beryl_protocol::ipc::{
-    Platform, TableHostRequest, TableHostSettings, TableJoinRequest, TableLink, TableLobbyRequest,
+    Platform, TableHostRequest, TableHostSettings, TableJoinRequest, TableLobbyRequest,
     TableResumeRequest,
 };
 use beryl_session::ai::AgentMove;
@@ -412,9 +412,9 @@ impl Session for Live {
             SessionCommand::TableLeave => {
                 Reply::TableLeave(self.tables.leave().map_err(|error| error.reason))
             }
-            SessionCommand::TableHost { name } => {
+            SessionCommand::TableHost { name, link } => {
                 let request = TableHostRequest {
-                    link: TableLink::Local,
+                    link,
                     settings: TableHostSettings {
                         name,
                         starting_life: None,
@@ -475,5 +475,79 @@ impl Session for Live {
             "{}",
             report.unwrap_or_else(|| "beryl3d: search: nothing was searched".to_owned())
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use beryl_protocol::ipc::{LobbyChange, LobbyView, TableLink};
+    use std::path::Path;
+    use std::sync::mpsc::Receiver;
+    use std::time::Duration;
+
+    fn profile(path: &Path) -> (Live, Receiver<Input>) {
+        let (send, receive) = channel();
+        let dirs = Dirs {
+            data: path.to_owned(),
+            logs: path.join("logs"),
+            bugs: path.join("bugs"),
+        };
+        (Live::new(Some(dirs), Inbox::new(send, || true)), receive)
+    }
+
+    fn joined_lobby(inbox: &Receiver<Input>) -> LobbyView {
+        loop {
+            match inbox
+                .recv_timeout(Duration::from_secs(10))
+                .expect("both seats receive the lobby after joining")
+            {
+                Input::Lobby(update) => {
+                    if let Some(view) = update.view
+                        && view.seats.iter().all(|seat| seat.name.is_some())
+                    {
+                        return view;
+                    }
+                }
+                Input::TableError(reason) => panic!("{reason}"),
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn the_native_host_and_guest_commands_open_the_same_iroh_table() {
+        let profiles = tempfile::tempdir().unwrap();
+        let (mut host, host_inbox) = profile(&profiles.path().join("host"));
+        let (mut guest, guest_inbox) = profile(&profiles.path().join("guest"));
+        host.tables = host.tables.with_iroh_loopback();
+
+        let reply = host.run(SessionCommand::TableHost {
+            link: TableLink::Iroh,
+            name: "Host".into(),
+        });
+        assert_eq!(reply, Reply::TableOpen(Ok(())));
+        let Reply::TableLobby(Ok(Some(lobby))) =
+            host.run(SessionCommand::TableLobby(LobbyChange::View))
+        else {
+            panic!("hosting opens the lobby");
+        };
+        let invite = lobby.view.unwrap().invite.unwrap();
+        assert!(invite.starts_with("beryl:"));
+
+        let reply = guest.run(SessionCommand::TableJoin {
+            invite,
+            name: "Guest".into(),
+        });
+        assert_eq!(reply, Reply::TableOpen(Ok(())));
+        let host_view = joined_lobby(&host_inbox);
+        let guest_view = joined_lobby(&guest_inbox);
+        assert_ne!(host_view.you, guest_view.you);
+        for view in [&host_view, &guest_view] {
+            let names: Vec<_> = view.seats.iter().map(|seat| seat.name.as_deref()).collect();
+            assert_eq!(names, [Some("Host"), Some("Guest")]);
+        }
+        guest.end();
+        host.end();
     }
 }

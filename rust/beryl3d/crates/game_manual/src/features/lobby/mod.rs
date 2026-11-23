@@ -7,7 +7,7 @@ pub use entries::EntryMessage;
 
 use beryl_protocol::SessionError;
 use beryl_protocol::ipc::decks::{DeckImportReply, DeckImportRequest, SavedDeck};
-use beryl_protocol::ipc::{LobbyChange, LobbySettings};
+use beryl_protocol::ipc::{LobbyChange, LobbySettings, TableLink};
 use kit_scene::{Context, Feature};
 use kit_ui::element::Element;
 
@@ -41,6 +41,8 @@ pub enum Message {
     ChangeLobby(LobbyChange),
     /// Ask for the starting life and hand size the host's fields hold.
     SaveSettings(Option<LobbySettings>),
+    /// Copy the host's invite.
+    CopyInvite,
     /// Leave the table and go back to the start screen.
     Leave,
     LinkError(Option<String>),
@@ -59,7 +61,7 @@ pub struct State {
 pub enum Command {
     Change(LobbyChange),
     SavedTables,
-    Host(String),
+    Host { name: String, link: TableLink },
     Join { invite: String, name: String },
     Resume(String),
     SavedDecks,
@@ -68,6 +70,7 @@ pub enum Command {
 
 pub enum Request {
     OpenLobby,
+    CopyInvite,
     Leave,
     ClearFields(&'static [&'static str]),
 }
@@ -147,6 +150,10 @@ impl Feature for LobbyScreen {
                         settings: *settings,
                     },
                 );
+            }
+            Message::CopyInvite => {
+                effects.request(Request::CopyInvite);
+                return false;
             }
             Message::Leave => {
                 effects.request(Request::Leave);

@@ -4,9 +4,8 @@
 //! player's name and, to join, the invite code; each saved table with 'Resume table'; and why
 //! the last attempt to open a table failed, such as a version mismatch.
 //!
-//! Beryl 3D's session is built without internet play, so a hosted table is always on this
-//! computer's network, as the web's browser build hosts one, and the form offers no choice of
-//! connection.
+//! The desktop host form uses internet invites by default and offers a localhost connection
+//! for two app instances on one computer.
 
 use crate::features::lobby::{EntryMessage, Message};
 use beryl_protocol::ipc::SavedTable;
@@ -16,6 +15,7 @@ use kit_base::tokens::{color, space, type_style};
 use kit_text::text::TypeStyle;
 use kit_ui::element::{Align, Element, column, row, text};
 use kit_ui::widgets::screen::ScreenColumn;
+use kit_ui::widgets::start_panel::checkbox;
 use kit_ui::widgets::{Fields, button, field, primary};
 
 /// The name of the host or join form's name field.
@@ -33,6 +33,7 @@ impl TableEntries {
     pub const fn new() -> Self {
         Self {
             mode: None,
+            local_only: false,
             saved: Vec::new(),
             saved_error: false,
             error: None,
@@ -57,6 +58,8 @@ pub enum EntryMode {
 pub struct TableEntries {
     /// The form open under the buttons, if any.
     pub mode: Option<EntryMode>,
+    /// Whether the host form uses a localhost invite.
+    pub local_only: bool,
     /// The tables that can be resumed, the last joined table first.
     pub saved: Vec<SavedTable>,
     /// Whether the session could not read the saved tables.
@@ -106,7 +109,11 @@ pub fn entries(
             button("Solo table").on_press(Message::Entry(EntryMessage::Solo)),
         ));
     let mut shown = vec![buttons];
-    shown.extend(entries.mode.map(|mode| form(fields, mode, layout)));
+    shown.extend(
+        entries
+            .mode
+            .map(|mode| form(fields, mode, entries.local_only, layout)),
+    );
     if !entries.saved.is_empty() {
         let rows = (0u16..).zip(&entries.saved).map(|(at, saved)| {
             let names = match &saved.guest {
@@ -145,7 +152,12 @@ pub fn entries(
 
 /// The host or join form: the name, the invite code to join, the button that opens the table
 /// once the fields hold what it needs, and Cancel.
-fn form(fields: &Fields, mode: EntryMode, layout: Option<ScreenColumn>) -> Element {
+fn form(
+    fields: &Fields,
+    mode: EntryMode,
+    local_only: bool,
+    layout: Option<ScreenColumn>,
+) -> Element {
     let labelled = |label: &str, name: &str| {
         let mut field = field(name, &fields.get(name));
         field.style.align_self = Some(Align::Stretch);
@@ -188,6 +200,9 @@ fn form(fields: &Fields, mode: EntryMode, layout: Option<ScreenColumn>) -> Eleme
                 .into_iter()
                 .flatten(),
         )
+        .children((mode == EntryMode::Host).then(|| {
+            checkbox("Local only", local_only).on_press(Message::Entry(EntryMessage::LocalOnly))
+        }))
         .child(buttons.name("form buttons"))
 }
 

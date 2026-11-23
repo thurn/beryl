@@ -210,7 +210,7 @@ impl Mounted for LobbyScreen {
         client.commands.push_back(match command {
             lobby::Command::Change(change) => SessionCommand::TableLobby(change),
             lobby::Command::SavedTables => SessionCommand::TableSaved,
-            lobby::Command::Host(name) => SessionCommand::TableHost { name },
+            lobby::Command::Host { name, link } => SessionCommand::TableHost { name, link },
             lobby::Command::Join { invite, name } => SessionCommand::TableJoin { invite, name },
             lobby::Command::Resume(id) => SessionCommand::TableResume(id),
             lobby::Command::SavedDecks => SessionCommand::DeckList,
@@ -225,6 +225,18 @@ impl Mounted for LobbyScreen {
                 client.update_start(&app_screens::screens::start::Message::Leave);
                 client.features.screen = Screen::Lobby;
                 client.change_sheet(None);
+            }
+            lobby::Request::CopyInvite => {
+                if let Some(invite) = client
+                    .features
+                    .lobby_view
+                    .as_ref()
+                    .and_then(|view| view.invite.as_ref())
+                {
+                    client
+                        .requests
+                        .push_back(crate::command::Request::Copy(invite.clone()));
+                }
             }
             lobby::Request::Leave => client.leave_table(),
             lobby::Request::ClearFields(fields) => {

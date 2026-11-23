@@ -57,6 +57,7 @@ def client(profile: str, headless: bool) -> Iterator[stand_in.Running]:
 def join(host: stand_in.Running, guest: stand_in.Running) -> None:
     host.act('press button "Host a table"')
     host.act('type field "table name" "Host"')
+    host.act('press toggle "Local only"')
     host.act('press button "Host"')
     prefix = "Invite code "
     deadline = time.monotonic() + stand_in.START_LIMIT_S
@@ -70,6 +71,8 @@ def join(host: stand_in.Running, guest: stand_in.Running) -> None:
         if time.monotonic() > deadline:
             raise stand_in.StandInError("the host did not show an invite code")
         time.sleep(stand_in.POLL_S)
+    if not invite.startswith("beryl-local:"):
+        raise stand_in.StandInError("the host did not create a localhost invite")
     guest.act('press button "Join a table"')
     guest.act('type field "table name" "Guest"')
     guest.act(f'type field "invite code" {json.dumps(invite)}')

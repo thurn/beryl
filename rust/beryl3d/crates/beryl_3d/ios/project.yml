@@ -35,6 +35,10 @@ targets:
         ENABLE_BITCODE: false
         INFOPLIST_FILE: $(BERYL3D_CRATE_DIR)/ios/Beryl3D/Info.plist
         GENERATE_INFOPLIST_FILE: false
+    dependencies:
+      # iroh uses these for network reachability and system DNS.
+      - sdk: SystemConfiguration.framework
+      - sdk: libresolv.tbd
     scheme:
       testTargets: [Beryl3DUITests]
   Beryl3DUITests:

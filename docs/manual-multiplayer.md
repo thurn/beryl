@@ -436,9 +436,10 @@ runs no game logic at all: it shows the views it is sent and sends back the
 actions its player takes. Assists are computed on the host too, for both
 players.
 
-The native desktop app hosts and joins tables on localhost. The guest's app
-holds the link in Rust and publishes updates under its own session ID. The table
-screen uses the same commands and update types for solo, hosted and joined play.
+The native desktop app hosts tables over the internet or on localhost. Desktop
+and phone guests can join with an invite. The guest's app holds the link in Rust
+and publishes updates under its own session ID. The table screen uses the same
+commands and update types for solo, hosted and joined play.
 
 ### The link
 
@@ -469,9 +470,8 @@ There are three implementations.
 
 ### Shared iroh transport
 
-The shared session crate has an optional iroh transport. The native app ships
-with localhost TCP. The `iroh` check family exercises the optional transport
-over loopback with the relay disabled.
+The native app enables the shared session crate's iroh transport. The `iroh`
+check family exercises the transport over loopback with the relay disabled.
 
 iroh connects two endpoints by public key instead of by address. Each endpoint
 stays connected to a **relay**, a server that passes encrypted traffic between
@@ -489,8 +489,6 @@ fails.
   which is encrypted between the two endpoints. The relay address is a setting,
   so using a self-hosted relay (the server is open source) is a configuration
   change and not a code change.
-- **The lobby shows whether the connection is direct or relayed,** and its round
-  trip time.
 - **The table secret stops strangers.** A connection that does not present the
   secret from the invite is closed before any table data is sent.
 
@@ -500,6 +498,14 @@ An invite code is text. The second form below is the localhost link's.
 beryl:k7fq3mxdpw2a91hc…        key, relay address and table secret, encoded
 beryl-local:52114:3mxd         loopback port and table secret
 ```
+
+The native desktop app creates an internet invite when you choose **Host a
+table**, enter your name and select **Host**. Choose **Copy** beside the invite
+in the lobby to share it. Check **Local only** in the host form to create a
+localhost invite for a second Beryl instance on the same computer. Guests on
+desktop, iOS and Android can paste an internet invite into **Join a table**.
+Desktop hosts and guests on all platforms can reopen their saved tables from the
+start screen.
 
 ### Messages
 
@@ -1198,6 +1204,8 @@ giving control and passing the turn to another player are unavailable.
   `just b3d list table-` to find a board and `just b3d tree` with `--do` to
   inspect and drive it. The table crate checks the action templates in
   `data/table-commands.json`.
+- **Native internet invites.** The Beryl 3D session test runs the native Host
+  and Join commands over iroh loopback with the relay disabled.
 - **Live startup.** `just table-pair --headless` joins a native host and guest
   over localhost. The `native-app`, `native-ios` and `native-android` Ignite
   families check desktop startup and build the phone packages.
@@ -1206,4 +1214,7 @@ giving control and passing the turn to another player are unavailable.
 
 Use `just table-pair` to exercise the [table shortcuts](#keyboard-shortcuts) in
 visible desktop windows. For a touch issue, use `just ios` or `just android` and
-reproduce the action at a solo table. The automated checks are the landing gate.
+reproduce the action at a solo table. To exercise internet play, host an
+internet table on one machine and join with its invite from another network.
+Check that both players see each other in the lobby and can move cards on the
+table. The automated checks are the landing gate.

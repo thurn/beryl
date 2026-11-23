@@ -7,7 +7,10 @@ use app_client::Input;
 use app_client::command::{Reply, Request};
 use app_client::driver::{Duration, OPEN, Page, Recording};
 use app_client::{Client, Config};
-use beryl_protocol::ipc::{CONCEDE, ConcedeRequest, FixtureMessage, LIST_AGENTS, START_GAME};
+use beryl_protocol::ipc::{
+    CONCEDE, ConcedeRequest, FixtureMessage, LIST_AGENTS, START_GAME, TABLE_HOST,
+    TABLE_LOBBY_COMMAND, TableHostReply, TableHostRequest, TableHostSettings, TableLink,
+};
 use beryl_protocol::protocol::{Side, Status};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use beryl_protocol::{AgentView, SessionId, StartRequest};
@@ -106,6 +109,46 @@ fn pressing_start_with_the_second_agent_chosen_starts_against_it() {
         page.try_find(START).is_err(),
         "the game screen replaced the start screen"
     );
+}
+
+#[test]
+fn the_host_form_defaults_to_internet_and_can_send_a_local_request() {
+    for link in [TableLink::Iroh, TableLink::Local] {
+        let mut page = page(vec![
+            FixtureMessage::response(LIST_AGENTS, &agents()),
+            FixtureMessage::asked(
+                TABLE_HOST,
+                &TableHostRequest {
+                    link,
+                    settings: TableHostSettings {
+                        name: "Host".into(),
+                        starting_life: None,
+                        starting_hand_size: None,
+                    },
+                },
+                &TableHostReply {
+                    invite: String::new(),
+                },
+            ),
+            FixtureMessage::response(TABLE_LOBBY_COMMAND, &()),
+        ]);
+        page.press("button \"Host a table\"");
+        page.type_text("field \"table name\"", "Host");
+        page.check();
+        let local = "toggle \"Local only\"";
+        assert!(!page.find(local).states().has(StateBits::SELECTED));
+        if link == TableLink::Local {
+            page.press(local);
+            assert!(page.find(local).states().has(StateBits::SELECTED));
+        }
+        page.press("button \"Host\"");
+        page.still();
+        assert!(
+            page.inputs()
+                .iter()
+                .any(|input| matches!(input, Input::Reply(Reply::TableOpen(Ok(())))))
+        );
+    }
 }
 
 #[test]

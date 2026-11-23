@@ -14,14 +14,8 @@ fn identity(data_dir: &Path) -> Result<Identity, LinkError> {
     Identity::open(data_dir.join("identity"))
 }
 
-pub(super) fn open(
-    data_dir: &Path,
-    relay: Option<String>,
-) -> Result<(IrohHost, Invite), LinkError> {
-    IrohHost::open(
-        identity(data_dir)?,
-        relay.map_or(RelayChoice::Default, RelayChoice::Url),
-    )
+pub(super) fn open(data_dir: &Path, relay: RelayChoice) -> Result<(IrohHost, Invite), LinkError> {
+    IrohHost::open(identity(data_dir)?, relay)
 }
 
 pub(super) fn resume(data_dir: &Path, invite: &Invite) -> Result<IrohHost, LinkError> {

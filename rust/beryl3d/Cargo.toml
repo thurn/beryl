@@ -200,3 +200,7 @@ lto = "thin"
 [profile.test]
 opt-level = 1
 lto = false
+
+[patch.crates-io]
+# Match the main workspace's netwatch patch for routing constants that iOS libc lacks.
+netwatch = { git = "https://github.com/n0-computer/net-tools", rev = "c8d6e3efdb65e038451738cea63e327d9b4cbeaf" }

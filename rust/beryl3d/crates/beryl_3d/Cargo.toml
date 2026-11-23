@@ -50,9 +50,8 @@ glam = "0.34.3"
 beryl_search = { path = "../../../crates/beryl_search" }
 # The game the app plays: `Sessions` on the session thread.
 beryl_session = { path = "../../../crates/beryl_session" }
-# The manual table's session: `TableConnections` on the session thread, as the web app's
-# `table_*` commands call it. It replaces nothing.
-beryl_table_session = { path = "../../../crates/beryl_table_session" }
+# The manual table's session, including its encrypted internet and localhost connections.
+beryl_table_session = { path = "../../../crates/beryl_table_session", features = ["iroh"] }
 # The lobby request the session thread hands the manual table. It replaces nothing: app_client
 # and beryl_session already depend on it.
 beryl_protocol = { path = "../../../crates/beryl_protocol" }
@@ -93,3 +92,5 @@ cc = "1.11.2"
 beryl_test_files = { path = "../../../crates/beryl_test_files" }
 # The crate itself with `tools`, so that its tests and the binary they run can replay fixtures.
 beryl_3d = { path = ".", features = ["tools"] }
+# Give live table tests separate, temporary host and guest profiles.
+tempfile = "3"

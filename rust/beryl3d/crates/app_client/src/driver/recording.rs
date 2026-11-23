@@ -350,10 +350,10 @@ fn wire(command: &SessionCommand) -> (&'static str, Option<Value>) {
             }),
         ),
         SessionCommand::TableLeave => (ipc::TABLE_LEAVE, None),
-        SessionCommand::TableHost { name } => (
+        SessionCommand::TableHost { name, link } => (
             ipc::TABLE_HOST,
             value(&ipc::TableHostRequest {
-                link: ipc::TableLink::Local,
+                link: *link,
                 settings: ipc::TableHostSettings {
                     name: name.clone(),
                     starting_life: None,

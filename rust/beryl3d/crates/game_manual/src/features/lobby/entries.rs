@@ -3,7 +3,7 @@
 use super::{Command, Effects, Request, State};
 use crate::manual::lobby::Lobby;
 use crate::screens::table_entries::EntryMode;
-use beryl_protocol::ipc::{LobbyChange, SavedTable};
+use beryl_protocol::ipc::{LobbyChange, SavedTable, TableLink};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EntryMessage {
@@ -11,6 +11,8 @@ pub enum EntryMessage {
     Solo,
     /// Open the start screen's form for hosting a table.
     Host,
+    /// Toggle localhost hosting in the host form.
+    LocalOnly,
     /// Open the start screen's form for joining a table.
     Join,
     /// Close the start screen's host or join form.
@@ -40,9 +42,17 @@ pub(super) fn update(state: &mut State, message: &EntryMessage, effects: &mut Ef
             };
             entries.error = None;
         }
+        EntryMessage::LocalOnly => entries.local_only = !entries.local_only,
         EntryMessage::OpenTable { name, invite } => {
             let command = match entries.mode {
-                Some(EntryMode::Host) if !name.is_empty() => Command::Host(name.clone()),
+                Some(EntryMode::Host) if !name.is_empty() => Command::Host {
+                    name: name.clone(),
+                    link: if entries.local_only {
+                        TableLink::Local
+                    } else {
+                        TableLink::Iroh
+                    },
+                },
                 Some(EntryMode::Join) if !name.is_empty() && !invite.is_empty() => Command::Join {
                     invite: invite.clone(),
                     name: name.clone(),
