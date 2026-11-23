@@ -43,7 +43,7 @@ use ignite_store::hub::releases::Releases;
 use ignite_store::hub::{tickets, tips};
 use ignite_store::{Result, StoreError};
 
-use super::filing::{self, Author, Change, Filed, Filing, UPKEEP};
+use super::filing::{self, Author, Change, FAULT_KEY, Filed, Filing, UPKEEP};
 use super::signature::Signature;
 use super::{
     parse_time,
@@ -416,6 +416,32 @@ fn file_regression_stall(
         released: true,
     };
     filing::file(conn, UPKEEP, &filing, now)
+}
+
+/// Whether a regression-stall escalation should yield a machine's only repair slot.
+pub(crate) fn yields_to_repair(
+    conn: &Connection,
+    escalation: &str,
+    now: Timestamp,
+    admissible: impl FnOnce(&str) -> bool,
+) -> Result<bool> {
+    let subject: Option<String> = conn
+        .prepare_cached(
+            "SELECT metadata -> ?2 ->> 'subject' FROM tickets
+             WHERE id = ?1 AND metadata -> ?2 ->> 'category' = ?3",
+        )?
+        .query_row((escalation, FAULT_KEY, LABEL), |row| row.get(0))
+        .optional()?
+        .flatten();
+    let Some(regression) = subject
+        .as_deref()
+        .and_then(|subject| subject.strip_prefix(REGRESSION_STALL_SUBJECT))
+        .filter(|regression| admissible(regression))
+    else {
+        return Ok(false);
+    };
+    // The current stall may differ from the one that first filed this escalation.
+    regression_stalls::can_prioritize_repair(conn, regression, now)
 }
 
 /// Files the justiciar ticket for `ticket`, which different sessions released and which the hub

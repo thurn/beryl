@@ -454,6 +454,10 @@ fn a_regression_waiting_for_a_claim_escalates_and_clears_when_work_starts() {
 
     clock.advance(1.0);
     let emergency = escalate(&mut conn, &clock, &regression, "without a claim");
+    assert!(
+        justiciar::yields_to_repair(&conn, &emergency, clock.now(), |id| id == regression).unwrap()
+    );
+    assert!(!justiciar::yields_to_repair(&conn, &emergency, clock.now(), |_| false).unwrap());
     let again = justiciar::master_lag(&mut conn, clock.now()).unwrap();
     assert_eq!(again[0].ticket, emergency);
     assert_eq!(again[0].change, Change::Unchanged);
@@ -482,11 +486,15 @@ fn a_regression_whose_holder_stops_recording_activity_escalates() {
         regression
     );
     clock.advance(1.0);
-    escalate(
+    let emergency = escalate(
         &mut conn,
         &clock,
         &regression,
         "holder last recorded activity",
+    );
+    assert!(
+        !justiciar::yields_to_repair(&conn, &emergency, clock.now(), |id| id == regression)
+            .unwrap()
     );
 
     clock.advance(1.0);

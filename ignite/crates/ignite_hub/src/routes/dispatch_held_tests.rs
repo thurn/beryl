@@ -15,7 +15,7 @@ use ignite_core::time::Timestamp;
 use ignite_store::hub;
 
 use crate::routes::dispatch::tests::{at, file, free, post, start};
-use crate::upkeep::{filing::UPKEEP, stuck};
+use crate::upkeep::{filing::UPKEEP, justiciar, stuck};
 
 fn pause(conn: &mut Connection, machine: &Value, paused: bool) {
     let body = json!({"machine": machine, "paused": paused});
@@ -239,6 +239,56 @@ fn a_paused_machine_gets_the_tickets_holding_master_back_one_at_a_time() {
     // Another machine, not paused, still gets the regressions and then the feature.
     let (_, other) = post(&mut conn, "/next", &free("m-2", &["local_d"]), at(3.0));
     assert_eq!(offered(&other), Some(ids[1].as_str()), "{other}");
+}
+
+#[test]
+fn checks_only_offers_the_native_repair_before_its_unclaimed_escalation() {
+    let (mut conn, repair, _, now) = stalled_repair(&["machine:jarvis"]);
+    let mut asking = free("m-1", &[]);
+    asking["room"] = json!({"start": 0, "providers": [{"name": "claude", "tiers": ["opus"]}]});
+    let (_, reply) = post(&mut conn, "/next", &asking, now);
+    assert_eq!(offered(&reply), Some(repair.as_str()), "{reply}");
+    assert_eq!(reply["master_blocker"], true);
+    let (_, second) = post(&mut conn, "/next", &asking, now);
+    assert_eq!(second, Value::Null);
+}
+
+#[test]
+fn checks_only_offers_the_escalation_when_its_repair_lacks_a_provider() {
+    let (mut conn, _, escalation, now) = stalled_repair(&["machine:jarvis", "provider:codex"]);
+    let (_, reply) = post(&mut conn, "/next", &free("m-1", &["local_a"]), now);
+    assert_eq!(offered(&reply), Some(escalation.as_str()), "{reply}");
+}
+
+fn stalled_repair(labels: &[&str]) -> (Connection, TicketId, String, Timestamp) {
+    let mut conn = hub::open_in_memory().unwrap();
+    crate::routes::dispatch::tests::register(&mut conn);
+    pause(&mut conn, &json!("m-1"), true);
+    let ids = file(
+        &mut conn,
+        &[
+            ("landed work", &[], &[]),
+            ("repair native check", labels, &[]),
+        ],
+    );
+    let repair = ids[1].clone();
+    conn.execute(
+        "UPDATE tickets SET landed_at = ?1 WHERE id = ?2",
+        [start().to_string(), ids[0].to_string()],
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE tickets SET needs_os = 'macos' WHERE id = ?1",
+        [repair.as_str()],
+    )
+    .unwrap();
+    regression(&conn, "native:build", &repair, "open");
+    let now = at(justiciar::MASTER_LAG_SECONDS + 1.0);
+    let filed = justiciar::master_lag(&mut conn, now).unwrap();
+    assert_eq!(filed.len(), 1);
+    let escalation = filed[0].ticket.clone();
+    assert_ne!(escalation, repair.as_str());
+    (conn, repair, escalation, now)
 }
 
 #[test]

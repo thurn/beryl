@@ -92,24 +92,50 @@ struct Regression {
 }
 
 pub(super) fn open(conn: &Connection, now: Timestamp) -> Result<BTreeMap<String, Option<Stall>>> {
-    open_with(conn, now, |conn, id| {
-        let Some(ticket) = tickets::load(conn, id)? else {
-            return Ok(true);
-        };
-        Ok(regressions::passing(conn, &ticket)?.is_some())
-    })
+    observe(conn, now, None, passed)
 }
 
+/// A repair can proceed normally if the regression is waiting for a claim or has resumed
+/// progress. Failed fixes, an inactive holder and an unusually old episode need attention.
+pub(super) fn can_prioritize_repair(
+    conn: &Connection,
+    ticket: &str,
+    now: Timestamp,
+) -> Result<bool> {
+    let stalls = observe(conn, now, Some(ticket), passed)?;
+    Ok(matches!(
+        stalls.get(ticket),
+        Some(None | Some(Stall::Unclaimed(_)))
+    ))
+}
+
+fn passed(conn: &Connection, id: &str) -> Result<bool> {
+    let Some(ticket) = tickets::load(conn, id)? else {
+        return Ok(true);
+    };
+    Ok(regressions::passing(conn, &ticket)?.is_some())
+}
+
+#[cfg(test)]
 pub(super) fn open_with(
     conn: &Connection,
     now: Timestamp,
+    passed: impl Fn(&Connection, &str) -> Result<bool>,
+) -> Result<BTreeMap<String, Option<Stall>>> {
+    observe(conn, now, None, passed)
+}
+
+fn observe(
+    conn: &Connection,
+    now: Timestamp,
+    ticket: Option<&str>,
     passed: impl Fn(&Connection, &str) -> Result<bool>,
 ) -> Result<BTreeMap<String, Option<Stall>>> {
     let mut select = conn.prepare(
         "WITH open_tickets AS (
              SELECT DISTINCT r.ticket
              FROM regressions r JOIN tickets t ON t.id = r.ticket
-             WHERE r.state != ?1 AND t.status != 'closed'
+             WHERE r.state != ?1 AND t.status != 'closed' AND (?4 IS NULL OR t.id = ?4)
          )
          SELECT t.id, t.created_at, t.status, coalesce(t.session, t.assignee), t.claimed_at,
                 (SELECT max(h.at) FROM history h WHERE h.ticket = t.id
@@ -123,7 +149,7 @@ pub(super) fn open_with(
     )?;
     let added_key = format!("$.{}", regressions::ADDED_KEY);
     let handoff_key = format!("$.{CULPRIT_HANDOFF_KEY}");
-    let mut rows = select.query(params![tips::FIXED, added_key, handoff_key])?;
+    let mut rows = select.query(params![tips::FIXED, added_key, handoff_key, ticket])?;
     let mut regressions = Vec::new();
     let last_pass_seen: Option<String> = conn.query_row(
         "SELECT max(seen) FROM tips WHERE state = 'verified' AND verified <= ?1",

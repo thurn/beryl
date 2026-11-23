@@ -146,7 +146,7 @@ pub fn next(
         &settings,
         &snapshot,
         &capacity,
-        (ready, waiting_for_queue),
+        (paused, ready, waiting_for_queue),
     )
 }
 
@@ -157,7 +157,7 @@ fn dispatch_ready(
     settings: &FleetSettings,
     snapshot: &Snapshot,
     capacity: &capacity::Capacity<'_>,
-    (mut ready, mut waiting_for_queue): (Vec<ReadyTicket>, Vec<ReadyTicket>),
+    (paused, mut ready, mut waiting_for_queue): (Paused, Vec<ReadyTicket>, Vec<ReadyTicket>),
 ) -> Result<std::result::Result<Reservation, HandoffWait>> {
     let machine = free.machine.as_str();
     let epic_order = dispatch_groups(snapshot, &mut ready);
@@ -212,10 +212,18 @@ fn dispatch_ready(
             master_blocker: held::holds_master(ticket),
         })
     };
-    let candidates = dispatch::eligible_tickets(free, &ready, &epic_order, improvements)
-        .filter_map(|ticket| candidate_for(ticket).map(|candidate| (ticket, candidate)));
+    let eligible = || dispatch::eligible_tickets(free, &ready, &epic_order, improvements);
+    let candidates = eligible().filter_map(|ticket| Some((ticket, candidate_for(ticket)?)));
     let name = free.name.as_deref().unwrap_or(machine);
+    let repair_can_start = |repair: &ReadyTicket| {
+        candidate_for(repair).is_some() && capacity.budget.blocked(repair, name).is_none()
+    };
     match capacity.choose(name, candidates, |ticket, candidate| {
+        if let Some(reason) =
+            held::defer_escalation(conn, paused, ticket, now, eligible, repair_can_start)?
+        {
+            return Ok(Some(reason));
+        }
         placement.defer(
             conn,
             ticket,

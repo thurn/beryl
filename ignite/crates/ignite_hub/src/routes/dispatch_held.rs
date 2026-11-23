@@ -17,7 +17,7 @@ use ignite_store::hub::{capacity, fleet, provider_usage, tickets};
 
 use crate::routes::dispatch::mix as dispatch_mix;
 use crate::upkeep::filing::BLOCKED_TIPS_KEY;
-use crate::upkeep::regressions;
+use crate::upkeep::{justiciar, regressions};
 
 /// The states of a regression whose check still fails, so that its ticket holds `master` back.
 pub const FAILING: [&str; 2] = ["open", ignite_store::hub::tips::REOPENED];
@@ -187,6 +187,28 @@ pub fn holds_master(ticket: &ReadyTicket) -> bool {
     ticket.holds_tip
         || ticket.kind == TicketKind::Regression
         || ticket.labels.iter().any(|l| l == JUSTICIAR)
+}
+
+/// A checks-only machine has one repair slot. Compare the escalation with its own
+/// regression so other emergencies keep their usual place in the queue.
+pub(super) fn defer_escalation<'a, I: Iterator<Item = &'a ReadyTicket>>(
+    conn: &Connection,
+    paused: Paused,
+    ticket: &ReadyTicket,
+    now: Timestamp,
+    eligible: impl FnOnce() -> I,
+    can_start: impl Fn(&ReadyTicket) -> bool,
+) -> Result<Option<String>> {
+    let yields = paused == Paused::MasterOnly
+        && ticket.labels.iter().any(|label| label == JUSTICIAR)
+        && justiciar::yields_to_repair(conn, ticket.id.as_str(), now, |regression| {
+            eligible().any(|repair| {
+                repair.id.as_str() == regression
+                    && repair.kind == TicketKind::Regression
+                    && can_start(repair)
+            })
+        })?;
+    Ok(yields.then(|| "the regression can use this machine's repair slot".to_owned()))
 }
 
 fn has_blocker(conn: &Connection, filter: &str, key: &str) -> Result<bool> {
