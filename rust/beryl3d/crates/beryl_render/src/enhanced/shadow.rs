@@ -1,12 +1,10 @@
 //! The Enhanced tier's shadow map (docs/beryl-3d.md, "The Enhanced tier": "A shadow map"),
 //! sampled by `lit_by_key` in `shadow.wgsl`.
 //!
-//! Every card before the flat layer casts a shadow of its true shape from one directional key
-//! light, on the table and on the cards below it. The light is `Shadow::toward_light`, the one
-//! the Baseline tier's contact shadows fall from (`cast` in the table's `shadows.rs`), so a card
-//! at a height casts its shadow at the same place in both tiers. Each frame, the cards are drawn into a
-//! depth map seen from the light, through an orthographic projection fitted to the part of the
-//! table the camera sees; the table and every sprite cast nothing.
+//! Cards on the table and cards held by the pointer cast shadows of their true shape onto the
+//! table and cards below them. Both tiers use the same directional key light. Enhanced draws
+//! the cards into a depth map from the light's point of view, using an orthographic projection
+//! fitted to the visible table. The table and sprites cast no shadows.
 //!
 //! The map's size and depth biases are `enhanced.shadow_map` in `data/beryl3d/lighting.json`.
 //! How dark its shadows are is `shadow.darkness`, the contact shadows' opacity too, which
@@ -17,7 +15,7 @@ use std::num::NonZeroU64;
 use glam::camera::rh::{proj::directx, view::look_to_mat4};
 use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
 use kit_base::data::lighting::ShadowMap;
-use kit_frame::frame::{Frame, Mesh};
+use kit_frame::frame::{Band, Frame, Mesh};
 
 use super::{LIT, LIT_OFFSET, SHADER};
 use crate::count::{self, FragmentCounter};
@@ -155,8 +153,8 @@ impl Shadow {
     }
 
     /// Records the shadow map's pass for the frame `draws` describes into `encoder`, and returns
-    /// how many draw calls it took: one for each run of card-mesh records before the flat
-    /// layer. The vertex stage leaves out the records of any other material, such as the table.
+    /// how many draw calls it took: one for each run of card-mesh records on the table or
+    /// held by the pointer. The vertex stage leaves out records of other materials.
     /// `counter`, when present, counts the pass's fragments, of which a depth-only pass has none.
     pub(crate) fn draw(
         &mut self,
@@ -194,11 +192,19 @@ impl Shadow {
         let indices = draws.ranges[Mesh::Card as usize].clone();
         let mut draw_calls = 0;
         count::begin(counter, &mut pass);
+        let dragged =
+            draws.frame.bands[Band::Dragged as usize]..draws.frame.bands[Band::Foreground as usize];
         for run in runs(draws.frame) {
-            if run.pass.is_layer() || run.mesh != Mesh::Card as u8 {
+            if run.mesh != Mesh::Card as u8 {
                 continue;
             }
-            let records = run.records.start..run.records.end.min(draws.kept);
+            // Held table cards use the flat pass for paint order. A run can also
+            // contain previews and foreground overlays, which have no table position.
+            let mut records = run.records.start..run.records.end.min(draws.kept);
+            if run.pass.is_layer() {
+                records.start = records.start.max(dragged.start);
+                records.end = records.end.min(dragged.end);
+            }
             if records.is_empty() {
                 continue;
             }

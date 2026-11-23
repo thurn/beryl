@@ -107,6 +107,41 @@ fn a_lifted_card_shadows_the_table_where_cast_puts_its_shadow() {
     );
 }
 
+#[test]
+fn a_dragged_card_casts_a_shadow_from_the_flat_pass() {
+    let mut renderer = enhanced();
+    let height = 20.0;
+    let held_at = Vec2::new(25.0, 0.0);
+    let preview_at = Vec2::new(-25.0, 0.0);
+    let overlay_at = Vec2::new(0.0, 25.0);
+    // All three cards share one run in the flat pass. Only the held card shades the table.
+    let held = (Band::Dragged, small_card(held_at.extend(height)).1);
+    let preview = (Band::LayerCards, small_card(preview_at.extend(height)).1);
+    let overlay = (Band::Foreground, small_card(overlay_at.extend(height)).1);
+    let with = draw(
+        &mut renderer,
+        Tier::Enhanced,
+        &[table(), preview, held, overlay],
+    );
+    let without = draw(&mut renderer, Tier::Enhanced, &[table()]);
+    let centre = cast(held_at, height);
+    assert!(
+        darkening(
+            with.overhead(centre.x, centre.y),
+            without.overhead(centre.x, centre.y),
+        ) > 0.5 * darkness(),
+        "the table at the held card's shadow centre {centre}"
+    );
+    for at in [preview_at, overlay_at] {
+        let centre = cast(at, height);
+        assert_eq!(
+            with.overhead(centre.x, centre.y),
+            without.overhead(centre.x, centre.y),
+            "the table under the overlay card at {centre}"
+        );
+    }
+}
+
 // Measured: the lower card's face at the lifted card's shadow centre loses 0.55 of its
 // brightness.
 #[test]

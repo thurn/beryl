@@ -13,9 +13,9 @@ use beryl_protocol::protocol::{ObjectId, Side, Status, ZoneName};
 use beryl_protocol::script::Subject;
 use game_probe::agent::steps::no_jumps;
 use game_table::table::Place;
-use glam::Vec2;
+use glam::{Vec2, Vec3};
 use kit_base::data::profiles::SizeClass;
-use kit_frame::frame::{Frame, Resolved, Role, StateBits, Wake};
+use kit_frame::frame::{Frame, Material, Resolved, Role, StateBits, Wake};
 use kit_scene::hit::uncovered;
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::Size;
@@ -274,6 +274,77 @@ fn a_drop_that_leaves_priority_open_returns_the_card_to_its_place() {
         .handle(Input::Reply(Reply::Click(Ok(ClickReply::Open { prompt }))));
     table.wait(0.8, 60);
     assert!(crossing(table.card_slot(slot).corners).distance(rest) < 0.01);
+}
+
+#[test]
+fn a_held_hand_card_casts_a_visible_shadow_while_moving_and_at_rest() {
+    let lighting = crate::test_data::data().lighting.shadow;
+    let floor = lighting.contact.above;
+    for (recording, slot) in [
+        ("hand-pair-twin", ObjectId(1)),
+        ("shape-zone", ObjectId(SLOT)),
+    ] {
+        let mut table = Table::recording(recording);
+        let rest = table.card_slot(slot).pose;
+        let start = table.press_point(slot);
+        table.pointer(PointerPhase::Down, start);
+        // Cross empty felt, pause long enough for the lean to settle, then move again.
+        let mut last = Vec2::ZERO;
+        for tick in 0_u32..54 {
+            let at = Vec2::new(
+                1_060.0 + tick.min(10) as f32 * 14.0,
+                415.0 - tick.saturating_sub(43) as f32 * 9.0,
+            );
+            table.now += 16 * MILLISECOND;
+            if at != last {
+                table.pointer(PointerPhase::Move, at);
+                last = at;
+            }
+            let card = table.card_slot(slot);
+            assert!(card.state.has(StateBits::HELD));
+            let pose = card.pose.expect("the held card is in table space");
+            let expected = pose.position.truncate() + lighting.fall() * pose.position.z;
+            let frame = table.frame();
+            let shadow = frame
+                .draws
+                .iter()
+                .find(|draw| {
+                    draw.material == Material::ContactShadow as u8
+                        && Vec2::new(draw.model[3], draw.model[7]).distance(expected) < 0.01
+                        && (draw.model[11] - floor).abs() < 0.01
+                })
+                .unwrap_or_else(|| {
+                    panic!("{recording} tick {tick}: no shadow on the felt at {expected}")
+                });
+            // Measure the midpoints of the shadow's short edges, inset by its blur. At
+            // least one must be below the face so its solid part is clear of the glow.
+            let project = |y: f32| {
+                frame.view_projection.project_point3(Vec3::new(
+                    shadow.model[1] * y + shadow.model[3],
+                    shadow.model[5] * y + shadow.model[7],
+                    shadow.model[11],
+                ))
+            };
+            let edge = frame.card.y * 0.5 - 2.0 * shadow.params[0];
+            let shadow_bottom = (1.0 - project(-edge).y.min(project(edge).y)) * 450.0;
+            let card_bottom = card
+                .corners
+                .into_iter()
+                .map(|point| point.y)
+                .fold(0.0, f32::max);
+            assert!(
+                shadow_bottom - card_bottom > 12.0,
+                "{recording} tick {tick}: shadow ends at {shadow_bottom}, face ends at {card_bottom}"
+            );
+        }
+
+        table.pointer(PointerPhase::Cancel, last);
+        table.wait(0.25, 60);
+        let released = table.card_slot(slot);
+        assert!(!released.state.has(StateBits::HELD));
+        assert_eq!(released.pose, rest, "the shadow returns with the card");
+        assert_eq!(table.commands(), []);
+    }
 }
 
 #[test]

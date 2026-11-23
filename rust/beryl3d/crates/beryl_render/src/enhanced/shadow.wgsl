@@ -1,7 +1,7 @@
 
-// The Enhanced tier's shadow map (docs/beryl-3d.md, "The Enhanced tier": "A shadow map"): every
-// card before the flat layer is drawn into a depth map seen from the key light by `vs_shadow`,
-// and `lit_by_key` compares a fragment's depth from the light with the map.
+// The Enhanced tier draws cards on the table and cards held by the pointer into a depth map
+// seen from the key light by `vs_shadow`. Then `lit_by_key` compares a fragment's depth from
+// the light with the map.
 
 // Where a card-mesh vertex lies in the key light's clip space, for the depth-only pass that
 // draws the shadow map. A record of any material but a card's (the table, which shares the card

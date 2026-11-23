@@ -61,17 +61,17 @@ impl Held {
     /// Draws a held hand card facing the camera, so carrying it towards the opponent does
     /// not shrink or foreshorten it. Drags from other zones lie on the play surface's plane.
     pub fn pose(self, camera: &Camera, heft: &Heft, tuning: &PointerTuning) -> Pose {
-        let height = tuning.held_height_mm;
-        let position = camera.on_plane(self.at, height);
         let tilt = heft.tilt();
         let Some(hand_height) = self.hand_height else {
             return Pose {
-                position,
+                position: camera.on_plane(self.at, tuning.held_height_mm),
                 rotation: Quat::from_rotation_y(tilt.x) * Quat::from_rotation_x(tilt.y),
                 ..Pose::default()
             };
         };
 
+        let height = tuning.held_hand_height_mm;
+        let position = camera.on_plane(self.at, height);
         let ndc = camera.window.size.ndc(self.at.x, self.at.y);
         let rotation = Quat::from_rotation_x(tilt.y) * Quat::from_rotation_y(tilt.x);
         let face_height = hand_height * (1.0 + heft.lift * (tuning.held_hand_scale - 1.0));

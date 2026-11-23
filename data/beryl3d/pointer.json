@@ -6,6 +6,7 @@
   "raise_scale": 1.5,
   "nearer": 0.6,
   "held_height_mm": 39.38,
+  "held_hand_height_mm": 80,
   "held_hand_stage_min_aspect": 1.6,
   "held_hand_scale": 1.060606,
   "held_hand_lift_hz": 4.5,

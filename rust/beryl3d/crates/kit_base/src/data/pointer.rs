@@ -22,6 +22,10 @@ pub struct PointerTuning {
     pub nearer: f32,
     #[serde(deserialize_with = "positive")]
     pub held_height_mm: f32,
+    /// Height over the table used for a held hand card. Its camera-facing face needs more
+    /// clearance for the shadow to extend past it when the lean settles.
+    #[serde(deserialize_with = "positive")]
+    pub held_hand_height_mm: f32,
     /// The desktop web stage is at least this wide for each point of height.
     #[serde(deserialize_with = "positive")]
     pub held_hand_stage_min_aspect: f32,
