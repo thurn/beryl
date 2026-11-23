@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use ignite_core::ids::Commit;
+use ignite_core::ids::{Commit, Handle};
 use ignite_core::protocol::hub::{Record, ResultKey};
 use ignite_core::protocol::{Class, Outcome};
 use ignite_core::traits::Result;
@@ -37,6 +37,29 @@ impl TipVerifier {
             }
         }
         Ok(())
+    }
+
+    /// Checks the shared cache even when the local verdicts already contain failures.
+    /// When stopping an active round, require that round's own failure record.
+    pub(super) fn failure_recovered(
+        &self,
+        ctx: &Context,
+        tip: &Commit,
+        round: Option<&Handle>,
+    ) -> bool {
+        let Some(failed) = self.failed.as_ref().filter(|failed| {
+            failed.commit == *tip
+                && !failed.checks.is_empty()
+                && round.is_none_or(|handle| failed.round.as_ref() == Some(handle))
+        }) else {
+            return false;
+        };
+        ctx.hub.lookup(&failed.checks).is_ok_and(|hits| {
+            hits.len() == failed.checks.len()
+                && hits.into_iter().zip(&failed.checks).all(|(hit, key)| {
+                    hit.is_some_and(|hit| hit.key == *key && hit.outcome == Outcome::Pass)
+                })
+        })
     }
 
     /// Sends one record with the verb `cached` and no cost for each family whose checks were

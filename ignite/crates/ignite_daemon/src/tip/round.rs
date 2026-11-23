@@ -22,8 +22,8 @@
 //!   the new release (`SelfUpdate::after_master_moved`), as before; a loop that waited for a
 //!   round started before a restart does the same with that round's reply.
 //! - While waiting, the loop checks whether a failed candidate can give way to newer staging,
-//!   the hub already selected a replacement, or `master` advanced past its target. It stops
-//!   the old round so the next one can use its landing trees.
+//!   the hub already selected a replacement, or `master` advanced past its target. It also
+//!   stops culprit searches once all failed keys pass, so ordinary verification can resume.
 //!
 //! A round whose verb process dies is not run again: its handle ends `incomplete`, and the next
 //! turn of the loop starts a new round when the tip still needs one.
@@ -46,7 +46,7 @@ use crate::server::{Context, Server, Verb, error_reply};
 /// The internal verb that runs one round of tip verification.
 pub const ROUND_VERB: &str = "tip-round";
 
-/// How long the loop waits on a round's handle between checks for supersession.
+/// How long the loop waits on a round's handle between checks for supersession or recovery.
 const WAIT_S: u32 = 60;
 
 /// What a round answers with, in its reply's JSON.
@@ -162,7 +162,7 @@ pub struct TipLoop {
     pub verb: Arc<TipRoundVerb>,
     /// The feed position already seen.
     since: Seq,
-    /// After supersession, read the feed without waiting so the next candidate can start.
+    /// Whether to check for new work without waiting on the feed.
     retry_now: bool,
 }
 
@@ -214,17 +214,17 @@ impl TipLoop {
         mut wait_s: u32,
     ) -> Result<(Commit, TipOutcome)> {
         let handles = self.server.handles();
-        let mut superseded = None;
+        let mut interrupted = None;
         let reply = loop {
             match handles.wait(handle, wait_s, None) {
                 Waited::Running(_) => {
                     wait_s = WAIT_S;
-                    if superseded.is_none()
+                    if interrupted.is_none()
                         && let Some(tip) = target
-                        && let Some(by) = self.superseding_tip(ctx, tip)
+                        && let Some(outcome) = self.interruption(ctx, tip, handle)
                         && self.server.stop_internal(handle)
                     {
-                        superseded = Some((tip.clone(), by));
+                        interrupted = Some((tip.clone(), outcome));
                     }
                 }
                 Waited::Done(reply) | Waited::Interrupted(reply) => break reply,
@@ -240,11 +240,27 @@ impl TipLoop {
             .and_then(|json| serde_json::from_value::<RoundReply>(json).ok());
         let finished = match read {
             Some(RoundReply { tip, outcome }) => Ok((tip, outcome)),
-            None if let Some((tip, by)) = superseded => Ok((tip, TipOutcome::Superseded { by })),
+            None if let Some(interrupted) = interrupted => Ok(interrupted),
             None => Err(Error::Conflict(format!("{handle}: {}", reply.text))),
         };
-        self.retry_now = matches!(finished, Ok((_, TipOutcome::Superseded { .. })));
+        self.retry_now = matches!(
+            finished,
+            Ok((
+                _,
+                TipOutcome::Failed { .. } | TipOutcome::Recovered | TipOutcome::Superseded { .. }
+            ))
+        );
         finished
+    }
+
+    fn interruption(&self, ctx: &Context, tip: &Commit, handle: &Handle) -> Option<TipOutcome> {
+        if let Some(by) = self.superseding_tip(ctx, tip) {
+            return Some(TipOutcome::Superseded { by });
+        }
+        self.verb
+            .verifier()
+            .failure_recovered(ctx, tip, Some(handle))
+            .then_some(TipOutcome::Recovered)
     }
 
     /// A round can spend hours waiting for checks or searching for a culprit. A running

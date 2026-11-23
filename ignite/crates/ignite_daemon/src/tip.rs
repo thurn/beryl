@@ -311,6 +311,8 @@ pub enum TipOutcome {
     },
     /// These checks failed at the tip. `master` stays where it is.
     Failed { checks: Vec<CheckName> },
+    /// All failures of a reporting round now have cached passes. Verify the tip again.
+    Recovered,
     /// A newer tip arrived during the round; the next round verifies it.
     Superseded { by: Commit },
 }
@@ -344,6 +346,8 @@ pub struct TipVerifier {
     since: Seq,
     /// The last tip that was verified or failed. A waiting or superseded tip is tried again.
     settled: Option<Commit>,
+    /// The exact keys that held the last failed tip, also saved before culprit searches.
+    failed: Option<state::FailedTip>,
     /// Policy under which the last round started. An operator may make the same tip runnable.
     fleet_version: Option<u64>,
     /// Failures already reported, so a cached failure that stands for later tips is reported
@@ -399,6 +403,7 @@ impl TipVerifier {
             host: String::new(),
             since: Seq(0),
             settled: None,
+            failed: None,
             fleet_version: None,
             reported: HashSet::new(),
             deferred: HashSet::new(),
@@ -456,8 +461,8 @@ impl TipVerifier {
         self.since
     }
 
-    /// Whether `tip` needs a round: it was not settled, and is not resting after a round that
-    /// ended waiting.
+    /// Whether `tip` needs a round. A settled failure is due again once the hub has passes
+    /// for all of its failed keys.
     pub fn due(&self, ctx: &Context, tip: &Commit) -> bool {
         let notice = self.fleet_notice();
         if notice
@@ -470,7 +475,7 @@ impl TipVerifier {
             return true;
         }
         if self.settled.as_ref() == Some(tip) {
-            return false;
+            return self.failure_recovered(ctx, tip, None);
         }
         !matches!(&self.resting, Some((resting, until)) if resting == tip && ctx.clock.now() < *until)
     }
@@ -505,7 +510,7 @@ impl TipVerifier {
                 }
                 self.resting = Some((tip.clone(), now.plus_seconds(WAITING_RETRY_S)));
             }
-            TipOutcome::Superseded { .. } => {}
+            TipOutcome::Recovered | TipOutcome::Superseded { .. } => {}
         }
         self.save(ctx);
         Ok(outcome)

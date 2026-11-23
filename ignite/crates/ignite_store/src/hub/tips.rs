@@ -197,7 +197,8 @@ pub fn claim(conn: &Connection, claim: &TipClaim, now: Timestamp) -> Result<TipC
 /// Sets a tip's state. `verified` and `failed` also record when verification finished, and
 /// mark every older tip still `seen` or `verifying` as `superseded`: tips in between are never
 /// verified one by one, and leaving them `verifying` showed stale work on the dashboard and
-/// made the hub's upkeep blame silent machines for them.
+/// made the hub's upkeep blame silent machines for them. A recovered tip keeps its failure
+/// evidence, and a slower round cannot mark the verified commit failed again.
 pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Result<()> {
     seen(conn, verified.commit.as_str(), now)?;
     let finished = matches!(verified.state, TipState::Verified | TipState::Failed);
@@ -213,7 +214,7 @@ pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Re
         .map(serde_json::to_string)
         .transpose()
         .map_err(|error| StoreError::Invalid(format!("a tip's failed checks: {error}")))?;
-    conn.execute(
+    let updated = conn.execute(
         "UPDATE tips SET state = ?2, verified = CASE WHEN ?3 THEN ?4 ELSE NULL END,
          regression_passes = CASE
            WHEN ?2 != 'verified' THEN NULL
@@ -224,9 +225,9 @@ pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Re
              UNION SELECT value FROM json_each(?5)
            ))
          END,
-         failure = CASE WHEN ?2 = 'failed' THEN coalesce(?6, failure) END,
+         failure = CASE WHEN ?2 = 'failed' THEN coalesce(?6, failure) ELSE failure END,
          observed_failures = CASE WHEN ?2 != 'verified' THEN observed_failures END
-         WHERE commit_sha = ?1",
+         WHERE commit_sha = ?1 AND (state != 'verified' OR ?2 = 'verified')",
         params![
             verified.commit.as_str(),
             tip_state_text(verified.state),
@@ -236,7 +237,7 @@ pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Re
             failure,
         ],
     )?;
-    if finished {
+    if finished && updated != 0 {
         conn.execute(
             "UPDATE tips SET state = 'superseded'
              WHERE state IN ('seen', 'verifying')

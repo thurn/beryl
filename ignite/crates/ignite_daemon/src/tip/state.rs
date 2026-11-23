@@ -15,7 +15,7 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 use ignite_core::config::Os;
-use ignite_core::ids::{CheckName, Commit, Seq};
+use ignite_core::ids::{CheckName, Commit, Handle, Seq};
 use ignite_core::protocol::hub::{ResultKey, Reverted};
 use ignite_core::time::Timestamp;
 use ignite_store::local::tip_state;
@@ -30,6 +30,7 @@ use crate::server::Context;
 pub(super) struct Memory {
     since: Seq,
     settled: Option<Commit>,
+    failed: Option<FailedTip>,
     fleet_version: Option<u64>,
     reported: Vec<ResultKey>,
     deferred: Vec<CheckName>,
@@ -42,6 +43,15 @@ pub(super) struct Memory {
     rechecked: Vec<ResultKey>,
     resting: Option<(Commit, Timestamp)>,
     unsent_reverts: Vec<Reverted>,
+}
+
+/// The round publishes this after recording the failure, before it starts any culprit search.
+#[derive(Clone, Serialize, Deserialize)]
+pub(super) struct FailedTip {
+    pub commit: Commit,
+    pub checks: Vec<ResultKey>,
+    /// Identifies the round the loop can stop. A later round at the same SHA has its own handle.
+    pub round: Option<Handle>,
 }
 
 /// The database the memory is saved in, and the text last saved, so that a round that changed
@@ -113,6 +123,7 @@ impl TipVerifier {
     fn restore(&mut self, memory: Memory) {
         self.since = memory.since;
         self.settled = memory.settled;
+        self.failed = memory.failed;
         self.fleet_version = memory.fleet_version;
         self.reported = set(memory.reported);
         self.deferred = set(memory.deferred);
@@ -134,6 +145,7 @@ impl TipVerifier {
         Memory {
             since: self.since,
             settled: self.settled.clone(),
+            failed: self.failed.clone(),
             fleet_version: self.fleet_version,
             reported: listed(self.reported.iter().cloned()),
             deferred: listed(self.deferred.iter().cloned()),

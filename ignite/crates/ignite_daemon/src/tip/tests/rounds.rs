@@ -7,7 +7,7 @@ use std::sync::{Barrier, mpsc};
 use std::thread;
 
 use ignite_core::protocol::Usage;
-use ignite_core::protocol::hub::{MachineRegister, TipCheckFailures};
+use ignite_core::protocol::hub::{MachineRegister, TipCheckFailures, TipFailure, TipVerified};
 use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
 use ignite_core::traits::RunResult;
 use ignite_hub::server::{HubServer, RunningHub};
@@ -479,6 +479,113 @@ fn both_platforms_start_the_successor_while_the_failed_round_is_running() {
             false,
         ))
     );
+}
+
+fn store_pass(ctx: &Context, key: &ResultKey) {
+    ctx.hub
+        .store(&[NewResult {
+            key: key.clone(),
+            outcome: Outcome::Pass,
+            machine: ctx.machine.clone(),
+            record: RecordId(2),
+            output: None,
+            cost: ignite_core::protocol::hub::ResultCost::default(),
+            areas: Vec::new(),
+        }])
+        .unwrap();
+}
+
+#[test]
+fn a_settled_failure_retries_the_same_tip_once_all_exact_keys_pass() {
+    let world = World::new();
+    let (server, database, ctx) = running_hub(&world, "recovered-tip");
+    let peer = connect_machine(world.ctx("m-2"), &server, "peer", Os::Macos);
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    let mut first = check("first", 'a');
+    first.key.platform = Some(Os::Macos);
+    let second = check("second", 'b');
+    let checks = vec![first.clone(), second.clone()];
+    for check in &checks {
+        world.work.set_outcome(&tip, &check.check, Outcome::Fail);
+    }
+    world.work.set_checks(&tip, checks);
+    let local = database.with_file_name("daemon.db");
+    let remembering = || {
+        world
+            .verifier()
+            .with_memory(ignite_store::local::open(&local).unwrap())
+    };
+
+    assert_eq!(
+        remembering().round(&ctx, 0).unwrap(),
+        Some((
+            tip.clone(),
+            TipOutcome::Failed {
+                checks: vec![first.check.clone(), second.check.clone()],
+            }
+        ))
+    );
+    let failed_runs = world.work.runs();
+    let regressions = ctx.hub.open_regressions().unwrap();
+    assert_eq!(regressions.len(), 2);
+
+    let mut wrong_platform = first.key.clone();
+    wrong_platform.platform = Some(Os::Windows);
+    let mut wrong_hash = first.key.clone();
+    wrong_hash.hash = InputHash::new("c".repeat(64)).unwrap();
+    for key in [&second.key, &wrong_platform, &wrong_hash] {
+        store_pass(&peer, key);
+    }
+    assert_eq!(remembering().round(&ctx, 0).unwrap(), None);
+    assert_eq!(remembering().round(&ctx, 0).unwrap(), None);
+    assert_eq!(world.master(), commit("aaaa000"));
+    assert_eq!(world.work.runs(), failed_runs);
+    assert_eq!(ctx.hub.open_regressions().unwrap(), regressions);
+
+    store_pass(&peer, &first.key);
+    assert_eq!(
+        remembering().round(&ctx, 0).unwrap(),
+        Some((tip.clone(), TipOutcome::Verified))
+    );
+    assert_eq!(world.master(), tip);
+    assert_eq!(world.work.runs(), failed_runs);
+    assert_eq!(remembering().round(&ctx, 0).unwrap(), None);
+
+    // A peer that was slow to report could still be holding the old failed verdict.
+    peer.hub
+        .tip_verified(&TipVerified {
+            commit: tip.clone(),
+            machine: peer.machine.clone(),
+            state: TipState::Failed,
+            regression_passes: None,
+            failure: Some(TipFailure {
+                checks: vec![first.key.clone()],
+                unverified_commits: Vec::new(),
+            }),
+        })
+        .unwrap();
+    let conn = hub::open(&database).unwrap();
+    let state: String = conn
+        .query_row(
+            "SELECT state FROM tips WHERE commit_sha = ?1",
+            [tip.as_str()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(state, "verified");
+    assert_eq!(tips::candidate_failures(&conn).unwrap(), None);
+    assert_eq!(
+        tips::latest_failure(&conn, Timestamp::EPOCH).unwrap(),
+        Some((
+            TipCheckFailures {
+                commit: tip,
+                checks: vec![first.key, second.key],
+            },
+            true,
+        ))
+    );
+    server.stop();
 }
 
 #[test]

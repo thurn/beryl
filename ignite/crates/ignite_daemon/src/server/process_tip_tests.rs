@@ -3,9 +3,9 @@
 //! round's batch runs, and the restarted loop waits for that round instead of starting one.
 
 use ignite_core::config::Os;
-use ignite_core::ids::{CheckName, InputHash, Seq};
+use ignite_core::ids::{CheckName, InputHash, RecordId, Seq};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::ResultKey;
+use ignite_core::protocol::hub::{NewResult, ResultCost, ResultKey};
 use ignite_core::tipround::{
     DeferredPlatform, PlatformVerification, TipCandidate, TipCandidateUpdate, TipCoverageUpdate,
 };
@@ -25,6 +25,7 @@ struct OneCheck {
     remote: Option<(Arc<Switch>, Handle)>,
     block_listing: bool,
     platform: Option<Os>,
+    fail_at: Option<Commit>,
 }
 
 fn the_check(platform: Option<Os>) -> TipCheck {
@@ -93,10 +94,10 @@ impl TipWork for OneCheck {
 
     fn run(&self, ctx: &Context, at: &Commit, checks: &[CheckName], _rerun: bool) -> Vec<TipRun> {
         self.runs.fetch_add(1, Ordering::SeqCst);
-        let outcome = if self.command(ctx, at, &["cargo", "test"]) == Some(0) {
-            Outcome::Pass
-        } else {
-            Outcome::Incomplete
+        let outcome = match self.command(ctx, at, &["cargo", "test"]) {
+            Some(0) if self.fail_at.as_ref() == Some(at) => Outcome::Fail,
+            Some(0) => Outcome::Pass,
+            _ => Outcome::Incomplete,
         };
         checks
             .iter()
@@ -111,8 +112,18 @@ impl TipWork for OneCheck {
             .collect()
     }
 
-    fn landings(&self, _ctx: &Context, _from: &Commit, _to: &Commit) -> Result<Vec<TipLanding>> {
-        Ok(Vec::new())
+    fn landings(&self, _ctx: &Context, _from: &Commit, to: &Commit) -> Result<Vec<TipLanding>> {
+        if self.fail_at.as_ref() != Some(to) {
+            return Ok(Vec::new());
+        }
+        Ok([Commit::new("ababa00").unwrap(), to.clone()]
+            .into_iter()
+            .map(|commit| TipLanding {
+                ticket: None,
+                commits: vec![commit],
+                paths: the_check(self.platform).inputs,
+            })
+            .collect())
     }
 }
 
@@ -150,6 +161,7 @@ impl VerbStarter for RoundThreads {
                 remote: Some((self.switch.clone(), handle.clone())),
                 block_listing: self.work.block_listing,
                 platform: self.work.platform,
+                fail_at: self.work.fail_at.clone(),
             },
             self.home.join("daemon.db"),
         );
@@ -520,4 +532,62 @@ fn an_adopted_round_blocked_in_listing_selects_a_successor_after_failure() {
     machine.commands.finish_all();
     let (_, turn) = checking.join().unwrap();
     assert_eq!(turn.unwrap(), Some((newer, TipOutcome::Verified)));
+}
+
+#[test]
+fn a_pass_stops_a_running_culprit_search_and_retries_the_same_tip() {
+    let target = Commit::new("bbbb000").unwrap();
+    let machine = TipMachine::with_work(
+        "recovered-tip-round",
+        OneCheck {
+            fail_at: Some(target.clone()),
+            ..OneCheck::default()
+        },
+    );
+    let ctx = machine.threads.ctx.clone();
+    let key = the_check(None).key;
+    let store = |outcome| {
+        ctx.hub
+            .store(&[NewResult {
+                key: key.clone(),
+                outcome,
+                machine: ctx.machine.clone(),
+                record: RecordId(1),
+                output: None,
+                cost: ResultCost::default(),
+                areas: Vec::new(),
+            }])
+            .unwrap();
+    };
+    store(Outcome::Fail);
+    let (server, tips) = machine.daemon();
+    machine.switch.set(Some(server.clone()));
+    server.start_internal(
+        tips.verb.clone(),
+        TipRoundVerb::request(&target, Seq(0), &ctx.repo),
+    );
+    assert!(until(|| machine.commands.begun() == 1));
+    machine.commands.finish_all();
+    assert!(until(|| machine.commands.begun() == 2));
+
+    // The second command is the historical probe. Leave it blocked until the adopted round
+    // receives a stop, proving the pass is noticed before the search can finish.
+    store(Outcome::Pass);
+    let stopping = turn_on_a_thread(tips, ctx.clone());
+    assert!(until(|| machine.switch.stops.load(Ordering::SeqCst) > 0));
+    machine.commands.finish_all();
+    let (mut tips, turn) = stopping.join().unwrap();
+    assert_eq!(turn.unwrap(), Some((target.clone(), TipOutcome::Recovered)));
+    assert_eq!(
+        machine.git.tip("master").unwrap(),
+        Commit::new("aaaa000").unwrap()
+    );
+
+    assert_eq!(
+        tips.turn(&ctx, 0).unwrap(),
+        Some((target.clone(), TipOutcome::Verified))
+    );
+    assert_eq!(machine.git.tip("master").unwrap(), target);
+    assert_eq!(machine.commands.begun(), 2);
+    assert!(lock(&machine.landing.owner).is_none());
 }

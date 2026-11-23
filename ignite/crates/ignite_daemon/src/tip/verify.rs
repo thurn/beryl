@@ -11,6 +11,7 @@ use ignite_core::traits::{Push, Result};
 use super::coverage::{Required, Scope};
 use super::families::RunPhase;
 use super::round::require_running;
+use super::state::FailedTip;
 use super::{
     Listed, ListingPhase, TipCheck, TipOutcome, TipRun, TipSet, TipVerifier, candidate, covered,
     green, meter, names_of, settle_runs, split, verdict,
@@ -33,6 +34,7 @@ impl TipVerifier {
     /// or waits. A round that ran sends the hub a record of where its time went.
     pub fn verify(&mut self, ctx: &Context, tip: &Commit) -> Result<TipOutcome> {
         self.require_machine_on()?;
+        self.failed = None;
         crate::steps::step(format!("verifying tip {tip}"));
         let last = ctx.git.tip(&ctx.config.repository.master)?;
         let coverage = ctx.hub.tip_coverage()?;
@@ -245,6 +247,7 @@ impl TipVerifier {
             }
         }
         if !failed.is_empty() {
+            let keys: Vec<_> = failed.iter().map(|check| check.key.clone()).collect();
             let recorded = if last == tip {
                 Ok(())
             } else {
@@ -259,15 +262,28 @@ impl TipVerifier {
                         state: TipState::Failed,
                         regression_passes: None,
                         failure: Some(TipFailure {
-                            checks: failed.iter().map(|check| check.key.clone()).collect(),
+                            checks: keys.clone(),
                             unverified_commits,
                         }),
                     })
                     .and_then(|()| candidate::allow_newer(ctx, tip))
             };
+            // Checks whose cache is disabled must run again to establish a new verdict.
+            // Their older cached passes cannot end a search or requeue a settled tip.
+            if recorded.is_ok() && failed.iter().all(|check| check.reuse) {
+                self.failed = Some(FailedTip {
+                    commit: tip.clone(),
+                    checks: keys,
+                    round: crate::steps::current().and_then(|activity| activity.handle()),
+                });
+                self.save(ctx);
+                if self.failure_recovered(ctx, tip, None) {
+                    return Ok(TipOutcome::Recovered);
+                }
+            }
             for check in &failed {
                 let output = verdicts.get(&check.key).and_then(|v| v.output.clone());
-                // If this search is interrupted, a later tip that still fails reports it.
+                // If this search is interrupted and the check still fails, the next round reports it.
                 let prior = scope.last_good_for(check);
                 if let Err(error) = self.blame(
                     ctx,
