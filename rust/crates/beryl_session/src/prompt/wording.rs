@@ -296,6 +296,7 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
         // Composed from "Drag cards to order them on top of your library."
         // (`yvNZVakbnrQ 22:50.5`, 32:32.0): only an opponent's is in the recordings
         // (`pE4XSNi-nZc 27:18.0`).
+        Purpose::PutBack if matches!(to, Place::Bottom) => arranges("Put cards on the bottom."),
         Purpose::PutBack => arranges(match most {
             0 | 1 => "Put a card on top.",
             _ => "Put {most:words} cards on top.",

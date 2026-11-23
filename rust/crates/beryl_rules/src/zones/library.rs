@@ -138,15 +138,71 @@ pub fn put_back<L: Layout>(
         put.insert(card);
         order.push(card)?;
     }
-    zones::move_all(game, put, Zone::Library, Reason::Effect)?;
-    // The batch lands in game order; each card then goes on top of those picked before it.
-    let s = &mut *game.state;
-    for &slot in order.as_slice() {
-        if let Some(card) = s.card_in(s.object_ref(slot), Library) {
-            s.reorder_library(card, Place::Top)?;
-        }
+    move_hand_cards_in_order(game, put, order.as_slice(), Place::Top)?;
+    Ok(put)
+}
+
+/// The first part of a split takes as many cards as the player chooses
+/// (see [CR 608.2d]): "the player announces these while applying the effect."
+/// All chosen cards move together, each going below the one picked before it
+/// ([CR 401.4]): "the owner of those cards may arrange them in any order."
+///
+/// [CR 608.2d]: https://yawgatog.com/resources/magic-rules/#R6082d
+/// [CR 401.4]: https://yawgatog.com/resources/magic-rules/#R4014
+fn put_any_on_bottom<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &mut Resolution<'_, L>,
+    player: Seat,
+) -> Result<Bitboard<L::Slot>, Stop> {
+    let mut left = game.state.zone(ZoneKey::Of(player, Zone::Hand));
+    let prompt = Prompt::new(Purpose::PutBack)
+        .places(prompt::Place::Bottom, prompt::Place::None)
+        .part(Part::First);
+    let mut put = Bitboard::EMPTY;
+    let mut order: L::Queue<L::Slot, 64> = Default::default();
+    while !left.is_empty() {
+        let Some(slot) = choices::pick_or_end(game, resolution, player, left, prompt)? else {
+            break;
+        };
+        left.remove(slot);
+        put.insert(slot);
+        order.push(slot)?;
+    }
+    if !put.is_empty() {
+        move_hand_cards_in_order(game, put, order.as_slice(), Place::Bottom)?;
     }
     Ok(put)
+}
+
+/// Moves the cards in one event (see [`event::move_batch`]). The batch lands in game
+/// order, then each arrived card goes above or below the ones picked before it
+/// ([CR 401.4]): "That library's owner doesn't reveal the order in which the cards go into
+/// the library."
+///
+/// [CR 401.4]: https://yawgatog.com/resources/magic-rules/#R4014
+fn move_hand_cards_in_order<L: Layout>(
+    game: &mut Game<'_, L>,
+    cards: Bitboard<L::Slot>,
+    order: &[L::Slot],
+    place: Place,
+) -> Result<(), Full> {
+    event::move_batch_to(
+        game.state,
+        game.table,
+        game.sink,
+        cards,
+        Zone::Library,
+        place,
+        Reason::Effect,
+        Entry::default(),
+    )?;
+    let state = &mut *game.state;
+    for &slot in order {
+        if let Some(card) = state.card_in(state.object_ref(slot), Library) {
+            state.reorder_library(card, place)?;
+        }
+    }
+    Ok(())
 }
 
 /// `player` looks at the top `n` cards of their library, or all of it if it has fewer, takes
@@ -294,6 +350,22 @@ pub(crate) fn put_back_instruction<L: Layout>(
         put |= put_back(game, resolution, player, count)?;
     }
     Ok(Outcome::acted_on(put))
+}
+
+/// [`Effect::PutAnyOnBottom`](beryl_card::Effect::PutAnyOnBottom): the outcome counts
+/// the cards that reached the library, including zero when the player keeps their hand.
+#[cold]
+pub(crate) fn put_any_on_bottom_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    players: Players,
+) -> Result<Outcome<L>, Stop> {
+    let mut outcome = Outcome::NOTHING;
+    for player in run.in_turn_order(players) {
+        let (game, resolution) = run.resolving();
+        let put = put_any_on_bottom(game, resolution, player)?;
+        outcome = outcome.with(run.now_in(put, Zone::Library));
+    }
+    Ok(outcome)
 }
 
 /// [`Effect::Dig`](beryl_card::Effect::Dig): "[Player] looks at the top [look] cards of

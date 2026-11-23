@@ -127,6 +127,7 @@ impl Effect {
             | Effect::ForEachPlayer {
                 players: player, ..
             }
+            | Effect::PutAnyOnBottom { player }
             | Effect::AddMana { player, .. }
             | Effect::GetEmblem { player, .. }
             | Effect::ManifestDread(player)

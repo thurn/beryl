@@ -181,13 +181,8 @@ impl Ctx {
             Effect::PutIntoLibrary { objects, position } => {
                 self.put_into_library(objects, position)
             }
-            Effect::PutBack { player, count } => {
-                vec![self.clause(player, ("put", "puts"), |c| {
-                    let cards = c.count_of(count, "card", "cards");
-                    let hand = c.possessive(player);
-                    format!("{cards} from {hand} hand on top of {hand} library in any order")
-                })]
-            }
+            Effect::PutBack { player, count } => self.put_from_hand(player, Some(count)),
+            Effect::PutAnyOnBottom { player } => self.put_from_hand(player, None),
             Effect::ShuffleInto { player, cards } => {
                 vec![self.clause(player, ("shuffle", "shuffles"), |c| {
                     let cards = c.objects(cards);

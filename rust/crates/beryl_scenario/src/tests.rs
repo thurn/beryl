@@ -600,3 +600,23 @@ fn the_snapshot_can_end_at_a_prompt() {
     assert_eq!(json[0]["trace"][2]["kind"], "ChooseObject");
     assert!(json[0].get("failure").is_none(), "{}", json[0]["failure"]);
 }
+
+#[test]
+fn any_number_of_hand_cards_to_the_bottom_is_exported_as_a_resolution_choice() {
+    use beryl_card::effect::build::{put_any_on_bottom, you};
+
+    static CARD: CardDef = beryl_card::card(
+        "Test Bottom",
+        &[Face::EMPTY
+            .types(Types::SORCERY)
+            .abilities(&[Ability::spell().effect(&put_any_on_bottom(you()))])],
+    );
+    let facts = crate::facts::card_facts(&CARD);
+    let json = serde_json::to_value(facts).unwrap();
+    let ability = &json["faces"][0]["abilities"][0];
+    assert!(ability.get("targets").is_none());
+    assert_eq!(
+        ability["instructions"],
+        serde_json::json!([{"kind": "PutAnyOnBottom", "player": "You"}])
+    );
+}

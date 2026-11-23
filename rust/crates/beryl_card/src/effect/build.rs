@@ -443,6 +443,12 @@ pub const fn put_back(player: Players, count: u8) -> Effect {
     }
 }
 
+/// [`Effect::PutAnyOnBottom`]: "[player] puts any number of cards from their hand on the
+/// bottom of their library."
+pub const fn put_any_on_bottom(player: Players) -> Effect {
+    Effect::PutAnyOnBottom { player }
+}
+
 /// [`Effect::ShuffleInto`]: "[player] shuffles [cards] into their library".
 pub const fn shuffle_into(player: Players, cards: Objects) -> Effect {
     Effect::ShuffleInto { player, cards }

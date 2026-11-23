@@ -281,6 +281,11 @@ pub enum Effect {
     /// or more cards in a specific position in a library at the same time, the owner of
     /// those cards may arrange them in any order."
     PutBack { player: Players, count: Amount },
+    /// The player chooses any number of hand cards and their order on the library bottom
+    /// (see [CR 401.4]). The outcome is the cards put there.
+    ///
+    /// [CR 401.4]: https://yawgatog.com/resources/magic-rules/#R4014
+    PutAnyOnBottom { player: Players },
     /// "[Player] shuffles [cards] into their library": the cards go to their owners'
     /// libraries (CR 400.3) and each of the players shuffles
     /// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)): "To shuffle a
@@ -742,6 +747,7 @@ impl Effect {
             | Effect::Mill { .. }
             | Effect::Scry { .. }
             | Effect::PutBack { .. }
+            | Effect::PutAnyOnBottom { .. }
             | Effect::ShuffleInto { .. }
             | Effect::Dig { .. }
             | Effect::ExileUntil { .. }

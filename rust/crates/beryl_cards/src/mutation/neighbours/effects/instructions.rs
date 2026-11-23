@@ -255,6 +255,11 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                 &mut add,
             );
         }
+        Effect::PutAnyOnBottom { player } => {
+            for (name, player) in players(player) {
+                add(Kind::EffectPlayers, name, Effect::PutAnyOnBottom { player });
+            }
+        }
         Effect::ShuffleInto { player, cards } => {
             for (name, player) in players(player) {
                 add(

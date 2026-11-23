@@ -38,6 +38,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::PhaseOut(_)
         | Effect::SetPrepared { .. }
         | Effect::PutBack { .. }
+        | Effect::PutAnyOnBottom { .. }
         | Effect::Dig { .. }
         | Effect::ExileUntil { .. }
         | Effect::Fateseal { .. }

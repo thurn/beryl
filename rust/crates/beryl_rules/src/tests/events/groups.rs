@@ -1,7 +1,9 @@
 //! Which recorded events happened as one event of the rules: the groups a recording sink's
 //! tags tell, and the blocks a declaration says.
 
-use beryl_card::effect::build::{destroy, draw, exile_until_this_leaves, put_back, target, you};
+use beryl_card::effect::build::{
+    destroy, draw, exile_until_this_leaves, put_any_on_bottom, put_back, sequence, target, you,
+};
 use beryl_card::{Amount, Effect, Objects, Recipients};
 
 use crate::card::{
@@ -149,8 +151,37 @@ static STORM: CardDef = CardDef {
     tokens: &[],
 };
 
+/// Puts any number of cards from the hand on the bottom, then draws that many plus one.
+static REPLACE_HAND: CardDef = CardDef {
+    name: "Group Replace Hand",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        cost: W,
+        types: Types::SORCERY,
+        abilities: &[Ability::spell().effect(&sequence(&[
+            put_any_on_bottom(you()),
+            Effect::Draw {
+                player: you(),
+                count: Amount::Plus(1, &Amount::ThatMany),
+            },
+        ]))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
 static CARDS: CardTable = CardTable::new(&[
-    &LAND, &BEAR, &OGRE, &AURA, &WRATH, &QUAKE, &INSIGHT, &JAILER, &DELVER, &STORM,
+    &LAND,
+    &BEAR,
+    &OGRE,
+    &AURA,
+    &WRATH,
+    &QUAKE,
+    &INSIGHT,
+    &JAILER,
+    &DELVER,
+    &STORM,
+    &REPLACE_HAND,
 ]);
 
 const DECK: &Decklist = &[
@@ -164,6 +195,7 @@ const DECK: &Decklist = &[
     (2, "Group Jailer"),
     (1, "Group Delver"),
     (1, "Group Storm"),
+    (1, "Group Replace Hand"),
 ];
 
 /// A game of [`DECK`] mirrors in the starting player's main phase, recording its events.
@@ -474,4 +506,69 @@ fn cards_put_back_from_a_hand_go_to_the_library_as_one_event_in_the_order_chosen
     group(&events, put);
     let library = g.s.library(me);
     assert_eq!(library[library.len() - 2..], [first, second]);
+}
+
+#[test]
+fn any_number_of_hand_cards_go_to_the_bottom_in_order_and_count_toward_the_draw() {
+    for chosen in [0, 2, 3] {
+        let mut g = game();
+        let me = g.me;
+        g.give(me, "Test Land", Zone::Battlefield);
+        let hand = [
+            g.give(me, "Group Ogre", Zone::Hand),
+            g.give(me, "Group Aura", Zone::Hand),
+            g.give(me, "Group Bear", Zone::Hand),
+        ];
+        let spell = g.give(me, "Group Replace Hand", Zone::Hand);
+        let library = g.s.library(me).to_vec();
+        g.pick(cast(spell));
+        told(&mut g);
+        g.pass_both();
+
+        for &card in &hand[..chosen] {
+            g.pick(Opt::Object(card));
+        }
+        if chosen < hand.len() {
+            g.pick(Opt::Done);
+        }
+
+        let events = told(&mut g);
+        let bottomed = |e: &Event| {
+            matches!(
+                e,
+                Event::ZoneChange {
+                    from: Zone::Hand,
+                    to: Zone::Library,
+                    ..
+                }
+            )
+        };
+        assert_eq!(count(&events, bottomed), chosen);
+        if chosen > 0 {
+            group(&events, bottomed);
+        }
+        assert_eq!(
+            count(&events, |e| matches!(e, Event::DrawCard { .. })),
+            chosen + 1
+        );
+        let kept: Vec<_> = hand[chosen..]
+            .iter()
+            .copied()
+            .chain(library.iter().rev().copied().take(chosen + 1))
+            .collect();
+        assert_eq!(
+            g.s.zone(crate::state::ZoneKey::Of(me, Zone::Hand)).count(),
+            4
+        );
+        for card in kept {
+            assert_eq!(g.s.object(card).zone(), Zone::Hand);
+        }
+        let expected: Vec<_> = hand[..chosen]
+            .iter()
+            .rev()
+            .copied()
+            .chain(library[..library.len() - chosen - 1].iter().copied())
+            .collect();
+        assert_eq!(g.s.library(me), expected.as_slice());
+    }
 }

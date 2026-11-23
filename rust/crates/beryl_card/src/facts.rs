@@ -113,6 +113,7 @@ impl Effect {
             | Effect::ReturnTransformed(_)
             | Effect::PutIntoLibrary { .. }
             | Effect::PutBack { .. }
+            | Effect::PutAnyOnBottom { .. }
             | Effect::ShuffleInto { .. }
             | Effect::Dig { .. }
             | Effect::ExileUntil { .. }

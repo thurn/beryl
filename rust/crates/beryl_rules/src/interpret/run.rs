@@ -196,6 +196,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::ReturnTransformed(_)
             | Effect::PutIntoLibrary { .. }
             | Effect::PutBack { .. }
+            | Effect::PutAnyOnBottom { .. }
             | Effect::ShuffleInto { .. }
             | Effect::Dig { .. }
             | Effect::ExileUntil { .. }
@@ -324,6 +325,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             }
             Effect::PutBack { player, count } => {
                 library::put_back_instruction(self, player, count)?
+            }
+            Effect::PutAnyOnBottom { player } => {
+                library::put_any_on_bottom_instruction(self, player)?
             }
             Effect::ShuffleInto { player, cards } => {
                 shuffle::into_instruction(self, player, cards)?
