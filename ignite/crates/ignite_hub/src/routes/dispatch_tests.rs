@@ -208,8 +208,11 @@ fn two_machines_asking_at_once_never_get_one_ticket() {
     let specs: Vec<(&str, &[&str], &[usize])> =
         specs.iter().map(|(t, l, d)| (t.as_str(), *l, *d)).collect();
     file(&mut conn, &specs);
-    conn.execute("UPDATE tickets SET cores = 0.1 WHERE type = 'task'", [])
-        .unwrap();
+    conn.execute(
+        "UPDATE tickets SET cores = 0.1, body = ?1 WHERE type = 'task'",
+        ["Edit `docs/guide.md`"],
+    )
+    .unwrap();
     let barrier = Arc::new(Barrier::new(2));
     let askers: Vec<_> = ["m-a", "m-b"]
         .into_iter()

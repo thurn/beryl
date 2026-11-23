@@ -115,8 +115,12 @@ pub fn wants_output(output: &str, files: &[String]) -> bool {
 }
 
 /// Estimates build work from expected cores and Rust paths.
+///
+/// Tickets without paths count as build work because their build requirements are unknown.
+/// Bug reports often omit paths before triage and still need to compile their fixes.
 pub fn likely_compiles(cores: f64, files: &[String]) -> bool {
-    cores >= COMPILES_FROM_CORES
+    files.is_empty()
+        || cores >= COMPILES_FROM_CORES
         || files.iter().any(|file| {
             let path = std::path::Path::new(file);
             path.extension()
@@ -293,6 +297,13 @@ mod tests {
         old_sample.as_object_mut().unwrap().remove("cpu_percent");
         let old_pressure: DispatchPressure = serde_json::from_value(old_sample).unwrap();
         assert!(old_pressure.queue_backlogged());
+    }
+
+    #[test]
+    fn a_ticket_that_names_no_files_counts_as_build_work() {
+        assert!(likely_compiles(0.0, &[]));
+        assert!(!likely_compiles(0.0, &["docs/guide.md".to_owned()]));
+        assert!(likely_compiles(0.0, &["src/lib.rs".to_owned()]));
     }
 
     #[test]

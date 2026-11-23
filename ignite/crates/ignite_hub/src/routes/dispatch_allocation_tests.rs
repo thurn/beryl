@@ -114,8 +114,11 @@ fn six_workers_balance_at_four_and_two_and_refill_the_pool_that_finished() {
     }
     ops.push(json!({"op":"create","parent":"$1","fields":{"title":"First narrow ticket","allocation":900}}));
     let ids = write(&mut conn, &json!(ops));
-    conn.execute("UPDATE tickets SET cores = 0.1 WHERE type = 'task'", [])
-        .unwrap();
+    conn.execute(
+        "UPDATE tickets SET cores = 0.1, body = ?1 WHERE type = 'task'",
+        ["Edit `docs/guide.md`"],
+    )
+    .unwrap();
     let wide = format!("{}.", ids[0]);
     let narrow = format!("{}.", ids[1]);
     let mut handoffs = Vec::new();

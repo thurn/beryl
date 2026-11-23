@@ -211,6 +211,9 @@ fn check_ramp(admit_cores: Option<f64>) {
             ("five", &[], &[]),
         ],
     );
+    for id in &ids {
+        classify(&conn, id, 0.1, "Investigate a reported bug");
+    }
     let mut pressure = DispatchPressure {
         build_slots: 6,
         build_slots_free: 6,
