@@ -35,14 +35,14 @@ which propose manual actions for the player to apply.
 
 ## Decisions
 
-| ID  | Decision                                                                                                                                                      |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T1  | Players share a private invite. The host is trusted with the game state and random outcomes.                                                                  |
-| T5  | The manual table owns its own state. Both game modes use the same stage protocol.                                                                             |
-| T6  | Beryl places permanents in automatic rows. A player can reorder cards or pin them to a row.                                                                   |
-| T10 | Context menus contain command labels. Commands that need a number or text open a prompt.                                                                      |
-| T14 | Either player can act on public cards and either life total. The host checks access to hidden zones.                                                          |
-| T19 | The handshake compares `WIRE_HASH`, which covers the generated protocol and the Rust wire envelope. Builds with identical wire definitions can play together. |
+| ID  | Decision                                                                                                                                |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| T1  | Players share a private invite. The host is trusted with the game state and random outcomes.                                            |
+| T5  | The manual table owns its own state. Both game modes use the same stage protocol.                                                       |
+| T6  | Beryl places permanents in automatic rows. A player can reorder cards or pin them to a row.                                             |
+| T10 | Context menus contain command labels. Commands that need a number or text open a prompt.                                                |
+| T14 | Either player can act on public cards and either life total. The host checks access to hidden zones.                                    |
+| T19 | The handshake compares `WIRE_HASH`, which covers the Rust definitions for table actions, game and lobby updates, and the link envelope. |
 
 ## The table
 
@@ -584,10 +584,17 @@ for rejoining.
 
 ### Builds must match
 
-The handshake compares `beryl_protocol::WIRE_HASH`, which fingerprints
-`ui/src/generated/protocol.ts` and `beryl_link/src/wire/envelope.rs`. The host
-reports a mismatch as “Both players need the same version of Beryl.” Both
-players can use builds from different commits when these definitions match.
+The handshake compares `beryl_protocol::WIRE_HASH`. The build fingerprints the
+Rust definitions for table actions, game and lobby updates, and the link
+envelope, including their Serde attributes and custom serializers. It ignores
+comments and legacy TypeScript export attributes. It also includes other Rust
+tokens in those source files, so an edit in a wire module can change the hash
+even if its JSON is the same.
+
+The switch from the generated TypeScript fingerprint preserves the hash for the
+transition schema. When the fingerprints differ, both players need to update to
+builds that agree. The host reports this as “Both players need the same version
+of Beryl.”
 
 ### Two apps on one machine
 

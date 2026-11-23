@@ -10,14 +10,14 @@ use std::time::Duration;
 use beryl_link::host::{self, Host, Hosted, Sender, TableQueue};
 use beryl_link::wire::RefusalReason;
 use beryl_link::{Link, LinkError, PING_INTERVAL, PeerInfo, Route};
-use beryl_protocol::ipc::LobbyUpdate;
+use beryl_protocol::ipc::{LobbyUpdate, TableRequest};
 use beryl_protocol::protocol::{LinkState, TableAction};
 use beryl_protocol::{GameUpdate, SessionId, WIRE_HASH};
 use beryl_table::{Action, Entry, Refusal, Seat, Table};
 use serde_json::Value;
 
 use crate::lobby;
-use crate::prompt::{PromptState, Request};
+use crate::prompt::PromptState;
 use crate::publication::PublishedTable;
 use crate::refusal::to_wire;
 use crate::saves::Save;
@@ -93,7 +93,7 @@ impl HostSession {
         self.0.lock().save.id() == id
     }
 
-    pub(super) fn local_action(&self) -> impl FnOnce(Request) -> Result<(), Refusal> + use<> {
+    pub(super) fn local_action(&self) -> impl FnOnce(TableRequest) -> Result<(), Refusal> + use<> {
         let table = Arc::clone(&self.0);
         move |action| table.lock().apply(LOCAL, action)
     }
@@ -177,24 +177,24 @@ impl HostedTable {
 
     // Both IPC and the authenticated link call this with the same table
     // queue lock held until both views have been sent or queued.
-    fn apply(&mut self, seat: Seat, request: Request) -> Result<(), Refusal> {
+    fn apply(&mut self, seat: Seat, request: TableRequest) -> Result<(), Refusal> {
         self.check_available(seat)?;
         let was_playing = self.table.table().game_match.in_game;
         let all = match request {
-            Request::Action(action) => {
+            TableRequest::Action(action) => {
                 check_lobby_actor(seat, &action)?;
                 self.table
                     .dispatch_action(seat, action, |entry| save_entry(&mut self.save, entry))?;
                 true
             }
-            Request::Lobby(request) => {
+            TableRequest::Lobby(request) => {
                 self.table
                     .apply_lobby_checked(seat, request.change, |entry| {
                         save_entry(&mut self.save, entry)
                     })?;
                 true
             }
-            Request::Answer(request) => self.table.answer(seat, request.answer, |entry| {
+            TableRequest::Answer(request) => self.table.answer(seat, request.answer, |entry| {
                 save_entry(&mut self.save, entry)
             })?,
         };

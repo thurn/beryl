@@ -6,6 +6,8 @@ pub use beryl_table::state::{Assist, LobbySettings};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::protocol::{Answer, TableAction};
+
 pub const TABLE_HOST: &str = "table_host";
 pub const TABLE_JOIN: &str = "table_join";
 pub const TABLE_RESUME: &str = "table_resume";
@@ -126,6 +128,20 @@ pub struct LobbyUpdate {
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct TableLobbyRequest {
     pub change: LobbyChange,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TableAnswerRequest {
+    pub answer: Answer,
+}
+
+/// What a link's action message carries, with ordinary table actions sent directly.
+#[derive(Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum TableRequest {
+    Answer(TableAnswerRequest),
+    Lobby(TableLobbyRequest),
+    Action(TableAction),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

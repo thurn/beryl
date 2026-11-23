@@ -511,8 +511,10 @@ name = "beryl_protocol"
 version = "0.1.0"
 dependencies = [
  "beryl_card",
+ "beryl_card_build",
  "beryl_kernel",
  "beryl_table",
+ "proc-macro2",
  "serde",
  "serde_json",
  "ts-rs",

@@ -105,14 +105,6 @@ mod purpose_name {
     }
 }
 
-/// The TypeScript type of a [`Purpose`]: the union of every purpose's name.
-pub fn purpose_decl() -> String {
-    let names: Vec<String> = (Purpose::ALL.iter())
-        .map(|purpose| format!("\"{}\"", purpose.name()))
-        .collect();
-    format!("type Purpose = {};", names.join(" | "))
-}
-
 /// Which part of a prompt a pick answers ([`Part`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

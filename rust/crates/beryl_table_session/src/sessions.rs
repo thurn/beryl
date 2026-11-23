@@ -11,6 +11,7 @@ use beryl_link::wire::Hello;
 use beryl_link::{Link, LinkError, PING_INTERVAL};
 use beryl_protocol::ipc::{
     LobbyUpdate, SavedTable, TABLE_LINK, TABLE_LOBBY, TableAnswerRequest, TableLobbyRequest,
+    TableRequest,
 };
 use beryl_protocol::protocol::{Answer, LinkState, TableAction};
 use beryl_protocol::{GameUpdate, SessionId, SessionIds, WIRE_HASH};
@@ -21,7 +22,7 @@ use beryl_table::{Action, Chance, Log, Refusal, Seat, Table};
 use serde_json::Value;
 
 use crate::guest::GuestSession;
-use crate::prompt::{PromptState, Request};
+use crate::prompt::PromptState;
 use crate::publication::PublishedTable;
 use crate::saves::{self, HostSettings, Save};
 use crate::{host::HostSession, lobby};
@@ -356,13 +357,13 @@ impl TableSessions {
     }
 
     pub fn act(&self, action: TableAction) -> Result<(), Refusal> {
-        self.send(Request::Action(action))
+        self.send(TableRequest::Action(action))
     }
 
     /// Takes a local click. Joined sessions relay it to the host, which
     /// supplies the authenticated seat.
     pub fn answer(&self, answer: Answer) -> Result<(), Refusal> {
-        self.send(Request::Answer(TableAnswerRequest { answer }))
+        self.send(TableRequest::Answer(TableAnswerRequest { answer }))
     }
 
     /// Open a prompt for one seat on the authoritative table.
@@ -410,20 +411,20 @@ impl TableSessions {
         }
     }
 
-    fn send(&self, request: Request) -> Result<(), Refusal> {
+    fn send(&self, request: TableRequest) -> Result<(), Refusal> {
         let mut current = self.lock();
         match current.as_mut().ok_or(Refusal::Stale)? {
             Current::Solo(solo) => {
                 let was_playing = solo.table.table().game_match.in_game;
                 match request {
-                    Request::Action(action) => {
+                    TableRequest::Action(action) => {
                         solo.table.dispatch_action(SOLO, action, |_| Ok(()))?;
                     }
-                    Request::Lobby(request) => {
+                    TableRequest::Lobby(request) => {
                         solo.table
                             .apply_lobby_checked(SOLO, request.change, |_| Ok(()))?;
                     }
-                    Request::Answer(request) => {
+                    TableRequest::Answer(request) => {
                         solo.table.answer(SOLO, request.answer, |_| Ok(()))?;
                     }
                 }
@@ -455,7 +456,7 @@ impl TableSessions {
     }
 
     pub(super) fn change_lobby(&self, request: TableLobbyRequest) -> Result<(), Refusal> {
-        self.send(Request::Lobby(request))
+        self.send(TableRequest::Lobby(request))
     }
 
     pub fn current(&self) -> Option<GameUpdate> {

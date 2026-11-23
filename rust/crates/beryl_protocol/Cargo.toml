@@ -29,7 +29,15 @@ ts-rs = { version = "12.0.1", features = ["no-serde-warnings"] }
 # Names each manual table view so a stale action is refused, in place of a hand-written id.
 uuid = { version = "1", features = ["v4"] }
 
+[build-dependencies]
+# Generates the counter variants that the protocol mirrors from the card vocabulary.
+beryl_card_build = { path = "../beryl_card_build" }
+# Tokenizes the Rust wire definitions without a handwritten lexer.
+proc-macro2 = "1.0.107"
+
 [dev-dependencies]
 # Every shared dependency with the whole workspace's features, so that a build of this
 # package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
 beryl_workspace_hack = { path = "../beryl_workspace_hack" }
+# Exercises the build script's wire fingerprint with synthetic Rust definitions.
+proc-macro2 = "1.0.107"

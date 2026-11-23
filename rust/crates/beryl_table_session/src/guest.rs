@@ -9,13 +9,12 @@ use std::thread;
 
 use beryl_link::LinkError;
 use beryl_link::guest::{Event, Guest};
-use beryl_protocol::ipc::LobbyUpdate;
+use beryl_protocol::ipc::{LobbyUpdate, TableRequest};
 use beryl_protocol::protocol::LinkState;
 use beryl_protocol::{GameUpdate, SessionId};
 use beryl_table::Refusal;
 use serde_json::Value;
 
-use crate::prompt::Request;
 use crate::refusal::from_wire;
 use crate::sessions::{Emit, EmitEvent, TableEvent};
 
@@ -130,7 +129,7 @@ impl GuestSession {
         Some(update)
     }
 
-    pub(super) fn local_action(&self) -> impl FnOnce(Request) -> Result<(), Refusal> + use<> {
+    pub(super) fn local_action(&self) -> impl FnOnce(TableRequest) -> Result<(), Refusal> + use<> {
         let shared = Arc::clone(&self.0);
         move |action| {
             let reply = shared.send(action)?;
@@ -158,7 +157,7 @@ impl Shared {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn send(&self, action: Request) -> Result<Receiver<Result<(), Refusal>>, Refusal> {
+    fn send(&self, action: TableRequest) -> Result<Receiver<Result<(), Refusal>>, Refusal> {
         let payload = serde_json::to_value(action).map_err(|_| Refusal::INVALID)?;
         let mut state = self.lock();
         if !matches!(state.link, Some(LinkState::Connected { .. })) {

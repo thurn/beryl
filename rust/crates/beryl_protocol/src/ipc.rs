@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::GameUpdate;
-use crate::protocol::{Answer, CandidateIndex, DecisionId, SessionId, StopsSetting, TableAction};
+use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting, TableAction};
 
 pub mod decks;
 mod table;
@@ -169,11 +169,6 @@ pub struct TableSoloRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct TableActRequest {
     pub action: TableAction,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct TableAnswerRequest {
-    pub answer: Answer,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

@@ -1,24 +1,13 @@
 //! Host-only prompt state. The wire view uses viewer slots, never table IDs.
-use beryl_protocol::ipc::{TableAnswerRequest, TableLobbyRequest};
 use beryl_protocol::protocol::{
-    Answer, CardHandling, ObjectId as Slot, PileName, Side, TableAction, TablePrompt, ZoneName,
+    Answer, CardHandling, ObjectId as Slot, PileName, Side, TablePrompt, ZoneName,
 };
 use beryl_table::action::Flow;
 use beryl_table::assist::text::FlowChoice;
 use beryl_table::state::{ObjectId, Zone};
 use beryl_table::{Action, Refusal, Seat, Table};
-use serde::{Deserialize, Serialize};
 
 use crate::publication::SeatPublication;
-
-// The link preserves the ordinary action payload and wraps prompt answers.
-#[derive(Deserialize, Serialize)]
-#[serde(untagged)]
-pub(crate) enum Request {
-    Answer(TableAnswerRequest),
-    Lobby(TableLobbyRequest),
-    Action(TableAction),
-}
 
 #[derive(Clone)]
 pub enum PromptState {

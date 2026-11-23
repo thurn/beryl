@@ -26,18 +26,15 @@ pub use performance_probe::performance_probe;
 pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 pub use session_ids::SessionIds;
 
-/// A 64-bit FNV-1a hash of the generated TypeScript protocol and link envelope definitions.
-/// The hash is represented in lowercase hexadecimal.
+/// The lowercase hexadecimal fingerprint of the Rust table protocol and link envelopes.
 pub const WIRE_HASH: &str = env!("BERYL_WIRE_HASH");
 
 /// The wire fingerprint extended with additional definitions in order.
 pub fn wire_hash(extra: &[&str]) -> String {
     let mut hash = u64::from_str_radix(WIRE_HASH, 16).expect("build.rs emits a hex hash");
-    for definition in extra {
-        // Prefix each definition with its length so the hash input preserves the boundaries.
-        hash = wire_fingerprint::extend(hash, &(definition.len() as u64).to_le_bytes());
-        hash = wire_fingerprint::extend(hash, definition.as_bytes());
-    }
+    hash = extra.iter().fold(hash, |hash, definition| {
+        wire_fingerprint::definition(hash, definition)
+    });
     format!("{hash:016x}")
 }
 
