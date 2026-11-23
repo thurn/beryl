@@ -33,6 +33,8 @@ fn nextest_runs(world: &World) -> usize {
 #[test]
 fn a_stopped_nextest_run_neither_retries_nor_caches_a_failure() {
     let world = nextest_world();
+    let target = world.dir.join("out");
+    fs::create_dir_all(&target).unwrap();
     // The supervisor has ended the command. The verb has yet to see the stop request.
     fs::write(world.dir.join("ended"), "").unwrap();
     fs::write(
@@ -67,6 +69,7 @@ fn a_stopped_nextest_run_neither_retries_nor_caches_a_failure() {
     assert!(run.outcomes.is_empty());
     assert_eq!(nextest_runs(&world), 1);
     assert_eq!(cached(&world, "rs:core::a"), None);
+    assert!(target.join(SUSPECT_FILE).is_file());
 }
 
 /// The family `rs` needs the product `deps`, whose target directory is `out`.

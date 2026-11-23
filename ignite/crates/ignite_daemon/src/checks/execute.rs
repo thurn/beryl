@@ -501,7 +501,9 @@ impl Checks {
             repair::clear_if_suspect(target);
         }
         let (reported, output, record) = self.run_family(ctx, tree, name, family, checks, options);
-        repair::mark_if_ended(&output, &targets);
+        if repair::mark_if_ended(&output, &targets) {
+            return (reported, output, record, false);
+        }
         let failure = build_failure(&reported, &output);
         let Some(failure) = failure else {
             return (reported, output, record, false);
@@ -521,8 +523,8 @@ impl Checks {
             failure.crates.join(", ")
         );
         let (reported, output, record) = self.run_family(ctx, tree, name, family, checks, options);
-        repair::mark_if_ended(&output, &targets);
-        let unbuilt = build_failure(&reported, &output).is_some();
+        let ended = repair::mark_if_ended(&output, &targets);
+        let unbuilt = !ended && build_failure(&reported, &output).is_some();
         (reported, output, record, unbuilt)
     }
 

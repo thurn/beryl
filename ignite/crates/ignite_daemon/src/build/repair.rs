@@ -33,7 +33,7 @@ use ignite_core::traits::{BuildResult, RunResult};
 
 use super::rejoin::BuildKey;
 use super::{BUILD_KEY_ENV, BuildManager, Plan, lock, read_units};
-use crate::supervise::SpecFile;
+use crate::supervise::{ResultFile, SpecFile};
 
 /// The file in a target directory that says a build there was ended partway.
 pub const SUSPECT_FILE: &str = ".ignite-suspect";
@@ -401,19 +401,24 @@ pub fn mark_ended(spec: &SpecFile, tree: &Path) {
     }
 }
 
-/// Whether a command was ended before it finished: by a signal, or at its hang limit.
+/// Whether a command was ended before it finished. A wrapper can catch the stop signal and
+/// return a numeric exit code, so check the supervisor's record for failed commands.
 pub fn ended_partway(run: &RunResult) -> bool {
-    run.exit.is_none() || run.hung
+    run.exit.is_none()
+        || run.hung
+        || (run.exit != Some(0) && ResultFile::ended_from_outside(&run.output))
 }
 
-/// Marks each of `targets` when `run`, a command that may have compiled in them, was ended
-/// partway, so the next build there clears what it left unfinished.
-pub fn mark_if_ended(run: &RunResult, targets: &[PathBuf]) {
-    if ended_partway(run) {
+/// Reports whether `run` ended partway and, if so, marks each target where it may have compiled
+/// so the next build there clears what it left unfinished.
+pub fn mark_if_ended(run: &RunResult, targets: &[PathBuf]) -> bool {
+    let ended = ended_partway(run);
+    if ended {
         for target in targets {
             mark_suspect(target);
         }
     }
+    ended
 }
 
 /// What a command's Cargo build said when it failed before the command did anything else: it
@@ -458,11 +463,13 @@ impl BuildManager {
             Ok(ran) => ran,
             Err(failed) => return (failed, false),
         };
-        mark_if_ended(&first, &targets);
+        if mark_if_ended(&first, &targets) {
+            return Self::outcome(first, &units_file, true);
+        }
         let repair = run_failure(false, &first)
             .filter(|failure| failure.damaged || self.held_elsewhere(plan));
         let Some(failure) = repair else {
-            return Self::outcome(first, &units_file);
+            return Self::outcome(first, &units_file, false);
         };
         let first_units = read_units(&units_file);
         let _ = fs::remove_file(&units_file);
@@ -483,8 +490,8 @@ impl BuildManager {
             Ok(ran) => ran,
             Err(failed) => return (failed, false),
         };
-        mark_if_ended(&second, &targets);
-        match Self::outcome(second, &units_file) {
+        let ended = mark_if_ended(&second, &targets);
+        match Self::outcome(second, &units_file, ended) {
             (BuildResult::Built { usage, units }, remember) => {
                 let mut all = first_units;
                 all.extend(units);

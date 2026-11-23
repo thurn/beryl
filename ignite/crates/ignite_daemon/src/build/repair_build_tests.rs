@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::build::repair::SUSPECT_FILE;
+use crate::supervise::ResultFile;
 
 /// What Cargo printed when the test target `session` failed to link in a landing tree whose
 /// incremental build was damaged, shortened.
@@ -166,13 +167,30 @@ fn a_failure_of_inputs_another_tree_built_clears_the_crate() {
     assert_eq!(f.launcher.builds().len(), 2);
 }
 
-/// A build ended partway marks its target directory, and the next build first clears each
-/// unit whose compile it left unfinished, and no other build of that crate.
+/// Makes the launcher return exit 143 and supplies the supervisor result beside its output.
+fn wrapper_failure(f: &Fixture) {
+    f.launcher.with(|s| s.failing = Some((Some(143), false)));
+    let result = ResultFile {
+        exit: Some(143),
+        output: f.dir.join("output.log"),
+        usage: Usage::default(),
+        hung: false,
+    };
+    fs::write(
+        f.dir.join("result.json"),
+        serde_json::to_vec(&result).unwrap(),
+    )
+    .unwrap();
+}
+
+/// A wrapper can catch the stop signal and exit 143. The next build of the same inputs
+/// still runs, clearing the unfinished unit and keeping the other build of that crate.
 #[test]
-fn a_build_ended_partway_leaves_the_next_build_to_clear_its_unfinished_units() {
-    let f = fixture("repair-ended", false);
+fn a_stopped_wrapper_leaves_the_next_build_to_clear_its_unfinished_unit() {
+    let f = fixture("repair-stopped-wrapper", false);
     let debug = damaged_target(&f);
-    f.launcher.with(|s| s.failing = Some((None, false)));
+    wrapper_failure(&f);
+    fs::write(f.dir.join("ended"), "").unwrap();
     let ended = f.manager.ensure(&tree(), "tests", &names(&["b"]));
     assert!(matches!(ended, BuildResult::Failed { .. }), "{ended:?}");
     let target = f.dir.join("target");
@@ -213,4 +231,26 @@ fn a_build_ended_partway_leaves_the_next_build_to_clear_its_unfinished_units() {
     );
     assert!(deps.contains(&"session_types-fedcba9876543210".to_owned()));
     assert!(!fingerprint.exists());
+}
+
+#[test]
+fn an_unmarked_exit_143_leaves_the_target_alone() {
+    let f = fixture("repair-unmarked-exit", false);
+    let debug = damaged_target(&f);
+    let working = debug
+        .join("incremental")
+        .join("session-1imqhd34qdwcf")
+        .join("s-1-2-working");
+    fs::create_dir_all(&working).unwrap();
+    wrapper_failure(&f);
+
+    let failed = f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    assert!(matches!(failed, BuildResult::Failed { .. }), "{failed:?}");
+    assert!(!f.dir.join("target").join(SUSPECT_FILE).exists());
+
+    f.launcher.with(|s| s.failing = None);
+    f.git.set_object("a", oid('2'));
+    let built = f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    assert!(matches!(built, BuildResult::Built { .. }), "{built:?}");
+    assert!(working.is_dir());
 }

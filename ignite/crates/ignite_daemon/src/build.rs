@@ -518,8 +518,8 @@ impl BuildManager {
 
     /// Runs the build command once, and returns how it ended with the file its compile units
     /// are in. `Err` is the failure of the daemon's own files, before anything ran. A build
-    /// result's flag says whether a failure came from the command exiting with a code, which
-    /// the same inputs would repeat, rather than from a signal, a hang or the daemon's own files.
+    /// result's flag says whether a failure can be reused for the same inputs. An interruption
+    /// or a failure of the daemon's own files leaves the build eligible to run again.
     fn run_once(&self, plan: &Plan) -> std::result::Result<(RunResult, PathBuf), BuildResult> {
         let units_file = self.record_file(&plan.request.product, "units");
         let prepared =
@@ -556,22 +556,19 @@ impl BuildManager {
 
     /// The result of a build command that ended with `run`, whose compile units are in
     /// `units_file`, which it deletes. The flag is as for [`BuildManager::run_once`].
-    fn outcome(run: RunResult, units_file: &Path) -> (BuildResult, bool) {
+    fn outcome(run: RunResult, units_file: &Path, ended_partway: bool) -> (BuildResult, bool) {
         let RunResult {
             exit,
             output,
             usage,
-            hung,
+            ..
         } = run;
         let units = read_units(units_file);
         let _ = fs::remove_file(units_file);
         if exit == Some(0) {
             (BuildResult::Built { usage, units }, false)
         } else {
-            (
-                BuildResult::Failed { output, usage },
-                exit.is_some() && !hung,
-            )
+            (BuildResult::Failed { output, usage }, !ended_partway)
         }
     }
 }

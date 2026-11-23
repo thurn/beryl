@@ -9,13 +9,14 @@
 //! stored as a build this daemon started would be. This covers builds that a background loop
 //! started, which have no handle and are never adopted (see `crate::adopt`).
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use ignite_core::ids::{InputHash, TreeId};
 use serde::{Deserialize, Serialize};
 
 use super::flight::FlightGuard;
+use super::repair;
 use super::{BuildManager, Flight, Plan, Request, UNITS_ENV, lock};
 use crate::supervise::{Run, SpecFile};
 
@@ -132,7 +133,11 @@ impl BuildManager {
                         (ended.exit == Some(0)).then(|| ended.output.clone()),
                     );
                 }
-                let (result, remember) = BuildManager::outcome(ended, Path::new(&units));
+                let ended_partway = repair::ended_partway(&ended);
+                if ended_partway && let Some(path) = manager.trees.path(&tree) {
+                    repair::mark_ended(&spec, &path);
+                }
+                let (result, remember) = BuildManager::outcome(ended, &units, ended_partway);
                 guard.finish(&result, remember);
             });
             match spawned {
