@@ -1,0 +1,5 @@
+{"event":"init","conversation_id":"f25c9f7a-0266-4483-8d18-d0900a514594","init":{"model":"gemini-4-neon","cwd":"/work/project","tools":["run_command"],"permission_mode":"always-proceed"}}
+{"event":"step_update","step_update":{"conversation_id":"f25c9f7a-0266-4483-8d18-d0900a514594","step_index":4,"state":"DONE","step_type":"user_input"}}
+{"event":"step_update","step_update":{"conversation_id":"f25c9f7a-0266-4483-8d18-d0900a514594","step_index":5,"state":"ACTIVE","step_type":"agent_response","text_delta":"resumed"}}
+{"event":"step_update","step_update":{"conversation_id":"f25c9f7a-0266-4483-8d18-d0900a514594","step_index":5,"state":"DONE","step_type":"agent_response","text_delta":"\n","duration_seconds":2.8,"usage":{"input_tokens":2255,"output_tokens":2,"thinking_tokens":0,"cache_read_tokens":14206,"total_tokens":2257}}}
+{"event":"result","result":{"conversation_id":"f25c9f7a-0266-4483-8d18-d0900a514594","status":"SUCCESS","response":"resumed\n","duration_seconds":12.0,"num_turns":2,"usage":{"input_tokens":20559,"output_tokens":44,"thinking_tokens":0,"cache_read_tokens":28274,"total_tokens":20603}}}

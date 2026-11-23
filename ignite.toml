@@ -204,6 +204,18 @@ opus = "gpt-6.2-sol"
 sonnet = "gpt-6.2-sol"
 light = "gpt-6.2-sol"
 
+# Antigravity CLI (`agy`) splits Gemini and Claude into separate providers because
+# they draw from independent quota pools.
+[pool.models.agy-gemini]
+opus = "gemini-4-neon"
+sonnet = "gemini-4-neon"
+light = "gemini-3.8-flash"
+
+[pool.models.agy-claude]
+opus = "claude-opus-5-5"
+sonnet = "claude-sonnet-5-5"
+light = "claude-sonnet-5-5"
+
 # The daemon runs each worker turn with the configured program and CLI adapter. Set
 # `dialect` when the provider name differs from the adapter name. See "CLI mode" in docs/ignite.md.
 [pool.cli.claude]
@@ -214,6 +226,16 @@ args = ["--dangerously-skip-permissions"]
 program = "codex"
 # Playwright's separate service can still be starting when Ignite probes after a reboot.
 args = ["--dangerously-bypass-approvals-and-sandbox", "-c", "mcp_servers.playwright.required=false"]
+
+[pool.cli.agy-gemini]
+program = "agy"
+dialect = "agy"
+args = ["--dangerously-skip-permissions"]
+
+[pool.cli.agy-claude]
+program = "agy"
+dialect = "agy"
+args = ["--dangerously-skip-permissions"]
 
 # Tip verification (docs/ignite.md, "How long a round takes"). A claim holds about this many CPU
 # seconds of recorded check costs, so a family of thousands of cheap checks is a few commands
@@ -312,7 +334,7 @@ products = ["b3d"]
 # The efficiency dashboard's commands. Each daemon runs them when the session transcripts grow and
 # posts the export to the hub (docs/ignite.md, "Records and metrics").
 [metrics]
-watch = ["~/.claude/projects", "~/.codex/sessions"]
+watch = ["~/.claude/projects", "~/.codex/sessions", "~/.gemini/antigravity-cli/brain"]
 ingest = ["just", "efficiency", "ingest"]
 export = ["just", "efficiency", "export", "--no-ingest", "--since", "{since}", "--out", "{out}"]
 findings = ["just", "efficiency", "findings", "--no-ingest", "--json"]

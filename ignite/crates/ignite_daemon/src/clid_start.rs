@@ -46,10 +46,24 @@ pub const TURN_VARIABLE: &str = "IGNITE_CLI_TURN";
 /// The variable that names the Ignite session to every `ignite` command the CLI runs.
 pub const SESSION_VARIABLE: &str = "IGNITE_SESSION";
 
-/// The variables in which the desktop apps name their own sessions. A turn's CLI program runs
-/// without them, so that its `ignite` commands are recorded under `IGNITE_SESSION` alone and
-/// never under a desktop session that the daemon happened to inherit.
-pub const APP_SESSION_VARIABLES: &[&str] = &["CLAUDE_CODE_HOST_SESSION_ID", "CODEX_THREAD_ID"];
+/// The variables in which the desktop apps and CLIs name their own sessions or parent
+/// language-server endpoints. A turn's CLI program runs without them, so that its `ignite`
+/// commands are recorded under `IGNITE_SESSION` alone and never inherit a parent interactive
+/// session's state.
+pub const APP_SESSION_VARIABLES: &[&str] = &[
+    "CLAUDE_CODE_HOST_SESSION_ID",
+    "CODEX_THREAD_ID",
+    "ANTIGRAVITY_AGENT",
+    "ANTIGRAVITY_CONVERSATION_ID",
+    "ANTIGRAVITY_TRAJECTORY_ID",
+    "ANTIGRAVITY_LS_ADDRESS",
+    "ANTIGRAVITY_CSRF_TOKEN",
+    "ANTIGRAVITY_SOURCE_METADATA",
+    "ANTIGRAVITY_APP_DATA_DIR",
+    "ANTIGRAVITY_AGENTAPI_EXE",
+    "ANTIGRAVITY_LS_VERSION",
+    "ANTIGRAVITY_PROJECT_ID",
+];
 
 /// The file in a session's folder that holds the number of the last turn [`cli_turn`] ran.
 const LAST_TURN: &str = "turn";

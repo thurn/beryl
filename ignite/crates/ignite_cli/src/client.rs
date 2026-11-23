@@ -20,11 +20,12 @@ pub const NOT_BUILT: &[(&str, &str)] = &[];
 /// tool timeout.
 pub const DEFAULT_WAIT_S: u32 = 540;
 
-/// The explicit override and the IDs that the desktop apps use to address their sessions.
+/// The explicit override and the IDs that the desktop apps and CLIs use to address their sessions.
 pub const SESSION_VARIABLES: &[&str] = &[
     "IGNITE_SESSION",
     "CLAUDE_CODE_HOST_SESSION_ID",
     "CODEX_THREAD_ID",
+    "ANTIGRAVITY_CONVERSATION_ID",
 ];
 
 /// Verbs sent without the asking session, which names its session in its arguments instead.
@@ -172,6 +173,12 @@ mod tests {
             _ => None,
         };
         assert_eq!(session_from_env(codex).unwrap().as_str(), thread);
+        let agy_id = "862f746a-45c5-4ba7-8436-2cd1c0f50782";
+        let agy = |name: &str| match name {
+            "ANTIGRAVITY_CONVERSATION_ID" => Some(agy_id.to_owned()),
+            _ => None,
+        };
+        assert_eq!(session_from_env(agy).unwrap().as_str(), agy_id);
         let both = |name: &str| Some(format!("{name}-value"));
         assert_eq!(
             session_from_env(both).unwrap().as_str(),

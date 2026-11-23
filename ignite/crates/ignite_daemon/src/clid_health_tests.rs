@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use ignite_core::cli::codex::Codex;
-use ignite_core::cli::{HoldReason, TokenCounts, TurnEvents, UsageSample};
+use ignite_core::cli::{HoldReason, Slot, TokenCounts, TurnEvents, UsageSample};
 use ignite_core::config::Config;
 use ignite_core::fakes::{
     FakeBuilds, FakeCliApp, FakeClock, FakeGit, FakeHub, ScriptedLauncher, ScriptedTurn,
@@ -93,6 +93,17 @@ fn rig(name: &str) -> Rig {
         program = "fake-codex"
         [pool.models.codex]
         light = "codex-light"
+        [pool.cli.agy-gemini]
+        dialect = "agy"
+        program = "fake-agy"
+        [pool.models.agy-gemini]
+        sonnet = "gemini-4-neon"
+        light = "gemini-3.8-flash"
+        [pool.cli.agy-claude]
+        dialect = "agy"
+        program = "fake-agy"
+        [pool.models.agy-claude]
+        sonnet = "claude-sonnet-5-5"
     "#;
     let clock = Arc::new(FakeClock::new(Timestamp::parse(START).unwrap()));
     let hub = Arc::new(FakeHub::default());
@@ -617,4 +628,84 @@ fn the_loops_effects_reach_health() {
     health.tick(&rig.ctx, &[("fake", &rig.app)]);
     assert!(effects.probed("fake"));
     assert!(health.offers("fake"));
+}
+
+#[test]
+fn agy_probe_and_plan_limit_record_separate_gemini_and_claude_usage() {
+    use ignite_core::cli::agy::Agy;
+
+    let rig = rig("agy-usage");
+    // Probe turn + /usage call for agy-gemini.
+    rig.launcher.scripted.push(ScriptedTurn::clean(vec![
+        r#"{"event":"init","conversation_id":"c-1","init":{"model":"gemini-3.8-flash"}}"#.to_owned(),
+        r#"{"event":"result","result":{"conversation_id":"c-1","status":"SUCCESS","response":"ready"}}"#
+            .to_owned(),
+    ]));
+    let usage_json = r#"{"status":"SUCCESS","command":{"name":"usage","data":{"groups":[{"name":"Gemini Models","buckets":[{"id":"gemini-weekly","window":"weekly","remaining_fraction":0.8,"reset_time":"2026-11-27T00:00:00Z"},{"id":"gemini-5h","window":"5h","remaining_fraction":0.5,"reset_time":"2026-11-20T17:00:00Z"}]},{"name":"Claude and GPT models","buckets":[{"id":"3p-weekly","window":"weekly","remaining_fraction":0.9,"reset_time":"2026-11-27T01:00:00Z"},{"id":"3p-5h","window":"5h","remaining_fraction":0.0,"reset_time":"2026-11-20T16:00:00Z"}]}]}}}"#;
+    rig.launcher
+        .scripted
+        .push(ScriptedTurn::clean(vec![usage_json.to_owned()]));
+
+    rig.health.tick(&rig.ctx, &[("agy-gemini", &Agy)]);
+    assert!(rig.health.offers("agy-gemini"));
+    let rows = rig
+        .pool
+        .with_database(|conn| plan_usage::latest(conn))
+        .unwrap();
+    let find = |provider: &str, label: &str| {
+        rows.iter()
+            .find(|r| r.provider == provider && r.label.as_deref() == Some(label))
+            .cloned()
+            .unwrap()
+    };
+    assert_eq!(
+        find("agy-gemini", "Weekly · all models").percent_used,
+        Some(20.0)
+    );
+    assert_eq!(find("agy-gemini", "5-hour").percent_used, Some(50.0));
+    assert_eq!(
+        find("agy-claude", "Weekly · all models").percent_used,
+        Some(10.0)
+    );
+    assert_eq!(find("agy-claude", "5-hour").percent_used, Some(100.0));
+
+    // A PlanLimit end for agy-claude refreshes /usage and records a 100% limit sample
+    // with the exact reset_time, without placing agy-claude on a local CLI hold.
+    rig.launcher
+        .scripted
+        .push(ScriptedTurn::clean(vec![usage_json.to_owned()]));
+    let health = Arc::new(rig.health_clone());
+    let effects = HealthEffects {
+        health: health.clone(),
+        ctx: rig.ctx.clone(),
+    };
+    let slot = ignite_core::cli::Slot {
+        app: "agy-claude".to_owned(),
+        index: 1,
+        session: Some(SessionId::new("cli-agy-claude-0a1b2c3d").unwrap()),
+        ticket: Some(TicketId::new("T.2").unwrap()),
+        state: ignite_core::cli::SlotState::Running,
+        turn: 1,
+        transcript: Some("c-2".to_owned()),
+        model: Some("claude-sonnet-5-5".to_owned()),
+        effort: None,
+        since: None,
+    };
+    effects.ended(
+        &slot,
+        &ignite_core::cli::TurnEnd::PlanLimit { window: None },
+        &TurnEvents::default(),
+    );
+    assert!(health.hold("agy-claude").is_none());
+    let rows = rig
+        .pool
+        .with_database(|conn| plan_usage::latest(conn))
+        .unwrap();
+    let limit = rows
+        .iter()
+        .find(|r| r.provider == "agy-claude" && r.label.as_deref() == Some("5-hour"))
+        .unwrap();
+    assert_eq!(limit.status, "limit");
+    assert_eq!(limit.percent_used, Some(100.0));
+    assert_eq!(limit.resets_at.as_deref(), Some("2026-11-20T16:00:00Z"));
 }

@@ -262,6 +262,138 @@ fn codex_input(item: &Value) -> String {
     String::new()
 }
 
+/// The digest of an `agy -p --output-format stream-json` stream.
+pub(super) fn agy(output: &str) -> Vec<Entry> {
+    let mut entries = Vec::new();
+    let mut started: Vec<(u64, u32)> = Vec::new();
+    let mut pending_text: Vec<(u64, String)> = Vec::new();
+    for line in output.lines() {
+        let Ok(event) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        match event["event"].as_str() {
+            Some("step_update") => {
+                let update = &event["step_update"];
+                let step = update["step_index"].as_u64().unwrap_or(0);
+                let state = update["state"].as_str().unwrap_or("");
+                match update["step_type"].as_str() {
+                    Some("agent_response") => {
+                        if let Some(delta) = update["text_delta"].as_str() {
+                            if let Some((_, buf)) =
+                                pending_text.iter_mut().find(|(i, _)| *i == step)
+                            {
+                                buf.push_str(delta);
+                            } else {
+                                pending_text.push((step, delta.to_owned()));
+                            }
+                        }
+                        if state == "DONE"
+                            && let Some(pos) = pending_text.iter().position(|(i, _)| *i == step)
+                        {
+                            let (_, text) = pending_text.remove(pos);
+                            let trimmed = text.trim();
+                            if !trimmed.is_empty() {
+                                entries.push(Entry::new(
+                                    TranscriptKind::Assistant,
+                                    trimmed.to_owned(),
+                                ));
+                            }
+                        }
+                    }
+                    Some("tool") => {
+                        let info = &update["tool_info"];
+                        let name = update["tool_name"]
+                            .as_str()
+                            .or_else(|| info["name"].as_str())
+                            .unwrap_or("tool");
+                        if state == "ACTIVE" {
+                            if !started.iter().any(|(seen, _)| *seen == step) {
+                                started.push((step, next_place(&entries)));
+                                entries.push(Entry::new(
+                                    TranscriptKind::Tool,
+                                    tool_line(name, &agy_input(&info["parameters"])),
+                                ));
+                            }
+                        } else if state == "DONE" {
+                            let call = if let Some((_, call)) =
+                                started.iter().find(|(seen, _)| *seen == step)
+                            {
+                                *call
+                            } else {
+                                let call = next_place(&entries);
+                                entries.push(Entry::new(
+                                    TranscriptKind::Tool,
+                                    tool_line(name, &agy_input(&info["parameters"])),
+                                ));
+                                call
+                            };
+                            push_result(&mut entries, call, &agy_result(info));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Some("result") => {
+                let result = &event["result"];
+                let status = result["status"].as_str().unwrap_or("result");
+                let line = if status == "SUCCESS" {
+                    "completed".to_owned()
+                } else {
+                    let detail = result["error"]
+                        .as_str()
+                        .unwrap_or("")
+                        .lines()
+                        .next()
+                        .unwrap_or("")
+                        .trim();
+                    if detail.is_empty() {
+                        format!("failed: {status}")
+                    } else {
+                        format!("failed: {detail}")
+                    }
+                };
+                entries.push(Entry::new(TranscriptKind::Result, line));
+            }
+            _ => {}
+        }
+    }
+    entries
+}
+
+fn agy_input(params: &Value) -> String {
+    for key in [
+        "CommandLine",
+        "command",
+        "Path",
+        "file_path",
+        "path",
+        "pattern",
+        "url",
+        "query",
+        "Prompt",
+        "prompt",
+    ] {
+        if let Some(text) = params[key].as_str() {
+            return text.to_owned();
+        }
+    }
+    if params.is_null() || params.as_object().is_some_and(serde_json::Map::is_empty) {
+        String::new()
+    } else {
+        params.to_string()
+    }
+}
+
+fn agy_result(info: &Value) -> String {
+    if let Some(text) = info["output"].as_str() {
+        return text.to_owned();
+    }
+    info["error"]["message"]
+        .as_str()
+        .map(str::to_owned)
+        .unwrap_or_default()
+}
+
 /// `name: input`, or just `name` for a call with no input.
 fn tool_line(name: &str, input: &str) -> String {
     let first = input.lines().next().unwrap_or("").trim();
@@ -302,6 +434,7 @@ mod tests {
 
     const CLAUDE: &str = include_str!("fixtures/first_turn.jsonl");
     const CODEX: &str = include_str!("codex_fixtures/clean_with_tool.jsonl");
+    const AGY: &str = include_str!("agy_fixtures/clean_with_tool.jsonl");
 
     /// Each entry as its kind, text and call, for comparing.
     fn rows(entries: &[Entry]) -> Vec<(TranscriptKind, &str, Option<u32>)> {
@@ -409,8 +542,21 @@ not json
     }
 
     #[test]
+    fn a_recorded_agy_turn_shows_its_tool_once_and_accumulates_deltas() {
+        assert_eq!(
+            rows(&agy(AGY)),
+            vec![
+                (TranscriptKind::Tool, "run_command: echo hi", None),
+                (TranscriptKind::ToolResult, "hi", Some(0)),
+                (TranscriptKind::Assistant, "done", None),
+                (TranscriptKind::Result, "completed", None),
+            ]
+        );
+    }
+
+    #[test]
     fn a_digest_of_a_longer_text_starts_with_the_digest_of_a_prefix() {
-        for (app, text) in [("claude", CLAUDE), ("codex", CODEX)] {
+        for (app, text) in [("claude", CLAUDE), ("codex", CODEX), ("agy", AGY)] {
             let whole = of(app, text);
             let lines: Vec<&str> = text.lines().collect();
             for count in 0..=lines.len() {

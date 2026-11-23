@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::ids::{SessionId, TicketId};
 use crate::time::Timestamp;
 
+pub mod agy;
 pub mod claude;
 pub mod codex;
 pub mod decide;
@@ -324,8 +325,13 @@ pub struct Facts {
     pub last_text: Option<String>,
 }
 
-static ADAPTERS: LazyLock<Vec<Arc<dyn CliApp>>> =
-    LazyLock::new(|| vec![Arc::new(claude::Claude), Arc::new(codex::Codex)]);
+static ADAPTERS: LazyLock<Vec<Arc<dyn CliApp>>> = LazyLock::new(|| {
+    vec![
+        Arc::new(claude::Claude),
+        Arc::new(codex::Codex),
+        Arc::new(agy::Agy),
+    ]
+});
 
 /// The adapter for a CLI dialect supported by this build.
 pub fn adapter(dialect: &str) -> Option<Arc<dyn CliApp>> {
