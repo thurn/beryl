@@ -140,8 +140,9 @@ situation, and a command names the topic when it applies.
   plans with epic allocation zero. The operator activates them through
   Allocation on the dashboard or
   `ignite ticket update <epic> --allocation <weight>`. The user can authorize
-  activation of this session's tickets with `/release`. Player bug reports
-  (`just bugs file`) also start at zero for `/bugfix` to review.
+  activation of this session's tickets with `/release`. Beryl 3D bug-report
+  epics start at zero. `/bugfix` releases an epic by setting its allocation to
+  1. Its reports use the epic's allocation.
 - A ticket's acceptance names a deterministic result that someone can observe:
   what was built, a decision, a file. A timing measured on a shared machine is
   recorded as information, never the gate. File a ticket whose acceptance is

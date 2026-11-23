@@ -3423,9 +3423,11 @@ saw.
   `![alt](attachment:<name>)` shows that ticket's own image. An external image
   URL stays a link.
 - **Bug reports.** `by bugs file` attaches a report's `screenshot.png` and
-  `window.png` and embeds them in the ticket's body. It files the report with
-  allocation zero for the `bugfix` planner to review. `by bugs attach` adds
-  images to tickets filed earlier that have no attachment.
+  `window.png` and embeds them in the ticket's body. Reports from a Beryl 3D
+  launch share an epic with allocation zero and inherit its worker pool.
+  `/bugfix` releases the epic by setting its allocation to 1. A standalone
+  report starts at allocation zero for review. `by bugs attach` adds images to
+  tickets filed earlier that have no attachment.
 
 ### Scheduled tickets
 

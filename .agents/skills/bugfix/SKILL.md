@@ -5,10 +5,11 @@ description: Triage existing Beryl bug-report epics in Ignite. Use for /bugfix o
 
 # Triage bug-report epics
 
-`/bugfix [epic IDs]` prepares existing report epics and sets each prepared
-epic's Ignite allocation to 1. The triage pass reads the evidence, groups work,
-and writes the verification plan. Workers reproduce, fix, verify, and close
-reports.
+`/bugfix [epic IDs]` prepares existing report epics and releases them by
+setting each parked epic's Ignite allocation to 1. The epic controls dispatch
+for its reports. Leave individual ticket allocations alone. The triage pass
+reads the evidence, groups work, and writes the verification plan. Workers
+reproduce, fix, verify, and close reports.
 
 ## Read the reports
 
@@ -80,20 +81,17 @@ each report.
    `{"id":"<ticket>","version":123}` entries in the batch's `if` array for
    tickets whose state the edits depend on. Re-read and reconcile a conflict.
    Preserve the report bodies and append triage context to notes. Keep pending
-   tickets pending during this update. Park grouped followers at local
-   allocation 0 so they stay with the lead even after that ticket lands.
+   tickets pending during this update.
 2. Run `ignite plan check <epic>`. Resolve unintended blockers and check that
-   every runnable lead has an estimate. Parked followers are verified within
-   their lead's estimate. Verify that each has a lead which can take the work.
-3. Re-read the epic and its descendants. In a final version-checked batch,
-   set the epic's `allocation` to `1` and set `allocation: null` on the
-   prepared leads ready for the pool so they inherit that share. Setting a
-   positive allocation on a pending epic opens it and its pending descendants.
-   Grouped followers stay parked at allocation 0. To preserve other pending
-   holds, restore their `pending_approval` status later in the same batch.
-   If the epic was already open, set any prepared pending leads to `open`
-   explicitly. Read back the epic and descendants to confirm the allocation
-   and readiness. Summarize the groups, separately runnable work, and any holds.
+   every runnable lead has an estimate. Include follower verification in the
+   lead's estimate. Verify that each follower depends on a lead that can take
+   the work.
+3. Re-read the epic and its descendants. Release a parked epic with a
+   version-checked batch whose only update sets the epic's `allocation` to
+   `1`. Ignite opens pending descendants when it activates the epic. If this
+   would lift an explicit approval hold, leave the epic parked and report the
+   hold. Read back the epic and descendants to confirm readiness and report
+   any existing ticket overrides that still prevent dispatch.
 
 ## Worker: fixing one report
 
@@ -124,7 +122,7 @@ report. Land the fix through Ignite. Close each verified follower with
 `ignite ticket close <id> --reason "<evidence and landing SHA>"` and archive
 verified local reports with `just bugs done <ticket> --commit <sha>`. If a
 follower needs independent work, record what the lead covered, update the
-remaining acceptance, give it a tier and estimate, and use a batch to set its
-allocation to `null` and status to `open` after the lead lands. For a case
-with inconclusive evidence, record the gap and the next reproduction step.
-Keep the report filed until its own criteria are verified.
+remaining acceptance, and give it a tier and estimate before landing. The
+follower's dependency clears when the lead lands. For a case with inconclusive
+evidence, record the gap and the next reproduction step. Keep the report filed
+until its own criteria are verified.

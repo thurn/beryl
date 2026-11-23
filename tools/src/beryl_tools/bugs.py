@@ -351,10 +351,8 @@ def file_bead(report: Report) -> str:
             ",".join(labels),
             "--body-file",
             str(body),
-            # The `bugfix` planner deduplicates and groups reports before workers start.
-            "--allocation",
-            "0",
-            *(["--parent", epic, "--independent"] if epic else []),
+            # Grouped reports use the launch epic's allocation. Standalone reports wait for review.
+            *(["--parent", epic, "--independent"] if epic else ["--allocation", "0"]),
             *[arg for path, _ in images(report) for arg in ("--attach", str(path))],
         )
     return str(created["results"][0]["id"])

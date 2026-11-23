@@ -120,7 +120,9 @@ class Ignite:
                 {
                     "title": rest[0],
                     "type": option("--type"),
-                    "allocation": int(option("--allocation")),
+                    "allocation": (
+                        int(option("--allocation")) if "--allocation" in rest else None
+                    ),
                     "labels": option("--labels").split(","),
                     "body": Path(option("--body-file")).read_text(),
                     "attach": [
@@ -194,7 +196,7 @@ def test_beryl3d_reports_from_a_run_share_one_epic(
 
     assert len(ignite.issues) == 2
     assert [ticket["parent"] for ticket in ignite.tickets] == ["E1", "E1", "E2"]
-    assert all(ticket["allocation"] == 0 for ticket in ignite.tickets)
+    assert all(ticket["allocation"] is None for ticket in ignite.tickets)
 
 
 def test_file_attaches_and_embeds_the_images(
