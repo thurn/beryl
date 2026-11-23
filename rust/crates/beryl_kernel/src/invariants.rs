@@ -126,28 +126,7 @@ impl<L: Layout> State<L> {
                 at,
             )?;
             if !matches!(o.zone, Zone::Battlefield | Zone::Stack) {
-                // What may stay off the battlefield: being a token. What exiled a card is
-                // a memo of it, held to the exile zone by the Memos store's own check.
-                check(
-                    *o == Object {
-                        card: o.card,
-                        incarnation: o.incarnation,
-                        zone: o.zone,
-                        owner: o.owner,
-                        base_controller: o.owner,
-                        timestamp: o.timestamp,
-                        // See CR 723.3c: the exiled copy has the inset's characteristics.
-                        face: if o.zone == Zone::Exile && self.prepare_source(slot).is_some() {
-                            FaceIx::BACK
-                        } else {
-                            FaceIx::FRONT
-                        },
-                        flags: o.flags.kept_across_zones(),
-                        ..Object::EMPTY
-                    },
-                    "permanent status off the battlefield",
-                    at,
-                )?;
+                self.check_off_battlefield_status(slot)?;
             }
             // A blocker blocks attackers, or nothing once they left combat (see CR 506.4).
             check(
@@ -179,6 +158,32 @@ impl<L: Layout> State<L> {
             }
         }
         Ok(())
+    }
+
+    fn check_off_battlefield_status(&self, slot: L::Slot) -> Result<(), Violation> {
+        let o = self.object(slot);
+        // What may stay off the battlefield: being a token. What exiled a card is
+        // a memo of it, held to the exile zone by the Memos store's own check.
+        check(
+            *o == Object {
+                card: o.card,
+                incarnation: o.incarnation,
+                zone: o.zone,
+                owner: o.owner,
+                base_controller: o.owner,
+                timestamp: o.timestamp,
+                // See CR 723.3c: the exiled copy has the inset's characteristics.
+                face: if o.zone == Zone::Exile && self.prepare_source(slot).is_some() {
+                    FaceIx::BACK
+                } else {
+                    FaceIx::FRONT
+                },
+                flags: o.flags.kept_across_zones(),
+                ..Object::EMPTY
+            },
+            "permanent status off the battlefield",
+            Some(At::Slot(slot.index())),
+        )
     }
 
     fn check_zones(&self) -> Result<(), Violation> {

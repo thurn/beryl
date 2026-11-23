@@ -35,7 +35,7 @@ use crate::game::life;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::profile::Stops;
-use crate::replacement::event::{Entry, ReplacementKind, Sink};
+use crate::replacement::event::{Entry, Preparation, ReplacementKind, Sink};
 use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone};
 use crate::table::{Capability, GameTable};
 use crate::{interpret, interpret::catalog};
@@ -420,7 +420,7 @@ fn entering<L: Layout>(
             Rewrite::EntersTapped => entry.tapped = true,
             // See CR 723.3a: "Some spells and abilities cause a permanent with a prepare
             // spell to become prepared or state that a permanent enters prepared."
-            Rewrite::EntersPrepared => entry.prepared = true,
+            Rewrite::EntersPrepared => entry.preparation = Preparation::Prepared,
             Rewrite::EntersTappedUnlessFewLands(n) => {
                 // Not yet on the battlefield, so every land counted is another land.
                 let lands = s

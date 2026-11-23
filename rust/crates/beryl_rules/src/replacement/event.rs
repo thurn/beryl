@@ -47,7 +47,7 @@ pub(crate) struct Entry<L: Layout = Small> {
     /// The intrinsic lore counter, which can be placed alongside other entry counters.
     pub saga_lore: bool,
     /// An entry replacement gives this permanent the prepared designation (see CR 723.3a).
-    pub prepared: bool,
+    pub preparation: Preparation,
     /// Its controller chose to pay the life an "unless you pay N life" replacement asks.
     pub pay_life: bool,
     /// What its spell was cast with that its abilities read, which it enters remembering
@@ -57,6 +57,14 @@ pub(crate) struct Entry<L: Layout = Small> {
     pub x: u8,
     /// The object or player an Aura spell attaches to as it resolves (see CR 608.3c).
     pub attach: Option<Attachment<L::Slot>>,
+}
+
+/// The preparation designation an entry replacement can give an arriving permanent.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub(crate) enum Preparation {
+    #[default]
+    Unprepared,
+    Prepared,
 }
 
 /// Gives the permanent that just entered in `slot` what it enters with, has it remember
@@ -413,22 +421,35 @@ fn move_ordered<L: Layout, const N: usize>(
         crate::saga::match_arrivals(s, t, arrived.as_slice())?;
     }
     if !returning.is_empty() {
-        // see CR 610.3c: "An object returned to the battlefield this way returns under its
-        // owner's control unless otherwise specified."
-        sink.together_with_last();
-        let returned = move_batch(
-            s,
-            t,
-            sink,
-            returning,
-            Zone::Battlefield,
-            Reason::Return,
-            Entry::default(),
-        );
-        sink.apart();
-        returned?;
+        return_exiled(s, t, sink, returning)?;
     }
     Ok(())
+}
+
+/// Returns objects exiled until a permanent leaves. See [CR 610.3c]: "An object returned
+/// to the battlefield this way returns under its owner's control unless otherwise specified."
+///
+/// [CR 610.3c]: https://yawgatog.com/resources/magic-rules/#R6103c
+#[cold]
+#[inline(never)]
+fn return_exiled<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    returning: Bitboard<L::Slot>,
+) -> Result<(), Full> {
+    sink.together_with_last();
+    let result = move_batch(
+        s,
+        t,
+        sink,
+        returning,
+        Zone::Battlefield,
+        Reason::Return,
+        Entry::default(),
+    );
+    sink.apart();
+    result
 }
 
 /// Creates the prepare spell copies for permanents that entered prepared before any enters
@@ -442,7 +463,7 @@ fn prepare_arrivals<L: Layout>(
     moves: &[PreparedMove<L>],
 ) -> Result<(), Full> {
     for &(slot, _, dest, entry) in moves {
-        if dest == Zone::Battlefield && entry.prepared {
+        if dest == Zone::Battlefield && entry.preparation == Preparation::Prepared {
             crate::objects::preparation::prepare(s, t, sink, slot)?;
         }
     }
