@@ -17,6 +17,7 @@ use game_manual::manual::commands::{AppliesTo, commands_for};
 use game_manual::manual::{Context, Target, target_at};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits, Wake};
+use kit_scene::hit::{self, PointerHit};
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
@@ -937,8 +938,8 @@ fn drag(client: &mut Client, from: Vec2, to: Vec2, now: u64) {
     client.frame(now + 9 * 16 * MS);
 }
 
-#[test]
-fn a_rectangle_over_three_permanents_selects_them_and_tap_acts_on_all_three() {
+/// Sweeps the three local lands from clear table space on the desktop.
+fn sweep_three_lands() -> (Client, Frame, Vec<ObjectId>) {
     let view = table_view();
     let (mut client, frame) = client_at_table(&view);
     let lands: Vec<ObjectId> = (view.objects.iter())
@@ -950,25 +951,42 @@ fn a_rectangle_over_three_permanents_selects_them_and_tap_acts_on_all_three() {
         .map(|object| object.slot)
         .collect();
     assert_eq!(lands.len(), 3);
-    let corners: Vec<Vec2> = lands
+    let (low, high) = lands
         .iter()
         .flat_map(|&slot| corners_of(&frame, slot))
-        .collect();
-    let low = corners
-        .iter()
-        .fold(Vec2::INFINITY, |low, &corner| low.min(corner));
-    let high = (corners.iter()).fold(Vec2::NEG_INFINITY, |high, &corner| high.max(corner));
+        .fold(
+            (Vec2::INFINITY, Vec2::NEG_INFINITY),
+            |(low, high), corner| (low.min(corner), high.max(corner)),
+        );
     let margin = Vec2::splat(4.0);
-    let start = low - margin;
-    assert_eq!(
-        target_at(&frame, start),
-        Target::Table,
-        "the sweep starts on a card"
+    let low = low - margin;
+    let high = high + margin;
+    // The upper-left corner is over the white mana counter in the native desktop layout.
+    let start = Vec2::new(high.x, low.y);
+    let end = Vec2::new(low.x, high.y);
+    let empty_table_at = |client: &mut Client, frame: &Frame, point| {
+        let layer = client.layer_mut();
+        let target = hit::pointer(frame, layer, point, true, None, |_| true, |_| false);
+        matches!(target, PointerHit::Empty)
+    };
+    assert!(
+        empty_table_at(&mut client, &frame, start),
+        "the sweep press at {start} needs empty table"
     );
-    drag(&mut client, start, high + margin, MS);
+    drag(&mut client, start, end, MS);
+    let frame = client.frame(500 * MS).clone();
+    assert!(
+        empty_table_at(&mut client, &frame, end),
+        "the cursor at {end} should be over empty table after the sweep"
+    );
+    (client, frame, lands)
+}
+
+#[test]
+fn a_rectangle_over_three_permanents_selects_them_and_tap_acts_on_all_three() {
+    let (mut client, frame, lands) = sweep_three_lands();
 
     // Each land wears the selected mark, and nothing else does.
-    let frame = client.frame(500 * MS).clone();
     let selected: Vec<u32> = (frame.resolved.iter())
         .filter(|element| element.role == Role::Card && element.state.0 & StateBits::SELECTED != 0)
         .map(|element| element.id.0)
@@ -1224,32 +1242,12 @@ fn the_arrow_command_sends_an_arrow_to_the_card_clicked_next() {
 
 #[test]
 fn a_key_over_the_table_acts_on_the_selected_cards() {
-    let view = table_view();
-    let (mut client, frame) = client_at_table(&view);
-    let lands: Vec<ObjectId> = (view.objects.iter())
-        .filter(|object| {
-            object.zone == ZoneName::Battlefield
-                && object.controller == Side::You
-                && matches!(object.name.as_deref(), Some("Island" | "Plains"))
-        })
-        .map(|object| object.slot)
-        .collect();
-    let corners: Vec<Vec2> = lands
-        .iter()
-        .flat_map(|&slot| corners_of(&frame, slot))
-        .collect();
-    let low = corners
-        .iter()
-        .fold(Vec2::INFINITY, |low, &corner| low.min(corner));
-    let high = (corners.iter()).fold(Vec2::NEG_INFINITY, |high, &corner| high.max(corner));
-    let margin = Vec2::splat(4.0);
-    drag(&mut client, low - margin, high + margin, MS);
-    let frame = client.frame(500 * MS).clone();
-    // The pointer rests on the table, off every card, as the sweep ended past them.
-    assert_eq!(target_at(&frame, high + margin), Target::Table);
-    acts(&mut client);
-    // Option+L, Peek, acts on the three selected lands as the web's `currentTarget` gives
-    // the selection's first card for a key.
+    let (mut client, _, _) = sweep_three_lands();
+    assert!(
+        acts(&mut client).is_empty(),
+        "the sweep sent a table action"
+    );
+    // Option+L peeks at the three selected lands while the cursor rests on empty table.
     let option = Modifiers {
         alt: true,
         ..Modifiers::default()
