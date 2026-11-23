@@ -3,6 +3,7 @@
 
 pub mod card;
 pub mod light;
+pub mod line_vfx;
 pub mod particles;
 mod player;
 pub mod preview;

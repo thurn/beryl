@@ -4,7 +4,7 @@
 
 use glam::{Affine3A, Quat, Vec2, Vec3};
 use kit_base::atlas::Tier;
-use kit_frame::frame::{Band, Draw, Vfx, vfx};
+use kit_frame::frame::{Band, Draw, LineStyle, Vfx, vfx};
 
 use super::enhanced::enhanced;
 use super::render::{Picture, draw_in, overhead, rectangle};
@@ -154,5 +154,104 @@ fn combat_vfx_animates_over_time_and_respects_fade_and_quad_edges() {
     // Far corners of the 200x200 target stay dark, confirming no unclipped edge artifacts.
     for (x, y) in [(0, 0), (199, 0), (0, 199), (199, 199)] {
         assert_eq!(t0.at(x, y), [0, 0, 0], "corner ({x}, {y}) stays dark");
+    }
+}
+
+fn render_layer_vfx(renderer: &mut beryl_render::Renderer, draw: Draw) -> Picture {
+    let records = [(Band::Opaque, black_table()), (Band::LayerCover, draw)];
+    draw_in(Tier::Enhanced, renderer, overhead(), (200, 200), &records).0
+}
+
+#[test]
+fn enhanced_line_ribbons_and_spearheads_render_distinct_arena_palettes_in_layer_cover() {
+    let mut renderer = enhanced();
+    let ribbon_tf = Affine3A::from_scale_rotation_translation(
+        Vec3::new(140.0, 44.0, 1.0),
+        Quat::IDENTITY,
+        Vec3::new(0.0, 0.0, 1.0),
+    );
+    let mut ribbon = |style: LineStyle, time_s: f32, opacity: f32| {
+        render_layer_vfx(
+            &mut renderer,
+            Draw::vfx_line_ribbon(
+                ribbon_tf,
+                opacity,
+                style,
+                [1.0, 0.85],
+                [0.0, 0.0],
+                [time_s, 0.15, 0.85, 8.0],
+            ),
+        )
+    };
+
+    let aim = channel_sums(&ribbon(LineStyle::Aim, 0.5, 1.0));
+    let friendly = channel_sums(&ribbon(LineStyle::FriendlyTarget, 0.5, 1.0));
+    let attack = channel_sums(&ribbon(LineStyle::Attack, 0.5, 1.0));
+    let block = channel_sums(&ribbon(LineStyle::Block, 0.5, 1.0));
+    let source = channel_sums(&ribbon(LineStyle::Source, 0.5, 1.0));
+
+    assert!(
+        aim[2] > aim[0] * 2 && aim[1] > aim[0],
+        "aim is cyan: {aim:?}"
+    );
+    assert!(
+        friendly[1] > friendly[0] * 2 && friendly[1] > friendly[2],
+        "friendly target is green: {friendly:?}"
+    );
+    assert!(
+        attack[0] > attack[1] * 3 / 2 && attack[0] > attack[2] && attack[2] > attack[1],
+        "attack beam is rose-crimson: {attack:?}"
+    );
+    assert!(
+        block[0] > block[1] && block[1] > block[2] * 3 / 2,
+        "block beam is solar gold: {block:?}"
+    );
+    assert!(
+        source[1] > source[0] && source[1] < aim[1],
+        "source line is delicate pale teal-silver: source={source:?}, aim={aim:?}"
+    );
+
+    // Scrolling wisps change over time, and zero opacity draws nothing.
+    let t0 = ribbon(LineStyle::Aim, 0.0, 1.0);
+    let t1 = ribbon(LineStyle::Aim, 0.75, 1.0);
+    let diff = t0
+        .pixels
+        .iter()
+        .zip(&t1.pixels)
+        .filter(|(a, b)| a != b)
+        .count();
+    assert!(diff > 400, "line plasma animates over time: {diff}");
+    assert_eq!(
+        channel_sums(&ribbon(LineStyle::Aim, 0.5, 0.0)),
+        [0, 0, 0],
+        "zero opacity draws nothing"
+    );
+
+    // Faceted spearhead lights up in the matching palette and fades before quad corners.
+    let head_tf = Affine3A::from_scale_rotation_translation(
+        Vec3::new(90.0, 50.0, 1.0),
+        Quat::IDENTITY,
+        Vec3::new(0.0, 0.0, 1.0),
+    );
+    let head = render_layer_vfx(
+        &mut renderer,
+        Draw::vfx_line_head(
+            head_tf,
+            1.0,
+            LineStyle::Aim,
+            [0.5, 1.0, 0.2, vfx::LINE_HEAD_ASPECT],
+        ),
+    );
+    let head_sums = channel_sums(&head);
+    assert!(
+        head_sums[2] > 50_000 && head_sums[2] > head_sums[0] * 2,
+        "cyan spearhead renders strongly in layer cover: {head_sums:?}"
+    );
+    for (x, y) in [(0, 0), (199, 0), (0, 199), (199, 199)] {
+        assert_eq!(
+            head.at(x, y),
+            [0, 0, 0],
+            "head corner ({x}, {y}) stays dark"
+        );
     }
 }

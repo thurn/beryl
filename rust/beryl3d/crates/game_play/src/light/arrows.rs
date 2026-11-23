@@ -21,20 +21,22 @@ use super::lines::{End, aim_way, along, cubic, way_of};
 use super::{Lit, Open, Span};
 use crate::play::Scene;
 use crate::verbs::Interval;
+use kit_base::atlas::Tier;
 use kit_base::data::light::Light;
 use kit_base::tokens::color;
 pub use kit_frame::frame::ARROW_IDS;
 use kit_frame::frame::{
-    Band, Draw, ElementId, Endpoint, FrameBuilder, LineEnd, Place, Resolved, Role, ShapeAnchor,
-    StateBits,
+    Band, Draw, ElementId, Endpoint, FrameBuilder, LineEnd, LineStyle, Place, Resolved, Role,
+    ShapeAnchor, StateBits,
 };
 use kit_frame::frame::{Sprite, sprites};
+use kit_fx::effects::line_vfx::{self, LineDraw, Section, sections, slant};
 use kit_space::camera::Camera;
 
 /// How many pieces an arrow's ribbon is cut into, each a quad of its body and halo and a quad of
 /// its core. The cuts lie closer together where its width changes faster, so that no piece is
 /// much wider than the next.
-pub const RIBBON: usize = 20;
+pub use kit_fx::effects::line_vfx::RIBBON;
 
 /// How many points along its curve a ribbon's cuts are chosen among. They lie closer together
 /// toward its end, where an arrow's head flares and a line of combat ends in a dart.
@@ -91,6 +93,7 @@ pub fn write(lit: &Lit, now: u64, prompt: bool, scene: &Scene<'_>, builder: &mut
             opacity: fade(open, now),
             moving: from.moving || to.moving,
             id,
+            now,
         };
         drawn.write(scene, builder);
     }
@@ -122,13 +125,14 @@ pub fn write(lit: &Lit, now: u64, prompt: bool, scene: &Scene<'_>, builder: &mut
             opacity: 1.0,
             moving: true,
             id: AIM_ID + index as u32,
+            now,
         };
         drawn.write(scene, builder);
     }
 }
 
 /// One arrow as a frame draws it: its kind, its two ends on the screen and the things there,
-/// how clear it is, whether an end moves, and its element id.
+/// how clear it is, whether an end moves, its element id, and the frame clock in nanoseconds.
 struct Drawn {
     arrow: Arrow,
     ends: [End; 2],
@@ -137,6 +141,7 @@ struct Drawn {
     opacity: f32,
     moving: bool,
     id: u32,
+    now: u64,
 }
 
 impl Drawn {
@@ -209,19 +214,41 @@ impl Drawn {
         } else {
             sized(from).min(sized(to))
         };
-        let (cut, wide, shine) = ribbon_style(light, self.arrow, aiming, opacity);
         // The line to a source grows out of the source, which is where it ends, so it is cut
         // from that end.
         let ribbon = match self.arrow {
             Arrow::Source => [points[3], points[2], points[1], points[0]],
             _ => points,
         };
+        let band = builder.node_band(index).records(Band::Glows);
+        if builder.tier() == Tier::Enhanced {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "wrapped animation clock in seconds fits an f32's precision"
+            )]
+            let time_s = (self.now % 1_000_000_000_000) as f32 / 1e9;
+            line_vfx::write(
+                table.camera(),
+                &LineDraw {
+                    points: ribbon,
+                    style: line_style(self.arrow, aiming),
+                    unit_scale: k * scale,
+                    opacity,
+                    time_s,
+                    turn_weight: light.glow.turn_weight,
+                    seed_id: self.id,
+                    band,
+                },
+                builder,
+            );
+            return;
+        }
+        let (cut, wide, shine) = ribbon_style(light, self.arrow, aiming, opacity);
         let lengths = Lengths {
             wide: wide * k * scale,
             scale,
             light,
         };
-        let band = builder.node_band(index).records(Band::Glows);
         write_ribbon(scene, &ribbon, cut, lengths, (shine, band), builder);
     }
 }
@@ -276,14 +303,31 @@ struct Shine {
     strength: f32,
 }
 
-/// The cut, reference width and light for a preview or confirmed arrow.
+/// Maps a protocol arrow and aiming state to its Enhanced procedural line style. All live
+/// pointer aims use Arena's electric cyan; confirmed targets keep green/red (UI Conventions,
+/// exception 4); attack beams are rose-crimson, block beams solar gold, and source lines faint
+/// pale teal-silver.
+const fn line_style(arrow: Arrow, aiming: bool) -> LineStyle {
+    if aiming {
+        return LineStyle::Aim;
+    }
+    match arrow {
+        Arrow::FriendlyTarget => LineStyle::FriendlyTarget,
+        Arrow::HostileTarget => LineStyle::HostileTarget,
+        Arrow::Attack => LineStyle::Attack,
+        Arrow::Block => LineStyle::Block,
+        Arrow::Source => LineStyle::Source,
+    }
+}
+
+/// The cut, reference width and light for a Baseline preview or confirmed arrow.
 fn ribbon_style(light: &Light, arrow: Arrow, aiming: bool, opacity: f32) -> (Cut, f32, Shine) {
     let (cut, wide, tone, core, gain) = match arrow {
-        Arrow::FriendlyTarget | Arrow::HostileTarget if aiming => (
+        _ if aiming => (
             Cut::Arrow,
             light.wide.aim,
-            color::SOURCE_LINE,
-            color::SOURCE_LINE_CORE,
+            color::AIM_LINE,
+            color::AIM_LINE_CORE,
             light.glow.gains.aim,
         ),
         Arrow::FriendlyTarget => (
@@ -404,38 +448,6 @@ fn write_ribbon(
     }
 }
 
-/// A shared cross-section of two quads. The half-width is measured along the normal to
-/// `tangent`, so either quad can reconstruct the same two points, even when reversed.
-#[derive(Clone, Copy)]
-struct Section {
-    at: Vec2,
-    half: f32,
-    tangent: Vec2,
-}
-
-fn sections(samples: [(Vec2, f32); RIBBON + 1]) -> [Section; RIBBON + 1] {
-    let segments: [(Vec2, f32); RIBBON] = std::array::from_fn(|index| {
-        let delta = samples[index + 1].0 - samples[index].0;
-        (delta.normalize_or(Vec2::X), delta.length())
-    });
-    std::array::from_fn(|index| {
-        let (incoming, before) = segments[index.saturating_sub(1)];
-        let (outgoing, after) = segments[index.min(RIBBON - 1)];
-        let tangent = (incoming + outgoing).normalize_or(outgoing);
-        let (at, half) = samples[index];
-        // On a short, sharp bend the outer corner can pass the next cross-section.
-        // Limit both ends to just under half the segment so its triangles cannot fold.
-        let limit = |way: Vec2, length| 0.49 * length / way.perp_dot(tangent).abs().max(1e-5);
-        Section {
-            at,
-            tangent,
-            half: half
-                .min(limit(incoming, before))
-                .min(limit(outgoing, after)),
-        }
-    })
-}
-
 fn strip_piece(
     camera: &Camera,
     [from, to]: [Section; 2],
@@ -546,18 +558,6 @@ fn cut_ribbon(
         );
     }
     Some((cuts, whole))
-}
-
-/// How far an end of a quad that runs along `along` moves along it, for each length across it,
-/// to lie across `halves`, the way that halves the turn between two pieces of a ribbon: a
-/// quad's local y runs `(along.y, -along.x)` on the screen (`Camera::screen_transform`).
-fn slant(along: Vec2, halves: Vec2) -> f32 {
-    let across = Vec2::new(along.y, -along.x);
-    let facing = along.dot(halves);
-    if facing.abs() < 1e-3 {
-        return 0.0;
-    }
-    -across.dot(halves) / facing
 }
 
 /// 0 at `from` and below, 1 at `to` and above, rising smoothly between, as GLSL's `smoothstep`.

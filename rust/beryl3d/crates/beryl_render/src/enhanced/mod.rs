@@ -24,7 +24,6 @@ use kit_frame::frame::Frame;
 use crate::count::{self, FragmentCounter};
 use crate::draw::Draws;
 use crate::pipeline::{DEPTH, Pipelines, Shape, pipeline_set};
-use crate::runs::Pass;
 
 use self::bloom::Bloom;
 use self::shadow::Shadow;
@@ -297,7 +296,15 @@ impl Enhanced {
                 multiview_mask: None,
             });
             count::begin(counter, &mut pass);
-            draw_calls += draws.record(&mut pass, layer, Pass::is_layer);
+            draw_calls += draws.record_with(&mut pass, |run| {
+                run.pass.is_layer().then(|| {
+                    if run.vfx {
+                        self.vfx.layer()
+                    } else {
+                        &layer[run.pass as usize]
+                    }
+                })
+            });
             count::end(counter, &mut pass);
         }
         draw_calls

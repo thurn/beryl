@@ -5,7 +5,6 @@
 
 use glam::{Affine3A, Vec2};
 
-use super::Vfx;
 use kit_base::atlas::FaceSize;
 use kit_base::paint::Geometry;
 use kit_base::paint::Shadow;
@@ -609,23 +608,6 @@ impl Draw {
         draw
     }
 
-    /// A procedural Enhanced-tier visual effect of `kind` with effect-specific `params`.
-    /// For combat shapes (`Vfx::Chevron`, `Vfx::ChevronBlocked`, `Vfx::ShieldDome`), `params`
-    /// is `[time_s, fade, seed, aspect]`.
-    #[must_use]
-    pub fn vfx(transform: Affine3A, tint: [u8; 4], kind: Vfx, params: [f32; 4]) -> Self {
-        let mut draw = Self::new(
-            transform,
-            tint,
-            Material::Vfx,
-            TextureArray::Atlas,
-            Mesh::Quad,
-        );
-        draw.uv = [kind as u16, 0, 0, 0];
-        draw.params = params;
-        draw
-    }
-
     /// Whether this record uses the renderer's dedicated Enhanced VFX pipeline.
     #[must_use]
     pub const fn is_vfx(&self) -> bool {
@@ -696,7 +678,7 @@ impl Draw {
         draw
     }
 
-    fn new(
+    pub(super) fn new(
         transform: Affine3A,
         tint: [u8; 4],
         material: Material,

@@ -14,17 +14,23 @@ use super::bloom::ADD;
 
 /// The procedural Enhanced VFX shader: entry points followed by each effect module.
 /// Each effect is shaded by a function named `shade_<effect>`, which `shader_cost` measures.
-pub const SHADER: &str = concat!(include_str!("vfx.wgsl"), include_str!("combat_fx.wgsl"));
+pub const SHADER: &str = concat!(
+    include_str!("vfx.wgsl"),
+    include_str!("combat_fx.wgsl"),
+    include_str!("line_fx.wgsl"),
+);
 
 /// Pipelines for `Material::Vfx` records, all built once at startup.
 pub(crate) struct Vfx {
     pipelines: Pipelines,
+    /// Single-sample pipeline for VFX records in the flat layer (`Band::LayerCover`).
+    layer: wgpu::RenderPipeline,
     bloom: wgpu::RenderPipeline,
 }
 
 impl Vfx {
-    /// Builds the main-pass and bloom-pass pipelines for targets of `format`, reading bind
-    /// group 0 laid out as `records`.
+    /// Builds the main-pass, flat-layer, and bloom-pass pipelines for targets of `format`,
+    /// reading bind group 0 laid out as `records`.
     pub(crate) fn new(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
@@ -41,13 +47,32 @@ impl Vfx {
             samples: SAMPLES,
         };
         let pipelines = pipeline_set(device, &[records], &shape);
+        let layer_shape = Shape {
+            shader: &shader,
+            entry_points: ("vs_vfx", "fs_vfx"),
+            format,
+            samples: 1,
+        };
+        let layer = pipeline_set(device, &[records], &layer_shape)
+            .into_iter()
+            .nth(Pass::Layer as usize)
+            .expect("Pass::Layer pipeline exists");
         let bloom = bloom_pipeline(device, &shader, format, records);
-        Self { pipelines, bloom }
+        Self {
+            pipelines,
+            layer,
+            bloom,
+        }
     }
 
     /// The main-pass pipeline for `pass`.
     pub(crate) fn pipeline(&self, pass: Pass) -> &wgpu::RenderPipeline {
         &self.pipelines[pass as usize]
+    }
+
+    /// The single-sample flat-layer pipeline for `Band::LayerCover` VFX records.
+    pub(crate) fn layer(&self) -> &wgpu::RenderPipeline {
+        &self.layer
     }
 
     /// The additive one-sample pipeline that extracts VFX light into the bloom target.

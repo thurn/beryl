@@ -13,10 +13,13 @@ use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use glam::{Vec2, Vec3};
 use kit_base::data::profiles::SizeClass;
 use kit_base::tokens::color;
-use kit_frame::frame::{Draw, ElementId, Endpoint, Frame, Material, Role, ShapeAnchor};
+use kit_frame::frame::{
+    Band, Draw, ElementId, Endpoint, Frame, FrameBuilder, LineStyle, Material, Role, ShapeAnchor,
+    Vfx,
+};
 use kit_probe::agent::checks::{KeptArrow, keep_arrows, lines_hold, relations_hold};
 use kit_probe::agent::{Context, TreeOptions};
-use kit_ui::input::{Insets, Size};
+use kit_ui::input::{Insets, Size, Tier};
 
 use crate::common::{Cards, MS, before, discard, draw, empty_frame, frame, show};
 
@@ -461,5 +464,72 @@ fn a_target_ribbon_has_screen_sized_glow_and_one_tapered_tip() {
         );
         played.play(pointed(&begun, vec![target(Span::End)]), |_, _| {});
         assert!(arrows(&played.last_frame()).is_empty());
+    }
+}
+
+#[test]
+fn enhanced_arrows_emit_vfx_ribbons_and_spearheads_in_layer_cover() {
+    let cases = [
+        ("source line", Arrow::Source, LineStyle::Source),
+        (
+            "target arrow",
+            Arrow::FriendlyTarget,
+            LineStyle::FriendlyTarget,
+        ),
+        (
+            "stack arrow",
+            Arrow::HostileTarget,
+            LineStyle::HostileTarget,
+        ),
+        ("block line", Arrow::Block, LineStyle::Block),
+        ("attack line", Arrow::Attack, LineStyle::Attack),
+    ];
+    for (case, arrow, expected_style) in cases {
+        let (mut played, start, cards) = Played::new();
+        let act = point(Span::Begin, arrow, card(cards.angel), card(cards.island));
+        played.play(pointed(&start, vec![(act, point_timing(case))]), |_, _| {});
+
+        let mut enhanced_buf = empty_frame();
+        let mut builder = FrameBuilder::new(
+            &mut enhanced_buf,
+            Tier::Enhanced,
+            crate::test_data::data().card.size(),
+        );
+        played.show.frame(played.now, &mut builder);
+        let enhanced = builder.finish();
+        assert!(
+            enhanced.ambient_motion,
+            "{case}: enhanced arrows request continuous animation"
+        );
+
+        let band = Band::LayerCover as usize;
+        let cover_draws =
+            &enhanced.draws[enhanced.bands[band] as usize..enhanced.bands[band + 1] as usize];
+        let ribbons = cover_draws
+            .iter()
+            .filter(|draw| {
+                draw.material == Material::Vfx as u8
+                    && draw.uv[0] == Vfx::LineRibbon as u16
+                    && draw.tint[3] > 0
+                    && draw.uv[3] == u16::from(expected_style as u8)
+            })
+            .count();
+        let heads = cover_draws
+            .iter()
+            .filter(|draw| {
+                draw.material == Material::Vfx as u8
+                    && draw.uv[0] == Vfx::LineHead as u16
+                    && draw.tint[3] > 0
+                    && draw.uv[3] == u16::from(expected_style as u8)
+            })
+            .count();
+        assert_eq!(
+            ribbons, RIBBON,
+            "{case}: expected {RIBBON} Vfx::LineRibbon segments in LayerCover"
+        );
+        assert_eq!(
+            heads, 1,
+            "{case}: expected one Vfx::LineHead spearhead in LayerCover"
+        );
     }
 }

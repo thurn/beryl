@@ -4,7 +4,9 @@
 //! `Draw::uv[0]` and uses the same padding ratios so outer halos fade out before reaching the
 //! quad border.
 
-use glam::Vec2;
+use glam::{Affine3A, Vec2};
+
+use super::draw::{Draw, Material, Mesh, TextureArray};
 
 /// Which procedural effect `Material::Vfx` draws, stored in `Draw::uv[0]`.
 #[repr(u16)]
@@ -16,12 +18,144 @@ pub enum Vfx {
     ChevronBlocked = 1,
     /// Blocking shield dome: polar-swirling golden forcefield curtain and crest ridge.
     ShieldDome = 2,
+    /// One tapered, mitred segment of a luminous curved or straight line ribbon.
+    LineRibbon = 3,
+    /// Faceted glowing spearhead seated at the end of a luminous line.
+    LineHead = 4,
+}
+
+/// Visual palette and motion style for procedural Enhanced lines (`Vfx::LineRibbon` and
+/// `Vfx::LineHead`), stored in the low byte of `Draw::uv[3]`.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LineStyle {
+    /// Electric cyan-blue live aiming arrow.
+    Aim = 0,
+    /// Vivid emerald-green friendly target arrow.
+    FriendlyTarget = 1,
+    /// Vivid crimson-red hostile target arrow.
+    HostileTarget = 2,
+    /// Slender rose-crimson confirmed attack beam.
+    Attack = 3,
+    /// Slender solar-gold confirmed block beam.
+    Block = 4,
+    /// Faint pale teal-silver connection line linking a source to its derived entry.
+    Source = 5,
 }
 
 /// `[side, bottom, top]` quad padding around a chevron (`Vfx::Chevron`, `Vfx::ChevronBlocked`).
 pub const CHEVRON_PAD: [f32; 3] = [0.20, 0.05, 0.24];
 /// `[side, bottom, top]` quad padding around a shield dome (`Vfx::ShieldDome`).
 pub const SHIELD_PAD: [f32; 3] = [0.14, 0.06, 0.20];
+/// Length-to-width ratio of the faceted spearhead (`Vfx::LineHead`).
+pub const LINE_HEAD_ASPECT: f32 = 2.16;
+/// `[length_pad, width_pad]` quad padding around a spearhead's half-extents so its outer glow
+/// fades cleanly before reaching the quad boundary. Must match `line_fx.wgsl`.
+pub const LINE_HEAD_PAD: [f32; 2] = [0.55, 0.95];
+
+/// Packs start and end ribbon width tapers (each in `(0, 1]`) into one `u16` (`start` in the low
+/// byte, `end` in the high byte) for `vs_vfx`.
+#[must_use]
+pub fn pack_taper(start: f32, end: f32) -> u16 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to [1, 255] first"
+    )]
+    let byte = |v: f32| (v.clamp(1.0 / 255.0, 1.0) * 255.0).round() as u16;
+    byte(start) | (byte(end) << 8)
+}
+
+/// Packs start and end mitre slants (each in `[-1, 1]`) into one `u16` (`start` in the low byte,
+/// `end` in the high byte) for `vs_vfx`.
+#[must_use]
+pub fn pack_slant(start: f32, end: f32) -> u16 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to [0, 255] first"
+    )]
+    let byte = |v: f32| ((v.clamp(-1.0, 1.0) + 1.0) * 127.5).round() as u16;
+    byte(start) | (byte(end) << 8)
+}
+
+fn alpha_byte(opacity: f32) -> u8 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to [0, 255] first"
+    )]
+    let alpha = (opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
+    alpha
+}
+
+impl Draw {
+    /// A procedural Enhanced-tier visual effect of `kind` with effect-specific `params`.
+    /// For combat shapes (`Vfx::Chevron`, `Vfx::ChevronBlocked`, `Vfx::ShieldDome`), `params`
+    /// is `[time_s, fade, seed, aspect]`.
+    #[must_use]
+    pub fn vfx(transform: Affine3A, tint: [u8; 4], kind: Vfx, params: [f32; 4]) -> Self {
+        let mut draw = Self::new(
+            transform,
+            tint,
+            Material::Vfx,
+            TextureArray::Atlas,
+            Mesh::Quad,
+        );
+        draw.uv = [kind as u16, 0, 0, 0];
+        draw.params = params;
+        draw
+    }
+
+    /// One tapered, mitred segment of a procedural Enhanced-tier luminous line ribbon
+    /// (`Vfx::LineRibbon`). `params` is `[time_s, v_start, v_end, length_ratio]`.
+    #[must_use]
+    pub fn vfx_line_ribbon(
+        transform: Affine3A,
+        opacity: f32,
+        style: LineStyle,
+        taper: [f32; 2],
+        slant: [f32; 2],
+        params: [f32; 4],
+    ) -> Self {
+        let mut draw = Self::new(
+            transform,
+            [u8::MAX, u8::MAX, u8::MAX, alpha_byte(opacity)],
+            Material::Vfx,
+            TextureArray::Atlas,
+            Mesh::Quad,
+        );
+        draw.uv = [
+            Vfx::LineRibbon as u16,
+            pack_taper(taper[0], taper[1]),
+            pack_slant(slant[0], slant[1]),
+            u16::from(style as u8),
+        ];
+        draw.params = params;
+        draw
+    }
+
+    /// A procedural Enhanced-tier faceted glowing spearhead (`Vfx::LineHead`) seated at the tip
+    /// of a luminous line. `params` is `[time_s, fade, seed, aspect]`.
+    #[must_use]
+    pub fn vfx_line_head(
+        transform: Affine3A,
+        opacity: f32,
+        style: LineStyle,
+        params: [f32; 4],
+    ) -> Self {
+        let mut draw = Self::new(
+            transform,
+            [u8::MAX, u8::MAX, u8::MAX, alpha_byte(opacity)],
+            Material::Vfx,
+            TextureArray::Atlas,
+            Mesh::Quad,
+        );
+        draw.uv = [Vfx::LineHead as u16, 0, 0, u16::from(style as u8)];
+        draw.params = params;
+        draw
+    }
+}
 
 /// Returns `(quad_size, outward_center_offset)` for a procedural shape of `base_width` and
 /// `height` with `[side, bottom, top]` padding ratios.

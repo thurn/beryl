@@ -40,7 +40,7 @@ pub use look::{EffectLook, EffectTarget, ElementLook, LookPaint, LookShadow, Loo
 pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints, ScreenClip};
 pub use rings::{LIFTED, Lifted, RINGS, Ring, outline_corners};
 pub use undrawn::{Missing, Undrawn};
-pub use vfx::Vfx;
+pub use vfx::{LineStyle, Vfx};
 pub use work::{Areas, Load, Work};
 
 use kit_base::atlas::Tier;

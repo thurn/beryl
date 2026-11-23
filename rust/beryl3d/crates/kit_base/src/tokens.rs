@@ -60,22 +60,23 @@ pub mod ratio {
 pub mod color {
     include!(concat!(env!("OUT_DIR"), "/tokens/color.rs"));
 
-    /// The light of an arrow or line, by what it says (UI Conventions, exception 4), from the
-    /// web stage's `TONES` (`ui/src/stage/light.ts`): green at a target its chooser controls
-    /// and red at one they do not, cyan an attack's line, gold a block's, and pale the line from
-    /// an ability to its source.
+    /// The light of an arrow or line, by what it says: green at a friendly target and red at a
+    /// hostile target (UI Conventions, exception 4), electric cyan while aiming, rose-crimson for
+    /// a confirmed attack line, solar gold for a block line, and pale teal-silver for an ability's
+    /// source line (matching Arena).
+    pub const AIM_LINE: [u8; 4] = [20, 194, 255, 255];
     pub const FRIENDLY_TARGET: [u8; 4] = [20, 235, 128, 255];
     pub const HOSTILE_TARGET: [u8; 4] = [255, 43, 26, 255];
-    pub const ATTACK_LINE: [u8; 4] = [26, 214, 242, 255];
+    pub const ATTACK_LINE: [u8; 4] = [235, 58, 78, 255];
     pub const BLOCK_LINE: [u8; 4] = [255, 168, 26, 255];
-    pub const SOURCE_LINE: [u8; 4] = [219, 184, 117, 255];
-    /// The hot core of each of those, the `core` of its tone in `TONES`, which lights the middle
-    /// of its ribbon.
+    pub const SOURCE_LINE: [u8; 4] = [136, 208, 192, 255];
+    /// The hot core of each of those, which lights the middle of its ribbon.
+    pub const AIM_LINE_CORE: [u8; 4] = [220, 252, 255, 255];
     pub const FRIENDLY_TARGET_CORE: [u8; 4] = [219, 255, 230, 255];
     pub const HOSTILE_TARGET_CORE: [u8; 4] = [255, 219, 179, 255];
-    pub const ATTACK_LINE_CORE: [u8; 4] = [217, 252, 255, 255];
+    pub const ATTACK_LINE_CORE: [u8; 4] = [255, 224, 230, 255];
     pub const BLOCK_LINE_CORE: [u8; 4] = [255, 247, 204, 255];
-    pub const SOURCE_LINE_CORE: [u8; 4] = [255, 242, 217, 255];
+    pub const SOURCE_LINE_CORE: [u8; 4] = [224, 248, 242, 255];
 
     /// The tint of a white streak: `white` in `TONES` (`ui/src/stage/light.ts`).
     pub const STREAK_WHITE: [u8; 4] = [255, 230, 158, 255];

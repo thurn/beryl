@@ -81,30 +81,39 @@ pub fn way_of(
     }
 }
 
-/// A preview ends at the pointer. Target previews can bow, but only the portion past
-/// the card's last edge belongs on the table. Declaration previews leave the edge
-/// directly toward the pointer, as the web stage's `Aim` does.
+/// A preview ends at the pointer. Target and attack previews arch upward over the table as
+/// Arena's aiming arrows do (`UrGalw_f35w 40:58`, `SswBO8aOOgc 33:32.2`), trimmed to the
+/// portion past the source card's edge. Block previews leave the edge directly toward the
+/// pointer (`IEXcjBn3BXk 22:20.8`).
 pub(super) fn aim_way(
     light: &Light,
     arrow: Arrow,
     from: End,
     pointer: Vec2,
-    scale: f32,
+    _scale: f32,
 ) -> Option<[Vec2; 3]> {
     let start = edge(from, pointer)?;
-    if matches!(arrow, Arrow::Attack | Arrow::Block) {
+    if matches!(arrow, Arrow::Block) {
         return Some([start, start.lerp(pointer, 0.5), pointer]);
     }
-    let to = End {
-        middle: pointer,
-        half: Vec2::splat(scale),
-        round: true,
-        toward: 0.0,
+    let way = pointer - from.middle;
+    let far = way.length();
+    if far <= 0.0 {
+        return None;
+    }
+    let unit = from.half.y.max(1.0);
+    let side = if way.x >= 0.0 { 1.0 } else { -1.0 };
+    let up = Vec2::new(side * way.y, -side * way.x) / far;
+    let bow_share = if arrow == Arrow::Attack {
+        light.bow.share * 0.65
+    } else {
+        light.bow.share * 1.25
     };
-    // A pointer within a reference point of the source can overlap its reach.
-    // There is still room for a preview between the source edge and the pointer.
-    let [a, control, _] =
-        arc(light, from, to).unwrap_or([start, start.lerp(pointer, 0.5), pointer]);
+    let bowed = (bow_share * far)
+        .max(light.bow.least * unit)
+        .min(light.bow.most * unit);
+    let control = from.middle.lerp(pointer, 0.5) + up * bowed;
+    let a = edge(from, control).unwrap_or(start);
     let at = |t| a.lerp(control, t).lerp(control.lerp(pointer, t), t);
     let inside = |p| edge(from, p).is_none();
     if let Some(last) = (0..CROSS_STEPS)
@@ -231,39 +240,27 @@ fn arc(light: &Light, from: End, to: End) -> Option<[Vec2; 3]> {
     ])
 }
 
-/// The arc from a stack item to the one it lies over (UI Conventions, "Two items on the stack").
-/// The one on top lies a little across and down from the other, of which a strip shows along one
-/// edge. The arc leaves the side of `from` that faces the same way, swings out clear of both and
-/// comes back into the end of that strip, so that its head lies on the table beside the stack.
+/// The arc from a stack item to the one it lies over (UI Conventions, "Two items on the stack";
+/// Arena, `I3Te0m1bBFw 39:49.50`). The top item sits slightly right and below the card beneath it,
+/// which peeks out along the top and left edges. The arc rises out of the top edge of `from`,
+/// arches over both cards, and drops down onto the exposed top-left strip of `to`.
 fn stack_loop(from: End, to: End) -> [Vec2; 3] {
     let side = if from.middle.x >= to.middle.x {
         -1.0
     } else {
         1.0
     };
-    let high = if from.middle.y >= to.middle.y {
-        -1.0
-    } else {
-        1.0
-    };
-    let shown = to.middle.y + high * to.half.y;
-    let covered = from.middle.y + high * from.half.y;
-    let strip = match (covered - shown).abs() {
-        0.0 => 0.24 * to.half.y,
-        strip => strip,
-    };
     let a = Vec2::new(
-        from.middle.x + side * from.half.x,
-        from.middle.y + high * from.half.y * 0.5,
+        from.middle.x + side * from.half.x * 0.18,
+        from.middle.y - from.half.y,
     );
-    let b = Vec2::new(to.middle.x + side * to.half.x, shown - high * strip / 2.0);
-    let out = 0.7 * from.half.x.min(to.half.x);
-    let clear = if side < 0.0 {
-        a.x.min(b.x)
-    } else {
-        a.x.max(b.x)
-    };
-    [a, Vec2::new(clear + side * out, f32::midpoint(a.y, b.y)), b]
+    let b = Vec2::new(
+        to.middle.x + side * to.half.x * 0.78,
+        to.middle.y - to.half.y * 0.68,
+    );
+    let top = a.y.min(b.y);
+    let lift = 0.56 * from.half.y.min(to.half.y);
+    [a, Vec2::new(f32::midpoint(a.x, b.x), top - lift), b]
 }
 
 /// The line from an ability `from` to its `source`, sagging at most to the screen height `sag`.
