@@ -6,7 +6,7 @@ Run from the repository's root as `python -m beryl_tools.ignite.script <verb> <f
 - `list <family> [card...]` prints one JSON line per check: `{"check": "script:<card>/<moment>/
   <seat>", "inputs": ["rust/cards/<crate>/<set>/<card>.rs"]}`. The inputs are the paths that
   check reads in addition to the family's own `inputs` in the manifest. For `script`, naming
-  cards (by name or slug; `fixtures` for the UI recordings) lists only theirs.
+  cards (by name or slug; `fixtures` for the fixture recordings) lists only theirs.
 - `run <family> <check>...` runs the checks named and writes one JSON line per check that reached
   a verdict to the file named by `IGNITE_RESULTS`: `{"check", "outcome"}` and, for a failure,
   `message`. A check the tool ended without judging gets no line, so Ignite records it as
@@ -16,7 +16,7 @@ The families:
 
 - `script`: `beryl_cli script-check`, in a debug build (the `cli` product), where every
   script the session builds is held to the replay check and the rule invariants. One check per
-  card, moment and seat, and one per UI fixture. The moments of a card are what `beryl_cli
+  card, moment and seat, and one per fixture. The moments of a card are what `beryl_cli
   specs-check <card>` lists, which plays them. A check's own inputs are its card's file, the
   file of every card that file names (`used_files`), and the file of every card their
   definitions name, so that editing a card leaves the checks of cards that do not use it as
@@ -42,7 +42,7 @@ from typing import Any
 RESULTS_ENV = "IGNITE_RESULTS"
 FAMILIES = ("script", "app", "mobile", "android")
 CARDS = "rust/cards"
-FIXTURES = "ui/fixtures.json"
+FIXTURES = "data/beryl3d/fixtures.json"
 # The seats of a card's moment, as `beryl_cli` names them.
 SEATS = ("yours", "theirs")
 # The longest message a result carries.
@@ -188,7 +188,7 @@ def moments(root: Path, cards: Sequence[str]) -> list[tuple[str, str]]:
 
 
 def fixture_checks(root: Path) -> list[dict[str, Any]]:
-    """One check for each UI fixture's recording, from the seat its human sits in.
+    """One check for each fixture's recording, from the seat its human sits in.
 
     A fixture plays whole decks, so any card file can change what it records: each fixture
     check reads every card file (`CARDS`, a directory whose git tree ID covers them all).

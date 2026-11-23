@@ -93,8 +93,8 @@ def repository(root: Path) -> None:
     cards.mkdir(parents=True)
     (cards / "alpha.rs").write_text(card("Alpha", "{U}"))
     (cards / "beta.rs").write_text(card("Beta"))
-    (root / "ui").mkdir()
-    (root / "ui" / "fixtures.json").write_text(
+    (root / "data" / "beryl3d").mkdir(parents=True)
+    (root / "data/beryl3d/fixtures.json").write_text(
         json.dumps(
             {
                 "fixtures": [
@@ -308,9 +308,14 @@ def test_card_references_match_names_variants_and_constants() -> None:
     assert adapter.letters("MANA_CRYPT") == adapter.letters("Mana Crypt")
 
 
-def test_a_fixture_check_reads_every_card_file(repo: Path) -> None:
+def test_a_fixture_check_reads_native_definitions_and_every_card_file(
+    repo: Path,
+) -> None:
     checks = {c["check"]: c for c in adapter.list_checks("script", repo, [])}
-    assert "rust/cards" in checks["script:fixtures/table-opening/yours"]["inputs"]
+    assert checks["script:fixtures/table-opening/yours"]["inputs"] == [
+        "data/beryl3d/fixtures.json",
+        "rust/cards",
+    ]
 
 
 def test_a_card_named_only_in_a_comment_is_not_a_reference() -> None:

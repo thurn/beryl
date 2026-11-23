@@ -11,10 +11,12 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use crate::recordings::FIXTURE_DEFINITIONS;
+
 /// The files and directories outside the crates that a recording depends on, from the root of
 /// the repository.
 const DATA: [&str; 7] = [
-    "ui/fixtures.json",
+    FIXTURE_DEFINITIONS,
     "docs/sample-decks",
     "data/ui-conventions.json",
     "data/card-store.tsv",

@@ -110,7 +110,7 @@ fn the_explicit_profile_plays_only_fixtures_in_its_own_window() {
     let names: Vec<_> = listed.stdout.lines().collect();
     assert!(names.contains(&"b3d:pay-default/you/759x393"));
     let fixtures: Value = serde_json::from_str(
-        &beryl_test_files::read_to_string("ui/fixtures.json").expect("fixture list"),
+        &beryl_test_files::read_to_string("data/beryl3d/fixtures.json").expect("fixture list"),
     )
     .expect("fixture JSON");
     let fixtures = fixtures["fixtures"].as_array().expect("fixtures");

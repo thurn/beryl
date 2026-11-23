@@ -10,6 +10,7 @@ from .. import paths
 # Beryl 3D's Cargo workspace, with its own manifest, lock file and build directory.
 WORKSPACE: Path = paths.RUST / "beryl3d"
 DATA: Path = paths.REPO / "data" / "beryl3d"
+FIXTURE_DEFINITIONS = "data/beryl3d/fixtures.json"
 
 
 def cache() -> Path:

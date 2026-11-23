@@ -220,7 +220,7 @@ fn root() -> PathBuf {
     ] {
         beryl_test_files::read_dir(folder).unwrap();
     }
-    beryl_test_files::read("ui/fixtures.json").unwrap();
+    beryl_test_files::read("data/beryl3d/fixtures.json").unwrap();
     beryl_test_files::read("rust/beryl3d/Cargo.lock").unwrap();
     beryl_test_files::root().unwrap().canonicalize().unwrap()
 }
@@ -229,7 +229,8 @@ fn root() -> PathBuf {
 fn the_sources_are_the_recorder_and_its_data_and_not_the_client() {
     let files = sources::sources(&root()).unwrap();
     let has = |path: &str| files.iter().any(|f| f == Path::new(path));
-    assert!(has("ui/fixtures.json"));
+    assert!(has("data/beryl3d/fixtures.json"));
+    assert!(!has("ui/fixtures.json"));
     assert!(has("data/card-store.tsv"));
     assert!(has("rust/crates/beryl_cli/src/fixture.rs"));
     assert!(has("rust/crates/beryl_engine/Cargo.toml"));
@@ -247,11 +248,11 @@ fn the_sources_are_the_recorder_and_its_data_and_not_the_client() {
 #[test]
 fn a_changed_byte_in_the_fixture_definitions_changes_the_hash() {
     let dir = scratch("hash");
-    std::fs::create_dir_all(dir.join("ui")).unwrap();
-    let mut bytes = beryl_test_files::read("ui/fixtures.json").unwrap();
-    let file = dir.join("ui/fixtures.json");
+    std::fs::create_dir_all(dir.join("data/beryl3d")).unwrap();
+    let mut bytes = beryl_test_files::read("data/beryl3d/fixtures.json").unwrap();
+    let file = dir.join("data/beryl3d/fixtures.json");
     std::fs::write(&file, &bytes).unwrap();
-    let listed = [PathBuf::from("ui/fixtures.json")];
+    let listed = [PathBuf::from("data/beryl3d/fixtures.json")];
     let before = sources::hash(&dir, &listed).unwrap();
     assert_eq!(before, sources::hash(&dir, &listed).unwrap());
     let middle = bytes.len() / 2;
@@ -314,7 +315,8 @@ fn the_corpus_and_an_on_demand_pack_are_separate() {
         .map(|entry| entry.name)
         .collect();
     let fixtures: serde_json::Value =
-        serde_json::from_slice(&beryl_test_files::read("ui/fixtures.json").unwrap()).unwrap();
+        serde_json::from_slice(&beryl_test_files::read("data/beryl3d/fixtures.json").unwrap())
+            .unwrap();
     let listed = beryl_test_files::read_to_string("data/beryl3d/corpus.txt").unwrap();
     let expected: BTreeSet<_> = listed
         .lines()

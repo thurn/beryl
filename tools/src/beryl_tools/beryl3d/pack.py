@@ -160,7 +160,7 @@ def names_seen(entries: list[Entry], names: Iterable[str]) -> dict[str, set[str]
 
 # Spec moments are derived by playing the card scenarios, so the corpus check
 # reads the pack index rather than trying to predict their names from source.
-CORPUS_INPUTS = [
+CORPUS_INPUTS: list[str] = [
     "rust/cards/**",
     "rust/crates/**",
     "rust/beryl3d/crates/beryl_record/**",
@@ -168,7 +168,7 @@ CORPUS_INPUTS = [
     "rust/Cargo.lock",
     "data/card-store.tsv",
     "data/set-groups.json",
-    "ui/fixtures.json",
+    paths.FIXTURE_DEFINITIONS,
     "docs/sample-decks/**",
 ]
 

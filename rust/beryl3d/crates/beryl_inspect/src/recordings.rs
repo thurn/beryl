@@ -1,4 +1,4 @@
-//! Every recording Beryl 3D's tests and tools read: each fixture in `ui/fixtures.json` and each
+//! Every recording Beryl 3D's tests and tools read: each fixture in `data/beryl3d/fixtures.json` and each
 //! card spec moment, as the session's messages to one seat, read from the pack for the present
 //! sources (see [`crate::pack`]). This crate does not play the engine: the `record` program
 //! (`beryl_record`) builds a missing pack with [`build`], and a read of a missing one fails
@@ -21,6 +21,9 @@ use kit_ui::input::Size;
 use crate::pack::{self, Entry, Recorder};
 use crate::stress::Board;
 use crate::{pages, screens, stories};
+
+/// The fixture definitions, relative to the repository root.
+pub const FIXTURE_DEFINITIONS: &str = "data/beryl3d/fixtures.json";
 
 /// One recording, as `just b3d list` shows it.
 #[derive(Clone, Debug, PartialEq, Eq)]

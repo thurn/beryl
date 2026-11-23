@@ -243,7 +243,7 @@ def cards_by_recording() -> dict[str, list[str]]:
     if kept.exists():
         return json.loads(kept.read_text())
     defined = json.loads(
-        (paths.REPO / "ui" / "fixtures.json").read_text(encoding="utf-8")
+        (paths.REPO / b3d_paths.FIXTURE_DEFINITIONS).read_text(encoding="utf-8")
     )["fixtures"]
     decks = {d.name: d.read_text(encoding="utf-8") for d in sorted(DECKS.glob("*.txt"))}
     decks["wu-control"] = WU_CONTROL.read_text(encoding="utf-8")

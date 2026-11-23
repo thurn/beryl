@@ -54,7 +54,7 @@ pub(crate) fn read() -> Result<BTreeSet<String>, String> {
 }
 
 pub(crate) fn fixtures() -> Result<BTreeSet<String>, String> {
-    let path = recordings::root().join("ui/fixtures.json");
+    let path = recordings::root().join(recordings::FIXTURE_DEFINITIONS);
     let text = fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
     let value: Value =
         serde_json::from_str(&text).map_err(|error| format!("{}: {error}", path.display()))?;

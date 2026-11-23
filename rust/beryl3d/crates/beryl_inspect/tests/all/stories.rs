@@ -126,7 +126,8 @@ fn round_trip(source: &[&str]) {
 #[test]
 fn a_written_story_replays_a_moment_of_every_fixture() {
     let manifest: serde_json::Value =
-        serde_json::from_slice(&beryl_test_files::read("ui/fixtures.json").unwrap()).unwrap();
+        serde_json::from_slice(&beryl_test_files::read("data/beryl3d/fixtures.json").unwrap())
+            .unwrap();
     let fixtures = manifest["fixtures"].as_array().unwrap();
     assert!(
         fixtures

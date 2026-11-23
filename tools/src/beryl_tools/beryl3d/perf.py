@@ -1,7 +1,7 @@
 """`just b3d perf`: the running app's frame timing of recorded fixtures, as `just ui-perf` times
 the web interface's (docs/beryl-3d.md, "Driving the running app").
 
-Each fixture of `ui/fixtures.json` that has a recording is replayed with no window for the
+Each fixture of `data/beryl3d/fixtures.json` that has a recording is replayed with no window for the
 recording's length plus a second, and the frame log the app writes is read back. The log holds
 one line for each *late* frame (a frame that missed the rate the host asked for) and a summary
 of the whole run, so the client times here are over late frames only; `frames` and `late`
@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import deps, paths as repo_paths
-from . import app, parity
+from . import app, paths
 from .command import Command
 
 # How long past a recording's end the app keeps playing, so that its last frames are drawn.
@@ -31,8 +31,10 @@ LISTED: re.Pattern[str] = re.compile(r"^(\S+)\s+--seat \S+\s+(\d+)ms, \d+ views$
 
 
 def fixture_names() -> list[str]:
-    """Every fixture `just ui-perf` can play: the definitions of `ui/fixtures.json`."""
-    return [f["name"] for f in parity.read_json(parity.FIXTURES)["fixtures"]]
+    """The fixture names in the native recording definitions."""
+    source = repo_paths.REPO / paths.FIXTURE_DEFINITIONS
+    fixtures = json.loads(source.read_text(encoding="utf-8"))["fixtures"]
+    return [fixture["name"] for fixture in fixtures]
 
 
 def recording_lengths(listing: str) -> dict[str, int]:
@@ -118,7 +120,7 @@ def perf_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "fixtures",
         nargs="*",
-        help="fixtures to play, by name; every fixture of ui/fixtures.json by default",
+        help="fixtures to play by name (default: all native fixtures)",
     )
     parser.add_argument(
         "--verbs", action="store_true", help="the late frames by the verb playing"

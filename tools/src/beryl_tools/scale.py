@@ -60,6 +60,7 @@ from pathlib import Path
 from typing import IO
 
 from . import card_store, nearest, paths, system
+from .beryl3d.paths import FIXTURE_DEFINITIONS
 from .scale_workspace import (
     BINARY,
     REGISTRY,
@@ -293,8 +294,9 @@ def run_checker(only: list[str], results: Path, out: IO[str]) -> int:
     """Runs the built checker's `script-check` on the checks `only` names (a card's slug), which
     writes one line per check, with its seconds, to `results`; returns its exit code."""
     binary = system.exe(paths.RUN_TARGET / "debug" / "beryl_cli")
+    definitions = paths.REPO / FIXTURE_DEFINITIONS
     return subprocess.run(
-        [str(binary), "script-check", str(paths.UI / "fixtures.json"), *only],
+        [str(binary), "script-check", str(definitions), *only],
         cwd=paths.RUST,
         env={**os.environ, "BERYL_CHECK_RESULTS": str(results)},
         stdin=subprocess.DEVNULL,

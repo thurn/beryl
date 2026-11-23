@@ -1,5 +1,4 @@
-//! `beryl_cli`'s recorders, which make the web interface's fixtures and card spec moments, run
-//! for every recording the pack holds.
+//! Builds the native recordings pack with `beryl_cli`'s fixture and card spec recorders.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -12,6 +11,7 @@ use beryl_session::ipc::FixtureMessage;
 use beryl_session::{GameUpdate, Seat, SessionId, card_records};
 
 use beryl_inspect::pack::{Recorded, Recorder};
+use beryl_inspect::recordings::FIXTURE_DEFINITIONS;
 
 /// Every implemented card and what is built from their files, which the recorders play with.
 /// This program links the cards and hands them to `beryl_cli`'s library, which names no card
@@ -106,12 +106,12 @@ enum Job<'a> {
 }
 
 impl Recorder for Cli {
-    /// Every fixture in `ui/fixtures.json` and every card spec moment, from both seats, on as
-    /// many threads as the machine has cores. A fixture that has one viewer (a manual table,
+    /// Every selected fixture and card spec moment, from both seats, on as many threads as
+    /// Ignite grants. A fixture that has one viewer (a manual table,
     /// or a board with a prop, which stands only in its human's view) is recorded from that
     /// seat alone ([`fixture::Definition::seats`]).
     fn record(&self) -> Vec<Recorded> {
-        let source = self.root.join("ui/fixtures.json");
+        let source = self.root.join(FIXTURE_DEFINITIONS);
         let mut done = Vec::new();
         let definitions = match fixture::definitions(&source) {
             Ok(definitions) => definitions,
