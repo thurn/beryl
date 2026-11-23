@@ -3,11 +3,13 @@
 
 Supports clean-room VFX and animation research by inspecting:
   - Manifest_*.mtga JSON entries (mapping bundle names to Unity Assets/... paths)
+  - Asset Lookup Trees (MTGA_Data/Downloads/ALT/ALT_*.mtga plain-text JSON trees)
   - UnityFS v8 (LZ4HC) AssetBundle unpacking (pure stdlib, no external packages)
   - Prefab component/state strings and external CAB-* dependency resolution
   - Unity Material serialized colors, floats, and texture transform scales
   - Plain-text Metal Shading Language (MSL) fragment/vertex shaders inside Shader_* bundles
-  - Unobfuscated C# identifiers inside il2cpp_data/Metadata/global-metadata.dat
+  - Unobfuscated C# identifiers, types/fields/methods in IL2CPP global-metadata.dat
+  - ARM64 disassembly of C# methods from GameAssembly.dylib via llvm-objdump
 
 Strictly read-only. Never exports or copies proprietary textures, meshes, or shaders.
 """
@@ -23,6 +25,8 @@ import struct
 import sys
 from pathlib import Path
 from typing import Any
+
+from il2cpp import cmd_disasm, cmd_types
 
 DEFAULT_MTGA = Path.home() / "Library/Application Support/Steam/steamapps/common/MTGA"
 
@@ -466,6 +470,85 @@ def cmd_symbols(mtga: Path, args: argparse.Namespace) -> None:
         print(f"  {s}")
 
 
+def cmd_alt(mtga: Path, args: argparse.Namespace) -> None:
+    alt_dir = mtga / "MTGA_Data/Downloads/ALT"
+    query = args.file.lower()
+    exact = sorted(
+        p
+        for p in alt_dir.iterdir()
+        if p.name.lower() == query or p.name.lower().startswith(query + "_")
+    )
+    matches = exact or sorted(p for p in alt_dir.iterdir() if query in p.name.lower())
+    if not matches:
+        raise FileNotFoundError(f"No ALT_*.mtga matching {args.file!r} in {alt_dir}")
+    path = matches[0]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    print(f"# {path.name} ({len(data)} trees)")
+    if not args.pattern:
+        for key, val in sorted(data.items()):
+            nodes = val.get("Nodes", []) if isinstance(val, dict) else []
+            print(f"  {key} ({len(nodes)} nodes)")
+        return
+    pattern = re.compile(args.pattern, re.IGNORECASE)
+    shown = 0
+    for tree_name, tree in sorted(data.items()):
+        if not isinstance(tree, dict) or "Nodes" not in tree:
+            continue
+        tree_hits = bool(pattern.search(tree_name))
+        nodes = {n["NodeId"]: n for n in tree.get("Nodes", []) if "NodeId" in n}
+        parents: dict[str, list[tuple[str, str]]] = {}
+        for conn in tree.get("Connections", []):
+            parent = conn.get("Parent", "")
+            child = conn.get("Child")
+            if isinstance(child, str):
+                parents.setdefault(child, []).append((parent, ""))
+            elif isinstance(child, list):
+                for dst in child:
+                    if isinstance(dst, str):
+                        parents.setdefault(dst, []).append((parent, ""))
+            elif isinstance(child, dict):
+                for edge_key, dst in child.items():
+                    dsts = dst if isinstance(dst, list) else [dst]
+                    for item in dsts:
+                        if isinstance(item, str):
+                            parents.setdefault(item, []).append((parent, str(edge_key)))
+        for nid, node in nodes.items():
+            summary = json.dumps({k: v for k, v in node.items() if k != "NodeId"})
+            if not tree_hits and not pattern.search(summary):
+                continue
+            chain: list[tuple[str, str]] = []
+            cur: str | None = nid
+            edge = ""
+            seen_ids: set[str] = set()
+            while cur and cur not in seen_ids and len(chain) < 16:
+                seen_ids.add(cur)
+                n = nodes.get(cur, {})
+                brief = {
+                    k: v
+                    for k, v in n.items()
+                    if k not in ("NodeId", "Position", "Name")
+                    and v not in ("", [], None)
+                }
+                chain.append((edge, json.dumps(brief, separators=(",", ":"))))
+                plist = parents.get(cur)
+                if plist:
+                    cur, edge = plist[0]
+                else:
+                    cur, edge = None, ""
+            print(f"\n[{tree_name}]")
+            # `edge` on chain[i] is the edge leaving chain[i+1] into chain[i].
+            steps = list(reversed(chain))
+            for depth, (_out_edge, step) in enumerate(steps):
+                in_edge = steps[depth - 1][0] if depth > 0 else ""
+                tag = f"[{in_edge}] " if in_edge else ""
+                print(f"  {'  ' * depth}-> {tag}{step}")
+            shown += 1
+            if shown >= args.limit:
+                print(f"\n# reached limit {args.limit}")
+                return
+    print(f"\n# showed {shown} matching ALT path(s)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -480,6 +563,13 @@ def main() -> None:
     p_man.add_argument("--limit", type=int, default=30)
     p_man.add_argument("--max-assets", type=int, default=15)
     p_man.add_argument("--include-card-art", action="store_true")
+
+    p_alt = sub.add_parser(
+        "alt", help="Inspect Asset Lookup Trees (ALT_*.mtga) and trace condition chains"
+    )
+    p_alt.add_argument("file", help="ALT file prefix (e.g. ALT_Card, ALT_ZoneTransfer)")
+    p_alt.add_argument("pattern", nargs="?", default="", help="Optional regex to trace")
+    p_alt.add_argument("--limit", type=int, default=20)
 
     p_pre = sub.add_parser(
         "prefab", help="Inspect nodes, external CABs, and strings in a bundle"
@@ -514,14 +604,35 @@ def main() -> None:
     p_sym.add_argument("pattern", help="Regex pattern")
     p_sym.add_argument("--limit", type=int, default=60)
 
+    p_typ = sub.add_parser(
+        "types",
+        help="Dump fields and method tokens for C# types in global-metadata.dat",
+    )
+    p_typ.add_argument("pattern", help="Regex matching Namespace.TypeName")
+    p_typ.add_argument("--limit", type=int, default=10)
+    p_typ.add_argument("--max-members", type=int, default=40)
+
+    p_dis = sub.add_parser(
+        "disasm", help="Disassemble ARM64 C# method(s) from GameAssembly.dylib"
+    )
+    p_dis.add_argument("type_pattern", help="Regex matching Namespace.TypeName")
+    p_dis.add_argument("method_pattern", help="Regex matching method name")
+    p_dis.add_argument("--assembly", default="Core.dll")
+    p_dis.add_argument("--limit", type=int, default=5)
+    p_dis.add_argument("--max-bytes", type=int, default=0x500)
+    p_dis.add_argument("--max-lines", type=int, default=85)
+
     args = parser.parse_args()
     handlers = {
         "manifest": cmd_manifest,
+        "alt": cmd_alt,
         "prefab": cmd_prefab,
         "cabs": cmd_cabs,
         "materials": cmd_materials,
         "shader": cmd_shader,
         "symbols": cmd_symbols,
+        "types": cmd_types,
+        "disasm": cmd_disasm,
     }
     handlers[args.cmd](args.mtga, args)
 

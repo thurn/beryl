@@ -12,9 +12,10 @@ description: >-
 # Arena Reverse-Engineering Reference (Clean-Room VFX & Animation)
 
 Use this skill alongside `arena-video` and `arena-pixel-match` when building
-rich VFX, shaders, particle systems, highlights, or animations in Beryl 3D and
-gameplay video alone does not explain *how* MTG Arena renders them (blend modes,
-UV distortion math, color transfer curves, state flags, or layer stacking).
+rich VFX, shaders, particle systems, highlights, or card-motion animations in
+Beryl 3D and gameplay video alone does not explain *how* MTG Arena renders or
+evaluates them (blend modes, UV distortion math, color transfer curves, spline
+interpolation, Hermite timing curves, state flags, or layer stacking).
 
 ## Clean-room rule (mandatory)
 
@@ -25,11 +26,11 @@ proprietary asset or code from the MTG Arena installation:
   prefabs, animation clips, fonts, or audio files.
 - Never paste or mechanically port decompiled C# or extracted Metal Shading
   Language (MSL) code into Beryl.
-- **Do** inspect MTGA strictly read-only to learn the *technique*: layer stack,
-  blend mode, state transitions, UV scroll/polar coordinates, contrast/ramp
-  math, and particle behavior. Then author original procedural WGSL, Rust
-  geometry, or code-generated sprites (`beryl_assets`) and tune visually
-  against `arena-video` recordings.
+- **Do** inspect MTGA strictly read-only to learn the *technique*: selection
+  rules, spline/easing math, layer stack, blend mode, state transitions, UV
+  scroll/polar coordinates, contrast/ramp math, and particle behavior. Then
+  author original procedural WGSL, Rust geometry/splines, or code-generated
+  sprites (`beryl_assets`) and tune visually against `arena-video` recordings.
 
 ## Where MTGA lives on macOS and how it is structured
 
@@ -40,22 +41,34 @@ Default Steam installation on macOS:
 
 Key facts about the macOS Unity build (Unity 6 / IL2CPP):
 
-- **~85% of Arena's VFX and animations live in data-driven AssetBundles**, not
-  in C#. C# (`GameAssembly.dylib`) mainly toggles animator states, assigns
-  highlight types, and triggers prefab playback. Always inspect the Manifest,
-  Prefabs, Materials, and Shaders before touching IL2CPP disassembly.
+- **~85% of Arena's VFX and animations live in data-driven AssetBundles and
+  Asset Lookup Trees (ALTs)**, not hardcoded in C#. C# (`GameAssembly.dylib`)
+  mainly evaluates generic spline/easing engines, toggles animator states,
+  assigns highlight types, and triggers prefab playback. Always inspect ALTs,
+  the Manifest, Prefabs, Materials, and Shaders before touching IL2CPP
+  disassembly.
+- **Asset Lookup Trees (`MTGA_Data/Downloads/ALT/ALT_*.mtga`)**: plain-text JSON
+  decision trees (`Root`, `Nodes`, `Connections`) that map game context
+  (`FromZone`, `FromOwner`, `ToZone`, `ToOwner`, `GameState_Phase`,
+  `CardData_FaceDown`, `ZoneTransferReason`) to specific spline, VFX, SFX, and
+  stagger assets. These are **not** UnityFS bundles.
 - **Manifest (`Manifest_*.mtga`)**: plain-text JSON indexing every downloaded
   `.mtga` bundle to its original Unity `Assets/...` source paths.
 - **AssetBundles (`AssetBundle/*.mtga`)**: standard unencrypted `UnityFS` (v8,
-  LZ4HC) archives containing `SerializedFile` (v22) objects with embedded
-  TypeTrees.
+  LZ4HC) archives containing one or more `SerializedFile` (v22) objects with
+  embedded TypeTrees. Scene bundles like `Bucket_Scenes.ScenePayloads_*` hold
+  many `SerializedFile` nodes (one per scene), not just `nodes[0]`.
 - **Shaders (`Shader_*.mtga` and `globalgamemanagers.assets`)**: on macOS,
   Unity embeds LZ4-compressed **plain-text Metal Shading Language (MSL)**
   (`#include <metal_stdlib>`, `xlatMtlMain`) alongside serialized blend, depth,
   and stencil states.
 - **C# metadata (`il2cpp_data/Metadata/global-metadata.dat`)**: unencrypted
-  Unity IL2CPP metadata (`0xFAB11BAF`) with unobfuscated C# namespaces, types,
-  methods, and field names.
+  Unity IL2CPP v39 metadata (`0xFAB11BAF`) with unobfuscated C# namespaces,
+  types, fields, methods, and metadata tokens (`0x06xxxxxx`).
+- **Compiled C# (`MTGA.app/Contents/Frameworks/GameAssembly.dylib`)**: universal
+  Mach-O (`0xcafebabe`) with an ARM64 slice using chained fixups (`ptr & ((1 <<
+  36) - 1)`). `Il2CppCodeGenModule` tables map each method token to its exact
+  ARM64 virtual address for `xcrun lldb -b` batch disassembly.
 - **Live GPU capture**: `MTGA.app` is signed without Hardened Runtime
   (`codesign` flags `0x0`), so Xcode Metal Frame Capture can inspect live draw
   calls, bound uniforms, and pass order whenever static inspection is ambiguous.
@@ -66,22 +79,49 @@ Use the read-only, standard-library helper in this skill's directory:
 
 ```bash
 SCRIPT=.agents/skills/arena-re/scripts/inspect_mtga.py
-python3 "$SCRIPT" manifest "combat|highlight|intention"
+python3 "$SCRIPT" manifest "combat|highlight|intention|spline"
+python3 "$SCRIPT" alt ALT_Card "LibraryToHand"
+python3 "$SCRIPT" alt ALT_ZoneTransfer "Stagger"
 python3 "$SCRIPT" prefab Bucket_Card.AttackerIcon_0
 python3 "$SCRIPT" cabs Bucket_Card.AttackerIcon_0
 python3 "$SCRIPT" materials Bucket_Card.AttackerIcon_0
 python3 "$SCRIPT" shader Shader_ParticleUber --match "_DistTex.sample" --match "_MultTex.sample"
 python3 "$SCRIPT" symbols "UpdateHalos|DrawCombatArrow|BattlefieldIcons"
+python3 "$SCRIPT" types "SplineMovementData|MovementData|ZoneTransferGroup"
+python3 "$SCRIPT" disasm "SplineData" "HermiteGetPoint|GetModifiedPositions"
 ```
 
 Pass `--mtga <path>` if MTGA is installed outside the default Steam folder.
 
+For numeric `MonoBehaviour` / `ScriptableObject` / `Transform` / `Camera` fields
+(`AnimationCurve` Hermite keyframes, `SplineData` node vectors/Eulers, camera
+FOV and root transform), run `UnityPy` on the fly with `uv` (always set
+`FALLBACK_UNITY_VERSION` because MTGA strips the version header from bundles):
+
+```bash
+uv run --with UnityPy python -c '
+import UnityPy
+UnityPy.config.FALLBACK_UNITY_VERSION = "2022.3.0f1"
+env = UnityPy.load(".../Bucket_Card.MovementPayload_Spline_0_....mtga")
+for obj in env.objects:
+    if obj.type.name == "MonoBehaviour":
+        tree = obj.read_typetree()
+        if "LibraryToHand" in tree.get("m_Name", ""):
+            print(tree["m_Name"], tree.get("Speed"), tree.get("Easing"))
+'
+```
+
 ## Where Arena puts different kinds of VFX and animations
 
-Search the Manifest first (`manifest <regex>`) to map a feature to its bundles:
+Search ALTs (`alt`) and the Manifest (`manifest <regex>`) first to map a feature
+to its rules and bundles:
 
-| Feature area | Typical Manifest bundle prefixes |
+| Feature area | Typical ALT / Manifest bundle prefixes |
 | --- | --- |
+| Zone-transfer selection rules, phase splits & stagger | `ALT/ALT_Card_*.mtga` (`ALT_Card.MovementPayload_Spline`, `_NonStack_SFX`, `_VFX`), `ALT/ALT_ZoneTransfer_*.mtga` (`ZoneTransfer_GroupStagger`, `ZoneTransfer_HangTime`), `ALT/ALT_RegionTransfer_*.mtga` |
+| Card movement splines & Hermite easing curves | `Bucket_Card.MovementPayload_Spline_*` (`SplineMovementData`: `Speed`, `Easing: AnimationCurve`, `Spline: SplineData`) |
+| Card holders & zone anchors (hands, libraries) | `Bucket_Prefab.CardHolderBasePrefab_*` (`LocalHand_Desktop_16x9`, `OpponentHand_Desktop_16x9`, `LocalLibrary`, `OpponentLibrary`) |
+| DuelScene camera & root transforms | `Bucket_Scenes.ScenePayloads_*` (`DuelScene.unity`, `TopDownCameraController`, main `Camera` FOV/position/rotation) |
 | Card eligibility / hover / selection highlights | `Bucket_Card.Highlight_*`, `Bucket_Card.Parts.HighlightsPart_*` |
 | Combat attacker & blocker indicators | `Bucket_Card.AttackerIcon_*`, `Bucket_Card.BlockerIcon_*` |
 | Combat strikes, splines & hit impacts | `Bucket_Combat.Spline*`, `Bucket_Combat.VFXBirth_*`, `Bucket_Combat.VFXHit_*`, `Bucket_Combat.VFXSustain_*` |
@@ -91,28 +131,58 @@ Search the Manifest first (`manifest <regex>`) to map a feature to its bundles:
 | Turn glows, avatar highlights & duel UI FX | `Atlas_Duel_PlayerTurnGlows_*`, `Bucket_Avatar.HighlightVFX_*`, `Bucket_Avatar.PersistVFX_*`, `Bucket_UI.DuelScene.*` |
 | Shared VFX shaders | `Shader_ParticleUber_*`, `Shader_GlowPremultiplied_*`, `Shader_GlowPanner_*`, `Shader_GlowFading_*`, `Shader_TextureMultSmoke_*`, `Shader_Additive_*`, `Shader_CardAdvanced_*` |
 
+### Key `Core.dll` C# classes for card motion and zone transfers
+
+Use `types` / `disasm` on these classes when investigating card flight, timing,
+or zone layout behavior:
+
+| C# type (`Core.dll`) | Role |
+| --- | --- |
+| `MovementSystem.SplineMovementSystem` | Drives active spline transfers (`UpdateMovement`, `MoveTowards`, `GetDefaultSpeed`) |
+| `MovementData` | Per-card progress/pose evaluator (`UpdateProgress`, `UpdatePosition`, `UpdateRotation`, `UpdateScale`, `.cctor` default regroup speed/curve) |
+| `SplineMovementData` / `SplineData` | `PlaceOnCurveEased`, `GetModifiedPositions` (`WorldAbsolute` endpoint clamp vs. relative TRS warp), `GetModifiedRotations`, `HermiteGetPoint` (uniform cubic Catmull-Rom), `GetPCFFPoints` (linear-reflected phantom endpoints), `GetRotationOnCurve` (piecewise `Quaternion.Slerp`) |
+| `ZoneTransferGroup` / `ZoneTransferUXEvent` | Batch stagger scheduling (`TryGetStaggerDuration`, `Update`), including adaptive stagger compression (`MAX_STAGGER_TIME = 1.5 s`, so large batches use `1.5 / count`) |
+| `CardHolderBase` / `BaseHandCardHolder` / `HandCardHolder` / `OpponentHandCardHolder` / `LibraryCardHolder` | Zone resting slot order, fan layout, `GetLayoutSplineEvents`, `PlayImpactShake` |
+| `TopDownCameraController` | DuelScene perspective camera framing (Unity Y-up left-handed coordinates; needed to project Arena world-space spline nodes into screen NDC and camera depth ratios) |
+
 ## The 6-step clean-room RE + visual-match loop
 
 ### 1. Film Arena first (`arena-video`)
 
-Before reading a single shader uniform, film the exact moment in `~/arena` using
-`arena-video` (whole table first, then high-resolution crop of the effect):
+Before reading a single shader uniform or spline node, film the exact moment in
+`~/arena` using `arena-video` (whole table first, then high-resolution crop of
+the effect or a 12–15 fps strip for fast card flights):
 
 ```bash
 just video film <id> <time> --span 4 --fps 2 --cols 4 --width 960
+just video film <id> <time> --span 1.5 --fps 12 --cols 5 --width 360
 just video film <id> <time> --span 1.5 --fps 4 --cols 3 --width 960 --crop x,y,w,h
 ```
 
-**Why video comes first**: Raw material properties are frequently misleading
-without seeing the composited output. For example, a material's
+**Why video comes first**: Raw material properties and serialized curves are
+frequently misleading without seeing the composited output. A material's
 `_HighRangeColorMult` may look green/cyan on paper while vertex color, texture
-tint, and bloom composite it into warm gold; and gameplay frames immediately
-expose state-driven shifts (such as blocked attackers turning from crimson to
-gold, or brief confirmation flashes) that static prefab dumps obscure.
+tint, and bloom composite it into warm gold; gameplay frames immediately expose
+state-driven shifts (blocked attackers turning crimson to gold), zone ordering
+(Arena mirrors the opponent's hand across the table so newly drawn cards enter
+the **leftmost** slot), and where the motion actually feels fast or paused.
 
-### 2. Inspect the prefab hierarchy, states and components
+### 2. Inspect ALTs, prefabs, serialized assets, and scene transforms
 
-Run `prefab` and `cabs` on the target bundle:
+For **card motion & zone transfers**:
+
+1. Query `ALT_Card` and `ALT_ZoneTransfer` with `alt` to find every branch
+   (e.g., Beginning-phase vs. non-Beginning `Speed`, face-down variants, stagger
+   duration, SFX/VFX delays).
+2. Read the referenced `ScriptableObject` / `MonoBehaviour` assets via `UnityPy`
+   (`read_typetree()`) to inspect `Speed`, `AnimationCurve` Hermite keyframes,
+   and `SplineData` control nodes.
+3. Read `DuelScene.unity` camera parameters from `Bucket_Scenes.ScenePayloads_*`
+   (iterating all non-`.resS` nodes) so you can project Arena's world-space
+   control points into screen-space NDC and camera depth ratios (`rel_scale =
+   depth_end / depth_node`).
+
+For **VFX & indicators**, run `prefab` and `cabs` on the target bundle:
 
 ```bash
 python3 "$SCRIPT" prefab <bundle-prefix>
@@ -157,29 +227,42 @@ Extract only the rendering architecture and parameters:
   fragment body, not by uniform names in `UnityPerMaterial_Type`, because uber
   shaders declare every uniform struct field in every variant.
 
-### 4. Check C# symbols only when orchestration or timing is unclear
+### 4. Inspect C# types and ARM64 disassembly when rules or math are in code
 
-If you need to know *when* a state flag toggles, how arrows/splines are driven,
-or what controls highlight priority, search `global-metadata.dat`:
+Use `symbols`, `types`, and `disasm` when neither assets nor video answer
+orchestration, speed multipliers, stagger compression, or interpolation math:
 
 ```bash
-python3 "$SCRIPT" symbols "<regex>"
+python3 "$SCRIPT" types "MovementData|SplineData"
+python3 "$SCRIPT" disasm "MovementData" "UpdateProgress|UpdatePosition"
 ```
 
-Only disassemble `GameAssembly.dylib` (ARM64 Mach-O) if neither the assets nor
-Arena video answer the timing or state logic; for most visual effects, video
-frame counts at 30/60 fps plus prefab state names are faster and exact.
+Common things C# disassembly resolves in minutes that video alone hides:
+
+- **Exact progress speed formula**: e.g., `progress += dt * endPoint.Speed *
+  spline.Speed * globalSpeedMultiplier`, and default non-spline regroup speed
+  (`GLOBALSPEED = 4.0` = `250 ms`).
+- **Endpoint handling**: `WorldAbsolute` + `Clamp` overwrites only `nodes[0]`
+  and `nodes[N - 1]` while keeping interior nodes fixed in space, whereas
+  relative splines apply an affine TRS warp.
+- **Spline boundary & rotation rules**: uniform cubic Catmull-Rom with reflected
+  phantom endpoints (`P = 2C - F`, `FF = 2F - C`) vs. piecewise `Quaternion.Slerp`
+  for rotation.
+- **Adaptive stagger caps**: e.g., `ZoneTransferGroup` compressing `0.25 s`
+  stagger to `1.5 / count` when `0.25 * count > 1.5 s`.
 
 ### 5. Author clean-room Rust + WGSL for Beryl 3D
 
 Translate the *technique* cleanly into Beryl 3D's architecture
 (`docs/beryl-3d.md` and `rust/beryl3d/AGENTS.md`):
 
+#### For VFX & Shaders
+
 - **Baseline vs. Enhanced split (Decision C8)**: Leave Baseline's frozen
   `rust/beryl3d/crates/beryl_render/src/shader.wgsl` untouched (1 texture sample
   per fragment, 2015 floor / OpenGL ES 3.0 budget). Put rich procedural noise,
   UV distortion, Fresnel rims, bloom, and extra particles in the **Enhanced**
-  tier (`beryl_render/src/enhanced/`).
+  tier (`rust/beryl3d/crates/beryl_render/src/enhanced/`).
 - **`Draw` record & `shader_cost` awareness**: `kit_frame::frame::Draw` is fixed
   at 80 bytes (`uv: [u16; 4]`, `params: [f32; 4]`). Adding branches to `fs_lit`
   in `enhanced/entry.wgsl` increases entry-point naga expressions charged to
@@ -207,6 +290,71 @@ Translate the *technique* cleanly into Beryl 3D's architecture
     headless test commands like `--do still` will never settle. Signal ambient
     VFX ticks to live display hosts (`beryl_host/src/frames.rs`) separately from
     finite script wake, and freeze ambient motion under reduced motion.
+
+#### For 3D Card Motion, Splines & Timing
+
+Key Beryl 3D files to read and update together:
+
+- **Step durations, phase splits, stagger & regrouping**:
+  `data/ui-conventions.json`, `rust/crates/beryl_protocol/src/script/timing.rs`
+  (and `timing/rules.rs`, `timing/tests.rs`, `ui/scripts/stage-table.mjs`).
+- **Compact 3D spline & Hermite curve engine**:
+  `rust/beryl3d/crates/kit_base/src/pose/spline.rs` (`Shape::Spline`,
+  `HermiteCurve`, `SplineNode`) and
+  `rust/beryl3d/crates/kit_base/src/pose/segment.rs`.
+- **Data-driven verb tuning & layout profiles**: `data/beryl3d/verbs.json`,
+  `rust/beryl3d/crates/kit_base/src/data/verbs.rs`,
+  `data/beryl3d/profiles/desktop.json` and `phone.json`.
+- **Verb playback & camera projection**:
+  `rust/beryl3d/crates/game_play/src/verbs/fly.rs`.
+- **Resting zone/hand order (keep both clients aligned)**:
+  `rust/beryl3d/crates/game_table/src/table/hands.rs`,
+  `ui/src/game/handLayout.ts`, `ui/src/stage/phone.ts`.
+- **Probe tests**: `rust/beryl3d/crates/game_probe/tests/all/verbs_fly_draw.rs`.
+
+Essential motion translation rules:
+
+- **Update real step durations — never squeeze Arena's curves into old Beryl
+  timings**: Compressing a 1429 ms Hermite hold-plateau curve into 1050 ms (or
+  an 833 ms opponent draw into 475 ms) distorts the pause shoulders and flight
+  feel. Update `data/ui-conventions.json` and `beryl_protocol::script::timing`,
+  run `just conventions`, and refresh both committed web references:
+  - `just b3d timeline-parity --fixtures --refresh-web`
+  - `just b3d match score --refresh-web`
+  If changing animation durations shifts a raw wall-clock entry in
+  `tools/src/beryl_tools/beryl3d/match/reference.py` (`MOMENTS`), anchor it to
+  its `step:V.B.S` moment so future timing updates cannot drift it.
+- **Avoid camera depth-ratio speed warp**: Arena's camera sits far enough back
+  that library-to-hand depth varies by only `~1.6:1`, so 3D world Catmull-Rom
+  maps evenly to screen speed. Beryl 3D's camera puts the table at `~1300 mm`
+  and the hand at `~300 mm` (`~4.8:1` ratio), which warps screen-space velocity
+  if Catmull-Rom runs directly in Beryl world coordinates. Use `Shape::Spline`'s
+  **homogeneous camera-ray Catmull-Rom** (`(ray * w, w)` weighted by Arena's
+  frustum depth ratio `w = 1 / rel_scale`, divided by `w(u)` and scaled by
+  Catmull-Rom `depth(u)`) so screen-space NDC velocity matches Arena 1:1 while
+  preserving true 3D depth for shadows and layering.
+- **Check resting zone order, Z-rotation symmetry, and edge-on flips**:
+  - Verify which side of a zone newly arriving cards enter (e.g., opponent hand
+    cards are mirrored across the table and enter the **leftmost** slot in both
+    Beryl 3D and the web client; otherwise endpoint clamping creates an
+    end-of-flight U-turn).
+  - `CentredFan` with `inverted: true` rotates opponent hand cards by `π` about
+    local Z; set `start_half_turn` on symmetric face-down departures so cards do
+    not spin 180° in-plane mid-flight.
+  - Derive `Pose::turn` from the 3D front-face normal
+    `(world_rot * Vec3::Z).dot(camera_back) >= 0` across edge-on flips so
+    `StateBits::FACE_DOWN` switches on the exact edge-on frame with zero
+    transform discontinuity.
+- **Respect `Segment` size, zero-allocation, and toolkit-layer budgets**:
+  - `kit_base::pose::Segment` must stay `<= 256` bytes
+    (`clippy::large_types_passed_by_value` across `game_play`) and `Shape`
+    variant size spread `< 200` bytes (`clippy::large_enum_variant`), with zero
+    heap allocations in `Client::frame` (`b3d-gate`). Quantize spline nodes
+    (`i16`/`u16`, smallest-three quaternions) and assert the size budget in
+    tests (`pose::spline::tests::segment_stays_within_value_size_budget`).
+  - `kit_base` is a toolkit crate enforced by `just b3d levels`: never mention
+    Magic domain terms (`library`, `hand`, `opponent`, `card`) in `kit_base`
+    code or comments.
 - **Respect Beryl conventions**: Check `docs/ui-conventions.md` (for example,
   Beryl taps cards 90° rather than Arena's ~15° tilt, so normalize shader
   geometry by `aspect = height / base_width` rather than assuming a fixed edge
@@ -214,15 +362,18 @@ Translate the *technique* cleanly into Beryl 3D's architecture
 
 ### 6. Iterate side-by-side (`arena-pixel-match` style)
 
-Render Beryl 3D in Enhanced mode at 2× scale and compare cropped frames directly
-beside the Arena crops from step 1:
+Render Beryl 3D at 1× playback speed (`--no-catch-up`) and compare filmstrips
+directly beside the Arena clips from step 1:
 
 ```bash
 just b3d png <scene> --at <moment> --tier enhanced --scale 2
-just b3d film <scene> --from <start> --to <end> --frames 4 --tier enhanced
+# Note: step:V.B.S is the step's MIDPOINT. Use --no-catch-up and ±half-duration
+# to film a full 1x animation from start to end:
+just b3d film <scene> --seat you --no-catch-up \
+  --from step:V.B.S-<half>ms --to step:V.B.S+<half>ms --frames 15
 ```
 
-Check these failure modes that shader reading alone will miss:
+Check these failure modes that static asset reading and unit tests miss:
 
 1. **Multi-card crowding**: Adjacent cards' glows/shields colliding or crossing
    like overlapping eyebrows when widths exceed ~105% of card width.
@@ -230,22 +381,50 @@ Check these failure modes that shader reading alone will miss:
    + bloom summing to solid white at intersections.
 3. **Row-gap clearance**: Opposing rows' chevrons and shields touching across
    the battlefield gap.
-4. **Both seats & orientations**: Verify `you` (pointing up) and `opponent`
-   (pointing down), plus tapped vs. untapped cards and bright vs. dark playmat
-   regions.
-5. **Temporal readability**: Check a 4-frame filmstrip to confirm scrolling
-   wisps and particles read as smooth motion rather than high-frequency noise.
+4. **Both seats, batch sizes & orientations**: Verify `you` and `opponent`
+   seats, single vs. multi-card batches, tapped vs. untapped cards, desktop vs.
+   phone layouts, and bright vs. dark playmat regions.
+5. **Motion artifacts**: Watch the 1× filmstrip for wrong hand-side entry or
+   end-of-flight U-turns, 180° in-plane back-spins on face-down flights,
+   compressed hold plateaus, or depth-ratio speed warp.
+6. **Temporal readability**: Check multi-frame strips to confirm scrolling wisps
+   and particles read as smooth motion rather than high-frequency noise.
 
 ## Common pitfalls
 
+- **Forgetting `--no-catch-up` or midpoint math in `just b3d film`**: Without
+  `--no-catch-up`, Beryl 3D replays queued scripts at 2×–4× speed; and
+  `step:V.B.S` resolves to the step's **midpoint**, not its start.
+- **Trusting video-estimated durations over serialized `Speed` + curve**:
+  Zero-slope Hermite ease-in keeps a card visually over its starting pile for
+  ~150–200 ms, so video stopwatches (`data/arena-motion.json`) can under-report
+  the true spline duration; always verify against the ALT + `SplineMovementData`
+  `Speed` and curve tail.
 - **UnityFS v8 padding**: Bundles with `flags & 0x200` align the start of data
   blocks to a 16-byte boundary after `blocksInfo`; omitting that alignment
   corrupts LZ4 decompression immediately.
+- **Multi-node scene bundles**: `Bucket_Scenes.ScenePayloads_*` stores many
+  `SerializedFile` nodes (one per scene plus `.resS`); iterate all non-`.resS`
+  nodes instead of assuming `nodes[0]`.
+- **`UnityPy` version warning**: MTGA strips the Unity version string from
+  bundles; set `UnityPy.config.FALLBACK_UNITY_VERSION = "2022.3.0f1"` before
+  calling `read_typetree()`.
+- **Mach-O ARM64 chained fixups & `objdump` range bug**: Raw 64-bit pointers
+  inside `GameAssembly.dylib` `__DATA_CONST`/`__DATA` carry chained-fixup
+  metadata in their upper bits; mask with `(1 << 36) - 1` before comparing
+  against virtual addresses. Also, Apple's `objdump` / `xcrun llvm-objdump`
+  ignores `--start-address`/`--stop-address` when given `--arch=arm64` on a
+  universal binary (dumping millions of lines); use `xcrun lldb -b` (as
+  `inspect_mtga.py disasm` does) to disassemble a single function range in
+  under a second.
 - **Uber-shader false positives**: `Shader_ParticleUber` declares `_DistTex`,
   `_MultTex`, and `_FresnelExp` inside `UnityPerMaterial_Type` for *all*
   variants. Always match on actual `.sample(` calls inside `fragment `.
 - **Over-interpreting raw HDR floats**: Multiply material colors by vertex
   colors and check the actual video frame before picking Beryl's palette.
+- **Dual Rust workspaces formatting**: `just fmt` formats `rust/`, JS, Python,
+  and Markdown, while `rust/beryl3d/` is a separate Cargo workspace that also
+  needs `cargo fmt --manifest-path rust/beryl3d/Cargo.toml --all`.
 - **Forgetting `data/beryl3d/parity.json`**: Any new skill directory under
   `.agents/skills/` must also be listed in `data/beryl3d/parity.json` (and
   symlinked in `.claude/skills/`) so `just b3d parity --check` passes.
