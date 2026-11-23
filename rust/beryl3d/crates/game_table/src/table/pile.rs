@@ -20,7 +20,7 @@
 //!   (the phone layout) the pile's bottom card stands on the point of the table under it.
 
 use beryl_protocol::protocol::{ObjectId, ObjectView, Side, ZoneName};
-use glam::{Affine3A, Mat3, Quat, Vec2, Vec3};
+use glam::{Affine3A, Mat3, Vec2, Vec3};
 
 use super::place::{Placement, Rest, turn};
 use super::scene::Table;
@@ -204,11 +204,10 @@ pub(super) fn lay_pile(
         if let Some(rim_scale) = rim_scale
             && height + 2 == count
         {
-            let top = layers.pose(bottom, count - 1).position;
+            let top = layers.pose(bottom, count - 1);
             let offset = rim_offset(&layout.pile, side, 1.0) * rim_scale;
-            let point = camera.to_screen(top) + offset;
-            let z = pose.position.z;
-            pose.position = camera.on_plane(point, z).truncate().extend(z);
+            let point = camera.to_screen(top.position) + offset;
+            pose.position = layer_centre(camera, top, point, card.layer);
         }
         let place = Place::Card {
             zone,
@@ -434,6 +433,16 @@ fn rim_offset(pile: &PileGeometry, side: Side, depth: f32) -> Vec2 {
     }
 }
 
+/// The centre under `point`, on a plane parallel to `top` and `below` millimetres behind it.
+/// Using horizontal planes for the projected offsets can put a tilted rim at the same depth
+/// as the top face. The depth test then draws triangles of the rim across the face.
+fn layer_centre(camera: &Camera, top: Pose, point: Vec2, below: f32) -> Vec3 {
+    let normal = top.rotation * Vec3::Z;
+    let ray = camera.on_plane(point, top.position.z) - camera.eye;
+    let distance = (top.position - camera.eye).dot(normal) - below;
+    camera.eye + ray * (distance / ray.dot(normal))
+}
+
 /// One side of a pile's cards whose edges show beneath its top card, in the table's space.
 struct Edge {
     /// The way out of the card across the edge.
@@ -449,7 +458,7 @@ struct Edge {
     /// Whether the spread lines are drawn individually. The opponent's left
     /// edges step less than their line is wide, so they draw one band.
     stripes: bool,
-    /// How far below its card's height the edge is drawn, so that where two edges of one card
+    /// How far behind its card the edge is drawn, so that where two edges of one card
     /// meet at a corner, the light line covers the shaded one.
     below: f32,
 }
@@ -461,7 +470,7 @@ struct Edge {
 /// to the right of the top card. The opponent's shows their near edges below it, and their
 /// left edges, in a shaded line, to its left.
 ///
-/// Each rim lies flat at its card's height, under the point of the screen the web draws it at.
+/// Each rim lies behind the two visible cards, under the point of the screen the web draws it at.
 /// A rim's line shows only as far as the card above it leaves it uncovered, so a few records
 /// draw what the web draws with one element a card:
 ///
@@ -494,21 +503,17 @@ fn write_side(
         |fit| fit.rim_scale,
     );
     let bottom = bottom_pose(card, pile.base, pile.scale, pile.tilt, pile.skew);
-    let top = Pile::vertical(card).pose(bottom, pile.count - 1).position;
-    let top_height = top.z;
+    let top = Pile::vertical(card).pose(bottom, pile.count - 1);
     // The rims lean back with the pile's cards (`PileShown::tilt`).
-    let lean = Quat::from_rotation_x(pile.tilt);
-    let top = camera.to_screen(top);
-    // The point of the table `height` up that lies under the web's card `depth` beneath the top.
+    let lean = top.rotation;
+    let on_screen = camera.to_screen(top.position);
     #[expect(clippy::cast_precision_loss, reason = "depth is at most 63")]
-    let centre = |depth: usize, height: f32| {
+    let centre = |depth: usize, below: f32| {
         let offset = rim_offset(geometry, side, depth as f32);
-        let point = top + offset * rim_scale;
-        camera.on_plane(point, height)
+        layer_centre(camera, top, on_screen + offset * rim_scale, below)
     };
     #[expect(clippy::cast_precision_loss, reason = "depth is at most 63")]
-    let height = |depth: usize| top_height - camera.data.card.layer * depth as f32;
-    let at = |depth: usize| centre(depth, height(depth));
+    let separation = |depth: usize| card.layer * depth as f32;
 
     // The web shears each pile card about its own top left corner (`skewX`), which leans its
     // sides toward the vanishing point. The same shear about a card's middle, along the card's
@@ -529,7 +534,7 @@ fn write_side(
             translation: (pivot - linear * pivot).into(),
         }
     };
-    let low = height(deepest) - camera.data.card.layer / 2.0;
+    let low = separation(deepest) + card.layer / 2.0;
     for depth in [2, deepest] {
         let middle = centre(depth, low);
         let transform = shear(middle)
@@ -541,9 +546,11 @@ fn write_side(
         builder.draw(Band::Opaque, Draw::table(transform, RIM_FILL));
     }
     for edge in edges(card, geometry, side, pile.scale) {
-        // The middle of `depth`'s edge, drawn `edge.below` under its card.
+        // The band's screen span can start at the second card, but its mesh must start
+        // behind that card just like the individual stripes.
+        let edge_centre = |depth: usize| centre(depth, separation(depth.max(2)) + edge.below);
         let normal = lean * edge.normal;
-        let on_edge = |depth: usize| at(depth) + normal * edge.half_across - Vec3::Z * edge.below;
+        let on_edge = |depth: usize| edge_centre(depth) + normal * edge.half_across;
         // The card mesh squeezed to a line lying flat, its middle at `middle`, spanning `across`
         // and the card's length along the edge. The squeezed mesh keeps the card's rounded
         // corners at the line's ends, as the web's border curves into the card's corners. The
@@ -573,7 +580,10 @@ fn write_side(
                     .clamp(0.0, edge.line);
                 if width > 0.0 {
                     let middle = on_edge(depth) - normal * width / 2.0;
-                    builder.draw(Band::Opaque, line(at(depth), middle, normal * width));
+                    builder.draw(
+                        Band::Opaque,
+                        line(edge_centre(depth), middle, normal * width),
+                    );
                 }
             }
         }
@@ -582,7 +592,7 @@ fn write_side(
             let (near, far) = (on_edge(band_from), on_edge(deepest));
             builder.draw(
                 Band::Opaque,
-                line(at(band_from), (near + far) / 2.0, far - near),
+                line(edge_centre(band_from), (near + far) / 2.0, far - near),
             );
         }
     }

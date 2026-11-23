@@ -13,7 +13,7 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, object, timing};
 use game_table::table::{Camera, Held, Table, TrayKind, landing, tray, tray_boxes};
 use glam::{Vec2, Vec3};
 use kit_base::pose::{Pose, Segment};
-use kit_frame::frame::{Frame, Role};
+use kit_frame::frame::{Frame, Material, Role};
 use kit_space::motion::pose_at;
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Size};
@@ -116,6 +116,70 @@ fn a_library_falls_by_one_layer_when_a_card_is_drawn() {
     assert!(
         (before - after - crate::test_data::data().card.layer).abs() < 1e-2,
         "{before} became {after}"
+    );
+}
+
+#[test]
+fn the_opponents_graveyard_face_is_in_front_of_the_cards_and_rims_below_it() {
+    let mut view = ViewBuilder::new();
+    let mut slots = Vec::new();
+    for name in [
+        "Damn",
+        "Counterspell",
+        "Fractured Identity",
+        "Plains",
+        "Snapcaster Mage",
+    ] {
+        slots.push(view.card(ZoneName::Graveyard, Side::Opponent, name).slot);
+    }
+    view.script(ScriptBuilder::reset().build());
+
+    let mut client = client();
+    client.handle(Input::Device(DeviceInput::Surface {
+        size: Size {
+            width: 1728.0,
+            height: 1117.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    }));
+    client.handle(Input::Update(Box::new(view.update())));
+    let frame = client.frame(0);
+    let pose = |index: usize| {
+        frame
+            .resolved
+            .iter()
+            .find(|element| element.role == Role::Card && element.id.0 == u32::from(slots[index].0))
+            .and_then(|element| element.pose)
+            .expect("a visible card in the pile")
+    };
+    let (top, under) = (pose(4), pose(3));
+    let normal = top.rotation * Vec3::Z;
+    let separation = crate::test_data::data().card.layer / 2.0;
+    let rims = frame.draws.iter().filter(|draw| {
+        draw.material == Material::Table as u8
+            && draw.params.iter().all(|value| value.abs() < f32::EPSILON)
+    });
+    let half = crate::test_data::data().card.half();
+    let mut count = 0;
+    for draw in rims {
+        count += 1;
+        let [xx, xy, _, x, yx, yy, _, y, zx, zy, _, z] = draw.model;
+        let (across, along) = (Vec3::new(xx, yx, zx), Vec3::new(xy, yy, zy));
+        for x_side in [-half.x, half.x] {
+            for y_side in [-half.y, half.y] {
+                let corner = Vec3::new(x, y, z) + across * x_side + along * y_side;
+                assert!(
+                    (under.position - corner).dot(normal) > separation,
+                    "the rim at {corner:?} must lie behind the second card"
+                );
+            }
+        }
+    }
+    assert!(count > 2, "the pile draws dark filling and stripes");
+    assert!(
+        (top.position - under.position).dot(normal) > separation,
+        "the second card must lie behind the top face"
     );
 }
 
