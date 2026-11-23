@@ -14,6 +14,7 @@
 pub(crate) mod bloom;
 mod light;
 mod shadow;
+pub(crate) mod vfx;
 
 use std::num::NonZeroU64;
 
@@ -27,6 +28,7 @@ use crate::runs::Pass;
 
 use self::bloom::Bloom;
 use self::shadow::Shadow;
+use self::vfx::Vfx;
 
 /// How many samples each pixel of the main pass holds.
 pub(crate) const SAMPLES: u32 = 4;
@@ -95,6 +97,8 @@ pub(crate) struct Enhanced {
     /// resolve; its four-sample pipeline is made with the others so that a frame drawn some
     /// other way later needs none made during play.
     pipelines: Pipelines,
+    /// Dedicated pipelines for procedural Enhanced VFX (`Material::Vfx`).
+    vfx: Vfx,
     /// The layout of bind group 1: `Lit`, the shadow map and its comparison sampler.
     layout: wgpu::BindGroupLayout,
     shadow: Shadow,
@@ -147,6 +151,7 @@ impl Enhanced {
         let uniforms: Vec<&wgpu::Buffer> = uniforms.collect();
         let mut enhanced = Self {
             pipelines,
+            vfx: Vfx::new(device, format, layout),
             layout: lit_layout,
             shadow: Shadow::new(device, &uniforms, &tuning.enhanced.shadow_map),
             bloom: Bloom::new(device, format, layout, tuning.enhanced.bloom),
@@ -260,10 +265,20 @@ impl Enhanced {
             };
             pass.set_bind_group(1, group, &[]);
             count::begin(counter, &mut pass);
-            draw_calls += draws.record(&mut pass, &self.pipelines, |pass| !pass.is_layer());
+            draw_calls += draws.record_with(&mut pass, |run| {
+                (!run.pass.is_layer()).then(|| {
+                    if run.vfx {
+                        self.vfx.pipeline(run.pass)
+                    } else {
+                        &self.pipelines[run.pass as usize]
+                    }
+                })
+            });
             count::end(counter, &mut pass);
         }
-        draw_calls += self.bloom.apply(encoder, draws, view, counter);
+        draw_calls += self
+            .bloom
+            .apply(encoder, draws, view, self.vfx.bloom(), counter);
         if draws.frame.layer < draws.kept {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("flat layer"),

@@ -39,6 +39,8 @@ pub struct Run {
     pub array: u8,
     /// An entry of `Frame::clips` in any pass, or 0 for the whole target.
     pub clip: u8,
+    /// Whether this run uses the dedicated Enhanced VFX pipeline.
+    pub vfx: bool,
     /// The records drawn, as a range of `Frame::draws`.
     pub records: Range<u32>,
 }
@@ -93,9 +95,10 @@ impl Iterator for Runs<'_> {
         let start = self.next;
         let first = draws.get(start as usize)?;
         let pass = self.pass(start);
+        let vfx = first.is_vfx();
         let mut end = start + 1;
         while let Some(draw) = draws.get(end as usize) {
-            if draw.flags != first.flags || self.pass(end) != pass {
+            if draw.flags != first.flags || draw.is_vfx() != vfx || self.pass(end) != pass {
                 break;
             }
             end += 1;
@@ -106,6 +109,7 @@ impl Iterator for Runs<'_> {
             mesh: first.mesh() as u8,
             array: first.texture_array() as u8,
             clip: first.clip(),
+            vfx,
             records: start..end,
         })
     }
@@ -163,5 +167,29 @@ mod tests {
                 (Pass::Layer, 7..8),
             ]
         );
+    }
+
+    #[test]
+    fn vfx_records_split_into_their_own_runs_and_batch_together() {
+        use kit_frame::frame::Vfx;
+
+        let mut frame = Frame::with_capacity(0, 8, 0);
+        let mut builder =
+            FrameBuilder::new(&mut frame, Tier::Enhanced, glam::Vec2::new(63.0, 88.0));
+        let glow = Draw::glow(Affine3A::IDENTITY, [255; 4], Sprite::default(), 0.0);
+        let chevron = Draw::vfx(Affine3A::IDENTITY, [255; 4], Vfx::Chevron, [0.0; 4]);
+        let shield = Draw::vfx(Affine3A::IDENTITY, [255; 4], Vfx::ShieldDome, [0.0; 4]);
+        builder.draw(Band::Glows, glow);
+        builder.draw(Band::Glows, chevron);
+        builder.draw(Band::Glows, shield);
+        let frame = builder.finish();
+        let found: Vec<(Pass, bool, Range<u32>)> = runs(frame)
+            .map(|run| (run.pass, run.vfx, run.records))
+            .collect();
+        assert_eq!(
+            found,
+            [(Pass::Table, false, 0..1), (Pass::Table, true, 1..3)]
+        );
+        assert_eq!(frame.load.draw_calls, 2);
     }
 }

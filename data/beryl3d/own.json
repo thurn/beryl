@@ -24,5 +24,30 @@
     "size": [0.83, 0.10],
     "open_ms": 120,
     "opens_from": 0.85
+  },
+  "combat_fx": {
+    "attacker": {
+      "width_scale": 0.86,
+      "height_scale": 0.185,
+      "height_range": [0.21, 0.255],
+      "sparks": {
+        "unblocked_count": 7,
+        "blocked_count": 4,
+        "cycle_s": [0.85, 0.55],
+        "edge_inset": 0.44,
+        "along": [0.12, 0.78],
+        "sway_turns": 1.2,
+        "sway_reach": 0.036,
+        "drift": [0.18, 0.14],
+        "radius": [0.022, 0.014],
+        "shrink": 0.5,
+        "fade_in": 5.0
+      }
+    },
+    "blocker": {
+      "width_scale": 1.04,
+      "height_card": 0.195,
+      "height_edge_max": 0.22
+    }
   }
 }

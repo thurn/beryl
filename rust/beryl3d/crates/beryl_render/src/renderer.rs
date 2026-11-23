@@ -717,7 +717,7 @@ fn over_pass(
     let calls = draws.record_part(
         &mut pass,
         at..draws.kept,
-        |run| Some(&pipelines[run as usize]),
+        |run| Some(&pipelines[run.pass as usize]),
         (draws.width, draws.height),
     );
     count::end(counter, &mut pass);

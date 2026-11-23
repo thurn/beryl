@@ -377,44 +377,14 @@ impl Client {
         }
         self.layer
             .follow(|subject| game_hud::hud::anchors::spot_of(&builder, subject));
-        // Each total shows what `prepare` laid out, over the opening too, as the web's does.
-        let opening = self.features.opening.shown;
-        self.features.totals(counts::Draw {
-            layer: &mut self.layer,
-            counts: self.show.counts(),
-            effects: self.show.effects(),
-            now: table_now,
-            table,
-            tier: builder.tier(),
-            visible: counted,
+        update_hud_features(
+            &mut self.features,
+            &mut self.layer,
+            &self.show,
+            (table_now, self.tier),
+            (visible, counted, rows_counted, covers),
             targets,
-            dimmed: opening,
-        });
-        self.features.update_piles(piles::Draw {
-            layer: &mut self.layer,
-            table,
-            hovered: self.show.pointer().hovered_pile(),
-            visible: counted && !covers,
-        });
-        self.features.notices(notices::Draw {
-            layer: &mut self.layer,
-            notices: self.show.notices(),
-            now: table_now,
-            layout: table.layout(),
-            visible,
-        });
-        self.features.update_rows(rows::Draw {
-            layer: &mut self.layer,
-            table,
-            visible: rows_counted,
-        });
-        self.features.banner(banner::Draw {
-            layer: &mut self.layer,
-            view: self.show.shown().map(|update| &update.view),
-            now: table_now,
-            visible,
-            tuning: table.data().hud,
-        });
+        );
         Tree::solve_float_anchors(&mut self.layer, &builder);
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
@@ -607,7 +577,7 @@ impl Client {
     /// When to paint a live frame, including decorative motion that never delays play.
     #[must_use]
     pub fn display_wake(&self) -> Wake {
-        if self.features.opening.coin_moving {
+        if self.features.opening.coin_moving || self.frame.ambient_motion {
             Wake::Now
         } else {
             self.wake()
@@ -684,4 +654,54 @@ impl Client {
             .flatten()
             .chain(preview.into_iter().flatten())
     }
+}
+
+/// Updates the HUD features (totals, piles, notices, rows and banner) for the current frame.
+fn update_hud_features(
+    features: &mut features::Features,
+    layer: &mut Layer,
+    show: &Show,
+    (table_now, tier): (u64, Tier),
+    (visible, counted, rows_counted, covers): (bool, bool, bool, bool),
+    targets: [bool; 2],
+) {
+    let table = show.table();
+    // Each total shows what `prepare` laid out, over the opening too, as the web's does.
+    let opening = features.opening.shown;
+    features.totals(counts::Draw {
+        layer,
+        counts: show.counts(),
+        effects: show.effects(),
+        now: table_now,
+        table,
+        tier,
+        visible: counted,
+        targets,
+        dimmed: opening,
+    });
+    features.update_piles(piles::Draw {
+        layer,
+        table,
+        hovered: show.pointer().hovered_pile(),
+        visible: counted && !covers,
+    });
+    features.notices(notices::Draw {
+        layer,
+        notices: show.notices(),
+        now: table_now,
+        layout: table.layout(),
+        visible,
+    });
+    features.update_rows(rows::Draw {
+        layer,
+        table,
+        visible: rows_counted,
+    });
+    features.banner(banner::Draw {
+        layer,
+        view: show.shown().map(|update| &update.view),
+        now: table_now,
+        visible,
+        tuning: table.data().hud,
+    });
 }

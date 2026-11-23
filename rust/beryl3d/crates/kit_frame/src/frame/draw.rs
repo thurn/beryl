@@ -5,6 +5,7 @@
 
 use glam::{Affine3A, Vec2};
 
+use super::Vfx;
 use kit_base::atlas::FaceSize;
 use kit_base::paint::Geometry;
 use kit_base::paint::Shadow;
@@ -48,6 +49,8 @@ pub enum Material {
     Particle = 8,
     BoxShadow = 9,
     Gradient = 10,
+    /// Procedural Enhanced-tier visual effects, drawn by the renderer's dedicated VFX pipeline.
+    Vfx = 11,
 }
 
 /// The texture array a record samples.
@@ -604,6 +607,29 @@ impl Draw {
         let mut draw = Self::sprite(transform, tint, Material::Particle, sprite);
         draw.params = [age, seed, 0.0, 0.0];
         draw
+    }
+
+    /// A procedural Enhanced-tier visual effect of `kind` with effect-specific `params`.
+    /// For combat shapes (`Vfx::Chevron`, `Vfx::ChevronBlocked`, `Vfx::ShieldDome`), `params`
+    /// is `[time_s, fade, seed, aspect]`.
+    #[must_use]
+    pub fn vfx(transform: Affine3A, tint: [u8; 4], kind: Vfx, params: [f32; 4]) -> Self {
+        let mut draw = Self::new(
+            transform,
+            tint,
+            Material::Vfx,
+            TextureArray::Atlas,
+            Mesh::Quad,
+        );
+        draw.uv = [kind as u16, 0, 0, 0];
+        draw.params = params;
+        draw
+    }
+
+    /// Whether this record uses the renderer's dedicated Enhanced VFX pipeline.
+    #[must_use]
+    pub const fn is_vfx(&self) -> bool {
+        self.material == Material::Vfx as u8
     }
 
     /// The strip that softens the edge of this card, drawn with the blended records: the same

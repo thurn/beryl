@@ -21,6 +21,7 @@ mod textures;
 
 pub use atlas::ATLAS_PAGES;
 pub use enhanced::SHADER as ENHANCED_SHADER;
+pub use enhanced::vfx::SHADER as VFX_SHADER;
 pub use mesh::CARD_RADIUS;
 pub use renderer::{Drawn, Limits, Renderer};
 pub use surface::{Native, Presented, Surface};

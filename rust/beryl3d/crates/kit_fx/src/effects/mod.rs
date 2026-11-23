@@ -7,6 +7,7 @@ pub mod particles;
 mod player;
 pub mod preview;
 pub mod shake;
+pub mod vfx;
 
 pub use player::{NumberLook, TextLook, text};
 

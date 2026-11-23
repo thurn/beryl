@@ -108,7 +108,7 @@ pub(super) struct Scratch {
     card_bands: Vec<Option<Band>>,
     batching: Batching,
     /// The call key of the first record pushed to each band, by `Band` value.
-    first_calls: [Option<u8>; BANDS],
+    first_calls: [Option<u16>; BANDS],
     /// A bit for each band, by `Band` value, holding records of more than one call key, which
     /// alone `batch` may need to reorder.
     mixed: u16,
@@ -163,8 +163,9 @@ impl Scratch {
         );
         let tie = record_tie(band, index as u64) << RECORD_INDEX_SHIFT;
         self.keys.push(((band as u64) << BAND_SHIFT) | tie);
-        let first = self.first_calls[band as usize].get_or_insert(draw.flags);
-        if *first != draw.flags {
+        let call = record_call_key(draw);
+        let first = self.first_calls[band as usize].get_or_insert(call);
+        if *first != call {
             self.mixed |= 1 << band as u16;
         }
     }
@@ -473,11 +474,10 @@ fn draw_calls(frame: &Frame) -> u32 {
     let mut calls = 0;
     let mut previous = None;
     for (index, (draw, &key)) in frame.draws.iter().zip(&frame.scratch.keys).enumerate() {
-        // `flags` holds exactly the texture array, the mesh and the clip.
         let key = (
             pass(super::index(index)),
             key & OPAQUE_LAYER_CARD,
-            draw.flags,
+            record_call_key(draw),
         );
         if previous != Some(key) {
             calls += 1;
@@ -516,16 +516,22 @@ fn adds(draw: &Draw) -> bool {
     draw.material == Material::Glow as u8 || draw.material == Material::Streak as u8
 }
 
-/// The part of the key a draw call is cut on: the record's mesh, texture array and clip.
-fn call_key(key: u64, draws: &[Draw]) -> u8 {
-    draws[record_index(key)].flags
+/// The part of the key a draw call is cut on: the record's mesh, texture array, clip and
+/// whether it uses the dedicated Enhanced VFX pipeline.
+const fn record_call_key(draw: &Draw) -> u16 {
+    (draw.flags as u16) | ((draw.is_vfx() as u16) << 8)
+}
+
+/// The call key of the record named by `key`.
+fn call_key(key: u64, draws: &[Draw]) -> u16 {
+    record_call_key(&draws[record_index(key)])
 }
 
 /// Whether every call key in `keys` comes in one unbroken run already, as in a band whose
 /// records are all drawn alike, so that reordering would save no call.
 fn grouped(keys: &[u64], draws: &[Draw]) -> bool {
-    // A bit for each call key whose run has ended.
-    let mut ended = [0_u64; 4];
+    // A bit for each of the 512 possible call keys whose run has ended.
+    let mut ended = [0_u64; 8];
     let mut previous = None;
     for &key in keys {
         let call = call_key(key, draws);

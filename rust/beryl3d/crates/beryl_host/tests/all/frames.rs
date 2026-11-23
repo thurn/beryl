@@ -177,3 +177,59 @@ fn the_loops_wake_counts_the_feed_and_the_pause() {
     frames.tick(INTERVAL, &mut Counter::default());
     assert_eq!(frames.next_wake(INTERVAL), Wake::At(5 * INTERVAL));
 }
+
+#[test]
+fn enhanced_ambient_vfx_keeps_live_ticks_running_until_paused_or_ended() {
+    use beryl_protocol::protocol::{CardType, Combat, Side, ZoneName};
+    use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
+    use kit_frame::frame::Wake;
+    use kit_ui::input::{Insets, Size, Tier};
+
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 256,
+            draws: 1024,
+            name_bytes: 8192,
+        },
+    );
+    client.handle(Input::Device(DeviceInput::Surface {
+        size: Size {
+            width: 1440.0,
+            height: 900.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    }));
+    client.handle(Input::Device(DeviceInput::Tier(Tier::Enhanced)));
+    let mut attacking = ViewBuilder::new();
+    let card = attacking.card(ZoneName::Battlefield, Side::You, "Serra Angel");
+    card.types = vec![CardType::Creature];
+    card.combat = Some(Combat::Attacking {
+        planeswalker: None,
+        target_departed: None,
+        blocked: false,
+    });
+    attacking.script(ScriptBuilder::reset().build());
+
+    let mut frames = FrameLoop::new(client, TestTicks::default());
+    let mut counter = Counter::default();
+    frames.handle(Input::Update(Box::new(attacking.update())));
+    assert!(frames.tick(INTERVAL, &mut counter).is_some());
+    assert_eq!(
+        frames.client().wake(),
+        Wake::Never,
+        "finite script is settled"
+    );
+    assert_eq!(
+        frames.next_wake(INTERVAL),
+        Wake::Now,
+        "live host keeps ticking for ambient combat plasma"
+    );
+    assert!(frames.tick(2 * INTERVAL, &mut counter).is_some());
+
+    // Dropping to Baseline stops ambient ticks once the next frame draws.
+    frames.handle(Input::Device(DeviceInput::Tier(Tier::Baseline)));
+    assert!(frames.tick(3 * INTERVAL, &mut counter).is_some());
+    assert_eq!(frames.next_wake(3 * INTERVAL), Wake::Never);
+}

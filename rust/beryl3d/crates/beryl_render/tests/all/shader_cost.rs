@@ -26,16 +26,24 @@ use serde_json::{Value, json};
 
 const SHADER: &str = include_str!("../../src/shader.wgsl");
 const ENHANCED: &str = beryl_render::ENHANCED_SHADER;
+const VFX: &str = beryl_render::VFX_SHADER;
 const GATES: &str = include_str!("../../../../../../data/beryl3d/gates.json");
 /// The most texture samples a Baseline material may take per fragment.
 const MOST_SAMPLES: u64 = 1;
 /// The most texture samples an Enhanced material may take per fragment.
 const MOST_ENHANCED_SAMPLES: u64 = 5;
+/// Procedural Enhanced VFX take no texture samples per fragment.
+const MOST_VFX_SAMPLES: u64 = 0;
 /// The Enhanced materials' functions, each with the name its counts go under.
 const ENHANCED_MATERIALS: [(&str, &str); 3] = [
     ("shade_card_lit", "card_lit"),
     ("shade_table_lit", "table_lit"),
     ("shade_particle", "particle"),
+];
+/// The procedural Enhanced VFX functions, each with the name its counts go under.
+const VFX_MATERIALS: [(&str, &str); 2] = [
+    ("shade_attacker_chevron", "vfx_chevron"),
+    ("shade_blocker_shield", "vfx_shield"),
 ];
 /// The FNV-1a hash of `src/shader.wgsl`'s bytes. The Baseline shader is frozen by the Enhanced
 /// tier, which reuses its functions and repeats its entry points; a deliberate change to it
@@ -213,10 +221,48 @@ fn backdrop_costs() -> BTreeMap<String, Cost> {
         .collect()
 }
 
+/// The procedural Enhanced VFX materials' costs, by the names in `VFX_MATERIALS`.
+fn vfx_costs(source: &str) -> BTreeMap<String, Cost> {
+    let module = naga::front::wgsl::parse_str(source).expect("the VFX shader parses");
+    let entry = module
+        .entry_points
+        .iter()
+        .find(|entry| entry.name == "fs_vfx")
+        .expect("the VFX shader has `fs_vfx`");
+    let material = |function: &Function| {
+        function
+            .name
+            .as_deref()
+            .is_some_and(|name| name.starts_with("shade_"))
+    };
+    let own = transitive(&module, &entry.function, &material);
+    VFX_MATERIALS
+        .iter()
+        .map(|&(function, name)| {
+            let (_, found) = module
+                .functions
+                .iter()
+                .find(|(_, f)| f.name.as_deref() == Some(function))
+                .unwrap_or_else(|| panic!("the VFX shader has `{function}`"));
+            let cost = transitive(&module, found, &|_| false);
+            (
+                name.to_owned(),
+                Cost {
+                    samples: cost.samples + own.samples,
+                    expressions: cost.expressions + own.expressions,
+                },
+            )
+        })
+        .collect()
+}
+
 /// The most texture samples the material counted under `name` may take per fragment.
 fn most_samples(name: &str) -> u64 {
     if let Some((_, samples)) = BACKDROP_PASSES.iter().find(|(pass, _)| *pass == name) {
         return *samples;
+    }
+    if VFX_MATERIALS.iter().any(|&(_, vfx)| vfx == name) {
+        return MOST_VFX_SAMPLES;
     }
     if ENHANCED_MATERIALS
         .iter()
@@ -233,6 +279,7 @@ fn each_material_is_within_its_limits() {
     let mut costs = costs(SHADER);
     assert!(!costs.is_empty(), "the shader has no `shade_` functions");
     costs.extend(enhanced_costs(ENHANCED));
+    costs.extend(vfx_costs(VFX));
     costs.extend(backdrop_costs());
     assert!(!costs.is_empty(), "the shader has no `shade_` functions");
     let printed: BTreeMap<_, _> = costs

@@ -10,10 +10,10 @@ use game_probe::story::{Body, Story};
 use glam::{Affine3A, Vec3};
 use kit_base::tokens::{badge, color};
 use kit_frame::frame::{
-    Band, Draw, ElementId, Endpoint, Frame, Material, Role, ShapeAnchor, Sprite, sprites,
+    Band, Draw, ElementId, Endpoint, Frame, Material, Role, ShapeAnchor, Sprite, Vfx, sprites,
 };
 use kit_ui::input::Input as DeviceInput;
-use kit_ui::input::{Insets, Size, Window};
+use kit_ui::input::{Insets, Size, Tier, Window};
 
 const MS: u64 = 1_000_000;
 
@@ -248,7 +248,6 @@ fn the_wedge_fades_in_and_stays_then_goes_with_the_attack() {
         "no wedge once the attack is over"
     );
 }
-
 #[test]
 fn opposing_combat_marks_leave_room_for_the_block_connector() {
     const SIZE: Size = Size {
@@ -330,4 +329,75 @@ fn opposing_combat_marks_leave_room_for_the_block_connector() {
             .iter()
             .all(|element| element.role != Role::Arrow)
     );
+}
+
+#[test]
+fn enhanced_combat_emits_vfx_sparks_and_ambient_motion_and_steps_down_cleanly() {
+    let mut client = client();
+    client.handle(Input::Device(DeviceInput::Tier(Tier::Enhanced)));
+
+    // Unblocked attacker: Vfx::Chevron in Band::Glows + ember particles, no Baseline wedge.
+    let unblocked = show(&mut client, &creature(Side::You, attacking), 100 * MS);
+    assert!(unblocked.ambient_motion);
+    assert!(marks(&unblocked, sprites::WEDGE).is_empty());
+    let vfx_records: Vec<(usize, Draw)> = unblocked
+        .draws
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|(_, draw)| draw.is_vfx())
+        .collect();
+    assert_eq!(vfx_records.len(), 1);
+    assert_eq!(unblocked.band(vfx_records[0].0), Some(Band::Glows));
+    assert_eq!(vfx_records[0].1.uv[0], Vfx::Chevron as u16);
+    let unblocked_sparks = unblocked.load.particles;
+    assert!(
+        unblocked_sparks > 0,
+        "unblocked attacker emits ember sparks"
+    );
+
+    // Blocked attacker: Vfx::ChevronBlocked with fewer sparks.
+    let blocked = show(
+        &mut client,
+        &creature(Side::You, |card| {
+            card.combat = Some(Combat::Attacking {
+                planeswalker: None,
+                target_departed: None,
+                blocked: true,
+            });
+        }),
+        200 * MS,
+    );
+    let blocked_vfx: Vec<Draw> = blocked.draws.iter().copied().filter(Draw::is_vfx).collect();
+    assert_eq!(blocked_vfx.len(), 1);
+    assert_eq!(blocked_vfx[0].uv[0], Vfx::ChevronBlocked as u16);
+    assert!(blocked.load.particles > 0 && blocked.load.particles < unblocked_sparks);
+
+    // Blocker: Vfx::ShieldDome in Band::Glows, no Baseline crescent.
+    let defender = show(
+        &mut client,
+        &creature(Side::Opponent, |card| {
+            card.combat = Some(Combat::Blocking {
+                attacker: Some(ObjectId(7)),
+            });
+        }),
+        300 * MS,
+    );
+    assert!(defender.ambient_motion);
+    assert!(marks(&defender, sprites::CRESCENT).is_empty());
+    let shield_vfx: Vec<Draw> = defender
+        .draws
+        .iter()
+        .copied()
+        .filter(Draw::is_vfx)
+        .collect();
+    assert_eq!(shield_vfx.len(), 1);
+    assert_eq!(shield_vfx[0].uv[0], Vfx::ShieldDome as u16);
+
+    // Stepping down to Baseline mid-combat restores Baseline marks and clears ambient motion.
+    client.handle(Input::Device(DeviceInput::Tier(Tier::Baseline)));
+    let stepped = client.frame(400 * MS).clone();
+    assert!(!stepped.ambient_motion);
+    assert!(stepped.draws.iter().all(|draw| !draw.is_vfx()));
+    assert_eq!(marks(&stepped, sprites::CRESCENT).len(), 1);
 }

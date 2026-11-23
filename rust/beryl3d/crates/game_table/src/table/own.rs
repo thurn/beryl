@@ -8,8 +8,11 @@
 //! - A token: a coin at the bottom left, where the web's `.card-counters` row puts its label.
 //! - A permanent its owner does not control: a violet outline, the web's `.card-stolen-edge`.
 //! - An attacker: a wedge along the edge facing the defender. It turns gold as the creature
-//!   becomes blocked (Arena, `IEXcjBn3BXk` at 22:23).
-//! - A blocker: a gold crescent along the edge facing the attacker, opening toward the card.
+//!   becomes blocked (Arena, `IEXcjBn3BXk` at 22:23). In the Enhanced tier, this is drawn as a
+//!   procedural plasma chevron (crimson-orange unblocked, solar-gold when blocked) with looping
+//!   ember sparks.
+//! - A blocker: a gold crescent along the edge facing the attacker, opening toward the card. In
+//!   the Enhanced tier, this is drawn as a procedural golden energy shield dome.
 //!
 //! The wedge and the crescent fade in over `fade_ms` from the frame the record first says the
 //! creature fights. The wedge starts a little large and settles over `pop_ms`, and the crescent
@@ -24,26 +27,39 @@ use beryl_protocol::protocol::{Combat, ObjectView, Side};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::Look;
+use kit_base::atlas::Tier;
 use kit_base::data::light::Own;
 use kit_base::tokens::{badge, color};
 use kit_frame::frame::{Band, Draw, FrameBuilder, PaintBand, Sprite, sprites};
+use kit_fx::effects::vfx::{FighterKind, FighterVfx, write_fighter};
 
 /// How a creature fights, as its record says.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Fighting {
     #[default]
     No,
-    Attacks,
+    Attacks {
+        blocked: bool,
+    },
     Blocks,
 }
 
 impl Fighting {
     fn of(record: &ObjectView) -> Self {
         match record.combat {
-            Some(Combat::Attacking { .. }) => Self::Attacks,
+            Some(Combat::Attacking { blocked, .. }) => Self::Attacks { blocked },
             Some(Combat::Blocking { .. }) => Self::Blocks,
             None => Self::No,
         }
+    }
+
+    fn same_role(self, other: Self) -> bool {
+        matches!(
+            (self, other),
+            (Self::No, Self::No)
+                | (Self::Attacks { .. }, Self::Attacks { .. })
+                | (Self::Blocks, Self::Blocks)
+        )
     }
 }
 
@@ -61,13 +77,18 @@ impl Fights {
     }
 
     /// Since when the creature in `slot` has fought as `fighting`, noting `now` if it did not
-    /// in the frame before. A slot past the room reserved is taken to have just begun.
+    /// in the frame before. Transitions between unblocked and blocked attacking keep the original
+    /// attack start time so the chevron does not replay its pop animation. A slot past the room
+    /// reserved is taken to have just begun.
     fn since(&self, slot: usize, fighting: Fighting, now: u64) -> u64 {
         let Some(cell) = self.0.get(slot) else {
             return now;
         };
         let (was, since) = cell.get();
-        if was == fighting {
+        if was.same_role(fighting) {
+            if was != fighting {
+                cell.set((fighting, since));
+            }
             return since;
         }
         cell.set((fighting, now));
@@ -120,9 +141,13 @@ pub(super) fn write(
             reason = "an age in nanoseconds; a few seconds fit an f32's precision well enough"
         )]
         let age = now.saturating_sub(since) as f32 / 1e6;
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "wrapped animation clock in seconds fits an f32's precision"
+        )]
+        let time_s = (now % 1_000_000_000_000) as f32 / 1e9;
         let edge = Edge::toward(look.pose.rotation, defending(record.controller), card);
-        let blocked = matches!(record.combat, Some(Combat::Attacking { blocked: true, .. }));
-        marks.fight(fighting, &edge, age, blocked);
+        marks.fight(slot, fighting, &edge, age, time_s);
     }
 }
 
@@ -133,6 +158,8 @@ struct Marks<'b, 'f> {
     own: &'b Own,
     card: Affine3A,
     band: Band,
+    glow_band: Band,
+    particle_band: Band,
     opacity: f32,
     builder: &'b mut FrameBuilder<'f>,
 }
@@ -144,6 +171,8 @@ impl<'b, 'f> Marks<'b, 'f> {
             own,
             card: pose.upward(),
             band: band.records(Band::TableMarks),
+            glow_band: band.records(Band::Glows),
+            particle_band: band.records(Band::Particles),
             opacity: pose.opacity.clamp(0.0, 1.0),
             builder,
         }
@@ -160,31 +189,9 @@ impl<'b, 'f> Marks<'b, 'f> {
     }
 
     /// The quad `size` large with its middle `out` past the middle of `edge`, turned by `turn`
-    /// about the card's normal. A card in a battlefield row leans back toward the camera, so
-    /// past its near edge its plane runs under the table, which would hide the quad: there the
-    /// quad is folded up about the edge until it lies level, as the web's mark lies flat on
-    /// the stage past the card.
+    /// about the card's normal.
     fn past(&self, edge: &Edge, out: f32, size: Vec2, turn: f32) -> Affine3A {
-        let axis = edge.axis.extend(0.0);
-        let outward = self.card.transform_vector3(axis).normalize_or_zero();
-        let normal = self.card.transform_vector3(Vec3::Z).normalize_or_zero();
-        // Folding by `angle` toward the normal turns the outward way into
-        // `outward * cos + normal * sin`, which is level where `tan = -outward.z / normal.z`.
-        let fold = if outward.z < 0.0 && normal.z > f32::EPSILON {
-            Quat::from_axis_angle(axis.cross(Vec3::Z), (-outward.z / normal.z).atan())
-        } else {
-            Quat::IDENTITY
-        };
-        self.card
-            * Affine3A::from_rotation_translation(
-                fold,
-                (edge.axis * edge.reach).extend(self.own.lift),
-            )
-            * Affine3A::from_scale_rotation_translation(
-                size.extend(1.0),
-                Quat::from_rotation_z(turn),
-                (edge.axis * out).extend(0.0),
-            )
+        past_edge(self.card, self.own.lift, edge, out, size, turn)
     }
 
     fn moon(&mut self, at: Vec2, diameter: f32) {
@@ -218,11 +225,17 @@ impl<'b, 'f> Marks<'b, 'f> {
 
     /// The wedge of an attacker or the crescent of a blocker on `edge`, `age` milliseconds
     /// after its record first said it fights. A block changes the attacker's color without
-    /// replaying its entrance.
-    fn fight(&mut self, fighting: Fighting, edge: &Edge, age: f32, blocked: bool) {
+    /// replaying its entrance. Baseline draws the lightweight atlas sprites; Enhanced draws the
+    /// procedural plasma chevron or golden shield dome in `Band::Glows` (for bloom) plus looping
+    /// ember sparks in `Band::Particles`.
+    fn fight(&mut self, slot: usize, fighting: Fighting, edge: &Edge, age: f32, time_s: f32) {
         let fade = (age / self.own.fade_ms).clamp(0.0, 1.0);
         let turn = edge.axis.y.atan2(edge.axis.x) - PI / 2.0;
-        if fighting == Fighting::Attacks {
+        if self.builder.tier() == Tier::Enhanced {
+            self.fight_enhanced(slot, fighting, edge, (age, time_s, fade, turn));
+            return;
+        }
+        if let Fighting::Attacks { blocked } = fighting {
             let pop = (-age / self.own.wedge.pop_ms).exp();
             let card_width = self.builder.card().x;
             let length = self.own.wedge.chevron * card_width * (1.0 + self.own.wedge.pop.y * pop);
@@ -260,6 +273,60 @@ impl<'b, 'f> Marks<'b, 'f> {
         );
         self.builder.draw(self.band, draw);
     }
+
+    /// Enhanced-tier procedural attacker chevron (unblocked crimson-ember / blocked solar-gold)
+    /// and blocker golden shield dome, plus deterministic ember sparks.
+    fn fight_enhanced(
+        &mut self,
+        slot: usize,
+        fighting: Fighting,
+        edge: &Edge,
+        (age, time_s, fade, turn): (f32, f32, f32, f32),
+    ) {
+        let kind = match fighting {
+            Fighting::Attacks { blocked } => FighterKind::Attacker { blocked },
+            Fighting::Blocks => FighterKind::Blocker,
+            Fighting::No => return,
+        };
+        let card = self.card;
+        let lift = self.own.lift;
+        let fx = FighterVfx {
+            slot,
+            kind,
+            glow_band: self.glow_band,
+            particle_band: self.particle_band,
+            across: edge.across,
+            age_ms: age,
+            time_s,
+            opacity: fade * self.opacity,
+        };
+        write_fighter(self.builder, self.own, &fx, |out, size| {
+            past_edge(card, lift, edge, out, size, turn)
+        });
+    }
+}
+
+/// The quad `size` large with its middle `out` past the middle of `edge`, turned by `turn` about
+/// the card's normal. A card in a battlefield row leans back toward the camera, so past its near
+/// edge its plane runs under the table, which would hide the quad: there the quad is folded up
+/// about the edge until it lies level, as the web's mark lies flat on the stage past the card.
+fn past_edge(card: Affine3A, lift: f32, edge: &Edge, out: f32, size: Vec2, turn: f32) -> Affine3A {
+    let axis = edge.axis.extend(0.0);
+    let outward = card.transform_vector3(axis).normalize_or_zero();
+    let normal = card.transform_vector3(Vec3::Z).normalize_or_zero();
+    // Folding by `angle` toward the normal turns the outward way into
+    // `outward * cos + normal * sin`, which is level where `tan = -outward.z / normal.z`.
+    let fold = if outward.z < 0.0 && normal.z > f32::EPSILON {
+        Quat::from_axis_angle(axis.cross(Vec3::Z), (-outward.z / normal.z).atan())
+    } else {
+        Quat::IDENTITY
+    };
+    card * Affine3A::from_rotation_translation(fold, (edge.axis * edge.reach).extend(lift))
+        * Affine3A::from_scale_rotation_translation(
+            size.extend(1.0),
+            Quat::from_rotation_z(turn),
+            (edge.axis * out).extend(0.0),
+        )
 }
 
 /// The way across the table, in the table's space, that a creature controlled by `controller`

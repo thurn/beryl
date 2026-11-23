@@ -1,0 +1,103 @@
+// Dedicated Enhanced-tier procedural VFX entry points. Runs in its own pipeline so procedural
+// effects never add branches or shadow/atlas texture samples to Baseline's `shader.wgsl` or
+// Enhanced's lit `fs_lit`.
+
+struct VfxUniforms {
+    view_projection: mat4x4<f32>,
+    // The target's size in physical pixels.
+    target_size: vec2<f32>,
+    // How far the picture of the table is shaken, in physical pixels, x right and y down.
+    shake: vec2<f32>,
+    // Unused here; kept to match bind group 0's uniform layout.
+    masked: vec4<u32>,
+};
+
+override SHAKEN: bool = true;
+
+@group(0) @binding(0) var<uniform> u: VfxUniforms;
+
+struct VfxVertexIn {
+    @location(0) position: vec2<f32>,
+    @location(1) uv: vec2<f32>,
+    @location(4) row0: vec4<f32>,
+    @location(5) row1: vec4<f32>,
+    @location(6) row2: vec4<f32>,
+    @location(7) rect: vec4<u32>,
+    @location(9) tint: vec4<f32>,
+    @location(10) params: vec4<f32>,
+};
+
+struct VfxOut {
+    @builtin(position) clip: vec4<f32>,
+    @location(0) mesh_uv: vec2<f32>,
+    @location(1) tint: vec4<f32>,
+    @location(2) @interpolate(flat) kind: u32,
+    @location(3) @interpolate(flat) params: vec4<f32>,
+};
+
+@vertex
+fn vs_vfx(v: VfxVertexIn) -> VfxOut {
+    let local = vec4<f32>(v.position, 0.0, 1.0);
+    let position = vec3<f32>(dot(v.row0, local), dot(v.row1, local), dot(v.row2, local));
+    var clip = u.view_projection * vec4<f32>(position, 1.0);
+    if (SHAKEN) {
+        clip = vec4<f32>(
+            clip.xy + vec2<f32>(u.shake.x, -u.shake.y) * 2.0 / u.target_size * clip.w,
+            clip.zw,
+        );
+    }
+    var out: VfxOut;
+    out.clip = clip;
+    out.mesh_uv = v.uv;
+    out.tint = v.tint;
+    out.kind = v.rect.x;
+    out.params = v.params;
+    return out;
+}
+
+@fragment
+fn fs_vfx(in: VfxOut) -> @location(0) vec4<f32> {
+    let time_s = in.params.x;
+    let fade = in.params.y * in.tint.a;
+    let seed = in.params.z;
+    let aspect = in.params.w;
+    switch in.kind {
+        case VFX_CHEVRON: {
+            return shade_attacker_chevron(in.mesh_uv, fade, time_s, seed, aspect, false);
+        }
+        case VFX_CHEVRON_BLOCKED: {
+            return shade_attacker_chevron(in.mesh_uv, fade, time_s, seed, aspect, true);
+        }
+        case VFX_SHIELD_DOME: {
+            return shade_blocker_shield(in.mesh_uv, fade, time_s, seed, aspect);
+        }
+        default: {
+            return vec4<f32>(0.0);
+        }
+    }
+}
+
+@fragment
+fn fs_vfx_bloom(in: VfxOut) -> @location(0) vec4<f32> {
+    let time_s = in.params.x;
+    let fade = in.params.y * in.tint.a;
+    let seed = in.params.z;
+    let aspect = in.params.w;
+    switch in.kind {
+        case VFX_CHEVRON: {
+            let color = shade_attacker_chevron(in.mesh_uv, fade, time_s, seed, aspect, false);
+            return vec4<f32>(color.rgb * BLOOM_GAIN_UNBLOCKED, 0.0);
+        }
+        case VFX_CHEVRON_BLOCKED: {
+            let color = shade_attacker_chevron(in.mesh_uv, fade, time_s, seed, aspect, true);
+            return vec4<f32>(color.rgb * BLOOM_GAIN_GOLDEN, 0.0);
+        }
+        case VFX_SHIELD_DOME: {
+            let color = shade_blocker_shield(in.mesh_uv, fade, time_s, seed, aspect);
+            return vec4<f32>(color.rgb * BLOOM_GAIN_GOLDEN, 0.0);
+        }
+        default: {
+            return vec4<f32>(0.0);
+        }
+    }
+}

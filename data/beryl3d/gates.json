@@ -63,6 +63,14 @@
     "particle": {
       "samples": 5,
       "expressions": 212
+    },
+    "vfx_chevron": {
+      "samples": 0,
+      "expressions": 457
+    },
+    "vfx_shield": {
+      "samples": 0,
+      "expressions": 425
     }
   },
   "tests": {

@@ -119,6 +119,10 @@ pub mod color {
     /// The crescent a blocker wears: the glow of `gold` in `TONES`, the tone `fighterLight`
     /// gives it.
     pub const CRESCENT: [u8; 4] = [255, 168, 26, 255];
+    /// Ember sparks drifting off an unblocked attacker's Enhanced chevron.
+    pub const COMBAT_SPARK: [u8; 4] = [255, 206, 108, 255];
+    /// Golden sparks drifting off a blocked attacker's Enhanced chevron.
+    pub const COMBAT_SPARK_BLOCKED: [u8; 4] = [255, 232, 132, 220];
     /// A summoning-sick permanent's moon: the `--mark` of `.mark-sick`
     /// (`ui/src/design/components/card-frame.css`).
     pub const MOON: [u8; 4] = CYAN;

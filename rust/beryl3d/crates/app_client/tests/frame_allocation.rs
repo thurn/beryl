@@ -339,6 +339,27 @@ fn a_frame_of_255_attackers_allocates_nothing() {
         "each attacker drawn wears a wedge"
     );
     assert_eq!(after - before, 0, "allocations in a frame of 255 attackers");
+
+    // Enhanced tier: procedural chevrons + looping ember sparks also allocate nothing.
+    client.handle(Input::Device(DeviceInput::Tier(Tier::Enhanced)));
+    client.frame(40_000_000);
+    client.prepare(60_000_000);
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    let enhanced = client.frame(60_000_000);
+    let after = ALLOCATIONS.load(Ordering::Relaxed);
+    assert!(
+        enhanced.draws.iter().any(kit_frame::frame::Draw::is_vfx),
+        "enhanced attackers emit VFX records"
+    );
+    assert!(
+        enhanced.load.particles > 0,
+        "enhanced attackers emit ember sparks"
+    );
+    assert_eq!(
+        after - before,
+        0,
+        "allocations in an Enhanced frame of 255 attackers"
+    );
 }
 
 /// A frame of a table of 255 creatures, each with its power and toughness and two kinds of

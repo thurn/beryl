@@ -177,6 +177,7 @@ impl Bloom {
         encoder: &mut wgpu::CommandEncoder,
         draws: &Draws,
         view: &wgpu::TextureView,
+        vfx_glows: &wgpu::RenderPipeline,
         counter: Option<&FragmentCounter>,
     ) -> u32 {
         let bands = &draws.frame.bands;
@@ -202,7 +203,12 @@ impl Bloom {
                 .into_iter()
                 .filter(|range| !range.is_empty())
                 .map(|range| {
-                    draws.record_part(&mut pass, range, |_| Some(&self.glows), targets.size)
+                    draws.record_part(
+                        &mut pass,
+                        range,
+                        |run| Some(if run.vfx { vfx_glows } else { &self.glows }),
+                        targets.size,
+                    )
                 })
                 .sum();
             count::end(counter, &mut pass);
@@ -365,7 +371,7 @@ fn glows_pipeline(
 }
 
 /// Adds the source to the destination.
-const ADD: wgpu::BlendComponent = wgpu::BlendComponent {
+pub(super) const ADD: wgpu::BlendComponent = wgpu::BlendComponent {
     src_factor: wgpu::BlendFactor::One,
     dst_factor: wgpu::BlendFactor::One,
     operation: wgpu::BlendOperation::Add,

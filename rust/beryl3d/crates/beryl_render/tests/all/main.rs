@@ -30,6 +30,7 @@ mod shader_cost;
 mod shadow;
 mod tabletop;
 mod text;
+mod vfx;
 
 fn reference_camera() -> kit_space::camera::CameraData {
     use kit_base::data::profiles::Profiles;

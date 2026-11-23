@@ -7,7 +7,7 @@ use glam::Vec2;
 use kit_frame::frame::{Frame, Mesh};
 
 use crate::pipeline::{Pipelines, RECORD};
-use crate::runs::{Pass, runs};
+use crate::runs::{Pass, Run, runs};
 use crate::slots::Slot;
 
 /// What every pass of one frame draws from: the frame, the buffers its records were written
@@ -38,21 +38,31 @@ impl Draws<'_> {
         self.record_part(
             pass,
             0..self.kept,
-            |run| wanted(run).then(|| &pipelines[run as usize]),
+            |run| wanted(run.pass).then(|| &pipelines[run.pass as usize]),
             (self.width, self.height),
         )
     }
 
+    /// Records the runs for which `pipeline` returns a pipeline into `pass`, and returns how
+    /// many draw calls it recorded.
+    pub(crate) fn record_with<'p>(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        pipeline: impl Fn(&Run) -> Option<&'p wgpu::RenderPipeline>,
+    ) -> u32 {
+        self.record_part(pass, 0..self.kept, pipeline, (self.width, self.height))
+    }
+
     /// Records the frame's records in `records` into `pass`, a pass over a target `target`
     /// pixels large, and returns how many draw calls it recorded. Each run is drawn with the
-    /// pipeline `pipeline` gives for its pass, and skipped where it gives none. A run that
-    /// straddles the range is cut to it. Clip rectangles, which are in the frame's pixels, are
-    /// scaled to the target.
+    /// pipeline `pipeline` gives for it, and skipped where it gives none. A run that straddles
+    /// the range is cut to it. Clip rectangles, which are in the frame's pixels, are scaled to
+    /// the target.
     pub(crate) fn record_part<'p>(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
         records: Range<u32>,
-        pipeline: impl Fn(Pass) -> Option<&'p wgpu::RenderPipeline>,
+        pipeline: impl Fn(&Run) -> Option<&'p wgpu::RenderPipeline>,
         target: (u32, u32),
     ) -> u32 {
         pass.set_vertex_buffer(0, self.vertices.slice(..));
@@ -65,7 +75,7 @@ impl Draws<'_> {
         let mut draw_calls = 0;
         let mut state = None;
         for run in runs(self.frame) {
-            let Some(drawn_with) = pipeline(run.pass) else {
+            let Some(drawn_with) = pipeline(&run) else {
                 continue;
             };
             let part = run.records.start.max(records.start)..run.records.end.min(end);
@@ -80,7 +90,7 @@ impl Draws<'_> {
                 debug_assert!(false, "a record names texture array {}", run.array);
                 continue;
             };
-            if state.is_none_or(|(pass, _, _)| pass != run.pass) {
+            if state.is_none_or(|(pass, _, _, _)| pass != run.pass) {
                 // The moving passes use the near half of the depth buffer. They cover the
                 // resting table and still depth-test correctly against each other.
                 let (near, far) = match run.pass {
@@ -90,12 +100,12 @@ impl Draws<'_> {
                 };
                 pass.set_viewport(0.0, 0.0, target.0 as f32, target.1 as f32, near, far);
             }
-            if state != Some((run.pass, run.array, run.clip)) {
+            if state != Some((run.pass, run.array, run.clip, run.vfx)) {
                 pass.set_pipeline(drawn_with);
                 pass.set_bind_group(0, bind_group, &[]);
                 let [x, y, w, h] = scissor(self.frame, run.clip, target, scale);
                 pass.set_scissor_rect(x, y, w, h);
-                state = Some((run.pass, run.array, run.clip));
+                state = Some((run.pass, run.array, run.clip, run.vfx));
             }
             // The run's records are bound from their offset, so every draw starts at
             // instance 0: OpenGL ES 3.0 has no first instance.
