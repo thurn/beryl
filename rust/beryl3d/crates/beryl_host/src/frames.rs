@@ -12,9 +12,10 @@ use app_client::command::Request;
 use app_client::settings::Graphics;
 use beryl_render::{Picture, Readback, Renderer};
 use kit_frame::frame::{Frame, Wake};
-use kit_ui::input::Tier;
+use kit_ui::input::{Lifecycle, Tier};
 
 use crate::assets::Assets;
+use crate::performance::Monitor;
 use crate::rate::{Paced, RateRule, Step, Thresholds};
 
 /// A source of display ticks: a display link on macOS, winit's redraw requests elsewhere, a
@@ -224,6 +225,7 @@ pub struct FrameLoop<T> {
     rate: Option<RateRule>,
     /// The rate frames are counted against: the rule's choice, or the fixed rate.
     hz: f32,
+    monitor: Monitor,
     /// How the tier is chosen, as the settings last said, and whether the renderer has the
     /// Enhanced tier, so that a change of the setting during play can be carried out.
     graphics: Graphics,
@@ -251,6 +253,7 @@ impl<T: Ticks> FrameLoop<T> {
             last: None,
             rate: None,
             hz: 60.0,
+            monitor: Monitor::default(),
             graphics: Graphics::Automatic,
             enhanced_available: false,
             #[cfg(feature = "drive")]
@@ -352,14 +355,50 @@ impl<T: Ticks> FrameLoop<T> {
 
     /// Hands `input` to the client. Nothing is drawn until the next tick.
     pub fn handle(&mut self, input: Input) {
+        match input {
+            Input::Device(DeviceInput::Lifecycle(Lifecycle::Suspended)) => {
+                self.monitor.suspended = true;
+                self.pause_monitor();
+            }
+            Input::Device(DeviceInput::Lifecycle(Lifecycle::Resumed)) => {
+                self.monitor.suspended = false;
+            }
+            _ => {}
+        }
         self.feed.input(&input);
         self.client.handle(input);
         self.input_since = true;
     }
 
+    pub(crate) fn set_monitor_visible(&mut self, visible: bool) {
+        self.monitor.hidden = !visible;
+        if !visible {
+            self.pause_monitor();
+        }
+    }
+
+    fn pause_monitor(&mut self) {
+        if let Some(monitor) = &mut self.monitor.samples {
+            monitor.pause();
+        }
+    }
+
+    fn monitoring(&self) -> bool {
+        !self.monitor.hidden && !self.monitor.suspended && self.client.fps_monitor_enabled()
+    }
+
     /// The display is ready for a frame at `now`, in nanoseconds since the client started.
     /// Draws one if the client or the feed wants it, and says what it cost.
     pub fn tick(&mut self, now: u64, draw: &mut impl Draw) -> Option<Ticked> {
+        self.tick_with_cadence(now, draw, None)
+    }
+
+    pub(crate) fn tick_with_cadence(
+        &mut self,
+        now: u64,
+        draw: &mut impl Draw,
+        cadence: Option<f64>,
+    ) -> Option<Ticked> {
         if !self.wanted(now) {
             self.last = None;
             return None;
@@ -377,6 +416,18 @@ impl<T: Ticks> FrameLoop<T> {
         #[cfg(feature = "drive")]
         self.play_live(now, clock);
         self.feed.before(&mut self.client, clock);
+        let monitoring = self.monitoring() && !self.is_paused(now);
+        if monitoring
+            && let Some(rates) = self
+                .monitor
+                .samples
+                .get_or_insert_default()
+                .sample(now, self.hz, cadence)
+        {
+            self.client.set_frame_rates(rates);
+        } else if !self.client.fps_monitor_enabled() {
+            self.monitor.samples = None;
+        }
         self.deliver_assets(draw, When::BeforeFrame);
         // A watched edit of `lighting.json` reaches the client as new data; the renderer takes
         // it before the next frame, and does nothing while it is unchanged.
@@ -390,6 +441,12 @@ impl<T: Ticks> FrameLoop<T> {
         let frame = self.client.frame(clock);
         let client = started.elapsed().as_nanos() as u64;
         let shown = draw.draw(frame);
+        if shown.is_some()
+            && monitoring
+            && let Some(monitor) = &mut self.monitor.samples
+        {
+            monitor.shown(now);
+        }
         if self.feed.capture_wanted()
             && let Some(readback) = draw.capture(frame)
         {
@@ -573,7 +630,11 @@ impl<T: Ticks> FrameLoop<T> {
                 Wake::Now
             }
         } else {
-            let wake = earlier(self.client.display_wake(), self.feed.wake());
+            let wake = if self.monitoring() {
+                Wake::Now
+            } else {
+                earlier(self.client.display_wake(), self.feed.wake())
+            };
             match (wake, self.pause) {
                 // The clock stops at the pause, so a wait past it ends there.
                 (Wake::At(at), Some(pause)) if at > pause => Wake::At(pause),

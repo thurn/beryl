@@ -28,6 +28,7 @@ struct Saved {
     /// The table commands whose keys the player changed, by command id (`Bindings`).
     bindings: BTreeMap<String, Option<String>>,
     graphics: SavedGraphics,
+    fps_monitor: bool,
 }
 
 /// `Graphics` as the file writes it: `automatic`, `baseline` or `enhanced`.
@@ -76,6 +77,7 @@ impl From<Settings> for Saved {
             stops: settings.stops,
             bindings: settings.bindings.overrides().clone(),
             graphics: settings.graphics.into(),
+            fps_monitor: settings.fps_monitor,
         }
     }
 }
@@ -90,6 +92,7 @@ impl From<Saved> for Settings {
             stops: saved.stops,
             bindings: Bindings::from_overrides(saved.bindings),
             graphics: saved.graphics.into(),
+            fps_monitor: saved.fps_monitor,
         }
     }
 }

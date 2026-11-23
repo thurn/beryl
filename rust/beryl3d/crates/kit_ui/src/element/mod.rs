@@ -405,6 +405,8 @@ pub mod floats {
     pub const REFUSAL: FloatId = FloatId(38);
     /// A failed reload of the developer tuning files.
     pub const DATA_ERROR: FloatId = FloatId(39);
+    /// The optional frame rate readout at the window’s top left.
+    pub const FRAME_RATES: FloatId = FloatId(40);
 }
 
 #[cfg(test)]

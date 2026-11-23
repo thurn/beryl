@@ -233,3 +233,25 @@ fn enhanced_ambient_vfx_keeps_live_ticks_running_until_paused_or_ended() {
     assert!(frames.tick(3 * INTERVAL, &mut counter).is_some());
     assert_eq!(frames.next_wake(3 * INTERVAL), Wake::Never);
 }
+
+#[test]
+fn an_enabled_fps_monitor_draws_a_still_screen_until_switched_off() {
+    use app_client::settings::Settings;
+    use kit_frame::frame::Wake;
+
+    let mut frames = FrameLoop::new(client(), TestTicks::default());
+    let mut draw = Counter::default();
+    frames.handle(Input::Settings(Settings {
+        fps_monitor: true,
+        ..Settings::default()
+    }));
+    assert_eq!(frames.next_wake(0), Wake::Now);
+    for frame in 1..=62 {
+        assert!(frames.tick(frame * INTERVAL, &mut draw).is_some());
+    }
+    assert_eq!(draw.frames, 62);
+
+    frames.handle(Input::Settings(Settings::default()));
+    assert!(frames.tick(63 * INTERVAL, &mut draw).is_some());
+    assert_eq!(frames.next_wake(63 * INTERVAL), Wake::Never);
+}

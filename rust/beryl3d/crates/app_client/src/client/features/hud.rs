@@ -1,5 +1,6 @@
 //! Mounts the HUD floats and routes their updates.
 
+use app_screens::performance::{FpsMonitor, FrameRates};
 use beryl_protocol::prompt::Click;
 use game_hud::hud::FloatFeature;
 use game_hud::hud::banner::Banner;
@@ -19,6 +20,7 @@ pub(super) const ROW_COUNTS: &str = "row-counts";
 pub(super) const NOTICES: &str = "notices";
 pub(super) const STEP_BANNER: &str = "step-banner";
 pub(super) const INSPECTOR: &str = "inspector";
+pub(super) const FPS_MONITOR: &str = "fps-monitor";
 
 impl Registration {
     pub(super) const fn floating<F: Mounted + FloatFeature>(id: &'static str) -> Self {
@@ -44,6 +46,18 @@ impl Registration {
 }
 
 impl Features {
+    pub fn update_fps_monitor(&mut self, rates: FrameRates) -> bool {
+        Self::slot::<FpsMonitor>(&mut self.slots, FPS_MONITOR)
+            .update(&rates)
+            .0
+    }
+
+    pub fn fps_monitor_view(&mut self, compact: bool) -> kit_ui::element::Element {
+        Self::slot::<FpsMonitor>(&mut self.slots, FPS_MONITOR)
+            .view(compact)
+            .clone()
+    }
+
     pub fn totals<U: StateUpdate<CountFloats>>(&mut self, update: U) -> U::Output {
         Self::slot::<CountFloats>(&mut self.slots, LIFE_TOTALS).apply(update)
     }
@@ -103,6 +117,7 @@ impl PassiveFloat for NoticeFloats {}
 impl PassiveFloat for RowCounts {}
 impl PassiveFloat for Banner {}
 impl PassiveFloat for Inspector {}
+impl PassiveFloat for FpsMonitor {}
 
 impl<F: PassiveFloat + 'static> Mounted for F {
     fn command(_: &mut Client, command: Infallible) {

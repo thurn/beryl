@@ -582,6 +582,20 @@
         "line_height": 1,
         "note": "The first player's mark on the 44-point desktop coin, at 56 percent of its diameter."
       },
+      "FPS_MONITOR_NUMBER": {
+        "font": "OpenSans",
+        "weight": 700,
+        "size": 26,
+        "line_height": 1.0,
+        "note": "The current frame rate in the native client’s FPS monitor."
+      },
+      "FPS_MONITOR_LABEL": {
+        "font": "OpenSans",
+        "weight": 600,
+        "size": 12,
+        "line_height": 1.3,
+        "note": "Units and secondary readings in the native client’s FPS monitor."
+      },
       "TURN_CAPTION": {
         "font": "Serif",
         "weight": 400,
@@ -1385,6 +1399,26 @@
       "LOBBY_FIRST_WIDTH": {
         "value": 51,
         "note": "The width of the desktop lobby's 'First' box, as the web lays out its `select`."
+      },
+      "FPS_MONITOR_WIDTH": {
+        "value": 176,
+        "note": "The desktop FPS monitor's width."
+      },
+      "FPS_MONITOR_DIGITS": {
+        "value": 45,
+        "note": "The FPS monitor leaves room for three digits."
+      },
+      "FPS_MONITOR_INDICATOR": {
+        "value": 6,
+        "note": "The diameter of the FPS monitor's pacing indicator."
+      },
+      "FPS_MONITOR_BAND": {
+        "value": 48,
+        "note": "The room for the compact FPS monitor above the table."
+      },
+      "FPS_MONITOR_TOGGLE": {
+        "value": 68,
+        "note": "The width of the FPS monitor's On and Off control."
       },
       "SETTINGS_GEAR_INSET": {
         "value": 14,

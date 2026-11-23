@@ -13,6 +13,8 @@ pub struct ScreenSettings {
     pub full_control: bool,
     /// How the visual tier is chosen.
     pub graphics: Graphics,
+    /// Whether to show and run the frame rate monitor.
+    pub fps_monitor: bool,
 }
 
 /// How the visual tier is chosen (docs/beryl-3d.md, "Choosing a tier").
@@ -38,6 +40,7 @@ pub enum Setting {
     Muted(bool),
     FullControl(bool),
     Graphics(Graphics),
+    FpsMonitor(bool),
 }
 
 impl Setting {
@@ -46,7 +49,7 @@ impl Setting {
     pub fn level(self) -> Option<u8> {
         match self {
             Self::Music(level) | Self::Effects(level) => Some(level),
-            Self::Muted(_) | Self::FullControl(_) | Self::Graphics(_) => None,
+            Self::Muted(_) | Self::FullControl(_) | Self::Graphics(_) | Self::FpsMonitor(_) => None,
         }
     }
 
@@ -56,7 +59,10 @@ impl Setting {
         match self {
             Self::Music(_) => Self::Music(level),
             Self::Effects(_) => Self::Effects(level),
-            switch @ (Self::Muted(_) | Self::FullControl(_) | Self::Graphics(_)) => switch,
+            switch @ (Self::Muted(_)
+            | Self::FullControl(_)
+            | Self::Graphics(_)
+            | Self::FpsMonitor(_)) => switch,
         }
     }
 }

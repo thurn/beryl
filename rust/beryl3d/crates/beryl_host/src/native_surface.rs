@@ -152,6 +152,9 @@ impl NativeSurface {
                         Err("this phone host draws offscreen and takes no surface".to_owned())
                     }
                 };
+                if attached.is_ok() {
+                    frames.set_monitor_visible(true);
+                }
                 frames.handle(size);
                 self.state = State::Running(running);
                 attached
@@ -234,6 +237,7 @@ impl NativeSurface {
             && let Output::Surface(surface) = &mut running.screen.output
         {
             *surface = None;
+            running.frames.set_monitor_visible(false);
         }
     }
 

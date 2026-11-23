@@ -15,6 +15,7 @@ fn settings_written_read_back_equal() {
     changed.apply(Setting::Muted(true));
     changed.apply(Setting::FullControl(true));
     changed.apply(Setting::Graphics(Graphics::Enhanced));
+    changed.apply(Setting::FpsMonitor(true));
     // A new key bound to Draw, then Untap all's key bound to Draw, which leaves Untap all with
     // none: both kinds of entry are saved.
     let (_, draw) = commands::command("library.draw").unwrap();
@@ -28,7 +29,7 @@ fn settings_written_read_back_equal() {
 }
 
 #[test]
-fn a_file_without_the_graphics_setting_chooses_the_tier_automatically() {
+fn legacy_settings_take_the_graphics_and_monitor_defaults() {
     let dir = std::env::temp_dir().join(format!("beryl3d-graphics-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -36,5 +37,6 @@ fn a_file_without_the_graphics_setting_chooses_the_tier_automatically() {
     let loaded = settings::load(&dir).unwrap().unwrap();
     assert_eq!(loaded.music, 20);
     assert_eq!(loaded.graphics, Graphics::Automatic);
+    assert!(!loaded.fps_monitor);
     let _ = std::fs::remove_dir_all(&dir);
 }

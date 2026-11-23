@@ -21,6 +21,7 @@ mod inbox;
 #[cfg(target_os = "macos")]
 mod macos;
 pub mod native_surface;
+mod performance;
 pub mod rate;
 mod threads;
 mod windowless;

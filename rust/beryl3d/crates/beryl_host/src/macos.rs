@@ -33,9 +33,12 @@ define_class!(
     impl Ticker {
         // SAFETY: `tick:` takes the `CADisplayLink` that fired, as the link calls it.
         #[unsafe(method(tick:))]
-        fn tick(&self, _link: &CADisplayLink) {
+        fn tick(&self, link: &CADisplayLink) {
+            // macOS can deliver a different cadence from the one the app asked for.
+            let interval = link.targetTimestamp() - link.timestamp();
+            let cadence = (interval.is_finite() && interval > 0.0).then(|| interval.recip());
             // The event loop has ended if this fails, and then no frame is wanted.
-            let _ = self.ivars().proxy.send_event(UserEvent::Tick);
+            let _ = self.ivars().proxy.send_event(UserEvent::Tick(cadence));
         }
     }
 );

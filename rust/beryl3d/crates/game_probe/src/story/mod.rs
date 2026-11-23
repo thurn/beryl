@@ -29,6 +29,7 @@ pub struct SettingsStory {
     pub muted: Option<bool>,
     pub full_control: Option<bool>,
     pub graphics: Option<String>,
+    pub fps_monitor: Option<bool>,
 }
 
 /// A moment played from its own stream of protocol messages, without the recordings pack.
@@ -278,7 +279,11 @@ impl SettingsStory {
                 let _ = writeln!(text, "{key} {level}");
             }
         }
-        for (key, value) in [("muted", self.muted), ("full-control", self.full_control)] {
+        for (key, value) in [
+            ("muted", self.muted),
+            ("full-control", self.full_control),
+            ("fps-monitor", self.fps_monitor),
+        ] {
             if let Some(value) = value {
                 let _ = writeln!(text, "{key} {value}");
             }
@@ -342,6 +347,7 @@ impl SettingsStory {
             "effects" => self.effects = Some(level()?),
             "muted" => self.muted = Some(boolean()?),
             "full-control" => self.full_control = Some(boolean()?),
+            "fps-monitor" => self.fps_monitor = Some(boolean()?),
             "graphics" if matches!(value, "automatic" | "baseline" | "enhanced") => {
                 self.graphics = Some(value.to_owned());
             }

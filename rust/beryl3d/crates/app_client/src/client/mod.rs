@@ -46,6 +46,7 @@ mod lobby;
 mod manual;
 mod manual_overlays;
 mod own;
+mod performance;
 mod profiles;
 mod refusal;
 mod screen;
@@ -87,6 +88,7 @@ pub struct Client {
     frame: Frame,
     probe: Option<game_probe::explain::Probe>,
     stories: story::Stories,
+    /// The host's window, with its layout class resolved.
     window: Window,
     /// The table and the scripts that lead it from view to view.
     show: Show,
@@ -194,7 +196,11 @@ impl Client {
             Input::Reply(Reply::DeckList(saved)) => self.take_saved_decks(saved),
             Input::Reply(Reply::DeckImport(imported)) => self.take_imported_deck(imported),
             Input::Settings(settings) => {
+                let monitor_changed = self.settings.fps_monitor != settings.fps_monitor;
                 self.settings = settings;
+                if monitor_changed {
+                    self.apply_frame_monitor_setting();
+                }
                 self.send_stops();
                 self.show_screen();
             }
@@ -463,17 +469,18 @@ impl Client {
 
     /// Lays the table and the flat layer out in a window of a new size, scale or safe area.
     fn resize(&mut self, window: Window) {
-        let window = self.data().profiles.resolve_window(window);
         self.cancel_gesture();
         self.routes.scrolling.cancel();
         let previous_scale = self.window.scale;
-        self.window = window;
+        self.window = self.data().profiles.resolve_window(window);
+        let window = self.layout_window();
         self.show.resize(window);
         if (previous_scale - window.scale).abs() > f32::EPSILON {
             self.restart_story();
         }
         self.layer.resize(window);
         self.place_data_error();
+        self.refresh_frame_rates();
         self.show_gear();
         self.prepare_resized();
         if self.show.badges_mut().shaped() {

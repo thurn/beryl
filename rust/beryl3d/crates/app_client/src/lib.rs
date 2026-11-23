@@ -6,4 +6,5 @@ pub mod driver;
 pub mod settings;
 pub mod stories;
 
+pub use app_screens::performance::FrameRates;
 pub use client::{Client, Config, FeatureInfo, Input, composed_features, registered_features};

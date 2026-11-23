@@ -38,6 +38,7 @@ impl Client {
         let sheet = self.features.sheet;
         if self.features.shown != (self.features.screen, sheet) {
             self.features.shown = (self.features.screen, sheet);
+            self.refresh_frame_rates();
             self.cancel_gesture();
             self.routes.scrolling.cancel();
             self.features.focus_row(RowMessage::Focus(None));
@@ -98,7 +99,7 @@ impl Client {
         // desktop board holds it away under the opening, a sheet open over it or not; the
         // phone's board does not.
         if self.show.table().layout().style.hand_away > 0.0
-            && self.show.hold_hand_away(game_opening, self.window)
+            && self.show.hold_hand_away(game_opening, self.layout_window())
         {
             self.prepare_resized();
         }
@@ -261,6 +262,7 @@ impl Client {
             effects: Some(settings.effects),
             muted: Some(settings.muted),
             full_control: Some(settings.full_control),
+            fps_monitor: Some(settings.fps_monitor),
             graphics: Some(
                 match settings.graphics {
                     Graphics::Automatic => "automatic",
@@ -278,6 +280,7 @@ impl Client {
         build: impl FnOnce(&mut Features, ViewInputs<'_>, Option<FaceId>) -> T,
     ) -> T {
         let sheet = self.features.sheet;
+        let window = self.layout_window();
         let view = self.show.latest().map(|update| &update.view);
         let played = self.show.shown().map(|update| &update.view);
         let profile = self.show.table().profile();
@@ -288,7 +291,7 @@ impl Client {
         };
         let hud = HudIn {
             data: self.show.table().data(),
-            window: self.window,
+            window,
             profile,
             view,
             played,
@@ -313,7 +316,7 @@ impl Client {
             drag_threshold: self.data().pointer.drag_threshold_points,
             profile,
             screen: self.features.screen,
-            window: self.window,
+            window,
             view,
             session: self.session,
             fields: self.layer.fields(),
@@ -334,7 +337,7 @@ impl Client {
         ScreenIn {
             data: self.show.table().data(),
             screen: self.features.screen,
-            window: self.window,
+            window: self.layout_window(),
             profile: self.show.table().profile(),
             view: self.show.latest().map(|update| &update.view),
             played: self.show.shown().map(|update| &update.view),

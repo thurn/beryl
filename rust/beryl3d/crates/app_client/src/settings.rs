@@ -31,6 +31,8 @@ pub struct Settings {
     pub bindings: Bindings,
     /// How the visual tier is chosen.
     pub graphics: Graphics,
+    /// Whether to show and run the frame rate monitor.
+    pub fps_monitor: bool,
 }
 
 impl Default for Settings {
@@ -45,6 +47,7 @@ impl Default for Settings {
             stops: StopsSetting::SMART,
             bindings: Bindings::new(),
             graphics: Graphics::Automatic,
+            fps_monitor: false,
         }
     }
 }
@@ -59,6 +62,7 @@ impl Settings {
             muted: self.muted,
             full_control: self.full_control,
             graphics: self.graphics,
+            fps_monitor: self.fps_monitor,
         }
     }
 
@@ -80,6 +84,7 @@ impl Settings {
                 self.stops.full_control = on;
             }
             Setting::Graphics(graphics) => self.graphics = graphics,
+            Setting::FpsMonitor(enabled) => self.fps_monitor = enabled,
         }
     }
 }

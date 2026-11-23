@@ -177,3 +177,43 @@ fn choosing_baseline_saves_it() {
     let settings = saved(&mut client).expect("a save");
     assert_eq!(settings.graphics, Graphics::Baseline);
 }
+
+#[test]
+fn the_fps_setting_shows_a_passive_readout_and_saves_both_states() {
+    let mut client = in_game();
+    let monitor = |client: &mut Client| {
+        let frame = client.frame(1);
+        frame.resolved.iter().find_map(|element| {
+            (element.role == Role::Region && frame.name(element.name) == "FPS monitor")
+                .then_some(element.state)
+        })
+    };
+    assert!(monitor(&mut client).is_none());
+    click(&mut client, Role::Button, "Settings");
+    click(&mut client, Role::Toggle, "FPS monitor");
+    assert!(saved(&mut client).expect("settings saved").fps_monitor);
+
+    client.set_frame_rates(app_client::FrameRates {
+        current: Some(118),
+        low: Some(60),
+        target: Some(120),
+        cadence: Some(120),
+    });
+    assert!(monitor(&mut client).unwrap().has(StateBits::PASSES));
+    let frame = client.frame(1);
+    for label in ["118", "1 min low", "60", "120 target", "120 Hz link"] {
+        let text = &frame.resolved[find(frame, Role::Text, label)];
+        assert!(text.state.has(StateBits::PASSES));
+    }
+
+    click(&mut client, Role::Button, "close");
+    let frame = client.frame(1);
+    let (left, _, _, _) = edges(frame, find(frame, Role::Region, "FPS monitor"));
+    let (_, _, log_right, _) = edges(frame, find(frame, Role::Button, "Show log"));
+    assert!(log_right < left);
+
+    click(&mut client, Role::Button, "Settings");
+    click(&mut client, Role::Toggle, "FPS monitor");
+    assert!(!saved(&mut client).expect("settings saved").fps_monitor);
+    assert!(monitor(&mut client).is_none());
+}

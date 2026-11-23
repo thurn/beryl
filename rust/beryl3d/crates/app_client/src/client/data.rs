@@ -51,7 +51,7 @@ impl Client {
             FloatLook {
                 point: Vec2::new(
                     self.window.size.width * 0.5,
-                    self.window.safe_area.top + screens::GEAR_INSET,
+                    self.layout_window().safe_area.top + screens::GEAR_INSET,
                 ),
                 anchor: Vec2::new(0.5, 0.0),
                 ..FloatLook::default()

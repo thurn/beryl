@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 
 use crate::command::Request;
+use app_screens::performance::FpsMonitor;
 use app_screens::screens::bug_report::{self, BugReport};
 use app_screens::screens::gallery::{self, GalleryScreen};
 use app_screens::screens::settings::{self, SettingsSheet};
@@ -41,7 +42,7 @@ use game_hud::hud::{
     banner::Banner, counts::CountFloats, inspector::Inspector, notices::NoticeFloats,
     piles::PileCounts, rows::RowCounts,
 };
-use hud::{INSPECTOR, LIFE_TOTALS, NOTICES, PILE_COUNTS, ROW_COUNTS, STEP_BANNER};
+use hud::{FPS_MONITOR, INSPECTOR, LIFE_TOTALS, NOTICES, PILE_COUNTS, ROW_COUNTS, STEP_BANNER};
 pub use inspect::{FeatureInfo, composed_features, registered_features};
 mod manual;
 mod table_input;
@@ -75,6 +76,7 @@ const REGISTRY: &[Registration] = &[
     Registration::floating::<NoticeFloats>(NOTICES),
     Registration::floating::<Banner>(STEP_BANNER),
     Registration::floating::<Inspector>(INSPECTOR),
+    Registration::floating::<FpsMonitor>(FPS_MONITOR),
     Registration::routed::<StepRow>(STEPS),
     Registration::routed::<FullControl>(FULL_CONTROL),
     Registration::routed::<Viewer>(VIEWER),

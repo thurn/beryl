@@ -6,7 +6,7 @@
 
 use super::{Inputs, Message, State};
 use crate::screens::Screen;
-use crate::settings::{Graphics, Setting};
+use crate::settings::{Graphics, ScreenSettings, Setting};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_scene::SizeClass;
 use kit_ui::element::{Action, Align, Element, Justify, Overflow, Position, column, row, text};
@@ -89,7 +89,7 @@ pub(super) fn settings(state: &State, input: Inputs) -> Element {
                 .child(mute)
                 .child(levels),
         )
-        .child(graphics(settings.graphics, layout.size_class))
+        .child(graphics(settings, layout.size_class))
         .child(
             row()
                 .gap(space::L)
@@ -151,7 +151,8 @@ pub(super) fn settings(state: &State, input: Inputs) -> Element {
 /// one shown as the primary button and marked selected. Neither the web interface nor Arena has
 /// this setting, so it is built from the sheet's own buttons. In a compact window the buttons
 /// stand one to a line to keep their text readable.
-fn graphics(chosen: Graphics, size_class: SizeClass) -> Element {
+fn graphics(settings: ScreenSettings, size_class: SizeClass) -> Element {
+    let chosen = settings.graphics;
     let choice = |label: &str, graphics: Graphics| {
         let element = if graphics == chosen {
             primary(label)
@@ -168,20 +169,42 @@ fn graphics(chosen: Graphics, size_class: SizeClass) -> Element {
         choice("Baseline", Graphics::Baseline),
         choice("Enhanced", Graphics::Enhanced),
     ];
-    if size_class == SizeClass::Compact {
-        return column()
-            .name("graphics")
-            .gap(space::S)
-            .align_items(Align::Stretch)
-            .child(text("Graphics"))
-            .children(choices);
-    }
+    let tier = if size_class == SizeClass::Compact {
+        column().gap(space::S).align_items(Align::Stretch)
+    } else {
+        row().gap(space::M).align_items(Align::Center)
+    };
+    column()
+        .gap(space::S)
+        .child(
+            tier.name("graphics")
+                .child(text("Graphics"))
+                .children(choices),
+        )
+        .child(fps_monitor(settings.fps_monitor))
+}
+
+/// Keeps the control's position and width steady when its text changes.
+fn fps_monitor(enabled: bool) -> Element {
+    let mut control = if enabled {
+        primary("On")
+    } else {
+        button("Off")
+    };
+    control.role = kit_frame::frame::Role::Toggle;
     row()
-        .name("graphics")
         .gap(space::M)
         .align_items(Align::Center)
-        .child(text("Graphics"))
-        .children(choices)
+        .justify_content(Justify::SpaceBetween)
+        .child(text("FPS monitor"))
+        .child(
+            control
+                .name("FPS monitor")
+                .min_width(size::FPS_MONITOR_TOGGLE)
+                .radius(size::BUTTON_HEIGHT / 2.0)
+                .selected(enabled)
+                .on_press(Message::Change(Setting::FpsMonitor(!enabled))),
+        )
 }
 
 /// A slider for `setting` named `label`, with the label beside it.

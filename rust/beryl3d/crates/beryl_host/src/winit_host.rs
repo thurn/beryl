@@ -64,7 +64,7 @@ pub struct Options {
 pub enum UserEvent {
     /// The display link fired: the display is ready for a frame.
     #[cfg(target_os = "macos")]
-    Tick,
+    Tick(Option<f64>),
     /// Inputs are waiting in the inbox.
     Inbox,
 }
@@ -385,12 +385,16 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
             .is_some_and(|end| self.started.elapsed() >= end)
     }
 
-    fn tick(&mut self) {
+    fn tick(&mut self, cadence: Option<f64>) {
         let now = self.now();
         let Some(running) = &mut self.running else {
             return;
         };
-        if running.frames.tick(now, &mut running.screen).is_some() {
+        if running
+            .frames
+            .tick_with_cadence(now, &mut running.screen, cadence)
+            .is_some()
+        {
             while let Some(request) = running.frames.next_request() {
                 if let Some(answer) = carry_out(&running.window, &mut running.clipboard, request) {
                     running.frames.handle(answer);
@@ -443,7 +447,7 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             #[cfg(target_os = "macos")]
-            UserEvent::Tick => self.tick(),
+            UserEvent::Tick(cadence) => self.tick(cadence),
             UserEvent::Inbox => {
                 if let Some(running) = &mut self.running {
                     for input in self.inbox.try_iter() {
@@ -461,7 +465,7 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
                 .as_mut()
                 .is_some_and(|running| matches!(running.frames.ticks(), Pacer::Redraw(_)));
             if redraw {
-                self.tick();
+                self.tick(None);
             }
             return;
         }
@@ -470,6 +474,7 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
             return;
         };
         match &event {
+            WindowEvent::Occluded(occluded) => running.frames.set_monitor_visible(!occluded),
             WindowEvent::CloseRequested => {
                 event_loop.exit();
                 return;

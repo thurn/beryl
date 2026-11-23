@@ -388,6 +388,10 @@ restore the old behavior.
 Built from motions and shapes Beryl already has. Arena has these, but the
 recordings do not show them.
 
+- **FPS monitor.** Settings can show a read-only panel at the top left of the
+  native client. It reports current FPS, the lowest frame rate implied by a
+  frame gap in the last minute, the app’s target and the display link’s rate
+  when available.
 - **Banding.** When an attacker can start or join a band, the choice uses the
   existing option buttons. Assign Damage uses the number control to assign a
   share to each creature in turn.

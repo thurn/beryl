@@ -101,6 +101,22 @@ next input. Hosts use this to avoid rendering a static table. An input, session
 update or asset completion can wake the host. Hosts drain the client's requests
 after preparing and drawing the frame.
 
+### FPS monitor
+
+Settings can turn on a panel at the top left. It updates about twice a second.
+The large number counts frames submitted in the last sample. The one-minute low
+shows the rate implied by the longest gap between submissions, so a single
+stutter remains visible after FPS recovers. The readout sits beside the desktop
+log button and reserves a single row above the table in compact windows. With
+the monitor enabled, the host also draws when the scene is still. Turning it off
+restores on-demand drawing.
+
+The target is the rate Beryl requests. On macOS, the link reading is the cadence
+Core Animation reports, which can change independently of the request. The
+current FPS is colored relative to the lower of those rates when both are
+available. The link reading describes callback timing. FPS describes frame
+submissions.
+
 ## Determinism
 
 The same initial state, timed input stream and assets produce the same frame

@@ -219,13 +219,14 @@ impl Client {
         // there as the web's `useGlide` moves it. A new window lays the opening out again, and
         // its cards stand at once in their new places.
         let closed = self.features.screen_cards.was_opening && !self.features.opening.shown;
+        let window = self.layout_window();
         let resized = self
             .features
             .screen_cards
             .laid_in
-            .is_some_and(|laid| laid != self.window);
+            .is_some_and(|laid| laid != window);
         self.features.screen_cards.was_opening = self.features.opening.shown;
-        self.features.screen_cards.laid_in = Some(self.window);
+        self.features.screen_cards.laid_in = Some(window);
         let opening = self.data().shown.opening;
         let back = if closed {
             (ns(opening.kept_ms), Curve::EASE_OUT)

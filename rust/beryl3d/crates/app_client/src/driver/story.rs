@@ -147,6 +147,7 @@ mod playback {
         settings.effects = input.effects.unwrap_or(settings.effects);
         settings.muted = input.muted.unwrap_or(settings.muted);
         settings.full_control = input.full_control.unwrap_or(settings.full_control);
+        settings.fps_monitor = input.fps_monitor.unwrap_or(settings.fps_monitor);
         settings.graphics = match input.graphics.as_deref() {
             Some("baseline") => Graphics::Baseline,
             Some("enhanced") => Graphics::Enhanced,

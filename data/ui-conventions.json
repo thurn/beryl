@@ -994,6 +994,11 @@
     },
     {
       "kind": "not-seen",
+      "name": "FPS monitor",
+      "rule": "Settings can show a read-only panel at the top left of the native client. It reports current FPS, the lowest frame rate implied by a frame gap in the last minute, the app’s target and the display link’s rate when available."
+    },
+    {
+      "kind": "not-seen",
       "name": "Banding",
       "rule": "When an attacker can start or join a band, the choice uses the existing option buttons. Assign Damage uses the number control to assign a share to each creature in turn."
     },

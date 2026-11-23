@@ -348,3 +348,45 @@ fn every_control_is_on_screen_large_enough_and_reachable_at_every_size_and_on_re
         Vec::<String>::new()
     );
 }
+
+#[test]
+fn the_compact_fps_monitor_leaves_room_for_the_table_and_settings() {
+    use app_client::FrameRates;
+    use app_client::settings::Settings;
+
+    for (width, height) in PHONES {
+        let mut client = compact(width, height);
+        client.handle(waiting());
+        let normal = {
+            let frame = client.frame(0);
+            edges(frame, find(frame, Role::Region, "opponent's orb"))
+        };
+        client.handle(Input::Settings(Settings {
+            fps_monitor: true,
+            ..Settings::default()
+        }));
+        client.set_frame_rates(FrameRates {
+            current: Some(118),
+            low: Some(58),
+            target: Some(120),
+            cadence: Some(120),
+        });
+        let frame = client.frame(MS);
+        let (left, top, right, bottom) = edges(frame, find(frame, Role::Region, "FPS monitor"));
+        let (_, orb_top, _, _) = edges(frame, find(frame, Role::Region, "opponent's orb"));
+        assert!(left >= SAFE.left && right <= width - SAFE.right);
+        assert!(top >= SAFE.top && bottom <= orb_top);
+        assert!(layer_faults(frame, window(width, height)).is_empty());
+        press(&mut client, 2 * MS, Role::Button, "Menu");
+        let frame = client.frame(600 * MS);
+        let (_, title_top, _, _) = edges(frame, find(frame, Role::Text, "Settings"));
+        assert!(bottom <= title_top);
+
+        client.handle(Input::Settings(Settings::default()));
+        press(&mut client, 900 * MS, Role::Button, "close");
+        let frame = client.frame(1200 * MS);
+        assert!(!has(frame, Role::Region, "FPS monitor"));
+        let restored = edges(frame, find(frame, Role::Region, "opponent's orb"));
+        assert_eq!(normal, restored);
+    }
+}
