@@ -336,6 +336,23 @@ impl Claims {
         reason: &str,
         cause: ReleaseCause,
     ) -> Result<()> {
+        self.release_session_if(ctx, session, ticket, reason, cause, &|| true)
+            .map(|_| ())
+    }
+
+    /// Checks `should_release` again after saving the work, just before returning the lease.
+    pub(crate) fn release_session_if(
+        &self,
+        ctx: &Context,
+        session: &SessionId,
+        ticket: &TicketId,
+        reason: &str,
+        cause: ReleaseCause,
+        should_release: &dyn Fn() -> bool,
+    ) -> Result<bool> {
+        if !should_release() {
+            return Ok(false);
+        }
         let held = {
             let state = lock(&self.state);
             let found = state
@@ -346,7 +363,11 @@ impl Claims {
         }
         .ok_or_else(|| Error::NotFound(format!("{session} holds no tree for {ticket}")))?;
         let note = |saved: &Saved| format!("{reason} Its work is saved as {}.", saved.branch);
-        match self.give_back(ctx, &held, note, None, None, cause) {
+        let given = self.prepare_release(ctx, &held, note, None, cause);
+        if !should_release() {
+            return Ok(false);
+        }
+        match given.and_then(|release| self.give_back(&held, release, None)) {
             // The ticket is released either way. A tree whose reset failed keeps the ticket's
             // branch until the retry, and the next lease of the ticket frees it (see `trees`).
             Ok(given) => {
@@ -356,7 +377,7 @@ impl Claims {
                         held.tree
                     );
                 }
-                Ok(())
+                Ok(true)
             }
             // A tree that a waiting `ignite start "<summary>"` was given keeps the ad hoc
             // placeholder name until the session runs `start` again and claims it. When the
@@ -369,7 +390,7 @@ impl Claims {
                 if let Some(error) = self.free(&held, None) {
                     eprintln!("ignite: {} not reset: {error}", held.tree);
                 }
-                Ok(())
+                Ok(true)
             }
             Err(error) => Err(error),
         }

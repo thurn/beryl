@@ -23,12 +23,12 @@ use ignite_core::cli::decide::{INTERRUPTED_TEXT, block_text};
 use ignite_core::cli::{CliApp, HoldReason, SlotState, TurnEnd};
 use ignite_core::config::Config;
 use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub};
-use ignite_core::ids::{MachineId, SessionId, TicketId};
-use ignite_core::protocol::client::Reply;
+use ignite_core::ids::{Handle, MachineId, SessionId, TicketId};
+use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::protocol::hub::Reservation;
 use ignite_core::time::Timestamp;
-use ignite_core::traits::{CommandSpec, Result};
+use ignite_core::traits::{Clock, CommandSpec, Result};
 use ignite_store::local::cli_slots as store;
 use ignite_store::local::rows::CheckSighting;
 
@@ -36,6 +36,7 @@ use super::health::{Health, HealthEffects};
 use super::start::{TurnLauncher, find_run};
 use super::*;
 use crate::dispatchd::{RunningVerb, SessionCommand};
+use crate::handles::{Handles, finish_in_row};
 use crate::server::Context;
 use crate::supervise::{Started, SupervisedLauncher};
 
@@ -105,6 +106,16 @@ if [ -f "$dir/turn.$n" ]; then . "$dir/turn.$n"; else init; say done; result; fi
 struct E2eHost {
     holders: Mutex<BTreeMap<SessionId, TicketId>>,
     releases: Mutex<Vec<(ReleaseCause, String)>>,
+    gate: Mutex<Option<Gate>>,
+}
+
+struct Gate {
+    session: SessionId,
+    handle: Handle,
+    started: Timestamp,
+    handles: Handles,
+    database: Arc<Mutex<rusqlite::Connection>>,
+    finish_on_release: bool,
 }
 
 impl Host for E2eHost {
@@ -129,8 +140,22 @@ impl Host for E2eHost {
     fn quiet_since(&self, _session: &SessionId) -> Option<Timestamp> {
         None
     }
-    fn running_verbs(&self, _session: &SessionId) -> Vec<RunningVerb> {
-        Vec::new()
+    fn running_verbs(&self, session: &SessionId) -> Vec<RunningVerb> {
+        lock(&self.gate)
+            .iter()
+            .filter(|gate| &gate.session == session)
+            .map(|gate| RunningVerb {
+                verb: "check".to_owned(),
+                handle: Some(gate.handle.clone()),
+                started: gate.started,
+                step: None,
+            })
+            .collect()
+    }
+    fn verb_finished(&self, handle: &Handle) -> bool {
+        lock(&self.gate)
+            .as_ref()
+            .is_some_and(|gate| gate.handles.finished(handle))
     }
     fn interrupt(&self, _session: &SessionId, _reply: Reply) -> bool {
         false
@@ -145,6 +170,38 @@ impl Host for E2eHost {
         lock(&self.holders).remove(session);
         lock(&self.releases).push((cause, reason.to_owned()));
         Ok(())
+    }
+    fn release_if(
+        &self,
+        session: &SessionId,
+        ticket: &TicketId,
+        reason: &str,
+        still_stuck: &dyn Fn() -> bool,
+    ) -> Result<bool> {
+        assert!(
+            still_stuck(),
+            "dispatch reached release with the gate still running"
+        );
+        {
+            let gate = lock(&self.gate);
+            let gate = gate.as_ref().unwrap();
+            if gate.finish_on_release {
+                // The verb process writes its reply while the release is preparing to call
+                // the hub. Its activity and cached reply still say it is running.
+                assert!(finish_in_row(
+                    &lock(&gate.database),
+                    &gate.handle,
+                    &Reply::text(Exit::Success, "the gate passed"),
+                    false,
+                    gate.started,
+                )?);
+            }
+        }
+        if !still_stuck() {
+            return Ok(false);
+        }
+        self.release(session, ticket, reason, ReleaseCause::TakenBack)?;
+        Ok(true)
     }
     fn title(&self, _session: &SessionId) -> Option<String> {
         None

@@ -42,7 +42,7 @@ fn facts() -> Facts {
 fn verb(command: &str, handle: &str) -> Verb {
     Verb {
         command: command.to_owned(),
-        handle: handle.to_owned(),
+        handle: Some(handle.parse().unwrap()),
     }
 }
 
@@ -69,8 +69,8 @@ fn message() -> String {
 
 fn wait_on(command: &str, handle: &str) -> Action {
     Action::WaitForVerb {
-        handle: handle.to_owned(),
-        prompt: format!("`{command} {handle}` finished: run `ignite wait {handle}`."),
+        handle: Some(handle.parse().unwrap()),
+        prompt: format!("`ignite {command} {handle}` finished. Run `ignite wait {handle}`."),
     }
 }
 

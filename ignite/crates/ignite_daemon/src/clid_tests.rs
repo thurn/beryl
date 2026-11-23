@@ -483,6 +483,7 @@ fn a_hung_turn_is_ended_and_treated_as_interrupted() {
     // A running verb of the session keeps the turn alive.
     let verb = RunningVerb {
         verb: "test".to_owned(),
+        handle: None,
         started: rig.clock.now(),
         step: None,
     };

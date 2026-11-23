@@ -83,6 +83,7 @@ fn waiting_on_test(command: &str, step: Option<&str>) -> (super::tests::Rig, Arc
     );
     let verb = |name: &str| RunningVerb {
         verb: name.to_owned(),
+        handle: None,
         started: now,
         step: step.map(|s| (s.to_owned(), now)),
     };
@@ -126,6 +127,25 @@ fn an_idle_worker_with_a_stuck_step_gets_one_message_and_is_released_15_minutes_
         lock(&rig.host.releases).clone(),
         [(session("cli-claude-00000001"), ticket_id("T.1"))]
     );
+}
+
+#[test]
+fn a_finished_command_gives_the_resumed_worker_a_new_silence_period() {
+    let (rig, fake) = waiting_on_test("check", None);
+    let worker = session("cli-claude-00000001");
+    fake.set_check(&worker, SessionCheck::WaitingForVerb);
+    rig.clock.advance(STUCK_COMMAND_S);
+    tick(&rig);
+    assert!(fake.sent().is_empty());
+
+    lock(&rig.host.verbs).remove(&worker);
+    let previous = lock(&rig.host.commands).remove(&worker).unwrap();
+    lock(&rig.host.quiet).insert(worker.clone(), previous.since);
+    fake.set_check(&worker, SessionCheck::Idle);
+    rig.clock.advance(IDLE_AFTER_MESSAGE_S);
+    tick(&rig);
+    assert!(fake.sent().is_empty());
+    assert!(lock(&rig.host.releases).is_empty());
 }
 
 #[test]

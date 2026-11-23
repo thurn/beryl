@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use serde::{Deserialize, Serialize};
 
 use ignite_core::config::Os;
-use ignite_core::ids::{Seq, SessionId, TicketId};
+use ignite_core::ids::{Handle, Seq, SessionId, TicketId};
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::hub::{ReleaseCause, Reservation};
 use ignite_core::protocol::tickets::TicketDetail;
@@ -47,6 +47,8 @@ pub(crate) use workers::capacity_report;
 
 pub use cli_view::digest_text;
 pub use stall::RunningVerb;
+#[cfg(all(test, unix))]
+pub(crate) use stall::STUCK_COMMAND_S;
 pub use tell::TellVerb;
 pub use turn::TurnEndedVerb;
 pub use usage::{hold_lines, post_usage, usage_holds, usage_report};
@@ -55,7 +57,7 @@ pub use usage::{hold_lines, post_usage, usage_holds, usage_report};
 pub const REFUSED_S: f64 = 60.0;
 /// Seconds without a command after which a working session is checked.
 pub const SILENT_S: f64 = 1800.0;
-/// Seconds an idle session has, after being asked to continue, before its ticket is released.
+/// Seconds after the first idle answer before another can give back the ticket.
 pub const IDLE_AFTER_MESSAGE_S: f64 = 900.0;
 
 /// The message an idle worker gets when it has run nothing for 30 minutes.
@@ -120,6 +122,10 @@ pub trait Host: Send + Sync {
     /// The verbs the session started that are still running, whether or not it still waits on
     /// them, with their current steps.
     fn running_verbs(&self, session: &SessionId) -> Vec<RunningVerb>;
+    /// Whether the handle has a result, even if the activity has yet to hear it finished.
+    fn verb_finished(&self, _handle: &Handle) -> bool {
+        false
+    }
     /// Ends the session's `ignite wait` at once with `reply`. Returns whether it was waiting.
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool;
     /// Gives back the ticket of a session that is gone or idle, keeping its work.
@@ -130,6 +136,20 @@ pub trait Host: Send + Sync {
         reason: &str,
         cause: ReleaseCause,
     ) -> Result<()>;
+    /// Gives back a stalled session's ticket if the stall still holds when the lease is returned.
+    fn release_if(
+        &self,
+        session: &SessionId,
+        ticket: &TicketId,
+        reason: &str,
+        still_stuck: &dyn Fn() -> bool,
+    ) -> Result<bool> {
+        if !still_stuck() {
+            return Ok(false);
+        }
+        self.release(session, ticket, reason, ReleaseCause::TakenBack)?;
+        Ok(true)
+    }
     /// The title the desktop app shows for the session, or `None` when it cannot be read.
     fn title(&self, session: &SessionId) -> Option<String>;
     /// The live processes under process `root` (the session's own process, as its `Stop` hook
@@ -182,6 +202,7 @@ struct Reserved {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Stall {
     checked_at: Timestamp,
+    /// When the first idle answer started the grace period. A waiting slot already has a prompt.
     messaged_at: Option<Timestamp>,
     /// Set when the stall is a command stuck past its time rather than silence.
     #[serde(default)]

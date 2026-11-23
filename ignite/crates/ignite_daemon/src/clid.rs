@@ -109,6 +109,8 @@ pub enum SessionCheck {
     Running,
     /// No turn runs now.
     Idle,
+    /// The next turn will start when the session's `ignite` work finishes.
+    WaitingForVerb,
     /// The session has no slot.
     Gone,
 }
@@ -149,7 +151,7 @@ pub trait CliPool: Send + Sync {
     /// Queues `text` for the session's next turn. An urgent message (`tell --now`, or an order
     /// from a justiciar) ends the running turn and resumes with it.
     fn message(&self, session: &SessionId, text: &str, urgent: bool) -> Result<()>;
-    /// Whether the session's turn is running, it is between turns, or it has no slot.
+    /// Whether the session runs, waits on a verb, is otherwise idle, or has no slot.
     fn check(&self, session: &SessionId) -> SessionCheck;
     /// Current worker rows of `app`, ordered by number.
     fn slots(&self, app: &str) -> Vec<Slot>;
@@ -505,11 +507,17 @@ impl CliDaemon {
             }
             SlotState::Running => self.watch(row),
             SlotState::WaitingVerb => {
-                if self.verbs_of(&session).is_empty() {
-                    self.start_next(row)
-                } else {
-                    Ok(())
+                if !self.verbs_of(&session).is_empty() {
+                    return Ok(());
                 }
+                if slot
+                    .ticket
+                    .as_ref()
+                    .is_some_and(|ticket| self.host.holders().get(&session) != Some(ticket))
+                {
+                    return self.retire_slot(row, &session);
+                }
+                self.start_next(row)
             }
             SlotState::BackingOff => {
                 let due = row
@@ -639,25 +647,23 @@ impl CliDaemon {
         self.mark_running(row)
     }
 
-    /// The `ignite` verbs of the session that still run, as `decide` names them. The host
-    /// reports no handle, so a verb's name stands for it.
+    /// The `ignite` verbs of the session that still run, as `decide` names them.
     fn verbs_of(&self, session: &SessionId) -> Vec<ignite_core::cli::Verb> {
         let mut verbs: Vec<ignite_core::cli::Verb> = self
             .host
             .running_verbs(session)
             .into_iter()
             .map(|verb| ignite_core::cli::Verb {
-                command: verb.verb.clone(),
-                handle: verb.verb,
+                command: verb.verb,
+                handle: verb.handle,
             })
             .collect();
         if verbs.is_empty()
             && let Some(command) = self.host.command(session).filter(|c| c.running)
         {
-            let name = command.command.split_whitespace().next().unwrap_or("");
             verbs.push(ignite_core::cli::Verb {
-                command: command.command.clone(),
-                handle: name.to_owned(),
+                command: command.command,
+                handle: None,
             });
         }
         verbs
@@ -724,6 +730,8 @@ impl CliPool for CliDaemon {
                 };
                 if running {
                     SessionCheck::Running
+                } else if slot.state == SlotState::WaitingVerb {
+                    SessionCheck::WaitingForVerb
                 } else {
                     SessionCheck::Idle
                 }

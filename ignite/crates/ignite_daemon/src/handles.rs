@@ -278,6 +278,16 @@ impl Handles {
         })
     }
 
+    /// A verb process can write its reply before the daemon updates its activity and waiters.
+    pub(crate) fn finished(&self, handle: &Handle) -> bool {
+        self.stored(handle)
+            .is_some_and(|row| row.state != "running")
+            || lock(&self.state)
+                .replies
+                .get(handle)
+                .is_some_and(|entry| entry.reply.is_some())
+    }
+
     /// Records the reply of a finished operation and wakes everyone waiting on it.
     pub fn finish(&self, handle: &Handle, reply: Reply) {
         self.finish_as(handle, reply, "done");

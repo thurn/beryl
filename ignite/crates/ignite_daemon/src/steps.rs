@@ -463,6 +463,11 @@ impl Activity {
         change(&mut lock(&self.state).work);
     }
 
+    /// The start of the activity and its current step, from the clock that recorded them.
+    pub(crate) fn timing(&self) -> (Timestamp, Option<(String, Timestamp)>) {
+        (self.started, lock(&self.state).step.clone())
+    }
+
     /// What the work is doing now.
     pub fn view(&self) -> View {
         let now = self.clock.now();

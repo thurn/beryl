@@ -13,7 +13,7 @@ use std::sync::{Arc, LazyLock};
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{SessionId, TicketId};
+use crate::ids::{Handle, SessionId, TicketId};
 use crate::time::Timestamp;
 
 pub mod agy;
@@ -254,8 +254,11 @@ pub enum Action {
     Free,
     /// Start the next turn now with `prompt`.
     Resume { prompt: String },
-    /// Start the next turn with `prompt` when the session's `ignite` verb `handle` ends.
-    WaitForVerb { handle: String, prompt: String },
+    /// Start the next turn with `prompt` when the session's `ignite` work ends.
+    WaitForVerb {
+        handle: Option<Handle>,
+        prompt: String,
+    },
     /// Start the next turn with `prompt` at `at`.
     BackOff { at: Timestamp, prompt: String },
     /// Give back the ticket, keeping its work, with `note`; the slot is then free.
@@ -284,8 +287,8 @@ pub struct Hold {
 pub struct Verb {
     /// The verb and its first argument, such as `land`.
     pub command: String,
-    /// The handle to wait on, such as `L-5521`.
-    pub handle: String,
+    /// The verb's durable handle, such as `L-5521`, if it has one.
+    pub handle: Option<Handle>,
 }
 
 /// How the daemon answered a session's previous turn end, where the rules answer a second such

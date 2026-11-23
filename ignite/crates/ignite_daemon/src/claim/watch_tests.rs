@@ -301,6 +301,27 @@ fn a_failed_save_keeps_the_ticket_held() {
     assert!(world.claims.holder(TREE.as_ref()).is_some());
 }
 
+#[test]
+fn a_stall_that_clears_while_saving_keeps_the_lease() {
+    let world = started();
+    let ticket = id("Tq.48");
+    let released = world
+        .claims
+        .release_session_if(
+            &world.ctx,
+            &session(WORKER),
+            &ticket,
+            "The command is stuck.",
+            ReleaseCause::TakenBack,
+            &|| !lock(&world.trees.saved).contains_key(&ticket),
+        )
+        .unwrap();
+    assert!(lock(&world.trees.saved).contains_key(&ticket));
+    assert!(!released);
+    assert!(lock(&world.desk.releases).is_empty());
+    assert!(world.claims.holder(TREE.as_ref()).is_some());
+}
+
 /// A tree leased under an ad hoc placeholder that no `start` claimed before the daemon
 /// restarted is unknown at the hub. The daemon used to retry the failed release indefinitely.
 #[test]

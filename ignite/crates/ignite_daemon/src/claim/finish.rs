@@ -64,7 +64,10 @@ impl Claims {
             Err(reply) => return reply,
         };
         let title = brief::title_of(held.brief.as_ref(), &held.ticket);
-        match self.give_back(ctx, &held, |_| note, needs, req.pid, ReleaseCause::GaveUp) {
+        let given = self
+            .prepare_release(ctx, &held, |_| note, needs, ReleaseCause::GaveUp)
+            .and_then(|release| self.give_back(&held, release, req.pid));
+        match given {
             Ok(Given {
                 ended: Ended::AlreadyClosed,
                 reset,
@@ -84,36 +87,42 @@ impl Claims {
         }
     }
 
-    /// Saves the tree's work, releases the ticket at the hub with the note made from what was
-    /// saved, and frees the tree. If the save or the release fails, the session keeps the ticket
-    /// and the tree. The exception is a ticket that the hub no longer holds for the session,
-    /// because it was closed or reopened at the hub: the hub then refuses the release, and that
-    /// refusal proves the hold is gone, so the tree is freed anyway, after the save.
-    pub(super) fn give_back(
+    /// Saves the work before preparing the request to return its lease.
+    pub(super) fn prepare_release(
         &self,
         ctx: &Context,
         held: &Held,
         note: impl FnOnce(&Saved) -> String,
         needs: Option<String>,
-        caller: Option<u32>,
         cause: ReleaseCause,
-    ) -> Result<Given> {
+    ) -> Result<ReleaseRequest> {
         let saved = self.trees.save(&held.tree, &held.ticket)?;
-        let released = self.desk.release(&ReleaseRequest {
+        Ok(ReleaseRequest {
             ticket: held.ticket.clone(),
             machine: ctx.machine.clone(),
             session: held.session.clone(),
             note: note(&saved),
             needs,
-            saved: saved.clone(),
+            saved,
             cause,
-        });
+        })
+    }
+
+    /// Returns the lease at the hub, then frees the tree. A refusal that proves the hub
+    /// has already closed or taken back the ticket also frees the tree.
+    pub(super) fn give_back(
+        &self,
+        held: &Held,
+        release: ReleaseRequest,
+        caller: Option<u32>,
+    ) -> Result<Given> {
+        let released = self.desk.release(&release);
         let ended = match released {
             Ok(()) => Ended::Taken,
             Err(error) => self.refused_as_not_held(held, &error).ok_or(error)?,
         };
         Ok(Given {
-            saved,
+            saved: release.saved,
             reset: self.free(held, caller),
             ended,
         })

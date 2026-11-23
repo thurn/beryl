@@ -163,12 +163,19 @@ fn interrupted(facts: &Facts) -> Action {
 
 /// Waiting for `verb`, and the prompt that tells the worker it finished.
 fn wait_for(verb: &Verb) -> Action {
+    let prompt = match &verb.handle {
+        Some(handle) => format!(
+            "`ignite {} {handle}` finished. Run `ignite wait {handle}`.",
+            verb.command
+        ),
+        None => format!(
+            "`ignite {}` finished. Run `ignite status` and continue.",
+            verb.command
+        ),
+    };
     Action::WaitForVerb {
         handle: verb.handle.clone(),
-        prompt: format!(
-            "`{} {}` finished: run `ignite wait {}`.",
-            verb.command, verb.handle, verb.handle
-        ),
+        prompt,
     }
 }
 

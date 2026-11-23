@@ -314,7 +314,7 @@ impl HeadlessDispatch {
                     let release = self.checked(&mut state, ctx, &session, answer);
                     drop(state);
                     if let Some(due) = release {
-                        eprintln!("ignite: {}", self.release(&due));
+                        eprintln!("ignite: {}", self.release(ctx, cli.pool.as_ref(), &due));
                     }
                 }
             }

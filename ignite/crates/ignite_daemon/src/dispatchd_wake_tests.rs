@@ -35,6 +35,7 @@ fn runs_in_background(rig: &Rig, verb: &str) {
         session("local_w1"),
         vec![RunningVerb {
             verb: verb.to_owned(),
+            handle: None,
             started: rig.clock.now(),
             step: None,
         }],

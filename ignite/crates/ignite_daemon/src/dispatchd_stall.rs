@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 
 use serde::{Deserialize, Serialize};
 
-use ignite_core::ids::{SessionId, TicketId};
+use ignite_core::ids::{Handle, SessionId, TicketId};
 use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::time::Timestamp;
 
@@ -12,7 +12,7 @@ use super::wake::WAKE;
 use super::{
     CONTINUE, HeadlessDispatch, IDLE_AFTER_MESSAGE_S, SILENT_S, Stall, State, cli, ends_ticket,
 };
-use crate::clid::SessionCheck;
+use crate::clid::{CliPool, SessionCheck};
 use crate::loop_health::span;
 use crate::server::Context;
 
@@ -26,6 +26,8 @@ pub const STUCK_STEP_S: f64 = 1800.0;
 pub struct RunningVerb {
     /// The verb, such as `test`.
     pub verb: String,
+    /// The handle whose result outlives the client and daemon.
+    pub handle: Option<Handle>,
     pub started: Timestamp,
     /// The verb's current step and when it began, if it reported one.
     pub step: Option<(String, Timestamp)>,
@@ -37,8 +39,16 @@ pub(super) struct Stuck {
     /// When the command crossed one of the limits. A new stuck command, or a new step that
     /// crosses the step limit later, is a new stall.
     pub(super) at: Timestamp,
+    #[serde(default)]
+    handle: Option<Handle>,
     /// What the command is doing and for how long, for the message, as of the last check.
     pub(super) what: String,
+}
+
+impl Stuck {
+    fn matches(&self, other: &Self) -> bool {
+        self.at == other.at && self.handle == other.handle
+    }
 }
 
 /// The message an idle worker gets when a command it started is stuck.
@@ -73,7 +83,11 @@ fn overdue(verb: &RunningVerb, now: Timestamp) -> Option<Stuck> {
             span(now.seconds_since(*began))
         );
     }
-    Some(Stuck { at, what })
+    Some(Stuck {
+        at,
+        handle: verb.handle.clone(),
+        what,
+    })
 }
 
 /// A ticket to give back once the dispatch state is unlocked.
@@ -81,6 +95,7 @@ pub(super) struct DueRelease {
     session: SessionId,
     ticket: TicketId,
     reason: &'static str,
+    stuck: Option<Stuck>,
 }
 
 impl DueRelease {
@@ -89,6 +104,7 @@ impl DueRelease {
             session: session.clone(),
             ticket,
             reason,
+            stuck: None,
         }
     }
 }
@@ -126,7 +142,7 @@ impl HeadlessDispatch {
                 state.reserved.remove(session);
                 holding.map(|ticket| DueRelease::new(session, ticket, "the session is gone"))
             }
-            SessionCheck::Idle => {
+            SessionCheck::Idle | SessionCheck::WaitingForVerb => {
                 let ticket = holding?;
                 let stall = state.stalls.entry(session.clone()).or_insert(Stall {
                     checked_at: now,
@@ -134,17 +150,34 @@ impl HeadlessDispatch {
                     stuck: None,
                     woken: false,
                 });
-                let stuck = stall.stuck.as_ref().map(|stuck| stuck_message(&stuck.what));
-                let unprompted = if stall.woken { WAKE } else { CONTINUE };
+                if let Some(stuck) = &stall.stuck {
+                    if !self.same_stuck(session, stuck, now) {
+                        stall.stuck = None;
+                        stall.checked_at = now;
+                        stall.messaged_at = None;
+                        return None;
+                    }
+                } else if answer == SessionCheck::WaitingForVerb {
+                    return None;
+                }
+                let stuck = stall.stuck.as_ref();
                 match stall.messaged_at {
                     None => {
                         stall.messaged_at = Some(now);
-                        let message = stuck.as_deref().unwrap_or(unprompted);
-                        state.cli_calls.push(cli::Call::Message {
-                            session: session.clone(),
-                            text: message.to_owned(),
-                            urgent: false,
-                        });
+                        // A waiting slot has no turn to receive the reminder. Its next
+                        // turn already has a prompt for the command's result.
+                        if answer == SessionCheck::Idle {
+                            let message = match stuck {
+                                Some(stuck) => stuck_message(&stuck.what),
+                                None if stall.woken => WAKE.to_owned(),
+                                None => CONTINUE.to_owned(),
+                            };
+                            state.cli_calls.push(cli::Call::Message {
+                                session: session.clone(),
+                                text: message,
+                                urgent: false,
+                            });
+                        }
                         None
                     }
                     // The record stays, so that a release that fails is tried again only at the
@@ -157,7 +190,9 @@ impl HeadlessDispatch {
                         } else {
                             "the session stayed idle after a reminder"
                         };
-                        Some(DueRelease::new(session, ticket, reason))
+                        let mut due = DueRelease::new(session, ticket, reason);
+                        due.stuck.clone_from(&stall.stuck);
+                        Some(due)
                     }
                     Some(_) => None,
                 }
@@ -166,16 +201,29 @@ impl HeadlessDispatch {
     }
 
     /// Gives a ticket back, and returns the outcome for the daemon log.
-    pub(super) fn release(&self, due: &DueRelease) -> String {
+    pub(super) fn release(&self, ctx: &Context, pool: &dyn CliPool, due: &DueRelease) -> String {
         let (session, ticket, reason) = (&due.session, &due.ticket, due.reason);
-        match self
-            .host
-            .release(session, ticket, reason, ReleaseCause::TakenBack)
-        {
-            Ok(()) => {
+        let released = match &due.stuck {
+            Some(stuck) => self.host.release_if(session, ticket, reason, &|| match pool
+                .check(session)
+            {
+                SessionCheck::Running => false,
+                SessionCheck::Gone => true,
+                SessionCheck::Idle | SessionCheck::WaitingForVerb => {
+                    self.same_stuck(session, stuck, ctx.clock.now())
+                }
+            }),
+            None => self
+                .host
+                .release(session, ticket, reason, ReleaseCause::TakenBack)
+                .map(|()| true),
+        };
+        match released {
+            Ok(true) => {
                 self.note_released(session, ticket);
                 format!("released {ticket} from {session}: {reason}")
             }
+            Ok(false) => format!("kept {ticket} with {session}: its command stall cleared"),
             Err(error) => format!("could not release {ticket} from {session}: {error}"),
         }
     }
@@ -197,6 +245,14 @@ impl HeadlessDispatch {
             }
             if self.watch_waiting(state, &session, now) {
                 continue;
+            }
+            if let Some(stall) = state.stalls.get_mut(&session)
+                && stall.stuck.take().is_some()
+            {
+                // A finished command gives the worker a new turn. Start the silence clock here
+                // even if a restart left the last command time pointing to when the gate began.
+                stall.checked_at = now;
+                stall.messaged_at = None;
             }
             let since = match self.host.command(&session) {
                 Some(command) if command.running => {
@@ -256,7 +312,18 @@ impl HeadlessDispatch {
             // `wait` only waits on another verb, which is listed itself.
             .filter(|verb| verb.verb != "wait" && !ends_ticket(&verb.verb))
             .filter_map(|verb| overdue(verb, now))
+            .filter(|stuck| {
+                stuck
+                    .handle
+                    .as_ref()
+                    .is_none_or(|handle| !self.host.verb_finished(handle))
+            })
             .min_by_key(|stuck| stuck.at)
+    }
+
+    fn same_stuck(&self, session: &SessionId, previous: &Stuck, now: Timestamp) -> bool {
+        self.stuck(session, now)
+            .is_some_and(|stuck| stuck.matches(previous))
     }
 
     /// Checks a session whose command is stuck: at once for a new stuck command, 15 minutes
@@ -266,7 +333,7 @@ impl HeadlessDispatch {
             return;
         }
         let due = match state.stalls.get(session) {
-            Some(stall) if stall.stuck.as_ref().is_some_and(|s| s.at == stuck.at) => {
+            Some(stall) if stall.stuck.as_ref().is_some_and(|s| s.matches(&stuck)) => {
                 match stall.messaged_at {
                     Some(at) if stall.checked_at <= at => {
                         now.seconds_since(at) >= IDLE_AFTER_MESSAGE_S

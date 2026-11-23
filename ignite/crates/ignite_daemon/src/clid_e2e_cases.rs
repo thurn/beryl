@@ -90,6 +90,83 @@ fn cli_e2e_a_daemon_restart_during_a_turn_neither_starts_it_again_nor_ends_it_tw
     assert_eq!(turns[0].1, "ended");
 }
 
+/// Parks the worker on its real gate handle and gives dispatch one chance to see it stuck.
+fn stalled_gate(rig: &Rig, finish_on_release: bool) -> (SessionId, Handle) {
+    use crate::dispatchd::{HeadlessDispatch, STUCK_COMMAND_S, Setup};
+
+    let session = rig.begin();
+    let database = Arc::new(Mutex::new(Rig::open(&rig.home)));
+    let handles = Handles::open(rig.clock.clone(), database.clone()).unwrap();
+    let handle = handles.create("check", Some(&session), None);
+    *lock(&rig.host.gate) = Some(Gate {
+        session: session.clone(),
+        handle: handle.clone(),
+        started: rig.clock.now(),
+        handles,
+        database,
+        finish_on_release,
+    });
+    rig.wait_turn(&session, 1);
+    rig.daemon.step().unwrap();
+    assert_eq!(rig.slot().state, SlotState::WaitingVerb);
+
+    let dispatch = HeadlessDispatch::new(
+        Pool::new(Rig::open(&rig.home)),
+        rig.host.clone(),
+        Setup {
+            os: ignite_core::config::Os::Macos,
+            families: Vec::new(),
+        },
+    );
+    dispatch.set_cli(rig.daemon.clone(), &rig.ctx.config);
+    rig.clock.advance(STUCK_COMMAND_S);
+    dispatch.tick(&rig.ctx);
+    assert!(rig.releases().is_empty());
+    rig.clock.advance(crate::dispatchd::IDLE_AFTER_MESSAGE_S);
+    dispatch.tick(&rig.ctx);
+    (session, handle)
+}
+
+#[test]
+fn cli_e2e_a_stalled_gate_finishing_during_release_keeps_the_claim() {
+    let mut rig = Rig::new("gate-finishes");
+    let (session, handle) = stalled_gate(&rig, true);
+    assert!(rig.releases().is_empty());
+    assert_eq!(rig.host.holders()[&session].as_str(), TICKET);
+
+    // Restart after the result is durable, as the verb process and the daemon can end
+    // independently. The new daemon can read the result before it resumes the worker.
+    let gate = lock(&rig.host.gate).take().unwrap();
+    let handles = Handles::open(rig.clock.clone(), gate.database).unwrap();
+    let waited = handles.wait(&handle, 0, Some(&session));
+    assert!(matches!(waited, crate::handles::Waited::Done(reply) if reply.exit == Exit::Success));
+
+    rig.restart();
+    rig.daemon.step().unwrap();
+    rig.wait_turn(&session, 2);
+    let prompt = rig.prompt(2);
+    assert_eq!(
+        prompt,
+        format!("`ignite check {handle}` finished. Run `ignite wait {handle}`.")
+    );
+    assert_eq!(rig.host.holders()[&session].as_str(), TICKET);
+}
+
+#[test]
+fn cli_e2e_a_gate_that_stays_stuck_can_still_lose_its_claim() {
+    let rig = Rig::new("gate-stays-stuck");
+    let (session, _) = stalled_gate(&rig, false);
+    assert!(!rig.host.holders().contains_key(&session));
+    assert!(matches!(
+        rig.releases().as_slice(),
+        [(ReleaseCause::TakenBack, reason)] if reason.contains("command stuck")
+    ));
+    lock(&rig.host.gate).take();
+    rig.daemon.step().unwrap();
+    assert_eq!(rig.invocations(), 1);
+    assert_eq!(rig.daemon.check(&session), SessionCheck::Gone);
+}
+
 #[test]
 fn cli_e2e_a_program_killed_mid_turn_resumes_its_transcript_as_interrupted() {
     let rig = Rig::new("killed");

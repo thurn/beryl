@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use ignite_core::admission::Worked;
 use ignite_core::dispatch_pressure::{DispatchPressure, QueueRecovery};
-use ignite_core::ids::{Commit, MachineId, SessionId, TicketId, TreeId};
+use ignite_core::ids::{Commit, Handle, MachineId, SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::protocol::hub::{AdhocClaim, Claim, Close, Release, TicketBrief};
@@ -470,24 +470,29 @@ impl Host for DaemonHost {
         let Some(server) = self.server() else {
             return Vec::new();
         };
-        let now = self.ctx.clock.now();
         server
             .steps()
             .live()
             .iter()
             .filter(|activity| activity.work().session.as_ref() == Some(session))
             .filter_map(|activity| {
-                let view = activity.view();
-                (view.kind == "verb").then(|| RunningVerb {
-                    verb: view.name,
-                    started: now.plus_seconds(-view.age_s),
-                    step: view
-                        .step
-                        .zip(view.step_age_s)
-                        .map(|(step, age)| (step, now.plus_seconds(-age))),
+                let crate::steps::Kind::Verb(verb) = activity.kind() else {
+                    return None;
+                };
+                let (started, step) = activity.timing();
+                Some(RunningVerb {
+                    verb: verb.clone(),
+                    handle: activity.handle(),
+                    started,
+                    step,
                 })
             })
             .collect()
+    }
+
+    fn verb_finished(&self, handle: &Handle) -> bool {
+        self.server()
+            .is_some_and(|server| server.handles().finished(handle))
     }
 
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool {
@@ -527,6 +532,23 @@ impl Host for DaemonHost {
     ) -> Result<()> {
         self.claims
             .release_session(&self.ctx, session, ticket, reason, cause)
+    }
+
+    fn release_if(
+        &self,
+        session: &SessionId,
+        ticket: &TicketId,
+        reason: &str,
+        still_stuck: &dyn Fn() -> bool,
+    ) -> Result<bool> {
+        self.claims.release_session_if(
+            &self.ctx,
+            session,
+            ticket,
+            reason,
+            ReleaseCause::TakenBack,
+            still_stuck,
+        )
     }
 
     fn running_under(&self, root: u32, asker: Option<u32>) -> Option<Vec<u32>> {

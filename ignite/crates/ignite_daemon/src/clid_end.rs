@@ -203,7 +203,7 @@ impl CliDaemon {
                 self.close(row, turn, end, exit, SlotState::WaitingVerb, |r| {
                     counters(r);
                     r.next_prompt = Some(prompt.clone());
-                    r.wait_handle = Some(handle.clone());
+                    r.wait_handle = handle.as_ref().map(ToString::to_string);
                 })?;
             }
             Action::BackOff { at, prompt } => {

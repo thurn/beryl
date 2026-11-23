@@ -87,6 +87,7 @@ fn wait_for_verb_starts_the_next_turn_when_the_verb_ends() {
     let session = rig.begin();
     let verb = RunningVerb {
         verb: "check".to_owned(),
+        handle: Some("C-19".parse().unwrap()),
         started: Timestamp::from_millis(START),
         step: None,
     };
@@ -96,8 +97,8 @@ fn wait_for_verb_starts_the_next_turn_when_the_verb_ends() {
         .unwrap()
         .insert(session.clone(), vec![verb]);
     rig.then(Action::WaitForVerb {
-        handle: "check".to_owned(),
-        prompt: "`check` finished: run `ignite wait check`".to_owned(),
+        handle: Some("C-19".parse().unwrap()),
+        prompt: "`ignite check C-19` finished. Run `ignite wait C-19`.".to_owned(),
     });
     rig.daemon.step().unwrap();
     assert_eq!(rig.asked()[0].1.running_verbs[0].command, "check");
@@ -109,7 +110,7 @@ fn wait_for_verb_starts_the_next_turn_when_the_verb_ends() {
     rig.daemon.step().unwrap();
     assert_eq!(
         rig.turns.prompts()[1],
-        "`check` finished: run `ignite wait check`"
+        "`ignite check C-19` finished. Run `ignite wait C-19`."
     );
     assert_eq!(rig.slot().state, SlotState::Running);
 }
