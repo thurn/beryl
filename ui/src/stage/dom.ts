@@ -188,26 +188,27 @@ export class DomSurface implements Surface {
   dress(name: Name, { object, dress }: Resting) {
     const node = this.#nodes.get(name);
     if (!node) return;
-    node.dataset.zone = dress.zone;
+    // A card can change pose or record while keeping the same DOM attributes.
+    if (node.dataset.zone !== dress.zone) node.dataset.zone = dress.zone;
     // What an effect on it is sized by (effects.css).
     node.style.setProperty("--frame", `${dress.frame}px`);
     this.#mirror(name);
-    if (!object) {
-      node.className = "hud stack-ability stage-node";
-      return;
-    }
-    node.className = [
-      "card-el",
-      "stage-node",
-      `card-el-${dress.look}`,
-      `card-el-${object.controller}`,
-      dress.rim && "card-el-rim",
-      dress.stacked && "card-el-stacked",
-    ]
-      .filter(Boolean)
-      .join(" ");
-    if (object.name && !dress.back) node.dataset.card = object.name;
-    else delete node.dataset.card;
+    const classes = object
+      ? [
+          "card-el",
+          "stage-node",
+          `card-el-${dress.look}`,
+          `card-el-${object.controller}`,
+          dress.rim && "card-el-rim",
+          dress.stacked && "card-el-stacked",
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : "hud stack-ability stage-node";
+    if (node.className !== classes) node.className = classes;
+    const card = dress.back ? undefined : object?.name;
+    if (!card) delete node.dataset.card;
+    else if (node.dataset.card !== card) node.dataset.card = card;
   }
 
   /** Draws the card of the node `name` raised out of the fan it lies in, and no other node's:

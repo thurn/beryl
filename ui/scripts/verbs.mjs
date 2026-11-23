@@ -112,9 +112,8 @@ const MIDDLE = 450;
  * end, which the view the stage then shows tells (`shows`). Returns each step `stage.step` showed, in order, with every
  * node's pose by `stage.pose` and the effects on it by `stage.effect` before it, as it began,
  * half way and as it ended, where a tick landed there; and how the page's nodes differed from
- * the model at any of those. A step that
- * takes no time shows only in what the samples around it hold. Also every edge of a step the
- * stage told (`stage.follow`) with the sounds that step asks for (src/audio/steps.ts), and
+ * the model. A step that takes no time shows only in the samples around it. Also every edge
+ * from `stage.follow` with the sounds that step asks for (src/audio/steps.ts), and
  * the sounds the page was asked for meanwhile (`window.berylSounds`), all in stage time; and
  * where the two halves of the table meet. */
 async function walk({ tick, gap, answers, middle, whole, written }) {
@@ -130,8 +129,7 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
         clock.advance(Math.ceil(clock.now) - clock.now);
     }
     const origin = clock.now;
-    // The times to sample besides: the middle and the end of every step the stage tells of as
-    // it begins, so that a step that plays while an earlier one of its beat does is seen too.
+    // Sample each step's midpoint and end, including steps that overlap.
     const wanted = new Set();
     const extra = [];
     let sample;
@@ -217,19 +215,24 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
     const heard = window.berylSounds.length;
     const edges = [];
     const unfollow = stage.follow((edge) => {
+        const { act } = edge.step;
+        const { from, to } = edge.span;
+        const start = edge.edge === "start";
         edges.push({
             edge: edge.edge,
             at: edge.at - origin,
-            verb: edge.step.act.verb,
-            act: edge.step.act,
-            span: edge.span.to - edge.span.from,
+            verb: act.verb,
+            act,
+            span: to - from,
+            sourceZone:
+                start && act.verb === "fly"
+                    ? edge.table.view.objects.find(
+                          (card) => card.slot === act.object.slot,
+                      )?.zone
+                    : undefined,
             cues: window.berylStepSounds(edge),
         });
-        if (edge.edge !== "start") return;
-        const { duration } = stage.timings(edge.step, edge.table.view);
-        if (duration > 0) {
-            wanted.add(edge.at + duration / 2).add(edge.at + duration);
-        }
+        if (start && from < to) wanted.add((from + to) / 2).add(to);
     });
     const near = (a, b, by) => Math.abs(a - b) <= by;
     /** Why the page's node for `name` is not where the model has it, if it is not. */

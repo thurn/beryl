@@ -88,8 +88,31 @@ function counters() {
             walk(root.current, root.current.alternate);
         },
     };
-    // ResizeObserver, notified by `settle` when an observed element's border box changed
-    // since it was last notified, and once when first observed, as the real one is.
+    // ResizeObserver observes the layout box. A bounding client rect includes transforms
+    // from the card's flight, which would refit its text on every animation frame.
+    const contentBox = (target) => {
+        if (!target.getClientRects().length) return new DOMRectReadOnly();
+        const style = getComputedStyle(target);
+        const width = parseFloat(style.width);
+        const height = parseFloat(style.height);
+        if (style.boxSizing !== "border-box") {
+            return new DOMRectReadOnly(0, 0, width, height);
+        }
+        return new DOMRectReadOnly(
+            0,
+            0,
+            width -
+                parseFloat(style.paddingLeft) -
+                parseFloat(style.paddingRight) -
+                parseFloat(style.borderLeftWidth) -
+                parseFloat(style.borderRightWidth),
+            height -
+                parseFloat(style.paddingTop) -
+                parseFloat(style.paddingBottom) -
+                parseFloat(style.borderTopWidth) -
+                parseFloat(style.borderBottomWidth),
+        );
+    };
     const observers = new Set();
     window.ResizeObserver = class {
         #callback;
@@ -112,7 +135,7 @@ function counters() {
         notify() {
             const entries = [];
             for (const [target, last] of this.#sizes) {
-                const box = target.getBoundingClientRect();
+                const box = contentBox(target);
                 const size = `${box.width}x${box.height}`;
                 if (size === last) continue;
                 this.#sizes.set(target, size);

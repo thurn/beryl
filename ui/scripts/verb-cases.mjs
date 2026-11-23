@@ -125,11 +125,20 @@ export const CASES = {
             const start = flight.at.from?.poses[name];
             const half = flight.at.middle?.poses[name];
             const end = flight.at.to.poses[name];
+            // Staggered draws reserve their spots in the hand before each flight begins.
+            // The flight event retains the table from before its card changed zones.
+            const departure = zones.edges.find(
+                (edge) =>
+                    edge.edge === "start" &&
+                    edge.at === flight.from &&
+                    edge.verb === "fly" &&
+                    edge.act.object.slot === name,
+            );
+            assert.equal(departure?.sourceZone, from, what);
             assert.equal(flight.at.to.zones[name], object.zone, what);
             assert.ok(end.depth < ALOFT, `${what}: it lands among what rests`);
             if (start) {
                 const was = before(zones, flight);
-                assert.equal(was.zones[name], from, what);
                 leavesFrom(start, was.poses[name], end, what);
             }
             if (half) assert.ok(half.depth >= ALOFT, `${what}: it flies`);
