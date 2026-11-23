@@ -215,88 +215,49 @@ fn every_draw_plays_to_its_placement_with_no_jump_for_its_time() {
     }
 }
 
-/// A card drawn alone turns face up as it leaves the library, at the web's `HELD_TURNING`
-/// moments of its flight in to where it is held (`held.turn`, as shares of `held.in` of the
-/// step): it has not begun turning just before `at - each`, is face up just after `at`, has
-/// finished just after `at + each`, and stays face up.
+/// A card drawn into the viewer's hand flies along the six-node draw spline: face down as it
+/// lifts off the library, flipping across edge-on near the middle of the table, leaning through
+/// its 3D flourish, and staying face up through the hold and drop into the hand.
 #[test]
-fn a_card_drawn_alone_turns_at_the_held_turn() {
-    let fly = &crate::test_data::data().verbs.fly;
-    let held = &fly.held;
+fn a_card_drawn_alone_flips_mid_flight_and_grows_to_hold_size() {
     let (before, cards) = table();
     let slot = cards.library[0];
     let show = played(&before, after(&before, &[&[(slot, ZoneName::Hand)]]));
     let segments = segments(&show, slot);
     let step = span(&show, slot);
-    let turn_at = |share: f32| pose_at(&segments, at(step, held.r#in * share)).turn;
-    let (edge_on, each) = (held.turn.at, held.turn.each);
     assert!(
-        turn_at(edge_on - each - 0.01) > 1.0 - 1e-4,
-        "not yet turning"
+        segments
+            .iter()
+            .any(|segment| matches!(segment.shape, Shape::Spline(_))),
+        "the draw uses a spline segment"
+    );
+    // Face down during lift-off, face up after crossing edge-on around t = 0.26, and face up at
+    // arrival in the hand.
+    assert!(
+        pose_at(&segments, at(step, 0.12)).turn > 0.5,
+        "face down during lift-off"
     );
     assert!(
-        turn_at(edge_on - 0.01) > 0.5,
-        "face down before it is edge-on"
+        pose_at(&segments, at(step, 0.36)).turn < 0.5,
+        "face up after crossing edge-on"
     );
-    assert!(turn_at(edge_on + 0.01) < 0.5, "face up after it is edge-on");
-    assert!(turn_at(edge_on + each + 0.01) < 1e-4, "turned");
-    assert!(pose_at(&segments, step.1).turn < 1e-4);
-}
+    assert!(pose_at(&segments, step.1).turn < 1e-4, "face up at rest");
 
-/// On its way to where it is held, a card drawn alone leans `held.lean` degrees
-/// counterclockwise, as the camera sees it, half way to being edge-on, and is upright again
-/// once it is edge-on; and on the window it stays about as wide as it was on the library until
-/// it is edge-on, and then grows to its held size (the web's `leaning` and `grown` in
-/// `ui/src/stage/drawn.ts`). The lean is measured against the same flight with no lean.
-#[test]
-fn a_card_drawn_alone_leans_as_it_lifts_off_and_grows_once_edge_on() {
-    let (before, cards) = table();
-    let slot = cards.library[0];
-    let show = played(&before, after(&before, &[&[(slot, ZoneName::Hand)]]));
-    let segments = segments(&show, slot);
-    let (flying, bow) = segments
-        .iter()
-        .find_map(|segment| match segment.shape {
-            Shape::Held { bow, .. } => Some((*segment, bow)),
-            _ => None,
-        })
-        .expect("the flight in is held");
-    let plain = Segment {
-        shape: Shape::Bowed(bow),
-        ..flying
-    };
-    let time = |share: f32| at((flying.start, flying.end()), share);
-    let lean = |share: f32| {
-        let (held, plain) = (flying.pose_at(time(share)), plain.pose_at(time(share)));
-        let (axis, angle) = (held.rotation * plain.rotation.inverse()).to_axis_angle();
-        angle.to_degrees() * axis.dot(bow.axis).signum()
-    };
-    let held = &show.table().data().verbs.fly.held;
-    let edge_on = held.turn.at;
-    let peak = lean(edge_on / 2.0);
-    assert!((peak - held.lean).abs() < 0.1, "leans {peak} degrees");
-    assert!(lean(edge_on).abs() < 0.1, "upright when edge-on");
-    assert!(lean(0.8).abs() < 0.1, "upright after");
-    // Its width on the window: the length of its bottom edge, which stays across the screen
-    // as it turns over top over bottom.
+    // On screen, the card stays near library width while lifting off and grows to ~1.3x hand
+    // height at the hold plateau.
     let camera = show.table().camera();
-    let width = |share: f32| {
-        let corners = camera.card_box(&flying.pose_at(time(share))).0;
-        corners[0].distance(corners[1])
+    let card_height = |share: f32| {
+        let corners = camera.card_box(&pose_at(&segments, at(step, share))).0;
+        corners[0].distance(corners[3])
     };
-    let (small, large) = (width(0.0), width(1.0));
-    assert!(large > small * 2.0, "it grows: {small} to {large} points");
-    for share in [edge_on / 2.0, edge_on] {
-        let seen = width(share) / small;
-        assert!(
-            (0.95..1.05).contains(&seen),
-            "{seen} times its width on the library {share} of the way in"
-        );
-    }
-    let growing = width(0.65);
+    let (library_h, hold_h, hand_h) = (card_height(0.0), card_height(0.64), card_height(1.0));
     assert!(
-        growing > small * 1.2 && growing < large,
-        "growing after: {growing}"
+        hold_h > hand_h * 1.2 && hold_h < hand_h * 1.4,
+        "hold height {hold_h} should be ~1.3x hand height {hand_h}"
+    );
+    assert!(
+        hold_h > library_h * 1.5,
+        "card grows substantially from library ({library_h}) to hold ({hold_h})"
     );
 }
 
@@ -305,15 +266,12 @@ fn on_screen(show: &Show, pose: Pose) -> Vec2 {
     show.table().camera().to_screen(pose.position)
 }
 
-/// A card drawn alone is held up at the held place for the whole of the hold: it is within a
-/// logical point of the straight way from there toward its place in the hand, and no farther
-/// along it than it sinks while held. It sinks along a straight way in the table's space, and
-/// the hand is a little farther from the eye, so on the window it sinks a little more: a
-/// hundredth of the way is allowed for that.
+/// A card drawn into the viewer's hand holds stationary at node 4 during the Hermite curve's
+/// flat hold plateau (`ease[1].time..=ease[2].time`), positioned at the authored hold spot beside
+/// the stack.
 #[test]
 fn a_card_drawn_alone_is_held_up_beside_the_stack() {
-    let fly = &crate::test_data::data().verbs.fly;
-    let held = &fly.held;
+    let local = &crate::test_data::data().verbs.fly.draw.local;
     let (before, cards) = table();
     let slot = cards.library[0];
     let show = played(&before, after(&before, &[&[(slot, ZoneName::Hand)]]));
@@ -321,35 +279,74 @@ fn a_card_drawn_alone_is_held_up_beside_the_stack() {
     let step = span(&show, slot);
     let camera = show.table().camera();
     let size = camera.window.size;
-    let kit_base::data::profiles::HeldDraw::Fixed { ndc, .. } =
-        show.table().layout().play.held_draw
-    else {
-        panic!("the reference profile holds a draw at a fixed position");
-    };
-    let place = Vec2::new(
-        f32::midpoint(ndc.x, 1.0) * size.width,
-        f32::midpoint(1.0, -ndc.y) * size.height,
+    let hold_ndc = local.nodes[3].ndc;
+    let expected = Vec2::new(
+        f32::midpoint(hold_ndc.x, 1.0) * size.width,
+        f32::midpoint(1.0, -hold_ndc.y) * size.height,
     );
-    let rest = on_screen(&show, pose_at(&segments, step.1));
-    let way = rest - place;
-    let sink = fly.held_sink;
+    let (hold_start, hold_end) = (local.ease[1].time, local.ease[2].time);
+    let anchor = on_screen(&show, pose_at(&segments, at(step, hold_start)));
+    assert!(
+        anchor.distance(expected) < 2.0,
+        "hold spot {anchor:?} should match authored {expected:?}"
+    );
     for i in 0..=10 {
         #[expect(clippy::cast_precision_loss, reason = "a small count")]
-        let share = held.r#in + held.hold * i as f32 / 10.0;
+        let share = hold_start + (hold_end - hold_start) * i as f32 / 10.0;
         let seen = on_screen(&show, pose_at(&segments, at(step, share)));
-        let off = seen - place;
-        let along = off.dot(way) / way.length_squared();
-        let aside = (off - way * along).length();
-        assert!(aside < 1.0, "{share}: {aside} points off the way down");
         assert!(
-            (-0.001..=sink + 0.01).contains(&along),
-            "{share}: {along} of the way down"
+            seen.distance(anchor) < 0.5,
+            "card moved during flat hold plateau at {share}: {seen:?} vs {anchor:?}"
         );
     }
 }
 
-/// Three cards drawn together never stop between the library and the hand: each moves from
-/// when its step begins until it ends.
+/// An opponent's drawn card stays face down, pauses briefly on their library, drops down the
+/// right flank, sweeps across upper centre at peak apparent scale, and lands in their hand.
+#[test]
+fn an_opponents_draw_follows_the_four_node_spline_face_down() {
+    let (before, cards) = table();
+    let slot = cards.their_library[0];
+    let show = played(&before, after(&before, &[&[(slot, ZoneName::Hand)]]));
+    let segments = segments(&show, slot);
+    let step = span(&show, slot);
+    let spline = segments
+        .iter()
+        .find(|segment| matches!(segment.shape, Shape::Spline(_)))
+        .expect("opponent draw uses a spline");
+    let start_pos = on_screen(&show, spline.pose_at(step.0));
+    let paused_pos = on_screen(&show, spline.pose_at(at(step, 0.04)));
+    assert!(
+        start_pos.distance(paused_pos) < 0.5,
+        "pauses before launch: {start_pos:?} vs {paused_pos:?}"
+    );
+    let drop_pos = on_screen(&show, spline.pose_at(at(step, 0.30)));
+    let apex_pos = on_screen(&show, spline.pose_at(at(step, 0.60)));
+    let end_pos = on_screen(&show, spline.pose_at(step.1));
+    assert!(
+        drop_pos.y > start_pos.y + 40.0,
+        "drops down the board from library: {drop_pos:?} vs {start_pos:?}"
+    );
+    assert!(
+        apex_pos.x < drop_pos.x - 40.0 && apex_pos.y > end_pos.y + 40.0,
+        "sweeps left across upper centre before entering hand: {apex_pos:?}"
+    );
+    let camera = show.table().camera();
+    for share in [0.0, 0.25, 0.5, 0.75, 1.0] {
+        let pose = spline.pose_at(at(step, share));
+        assert!(pose.turn > 0.5, "stays face down at {share}");
+        // Verify the card back never spins sideways in-plane while travelling into an inverted
+        // opponent hand fan.
+        let corners = camera.card_box(&pose).0;
+        let vertical = (corners[3] - corners[0]).normalize_or_zero();
+        assert!(
+            vertical.y.abs() > 0.7,
+            "card spun sideways at {share}: vertical axis {vertical:?}"
+        );
+    }
+}
+
+/// Three cards drawn together play continuously across their steps with no stalled tracks.
 #[test]
 fn several_drawn_together_never_rest_on_the_way() {
     let (before, cards) = table();
@@ -400,7 +397,7 @@ fn a_draw_then_a_cast_fits_on_one_track() {
     );
     clean(&show, "draw then cast");
     let segments = segments(&show, slot);
-    assert!(segments.len() >= 4, "{segments:?}");
+    assert!(segments.len() >= 2, "{segments:?}");
     let mut track = Track::default();
     for segment in segments {
         assert!(
@@ -410,60 +407,28 @@ fn a_draw_then_a_cast_fits_on_one_track() {
     }
 }
 
-/// When the window changes shape during a flight that turns over, sweeps past a place or is
-/// held up, the segment under way takes its new end pose and keeps the card where it was at
-/// that instant, face, size and lean included.
+/// When the window changes shape during a draw spline, the segment under way takes its new end
+/// pose and keeps the card at the exact same position, scale, and 3D transform at that instant.
 #[test]
-fn a_new_end_mid_turn_or_sweep_keeps_the_pose_at_that_instant() {
-    use game_play::verbs::Interval;
+fn a_new_end_mid_draw_spline_keeps_the_pose_at_that_instant() {
     use glam::Vec3;
-    use kit_base::pose::{Bow, Curve, Shape};
-    let from = Pose {
-        position: Vec3::new(-200.0, 50.0, 0.0),
-        turn: 1.0,
-        ..Pose::default()
-    };
-    let to = Pose {
-        position: Vec3::new(300.0, -100.0, 40.0),
-        scale: 1.5,
-        ..Pose::default()
-    };
-    let fly = &crate::test_data::data().verbs.fly;
-    let held = Shape::Held {
-        bow: Bow {
-            offset: Vec3::new(0.0, 60.0, 30.0),
-            sharpness: 1.3,
-            lean: 0.0,
-            axis: Vec3::new(0.0, -0.6, 0.8),
-        },
-        lean: fly.held.lean.to_radians(),
-        eye: 1500.0,
-    };
-    let swept = Shape::Swept {
-        bulge: Vec3::new(40.0, 120.0, 60.0),
-        grow: 0.4,
-    };
-    for (shape, turning) in [(swept, fly.turn.draw), (held, fly.held.turn)] {
-        let flight = Segment {
-            shape,
-            turning: Some(turning),
-            ..Segment::between(
-                from,
-                to,
-                Interval {
-                    from: 0,
-                    to: 700 * MS,
-                },
-                Curve::EASE_OUT,
-            )
-        };
-        for t in [60 * MS, 112 * MS, 150 * MS, 210 * MS, 400 * MS] {
+    let (before, cards) = table();
+    for slot in [cards.library[0], cards.their_library[0]] {
+        let show = played(&before, after(&before, &[&[(slot, ZoneName::Hand)]]));
+        let segments = segments(&show, slot);
+        let flight = *segments
+            .iter()
+            .find(|segment| matches!(segment.shape, Shape::Spline(_)))
+            .expect("draw uses a spline");
+        let step = (flight.start, flight.end());
+        for share in [0.10, 0.25, 0.42, 0.64, 0.82] {
+            let t = at(step, share);
             let now = flight.pose_at(t);
             let mut moved = Segment {
                 to: Pose {
-                    position: Vec3::new(260.0, -130.0, 30.0),
-                    scale: 1.3,
-                    ..to
+                    position: flight.to.position + Vec3::new(25.0, -15.0, 10.0),
+                    scale: flight.to.scale * 1.15,
+                    ..flight.to
                 },
                 ..flight
             };
@@ -471,13 +436,14 @@ fn a_new_end_mid_turn_or_sweep_keeps_the_pose_at_that_instant() {
             let kept = moved.pose_at(t);
             assert!(
                 kept.position.distance(now.position) < 1e-2,
-                "{shape:?} {t}: {kept:?} {now:?}"
+                "slot #{} at {share}: {kept:?} vs {now:?}",
+                slot.0
             );
-            assert!((kept.scale - now.scale).abs() < 1e-4, "{shape:?} {t}");
-            assert!((kept.turn - now.turn).abs() < 1e-4, "{shape:?} {t}");
+            assert!((kept.scale - now.scale).abs() < 1e-4, "at {share}");
+            assert!((kept.turn - now.turn).abs() < 1e-4, "at {share}");
             assert!(
                 kept.rotation.dot(now.rotation).abs() > 1.0 - 1e-5,
-                "{shape:?} {t}"
+                "at {share}"
             );
         }
     }

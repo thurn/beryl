@@ -10,12 +10,13 @@
 //!   to its place. The scene draws it in front of the resting cards while it travels.
 //! - The opponent's land drops out of their hand into the open table on the side away from
 //!   where it is going, tilted, and swings back along the table to its place.
-//! - A card the viewer draws alone flies from the library to a place beside the stack, bowing
-//!   up the screen and leaning a little as it lifts off, is held up there large to be read,
-//!   sinking a little toward the hand, and drops into the hand (the web's `heldUp` in `ui/src/stage/drawn.ts`). Each of several drawn
-//!   together sweeps past that place without stopping (`swept`).
-//! - The opponent's draw drops toward the middle of the table and rises into their hand, and so
-//!   does a card no one can read that an effect puts in a hand from a library, farther.
+//! - A card the viewer draws flies along a six-node Catmull-Rom spline with piecewise spherical
+//!   rotation and a four-keyframe cubic Hermite timing curve (`Shape::Spline`): lifting off the
+//!   library face down, flipping across edge-on near the middle of the table, leaning into a 3D
+//!   flourish, holding large and square beside the stack, and dropping smoothly into the hand.
+//! - The opponent's draw flies along a four-node Catmull-Rom spline (`Shape::Spline`): pausing
+//!   briefly on the library, dropping flat down the flank, sweeping across upper centre while
+//!   pitching halfway toward the camera, and landing face down in their hand.
 //! - An opponent's discard drops along the line from hand to graveyard. Other flights also
 //!   follow a straight line across the table.
 //! - Any straight or bowed flight that would carry its card's centre past the top, bottom or
@@ -42,12 +43,11 @@ use beryl_protocol::script::Act;
 use glam::{Quat, Vec2, Vec3};
 use std::f32::consts::PI;
 
-use super::{Interval, StepIn, StepOut};
-use beryl_protocol::script::Subject;
+use super::{StepIn, StepOut};
 use game_table::table::Camera;
 use kit_base::data::profiles::HeldDraw;
 use kit_base::data::verbs::{Bowing, Fly};
-use kit_base::pose::{Bow, Curve, Pose, Segment, Shape};
+use kit_base::pose::{Bow, MAX_SPLINE_INTERIOR, Pose, Segment, Shape, Spline, SplineNode};
 
 pub const BUILT: bool = true;
 
@@ -65,10 +65,10 @@ enum Path {
         rises: bool,
     },
     Thrown,
-    /// The viewer's card drawn alone: held up beside the stack, then dropped into the hand.
-    Held,
-    /// One of several the viewer draws together: past where one alone is held up.
-    Swept,
+    /// A card drawn into the viewer's hand (single, multi-draw, or face down): six-node spline.
+    DrawLocal,
+    /// A card drawn into the opponent's hand: four-node spline.
+    DrawOpponent,
 }
 
 /// Whether `act` is a card drawn, or a card flown as one is: the flight from a library to a
@@ -79,8 +79,7 @@ fn draws(act: &Act) -> bool {
         if object.zone == ZoneName::Hand && (*why == Why::Draw || object.name.is_none()))
 }
 
-/// The path of the flight `act` makes, whose case is `case` (the web's `bowOf` and `lifts`,
-/// and its `heldUp` and `swept` for the cases `draw` and `draw of several`).
+/// The path of the flight `act` makes, whose case is `case` (the web's `bowOf` and `lifts`).
 fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
     let Act::Fly {
         from, object, why, ..
@@ -91,20 +90,21 @@ fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
     let mine = object.controller == Side::You;
     let toward = if mine { 1.0 } else { -1.0 };
     match case {
-        Some("draw") => return Path::Held,
-        Some("draw of several") => return Path::Swept,
+        Some("draw" | "draw of several") => return Path::DrawLocal,
+        Some("opponent draw") => {
+            return if mine {
+                Path::DrawLocal
+            } else {
+                Path::DrawOpponent
+            };
+        }
         _ => {}
     }
     if draws(act) {
-        // Toward the middle of the table, away from its player's edge.
-        return Path::Bowed {
-            bowing: if *why == Why::Draw {
-                fly.bows.drawn
-            } else {
-                fly.bows.taken
-            },
-            toward: -toward,
-            rises: true,
+        return if mine {
+            Path::DrawLocal
+        } else {
+            Path::DrawOpponent
         };
     }
     match (*from, object.zone) {
@@ -269,131 +269,174 @@ fn turns(from: Pose, to: Pose) -> bool {
     (from.turn - to.turn).abs() > 1e-4
 }
 
-/// The pose `u` of the way from `from` to `to`, each part of it alike.
-fn lerp(from: Pose, to: Pose, u: f32) -> Pose {
-    Pose {
-        position: from.position.lerp(to.position, u),
-        rotation: from.rotation.slerp(to.rotation, u),
-        scale: from.scale + (to.scale - from.scale) * u,
-        opacity: from.opacity + (to.opacity - from.opacity) * u,
-        turn: from.turn + (to.turn - from.turn) * u,
-        skew: from.skew + (to.skew - from.skew) * u,
-        shear: from.shear + (to.shear - from.shear) * u,
+/// Moves `pose` in screen space at its current depth if any of its corners fall outside the
+/// window's safe area.
+fn clamped_to_safe_area(mut pose: Pose, camera: &Camera) -> Pose {
+    let (corners, _) = camera.card_box(&pose);
+    let inside = into_safe_area(&corners, camera);
+    if inside != Vec2::ZERO {
+        camera.move_in_screen(&mut pose, inside);
     }
+    pose
 }
 
-/// The part of the step's time from `from` to `to`, as shares of it.
-fn part(own: Interval, from: f32, to: f32) -> Interval {
-    #[expect(
-        clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a step lasts seconds, far below f64's exact range"
-    )]
-    let at = |share: f32| own.from + (own.duration() as f64 * f64::from(share)) as u64;
-    Interval {
-        from: at(from),
-        to: at(to),
-    }
-}
+/// Reference NDC endpoints of the local draw spline (library to hold spot) used to remap
+/// interior waypoints proportionally on compact layouts where the hold spot sits above the hand.
+const LOCAL_REF_FROM_NDC: Vec2 = Vec2::new(-0.74870, -0.81511);
 
-/// The viewer's card drawn alone, as the web's `heldUp` has it, in three segments over the
-/// step: the flight in to where it is held, `held.in` of the step, bowed up the screen and, if
-/// its face changes, turning over as it leaves the library at `held.turn` of the flight in,
-/// leaning `held.lean` degrees as it lifts off and growing on the screen only once it is
-/// edge-on (`Shape::Held`); the hold, `held.hold` of the step, sinking evenly by
-/// `held_sink` of the way toward the hand; and the drop into the hand, leaving that pace and
-/// quickening, with no jolt between the two.
-fn held_up(step: &StepIn<'_>, (from, to): (Pose, Pose), out: &mut StepOut<'_>, subject: Subject) {
-    let fly = &step.verbs.fly;
-    let held = &fly.held;
-    let up = held_place(step, to);
-    let lowered = lerp(up, to, fly.held_sink);
-    let (flying, holding) = (held.r#in, held.hold);
+/// Builds the six-node Catmull-Rom spline for a card drawn into the viewer's hand, projecting
+/// each interior waypoint through the active camera and clamping it into the window's safe area.
+fn local_draw_spline(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
+    let spec = &step.verbs.fly.draw.local;
     let camera = step.places.camera();
-    let bowed = bow(&held.bow, -1.0, (from, up), camera);
-    // The web leans and holds back the growth only of a card that turns over (its `heldUp`
-    // returns the bowed pose alone for a card already face up).
-    let (shape, turning) = if turns(from, to) {
-        let lean = held.lean.to_radians();
-        let eye = camera.eye.dot(bowed.axis);
-        (
-            Shape::Held {
-                bow: bowed,
-                lean,
-                eye,
-            },
-            Some(held.turn),
-        )
-    } else {
-        (Shape::Bowed(bowed), None)
+    let camera_back = camera.axes()[2];
+    let eye_along_back = camera.eye.dot(camera_back);
+    let from_depth = camera.depth(from.position);
+    let to_depth = camera.depth(to.position);
+    let from_seen = from.scale / from_depth;
+    let to_seen = to.scale / to_depth;
+    let flips = turns(from, to);
+    let stays_face_down = !flips && from.turn > 0.5;
+
+    let (over_rest_ndc, hold_seen) = match step.places.layout().play.held_draw {
+        HeldDraw::Fixed { size, .. } => (None, to_seen * size),
+        HeldDraw::OverRest { .. } => {
+            let hold = held_place(step, to);
+            (
+                Some(camera.project(hold.position).truncate()),
+                hold.scale / camera.depth(hold.position),
+            )
+        }
     };
-    out.segment(
-        subject,
-        Segment {
-            shape,
-            turning,
-            ..Segment::between(from, up, part(step.own, 0.0, flying), step.curve)
-        },
-    );
-    out.segment(
-        subject,
-        Segment::between(
-            up,
-            lowered,
-            part(step.own, flying, flying + holding),
-            Curve::LINEAR,
-        ),
-    );
-    // The drop goes `pace x + (1 - pace) x²` of its way in `x` of its time, so that it leaves
-    // at the pace the hold sank at: a curve of the second degree, which as a cubic Bezier has
-    // the control points (1/3, pace/3) and (2/3, (1 + pace)/3).
-    let sink = fly.held_sink;
-    let pace = (sink * (1.0 - flying - holding)) / (holding * (1.0 - sink));
-    let drop = Curve {
-        x1: 1.0 / 3.0,
-        y1: pace / 3.0,
-        x2: 2.0 / 3.0,
-        y2: (1.0 + pace) / 3.0,
-    };
-    out.segment(
-        subject,
-        Segment::between(lowered, to, part(step.own, flying + holding, 1.0), drop),
-    );
+    let from_ndc = camera.project(from.position).truncate();
+    let ref_hold_ndc = spec.nodes[3].ndc;
+    let ref_span = ref_hold_ndc - LOCAL_REF_FROM_NDC;
+
+    let mut interior = [SplineNode::default(); MAX_SPLINE_INTERIOR];
+    for (index, node) in spec.nodes.iter().enumerate() {
+        #[expect(clippy::cast_precision_loss, reason = "index is 0..4")]
+        let u = (index + 1) as f32 / 5.0;
+        let ndc = match over_rest_ndc {
+            Some(hold_ndc) if index == 3 => hold_ndc,
+            Some(hold_ndc) => {
+                // Remap interior waypoints proportionally between `from_ndc` and `hold_ndc` on
+                // narrow/compact layouts so the arc stays balanced over the screen.
+                let share = (node.ndc - LOCAL_REF_FROM_NDC) / ref_span;
+                from_ndc + (hold_ndc - from_ndc) * share
+            }
+            None => node.ndc,
+        };
+        let depth = (from_depth + (to_depth - from_depth) * node.depth_share).min(node.max_depth);
+        let linear_seen = from_seen + (to_seen - from_seen) * u;
+        let linear_rel = spec.from_rel_scale + (1.0 - spec.from_rel_scale) * u;
+        let seen_scale = if index == 3 {
+            hold_seen
+        } else {
+            linear_seen * (node.rel_scale / linear_rel)
+        };
+        let base = camera.screen_pose(ndc, depth, node.rotation, 0.1);
+        let rotation = if flips {
+            base.rotation
+        } else if stays_face_down {
+            from.rotation.slerp(to.rotation, u)
+        } else if index == 0 {
+            // An already face-up card lifts smoothly into the face-up flourish without turning
+            // face down at node 1.
+            let node2 = camera
+                .screen_pose(spec.nodes[1].ndc, depth, spec.nodes[1].rotation, 0.1)
+                .rotation;
+            from.rotation.slerp(node2, 0.5)
+        } else {
+            base.rotation
+        };
+        let probe = Pose {
+            position: base.position,
+            rotation,
+            scale: seen_scale * depth,
+            turn: if flips { 0.0 } else { from.turn },
+            ..Pose::default()
+        };
+        let clamped = clamped_to_safe_area(probe, camera);
+        interior[index] = SplineNode {
+            position: clamped.position,
+            rotation,
+            seen_scale,
+        };
+    }
+
+    Shape::Spline(Spline::new(
+        &interior,
+        &to,
+        spec.curve(),
+        (flips, false),
+        (camera_back, eye_along_back),
+    ))
 }
 
-/// How a curve of the second degree from `a` to `c` reaches `b` and no farther: its middle
-/// control value (the web's `on` in `swept`). Where `b` lies beyond both ends the curve turns
-/// back there, and where it lies between them it never turns.
-fn pull(a: f32, b: f32, c: f32) -> f32 {
-    let beyond = (b - a) * (b - c);
-    if beyond > 0.0 {
-        b + (b - a).signum() * beyond.sqrt()
-    } else {
-        b
-    }
-}
+/// Builds the four-node Catmull-Rom spline for a card drawn into the opponent's hand: brief
+/// launch pause, flat drop down the library's flank, rising sweep across upper centre, and
+/// smooth arrival into the opponent's hand.
+fn opponent_draw_spline(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
+    let spec = &step.verbs.fly.draw.opponent;
+    let camera = step.places.camera();
+    let camera_back = camera.axes()[2];
+    let eye_along_back = camera.eye.dot(camera_back);
+    let from_depth = camera.depth(from.position);
+    let to_depth = camera.depth(to.position);
+    let from_seen = from.scale / from_depth;
+    let to_seen = to.scale / to_depth;
 
-/// One of several cards drawn together, sweeping past where one alone is held up (the web's
-/// `swept`): a curve of the second degree from `from` to `to` that goes as far across the
-/// screen, as far up it, as near the eye and as large as that place, and no farther.
-fn swept(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
-    let via = held_place(step, to);
-    let control = step
-        .places
-        .camera()
-        .axes()
-        .iter()
-        .map(|&axis| {
-            let along = |pose: Pose| pose.position.dot(axis);
-            axis * pull(along(from), along(via), along(to))
-        })
-        .sum::<Vec3>();
-    let scale = pull(from.scale, via.scale, to.scale);
-    Shape::Swept {
-        bulge: control - (from.position + to.position) / 2.0,
-        grow: scale - f32::midpoint(from.scale, to.scale),
+    let from_ndc = camera.project(from.position).truncate();
+    let to_ndc = camera.project(to.position).truncate();
+    // On compact layouts where the opponent's library sits on the left and their hand on the
+    // right, mirror the horizontal waypoints so the card drops cleanly down the library side.
+    let mirror_x = if from_ndc.x < to_ndc.x - 0.05 {
+        -1.0
+    } else {
+        1.0
+    };
+    // An inverted opponent hand fan turns its cards half round about local Z; turn the symmetric
+    // card back half round at departure so it pitches cleanly without spinning in-plane.
+    let start_half_turn = (from.rotation * Vec3::Y).dot(to.rotation * Vec3::Y) < 0.0;
+    let start_rot = if start_half_turn {
+        from.rotation * Quat::from_rotation_z(PI)
+    } else {
+        from.rotation
+    };
+
+    let mut interior = [SplineNode::default(); 2];
+    for (index, node) in spec.nodes.iter().enumerate() {
+        #[expect(clippy::cast_precision_loss, reason = "index is 0..2")]
+        let u = (index + 1) as f32 / 3.0;
+        let ndc = Vec2::new(node.ndc.x * mirror_x, node.ndc.y);
+        let depth = from_depth + (to_depth - from_depth) * node.depth_share;
+        let linear_seen = from_seen + (to_seen - from_seen) * u;
+        let linear_rel = spec.from_rel_scale + (1.0 - spec.from_rel_scale) * u;
+        let seen_scale = linear_seen * (node.rel_scale / linear_rel);
+        let rotation = start_rot.slerp(to.rotation, node.pitch_blend);
+        let base = camera.screen_pose(ndc, depth, Quat::IDENTITY, 0.1);
+        let probe = Pose {
+            position: base.position,
+            rotation,
+            scale: seen_scale * depth,
+            turn: from.turn,
+            ..Pose::default()
+        };
+        let clamped = clamped_to_safe_area(probe, camera);
+        interior[index] = SplineNode {
+            position: clamped.position,
+            rotation,
+            seen_scale,
+        };
     }
+
+    Shape::Spline(Spline::new(
+        &interior,
+        &to,
+        spec.curve(),
+        (false, start_half_turn),
+        (camera_back, eye_along_back),
+    ))
 }
 
 pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
@@ -410,19 +453,34 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
         if rises && travels { fly.arc } else { 0.0 }
     };
     let path = path_of(step.act, step.timing.case.as_deref(), fly);
-    // A card whose face changes turns over at moments of its own: a drawn card as it leaves the
-    // library, any other a little before half way (the web's `turningOf`).
+    // A card whose face changes turns over at moments of its own: a drawn card turns via its
+    // 3D spline orientations, any other a little before half way (the web's `turningOf`).
     let turning = turns(from, to).then_some(if draws(step.act) {
         fly.turn.draw
     } else {
         fly.turn.cast
     });
     let segment = match path {
-        Path::Held => return held_up(step, (from, to), out, subject),
-        Path::Swept => Segment {
-            shape: swept(step, (from, to)),
-            ..between
-        },
+        Path::DrawLocal => {
+            out.segment(
+                subject,
+                Segment {
+                    shape: local_draw_spline(step, (from, to)),
+                    ..between
+                },
+            );
+            return;
+        }
+        Path::DrawOpponent => {
+            out.segment(
+                subject,
+                Segment {
+                    shape: opponent_draw_spline(step, (from, to)),
+                    ..between
+                },
+            );
+            return;
+        }
         Path::Straight { rises } => Segment {
             arc: arc(rises),
             ..between

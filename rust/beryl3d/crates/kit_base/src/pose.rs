@@ -9,8 +9,12 @@ use glam::{Affine3A, Mat3, Quat, Vec3};
 
 mod curve;
 mod segment;
+mod spline;
 
 pub use segment::between;
+pub use spline::{
+    HermiteCurve, HermiteKey, MAX_HERMITE_KEYS, MAX_SPLINE_INTERIOR, Spline, SplineNode,
+};
 
 /// When one step plays on the script's clock, in nanoseconds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -245,6 +249,9 @@ pub enum Shape {
     /// segment's curve: a card fading in where it rests that its hand regrouped round, on its
     /// short way to its new place and for the rest of its fade there (`play::step::fade`).
     Regrouping(Fade),
+    /// A multi-node Catmull-Rom position spline with piecewise spherical rotation interpolation
+    /// and a piecewise cubic Hermite timing curve.
+    Spline(Spline),
 }
 
 /// A fade that a `Shape::Regrouping` segment's opacity follows. It began `begun` nanoseconds

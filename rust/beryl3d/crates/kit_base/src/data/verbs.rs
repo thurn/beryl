@@ -1,12 +1,13 @@
 //! The verb tuning in `verbs.json`. Distances, angles and shares follow each verb's motion.
 
-use glam::Vec2;
+use glam::{Quat, Vec2};
 use serde::Deserialize;
 
 use super::tuning::{
     before_end, finite, fraction, interior, nonnegative, nonzero_count, positive,
-    positive_fraction, vector,
+    positive_fraction, quaternion, vector,
 };
+use crate::pose::{HermiteCurve, HermiteKey, MAX_HERMITE_KEYS};
 
 /// Tuning for each of the verbs in `verbs.json`.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
@@ -34,6 +35,113 @@ pub struct Fly {
     pub held: Held,
     #[serde(deserialize_with = "before_end")]
     pub held_sink: f32,
+    pub draw: DrawSplines,
+}
+
+/// Authored multi-node splines for card flights.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct DrawSplines {
+    pub local: LocalDrawSpline,
+    pub opponent: OpponentDrawSpline,
+}
+
+/// One keyframe of a piecewise cubic Hermite timing curve in `verbs.json`.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct HermiteKeyData {
+    #[serde(deserialize_with = "fraction")]
+    pub time: f32,
+    #[serde(deserialize_with = "fraction")]
+    pub value: f32,
+    #[serde(deserialize_with = "finite")]
+    pub in_slope: f32,
+    #[serde(deserialize_with = "finite")]
+    pub out_slope: f32,
+}
+
+impl From<HermiteKeyData> for HermiteKey {
+    fn from(data: HermiteKeyData) -> Self {
+        Self {
+            time: data.time,
+            value: data.value,
+            in_slope: data.in_slope,
+            out_slope: data.out_slope,
+        }
+    }
+}
+
+/// One interior control node of a six-node card spline, specified in camera space.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LocalDrawNode {
+    #[serde(deserialize_with = "vector")]
+    pub ndc: Vec2,
+    #[serde(deserialize_with = "fraction")]
+    pub depth_share: f32,
+    #[serde(deserialize_with = "positive")]
+    pub max_depth: f32,
+    #[serde(deserialize_with = "positive")]
+    pub rel_scale: f32,
+    #[serde(deserialize_with = "quaternion")]
+    pub rotation: Quat,
+}
+
+/// A six-node spline (endpoints plus four interior nodes) and four-keyframe Hermite curve.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LocalDrawSpline {
+    #[serde(deserialize_with = "positive")]
+    pub from_rel_scale: f32,
+    pub nodes: [LocalDrawNode; 4],
+    pub ease: [HermiteKeyData; 4],
+}
+
+impl LocalDrawSpline {
+    /// Converts the authored keyframes into a `HermiteCurve`.
+    #[must_use]
+    pub fn curve(&self) -> HermiteCurve {
+        HermiteCurve {
+            keys: self.ease.map(HermiteKey::from),
+            len: 4,
+        }
+    }
+}
+
+/// One interior control node of a four-node card spline, specified in camera space.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct OpponentDrawNode {
+    #[serde(deserialize_with = "vector")]
+    pub ndc: Vec2,
+    #[serde(deserialize_with = "fraction")]
+    pub depth_share: f32,
+    #[serde(deserialize_with = "positive")]
+    pub rel_scale: f32,
+    #[serde(deserialize_with = "fraction")]
+    pub pitch_blend: f32,
+}
+
+/// A four-node spline (endpoints plus two interior nodes) and three-keyframe Hermite curve.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct OpponentDrawSpline {
+    #[serde(deserialize_with = "positive")]
+    pub from_rel_scale: f32,
+    pub nodes: [OpponentDrawNode; 2],
+    pub ease: [HermiteKeyData; 3],
+}
+
+impl OpponentDrawSpline {
+    /// Converts the authored keyframes into a `HermiteCurve`.
+    #[must_use]
+    pub fn curve(&self) -> HermiteCurve {
+        let mut keys = [HermiteKey::default(); MAX_HERMITE_KEYS];
+        for (slot, key) in keys.iter_mut().zip(self.ease) {
+            *slot = key.into();
+        }
+        HermiteCurve { keys, len: 3 }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

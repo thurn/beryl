@@ -74,7 +74,70 @@
           "back": 0
         }
       },
-      "held_sink": 0.08
+      "held_sink": 0.08,
+      "draw": {
+        "local": {
+          "from_rel_scale": 0.80727,
+          "nodes": [
+            {
+              "ndc": [-0.39146, -0.2677],
+              "depth_share": 0.25,
+              "max_depth": 1200,
+              "rel_scale": 0.8389,
+              "rotation": [0.923295, 0.010287, 0.000464, 0.383953]
+            },
+            {
+              "ndc": [0.14154, 0.01993],
+              "depth_share": 0.55,
+              "max_depth": 900,
+              "rel_scale": 0.89761,
+              "rotation": [0.297962, 0.007497, -0.008485, 0.954511]
+            },
+            {
+              "ndc": [0.44519, 0.05538],
+              "depth_share": 0.95,
+              "max_depth": 350,
+              "rel_scale": 1.00846,
+              "rotation": [0.100419, -0.127846, -0.034566, 0.986092]
+            },
+            {
+              "ndc": [0.66647, -0.1802],
+              "depth_share": 1.0,
+              "max_depth": 270,
+              "rel_scale": 1.29708,
+              "rotation": [-0.008727, 0.0, 0.0, 0.999962]
+            }
+          ],
+          "ease": [
+            { "time": 0.0, "value": 0.0, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 0.57859, "value": 0.8, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 0.70068, "value": 0.8, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 0.94951, "value": 1.0, "in_slope": 0.0, "out_slope": 0.0 }
+          ]
+        },
+        "opponent": {
+          "from_rel_scale": 0.94471,
+          "nodes": [
+            {
+              "ndc": [0.45398, 0.23039],
+              "depth_share": 0.45,
+              "rel_scale": 1.04727,
+              "pitch_blend": 0.0
+            },
+            {
+              "ndc": [0.05607, 0.41515],
+              "depth_share": 0.8,
+              "rel_scale": 1.14818,
+              "pitch_blend": 0.5
+            }
+          ],
+          "ease": [
+            { "time": 0.0, "value": 0.0, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 0.04998, "value": 0.0, "in_slope": 0.0, "out_slope": 1.03272 },
+            { "time": 1.0, "value": 1.0, "in_slope": 0.0, "out_slope": 0.0 }
+          ]
+        }
+      }
     },
     "strike": {
       "wind": 0.08,

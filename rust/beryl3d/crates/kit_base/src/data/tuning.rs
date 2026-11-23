@@ -1,6 +1,6 @@
 //! Parsing and validation of the client's tuning files.
 
-use glam::Vec2;
+use glam::{Quat, Vec2};
 use serde::de::{DeserializeOwned, Error};
 use serde::{Deserialize, Deserializer};
 
@@ -224,6 +224,22 @@ fn validate(verbs: &Verbs) -> Result<(), (&'static str, &'static str)> {
     if verbs.streak.least > verbs.streak.most {
         return Err(("streak.most", "must be at least as large as the minimum"));
     }
+    for pair in fly.draw.local.ease.windows(2) {
+        if pair[1].time < pair[0].time {
+            return Err((
+                "fly.draw.local.ease",
+                "keyframes must be sorted by ascending time",
+            ));
+        }
+    }
+    for pair in fly.draw.opponent.ease.windows(2) {
+        if pair[1].time < pair[0].time {
+            return Err((
+                "fly.draw.opponent.ease",
+                "keyframes must be sorted by ascending time",
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -287,4 +303,16 @@ pub(super) fn vector<'de, D: Deserializer<'de>>(de: D) -> Result<Vec2, D::Error>
         return Err(D::Error::custom("expected two finite components"));
     }
     Ok(vector)
+}
+
+pub(super) fn quaternion<'de, D: Deserializer<'de>>(de: D) -> Result<Quat, D::Error> {
+    let raw = <[f32; 4]>::deserialize(de)?;
+    if !raw.iter().all(|v| v.is_finite()) {
+        return Err(D::Error::custom("expected four finite components"));
+    }
+    let quat = Quat::from_array(raw);
+    if quat.length_squared() <= 1e-6 {
+        return Err(D::Error::custom("expected a non-zero quaternion"));
+    }
+    Ok(quat.normalize())
 }

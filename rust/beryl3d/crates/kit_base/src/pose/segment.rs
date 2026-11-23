@@ -84,8 +84,14 @@ impl Segment {
             Shape::Thrown { tuning, .. } => Some(at(tuning.risen)),
             _ => None,
         };
+        let spline = match self.shape {
+            Shape::Spline(spline) => spline.moments().map(|share| share.map(at)),
+            _ => [None; 4],
+        };
         let turning = self.turning.map(|turning| turning.span().map(at));
-        peak.into_iter().chain(turning.into_iter().flatten())
+        peak.into_iter()
+            .chain(spline.into_iter().flatten())
+            .chain(turning.into_iter().flatten())
     }
 
     /// The fraction of its time that has passed at `t`, which must be under way.
@@ -261,6 +267,7 @@ impl Segment {
                     ..self.from
                 }
             }
+            Shape::Spline(spline) => spline.pose_at(&self.from, &self.to, elapsed),
         }
     }
 }
@@ -315,6 +322,10 @@ impl Segment {
             return;
         }
         let elapsed = self.elapsed(t);
+        if let Shape::Spline(spline) = &mut self.shape {
+            spline.through(&mut self.from, elapsed, pose);
+            return;
+        }
         if self.shape == Shape::Fading {
             // It stands where it was all the way, only fading, so it starts where it is now.
             let u = self.curve.ease(elapsed);
