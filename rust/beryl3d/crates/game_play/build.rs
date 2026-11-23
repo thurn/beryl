@@ -10,12 +10,11 @@ fn main() {
     write_sounds(&manifest, &out_dir);
 }
 
-/// Writes the names of the keys of `sounds` in `ui/src/audio/manifest.json`, in the order the
+/// Writes the names of the keys of `sounds` in `data/audio/manifest.json`, in the order the
 /// file lists them, as `sound::NAMES` for `src/sound.rs` to include. `serde_json` keeps an
 /// object's keys sorted, so the order is found from where each key stands in the file's text.
-/// Nothing is written under `ui/`.
 fn write_sounds(manifest: &std::path::Path, out_dir: &std::path::Path) {
-    let path = manifest.join("../../../../ui/src/audio/manifest.json");
+    let path = manifest.join("../../../../data/audio/manifest.json");
     println!("cargo:rerun-if-changed={}", path.display());
     let text = fs::read_to_string(&path).unwrap();
     let json: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -36,7 +35,7 @@ fn write_sounds(manifest: &std::path::Path, out_dir: &std::path::Path) {
         .collect();
     names.sort();
     let mut out = format!(
-        "/// The sounds of `ui/src/audio/manifest.json`, in the order the file lists them.\npub const NAMES: [&str; {}] = [\n",
+        "/// The sounds of `data/audio/manifest.json`, in the order the file lists them.\npub const NAMES: [&str; {}] = [\n",
         names.len()
     );
     for (_, name) in names {

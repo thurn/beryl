@@ -65,8 +65,7 @@ SERIAL = f"emulator-{PORT}"
 # The emulator option that hides Vulkan from the system image, so wgpu falls back to OpenGL
 # ES 3.0.
 NO_VULKAN = ("-feature", "-Vulkan")
-# The Tauri app's Gradle wrapper, which the Android host's project uses too.
-GRADLEW: Path = repo_paths.APP / "gen" / "android" / "gradlew"
+ANDROID: Path = CRATE / "android"
 
 
 def out_dir(kind: str) -> Path:
@@ -381,7 +380,7 @@ def android_apk() -> Path:
     started = time.monotonic()
     code = subprocess.run(
         [
-            *[str(GRADLEW), "--quiet", "-p", str(CRATE / "android"), "assembleDebug"],
+            *[str(ANDROID / "gradlew"), "--quiet", "-p", str(ANDROID), "assembleDebug"],
             *["--project-cache-dir", str(root / "gradle")],
             f"-Pberyl3d.buildDir={root / 'build'}",
             f"-Pberyl3d.jniLibs={root / 'jniLibs'}",

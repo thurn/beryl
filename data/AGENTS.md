@@ -4,6 +4,9 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
 
 - The [Beryl 3D data guide](beryl3d/AGENTS.md) describes the files in
   `beryl3d/`.
+- `audio/manifest.json` selects the sources and variants for Beryl 3D's music
+  and sound effects. `just audio` writes the media under `audio/assets/` and the
+  exact music loop lengths to `audio/loops.json`.
 - `pytest-reads.json` maps each Python module of `tools/` and `efficiency/` to
   the tracked files and directories it reads at run time, so a pytest check's
   input hash covers them (`tools/src/beryl_tools/ignite/pytest_reads.py`). A

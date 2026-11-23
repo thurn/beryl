@@ -25,13 +25,11 @@ from . import paths, vm
 SOURCES: tuple[str, ...] = (
     # The workspace includes the toolkit crates and their bundled fonts.
     "rust",
-    # Includes the spatial data, audit limits and design tokens that kit_base generates.
+    # Includes the spatial data, audit limits, design tokens and audio assets.
     "data",
     "docs/sample-decks",
     "ui/src/generated",
     "ui/fixtures.json",
-    # The build scripts of `game_play` and `app_screens` read sound names and credits here.
-    "ui/src/audio/manifest.json",
 )
 # In the machine: where the sources arrive, and the copy the gates build from.
 INCOMING = "$HOME/b3d-incoming"

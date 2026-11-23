@@ -30,10 +30,11 @@ def test_release_replaces_the_macos_app_with_a_signed_bundle(
     manifest = tmp_path / "crates" / "beryl_3d" / "Cargo.toml"
     manifest.parent.mkdir(parents=True)
     manifest.write_text('[package]\nversion = "0.2.3"\n')
-    audio: Path = tmp_path / "public" / "audio" / "music" / "menu-0.m4a"
+    audio_root = tmp_path / "data" / "audio" / "assets"
+    audio: Path = audio_root / "music" / "menu-0.m4a"
     audio.parent.mkdir(parents=True)
     audio.write_bytes(b"music")
-    icon = tmp_path / "icons" / "icon.icns"
+    icon = manifest.parent / "macos" / "icon.icns"
     icon.parent.mkdir()
     icon.write_bytes(b"icon")
 
@@ -51,8 +52,7 @@ def test_release_replaces_the_macos_app_with_a_signed_bundle(
     monkeypatch.setattr(app, "build_release", lambda: 0)
     monkeypatch.setattr(app.paths, "WORKSPACE", tmp_path)
     monkeypatch.setattr(app.paths, "build_lock", lambda: tmp_path / "build.lock")
-    monkeypatch.setattr(paths, "APP", tmp_path)
-    monkeypatch.setattr(paths, "UI", tmp_path)
+    monkeypatch.setattr(app.audio, "OUTPUT", audio_root)
     monkeypatch.setattr(subprocess, "run", sign)
 
     assert cli.main(["release"]) == 0

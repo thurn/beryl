@@ -1,4 +1,3 @@
-// The releases the Tauri app's gen/android/build.gradle.kts uses.
 buildscript {
     repositories {
         google()

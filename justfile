@@ -224,7 +224,7 @@ conventions *args:
 design-tokens *args:
     {{ by }} design-tokens "$@"
 
-# Transcode the UI's music and sounds from the staged CC0 packs into ui/public/audio (--check)
+# Transcode Beryl 3D's music and sounds from the staged CC0 packs into data/audio/assets (--check)
 [group('data')]
 audio *args:
     {{ by }} audio "$@"

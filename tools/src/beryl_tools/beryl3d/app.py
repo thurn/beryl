@@ -25,7 +25,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from .. import bugs, deps, paths as repo_paths, system
+from .. import audio, bugs, deps, paths as repo_paths, system
 from . import live, paths
 from .command import Command
 
@@ -87,9 +87,10 @@ def build_release() -> int:
 
 def package_macos(bundle: Path) -> None:
     """Build and sign a complete bundle before replacing an earlier release."""
-    manifest = paths.WORKSPACE / "crates" / "beryl_3d" / "Cargo.toml"
+    crate = paths.WORKSPACE / "crates" / "beryl_3d"
+    manifest = crate / "Cargo.toml"
     version = tomllib.loads(manifest.read_text())["package"]["version"]
-    icon = repo_paths.APP / "icons" / "icon.icns"
+    icon = crate / "macos" / "icon.icns"
     with tempfile.TemporaryDirectory(prefix=".beryl3d-", dir=bundle.parent) as scratch:
         staged = Path(scratch) / bundle.name
         contents = staged / "Contents"
@@ -98,7 +99,7 @@ def package_macos(bundle: Path) -> None:
         shutil.copy(RELEASE_BINARY, executable)
         resources = contents / "Resources"
         shutil.copytree(
-            repo_paths.UI / "public" / "audio",
+            audio.OUTPUT,
             resources / "audio",
             copy_function=shutil.copy,
         )

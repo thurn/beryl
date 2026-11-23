@@ -173,7 +173,7 @@ pub struct Summary {
     #[serde(default)]
     pub searching: Searching,
     /// How many times each sound was sent to the audio thread, by its name in
-    /// `ui/src/audio/manifest.json`. A run with no window sends them to a silent output.
+    /// `data/audio/manifest.json`. A run with no window sends them to a silent output.
     #[serde(default)]
     pub sounds: BTreeMap<String, u32>,
 }

@@ -10,9 +10,9 @@
       "data/efficiency-prices.json"
     ],
     "tools/src/beryl_tools/audio.py": [
-      "ui/public/audio",
-      "ui/src/audio/loops.json",
-      "ui/src/audio/manifest.json"
+      "data/audio/assets",
+      "data/audio/loops.json",
+      "data/audio/manifest.json"
     ],
     "tools/src/beryl_tools/bench.py": [
       "rust-toolchain.toml"

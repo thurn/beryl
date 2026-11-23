@@ -1,17 +1,15 @@
-"""`by audio`: the UI's music and sound effects, transcoded from the CC0 packs staged in
-$BERYL_CACHE/audio-sources into ui/public/audio, as ui/src/audio/manifest.json selects them.
+"""`by audio`: Beryl 3D's music and sound effects, transcoded from the CC0 packs staged in
+$BERYL_CACHE/audio-sources into data/audio/assets, as data/audio/manifest.json selects them.
 
 The outputs are committed, so the app and its CI never need the packs or ffmpeg; this command
 makes the selection reproducible and editable. Each manifest entry (a music cue or a sound) has
 one or more variants, each a file in a source pack. Variant n of cue `id` becomes
-`music/<id>-<n>.m4a` or `sfx/<id>-<n>.wav`, the names the UI's engine (ui/src/audio) asks for.
+`music/<id>-<n>.m4a` or `sfx/<id>-<n>.wav`, the names the native audio player asks for.
 
-- Music is AAC in MP4, from ffmpeg's own encoder, whose edit list WebKit's decoder honors at
-  the start: no priming delays the music. Decoders may keep the padding to the last AAC frame
-  at the end (up to 23 ms of silence), so each loop's exact length goes to LOOPS, which the
-  engine loops at rather than at the decoded buffer's end. A constant gain brings each track to MUSIC_LUFS (EBU R128 loudness), held under
-  a true peak of PEAK_DB; a constant gain keeps the loop point seamless, as loudnorm's dynamic
-  mode would not.
+- Music is AAC in MP4. The encoder's edit list marks the start after priming, and LOOPS
+  records each loop's exact length so playback can skip any padding in the last AAC frame.
+  A constant gain brings each track to MUSIC_LUFS (EBU R128 loudness) under a true peak of
+  PEAK_DB and keeps the loop point seamless.
 - Sound effects are 16-bit mono WAV, which has no encoder delay to make a cue late: leading
   silence is cut, and the peak brought to PEAK_DB. Their relative levels are the manifest's
   `gain`, applied at playback, so tuning one needs no transcode."""
@@ -28,10 +26,11 @@ from typing import NotRequired, TypedDict, cast
 
 from . import paths
 
-MANIFEST: Path = paths.UI / "src" / "audio" / "manifest.json"
-OUTPUT: Path = paths.UI / "public" / "audio"
+AUDIO: Path = paths.REPO / "data" / "audio"
+MANIFEST: Path = AUDIO / "manifest.json"
+OUTPUT: Path = AUDIO / "assets"
 # Each looping music cue's variants' lengths in seconds, written with the outputs.
-LOOPS: Path = paths.UI / "src" / "audio" / "loops.json"
+LOOPS: Path = AUDIO / "loops.json"
 FFMPEG = "ffmpeg"
 MUSIC_LUFS = -18.0
 PEAK_DB = -1.0
@@ -252,7 +251,7 @@ def audio(args: argparse.Namespace) -> int:
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "audio",
-        help="transcode the manifest's music and sounds into ui/public/audio",
+        help="transcode the manifest's music and sounds into data/audio/assets",
     )
     p.add_argument("--manifest", default=str(MANIFEST))
     p.add_argument("--output", default=str(OUTPUT))

@@ -1,8 +1,7 @@
-//! The sound files and their list, which are the web interface's (docs/beryl-3d.md, "Sound"):
-//! `ui/src/audio/manifest.json` names each cue and its variants, `ui/src/audio/loops.json`
-//! gives each looping track's exact length, and the files are under `ui/public/audio`, effects
-//! as WAV files in `sfx/` and music as AAC in M4A files in `music/`. Variant n of a cue is
-//! `<cue>-<n>.<wav|m4a>`, as `just audio` writes them.
+//! `data/audio/manifest.json` names each cue and its variants. `data/audio/loops.json` gives
+//! each looping track's exact length. Under `data/audio/assets`, sound effects are WAV files in
+//! `sfx/` and music is AAC in M4A files in `music/`. Variant n of a cue is
+//! `<cue>-<n>.<wav|m4a>`, as `just audio` writes it.
 
 use std::fs::File;
 use std::io::BufReader;
@@ -14,17 +13,17 @@ use rodio::buffer::SamplesBuffer;
 use rodio::{Decoder, Source};
 use serde_json::Value;
 
-/// The web interface's list of cues.
-const MANIFEST: &str = include_str!("../../../../../../ui/src/audio/manifest.json");
+/// The native app's list of cues.
+const MANIFEST: &str = include_str!("../../../../../../data/audio/manifest.json");
 /// The exact length of each variant of each looping track, in seconds.
-const LOOPS: &str = include_str!("../../../../../../ui/src/audio/loops.json");
+const LOOPS: &str = include_str!("../../../../../../data/audio/loops.json");
 /// A sound's most copies at once when its manifest entry gives none, as in `sound.ts`.
 const VOICES: usize = 4;
 
 /// Every music the client asks for, in the order `Manifest::music` holds them.
 pub const MUSIC: [Music; 4] = [Music::Menu, Music::Game, Music::Win, Music::Loss];
 
-/// The audio resources in a macOS app bundle, or the checkout's `ui/public/audio`.
+/// The audio resources in a macOS app bundle, or the checkout's `data/audio/assets`.
 #[must_use]
 pub fn folder() -> PathBuf {
     #[cfg(target_os = "macos")]
@@ -34,7 +33,7 @@ pub fn folder() -> PathBuf {
     {
         return macos.join("../Resources/audio");
     }
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../ui/public/audio")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../data/audio/assets")
 }
 
 /// The manifest's key for `music`.
@@ -93,9 +92,9 @@ impl Manifest {
     /// When manifest.json or loops.json lacks an entry the client needs.
     pub fn read() -> Result<Self, String> {
         let manifest: Value = serde_json::from_str(MANIFEST)
-            .map_err(|error| format!("ui/src/audio/manifest.json: {error}"))?;
+            .map_err(|error| format!("data/audio/manifest.json: {error}"))?;
         let loops: Value = serde_json::from_str(LOOPS)
-            .map_err(|error| format!("ui/src/audio/loops.json: {error}"))?;
+            .map_err(|error| format!("data/audio/loops.json: {error}"))?;
         let variants = |entry: &Value, name: &str| {
             entry["variants"]
                 .as_array()

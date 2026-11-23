@@ -10,13 +10,12 @@ fn main() {
     write_credits(&manifest, &out_dir);
 }
 
-/// Writes `CREDITS` for `src/screens/settings.rs`: each author whose work the music or sounds of
-/// `ui/src/audio/manifest.json` use, as `ui/src/audio/SoundControls.tsx`'s `credits` finds them,
-/// with the kinds of work ("Music", "Sound" or "Music & Sound"), the license and the titles of
-/// their packs. The authors are in alphabetical order. Nothing is written under `ui/`.
+/// Writes `CREDITS` for the settings screen. For each author whose work is used by a cue in
+/// `data/audio/manifest.json`, it lists the kinds of work ("Music", "Sound" or "Music & Sound"),
+/// the license and the titles of their packs. The authors are in alphabetical order.
 fn write_credits(manifest: &std::path::Path, out_dir: &std::path::Path) {
     use std::collections::{BTreeMap, BTreeSet};
-    let path = manifest.join("../../../../ui/src/audio/manifest.json");
+    let path = manifest.join("../../../../data/audio/manifest.json");
     println!("cargo:rerun-if-changed={}", path.display());
     let json: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();

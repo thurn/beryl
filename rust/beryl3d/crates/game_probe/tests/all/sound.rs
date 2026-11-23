@@ -99,8 +99,7 @@ fn reached(at: u64, every: u64) -> u64 {
 #[test]
 fn the_list_of_names_is_the_manifests() {
     let json: serde_json::Value = serde_json::from_str(
-        &beryl_test_files::read_to_string("ui/src/audio/manifest.json")
-            .expect("the manifest exists"),
+        &beryl_test_files::read_to_string("data/audio/manifest.json").expect("the manifest exists"),
     )
     .expect("the manifest is JSON");
     let sounds = json["sounds"].as_object().expect("`sounds` is an object");
