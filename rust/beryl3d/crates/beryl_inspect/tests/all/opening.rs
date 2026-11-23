@@ -82,9 +82,9 @@ fn the_opening_hand_fans_out_and_keep_answers_the_mulligan() {
         .find(|line| line.contains("toggle \"Your draw\""))
         .expect("the viewer's draw stop");
     assert!(!draw.contains("interactive"), "{draw}");
-    assert_fan(&mut page, SIZE, 1.0, 0.0);
+    assert_fan(&mut page, SIZE);
     let mut reported = at_size("opening-keep", "prompt:1", REPORTED_SIZE);
-    assert_fan(&mut reported, REPORTED_SIZE, 1.2, 18.5);
+    assert_fan(&mut reported, REPORTED_SIZE);
     reported.check();
     page.check();
     let (view, _, _) = page.position();
@@ -100,8 +100,8 @@ fn the_opening_hand_fans_out_and_keep_answers_the_mulligan() {
     assert!(rest_faults("opening-keep").is_empty());
 }
 
-/// Checks the visible cards against the web at the same scale and stage offset.
-fn assert_fan(page: &mut Page, size: Size, scale: f32, stage_top: f32) {
+/// The desktop profile keeps the fan centred and its dimensions in logical points.
+fn assert_fan(page: &mut Page, size: Size) {
     let frame = page.frame();
     let corners = |name: &str| {
         let (_, slot) = name.rsplit_once(" #").expect("a slot");
@@ -111,12 +111,12 @@ fn assert_fan(page: &mut Page, size: Size, scale: f32, stage_top: f32) {
     };
     let middle = corners(HAND[3]);
     let bottom = middle[0].midpoint(middle[1]);
-    let web_bottom = stage_top + (246.8 + 176.0 * 88.0 / 63.0) * scale;
+    let expected_bottom = 246.8 + 176.0 * 88.0 / 63.0;
     assert!(
-        bottom.distance(Vec2::new(size.width / 2.0, web_bottom)) < 1.0,
+        bottom.distance(Vec2::new(size.width / 2.0, expected_bottom)) < 1.0,
         "{bottom:?}"
     );
-    // These are the visible web cards' rotations and drops around their bottom centers.
+    // The cards turn and drop around their bottom centres.
     for (name, (across, drop, turn)) in HAND.into_iter().zip([
         (-552.0, 45.0, -6.0_f32),
         (-368.0, 20.0, -4.0),
@@ -130,17 +130,14 @@ fn assert_fan(page: &mut Page, size: Size, scale: f32, stage_top: f32) {
         let pivot = card[0].midpoint(card[1]);
         let edge = card[1] - card[0];
         assert!(
-            pivot.distance(bottom + Vec2::new(across, drop) * scale) < 1.0,
+            pivot.distance(bottom + Vec2::new(across, drop)) < 1.0,
             "{name} at {pivot:?}, middle at {bottom:?}"
         );
         assert!(
             (edge.y.atan2(edge.x).to_degrees() - turn).abs() < 0.1,
             "{name}: {edge:?}"
         );
-        assert!(
-            (edge.length() - 176.0 * scale).abs() < 1.0,
-            "{name}: {edge:?}"
-        );
+        assert!((edge.length() - 176.0).abs() < 1.0, "{name}: {edge:?}");
     }
 }
 
@@ -186,7 +183,13 @@ fn assert_fan_hover(page: &mut Page, middle: ElementId, neighbour: ElementId) {
 
     // The raised middle card covers the left edge of its neighbour. The pointer enters
     // the neighbour's place in the fan even while the middle card is drawn in front of it.
-    let edge = Vec2::new(996.0, 469.0);
+    let neighbour_bounds = AnchorBox::around(neighbour_rest);
+    let overlap_min =
+        (raised.centre - raised.half).max(neighbour_bounds.centre - neighbour_bounds.half);
+    let overlap_max =
+        (raised.centre + raised.half).min(neighbour_bounds.centre + neighbour_bounds.half);
+    assert!(overlap_min.cmplt(overlap_max).all());
+    let edge = overlap_min.midpoint(overlap_max);
     assert!(Area::Quad(neighbour_rest, None).contains(edge));
     assert!(Area::Quad(corners(page, middle), None).contains(edge));
     assert!(!Area::Quad(middle_rest, None).contains(edge));

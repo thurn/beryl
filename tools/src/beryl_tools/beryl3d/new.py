@@ -684,7 +684,7 @@ RECIPES = (
         "A script verb with an instant presentation to fill in.",
         "Implement play and its timing. Add session and web support before emitting it live.\n"
         "See it with just b3d tree story/game_play/<name> or just b3d png story/game_play/<name>.\n"
-        "Run just b3d cargo-test -p beryl_inspect and ignite test b3d-timeline.",
+        "Run just b3d cargo-test -p beryl_inspect.",
         add_verb,
     ),
     Recipe(

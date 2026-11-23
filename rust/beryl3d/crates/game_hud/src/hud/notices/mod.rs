@@ -123,8 +123,8 @@ pub struct Prepare<'a, Coming> {
     pub layer: &'a mut Layer,
     pub coming: Coming,
     pub held: &'a [Announced],
-    /// Stage width and scale for a regular window, from the client's desktop projection.
-    pub stage_fit: (f32, f32),
+    /// Width of the regular window in logical points.
+    pub window_width: f32,
     pub size_class: SizeClass,
 }
 
@@ -135,7 +135,7 @@ where
     type Output = ();
 
     fn apply(self, state: &mut NoticeFloats) -> (bool, ()) {
-        let turn = TurnMetrics::fit(self.stage_fit, self.size_class);
+        let turn = TurnMetrics::for_window(self.window_width, self.size_class);
         state.prepare(self.layer, self.coming, self.held, turn);
         (false, ())
     }
@@ -295,9 +295,9 @@ struct TurnMetrics {
 }
 
 impl TurnMetrics {
-    fn fit((width, scale): (f32, f32), size_class: SizeClass) -> Self {
+    fn for_window(width: f32, size_class: SizeClass) -> Self {
         match size_class {
-            SizeClass::Regular => Self { width, scale },
+            SizeClass::Regular => Self { width, scale: 1.0 },
             SizeClass::Compact => Self {
                 width: size::TURN_BANNER_COMPACT_WIDTH,
                 scale: ratio::TURN_BANNER_COMPACT_SCALE,

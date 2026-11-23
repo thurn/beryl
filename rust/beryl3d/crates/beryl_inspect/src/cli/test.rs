@@ -44,7 +44,7 @@ pub(super) const STOP_AFTER: &str = "--stop-after";
 pub(super) const COMPACT_ONLY: &str = "--phone-only";
 
 /// The switch that prints the names of the tests the rest of the command line would play, one
-/// a line, and plays none (`just b3d match boxes --all` reads it).
+/// a line, and plays none.
 pub(super) const LIST: &str = "--list";
 
 /// The switch that runs the full pack.
@@ -394,7 +394,7 @@ impl Report<'_> {
                 "frames": o.frames,
             })).collect::<Vec<_>>(),
             // Every test played and whether it passed, as the run log has them, so that
-            // `just b3d parity` can tell which recordings pass from both seats in every window.
+            // a caller can tell which recordings pass from both seats in every window.
             "results": self.outcomes.iter().map(|o| {
                 let name = o.test.name();
                 let outcome = if self.failing.contains(&name) { "fail" } else { "pass" };

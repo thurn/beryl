@@ -1,6 +1,4 @@
-//! `data/beryl3d/parity.json`'s verbs, effects and marks, which the parity list counts as done
-//! when the recording named for each is done. A name that is wrong would count an item done that
-//! Beryl 3D never shows.
+//! Checks that the motion recordings exist and play the verbs and effects they document.
 
 use std::collections::BTreeMap;
 
@@ -11,18 +9,18 @@ use beryl_protocol::protocol::Side;
 use kit_base::data::profiles::SizeClass;
 use kit_ui::input::Size;
 
-fn parity() -> serde_json::Value {
-    let text = beryl_test_files::read_to_string("data/beryl3d/parity.json")
-        .expect("the parity file is readable");
-    serde_json::from_str(&text).expect("the parity file is JSON")
+fn motion_recordings() -> serde_json::Value {
+    let text = beryl_test_files::read_to_string("data/beryl3d/motion-recordings.json")
+        .expect("the motion recording map is readable");
+    serde_json::from_str(&text).expect("the motion recording map is JSON")
 }
 
-/// Each item of `key` in the parity file, with the recording it names.
+/// Each item of `key` in the motion recording map, with the recording it names.
 fn mapped(file: &serde_json::Value, key: &str) -> Vec<(String, String)> {
     let mapped = file[key]
         .as_object()
-        .unwrap_or_else(|| panic!("the parity file maps {key}"));
-    assert!(!mapped.is_empty(), "the parity file maps no {key}");
+        .unwrap_or_else(|| panic!("the motion recording map maps {key}"));
+    assert!(!mapped.is_empty(), "the motion recording map maps no {key}");
     mapped
         .iter()
         .map(|(item, recording)| {
@@ -49,11 +47,10 @@ fn steps(recording: &str, seats: &[Side]) -> Vec<TimelineStep> {
         .collect()
 }
 
-/// Every recording the parity file names for a verb, an effect or a mark is a recording of the
-/// pack, so the parity list counts each by a recording the tests play.
+/// Each verb, effect or mark names a recording in the pack.
 #[test]
-fn the_parity_file_names_recordings_of_the_pack() {
-    let file = parity();
+fn the_motion_recordings_are_in_the_pack() {
+    let file = motion_recordings();
     let names: Vec<String> = recordings::names()
         .expect("the recordings pack is readable")
         .into_iter()
@@ -69,14 +66,11 @@ fn the_parity_file_names_recordings_of_the_pack() {
     }
 }
 
-/// The recording the parity file names for a verb plays a step of that verb, and the one it names
-/// for an effect plays a step with that effect, from one seat or the other. Otherwise the parity
-/// list would count the verb or effect done because an unrelated recording passes its tests.
-/// Marks are a card's look while a prompt is open, not a step, so only their recording's
-/// existence is checked.
+/// Each mapped verb and effect plays from at least one seat. Marks belong to a card's look
+/// while a prompt is open, so the timeline covers only the verbs and effects.
 #[test]
 fn each_verb_and_effect_plays_in_its_recording() {
-    let file = parity();
+    let file = motion_recordings();
     let mut seats: BTreeMap<String, Vec<Side>> = BTreeMap::new();
     for (name, seat) in recordings::names().expect("the recordings pack is readable") {
         let side = if seat == Seat::P0 {

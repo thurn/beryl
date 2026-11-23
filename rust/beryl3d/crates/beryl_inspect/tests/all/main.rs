@@ -20,9 +20,9 @@ mod hud;
 mod log;
 mod manual_table;
 mod map;
+mod motion_recordings;
 mod opening;
 mod pack;
-mod parity;
 mod pointer_held;
 #[path = "profiles/prompt_placement.rs"]
 mod prompt_placement;

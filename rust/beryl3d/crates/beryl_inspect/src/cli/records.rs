@@ -1,8 +1,5 @@
-//! `tree --records`: a frame's elements as the element records that `just b3d match` compares
-//! with the web interface's (docs/beryl-3d.md, "Matching the web interface's look"). Each
-//! record is `{key, role, name, object, place, box, z, parent, style, text}`, with `style`
-//! in CSS's property names and values normalized as the web side's dump script writes them
-//! (`tools/src/beryl_tools/beryl3d/match/dump.mjs`): colors as `[r, g, b, a]` with the alpha
+//! `tree --records` prints a frame's elements and styles as JSON. Each record is `{key, role, name, object, place, box, z, parent, style, text}`, with `style`
+//! using CSS property names. It gives colors as `[r, g, b, a]` with the alpha
 //! from 0 to 1, lengths in points, shadows as `{inset, x, y, blur, spread, color}` (`box-shadow`
 //! and each `drop-shadow` of `filter`), gradients as `{kind, repeating, shape, stops}`
 //! (`background-image` and `mask-image`), the other filter functions as `{fn, value}`, and
@@ -11,15 +8,14 @@
 //!
 //! After the elements come the effects the frame draws (`Looks::effects`), one record each of
 //! role `effect`, named by the effect, with what it is on as its `object` (a card's slot, an
-//! ability's `a<id>` or a player's side) as the web's dump names its `.stage-effect` nodes
-//! (`tools/src/beryl_tools/beryl3d/match/page.mjs`), the box its quad covers on the window and
+//! ability's `a<id>` or a player's side), the box its quad covers on the window and
 //! its opacity. `shake`, which moves the whole picture of the table, is on `table`, and its box
 //! is the offset of the picture, of no size.
 //!
 //! After the effects come the marks' outlines (`Frame::rings`), one `mark` record each, named
 //! by the mark (`eligible`, `selected`, `suggested`, `friendly-target`, `hostile-target`),
 //! parented to the card, ability or life total it rings, with that as its `object` named as an
-//! effect's is, as the web's `.stage-mark` nodes are (`data/beryl3d/match/roles.json`).
+//! effect's is.
 //! Each outline takes its box shadows from the draw geometry recorded for its mark node.
 
 use beryl_protocol::protocol::Side;
@@ -276,10 +272,7 @@ fn sides(values: &[Value; 4]) -> Value {
 }
 
 /// The `transform` of a card on the table, as a 2D `matrix()`'s six numbers: the rotation of the
-/// top edge of its face on screen, with no scale, moved to the face's top left corner. The web
-/// lays its cards out flat and turns them with a CSS transform, where Beryl 3D poses each card in
-/// 3D and projects it, so its scale and skew have no CSS counterpart; `just b3d match styles`
-/// compares a transform by its rotation alone and leaves the position and size to the boxes.
+/// top edge of its face on screen, with no scale, moved to the face's top left corner.
 fn card_transform(element: &Resolved) -> Value {
     // `card_corners` order: bottom left, bottom right, top right and top left of the face.
     let [_, _, top_right, top_left] = element.corners;
@@ -530,8 +523,7 @@ pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
                 "name": frame.name(element.name),
                 "object": object,
                 // Where on the table it lies, as the tree writes it (`battlefield.yours.lands`,
-                // `stack`), or empty for the flat layer. `just b3d match census` reads it to
-                // tell a card in hand from one on the battlefield or the stack.
+                // `stack`), or empty for the flat layer.
                 "place": element.place.label(),
                 "box": [round(rect.x), round(rect.y), round(rect.width), round(rect.height)],
                 "z": z[at],

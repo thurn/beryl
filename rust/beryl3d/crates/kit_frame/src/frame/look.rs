@@ -32,8 +32,7 @@ pub enum EffectTarget {
 }
 
 /// One effect as a frame draws it, which `tree --records` reports as an element of role
-/// `effect`, so that `just b3d match` can measure it against the web interface's `.stage-effect`
-/// node of the same name on the same thing (docs/beryl-3d.md, "Effects"). `model` places a quad
+/// `effect`. `model` places a quad
 /// from -0.5 to 0.5 in the table's space, as `Draw::model` does. For an effect that is light,
 /// whose web node is only a record the size of what it is on (the light is drawn on a canvas or
 /// past the node's edge), both are that node's box and opacity as its CSS rule scales and fades

@@ -45,9 +45,7 @@ fn ways_row(prompt: &PromptView, input: &HudIn) -> Option<Element> {
         return None;
     }
     let space = input.profile.tray();
-    let (tray, per_stage) = input
-        .ways_tray
-        .unwrap_or_else(|| space.on_window(input.window.size));
+    let (tray, per_stage) = space.on_window(input.window.size);
     #[expect(clippy::cast_precision_loss, reason = "a card has a few ways")]
     let count = ways.len() as f32;
     let tray_wide = tray.width / per_stage;

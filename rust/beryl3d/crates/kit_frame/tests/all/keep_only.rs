@@ -1,6 +1,6 @@
 //! A looking frame knows which element each of its records belongs to (`Frame::owners`), in
-//! drawing order, and `Frame::keep_only` draws a subtree alone: what `just b3d png --only` and
-//! `just b3d match` use to separate one element's pixels from what lies behind it.
+//! drawing order, and `Frame::keep_only` draws a subtree alone: which lets `just b3d png --only`
+//! show an element without the rest of the frame.
 
 use glam::{Affine3A, Mat4, Vec2, Vec3};
 use kit_base::atlas::Tier;

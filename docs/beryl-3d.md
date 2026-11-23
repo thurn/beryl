@@ -191,10 +191,8 @@ in front of what they pass.
 
 A profile supplies the camera fit and the part of the table that must stay in
 view. The orientation is fixed for the profile. The desktop camera is fitted to
-Arena recordings, and the temporary web fit places rows and piles against the
-web client's stage. [Layout profiles](beryl-3d-architecture.md#layout-profiles)
-and [the web-parity seam](beryl-3d-architecture.md#the-web-parity-seam) describe
-how those inputs reach the table.
+Arena recordings. [Layout profiles](beryl-3d-architecture.md#layout-profiles)
+describes how the profile supplies the table regions and camera.
 
 ### Objects and placement
 
@@ -602,36 +600,12 @@ Replays and the games ledger use the shared profile folder, so either client can
 resume a saved game. Native settings are stored separately from the web
 interface's browser settings.
 
-### Matching the web interface's look
+### Recording timelines
 
-Until the switch, the web client is the working visual reference and Arena
-remains the reference for flow, timing, layout and wording. See
-[UI Conventions](ui-conventions.md) for Beryl's deliberate differences from
-Arena. The [web-match skill](../.agents/skills/web-match/SKILL.md) describes the
-comparison tools and checked-in references.
-
-### Timeline parity
-
-Both clients print when script steps and their sound cues play in the same
-recordings. The parity check compares native playback with the committed web
-timelines. The [web-match skill](../.agents/skills/web-match/SKILL.md) covers
-refreshing references and diagnosing a difference.
-
-### The parity list
-
-The parity inventory records coverage of the screens, prompt shapes and other
-interface behavior needed at the switch. The
-[web-match skill](../.agents/skills/web-match/SKILL.md) describes how to check
-and update it.
-
-### The switch
-
-The project's owner decides when Beryl 3D becomes the app and when to remove the
-web code. A complete parity inventory is required for the switch. When selected,
-Beryl 3D becomes the target of the development command, release bundle and phone
-builds. The retirement change removes the unused web and Tauri code, browser
-checks, TypeScript protocol generation, and the
-[web-parity scaffold and reference checks](beryl-3d-architecture.md#the-web-parity-seam).
+`just b3d timeline <recording>` prints when each script step begins and ends,
+with its effect and sound cues. `just b3d motion-film <verb>` uses
+`data/beryl3d/motion-recordings.json` to choose a replay, then films the verb
+from both seats on desktop and phone alongside available Arena recordings.
 
 ### Platforms and versions
 

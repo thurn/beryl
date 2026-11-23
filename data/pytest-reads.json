@@ -29,14 +29,8 @@
     "tools/src/beryl_tools/beryl3d/gate.py": [
       "data/beryl3d/budgets.json"
     ],
-    "tools/src/beryl_tools/beryl3d/match/support.py": [
-      "data/beryl3d/match/supported.json"
-    ],
-    "tools/src/beryl_tools/beryl3d/match/target.py": [
-      "data/beryl3d/profiles/phone.json"
-    ],
     "tools/src/beryl_tools/beryl3d/motion_film.py": [
-      "data/beryl3d/parity.json"
+      "data/beryl3d/motion-recordings.json"
     ],
     "tools/src/beryl_tools/beryl3d/tiers.py": [
       "data/beryl3d/frame-rate.json"
@@ -299,12 +293,6 @@
     ],
     "tools/tests/test_beryl3d_profiles.py": [
       "rust/beryl3d/Cargo.toml"
-    ],
-    "tools/tests/test_beryl3d_web_seam.py": [
-      "data/beryl3d",
-      "docs/beryl-3d-architecture.md",
-      "rust/beryl3d",
-      "tools/src/beryl_tools/beryl3d/match"
     ],
     "tools/tests/test_card.py": [
       "rust/crates/beryl_card/src/effect/build.rs",

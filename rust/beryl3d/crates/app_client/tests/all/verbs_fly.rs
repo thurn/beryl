@@ -478,7 +478,7 @@ fn a_resolving_permanent_is_thrown_up_and_half_way_across_at_a_quarter() {
 #[test]
 fn a_thrown_permanent_never_rises_past_the_top_of_the_window() {
     // Under the top of the opponent's creatures' row, which stands where the web interface's
-    // does (`scaffold_web`), so that the room over the card's place is all the safe area caps.
+    // does, so that the room over the card's place is all the safe area caps.
     let inset = window_inset(220.0);
     for (case, window, capped) in [
         ("permanent resolves", window(1440.0, 900.0), false),

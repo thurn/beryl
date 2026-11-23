@@ -6,8 +6,7 @@ description: Inspect, drive, and verify Beryl 3D headlessly. Find recordings and
 # Inspecting Beryl 3D
 
 The [Beryl 3D guide](../../../rust/beryl3d/AGENTS.md) covers the shared build,
-checks and the picture required for a visual change. Use the
-[web-match skill](../web-match/SKILL.md) to compare the clients.
+checks and the picture required for a visual change.
 
 ## Find a scene and moment
 

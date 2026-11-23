@@ -21,8 +21,7 @@ out and which fitting policy it uses. `just b3d map data` lists the shared
 timing file, and `just b3d new effect --help` shows how to register an effect.
 
 Read the guide in the crate you change. At the same level a crate may depend on
-earlier crates in `levels.json`. Dependencies between levels point down. Only
-`app_client` depends on `scaffold_web`, which owns new web fit values. The
+earlier crates in `levels.json`. Dependencies between levels point down. The
 client core reads time and assets through its inputs. Given the same inputs it
 draws the same frames, and an animation-only frame allocates nothing.
 
@@ -56,10 +55,8 @@ inspect what the player sees, and `check` to check one scene on every tick.
 [b3d skill](../../.agents/skills/b3d/SKILL.md) shows how to read their output.
 
 For a change in how something looks, open the picture from
-`just b3d png --scale 2` or a film of the affected span. Compare with the web
-interface when checking parity. Record the picture's path and what you saw on
-the ticket. The [web-match skill](../../.agents/skills/web-match/SKILL.md)
-covers side-by-side comparisons.
+`just b3d png --scale 2` or a film of the affected span. Record the picture's
+path and what you saw on the ticket.
 
 For phone host changes, `just b3d ios-smoke` and `just b3d android-smoke` replay
 a recording headlessly and save a screenshot and frame log under

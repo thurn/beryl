@@ -165,7 +165,7 @@ pub fn write_rgba_png(path: &Path, pixels: &[u8], width: u32, height: u32) -> Re
 }
 
 /// Reads the PNG file at `path` as RGBA bytes, row by row from the top, whatever its own
-/// color type: `just b3d compare` puts the web interface's screenshot beside a frame with it.
+/// color type.
 ///
 /// # Errors
 ///

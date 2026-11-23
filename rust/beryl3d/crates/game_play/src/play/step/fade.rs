@@ -77,9 +77,7 @@ pub(super) enum Regrouped {
 /// A fade that has not begun by `room.from` plays at the new place. From one under way, whole
 /// or already cut short by an earlier regroup, the card slides to the new place over the `MOVE`
 /// before `room.from` (from when the fade began, if that is later) and fades on there as the
-/// fade was. On the web stage the card stands at its new place from `room.from`, so a slide
-/// that began then was a frame behind it: `just b3d match` reads both clients at step starts,
-/// and there every card the step made room for stood half a slot from the web's. Both segments
+/// fade was. The card reaches its new place when the next step begins. Both segments
 /// follow the fade's opacity (`Shape::Regrouping`) and take the place of what the card would
 /// have done after the slide begins; the beat is laid out before it plays, so the slide is
 /// known before it starts. The records, which the interface checks read, change with the

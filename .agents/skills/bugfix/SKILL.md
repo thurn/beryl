@@ -102,8 +102,7 @@ already resolves a report, verify the original expectation on a build
 containing it and record the evidence and commit.
 
 - For Beryl 3D use [b3d](../b3d/SKILL.md), including native rendered captures for
-  visual claims and [web-match](../web-match/SKILL.md) when Beryl Web is the
-  reference. A live capture may require replaying from before the reported
+  visual claims. A live capture may require replaying from before the reported
   decision to see a transient event. For web UI use the report's fixture or
   [specs](../specs/SKILL.md), and use [arena-video](../arena-video/SKILL.md)
   where Arena is the reference.

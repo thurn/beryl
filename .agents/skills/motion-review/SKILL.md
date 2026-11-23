@@ -65,7 +65,7 @@ just b3d motion-film <verb> [case]
 ```
 
 It finds a recording that plays the verb (the verb's entry in
-`data/beryl3d/parity.json`, or `--recording <name>`) and films the first step of
+`data/beryl3d/motion-recordings.json`, or `--recording <name>`) and films the first step of
 each case from both seats in both layouts, at Arena's 15 frames a second and 760
 px wide, with `just b3d film`. Beside each case it cuts Arena's instances of it
 into `~/Library/Caches/beryl/b3d/motion-film/<verb>-<run>/arena/`, as

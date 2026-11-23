@@ -21,50 +21,6 @@ fn shadows(frame: &Frame) -> Vec<&Draw> {
         .collect()
 }
 
-/// The desktop uses the web stage's shade only when the app includes its fit policy.
-#[test]
-fn the_tabletop_shade_follows_the_web_fit() {
-    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
-    let mut view = ViewBuilder::new();
-    view.script(ScriptBuilder::reset().build());
-    client.handle(Input::Update(Box::new(view.update())));
-    let cases = [
-        // The base stage, then letterboxing on the sides and above and below.
-        (1600.0, 900.0, 2.0, [1600.0, 96.0, 600.0, 170.0]),
-        (3000.0, 900.0, 1.0, [1233.0, 48.0, 300.0, 85.0]),
-        (1080.0, 900.0, 1.0, [600.0, 148.5, 225.0, 63.75]),
-        // Resizing from desktop to phone clears the shade.
-        (393.0, 759.0, 1.0, [0.0, 0.0, -1.0, 0.0]),
-    ];
-    for (width, height, scale, shaded) in cases {
-        client.handle(Input::Device(DeviceInput::Surface {
-            size: Size { width, height },
-            scale,
-            safe_area: Insets::default(),
-        }));
-        let cloth = client
-            .frame(0)
-            .draws
-            .iter()
-            .find(|draw| draw.material == Material::Table as u8 && draw.params[2] != 0.0)
-            .expect("the table draws its cloth");
-        let expected = if cfg!(feature = "web-fit") {
-            shaded
-        } else {
-            [0.0, 0.0, -1.0, 0.0]
-        };
-        assert!(
-            cloth
-                .params
-                .into_iter()
-                .zip(expected)
-                .all(|(actual, expected)| (actual - expected).abs() < 1e-3),
-            "{width}x{height} at scale {scale}: {:?}, expected {expected:?}",
-            cloth.params,
-        );
-    }
-}
-
 #[test]
 fn every_card_in_a_hand_or_on_the_stack_casts_one_shadow_and_no_card_lying_down_does() {
     let mut builder = ViewBuilder::new();
@@ -118,7 +74,6 @@ fn every_card_in_a_hand_or_on_the_stack_casts_one_shadow_and_no_card_lying_down_
     assert_eq!(shadows(frame).len(), 7 + 5 + 3);
 }
 
-#[cfg(feature = "web-fit")]
 #[test]
 fn a_card_tucked_under_a_permanent_does_not_cast_a_contact_shadow() {
     let mut view = ViewBuilder::new();
@@ -148,7 +103,7 @@ fn a_card_tucked_under_a_permanent_does_not_cast_a_contact_shadow() {
     );
     assert!(
         shadows(frame).is_empty(),
-        "cards resting in tilted battlefield rows must not cast contact shadows"
+        "a card resting under a permanent must not cast a contact shadow"
     );
 }
 

@@ -1,9 +1,4 @@
-//! The game screen's furniture drawn as the web interface draws it: action buttons and life orbs
-//! in the colours and widths of the web's own rules. The expected values are read from the web
-//! interface's files (`ui/src/design/components/buttons.css`, `life-orbs.css` and
-//! `ui/src/components/Player.tsx`), and the drawn ones from the frame's draw records, not from
-//! pixels, so the check holds at every scale and tier. No check compares whole pictures
-//! (decision C5 in docs/beryl-3d.md); `just b3d compare` shows the two side by side.
+//! Checks the play-or-draw buttons and life orbs using native frame draw records.
 //!
 //! A panel's colour is checked twice: on its own record, and as what shows at its middle once
 //! every flat-layer panel is drawn, so that a scrim or other panel drawn over a button, which
@@ -23,55 +18,6 @@ const WINDOW: Size = Size {
     width: 1600.0,
     height: 900.0,
 };
-
-fn web_file(path: &str) -> String {
-    beryl_test_files::read_to_string(format!("ui/src/{path}"))
-        .unwrap_or_else(|why| panic!("{path}: {why}"))
-}
-
-/// The value of `property` in the rule of `selector` in the CSS `sheet`, which must have both.
-fn css(sheet: &str, selector: &str, property: &str) -> String {
-    let start = sheet
-        .find(&format!("\n{selector} {{"))
-        .unwrap_or_else(|| panic!("no rule `{selector}`"));
-    let body = &sheet[start..];
-    let body = &body[..body.find("\n}").expect("the rule ends")];
-    let at = body
-        .find(&format!("\n  {property}:"))
-        .unwrap_or_else(|| panic!("`{selector}` sets no `{property}`"));
-    let value = &body[at + property.len() + 4..];
-    value[..value.find(';').expect("the declaration ends")]
-        .trim()
-        .to_owned()
-}
-
-/// Every `#rrggbb` colour in a CSS value, in order, as opaque RGBA.
-fn hex_colors(value: &str) -> Vec<[u8; 4]> {
-    value
-        .match_indices('#')
-        .filter_map(|(at, _)| {
-            let hex = value.get(at + 1..at + 7)?;
-            let channel = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
-            Some([channel(0)?, channel(2)?, channel(4)?, 255])
-        })
-        .collect()
-}
-
-fn hex_color(value: &str) -> [u8; 4] {
-    match hex_colors(value).as_slice() {
-        [color] => *color,
-        colors => panic!("`{value}` is not one colour but {colors:?}"),
-    }
-}
-
-/// A length in CSS pixels, `1.5px` or `5`.
-fn length(value: &str) -> f32 {
-    let number = value.split_whitespace().next().expect("a value");
-    number
-        .trim_end_matches("px")
-        .parse()
-        .unwrap_or_else(|why| panic!("`{value}`: {why}"))
-}
 
 /// A flat-layer panel as its record draws it, in logical points on screen.
 #[derive(Debug)]
@@ -217,25 +163,41 @@ fn glyph_tints(frame: &Frame, rect: Rect) -> Vec<[u8; 4]> {
         .collect()
 }
 
-/// How a web rule draws a button: its face, rim, label and rim width. A gradient face lists its
-/// stops' colours in order, which the flat layer's gradient draws; a rim lit unevenly lists
-/// every colour the web uses, and the flat layer draws one of them.
+/// The expected face, rim and text colors of an enabled prompt button.
 struct ButtonLook {
-    faces: Vec<[u8; 4]>,
-    rims: Vec<[u8; 4]>,
+    faces: &'static [[u8; 4]],
+    rims: &'static [[u8; 4]],
     ink: [u8; 4],
     border: f32,
 }
 
-fn button_look(selector: &str) -> ButtonLook {
-    let sheet = web_file("design/components/buttons.css");
-    ButtonLook {
-        faces: hex_colors(&css(&sheet, selector, "background")),
-        rims: hex_colors(&css(&sheet, selector, "border-color")),
-        ink: hex_color(&css(&sheet, selector, "color")),
-        border: length(&css(&sheet, ".button", "border")),
-    }
+const fn rgba(rgb: u32) -> [u8; 4] {
+    let [_, red, green, blue] = rgb.to_be_bytes();
+    [red, green, blue, 255]
 }
+
+const PRIMARY: ButtonLook = ButtonLook {
+    faces: &[
+        rgba(0xe2_83_22),
+        rgba(0xcc_6f_1c),
+        rgba(0xb4_5e_12),
+        rgba(0xa7_57_0f),
+        rgba(0xad_5b_10),
+        rgba(0xc4_6a_18),
+        rgba(0xe0_81_22),
+        rgba(0xf6_a8_3c),
+    ],
+    rims: &[rgba(0xff_f2_b1), rgba(0xeb_a0_43), rgba(0xf7_bc_56)],
+    ink: rgba(0xff_fa_f2),
+    border: 1.5,
+};
+
+const SECONDARY: ButtonLook = ButtonLook {
+    faces: &[rgba(0x2a_25_22), rgba(0x1d_19_17), rgba(0x26_21_20)],
+    rims: &[rgba(0xe9_e3_da), rgba(0xb9_b2_a9), rgba(0xa5_9e_96)],
+    ink: rgba(0xff_fd_fa),
+    border: 1.5,
+};
 
 /// The box of the first button named `name` in the frame, in tree order.
 fn first_button(frame: &Frame, name: &str) -> Rect {
@@ -264,7 +226,7 @@ fn gradient_on(frame: &Frame, rect: Rect) -> Option<(usize, Vec<[u8; 4]>)> {
 }
 
 /// Checks that the first button named `name` on `page` is drawn as `look` says: a gradient
-/// face in the web's colors, or a flat face in one of them.
+/// face with the expected gradient stops, or a flat face in one of those colors.
 fn assert_button_drawn(page: &mut Page, name: &str, look: &ButtonLook, what: &str) {
     let frame = page.frame();
     let rect = first_button(frame, name);
@@ -272,27 +234,27 @@ fn assert_button_drawn(page: &mut Page, name: &str, look: &ButtonLook, what: &st
     let mut faults = Vec::new();
     let gradient = gradient_on(frame, rect);
     if let Some((_, colors)) = &gradient {
-        if *colors != look.faces {
+        if colors.as_slice() != look.faces {
             faults.push(format!(
-                "its gradient's stops are {colors:?}, not the web's {:?}",
+                "its gradient's stops are {colors:?}, expected {:?}",
                 look.faces
             ));
         }
     } else if !look.faces.contains(&panel.tint) {
         faults.push(format!(
-            "its face is {:?}, not one of the web's {:?}",
+            "its face is {:?}, expected one of {:?}",
             panel.tint, look.faces
         ));
     }
     if !look.rims.contains(&panel.edge) {
         faults.push(format!(
-            "its rim is {:?}, not one of the web's {:?}",
+            "its rim is {:?}, expected one of {:?}",
             panel.edge, look.rims
         ));
     }
     if (panel.border - look.border).abs() > 0.01 {
         faults.push(format!(
-            "its rim is {} points wide, not the web's {}",
+            "its rim is {} points wide, expected {}",
             panel.border, look.border
         ));
     }
@@ -323,7 +285,7 @@ fn assert_button_drawn(page: &mut Page, name: &str, look: &ButtonLook, what: &st
     }
     if let Some(tint) = tints.iter().find(|tint| **tint != look.ink) {
         faults.push(format!(
-            "its label is drawn in {tint:?}, not the web's {:?}",
+            "its label is drawn in {tint:?}, expected {:?}",
             look.ink
         ));
     }
@@ -355,35 +317,18 @@ fn page_at(name: &str, moment: &str) -> Page {
 /// The play-or-draw prompt's buttons, which the opening screen's scrim once covered, so that
 /// the Play button looked disabled though it could be pressed.
 #[test]
-fn the_play_or_draw_buttons_are_drawn_as_the_webs_enabled_buttons() {
+fn the_play_or_draw_buttons_show_their_enabled_style() {
     let mut page = page_at("opening-play", "prompt:1");
-    assert_button_drawn(
-        &mut page,
-        "Play",
-        &button_look(".button-primary"),
-        "primary",
-    );
-    assert_button_drawn(
-        &mut page,
-        "Draw",
-        &button_look(".button-secondary"),
-        "secondary",
-    );
+    assert_button_drawn(&mut page, "Play", &PRIMARY, "primary");
+    assert_button_drawn(&mut page, "Draw", &SECONDARY, "secondary");
 }
 
-/// Both life orbs: the core's fill and the bezel's width of the web's `.life-orb-core` and
-/// `BEZEL`, and the gold of `.life-orb-ring`, which both orbs draw toward their player's edge.
+/// Both orbs draw their core fill, bezel and gold ring.
 #[test]
-fn the_life_orbs_are_drawn_in_the_webs_core_bezel_and_ring() {
-    let sheet = web_file("design/components/life-orbs.css");
-    let core = hex_color(&css(&sheet, ".life-orb-core", "fill"));
-    let bezel = length(&css(&sheet, ".life-orb-core", "stroke-width"));
-    let ring = hex_color(&css(&sheet, ".life-orb-ring", "stroke"));
-    let player = web_file("components/Player.tsx");
-    assert!(
-        player.contains(&format!("export const BEZEL = {bezel};")),
-        "Player.tsx's `BEZEL` is not life-orbs.css's stroke width {bezel}"
-    );
+fn the_life_orbs_draw_a_core_bezel_and_ring() {
+    let core = rgba(0x2c_29_26);
+    let bezel = 5.0;
+    let ring = rgba(0xff_b4_44);
     // The orbs are drawn from the HUD's orb layers, each an icon cell, not as panels, so the
     // colours and widths are read from the layers the cells are rasterized from.
     let layers = &game_hud::art::orb::LAYERS;
@@ -394,13 +339,13 @@ fn the_life_orbs_are_drawn_in_the_webs_core_bezel_and_ring() {
     assert_eq!(filled_core.color, core, "the core's fill");
     assert!(
         (game_hud::art::orb::BEZEL - bezel).abs() < 0.01,
-        "the bezel is {} points wide, not the web's {bezel}",
+        "the bezel is {} points wide, expected {bezel}",
         game_hud::art::orb::BEZEL
     );
     assert!(
         layers.iter().any(|layer| {
             layer.paint.stroke == Some((3.0, true)) && layer.color == ring && !layer.active
         }),
-        "no layer draws `.life-orb-ring`'s {ring:?} stroke on both orbs"
+        "no layer draws the {ring:?} stroke on both orbs"
     );
 }

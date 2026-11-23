@@ -1,7 +1,6 @@
 //! The picture commands of `just b3d` (docs/beryl-3d.md, "The agent interface"): `png` draws one
 //! moment of a recording with the real renderer, offscreen, `film` draws a span of it as a
-//! grid of frames in one picture, and `compare` puts a moment beside the web interface's
-//! screenshot of it. `sample` draws the conformance samples of `just b3d match samples`. The crate is this one program, with no library, and links no
+//! grid of frames in one picture. The crate is this one program, with no library, and links no
 //! engine, so that it rebuilds and relinks fast after an edit (docs/beryl-3d.md,
 //! "Edit-to-output time"). Its tests run the program.
 //!
@@ -9,11 +8,8 @@
 //! status 2 and a message that names what would work. Every file is written under
 //! `$BERYL_CACHE/b3d/out/` with a name that includes the process id, so two runs never share one.
 
-mod compare;
 mod film;
 mod font;
-mod pixels;
-mod sample;
 mod scene;
 
 use std::fmt::Write;
@@ -51,7 +47,7 @@ struct Command {
     run: fn(&Options) -> Result<String, Error>,
 }
 
-const COMMANDS: [Command; 5] = [
+const COMMANDS: [Command; 2] = [
     Command {
         name: "png",
         summary: "draws one moment of a recording to a PNG file",
@@ -128,95 +124,6 @@ const COMMANDS: [Command; 5] = [
             ),
         ],
         run: film::film,
-    },
-    Command {
-        name: "compare",
-        summary: "puts the web interface's screenshot of a moment beside Beryl 3D's frame of it",
-        examples: [
-            (
-                "just b3d compare opening-play --at prompt:1",
-                "the play-or-draw prompt in both interfaces",
-            ),
-            (
-                "just b3d compare pay-default --seat opponent --at view:2",
-                "a moment from the opponent's seat",
-            ),
-        ],
-        spec: Spec {
-            recording: true,
-            values: &["--web"],
-            switches: &[],
-        },
-        own: &[(
-            "--web <png>",
-            "the web interface's screenshot to put on the left (`just b3d compare` takes it)",
-        )],
-        run: compare::compare,
-    },
-    Command {
-        name: "pixels",
-        summary: "lists, worst first, the elements answerable for the pixels a match snapshot's \
-                  two pictures differ in",
-        examples: [
-            (
-                "just b3d match pixels opening-play --at prompt:1",
-                "takes the snapshot and pairs it, then runs this",
-            ),
-            (
-                "b3d-render pixels opening-play --at prompt:1 --scale 2 --dir <snapshot>",
-                "on a snapshot directory already paired",
-            ),
-        ],
-        spec: Spec {
-            recording: true,
-            values: &["--dir", "--only", "--web-only", "--box"],
-            switches: &[],
-        },
-        own: &[
-            (
-                "--dir <directory>",
-                "the `just b3d match` snapshot directory, with web.png, b3d.png, their records \
-                 and joined.json",
-            ),
-            (
-                "--only <locator>",
-                "the snapshot shows that element alone (`just b3d match snapshot --only`)",
-            ),
-            (
-                "--box <x>,<y>,<width>,<height>",
-                "also count, in pixels.json's `inside`, the differing pixels inside this box, \
-                 in points",
-            ),
-            (
-                "--web-only <index>",
-                "with --only, the index of its web pair in web.json",
-            ),
-        ],
-        run: pixels::pixels,
-    },
-    Command {
-        name: "sample",
-        summary: "draws the conformance samples of a job and scores each against the web's picture",
-        examples: [
-            (
-                "just b3d match samples",
-                "every sample, shot in WebKit and drawn here",
-            ),
-            (
-                "just b3d match samples shadow",
-                "the samples whose names start with shadow",
-            ),
-        ],
-        spec: Spec {
-            recording: false,
-            values: &["--job"],
-            switches: &[],
-        },
-        own: &[(
-            "--job <json>",
-            "the samples to draw and the web's pictures of them (`just b3d match samples` writes it)",
-        )],
-        run: sample::sample,
     },
 ];
 

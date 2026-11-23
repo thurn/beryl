@@ -318,12 +318,8 @@ Essential motion translation rules:
   timings**: Compressing a 1429 ms Hermite hold-plateau curve into 1050 ms (or
   an 833 ms opponent draw into 475 ms) distorts the pause shoulders and flight
   feel. Update `data/ui-conventions.json` and `beryl_protocol::script::timing`,
-  run `just conventions`, and refresh both committed web references:
-  - `just b3d timeline-parity --fixtures --refresh-web`
-  - `just b3d match score --refresh-web`
-  If changing animation durations shifts a raw wall-clock entry in
-  `tools/src/beryl_tools/beryl3d/match/reference.py` (`MOMENTS`), anchor it to
-  its `step:V.B.S` moment so future timing updates cannot drift it.
+  run `just conventions`, and inspect the updated playback with
+  `just b3d timeline <recording>`.
 - **Avoid camera depth-ratio speed warp**: Arena's camera sits far enough back
   that library-to-hand depth varies by only `~1.6:1`, so 3D world Catmull-Rom
   maps evenly to screen speed. Beryl 3D's camera puts the table at `~1300 mm`
@@ -425,6 +421,3 @@ Check these failure modes that static asset reading and unit tests miss:
 - **Dual Rust workspaces formatting**: `just fmt` formats `rust/`, JS, Python,
   and Markdown, while `rust/beryl3d/` is a separate Cargo workspace that also
   needs `cargo fmt --manifest-path rust/beryl3d/Cargo.toml --all`.
-- **Forgetting `data/beryl3d/parity.json`**: Any new skill directory under
-  `.agents/skills/` must also be listed in `data/beryl3d/parity.json` (and
-  symlinked in `.claude/skills/`) so `just b3d parity --check` passes.

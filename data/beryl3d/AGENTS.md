@@ -45,5 +45,6 @@ Run `just b3d data` to validate it, including inspection-only profiles.
   presentation. `frame-rate.json` and `tier-probe.json` tune host pacing and
   startup tier selection.
 
-The [web-match skill](../../.agents/skills/web-match/SKILL.md) documents the web
-snapshots, timelines and their comparison counts.
+`motion-recordings.json` names the replay that demonstrates each listed verb,
+effect and mark. `just b3d motion-film` uses the verb entries to select a
+replay.

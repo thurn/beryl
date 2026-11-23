@@ -129,21 +129,6 @@ def test_update_lowers_or_removes_a_cap_allowance_without_raising_it(
     assert json.loads(path.read_text())["cap_allowances"] == {}
 
 
-def test_only_app_client_can_use_the_web_scaffold(root: Path) -> None:
-    path = root / purity.LEVELS_FILE
-    config = json.loads(path.read_text())
-    config["crates"]["scaffold_web"] = {"level": "scaffold", "order": 3}
-    path.write_text(json.dumps(config))
-    scaffold = "rust/beryl3d/crates/scaffold_web/Cargo.toml"
-    write(root, scaffold, '[dependencies]\ngame_table = { path = "../game_table" }\n')
-    dependency = '[dependencies]\nscaffold_web = { path = "../scaffold_web" }\n'
-    write(root, f"{APP}/Cargo.toml", dependency)
-    assert purity.levels(root) == []
-    write(root, f"{GAME}/Cargo.toml", dependency)
-    (found,) = purity.levels(root)
-    assert found == f"{GAME}/Cargo.toml: game_table depends upward on scaffold_web"
-
-
 @pytest.mark.parametrize(
     "manifest",
     (
@@ -187,7 +172,7 @@ def test_toolkit_content_cannot_name_game_terms(
     ]
 
 
-def test_web_source_citations_can_only_grow_in_the_scaffold(root: Path) -> None:
+def test_web_source_citations_can_only_decrease(root: Path) -> None:
     path = root / purity.LEVELS_FILE
     config = json.loads(path.read_text())
     config["web_citations"] = {"game_table": 2}
@@ -199,11 +184,6 @@ def test_web_source_citations_can_only_grow_in_the_scaffold(root: Path) -> None:
         'const REFERENCE: &str = r#"ui/src/game/Stage.tsx"#;\n'
         "// Look up the widget in crates/kit_ui/src/widgets.\n"
         "fn ratio(ui: f32, src: f32) -> f32 { ui/src }\n",
-    )
-    write(
-        root,
-        "rust/beryl3d/crates/scaffold_web/src/lib.rs",
-        "// ui/src/game/Stage.tsx\n",
     )
     assert purity.levels(root) == []
 

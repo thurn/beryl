@@ -124,9 +124,6 @@ impl Client {
         let layer = Layer::with_icons(data.flat, Some(game_hud::mana_icons::icon));
         let mut frame = Frame::with_capacity(config.elements, config.draws, config.name_bytes);
         frame.labels = &game_hud::labels::GAME_LABELS;
-        #[cfg(feature = "web-fit")]
-        let table = Table::with_region_fit(data, window, scaffold_web::FIT);
-        #[cfg(not(feature = "web-fit"))]
         let table = Table::new(data, window);
         Self {
             frame,
@@ -334,7 +331,7 @@ impl Client {
     }
 
     /// Whether each frame records how its flat-layer elements look and the words of each line
-    /// of text (`Frame::looking`), for the tools that compare Beryl 3D with the web interface.
+    /// of text (`Frame::looking`), for the frame inspector.
     pub fn set_looking(&mut self, looking: bool) {
         self.frame.looking = looking;
     }

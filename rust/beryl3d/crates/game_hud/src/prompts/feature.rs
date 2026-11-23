@@ -35,7 +35,6 @@ pub struct ViewKey {
     target_points: f32,
     text_points: Option<f32>,
     tray: TraySpace,
-    ways_tray: Option<(Rect, f32)>,
     prompt: Option<PromptView>,
     placement: Option<Vec<(ElementId, Option<u32>, Rect)>>,
     bar: Option<Element>,
@@ -96,7 +95,6 @@ impl ViewKey {
                 hud.profile.tray()
             },
             prompt: hud.prompt.cloned(),
-            ways_tray: hud.ways_tray,
             placement,
             bar: inputs.bar.cloned(),
             details,

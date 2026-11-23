@@ -33,8 +33,7 @@ impl Cues {
 
 impl Page {
     /// When the client was given each view so far, in nanoseconds since the recording's start,
-    /// in order: the times at which the web interface's tools hand the same views to the page
-    /// (`just b3d match motion`).
+    /// in the order they arrived.
     #[must_use]
     pub fn views_given_at(&self) -> Vec<u64> {
         (self.inputs.iter().zip(&self.given_at))

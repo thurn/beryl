@@ -176,10 +176,7 @@ const COMMANDS: &[Command] = &[
             ),
             ("--role <role>", "only elements of that role"),
             ("--full", "every element, with no place cut short"),
-            (
-                "--records",
-                "every element as JSON records with its style, for `just b3d match`",
-            ),
+            ("--records", "every element as JSON records with its style"),
             (
                 "--to <moment>",
                 "beside --records: one line of records for each 60 Hz frame from --at to here",

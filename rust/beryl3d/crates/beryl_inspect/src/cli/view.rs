@@ -93,7 +93,7 @@ pub(super) fn tree(options: &Options) -> Result<Printed, Usage> {
 }
 
 /// One 60 Hz frame, in nanoseconds: the step at which `tree --records --to` prints the frames
-/// of a span, as the web interface's tools step Playwright's clock (`just b3d match motion`).
+/// of a span.
 const FRAME_NANOSECONDS: u64 = 1_000_000_000 / 60;
 
 /// `tree --records`: the moment's position and every element as a record, as one JSON object.

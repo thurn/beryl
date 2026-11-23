@@ -59,10 +59,6 @@
     "app_client": {
       "level": "app",
       "order": 14
-    },
-    "scaffold_web": {
-      "level": "scaffold",
-      "order": 15
     }
   },
   "cap_lines": 12000,
@@ -74,7 +70,7 @@
     "app_screens": 10,
     "beryl_3d": 1,
     "beryl_assets": 8,
-    "beryl_inspect": 5,
+    "beryl_inspect": 2,
     "beryl_render": 1,
     "game_hud": 78,
     "game_manual": 55,

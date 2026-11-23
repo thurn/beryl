@@ -1,6 +1,5 @@
-//! `timeline` and `export`: when each step of each script of a recording begins and ends, as
-//! JSON lines, and the recordings' messages as the fixture files the web interface reads
-//! (docs/beryl-3d.md, "Timeline parity").
+//! `timeline` prints each script step and its start and end times as JSON lines.
+//! `export` writes the recordings' messages as fixture files.
 
 use std::fmt::Write;
 use std::fs;
@@ -148,10 +147,7 @@ fn all(options: &Options) -> Result<Printed, Usage> {
 }
 
 /// The name of the file that one `timeline --all` run writes: the time in nanoseconds and the
-/// process id. The fast check's trees and the Beryl 3D sweep share the cache's `out` folder,
-/// and the sweep runs `timeline-parity` and `timeline-parity-all` at once in one tree. When
-/// the name held only the second, two runs that finished in the same second wrote one file,
-/// and the first to finish deleted it before the second read it.
+/// process ID keep concurrent runs from writing the same file in the shared cache.
 fn run_file_name() -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -197,9 +193,7 @@ pub(super) fn export(options: &Options) -> Result<Printed, Usage> {
         }
     }
     fs::create_dir_all(&directory).map_err(|e| Usage(format!("{}: {e}", directory.display())))?;
-    // Each recording on a thread of its own, as many at once as the command's CPU tokens allow
-    // (`runner::each`): one after another, the export took about 40 s, the longest of the
-    // workspace's tests and part of the lane's timeline-parity step.
+    // Export recordings in parallel within the command's CPU grant.
     let written = runner::each(&names, |(name, seat)| -> Result<(), Usage> {
         let seat = side_of(*seat);
         let recording = pages::recording(name, seat).map_err(Usage)?;

@@ -2,7 +2,7 @@
 motion-review and arena-pixel-match skills, as `just motion --film` films the web interface's
 (tools/src/beryl_tools/motion_film.py).
 
-It finds a recording that plays the verb (the verb's entry in `data/beryl3d/parity.json`, or
+It finds a recording that plays the verb (the verb's entry in `data/beryl3d/motion-recordings.json`, or
 `--recording`), reads Beryl 3D's timeline of it from each seat (`just b3d timeline`, with each
 view's start from the steps `just b3d info` times), and films
 the first step of each case of the verb, or of the one case asked for, from its start to
@@ -30,11 +30,11 @@ from pathlib import Path
 from typing import Any
 
 from .. import motion, video
-from .. import motion_film as web_film
+from .. import motion_film as arena_film
 from . import paths
 from .command import Command
 
-PARITY: Path = paths.DATA / "parity.json"
+MOTION_RECORDINGS: Path = paths.DATA / "motion-recordings.json"
 SEATS: tuple[str, ...] = ("you", "opponent")
 LAYOUTS: tuple[str, ...] = ("desktop", "phone")
 # The most frames one film holds (`MOST_FRAMES` in beryl_pictures' film.rs). A step longer than
@@ -42,7 +42,7 @@ LAYOUTS: tuple[str, ...] = ("desktop", "phone")
 MOST_FRAMES = 24
 # Milliseconds filmed past a step's end, where its subject comes to rest, as Arena's instances
 # are cut.
-SETTLE_MS: float = web_film.SETTLE * 1000
+SETTLE_MS: float = arena_film.SETTLE * 1000
 # How many steps playing meanwhile a film's text names before it counts the rest.
 MOST_MEANWHILE = 4
 # The lines of `just b3d info` that give a step's start, in ms since the recording's start,
@@ -84,7 +84,7 @@ def milliseconds(value: float) -> str:
 def spans(start: float, end: float) -> list[tuple[float, float]]:
     """The spans, in ms, of the films of a step from `start` to `end`: each at most
     `MOST_FRAMES` frames at Arena's rate, the last ending at `end`."""
-    longest = MOST_FRAMES * 1000 / web_film.ARENA_FPS
+    longest = MOST_FRAMES * 1000 / arena_film.ARENA_FPS
     out: list[tuple[float, float]] = []
     at = start
     while True:
@@ -103,8 +103,8 @@ def film_arguments(
         recording,
         *("--seat", seat, "--layout", layout),
         *("--from", milliseconds(span[0]), "--to", milliseconds(span[1])),
-        *("--rate", str(web_film.ARENA_FPS)),
-        *("--frame-width", str(web_film.ARENA_WIDTH)),
+        *("--rate", str(arena_film.ARENA_FPS)),
+        *("--frame-width", str(arena_film.ARENA_WIDTH)),
     ]
 
 
@@ -223,11 +223,11 @@ def arena_side(
     """Arena's instances of the verb cut into `folder`, and why each one left out was."""
     cut: list[dict[str, Any]] = []
     missing: list[str] = []
-    for n, instance in enumerate(web_film.chosen(motion.motion(), verb, case, most)):
-        take = web_film.retake(instance)
+    for n, instance in enumerate(arena_film.chosen(motion.motion(), verb, case, most)):
+        take = arena_film.retake(instance)
         name = f"{instance.get('case')} · {take.recording} {video.clock(take.start, 2)}"
         try:
-            frames = web_film.arena_frames(take, folder / f"{n + 1:02d}")
+            frames = arena_film.arena_frames(take, folder / f"{n + 1:02d}")
         except video.VideoError as error:
             missing.append(f"{name}: {str(error).splitlines()[0]}")
             continue
@@ -238,10 +238,12 @@ def arena_side(
 def run_motion_film(args: argparse.Namespace) -> int:
     verb = str(args.verb)
     case = " ".join(args.case) or None
-    recording = args.recording or json.loads(PARITY.read_text())["verbs"].get(verb)
+    recording = args.recording or json.loads(MOTION_RECORDINGS.read_text())[
+        "verbs"
+    ].get(verb)
     if recording is None:
         print(
-            f"motion-film: parity.json names no recording for {verb!r};"
+            f"motion-film: motion-recordings.json names no recording for {verb!r};"
             " give one with --recording",
             file=sys.stderr,
         )
@@ -308,12 +310,12 @@ def motion_film_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--recording",
-        help="the recording to film, instead of the verb's entry in data/beryl3d/parity.json",
+        help="the recording to film, instead of the verb's entry in data/beryl3d/motion-recordings.json",
     )
     parser.add_argument(
         "--instances",
-        default=web_film.INSTANCES,
-        help=f"how many of Arena's instances of each case (default {web_film.INSTANCES})",
+        default=arena_film.INSTANCES,
+        help=f"how many of Arena's instances of each case (default {arena_film.INSTANCES})",
     )
 
 

@@ -28,7 +28,6 @@ SCENE_CRATES: set[str] = {
     "game_probe",
     "app_screens",
     "app_client",
-    "scaffold_web",
 }
 RENDER = "beryl_render"
 INSPECT = "beryl_inspect"
@@ -424,7 +423,7 @@ def rust_tokens(source: str, *, comments: bool = False) -> list[RustToken]:
 
 
 def upwards(config: Levels, source: str, target: str) -> bool:
-    """Apply the dependency order and the dedicated consumer of the web scaffold."""
+    """Apply the dependency order to client crates."""
     order = config["crates"]
     if source in order and order[source]["level"] == "toolkit":
         if target.startswith(("game_", "app_")) or (
@@ -433,10 +432,6 @@ def upwards(config: Levels, source: str, target: str) -> bool:
             return True
     if source in {"beryl_assets", "beryl_render"} and target in order:
         return order[target]["level"] != "toolkit"
-    if target == "scaffold_web":
-        return source != "app_client"
-    if source == "scaffold_web" and target == "app_client":
-        return True
     return (
         source in order
         and target in order
@@ -541,11 +536,9 @@ def profile_words(root: Path) -> list[str]:
 
 
 def web_citation_counts(root: Path) -> dict[str, int]:
-    """Count web source references in comments and strings outside the scaffold."""
+    """Count web source references in comments and strings."""
     counts: dict[str, int] = {}
     for crate in sorted(crates(root).iterdir()):
-        if crate.name == "scaffold_web":
-            continue
         count = 0
         for path in crate.rglob("*.rs"):
             source = path.read_text()

@@ -1,5 +1,0 @@
-{"seat":"you","view":1,"beat":0,"step":0,"verb":"announce","case":null,"start":116,"end":1316,"effects":[],"sounds":[]}
-{"seat":"you","view":2,"beat":0,"step":0,"verb":"fly","case":"discard","start":0,"end":165,"effects":[],"sounds":[["shove","start",null]]}
-{"seat":"you","view":3,"beat":0,"step":0,"verb":"fly","case":null,"start":0,"end":475,"effects":[],"sounds":[["exile","start",null]]}
-{"seat":"you","view":4,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
-{"seat":"you","view":4,"beat":1,"step":0,"verb":"lift","case":null,"start":25,"end":458,"effects":[],"sounds":[]}

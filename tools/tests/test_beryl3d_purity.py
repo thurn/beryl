@@ -26,7 +26,6 @@ SCENE_CRATES = (
     "game_probe",
     "app_screens",
     "app_client",
-    "scaffold_web",
 )
 LINTS = '[workspace.lints.rust]\nwarnings = "deny"\n'
 

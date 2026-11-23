@@ -204,7 +204,7 @@ fn records_to_a_later_moment_print_one_line_a_frame_60_to_the_second() {
 
 /// While the lands tap for the spell, a glow plays on each of them, which `--records` lists
 /// after the elements as an element of role `effect`, named by the effect and with the land's
-/// slot as its object, so that `just b3d match` can measure it against the web's.
+/// slot as its object.
 #[test]
 fn records_list_each_effect_under_way_as_an_element() {
     let printed = ok(&["tree", RECORDING, "--at", "1000ms", "--records"]);

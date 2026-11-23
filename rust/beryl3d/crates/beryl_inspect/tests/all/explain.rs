@@ -20,7 +20,7 @@ fn a_crowded_battlefield_row_reports_overlap_and_its_region() {
     let place = &value["place"];
     assert_eq!(place["container"], "battlefield.yours.creatures");
     assert_eq!(place["policy"], "row");
-    assert_eq!(place["region"]["key"], "table.anchored.web.room");
+    assert_eq!(place["region"]["key"], "table.creatures");
     assert!(
         place["stages"]
             .as_array()

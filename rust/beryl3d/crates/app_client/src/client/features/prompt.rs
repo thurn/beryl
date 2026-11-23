@@ -75,7 +75,7 @@ impl Features {
 
     pub(in crate::client) fn prompt_view(
         &self,
-        mut hud: HudIn<'_>,
+        hud: HudIn<'_>,
         explaining: bool,
     ) -> Option<Element> {
         if !prompts::bar::appears(&hud) {
@@ -90,9 +90,6 @@ impl Features {
             return Some(bar);
         };
         let placement = prompt_placement(&prompt.body)?;
-        if matches!(prompt.body, ShapeBody::Mode { .. }) {
-            hud.ways_tray = scaffold_web::ways_tray(hud.profile, hud.window);
-        }
         self.draw_prompt(
             placement,
             prompts::Inputs {

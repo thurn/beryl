@@ -121,7 +121,6 @@ dependencies = [
  "kit_space",
  "kit_text",
  "kit_ui",
- "scaffold_web",
  "serde",
  "serde_json",
 ]
@@ -501,7 +500,6 @@ dependencies = [
  "kit_frame",
  "kit_probe",
  "kit_scene",
- "kit_text",
  "kit_ui",
  "serde_json",
 ]
@@ -3642,19 +3640,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "scaffold_web"
-version = "0.1.0"
-dependencies = [
- "beryl_protocol",
- "beryl_test_files",
- "game_table",
- "glam",
- "kit_base",
- "kit_space",
- "serde",
 ]
 
 [[package]]

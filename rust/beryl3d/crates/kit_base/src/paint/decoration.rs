@@ -22,8 +22,7 @@ pub struct Shadow {
 impl Shadow {
     /// How much narrower the Gaussian `WebKit` draws is than the one CSS names. A box shadow's
     /// blur length is two standard deviations by the CSS specification, and a `drop-shadow`'s is
-    /// one; `WebKit` at scale 2 draws each about 0.85 times as wide, which `just b3d match samples`
-    /// measured on outer box shadows of blurs 16 and 24 and drop shadows of blurs 3 and 8 (a
+    /// one; `WebKit` at scale 2 draws each about 0.85 times as wide, measured on outer box shadows of blurs 16 and 24 and drop shadows of blurs 3 and 8 (a
     /// Gaussian edge of that deviation fits each profile within a level of 255).
     pub const WEBKIT_DEVIATION: f32 = 0.85;
 

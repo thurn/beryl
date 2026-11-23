@@ -23,7 +23,7 @@ pub const RINGS: usize = 2 * (OBJECTS + ABILITIES + 2);
 pub struct Ring {
     /// The mark node that owns this outline.
     pub element: u32,
-    /// Which mark the outline draws, which `just b3d match` names its record by.
+    /// The mark that names the outline in frame records.
     pub name: &'static str,
     pub model: [f32; 12],
     /// Half the width and height, in the units of `model`'s quad, of the rectangle the

@@ -51,12 +51,8 @@ Three more facts shaped the design:
 
 Later sections refer to these by number.
 
-- **A1. Arena is the reference, and the web interface is the working reference
-  until the switch.** Beryl 3D matches the web interface until its owner
-  switches the app to Beryl 3D, because the web interface is the nearest thing
-  to Arena that can be measured point by point. Everything that exists only to
-  match the web interface is kept in one place that one change can delete (see
-  [The web-parity seam](#the-web-parity-seam)). Nothing permanent depends on it.
+- **A1. Arena is the reference for game flow, timing and layout.** The client
+  uses the regions and camera from its native layout profiles.
 - **A2. Three levels of crates: toolkit, game and app.** The toolkit level knows
   nothing about Magic: it names no type of `beryl_protocol`, no zone, no prompt
   and no card. A check holds the levels apart.
@@ -99,28 +95,26 @@ choosing which recordings run. The others are unchanged.
 
 ## Levels and crates
 
-The client core has fifteen crates in three levels, with one more that holds the
-web-parity code. A crate may depend on crates listed above it in its own level
-and on any crate of a lower level, and on nothing else in this table.
+The client core has fifteen crates in three levels. A crate may depend on crates
+listed above it in its own level and on crates of a lower level.
 
-| Crate          | Level    | What it holds                                                                                                           | Comes from, in `beryl_scene/src`                                                         |
-| -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `kit_base`     | toolkit  | Ids, geometry, paint, typography, `Pose`, curves, design tokens and the data store                                      | Shared types, `tokens.rs`, `data.rs`, curves and segments of `motion.rs`                 |
-| `kit_text`     | toolkit  | Shaping, line breaking, glyph requests                                                                                  | `text/`                                                                                  |
-| `kit_frame`    | toolkit  | `Frame`, `Draw` and `Material`: everything a renderer reads                                                             | `frame.rs`, `frame/`                                                                     |
-| `kit_ui`       | toolkit  | Elements, styles, flexbox and grid layout, widgets, focus, text entry, transitions, scrolling                           | `element/`, `layout/`, `widgets/`, `input.rs`                                            |
-| `kit_space`    | toolkit  | Objects in table space, the camera, tracks, containers and the arrangement solver                                       | `motion.rs`, `table/camera.rs`, the generic parts of `table/`                            |
-| `kit_fx`       | toolkit  | Effect primitives, the effect player, lines and outlines between nodes                                                  | `effects/`, the shapes of `light/`                                                       |
-| `kit_scene`    | toolkit  | The one tree: nodes, relations, the solve order, paint order, hit testing, input routing, the `Feature` trait           | `agent/hit.rs`, `pointer/`, and new code                                                 |
-| `kit_probe`    | toolkit  | The tree printout, locators, actions, the interface checks, toolkit stories                                             | `agent/`, the generic parts of `driver/`                                                 |
-| `game_table`   | game     | Each zone as a container, for each profile: rows, hands, the stack, piles, trays, badges                                | `table/`                                                                                 |
-| `game_play`    | game     | Scripts compiled to tracks, verbs, beats, life and mana floats, notices, sound cues, arrows and marks                   | `play/`, `verbs/`, `beat.rs`, `notice.rs`, `sound.rs`, `light/`, `art/`, parts of `hud/` |
-| `game_hud`     | game     | The game screen's features: prompts, life totals, the log, the inspector, the pile viewer, the opening hand, the result | `hud/`, `prompts/`, `inspect/`, `navigation.rs`, parts of `screens/`                     |
-| `game_manual`  | game     | The manual table and its lobby                                                                                          | `manual/`, parts of `screens/`                                                           |
-| `game_probe`   | game     | Game elements in recordings, table and feature stories, checks that read scripts                                        | `driver/element.rs`, `agent/steps.rs`, `testing.rs`, `probe.rs`                          |
-| `app_screens`  | app      | The screens with no game: start, settings, bug report, the story browser, testing                                       | `screens/` and the settings sheet's controls                                             |
-| `app_client`   | app      | `Client`: the feature registry, routing, session commands and the test driver that runs the client                      | `client/`, `command.rs`, `settings.rs`, parts of `driver/`                               |
-| `scaffold_web` | scaffold | Fitting rows and piles to the web interface's positions; deleted at the switch                                          | `table/web_fit.rs`                                                                       |
+| Crate         | Level   | What it holds                                                                                                           | Comes from, in `beryl_scene/src`                                                         |
+| ------------- | ------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `kit_base`    | toolkit | Ids, geometry, paint, typography, `Pose`, curves, design tokens and the data store                                      | Shared types, `tokens.rs`, `data.rs`, curves and segments of `motion.rs`                 |
+| `kit_text`    | toolkit | Shaping, line breaking, glyph requests                                                                                  | `text/`                                                                                  |
+| `kit_frame`   | toolkit | `Frame`, `Draw` and `Material`: everything a renderer reads                                                             | `frame.rs`, `frame/`                                                                     |
+| `kit_ui`      | toolkit | Elements, styles, flexbox and grid layout, widgets, focus, text entry, transitions, scrolling                           | `element/`, `layout/`, `widgets/`, `input.rs`                                            |
+| `kit_space`   | toolkit | Objects in table space, the camera, tracks, containers and the arrangement solver                                       | `motion.rs`, `table/camera.rs`, the generic parts of `table/`                            |
+| `kit_fx`      | toolkit | Effect primitives, the effect player, lines and outlines between nodes                                                  | `effects/`, the shapes of `light/`                                                       |
+| `kit_scene`   | toolkit | The one tree: nodes, relations, the solve order, paint order, hit testing, input routing, the `Feature` trait           | `agent/hit.rs`, `pointer/`, and new code                                                 |
+| `kit_probe`   | toolkit | The tree printout, locators, actions, the interface checks, toolkit stories                                             | `agent/`, the generic parts of `driver/`                                                 |
+| `game_table`  | game    | Each zone as a container, for each profile: rows, hands, the stack, piles, trays, badges                                | `table/`                                                                                 |
+| `game_play`   | game    | Scripts compiled to tracks, verbs, beats, life and mana floats, notices, sound cues, arrows and marks                   | `play/`, `verbs/`, `beat.rs`, `notice.rs`, `sound.rs`, `light/`, `art/`, parts of `hud/` |
+| `game_hud`    | game    | The game screen's features: prompts, life totals, the log, the inspector, the pile viewer, the opening hand, the result | `hud/`, `prompts/`, `inspect/`, `navigation.rs`, parts of `screens/`                     |
+| `game_manual` | game    | The manual table and its lobby                                                                                          | `manual/`, parts of `screens/`                                                           |
+| `game_probe`  | game    | Game elements in recordings, table and feature stories, checks that read scripts                                        | `driver/element.rs`, `agent/steps.rs`, `testing.rs`, `probe.rs`                          |
+| `app_screens` | app     | The screens with no game: start, settings, bug report, the story browser, testing                                       | `screens/` and the settings sheet's controls                                             |
+| `app_client`  | app     | `Client`: the feature registry, routing, session commands and the test driver that runs the client                      | `client/`, `command.rs`, `settings.rs`, parts of `driver/`                               |
 
 The supporting crates are `beryl_render`, `beryl_assets`, `beryl_host`,
 `beryl_inspect`, `beryl_pictures`, `beryl_record` and `beryl_3d`. `beryl_render`
@@ -134,10 +128,8 @@ Rules, each held by the `levels` check from `data/beryl3d/levels.json`:
   crate hands the toolkit plain values: an opaque key for each object, a label
   for the tree printout, a size.
 - **A game crate does not depend on an app crate.**
-- **Only `scaffold_web` may add citations to `ui/src`** or hold new values
-  copied from the web interface. The `web_citations` allowance counts the
-  remaining citations per crate and may only go down. The check restricts
-  dependencies on the scaffold to `app_client`.
+- **The `web_citations` allowance may only go down.** It counts remaining
+  citations to the web client per crate.
 - **At 12,000 source lines, look for a natural seam in a client-core crate.**
   Keeping a crate small makes it cheaper to rebuild after an edit and lets its
   `AGENTS.md` describe the whole crate in at most 60 lines. Crate boundaries
@@ -445,8 +437,6 @@ The guides are held to sizes:
 - Each crate has an `AGENTS.md` of at most 60 lines.
 - Each kind of thing that `just b3d new` writes has a recipe of at most 30
   lines.
-- The tools that compare Beryl 3D with the web interface are described in a
-  skill of their own, which is deleted at the switch.
 
 The `guides` check holds the sizes, and fails for a kind in the map with no
 recipe. Structure is recorded by the map, which cannot go stale, and the guides
@@ -497,26 +487,6 @@ the desktop window, the two phone programs and the windowless host that draws
 pictures. The hosts differ only in where frames go and where input comes from.
 The text tools keep their stub atlas, which answers every glyph the client asks
 for, because they draw nothing.
-
-## The web-parity seam
-
-Until the switch, Beryl 3D is fitted to the web interface (A1). All of that is
-kept where one change can remove it:
-
-- `rust/beryl3d/crates/scaffold_web/` holds the fit of rows and piles and the
-  card shear that matches the projected width of the web cards. Its
-  `rust/beryl3d/crates/scaffold_web/web-fit.json` holds the copied stage
-  measurements. Retiring the web client removes the workspace member and
-  dependency, `app_client`'s default `web-fit` feature, and its installation in
-  `Client::new`. The `RegionFit` hook in `game_table` defaults to the layout
-  profile's regions and the camera fitted to Arena.
-- `tools/src/beryl_tools/beryl3d/match/`, `data/beryl3d/match/`,
-  `data/beryl3d/web-match.json`, `data/beryl3d/timeline/`,
-  `data/beryl3d/timeline-parity.json`, `data/beryl3d/parity.json` and the
-  `web-match` skill, including its link in `.claude/skills/`.
-
-The counts in `web-match.json` may only go down. Retiring the web client removes
-this scaffold and the reference checks.
 
 ## Where a thing goes
 

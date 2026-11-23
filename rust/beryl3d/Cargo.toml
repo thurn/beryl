@@ -27,7 +27,6 @@ members = [
     "crates/game_probe",
     "crates/app_screens",
     "crates/app_client",
-    "crates/scaffold_web",
 ]
 
 [workspace.package]
@@ -87,7 +86,6 @@ app_screens = { path = "crates/app_screens" }
 # `Client`: the feature registry, routing, session commands, settings.
 app_client = { path = "crates/app_client" }
 # Fitting rows and piles to the web interface's positions; deleted at the switch.
-scaffold_web = { path = "crates/scaffold_web" }
 
 # Stores small erased action messages inline, in place of allocating each control's message.
 smallbox = "0.8.8"
@@ -143,12 +141,6 @@ opt-level = 3
 opt-level = 2
 [profile.dev.package.beryl_inspect]
 opt-level = 2
-# `just b3d match pixels` walks every pixel of two 3200 by 1800 pictures several times.
-# Unoptimized it took 2.2 CPU-seconds on a desktop target, and at opt-level 2 it takes 1.0; the
-# crate is small, so the program still rebuilds in about a second after an edit.
-[profile.dev.package.beryl_pictures]
-opt-level = 2
-
 # Every dependency at opt-level 1. None of them is rebuilt after an edit to this workspace's
 # crates, and optimized they make `b3d-render` 28 MB instead of 74, which links faster, passes
 # macOS's check of a new executable faster and draws its picture in 0.4 CPU-seconds instead of

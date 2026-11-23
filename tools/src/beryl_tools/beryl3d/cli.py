@@ -30,15 +30,12 @@ from . import (
     cargo,
     cargo_tests,
     clear_save,
-    compare,
     corpus,
     gate,
     live,
-    match,
     motion_film,
     new,
     pack,
-    parity,
     paths,
     perf,
     phone,
@@ -49,7 +46,6 @@ from . import (
     stand_in,
     table_pair,
     tiers,
-    timeline,
     trend,
     vm,
 )
@@ -437,7 +433,6 @@ MODULES: tuple[ModuleType, ...] = (
     table_pair,
     camera,
     vm,
-    parity,
     play,
     perf,
     trend,
@@ -446,7 +441,6 @@ MODULES: tuple[ModuleType, ...] = (
     bug,
     clear_save,
     new,
-    match,
 )
 
 OWN_COMMANDS: tuple[Command, ...] = (
@@ -510,7 +504,6 @@ OWN_COMMANDS: tuple[Command, ...] = (
         "film",
         "draws up to 24 frames of a recording as a grid in one PNG, a line of text per frame",
     ),
-    compare.COMMAND,
     Command(
         "levels",
         "reports upward imports and toolkit protocol counts during the client core split",
@@ -525,22 +518,6 @@ OWN_COMMANDS: tuple[Command, ...] = (
         lambda p: p.add_argument(
             "--update", action="store_true", help="lower the recorded counts"
         ),
-    ),
-    Command(
-        "timeline-parity",
-        "holds the web interface's and Beryl 3D's timelines of every recording to each other",
-        (
-            (
-                "just b3d timeline-parity --fixtures",
-                "the recorded fixtures only",
-            ),
-            (
-                "just b3d timeline-parity --fixtures --refresh-web",
-                "rewrite the committed web timelines the b3d-timeline check reads",
-            ),
-        ),
-        lambda args: timeline.run_parity(args),
-        timeline.parity_arguments,
     ),
     Command(
         "cargo",

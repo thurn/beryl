@@ -1,0 +1,44 @@
+{
+  "verbs": {
+    "fly": "verbs-zones",
+    "appear": "verbs-opening-theirs",
+    "vanish": "verbs-opening-theirs",
+    "emerge": "verbs-piles",
+    "flip": "verbs-reveal",
+    "tap": "verbs-zones",
+    "strike": "verbs-combat",
+    "streak": "verbs-zones",
+    "count": "verbs-place",
+    "set": "verbs-combat",
+    "showcase": "verbs-reveal",
+    "dwell": "verbs-piles",
+    "announce": "verbs-combat",
+    "point": "verbs-piles",
+    "mark": "verbs-piles",
+    "lift": "verbs-dig"
+  },
+  "effects": {
+    "glow": "verbs-zones",
+    "settle": "verbs-piles",
+    "dissolve": "verbs-opening-theirs",
+    "dim": "verbs-zones",
+    "blanch": "verbs-piles",
+    "cover": "verbs-reveal",
+    "impact": "verbs-combat",
+    "shake": "verbs-combat",
+    "trail": "verbs-combat",
+    "flash": "verbs-zones",
+    "beam": "verbs-piles",
+    "pulse": "verbs-piles",
+    "loss": "verbs-burn",
+    "gain": "verbs-combat"
+  },
+  "marks": {
+    "eligible": "first-target",
+    "selected": "shape-pick",
+    "suggested": "pay-default",
+    "paying": "pay-other",
+    "friendly-target": "target-own",
+    "hostile-target": "arrow-spell"
+  }
+}

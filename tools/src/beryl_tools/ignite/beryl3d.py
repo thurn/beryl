@@ -18,7 +18,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from .. import card_files, card_store, paths, set_groups
-from ..beryl3d import gate, pack, purity, timeline
+from ..beryl3d import gate, pack, purity
 from ..beryl3d import paths as b3d_paths
 from ..system import WINDOWS, exe
 from . import Listed, Result, beryl3d_validation, listed, report
@@ -483,92 +483,6 @@ def gate_run(checks: list[str]) -> list[Result]:
     return results
 
 
-# Timeline parity of the recorded fixtures.
-
-
-def fixtures() -> list[str]:
-    defined = json.loads(
-        (paths.REPO / "ui" / "fixtures.json").read_text(encoding="utf-8")
-    )
-    return [str(f["name"]) for f in defined["fixtures"]]
-
-
-def timeline_list() -> list[Listed]:
-    """One check per fixture, each reading the committed copy of the web interface's timeline
-    of it (`timeline.copy_path`) and the card files its recording plays. No check reads a file
-    of the web interface, so a change to the web interface runs none of them (docs/beryl-3d.md,
-    decision C17)."""
-    cards = cards_by_recording()
-    return [
-        Listed(
-            f"b3d-timeline:{f}",
-            [
-                timeline.copy_path(f).relative_to(paths.REPO).as_posix(),
-                *cards.get(f, []),
-            ],
-        )
-        for f in fixtures()
-    ]
-
-
-def timeline_results(
-    found: dict[str, timeline.Difference],
-    names: list[tuple[str, str]],
-    allowed: dict[str, int],
-    wanted: list[str],
-) -> list[Result]:
-    """Each wanted fixture's result: it fails when it has no committed web timeline, or when one
-    of its seats differs from that copy by more steps than data/beryl3d/timeline-parity.json
-    allows. A fixture missing from the recordings pack fails as differing, since its copy has
-    steps that Beryl 3D did not play; one whose copy and Beryl 3D's timeline are both empty
-    passes. `found` are the differences over every recording and seat in `names`."""
-    bad = {d.key: d for d in timeline.over_limit(found, allowed)}
-    results: list[Result] = []
-    for fixture in wanted:
-        keys = [timeline.key_of(n, s) for n, s in names if n == fixture]
-        check = f"b3d-timeline:{fixture}"
-        copy = timeline.copy_shown(fixture)
-        if not timeline.copy_path(fixture).is_file():
-            results.append(
-                Result(check, "fail", f"{copy} is missing; {timeline.REFRESH_WEB}")
-            )
-            continue
-        over = [bad[k] for k in keys if k in bad]
-        web_side = (
-            f"(the web side is the committed copy {copy}; if the web interface changed "
-            f"on purpose, {timeline.REFRESH_WEB})"
-        )
-        message = timeline.report(over, web_side) if over else ""
-        results.append(Result(check, "fail" if over else "pass", message))
-    return results
-
-
-def timeline_run(checks: list[str]) -> list[Result]:
-    """Compares Beryl 3D's timeline of each wanted fixture with the committed web timeline. It
-    starts no `node` and reads nothing under ui/ beyond the fixtures' definitions."""
-    wanted = asked("b3d-timeline", checks)
-    if not wanted:
-        return []
-    printed = b3d_text(["timeline", "--all"]).splitlines()
-    # The second line names the file of every recording's timeline (`timeline.native_lines`).
-    native_file = Path(printed[1])
-    native = timeline.parse(native_file.read_text().splitlines())
-    native_file.unlink()
-    web: timeline.Timelines = {}
-    for fixture in wanted:
-        web |= timeline.load_copy(fixture) or {}
-    names = sorted(
-        (recording, seat)
-        for recording, seat in (k.rsplit("/", 1) for k in native.keys() | web.keys())
-    )
-    scope = {timeline.key_of(n, s) for n, s in names if n in wanted}
-    found = timeline.differences(web, native, scope)
-    return timeline_results(found, names, timeline.load_allowlist(), wanted)
-
-
-# The instruction counts in the beryl3d-bench machine.
-
-
 def frame_counts_list() -> list[Listed]:
     from . import beryl3d_frame_counts
 
@@ -662,52 +576,15 @@ LIST_NEEDS_BUILD: frozenset[str] = frozenset(
         FRAME_LIMITS_FAMILY,
         "b3d-every-tick",
         "b3d-gate",
-        "b3d-timeline",
         "b3d-frame-counts",
-        "b3d-web-match",
     }
 )
-
-
-# Import family-specific adapters only when their family runs.
-def web_match_list() -> list[Listed]:
-    from . import beryl3d_match
-
-    return beryl3d_match.list_web_match(cards_by_recording())
-
-
-def web_match_run(checks: list[str]) -> list[Result]:
-    from . import beryl3d_match
-
-    return beryl3d_match.run_web_match(checks)
-
-
-def web_drift_run(checks: list[str]) -> list[Result]:
-    from . import beryl3d_match
-
-    return beryl3d_match.run_web_drift(checks)
-
-
-def timeline_drift_run(checks: list[str]) -> list[Result]:
-    from . import beryl3d_timeline_drift
-
-    return beryl3d_timeline_drift.run_timeline_drift(checks)
 
 
 def frame_trend_run(checks: list[str]) -> list[Result]:
     from . import beryl3d_frame_trend
 
     return beryl3d_frame_trend.run(checks)
-
-
-def next_checks(family: str) -> list[dict[str, str]]:
-    if family == "b3d-web-drift":
-        from . import beryl3d_match
-
-        return beryl3d_match.next_web_drift()
-    from . import beryl3d_timeline_drift
-
-    return beryl3d_timeline_drift.next_timeline_drift()
 
 
 LISTS: dict[str, Callable[[], list[Listed]]] = {
@@ -726,12 +603,8 @@ LISTS: dict[str, Callable[[], list[Listed]]] = {
     FRAME_LIMITS_FAMILY: frame_limits_list,
     "b3d-every-tick": lambda: interface_list("b3d-every-tick"),
     "b3d-gate": gate_list,
-    "b3d-timeline": timeline_list,
     "b3d-frame-counts": frame_counts_list,
-    "b3d-web-match": lambda: web_match_list(),
     # An exploration family's checks come from `next`.
-    "b3d-web-drift": lambda: [],
-    "b3d-timeline-drift": lambda: [],
     "b3d-frame-trend": lambda: [],
 }
 
@@ -744,11 +617,7 @@ RUNS: dict[str, Callable[[list[str]], list[Result]]] = {
     FRAME_LIMITS_FAMILY: frame_limits_run,
     "b3d-every-tick": lambda c: interface_run("b3d-every-tick", c, ["--every-tick"]),
     "b3d-gate": gate_run,
-    "b3d-timeline": timeline_run,
     "b3d-frame-counts": frame_counts_run,
-    "b3d-web-match": lambda c: web_match_run(c),
-    "b3d-web-drift": lambda c: web_drift_run(c),
-    "b3d-timeline-drift": timeline_drift_run,
     "b3d-frame-trend": frame_trend_run,
 }
 
@@ -773,14 +642,6 @@ def main(args: list[str]) -> int:
                 if built != 0:
                     return built
             listed(LISTS[family]())
-            return 0
-        case [("b3d-web-drift" | "b3d-timeline-drift") as family, "next"]:
-            if not exe(DEBUG / "record").is_file():
-                built = build(to_stderr=True)
-                if built != 0:
-                    return built
-            for line in next_checks(family):
-                print(json.dumps(line), flush=True)
             return 0
         case [family, "run", *checks] if family in RUNS:
             results = RUNS[family](checks)

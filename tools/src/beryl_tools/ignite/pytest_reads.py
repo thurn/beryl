@@ -3,7 +3,7 @@ input hash covers them.
 
 A pytest check's inputs (`list_checks` in `beryl_tools.ignite.python`) are found statically: the
 test's file, the modules it imports and its conftest files. A module can also open a data file
-at run time, as `beryl_tools.beryl3d.match.support` reads `data/beryl3d/match/supported.json`.
+at run time, as `beryl_tools.beryl3d.motion_film` reads `data/beryl3d/motion-recordings.json`.
 No import names that file, so before this record existed the check's input hash did not change
 when the file did, and Ignite's gate reused a pass from before the change.
 
