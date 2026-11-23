@@ -322,9 +322,8 @@ fn every_card_in_the_store_has_a_module() {
     Store::parse(&beryl_test_files::read_to_string("data/card-store.tsv").unwrap()).unwrap();
 }
 
-/// Each face's printed characteristics come from its record: a later face names itself, as
-/// does the face of a card or token of one face, `*` is 0, and a token is the printing its card
-/// links.
+/// Each generated face has the name and characteristics from its record. The power `*` starts
+/// at 0, and a card's token uses the printing that its record links.
 #[test]
 fn faces_and_tokens_start_from_their_records() {
     let scratch = Scratch::new("printed");
@@ -335,27 +334,68 @@ fn faces_and_tokens_start_from_their_records() {
     );
     scratch.write("apc/fire_ice.rs", "printed::FIRE printed::ICE");
     let source = crate_source(&scratch.0, &store).unwrap();
-    for line in [
-        "pub const ADELINE: beryl_card::Face = beryl_card::Face::EMPTY\n    \
-         .named(\"Adeline\")\n    \
-         .cost(beryl_card::mana(\"{1}{W}{W}\"))\n    \
-         .supertypes(beryl_card::Supertypes::LEGENDARY)\n    \
-         .types(beryl_card::Types::CREATURE)\n    \
-         .subtypes(beryl_card::Subtypes::of(&[beryl_card::Subtype::Human, \
-         beryl_card::Subtype::Knight]))\n    \
-         .colors(beryl_card::Colors::WHITE)\n    \
-         .power_toughness(0, 4);",
-        "pub const FIRE: beryl_card::Face = beryl_card::Face::EMPTY\n    .cost(",
-        "pub const ICE: beryl_card::Face = beryl_card::Face::EMPTY\n    .named(\"Ice\")\n",
-        "pub const Fire: beryl_card::definition::Shape = beryl_card::definition::Shape::Split { fuse: false };",
-        "pub const HUMAN_TOKEN: beryl_card::Face = beryl_card::Face::EMPTY\n    \
-         .named(\"Human Token\")\n    \
-         .types(beryl_card::Types::CREATURE)\n    \
-         .subtypes(beryl_card::Subtypes::of(&[beryl_card::Subtype::Human]))\n    \
-         .colors(beryl_card::Colors::RED)",
-    ] {
-        assert!(source.contains(line), "no {line:?} in:\n{source}");
+    let faces: &[(&str, &[&str])] = &[
+        (
+            "ADELINE",
+            &[
+                ".named(\"Adeline\")",
+                ".cost(beryl_card::mana(\"{1}{W}{W}\"))",
+                ".supertypes(beryl_card::Supertypes::LEGENDARY)",
+                ".types(beryl_card::Types::CREATURE)",
+                ".subtypes(beryl_card::Subtypes::of(&[beryl_card::Subtype::Human, \
+                 beryl_card::Subtype::Knight]))",
+                ".colors(beryl_card::Colors::WHITE)",
+                ".power_toughness(0, 4)",
+            ],
+        ),
+        (
+            "FIRE",
+            &[
+                ".named(\"Fire\")",
+                ".cost(beryl_card::mana(\"{1}{R}\"))",
+                ".types(beryl_card::Types::INSTANT)",
+                ".colors(beryl_card::Colors::RED)",
+            ],
+        ),
+        (
+            "ICE",
+            &[
+                ".named(\"Ice\")",
+                ".cost(beryl_card::mana(\"{1}{U}\"))",
+                ".types(beryl_card::Types::INSTANT)",
+                ".colors(beryl_card::Colors::BLUE)",
+            ],
+        ),
+        (
+            "HUMAN_TOKEN",
+            &[
+                ".named(\"Human Token\")",
+                ".types(beryl_card::Types::CREATURE)",
+                ".subtypes(beryl_card::Subtypes::of(&[beryl_card::Subtype::Human]))",
+                ".colors(beryl_card::Colors::RED)",
+                ".power_toughness(1, 1)",
+            ],
+        ),
+    ];
+    for &(constant, fields) in faces {
+        let declaration = format!("pub const {constant}: beryl_card::Face =");
+        let (_, initializer) = source
+            .split_once(&declaration)
+            .unwrap_or_else(|| panic!("no {declaration:?} in:\n{source}"));
+        let (initializer, _) = initializer.split_once(';').unwrap();
+        let mut lines = initializer.lines().map(str::trim);
+        assert_eq!(lines.next(), Some("beryl_card::Face::EMPTY"), "{constant}");
+        for &field in fields {
+            assert!(
+                lines.clone().any(|line| line == field),
+                "{constant} has no {field:?} in:\n{initializer}"
+            );
+        }
     }
+    assert!(source.contains(concat!(
+        "pub const Fire: beryl_card::definition::Shape = ",
+        "beryl_card::definition::Shape::Split { fuse: false };"
+    )));
 
     // With no card of the crate to choose a printing, the store's must agree.
     let shared = Scratch::new("printed-shared");

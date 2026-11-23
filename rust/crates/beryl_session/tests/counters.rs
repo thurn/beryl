@@ -5,7 +5,7 @@
 
 use beryl_card_store::STORE;
 use beryl_cards::{CARDS, names};
-use beryl_engine::card::{Ability, Behavior, SpecIx, Takes};
+use beryl_engine::card::{Ability, Behavior, FaceIx, SpecIx, Takes};
 
 /// Whether `ability` counters what is chosen for one of its targets.
 fn counters(ability: &Ability) -> bool {
@@ -20,10 +20,18 @@ fn a_card_counters_its_target_exactly_where_its_text_says_so() {
     let (mut read, mut declared) = (Vec::new(), Vec::new());
     for card in CARDS.cards() {
         let record = STORE.card(card.name).expect("a record for every card");
-        assert_eq!(card.faces.len(), record.faces.len(), "{}", card.name);
-        for (face, printed) in card.faces.iter().zip(&record.faces) {
+        assert_eq!(
+            card.printed_face_ixs().count(),
+            record.faces.len(),
+            "{}",
+            card.name
+        );
+        let mut printed_counters = false;
+        for (index, printed) in card.printed_face_ixs().zip(&record.faces) {
             let text = printed.oracle_text.as_deref().unwrap_or_default();
             let says = text.to_lowercase().contains("counter target");
+            printed_counters |= says;
+            let face = card.face(index);
             let countering: Vec<&Ability> = face.abilities.iter().filter(|a| counters(a)).collect();
             assert_eq!(!countering.is_empty(), says, "{}: {text:?}", printed.name);
             for ability in countering {
@@ -32,6 +40,15 @@ fn a_card_counters_its_target_exactly_where_its_text_says_so() {
                     Behavior::Custom(_) => declared.push(card.name),
                 }
             }
+        }
+        if card.shape.has_fuse() {
+            // The combined spell has both halves' rules text and no separate Oracle record.
+            assert_eq!(
+                card.face(FaceIx::FUSED).abilities.iter().any(counters),
+                printed_counters,
+                "{} cast fused",
+                card.name
+            );
         }
     }
     // Every card of the pool that counters says so as data: none declares it beside a body.
