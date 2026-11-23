@@ -74,7 +74,7 @@
     }
   },
   "tests": {
-    "median_frames": 124,
-    "most_frames": 5989
+    "median_audit_frames": 50,
+    "most_audit_frames": 2400
   }
 }

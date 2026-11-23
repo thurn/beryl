@@ -28,6 +28,7 @@ fn outcome(recording: &str, rules: &[Rule]) -> Outcome {
             })
             .collect(),
         frames: 1,
+        visibility_only_frames: 0,
         judged: kit_probe::agent::Judged::default(),
         error: None,
         seconds: 0.0,

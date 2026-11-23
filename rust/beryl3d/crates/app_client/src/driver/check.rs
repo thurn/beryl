@@ -103,6 +103,36 @@ struct CheckSchedule {
     all: BTreeSet<u64>,
 }
 
+impl CheckSchedule {
+    /// Counts frames in the schedule that are needed only to sample visibility. A sample
+    /// must fall on the replay clock and inside a judged step's visibility window.
+    fn visibility_only_frames(&self, tick: u64, end: u64) -> usize {
+        let mut windows: Vec<_> = self
+            .judged
+            .iter()
+            .map(|step| (step.from, step.until))
+            .collect();
+        windows.sort_unstable();
+        let mut windows = windows.into_iter().peekable();
+        let mut until = 0;
+        self.all
+            .iter()
+            .copied()
+            .filter(|&time| {
+                while let Some((_, ends)) = windows.next_if(|&(from, _)| from <= time) {
+                    until = until.max(ends);
+                }
+                time < until
+                    && time <= end
+                    && (time.is_multiple_of(tick) || time == end)
+                    && self.sampled.contains(&time)
+                    && !self.checked.contains(&time)
+                    && !self.naming.contains(&time)
+            })
+            .count()
+    }
+}
+
 impl Page {
     pub(super) fn context(&self) -> Context {
         let data = self.client.data();
@@ -128,14 +158,16 @@ impl Page {
         times(&played.given_at, &played.client, end)
     }
 
-    /// Counts the frames an ordinary interface audit schedules over this recording.
+    /// Counts all scheduled frames and the subset needed only for visibility sampling.
     /// Playback determines the schedule before the audit draws those frames for its probes.
     #[must_use]
-    pub fn scheduled_frame_count(&self) -> usize {
+    pub fn scheduled_frame_counts(&self) -> (usize, usize) {
         let (played, end) = self.played();
-        self.check_schedule(&played, end, Mode::AtCheckTimes)
-            .all
-            .len()
+        let schedule = self.check_schedule(&played, end, Mode::AtCheckTimes);
+        (
+            schedule.all.len(),
+            schedule.visibility_only_frames(self.tick.0, end),
+        )
     }
 
     fn check_schedule(&self, played: &Page, end: u64, mode: Mode) -> CheckSchedule {
@@ -173,6 +205,11 @@ impl Page {
     /// on the frames `mode` names, and returns the faults and how many frames were evaluated.
     pub fn check_all(&mut self, mode: Mode) -> Checked {
         let (played, end) = self.played();
+        let schedule = self.check_schedule(&played, end, mode);
+        let visibility_only_frames = match mode {
+            Mode::AtCheckTimes => schedule.visibility_only_frames(self.tick.0, end),
+            Mode::EveryTick => 0,
+        };
         let CheckSchedule {
             checked,
             found,
@@ -180,7 +217,7 @@ impl Page {
             naming,
             sampled,
             all,
-        } = self.check_schedule(&played, end, mode);
+        } = schedule;
         let history = played.client.history();
         let audit = played.client.data().audit;
         let mut tally = agent::Judged::default();
@@ -261,6 +298,7 @@ impl Page {
         Checked {
             faults,
             frames: all.len(),
+            visibility_only_frames,
             line_pairs,
             judged: tally,
         }
@@ -623,4 +661,37 @@ fn unique(faults: Vec<Fault>) -> Vec<Fault> {
         }
     }
     kept
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_visibility_samples_on_the_clock_and_in_a_step_discount_audit_frames() {
+        let judged = |from, until| Judged {
+            script: 0,
+            step: 0,
+            from,
+            to: until,
+            until,
+            samples: Vec::new(),
+            subject: None,
+            evaluated: false,
+            under_opening: false,
+        };
+        let mut schedule = CheckSchedule {
+            checked: BTreeSet::from([10]),
+            found: Vec::new(),
+            judged: vec![judged(31, 40), judged(10, 30), judged(12, 18)],
+            naming: BTreeSet::from([15]),
+            sampled: BTreeSet::from([5, 10, 12, 15, 20, 30, 34, 35, 40]),
+            all: BTreeSet::from([5, 10, 12, 15, 20, 25, 30, 34, 35, 40]),
+        };
+        // The ordinary tick at 20 and the final partial tick at 34 are visibility-only.
+        // Idle, off-clock and past-end samples, plus checks and fault names, are charged.
+        assert_eq!(schedule.visibility_only_frames(5, 34), 2);
+        schedule.all.remove(&34);
+        assert_eq!(schedule.visibility_only_frames(5, 34), 1);
+    }
 }

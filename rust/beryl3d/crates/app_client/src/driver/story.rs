@@ -121,6 +121,7 @@ mod playback {
             Some(Checked {
                 faults: game_probe::agent::check(frame, &context),
                 frames: 1,
+                visibility_only_frames: 0,
                 line_pairs: 0,
                 judged,
             })

@@ -31,9 +31,11 @@ Run `just b3d data` to validate it, including inspection-only profiles.
   corner measurements that `just b3d camera-fit` fits to the desktop camera.
 - `effects/` defines runtime drawing layers. The shared effect names and
   durations live in `data/ui-conventions.json`.
-- `gates.json` holds material shader limits and interface test frame limits.
-  `test-faults.json` holds the allowed fault counts by test and rule. A lower
-  count also fails until `just b3d test --update` records it.
+- `gates.json` holds material shader limits and the interface audit's frame
+  limits. The limits count full frame checks and fault diagnostics.
+  Visibility-only samples follow each judged step's sampling window and the
+  replay clock. `test-faults.json` holds the allowed fault counts by test and
+  rule. A lower count also fails until `just b3d test --update` records it.
 - `verbs.json`, `catch-up.json` and `slide.json` tune verb motion, queued
   scripts and table regrouping. `pointer.json` and `audit.json` tune input and
   interface checks.

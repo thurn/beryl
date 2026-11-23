@@ -220,12 +220,29 @@ fn frame_limits(options: &Options, prefix: &str) -> Result<Printed, Usage> {
     let over = limits.over(&outcomes, true);
     let fault = !over.is_empty();
     let tests = outcomes.len();
+    let fixture_audit_median = runner::fixture_audit_median(&outcomes).unwrap_or(0);
+    let most_audit_frames = outcomes
+        .iter()
+        .map(Outcome::audit_frames)
+        .max()
+        .unwrap_or(0);
     let text = if options.json {
-        json!({"tests": tests, "over_limits": over}).to_string()
+        json!({
+            "tests": tests,
+            "over_limits": over,
+            "fixture_median_frames": runner::fixture_median(&outcomes),
+            "most_frames": Frames::of(&outcomes).map(|frames| frames.most),
+            "fixture_median_audit_frames": fixture_audit_median,
+            "most_audit_frames": most_audit_frames,
+        })
+        .to_string()
     } else if fault {
         over.join("\n")
     } else {
-        format!("{tests} tests within frame limits")
+        format!(
+            "{tests} tests within frame limits (fixture median {fixture_audit_median}, \
+             maximum {most_audit_frames} audit frames)"
+        )
     };
     Ok(Printed { text, fault })
 }

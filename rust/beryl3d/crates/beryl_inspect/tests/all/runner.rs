@@ -288,6 +288,7 @@ fn outcome(recording: &str, frames: usize) -> Outcome {
         },
         faults: Vec::new(),
         frames,
+        visibility_only_frames: 0,
         judged: kit_probe::agent::Judged::default(),
         error: None,
         seconds: 0.0,
@@ -297,18 +298,20 @@ fn outcome(recording: &str, frames: usize) -> Outcome {
 #[test]
 fn the_frame_limits_name_what_is_over_them() {
     let limits = Limits {
-        median_frames: 20,
-        most_frames: 50,
+        median_audit_frames: 20,
+        most_audit_frames: 50,
     };
-    let outcomes = [outcome("a", 10), outcome("b", 30), outcome("c", 60)];
+    let mut long_flight = outcome("a", 100);
+    long_flight.visibility_only_frames = 90;
+    let outcomes = [long_flight, outcome("b", 30), outcome("c", 60)];
     let over = limits.over(&outcomes, true);
     assert_eq!(over.len(), 2, "{over:?}");
     assert!(
-        over[0].contains("median test of a recorded fixture evaluates 30 frames"),
+        over[0].contains("median recorded fixture test evaluates 30 audit frames"),
         "{over:?}"
     );
     assert!(
-        over[1].starts_with("b3d:c/you/1600x900 evaluates 60 frames"),
+        over[1].starts_with("b3d:c/you/1600x900 evaluates 60 audit frames"),
         "{over:?}"
     );
     // A prefix's tests are held to the most, not the median.
@@ -321,8 +324,8 @@ fn the_median_frame_limit_leaves_out_card_spec_moments() {
     // Card scenarios add spec moments without running Beryl 3D's lanes, so they must not move
     // the median that every Beryl 3D push is held to.
     let limits = Limits {
-        median_frames: 20,
-        most_frames: 500,
+        median_audit_frames: 20,
+        most_audit_frames: 500,
     };
     let fixtures = [outcome("a", 10), outcome("b", 20), outcome("c", 20)];
     let moments = (0..10).map(|n| outcome(&format!("card/moment-{n}"), 400));
@@ -349,6 +352,12 @@ fn the_frame_limit_runner_counts_the_frames_the_full_audit_evaluates() {
         assert!(scheduled.error.is_none(), "{:?}", scheduled.error);
         assert!(full.frames > 0, "{}", full.test.name());
         assert_eq!(full.frames, scheduled.frames, "{}", full.test.name());
+        assert_eq!(
+            full.visibility_only_frames,
+            scheduled.visibility_only_frames,
+            "{}",
+            full.test.name()
+        );
     }
     assert_eq!(counts.len(), tests.len());
 }

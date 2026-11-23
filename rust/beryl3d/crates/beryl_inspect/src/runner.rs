@@ -85,8 +85,10 @@ pub struct Outcome {
     pub test: Test,
     /// Every fault, each once (see `Page::check_all`).
     pub faults: Vec<Fault>,
-    /// How many frames the frame checks ran on.
+    /// How many frames the audit drew.
     pub frames: usize,
+    /// How many frames were needed only to sample visibility during a judged step.
+    pub visibility_only_frames: usize,
     /// How much each rule judged.
     pub judged: Judged,
     /// Why the test could not run: its recording could not be read or recorded, or the client
@@ -100,6 +102,12 @@ impl Outcome {
     #[must_use]
     pub fn passed(&self) -> bool {
         self.error.is_none() && self.faults.is_empty()
+    }
+
+    /// Frames charged to the interface audit budget.
+    #[must_use]
+    pub fn audit_frames(&self) -> usize {
+        self.frames - self.visibility_only_frames
     }
 }
 
@@ -187,11 +195,13 @@ pub fn run_until(tests: &[Test], mode: Mode, stop: Option<Instant>) -> Vec<Outco
 #[must_use]
 pub fn frame_counts(tests: &[Test]) -> Vec<Outcome> {
     run_with(tests, None, |test| {
-        play(test, Mode::AtCheckTimes, |page| Checked {
-            frames: page.scheduled_frame_count(),
-            faults: Vec::new(),
-            line_pairs: 0,
-            judged: Judged::default(),
+        play(test, Mode::AtCheckTimes, |page| {
+            let (frames, visibility_only_frames) = page.scheduled_frame_counts();
+            Checked {
+                frames,
+                visibility_only_frames,
+                ..Checked::default()
+            }
         })
     })
 }
@@ -237,7 +247,7 @@ fn play(test: Test, mode: Mode, check_page: impl FnOnce(Page) -> Checked) -> Out
         }
     })
     .and_then(|ran| ran);
-    let (faults, frames, judged, error) = match ran {
+    let (faults, frames, visibility_only_frames, judged, error) = match ran {
         Ok(checked) => {
             let mut judged = checked.judged;
             for rule in Rule::ALL {
@@ -250,16 +260,18 @@ fn play(test: Test, mode: Mode, check_page: impl FnOnce(Page) -> Checked) -> Out
                     .filter(|fault| stress::audited(&test.recording, fault.rule))
                     .collect(),
                 checked.frames,
+                checked.visibility_only_frames,
                 judged,
                 None,
             )
         }
-        Err(why) => (Vec::new(), 0, Judged::default(), Some(why)),
+        Err(why) => (Vec::new(), 0, 0, Judged::default(), Some(why)),
     };
     Outcome {
         test,
         faults,
         frames,
+        visibility_only_frames,
         judged,
         error,
         seconds: started.elapsed().as_secs_f64(),
@@ -402,14 +414,15 @@ pub fn each<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R>
         .collect()
 }
 
-/// The limits on the frames a test evaluates at its check times: `tests` in
-/// `data/beryl3d/gates.json`.
+/// Limits on audit frames other than visibility-only ticks. A longer flight entails more
+/// visibility samples at the same replay cadence. The budget holds full frame checks and
+/// fault diagnostics to a fixed count.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// The median over the tests of the recorded fixtures ([`fixture_median`]).
-    pub median_frames: usize,
-    /// The most any one test evaluates.
-    pub most_frames: usize,
+    /// The median audit frame count over the tests of the recorded fixtures.
+    pub median_audit_frames: usize,
+    /// The most audit frames any one test evaluates.
+    pub most_audit_frames: usize,
 }
 
 impl Limits {
@@ -431,8 +444,8 @@ impl Limits {
                 .ok_or_else(|| format!("{}: `tests.{key}` is not a count", path.display()))
         };
         Ok(Self {
-            median_frames: limit("median_frames")?,
-            most_frames: limit("most_frames")?,
+            median_audit_frames: limit("median_audit_frames")?,
+            most_audit_frames: limit("most_audit_frames")?,
         })
     }
 
@@ -440,23 +453,28 @@ impl Limits {
     /// that could not run are left out. The median is held only when `outcomes` are every test.
     #[must_use]
     pub fn over(&self, outcomes: &[Outcome], every_test: bool) -> Vec<String> {
-        let Some(frames) = Frames::of(outcomes) else {
-            return Vec::new();
-        };
         let mut over = Vec::new();
-        let median = fixture_median(outcomes);
-        if let Some(median) = median.filter(|m| every_test && *m > self.median_frames) {
+        let median = fixture_median_by(outcomes, Outcome::audit_frames);
+        if let Some(median) = median.filter(|m| every_test && *m > self.median_audit_frames) {
             over.push(format!(
-                "the median test of a recorded fixture evaluates {median} frames, over the \
-                 limit of {} in data/beryl3d/gates.json (tests.median_frames)",
-                self.median_frames
+                "the median recorded fixture test evaluates {median} audit frames, over the \
+                 limit of {} in data/beryl3d/gates.json (tests.median_audit_frames)",
+                self.median_audit_frames
             ));
         }
-        if frames.most > self.most_frames {
+        let costliest = outcomes
+            .iter()
+            .filter(|outcome| outcome.error.is_none())
+            .max_by_key(|outcome| outcome.audit_frames());
+        if let Some(costliest) =
+            costliest.filter(|outcome| outcome.audit_frames() > self.most_audit_frames)
+        {
             over.push(format!(
-                "{} evaluates {} frames, over the limit of {} in data/beryl3d/gates.json \
-                 (tests.most_frames)",
-                frames.costliest, frames.most, self.most_frames
+                "{} evaluates {} audit frames, over the limit of {} in data/beryl3d/gates.json \
+                 (tests.most_audit_frames)",
+                costliest.test.name(),
+                costliest.audit_frames(),
+                self.most_audit_frames
             ));
         }
         over
@@ -470,10 +488,20 @@ impl Limits {
 /// scenario, and the next Beryl 3D change to be pushed failed on a limit it had not moved.
 #[must_use]
 pub fn fixture_median(outcomes: &[Outcome]) -> Option<usize> {
+    fixture_median_by(outcomes, |outcome| outcome.frames)
+}
+
+/// The fixture median for the full frame checks and fault diagnostics.
+#[must_use]
+pub fn fixture_audit_median(outcomes: &[Outcome]) -> Option<usize> {
+    fixture_median_by(outcomes, Outcome::audit_frames)
+}
+
+fn fixture_median_by(outcomes: &[Outcome], frames: impl Fn(&Outcome) -> usize) -> Option<usize> {
     let mut counts: Vec<usize> = outcomes
         .iter()
         .filter(|o| o.error.is_none() && !o.test.recording.contains('/'))
-        .map(|o| o.frames)
+        .map(frames)
         .collect();
     counts.sort_unstable();
     counts.get(counts.len() / 2).copied()

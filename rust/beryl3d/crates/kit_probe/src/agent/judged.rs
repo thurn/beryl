@@ -17,6 +17,8 @@ pub struct Checked {
     pub faults: Vec<Fault>,
     /// How many frames were drawn, including frames drawn to sample motion or name a fault.
     pub frames: usize,
+    /// Replay ticks drawn solely to sample visibility during a judged step.
+    pub visibility_only_frames: usize,
     /// Pairs of consecutive checked frames sharing an arrow for "lines hold".
     pub line_pairs: usize,
     /// How much each rule judged.

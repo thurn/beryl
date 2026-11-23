@@ -26,8 +26,13 @@ const SIZE: Size = Size {
 /// to the battlefield, a Soldier token appears, and the Angel's sickness wears off as the Island
 /// taps. The script starts 400 ms in, when the recorded reply to the first view is given.
 fn page() -> Page {
+    page_with_flight_duration(420.0)
+}
+
+fn page_with_flight_duration(duration: f64) -> Page {
     let (start, cards) = before();
-    let (mut after, timings) = three_beats(&start, cards);
+    let (mut after, mut timings) = three_beats(&start, cards);
+    timings[0].duration = duration;
     after
         .view
         .script
@@ -102,6 +107,25 @@ fn the_three_beat_script_has_no_fault() {
     let checked = page().check_all(Mode::AtCheckTimes);
     let printed: Vec<String> = checked.faults.iter().map(printed).collect();
     assert!(printed.is_empty(), "{}", printed.join("\n"));
+}
+
+#[test]
+fn extending_a_flight_adds_visibility_samples_with_the_same_audit_work() {
+    let short = page().check_all(Mode::AtCheckTimes);
+    let mut long = page_with_flight_duration(1_429.0);
+    let checked = long.check_all(Mode::AtCheckTimes);
+    assert!(checked.visibility_only_frames > short.visibility_only_frames);
+    assert_eq!(
+        checked.frames - checked.visibility_only_frames,
+        short.frames - short.visibility_only_frames
+    );
+
+    long.plant(Planted::Unseen, MID_FLIGHT)
+        .expect("a flight plays then");
+    let sparse = long.check_all(Mode::AtCheckTimes);
+    let every = long.check_all(Mode::EveryTick);
+    assert_eq!(of(&sparse, Rule::StepShown).len(), 1);
+    assert_eq!(of(&sparse, Rule::StepShown), of(&every, Rule::StepShown));
 }
 
 #[test]
