@@ -20,13 +20,14 @@ impl Table {
     #[must_use]
     pub fn with_region_fit(data: Arc<Data>, window: Window, fit: RegionFit) -> Self {
         let window = data.profiles.resolve_window(window);
-        let layout = Profile::for_window(&data.profiles, window)
-            .with_region_fit(fit)
-            .layout();
+        let profile = Profile::for_window(&data.profiles, window).with_region_fit(fit);
+        let layout = profile.layout();
+        let screen_projection = profile.screen_projection();
         let camera = layout.fit(window);
         Self {
             data,
             layout,
+            screen_projection,
             row_fits: RowFits::new(&layout, &camera),
             camera,
             scroll: Scroll::default(),
@@ -47,16 +48,17 @@ impl Table {
     #[must_use]
     pub fn profile(&self) -> Profile<'_> {
         Profile::for_window(&self.data.profiles, self.camera.window)
-            .with_region_fit(self.layout.region_fit)
+            .with_fitted_projection(self.layout.region_fit, self.screen_projection)
     }
 
     /// Fits the camera to a window of a new shape, in the layout that shape takes, and
     /// recomputes every resting place.
     pub fn resize(&mut self, window: Window, view: Option<&PlayerView>) {
         let window = self.data.profiles.resolve_window(window);
-        self.layout = Profile::for_window(&self.data.profiles, window)
-            .with_region_fit(self.layout.region_fit)
-            .layout();
+        let profile = Profile::for_window(&self.data.profiles, window)
+            .with_region_fit(self.layout.region_fit);
+        self.screen_projection = profile.screen_projection();
+        self.layout = profile.layout();
         if self.hand_away {
             // The stage fills the height of the window, so two normalized device units span
             // its full height in stage points.

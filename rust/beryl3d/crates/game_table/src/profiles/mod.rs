@@ -23,17 +23,20 @@ pub struct Profile<'a> {
     fallback: &'a ProfileData,
     window: Window,
     region_fit: RegionFit,
+    screen_projection: ScreenProjection,
 }
 
 impl<'a> Profile<'a> {
     /// Selects the profile using logical points, independent of pixel density.
     #[must_use]
     pub fn for_window(profiles: &'a Profiles, window: Window) -> Self {
+        let region_fit = RegionFit::default();
         Self {
             data: profiles.for_size(window.size),
             fallback: profiles.fallback(),
             window,
-            region_fit: RegionFit::default(),
+            region_fit,
+            screen_projection: region_fit.screen(window),
         }
     }
 
@@ -49,15 +52,25 @@ impl<'a> Profile<'a> {
 
     /// Supplies a policy for fitting the table's regions.
     #[must_use]
-    pub fn with_region_fit(mut self, fit: RegionFit) -> Self {
+    pub fn with_region_fit(self, fit: RegionFit) -> Self {
+        self.with_fitted_projection(fit, fit.screen(self.window))
+    }
+
+    /// Reuses the screen projection already fitted for this window.
+    pub(crate) fn with_fitted_projection(
+        mut self,
+        fit: RegionFit,
+        screen_projection: ScreenProjection,
+    ) -> Self {
         self.region_fit = fit;
+        self.screen_projection = screen_projection;
         self
     }
 
     /// The projection used by screen elements laid out in reference coordinates.
     #[must_use]
     pub fn screen_projection(self) -> ScreenProjection {
-        self.region_fit.screen(self.window)
+        self.screen_projection
     }
 
     /// Fits the table's containers for this window.

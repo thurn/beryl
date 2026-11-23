@@ -20,7 +20,7 @@ use super::shadows::Floors;
 use super::shown::Shown;
 use super::tray::TrayMotion;
 use super::tray_layout::Held;
-use super::{Camera, Layout, Place, PlayerAnchor, takes_pointer};
+use super::{Camera, Layout, Place, PlayerAnchor, ScreenProjection, takes_pointer};
 use crate::faces::{CARD_BACK, Faces};
 use crate::table::labels::{COPY_NOTE, FACE_NOTE, PHASED_OUT, PICKED, TAPPED};
 use kit_base::data::Data;
@@ -121,6 +121,8 @@ pub struct Table {
     data: Arc<Data>,
     /// The selected profile fitted to the window.
     layout: Layout,
+    /// The reference stage projection, shared by the table and screen elements.
+    screen_projection: ScreenProjection,
     camera: Camera,
     row_fits: RowFits,
     scroll: Scroll,
