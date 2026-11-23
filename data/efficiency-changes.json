@@ -850,5 +850,10 @@
     "label": "The fuzz prebuild compiles only the integration binaries its searches run.",
     "metric": "bead.core-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Bug-report triage assigns one lead to investigate a likely shared cause and gives that worker the original cases to verify.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

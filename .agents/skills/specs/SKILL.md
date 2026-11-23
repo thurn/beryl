@@ -294,7 +294,7 @@ Fix it in this order, preferring the general fix:
    or a zone, never to one card, so fix it where every card with that shape gets
    it, and audit a few other cards that open it. A wrong motion, arrow or combat
    line is the script's (the session's builder) or the stage's
-   (`ui/src/stage/`): the `bugfix` skill, step 3, says how to tell.
+   (`ui/src/stage/`). See the [bugfix worker handoff](../bugfix/SKILL.md#worker-fixing-one-report).
 
 There are no hand-written moments: a case only one card has is a scenario in its
 file. A fixed engine bug gets its entry in `docs/bugs.md`.
