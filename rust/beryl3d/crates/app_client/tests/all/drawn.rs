@@ -4,8 +4,11 @@
 
 use app_client::driver::{Mode, Page, Recording};
 use beryl_protocol::ipc::FixtureMessage;
-use beryl_protocol::protocol::Side;
-use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::prompt::{ButtonId, Purpose, ShapeBody};
+use beryl_protocol::protocol::{Kind, Side, Status, ZoneName};
+use beryl_protocol::testing::{self, ScriptBuilder, ViewBuilder};
+use kit_base::tokens::color;
+use kit_frame::frame::StateBits;
 use kit_probe::agent::{Fault, Rule};
 use kit_ui::input::{AssetReady, GlyphCell, GlyphKey, Size};
 
@@ -113,4 +116,97 @@ fn an_icon_the_host_never_delivered_is_a_fault() {
             .any(|fault| fault.message.contains("'s icon ")),
         "the table's icons were never delivered, so some must be undrawn: {faults:#?}"
     );
+}
+
+#[test]
+fn the_discard_prompt_wraps_beside_a_crowded_hand() {
+    let mut view = ViewBuilder::new();
+    view.script(ScriptBuilder::reset().build());
+    for name in [
+        "Portable Hole",
+        "Snapcaster Mage",
+        "Jace, Wielder of Mysteries",
+        "Plains",
+        "Jace, the Mind Sculptor",
+        "Stock Up",
+        "Subtlety",
+        "Fractured Identity",
+    ] {
+        view.card(ZoneName::Hand, Side::You, name);
+    }
+    let mut update = view.update();
+    let asks = "Discard a basic land card or two cards.";
+    let mut submit = super::flat_layer::prompt_button(ButtonId::Confirm, "Submit 0", false);
+    submit.enabled = false;
+    let app_client::Input::Update(deciding) = super::flat_layer::deciding(testing::prompt(
+        Purpose::Discard,
+        asks,
+        vec![submit],
+        ShapeBody::Pick {
+            tray: Vec::new(),
+            least: 2,
+            most: 2,
+            picked: Vec::new(),
+            warned: Vec::new(),
+        },
+    )) else {
+        unreachable!("the sample prompt is a game update");
+    };
+    update.view.status = deciding.view.status;
+    if let Status::Deciding { decision } = &mut update.view.status {
+        decision.kind = Kind::YesNo;
+        decision.cancellable = false;
+    }
+
+    let recording = Recording(vec![FixtureMessage::game_update(&update)]);
+    let mut page = Page::new(
+        crate::test_data::data(),
+        recording.into(),
+        Side::You,
+        Size {
+            width: 1728.0,
+            height: 1117.0,
+        },
+    )
+    .expect("the discard prompt opens")
+    .with_scale(2.0);
+    page.set_looking(true);
+    page.still();
+
+    let title = page.find(&format!("text \"{asks}\""));
+    let submit = page.find("button \"Submit 0\"");
+    let card = page.find("card \"Fractured Identity\"").rect();
+    assert!(title.rect().x > card.x + card.width);
+    assert!(title.rect().y + title.rect().height < submit.rect().y);
+    assert!((title.rect().width - submit.rect().width).abs() < 0.01);
+    assert!(submit.state.has(StateBits::DISABLED));
+
+    let frame = page.frame();
+    let lines: Vec<_> = frame
+        .lines
+        .iter()
+        .filter(|line| line.element == title.index)
+        .map(|line| frame.name(line.words).trim())
+        .collect();
+    assert_eq!(lines, ["Discard a basic land", "card or two cards."]);
+    let look = |index| {
+        frame
+            .looks
+            .elements
+            .iter()
+            .find(|look| look.element == index)
+            .expect("the prompt's style is recorded")
+    };
+    assert_eq!(look(title.index).color, color::QUESTION_TITLE);
+    assert_eq!(look(title.index).background, None);
+    assert!(
+        frame
+            .looks
+            .shadows
+            .iter()
+            .any(|shadow| shadow.element == title.index && shadow.drop)
+    );
+    assert_eq!(look(submit.index).color, color::DISABLED_INK);
+    assert_eq!(look(submit.index).background, Some(color::DISABLED));
+    assert!(drawn(&page.faults()).is_empty());
 }

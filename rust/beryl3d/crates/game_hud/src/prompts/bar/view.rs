@@ -4,7 +4,7 @@
 
 use std::borrow::Cow;
 
-use beryl_protocol::prompt::{ButtonId, PromptButton, PromptView, ShapeBody};
+use beryl_protocol::prompt::{ButtonId, PromptButton, PromptView, Purpose, ShapeBody};
 use beryl_protocol::protocol::{Side, Status};
 use glam::Vec2;
 
@@ -79,8 +79,10 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
         }
         return bar;
     }
+    // A discard title shares the button's width so the dock stays beside the hand.
+    let fitted_dock = question || prompt.is(Purpose::Discard);
     let title = (!asks.is_empty()).then(|| {
-        if question {
+        if fitted_dock {
             question_title(&asks, prompt.title.encode_utf16().count())
         } else {
             text(&asks)
@@ -129,7 +131,7 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
                 widgets::tooltip(&button.label, &button.label, input.data.flat.tooltip)
             }))
         }));
-    if question {
+    if fitted_dock {
         return fit_question_dock(dock, input.profile);
     }
     dock
