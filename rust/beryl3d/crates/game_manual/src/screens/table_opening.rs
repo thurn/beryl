@@ -12,7 +12,7 @@
 //! The roll for first is the step banner's (`hud::notices`), which names each seat's die.
 
 use beryl_protocol::PlayerView;
-use beryl_protocol::protocol::{ObjectId, TablePrompt};
+use beryl_protocol::protocol::{ObjectId, Side, TablePrompt};
 use glam::Vec2;
 
 use crate::features::table::Message as TableMessage;
@@ -64,6 +64,7 @@ fn pieces(view: &PlayerView, input: &HudIn) -> Option<(Element, Element)> {
             let shown = Presentation {
                 view,
                 starting: None,
+                coin: None,
                 title,
                 hand: &[],
                 hand_hidden: false,
@@ -114,6 +115,13 @@ fn pieces(view: &PlayerView, input: &HudIn) -> Option<(Element, Element)> {
             let shown = Presentation {
                 view,
                 starting: Some(view.turn.active),
+                coin: profile
+                    .data()
+                    .hud
+                    .opening
+                    .wrapped_hand
+                    .is_none()
+                    .then_some(view.turn.active == Side::You),
                 title: &title,
                 hand: &in_hand,
                 hand_hidden: false,

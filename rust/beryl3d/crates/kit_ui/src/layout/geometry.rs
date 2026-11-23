@@ -19,6 +19,28 @@ pub(super) struct Geometry {
 }
 
 impl Layer {
+    /// Finds the first screen element named `name` in tree order.
+    #[must_use]
+    pub fn screen_element(&self, name: &str) -> Option<kit_frame::frame::ElementId> {
+        fn find(node: &Node, name: &str) -> Option<kit_frame::frame::ElementId> {
+            if node.element.name == name {
+                return Some(node.id);
+            }
+            node.children.iter().find_map(|child| find(child, name))
+        }
+        self.screen.as_ref().and_then(|node| find(node, name))
+    }
+
+    /// Sets the pose of a decorative element and its children without changing their layout.
+    pub fn pose_element(
+        &mut self,
+        element: Option<kit_frame::frame::ElementId>,
+        offset: Vec2,
+        scale: Vec2,
+    ) {
+        self.element_pose = element.map(|id| (id, offset, scale));
+    }
+
     pub(super) fn geometry(
         &self,
         node: &Node,
@@ -26,15 +48,16 @@ impl Layer {
         zoom: Zoom,
         state: StateBits,
     ) -> Geometry {
-        let point = point + node.translation();
+        let pose = self.element_pose.filter(|(id, _, _)| *id == node.id);
+        let point = point + node.translation() + pose.map_or(Vec2::ZERO, |(_, offset, _)| offset);
         let sink = self.node_sink(node, state);
         let rect = moved(node.paint_rect(), point + node.offset() + sink);
-        let scale = node.scale();
-        let scaled = scale.to_bits() != 1.0_f32.to_bits();
+        let scale = node.scale().max(0.0) * pose.map_or(Vec2::ONE, |(_, _, scale)| scale);
+        let scaled = scale != Vec2::ONE;
         let zoom = if scaled {
             let pivot = Vec2::new(rect.x, rect.y)
                 + Vec2::new(rect.width, rect.height) * node.element.style.scale_origin;
-            zoom.inside(pivot, scale.max(0.0))
+            zoom.inside(pivot, scale)
         } else {
             zoom
         };

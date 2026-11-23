@@ -118,6 +118,12 @@ impl Client {
         };
         self.layer
             .show(shown.map(|screen| transitions(screen, duration)));
+        self.features.opening.coin_element = (opening || self.bug_open())
+            .then(|| {
+                self.layer
+                    .screen_element(game_hud::screens::opening::coin::NAME)
+            })
+            .flatten();
         if let Some(field) = self.features.focus_after_show.take() {
             self.layer.focus_field(field);
         }
@@ -138,10 +144,10 @@ impl Client {
 
     /// Updates the opening clock and whether a result can be dismissed.
     fn refresh_screen_state(&mut self) {
-        let played = self.show.shown().map(|update| &update.view);
-        self.features.opening.spin(
+        let played = self.show.shown();
+        self.features.opening.update(
             played.filter(|_| self.features.screen == Screen::Game),
-            self.now,
+            self.features.bug().table_time(self.now),
             self.show.table().data().shown.opening.flip_ms,
         );
         // A result put aside comes back with the next game's end.
@@ -297,7 +303,7 @@ impl Client {
             viewing: self.features.viewer().open(),
             revealed: &revealed,
             carried: self.carried_item(),
-            spinning: self.features.opening.spinning(self.now),
+            spinning: self.opening_spinning(),
             placement_scene,
             ways_tray: None,
         };
@@ -333,13 +339,12 @@ impl Client {
             view: self.show.latest().map(|update| &update.view),
             played: self.show.shown().map(|update| &update.view),
             turn: self.features.steps().turn,
-            // While the opening's coin spins, no decision is offered, as the web's `Opening` offers
-            // none.
+            // When the opponent won, the first spin holds back the result and any new decision.
             prompt: self
                 .features
                 .prompts
                 .current()
-                .filter(|_| !self.features.opening.spinning(self.now)),
+                .filter(|_| !self.opening_spinning()),
             full_control: self.settings.full_control,
             stops: self.settings.stops,
             sheet: self.features.sheet,
@@ -348,9 +353,15 @@ impl Client {
             viewing: self.features.viewer().open(),
             revealed: self.features.viewer().revealed(),
             carried: self.carried_item(),
-            spinning: self.features.opening.spinning(self.now),
+            spinning: self.opening_spinning(),
             placement_scene: None,
         }
+    }
+
+    fn opening_spinning(&self) -> bool {
+        self.features
+            .opening
+            .spinning(self.features.bug().table_time(self.now))
     }
 
     /// The active scene's faces, which the host's asset workers prepare.

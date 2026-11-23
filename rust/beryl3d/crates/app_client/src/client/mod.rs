@@ -354,6 +354,7 @@ impl Client {
         self.show.advance_slide(table_now);
         self.inspect(table_now);
         self.viewing_frame(table_now);
+        self.pose_opening_coin(table_now);
         self.layer
             .visit_shows(|placement| self.show.update_show(placement));
         let visible = self.hud_shown();
@@ -600,6 +601,16 @@ impl Client {
             Wake::Now
         } else {
             self.wake.or_at(self.features.next_frame())
+        }
+    }
+
+    /// When to paint a live frame, including decorative motion that never delays play.
+    #[must_use]
+    pub fn display_wake(&self) -> Wake {
+        if self.features.opening.coin_moving {
+            Wake::Now
+        } else {
+            self.wake()
         }
     }
 

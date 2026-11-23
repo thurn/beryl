@@ -573,7 +573,7 @@ impl<T: Ticks> FrameLoop<T> {
                 Wake::Now
             }
         } else {
-            let wake = earlier(self.client.wake(), self.feed.wake());
+            let wake = earlier(self.client.display_wake(), self.feed.wake());
             match (wake, self.pause) {
                 // The clock stops at the pause, so a wait past it ends there.
                 (Wake::At(at), Some(pause)) if at > pause => Wake::At(pause),

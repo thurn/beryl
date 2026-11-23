@@ -6,12 +6,12 @@ use kit_ui::input::Input as DeviceInput;
 use std::str::FromStr;
 
 use app_client::Input;
-use app_client::command::SessionCommand;
+use app_client::command::{Reply, SessionCommand};
 use app_client::driver::{Duration, Mode, Moment, Page};
 use app_client::{Client, Config};
 use beryl_inspect::pages::{page, recording};
-use beryl_protocol::prompt::{Click, ClickRequest, Marked};
-use beryl_protocol::protocol::{ObjectId, Side, Status, ZoneName};
+use beryl_protocol::prompt::{Click, ClickReply, ClickRequest, Marked};
+use beryl_protocol::protocol::{ObjectId, SessionId, Side, Status, ZoneName};
 use beryl_protocol::script::{Mark, Script, Subject};
 use glam::Vec2;
 use kit_base::data::profiles::SizeClass;
@@ -291,6 +291,7 @@ fn the_opening_shows_the_flip_while_the_coin_spins_and_then_the_hand() {
     // of who starts and no button yet. The hand is dealt below the window, as the web's
     // desktop board holds it away under the opening, and the opening's row shows none of it.
     assert!(tree.contains("text \"Opponent won the flip\""), "{tree}");
+    assert!(tree.contains("region \"opening coin\""), "{tree}");
     assert!(tree.contains("region \"waiting\""), "{tree}");
     assert!(!tree.contains("On the draw"), "{tree}");
     assert!(!tree.contains("button \"Keep 7\""), "{tree}");
@@ -309,4 +310,110 @@ fn the_opening_shows_the_flip_while_the_coin_spins_and_then_the_hand() {
     assert!(tree.contains("button \"Keep 7\""), "{tree}");
     assert!(tree.contains("card \"Plains\" #33"), "{tree}");
     assert!(!tree.contains("region \"waiting\""), "{tree}");
+}
+
+/// The coin is repainted independently of whether the recorded game is waiting for a button.
+#[test]
+fn the_winner_can_choose_during_the_coin_spin_in_each_game() {
+    let game = recording("opening-play", Side::You).unwrap_or_else(|why| panic!("{why}"));
+    let mut open = game
+        .views()
+        .expect("the opening fixture's views")
+        .pop()
+        .expect("the Play/Draw view");
+    let choices = [
+        ("Play", Side::You, "On the play"),
+        ("Draw", Side::Opponent, "On the draw"),
+    ];
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
+    client.handle(Input::Device(DeviceInput::Surface {
+        size: REPORTED_SIZE,
+        scale: 2.0,
+        safe_area: Insets::default(),
+    }));
+    let mut now = 0;
+    for (label, starting, result) in choices {
+        let Status::Deciding { decision } = &mut open.view.status else {
+            panic!("the viewer chooses who starts");
+        };
+        decision.id.session = open.session;
+        let button = decision
+            .prompt
+            .buttons
+            .iter()
+            .find(|button| button.label == label)
+            .expect("an opening choice");
+        let request = SessionCommand::Click(ClickRequest {
+            decision: decision.id,
+            revision: decision.prompt.revision,
+            click: Click::Button { button: button.id },
+        });
+        client.handle(Input::Update(Box::new(open.clone())));
+        let frame = settled(&mut client, &mut now);
+        let button = opening_corners(frame, label);
+        let widths = [0, 100, 100, 100, 100].map(|step| {
+            now += step * MILLISECOND;
+            let disc = opening_corners(client.frame(now), "opening coin");
+            disc[0].distance(disc[1])
+        });
+        let (least, most) = widths
+            .into_iter()
+            .fold((f32::INFINITY, 0.0_f32), |(least, most), width| {
+                (least.min(width), most.max(width))
+            });
+        assert!(least < most / 2.0, "{widths:?}");
+        assert_eq!(client.wake(), Wake::Never);
+        assert_eq!(client.display_wake(), Wake::Now);
+        assert_eq!(opening_corners(client.frame(now), label), button);
+
+        let centre = button[0].midpoint(button[2]);
+        for _ in 0..2 {
+            for phase in [PointerPhase::Down, PointerPhase::Up] {
+                client.handle(Input::Device(DeviceInput::Pointer(Pointer {
+                    id: 0,
+                    kind: PointerKind::Mouse,
+                    phase,
+                    position: centre,
+                    button: Button::Primary,
+                    wheel: Vec2::ZERO,
+                    modifiers: Modifiers::default(),
+                })));
+                now += 16 * MILLISECOND;
+                client.frame(now);
+            }
+        }
+        let commands: Vec<_> = std::iter::from_fn(|| client.next_command()).collect();
+        assert_eq!(commands, [request]);
+
+        // The reply arrives as a new view naming the actual starting player. Both choices
+        // remove the old controls and land the coin beside the corresponding label.
+        client.handle(Input::Reply(Reply::Click(Ok(ClickReply::Answered))));
+        let mut answered = open.clone();
+        answered.view.status = Status::Thinking;
+        answered.view.turn.starting = Some(starting);
+        answered.view.script = Some(Script::empty());
+        client.handle(Input::Update(Box::new(answered)));
+        let before_land = opening_corners(settled(&mut client, &mut now), "opening coin");
+        now += 1000 * MILLISECOND;
+        let frame = client.frame(now);
+        assert!(before_land[0].y < opening_corners(frame, "opening coin")[0].y);
+        opening_corners(frame, result);
+        assert!(!frame.resolved.iter().any(|element| {
+            element.role == Role::Button && matches!(frame.name(element.name), "Play" | "Draw")
+        }));
+        assert_eq!(client.display_wake(), Wake::Never);
+
+        // Another initial view may replace this game while the old opening is still shown.
+        open.session = SessionId(open.session.0 + 1);
+        now += 16 * MILLISECOND;
+    }
+}
+
+fn opening_corners(frame: &Frame, name: &str) -> [Vec2; 4] {
+    frame
+        .resolved
+        .iter()
+        .find(|element| frame.name(element.name) == name)
+        .unwrap_or_else(|| panic!("missing opening element {name:?}"))
+        .corners
 }

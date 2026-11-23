@@ -101,9 +101,17 @@ impl Client {
     /// waiting to pick a card up, and the word a refused click put under a permanent going.
     pub(super) fn timed_wake(&self, table: u64) -> Wake {
         let wake = self.bug_wake(table).or_at(self.layer.tip_due());
+        let flip = if self.bug_open() {
+            None
+        } else {
+            self.features
+                .opening
+                .spin_due()
+                .map(|at| self.features.bug().frame_time(at))
+        };
         wake.or_at(self.gesture_due())
             .or_at(self.features.inspector().notice_until())
-            .or_at(self.features.opening.spin_due())
+            .or_at(flip)
     }
 
     /// A pointer event while the report is open: nothing reaches the table. While a region is

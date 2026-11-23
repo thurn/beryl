@@ -253,6 +253,13 @@ impl Router {
     /// associated with that decision even if a newer view arrives first.
     pub fn click(&mut self, click: Click, show: &mut Show) -> Option<ClickRequest> {
         let (decision, prompt) = self.prompt.as_ref()?;
+        // Play and Draw both commit the same decision. A second press while the first is in
+        // flight cannot change the starting player.
+        if prompt.is(Purpose::PlayOrDraw)
+            && self.clicks.iter().any(|click| click.decision == *decision)
+        {
+            return None;
+        }
         let request = ClickRequest {
             decision: *decision,
             revision: prompt.revision,

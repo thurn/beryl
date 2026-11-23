@@ -166,6 +166,8 @@ pub struct Layer {
     /// The press whose elements are shaken, and how far across the screen they are moved now, in
     /// logical points (`Layer::shake`).
     shaken: Option<(Action, f32)>,
+    /// A screen element's externally sampled translation and scale, in paint geometry only.
+    element_pose: Option<(ElementId, glam::Vec2, glam::Vec2)>,
     /// The tooltip the pointer is resting toward, if any (`tip`).
     tip: Option<tip::Resting>,
 }
@@ -223,6 +225,7 @@ impl Layer {
             submenu: None,
             pointed: None,
             shaken: None,
+            element_pose: None,
             tip: None,
         }
     }

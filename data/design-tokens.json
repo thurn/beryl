@@ -1797,6 +1797,34 @@
         "value": 0.22,
         "note": "How opaque the step stops stand while the opening hand overlay is up: `.table-dimmed[data-opening] .turn-controls`."
       },
+      "OPENING_COIN_EDGE_SCALE": {
+        "value": 0.015,
+        "note": "The minimum projected width as the opening coin turns edge-on, as a share of its diameter."
+      },
+      "OPENING_COIN_ROCK_RISE": {
+        "value": 0.45,
+        "note": "The coin rocks this many em in either direction while the opponent chooses who starts, from `coin-choose`."
+      },
+      "OPENING_COIN_LAND_RISE": {
+        "value": 0.6,
+        "note": "The coin begins this many em above its settled position, from `coin-land`."
+      },
+      "OPENING_COIN_LAND_TURNS": {
+        "value": 3,
+        "note": "The number of full turns during the 1080-degree `coin-land` animation."
+      },
+      "OPENING_COIN_LAND_EASE_X1": {
+        "value": 0.2,
+        "note": "The first control point's horizontal coordinate in the `coin-land` easing curve."
+      },
+      "OPENING_COIN_LAND_EASE_Y1": {
+        "value": 0.7,
+        "note": "The first control point's vertical coordinate in the `coin-land` easing curve."
+      },
+      "OPENING_COIN_LAND_EASE_X2": {
+        "value": 0.3,
+        "note": "The second control point's horizontal coordinate in the `coin-land` easing curve."
+      },
       "GAME_OVER_DIM_BRIGHTNESS": {
         "value": 0.68,
         "note": "How bright the table under the game's result stays: `.table-dimmed`'s `brightness(0.68)`."

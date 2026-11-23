@@ -1,9 +1,10 @@
 //! Routes the pile viewer and the opening's playback to the session and the table.
 
-use beryl_protocol::PlayerView;
-use beryl_protocol::protocol::{Declaration, ObjectId, Side, ZoneName};
+use beryl_protocol::protocol::{Declaration, ObjectId, SessionId, Side, ZoneName};
 use beryl_protocol::script::OwnStep;
-use game_hud::inspect::Viewed;
+use beryl_protocol::{GameUpdate, PlayerView};
+use game_hud::{inspect::Viewed, screens::opening};
+use glam::Vec2;
 
 use super::Client;
 use app_screens::screens::Screen;
@@ -14,7 +15,7 @@ use game_play::verbs::Interval;
 use game_table::table::Place;
 use game_table::table::{Moves, Relaid, Window};
 use kit_base::pose::Curve;
-use kit_frame::frame::{Place as FramePlace, ShowPlacement};
+use kit_frame::frame::{ElementId, Place as FramePlace, ShowPlacement};
 
 /// Nanoseconds in a millisecond, as the session's step timings are written in milliseconds.
 const NS_PER_MS: f64 = 1_000_000.0;
@@ -23,7 +24,11 @@ const NS_PER_MS: f64 = 1_000_000.0;
 #[derive(Debug, Default)]
 pub(super) struct Opening {
     pub shown: bool,
-    coin: Coin,
+    session: Option<SessionId>,
+    reveal: Reveal,
+    motion: Option<(opening::coin::Motion, u64)>,
+    pub coin_element: Option<ElementId>,
+    pub coin_moving: bool,
     views_shown: usize,
 }
 
@@ -35,10 +40,9 @@ pub(super) struct ScreenCards {
     laid_in: Option<Window>,
 }
 
-/// Where the opening's coin flip stands: no opening has begun; the coin spins until a time in
-/// the clock of `Client::frame`; or the opening has begun and its coin is not spinning.
+/// The opponent's choice of starting player is held back during the opening's first spin.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum Coin {
+enum Reveal {
     #[default]
     Before,
     Spinning {
@@ -48,28 +52,44 @@ enum Coin {
 }
 
 impl Opening {
-    /// Notes whether `view`, the latest view whose script has played out if the game screen is
-    /// shown, is in its opening. If the opponent won the flip and nobody has declared, the coin
-    /// spins for `flip_ms` from `now`, as it does when the web's opening first appears.
-    pub(super) fn spin(&mut self, view: Option<&PlayerView>, now: u64, flip_ms: f32) {
-        let Some(view) = view.filter(|view| game_hud::screens::opening::in_opening(view)) else {
-            self.coin = Coin::Before;
-            return;
-        };
-        if self.coin != Coin::Before {
-            return;
+    /// Starts the web coin's next motion when the opening first appears or its result changes.
+    /// A locally won flip spins while Play and Draw are offered. An opponent's choice is held
+    /// back for `flip_ms`, even if it has already arrived.
+    pub(super) fn update(&mut self, update: Option<&GameUpdate>, now: u64, flip_ms: f32) {
+        let update = update.filter(|update| opening::in_opening(&update.view));
+        let session = update.map(|update| update.session);
+        if session != self.session {
+            self.session = session;
+            self.reveal = Reveal::Before;
+            self.motion = None;
         }
-        let you = &view.players.you;
-        let spins = view.turn.flip_winner == Some(Side::Opponent)
-            && you.mulligans == 0
-            && you.mulligan == Declaration::Undeclared;
-        self.coin = if spins {
-            Coin::Spinning {
-                until: now + ns(flip_ms),
-            }
-        } else {
-            Coin::Landed
+        let Some(view) = update.map(|update| &update.view) else {
+            return;
         };
+        if self.reveal == Reveal::Before {
+            let you = &view.players.you;
+            self.reveal = if view.turn.flip_winner == Some(Side::Opponent)
+                && you.mulligans == 0
+                && you.mulligan == Declaration::Undeclared
+            {
+                Reveal::Spinning {
+                    until: now + ns(flip_ms),
+                }
+            } else {
+                Reveal::Landed
+            };
+        }
+        let spinning = self.spinning(now);
+        let motion = if !spinning && view.turn.starting.is_some() {
+            opening::coin::Motion::Land
+        } else if opening::opponent_choosing(view, spinning) {
+            opening::coin::Motion::Rock
+        } else {
+            opening::coin::Motion::Spin
+        };
+        if self.motion.is_none_or(|(previous, _)| previous != motion) {
+            self.motion = Some((motion, now));
+        }
     }
 
     /// Whether the opening's coin still spins at `now`.
@@ -79,14 +99,14 @@ impl Opening {
 
     /// When the opening's coin stops spinning, while it spins.
     pub(super) fn spin_due(&self) -> Option<u64> {
-        match self.coin {
-            Coin::Spinning { until } => Some(until),
-            Coin::Before | Coin::Landed => None,
+        match self.reveal {
+            Reveal::Spinning { until } => Some(until),
+            Reveal::Before | Reveal::Landed => None,
         }
     }
     fn land(&mut self, now: u64) -> bool {
         if self.spin_due().is_some_and(|until| now >= until) {
-            self.coin = Coin::Landed;
+            self.reveal = Reveal::Landed;
             return true;
         }
         false
@@ -261,7 +281,7 @@ impl Client {
             input,
             game: in_game,
         });
-        if self.features.opening.land(self.now) {
+        if self.features.opening.land(table_now) {
             self.show_screen();
         }
         let views_shown = self.show.views_shown();
@@ -287,6 +307,21 @@ impl Client {
             card: self.show.table().data().card,
             visible: visible && holds,
         });
+    }
+
+    /// Poses the opening coin on the table clock without laying out the screen again.
+    pub(super) fn pose_opening_coin(&mut self, now: u64) {
+        let report_open = self.bug_open();
+        let opening = &mut self.features.opening;
+        if let (Some(element), Some((motion, since))) = (opening.coin_element, opening.motion) {
+            let diameter = opening::coin::diameter(self.show.table().profile());
+            let (offset, scale, moving) = motion.pose(now.saturating_sub(since), diameter);
+            self.layer.pose_element(Some(element), offset, scale);
+            opening.coin_moving = moving && !report_open;
+        } else {
+            self.layer.pose_element(None, Vec2::ZERO, Vec2::ONE);
+            opening.coin_moving = false;
+        }
     }
 
     pub(super) fn prepare_steps(&mut self) {

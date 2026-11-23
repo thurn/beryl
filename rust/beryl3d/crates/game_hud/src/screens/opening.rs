@@ -12,10 +12,10 @@
 //! shown. A put-on-bottom pick clicks the cards in the row (`Click::On`); the session marks each
 //! one picked as selected, and the row shows it in a slot.
 //!
-//! Once the starting player is known, the desktop shows the opening coin beside the
-//! play-or-draw label. In-game coin flips use the separate `announce` notice.
+//! The opening coin spins before it lands beside the play-or-draw label. In-game coin flips
+//! use the separate `announce` notice.
 //!
-//! When the opponent won the flip, the opening first shows the flip for `FLIP_MS` however soon
+//! When the opponent won the flip, the opening shows the flip for 1.5 seconds however soon
 //! they chose, as the web's coin spins (`HudIn::spinning`): the title says who won, the hand
 //! is dealt out of sight and no button is offered. Until a button is offered, three gold dots
 //! under the title say that the game is waiting, as the web's `.opening-waiting` does.
@@ -25,6 +25,8 @@
 //! (`choosing_start`). The other opening buttons stand in the prompt bar.
 //!
 //! Not built yet: the web's face-down hand while the viewer has declared a mulligan.
+
+pub mod coin;
 
 use beryl_protocol::PlayerView;
 use beryl_protocol::prompt::{PromptButton, PromptView, Purpose};
@@ -148,13 +150,13 @@ pub fn opening(input: &HudIn) -> Option<Element> {
     // The opponent choosing who starts shows on the coin, and the opponent considering their
     // hand on their side of the table, so neither shows the dots (`Opening`'s
     // `choosingFirst` and `considering`).
-    let choosing_first =
-        starting.is_none() && view.turn.flip_winner == Some(Side::Opponent) && !input.spinning;
+    let choosing_first = opponent_choosing(view, input.spinning);
     let considering = matches!(view.handling, Some(CardHandling::Hand { .. }));
     Some(present(
         &Presentation {
             view,
             starting,
+            coin: Some(starting == Some(Side::You) || choosing_first),
             title: &title,
             hand: &shown,
             hand_hidden: starting.is_none(),
@@ -175,6 +177,12 @@ pub fn opening(input: &HudIn) -> Option<Element> {
     ))
 }
 
+/// Whether the coin rocks between the seats while the opponent chooses who starts.
+#[must_use]
+pub fn opponent_choosing(view: &PlayerView, spinning: bool) -> bool {
+    view.turn.starting.is_none() && view.turn.flip_winner == Some(Side::Opponent) && !spinning
+}
+
 /// Putting a mulligan card on the bottom uses the opening hand's slots.
 fn bottom_prompt(prompt: Option<&PromptView>) -> Option<&PromptView> {
     prompt.filter(|prompt| prompt.is(Purpose::PutOnBottom))
@@ -192,6 +200,8 @@ fn bottom_prompt(prompt: Option<&PromptView>) -> Option<&PromptView> {
 pub struct Presentation<'a> {
     pub view: &'a PlayerView,
     pub starting: Option<Side>,
+    /// Whether to draw the coin and whether it bears the starting player's 1.
+    pub coin: Option<bool>,
     pub title: &'a str,
     pub hand: &'a [ObjectId],
     pub hand_hidden: bool,
@@ -222,8 +232,20 @@ pub fn present(shown: &Presentation, profile: Profile, style: OpeningStyle) -> E
         card.press = shown.press.map(|press| press(slot));
         card
     };
-    let mut coin = row().name("coin").height(sizes.coin_height);
-    coin.style.margin = [0.0, 0.0, sizes.coin_gap, 0.0];
+    let mut coin_row = if shown.coin.is_some() && sizes.fan.is_none() {
+        column()
+    } else {
+        row()
+    }
+    .name("coin")
+    .height(sizes.coin_height)
+    .align_items(Align::Center);
+    coin_row.style.margin = [0.0, 0.0, sizes.coin_gap, 0.0];
+    if let Some(first) = shown.coin {
+        coin_row = coin_row
+            .gap(sizes.coin_label_gap)
+            .child(coin::disc(coin::diameter(profile), first));
+    }
     if let Some(starting) = starting {
         let words = if starting == Side::You {
             "On the play"
@@ -236,11 +258,11 @@ pub fn present(shown: &Presentation, profile: Profile, style: OpeningStyle) -> E
             .passes(true);
         if let Some(scale) = sizes.header_scale {
             label = label.drop_shadow(scaled_shadows(&shadow::OPENING_COIN_LABEL, scale));
-            coin = coin
-                .gap(size::OPENING_COIN_LABEL_GAP * scale)
-                .child(starting_coin(starting, scale));
         }
-        coin = coin.align_items(sizes.coin_align).child(label);
+        if shown.coin.is_none() {
+            label = label.align_self(sizes.coin_align);
+        }
+        coin_row = coin_row.child(label);
     }
     let mut heading = text(shown.title)
         .style(sizes.title)
@@ -273,7 +295,7 @@ pub fn present(shown: &Presentation, profile: Profile, style: OpeningStyle) -> E
         .name("opening")
         .passes(passes)
         .align_items(Align::Center)
-        .child(coin)
+        .child(coin_row)
         .child(heading)
         .child(hand_row)
         .children(slots_row)
@@ -291,34 +313,9 @@ pub fn present(shown: &Presentation, profile: Profile, style: OpeningStyle) -> E
         .child(
             backdrop(window.size)
                 .background([0; 4])
-                .background_image(vec![kit_base::tokens::gradient::OPENING_BACKDROP]),
+                .background_image(vec![gradient::OPENING_BACKDROP]),
         )
         .child(screen)
-}
-
-/// The web's 44-point `.coin` after the flip. Its face bears a 1 when the viewer plays first.
-fn starting_coin(starting: Side, scale: f32) -> Element {
-    let diameter = size::OPENING_COIN_DIAMETER * scale;
-    let numeral = type_style::OPENING_COIN_NUMBER;
-    let mark = (starting == Side::You).then(|| {
-        text("1")
-            .style(TypeStyle {
-                size: numeral.size * scale,
-                ..numeral
-            })
-            .color(color::OPENING_COIN_NUMBER)
-    });
-    row()
-        .name("opening coin")
-        .width(diameter)
-        .height(diameter)
-        .radius(diameter / 2.0)
-        .align_items(Align::Center)
-        .justify_content(Justify::Center)
-        .background_image(vec![gradient::OPENING_COIN])
-        .box_shadow(scaled_shadows(&shadow::OPENING_COIN, scale))
-        .passes(true)
-        .children(mark)
 }
 
 /// Converts a desktop opening shadow's stage lengths to window points.
@@ -509,6 +506,7 @@ struct Sizes {
     top: f32,
     coin_height: f32,
     coin_gap: f32,
+    coin_label_gap: f32,
     /// Where the words of the coin stand in its row.
     coin_align: Align,
     coin: TypeStyle,
@@ -567,6 +565,7 @@ impl Sizes {
             top: projection.origin.y + top * scale,
             coin_height: metrics.coin_height * scale,
             coin_gap: metrics.coin_gap * scale,
+            coin_label_gap: size::OPENING_COIN_LABEL_GAP * scale,
             coin_align: Align::Center,
             coin: text_style(COIN),
             title: text_style(TITLE),
@@ -647,6 +646,7 @@ impl Sizes {
             top: room.y - coin / 2.0,
             coin_height: coin + wrapped.coin_line,
             coin_gap: wrapped.coin_gap,
+            coin_label_gap: 0.0,
             coin_align: Align::End,
             coin: TypeStyle {
                 size: wrapped.coin_line,

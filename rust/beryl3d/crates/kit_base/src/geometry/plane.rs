@@ -76,12 +76,12 @@ impl ScreenPlane {
     }
 }
 
-/// Composes uniform, centre-relative scales for flat elements nested in another element.
+/// Composes centre-relative scales for flat elements nested in another element.
 #[derive(Clone, Copy, Debug)]
 pub struct Zoom {
     outer: (Vec2, f32),
     offset: Vec2,
-    scale: f32,
+    scale: Vec2,
 }
 
 impl Zoom {
@@ -92,15 +92,15 @@ impl Zoom {
         Self {
             outer: (pivot, scale),
             offset: Vec2::ZERO,
-            scale: 1.0,
+            scale: Vec2::ONE,
         }
     }
 
     /// Adds a scale in the coordinate system before this transform.
     #[must_use]
-    pub fn inside(self, pivot: Vec2, scale: f32) -> Self {
+    pub fn inside(self, pivot: Vec2, scale: Vec2) -> Self {
         Self {
-            offset: self.offset + pivot * ((1.0 - scale) * self.scale),
+            offset: self.offset + pivot * ((Vec2::ONE - scale) * self.scale),
             scale: self.scale * scale,
             ..self
         }
@@ -108,10 +108,11 @@ impl Zoom {
 
     #[must_use]
     pub fn rect(self, mut rect: Rect) -> Rect {
-        if self.scale.to_bits() != 1.0_f32.to_bits() || self.offset != Vec2::ZERO {
-            rect = zoom_rect(rect, (Vec2::ZERO, self.scale));
-            rect.x += self.offset.x;
-            rect.y += self.offset.y;
+        if self.scale != Vec2::ONE || self.offset != Vec2::ZERO {
+            rect.x = rect.x * self.scale.x + self.offset.x;
+            rect.y = rect.y * self.scale.y + self.offset.y;
+            rect.width *= self.scale.x;
+            rect.height *= self.scale.y;
         }
         zoom_rect(rect, self.outer)
     }
