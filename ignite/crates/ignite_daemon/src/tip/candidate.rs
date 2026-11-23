@@ -52,6 +52,13 @@ impl TipVerifier {
     }
 }
 
+/// A different commit selected by the hub ends the round. A retry flag, absent selection,
+/// or failed read leaves the round free to continue.
+pub(super) fn replacement(ctx: &Context, tip: &Commit) -> Option<Commit> {
+    let candidate = ctx.hub.tip_candidate().ok()??;
+    (candidate.commit != *tip).then_some(candidate.commit)
+}
+
 /// Lets a later staging tip try all required checks when this tip has a failed or blocked
 /// check. If another round has already selected a different tip, leave that selection alone.
 pub(super) fn allow_newer(ctx: &Context, tip: &Commit) -> Result<()> {

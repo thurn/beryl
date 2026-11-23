@@ -21,8 +21,9 @@
 //! - When a round's reply says `master` moved, the loop asks the daemon's self-update to build
 //!   the new release (`SelfUpdate::after_master_moved`), as before; a loop that waited for a
 //!   round started before a restart does the same with that round's reply.
-//! - While waiting, the loop also checks whether `master` has advanced past the round's
-//!   target. It stops that round so its landing trees can serve the newest tip.
+//! - While waiting, the loop checks whether the hub selected a replacement candidate or
+//!   `master` advanced past the round's target. It stops that round so the next one can use
+//!   its landing trees.
 //!
 //! A round whose verb process dies is not run again: its handle ends `incomplete`, and the next
 //! turn of the loop starts a new round when the tip still needs one.
@@ -38,14 +39,14 @@ use ignite_core::protocol::Class;
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::traits::{Error, Result};
 
-use super::{TipOutcome, TipVerifier, TipWork, families};
+use super::{TipOutcome, TipVerifier, TipWork, candidate, families};
 use crate::handles::Waited;
 use crate::server::{Context, Server, Verb, error_reply};
 
 /// The internal verb that runs one round of tip verification.
 pub const ROUND_VERB: &str = "tip-round";
 
-/// How long the loop waits on a round's handle between checks of `master`.
+/// How long the loop waits on a round's handle between checks for supersession.
 const WAIT_S: u32 = 60;
 
 /// What a round answers with, in its reply's JSON.
@@ -161,6 +162,8 @@ pub struct TipLoop {
     pub verb: Arc<TipRoundVerb>,
     /// The feed position already seen.
     since: Seq,
+    /// After supersession, read the feed without waiting so the next candidate can start.
+    retry_now: bool,
 }
 
 impl TipLoop {
@@ -170,6 +173,7 @@ impl TipLoop {
             server,
             verb,
             since,
+            retry_now: false,
         }
     }
 
@@ -186,9 +190,12 @@ impl TipLoop {
                 .map(Some);
         }
         crate::steps::step("waiting for a tip to verify");
-        let batch = ctx.hub.feed(self.since, wait_s)?;
+        let batch = ctx
+            .hub
+            .feed(self.since, if self.retry_now { 0 } else { wait_s })?;
         self.since = self.since.max(batch.seq);
         let Some(tip) = self.verb.verifier().next_target(ctx)? else {
+            self.retry_now = false;
             return Ok(None);
         };
         let request = TipRoundVerb::request(&tip, self.since, &ctx.repo);
@@ -200,7 +207,7 @@ impl TipLoop {
     /// Waits for the round and reads its reply. An adopted round can already be obsolete,
     /// so its first wait only checks whether it has finished.
     fn wait(
-        &self,
+        &mut self,
         ctx: &Context,
         handle: &Handle,
         target: Option<&Commit>,
@@ -214,7 +221,7 @@ impl TipLoop {
                     wait_s = WAIT_S;
                     if superseded.is_none()
                         && let Some(tip) = target
-                        && let Some(by) = verified_past(ctx, tip)
+                        && let Some(by) = superseding_tip(ctx, tip)
                         && self.server.stop_internal(handle)
                     {
                         superseded = Some((tip.clone(), by));
@@ -231,19 +238,26 @@ impl TipLoop {
             .json
             .clone()
             .and_then(|json| serde_json::from_value::<RoundReply>(json).ok());
-        match read {
+        let finished = match read {
             Some(RoundReply { tip, outcome }) => Ok((tip, outcome)),
             None if let Some((tip, by)) = superseded => Ok((tip, TipOutcome::Superseded { by })),
             None => Err(Error::Conflict(format!("{handle}: {}", reply.text))),
-        }
+        };
+        self.retry_now = matches!(finished, Ok((_, TipOutcome::Superseded { .. })));
+        finished
     }
 }
 
-/// A newer `staging` tip alone does not invalidate work. Stop only when a descendant is
-/// already on `master`. A round at `master` can still have deferred platform or budget checks.
-fn verified_past(ctx: &Context, target: &Commit) -> Option<Commit> {
-    let master = ctx.git.tip(&ctx.config.repository.master).ok()?;
-    (master != *target && ctx.git.is_ancestor(target, &master).ok()?).then_some(master)
+/// Stop a pre-promotion round when the hub replaces its candidate. A round that already
+/// moved `master` to its target can finish and report that promotion to the tip loop.
+fn superseding_tip(ctx: &Context, target: &Commit) -> Option<Commit> {
+    let master = ctx.git.tip(&ctx.config.repository.master).ok();
+    if master.as_ref() == Some(target) {
+        return None;
+    }
+    master
+        .filter(|master| ctx.git.is_ancestor(target, master).unwrap_or(false))
+        .or_else(|| candidate::replacement(ctx, target))
 }
 
 /// Leaves a stopped round before it treats interrupted checks as missing or failing.

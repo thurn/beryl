@@ -19,7 +19,7 @@
 //! busy machine runs fewer at once.
 
 use std::collections::{BTreeMap, HashSet, VecDeque};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -30,7 +30,7 @@ use ignite_core::protocol::hub::{ResultKey, TipCheckFailures, TipClaim};
 use ignite_core::tipround::{self, TipCosts, TipCostsRequest};
 use ignite_core::traits::Result;
 
-use super::{Listed, TipCheck, TipRun, TipVerifier};
+use super::{Listed, TipCheck, TipRun, TipVerifier, candidate};
 use crate::checks::BatchCallbacks;
 use crate::server::Context;
 
@@ -58,12 +58,7 @@ struct Round<'a> {
     /// Claim names for checks scoped to an OS or to an individual verifier.
     claim_scopes: BTreeMap<&'a str, (Os, bool)>,
     queue: Mutex<VecDeque<FamilyBatches>>,
-    /// How many families have been started.
-    started: Mutex<usize>,
-    /// How many families a thread is working on now: building, listing or running them.
-    in_flight: AtomicUsize,
-    ran_a_batch: AtomicBool,
-    /// A newer tip that ended the round, or the error reading `staging`.
+    /// The commit that ended the round, or the error reading `staging` after promotion.
     ended: Mutex<Option<Result<Commit>>>,
     runs: Mutex<Vec<TipRun>>,
     /// The batch each family is running under a claim, which the renewer claims again.
@@ -71,68 +66,46 @@ struct Round<'a> {
 }
 
 impl Round<'_> {
-    /// The next family to run, or `None` when none is left or the round has ended. Past the
-    /// first family, a newer `staging` tip ends the round only while the round has nothing
-    /// under way: no batch has run and no other family is being built, listed or run. A family
-    /// builds and lists before it claims its first batch, which can take ten minutes under
-    /// load, so ending the round then would throw that work away, and with landings arriving
-    /// more often than that, `master` would never move.
+    /// The next family to run, or `None` when none is left or the round should stop.
     fn next(&self) -> Option<FamilyBatches> {
-        let mut queue = lock(&self.queue);
+        let next = lock(&self.queue).pop_front()?;
+        (!self.should_stop()).then_some(next)
+    }
+
+    /// Before promotion, landings can keep advancing `staging` while both verifiers work
+    /// on the same candidate. After promotion, a newer `staging` tip can use these trees.
+    fn should_stop(&self) -> bool {
         if crate::steps::stop_requested()
             || self.verifier.machine_is_off()
             || lock(&self.ended).is_some()
         {
-            return None;
+            return true;
         }
-        let next = queue.pop_front()?;
-        let mut started = lock(&self.started);
-        let idle = *started > 0
-            && !self.ran_a_batch.load(Ordering::SeqCst)
-            && self.in_flight.load(Ordering::SeqCst) == 0;
-        if (self.after_master || idle) && self.superseded() {
-            return None;
-        }
-        *started += 1;
-        self.in_flight.fetch_add(1, Ordering::SeqCst);
-        Some(next)
-    }
-
-    /// A newer staging tip stops after-budget work immediately at the next batch. Before
-    /// promotion it stops idle work only when the hub no longer names this candidate.
-    fn superseded(&self) -> bool {
-        match self.ctx.git.tip(&self.ctx.config.repository.staging) {
-            Ok(newest) if newest == *self.tip => false,
-            Ok(_)
-                if !self.after_master
-                    && self.ctx.hub.tip_candidate().is_ok_and(|candidate| {
-                        candidate.is_some_and(|candidate| candidate.commit == *self.tip)
-                    }) =>
-            {
-                false
+        let ended = if self.after_master {
+            match self.ctx.git.tip(&self.ctx.config.repository.staging) {
+                Ok(newest) if newest == *self.tip => None,
+                other => Some(other),
             }
-            other => {
-                *lock(&self.ended) = Some(other);
-                true
-            }
+        } else {
+            candidate::replacement(self.ctx, self.tip).map(Ok)
+        };
+        let mut state = lock(&self.ended);
+        if state.is_none() {
+            *state = ended;
         }
+        state.is_some()
     }
 
     /// Claims one batch from the hub. A claim the hub cannot answer is not granted, so the
-    /// batch is left for a later round. A round past the tip budget claims nothing more once
-    /// it has ended or `staging` has a newer tip.
+    /// batch is left for a later round.
     fn claim(&self, family: &str, batch: u32) -> bool {
         // A family asks for its next batch once the last one has finished.
         lock(&self.held).remove(family);
-        if crate::steps::stop_requested()
-            || self.verifier.machine_is_off()
-            || self.after_master && (lock(&self.ended).is_some() || self.superseded())
-        {
+        if self.should_stop() {
             return false;
         }
         let granted = self.ask(family, batch);
         if granted {
-            self.ran_a_batch.store(true, Ordering::SeqCst);
             lock(&self.held).insert(family.to_owned(), batch);
         }
         granted
@@ -190,10 +163,8 @@ impl Round<'_> {
 
 impl TipVerifier {
     /// Runs `to_run`, some of the tip's checks, at `tip` and returns the runs, in batches cut
-    /// over the round's listing. While nothing is under way (another machine holds every batch
-    /// so far, say), an uncoordinated round yields to a newer `staging` tip. A round that has
-    /// run a batch, or is building or listing a family,
-    /// finishes, so landings that keep arriving cannot keep every tip from being verified.
+    /// over the round's listing. A replacement selected by the hub ends the round at the
+    /// next family or batch.
     /// With `after_master`, `master` is already at `tip`, and a newer tip ends the round at the
     /// next family or batch whatever is under way.
     pub(super) fn run_families(
@@ -219,9 +190,6 @@ impl TipVerifier {
                 })
                 .collect(),
             queue: Mutex::new(by_family(batches(&self.listed, to_run, &costs)).into()),
-            started: Mutex::new(0),
-            in_flight: AtomicUsize::new(0),
-            ran_a_batch: AtomicBool::new(false),
             ended: Mutex::new(None),
             runs: Mutex::new(Vec::new()),
             held: Mutex::new(BTreeMap::new()),
@@ -268,7 +236,6 @@ impl TipVerifier {
                                 .run_batches(ctx, tip, &family, &batches, &callbacks);
                             lock(&round.held).remove(&family);
                             lock(&round.runs).extend(runs);
-                            round.in_flight.fetch_sub(1, Ordering::SeqCst);
                         }
                     })
                 })

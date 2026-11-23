@@ -45,6 +45,14 @@ fn ran_with_master(world: &World) -> Vec<(Vec<String>, Commit)> {
         .collect()
 }
 
+fn named_check(family: &str, text: &str, hash: char) -> TipCheck {
+    let mut check = check(text, hash);
+    check.family = family.to_owned();
+    check.check = name(&format!("{family}:{text}"));
+    check.key.check.clone_from(&check.check);
+    check
+}
+
 #[test]
 fn master_moves_once_the_budgeted_checks_pass_and_a_later_failure_holds_it() {
     let world = World::new();
@@ -133,13 +141,6 @@ fn both_platforms_verify_one_candidate_across_a_landing() {
     mac.config.tip.seconds = 150.0 / DEFAULT_TIP_RATE;
     let mut windows = world.ctx("m-2");
     windows.config.clone_from(&mac.config);
-    let named_check = |family: &str, text: &str, hash| {
-        let mut check = check(text, hash);
-        check.family = family.to_owned();
-        check.check = name(&format!("{family}:{text}"));
-        check.key.check.clone_from(&check.check);
-        check
-    };
     let first = check("first", 'a');
     let second = named_check("other", "second", 'b');
     let last = named_check("other", "last", 'c');
@@ -296,6 +297,111 @@ fn a_failed_or_incomplete_native_check_holds_the_shared_candidate() {
         );
         assert_eq!(world.master(), newer);
     }
+}
+
+#[test]
+fn both_verifiers_switch_to_the_replacement_after_a_required_failure() {
+    let world = World::new();
+    let previous = world.master();
+    let mac = world.ctx("m-1");
+    let windows = world.ctx("m-2");
+    let tip = commit("bbbb000");
+    let newer = commit("cccc000");
+    world.land(&tip);
+
+    let native = |text, hash, platform| {
+        let mut check = named_check("native", text, hash);
+        check.key.platform = Some(platform);
+        check
+    };
+    let mac_check = native("mac", 'a', Os::Macos);
+    let windows_check = native("windows", 'b', Os::Windows);
+    let fixed_mac = native("mac", 'c', Os::Macos);
+    let new_windows = native("windows", 'd', Os::Windows);
+    let first = check("first", 'e');
+    let second = check("second", 'f');
+    world.store(&windows_check.key, Outcome::Pass, "m-2");
+    for check in [&first, &second] {
+        world.hub.set_check_cost(check.check.as_str(), 60.0);
+    }
+    let elsewhere = |mut check: TipCheck| {
+        check.runnable = false;
+        check
+    };
+    let mac_work = Arc::new(FakeWork::default());
+    for (at, mac_check, windows_check) in [
+        (&tip, &mac_check, &windows_check),
+        (&newer, &fixed_mac, &new_windows),
+    ] {
+        mac_work.set_checks(
+            at,
+            vec![mac_check.clone(), elsewhere(windows_check.clone())],
+        );
+        world.work.set_checks(
+            at,
+            vec![
+                elsewhere(mac_check.clone()),
+                windows_check.clone(),
+                first.clone(),
+                second.clone(),
+            ],
+        );
+    }
+    mac_work.set_outcome(&tip, &mac_check.check, Outcome::Fail);
+
+    // Windows has its native result. While its first portable batch runs, macOS verifies
+    // the same candidate, records a required failure, and selects the landing.
+    world.work.on_run.lock().unwrap().insert(tip.clone(), {
+        let (ctx, work, git) = (mac.clone(), mac_work.clone(), world.git.clone());
+        let (tip, newer) = (tip.clone(), newer.clone());
+        Arc::new(move || {
+            let mut verifier = TipVerifier::new(work.clone(), "test");
+            git.set_tip("staging", newer.clone());
+            assert_eq!(
+                verifier.round(&ctx, 0).unwrap(),
+                Some((
+                    tip.clone(),
+                    TipOutcome::Failed {
+                        checks: vec![mac_check.check.clone()]
+                    }
+                ))
+            );
+            assert_eq!(verifier.next_target(&ctx).unwrap(), Some(newer.clone()));
+        })
+    });
+
+    let mut verifier = world.verifier();
+    assert_eq!(
+        verifier.round(&windows, 0).unwrap(),
+        Some((tip.clone(), TipOutcome::Superseded { by: newer.clone() }))
+    );
+    assert_eq!(world.master(), previous);
+    let old_batches: Vec<_> = world
+        .hub
+        .tip_claim_asks()
+        .into_iter()
+        .filter(|claim| claim.commit == tip && claim.family == "unit")
+        .map(|claim| claim.batch)
+        .collect();
+    assert_eq!(old_batches, [0]);
+
+    let (at, outcome) = verifier.round(&windows, 0).unwrap().unwrap();
+    assert_eq!(at, newer);
+    assert!(matches!(outcome, TipOutcome::Waiting { checks, .. } if checks == [fixed_mac.check]));
+    assert_eq!(world.master(), previous);
+    let replacement_runs: Vec<_> = world
+        .work
+        .runs()
+        .into_iter()
+        .filter(|run| run.1 == newer)
+        .flat_map(|run| run.2)
+        .collect();
+    assert_eq!(replacement_runs, [new_windows.check, second.check]);
+    assert_eq!(
+        TipVerifier::new(mac_work, "test").round(&mac, 0).unwrap(),
+        Some((newer.clone(), TipOutcome::Verified))
+    );
+    assert_eq!(world.master(), newer);
 }
 
 /// A check with an open regression ticket runs before `master` moves whatever its score, so a

@@ -26,34 +26,58 @@ fn a_round_that_ran_a_batch_is_finished_when_a_newer_tip_arrives() {
 }
 
 #[test]
-fn a_round_that_has_run_nothing_starts_over_at_a_newer_tip() {
-    let world = World::new();
-    let ctx = world.ctx("m-1");
-    let tip = commit("bbbb000");
-    world.land(&tip);
-    let mut first = check("a", 'a');
-    first.family = "alpha".to_owned();
-    let mut second = check("b", 'b');
-    second.family = "beta".to_owned();
-    world.work.set_checks(&tip, vec![first, second]);
-    // Another machine holds the first batch, so this one has run nothing when it reaches the
-    // second.
-    world
-        .hub
-        .tip_claim(&TipClaim {
-            commit: tip.clone(),
-            family: "alpha".to_owned(),
-            batch: 0,
-            machine: MachineId::new("m-2").unwrap(),
-        })
-        .unwrap();
-    let newer = commit("cccc000");
-    world.land(&newer);
-
-    let outcome = world.verifier().verify(&ctx, &tip).unwrap();
-
-    assert_eq!(outcome, TipOutcome::Superseded { by: newer });
-    assert!(world.work.runs().is_empty());
+fn a_round_keeps_its_candidate_when_the_hub_cannot_confirm_a_replacement() {
+    for unreachable in [false, true] {
+        let world = World::new();
+        let ctx = world.ctx("m-1");
+        let tip = commit("bbbb000");
+        world.land(&tip);
+        let mut first = check("a", 'a');
+        first.family = "alpha".to_owned();
+        let mut second = check("b", 'b');
+        second.family = "beta".to_owned();
+        world.work.set_checks(&tip, vec![first.clone(), second]);
+        // Another machine holds the first batch, so this one is idle when it reaches the
+        // second. Marking its candidate for retry does not select a replacement.
+        let (other, candidate) = (ctx.clone(), tip.clone());
+        let (git, hub) = (world.git.clone(), world.hub.clone());
+        world.work.before_batches.lock().unwrap().insert(
+            "alpha".to_owned(),
+            Arc::new(move || {
+                git.set_tip("staging", commit("cccc000"));
+                assert!(
+                    other
+                        .hub
+                        .tip_claim(&TipClaim {
+                            commit: candidate.clone(),
+                            family: "alpha".to_owned(),
+                            batch: 0,
+                            machine: MachineId::new("m-2").unwrap(),
+                        })
+                        .unwrap()
+                        .granted
+                );
+                super::super::candidate::allow_newer(&other, &candidate).unwrap();
+                hub.set_unreachable(unreachable);
+            }),
+        );
+        let hub = world.hub.clone();
+        world.work.before_batches.lock().unwrap().insert(
+            "beta".to_owned(),
+            Arc::new(move || hub.set_unreachable(false)),
+        );
+        assert_eq!(
+            world.verifier().round(&ctx, 0).unwrap(),
+            Some((
+                tip,
+                TipOutcome::Waiting {
+                    checks: vec![first.check],
+                    unrunnable: Vec::new()
+                }
+            ))
+        );
+        assert_eq!(world.work.runs().len(), 1, "the second family ran");
+    }
 }
 
 /// Under load a family can spend ten minutes building and listing before it claims its first

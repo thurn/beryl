@@ -148,12 +148,12 @@ impl TipVerifier {
         };
         if step == green::BuildStep::Continue {
             let (newer, runs) = self.run_families(ctx, tip, &split.within, false)?;
+            tally.ran = tally
+                .ran
+                .saturating_add(u32::try_from(runs.len()).unwrap_or(u32::MAX));
             if let Some(by) = newer {
                 superseded = Some((by, runs));
             } else {
-                tally.ran = tally
-                    .ran
-                    .saturating_add(u32::try_from(runs.len()).unwrap_or(u32::MAX));
                 settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
             }
         }
@@ -172,6 +172,9 @@ impl TipVerifier {
         }
         Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
         require_running()?;
+        if let Some(by) = candidate::replacement(ctx, tip) {
+            return Ok(TipOutcome::Superseded { by });
+        }
         self.note_incomplete(ctx, tip, &checks, &verdicts, true);
         self.report_unlisted(ctx, tip, &unlisted);
         self.save(ctx);

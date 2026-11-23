@@ -6,7 +6,9 @@ use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, InputHash, Seq};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::ResultKey;
-use ignite_core::tipround::{DeferredPlatform, PlatformVerification, TipCoverageUpdate};
+use ignite_core::tipround::{
+    DeferredPlatform, PlatformVerification, TipCandidate, TipCandidateUpdate, TipCoverageUpdate,
+};
 use ignite_core::traits::{Git as _, Hub as _};
 
 use super::*;
@@ -436,4 +438,74 @@ fn a_round_blocked_in_listing_yields_to_master_and_the_latest_tip_runs() {
             deferred: None,
         }
     );
+}
+
+#[test]
+fn an_adopted_round_blocked_in_listing_yields_to_the_hubs_replacement() {
+    let machine = TipMachine::with_work(
+        "replaced-tip-round",
+        OneCheck {
+            block_listing: true,
+            ..OneCheck::default()
+        },
+    );
+    let ctx = machine.threads.ctx.clone();
+    let target = machine.git.tip("staging").unwrap();
+    let master = machine.git.tip("master").unwrap();
+    let candidate = |commit: &Commit| TipCandidate {
+        commit: commit.clone(),
+        retry_on_new_tip: false,
+    };
+    assert!(
+        machine
+            .hub
+            .update_tip_candidate(&TipCandidateUpdate {
+                expected: None,
+                replacement: candidate(&target),
+            })
+            .unwrap()
+    );
+    let (first, tips) = machine.daemon();
+    machine.switch.set(Some(first.clone()));
+    first.start_internal(
+        tips.verb.clone(),
+        TipRoundVerb::request(&target, Seq(0), &ctx.repo),
+    );
+    assert!(until(|| machine.commands.begun() == 1));
+
+    machine.switch.set(None);
+    drop(first);
+    let newer = Commit::new("cccc000").unwrap();
+    machine.git.set_tip("staging", newer.clone());
+    assert!(
+        machine
+            .hub
+            .update_tip_candidate(&TipCandidateUpdate {
+                expected: Some(candidate(&target)),
+                replacement: candidate(&newer),
+            })
+            .unwrap()
+    );
+
+    let (second, tips) = machine.daemon();
+    machine.switch.set(Some(second));
+    let stopping = turn_on_a_thread(tips, ctx.clone());
+    assert!(until(|| machine.switch.stops.load(Ordering::SeqCst) > 0));
+    machine.commands.finish_all();
+    let (tips, turn) = stopping.join().unwrap();
+    assert_eq!(
+        turn.unwrap(),
+        Some((target, TipOutcome::Superseded { by: newer.clone() }))
+    );
+    assert!(lock(&machine.landing.owner).is_none());
+    assert_eq!(machine.git.tip("master").unwrap(), master);
+    assert_eq!(machine.threads.work.runs.load(Ordering::SeqCst), 0);
+
+    let checking = turn_on_a_thread(tips, ctx);
+    assert!(until(|| machine.commands.begun() == 2));
+    machine.commands.finish_all();
+    assert!(until(|| machine.commands.begun() == 3));
+    machine.commands.finish_all();
+    let (_, turn) = checking.join().unwrap();
+    assert_eq!(turn.unwrap(), Some((newer, TipOutcome::Verified)));
 }
