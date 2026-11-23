@@ -10,8 +10,8 @@
 //! depth curve. That reproduces a reference camera's exact screen-space trajectory and velocity
 //! profile even when the endpoints sit at very different depths in the local camera frustum.
 //!
-//! `Spline` packs its control nodes and timing curve into 86 bytes (align 2) so `Shape` stays 88
-//! bytes and `Segment` stays 248 bytes, `Copy`, and zero-allocation on animation frames.
+//! `Spline` packs its control nodes and timing curve so `Segment` fits in 256 bytes and stays
+//! `Copy`, with no allocations on animation frames.
 
 use std::f32::consts::{FRAC_1_SQRT_2, PI};
 
@@ -192,7 +192,7 @@ struct EvalNode {
 }
 
 /// A resolved multi-node card spline between `Segment::from` (node `0`) and `Segment::to`
-/// (node `count + 1`), packed into 86 bytes (align 2) so `Segment` stays compact and `Copy`.
+/// (node `count + 1`), packed so `Segment` stays compact and `Copy`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Spline {
     /// Camera eye position in millimetres, quantized at `0.5 mm`.
@@ -209,9 +209,8 @@ pub struct Spline {
     ease: PackedHermite,
     /// Camera backward unit vector (`x, y` quantized; `z` reconstructed from unit length).
     camera_back_xy: [i16; 2],
-    /// When retargeted mid-flight by `Segment::through`, the eased progress `u0` at which
-    /// `Segment::from` was replaced with the instantaneous pose.
-    anchor_u: u16,
+    /// Exact `f32` bits of the elapsed fraction when `Segment::through` captured the pose.
+    anchor_elapsed_bits: u32,
     /// Five 6-bit homogeneous frustum depth weights (`from` followed by up to 4 interior nodes).
     weights: [u8; 4],
     /// Two-bit largest-component index for each of the four smallest-three quaternions.
@@ -425,7 +424,7 @@ impl Spline {
                 pack_scaled_i16(back.x, f32::from(i16::MAX)),
                 pack_scaled_i16(back.y, f32::from(i16::MAX)),
             ],
-            anchor_u: 0,
+            anchor_elapsed_bits: 0,
             weights: pack_weights(weight_list),
             rot_largest,
             flags,
@@ -593,30 +592,49 @@ impl Spline {
     /// Evaluates the full `Pose` at normalized elapsed time `elapsed` in `[0, 1]`.
     #[must_use]
     pub fn pose_at(&self, from: &Pose, to: &Pose, elapsed: f32) -> Pose {
-        let eye = self.eye();
-        let camera_back = self.camera_back();
         let curve = self.ease.unpack(self.four_keys());
         let u = curve.evaluate(elapsed);
+        let retargeted = self.retargeted();
+        let progress = if retargeted {
+            let anchor_elapsed = f32::from_bits(self.anchor_elapsed_bits);
+            if elapsed <= anchor_elapsed {
+                return *from;
+            }
+            let anchor_u = curve.evaluate(anchor_elapsed);
+            let remaining = 1.0 - anchor_u;
+            // The curve can already be at its destination before the segment ends. Use the
+            // remaining time in that case so the card can still move to its new destination.
+            let progress = if remaining < 1e-4 {
+                (elapsed - anchor_elapsed) / (1.0 - anchor_elapsed)
+            } else {
+                (u - anchor_u) / remaining
+            };
+            if progress <= 0.0 {
+                return *from;
+            }
+            if progress >= 1.0 {
+                return *to;
+            }
+            progress
+        } else {
+            u
+        };
+        let eye = self.eye();
+        let camera_back = self.camera_back();
         let (mut position, mut world_rot, mut seen_scale) =
             self.raw_at(from, to, u, eye, camera_back);
 
-        // After a mid-flight resize (`Segment::through`), `from` holds the exact pose at
-        // `anchor_u`. Blend smoothly from `from` (weight 1 at `anchor_u`) onto the spline
-        // (weight 1 at `u = 1`) so there is no jump at the resize frame and arrival at `to` is
-        // exact.
-        if self.retargeted() {
-            let u0 = unpack_unit(self.anchor_u);
-            let denom = (1.0 - u0).max(1e-4);
-            let keep = ((1.0 - u) / denom).clamp(0.0, 1.0);
+        // After a resize, blend from the captured pose onto the spline over the remaining flight.
+        if retargeted {
             let anchor_rot = if self.flips() {
                 effective_rotation(from)
             } else {
                 from.rotation
             };
             let anchor_seen = from.scale / Self::depth(from.position, eye, camera_back);
-            position = position.lerp(from.position, keep);
-            world_rot = world_rot.slerp(anchor_rot, keep);
-            seen_scale = seen_scale + (anchor_seen - seen_scale) * keep;
+            position = from.position.lerp(position, progress);
+            world_rot = anchor_rot.slerp(world_rot, progress);
+            seen_scale = anchor_seen + (seen_scale - anchor_seen) * progress;
         }
 
         let scale = seen_scale.max(1e-6) * Self::depth(position, eye, camera_back);
@@ -628,30 +646,24 @@ impl Spline {
                 (world_rot * Quat::from_rotation_x(-PI), 1.0)
             }
         } else {
-            (world_rot, from.turn + (to.turn - from.turn) * u)
+            (world_rot, from.turn + (to.turn - from.turn) * progress)
         };
 
         Pose {
             position,
             rotation,
             scale,
-            opacity: from.opacity + (to.opacity - from.opacity) * u,
+            opacity: from.opacity + (to.opacity - from.opacity) * progress,
             turn,
-            skew: from.skew + (to.skew - from.skew) * u,
-            shear: from.shear + (to.shear - from.shear) * u,
+            skew: from.skew + (to.skew - from.skew) * progress,
+            shear: from.shear + (to.shear - from.shear) * progress,
         }
     }
 
-    /// Retargets the spline through `target` at normalized time `elapsed` by recording `target`
-    /// in `from` and anchoring the smooth blend at `u = ease(elapsed)`.
+    /// Retargets the spline from `target` by storing the pose and its normalized time `elapsed`.
     pub fn through(&mut self, from: &mut Pose, elapsed: f32, target: Pose) {
-        let curve = self.ease.unpack(self.four_keys());
-        let u = curve.evaluate(elapsed);
-        if 1.0 - u < 1e-4 {
-            return;
-        }
         *from = target;
-        self.anchor_u = pack_unit(u);
+        self.anchor_elapsed_bits = elapsed.to_bits();
         self.flags |= FLAG_RETARGETED;
     }
 

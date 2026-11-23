@@ -611,8 +611,8 @@ fn each_pile_lies_in_its_players_strip() {
     }
 }
 
-/// A resize in mid-flight, from a desktop window to a phone and from one phone to another,
-/// leaves the card where it was at that instant, and it goes on to its place in the new layout.
+/// A resize during a draw preserves the card's pose under the resized camera. The card then
+/// lands in its new hand layout.
 #[test]
 fn resizing_mid_flight_into_and_between_compact_windows_keeps_the_pose() {
     for (from, to, banded) in [
@@ -635,14 +635,18 @@ fn resizing_mid_flight_into_and_between_compact_windows_keeps_the_pose() {
         frame(&mut show, &mut scratch, 150 * MS);
         let was = show.pose(card, 150 * MS).expect("the card is drawn");
         show.resize(to);
-        frame(&mut show, &mut scratch, 150 * MS);
-        let now = show.pose(card, 150 * MS).expect("the card is drawn");
-        assert!(
-            was.position.distance(now.position) < 1e-3
-                && was.rotation.dot(now.rotation).abs() > 1.0 - 1e-6
-                && (was.scale - now.scale).abs() < 1e-5,
-            "{from:?} to {to:?}: the card does not jump: {was:?} became {now:?}"
+        let resized = frame(&mut show, &mut scratch, 150 * MS);
+        let flying = resized
+            .resolved
+            .iter()
+            .find(|item| item.role == Role::Card && item.id.0 == u32::from(cards.top.0))
+            .expect("the resized frame draws the card");
+        let (expected, _) = show.table().camera().card_box(&was);
+        assert_eq!(
+            flying.corners, expected,
+            "{from:?} to {to:?}: the resized camera still draws the same pose"
         );
+        assert_eq!(flying.pose, Some(was), "{from:?} to {to:?}");
         assert_eq!(show.table().layout().bands.is_some(), banded);
         frame(&mut show, &mut scratch, 400 * MS);
         // The view the show ends on lists the drawn card last in the hand, as it rests.

@@ -449,7 +449,7 @@ fn a_new_end_mid_draw_spline_keeps_the_pose_at_that_instant() {
             .find(|segment| matches!(segment.shape, Shape::Spline(_)))
             .expect("draw uses a spline");
         let step = (flight.start, flight.end());
-        for share in [0.10, 0.25, 0.42, 0.64, 0.82] {
+        for share in [0.10, 0.25, 0.42, 0.64, 0.82, 0.98] {
             let t = at(step, share);
             let now = flight.pose_at(t);
             let mut moved = Segment {
@@ -462,17 +462,11 @@ fn a_new_end_mid_draw_spline_keeps_the_pose_at_that_instant() {
             };
             moved.through(t, now);
             let kept = moved.pose_at(t);
-            assert!(
-                kept.position.distance(now.position) < 1e-2,
-                "slot #{} at {share}: {kept:?} vs {now:?}",
-                slot.0
-            );
-            assert!((kept.scale - now.scale).abs() < 1e-4, "at {share}");
-            assert!((kept.turn - now.turn).abs() < 1e-4, "at {share}");
-            assert!(
-                kept.rotation.dot(now.rotation).abs() > 1.0 - 1e-5,
-                "at {share}"
-            );
+            assert_eq!(kept, now, "slot #{} at {share}", slot.0);
+            let later = moved.pose_at(t + (flight.end() - t) / 2);
+            assert_ne!(later, now, "the card resumes its flight after {share}");
+            assert_ne!(later, moved.to, "the card is still in flight after {share}");
+            assert_eq!(moved.pose_at(flight.end()), moved.to);
         }
     }
 }
