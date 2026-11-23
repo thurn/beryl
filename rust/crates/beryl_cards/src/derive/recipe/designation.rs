@@ -1,7 +1,8 @@
-//! Playing level bars and solving Cases before generating their later abilities.
+//! Reaching designations before generating the actions they enable.
 
-use beryl_card::{Ability, Amount, CardDef, Comparison, Condition, Designation};
-use beryl_engine::TurnStep;
+use beryl_card::definition::Shape;
+use beryl_card::{Ability, Amount, CardDef, Comparison, Condition, Designation, FaceIx, Rewrite};
+use beryl_engine::{TurnStep, Zone};
 use beryl_scenario::{Action, P0};
 
 use super::opening::{Opening, open_recipe, source_name};
@@ -39,6 +40,9 @@ pub(super) fn reach_level(def: &'static CardDef, place: Place, level: u8) -> Opt
 }
 
 pub(super) fn openings(def: &'static CardDef, place: Place) -> Vec<Opening> {
+    if place == Place::Hand {
+        return cast_prepare_spell(def, place).into_iter().collect();
+    }
     let Place::Battlefield(face) = place else {
         return Vec::new();
     };
@@ -76,6 +80,25 @@ pub(super) fn openings(def: &'static CardDef, place: Place) -> Vec<Opening> {
         openings.push(solve);
     }
     openings
+}
+
+/// The inset can be cast after the creature resolves and its entry replacement prepares it.
+fn cast_prepare_spell(def: &'static CardDef, place: Place) -> Option<Opening> {
+    if def.shape != Shape::Prepared
+        || !def.front().abilities.iter().any(|ability| {
+            ability
+                .replacement()
+                .is_some_and(|replacement| replacement.rewrite == Rewrite::EntersPrepared)
+        })
+    {
+        return None;
+    }
+    let mut opening = Opening::new(def, place, "cast the prepare spell");
+    opening.stimuli.extend([
+        Stimulus::CastFrom(P0, def.face_name(FaceIx::FRONT), Zone::Hand),
+        Stimulus::CastFrom(P0, def.face_name(FaceIx::BACK), Zone::Exile),
+    ]);
+    Some(opening)
 }
 
 /// Start early enough to solve the Case and reach its controller's next upkeep.
