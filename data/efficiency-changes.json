@@ -845,5 +845,10 @@
     "label": "Synthetic efficiency reports use fixture history, avoiding repeated Git queries during pytest.",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
+  },
+  {
+    "label": "The fuzz prebuild compiles only the integration binaries its searches run.",
+    "metric": "bead.core-minutes",
+    "expect": "down"
   }
 ]

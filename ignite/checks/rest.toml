@@ -339,10 +339,10 @@ dir = "rust"
 inputs = ["crate:beryl_link_iroh", "rust/Cargo.toml"]
 outputs = ["rust/target"]
 
-# The test binaries of the fuzzers, optimized with debug assertions and overflow checks on (the
-# build `just fuzz` makes). They land in rust/target/release.
+# The integration test binaries the fuzz runner selects, optimized with debug assertions and
+# overflow checks on. The `rust` and `allocations` families build their own test binaries.
 [product.fuzz-tests]
-build = "cargo test --release --config profile.release.debug-assertions=true --config profile.release.overflow-checks=true --locked --no-run -p beryl_search -p beryl_session"
+build = "cargo test --release --config profile.release.debug-assertions=true --config profile.release.overflow-checks=true --locked --no-run -p beryl_search -p beryl_session --test all --test session"
 dir = "rust"
 inputs = ["crate:beryl_search", "crate:beryl_session", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
 outputs = ["rust/target"]

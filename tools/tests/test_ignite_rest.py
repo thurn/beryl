@@ -62,6 +62,13 @@ def test_the_manifest_declares_the_families_and_products() -> None:
         family = declared["family"][name]
         assert family["kind"] == "exploration"
         assert f"rest next {name}" in str(family["next"])
+    fuzz_build = str(declared["product"]["fuzz-tests"]["build"]).split()
+    built_tests = {
+        name for flag, name in zip(fuzz_build, fuzz_build[1:]) if flag == "--test"
+    }
+    assert built_tests == {
+        args[args.index("--test") + 1] for args, _ in adapter.FUZZ_TARGETS.values()
+    }
     assert declared["family"]["iroh"]["adapter"] == "nextest"
     # The release branch waits on the `ignite` family (ignite.toml's `release_family`), so it
     # must hold Ignite's tests, and they must reuse the `ignite-tests` build.
