@@ -12,7 +12,7 @@ use ignite_core::protocol::hub::{IncompleteReason, ResultKey};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Result;
 
-use super::super::{TipCheck, TipLanding, TipRun, TipSet, TipVerifier, TipWork};
+use super::super::{ListingPhase, TipCheck, TipLanding, TipRun, TipSet, TipVerifier, TipWork};
 use crate::server::Context;
 
 const CONFIG: &str = r#"
@@ -37,7 +37,7 @@ landing_trees = 1
 struct NoWork;
 
 impl TipWork for NoWork {
-    fn checks(&self, _ctx: &Context, _commit: &Commit) -> Result<TipSet> {
+    fn checks(&self, _ctx: &Context, _commit: &Commit, _phase: ListingPhase) -> Result<TipSet> {
         unreachable!("not listed in these tests")
     }
     fn run(&self, _: &Context, _: &Commit, _: &[CheckName], _: bool) -> Vec<TipRun> {
@@ -77,13 +77,14 @@ fn check(name: &str, hash: char) -> TipCheck {
         runnable: true,
         reuse: true,
         machine_relative: false,
+        kind: crate::tip::TipCheckKind::Other,
     }
 }
 
 fn incomplete(check: &TipCheck, reason: IncompleteReason) -> TipRun {
     TipRun {
         check: check.check.clone(),
-        measurement_hash: None,
+        input_hash: None,
         outcome: Outcome::Incomplete,
         output: Some("the run's output".to_owned()),
         reason: Some(reason),

@@ -307,7 +307,7 @@ fn a_round_records_where_its_time_went_and_a_slow_one_files_one_ticket() {
     assert_eq!(world.hub.round_tickets_filed(), 1);
 }
 
-fn running_hub(world: &World, name: &str) -> (RunningHub, PathBuf, Context) {
+pub(super) fn running_hub(world: &World, name: &str) -> (RunningHub, PathBuf, Context) {
     let ctx = world.ctx("m-1");
     let database = ignite_core::test_files::temp_dir().join(format!("tip-{name}.sqlite"));
     let hub = HubServer {
@@ -322,7 +322,7 @@ fn running_hub(world: &World, name: &str) -> (RunningHub, PathBuf, Context) {
     (hub, database, ctx)
 }
 
-fn connect_machine(mut ctx: Context, hub: &RunningHub, name: &str, os: Os) -> Context {
+pub(super) fn connect_machine(mut ctx: Context, hub: &RunningHub, name: &str, os: Os) -> Context {
     ctx.config.hub.url = format!("http://{}", hub.address());
     let register = crate::hubclient::HubClient::new(&ctx.config.hub, "", "tip-test");
     let machine = register
@@ -344,7 +344,7 @@ fn connect_machine(mut ctx: Context, hub: &RunningHub, name: &str, os: Os) -> Co
     ctx
 }
 
-fn select(ctx: &Context, tip: &Commit) {
+pub(super) fn select(ctx: &Context, tip: &Commit) {
     let expected = ctx.hub.tip_candidate().unwrap();
     assert!(
         ctx.hub

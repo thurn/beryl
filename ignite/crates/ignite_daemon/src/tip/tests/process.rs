@@ -17,8 +17,8 @@ struct Slow {
 }
 
 impl TipWork for Slow {
-    fn checks(&self, ctx: &Context, commit: &Commit) -> Result<TipSet> {
-        self.work.checks(ctx, commit)
+    fn checks(&self, ctx: &Context, commit: &Commit, phase: ListingPhase) -> Result<TipSet> {
+        self.work.checks(ctx, commit, phase)
     }
 
     fn run(&self, ctx: &Context, at: &Commit, checks: &[CheckName], rerun: bool) -> Vec<TipRun> {

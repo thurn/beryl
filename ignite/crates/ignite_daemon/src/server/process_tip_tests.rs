@@ -13,7 +13,8 @@ use ignite_core::traits::{Git as _, Hub as _};
 
 use super::*;
 use crate::tip::{
-    ROUND_VERB, TipCheck, TipLanding, TipLoop, TipOutcome, TipRoundVerb, TipRun, TipSet, TipWork,
+    ListingPhase, ROUND_VERB, TipCheck, TipLanding, TipLoop, TipOutcome, TipRoundVerb, TipRun,
+    TipSet, TipWork,
 };
 
 /// One check, `unit:a`, whose run is one command through the round's launcher, which runs until
@@ -40,6 +41,7 @@ fn the_check(platform: Option<Os>) -> TipCheck {
         runnable: true,
         reuse: true,
         machine_relative: false,
+        kind: crate::tip::TipCheckKind::Other,
     }
 }
 
@@ -76,7 +78,10 @@ impl OneCheck {
 }
 
 impl TipWork for OneCheck {
-    fn checks(&self, ctx: &Context, at: &Commit) -> Result<TipSet> {
+    fn checks(&self, ctx: &Context, at: &Commit, phase: ListingPhase) -> Result<TipSet> {
+        if !phase.includes(false) {
+            return Ok(TipSet::default());
+        }
         if self.block_listing && self.command(ctx, at, &["cargo", "nextest", "list"]) != Some(0) {
             return Err(Error::Conflict("listing did not finish".to_owned()));
         }
@@ -97,7 +102,7 @@ impl TipWork for OneCheck {
             .iter()
             .map(|check| TipRun {
                 check: check.clone(),
-                measurement_hash: None,
+                input_hash: None,
                 outcome,
                 output: None,
                 reason: None,

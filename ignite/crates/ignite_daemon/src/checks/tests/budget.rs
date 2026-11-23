@@ -14,7 +14,6 @@ fn landing() -> RunOptions {
         rerun: false,
         ticket: Some("tk.7".parse().unwrap()),
         session: None,
-        reserve: None,
     }
 }
 

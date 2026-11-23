@@ -64,7 +64,23 @@ impl<'a> Scope<'a> {
         })
     }
 
-    pub fn select(
+    pub fn required(
+        &self,
+        ctx: &Context,
+        checks: Vec<TipCheck>,
+        unlisted: Vec<Unlisted>,
+    ) -> Result<Required> {
+        let (checks, unlisted) = self.select(checks, unlisted);
+        let keys: Vec<ResultKey> = checks.iter().map(|check| check.key.clone()).collect();
+        let cached = if keys.is_empty() {
+            Vec::new()
+        } else {
+            ctx.hub.lookup(&keys)?
+        };
+        Ok(self.defer(checks, cached, unlisted))
+    }
+
+    fn select(
         &self,
         mut checks: Vec<TipCheck>,
         mut unlisted: Vec<Unlisted>,
@@ -82,7 +98,7 @@ impl<'a> Scope<'a> {
             .map(|(_, gap)| &gap.last_good)
     }
 
-    pub fn defer(
+    fn defer(
         &self,
         checks: Vec<TipCheck>,
         cached: Vec<Option<CachedResult>>,

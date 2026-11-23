@@ -66,6 +66,7 @@ fn check(text: &str, hash: char) -> TipCheck {
         runnable: true,
         reuse: true,
         machine_relative: false,
+        kind: crate::tip::TipCheckKind::Other,
     }
 }
 

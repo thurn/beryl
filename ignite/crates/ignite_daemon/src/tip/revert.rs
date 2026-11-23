@@ -108,7 +108,9 @@ impl TipVerifier {
         culprit: &Culprit,
         output: Option<&str>,
     ) -> Handled {
-        if !ctx.config.revert.broken_build || !self.build_families(ctx).contains(&check.family) {
+        if !ctx.config.revert.broken_build
+            || (ctx.config.repository.green.is_none() || !check.is_build())
+        {
             return Handled::Report;
         }
         match self.revert(ctx, tip, check, culprit, output) {

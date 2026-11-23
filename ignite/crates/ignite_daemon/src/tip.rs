@@ -103,6 +103,13 @@ pub const WAITING_RETRY_S: f64 = 600.0;
 /// How many lines of a failure's output a regression report carries.
 const OUTPUT_LINES: usize = 40;
 
+/// The candidate's classification of a regression check.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TipCheckKind {
+    Build,
+    Other,
+}
+
 /// One regression check that a tip needs a pass for, on one platform.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TipCheck {
@@ -118,14 +125,22 @@ pub struct TipCheck {
     pub reuse: bool,
     /// The check's calibration and results belong to the verifier that listed it.
     pub machine_relative: bool,
+    /// Whether the candidate marks this family as a build family.
+    pub kind: TipCheckKind,
+}
+
+impl TipCheck {
+    pub(crate) fn is_build(&self) -> bool {
+        self.kind == TipCheckKind::Build
+    }
 }
 
 /// One check's outcome from a run at one commit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TipRun {
     pub check: CheckName,
-    /// The key of the calibration the run used, for checks that depend on it.
-    pub measurement_hash: Option<ignite_core::ids::InputHash>,
+    /// The hash the runner verified for a build or calibration-dependent check.
+    pub input_hash: Option<ignite_core::ids::InputHash>,
     pub outcome: Outcome,
     /// The file or reference that holds a failure's output.
     pub output: Option<String>,
@@ -165,6 +180,35 @@ pub struct TipSet {
     pub off: Vec<TipCheck>,
 }
 
+impl TipSet {
+    fn append(&mut self, other: Self) {
+        self.checks.extend(other.checks);
+        self.unlisted.extend(other.unlisted);
+        self.off.extend(other.off);
+    }
+}
+
+/// The regression families a round lists in one phase.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListingPhase {
+    All,
+    /// Build families that can be listed here, including checks keyed for other platforms.
+    Build,
+    /// Build families that need a listing published by a peer.
+    PeerBuild,
+    Other,
+}
+
+impl ListingPhase {
+    pub(crate) fn includes(self, builds: bool) -> bool {
+        match self {
+            Self::All => true,
+            Self::Build | Self::PeerBuild => builds,
+            Self::Other => !builds,
+        }
+    }
+}
+
 /// A check that batches are cut over: every check this machine can run that the family
 /// listed at the tip, whether the tip needs it or not.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -193,8 +237,8 @@ impl TipLanding {
 /// What tip verification needs beyond [`Context`]: the checks at a commit, a way to run them
 /// there and the landings between two commits. [`CheckTipWork`] is the real one.
 pub trait TipWork: Send + Sync {
-    /// Every regression check `commit` needs a pass for, as this machine can list them.
-    fn checks(&self, ctx: &Context, commit: &Commit) -> Result<TipSet>;
+    /// The regression checks of `phase` at `commit`, as this machine can list them.
+    fn checks(&self, ctx: &Context, commit: &Commit, phase: ListingPhase) -> Result<TipSet>;
     /// Runs the named checks at `commit` in a landing tree, in the `tip` class, storing their
     /// results. `rerun` ignores cached results.
     fn run(&self, ctx: &Context, commit: &Commit, checks: &[CheckName], rerun: bool)
@@ -228,12 +272,6 @@ pub trait TipWork: Send + Sync {
     /// name.
     fn covered_by(&self) -> BTreeMap<String, String> {
         BTreeMap::new()
-    }
-    /// The families declared `builds = true`, whose checks fail when the code does not compile
-    /// or type-check. The work runs their checks with the cores reserved for them when
-    /// `repository.green` is set.
-    fn build_families(&self) -> std::collections::BTreeSet<String> {
-        std::collections::BTreeSet::new()
     }
     /// The landings after `from` up to and including `to`, oldest first.
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>>;
@@ -477,7 +515,7 @@ impl TipVerifier {
 fn verdict(check: &TipCheck, outcome: Outcome, output: Option<String>) -> TipRun {
     TipRun {
         check: check.check.clone(),
-        measurement_hash: check.machine_relative.then(|| check.key.hash.clone()),
+        input_hash: (check.is_build() || check.machine_relative).then(|| check.key.hash.clone()),
         outcome,
         output,
         reason: None,
@@ -496,9 +534,9 @@ fn settle_runs(
     for run in runs {
         own.extend(run.output.clone());
         if let Some(check) = checks.iter().find(|c| c.runnable && c.check == run.check)
-            && (!check.machine_relative
+            && (!(check.is_build() || check.machine_relative)
                 || run.outcome == Outcome::Incomplete
-                || run.measurement_hash.as_ref() == Some(&check.key.hash))
+                || run.input_hash.as_ref() == Some(&check.key.hash))
         {
             verdicts.insert(check.key.clone(), run);
         }

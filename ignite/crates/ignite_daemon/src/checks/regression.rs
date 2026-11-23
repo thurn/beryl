@@ -14,11 +14,11 @@ use super::listings::{Kept, Listing, Origin};
 use super::prepare::on_threads;
 use super::{CheckRun, Checks, LISTING_BUILD_FAILED, OpenTree, Prepared, RunOptions, UNRESOLVED};
 use crate::server::Context;
-use crate::tip::{TipCheck, TipSet, Unlisted};
+use crate::tip::{ListingPhase, TipCheck, TipCheckKind, TipSet, Unlisted};
 
 impl Checks {
-    /// Every regression check of every regression family, keyed in `tree`, as a tip needs a
-    /// pass for it. A check the hub switched off as flaky is left out.
+    /// The regression checks for this phase, keyed in `tree`. Checks switched off as flaky are
+    /// left out of the required set.
     ///
     /// A family that needs a build to list on another platform uses the listing that platform
     /// publishes, as does any nextest family that requires a pass there. Its check names and
@@ -28,21 +28,36 @@ impl Checks {
     /// A family that cannot be listed, one whose products cannot be built for its listing, and
     /// a check whose inputs cannot be resolved are not errors: they come back in
     /// [`TipSet::unlisted`], so the other families still verify and the tip waits for these.
-    pub(crate) fn regression_checks(&self, ctx: &Context, tree: &TreeId) -> Result<TipSet> {
+    pub(crate) fn regression_checks_for(
+        &self,
+        ctx: &Context,
+        tree: &TreeId,
+        phase: ListingPhase,
+    ) -> Result<TipSet> {
         let (checks, tree) = self.open(ctx, tree)?;
-        Ok(checks.regression_in(ctx, &tree))
+        Ok(checks.regression_in(ctx, &tree, phase))
     }
 
-    /// [`Checks::regression_checks`] in a tree opened with its own manifests.
-    fn regression_in(&self, ctx: &Context, tree: &OpenTree) -> TipSet {
+    #[cfg(test)]
+    pub(crate) fn regression_checks(&self, ctx: &Context, tree: &TreeId) -> Result<TipSet> {
+        self.regression_checks_for(ctx, tree, ListingPhase::All)
+    }
+
+    /// Lists a phase using the candidate's manifests, including families this machine cannot run.
+    fn regression_in(&self, ctx: &Context, tree: &OpenTree, phase: ListingPhase) -> TipSet {
         let among: Vec<(&str, &Family)> = self
             .settings
             .manifest
             .families
             .iter()
-            .filter(|(_, declared)| declared.family.kind == Kind::Regression)
+            .filter(|(_, declared)| {
+                declared.family.kind == Kind::Regression && phase.includes(declared.family.builds)
+            })
             .map(|(name, declared)| (name.as_str(), &declared.family))
             .collect();
+        if among.is_empty() {
+            return TipSet::default();
+        }
         let local: Vec<_> = among
             .iter()
             .copied()
@@ -51,18 +66,22 @@ impl Checks {
                     && (!family.machine_relative || self.families().any(|(own, _)| own == *name))
             })
             .collect();
-        let options = RunOptions {
-            verb: "tip".to_owned(),
-            class: Class::Tip,
-            rerun: false,
-            ticket: None,
-            session: None,
-            reserve: None,
-        };
-        let mut run = CheckRun::default();
         let mut set = TipSet::default();
-        let prepared = self.prepare_among(ctx, tree, &local, &options, &mut run);
-        self.add_regression_checks(&local, prepared, Some(&run), &mut set);
+        if phase != ListingPhase::PeerBuild && !local.is_empty() {
+            let options = RunOptions {
+                verb: "tip".to_owned(),
+                class: Class::Tip,
+                rerun: false,
+                ticket: None,
+                session: None,
+            };
+            let mut run = CheckRun::default();
+            let prepared = self.prepare_among(ctx, tree, &local, &options, &mut run);
+            self.add_regression_checks(&local, prepared, Some(&run), &mut set);
+        }
+        if phase == ListingPhase::Build {
+            return set;
+        }
         for os in [Os::Macos, Os::Windows] {
             let remote: Vec<_> = among
                 .iter()
@@ -247,6 +266,11 @@ impl Checks {
                         runnable,
                         reuse: state == CheckState::On,
                         machine_relative: family.machine_relative,
+                        kind: if family.builds {
+                            TipCheckKind::Build
+                        } else {
+                            TipCheckKind::Other
+                        },
                     };
                     match (off, runnable) {
                         (false, _) => set.checks.push(check),

@@ -13,7 +13,9 @@ use ignite_git::changed::CommitPaths;
 
 use super::{commit, ticket};
 use crate::server::Context;
-use crate::tip::{TipCheck, TipLanding, TipRun, TipSet, TipWork, Unlisted, ticketed_landings};
+use crate::tip::{
+    ListingPhase, TipCheck, TipLanding, TipRun, TipSet, TipWork, Unlisted, ticketed_landings,
+};
 
 /// Checks, run outcomes and landings scripted by commit. A run stores its results at the hub
 /// under the keys the commit's checks have there, as the real runner does.
@@ -56,8 +58,8 @@ pub(super) struct FakeWork {
     pub(super) masters: Mutex<Vec<(Vec<CheckName>, Commit)>>,
     /// The checks each commit's listing finds switched off.
     pub(super) off: Mutex<HashMap<Commit, Vec<TipCheck>>>,
-    /// The families declared `builds = true`.
-    pub(super) builds: Mutex<std::collections::BTreeSet<String>>,
+    /// Called when the round starts listing a phase.
+    pub(super) before_listing: Mutex<Option<BeforeListing>>,
     /// Called when a family's batches start, before the first claim, where the real work
     /// builds and lists the family.
     pub(super) before_batches: Mutex<HashMap<String, BeforeBatches>>,
@@ -68,6 +70,8 @@ pub(super) struct FakeWork {
 
 /// What [`FakeWork::before_batches`] calls for one family.
 pub(super) type BeforeBatches = Arc<dyn Fn() + Send + Sync>;
+
+type BeforeListing = Box<dyn Fn(ListingPhase) + Send>;
 
 impl FakeWork {
     pub(super) fn listed(&self, at: &Commit) -> Vec<TipCheck> {
@@ -155,24 +159,49 @@ impl FakeWork {
 }
 
 impl TipWork for FakeWork {
-    fn checks(&self, ctx: &Context, at: &Commit) -> Result<TipSet> {
-        Self::launch(ctx, "list");
+    fn checks(&self, ctx: &Context, at: &Commit, phase: ListingPhase) -> Result<TipSet> {
+        if let Some(before) = self.before_listing.lock().unwrap().as_ref() {
+            before(phase);
+        }
+        if phase != ListingPhase::PeerBuild {
+            Self::launch(ctx, "list");
+        }
+        let matches = |check: &TipCheck| {
+            phase.includes(check.is_build())
+                && match phase {
+                    ListingPhase::Build => check.runnable,
+                    ListingPhase::PeerBuild => !check.runnable,
+                    ListingPhase::All | ListingPhase::Other => true,
+                }
+        };
+        let listed = self.listed(at);
+        let off = self.off.lock().unwrap();
+        let off = off.get(at).map(Vec::as_slice).unwrap_or_default();
+        let is_build_family = |family: &str| {
+            listed
+                .iter()
+                .chain(off)
+                .any(|check| check.is_build() && check.family == family)
+        };
+        let unlisted = self
+            .unlisted
+            .lock()
+            .unwrap()
+            .get(at)
+            .into_iter()
+            .flatten()
+            .filter(|missing| phase.includes(is_build_family(&missing.family)))
+            .filter(|missing| match phase {
+                ListingPhase::Build => missing.reportable,
+                ListingPhase::PeerBuild => !missing.reportable,
+                ListingPhase::All | ListingPhase::Other => true,
+            })
+            .cloned()
+            .collect();
         Ok(TipSet {
-            checks: self.listed(at),
-            unlisted: self
-                .unlisted
-                .lock()
-                .unwrap()
-                .get(at)
-                .cloned()
-                .unwrap_or_default(),
-            off: self
-                .off
-                .lock()
-                .unwrap()
-                .get(at)
-                .cloned()
-                .unwrap_or_default(),
+            off: off.iter().filter(|check| matches(check)).cloned().collect(),
+            unlisted,
+            checks: listed.into_iter().filter(matches).collect(),
         })
     }
 
@@ -192,10 +221,6 @@ impl TipWork for FakeWork {
 
     fn covered_by(&self) -> BTreeMap<String, String> {
         self.covered_by.lock().unwrap().clone()
-    }
-
-    fn build_families(&self) -> std::collections::BTreeSet<String> {
-        self.builds.lock().unwrap().clone()
     }
 
     fn run_batches(
@@ -283,8 +308,8 @@ impl TipWork for FakeWork {
             }
             runs.push(TipRun {
                 check: check.clone(),
-                measurement_hash: listed
-                    .filter(|c| c.machine_relative)
+                input_hash: listed
+                    .filter(|c| c.is_build() || c.machine_relative)
                     .map(|c| c.key.hash.clone()),
                 outcome,
                 output: (outcome == Outcome::Fail).then(|| {

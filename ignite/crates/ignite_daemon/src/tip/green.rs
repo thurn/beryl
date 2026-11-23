@@ -1,4 +1,4 @@
-//! The green branch: a round runs its build checks before any other check, and moves
+//! The green branch: a round lists and runs its build checks before listing other families, and moves
 //! `repository.green` to the tip once they have all passed (see "Tip verification" in
 //! `docs/ignite.md`).
 //!
@@ -16,101 +16,62 @@
 //! - With `repository.green` unset there is no build step, and a round does what it did before
 //!   the green branch existed.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
-use ignite_core::ids::{CheckName, Commit};
+use ignite_core::ids::Commit;
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::ResultKey;
 use ignite_core::traits::{Push, Result};
 
+use super::families::RunPhase;
 use super::meter::Tally;
-use super::split::Split;
-use super::{TipCheck, TipRun, TipVerifier, Unlisted, settle_runs};
+use super::verify::RunPlan;
+use super::{TipCheck, TipRun, TipVerifier, Unlisted};
 use crate::server::Context;
 
-/// How a round's build step ended.
-#[derive(Debug, PartialEq, Eq)]
-pub(super) enum BuildStep {
-    /// The round goes on with its other checks: the build checks passed, or some wait.
-    Continue,
-    /// A build check failed. The round runs nothing more and reports the failure.
-    Broken,
-    /// A newer `staging` tip ended the round before any build check ran.
-    Superseded(Commit),
-}
-
 impl TipVerifier {
-    /// The families whose checks are build checks; none when `repository.green` is unset, so
-    /// that a round has no build step.
-    pub(super) fn build_families(&self, ctx: &Context) -> BTreeSet<String> {
-        if ctx.config.repository.green.is_none() {
-            return BTreeSet::new();
-        }
-        self.work.build_families()
-    }
-
-    /// Runs the round's build checks, `split.build` and `split.build_recheck`, before any other
-    /// check, files their outcomes in `verdicts`, and moves `green` to `tip` when every build
-    /// check of the tip's set has passed and none waits.
-    #[allow(clippy::too_many_arguments)]
+    /// Runs the first phase without waiting for any other family's listing or budget.
     pub(super) fn run_build(
         &mut self,
         ctx: &Context,
         tip: &Commit,
         checks: &[TipCheck],
-        unlisted: &[Unlisted],
-        split: &Split<'_>,
+        plan: &RunPlan<'_>,
         verdicts: &mut HashMap<ResultKey, TipRun>,
         tally: &mut Tally,
-    ) -> Result<BuildStep> {
-        let builds = self.build_families(ctx);
-        if builds.is_empty() {
-            return Ok(BuildStep::Continue);
-        }
-        if !split.build.is_empty() {
-            let (superseded, runs) = self.run_families(ctx, tip, &split.build, false)?;
-            if let Some(by) = superseded {
-                return Ok(BuildStep::Superseded(by));
+    ) -> Result<Option<Commit>> {
+        if !plan.queued.is_empty() {
+            let (superseded, runs) = self.run_families(ctx, tip, &plan.queued, RunPhase::Build)?;
+            self.record_runs(checks, runs, verdicts, tally);
+            if superseded.is_some() {
+                return Ok(superseded);
             }
-            tally.ran = tally.ran.saturating_add(count(&runs));
-            settle_runs(checks, runs, verdicts, &mut self.own_outputs);
         }
-        if !split.build_recheck.is_empty() {
-            let names: Vec<CheckName> = split
-                .build_recheck
-                .iter()
-                .map(|c| c.check.clone())
-                .collect();
-            let runs = self.work.run(ctx, tip, &names, true);
-            tally.ran = tally.ran.saturating_add(count(&runs));
-            settle_runs(checks, runs, verdicts, &mut self.own_outputs);
-        }
-        // Another machine may have run a batch of them meanwhile.
-        Self::fill_from_cache(ctx, checks, verdicts)?;
-        super::round::require_running()?;
-        let outcomes: Vec<Option<Outcome>> = checks
-            .iter()
-            .filter(|c| builds.contains(&c.family))
-            .map(|c| verdicts.get(&c.key).map(|run| run.outcome))
-            .collect();
-        if outcomes.contains(&Some(Outcome::Fail)) {
-            return Ok(BuildStep::Broken);
-        }
-        let unlisted_build = unlisted.iter().any(|u| builds.contains(&u.family));
-        let passed = !outcomes.is_empty()
-            && !unlisted_build
-            && outcomes
-                .iter()
-                .all(|o| matches!(o, Some(Outcome::Pass | Outcome::Flaky)));
-        if passed {
-            move_green(ctx, tip);
-        }
-        Ok(BuildStep::Continue)
+        self.run_rechecks(ctx, tip, checks, &plan.recheck, verdicts, tally);
+        Ok(None)
     }
 }
 
-fn count(runs: &[TipRun]) -> u32 {
-    u32::try_from(runs.len()).unwrap_or(u32::MAX)
+/// Attempts to publish green once the build phase has accounted for its required listings
+/// and the checks of each applicable platform have passed for their listed inputs.
+pub(super) fn advance_if_ready(
+    ctx: &Context,
+    tip: &Commit,
+    checks: &[TipCheck],
+    unlisted: &[Unlisted],
+    verdicts: &HashMap<ResultKey, TipRun>,
+) -> bool {
+    let passed = !checks.is_empty()
+        && unlisted.is_empty()
+        && checks.iter().all(|check| {
+            verdicts
+                .get(&check.key)
+                .is_some_and(|run| matches!(run.outcome, Outcome::Pass | Outcome::Flaky))
+        });
+    if passed {
+        move_green(ctx, tip);
+    }
+    passed
 }
 
 /// Pushes `tip` to `repository.green`. A refused push is fine when `green` already holds the

@@ -150,10 +150,6 @@ pub struct RunOptions {
     pub rerun: bool,
     pub ticket: Option<TicketId>,
     pub session: Option<SessionId>,
-    /// Cores set aside for these checks' commands, passed on to each command's
-    /// [`ignite_core::traits::CommandSpec`] by the code that will reserve them; `None` for
-    /// ordinary checks.
-    pub reserve: Option<ignite_core::traits::Reserve>,
 }
 
 /// A check that did not pass, with what its run said.
@@ -191,8 +187,8 @@ pub struct Built {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CheckRun {
     pub outcomes: Vec<(CheckName, Outcome)>,
-    /// Measurement keys, so a tip round can match a verdict to the calibration it listed.
-    pub(crate) measurement_hashes: HashMap<CheckName, InputHash>,
+    /// Verified hashes for build and calibration-dependent checks, for tip verification.
+    pub(crate) input_hashes: HashMap<CheckName, InputHash>,
     /// Keys of failed checks whose inputs match the cached result or the completed run.
     pub(crate) failed_keys: Vec<ignite_core::protocol::hub::ResultKey>,
     pub from_cache: u32,
@@ -262,8 +258,8 @@ impl CheckRun {
         outcome: Outcome,
         failure: Option<Failure>,
     ) {
-        if family.machine_relative {
-            self.measurement_hashes
+        if family.builds || family.machine_relative {
+            self.input_hashes
                 .insert(keyed.key.check.clone(), keyed.key.hash.clone());
         }
         self.finish(&keyed.key.check, outcome, failure);

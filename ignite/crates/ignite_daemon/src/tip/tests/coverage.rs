@@ -59,7 +59,7 @@ fn a_run_cannot_pass_a_tip_listing_for_a_different_calibration() {
     let mut measurement = windows_check('b', true);
     measurement.machine_relative = true;
     let mut run = verdict(&measurement, Outcome::Pass, None);
-    run.measurement_hash = Some(InputHash::new("c".repeat(64)).unwrap());
+    run.input_hash = Some(InputHash::new("c".repeat(64)).unwrap());
     let mut outcomes = HashMap::new();
     settle_runs(
         &[measurement],

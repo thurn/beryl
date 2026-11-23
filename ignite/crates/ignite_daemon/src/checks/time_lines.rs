@@ -10,9 +10,12 @@
 
 use std::collections::BTreeMap;
 
+use ignite_core::ids::RecordId;
+use ignite_core::protocol::hub::{CompileUnit, Record};
+use ignite_core::protocol::{Outcome, Usage};
 use ignite_core::time::Timestamp;
 
-use super::{Built, CheckRun, ListingTime, plan};
+use super::{Built, CheckRun, Checks, ListingTime, OpenTree, RunOptions, plan};
 use crate::server::Context;
 
 /// The shortest step that [`CheckRun::slow`] keeps, in seconds.
@@ -33,6 +36,45 @@ impl Stopwatch {
     /// Seconds since the step started.
     pub(crate) fn seconds(self, ctx: &Context) -> f64 {
         ctx.clock.now().seconds_since(self.0).max(0.0)
+    }
+}
+
+impl Checks {
+    /// Sends a record of one command to the hub, or queues it when the hub cannot take it.
+    /// Returns the ID the hub gave the record, if it took it.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn record(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        family: &str,
+        options: &RunOptions,
+        usage: &Usage,
+        verb: &str,
+        outcome: Option<Outcome>,
+        compile_units: Vec<CompileUnit>,
+    ) -> Option<RecordId> {
+        #[allow(clippy::cast_precision_loss)]
+        let record = Record {
+            machine: ctx.machine.clone(),
+            ticket: options.ticket.clone(),
+            session: options.session.clone(),
+            tree: Some(tree.id.clone()),
+            verb: verb.to_owned(),
+            class: options.class,
+            family: Some(family.to_owned()),
+            queued_s: usage.queued_s,
+            wall_s: usage.wall_s,
+            cpu_s: usage.cpu_s,
+            instructions: usage.instructions.map(|n| n as f64),
+            peak_mb: usage.peak_mb,
+            outcome,
+            commit: None,
+            ignite: self.settings.ignite.clone(),
+            at: ctx.clock.now(),
+            compile_units,
+        };
+        self.cache.record(&record)
     }
 }
 
@@ -58,7 +100,7 @@ impl CheckRun {
         // Taken apart field by field, so a field added to `CheckRun` cannot be forgotten here.
         let CheckRun {
             outcomes,
-            measurement_hashes,
+            input_hashes,
             failed_keys,
             from_cache,
             ran,
@@ -79,7 +121,7 @@ impl CheckRun {
             slow_steps,
         } = other;
         self.outcomes.extend(outcomes);
-        self.measurement_hashes.extend(measurement_hashes);
+        self.input_hashes.extend(input_hashes);
         self.failed_keys.extend(failed_keys);
         self.from_cache += from_cache;
         self.ran += ran;

@@ -45,6 +45,14 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// What the verifier knows about a family's checks when it runs them.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum RunPhase {
+    Build,
+    BeforeMaster,
+    AfterMaster,
+}
+
 /// What the threads of one round share.
 struct Round<'a> {
     verifier: &'a TipVerifier,
@@ -165,15 +173,16 @@ impl TipVerifier {
     /// Runs `to_run`, some of the tip's checks, at `tip` and returns the runs, in batches cut
     /// over the round's listing. A replacement selected by the hub ends the round at the
     /// next family or batch.
-    /// With `after_master`, `master` is already at `tip`, and a newer tip ends the round at the
-    /// next family or batch whatever is under way.
+    /// After `master` moves, a newer tip ends the round at the next family or batch
+    /// whatever is under way.
     pub(super) fn run_families(
         &self,
         ctx: &Context,
         tip: &Commit,
         to_run: &[&TipCheck],
-        after_master: bool,
+        phase: RunPhase,
     ) -> Result<(Option<Commit>, Vec<TipRun>)> {
+        let after_master = phase == RunPhase::AfterMaster;
         let costs = |family: &str| family_costs(ctx, tip, family);
         let round = Round {
             verifier: self,
@@ -194,10 +203,17 @@ impl TipVerifier {
             runs: Mutex::new(Vec::new()),
             held: Mutex::new(BTreeMap::new()),
         };
-        // Report only matching results for checks selected to run before promotion.
+        // A build check may be covered by a family we have not listed yet. Only report a
+        // failure early when the check is already known to be required for master.
+        let possibly_covered = (phase == RunPhase::Build).then(|| self.work.covered_by());
         let required: HashSet<&ResultKey> = to_run
             .iter()
-            .filter(|_| !after_master)
+            .filter(|check| {
+                !after_master
+                    && !possibly_covered
+                        .as_ref()
+                        .is_some_and(|families| families.contains_key(&check.family))
+            })
             .map(|check| &check.key)
             .collect();
         let failed = |keys: &[ResultKey]| {

@@ -35,6 +35,7 @@ use ignite_core::score::BILLIONS_PER_CPU_SECOND;
 use ignite_core::tipround::RoundBudget;
 use ignite_core::traits::Result;
 
+use super::families::RunPhase;
 use super::meter::Tally;
 use super::{TipCheck, TipRun, TipVerifier, settle_runs};
 use crate::checks::plan::class_rates;
@@ -42,12 +43,7 @@ use crate::server::Context;
 
 /// A round's checks to run, split by the tip budget.
 pub(super) struct Split<'a> {
-    /// The build checks to run first, before the others, which move `green` when they pass.
-    /// Empty when `repository.green` is unset.
-    pub build: Vec<&'a TipCheck>,
-    /// The build checks to run again, ignoring their cached results, with `build`.
-    pub build_recheck: Vec<&'a TipCheck>,
-    /// The other checks to run again, ignoring their cached results, before `master` moves.
+    /// The checks to run again, ignoring their cached results, before `master` moves.
     pub recheck: Vec<&'a TipCheck>,
     /// The checks to run before `master` moves: forced and within the budget.
     pub within: Vec<&'a TipCheck>,
@@ -66,10 +62,8 @@ impl Split<'_> {
 }
 
 impl TipVerifier {
-    /// Splits `to_run` by the tip budget. `recheck`, the cached failures and checks the hub no
-    /// longer trusts the cache for, run before `master` moves and are counted as forced. With
-    /// `repository.green` set, the build checks of both leave them for the `build` group, which
-    /// is outside the budget.
+    /// Splits the remaining runs by the tip budget. Rechecks run before `master` moves and
+    /// count as forced. Build checks already ran in their own phase, outside the budget.
     pub(super) fn split<'a>(
         &self,
         ctx: &Context,
@@ -79,31 +73,7 @@ impl TipVerifier {
         recheck: &[&'a TipCheck],
         catching_up: bool,
     ) -> Split<'a> {
-        let builds = self.build_families(ctx);
-        let is_build = |check: &&TipCheck| builds.contains(&check.family);
-        let (build, to_run): (Vec<&TipCheck>, Vec<&TipCheck>) =
-            to_run.iter().copied().partition(is_build);
-        let (build_recheck, recheck): (Vec<&TipCheck>, Vec<&TipCheck>) =
-            recheck.iter().copied().partition(is_build);
-        let mut split = self.split_rest(ctx, last, tip, &to_run, &recheck, catching_up);
-        split.build = build;
-        split.build_recheck = build_recheck;
-        split
-    }
-
-    /// [`TipVerifier::split`] for the checks other than the build checks.
-    fn split_rest<'a>(
-        &self,
-        ctx: &Context,
-        last: &Commit,
-        tip: &Commit,
-        to_run: &[&'a TipCheck],
-        recheck: &[&'a TipCheck],
-        catching_up: bool,
-    ) -> Split<'a> {
         let unbudgeted = || Split {
-            build: Vec::new(),
-            build_recheck: Vec::new(),
             recheck: recheck.to_vec(),
             within: to_run.to_vec(),
             after: Vec::new(),
@@ -149,7 +119,8 @@ impl TipVerifier {
             "ignite: master is at {tip}; running the {} checks past the tip budget",
             split.after.len()
         );
-        let (superseded, runs) = self.run_families(ctx, tip, &split.after, true)?;
+        let (superseded, runs) =
+            self.run_families(ctx, tip, &split.after, RunPhase::AfterMaster)?;
         // Until now every check past the budget counted as unrun (see `split_by`).
         let left = unrun(split.after.iter(), &runs);
         note_unrun(tally, left, superseded.clone());
@@ -291,8 +262,6 @@ fn split_by<'a>(
     figures.unrun = unrun(after.iter(), &[]);
     Split {
         after_keys: after.iter().map(|c| c.key.clone()).collect(),
-        build: Vec::new(),
-        build_recheck: Vec::new(),
         recheck: recheck.to_vec(),
         within,
         after,
@@ -324,6 +293,7 @@ mod tests {
             runnable: true,
             reuse: true,
             machine_relative: false,
+            kind: crate::tip::TipCheckKind::Other,
         }
     }
 

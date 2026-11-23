@@ -10,10 +10,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use ignite_core::ids::{CheckName, Commit, RecordId};
 use ignite_core::manifest::{Adapter, Family};
 use ignite_core::protocol::hub::{
-    CachedResult, CompileUnit, FlakyReport, IncompleteReason, NewResult, Record, ResultCost,
+    CachedResult, FlakyReport, IncompleteReason, NewResult, ResultCost,
 };
-use ignite_core::protocol::{Outcome, Usage};
-use ignite_core::traits::{BuildFor, CommandSpec, Error, RunResult};
+use ignite_core::protocol::{Class, Outcome, Usage};
+use ignite_core::traits::{BuildFor, CommandSpec, Error, Reserve, RunResult};
 
 use super::prepare::moved_inputs;
 use super::units::CompileSpan;
@@ -461,7 +461,12 @@ impl Checks {
                 }
                 Outcome::Incomplete => {}
             }
-            run.finish_keyed(&keyed, family, outcome, failure);
+            if family.builds && (inputs_moved || unkeyed.contains(&keyed.listed.check)) {
+                // The verdict cannot satisfy a build listing unless it verifies that hash.
+                run.finish(&keyed.listed.check, outcome, failure);
+            } else {
+                run.finish_keyed(&keyed, family, outcome, failure);
+            }
         }
         self.cache.flaky(&flaky);
         self.cache.store(&stored);
@@ -710,7 +715,10 @@ impl Checks {
             tree: Some(tree.id.clone()),
             ticket: options.ticket.clone(),
             hang_limit_s: Some(hang_limit_s(slowest)),
-            reserve: options.reserve,
+            reserve: (options.class == Class::Tip
+                && ctx.config.repository.green.is_some()
+                && family.builds)
+                .then_some(Reserve::TipBuild),
         });
         // The units the command's test processes and compiles recorded, if it was set up to.
         let (units, span) = units::env_units_file(&spec_env)
@@ -731,43 +739,6 @@ impl Checks {
             units,
         );
         (result, record, span)
-    }
-
-    /// Sends a record of one command to the hub, or queues it when the hub cannot take it.
-    /// Returns the ID the hub gave the record, if it took it.
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn record(
-        &self,
-        ctx: &Context,
-        tree: &OpenTree,
-        family: &str,
-        options: &RunOptions,
-        usage: &Usage,
-        verb: &str,
-        outcome: Option<Outcome>,
-        compile_units: Vec<CompileUnit>,
-    ) -> Option<RecordId> {
-        #[allow(clippy::cast_precision_loss)]
-        let record = Record {
-            machine: ctx.machine.clone(),
-            ticket: options.ticket.clone(),
-            session: options.session.clone(),
-            tree: Some(tree.id.clone()),
-            verb: verb.to_owned(),
-            class: options.class,
-            family: Some(family.to_owned()),
-            queued_s: usage.queued_s,
-            wall_s: usage.wall_s,
-            cpu_s: usage.cpu_s,
-            instructions: usage.instructions.map(|n| n as f64),
-            peak_mb: usage.peak_mb,
-            outcome,
-            commit: None,
-            ignite: self.settings.ignite.clone(),
-            at: ctx.clock.now(),
-            compile_units,
-        };
-        self.cache.record(&record)
     }
 }
 

@@ -447,7 +447,6 @@ fn options(verb: &str, req: &Request, rerun: bool) -> RunOptions {
         rerun,
         ticket: None,
         session: req.session.clone(),
-        reserve: None,
     }
 }
 

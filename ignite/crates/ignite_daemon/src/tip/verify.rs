@@ -5,16 +5,28 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::{ResultKey, TipFailure, TipState, TipVerified};
+use ignite_core::protocol::hub::{CachedResult, ResultKey, TipFailure, TipState, TipVerified};
 use ignite_core::traits::{Push, Result};
 
 use super::coverage::{Required, Scope};
+use super::families::RunPhase;
 use super::round::require_running;
 use super::{
-    Listed, TipCheck, TipOutcome, TipRun, TipSet, TipVerifier, candidate, covered, green, meter,
-    names_of, settle_runs, split, verdict,
+    Listed, ListingPhase, TipCheck, TipOutcome, TipRun, TipSet, TipVerifier, candidate, covered,
+    green, meter, names_of, settle_runs, split, verdict,
 };
 use crate::server::Context;
+
+/// The checks of one phase that need a run, separating those that must ignore the cache.
+#[derive(Default)]
+pub(super) struct RunPlan<'a> {
+    pub queued: Vec<&'a TipCheck>,
+    pub recheck: Vec<&'a TipCheck>,
+}
+
+fn count(len: usize) -> u32 {
+    u32::try_from(len).unwrap_or(u32::MAX)
+}
 
 impl TipVerifier {
     /// Verifies one tip: runs what its set still needs, then moves `master`, reports failures
@@ -58,25 +70,57 @@ impl TipVerifier {
     ) -> Result<TipOutcome> {
         self.own_outputs.clear();
         self.reverted.clear();
+        self.listed.clear();
         self.send_reverts(ctx);
-        let TipSet {
-            checks,
-            unlisted,
-            off,
-        } = self.work.checks(ctx, tip)?;
+        let mut verdicts = HashMap::new();
+        let mut pending_green = None;
+        let mut listing = if ctx.config.repository.green.is_some() {
+            let mut builds = self.work.checks(ctx, tip, ListingPhase::Build)?;
+            require_running()?;
+            self.record_listing(&builds);
+            let local = builds
+                .checks
+                .iter()
+                .filter(|check| check.runnable)
+                .cloned()
+                .collect();
+            let Required { checks, cached, .. } = scope.required(ctx, local, Vec::new())?;
+            let build = self.plan_runs(ctx, tip, checks.iter().zip(cached), &mut verdicts);
+            tally.cached = count(verdicts.len());
+            if let Some(by) = self.run_build(ctx, tip, &checks, &build, &mut verdicts, tally)? {
+                return Ok(TipOutcome::Superseded { by });
+            }
+
+            // The last verifier to finish its local builds can see the other platforms'
+            // listings and results, even if those verifiers have moved on to ordinary listings.
+            require_running()?;
+            builds.append(self.work.checks(ctx, tip, ListingPhase::PeerBuild)?);
+            let Required {
+                checks, unlisted, ..
+            } = scope.required(ctx, builds.checks.clone(), builds.unlisted.clone())?;
+            let before = verdicts.len();
+            Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
+            tally.cached = tally.cached.saturating_add(count(verdicts.len() - before));
+            require_running()?;
+            if let Some(by) = candidate::replacement(ctx, tip) {
+                return Ok(TipOutcome::Superseded { by });
+            }
+            if !green::advance_if_ready(ctx, tip, &checks, &unlisted, &verdicts) {
+                pending_green = Some((checks, unlisted));
+            }
+            builds
+        } else {
+            TipSet::default()
+        };
+        let phase = if ctx.config.repository.green.is_some() {
+            ListingPhase::Other
+        } else {
+            ListingPhase::All
+        };
+        let other = self.work.checks(ctx, tip, phase)?;
+        self.record_listing(&other);
+        listing.append(other);
         require_running()?;
-        // Batches are cut over the listing alone, before checks switched off as flaky or
-        // covered by another family are left out, so that every machine cuts them alike.
-        self.listed = checks
-            .iter()
-            .chain(&off)
-            .filter(|c| c.runnable)
-            .map(|c| Listed {
-                family: c.family.clone(),
-                check: c.check.clone(),
-                portable: c.key.platform.is_none(),
-            })
-            .collect();
         let regressions: HashSet<CheckName> = ctx
             .hub
             .open_regressions()
@@ -84,96 +128,77 @@ impl TipVerifier {
             .into_iter()
             .map(|regression| regression.check)
             .collect();
-        let (checks, unlisted) = scope.select(
-            covered::drop_covered(checks, &self.work.covered_by(), &regressions),
-            unlisted,
-        );
-        let now = ctx.clock.now();
-        let keys: Vec<ResultKey> = checks.iter().map(|c| c.key.clone()).collect();
-        let cached = ctx.hub.lookup(&keys)?;
         let Required {
             checks,
             cached,
             unlisted,
             deferred,
-        } = scope.defer(checks, cached, unlisted);
-        let mut verdicts: HashMap<ResultKey, TipRun> = HashMap::new();
-        let mut to_run: Vec<&TipCheck> = Vec::new();
-        let mut recheck: Vec<&TipCheck> = Vec::new();
-        for (check, hit) in checks.iter().zip(cached) {
-            let held = self
-                .held_off
-                .get(&check.key)
-                .is_some_and(|until| now < *until);
-            match hit.filter(|_| check.reuse) {
-                // A failure is run again once here before it holds `master`, whoever stored it:
-                // another machine's may be a fault of that machine, this one's a fault of one
-                // run. The rerun's result is stored over it, and stands afterwards.
-                Some(hit)
-                    if hit.outcome == Outcome::Fail
-                        && check.runnable
-                        && !held
-                        && (hit.machine != ctx.machine
-                            || self.rechecked.insert(check.key.clone())) =>
-                {
-                    recheck.push(check);
-                }
-                Some(hit) => {
-                    verdicts.insert(check.key.clone(), verdict(check, hit.outcome, hit.output));
-                }
-                None if held => {}
-                None if check.runnable && check.reuse => to_run.push(check),
-                None if check.runnable => recheck.push(check),
-                None => {}
+        } = scope.required(
+            ctx,
+            covered::drop_covered(listing.checks, &self.work.covered_by(), &regressions),
+            listing.unlisted,
+        )?;
+        let is_build = |check: &TipCheck| ctx.config.repository.green.is_some() && check.is_build();
+        let before = verdicts.len();
+        let plan = self.plan_runs(
+            ctx,
+            tip,
+            checks
+                .iter()
+                .zip(cached)
+                .filter(|(check, _)| !is_build(check)),
+            &mut verdicts,
+        );
+        tally.cached = tally.cached.saturating_add(count(verdicts.len() - before));
+        if let Some((builds, unlisted_builds)) = &pending_green {
+            // A native verifier may have finished its checks while we listed the other families.
+            Self::fill_from_cache(ctx, builds, &mut verdicts)?;
+            require_running()?;
+            if let Some(by) = candidate::replacement(ctx, tip) {
+                return Ok(TipOutcome::Superseded { by });
+            }
+            if green::advance_if_ready(ctx, tip, builds, unlisted_builds, &verdicts) {
+                pending_green = None;
             }
         }
-        self.record_cached(ctx, tip, &checks, &to_run, &recheck);
-        tally.cached = u32::try_from(verdicts.len()).unwrap_or(u32::MAX);
 
-        // Required platform checks and the best-scored portable checks run before `master` moves.
+        // Coverage and deferrals still decide which failures hold master. The green phase
+        // considered build checks on their own, before any covering family could be listed.
+        let broken = checks.iter().filter(|check| is_build(check)).any(|check| {
+            verdicts
+                .get(&check.key)
+                .is_some_and(|run| run.outcome == Outcome::Fail)
+        });
         let split = self.split(
             ctx,
             last,
             tip,
-            &to_run,
-            &recheck,
+            &plan.queued,
+            &plan.recheck,
             scope.catching_up.is_some(),
         );
         tally.budget.clone_from(&split.budget);
-        // The build checks first; a broken build runs nothing more (see `green`).
-        let step = self.run_build(ctx, tip, &checks, &unlisted, &split, &mut verdicts, tally)?;
-        let mut superseded = match &step {
-            green::BuildStep::Superseded(by) => Some((by.clone(), Vec::new())),
-            _ => None,
-        };
-        if step == green::BuildStep::Continue {
-            let (newer, runs) = self.run_families(ctx, tip, &split.within, false)?;
-            tally.ran = tally
-                .ran
-                .saturating_add(u32::try_from(runs.len()).unwrap_or(u32::MAX));
+        if !broken {
+            let (newer, runs) =
+                self.run_families(ctx, tip, &split.within, RunPhase::BeforeMaster)?;
             if let Some(by) = newer {
-                superseded = Some((by, runs));
-            } else {
-                settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
+                tally.ran = tally.ran.saturating_add(count(runs.len()));
+                let left = split::unrun(split.within.iter().chain(&split.after), &runs);
+                split::note_unrun(tally, left, Some(by.clone()));
+                return Ok(TipOutcome::Superseded { by });
             }
-        }
-        if let Some((by, runs)) = superseded {
-            let left = split::unrun(split.within.iter().chain(&split.after), &runs);
-            split::note_unrun(tally, left, Some(by.clone()));
-            return Ok(TipOutcome::Superseded { by });
-        }
-        if step == green::BuildStep::Continue && !split.recheck.is_empty() {
-            let names: Vec<CheckName> = split.recheck.iter().map(|c| c.check.clone()).collect();
-            let runs = self.work.run(ctx, tip, &names, true);
-            tally.ran = tally
-                .ran
-                .saturating_add(u32::try_from(runs.len()).unwrap_or(u32::MAX));
-            settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
+            self.record_runs(&checks, runs, &mut verdicts, tally);
+            self.run_rechecks(ctx, tip, &checks, &split.recheck, &mut verdicts, tally);
         }
         Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
         require_running()?;
         if let Some(by) = candidate::replacement(ctx, tip) {
             return Ok(TipOutcome::Superseded { by });
+        }
+        if let Some((builds, unlisted_builds)) = pending_green {
+            Self::fill_from_cache(ctx, &builds, &mut verdicts)?;
+            require_running()?;
+            green::advance_if_ready(ctx, tip, &builds, &unlisted_builds, &verdicts);
         }
         self.note_incomplete(ctx, tip, &checks, &verdicts, true);
         self.report_unlisted(ctx, tip, &unlisted);
@@ -304,6 +329,92 @@ impl TipVerifier {
         } else {
             TipOutcome::VerifiedWithDeferrals { checks: deferred }
         })
+    }
+
+    /// Cuts batches over the listing before omitting covered and switched-off checks, so that
+    /// every machine cuts them alike.
+    fn record_listing(&mut self, listing: &TipSet) {
+        self.listed.extend(
+            listing
+                .checks
+                .iter()
+                .chain(&listing.off)
+                .filter(|check| check.runnable)
+                .map(|check| Listed {
+                    family: check.family.clone(),
+                    check: check.check.clone(),
+                    portable: check.key.platform.is_none(),
+                }),
+        );
+    }
+
+    fn plan_runs<'a>(
+        &mut self,
+        ctx: &Context,
+        tip: &Commit,
+        checks: impl Iterator<Item = (&'a TipCheck, Option<CachedResult>)>,
+        verdicts: &mut HashMap<ResultKey, TipRun>,
+    ) -> RunPlan<'a> {
+        let now = ctx.clock.now();
+        let mut plan = RunPlan::default();
+        let mut planned = Vec::new();
+        for (check, hit) in checks {
+            planned.push(check);
+            let held = self
+                .held_off
+                .get(&check.key)
+                .is_some_and(|until| now < *until);
+            match hit.filter(|_| check.reuse) {
+                // A failure is run again once here before it holds `master`, whoever stored it:
+                // another machine's may be a fault of that machine, this one's a fault of one
+                // run. The rerun's result is stored over it, and stands afterwards.
+                Some(hit)
+                    if hit.outcome == Outcome::Fail
+                        && check.runnable
+                        && !held
+                        && (hit.machine != ctx.machine
+                            || self.rechecked.insert(check.key.clone())) =>
+                {
+                    plan.recheck.push(check);
+                }
+                Some(hit) => {
+                    verdicts.insert(check.key.clone(), verdict(check, hit.outcome, hit.output));
+                }
+                None if held => {}
+                None if check.runnable && check.reuse => plan.queued.push(check),
+                None if check.runnable => plan.recheck.push(check),
+                None => {}
+            }
+        }
+        self.record_cached(ctx, tip, planned, &plan.queued, &plan.recheck);
+        plan
+    }
+
+    pub(super) fn run_rechecks(
+        &mut self,
+        ctx: &Context,
+        tip: &Commit,
+        checks: &[TipCheck],
+        recheck: &[&TipCheck],
+        verdicts: &mut HashMap<ResultKey, TipRun>,
+        tally: &mut meter::Tally,
+    ) {
+        if !recheck.is_empty() {
+            let names: Vec<CheckName> = recheck.iter().map(|check| check.check.clone()).collect();
+            let runs = self.work.run(ctx, tip, &names, true);
+            self.record_runs(checks, runs, verdicts, tally);
+        }
+    }
+
+    pub(super) fn record_runs(
+        &mut self,
+        checks: &[TipCheck],
+        runs: Vec<TipRun>,
+        verdicts: &mut HashMap<ResultKey, TipRun>,
+        tally: &mut meter::Tally,
+    ) {
+        tally.ran = tally.ran.saturating_add(count(runs.len()));
+        settle_runs(checks, runs, verdicts, &mut self.own_outputs);
     }
 
     /// Moves `master` to a tip whose every check passed and records it as verified.

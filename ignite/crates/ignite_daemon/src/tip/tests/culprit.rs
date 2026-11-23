@@ -91,6 +91,7 @@ fn vet(text: &str, hash: char) -> TipCheck {
     check.check = name(&format!("vet:{text}"));
     check.key.check = check.check.clone();
     check.family = "vet".to_owned();
+    check.kind = TipCheckKind::Build;
     check
 }
 
@@ -98,7 +99,6 @@ fn vet(text: &str, hash: char) -> TipCheck {
 /// landing of `tk.40` (`bbbb000`, changing `paths`) makes `failing` fail at the tip.
 fn broken(failing: &TipCheck, paths: &[&str], revert: bool) -> (World, Context, Commit) {
     let world = World::new();
-    world.work.builds.lock().unwrap().insert("vet".to_owned());
     let tip = commit("bbbb000");
     world.land(&tip);
     world.work.add_landing("tk.40", &["bbbb000"], paths);
@@ -322,7 +322,6 @@ fn a_landing_of_round_reverts_is_never_reverted() {
 #[test]
 fn the_fourth_culprit_of_a_round_is_reported() {
     let world = World::new();
-    world.work.builds.lock().unwrap().insert("vet".to_owned());
     let tip = commit("bbbb004");
     world.land(&tip);
     let mut checks = Vec::new();

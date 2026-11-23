@@ -90,7 +90,6 @@ fn the_landing_gate_uses_the_trees_manifests() {
         rerun: false,
         ticket: None,
         session: None,
-        reserve: None,
     };
 
     let gated = world.checks.gate(&world.ctx, &tree(), &landing);
@@ -207,4 +206,73 @@ fn a_tree_without_a_list_runs_every_family_and_one_that_does_not_parse_keeps_the
 
     fs::write(world.dir.join("ignite.toml"), "this is = not [valid").unwrap();
     assert!(runnable_here(&checks, &world).is_empty());
+}
+
+/// The build phase uses the candidate's classification for both listing and running.
+#[test]
+fn a_tip_uses_the_candidates_build_families_and_reserves_their_cores() {
+    use ignite_core::traits::Reserve;
+
+    use crate::tip::ListingPhase;
+
+    let mut world = held_world();
+    world.ctx.config.repository.green = Some("green".to_owned());
+    let manifest = format!(
+        "{}\n[family.other]\nkind = \"regression\"\nadapter = \"jsonl\"\nplatforms = \"any\"\n         list = \"lister --other\"\nrun = \"runner {{checks}}\"\ninputs = [\"src\"]\n",
+        TREE_MANIFEST.replace("always = true", "builds = true")
+    );
+    tree_declares(&world, &manifest);
+    *world.launcher.listing.lock().unwrap() =
+        "{\"check\":\"unit:a\"}\n{\"check\":\"other:b\"}\n".to_owned();
+
+    let builds = world
+        .checks
+        .regression_checks_for(&world.ctx, &tree(), ListingPhase::Build)
+        .unwrap();
+    assert_eq!(builds.checks.len(), 1);
+    assert_eq!(builds.checks[0].check, name("unit:a"));
+    assert!(builds.checks[0].is_build());
+    assert_eq!(
+        world.launcher.commands("lister"),
+        [vec!["lister", "--tree"]]
+    );
+
+    let tip = RunOptions {
+        verb: "tip".to_owned(),
+        class: Class::Tip,
+        ..options(false)
+    };
+    let (run, ran) = world.checks.run_batches(
+        &world.ctx,
+        &tree(),
+        "unit",
+        &[(0, vec![name("unit:a")])],
+        &tip,
+        &super::super::BatchCallbacks {
+            claim: &|_| true,
+            failed: &|_| {},
+        },
+    );
+    assert_eq!(ran, 1);
+    assert_eq!(outcome(&run, "unit:a"), Outcome::Pass);
+
+    let other = world
+        .checks
+        .regression_checks_for(&world.ctx, &tree(), ListingPhase::Other)
+        .unwrap();
+    assert_eq!(other.checks.len(), 1);
+    assert_eq!(other.checks[0].check, name("other:b"));
+    let specs = world.launcher.runs.lock().unwrap();
+    let commands: Vec<_> = specs
+        .iter()
+        .map(|spec| (spec.args[1].as_str(), spec.reserve))
+        .collect();
+    assert_eq!(
+        commands,
+        [
+            ("--tree", Some(Reserve::TipBuild)),
+            ("unit:a", Some(Reserve::TipBuild)),
+            ("--other", None)
+        ]
+    );
 }

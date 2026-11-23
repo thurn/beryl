@@ -41,16 +41,16 @@ impl TipVerifier {
 
     /// Sends one record with the verb `cached` and no cost for each family whose checks were
     /// all answered by the result cache, so the hub can count cache hits.
-    pub(super) fn record_cached(
+    pub(super) fn record_cached<'a>(
         &self,
         ctx: &Context,
         tip: &Commit,
-        checks: &[TipCheck],
+        checks: impl IntoIterator<Item = &'a TipCheck>,
         to_run: &[&TipCheck],
         recheck: &[&TipCheck],
     ) {
         let families: BTreeSet<&str> = checks
-            .iter()
+            .into_iter()
             .filter(|c| c.runnable)
             .map(|c| c.family.as_str())
             .collect();

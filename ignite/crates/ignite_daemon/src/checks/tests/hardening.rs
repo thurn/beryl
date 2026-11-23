@@ -7,6 +7,8 @@ use super::*;
 use ignite_core::protocol::hub::OpenRegression;
 use ignite_core::protocol::tickets::TicketDetail;
 
+use crate::tip::ListingPhase;
+
 fn tree() -> TreeId {
     TreeId::new("tree-01").unwrap()
 }
@@ -145,7 +147,12 @@ fn a_tip_waits_for_a_foreign_build_listing_without_building_it() {
     let manifest = format!(
         "{}\n{}\n[product.binary]\nbuild = \"builder\"\ninputs = [\"src\"]\noutputs = [\"out\"]\n",
         family("unit", "\"any\"", "lister", ""),
-        family("desktop", "[\"macos\"]", "lister", "needs = [\"binary\"]"),
+        family(
+            "desktop",
+            "[\"macos\"]",
+            "lister",
+            "needs = [\"binary\"]\nbuilds = true"
+        ),
     );
     let world = world(&manifest, &[], FakeHistory::default());
     *world.launcher.listing.lock().unwrap() = listing(&["unit:a", "desktop:b"]);
@@ -182,6 +189,16 @@ fn a_tip_waits_for_a_foreign_build_listing_without_building_it() {
     let foreign_check = warm.checks.iter().find(|c| c.family == "desktop").unwrap();
     assert_eq!(foreign_check.key, mac_check.key);
     assert!(!foreign_check.runnable);
+    let local = windows
+        .regression_checks_for(&world.ctx, &tree(), ListingPhase::Build)
+        .unwrap();
+    assert!(local.checks.is_empty());
+    assert!(local.unlisted.is_empty());
+    let peers = windows
+        .regression_checks_for(&world.ctx, &tree(), ListingPhase::PeerBuild)
+        .unwrap();
+    assert!(peers.unlisted.is_empty());
+    assert_eq!(peers.checks, std::slice::from_ref(foreign_check));
     assert_eq!(world.builds.requests().len(), builds);
     assert_eq!(world.launcher.commands("lister").len(), commands);
 }
@@ -240,7 +257,7 @@ fn a_measurement_pass_is_reusable_only_on_its_verifier_and_calibration() {
     assert_eq!(second.from_cache, 1);
     assert_eq!(outcome(&second, "unit:a"), Outcome::Pass);
     assert_eq!(outcome(&second, "meter:a"), Outcome::Fail);
-    assert_ne!(original.measurement_hashes, second.measurement_hashes);
+    assert_ne!(original.input_hashes, second.input_hashes);
     let specs = world.launcher.runs.lock().unwrap();
     for program in ["lister", "runner"] {
         assert!(specs.iter().any(|spec| {
@@ -257,7 +274,7 @@ fn a_measurement_pass_is_reusable_only_on_its_verifier_and_calibration() {
     let recalibrated = run(&world, &["meter:a", "unit:a"]);
     assert_eq!(recalibrated.from_cache, 1);
     assert!(recalibrated.passed(), "{recalibrated:?}");
-    assert_ne!(original.measurement_hashes, recalibrated.measurement_hashes);
+    assert_ne!(original.input_hashes, recalibrated.input_hashes);
 }
 
 #[test]
