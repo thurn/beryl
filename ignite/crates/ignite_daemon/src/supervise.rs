@@ -360,14 +360,13 @@ impl SupervisedLauncher {
         cancelled: Option<&(dyn Fn() -> bool + Sync)>,
     ) -> RunResult {
         // The work this command is part of (see `crate::steps`). Once someone asks that work to
-        // stop, as `ignite stop` does, its commands are ended like those of a caller that left,
-        // and no new one starts.
+        // stop, or its owner finishes, its commands are ended and no new one starts.
         let activity = crate::steps::current();
-        let stop_asked = || activity.as_ref().is_some_and(|a| a.stop_requested());
-        let either = || cancelled.is_some_and(|c| c()) || stop_asked();
+        let either =
+            || cancelled.is_some_and(|c| c()) || activity.as_ref().is_some_and(|a| a.cancelled());
         let cancelled: Option<&(dyn Fn() -> bool + Sync)> =
             (cancelled.is_some() || activity.is_some()).then_some(&either);
-        if stop_asked() {
+        if either() {
             return stopped(spec);
         }
         let result = match self.launch(spec, None, &either) {

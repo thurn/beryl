@@ -45,11 +45,14 @@ impl BuildManager {
         self
     }
 
-    pub(super) fn stopped_waiting(&self, plan: &Plan) -> BuildResult {
+    pub(super) fn stopped_waiting(&self, plan: &Plan, blocker: Option<&str>) -> BuildResult {
+        let blocker = blocker.map_or_else(String::new, |blocker| {
+            format!(" after waiting for {blocker}")
+        });
         self.failure(
             &plan.request.product,
             &format!(
-                "{NOT_STARTED}stopped waiting for a build of {} in {}: its work was asked to stop",
+                "{NOT_STARTED}stopped waiting to build {} in {}{blocker}: its work was asked to stop or has ended",
                 plan.request.product, plan.request.tree
             ),
         )
@@ -163,8 +166,18 @@ impl BuildManager {
         }
         match stage {
             ExpressBuildStage::Prepare => {
-                let _slot =
-                    self.prepare_compiled(&trees, &tree, &[], &crate::steps::stop_requested)?;
+                let activity = crate::steps::current();
+                let cancelled = || {
+                    activity
+                        .as_ref()
+                        .is_some_and(|activity| activity.cancelled())
+                };
+                let _slot = self.prepare_compiled(&trees, &tree, &[], &cancelled)?;
+                if cancelled() {
+                    return Err(Error::Conflict(format!(
+                        "the express build in {tree} was stopped"
+                    )));
+                }
                 // The runner is in the verb process. An output directory keeps its slot
                 // between this reply and the runner starting Cargo.
                 Trees::create_build_output(&tree, path, output)?;

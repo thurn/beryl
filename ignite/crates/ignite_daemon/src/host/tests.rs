@@ -783,3 +783,6 @@ fn a_verb_adopted_after_a_restart_ages_from_its_handle_and_says_its_step_is_not_
     );
     let _ = fs::remove_dir_all(&runs);
 }
+
+#[path = "builds_tests.rs"]
+mod builds;

@@ -94,12 +94,11 @@ impl BuildManager {
             let Some((request, hash)) = key.request() else {
                 continue;
             };
-            let dirs: Vec<(TreeId, String)> = key
-                .outputs
-                .iter()
-                .map(|dir| (request.tree.clone(), dir.clone()))
-                .collect();
-            let flight = Arc::new(Flight::default());
+            let owner = format!(
+                "supervised run {}",
+                run.dir().file_name().unwrap_or_default().to_string_lossy()
+            );
+            let flight = Arc::new(Flight::new(key.outputs, Some(owner)));
             {
                 let mut state = lock(&self.state);
                 let flight_key = (request.clone(), hash.clone());
@@ -107,21 +106,15 @@ impl BuildManager {
                     continue;
                 }
                 state.flights.insert(flight_key, Arc::clone(&flight));
-                state.busy.extend(dirs.iter().cloned());
             }
             let manager = Arc::clone(self);
             let units = units.unwrap_or_default();
             let thread = format!("ignite-build-{}", request.product);
-            let held = (
-                request.clone(),
-                hash.clone(),
-                dirs.clone(),
-                Arc::clone(&flight),
-            );
+            let held = (request.clone(), hash.clone(), Arc::clone(&flight));
             let spawned = std::thread::Builder::new().name(thread).spawn(move || {
                 // The guard frees the directories and wakes the joiners however this ends.
                 let tree = request.tree.clone();
-                let guard = FlightGuard::new(&manager, request, hash, dirs, flight);
+                let guard = FlightGuard::new(&manager, request, hash, flight);
                 let ended = run.wait();
                 if let Some(trees) = manager
                     .tree_control
@@ -146,8 +139,8 @@ impl BuildManager {
                     eprintln!("ignite: cannot wait for a build that still runs: {error}");
                     // Dropping an unfinished guard frees the directories and ends the flight, so
                     // no request waits for a build nobody watches.
-                    let (request, hash, dirs, flight) = held;
-                    drop(FlightGuard::new(self, request, hash, dirs, flight));
+                    let (request, hash, flight) = held;
+                    drop(FlightGuard::new(self, request, hash, flight));
                 }
             }
         }

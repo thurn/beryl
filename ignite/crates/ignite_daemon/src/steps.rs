@@ -275,6 +275,12 @@ impl Activity {
         lock(&self.state).stop == Stop::Asked
     }
 
+    /// Whether work on behalf of this activity must stop, including after its owner exits.
+    pub(crate) fn cancelled(&self) -> bool {
+        let state = lock(&self.state);
+        state.finished || state.stop == Stop::Asked
+    }
+
     /// See [`refuse_stop`]. With a [`StopKeeper`], the keeper is asked first, and a stop it
     /// says was asked is recorded here as well.
     pub fn refuse_stop(&self, reason: &str) -> bool {
@@ -519,14 +525,12 @@ impl Drop for Entered {
     }
 }
 
-/// The guard [`during`] returns.
+/// Restores the previous step on drop.
 pub struct During {
     held: Option<(Arc<Activity>, Option<StepAt>)>,
 }
 
-/// A step and when it started.
 type StepAt = (String, Timestamp);
-
 impl Drop for During {
     fn drop(&mut self) {
         if let Some((activity, previous)) = self.held.take() {
@@ -553,6 +557,25 @@ impl Drop for Critical {
 /// The guard [`waiting`] returns.
 pub struct Waiting {
     held: Option<(Arc<Activity>, u64)>,
+}
+
+impl Waiting {
+    /// Names a new blocker without restarting the clock of the same wait.
+    pub(crate) fn update(&self, what: &str) {
+        let Some((activity, id)) = &self.held else {
+            return;
+        };
+        let mut state = lock(&activity.state);
+        if let Some(wait) = state.waits.iter_mut().find(|wait| wait.id == *id)
+            && wait.what != what
+        {
+            what.clone_into(&mut wait.what);
+            let line = format!("waiting for {what}");
+            state
+                .observers
+                .retain(|observer| observer.send(line.clone()).is_ok());
+        }
+    }
 }
 
 impl Drop for Waiting {

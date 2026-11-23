@@ -482,7 +482,13 @@ impl BuildManager {
             plan.request.tree,
             failure.crates.join(", ")
         );
-        let _retry_slot = match self.prepare_space(plan, &crate::steps::stop_requested) {
+        let activity = crate::steps::current();
+        let cancelled = || {
+            activity
+                .as_ref()
+                .is_some_and(|activity| activity.cancelled())
+        };
+        let _retry_slot = match self.prepare_space(plan, &cancelled) {
             Ok(slot) => slot,
             Err(failed) => return (failed, false),
         };

@@ -158,8 +158,9 @@ impl Drop for Seeding {
 /// whose lease has just copied another tree's build. The seed deletes and replaces the tree's
 /// Cargo target directories, so a build that ran meanwhile would be deleted or mixed with the
 /// copy. While it waits, the calling work is shown as waiting for the copy. `Err` says why it
-/// stopped waiting when the work was asked to stop first.
+/// stopped waiting when its owner finished or was asked to stop first.
 pub fn wait_until_seeded(path: &Path) -> std::result::Result<(), String> {
+    let activity = crate::steps::current();
     let mut seeding = seeding();
     let mut waiting = None;
     while let Some(marker) = seeding.iter().find(|m| m.path == path) {
@@ -170,9 +171,12 @@ pub fn wait_until_seeded(path: &Path) -> std::result::Result<(), String> {
             ),
             None => format!("{}'s build directories to be copied", marker.tree),
         };
-        if crate::steps::stop_requested() {
+        if activity
+            .as_ref()
+            .is_some_and(|activity| activity.cancelled())
+        {
             return Err(format!(
-                "stopped waiting for {what}: its work was asked to stop"
+                "stopped waiting for {what}: its work was asked to stop or has ended"
             ));
         }
         if waiting.as_ref().is_none_or(|(shown, _)| *shown != what) {

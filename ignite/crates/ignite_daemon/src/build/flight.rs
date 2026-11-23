@@ -4,7 +4,7 @@
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::Duration;
 
-use ignite_core::ids::{InputHash, TreeId};
+use ignite_core::ids::InputHash;
 use ignite_core::traits::BuildResult;
 
 use super::store::Change;
@@ -13,14 +13,33 @@ use super::{BuildManager, Request, State, lock};
 /// How often a request waiting on another build checks whether its own work was asked to stop.
 pub(super) const STOP_RECHECK: Duration = Duration::from_millis(250);
 
-/// One running build that other requests can wait for.
-#[derive(Default)]
+/// One running build that other requests can wait for, and the outputs it reserves.
 pub(super) struct Flight {
+    pub(super) outputs: Vec<String>,
+    owner: Option<String>,
     result: Mutex<Option<BuildResult>>,
     done: Condvar,
 }
 
 impl Flight {
+    pub(super) fn new(outputs: Vec<String>, owner: Option<String>) -> Self {
+        Self {
+            outputs,
+            owner,
+            result: Mutex::default(),
+            done: Condvar::new(),
+        }
+    }
+
+    pub(super) fn describe(&self, request: &Request) -> String {
+        let mut description = format!("the build of {} in {}", request.product, request.tree);
+        if let Some(owner) = &self.owner {
+            use std::fmt::Write as _;
+            let _ = write!(description, " ({owner})");
+        }
+        description
+    }
+
     /// Waits for the build's result. Returns `None` once `stopped` is true, which is asked every
     /// [`STOP_RECHECK`], so a request whose work is stopped does not wait for the whole build.
     pub(super) fn wait(&self, stopped: &dyn Fn() -> bool) -> Option<BuildResult> {
@@ -54,7 +73,6 @@ pub(super) struct FlightGuard<'a> {
     manager: &'a BuildManager,
     request: Request,
     hash: InputHash,
-    dirs: Vec<(TreeId, String)>,
     flight: Arc<Flight>,
     finished: bool,
 }
@@ -64,14 +82,12 @@ impl<'a> FlightGuard<'a> {
         manager: &'a BuildManager,
         request: Request,
         hash: InputHash,
-        dirs: Vec<(TreeId, String)>,
         flight: Arc<Flight>,
     ) -> Self {
         Self {
             manager,
             request,
             hash,
-            dirs,
             flight,
             finished: false,
         }
@@ -79,9 +95,6 @@ impl<'a> FlightGuard<'a> {
 
     /// Frees the output directories and removes the flight, in `state`.
     fn release(&self, state: &mut State) {
-        for dir in &self.dirs {
-            state.busy.remove(dir);
-        }
         state
             .flights
             .remove(&(self.request.clone(), self.hash.clone()));

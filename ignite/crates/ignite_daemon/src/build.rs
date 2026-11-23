@@ -45,7 +45,7 @@
 //! unfinished run with that variable back into a running build that requests join (see
 //! `rejoin`).
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -201,7 +201,7 @@ pub struct BuildManager {
 }
 
 /// A product, its packages and the tree state it was built from.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Request {
     tree: TreeId,
     product: String,
@@ -215,9 +215,7 @@ struct State {
     /// The input hash each request last failed at with an exit code, and that build's output.
     failed: HashMap<Request, (InputHash, PathBuf)>,
     /// Builds running now, by request and input hash.
-    flights: HashMap<(Request, InputHash), Arc<Flight>>,
-    /// The (tree, output directory) pairs a running build writes.
-    busy: HashSet<(TreeId, String)>,
+    flights: BTreeMap<(Request, InputHash), Arc<Flight>>,
     /// Crate graphs by the state of the Cargo files they were read from.
     graphs: HashMap<InputHash, CrateGraph>,
     /// Feature comparisons already made, by directory, Cargo file state and packages: the
@@ -740,4 +738,4 @@ pub fn costliest(units: &[CompileUnit], n: usize) -> Vec<(String, f64)> {
 
 #[cfg(test)]
 #[path = "build_tests.rs"]
-mod tests;
+pub(crate) mod tests;

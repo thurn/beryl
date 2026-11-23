@@ -5,10 +5,11 @@
 //!
 //! A new request ID gets a thread of its own that asks the build manager, inside the verb
 //! process's activity, so the build is charged and stopped as one a verb on the daemon's own
-//! thread starts. The call waits for it at most [`Timing::block`](super::Timing::block) and
-//! answers `waiting` meanwhile; the next call with the same ID waits for the same thread. A call
-//! repeated after the daemon restarted asks the build manager again, which joins the build
-//! still running in its supervisor or finds the product current, so nothing is built twice.
+//! thread starts. If the verb process finishes before a build returns, the build gives up its
+//! wait or ends its command before releasing the reservation. The call answers `waiting`
+//! after [`Timing::block`](super::Timing::block), and a call with the same ID waits for the same
+//! thread. After a restart the build manager joins a build still running in its supervisor or
+//! finds the product current, so nothing is built twice.
 
 use std::sync::Arc;
 use std::time::Instant;
