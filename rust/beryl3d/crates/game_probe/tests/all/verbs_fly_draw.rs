@@ -59,7 +59,7 @@ fn moved(view: &mut beryl_protocol::protocol::PlayerView, slot: ObjectId, zone: 
         .expect("the card is on the table");
     let from = object.zone;
     object.zone = zone;
-    if object.controller == Side::You || zone == ZoneName::Stack {
+    if object.controller == Side::You || matches!(zone, ZoneName::Stack | ZoneName::Battlefield) {
         object.name.get_or_insert_with(|| "Plains".to_owned());
     }
     let object = object.clone();
@@ -68,6 +68,13 @@ fn moved(view: &mut beryl_protocol::protocol::PlayerView, slot: ObjectId, zone: 
         Side::Opponent => &mut view.players.opponent,
     };
     player.library.retain(|&s| s != slot);
+    if from == ZoneName::Stack {
+        view.stack
+            .retain(|item| !matches!(item, StackItem::Spell { slot: s, .. } if *s == slot));
+    }
+    if zone == ZoneName::Battlefield && !view.battlefield.contains(&slot) {
+        view.battlefield.push(slot);
+    }
     let item = (zone == ZoneName::Stack).then(|| StackItem::Spell {
         slot,
         targets: Vec::new(),
@@ -80,7 +87,10 @@ fn moved(view: &mut beryl_protocol::protocol::PlayerView, slot: ObjectId, zone: 
     Act::Fly {
         from,
         why: match (from, zone) {
-            (ZoneName::Library, _) => Why::Draw,
+            (ZoneName::Library, ZoneName::Hand) => Why::Draw,
+            (ZoneName::Stack, ZoneName::Battlefield) => Why::Resolve,
+            (ZoneName::Hand, ZoneName::Battlefield) => Why::Play,
+            (_, ZoneName::Battlefield) => Why::Return,
             _ => Why::Cast,
         },
         object,
@@ -395,20 +405,127 @@ fn several_drawn_together_never_rest_on_the_way() {
     }
 }
 
-/// The opponent's spell turns over on its way to the stack and is edge-on `turn.cast.at` of the
-/// way.
+/// The opponent's spell cast from hand follows the four-node relative flip spline: face down
+/// as it leaves their hand without spinning sideways, crossing edge-on mid-flight, and landing
+/// face up on the stack.
 #[test]
 fn an_opponents_spell_is_edge_on_at_the_cast_turn() {
     let (before, cards) = table();
     let slot = cards.their_spell;
     let show = played(&before, after(&before, &[&[(slot, ZoneName::Stack)]]));
+    clean(&show, "opponent spell cast");
     let segments = segments(&show, slot);
     let step = span(&show, slot);
-    let turn = show.table().data().verbs.fly.turn.cast;
-    let turned = pose_at(&segments, at(step, turn.at)).turn;
-    assert!((turned - 0.5).abs() < 0.02, "turned {turned}");
-    let before_turn = turn.at - turn.each - 0.01;
-    assert!((pose_at(&segments, at(step, before_turn)).turn - 1.0).abs() < 1e-4);
+    assert!(
+        segments
+            .iter()
+            .any(|segment| matches!(segment.shape, Shape::Spline(_))),
+        "opponent cast uses a spline segment"
+    );
+    assert!(
+        pose_at(&segments, at(step, 0.15)).turn > 0.5,
+        "face down as it leaves the opponent's hand"
+    );
+    assert!(
+        pose_at(&segments, at(step, 0.65)).turn < 0.5,
+        "face up after crossing edge-on"
+    );
+    assert!(
+        pose_at(&segments, step.1).turn < 1e-4,
+        "face up at rest on the stack"
+    );
+}
+
+/// Playing lands, casting spells to the stack, and resolving permanents onto the battlefield
+/// (both default and flying, for either player) each follow their authored spline cleanly with
+/// no jumps and exact mid-flight resize continuity.
+#[test]
+fn play_land_cast_and_enter_play_splines_play_cleanly_and_retarget() {
+    use beryl_protocol::protocol::{CardType, Keyword};
+    use glam::Vec3;
+
+    let mut builder = ViewBuilder::new();
+    let my_land = builder.card(ZoneName::Hand, Side::You, "Island").slot;
+    let opp_land = builder.card(ZoneName::Hand, Side::Opponent, "Island").slot;
+    let my_spell = builder.card(ZoneName::Hand, Side::You, "Counterspell").slot;
+    let my_creature = {
+        let obj = builder.card(ZoneName::Stack, Side::You, "Savannah Lions");
+        obj.types = vec![CardType::Creature];
+        obj.slot
+    };
+    let my_flyer = {
+        let obj = builder.card(ZoneName::Stack, Side::You, "Serra Angel");
+        obj.types = vec![CardType::Creature];
+        obj.keywords = vec![Keyword::Flying];
+        obj.slot
+    };
+    let opp_creature = {
+        let obj = builder.card(ZoneName::Stack, Side::Opponent, "Savannah Lions");
+        obj.types = vec![CardType::Creature];
+        obj.slot
+    };
+    let my_fetched = builder.card(ZoneName::Library, Side::You, "Plains").slot;
+    let opp_fetched = builder
+        .card(ZoneName::Library, Side::Opponent, "Plains")
+        .slot;
+    let my_exiled = builder.card(ZoneName::Exile, Side::You, "Plains").slot;
+    builder.script(ScriptBuilder::reset().build());
+    let before = builder.update();
+
+    let scenarios = [
+        ("land played", my_land, ZoneName::Battlefield),
+        ("opponent land played", opp_land, ZoneName::Battlefield),
+        ("own spell cast", my_spell, ZoneName::Stack),
+        ("permanent resolves", my_creature, ZoneName::Battlefield),
+        (
+            "permanent resolves (flying)",
+            my_flyer,
+            ZoneName::Battlefield,
+        ),
+        (
+            "opponent permanent resolves",
+            opp_creature,
+            ZoneName::Battlefield,
+        ),
+        ("library to battlefield", my_fetched, ZoneName::Battlefield),
+        (
+            "opponent library to battlefield",
+            opp_fetched,
+            ZoneName::Battlefield,
+        ),
+        ("exile to battlefield", my_exiled, ZoneName::Battlefield),
+    ];
+
+    for (label, slot, dst) in scenarios {
+        let show = played(&before, after(&before, &[&[(slot, dst)]]));
+        clean(&show, label);
+        let segs = segments(&show, slot);
+        let flight = *segs
+            .iter()
+            .find(|segment| matches!(segment.shape, Shape::Spline(_)))
+            .unwrap_or_else(|| panic!("{label}: expected a spline segment"));
+        let step = (flight.start, flight.end());
+        for share in [0.15, 0.45, 0.75] {
+            let t = at(step, share);
+            let now = flight.pose_at(t);
+            let mut moved = Segment {
+                to: Pose {
+                    position: flight.to.position + Vec3::new(20.0, -10.0, 5.0),
+                    scale: flight.to.scale * 1.1,
+                    ..flight.to
+                },
+                ..flight
+            };
+            moved.through(t, now);
+            let kept = moved.pose_at(t);
+            assert!(
+                kept.position.distance(now.position) < 1e-2,
+                "{label} at {share}: {kept:?} vs {now:?}"
+            );
+            assert!((kept.scale - now.scale).abs() < 1e-4, "{label} at {share}");
+            assert!((kept.turn - now.turn).abs() < 1e-4, "{label} at {share}");
+        }
+    }
 }
 
 /// A card drawn and then cast in one script keeps every segment of both flights on its track.

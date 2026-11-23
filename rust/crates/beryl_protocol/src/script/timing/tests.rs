@@ -193,6 +193,42 @@ fn each_case_of_the_data_is_found_on_one_act() {
             vec![],
         ),
         (
+            "library to battlefield",
+            fly(
+                ZoneName::Library,
+                Why::Return,
+                card(1, ZoneName::Battlefield, you),
+            ),
+            &table,
+            vec![],
+        ),
+        (
+            "opponent library to battlefield",
+            fly(
+                ZoneName::Library,
+                Why::Return,
+                card(1, ZoneName::Battlefield, them),
+            ),
+            &table,
+            vec![],
+        ),
+        (
+            "exile to battlefield",
+            fly(
+                ZoneName::Exile,
+                Why::Return,
+                card(1, ZoneName::Battlefield, you),
+            ),
+            &table,
+            vec![],
+        ),
+        (
+            "exile to stack",
+            fly(ZoneName::Exile, Why::Cast, card(1, ZoneName::Stack, you)),
+            &table,
+            vec![],
+        ),
+        (
             "discard",
             fly(
                 ZoneName::Hand,

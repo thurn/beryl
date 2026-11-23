@@ -1,44 +1,27 @@
 //! `fly`: the card travels from where it is to where it rests, turning over on the way if its face
-//! changes. The flight's path depends on what the card is doing, as the web interface's `bowOf`
-//! (`ui/src/stage/bows.ts`) and `lifts` (`ui/src/stage/lift.ts`) pick it:
+//! changes. The flight's path follows MTG Arena's zone-transfer splines (`data/beryl3d/verbs.json`,
+//! `verbs.fly.draw` and `verbs.fly.paths`) while keeping full rectangular cards throughout:
 //!
-//! - A spell cast onto the stack bows off the straight line, sideways on the screen, toward its
-//!   controller's edge of the table, the opponent's half as far and later, leaning the other way.
-//! - A permanent spell resolving is thrown up off the stack and drops onto its place
-//!   (`Shape::Thrown`), rising no higher than the top of the window leaves room for.
-//! - The viewer's card played from their hand onto the table, such as a land, glides straight
-//!   to its place. The scene draws it in front of the resting cards while it travels.
-//! - The opponent's land drops out of their hand into the open table on the side away from
-//!   where it is going, tilted, and swings back along the table to its place.
-//! - A card the viewer draws flies along a six-node Catmull-Rom spline with piecewise spherical
-//!   rotation and a four-keyframe cubic Hermite timing curve (`Shape::Spline`): lifting off the
-//!   library face down, flipping across edge-on near the middle of the table, leaning into a 3D
-//!   flourish, holding large and square beside the stack, and dropping smoothly into the hand.
-//! - The opponent's draw flies along a four-node Catmull-Rom spline (`Shape::Spline`): pausing
-//!   briefly on the library, dropping flat down the flank, sweeping across upper centre while
-//!   pitching halfway toward the camera, and landing face down in their hand.
-//! - An opponent's discard drops along the line from hand to graveyard. Other flights also
-//!   follow a straight line across the table.
-//! - Any straight or bowed flight that would carry its card's centre past the top, bottom or
-//!   right edge of the window is bowed down, up or left on the screen until it does not
-//!   (`kept_in_window`): the opponent's hand and their piles all lie along the top of the
-//!   window, and the viewer's piles reach its bottom edge, so a spell cast from the viewer's
-//!   graveyard, which bows toward the viewer's edge, would dip below it.
-//!
-//! Flights that rise use `verbs.fly.arc` for their height at the middle of the step: every
-//! flight but a card's played or cast from the viewer's hand, a drawn card's or an opponent's
-//! discard. A card whose face changes turns over top over bottom at moments of its own
-//! (`Turning`): a drawn card as it leaves the library, any other a little
-//! before half way. A card drawn alone turns at `held.turn` of its flight in, and grows on the
-//! screen toward its held size only once it is edge-on. The values are under `verbs.fly` in
-//! `data/beryl3d/verbs.json`.
-//!
-//! The web turns a card that lands face down the other way up the table (the opponent's draw)
-//! half round as it leaves, so that it never spins in the table's plane on the way. Beryl 3D's
-//! opponent's hand faces the camera the same way up as the library, so the flight has no half
-//! turn to take out.
+//! - The viewer's land played from hand glides straight to its slot along a two-node Hermite
+//!   ease-in spline (`paths.place_near`).
+//! - The opponent's land swings out of their hand up to an upper-right showcase apex facing the
+//!   camera, slowing so it can be read, then accelerates onto their land row (`paths.place_far`).
+//! - The viewer's spell cast from hand sweeps to the stack with a fast launch, subtle 3D tilt,
+//!   and smooth settle (`paths.send_near`).
+//! - The opponent's spell cast from hand leaves face down without in-plane spin, flips across
+//!   edge-on along a four-node relative spline, and lands face up on the stack (`paths.send_far`).
+//! - A permanent spell resolving from the stack launches upward to a high mid-table apex facing
+//!   flat toward the table and drops briskly onto its slot (`paths.settle_default`), or glides
+//!   along a higher banked arc when it has flying (`paths.settle_gliding`).
+//! - A card entering play from a library uses a crisp straight spline for the viewer
+//!   (`paths.fetch_near`) or a showcase flip apex for the opponent (`paths.fetch_far`); cards
+//!   moving out of exile to the stack or battlefield follow a smooth S-curve (`paths.return_drift`).
+//! - Drawn cards follow Arena's six-node local draw spline (`draw.local`) and four-node opponent
+//!   draw spline (`draw.opponent`).
+//! - Other flights (such as spells cast from a graveyard or discards) keep a straight or bowed
+//!   path kept inside the window's safe area (`kept_in_window`).
 
-use beryl_protocol::protocol::{Side, Why, ZoneName};
+use beryl_protocol::protocol::{Keyword, Side, Why, ZoneName};
 use beryl_protocol::script::Act;
 use glam::{Quat, Vec2, Vec3};
 use std::f32::consts::PI;
@@ -46,17 +29,17 @@ use std::f32::consts::PI;
 use super::{StepIn, StepOut};
 use game_table::table::Camera;
 use kit_base::data::profiles::HeldDraw;
-use kit_base::data::verbs::{Bowing, Fly};
-use kit_base::pose::{Bow, MAX_SPLINE_INTERIOR, Pose, Segment, Shape, Spline, SplineNode};
+use kit_base::data::verbs::{ApexNode, Bowing, Fly, RelativeNode, StraightSpline};
+use kit_base::pose::{
+    Bow, HermiteCurve, MAX_SPLINE_INTERIOR, Pose, Segment, Shape, Spline, SplineNode,
+};
 
 pub const BUILT: bool = true;
 
 /// The path a flight takes.
 enum Path {
     /// The straight line, rising `verbs.fly.arc` at its middle when `rises`.
-    Straight {
-        rises: bool,
-    },
+    Straight { rises: bool },
     /// Bowed toward one edge of the table: `toward` is 1 for the viewer's edge and -1 for the
     /// opponent's, as the web's `toward` is 1 down the stage.
     Bowed {
@@ -64,11 +47,26 @@ enum Path {
         toward: f32,
         rises: bool,
     },
-    Thrown,
     /// A card drawn into the viewer's hand (single, multi-draw, or face down): six-node spline.
     DrawLocal,
     /// A card drawn into the opponent's hand: four-node spline.
     DrawOpponent,
+    /// The viewer's land played from hand onto the battlefield: two-node ease-in spline.
+    PlayLandLocal,
+    /// The opponent's land played from hand onto the battlefield: three-node showcase spline.
+    PlayLandOpponent,
+    /// The viewer's spell cast from hand onto the stack: three-node relative spline.
+    CastLocal,
+    /// The opponent's spell cast from hand onto the stack: four-node relative flip spline.
+    CastOpponent,
+    /// A permanent resolving from the stack onto the battlefield: three-node throw-up spline.
+    EnterFromStack { flying: bool },
+    /// A card entering the battlefield from the viewer's library: two-node spline.
+    LibraryToBattlefieldLocal,
+    /// A card entering the battlefield from the opponent's library: three-node showcase spline.
+    LibraryToBattlefieldOpponent,
+    /// A card moving from exile to the stack or battlefield: two-node S-curve spline.
+    ExileTransfer,
 }
 
 /// Whether `act` is a card drawn, or a card flown as one is: the flight from a library to a
@@ -79,7 +77,7 @@ fn draws(act: &Act) -> bool {
         if object.zone == ZoneName::Hand && (*why == Why::Draw || object.name.is_none()))
 }
 
-/// The path of the flight `act` makes, whose case is `case` (the web's `bowOf` and `lifts`).
+/// The path of the flight `act` makes, whose case is `case`.
 fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
     let Act::Fly {
         from, object, why, ..
@@ -108,27 +106,41 @@ fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
         };
     }
     match (*from, object.zone) {
-        // A spell cast from a hand goes between two places held near the camera, and never
-        // leaves the table to rise above it: a rise along the table's height would carry it up
-        // the screen against its bow.
+        (ZoneName::Hand, ZoneName::Stack) => {
+            if mine {
+                Path::CastLocal
+            } else {
+                Path::CastOpponent
+            }
+        }
+        (ZoneName::Exile, ZoneName::Stack | ZoneName::Battlefield) => Path::ExileTransfer,
         (_, ZoneName::Stack) => Path::Bowed {
             bowing: if mine { fly.bows.cast } else { fly.bows.theirs },
             toward,
-            rises: *from != ZoneName::Hand,
+            rises: true,
         },
-        (ZoneName::Stack, ZoneName::Battlefield) => Path::Thrown,
+        (ZoneName::Stack, ZoneName::Battlefield) => Path::EnterFromStack {
+            flying: object.keywords.contains(&Keyword::Flying),
+        },
+        (ZoneName::Hand, ZoneName::Battlefield) => {
+            if mine {
+                Path::PlayLandLocal
+            } else {
+                Path::PlayLandOpponent
+            }
+        }
+        (ZoneName::Library, ZoneName::Battlefield) => {
+            if object.owner == Side::You {
+                Path::LibraryToBattlefieldLocal
+            } else {
+                Path::LibraryToBattlefieldOpponent
+            }
+        }
         // The opponent's hand lies at the top of the frame. A discard drops from the
         // hand to the graveyard, so it should not rise farther above the table first.
         (ZoneName::Hand, ZoneName::Graveyard) if !mine && *why == Why::Discard => {
             Path::Straight { rises: false }
         }
-        (ZoneName::Hand, ZoneName::Battlefield) if mine => Path::Straight { rises: false },
-        // The opponent's land bows toward the middle of the table, away from their own edge.
-        (ZoneName::Hand, ZoneName::Battlefield) => Path::Bowed {
-            bowing: fly.bows.played,
-            toward: -toward,
-            rises: false,
-        },
         _ => Path::Straight { rises: true },
     }
 }
@@ -157,25 +169,6 @@ fn bow(bowing: &Bowing, toward: f32, (from, to): (Pose, Pose), camera: &Camera) 
         lean: (side * bowing.lean).to_radians(),
         axis: back,
     }
-}
-
-/// How far, in millimetres up the screen, a card can rise from `from` or `to`, whichever has
-/// less room, before its top passes the top of the window's safe area (the web's `room` in
-/// `lifted`, `ui/src/stage/lift.ts`, which keeps a permanent resolving into the opponent's back
-/// row from rising past the far edge of the table). Each is measured at that pose's depth.
-fn room((from, to): (Pose, Pose), camera: &Camera) -> f32 {
-    let right = camera.axes()[0];
-    let top = camera.window.safe_area.top;
-    [from, to]
-        .map(|pose| {
-            let (corners, _) = camera.card_box(&pose);
-            let highest = corners.iter().map(|c| c.y).fold(f32::INFINITY, f32::min);
-            let points =
-                camera.to_screen(pose.position + right).x - camera.to_screen(pose.position).x;
-            ((highest - top) / points).max(0.0)
-        })
-        .into_iter()
-        .fold(f32::INFINITY, f32::min)
 }
 
 /// Where a drawn card is held up to be read. A fixed position uses the hand's card height.
@@ -441,13 +434,149 @@ fn opponent_draw_spline(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
     ))
 }
 
+/// Builds a two-node straight spline driven by an authored Hermite curve and Arena frustum
+/// depth ratio (used for local land plays, local library-to-battlefield, and exile transfers).
+fn straight_spline(step: &StepIn<'_>, to: Pose, spec: &StraightSpline) -> Shape {
+    let camera = step.places.camera();
+    let camera_back = camera.axes()[2];
+    Shape::Spline(Spline::new(
+        &[],
+        1.0 / spec.from_rel_scale,
+        &to,
+        spec.curve(),
+        (false, false),
+        (camera.eye, camera_back),
+    ))
+}
+
+/// Builds a three-node camera-space spline with one interior apex waypoint (used for resolving
+/// permanents leaving the stack, opponent land plays, and opponent library-to-battlefield).
+fn apex_spline(
+    step: &StepIn<'_>,
+    (from, to): (Pose, Pose),
+    from_rel_scale: f32,
+    node: &ApexNode,
+    curve: HermiteCurve,
+) -> Shape {
+    let camera = step.places.camera();
+    let camera_back = camera.axes()[2];
+    let from_depth = camera.depth(from.position);
+    let to_depth = camera.depth(to.position);
+    let from_seen = from.scale / from_depth;
+    let to_seen = to.scale / to_depth;
+    let flips = turns(from, to) && from.turn > 0.5 && to.turn < 0.5;
+    let stays_face_down = !flips && from.turn > 0.5;
+
+    let depth = (from_depth + (to_depth - from_depth) * node.depth_share).min(node.max_depth);
+    let linear_seen = f32::midpoint(from_seen, to_seen);
+    let linear_rel = f32::midpoint(from_rel_scale, 1.0);
+    let seen_scale = linear_seen * (node.rel_scale / linear_rel);
+    let base = camera.screen_pose(node.ndc, depth, node.rotation, 0.1);
+    let rotation = if stays_face_down {
+        from.rotation.slerp(to.rotation, 0.5)
+    } else {
+        base.rotation
+    };
+    let probe = Pose {
+        position: base.position,
+        rotation,
+        scale: seen_scale * depth,
+        turn: if flips { 0.0 } else { from.turn },
+        ..Pose::default()
+    };
+    let clamped = clamped_to_safe_area(probe, camera);
+    let interior = [SplineNode {
+        position: clamped.position,
+        rotation,
+        seen_scale,
+        weight: 1.0 / node.rel_scale,
+    }];
+
+    Shape::Spline(Spline::new(
+        &interior,
+        1.0 / from_rel_scale,
+        &to,
+        curve,
+        (flips, false),
+        (camera.eye, camera_back),
+    ))
+}
+
+/// Builds an endpoint-relative spline with one or two interior waypoints placed proportionally
+/// between `from` and `to` in NDC (used for local and opponent spells cast from hand to stack).
+fn relative_spline(
+    step: &StepIn<'_>,
+    (from, to): (Pose, Pose),
+    from_rel_scale: f32,
+    nodes: &[RelativeNode],
+    curve: HermiteCurve,
+    flip_back: bool,
+) -> Shape {
+    let camera = step.places.camera();
+    let camera_back = camera.axes()[2];
+    let from_depth = camera.depth(from.position);
+    let to_depth = camera.depth(to.position);
+    let from_seen = from.scale / from_depth;
+    let to_seen = to.scale / to_depth;
+    let from_ndc = camera.project(from.position).truncate();
+    let to_ndc = camera.project(to.position).truncate();
+    let span_ndc = to_ndc - from_ndc;
+    let flips = flip_back && turns(from, to) && from.turn > 0.5 && to.turn < 0.5;
+    let stays_face_down = !flips && from.turn > 0.5;
+    // Remove the 180-degree local-Z inversion on opponent hand cards so face-down cast flips
+    // pitch cleanly top-over-bottom without spinning in-plane.
+    let start_half_turn = flips && (from.rotation * Vec3::Y).dot(to.rotation * Vec3::Y) < 0.0;
+
+    let count = nodes.len().min(MAX_SPLINE_INTERIOR);
+    let mut interior = [SplineNode::default(); MAX_SPLINE_INTERIOR];
+    #[expect(clippy::cast_precision_loss, reason = "count is 1..=2")]
+    let spans = (count + 1) as f32;
+    for (index, node) in nodes.iter().take(count).enumerate() {
+        #[expect(clippy::cast_precision_loss, reason = "index is 0..2")]
+        let u = (index + 1) as f32 / spans;
+        let ndc = from_ndc + span_ndc * node.ndc_share;
+        let depth = from_depth + (to_depth - from_depth) * node.depth_share;
+        let linear_seen = from_seen + (to_seen - from_seen) * u;
+        let linear_rel = from_rel_scale + (1.0 - from_rel_scale) * u;
+        let seen_scale = linear_seen * (node.rel_scale / linear_rel);
+        let base = camera.screen_pose(ndc, depth, node.rotation, 0.1);
+        let rotation = if flips || (!flip_back && !stays_face_down) {
+            base.rotation
+        } else {
+            from.rotation.slerp(to.rotation, u)
+        };
+        let probe = Pose {
+            position: base.position,
+            rotation,
+            scale: seen_scale * depth,
+            turn: if flips { 0.0 } else { from.turn },
+            ..Pose::default()
+        };
+        let clamped = clamped_to_safe_area(probe, camera);
+        interior[index] = SplineNode {
+            position: clamped.position,
+            rotation,
+            seen_scale,
+            weight: 1.0 / node.rel_scale,
+        };
+    }
+
+    Shape::Spline(Spline::new(
+        &interior[..count],
+        1.0 / from_rel_scale,
+        &to,
+        curve,
+        (flips, start_half_turn),
+        (camera.eye, camera_back),
+    ))
+}
+
 pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
     let fly = &step.verbs.fly;
     let (Some(subject), Some(from), Some(to)) = (step.subject, step.from, step.to) else {
         return;
     };
     let between = Segment::between(from, to, step.own, step.curve);
-    let axes = step.places.camera().axes();
     // A card that flies to the place it already rests rises no more than it travels: one out of
     // view at a row's end that moves to the end of that row stays there, undrawn.
     let travels = from.position.truncate() != to.position.truncate();
@@ -455,6 +584,63 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
         if rises && travels { fly.arc } else { 0.0 }
     };
     let path = path_of(step.act, step.timing.case.as_deref(), fly);
+    let paths = &fly.paths;
+    let spline = match path {
+        Path::DrawLocal => Some(local_draw_spline(step, (from, to))),
+        Path::DrawOpponent => Some(opponent_draw_spline(step, (from, to))),
+        Path::PlayLandLocal => Some(straight_spline(step, to, &paths.place_near)),
+        Path::PlayLandOpponent => Some(apex_spline(
+            step,
+            (from, to),
+            paths.place_far.from_rel_scale,
+            &paths.place_far.node,
+            paths.place_far.curve(),
+        )),
+        Path::CastLocal => Some(relative_spline(
+            step,
+            (from, to),
+            paths.send_near.from_rel_scale,
+            std::slice::from_ref(&paths.send_near.node),
+            paths.send_near.curve(),
+            false,
+        )),
+        Path::CastOpponent => Some(relative_spline(
+            step,
+            (from, to),
+            paths.send_far.from_rel_scale,
+            &paths.send_far.nodes,
+            paths.send_far.curve(),
+            true,
+        )),
+        Path::EnterFromStack { flying } => {
+            let spec = if flying {
+                &paths.settle_gliding
+            } else {
+                &paths.settle_default
+            };
+            Some(apex_spline(
+                step,
+                (from, to),
+                spec.from_rel_scale,
+                &spec.node,
+                spec.curve(),
+            ))
+        }
+        Path::LibraryToBattlefieldLocal => Some(straight_spline(step, to, &paths.fetch_near)),
+        Path::LibraryToBattlefieldOpponent => Some(apex_spline(
+            step,
+            (from, to),
+            paths.fetch_far.from_rel_scale,
+            &paths.fetch_far.node,
+            paths.fetch_far.curve(),
+        )),
+        Path::ExileTransfer => Some(straight_spline(step, to, &paths.return_drift)),
+        Path::Straight { .. } | Path::Bowed { .. } => None,
+    };
+    if let Some(shape) = spline {
+        out.segment(subject, Segment { shape, ..between });
+        return;
+    }
     // A card whose face changes turns over at moments of its own: a drawn card turns via its
     // 3D spline orientations, any other a little before half way (the web's `turningOf`).
     let turning = turns(from, to).then_some(if draws(step.act) {
@@ -463,26 +649,6 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
         fly.turn.cast
     });
     let segment = match path {
-        Path::DrawLocal => {
-            out.segment(
-                subject,
-                Segment {
-                    shape: local_draw_spline(step, (from, to)),
-                    ..between
-                },
-            );
-            return;
-        }
-        Path::DrawOpponent => {
-            out.segment(
-                subject,
-                Segment {
-                    shape: opponent_draw_spline(step, (from, to)),
-                    ..between
-                },
-            );
-            return;
-        }
         Path::Straight { rises } => Segment {
             arc: arc(rises),
             ..between
@@ -496,18 +662,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
             shape: Shape::Bowed(bow(&bowing, toward, (from, to), step.places.camera())),
             ..between
         },
-        Path::Thrown => Segment {
-            shape: Shape::Thrown {
-                // Up the screen by a share of the spell's width, and no higher than the room
-                // over it.
-                rise: axes[1]
-                    * (fly.thrown.height * step.places.camera().data.card.width * from.scale)
-                        .min(room((from, to), step.places.camera())),
-                aloft: fly.thrown.scale * from.scale,
-                tuning: fly.thrown,
-            },
-            ..between
-        },
+        _ => between,
     };
     let segment = kept_in_window(
         Segment { turning, ..segment },

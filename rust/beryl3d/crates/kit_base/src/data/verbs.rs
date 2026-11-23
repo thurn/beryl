@@ -36,6 +36,152 @@ pub struct Fly {
     #[serde(deserialize_with = "before_end")]
     pub held_sink: f32,
     pub draw: DrawSplines,
+    pub paths: FlightSplines,
+}
+
+/// Authored multi-node splines for flights between resting zones.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlightSplines {
+    pub place_near: StraightSpline,
+    pub place_far: ApexSpline4,
+    pub send_near: RelativeSpline1,
+    pub send_far: RelativeSpline2,
+    pub settle_default: ApexSpline3,
+    pub settle_gliding: ApexSpline3,
+    pub fetch_near: StraightSpline,
+    pub fetch_far: ApexSpline3,
+    pub return_drift: StraightSpline,
+}
+
+/// A two-node straight spline driven by a three-keyframe Hermite curve and endpoint depth weight.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct StraightSpline {
+    #[serde(deserialize_with = "positive")]
+    pub from_rel_scale: f32,
+    pub ease: [HermiteKeyData; 3],
+}
+
+impl StraightSpline {
+    /// Converts the authored keyframes into a `HermiteCurve`.
+    #[must_use]
+    pub fn curve(&self) -> HermiteCurve {
+        curve_of_3(self.ease)
+    }
+}
+
+/// One interior camera-space waypoint for a three-node spline.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ApexNode {
+    #[serde(deserialize_with = "vector")]
+    pub ndc: Vec2,
+    #[serde(deserialize_with = "fraction")]
+    pub depth_share: f32,
+    #[serde(deserialize_with = "positive")]
+    pub max_depth: f32,
+    #[serde(deserialize_with = "positive")]
+    pub rel_scale: f32,
+    #[serde(deserialize_with = "quaternion")]
+    pub rotation: Quat,
+}
+
+/// A three-node camera-space spline with a three-keyframe Hermite curve.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ApexSpline3 {
+    #[serde(deserialize_with = "positive")]
+    pub from_rel_scale: f32,
+    pub node: ApexNode,
+    pub ease: [HermiteKeyData; 3],
+}
+
+impl ApexSpline3 {
+    /// Converts the authored keyframes into a `HermiteCurve`.
+    #[must_use]
+    pub fn curve(&self) -> HermiteCurve {
+        curve_of_3(self.ease)
+    }
+}
+
+/// A three-node camera-space spline with a four-keyframe Hermite curve.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ApexSpline4 {
+    #[serde(deserialize_with = "positive")]
+    pub from_rel_scale: f32,
+    pub node: ApexNode,
+    pub ease: [HermiteKeyData; 4],
+}
+
+impl ApexSpline4 {
+    /// Converts the authored keyframes into a `HermiteCurve`.
+    #[must_use]
+    pub fn curve(&self) -> HermiteCurve {
+        HermiteCurve {
+            keys: self.ease.map(HermiteKey::from),
+            len: 4,
+        }
+    }
+}
+
+/// One interior waypoint placed proportionally between start and end NDC positions.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct RelativeNode {
+    #[serde(deserialize_with = "vector")]
+    pub ndc_share: Vec2,
+    #[serde(deserialize_with = "fraction")]
+    pub depth_share: f32,
+    #[serde(deserialize_with = "positive")]
+    pub rel_scale: f32,
+    #[serde(deserialize_with = "quaternion")]
+    pub rotation: Quat,
+}
+
+/// A three-node endpoint-relative spline with a three-keyframe Hermite curve.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct RelativeSpline1 {
+    #[serde(deserialize_with = "positive")]
+    pub from_rel_scale: f32,
+    pub node: RelativeNode,
+    pub ease: [HermiteKeyData; 3],
+}
+
+impl RelativeSpline1 {
+    /// Converts the authored keyframes into a `HermiteCurve`.
+    #[must_use]
+    pub fn curve(&self) -> HermiteCurve {
+        curve_of_3(self.ease)
+    }
+}
+
+/// A four-node endpoint-relative spline with a three-keyframe Hermite curve.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct RelativeSpline2 {
+    #[serde(deserialize_with = "positive")]
+    pub from_rel_scale: f32,
+    pub nodes: [RelativeNode; 2],
+    pub ease: [HermiteKeyData; 3],
+}
+
+impl RelativeSpline2 {
+    /// Converts the authored keyframes into a `HermiteCurve`.
+    #[must_use]
+    pub fn curve(&self) -> HermiteCurve {
+        curve_of_3(self.ease)
+    }
+}
+
+fn curve_of_3(ease: [HermiteKeyData; 3]) -> HermiteCurve {
+    let mut keys = [HermiteKey::default(); MAX_HERMITE_KEYS];
+    for (slot, key) in keys.iter_mut().zip(ease) {
+        *slot = key.into();
+    }
+    HermiteCurve { keys, len: 3 }
 }
 
 /// Authored multi-node splines for card flights.

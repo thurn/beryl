@@ -137,6 +137,129 @@
             { "time": 1.0, "value": 1.0, "in_slope": 0.0, "out_slope": 0.0 }
           ]
         }
+      },
+      "paths": {
+        "place_near": {
+          "from_rel_scale": 1.3266,
+          "ease": [
+            { "time": 0.0, "value": 0.0, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 0.94951, "value": 1.0, "in_slope": 2.0, "out_slope": 0.0 },
+            { "time": 1.0, "value": 1.0, "in_slope": 0.0, "out_slope": 0.0 }
+          ]
+        },
+        "place_far": {
+          "from_rel_scale": 1.00593,
+          "node": {
+            "ndc": [0.3523, 0.3985],
+            "depth_share": 0.55,
+            "max_depth": 850,
+            "rel_scale": 1.44953,
+            "rotation": [0.0, 0.0, 0.0, 1.0]
+          },
+          "ease": [
+            { "time": 0.0, "value": 0.0, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 0.04896, "value": 0.0, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 0.53541, "value": 0.52125, "in_slope": 0.61037, "out_slope": 0.5509 },
+            { "time": 0.93205, "value": 1.0, "in_slope": 1.92952, "out_slope": 0.0 }
+          ]
+        },
+        "send_near": {
+          "from_rel_scale": 0.60814,
+          "node": {
+            "ndc_share": [0.18, 0.095],
+            "depth_share": 0.23,
+            "rel_scale": 0.66847,
+            "rotation": [0.043808, 0.07883, 0.043335, 0.994982]
+          },
+          "ease": [
+            { "time": 0.0, "value": 0.0, "in_slope": 0.0, "out_slope": 2.80348 },
+            { "time": 0.89962, "value": 1.0, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 1.0, "value": 1.0, "in_slope": 0.0, "out_slope": 0.0 }
+          ]
+        },
+        "send_far": {
+          "from_rel_scale": 0.42924,
+          "nodes": [
+            {
+              "ndc_share": [0.097, 0.1011],
+              "depth_share": 0.195,
+              "rel_scale": 0.48306,
+              "rotation": [0.984416, -0.003688, -0.003008, 0.175793]
+            },
+            {
+              "ndc_share": [0.449, 0.5728],
+              "depth_share": 0.618,
+              "rel_scale": 0.66314,
+              "rotation": [0.555696, -0.018826, -0.014925, 0.831038]
+            }
+          ],
+          "ease": [
+            { "time": 0.0, "value": 0.0, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 0.79594, "value": 1.0, "in_slope": 1.92952, "out_slope": 0.0 },
+            { "time": 1.0, "value": 1.0, "in_slope": 0.0, "out_slope": 0.0 }
+          ]
+        },
+        "settle_default": {
+          "from_rel_scale": 2.2376,
+          "node": {
+            "ndc": [0.23495, 0.44435],
+            "depth_share": 0.55,
+            "max_depth": 850,
+            "rel_scale": 1.6414,
+            "rotation": [-0.190471, 0.0, 0.0, 0.981693]
+          },
+          "ease": [
+            { "time": 0.0, "value": 0.0, "in_slope": 0.0, "out_slope": 1.75352 },
+            { "time": 0.91507, "value": 1.0, "in_slope": 1.57319, "out_slope": 0.0 },
+            { "time": 1.0, "value": 1.0, "in_slope": 0.0, "out_slope": 0.0 }
+          ]
+        },
+        "settle_gliding": {
+          "from_rel_scale": 2.18133,
+          "node": {
+            "ndc": [0.15101, 0.51891],
+            "depth_share": 0.53,
+            "max_depth": 850,
+            "rel_scale": 1.34206,
+            "rotation": [-0.08641, 0.033783, 0.126078, 0.987672]
+          },
+          "ease": [
+            { "time": 0.0, "value": 0.0, "in_slope": 0.0, "out_slope": 0.87097 },
+            { "time": 0.62233, "value": 0.87447, "in_slope": 0.60225, "out_slope": 0.60225 },
+            { "time": 0.9953, "value": 1.0, "in_slope": 0.25016, "out_slope": 0.0 }
+          ]
+        },
+        "fetch_near": {
+          "from_rel_scale": 1.0713,
+          "ease": [
+            { "time": 0.0, "value": 0.0, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 0.04998, "value": 0.0, "in_slope": 0.0, "out_slope": 1.03272 },
+            { "time": 0.94572, "value": 1.0, "in_slope": 1.26061, "out_slope": 0.0 }
+          ]
+        },
+        "fetch_far": {
+          "from_rel_scale": 0.93956,
+          "node": {
+            "ndc": [0.34315, 0.17105],
+            "depth_share": 0.55,
+            "max_depth": 850,
+            "rel_scale": 1.73883,
+            "rotation": [0.01745, 0.0, 0.0, 0.999848]
+          },
+          "ease": [
+            { "time": 0.0, "value": 0.0, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 0.04998, "value": 0.0, "in_slope": 0.0, "out_slope": 1.03272 },
+            { "time": 1.0, "value": 1.0, "in_slope": 1.55395, "out_slope": 0.0 }
+          ]
+        },
+        "return_drift": {
+          "from_rel_scale": 1.0,
+          "ease": [
+            { "time": 0.0, "value": 0.0, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 0.85518, "value": 1.0, "in_slope": 0.0, "out_slope": 0.0 },
+            { "time": 1.0, "value": 1.0, "in_slope": 0.0, "out_slope": 0.0 }
+          ]
+        }
       }
     },
     "strike": {

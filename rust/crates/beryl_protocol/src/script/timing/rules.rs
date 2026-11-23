@@ -323,12 +323,31 @@ fn a_land_played_is_quick_and_lands_with_no_flash() {
         Why::Resolve,
         card(1, ZoneName::Battlefield, Side::You),
     );
-    assert_eq!(alone(&land(Side::You)).duration, 315.0);
-    assert_eq!(alone(&land(Side::Opponent)).duration, 615.0);
+    assert_eq!(alone(&land(Side::You)).duration, 333.0);
+    assert_eq!(alone(&land(Side::Opponent)).duration, 833.0);
     assert!(effects(&land(Side::You)).is_empty());
     assert!(effects(&land(Side::Opponent)).is_empty());
     let names: Vec<_> = effects(&resolved).into_iter().map(|e| e.0).collect();
     assert_eq!(names, ["settle"]);
+    assert_eq!(alone(&resolved).duration, 571.0);
+    assert_eq!(
+        alone(&fly(
+            ZoneName::Hand,
+            Why::Cast,
+            card(1, ZoneName::Stack, Side::You)
+        ))
+        .duration,
+        500.0
+    );
+    assert_eq!(
+        alone(&fly(
+            ZoneName::Hand,
+            Why::Cast,
+            card(1, ZoneName::Stack, Side::Opponent)
+        ))
+        .duration,
+        625.0
+    );
 }
 
 /// A spell or ability is left a moment to be read, and the table longer as the game ends; a

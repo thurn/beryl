@@ -34,11 +34,12 @@ const RAY_SCALE: f32 = 16384.0;
 const DEPTH_SCALE: f32 = 4.0;
 /// Seen-scale ratio quantization (`ratio = seen / to_seen`, covering `0..8x`).
 const RATIO_SCALE: f32 = 8191.0;
-/// Hermite slope quantization (covering `-8..+8`).
-const SLOPE_SCALE: f32 = 4096.0;
-/// Six-bit frustum depth weight range `[WEIGHT_MIN, WEIGHT_MIN + WEIGHT_SPAN]`.
-const WEIGHT_MIN: f32 = 0.5;
-const WEIGHT_SPAN: f32 = 1.0;
+/// Hermite slope quantization (`1/32` steps, covering `-4.0..+3.97`).
+const SLOPE_SCALE: f32 = 32.0;
+/// Six-bit logarithmic frustum depth weight range (`2^-2 = 0.25` to `2^+2 = 4.0`, exact `1.0` at
+/// quantization step 31 of 62).
+const WEIGHT_LOG2_HALF_SPAN: f32 = 2.0;
+const WEIGHT_STEPS: f32 = 62.0;
 
 const FLAG_FLIPS: u8 = 1 << 4;
 const FLAG_HALF_TURN: u8 = 1 << 5;
@@ -121,56 +122,97 @@ pub struct SplineNode {
     pub weight: f32,
 }
 
-/// Compact 12-byte representation of a 3- or 4-keyframe draw timing curve starting at `(0, 0)`
-/// and ending at `value = 1`.
+/// Compact 16-byte representation of a 2-, 3-, or 4-keyframe timing curve starting at `(0, 0)`
+/// and ending at `value = 1`, preserving all six interior and endpoint slopes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct PackedHermite {
     t1: u16,
     v1: u16,
-    out1: i16,
     t2: u16,
     v2: u16,
     t3: u16,
+    /// Packed `[out0, in1, out1, in2, out2, in3]` quantized at `1 / SLOPE_SCALE`.
+    slopes: [i8; 6],
 }
 
 impl PackedHermite {
     fn pack(curve: HermiteCurve) -> (Self, bool) {
-        let four = curve.len >= 4;
+        let len = usize::from(curve.len).clamp(2, MAX_HERMITE_KEYS);
+        let four = len >= 4;
+        let k0 = curve.keys[0];
         let k1 = curve.keys[1];
-        let k2 = curve.keys[2];
-        let k3 = if four { curve.keys[3] } else { curve.keys[2] };
+        let (k2, k3) = if len == 2 {
+            // Normalize a 2-key curve `(0, 0) -> (t1, 1)` into a 3-key curve with a flat tail.
+            let tail = HermiteKey {
+                time: 1.0,
+                value: 1.0,
+                in_slope: 0.0,
+                out_slope: 0.0,
+            };
+            (tail, tail)
+        } else if len == 3 {
+            (curve.keys[2], curve.keys[2])
+        } else {
+            (curve.keys[2], curve.keys[3])
+        };
+        let slopes = if four {
+            [
+                pack_scaled_i8(k0.out_slope, SLOPE_SCALE),
+                pack_scaled_i8(k1.in_slope, SLOPE_SCALE),
+                pack_scaled_i8(k1.out_slope, SLOPE_SCALE),
+                pack_scaled_i8(k2.in_slope, SLOPE_SCALE),
+                pack_scaled_i8(k2.out_slope, SLOPE_SCALE),
+                pack_scaled_i8(k3.in_slope, SLOPE_SCALE),
+            ]
+        } else {
+            [
+                pack_scaled_i8(k0.out_slope, SLOPE_SCALE),
+                pack_scaled_i8(k1.in_slope, SLOPE_SCALE),
+                pack_scaled_i8(if len == 2 { 0.0 } else { k1.out_slope }, SLOPE_SCALE),
+                pack_scaled_i8(k2.in_slope, SLOPE_SCALE),
+                0,
+                0,
+            ]
+        };
         (
             Self {
                 t1: pack_unit(k1.time),
                 v1: pack_unit(k1.value),
-                out1: pack_scaled_i16(k1.out_slope, SLOPE_SCALE),
                 t2: pack_unit(k2.time),
                 v2: pack_unit(k2.value),
                 t3: pack_unit(k3.time),
+                slopes,
             },
             four,
         )
     }
 
     fn unpack(self, four: bool) -> HermiteCurve {
+        let s = |idx: usize| f32::from(self.slopes[idx]) / SLOPE_SCALE;
         let mut keys = [HermiteKey::default(); MAX_HERMITE_KEYS];
+        keys[0] = HermiteKey {
+            time: 0.0,
+            value: 0.0,
+            in_slope: 0.0,
+            out_slope: s(0),
+        };
         keys[1] = HermiteKey {
             time: unpack_unit(self.t1),
             value: unpack_unit(self.v1),
-            in_slope: 0.0,
-            out_slope: f32::from(self.out1) / SLOPE_SCALE,
+            in_slope: s(1),
+            out_slope: s(2),
         };
         keys[2] = HermiteKey {
             time: unpack_unit(self.t2),
             value: if four { unpack_unit(self.v2) } else { 1.0 },
-            in_slope: 0.0,
-            out_slope: 0.0,
+            in_slope: s(3),
+            out_slope: if four { s(4) } else { 0.0 },
         };
         if four {
             keys[3] = HermiteKey {
                 time: unpack_unit(self.t3),
                 value: 1.0,
-                in_slope: 0.0,
+                in_slope: s(5),
                 out_slope: 0.0,
             };
         }
@@ -205,7 +247,7 @@ pub struct Spline {
     interior_rot: [[i16; 3]; MAX_SPLINE_INTERIOR],
     /// Interior apparent screen scales as ratios of `to`'s apparent scale.
     interior_scale: [u16; MAX_SPLINE_INTERIOR],
-    /// Packed 3- or 4-keyframe Hermite timing curve.
+    /// Packed 2-, 3-, or 4-keyframe Hermite timing curve.
     ease: PackedHermite,
     /// Camera backward unit vector (`x, y` quantized; `z` reconstructed from unit length).
     camera_back_xy: [i16; 2],
@@ -215,7 +257,7 @@ pub struct Spline {
     weights: [u8; 4],
     /// Two-bit largest-component index for each of the four smallest-three quaternions.
     rot_largest: u8,
-    /// Low 3 bits: interior node count (`1..=4`); bit 3: 4-key Hermite curve; high 4 bits: flags.
+    /// Low 3 bits: interior node count (`0..=4`); bit 3: 4-key Hermite curve; high 4 bits: flags.
     flags: u8,
 }
 
@@ -253,13 +295,28 @@ fn pack_scaled_u16(value: f32, scale: f32) -> u16 {
 
 #[expect(
     clippy::cast_possible_truncation,
+    reason = "input is clamped to [i8::MIN, i8::MAX]"
+)]
+fn pack_scaled_i8(value: f32, scale: f32) -> i8 {
+    (value * scale)
+        .round()
+        .clamp(f32::from(i8::MIN), f32::from(i8::MAX)) as i8
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    reason = "weight is clamped to [0, 63]"
+    reason = "weight is clamped to [0, 62]"
 )]
 fn pack_weights(values: [f32; 5]) -> [u8; 4] {
     let mut bits = 0u32;
     for (i, &w) in values.iter().enumerate() {
-        let q = (((w - WEIGHT_MIN) / WEIGHT_SPAN).clamp(0.0, 1.0) * 63.0).round() as u32;
+        let log2_w = w
+            .max(0.25)
+            .log2()
+            .clamp(-WEIGHT_LOG2_HALF_SPAN, WEIGHT_LOG2_HALF_SPAN);
+        let share = (log2_w + WEIGHT_LOG2_HALF_SPAN) / (2.0 * WEIGHT_LOG2_HALF_SPAN);
+        let q = (share * WEIGHT_STEPS).round() as u32;
         bits |= (q & 0x3f) << (i * 6);
     }
     bits.to_le_bytes()
@@ -267,10 +324,11 @@ fn pack_weights(values: [f32; 5]) -> [u8; 4] {
 
 fn unpack_weight(bytes: [u8; 4], index: usize) -> f32 {
     let bits = u32::from_le_bytes(bytes);
-    let q = (bits >> (index * 6)) & 0x3f;
-    #[expect(clippy::cast_precision_loss, reason = "q is 0..64")]
-    let share = q as f32 / 63.0;
-    WEIGHT_MIN + share * WEIGHT_SPAN
+    let q = ((bits >> (index * 6)) & 0x3f).min(62);
+    #[expect(clippy::cast_precision_loss, reason = "q is 0..=62")]
+    let share = q as f32 / WEIGHT_STEPS;
+    let log2_w = -WEIGHT_LOG2_HALF_SPAN + share * (2.0 * WEIGHT_LOG2_HALF_SPAN);
+    log2_w.exp2()
 }
 
 /// Packs a unit quaternion into its 3 smallest components plus a 2-bit largest-component index.
@@ -668,21 +726,25 @@ impl Spline {
     }
 
     /// Key normalized elapsed times in `(0, 1)` where interface checks should inspect this spline
-    /// (for example: flip/flourish and hold plateau boundaries, or drop and sweep apex).
+    /// (for example: plateau boundaries on a hold curve, or early/mid/late flight points).
     #[must_use]
     pub fn moments(&self) -> [Option<f32>; 4] {
         if self.four_keys() {
-            let hold_start = unpack_unit(self.ease.t1);
-            let hold_end = unpack_unit(self.ease.t2);
-            [
-                Some(hold_start * 0.44),
-                Some(hold_start * 0.74),
-                Some(hold_start),
-                Some(hold_end),
-            ]
-        } else {
-            [Some(0.30), Some(0.60), None, None]
+            let v1 = unpack_unit(self.ease.v1);
+            let v2 = unpack_unit(self.ease.v2);
+            if (v2 - v1).abs() < 1e-3 && v1 > 0.1 {
+                let hold_start = unpack_unit(self.ease.t1);
+                let hold_end = unpack_unit(self.ease.t2);
+                return [
+                    Some(hold_start * 0.44),
+                    Some(hold_start * 0.74),
+                    Some(hold_start),
+                    Some(hold_end),
+                ];
+            }
+            return [Some(0.25), Some(0.50), Some(0.75), None];
         }
+        [Some(0.30), Some(0.60), None, None]
     }
 }
 

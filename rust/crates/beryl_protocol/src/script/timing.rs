@@ -185,12 +185,19 @@ pub fn case_of(act: &Act, found: &Table, beside: &[&Act]) -> Option<&'static str
             } else {
                 "opponent spell cast"
             }),
+            (ZoneName::Exile, ZoneName::Stack) => Some("exile to stack"),
             (ZoneName::Stack, ZoneName::Battlefield) => Some("permanent resolves"),
             (ZoneName::Hand, ZoneName::Battlefield) => Some(if object.controller == Side::You {
                 "land played"
             } else {
                 "opponent land played"
             }),
+            (ZoneName::Library, ZoneName::Battlefield) => Some(if object.owner == Side::You {
+                "library to battlefield"
+            } else {
+                "opponent library to battlefield"
+            }),
+            (ZoneName::Exile, ZoneName::Battlefield) => Some("exile to battlefield"),
             (ZoneName::Hand, ZoneName::Graveyard) => Some("discard"),
             // Yours, drawn alone during the beginning phase, plays at Arena's slower turn-draw
             // speed (0.7x); draws outside the beginning phase and multi-draws play at full speed

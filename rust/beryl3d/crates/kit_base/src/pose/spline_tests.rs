@@ -176,3 +176,135 @@ fn spline_interpolates_control_nodes_and_preserves_transform_across_flip() {
     assert!(end.position.distance(shifted_to.position) < 1e-2);
     assert!((end.scale - shifted_to.scale).abs() < 1e-3);
 }
+
+#[test]
+fn packed_hermite_preserves_endpoint_and_interior_slopes() {
+    let curves = [
+        // 3-key curve with fast launch out_slope and brisk arrival in_slope.
+        HermiteCurve {
+            keys: [
+                HermiteKey {
+                    time: 0.0,
+                    value: 0.0,
+                    in_slope: 0.0,
+                    out_slope: 1.75352,
+                },
+                HermiteKey {
+                    time: 0.91507,
+                    value: 1.0,
+                    in_slope: 1.57319,
+                    out_slope: 0.0,
+                },
+                HermiteKey {
+                    time: 1.0,
+                    value: 1.0,
+                    in_slope: 0.0,
+                    out_slope: 0.0,
+                },
+                HermiteKey::default(),
+            ],
+            len: 3,
+        },
+        // 4-key curve with non-zero interior and final slopes.
+        HermiteCurve {
+            keys: [
+                HermiteKey {
+                    time: 0.0,
+                    value: 0.0,
+                    in_slope: 0.0,
+                    out_slope: 0.0,
+                },
+                HermiteKey {
+                    time: 0.04896,
+                    value: 0.0,
+                    in_slope: 0.0,
+                    out_slope: 0.0,
+                },
+                HermiteKey {
+                    time: 0.53541,
+                    value: 0.52125,
+                    in_slope: 0.61037,
+                    out_slope: 0.55090,
+                },
+                HermiteKey {
+                    time: 0.93205,
+                    value: 1.0,
+                    in_slope: 1.92952,
+                    out_slope: 0.0,
+                },
+            ],
+            len: 4,
+        },
+    ];
+    for curve in curves {
+        let (packed, four) = PackedHermite::pack(curve);
+        let unpacked = packed.unpack(four);
+        for i in 0..=20 {
+            #[expect(clippy::cast_precision_loss, reason = "i is 0..=20")]
+            let t = i as f32 / 20.0;
+            let expected = curve.evaluate(t);
+            let actual = unpacked.evaluate(t);
+            assert!(
+                (expected - actual).abs() < 0.005,
+                "at t={t}: expected {expected}, got {actual}"
+            );
+        }
+    }
+}
+
+#[test]
+fn zero_interior_node_spline_interpolates_smoothly_with_wide_weights() {
+    let eye = Vec3::new(0.0, 0.0, 1200.0);
+    let from = Pose {
+        position: Vec3::new(-200.0, -300.0, 800.0),
+        rotation: Quat::IDENTITY,
+        scale: 0.4,
+        ..Pose::default()
+    };
+    let to = Pose {
+        position: Vec3::new(200.0, 100.0, 0.0),
+        rotation: Quat::IDENTITY,
+        scale: 0.8,
+        ..Pose::default()
+    };
+    let ease = HermiteCurve {
+        keys: [
+            HermiteKey {
+                time: 0.0,
+                value: 0.0,
+                in_slope: 0.0,
+                out_slope: 0.0,
+            },
+            HermiteKey {
+                time: 0.94951,
+                value: 1.0,
+                in_slope: 2.0,
+                out_slope: 0.0,
+            },
+            HermiteKey {
+                time: 1.0,
+                value: 1.0,
+                in_slope: 0.0,
+                out_slope: 0.0,
+            },
+            HermiteKey::default(),
+        ],
+        len: 3,
+    };
+    let spline = Spline::new(&[], 2.33, &to, ease, (false, false), (eye, Vec3::Z));
+    let start = spline.pose_at(&from, &to, 0.0);
+    let mid = spline.pose_at(&from, &to, 0.5);
+    let end = spline.pose_at(&from, &to, 1.0);
+    assert!(start.position.distance(from.position) < 1e-2);
+    assert!(end.position.distance(to.position) < 1e-2);
+    // Ease-in curve stays closer to start at t = 0.5.
+    assert!(mid.position.distance(from.position) < mid.position.distance(to.position));
+
+    // Log2 weight packing round-trips exact 1.0 and wide weights in [0.25, 4.0].
+    let weights = pack_weights([0.44, 1.0, 1.64, 2.33, 0.25]);
+    assert!((unpack_weight(weights, 0) - 0.44).abs() < 0.02);
+    assert!((unpack_weight(weights, 1) - 1.0).abs() < 1e-6);
+    assert!((unpack_weight(weights, 2) - 1.64).abs() < 0.05);
+    assert!((unpack_weight(weights, 3) - 2.33).abs() < 0.07);
+    assert!((unpack_weight(weights, 4) - 0.25).abs() < 0.01);
+}

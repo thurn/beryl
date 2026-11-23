@@ -1501,22 +1501,46 @@
       "regroup": 250,
       "cases": {
         "land played": {
-          "duration": 315,
+          "duration": 333,
           "delay": null,
           "stagger": null,
           "curve": "ease-in"
         },
         "opponent land played": {
-          "duration": 615,
+          "duration": 833,
           "delay": null,
           "stagger": null,
           "curve": "ease-out"
         },
         "permanent resolves": {
-          "duration": 520,
+          "duration": 571,
           "delay": 330,
           "stagger": null,
           "curve": "ease-out"
+        },
+        "library to battlefield": {
+          "duration": 400,
+          "delay": null,
+          "stagger": null,
+          "curve": "ease-out"
+        },
+        "opponent library to battlefield": {
+          "duration": 667,
+          "delay": null,
+          "stagger": null,
+          "curve": "ease-out"
+        },
+        "exile to battlefield": {
+          "duration": 800,
+          "delay": null,
+          "stagger": null,
+          "curve": "ease-in-out"
+        },
+        "exile to stack": {
+          "duration": 800,
+          "delay": null,
+          "stagger": null,
+          "curve": "ease-in-out"
         },
         "discard": {
           "duration": 165,
@@ -1525,16 +1549,16 @@
           "curve": null
         },
         "own spell cast": {
-          "duration": 370,
+          "duration": 500,
           "delay": null,
           "stagger": null,
           "curve": "ease-out"
         },
         "opponent spell cast": {
-          "duration": 400,
+          "duration": 625,
           "delay": null,
           "stagger": null,
-          "curve": "ease-out"
+          "curve": "ease-in"
         },
         "draw": {
           "duration": 1429,
