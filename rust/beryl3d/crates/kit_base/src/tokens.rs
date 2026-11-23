@@ -163,8 +163,6 @@ pub mod badge {
     pub const COUNT: [u8; 4] = [0xec, 0xda, 0xb9, 0xff];
     pub const COUNT_BORDER: [u8; 4] = [0xb8, 0x92, 0x4e, 0xff];
     pub const COUNT_INK: [u8; 4] = [0x1d, 0x1b, 0x19, 0xff];
-    /// The dark outline around a cost symbol.
-    pub const COST_RING: [u8; 4] = [0x10, 0x16, 0x1c, 0xff];
     /// The panel under a permanent's note or chosen value, `.card-note`'s `background` in
     /// `card-frame.css`, whose text is `color::TYPE`.
     pub const NOTE: [u8; 4] = [0x1c, 0x1a, 0x17, 0xe6];

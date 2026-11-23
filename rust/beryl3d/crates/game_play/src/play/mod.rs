@@ -318,8 +318,7 @@ impl Show {
     }
 
     /// Shapes the numbers and signs of the badges at `scale`, once for each set of badge sizes
-    /// the data gives; the mana symbols of every cost the face list names that are not shaped
-    /// yet, for the costs hand cards show; and the name of every named counter and the lines of
+    /// the data gives. Shapes the name of every named counter and the lines of
     /// text (`Badges::prepare`) in the latest view not shaped yet. Each view is the latest when
     /// it arrives, so every name a view shows is shaped before a frame shows it. New sizes drop
     /// every shaped name and line, so those of every view still to be shown are shaped again.
@@ -329,7 +328,6 @@ impl Show {
         if resized {
             self.badges.shape(text, wanted, scale, sizes);
         }
-        self.badges.shape_costs(text, wanted, self.faces.list());
         // The views the frames may still show, the latest last, with the show's fields
         // borrowed apart from the badges.
         let playing = (self.playing.as_ref()).and_then(|playing| playing.update.as_deref());

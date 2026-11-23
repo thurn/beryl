@@ -1,4 +1,4 @@
-//! The sizes of object badges and the cost symbols on a hand card, from
+//! The sizes of object badges, from
 //! `data/beryl3d/badges.json`. Lengths are in the web card's em, a share of a table card's
 //! width (`em`), unless a field says otherwise. Sizes in points are the sizes text is shaped at,
 //! so a change to one reshapes the badges' text.
@@ -24,7 +24,6 @@ pub struct BadgeTuning {
     pub counter: CounterBadge,
     pub lock: LockBadge,
     pub count: CountBadge,
-    pub cost: CostBadge,
     pub note: NoteTag,
     pub copy: CopyTag,
 }
@@ -134,29 +133,6 @@ pub struct CountBadge {
     pub border: f32,
     #[serde(deserialize_with = "positive")]
     pub numerals: f32,
-}
-
-/// A hand card's cost symbols, at its top right. Its sizes are in its own em.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct CostBadge {
-    #[serde(deserialize_with = "positive")]
-    pub em: f32,
-    #[serde(deserialize_with = "positive")]
-    pub symbol: f32,
-    #[serde(deserialize_with = "nonnegative")]
-    pub gap: f32,
-    #[serde(deserialize_with = "nonnegative")]
-    pub right: f32,
-    #[serde(deserialize_with = "nonnegative")]
-    pub sink: f32,
-    #[serde(deserialize_with = "nonnegative")]
-    pub ring: f32,
-    #[serde(deserialize_with = "positive")]
-    pub points: f32,
-    /// How far the symbols stand above the card, in millimetres at any scale of the card.
-    #[serde(deserialize_with = "nonnegative")]
-    pub lift: f32,
 }
 
 /// A permanent's note or chosen value, a line across the top of its face.

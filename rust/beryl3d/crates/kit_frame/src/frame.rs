@@ -282,8 +282,6 @@ pub enum Band {
     TableMarks,
     /// Marks on cards above the table: in flight, in a hand, on the stack, held up to be read.
     RaisedMarks,
-    /// Decorations in front of raised objects and their marks, below objects in flight.
-    TableOverlays,
     /// Glows and streaks.
     Glows,
     /// Particles, which only the Enhanced tier draws: blended, tested against the depth
@@ -314,7 +312,7 @@ pub const CLIPS: usize = 16;
 pub const OBJECTS: usize = 1024;
 /// The most records one card writes: the card, its soft edge, its contact shadow and a mark, and
 /// its badges (a plaque and its digits, the manual table's lock and a named counter with a
-/// six-letter name) or, in a hand, its cost (`table::badges`).
+/// six-letter name).
 pub const RECORDS_PER_OBJECT: usize = 18;
 /// The most records the flat layer writes: the glyphs and panels of a prompt, a card browser and
 /// the text around the table.
@@ -336,8 +334,8 @@ pub const DRAWS: usize =
 pub const BANDS: usize = Band::Foreground as usize + 1;
 /// The most elements of the flat layer a frame holds.
 pub const LAYER_ELEMENTS: usize = 3072;
-/// The most resolved elements a frame holds: one for each card and each ability on the stack,
-/// one for the cost of each card in a hand, room for their marks, and the flat layer's.
+/// The most resolved elements a frame holds: cards, abilities on the stack, their marks,
+/// and the elements of the flat layer.
 pub const ELEMENTS: usize = 2 * OBJECTS + ABILITIES + RINGS + LAYER_ELEMENTS;
 /// The most bytes of names a frame holds: 32 bytes for each element, which a card's name
 /// rarely exceeds.

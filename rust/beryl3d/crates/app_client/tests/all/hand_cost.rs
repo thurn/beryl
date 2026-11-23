@@ -1,35 +1,58 @@
-use app_client::driver::{Page, Recording};
+use app_client::Input;
+use app_client::driver::{Action, Page, Recording};
 use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::ipc::FixtureMessage;
-use beryl_protocol::protocol::{Side, ZoneName};
+use beryl_protocol::prompt::Marked;
+use beryl_protocol::protocol::{Side, Status, ZoneName};
 use beryl_protocol::script::{Act, Mark, Span, Subject, Table, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
-use kit_frame::frame::{Material, Role, StateBits};
+use kit_frame::frame::{Frame, Material, Role, StateBits};
 use kit_ui::input::Size;
 
+use super::flat_layer::{deciding, prompt};
+
+const HAND: [(&str, &str); 7] = [
+    ("Portable Hole", "{W}"),
+    ("Snapcaster Mage", "{1}{U}"),
+    ("Island", ""),
+    ("Thirst for Discovery", "{2}{U}"),
+    ("Jace, Wielder of Mysteries", "{1}{U}{U}{U}"),
+    ("Plains", ""),
+    ("Jace, the Mind Sculptor", "{2}{U}{U}"),
+];
+
 #[test]
-fn hand_costs_paint_over_a_playable_neighbors_outline() {
+fn a_crowded_hand_draws_printed_costs_without_floating_symbols() {
     let mut view = ViewBuilder::new();
-    for name in ["Island", "Plains", "Island", "Trinket Mage"] {
-        view.card(ZoneName::Hand, Side::You, name);
-    }
-    let plains = view.card(ZoneName::Hand, Side::You, "Plains").slot;
-    for name in ["Island", "Counterspell", "Island"] {
-        view.card(ZoneName::Hand, Side::You, name);
-    }
+    let slots = HAND.map(|(name, _)| view.card(ZoneName::Hand, Side::You, name).slot);
     view.script(ScriptBuilder::reset().build());
     let start = view.update();
     let initial = FixtureMessage::game_update(&start);
+
+    let eligible = |index: usize| Subject::Object { slot: slots[index] };
+    let marks = [eligible(1), eligible(2)].map(|on| Marked {
+        on,
+        mark: Mark::Eligible,
+    });
     let mut script = ScriptBuilder::default()
-        .beat([Act::Mark {
+        .beat(marks.iter().map(|marked| Act::Mark {
             span: Span::Begin,
-            mark: Mark::Eligible,
-            on: Subject::Object { slot: plains },
-        }])
+            mark: marked.mark,
+            on: marked.on,
+        }))
         .build();
     script.timing = time_script(&script, &Table::of(&start.view));
     view.script(script);
-    let marked = FixtureMessage::game_update(&view.update());
+    let mut marked = view.update();
+    let Input::Update(payment) = deciding(prompt("Pay {1}{U}")) else {
+        unreachable!("deciding supplies an update");
+    };
+    let Status::Deciding { mut decision } = payment.view.status else {
+        unreachable!("the payment has a decision");
+    };
+    decision.prompt.marks = marks.to_vec();
+    marked.view.status = Status::Deciding { decision };
+    let marked = FixtureMessage::game_update(&marked);
     let cards = fixture_message(&[initial.clone(), marked.clone()], TokenMakers::NONE);
     let recording = Recording(vec![cards, initial, marked]);
 
@@ -54,48 +77,83 @@ fn hand_costs_paint_over_a_playable_neighbors_outline() {
         page.seek(&"end".parse().unwrap())
             .expect("the marked hand settles");
         page.set_looking(true);
+        page.still();
         let frame = page.frame();
-        let outline = frame
-            .rings
-            .iter()
-            .find(|ring| ring.name == "eligible")
-            .expect("Plains has a playable outline");
-        let last_shadow = frame
-            .draws
-            .iter()
-            .zip(&frame.owners)
-            .rposition(|(draw, &owner)| {
-                owner == outline.element && draw.material == Material::BoxShadow as u8
-            })
-            .expect("the outline draws a shadow");
-
-        for name in ["{2}{U}", "{U}{U}"] {
-            let (index, cost) = frame
-                .resolved
-                .iter()
-                .enumerate()
-                .find(|(_, node)| node.role == Role::Text && frame.name(node.name) == name)
-                .expect("the mana cost is present");
-            assert!(cost.state.has(StateBits::PASSES));
-            assert!(!cost.interactive);
-            let index = u32::try_from(index).unwrap();
-            for material in [Material::Panel, Material::Glyph] {
-                let records: Vec<_> = frame
-                    .draws
-                    .iter()
-                    .zip(&frame.owners)
-                    .enumerate()
-                    .filter(|(_, (draw, owner))| {
-                        **owner == index && draw.material == material as u8
+        assert_hand(frame);
+        assert!(
+            frame.rings.iter().any(|ring| ring.name == "eligible"),
+            "the payable card has an outline"
+        );
+        assert!(
+            frame.resolved.iter().enumerate().any(|(index, node)| {
+                node.role == Role::Text
+                    && frame.name(node.name) == "Pay {1}{U}"
+                    && frame.draws.iter().zip(&frame.owners).any(|(draw, &owner)| {
+                        owner as usize == index && draw.material == Material::Glyph as u8
                     })
-                    .map(|(at, _)| at)
-                    .collect();
-                assert_eq!(records.len(), 2, "each symbol draws its {material:?}");
-                assert!(
-                    records.into_iter().all(|at| at > last_shadow),
-                    "{name} draws its {material:?} over the playable outline at {size:?}"
-                );
-            }
+            }),
+            "the payment prompt draws its cost"
+        );
+        for (name, cost) in HAND {
+            let face = page.faces().find(name).expect("the card has a face");
+            assert_eq!(
+                page.faces().faces()[usize::from(face.0)]
+                    .text
+                    .mana_cost
+                    .as_deref()
+                    .unwrap_or_default(),
+                cost,
+                "{name}'s printed cost"
+            );
+        }
+
+        for name in ["Portable Hole", "Snapcaster Mage"] {
+            let locator = format!("card \"{name}\"");
+            page.hover(&locator);
+            page.still();
+            assert_hand(page.frame());
+            assert!(
+                page.find(&locator).state.has(StateBits::HOVERED),
+                "{name} is hovered"
+            );
+        }
+        page.act(&Action::Hold(
+            "card \"Snapcaster Mage\"".into(),
+            format!("{},{}", size.width / 2.0, size.height / 2.0),
+        ));
+        assert_hand(page.frame());
+        assert!(
+            page.find("card \"Snapcaster Mage\"")
+                .state
+                .has(StateBits::HELD),
+            "Snapcaster Mage is held"
+        );
+    }
+}
+
+fn assert_hand(frame: &Frame) {
+    let mut cards = 0;
+    for (index, node) in frame.resolved.iter().enumerate() {
+        if node.place.label() != "hand.yours" {
+            continue;
+        }
+        assert_ne!(
+            node.role,
+            Role::Text,
+            "floating hand text: {}",
+            frame.name(node.name)
+        );
+        if node.role == Role::Card {
+            cards += 1;
+            assert!(
+                node.face.is_some()
+                    && frame.draws.iter().zip(&frame.owners).any(|(draw, &owner)| {
+                        owner as usize == index && draw.material == Material::Card as u8
+                    }),
+                "{} draws its printed face",
+                frame.name(node.name)
+            );
         }
     }
+    assert_eq!(cards, HAND.len());
 }

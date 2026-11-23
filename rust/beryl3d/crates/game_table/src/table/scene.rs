@@ -630,11 +630,6 @@ impl Table {
         if let Some(note) = note {
             builder.annotate(at, FACE_NOTE, note);
         }
-        // A hand card's cost stands over the card where the table holds it, not over its box:
-        // the web's opening draws its copies of the hand without costs.
-        let cost = (shown, listed, at, object.place);
-        let held = held_at.map_or(on, |pose| badges::On { pose, ..on });
-        (dress.badges).write_cost(cost, (&held, &self.camera), builder);
     }
 
     /// The badges share the card's paint band while it moves, is raised or is dragged.

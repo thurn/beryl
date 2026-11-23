@@ -157,7 +157,7 @@
     "The hand's fan": {
       "recording": "hand-ten",
       "at": "end",
-      "shows": "text \"{1}{W}{U}\" hand.yours"
+      "shows": "card \"Teferi, Time Raveler\" hand.yours"
     },
     "An arrow to the pointer": {
       "recording": "walkers",

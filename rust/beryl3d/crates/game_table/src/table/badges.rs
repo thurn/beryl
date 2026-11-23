@@ -1,7 +1,6 @@
-//! The badges a permanent wears on its face, and a hand card's mana cost (`cost`)
-//! (docs/beryl-3d.md, "Objects and placement": marks are separate quads). A permanent wears its
-//! power and toughness on a plaque at the bottom right, or its loyalty there for a
-//! planeswalker; a badge for each kind of counter on it, along its foot; and, on the top card of
+//! The badges a permanent wears on its face (docs/beryl-3d.md, "Objects and placement").
+//! A permanent wears its power and toughness on a plaque at the bottom right, or its loyalty
+//! there for a planeswalker; a badge for each kind of counter on it, along its foot; and, on the top card of
 //! a pile of identical permanents, how many the pile holds; on the manual table, a lock in its
 //! top left corner if it doesn't untap, and a badge for each named counter, with the counter's
 //! shortened name, in a row above the plaque. They follow the web interface's
@@ -18,7 +17,6 @@
 //! lines of text a permanent wears besides, its note or chosen value and a copy's label, are
 //! `tags`.
 
-mod cost;
 mod labels;
 mod tags;
 
@@ -116,8 +114,6 @@ pub struct Badges {
     glyphs: Glyphs,
     /// Physical pixels per logical point, which picks the glyphs' size in the atlas.
     scale: f32,
-    /// The mana symbols of hand cards' costs (`cost`).
-    costs: cost::Costs,
     /// The shaped label of each named counter a view has named, by the counter's whole name,
     /// sorted by it: the name itself, or its first five letters and an ellipsis if it is longer
     /// than six, as the web's `NamedCounterBadge` cuts it.
@@ -142,15 +138,13 @@ impl Badges {
     }
 
     /// Shapes every piece with `text` at `sizes`, and asks `wanted` for their glyphs at `scale`.
-    /// New sizes, from tuning loaded again, drop every shaped name, cost and line of text, whose
-    /// sizes and cuts depend on them, so that the callers that shape those as views arrive
-    /// shape them again (`shape_names`, `shape_costs` and `prepare`).
+    /// New sizes discard shaped names and lines of text. The callers shape them again
+    /// through `shape_names` and `prepare` as views arrive.
     pub fn shape(&mut self, text: &mut Text, wanted: &mut Glyphs, scale: f32, sizes: BadgeSizes) {
         self.scale = scale;
         if !self.shaped_at(&sizes) {
             self.sizes = Some(sizes);
             self.names.clear();
-            self.costs = cost::Costs::default();
             self.tags = tags::Tags::default();
             let pieces = [
                 "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "-", "/", "\u{d7}",
@@ -280,7 +274,6 @@ impl Badges {
         for (_, block) in &self.names {
             wanted.want(block, self.scale);
         }
-        self.want_costs(wanted);
         self.tags.want(wanted, self.scale);
     }
 }
