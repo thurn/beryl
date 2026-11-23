@@ -725,10 +725,31 @@ impl Spline {
         self.flags |= FLAG_RETARGETED;
     }
 
-    /// Key normalized elapsed times in `(0, 1)` where interface checks should inspect this spline
-    /// (for example: plateau boundaries on a hold curve, or early/mid/late flight points).
+    /// Interior times in `(0, 1)` for the full interface checks.
     #[must_use]
-    pub fn moments(&self) -> [Option<f32>; 4] {
+    pub fn moments(&self) -> [Option<f32>; 5] {
+        match self.count() {
+            // A two-node path has no waypoint. Check its midpoint like a line.
+            0 => return [Some(0.5), None, None, None, None],
+            1 => {
+                // The waypoint is at half the path's progress. Easing can put it well away
+                // from the middle of the flight, so check the pose at the waypoint itself.
+                let curve = self.ease.unpack(self.four_keys());
+                let (mut before, mut after) = (0.0, 1.0);
+                for _ in 0..16 {
+                    let time = f32::midpoint(before, after);
+                    if curve.evaluate(time) < 0.5 {
+                        before = time;
+                    } else {
+                        after = time;
+                    }
+                }
+                let time = f32::midpoint(before, after);
+                return [Some(time), None, None, None, None];
+            }
+            _ => {}
+        }
+        // Keep the separate checks for multi-waypoint motion, including both ends of a hold.
         if self.four_keys() {
             let v1 = unpack_unit(self.ease.v1);
             let v2 = unpack_unit(self.ease.v2);
@@ -738,13 +759,14 @@ impl Spline {
                 return [
                     Some(hold_start * 0.44),
                     Some(hold_start * 0.74),
+                    Some(0.5),
                     Some(hold_start),
                     Some(hold_end),
                 ];
             }
-            return [Some(0.25), Some(0.50), Some(0.75), None];
+            return [Some(0.25), Some(0.50), Some(0.75), None, None];
         }
-        [Some(0.30), Some(0.60), None, None]
+        [Some(0.30), Some(0.5), Some(0.60), None, None]
     }
 }
 

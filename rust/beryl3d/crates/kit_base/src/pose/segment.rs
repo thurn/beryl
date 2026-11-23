@@ -67,9 +67,9 @@ impl Segment {
         self.moves() && (self.arc != 0.0 || restacked != self.to)
     }
 
-    /// The moments besides its start, middle and end, which every check already looks at, when
-    /// something can go wrong: when a thrown permanent is first at its greatest height, and when
-    /// a card that turns over at a moment of its own begins and ends turning.
+    /// Interior moments for full interface checks. Most segments use the midpoint, while
+    /// splines supply their own. A thrown permanent also adds its first peak, and a card that
+    /// turns over at a moment of its own adds the start and end of the turn.
     pub fn moments(&self) -> impl Iterator<Item = u64> + use<> {
         let (start, duration) = (self.start, self.duration);
         #[expect(
@@ -80,17 +80,16 @@ impl Segment {
         )]
         let at =
             move |share: f32| start + (duration as f64 * f64::from(share.clamp(0.0, 1.0))) as u64;
-        let peak = match self.shape {
-            Shape::Thrown { tuning, .. } => Some(at(tuning.risen)),
-            _ => None,
-        };
-        let spline = match self.shape {
+        let middle = Some(start + duration / 2);
+        let motion = match self.shape {
             Shape::Spline(spline) => spline.moments().map(|share| share.map(at)),
-            _ => [None; 4],
+            Shape::Thrown { tuning, .. } => [middle, Some(at(tuning.risen)), None, None, None],
+            _ => [middle, None, None, None, None],
         };
         let turning = self.turning.map(|turning| turning.span().map(at));
-        peak.into_iter()
-            .chain(spline.into_iter().flatten())
+        motion
+            .into_iter()
+            .flatten()
             .chain(turning.into_iter().flatten())
     }
 

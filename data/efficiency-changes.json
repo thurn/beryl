@@ -880,5 +880,10 @@
     "label": "Browser work checks stop refitting text on card transforms, and the web stage skips writes to unchanged card attributes.",
     "metric": "slow-ci.cpu-seconds-per-run",
     "expect": "down"
+  },
+  {
+    "label": "Native interface replays run one interior full check on a straight spline or a spline with a single waypoint, cutting redundant full checks on ordinary card flights.",
+    "metric": "ignite.gate-instructions",
+    "expect": "down"
   }
 ]

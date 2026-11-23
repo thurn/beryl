@@ -292,6 +292,7 @@ fn zero_interior_node_spline_interpolates_smoothly_with_wide_weights() {
         len: 3,
     };
     let spline = Spline::new(&[], 2.33, &to, ease, (false, false), (eye, Vec3::Z));
+    assert_eq!(spline.moments(), [Some(0.5), None, None, None, None]);
     let start = spline.pose_at(&from, &to, 0.0);
     let mid = spline.pose_at(&from, &to, 0.5);
     let end = spline.pose_at(&from, &to, 1.0);
@@ -307,4 +308,29 @@ fn zero_interior_node_spline_interpolates_smoothly_with_wide_weights() {
     assert!((unpack_weight(weights, 2) - 1.64).abs() < 0.05);
     assert!((unpack_weight(weights, 3) - 2.33).abs() < 0.07);
     assert!((unpack_weight(weights, 4) - 0.25).abs() < 0.01);
+}
+
+#[test]
+fn a_single_waypoint_supplies_the_splines_only_interior_check() {
+    let to = Pose::default();
+    let waypoint = SplineNode {
+        position: Vec3::new(100.0, 50.0, 200.0),
+        rotation: Quat::IDENTITY,
+        seen_scale: 0.001,
+        weight: 1.0,
+    };
+    let ease = opponent_ease();
+    let spline = Spline::new(
+        &[waypoint],
+        1.0,
+        &to,
+        ease,
+        (false, false),
+        (Vec3::new(0.0, 0.0, 1200.0), Vec3::Z),
+    );
+    let [Some(time), None, None, None, None] = spline.moments() else {
+        panic!("expected one check time: {:?}", spline.moments());
+    };
+    assert!((time - 0.5).abs() > 0.05, "time {time}");
+    assert!((ease.evaluate(time) - 0.5).abs() < 0.001, "time {time}");
 }
