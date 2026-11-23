@@ -438,7 +438,11 @@ impl Hub for HubClient {
         let request = LookupRequest {
             keys: keys.to_vec(),
         };
-        let reply: LookupReply = self.post("/results/lookup", &request)?;
+        // A tip can look up thousands of checks at once, and each hit echoes its key
+        // with the cached verdict. Allow a larger, bounded body for the successful reply.
+        let path = "/results/lookup";
+        let answer = self.post_raw(path, &request, Some(MAX_BODY_BYTES))?;
+        let reply: LookupReply = decode(path, &self.ok(path, answer)?.body)?;
         Ok(reply.results)
     }
 

@@ -8,6 +8,9 @@ use ignite_core::protocol::Class;
 use ignite_core::protocol::hub::NextReply;
 use ignite_core::time::Timestamp;
 
+#[path = "hubclient_tests/result_cache.rs"]
+mod result_cache;
+
 /// One request the stand-in hub received.
 #[derive(Clone, Debug)]
 pub(crate) struct Seen {
