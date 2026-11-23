@@ -80,20 +80,7 @@ fn a_crowded_hand_draws_printed_costs_without_floating_symbols() {
         page.still();
         let frame = page.frame();
         assert_hand(frame);
-        assert!(
-            frame.rings.iter().any(|ring| ring.name == "eligible"),
-            "the payable card has an outline"
-        );
-        assert!(
-            frame.resolved.iter().enumerate().any(|(index, node)| {
-                node.role == Role::Text
-                    && frame.name(node.name) == "Pay {1}{U}"
-                    && frame.draws.iter().zip(&frame.owners).any(|(draw, &owner)| {
-                        owner as usize == index && draw.material == Material::Glyph as u8
-                    })
-            }),
-            "the payment prompt draws its cost"
-        );
+        assert_payment_prompt(frame);
         for (name, cost) in HAND {
             let face = page.faces().find(name).expect("the card has a face");
             assert_eq!(
@@ -129,6 +116,23 @@ fn a_crowded_hand_draws_printed_costs_without_floating_symbols() {
             "Snapcaster Mage is held"
         );
     }
+}
+
+fn assert_payment_prompt(frame: &Frame) {
+    assert!(
+        frame.rings.iter().any(|ring| ring.name == "eligible"),
+        "the payable card has an outline"
+    );
+    assert!(
+        frame.resolved.iter().enumerate().any(|(index, node)| {
+            node.role == Role::Text
+                && frame.name(node.name) == "Pay {1}{U}"
+                && frame.draws.iter().zip(&frame.owners).any(|(draw, &owner)| {
+                    owner as usize == index && draw.material == Material::Glyph as u8
+                })
+        }),
+        "the payment prompt draws its cost"
+    );
 }
 
 fn assert_hand(frame: &Frame) {
