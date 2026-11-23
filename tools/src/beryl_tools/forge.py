@@ -1,12 +1,8 @@
-"""The Forge oracle (docs/engine-architecture.md, section 17.2): exports Beryl's scenarios into
-Forge's vocabulary and plays them in Forge.
+"""Export Beryl's scenarios for the Forge oracle (architecture §17.2).
 
-`export` turns each scenario of the `beryl_scenario dump` JSON into a setup in Forge's
-`forge.game.GameState` text format and a list of steps for the scripted harness in
-tools/oracles/BerylForgeHarness.java, with Beryl's names for steps, zones, counters, optional
-costs and abilities mapped to Forge's. A scenario outside that vocabulary is reported as
-unsupported with the reason. `run` compiles the harness against the cached Forge build, plays
-the exported scenarios and returns one result per scenario.
+`export` turns scenario dumps into Forge game states and scripted steps. It gives
+a reason for unsupported scenarios. `play` runs the Java harness against the
+cached Forge build and returns one result per scenario.
 """
 
 from __future__ import annotations
