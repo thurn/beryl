@@ -224,7 +224,7 @@ impl Landing {
         }
 
         let Start {
-            tip,
+            mut tip,
             head,
             base,
             mut changed,
@@ -253,6 +253,7 @@ impl Landing {
         // failure fails at a base older than the tip as well, the ticket tree is rebased onto
         // the tip for real and the gate runs there once more (see
         // `GateRun::fails_at_older_base`).
+        let mut gate_rebases = 0;
         let judged = loop {
             let key = VerdictKey {
                 tree: ctx.git.tree_id(&held.path).map_err(io)?,
@@ -291,18 +292,34 @@ impl Landing {
                 earlier: None,
                 onto_tip: at.onto == tip,
             };
-            let gated = self.gate_pass(ctx, &pass, &mut Excused::new());
+            let result = self.gate_pass(ctx, &pass, &mut Excused::new());
             if steps::stop_requested() {
                 return Err(stopped());
             }
-            if !gated.run.passed() && gated.fails_at_older_base && at.onto != tip {
-                steps::step(format!("rebasing onto {staging} {}", short(&tip)));
-                at = Self::rebase(ctx, held, &tip)?;
-                if at.head == at.onto {
-                    return Err(nothing_to_land(&staging));
+            let gated = match result {
+                Ok(gated) if !gated.fails_at_older_base || at.onto == tip => gated,
+                moved => {
+                    if gate_rebases >= MAX_PASSES {
+                        return Err(stop(
+                            Exit::Conflict,
+                            &[
+                                line("failed", "staging kept moving during baseline checks"),
+                                line("next", "run ignite land again"),
+                            ],
+                        ));
+                    }
+                    gate_rebases += 1;
+                    if let Err(current_tip) = moved {
+                        tip = current_tip;
+                    }
+                    steps::step(format!("rebasing onto {staging} {}", short(&tip)));
+                    at = Self::rebase(ctx, held, &tip)?;
+                    if at.head == at.onto {
+                        return Err(nothing_to_land(&staging));
+                    }
+                    continue;
                 }
-                continue;
-            }
+            };
             if !gated.run.passed() {
                 let failed = failed_gate(&staging, &at, &gated, &held.path);
                 let failed = timeline.onto(ctx.clock.now(), failed, gated.seconds);

@@ -2,8 +2,8 @@
 //! the landing compares the check there, from the cache or by running it, and lands with the
 //! check known to fail only when it fails there too.
 
+use ignite_core::config::LandMode;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::client::Exit;
@@ -12,7 +12,7 @@ use super::fakes::{key, store};
 use super::{World, world_with_checks};
 
 /// A world whose `unit:both` reads `a.txt` and `b.txt` and fails where `file` holds `text`.
-fn broken(file: &'static str, text: &'static str) -> Arc<World> {
+fn broken(file: &'static str, text: &'static str) -> World {
     let world = world_with_checks(vec![
         ("unit:both", vec!["a.txt", "b.txt"]),
         ("unit:c", vec!["c.txt"]),
@@ -23,7 +23,7 @@ fn broken(file: &'static str, text: &'static str) -> Arc<World> {
         .lock()
         .unwrap()
         .push(("unit:both", file, text));
-    Arc::new(world)
+    world
 }
 
 const LANDING_TREE: &str = "/ignite-test-trees/landing-1";
@@ -73,6 +73,25 @@ fn a_check_that_fails_at_the_tip_too_is_known_failing_and_its_regression_is_file
         [(PathBuf::from(LANDING_TREE), vec!["unit:both".to_owned()])]
     );
     assert_eq!(world.git.pushes().len(), 1);
+}
+
+#[test]
+fn a_fix_landed_during_the_gate_prevents_a_report_against_the_old_tip() {
+    for mode in [LandMode::Strict, LandMode::Verdict] {
+        let mut world = broken("b.txt", "broken");
+        world.ctx.config.land.mode = mode;
+        world.git.land_other(&[("b.txt", "broken")]);
+        world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+
+        let git = world.git.clone();
+        world.queue_hook(move || git.land_other(&[("b.txt", "fixed")]));
+
+        let reply = world.land_as("tree-01", "local_a");
+
+        assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+        assert!(world.hub.hub.regressions().is_empty());
+        assert_eq!(world.git.pushes().len(), 1);
+    }
 }
 
 #[test]

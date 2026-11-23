@@ -497,7 +497,13 @@ impl Landing {
                     earlier: last_passed.as_ref(),
                     onto_tip: true,
                 };
-                (self.gate_pass(ctx, &pass, &mut excused), None)
+                let Ok(gated) = self.gate_pass(ctx, &pass, &mut excused) else {
+                    "staging advanced during the baseline check".clone_into(&mut last_cause);
+                    excused.clear();
+                    lease = None;
+                    continue;
+                };
+                (gated, None)
             };
             // The landing tree, if the landing holds one, stays leased while the landing goes
             // back to rebase, and is freed when `home` is dropped as the landing ends.

@@ -60,14 +60,14 @@ struct Comparison {
 impl Landing {
     /// Runs the gate, leaving out the checks in `excused` as known to fail. When every fault is
     /// a confirmed failure of a check that fails at the tip too, adds those checks to
-    /// `excused` and runs the gate again. `excused` lasts for the whole landing, so a later
-    /// pass does not ask again.
+    /// `excused` and runs the gate again. If staging advances during the comparison, returns
+    /// the new tip for the caller to rebase onto before filing any regression.
     pub(super) fn gate_pass(
         &self,
         ctx: &Context,
         pass: &Pass<'_>,
         excused: &mut Excused,
-    ) -> GateRun {
+    ) -> Result<GateRun, Commit> {
         loop {
             let gated = self
                 .gate
@@ -81,10 +81,10 @@ impl Landing {
             let Some(failed) = confirmed_failures(&gated)
                 .filter(|failed| !failed.iter().any(|c| excused.contains_key(c)))
             else {
-                return gated;
+                return Ok(gated);
             };
             if steps::stop_requested() {
-                return gated;
+                return Ok(gated);
             }
             let Comparison {
                 verdicts,
@@ -94,7 +94,7 @@ impl Landing {
                 Err(why) => {
                     self.gate.tip_unknown(&failed, pass.options);
                     gated.base = Some(format!("not compared with the tip: {why}"));
-                    return gated;
+                    return Ok(gated);
                 }
             };
             let mut passing = Vec::new();
@@ -112,7 +112,22 @@ impl Landing {
                         short(&pass.rebased.onto)
                     ));
                     gated.fails_at_older_base = true;
-                    return gated;
+                    return Ok(gated);
+                }
+            }
+            if !regressions.is_empty() {
+                // Culprit search can take long enough for a fix to land. The old comparison
+                // cannot tell whether these checks still fail on staging.
+                if steps::stop_requested() {
+                    return Ok(gated);
+                }
+                match ctx.git.tip(&ctx.config.repository.staging) {
+                    Ok(current) if current != pass.rebased.onto => return Err(current),
+                    Ok(_) => {}
+                    Err(error) => {
+                        gated.base = Some(format!("could not confirm the staging tip: {error}"));
+                        return Ok(gated);
+                    }
                 }
             }
             for report in regressions {
@@ -137,7 +152,7 @@ impl Landing {
                     passing.join(", "),
                     short(&pass.rebased.onto)
                 ));
-                return gated;
+                return Ok(gated);
             }
         }
     }
