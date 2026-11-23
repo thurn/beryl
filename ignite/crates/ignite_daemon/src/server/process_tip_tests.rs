@@ -441,7 +441,7 @@ fn a_round_blocked_in_listing_yields_to_master_and_the_latest_tip_runs() {
 }
 
 #[test]
-fn an_adopted_round_blocked_in_listing_yields_to_the_hubs_replacement() {
+fn an_adopted_round_blocked_in_listing_selects_a_successor_after_failure() {
     let machine = TipMachine::with_work(
         "replaced-tip-round",
         OneCheck {
@@ -482,7 +482,10 @@ fn an_adopted_round_blocked_in_listing_yields_to_the_hubs_replacement() {
             .hub
             .update_tip_candidate(&TipCandidateUpdate {
                 expected: Some(candidate(&target)),
-                replacement: candidate(&newer),
+                replacement: TipCandidate {
+                    retry_on_new_tip: true,
+                    ..candidate(&target)
+                },
             })
             .unwrap()
     );
@@ -491,6 +494,10 @@ fn an_adopted_round_blocked_in_listing_yields_to_the_hubs_replacement() {
     machine.switch.set(Some(second));
     let stopping = turn_on_a_thread(tips, ctx.clone());
     assert!(until(|| machine.switch.stops.load(Ordering::SeqCst) > 0));
+    assert_eq!(
+        machine.hub.tip_candidate().unwrap(),
+        Some(candidate(&newer))
+    );
     machine.commands.finish_all();
     let (tips, turn) = stopping.join().unwrap();
     assert_eq!(

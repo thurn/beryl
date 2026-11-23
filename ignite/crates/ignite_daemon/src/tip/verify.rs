@@ -220,10 +220,29 @@ impl TipVerifier {
             }
         }
         if !failed.is_empty() {
+            let recorded = if last == tip {
+                Ok(())
+            } else {
+                // A culprit probe may wait for a build slot. The tip already has a verdict,
+                // so record the exact keys and let a newer candidate run before the search.
+                let unverified_commits =
+                    ignite_git::refs::commits_between(&ctx.repo, last, tip).unwrap_or_default();
+                ctx.hub
+                    .tip_verified(&TipVerified {
+                        commit: tip.clone(),
+                        machine: ctx.machine.clone(),
+                        state: TipState::Failed,
+                        regression_passes: None,
+                        failure: Some(TipFailure {
+                            checks: failed.iter().map(|check| check.key.clone()).collect(),
+                            unverified_commits,
+                        }),
+                    })
+                    .and_then(|()| candidate::allow_newer(ctx, tip))
+            };
             for check in &failed {
                 let output = verdicts.get(&check.key).and_then(|v| v.output.clone());
-                // A failure to find the culprit or to reach the hub must not keep the tip from
-                // being recorded as failed; a later tip that still fails reports it again.
+                // If this search is interrupted, a later tip that still fails reports it.
                 let prior = scope.last_good_for(check);
                 if let Err(error) = self.blame(
                     ctx,
@@ -241,23 +260,10 @@ impl TipVerifier {
                 require_running()?;
                 self.save(ctx);
             }
-            let checks = names_of(&failed);
-            if last != tip {
-                let unverified_commits =
-                    ignite_git::refs::commits_between(&ctx.repo, last, tip).unwrap_or_default();
-                ctx.hub.tip_verified(&TipVerified {
-                    commit: tip.clone(),
-                    machine: ctx.machine.clone(),
-                    state: TipState::Failed,
-                    regression_passes: None,
-                    failure: Some(TipFailure {
-                        checks: failed.iter().map(|check| check.key.clone()).collect(),
-                        unverified_commits,
-                    }),
-                })?;
-                candidate::allow_newer(ctx, tip)?;
-            }
-            return Ok(TipOutcome::Failed { checks });
+            recorded?;
+            return Ok(TipOutcome::Failed {
+                checks: names_of(&failed),
+            });
         }
         if !waiting.is_empty() {
             let flagged = self.flag_missing_machines(ctx, tip, elsewhere);

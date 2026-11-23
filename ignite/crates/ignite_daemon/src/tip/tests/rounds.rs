@@ -308,7 +308,7 @@ fn a_round_records_where_its_time_went_and_a_slow_one_files_one_ticket() {
 }
 
 fn running_hub(world: &World, name: &str) -> (RunningHub, PathBuf, Context) {
-    let mut ctx = world.ctx("m-1");
+    let ctx = world.ctx("m-1");
     let database = ignite_core::test_files::temp_dir().join(format!("tip-{name}.sqlite"));
     let hub = HubServer {
         config: ctx.config.clone(),
@@ -318,13 +318,18 @@ fn running_hub(world: &World, name: &str) -> (RunningHub, PathBuf, Context) {
     }
     .start()
     .unwrap();
+    let ctx = connect_machine(ctx, &hub, "local", Os::Macos);
+    (hub, database, ctx)
+}
+
+fn connect_machine(mut ctx: Context, hub: &RunningHub, name: &str, os: Os) -> Context {
     ctx.config.hub.url = format!("http://{}", hub.address());
     let register = crate::hubclient::HubClient::new(&ctx.config.hub, "", "tip-test");
     let machine = register
         .register(&MachineRegister {
             machine: ctx.machine.clone(),
-            name: "local".to_owned(),
-            os: Os::Macos,
+            name: name.to_owned(),
+            os,
             cores: 1,
             memory_mb: 1024,
             families: Vec::new(),
@@ -336,7 +341,7 @@ fn running_hub(world: &World, name: &str) -> (RunningHub, PathBuf, Context) {
         &machine.token,
         "tip-test",
     ));
-    (hub, database, ctx)
+    ctx
 }
 
 fn select(ctx: &Context, tip: &Commit) {
@@ -355,13 +360,17 @@ fn select(ctx: &Context, tip: &Commit) {
 }
 
 #[test]
-fn the_hub_sees_a_required_failure_while_another_batch_is_open() {
+#[allow(clippy::too_many_lines)]
+fn both_platforms_start_the_successor_while_the_failed_round_is_running() {
     let world = World::new();
     let (server, database, ctx) = running_hub(&world, "while-running");
+    let windows = connect_machine(world.ctx("m-2"), &server, "windows", Os::Windows);
     let tip = commit("bbbb000");
+    let newer = commit("cccc000");
     world.land(&tip);
     select(&ctx, &tip);
-    let failed = in_family("a", "first");
+    let mut failed = in_family("a", "first");
+    failed.key.platform = Some(Os::Macos);
     let unfinished = in_family("b", "second");
     world
         .work
@@ -370,6 +379,23 @@ fn the_hub_sees_a_required_failure_while_another_batch_is_open() {
     world
         .work
         .set_outcome(&tip, &unfinished.check, Outcome::Incomplete);
+    let mut mac_check = failed.clone();
+    mac_check.key.hash = InputHash::new("c".repeat(64)).unwrap();
+    let mut windows_check = in_family("c", "native");
+    windows_check.key.platform = Some(Os::Windows);
+    windows_check.runnable = false;
+    world
+        .work
+        .set_checks(&newer, vec![mac_check.clone(), windows_check.clone()]);
+    world.git.set_changed(&tip, &newer, &["src/a"]);
+    world.land(&newer);
+    let previous = world.master();
+    for machine in [&ctx, &windows] {
+        assert_eq!(
+            world.verifier().next_target(machine).unwrap(),
+            Some(tip.clone())
+        );
+    }
     let resume = Arc::new(Barrier::new(2));
     let (ready, held) = mpsc::channel();
     let release = resume.clone();
@@ -384,7 +410,7 @@ fn the_hub_sees_a_required_failure_while_another_batch_is_open() {
     );
     let conn = hub::open(&database).unwrap();
 
-    let (observed, master_while_held, outcome) = thread::scope(|scope| {
+    let (observed, mac, master_after_mac, windows, outcome) = thread::scope(|scope| {
         let round = scope.spawn(|| {
             let outcome = world.verifier().verify(&ctx, &tip);
             let _ = finished.send(false);
@@ -398,9 +424,22 @@ fn the_hub_sees_a_required_failure_while_another_batch_is_open() {
         let observed = ureq::get(format!("{}/{}/api/tips/failures", hub.url, hub.project))
             .call()
             .and_then(|mut reply| reply.body_mut().read_to_vec());
-        let master_while_held = world.master();
+        let mac = world.verifier().round(&ctx, 0);
+        let master_after_mac = world.master();
+        mac_check.runnable = false;
+        windows_check.runnable = true;
+        world
+            .work
+            .set_checks(&newer, vec![mac_check, windows_check.clone()]);
+        let windows = world.verifier().round(&windows, 0);
         resume.wait();
-        (observed, master_while_held, round.join().unwrap())
+        (
+            observed,
+            mac,
+            master_after_mac,
+            windows,
+            round.join().unwrap(),
+        )
     });
     server.stop();
 
@@ -412,16 +451,33 @@ fn the_hub_sees_a_required_failure_while_another_batch_is_open() {
             checks: vec![failed.key.clone()],
         })
     );
-    assert_ne!(master_while_held, tip);
     assert_eq!(
-        outcome.unwrap(),
-        TipOutcome::Failed {
-            checks: vec![failed.check]
-        }
+        mac.unwrap(),
+        Some((
+            newer.clone(),
+            TipOutcome::Waiting {
+                checks: vec![windows_check.check],
+                unrunnable: Vec::new(),
+            },
+        ))
     );
+    assert_eq!(master_after_mac, previous);
     assert_eq!(
-        tips::candidate_failures(&conn).unwrap().unwrap().checks,
-        [failed.key]
+        windows.unwrap(),
+        Some((newer.clone(), TipOutcome::Verified))
+    );
+    assert_eq!(world.master(), newer);
+    assert_eq!(outcome.unwrap(), TipOutcome::Superseded { by: newer },);
+    assert_eq!(tips::candidate_failures(&conn).unwrap(), None);
+    assert_eq!(
+        tips::latest_failure(&conn, Timestamp::EPOCH).unwrap(),
+        Some((
+            TipCheckFailures {
+                commit: tip,
+                checks: vec![failed.key],
+            },
+            false,
+        ))
     );
 }
 
@@ -473,4 +529,49 @@ fn a_superseded_failure_cannot_blame_a_new_candidate_or_replace_a_missing_result
     assert!(
         matches!(outcome.unwrap(), TipOutcome::Waiting { checks, .. } if checks == [missing.check])
     );
+}
+
+#[test]
+fn the_successor_reports_a_failure_on_unchanged_inputs() {
+    let world = World::new();
+    let (server, _, ctx) = running_hub(&world, "unchanged-inputs");
+    let tip = commit("bbbb000");
+    let newer = commit("cccc000");
+    let failed = check("a", 'a');
+    world.land(&tip);
+    select(&ctx, &tip);
+    world.work.set_checks(&tip, vec![failed.clone()]);
+    world.work.set_outcome(&tip, &failed.check, Outcome::Fail);
+    // The old round stores its result and reports the failed batch before it can start blame.
+    world
+        .work
+        .run(&ctx, &tip, std::slice::from_ref(&failed.check), false);
+    ctx.hub
+        .tip_check_failures(&TipCheckFailures {
+            commit: tip.clone(),
+            checks: vec![failed.key.clone()],
+        })
+        .unwrap();
+
+    world.land(&newer);
+    world.git.set_changed(&tip, &newer, &["src/unrelated"]);
+    world.work.set_checks(&newer, vec![failed.clone()]);
+    world.work.set_outcome(&newer, &failed.check, Outcome::Fail);
+    world.work.add_commit(tip.as_str(), &["src/a"]);
+
+    let outcome = world.verifier().round(&ctx, 0).unwrap();
+    assert_eq!(
+        outcome,
+        Some((
+            newer,
+            TipOutcome::Failed {
+                checks: vec![failed.check.clone()],
+            },
+        ))
+    );
+    assert_eq!(world.master(), commit("aaaa000"));
+    let regressions = ctx.hub.open_regressions().unwrap();
+    assert_eq!(regressions.len(), 1);
+    assert_eq!(regressions[0].check, failed.check);
+    server.stop();
 }

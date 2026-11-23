@@ -312,8 +312,13 @@ fn recently_closed_for(conn: &Connection, landing: &str, now: Timestamp) -> Resu
 fn tip_failure_note(conn: &Connection, landed_at: Timestamp) -> Result<String> {
     let (report, context) = if let Some(report) = tips::candidate_failures(conn)? {
         (report, "Required checks reported failures at candidate")
-    } else if let Some(report) = tips::latest_failure(conn, landed_at)? {
-        (report, "A completed round recorded failures at")
+    } else if let Some((report, completed)) = tips::latest_failure(conn, landed_at)? {
+        let context = if completed {
+            "A completed round recorded failures at"
+        } else {
+            "Required checks reported failures at earlier candidate"
+        };
+        (report, context)
     } else {
         return Ok(String::new());
     };

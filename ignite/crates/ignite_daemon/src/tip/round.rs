@@ -21,9 +21,9 @@
 //! - When a round's reply says `master` moved, the loop asks the daemon's self-update to build
 //!   the new release (`SelfUpdate::after_master_moved`), as before; a loop that waited for a
 //!   round started before a restart does the same with that round's reply.
-//! - While waiting, the loop checks whether the hub selected a replacement candidate or
-//!   `master` advanced past the round's target. It stops that round so the next one can use
-//!   its landing trees.
+//! - While waiting, the loop checks whether a failed candidate can give way to newer staging,
+//!   the hub already selected a replacement, or `master` advanced past its target. It stops
+//!   the old round so the next one can use its landing trees.
 //!
 //! A round whose verb process dies is not run again: its handle ends `incomplete`, and the next
 //! turn of the loop starts a new round when the tip still needs one.
@@ -39,7 +39,7 @@ use ignite_core::protocol::Class;
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::traits::{Error, Result};
 
-use super::{TipOutcome, TipVerifier, TipWork, candidate, families};
+use super::{TipOutcome, TipVerifier, TipWork, families};
 use crate::handles::Waited;
 use crate::server::{Context, Server, Verb, error_reply};
 
@@ -221,7 +221,7 @@ impl TipLoop {
                     wait_s = WAIT_S;
                     if superseded.is_none()
                         && let Some(tip) = target
-                        && let Some(by) = superseding_tip(ctx, tip)
+                        && let Some(by) = self.superseding_tip(ctx, tip)
                         && self.server.stop_internal(handle)
                     {
                         superseded = Some((tip.clone(), by));
@@ -246,18 +246,33 @@ impl TipLoop {
         self.retry_now = matches!(finished, Ok((_, TipOutcome::Superseded { .. })));
         finished
     }
-}
 
-/// Stop a pre-promotion round when the hub replaces its candidate. A round that already
-/// moved `master` to its target can finish and report that promotion to the tip loop.
-fn superseding_tip(ctx: &Context, target: &Commit) -> Option<Commit> {
-    let master = ctx.git.tip(&ctx.config.repository.master).ok();
-    if master.as_ref() == Some(target) {
-        return None;
+    /// A round can spend hours waiting for checks or searching for a culprit. A running
+    /// loop can select the successor itself once the hub lets the candidate advance.
+    fn superseding_tip(&self, ctx: &Context, target: &Commit) -> Option<Commit> {
+        let master = ctx.git.tip(&ctx.config.repository.master).ok();
+        if master.as_ref() == Some(target) {
+            return None;
+        }
+        if let Some(master) =
+            master.filter(|master| ctx.git.is_ancestor(target, master).unwrap_or(false))
+        {
+            return Some(master);
+        }
+        let selected = ctx.hub.tip_candidate().ok()??;
+        if selected.commit != *target {
+            return Some(selected.commit);
+        }
+        if !selected.retry_on_new_tip {
+            return None;
+        }
+        self.verb
+            .verifier()
+            .next_target(ctx)
+            .ok()
+            .flatten()
+            .filter(|tip| tip != target)
     }
-    master
-        .filter(|master| ctx.git.is_ancestor(target, master).unwrap_or(false))
-        .or_else(|| candidate::replacement(ctx, target))
 }
 
 /// Leaves a stopped round before it treats interrupted checks as missing or failing.

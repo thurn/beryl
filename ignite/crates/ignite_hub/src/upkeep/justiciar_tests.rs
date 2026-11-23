@@ -201,7 +201,10 @@ fn master_lag_reports_candidate_failures_before_completion_and_keeps_their_commi
         tips::update_candidate(
             &mut conn,
             &TipCandidateUpdate {
-                expected: Some(tip),
+                expected: Some(TipCandidate {
+                    retry_on_new_tip: true,
+                    ..tip
+                }),
                 replacement: candidate("cccc000"),
             },
             clock.now()
