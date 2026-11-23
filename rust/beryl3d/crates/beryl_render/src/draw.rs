@@ -6,7 +6,7 @@ use std::ops::Range;
 use glam::Vec2;
 use kit_frame::frame::Frame;
 
-use crate::pipeline::RECORD;
+use crate::pipeline::{Pipelines, RECORD};
 use crate::runs::{Pass, runs};
 use crate::slots::Slot;
 
@@ -32,7 +32,7 @@ impl Draws<'_> {
     pub(crate) fn record(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
-        pipelines: &[wgpu::RenderPipeline; 5],
+        pipelines: &Pipelines,
         wanted: impl Fn(Pass) -> bool,
     ) -> u32 {
         self.record_part(
@@ -86,7 +86,7 @@ impl Draws<'_> {
                 let (near, far) = match run.pass {
                     Pass::Opaque | Pass::Table => (0.5, 1.0),
                     Pass::MovingOpaque | Pass::Moving => (0.0, 0.5),
-                    Pass::Layer => (0.0, 1.0),
+                    Pass::Layer | Pass::LayerOpaque => (0.0, 1.0),
                 };
                 pass.set_viewport(0.0, 0.0, target.0 as f32, target.1 as f32, near, far);
             }

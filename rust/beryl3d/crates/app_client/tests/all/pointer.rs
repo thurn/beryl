@@ -118,6 +118,7 @@ fn a_hovered_hand_card_paints_over_the_life_hud_until_it_lands() {
                 owner as usize == card && draw.material == Material::Card as u8
             })
             .expect("the hand card draws its face");
+        assert_eq!(frame.opaque_layer_card(card_draw), lifted);
 
         for hud in [orb, total, step] {
             let node = &frame.resolved[hud];

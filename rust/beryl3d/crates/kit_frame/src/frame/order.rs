@@ -17,11 +17,14 @@ use super::{
     BANDS, Band, Draw, Frame, FrameBuilder, Material, Mesh, Resolved, Role, StateBits, sprites,
 };
 
-/// The low bits of a sort key break ties by record index, making the sort deterministic.
+/// The index breaks sort ties, so records at the same depth keep a deterministic order.
 const INDEX_BITS: u32 = 24;
 const INDEX_MASK: u64 = (1 << INDEX_BITS) - 1;
+/// The low bit of a record key selects the opaque overlay pipeline without changing its order.
+const OPAQUE_LAYER_CARD: u64 = 1;
+const RECORD_INDEX_SHIFT: u32 = 1;
 /// The 32 bits above the index order records within a band by depth.
-const DEPTH_SHIFT: u32 = INDEX_BITS;
+const DEPTH_SHIFT: u32 = INDEX_BITS + RECORD_INDEX_SHIFT;
 /// The top bits hold the band, so the bands come in their declared order.
 const BAND_SHIFT: u32 = 60;
 
@@ -157,8 +160,8 @@ impl Scratch {
             (index as u64) <= INDEX_MASK,
             "a frame holds fewer than 2^24 records"
         );
-        self.keys
-            .push(((band as u64) << BAND_SHIFT) | record_tie(band, index as u64));
+        let tie = record_tie(band, index as u64) << RECORD_INDEX_SHIFT;
+        self.keys.push(((band as u64) << BAND_SHIFT) | tie);
         let first = self.first_calls[band as usize].get_or_insert(draw.flags);
         if *first != draw.flags {
             self.mixed |= 1 << band as u16;
@@ -208,7 +211,7 @@ pub(super) fn areas(frame: &Frame) -> super::Areas {
     let mut areas = super::Areas::default();
     for (index, draw) in frame.draws.iter().enumerate() {
         let area = screen_area(draw, &frame.view_projection, frame.card);
-        if index < opaque || moving_opaque.contains(&index) {
+        if index < opaque || moving_opaque.contains(&index) || frame.opaque_layer_card(index) {
             areas.opaque += area;
         } else {
             areas.blended += area;
@@ -235,7 +238,7 @@ fn set_bands(frame: &mut Frame) {
         // push indexes rise.
         let layer_end = frame.bands[Band::LayerCards as usize] as usize;
         let before = frame.scratch.keys[layer..layer_end]
-            .partition_point(|key| key & INDEX_MASK < u64::from(backdrop.pushed));
+            .partition_point(|&key| record_index(key) < backdrop.pushed as usize);
         backdrop.at = super::index(layer + before);
     }
 }
@@ -328,6 +331,15 @@ impl Frame {
         self.scratch.keys.get(index).map(|&key| band_of(key))
     }
 
+    /// Whether this record paints over the flat layer with blending disabled.
+    #[must_use]
+    pub fn opaque_layer_card(&self, index: usize) -> bool {
+        self.scratch
+            .keys
+            .get(index)
+            .is_some_and(|key| key & OPAQUE_LAYER_CARD != 0)
+    }
+
     /// The screen area of the opaque and of the blended records of the finished frame, each
     /// divided by the screen's: the rectangle that bounds each record's mesh, cut to the view
     /// volume. The one-pixel edge strip counts as no area, and clips are not taken into
@@ -371,6 +383,12 @@ impl FrameBuilder<'_> {
             .has(StateBits::RAISED);
         bands[at as usize] = Some(if raised { resting } else { band });
         self.draw(band, draw);
+        // Keep the face among the raised marks in paint order. A clipped card may have
+        // a soft mask, so it still uses the blended pipeline.
+        if raised && band == Band::LayerCards && resting == Band::Opaque && draw.clip() == 0 {
+            let index = self.frame.draws.len() - 1;
+            self.frame.scratch.keys[index] |= OPAQUE_LAYER_CARD;
+        }
     }
 }
 
@@ -384,7 +402,7 @@ fn record_tie(band: Band, index: u64) -> u64 {
 }
 
 fn record_index(key: u64) -> usize {
-    record_tie(band_of(key), key & INDEX_MASK) as usize
+    record_tie(band_of(key), (key >> RECORD_INDEX_SHIFT) & INDEX_MASK) as usize
 }
 
 /// The band a sort key holds.
@@ -453,9 +471,13 @@ fn draw_calls(frame: &Frame) -> u32 {
     };
     let mut calls = 0;
     let mut previous = None;
-    for (index, draw) in frame.draws.iter().enumerate() {
+    for (index, (draw, &key)) in frame.draws.iter().zip(&frame.scratch.keys).enumerate() {
         // `flags` holds exactly the texture array, the mesh and the clip.
-        let key = (pass(super::index(index)), draw.flags);
+        let key = (
+            pass(super::index(index)),
+            key & OPAQUE_LAYER_CARD,
+            draw.flags,
+        );
         if previous != Some(key) {
             calls += 1;
             previous = Some(key);

@@ -5,7 +5,7 @@
 //! A frame is drawn in four steps: the shadow map (`shadow::Shadow::draw`); the main pass over
 //! every record before the flat layer, multisampled and resolved into the frame's target; bloom
 //! (`bloom::Bloom::apply`), on the resolved picture; then the flat layer, in a pass of one sample
-//! that loads the resolved picture, with the Baseline tier's flat-layer pipeline, so that text
+//! that loads the resolved picture, with the Baseline tier's flat-layer pipelines, so that text
 //! and panels are drawn exactly as in Baseline.
 //!
 //! The shading of each step lives in a file of its own, Rust and WGSL alike: `shadow`,
@@ -22,7 +22,7 @@ use kit_frame::frame::Frame;
 
 use crate::count::{self, FragmentCounter};
 use crate::draw::Draws;
-use crate::pipeline::{DEPTH, Shape, pipeline_set};
+use crate::pipeline::{DEPTH, Pipelines, Shape, pipeline_set};
 use crate::runs::Pass;
 
 use self::bloom::Bloom;
@@ -94,7 +94,7 @@ pub(crate) struct Enhanced {
     /// flat layer is drawn with the Baseline tier's one-sample pipeline instead, after the
     /// resolve; its four-sample pipeline is made with the others so that a frame drawn some
     /// other way later needs none made during play.
-    pipelines: [wgpu::RenderPipeline; 5],
+    pipelines: Pipelines,
     /// The layout of bind group 1: `Lit`, the shadow map and its comparison sampler.
     layout: wgpu::BindGroupLayout,
     shadow: Shadow,
@@ -215,7 +215,7 @@ impl Enhanced {
 
     /// Records the frame `draws` describes into `encoder`, ending in `view`, and returns how
     /// many draw calls every pass took. `layer` is the Baseline tier's pipelines, of which the
-    /// flat layer's is used, and `layer_depth` a one-sample depth buffer the size of `view`.
+    /// flat layer's are used, and `layer_depth` a one-sample depth buffer the size of `view`.
     /// `counter`, when present, counts the fragments every pass shades.
     #[expect(
         clippy::too_many_arguments,
@@ -227,7 +227,7 @@ impl Enhanced {
         encoder: &mut wgpu::CommandEncoder,
         draws: &Draws,
         view: &wgpu::TextureView,
-        layer: &[wgpu::RenderPipeline; 5],
+        layer: &Pipelines,
         layer_depth: &wgpu::TextureView,
         counter: Option<&FragmentCounter>,
     ) -> u32 {
@@ -260,7 +260,7 @@ impl Enhanced {
             };
             pass.set_bind_group(1, group, &[]);
             count::begin(counter, &mut pass);
-            draw_calls += draws.record(&mut pass, &self.pipelines, |pass| pass != Pass::Layer);
+            draw_calls += draws.record(&mut pass, &self.pipelines, |pass| !pass.is_layer());
             count::end(counter, &mut pass);
         }
         draw_calls += self.bloom.apply(encoder, draws, view, counter);
@@ -282,7 +282,7 @@ impl Enhanced {
                 multiview_mask: None,
             });
             count::begin(counter, &mut pass);
-            draw_calls += draws.record(&mut pass, layer, |pass| pass == Pass::Layer);
+            draw_calls += draws.record(&mut pass, layer, Pass::is_layer);
             count::end(counter, &mut pass);
         }
         draw_calls

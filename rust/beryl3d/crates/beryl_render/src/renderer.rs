@@ -22,7 +22,7 @@ use crate::faces::{
 };
 use crate::mesh::meshes;
 use crate::panel_blur::{self, PanelBlur};
-use crate::pipeline::{DEPTH, RECORD, bind_group_layout, pipelines};
+use crate::pipeline::{DEPTH, Pipelines, RECORD, bind_group_layout, pipelines};
 use crate::slots::{Slots, mapped_features};
 use crate::target::Target;
 use glam::Vec2;
@@ -67,7 +67,7 @@ pub struct Renderer {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) format: wgpu::TextureFormat,
-    pipelines: [wgpu::RenderPipeline; 5],
+    pipelines: Pipelines,
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     /// The buffers frames write their uniforms and records into, with their bind groups.
@@ -647,7 +647,7 @@ fn baseline_pass(
     draws: &Draws,
     view: &wgpu::TextureView,
     depth: &wgpu::TextureView,
-    pipelines: &[wgpu::RenderPipeline; 5],
+    pipelines: &Pipelines,
     counter: Option<&FragmentCounter>,
 ) -> u32 {
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -687,7 +687,7 @@ fn over_pass(
     at: u32,
     view: &wgpu::TextureView,
     depth: &wgpu::TextureView,
-    pipelines: &[wgpu::RenderPipeline; 5],
+    pipelines: &Pipelines,
     counter: Option<&FragmentCounter>,
 ) -> u32 {
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

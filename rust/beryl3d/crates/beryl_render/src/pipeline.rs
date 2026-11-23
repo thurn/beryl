@@ -1,8 +1,6 @@
 //! The Baseline tier's pipelines, all created at startup (docs/beryl-3d.md, "The Baseline
-//! tier"): one opaque pipeline that writes the depth buffer, and one blended pipeline in two
-//! depth settings, tested against the depth buffer for the table's bands and untested for the
-//! flat layer's. A pipeline's depth setting is fixed when it is made, so the flat layer needs
-//! a pipeline of its own; its shader is the same.
+//! tier"). The table and moving cards use the depth buffer. The flat layer uses paint order,
+//! with separate pipelines for opaque faces and blended records. They share the same shader.
 
 use crate::mesh::Vertex;
 use crate::runs::Pass;
@@ -11,6 +9,8 @@ use crate::runs::Pass;
 pub const DEPTH: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 /// The size of one draw record, `kit_frame::frame::Draw`.
 pub const RECORD: u64 = 80;
+/// A pipeline for every record pass, indexed by `Pass as usize`.
+pub(crate) type Pipelines = [wgpu::RenderPipeline; Pass::LayerOpaque as usize + 1];
 
 const MESH_ATTRIBUTES: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
     0 => Float32x2,
@@ -96,12 +96,12 @@ pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     })
 }
 
-/// The pipelines for the three passes, indexed by `Pass as usize`.
+/// The pipelines for the Baseline tier, indexed by `Pass as usize`.
 pub fn pipelines(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     format: wgpu::TextureFormat,
-) -> [wgpu::RenderPipeline; 5] {
+) -> Pipelines {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("beryl_render"),
         source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -125,13 +125,13 @@ pub struct Shape<'a> {
     pub samples: u32,
 }
 
-/// The pipelines of `shape` for the three passes, indexed by `Pass as usize`, with bind groups
+/// The pipelines of `shape` for each pass, indexed by `Pass as usize`, with bind groups
 /// laid out by `layouts` in order.
 pub fn pipeline_set(
     device: &wgpu::Device,
     layouts: &[&wgpu::BindGroupLayout],
     shape: &Shape,
-) -> [wgpu::RenderPipeline; 5] {
+) -> Pipelines {
     let layouts: Vec<Option<&wgpu::BindGroupLayout>> = layouts.iter().copied().map(Some).collect();
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("beryl_render"),
@@ -144,6 +144,7 @@ pub fn pipeline_set(
         Pass::MovingOpaque,
         Pass::Moving,
         Pass::Layer,
+        Pass::LayerOpaque,
     ]
     .map(|pass| pipeline(device, &pipeline_layout, shape, pass))
 }
@@ -161,13 +162,14 @@ fn pipeline(
             false,
             wgpu::CompareFunction::LessEqual,
         ),
+        Pass::LayerOpaque => (None, false, wgpu::CompareFunction::Always),
         Pass::Layer => (
             Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
             false,
             wgpu::CompareFunction::Always,
         ),
     };
-    let shaken = [("SHAKEN", if pass == Pass::Layer { 0.0 } else { 1.0 })];
+    let shaken = [("SHAKEN", if pass.is_layer() { 0.0 } else { 1.0 })];
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(match pass {
             Pass::Opaque => "opaque",
@@ -175,6 +177,7 @@ fn pipeline(
             Pass::MovingOpaque => "opaque moving cards",
             Pass::Moving => "moving over the table",
             Pass::Layer => "flat layer",
+            Pass::LayerOpaque => "opaque card over the flat layer",
         }),
         layout: Some(layout),
         vertex: wgpu::VertexState {

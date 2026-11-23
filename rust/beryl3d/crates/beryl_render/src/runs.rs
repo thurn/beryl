@@ -6,7 +6,7 @@ use std::ops::Range;
 
 use kit_frame::frame::{Band, Draw, Frame};
 
-/// The five ways a record is drawn, in the order they come in the draw list.
+/// The pipeline a record is drawn with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pass {
     /// `draws[..opaque]`: no blending, writing the depth buffer.
@@ -19,6 +19,14 @@ pub enum Pass {
     Moving,
     /// `draws[layer..]`: the flat layer, blended with no depth test and not shaken.
     Layer,
+    /// Opaque faces in the flat layer's paint order, with blending and depth testing disabled.
+    LayerOpaque,
+}
+
+impl Pass {
+    pub(crate) const fn is_layer(self) -> bool {
+        matches!(self, Self::Layer | Self::LayerOpaque)
+    }
 }
 
 /// One instanced draw call.
@@ -77,6 +85,8 @@ impl Runs<'_> {
             Pass::MovingOpaque
         } else if index < self.layer {
             Pass::Moving
+        } else if self.frame.opaque_layer_card(index as usize) {
+            Pass::LayerOpaque
         } else {
             Pass::Layer
         }

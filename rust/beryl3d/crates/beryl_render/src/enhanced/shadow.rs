@@ -24,7 +24,7 @@ use crate::count::{self, FragmentCounter};
 use crate::draw::Draws;
 use crate::mesh::Vertex;
 use crate::pipeline::{DEPTH, RECORD};
-use crate::runs::{Pass, runs};
+use crate::runs::runs;
 
 /// The heights, in millimetres, of the slab of table the map is fitted to: cards lie and fly
 /// mostly between them.
@@ -195,7 +195,7 @@ impl Shadow {
         let mut draw_calls = 0;
         count::begin(counter, &mut pass);
         for run in runs(draws.frame) {
-            if run.pass == Pass::Layer || run.mesh != Mesh::Card as u8 {
+            if run.pass.is_layer() || run.mesh != Mesh::Card as u8 {
                 continue;
             }
             let records = run.records.start..run.records.end.min(draws.kept);

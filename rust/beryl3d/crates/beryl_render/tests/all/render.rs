@@ -11,7 +11,10 @@ use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
 use kit_base::atlas::{FaceSize, Tier};
 use kit_base::geometry::{Rect, Window};
 use kit_base::paint::{Gradient, Stop};
-use kit_frame::frame::{Band, DRAWS, Draw, Frame, FrameBuilder, ScreenClip, sprites};
+use kit_frame::frame::{
+    Band, DRAWS, Draw, ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, ScreenClip,
+    StateBits, sprites,
+};
 use kit_space::camera::Camera;
 
 pub(super) const BOTH: [Limits; 2] = [Limits::Default, Limits::Downlevel];
@@ -717,6 +720,75 @@ fn a_flight_draws_in_front_of_nearer_resting_cards_and_behind_panels() {
                 resting.at(100, 90),
                 "{limits:?} {tier:?}"
             );
+        }
+    }
+}
+
+#[test]
+fn opaque_raised_faces_draw_over_the_hud_and_under_the_tooltip() {
+    let hud = rectangle(Vec2::ZERO, Vec2::splat(200.0), 0.0, [0, 0, 255]);
+    let tooltip = rectangle(Vec2::ZERO, Vec2::splat(16.0), 0.0, [60, 180, 40]);
+    for limits in BOTH {
+        let mut renderer = renderer(limits);
+        for tier in [Tier::Baseline, Tier::Enhanced] {
+            let mut frame = Frame::with_capacity(2, 5, 0);
+            let mut builder = FrameBuilder::new(&mut frame, tier, crate::card());
+            builder.camera(overhead());
+            builder.draw(Band::Opaque, card(Vec3::Z * 10.0, 1, [0, 0, 255, 255]));
+            builder.draw(Band::Layer, hud);
+            for (id, x, height, opacity, resting, tint) in [
+                (1, -12.0, 1.0, 1.0, Band::Opaque, [255, 0, 0, 255]),
+                (2, 12.0, 2.0, 0.5, Band::RaisedMarks, [0, 0, 255, 128]),
+            ] {
+                let position = Vec3::new(x, 0.0, height);
+                let at = builder.resolved(
+                    "raised card",
+                    Resolved {
+                        id: ElementId(id),
+                        parent: u32::MAX,
+                        role: Role::Card,
+                        name: NameRef::default(),
+                        place: Place::Layer,
+                        pose: Some(kit_base::pose::Pose {
+                            position,
+                            opacity,
+                            ..Default::default()
+                        }),
+                        corners: [Vec2::ZERO; 4],
+                        depth: 0.0,
+                        opacity,
+                        clip: None,
+                        interactive: false,
+                        state: StateBits(StateBits::RAISED),
+                        face: Some(1),
+                        count: 1,
+                        annotations: Default::default(),
+                    },
+                );
+                builder.draw_card(at, resting, card(position, 1, tint));
+            }
+            builder.draw(Band::LayerCover, tooltip);
+            let frame = builder.finish();
+            let mut target = Target::offscreen(&renderer, 200, 200);
+            let drawn = renderer.render(frame, &mut target);
+            // The faded face and tooltip share a blended run after the opaque face.
+            assert_eq!(frame.load.draw_calls, 4);
+            let picture = Picture {
+                pixels: renderer.read(&target),
+                width: 200,
+            };
+            let [red, _, blue] = picture.at(73, 100);
+            assert!(red > 0 && blue == 0, "{limits:?} {tier:?}");
+            let [red, _, blue] = picture.at(90, 100);
+            assert!(red > 0 && blue > 0, "{limits:?} {tier:?}");
+            assert!(
+                close(picture.at(100, 100), [60, 180, 40]),
+                "{limits:?} {tier:?}"
+            );
+            // Enhanced also draws the shadow map and composites its bloom.
+            if tier == Tier::Baseline {
+                assert_eq!(drawn.draw_calls, frame.load.draw_calls);
+            }
         }
     }
 }
