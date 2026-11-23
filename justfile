@@ -385,6 +385,12 @@ coverage *args:
 fseventsd:
     {{ by }} fseventsd
 
+# Edit one file in an Ignite build tree, run formatters, and land it (`just edit <path>`)
+[group('checks')]
+[no-cd]
+edit *args:
+    @{{ by_anywhere }} edit "$@"
+
 # Format everything: black, rustfmt, prettier, mdformat (80 columns), the justfile
 [group('checks')]
 fmt:
