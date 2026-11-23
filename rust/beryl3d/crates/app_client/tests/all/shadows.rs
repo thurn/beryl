@@ -118,6 +118,40 @@ fn every_card_in_a_hand_or_on_the_stack_casts_one_shadow_and_no_card_lying_down_
     assert_eq!(shadows(frame).len(), 7 + 5 + 3);
 }
 
+#[cfg(feature = "web-fit")]
+#[test]
+fn a_card_tucked_under_a_permanent_does_not_cast_a_contact_shadow() {
+    let mut view = ViewBuilder::new();
+    let converter = view
+        .card(ZoneName::Battlefield, Side::Opponent, "Currency Converter")
+        .slot;
+    view.card(ZoneName::Exile, Side::Opponent, "Damn")
+        .exiled_with = Some(converter);
+    view.script(ScriptBuilder::reset().build());
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
+    client.handle(Input::Device(DeviceInput::Surface {
+        size: Size {
+            width: 1728.0,
+            height: 1117.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    }));
+    client.handle(Input::Update(Box::new(view.update())));
+
+    let frame = client.frame(0);
+    assert!(
+        frame
+            .resolved
+            .iter()
+            .any(|card| frame.name(card.name) == "Damn")
+    );
+    assert!(
+        shadows(frame).is_empty(),
+        "cards resting in tilted battlefield rows must not cast contact shadows"
+    );
+}
+
 #[test]
 fn a_card_drawn_off_a_tall_library_casts_its_shadow_on_the_librarys_top() {
     let mut builder = ViewBuilder::new();

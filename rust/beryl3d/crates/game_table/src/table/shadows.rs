@@ -79,14 +79,18 @@ impl Table {
         );
     }
 
-    /// Whether a card at `pose`, resting at `place`, lies on the table: in a battlefield row, or
-    /// on its pile (and not lifted off it, beside the pile, while the opponent looks at it).
+    /// Whether a card at `pose`, resting at `place`, lies in a battlefield row or on its pile.
     fn lies(&self, place: Place, pose: &Pose, pile_tolerance_squared: f32) -> bool {
-        let Place::Card { zone, side, .. } = place else {
+        let Place::Card { zone, side, row } = place else {
             return false;
         };
+        // A card tucked beneath a permanent shares that permanent's row, even if it is in
+        // exile. On a tilted row its centre can be higher than the permanent's centre, which
+        // would cast a narrow shadow across both faces if the card were treated as raised.
+        if row.is_some() || zone == ZoneName::Battlefield {
+            return true;
+        }
         match zone {
-            ZoneName::Battlefield => return true,
             ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile => {}
             _ => return false,
         }
