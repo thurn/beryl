@@ -270,6 +270,7 @@ oracle = 1
 # The browser and app families require the Mac's WebKit or desktop runtime.
 # Oracle checks use the pinned JDK and Maven builds from `just oracle-setup`.
 # Rollout counts use the `beryl-bench` WSL distribution from `just bench-count`.
+# Frame instruction counts use the `beryl3d-bench` WSL distribution from `just b3d vm`.
 #
 # `families` holds those verified on cygnus. Pytest and the browser-free UI checks run
 # natively, and Pyre uses WSL.
@@ -283,6 +284,7 @@ families = [
   "counts", "allocations", "card-text", "script", "scale", "iroh", "fuzz", "exhaust",
   "oracle", "oracle-generated", "ui-format", "ui-types", "ui-unit",
   "b3d-clippy", "b3d-validation", "b3d-test", "b3d-interface", "b3d-every-tick", "b3d-corpus",
+  "b3d-gate", "b3d-frame-counts", "b3d-frame-trend",
 ]
 
 [machine.cygnus.resources]

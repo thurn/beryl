@@ -7,6 +7,9 @@ Run `just b3d data` to validate it, including inspection-only profiles.
 - `budgets.json` sets each gated board's worst-frame and total work limits,
   handle allocations, peak draws and fragment limits for both visual tiers. Each
   limit has a `max` and a `why`.
+- `frame-calibration.json` records each registered verifier's reference revision
+  and runtime for the native and Callgrind frame gates. See
+  [Frame calibrations](../../docs/beryl-3d.md#frame-calibrations).
 - `levels.json` records the client-core levels, dependency order, source caps
   and remaining protocol and web references. Look for a seam before adding a
   `cap_allowances` entry. Record the current line count and the seams

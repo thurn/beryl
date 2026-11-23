@@ -483,9 +483,9 @@ an ordinary recording may never reach.
   allocator requires zero allocations inside `Client::frame` and accounts for
   allocations in `handle` separately.
 - **Instructions.** Callgrind collects instructions in the Linux `beryl3d-bench`
-  VM. Each measurement covers `frame` and the `handle` calls since the previous
-  frame. The separate VM keeps graphics-driver setup and measurement apart from
-  the engine's count gate.
+  guest under Lima on macOS and WSL on Windows. Each measurement covers `frame`
+  and the `handle` calls since the previous frame. The separate guest keeps
+  graphics-driver setup and measurement apart from the engine's count gate.
 - **GPU work.** The software Vulkan renderer counts fragment shader invocations
   over the passes of a frame. The count excludes fragments rejected before
   shading. The shader-cost check independently limits expressions and texture
@@ -501,6 +501,23 @@ count and the total. It also checks that the instruction peak is among the
 native candidates. A failure to rank that peak means the cheap counters need to
 account for the missing work. `just b3d gate --json` reports measured work
 alongside any budget failures.
+
+### Frame calibrations
+
+`data/beryl3d/frame-calibration.json` records the reference revision, fixture,
+and runtime for each registered Ignite verifier. Native checks use the work
+budgets in `budgets.json` with any calibrated per-board overrides. Instruction
+checks use the verifier's measured per-board budgets and scaling limits.
+`budgets.json` still records the original limits. Ignite reports a missing or
+incompatible profile as incomplete.
+
+Use `just b3d vm` to provision the guest. To enroll a verifier or rebase a
+profile, use an Ignite lease at an accepted revision. Run the native `gate`
+binary and measure the same board list twice through `counts.measure` in
+`tools/src/beryl_tools/beryl3d/counts.py`. It reports the guest runtime and the
+instruction count of every frame. Confirm the counts repeat and that a lowered
+limit fails. Record the revision and runtimes under the verifier ID, and keep
+the zero-allocation and native rank assertions.
 
 ### Measurements
 

@@ -9,27 +9,75 @@ measured when the work was linear, plus headroom.
 The frame with the most instructions must be among the frames `rank` picks from the native work
 counters, so the native gate keeps seeing the work that costs instructions.
 
-The machine mounts only the main checkout, and a worktree is elsewhere, so
-the sources the program needs are sent into the machine (`source.py`), with the recordings
-pack the recorded boards are read from.
+The Linux guest gets a copy of the worktree (`source.py`) and the native recordings pack.
 """
 
 from __future__ import annotations
 
 import json
-import platform
+import os
 import shlex
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import bench, vm_host
-from . import gate, source, vm
+from .. import bench, calibration, system, vm_host
+from . import frame_profiles, gate, source, vm
 
 # In the machine: the build directory the gate keeps warm between runs.
 TARGET = "$HOME/targets/b3d-gate"
 PROGRAM = "b3d-frame-counts"
+
+
+def runtime_script(channel: str) -> str:
+    """Print the tool versions from the same guest invocation that counts the frames."""
+    backend = "wsl" if system.WINDOWS else "lima"
+    return f""". /etc/os-release
+printf 'runtime backend={backend}\\n'
+printf 'runtime guest=%s %s\\n' "$ID" "$VERSION_ID"
+printf 'runtime arch=%s\\n' "$(uname -m)"
+printf 'runtime valgrind=%s\\n' "$(valgrind --version)"
+printf 'runtime libc=%s\\n' "$(getconf GNU_LIBC_VERSION)"
+printf 'runtime cc=%s\\n' "$(cc -dumpfullversion)"
+printf 'runtime rustc=%s\\n' "$(rustc +{shlex.quote(channel)} --version)"
+"""
+
+
+def runtime(stdout: str) -> dict[str, str]:
+    found: dict[str, str] = {}
+    for line in stdout.splitlines():
+        if line.startswith("runtime "):
+            key, separator, value = line.removeprefix("runtime ").partition("=")
+            if separator:
+                found[key] = value
+    return found
+
+
+def live_profile() -> calibration.Profile:
+    """Validate the listing digest with the live tools before Ignite can reuse a verdict."""
+    profile = frame_profiles.registered("instructions")
+    launcher = "wsl" if system.WINDOWS else "limactl"
+    if shutil.which(launcher) is None or vm_host.status(vm.NAME) is None:
+        raise calibration.SetupError(f"set up {vm.NAME} with `just b3d vm`")
+    if vm.start() != 0:
+        raise calibration.SetupError(f"could not start {vm.NAME}")
+    channel = bench.toolchain()
+    script = f'set -e\n. "$HOME/.cargo/env"\n{runtime_script(channel)}'
+    probe = subprocess.run(
+        bench.vm_command(script, vm.NAME, "/"),
+        cwd=vm_host.shell_host_cwd(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if probe.returncode:
+        raise calibration.SetupError(
+            f"could not identify tools in {vm.NAME}; run `just b3d vm`"
+        )
+    calibration.require_runtime(profile, runtime(probe.stdout))
+    return profile
 
 
 @dataclass(frozen=True)
@@ -58,7 +106,7 @@ def parse(stdout: str) -> dict[str, Counted]:
     found: dict[str, Counted] = {}
     for board, frames in played.items():
         counted = dumps.get(board, {})
-        if sorted(counted) != list(range(1, frames + 1)):
+        if frames <= 0 or sorted(counted) != list(range(1, frames + 1)):
             bench.log(
                 f"{board}: played {frames} frames but Callgrind wrote {len(counted)} dumps"
             )
@@ -142,10 +190,12 @@ def scaling_failures(
 
 def script(boards: list[str], *, wait: bool = True) -> str:
     """Provisions the machine, takes in the sources (`source.take_in_script`), builds
-    `b3d-frame-counts`, and runs it for every board in `boards` at once under Callgrind,
-    printing the lines `parse` reads."""
+    `b3d-frame-counts`, and runs it for every board in `boards` under Callgrind, within
+    Ignite's CPU grant. It prints the lines `parse` reads."""
+    channel = bench.toolchain()
     build = [
         "cargo",
+        f"+{channel}",
         "build",
         "--locked",
         "--release",
@@ -165,8 +215,10 @@ def script(boards: list[str], *, wait: bool = True) -> str:
         "--compress-strings=no",
     ]
     names = shlex.join(boards)
-    work = f"""{source.take_in_script()}cd {source.SOURCE}/rust/beryl3d
-{vm.JOBS_SCRIPT}CARGO_TARGET_DIR={TARGET} {shlex.join(build)}
+    grant = max(1, int(os.environ.get("IGNITE_CORES") or vm.CPUS))
+    work = f"""{runtime_script(channel)}{source.take_in_script()}cd {source.SOURCE}/rust/beryl3d
+{vm.JOBS_SCRIPT}if ((CARGO_BUILD_JOBS > {grant})); then export CARGO_BUILD_JOBS={grant}; fi
+CARGO_TARGET_DIR={TARGET} {shlex.join(build)}
 # The dumps are one file per frame, over a gigabyte for a run. They go on the machine's disk,
 # not `/tmp`, which is a 6 GiB tmpfs: a run that was killed before it removed its directory
 # left it there, and after a few of them Callgrind could not even create its `vgdb` pipe, so
@@ -176,15 +228,19 @@ rm -rf "$HOME"/b3d-counts.*
 out=$(mktemp -d "$HOME/b3d-counts.XXXXXX")
 trap 'rm -rf "$out"' EXIT
 pids=()
+# A completed process stays waitable by ID. Keep every status, even for boards that
+# finished before the next one starts.
+failed=0
 for board in {names}; do
   BERYL_CACHE="$HOME/{source.VM_CACHE}" {shlex.join(callgrind)} \\
     --callgrind-out-file="$out/$board.out" {TARGET}/release/{PROGRAM} "$board" \\
     >"$out/$board.frames" 2>"$out/$board.log" &
   pids+=($!)
+  if ((${{#pids[@]}} >= {grant})); then
+    wait "${{pids[0]}}" || failed=1
+    pids=("${{pids[@]:1}}")
+  fi
 done
-# Each run's own exit status: `wait` on a remembered process ID returns it even after the
-# process ended, where `$(jobs -p)` may no longer list it.
-failed=0
 for pid in "${{pids[@]}}"; do wait "$pid" || failed=1; done
 for board in {names}; do
   if [ ! -s "$out/$board.frames" ]; then cat "$out/$board.log" >&2; failed=1; continue; fi
@@ -197,9 +253,9 @@ done
 # Ubuntu's `~/.bash_logout`, whose `clear_console` fails with no terminal and replaces it.
 test "$failed" = 0
 """
-    provision = vm.provision_script(bench.toolchain())
+    provision = vm.provision_script(channel)
     if wait:
-        return provision + bench.locked(work)
+        return bench.locked(provision + work)
     return bench.locked(provision + work, wait=False)
 
 
@@ -207,11 +263,9 @@ def measure(
     boards: list[str], *, wait: bool = True, pack: Path | None = None
 ) -> str | None:
     """The machine script's output for `boards`, or `None` when the machine could not count."""
-    if platform.machine() not in ("arm64", "aarch64"):
-        bench.log("the frame counts are for Apple silicon's arm64; this machine is not")
-        return None
-    if shutil.which("limactl") is None:
-        bench.log("Lima is missing: brew install lima, then `just b3d vm` once")
+    launcher = "wsl" if system.WINDOWS else "limactl"
+    if shutil.which(launcher) is None:
+        bench.log(f"{launcher} is missing; install it and run `just b3d vm`")
         return None
     if not wait and vm_host.status(vm.NAME) is None:
         bench.log(f"{vm.NAME} is not configured; skipping optional counts")
@@ -243,39 +297,107 @@ def counters(counts: Counted) -> dict[str, float]:
     }
 
 
+def verdict(
+    boards: list[gate.Board], found: dict[str, Counted], budgets: gate.Budgets
+) -> tuple[list[str], list[str]]:
+    failed, said = scaling_failures(found, budgets["scaling"])
+    for board in boards:
+        failures, lines = judge(
+            board.name,
+            found[board.name],
+            budgets["boards"].get(board.name, {}),
+            board.ranked,
+        )
+        failed.extend(failures)
+        said.extend(lines)
+    return failed, said
+
+
+def budgets_for(budgets: gate.Budgets, profile: calibration.Profile) -> gate.Budgets:
+    """The verifier must supply the whole set of instruction limits."""
+    boards = profile.limits.get("boards")
+    scaling = profile.limits.get("scaling")
+    metrics = {"worst_frame_instructions", "total_instructions"}
+    if not isinstance(boards, dict):
+        raise calibration.SetupError(
+            f"{profile.verifier} has no per-board instruction limits"
+        )
+    for board, limits in budgets["boards"].items():
+        overrides = boards.get(board, {})
+        if metrics & limits.keys() and (
+            not isinstance(overrides, dict) or not metrics <= overrides.keys()
+        ):
+            raise calibration.SetupError(
+                f"{profile.verifier} has no instruction limits for {board}"
+            )
+    if not isinstance(scaling, dict) or scaling.keys() != budgets["scaling"].keys():
+        raise calibration.SetupError(
+            f"{profile.verifier} has incomplete frame scaling limits"
+        )
+    for name, reference in budgets["scaling"].items():
+        override = scaling[name]
+        if (
+            not isinstance(override, dict)
+            or override.get("over") != reference["over"]
+            or not metrics <= override.get("limits", {}).keys()
+        ):
+            raise calibration.SetupError(
+                f"{profile.verifier} has no scaling limits for {name} over {reference['over']}"
+            )
+    return gate.profile_budgets(budgets, profile)
+
+
+def collect(
+    boards: list[gate.Board],
+    profile: calibration.Profile,
+    *,
+    wait: bool = True,
+    pack: Path | None = None,
+) -> dict[str, Counted]:
+    output = measure([board.name for board in boards], wait=wait, pack=pack)
+    if output is None:
+        raise calibration.SetupError("Callgrind could not measure the boards")
+    calibration.require_runtime(profile, runtime(output))
+    found = parse(output)
+    for board in boards:
+        counted = found.get(board.name)
+        if counted is None or len(counted.frames) != len(board.frames):
+            raise calibration.SetupError(
+                f"Callgrind did not count every native frame of {board.name}"
+            )
+    return found
+
+
 def run(
     boards: list[gate.Board],
     budgets: gate.Budgets,
     *,
     json_output: bool,
     wait: bool = True,
+    pack: Path | None = None,
 ) -> int:
-    stdout = measure([b.name for b in boards], wait=wait)
-    if stdout is None:
+    try:
+        profile = frame_profiles.registered("instructions")
+        budgets = budgets_for(budgets, profile)
+        found = collect(boards, profile, wait=wait, pack=pack)
+    except calibration.SetupError as error:
+        bench.log(str(error))
         return 2
-    found = parse(stdout)
-    results = []
-    measurements = {}
-    for board in boards:
-        counts = found.get(board.name)
-        if counts is None:
-            bench.log(f"Callgrind reported no counts for {board.name}")
-            return 2
-        results.append(
-            judge(
-                board.name, counts, budgets["boards"].get(board.name, {}), board.ranked
+    failures, said = verdict(boards, found, budgets)
+    if json_output:
+        measurements = {name: counters(board) for name, board in found.items()}
+        print(
+            json.dumps(
+                {
+                    "boards": measurements,
+                    "verifier": profile.verifier,
+                    "calibration": profile.digest,
+                }
             )
         )
-        measurements[board.name] = counters(counts)
-    results.append(scaling_failures(found, budgets["scaling"]))
-    if json_output:
-        print(json.dumps({"boards": measurements}))
-    failed = False
-    for failures, said in results:
-        if not json_output:
-            for line in said:
-                print(line)
-        for line in failures:
-            print(f"FAIL {line}", file=sys.stderr)
-        failed |= bool(failures)
-    return 1 if failed else 0
+    else:
+        for line in said:
+            print(line)
+    for line in failures:
+        print(f"FAIL {line}", file=sys.stderr)
+    return 1 if failures else 0

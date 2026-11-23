@@ -1,0 +1,238 @@
+{
+  "native": {
+    "m-1d943bdd": {
+      "revision": "94f6bed66b0cea2aafabc218bed519950f6fce8c",
+      "fixture": "beryl3d-frame-native/v1",
+      "runtime": {
+        "backend": "native",
+        "os": "Windows",
+        "arch": "amd64",
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+      },
+      "limits": {
+        "base": "budgets.json"
+      }
+    },
+    "m-cf83bfb6": {
+      "revision": "94f6bed66b0cea2aafabc218bed519950f6fce8c",
+      "fixture": "beryl3d-frame-native/v1",
+      "runtime": {
+        "backend": "native",
+        "os": "Darwin",
+        "arch": "arm64",
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+      },
+      "limits": {
+        "base": "budgets.json"
+      }
+    }
+  },
+  "instructions": {
+    "m-cf83bfb6": {
+      "revision": "7b8e150040fe2a932567fa239c7dfe6daa8fe1c6",
+      "fixture": "beryl3d-frame-instructions/v1",
+      "runtime": {
+        "backend": "lima",
+        "guest": "ubuntu 26.04",
+        "arch": "aarch64",
+        "valgrind": "valgrind-3.26.0",
+        "libc": "glibc 2.43",
+        "cc": "15.2.0",
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+      },
+      "limits": {
+        "base": "budgets.json",
+        "boards": {
+          "stress-255": {
+            "worst_frame_instructions": {
+              "max": 6000000,
+              "why": "Jarvis measured up to 5,187,221 instructions. The original limit covers both runs."
+            },
+            "total_instructions": {
+              "max": 98944542,
+              "why": "Jarvis measured up to 80,765,498 instructions. The original limit covers both runs."
+            }
+          },
+          "stress-1024": {
+            "worst_frame_instructions": {
+              "max": 15000000,
+              "why": "Jarvis measured up to 14,337,776 instructions. The original limit covers both runs."
+            },
+            "total_instructions": {
+              "max": 166314131,
+              "why": "Jarvis measured up to 135,096,909 instructions. The original limit covers both runs."
+            }
+          },
+          "stress-verbs": {
+            "worst_frame_instructions": {
+              "max": 12000000,
+              "why": "Jarvis measured up to 11,289,368 instructions. The original limit covers both runs."
+            },
+            "total_instructions": {
+              "max": 120164496,
+              "why": "Jarvis measured up to 95,690,542 instructions. The original limit covers both runs."
+            }
+          },
+          "stress-hand": {
+            "worst_frame_instructions": {
+              "max": 2563000,
+              "why": "Jarvis measured up to 2,440,705 instructions. The limit adds 5% headroom and rounds up to the nearest thousand."
+            },
+            "total_instructions": {
+              "max": 93467000,
+              "why": "Jarvis measured up to 89,015,656 instructions. The limit adds 5% headroom and rounds up to the nearest thousand."
+            }
+          },
+          "stress-stack": {
+            "worst_frame_instructions": {
+              "max": 4000000,
+              "why": "Jarvis measured up to 3,307,439 instructions. The original limit covers both runs."
+            },
+            "total_instructions": {
+              "max": 453052230,
+              "why": "Jarvis measured up to 334,619,760 instructions. The original limit covers both runs."
+            }
+          },
+          "verbs-zones": {
+            "worst_frame_instructions": {
+              "max": 12346000,
+              "why": "Jarvis measured up to 11,757,751 instructions. The limit adds 5% headroom and rounds up to the nearest thousand."
+            },
+            "total_instructions": {
+              "max": 473833380,
+              "why": "Jarvis measured up to 439,807,221 instructions. The original limit covers both runs."
+            }
+          },
+          "pay-default": {
+            "worst_frame_instructions": {
+              "max": 3000000,
+              "why": "Jarvis measured up to 2,769,702 instructions. The original limit covers both runs."
+            },
+            "total_instructions": {
+              "max": 27408000,
+              "why": "Jarvis measured up to 26,102,104 instructions. The limit adds 5% headroom and rounds up to the nearest thousand."
+            }
+          }
+        },
+        "scaling": {
+          "stress-1024": {
+            "over": "stress-255",
+            "limits": {
+              "worst_frame_instructions": {
+                "max": 3.85,
+                "why": "Jarvis measured 2.764. The original ceiling holds."
+              },
+              "total_instructions": {
+                "max": 2.44,
+                "why": "Jarvis measured 1.673. The original ceiling holds."
+              }
+            }
+          }
+        }
+      }
+    },
+    "m-1d943bdd": {
+      "revision": "94f6bed66b0cea2aafabc218bed519950f6fce8c",
+      "fixture": "beryl3d-frame-instructions/v1",
+      "runtime": {
+        "backend": "wsl",
+        "guest": "ubuntu 24.04",
+        "arch": "x86_64",
+        "valgrind": "valgrind-3.22.0",
+        "libc": "glibc 2.39",
+        "cc": "13.3.0",
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+      },
+      "limits": {
+        "base": "budgets.json",
+        "boards": {
+          "stress-255": {
+            "worst_frame_instructions": {
+              "max": 6113000,
+              "why": "Cygnus measured 5,824,750 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            },
+            "total_instructions": {
+              "max": 98944542,
+              "why": "Cygnus measured 93,057,643 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            }
+          },
+          "stress-1024": {
+            "worst_frame_instructions": {
+              "max": 16784000,
+              "why": "Cygnus measured 15,986,967 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            },
+            "total_instructions": {
+              "max": 166314131,
+              "why": "Cygnus measured 151,958,561 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            }
+          },
+          "stress-verbs": {
+            "worst_frame_instructions": {
+              "max": 13692000,
+              "why": "Cygnus measured 13,097,536 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            },
+            "total_instructions": {
+              "max": 120164496,
+              "why": "Cygnus measured 116,058,480 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            }
+          },
+          "stress-hand": {
+            "worst_frame_instructions": {
+              "max": 3007000,
+              "why": "Cygnus measured 2,862,118 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            },
+            "total_instructions": {
+              "max": 106839000,
+              "why": "Cygnus measured 102,730,306 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            }
+          },
+          "stress-stack": {
+            "worst_frame_instructions": {
+              "max": 4429000,
+              "why": "Cygnus measured up to 4,217,979 instructions across two runs. The limit adds 5% headroom and rounds up to the nearest thousand."
+            },
+            "total_instructions": {
+              "max": 453052230,
+              "why": "Cygnus measured 448,558,857 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            }
+          },
+          "verbs-zones": {
+            "worst_frame_instructions": {
+              "max": 14060000,
+              "why": "Cygnus measured 13,384,989 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            },
+            "total_instructions": {
+              "max": 527633000,
+              "why": "Cygnus measured 514,423,281 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            }
+          },
+          "pay-default": {
+            "worst_frame_instructions": {
+              "max": 3245000,
+              "why": "Cygnus measured 3,096,290 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            },
+            "total_instructions": {
+              "max": 31165000,
+              "why": "Cygnus measured 30,689,660 instructions at the reference revision. The previous Cygnus limit covers this measurement."
+            }
+          }
+        },
+        "scaling": {
+          "stress-1024": {
+            "over": "stress-255",
+            "limits": {
+              "worst_frame_instructions": {
+                "max": 3.85,
+                "why": "Cygnus measured 2.745. The original ceiling holds on WSL."
+              },
+              "total_instructions": {
+                "max": 2.44,
+                "why": "Cygnus measured 1.633. The original ceiling holds on WSL."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

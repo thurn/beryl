@@ -23,6 +23,9 @@
     "tools/src/beryl_tools/beryl3d/cli.py": [
       "data/beryl3d/corpus.txt"
     ],
+    "tools/src/beryl_tools/beryl3d/frame_profiles.py": [
+      "data/beryl3d/frame-calibration.json"
+    ],
     "tools/src/beryl_tools/beryl3d/gate.py": [
       "data/beryl3d/budgets.json"
     ],

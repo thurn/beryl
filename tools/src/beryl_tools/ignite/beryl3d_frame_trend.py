@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 
-from ..beryl3d import gate, trend
+from .. import calibration
+from ..beryl3d import counts, frame_profiles, gate, trend
 from . import Result
-from .beryl3d import DEBUG, pack_path, run_out
+from .beryl3d import pack_path
+from .beryl3d_frame_counts import play
 from .rust import asked
 
 FAMILY = "b3d-frame-trend"
@@ -16,27 +19,30 @@ MESSAGE_LIMIT = 1500
 def next_checks() -> list[dict[str, str]]:
     """Ignite runs in the verified checkout. Offer its HEAD once per machine's series."""
     commit = trend.current_commit()
-    if trend.through_commit(trend.load(trend.series_path()), commit):
+    check = f"{FAMILY}:{commit}"
+    try:
+        provenance = trend.current_provenance()
+    except calibration.SetupError as error:
+        print(f"{FAMILY} setup: {error}", file=sys.stderr)
+        return [{"check": check, "digest": commit}]
+    if trend.through_commit(trend.load(trend.series_path(provenance)), commit):
         return []
-    return [{"check": f"{FAMILY}:{commit}", "digest": commit}]
+    return [{"check": check, "digest": f"{commit}:{provenance.digest}"}]
 
 
 def collect() -> trend.Boards:
-    done = run_out([str(DEBUG / "gate")])
-    if done.returncode:
-        raise ValueError(done.stderr.strip() or f"gate exited {done.returncode}")
-    native = gate.report(gate.parse(done.stdout), gate.parse_enhanced(done.stdout))
+    boards, enhanced = play()
+    native = gate.report(boards, enhanced)
 
     # Ignite has already built the gate and its pack. Use them directly and take the
     # benchmark VM only when its own lock permits an optional run.
-    from ..beryl3d import counts
-
-    output = counts.measure(list(native), wait=False, pack=pack_path())
-    instructions = (
-        {board: counts.counters(found) for board, found in counts.parse(output).items()}
-        if output is not None
-        else {}
-    )
+    instructions = {}
+    try:
+        profile = frame_profiles.registered("instructions")
+        found = counts.collect(boards, profile, wait=False, pack=pack_path())
+        instructions = {board: counts.counters(value) for board, value in found.items()}
+    except calibration.SetupError as error:
+        print(f"{FAMILY}: {error}", file=sys.stderr)
     return trend.with_instructions(native, instructions)
 
 
@@ -45,7 +51,13 @@ def run(checks: list[str]) -> list[Result]:
     if not wanted:
         return []
     head = trend.current_commit()
-    path = trend.series_path()
+    try:
+        provenance = trend.current_provenance()
+    except calibration.SetupError as error:
+        return [
+            Result(f"{FAMILY}:{commit}", "incomplete", str(error)) for commit in wanted
+        ]
+    path = trend.series_path(provenance)
     results: list[Result] = []
     for commit in wanted:
         check = f"{FAMILY}:{commit}"
@@ -55,7 +67,7 @@ def run(checks: list[str]) -> list[Result]:
             results.append(Result(check, "incomplete", f"Checkout is now at {head}."))
             continue
         try:
-            history = trend.record(path, commit, collect, reuse=True)
+            history = trend.record(path, commit, collect, provenance, reuse=True)
             lines = trend.regressions(history, gate.read_budgets()["trend"])
         except (OSError, ValueError, subprocess.CalledProcessError) as error:
             # Without a measurement, leave the batch unreported so Ignite can retry it.

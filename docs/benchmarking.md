@@ -205,6 +205,9 @@ that will run the measurement and validates its own limits. Use `Profile.digest`
 in the machine-relative Ignite listing and to scope the trend. Runtime or
 profile errors give setup or incomplete results.
 
+[Frame calibrations](beryl-3d.md#frame-calibrations) describes the native and
+Callgrind profiles for Beryl 3D.
+
 ## Determinism
 
 A benchmark that does different work on different runs can't detect a small

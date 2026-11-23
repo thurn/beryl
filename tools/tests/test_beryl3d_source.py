@@ -96,6 +96,7 @@ def test_a_file_list_longer_than_a_pipe_holds_is_sent(
         return launch(command, **kwargs)
 
     monkeypatch.setattr(subprocess, "Popen", popen)
+    monkeypatch.setattr(source.system, "WINDOWS", False)
     monkeypatch.setattr(source, "sources", lambda: names)
 
     result: list[subprocess.CompletedProcess[str] | None] = []

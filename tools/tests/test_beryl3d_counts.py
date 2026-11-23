@@ -1,6 +1,9 @@
 """`just b3d gate --counts`: reading Callgrind's per-frame counts of a board and holding them to
 their limits."""
 
+import pytest
+
+from beryl_tools import calibration
 from beryl_tools.beryl3d import counts, gate, vm
 
 RANKED = (1, 2)
@@ -115,3 +118,59 @@ def test_the_machine_script_counts_every_board_at_once_under_callgrind() -> None
     assert "--dump-after" not in script
     assert "for board in stress-255 pay-default; do" in script
     assert vm.JOBS_SCRIPT in script
+
+
+def test_count_measurement_requires_matching_tools_and_every_native_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    profile = calibration.Profile(
+        "cygnus", "a" * 40, "beryl3d-frame-instructions/v1", {"backend": "wsl"}, {}
+    )
+    native = gate.Board(
+        "stress-255",
+        [gate.Frame(index, 16 * index, "rest", {}) for index in range(2)],
+        0,
+        None,
+    )
+    guest = output("stress-255", [3, 5])
+    monkeypatch.setattr(
+        counts, "measure", lambda *_a, **_kw: "runtime backend=lima\n" + guest
+    )
+    with pytest.raises(calibration.SetupError, match="incompatible.*backend"):
+        counts.collect([native], profile)
+    monkeypatch.setattr(
+        counts,
+        "measure",
+        lambda *_a, **_kw: "runtime backend=wsl\n" + output("stress-255", [3]),
+    )
+    with pytest.raises(calibration.SetupError, match="every native frame"):
+        counts.collect([native], profile)
+    monkeypatch.setattr(
+        counts, "measure", lambda *_a, **_kw: "runtime backend=wsl\n" + guest
+    )
+    assert counts.collect([native], profile)["stress-255"].total == 8
+
+
+def test_an_instruction_override_cannot_borrow_another_verifiers_limits() -> None:
+    budgets: gate.Budgets = {
+        "boards": {
+            "stress-255": {
+                "worst_frame_instructions": budget(100),
+                "total_instructions": budget(200),
+            }
+        },
+        "enhanced": {},
+        "scaling": {},
+        "trend": {"adjacent_percent": 5, "weekly_percent": 10},
+    }
+    profile = calibration.Profile(
+        "cygnus",
+        "a" * 40,
+        "beryl3d-frame-instructions/v1",
+        {"backend": "wsl"},
+        {"base": "budgets.json", "boards": {}},
+    )
+    with pytest.raises(
+        calibration.SetupError, match="no instruction limits for stress-255"
+    ):
+        counts.budgets_for(budgets, profile)

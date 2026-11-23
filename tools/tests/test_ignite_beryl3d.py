@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import paths
-from beryl_tools.beryl3d import gate, pack, timeline
+from beryl_tools import calibration, paths
+from beryl_tools.beryl3d import frame_profiles, gate, pack, timeline
 from beryl_tools.beryl3d.match import reference, score
 from beryl_tools.beryl3d.match.target import Target
 from beryl_tools.ignite import RESULTS_ENV, Result
@@ -238,6 +238,15 @@ def frame(index: int, **counts: float) -> dict[str, object]:
     return {"frame": index, "ms": index * 16, "phase": "rest", **every, **counts}
 
 
+@pytest.fixture
+def frame_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    profile = calibration.Profile(
+        "fixture", "a" * 40, "beryl3d-frame-native/v1", {}, {"base": "budgets.json"}
+    )
+    monkeypatch.setattr(frame_profiles, "native", lambda: profile)
+
+
+@pytest.mark.usefixtures("frame_profile")
 def test_gate_reports_budget_failures_and_missing_boards(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -308,6 +317,7 @@ def test_gate_reports_budget_failures_and_missing_boards(
         (0, "truncated report", "", "invalid board output"),
     ],
 )
+@pytest.mark.usefixtures("frame_profile")
 def test_gate_runner_failures_report_incomplete_rows(
     returncode: int,
     stdout: str,
@@ -343,6 +353,20 @@ def test_gate_runner_failures_report_incomplete_rows(
     log = capsys.readouterr().err
     assert f"gate exited with status {returncode}" in log
     assert stdout in log and stderr in log
+
+
+def test_native_gate_without_a_profile_cannot_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("IGNITE_MACHINE", "unknown-test-verifier")
+    monkeypatch.setattr(adapter, "cards_by_recording", lambda: {})
+    monkeypatch.setattr(adapter, "gate_boards", lambda: ["stress-255"])
+    (listed,) = adapter.gate_list()
+    assert listed.check == "b3d-gate:stress-255"
+    assert not listed.digest
+    (result,) = adapter.gate_run([listed.check])
+    assert result.outcome == "incomplete"
+    assert "unknown-test-verifier" in result.message
 
 
 def test_b3d_clippy_preserves_diagnostics_after_an_unsuccessful_exit(

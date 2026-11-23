@@ -479,7 +479,9 @@ say only what a program cannot.
   than 10% since the oldest measurement within seven days files a ticket naming
   the commit. `just b3d trend record` measures the current checkout,
   `just b3d trend check` checks the saved counts, and `just b3d trend` shows
-  recent measurements from `$BERYL_CACHE/b3d/trend/frames.jsonl`.
+  recent measurements. Each row records its verifier and calibration digests.
+  The series for the selected profiles lives at
+  `$BERYL_CACHE/b3d/trend/<verifier>/<digest>.jsonl`.
 - **Compile cost** is measured outside the landing gate by Ignite's rebuild
   counts for edits to the prompt bar, button widget, battlefield rows and
   bundled flat-layer tuning. `ignite rebuild b3d-flat-tuning` appends a newline

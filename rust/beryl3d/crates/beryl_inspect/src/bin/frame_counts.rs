@@ -52,8 +52,35 @@ fn client_request(request: usize) {
     }
 }
 
-/// Valgrind has no client requests on other machines, and the count gate runs only on arm64.
-#[cfg(not(target_arch = "aarch64"))]
+/// Valgrind's amd64 request marker is four rotations of `rdi` and `xchg rbx, rbx`.
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn client_request(request: usize) {
+    let block: [usize; 6] = [request, 0, 0, 0, 0, 0];
+    #[expect(
+        unsafe_code,
+        reason = "Valgrind's client requests are an inline instruction sequence"
+    )]
+    // SAFETY: the rotations restore `rdi`. Valgrind reads the live request at `rax`
+    // and returns its result in `rdx`, which is declared as an output.
+    unsafe {
+        std::arch::asm!(
+            "rol rdi, 3",
+            "rol rdi, 13",
+            "rol rdi, 61",
+            "rol rdi, 51",
+            "xchg rbx, rbx",
+            in("rax") block.as_ptr(),
+            inout("rdx") 0_usize => _,
+            options(nostack, readonly),
+        );
+    }
+}
+
+/// Other targets can play back the board without Callgrind collecting anything.
+#[cfg(not(any(
+    target_arch = "aarch64",
+    all(target_os = "linux", target_arch = "x86_64")
+)))]
 fn client_request(_request: usize) {}
 
 fn main() -> ExitCode {

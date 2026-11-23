@@ -33,6 +33,8 @@ class Listed:
     # The workspace package the check belongs to, for a family whose build products are built
     # per package (`crate-closure` in a product's inputs).
     package: str = ""
+    # The local calibration for a machine-relative check.
+    digest: str = ""
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,8 @@ def listed(checks: Iterable[Listed]) -> None:
             line["inputs"] = entry.inputs
         if entry.package:
             line["package"] = entry.package
+        if entry.digest:
+            line["digest"] = entry.digest
         print(json.dumps(line), flush=True)
 
 

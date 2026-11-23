@@ -13,6 +13,15 @@ from beryl_tools.ignite import beryl3d, beryl3d_frame_trend
 BOARD = "stress-255"
 COUNTER = "total_elements"
 START = datetime(2026, 11, 1, tzinfo=UTC)
+PROVENANCE = trend.Provenance("test-verifier", "native-digest", "instruction-digest")
+
+
+@pytest.fixture(autouse=True)
+def calibration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(trend, "current_provenance", lambda: PROVENANCE)
+    monkeypatch.setattr(
+        trend, "series_path", lambda _profile: tmp_path / "frames.jsonl"
+    )
 
 
 def series(path: Path, samples: list[tuple[int, int | None]]) -> None:
@@ -26,6 +35,7 @@ def series(path: Path, samples: list[tuple[int, int | None]]) -> None:
                         "time": (START + timedelta(days=day)).isoformat(),
                         "board": BOARD,
                         "counts": counts,
+                        "provenance": vars(PROVENANCE),
                     }
                 )
                 + "\n"
@@ -51,7 +61,6 @@ def series(path: Path, samples: list[tuple[int, int | None]]) -> None:
 )
 def test_check_compares_the_two_baselines(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     samples: list[tuple[int, int | None]],
     status: int,
@@ -59,7 +68,6 @@ def test_check_compares_the_two_baselines(
 ) -> None:
     path = tmp_path / "frames.jsonl"
     series(path, samples)
-    monkeypatch.setattr(trend, "series_path", lambda: path)
     parser = argparse.ArgumentParser()
     trend.arguments(parser)
     assert trend.run(parser.parse_args(["check"])) == status
@@ -82,10 +90,14 @@ def test_record_keeps_one_row_per_board_and_all_native_counts(
         "other": {"total_instructions": 4},
     }
     history = trend.record(
-        path, "current", lambda: trend.with_instructions(native, instructions)
+        path,
+        "current",
+        lambda: trend.with_instructions(native, instructions),
+        PROVENANCE,
     )
     assert trend.load(path) == history
     assert len(path.read_text().splitlines()) == 3
+    assert history[-1].provenance == PROVENANCE
     assert history[-1].boards == {
         BOARD: {COUNTER: 106, "total_instructions": 200},
         "pay-default": {COUNTER: 29},
@@ -106,6 +118,7 @@ def test_exploration_lists_unmeasured_head_and_reports_its_jump(
                 "time": initial.time.isoformat(),
                 "board": BOARD,
                 "counts": initial.boards[BOARD],
+                "provenance": vars(PROVENANCE),
             }
         )
         + "\n"
@@ -115,12 +128,14 @@ def test_exploration_lists_unmeasured_head_and_reports_its_jump(
     commit = "c" * 40
     family = beryl3d_frame_trend.FAMILY
     check = f"{family}:{commit}"
-    monkeypatch.setattr(trend, "series_path", lambda: path)
     monkeypatch.setattr(trend, "current_commit", lambda: commit)
     monkeypatch.setattr(beryl3d_frame_trend, "collect", lambda: {BOARD: {COUNTER: 106}})
     for verb in ("list", "next"):
         assert beryl3d.main([family, verb]) == 0
-        assert json.loads(capsys.readouterr().out) == {"check": check, "digest": commit}
+        assert json.loads(capsys.readouterr().out) == {
+            "check": check,
+            "digest": f"{commit}:{PROVENANCE.digest}",
+        }
 
     for _ in range(2):
         assert beryl3d.main([family, "run", check]) == 1
@@ -139,8 +154,20 @@ def test_a_saved_check_cannot_measure_a_different_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = tmp_path / "frames.jsonl"
-    monkeypatch.setattr(trend, "series_path", lambda: path)
     monkeypatch.setattr(trend, "current_commit", lambda: "current")
     results = beryl3d_frame_trend.run([f"{beryl3d_frame_trend.FAMILY}:old"])
     assert [result.outcome for result in results] == ["incomplete"]
     assert not path.exists()
+
+
+def test_trend_cannot_compare_samples_from_other_calibrations() -> None:
+    different = trend.Provenance("test-verifier", "other-native", "instruction-digest")
+    history = [
+        trend.Measurement("old", START, {BOARD: {COUNTER: 1}}, different),
+        trend.Measurement(
+            "new", START + timedelta(days=1), {BOARD: {COUNTER: 100}}, PROVENANCE
+        ),
+    ]
+    assert (
+        trend.regressions(history, {"adjacent_percent": 5, "weekly_percent": 10}) == []
+    )

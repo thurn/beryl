@@ -56,6 +56,13 @@ def select(
 
     Callers identify their fixture, observe their runtime and validate their own limits.
     """
+    profile = registered(profiles, fixture)
+    require_runtime(profile, observe())
+    return profile
+
+
+def registered(profiles: Mapping[str, object], fixture: str) -> Profile:
+    """Get the expected profile for a listing that cannot start a measurement."""
     machine = verifier()
     entry = profiles.get(machine)
     if entry is None:
@@ -82,14 +89,18 @@ def select(
         raise SetupError(
             f"calibration for verifier {machine} does not cover fixture {fixture}"
         )
-    live = observe()
-    if runtime != live:
+    return Profile(machine, revision, fixture, runtime, limits)
+
+
+def require_runtime(profile: Profile, live: dict[str, str]) -> None:
+    """Reject a measurement when the running tools differ from its registered profile."""
+    if profile.runtime != live:
         changed = ", ".join(
             k
-            for k in sorted(runtime.keys() | live.keys())
-            if runtime.get(k) != live.get(k)
+            for k in sorted(profile.runtime.keys() | live.keys())
+            if profile.runtime.get(k) != live.get(k)
         )
         raise SetupError(
-            f"incompatible calibration for verifier {machine}: {changed}; recalibrate {fixture}"
+            f"incompatible calibration for verifier {profile.verifier}: {changed}; "
+            f"recalibrate {profile.fixture}"
         )
-    return Profile(machine, revision, fixture, live, limits)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shlex
@@ -15,9 +16,9 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from .. import paths as repo_paths
+from .. import calibration, paths as repo_paths
 from .. import system
-from . import gate, paths
+from . import frame_profiles, gate, paths
 from .command import Command
 
 Boards = dict[str, dict[str, float]]
@@ -26,14 +27,35 @@ WEEK = timedelta(days=7)
 
 
 @dataclass(frozen=True)
+class Provenance:
+    verifier: str
+    native: str
+    instructions: str = ""
+
+    @property
+    def digest(self) -> str:
+        return hashlib.sha256(f"{self.native}:{self.instructions}".encode()).hexdigest()
+
+
+@dataclass(frozen=True)
 class Measurement:
     commit: str
     time: datetime
     boards: Boards
+    provenance: Provenance | None = None
 
 
-def series_path() -> Path:
-    return paths.cache() / "trend" / "frames.jsonl"
+def current_provenance() -> Provenance:
+    native = frame_profiles.native()
+    try:
+        instructions = frame_profiles.registered("instructions").digest
+    except calibration.SetupError:
+        instructions = ""
+    return Provenance(native.verifier, native.digest, instructions)
+
+
+def series_path(provenance: Provenance) -> Path:
+    return paths.cache() / "trend" / provenance.verifier / f"{provenance.digest}.jsonl"
 
 
 def current_commit() -> str:
@@ -44,18 +66,21 @@ def current_commit() -> str:
 
 def load(path: Path) -> list[Measurement]:
     """Read the series in recording order. Every board of a measurement shares its timestamp."""
-    measurements: dict[tuple[str, datetime], Boards] = {}
+    measurements: dict[tuple[str, datetime, Provenance | None], Boards] = {}
     try:
         with path.open(encoding="utf-8") as series:
             for line in series:
                 row = json.loads(line)
-                key = row["commit"], datetime.fromisoformat(row["time"])
+                provenance = (
+                    Provenance(**row["provenance"]) if "provenance" in row else None
+                )
+                key = row["commit"], datetime.fromisoformat(row["time"]), provenance
                 measurements.setdefault(key, {})[row["board"]] = row["counts"]
     except FileNotFoundError:
         pass
     return [
-        Measurement(commit, time, boards)
-        for (commit, time), boards in measurements.items()
+        Measurement(commit, time, boards, provenance)
+        for (commit, time, provenance), boards in measurements.items()
     ]
 
 
@@ -68,7 +93,12 @@ def through_commit(history: list[Measurement], commit: str) -> list[Measurement]
 
 
 def record(
-    path: Path, commit: str, collect: Callable[[], Boards], *, reuse: bool = False
+    path: Path,
+    commit: str,
+    collect: Callable[[], Boards],
+    provenance: Provenance,
+    *,
+    reuse: bool = False,
 ) -> list[Measurement]:
     """Append a complete batch atomically so readers never see half of a commit's boards.
     Exploration can reuse a measurement left by a prior run, including after interruption.
@@ -102,12 +132,17 @@ def record(
                         "time": time.isoformat(),
                         "board": board,
                         "counts": counts,
+                        "provenance": {
+                            "verifier": provenance.verifier,
+                            "native": provenance.native,
+                            "instructions": provenance.instructions,
+                        },
                     }
                     pending.write(json.dumps(row, sort_keys=True) + "\n")
             os.replace(temporary, path)
         finally:
             temporary.unlink(missing_ok=True)
-    return [*history, Measurement(commit, time, boards)]
+    return [*history, Measurement(commit, time, boards, provenance)]
 
 
 def rises(
@@ -130,6 +165,9 @@ def rises(
 
 
 def regressions(history: list[Measurement], limits: gate.TrendLimits) -> list[str]:
+    if history:
+        provenance = history[-1].provenance
+        history = [entry for entry in history if entry.provenance == provenance]
     if len(history) < 2:
         return []
     newest, previous = history[-1], history[-2]
@@ -201,11 +239,12 @@ def show(history: list[Measurement], show_all: bool) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    path = series_path()
     try:
+        provenance = current_provenance()
+        path = series_path(provenance)
         if args.operation == "record":
             commit = current_commit()
-            newest = record(path, commit, collect_gates)[-1]
+            newest = record(path, commit, collect_gates, provenance)[-1]
             print(f"Recorded {len(newest.boards)} boards for {commit} in {path}")
         elif args.operation == "check":
             lines = regressions(load(path), gate.read_budgets()["trend"])

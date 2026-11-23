@@ -17,7 +17,7 @@ from .command import Command
 
 NAME = "beryl3d-bench"
 # The machine's size. The gates build with several compilers at once (`JOBS_SCRIPT`) and the
-# count gate runs the four gated boards under Callgrind at once; with 4 GiB they built with one
+# count gate runs several boards under Callgrind at once. With 4 GiB it built with one
 # compiler, since two of the main workspace's crates built together passed 4 GiB and the kernel
 # killed one.
 CPUS = 8
@@ -33,7 +33,7 @@ JOBS_SCRIPT = (
 # Mesa's Vulkan drivers, among them lavapipe, the software driver the renderer draws on to
 # count fragments, and the Vulkan loader that finds them. `pkg-config` and OpenSSL's headers are
 # for `openssl-sys`, which the renderer's example links through `beryl_art`'s `ureq`.
-GRAPHICS = ("mesa-vulkan-drivers", "libvulkan1", "pkg-config", "libssl-dev")
+GRAPHICS = ("mesa-vulkan-drivers", "libvulkan1", "pkg-config", "libssl-dev", "rsync")
 
 
 def provision_script(channel: str) -> str:

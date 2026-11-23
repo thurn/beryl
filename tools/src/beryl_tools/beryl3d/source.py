@@ -1,9 +1,9 @@
 """Sending this checkout's sources into the `beryl3d-bench` machine, for the gates that build
 there (`counts.py`, `gpu.py`).
 
-The machine mounts only the main checkout, and a worktree is elsewhere, so a
-gate cannot build from the checkout's path. It sends the files its build reads ([`SOURCES`]) as
-a tar stream on the script's stdin, and the script copies them over the machine's own copy,
+Lima mounts only the main checkout. WSL can see each worktree but builds faster on its Linux
+filesystem. A gate sends the files its build reads ([`SOURCES`]) as a tar stream on the script's
+stdin, and the script copies them over the machine's own copy,
 [`SOURCE`], with `rsync --checksum`: a file whose content did not change keeps its time, so Cargo
 rebuilds only what changed.
 """
@@ -11,10 +11,12 @@ rebuilds only what changed.
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path
 
+from .. import bench, system
 from .. import paths as repo_paths
 from .. import vm_host
 from . import paths, vm
@@ -79,6 +81,11 @@ def stream_script(script: str) -> str:
 def run_with_sources(script: str) -> subprocess.CompletedProcess[str] | None:
     """Runs `script` in the machine with the sources as a tar stream, which it reads with
     [`take_in_script`]. Its result, or `None` if only the tar stream failed."""
+    if system.WINDOWS:
+        # Build on the guest's Linux filesystem. The same tar receiver preserves the Cargo
+        # cache even when a different Windows worktree supplies the sources.
+        command = bench.vm_command(stream_script(script), vm.NAME, "/")
+        return vm_host.run_with_sources(command, SOURCES, capture=True)
     # tar reads the file list from a file, not from a pipe this process writes. tar writes the
     # archive while it is still reading names, and nothing reads the archive until the machine's
     # shell starts below. With a list longer than a pipe's buffer, tar would block on its full
@@ -113,16 +120,7 @@ def stream_sources(
         stdout=subprocess.PIPE,
     )
     # From the machine's root, since this checkout's path may not be mounted there.
-    command = [
-        "limactl",
-        "shell",
-        "--workdir",
-        "/",
-        vm.NAME,
-        "bash",
-        "-lc",
-        stream_script(script),
-    ]
+    command = bench.vm_command(stream_script(script), vm.NAME, "/")
     shell = subprocess.Popen(
         command,
         cwd=vm_host.LIMA_HOST_CWD,
@@ -171,6 +169,25 @@ def send_pack(pack: Path | None = None) -> bool:
             return False
         pack = Path(lines[-1])
     directory = f"{VM_CACHE}/b3d"
+    if system.WINDOWS:
+        # The guest receives bytes on stdin just like the source archive. Rename only when the
+        # copy is complete, so another checkout using the same pack can never read half of it.
+        name = shlex.quote(pack.name)
+        script = f"""set -e
+cd "$HOME"
+mkdir -p {directory}
+out=$(mktemp {directory}/.incoming.XXXXXX)
+trap 'rm -f -- "$out"' EXIT
+cat >"$out"
+mv -f -- "$out" {directory}/{name}
+"""
+        with pack.open("rb") as data:
+            return (
+                subprocess.run(
+                    bench.vm_command(script, vm.NAME, "/"), stdin=data, check=False
+                ).returncode
+                == 0
+            )
     make = [
         "limactl",
         "shell",

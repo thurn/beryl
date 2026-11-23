@@ -17,10 +17,13 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict, cast
 
 from .. import paths as repo_paths
 from . import paths
+
+if TYPE_CHECKING:
+    from ..calibration import Profile
 
 BUDGETS: Path = repo_paths.REPO / "data" / "beryl3d" / "budgets.json"
 
@@ -49,6 +52,28 @@ class Budgets(TypedDict):
 
 def read_budgets() -> Budgets:
     return json.loads(BUDGETS.read_text())
+
+
+def profile_budgets(budgets: Budgets, profile: Profile) -> Budgets:
+    """Apply the registered verifier's overrides to the shared semantic limits."""
+    from ..calibration import SetupError
+
+    if profile.limits.get("base") != "budgets.json":
+        raise SetupError(f"{profile.verifier} has no base frame budgets")
+    boards = profile.limits.get("boards", {})
+    scaling = profile.limits.get("scaling", {})
+    if not isinstance(boards, dict) or not isinstance(scaling, dict):
+        raise SetupError(f"{profile.verifier} has invalid frame budgets")
+    limits = cast(dict[str, dict[str, Budget]], boards)
+    return Budgets(
+        boards={
+            name: board | limits.get(name, {})
+            for name, board in budgets["boards"].items()
+        },
+        enhanced=budgets["enhanced"],
+        scaling=budgets["scaling"] | cast(dict[str, Scaling], scaling),
+        trend=budgets["trend"],
+    )
 
 
 # The client core's work counters (`kit_frame::frame::Work`).
@@ -312,6 +337,9 @@ def play(names: list[str], *, json_output: bool) -> tuple[list[Board], list[Tier
 
 
 def run_gate(args: argparse.Namespace) -> int:
+    from .. import calibration
+    from . import frame_profiles
+
     if args.if_free and not args.counts:
         print("gate: --if-free requires --counts", file=sys.stderr)
         return 2
@@ -320,11 +348,17 @@ def run_gate(args: argparse.Namespace) -> int:
         from . import gpu  # It imports `bench`, which Ignite's adapter must not load.
 
         return gpu.run_gpu(list(args.board), budgets, json_output=args.json)
-    boards, enhanced = play(list(args.board), json_output=args.json)
     if args.counts:
         from . import counts  # It imports this module.
 
+        boards, _ = play(list(args.board), json_output=args.json)
         return counts.run(boards, budgets, json_output=args.json, wait=not args.if_free)
+    try:
+        budgets = profile_budgets(budgets, frame_profiles.native())
+    except calibration.SetupError as error:
+        print(f"gate: {error}", file=sys.stderr)
+        return 2
+    boards, enhanced = play(list(args.board), json_output=args.json)
     particle_budget = budgets["enhanced"].get("particles")
     particles = particle_budget["max"] if particle_budget else None
     lines = failures(boards, budgets["boards"])

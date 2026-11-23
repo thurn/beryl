@@ -59,9 +59,6 @@ CARDS: Path = paths.REPO / "rust" / "cards"
 DECKS: Path = paths.REPO / "docs" / "sample-decks"
 
 FRAME_LIMITS = "frame-limits"
-# The one check of `b3d-frame-counts`: Callgrind counts every board at once in the
-# beryl3d-bench machine, and the scaling check compares two boards' counts.
-FRAME_COUNTS = "b3d-frame-counts:boards"
 
 
 def run_out(
@@ -408,8 +405,18 @@ def gate_boards() -> list[str]:
 def gate_list() -> list[Listed]:
     """One check per gated board, each reading the card files of its recording, if it has one
     (the stress boards are made by `beryl_inspect` and have none)."""
+    from .. import calibration
+    from ..beryl3d import frame_profiles
+
     cards = cards_by_recording()
-    return [Listed(f"b3d-gate:{b}", cards.get(b, [])) for b in gate_boards()]
+    digest = ""
+    try:
+        digest = frame_profiles.native().digest
+    except calibration.SetupError as error:
+        print(f"b3d-gate setup: {error}", file=sys.stderr)
+    return [
+        Listed(f"b3d-gate:{b}", cards.get(b, []), digest=digest) for b in gate_boards()
+    ]
 
 
 def gate_results(output: str, wanted: list[str], budgets: gate.Budgets) -> list[Result]:
@@ -436,9 +443,16 @@ def gate_results(output: str, wanted: list[str], budgets: gate.Budgets) -> list[
 
 
 def gate_run(checks: list[str]) -> list[Result]:
+    from .. import calibration
+    from ..beryl3d import frame_profiles
+
     wanted = asked("b3d-gate", checks)
     if not wanted:
         return []
+    try:
+        budgets = gate.profile_budgets(gate.read_budgets(), frame_profiles.native())
+    except calibration.SetupError as error:
+        return [Result(f"b3d-gate:{name}", "incomplete", str(error)) for name in wanted]
     command = [str(exe(DEBUG / "gate"))]
     for name in wanted:
         command += ["--board", name]
@@ -447,7 +461,6 @@ def gate_run(checks: list[str]) -> list[Result]:
     results: list[Result] = []
     missing = f"{status} without a complete Baseline and Enhanced board result"
     if done.returncode == 0:
-        budgets = gate.read_budgets()
         try:
             results = gate_results(done.stdout, wanted, budgets)
         except (KeyError, TypeError, ValueError) as error:
@@ -556,32 +569,15 @@ def timeline_run(checks: list[str]) -> list[Result]:
 
 
 def frame_counts_list() -> list[Listed]:
-    cards = cards_by_recording()
-    boards = sorted({c for b in gate_boards() for c in cards.get(b, [])})
-    return [Listed(FRAME_COUNTS, boards)]
+    from . import beryl3d_frame_counts
+
+    return beryl3d_frame_counts.list_checks()
 
 
 def frame_counts_run(checks: list[str]) -> list[Result]:
-    """Counts every board under Callgrind with `just b3d gate --counts`. Its machine, its
-    toolchain and the sources it sends in are set up by tools/src/beryl_tools/bench.py and
-    beryl3d/vm.py, which this adapter does not import, so it runs the command."""
-    if FRAME_COUNTS not in checks:
-        return []
-    done = run_out(
-        [sys.executable, "-m", "beryl_tools.cli", "b3d", "gate", "--counts"], paths.REPO
-    )
-    if done.returncode == 2:
-        # The machine could not count (no Lima, not Apple silicon): no verdict.
-        print(done.stdout + done.stderr, file=sys.stderr)
-        return []
-    if done.returncode == 0:
-        return [Result(FRAME_COUNTS, "pass")]
-    failures = [
-        line.removeprefix("FAIL ")
-        for line in done.stderr.splitlines()
-        if line.startswith("FAIL ")
-    ]
-    return [Result(FRAME_COUNTS, "fail", "\n".join(failures) or done.stderr.strip())]
+    from . import beryl3d_frame_counts
+
+    return beryl3d_frame_counts.run(checks)
 
 
 # Formatting, clippy and the source rules.
