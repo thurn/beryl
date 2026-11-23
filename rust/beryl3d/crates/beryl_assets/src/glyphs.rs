@@ -33,11 +33,9 @@ pub const FIRST_PAGE: u16 = 1;
 /// past it, and the client would never learn of the glyphs on it.
 const LAST_PAGE: u16 = ATLAS_PAGES - 1;
 
-/// How many of the atlas's last pages glyphs asked for ahead of time ([`GlyphWorker::prepare`])
-/// leave free for the icons and for glyphs laid-out text asks for. At three pixels to a point a
-/// page holds about two hundred glyphs of a body style, so three hold every glyph of a game's
-/// text with room to spare.
-const DEMAND_PAGES: u16 = 3;
+/// The last page available to prewarm printable ASCII. Later pages are for artwork and
+/// glyphs requested by laid-out text, including the extra cells for text shadows.
+const PREWARM_LAST_PAGE: u16 = 4;
 
 /// The keys of the printable ASCII characters, space to tilde, of every type style in
 /// `kit_base::tokens` at `scale` physical pixels per point, for a host to hand to
@@ -130,10 +128,8 @@ impl GlyphWorker {
     }
 
     /// Asks for glyphs ahead of time, so that text drawn in the first frames has them. Unlike
-    /// [`GlyphWorker::request`], it fills only the pages that leave the atlas's last
-    /// `DEMAND_PAGES` free, after the icons and glyphs asked for with it: at two pixels to a
-    /// point and more, the Latin glyphs of every type style would fill more pages than the atlas
-    /// holds. A glyph left out is rasterized when it is requested. Ask for the icons
+    /// [`GlyphWorker::request`], it fills only the first four glyph pages, after the icons and
+    /// glyphs asked for with it. A glyph left out is rasterized when it is requested. Ask for the icons
     /// ([`GlyphWorker::icons`]) first: the worker batches the requests that are waiting, and a
     /// batch rasterizes icons before these glyphs, so asking for these first lets a batch that
     /// holds only them fill the pages the icons need, and which batches form is a matter of
@@ -188,7 +184,7 @@ impl GlyphWorker {
 enum Message {
     /// Glyphs to rasterize.
     Keys(Vec<GlyphKey>),
-    /// Glyphs to rasterize ahead of time, while pages short of the last `DEMAND_PAGES` have room.
+    /// Glyphs to rasterize ahead of time, while the prewarm pages have room.
     Prepare(Vec<GlyphKey>),
     /// Every icon, at this scale.
     Icons(f32),
@@ -234,7 +230,7 @@ fn run(inbox: &Receiver<Message>, out: &Sender<Prepared>, wake: &dyn Fn(), mut i
             prepared.extend(atlas.add_icons(&icons, scale));
         }
         prepared.extend(atlas.add(&keys, LAST_PAGE));
-        prepared.extend(atlas.add(&ahead, LAST_PAGE - DEMAND_PAGES));
+        prepared.extend(atlas.add(&ahead, PREWARM_LAST_PAGE));
         let sent = !prepared.is_empty();
         for page in prepared {
             if out.send(page).is_err() {

@@ -365,7 +365,12 @@ impl Renderer {
     /// or a page past `ATLAS_PAGES`, is not. For a glyph page the host then gives the client
     /// the page's `AssetReady`, so that its text draws.
     pub fn upload_page(&mut self, prepared: &Prepared) -> bool {
-        self.atlas.upload(&self.queue, prepared)
+        let pages = self.atlas.pages();
+        let uploaded = self.atlas.upload(&self.device, &self.queue, prepared);
+        if self.atlas.pages() != pages {
+            self.rebind();
+        }
+        uploaded
     }
 
     /// Keeps a face that arrived during play until `upload_waiting` lets it through.

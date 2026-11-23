@@ -1,5 +1,6 @@
 //! The glyph rasterizer, through its worker: what a host sends and what comes back.
 
+use std::collections::BTreeSet;
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
@@ -9,7 +10,9 @@ use beryl_assets::glyphs::{
 use beryl_assets::packer::PAGE_SIZE;
 use beryl_assets::{Prepared, Upload};
 use kit_base::atlas::{AssetReady, GlyphCell, GlyphKey};
-use kit_text::text::fonts::Font;
+use kit_base::tokens::type_style;
+use kit_text::text::fonts::{ALL, Font};
+use kit_text::text::{Text, glyph_key};
 use swash::FontRef;
 
 /// Only catches a hung worker; a page normally arrives in milliseconds.
@@ -120,6 +123,66 @@ fn glyphs_that_overflow_a_page_go_on_to_the_next() {
         sent, capitals,
         "each glyph is sent once, in the order asked"
     );
+}
+
+#[test]
+fn familiar_text_still_gets_ink_after_eight_atlas_pages() {
+    let (out, results) = mpsc::channel();
+    let worker = GlyphWorker::spawn(out, || {}, || {}, IconSet::default());
+    // Large glyphs fill pages quickly without depending on the timing of real screen changes.
+    for size in [400, 500, 600] {
+        worker.request(('A'..='Z').map(|character| open_sans(character, size)));
+    }
+    worker.flush();
+    let mut highest_page = 0;
+    for prepared in results.try_iter() {
+        if let Upload::AtlasPage { page, .. } = prepared.upload {
+            highest_page = highest_page.max(page);
+        }
+    }
+
+    let mut text = Text::new();
+    let mut expected = BTreeSet::new();
+    for (words, style) in [
+        ("Your Turn", type_style::TURN_BANNER_TITLE),
+        ("Opponent's Turn", type_style::TURN_BANNER_TITLE),
+        ("Discard a basic land card or two cards.", type_style::TITLE),
+        ("Submit 0", type_style::BUTTON),
+        ("Submit 1", type_style::BUTTON),
+        ("Submit 2", type_style::BUTTON),
+        ("Library", type_style::TITLE),
+        ("24 Cards · top first", type_style::BODY),
+        ("Your graveyard", type_style::TITLE),
+        ("1 card", type_style::BODY),
+    ] {
+        let block = text.block(words, style, &[], None);
+        expected.extend(block.glyphs.iter().filter_map(|glyph| {
+            // Spaces have no visible coverage to check.
+            let key = glyph_key(block.run(glyph.run).style, 2.0, glyph.glyph);
+            let font = FontRef::from_index(ALL[usize::from(key.font)].data, 0).unwrap();
+            (key.glyph != font.charmap().map(' ')).then_some(key)
+        }));
+    }
+    worker.request(expected.iter().copied());
+    worker.flush();
+    for prepared in results.try_iter() {
+        let Upload::AtlasPage { pixels, .. } = prepared.upload else {
+            panic!("a glyph worker sends glyph pages");
+        };
+        let AssetReady::Glyphs { glyphs, .. } = prepared.ready else {
+            panic!("a glyph worker sends glyphs");
+        };
+        for cell in glyphs {
+            let [_, _, width, height] = cell.rect;
+            if (0..height)
+                .any(|row| (0..width).any(|column| coverage(&pixels, &cell, column, row) > 0))
+            {
+                expected.remove(&cell.key);
+            }
+        }
+    }
+    assert!(expected.is_empty(), "glyphs without ink: {expected:?}");
+    assert!(highest_page >= 8, "the test filled the original atlas");
 }
 
 #[test]

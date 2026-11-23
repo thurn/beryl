@@ -10,9 +10,8 @@
 /// The width and height of an atlas page, in texels.
 pub const PAGE_SIZE: u16 = 1024;
 
-/// How many pages the atlas holds, 1 MB each: the shapes of light (`crate::light`) and seven of
-/// glyphs and icons (`crate::glyphs`). The renderer makes its atlas texture this deep.
-pub const ATLAS_PAGES: u16 = 8;
+/// How many pages the atlas can grow to, 1 MiB each, including the shapes of light on page 0.
+pub const ATLAS_PAGES: u16 = 32;
 
 /// Shelf heights are rounded up to a multiple of this, so that glyphs a pixel or two apart in
 /// height share a shelf.

@@ -110,6 +110,61 @@ fn rasterize(text: &str) -> (Prepared, Vec<GlyphCell>) {
 }
 
 #[test]
+fn atlas_growth_keeps_the_old_and_new_glyphs_visible() {
+    let (first, cells) = rasterize("P");
+    let Upload::AtlasPage {
+        page: first_page,
+        pixels,
+    } = &first.upload
+    else {
+        panic!("the glyph worker sends a page");
+    };
+    let new_page = 8;
+    let next = Prepared {
+        upload: Upload::AtlasPage {
+            page: new_page,
+            pixels: pixels.clone(),
+        },
+        ready: AssetReady::Glyphs {
+            page: new_page,
+            glyphs: cells.clone(),
+        },
+    };
+    let cell = cells[0];
+    let record = |page, x| {
+        let size = Vec2::new(f32::from(cell.rect[2]), f32::from(cell.rect[3]));
+        let sprite = Sprite {
+            page,
+            rect: cell.rect,
+        };
+        (
+            Band::Layer,
+            Draw::glyph(over(Vec2::new(x, 20.0), size), [255; 4], sprite),
+        )
+    };
+    for limits in BOTH {
+        let mut renderer =
+            Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
+        assert!(renderer.upload_page(&first));
+        assert!(renderer.upload_page(&next), "page 8 must grow the atlas");
+        let pixels = draw(
+            &mut renderer,
+            &[
+                background([0; 3]),
+                record(*first_page, 20.0),
+                record(new_page, 100.0),
+            ],
+        );
+        for x in [20, 100] {
+            let [_, _, width, height] = cell.rect.map(u32::from);
+            let inked = (20..20 + height)
+                .any(|y| (x..x + width).any(|column| at(&pixels, column, y)[0] > 128));
+            assert!(inked, "{limits:?}: no ink at x={x} after growing the atlas");
+        }
+    }
+}
+
+#[test]
 fn white_text_on_a_black_panel_is_inked_in_the_stem_and_empty_in_the_bowl() {
     let (page, cells) = rasterize("Pay");
     let Upload::AtlasPage {
