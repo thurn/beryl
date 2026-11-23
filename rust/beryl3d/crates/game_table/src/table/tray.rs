@@ -46,7 +46,8 @@ pub(crate) struct TrayMotion {
     library: Vec<Pose>,
     arrangement: TrayArrangement,
     zone: Vec<Option<(Pose, bool)>>,
-    from: Vec<Option<Pose>>,
+    from: Vec<Option<Start>>,
+    movement: u64,
     over: Option<(u64, u64)>,
     /// A move that has not begun yet (`over` is `None`).
     waiting: Option<Wait>,
@@ -63,6 +64,14 @@ pub(crate) struct TrayMotion {
     now: u64,
 }
 
+/// A starting pose belongs to one tray movement. A card can leave the tray and later
+/// appear on the battlefield or in a pile under the same slot.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Start {
+    pose: Pose,
+    movement: u64,
+}
+
 impl TrayMotion {
     /// Room for every slot, so that no move allocates.
     pub(crate) fn new() -> Self {
@@ -72,6 +81,7 @@ impl TrayMotion {
             arrangement: TrayArrangement::default(),
             zone: vec![None; OBJECTS],
             from: vec![None; OBJECTS],
+            movement: 0,
             over: None,
             waiting: None,
             letting: Vec::new(),
@@ -107,11 +117,20 @@ impl TrayMotion {
         Some(self.curve.ease(elapsed))
     }
 
-    /// Notes that the card in `slot` moves from `pose`.
+    /// Records a start for the next movement while the current starts are still available
+    /// to sample the positions of cards already moving.
     fn starts(&mut self, slot: usize, pose: Pose) {
         if let Some(from) = self.from.get_mut(slot) {
-            *from = Some(pose);
+            *from = Some(Start {
+                pose,
+                movement: self.movement + 1,
+            });
         }
+    }
+
+    fn from(&self, slot: usize) -> Option<Pose> {
+        let start = self.from.get(slot).copied().flatten()?;
+        (start.movement == self.movement).then_some(start.pose)
     }
 }
 
@@ -213,6 +232,7 @@ impl Table {
             object.visible = true;
             self.objects.cards[slot] = Some(object);
         }
+        self.tray.movement += 1;
         self.held = Some(held);
         self.tray.poses = poses;
         self.tray.library = library;
@@ -269,6 +289,7 @@ impl Table {
             object.visible = visible;
             self.objects.cards[index] = Some(object);
         }
+        self.tray.movement += 1;
         self.tray.poses.clear();
         self.tray.library.clear();
         self.tray.arrangement = TrayArrangement::default();
@@ -337,10 +358,7 @@ impl Table {
     /// whether it moves.
     pub(super) fn tray_look(&self, slot: usize, object: &mut SceneObject, now: u64) -> bool {
         let clip = self.tray_grid_rest(slot, object);
-        let moving = self
-            .tray
-            .share(now)
-            .zip(self.tray.from.get(slot).copied().flatten());
+        let moving = self.tray.share(now).zip(self.tray.from(slot));
         if let Some((share, from)) = moving {
             object.pose = between(&from, &object.pose, share);
         }
@@ -377,7 +395,7 @@ impl Table {
         if !self.tray.leaving {
             return None;
         }
-        self.tray.from.get(slot).copied().flatten()
+        self.tray.from(slot)
     }
 
     /// `placement` with the cards held up in the tray, where this window lays it out.

@@ -80,6 +80,7 @@ const fn split(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
         .hand(P0, &[STOCK_UP, COUNTERSPELL])
+        .hand(P1, &[PLAINS, ISLAND])
         .permanents(P0, SPLITTERS)
         .permanents(P1, WATCHERS)
         .library(

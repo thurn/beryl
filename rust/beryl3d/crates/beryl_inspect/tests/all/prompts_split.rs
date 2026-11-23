@@ -9,9 +9,11 @@ use std::str::FromStr;
 
 use app_client::driver::{Duration, Moment, Page};
 use beryl_inspect::pages::page;
-use beryl_protocol::protocol::Side;
+use beryl_protocol::protocol::{Side, ZoneName};
+use game_table::table::Place;
 use glam::Vec2;
 use kit_base::data::profiles::SizeClass;
+use kit_frame::frame::{ElementId, Role, StateBits};
 use kit_ui::input::{Rect, Size};
 
 const SIZE: Size = Size {
@@ -185,6 +187,86 @@ fn a_look_that_takes_cards_out_of_the_library_holds_them_in_one_fan_with_no_boxe
 /// hand: Counterspell #3, Tundra #6, Counterspell #9, Mana Drain #10, Island #17 and Oust #20.
 const BRAINSTORM: usize = 7;
 
+/// Projected corners of the board cards and piles outside the viewer's chooser.
+fn background(page: &mut Page) -> Vec<(ElementId, [Vec2; 4])> {
+    let mut elements: Vec<_> = page
+        .frame()
+        .resolved
+        .iter()
+        .filter(|element| {
+            matches!(element.role, Role::Card | Role::Pile)
+                && matches!(
+                    Place::in_frame(element.place),
+                    Some(
+                        Place::Card {
+                            zone: ZoneName::Battlefield
+                                | ZoneName::Library
+                                | ZoneName::Graveyard
+                                | ZoneName::Exile,
+                            ..
+                        } | Place::Card {
+                            zone: ZoneName::Hand,
+                            side: Side::Opponent,
+                            ..
+                        }
+                    )
+                )
+        })
+        .map(|element| (element.id, element.corners))
+        .collect();
+    elements.sort_unstable_by_key(|(id, _)| id.0);
+    elements
+}
+
+#[test]
+fn a_put_back_drag_leaves_the_background_still() {
+    let mut page = at_prompt("shape-split", BRAINSTORM);
+    page.press("card #3");
+    page.move_to(Vec2::new(SIZE.width / 2.0, 20.0));
+    page.step(Duration::from_millis(600));
+
+    let board = background(&mut page);
+    let given = page.view_given_at();
+    let projection = page.frame().view_projection;
+    let shake = page.frame().shake;
+    for place in ["battlefield.yours.lands", "hand.theirs", "library.theirs"] {
+        assert!(
+            page.frame()
+                .resolved
+                .iter()
+                .any(|node| node.place.label() == place),
+            "the recorded board has visible elements in {place}"
+        );
+    }
+
+    let drain = page.find("card #10").rect();
+    let grip = Vec2::new(drain.x + drain.width * 0.15, drain.y + drain.height / 2.0);
+    let in_fan = grip + Vec2::new(30.0, 0.0);
+    let top = middle(page.find("card #3").rect());
+    page.hold_between(grip, in_fan);
+    for point in [
+        in_fan,
+        in_fan.lerp(top, 0.5),
+        top,
+        top.lerp(in_fan, 0.5),
+        in_fan,
+    ] {
+        page.move_to(point);
+        page.step(Duration::from_millis(16));
+        assert_eq!(page.view_given_at(), given);
+        let frame = page.frame();
+        assert_eq!(frame.view_projection, projection);
+        assert_eq!(frame.shake, shake);
+        assert!(
+            frame.resolved.iter().any(|node| {
+                node.role == Role::Card && node.id.0 == 10 && node.state.has(StateBits::HELD)
+            }),
+            "Mana Drain is still held at {point}"
+        );
+        assert_eq!(background(&mut page), board, "background at {point}");
+    }
+}
+
 #[test]
 fn a_card_put_back_from_the_hand_is_dropped_on_the_librarys_top_place() {
     let mut page = at_prompt("shape-split", BRAINSTORM);
@@ -216,8 +298,12 @@ fn a_card_put_back_from_the_hand_is_dropped_on_the_librarys_top_place() {
     );
     let grip = Vec2::new(drain.x + drain.width * 0.15, drain.y + drain.height / 2.0);
     let top_place = middle(counterspell) + Vec2::new(0.0, 0.165 * counterspell.height);
+    let board = background(&mut page);
     page.drag_between(grip, top_place);
-    page.step(Duration::from_millis(600));
+    for _ in 0..40 {
+        assert_eq!(background(&mut page), board);
+        page.step(Duration::from_millis(16));
+    }
     page.move_to(Vec2::new(SIZE.width / 2.0, 20.0));
     page.still();
     let drain = page.find("card #10").rect();
@@ -231,4 +317,9 @@ fn a_card_put_back_from_the_hand_is_dropped_on_the_librarys_top_place() {
         "Mana Drain is the library's top card, lowest in its column: {drain:?} and \
          {counterspell:?}"
     );
+
+    page.press("button \"Done\"");
+    page.step(Duration::from_millis(600));
+    assert!(page.try_find("region \"Top\"").is_err());
+    assert!(page.position().0 > BRAINSTORM);
 }

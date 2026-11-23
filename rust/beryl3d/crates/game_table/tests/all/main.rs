@@ -18,4 +18,5 @@ mod clearance;
 mod faces;
 mod paints;
 mod profiles;
+mod tray;
 mod under;
