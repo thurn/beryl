@@ -17,6 +17,7 @@ from beryl_tools.beryl3d.match import (
     fonts,
     joined,
     records,
+    reference,
     samples,
     snapshot,
     target,
@@ -111,6 +112,22 @@ def element(**given: object) -> dict[str, object]:
         ],
     }
     return {**base, **given}
+
+
+def test_web_only_hand_cost_is_excluded_from_shared_counts() -> None:
+    card = element(role="card", object=7, text=[])
+    overlay = element(role="hand-cost", name="{U}", parent=0, key=None, text=[])
+    symbol = element(role="icon", name="{U}", parent=1, key=None)
+    payment = element(role="button", key="auto-pay", name="Auto Pay", text=[])
+    payment_symbol = {**symbol, "parent": 3}
+    web = [card, overlay, symbol, payment, payment_symbol]
+    native = [card, payment, {**payment_symbol, "parent": 1}]
+
+    assert reference.count_shared(web, native) == dict.fromkeys(
+        reference.RECORD_COUNTS, 0
+    )
+    assert reference.count_shared(web, native[:-1])["unmatched"] == 1
+    assert reference.count(web, native)["unmatched"] == 2
 
 
 def document(*elements: dict[str, object]) -> dict[str, object]:

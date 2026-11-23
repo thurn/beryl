@@ -9,7 +9,8 @@
   unmatched, boxes, styles or unsupported count rises above its entry in
   `data/beryl3d/web-match.json`. It reads no file under `ui/` and needs no browser, so a change
   to the web interface runs none of Beryl 3D's checks, and its result depends only on its
-  declared inputs. The pixel count is left out, since it needs the web's picture.
+  declared inputs. Web-only hand cost overlays are excluded from these counts. The pixel
+  count is left out, since it needs the web's picture.
 - **`b3d-web-drift`** is an exploration family with one check for each reference target. It shoots
   the live web interface, compares it with the committed reference, and runs the full score,
   pixels included. It fails when the web interface no longer matches the reference or the score
@@ -110,7 +111,7 @@ def match_one(name: str, document: Mapping[str, Any]) -> Result:
             f"{reference.entry_name(t)} has no entry in {reference.RATCHET.name}; "
             "`just b3d match score --update --raise` adds it",
         )
-    found = Counts(reference.count(web, b3d_records(t)))
+    found = Counts(reference.count_shared(web, b3d_records(t)))
     rose = found.rose(held, RECORD_COUNTS)
     if not rose:
         return Result(check, "pass")

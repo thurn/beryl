@@ -29,7 +29,7 @@
       "role": "pile",
       "name": "^(.*), \\d+ cards?$"
     },
-    { "selector": ".hand-cost", "role": "text" },
+    { "selector": ".hand-cost", "role": "hand-cost" },
     { "selector": ".step-toggle", "role": "toggle" },
     { "selector": ".icon-button", "role": "button" },
     { "selector": ".button, button", "role": "button" },

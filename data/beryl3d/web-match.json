@@ -1,15 +1,15 @@
 {
  "targets": {
   "b3d:combat-attackers/you/1600x900@2#118000ms": {
-   "unmatched": 342,
-   "boxes": 27,
+   "unmatched": 340,
+   "boxes": 26,
    "styles": 17,
    "unsupported": 0,
    "pixels": 649781
   },
   "b3d:combat-attackers/you/1600x900@2#step:163.1.2+205ms": {
-   "unmatched": 350,
-   "boxes": 26,
+   "unmatched": 347,
+   "boxes": 24,
    "styles": 13,
    "unsupported": 0,
    "pixels": 1270458
@@ -29,8 +29,8 @@
    "pixels": 96114
   },
   "b3d:opening-keep/you/1600x900@2": {
-   "unmatched": 275,
-   "boxes": 12,
+   "unmatched": 263,
+   "boxes": 7,
    "styles": 6,
    "unsupported": 0,
    "pixels": 160554

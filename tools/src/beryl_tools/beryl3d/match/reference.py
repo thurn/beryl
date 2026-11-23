@@ -179,6 +179,26 @@ def load(t: Target) -> list[Element] | None:
     return elements
 
 
+def count_shared(web: Sequence[Element], b3d: Sequence[Element]) -> dict[str, int]:
+    """Compare the shared UI. The web floats mana costs above hand cards, as documented
+    in UI Conventions. Keep those records for web drift and omit their subtrees here.
+    """
+    shared: list[Element] = []
+    kept: dict[int, int] = {}
+    # The capture writes parents before children. Remap each parent to its retained index.
+    for index, element in enumerate(web):
+        parent = joined.parent(element)
+        if element.get("role") == "hand-cost" or (
+            parent is not None and parent not in kept
+        ):
+            continue
+        kept[index] = len(shared)
+        shared.append(
+            {**element, "parent": kept[parent] if parent is not None else None}
+        )
+    return count(shared, b3d)
+
+
 def count(web: Sequence[Element], b3d: Sequence[Element]) -> dict[str, int]:
     """The record counts of a target (`RECORD_COUNTS`) from its two sides' elements:
 

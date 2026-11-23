@@ -87,14 +87,14 @@ def pixel_count(t: Target, directory: Path) -> int | None:
 
 
 def measure(t: Target, directory: Path, refresh: bool = False) -> dict[str, int] | None:
-    """All five counts of `t`'s snapshot in `directory`, or None when `b3d-render` failed.
-    With `refresh`, the web side of a reference target is also written as its reference.
+    """Counts for shared elements and the full picture, or None when `b3d-render` failed.
+    With `refresh`, write the complete web element records as the target's reference.
     """
     web = json.loads((directory / "web.json").read_text())["elements"]
     b3d = json.loads((directory / "b3d.json").read_text())["elements"]
     if refresh and t in reference.targets():
         reference.write(t, web)
-    counts = reference.count(web, b3d)
+    counts = reference.count_shared(web, b3d)
     joined.ensure(directory)
     pixels = pixel_count(t, directory)
     if pixels is None:
