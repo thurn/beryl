@@ -14,9 +14,9 @@
 //!   the tip could not be found or run (the last case of `ignite guide blocked`).
 //!
 //! The outcomes come from each session's latest outcome of each check, which the result cache
-//! records on this machine ([`Host::check_sightings`]). When `green` exists, a failure counts
-//! only if the tested tree included that commit. A run on an older tree can finish after
-//! `green` advances.
+//! records on this machine ([`Host::check_sightings`]). When `green` exists, an outcome counts
+//! only if the tested tree included that commit. Culprit searches can report passes on older
+//! revisions while the check still fails at `green`.
 //!
 //! While it lasts, the hub is asked only for tickets that hold `master` back, as it is while
 //! commands wait long for cores (see `work`); `ignite status` and `ignite pool list` say why;
@@ -24,9 +24,9 @@
 //! failure is reported once to the hub as a justiciar report, unless the check is already
 //! assigned to an open regression ticket.
 //!
-//! It ends when the check passes for any session on this machine, when the `green` branch moves,
-//! or after [`LAPSE_S`], whichever is first. Only failures seen after the end can start the next
-//! one. The daemon persists the hold with the dispatch queue (see `store`), so it survives a restart.
+//! It ends when an eligible pass arrives on this machine, when the `green` branch moves, or after
+//! [`LAPSE_S`], whichever is first. Only failures seen after the end can start the next one. The
+//! daemon persists the hold with the dispatch queue (see `store`), so it survives a restart.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -131,10 +131,9 @@ fn detect(
     let mut includes_green = BTreeMap::new();
     for sighting in sightings {
         let head = sighting.head.as_deref();
-        if sighting.outcome == "fail"
-            && !*includes_green
-                .entry(head)
-                .or_insert_with(|| tested_green(ctx, head, green))
+        if !*includes_green
+            .entry(head)
+            .or_insert_with(|| tested_green(ctx, head, green))
         {
             continue;
         }
@@ -239,9 +238,9 @@ impl HeadlessDispatch {
         })
     }
 
-    /// Ends the shared failure in force when its check passed, `green` moved or it lapsed;
-    /// starts one when the sightings show it; and, while one lasts, sends its message to each
-    /// running worker that has not had it.
+    /// Ends the shared failure in force after a pass on a tree including `green`, a `green`
+    /// move or a lapse. Starts a hold when the sightings support one and tells each running
+    /// worker about it once.
     pub(super) fn watch_shared(&self, ctx: &Context, state: &mut State, now: Timestamp) {
         if let Some(current) = &state.shared.current {
             let lapsed = now.seconds_since(current.since) >= LAPSE_S;
@@ -251,11 +250,11 @@ impl HeadlessDispatch {
                 .is_some_and(|green| current.green.as_deref() != Some(green));
             let passed = !lapsed
                 && !moved
-                && self
-                    .host
-                    .check_sightings(current.since)
-                    .iter()
-                    .any(|s| s.check_name == current.check && s.outcome == "pass");
+                && self.host.check_sightings(current.since).iter().any(|s| {
+                    s.check_name == current.check
+                        && s.outcome == "pass"
+                        && tested_green(ctx, s.head.as_deref(), current.green.as_deref())
+                });
             if lapsed || moved || passed {
                 state.shared = Watch {
                     current: None,

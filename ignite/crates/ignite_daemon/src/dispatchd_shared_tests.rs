@@ -182,6 +182,7 @@ fn a_cached_failure_on_the_same_inputs_counts_as_the_same_failure() {
 #[test]
 fn a_pass_of_the_check_ends_it() {
     let (rig, fake) = pool();
+    *lock(&rig.host.green) = Some("bbbb".to_owned());
     sighting(&rig, "cli-claude-00000001", "fail", "boom", 120.0);
     sighting(&rig, "cli-claude-00000002", "fail", "boom", 60.0);
     messages(&rig, &fake);
@@ -194,6 +195,40 @@ fn a_pass_of_the_check_ends_it() {
     assert!(rig.headless_dispatch.shared_failure().is_none());
     assert!(!master_only(&rig, &fake));
     assert!(status(&rig).iter().all(|line| !line.contains(CHECK)));
+}
+
+#[test]
+fn a_historical_pass_does_not_hide_current_shared_failures() {
+    let (rig, fake) = pool();
+    let older = Commit::new("aaaa").unwrap();
+    let green = Commit::new("bbbb").unwrap();
+    rig.git.set_not_ancestor(&green, &older);
+    *lock(&rig.host.green) = Some(green.to_string());
+    sighting(&rig, "cli-claude-00000001", "fail", "boom", 120.0);
+    sighting(&rig, "cli-claude-00000002", "fail", "boom", 60.0);
+    sighting_on(&rig, "cli-claude-00000003", "pass", "", 0.0, Some("aaaa"));
+
+    assert!(master_only(&rig, &fake));
+}
+
+#[test]
+fn a_historical_pass_leaves_the_hold_until_a_descendant_passes() {
+    let (rig, fake) = pool();
+    let older = Commit::new("aaaa").unwrap();
+    let green = Commit::new("bbbb").unwrap();
+    rig.git.set_not_ancestor(&green, &older);
+    *lock(&rig.host.green) = Some(green.to_string());
+    sighting(&rig, "cli-claude-00000001", "fail", "boom", 120.0);
+    sighting(&rig, "cli-claude-00000002", "fail", "boom", 60.0);
+    assert!(master_only(&rig, &fake));
+
+    rig.clock.advance(60.0);
+    sighting_on(&rig, "cli-claude-00000003", "pass", "", 0.0, Some("aaaa"));
+    assert!(master_only(&rig, &fake));
+
+    rig.clock.advance(60.0);
+    sighting_on(&rig, "cli-claude-00000004", "pass", "", 0.0, Some("cccc"));
+    assert!(!master_only(&rig, &fake));
 }
 
 #[test]

@@ -870,5 +870,10 @@
     "label": "Beryl 3D counts the frames scheduled by the native replay runner in its own family, so ordinary interface batches can keep publishing during the corpus-wide frame-limit check.",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Ignite requires a pass on a tree containing green to lift a shared-failure hold, so culprit searches do not send more workers into the current failure.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
