@@ -3,8 +3,8 @@
 //! record says, so they need no span and no step: each is drawn while the record the table
 //! draws the card from says so, and changes as the step that carries a new record begins.
 //!
-//! - Summoning sickness: a moon over the lower half of the card, as the web's `.card-sick-moon`
-//!   leaves the art clear.
+//! - Summoning sickness: a cyan crescent on a dark badge, like the web's `.card-sick-moon`.
+//!   The badge sits over the art to leave the card's text and stats visible.
 //! - A token: a coin at the bottom left, where the web's `.card-counters` row puts its label.
 //! - A permanent its owner does not control: a violet outline, the web's `.card-stolen-edge`.
 //! - An attacker: a wedge past the card's edge toward the defending side, its tip `chevron`
@@ -27,7 +27,7 @@ use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::Look;
 use kit_base::data::light::Own;
-use kit_base::tokens::color;
+use kit_base::tokens::{badge, color};
 use kit_frame::frame::{Band, Draw, FrameBuilder, PaintBand, Sprite, sprites};
 
 /// How a creature fights, as its record says.
@@ -106,8 +106,7 @@ pub(super) fn write(
     let card = builder.card();
     let mut marks = Marks::on(look, own, band, builder);
     if record.summoning_sick {
-        let size = Vec2::splat(own.moon.size * card.x);
-        marks.icon(sprites::MOON, own.moon.at * card, size, color::MOON);
+        marks.moon(own.moon.at * card, own.moon.size * card.x);
     }
     if record.token {
         let size = Vec2::splat(own.coin.size * card.x);
@@ -187,6 +186,28 @@ impl<'b, 'f> Marks<'b, 'f> {
                 Quat::from_rotation_z(turn),
                 (edge.axis * out).extend(0.0),
             )
+    }
+
+    fn moon(&mut self, at: Vec2, diameter: f32) {
+        // The web badge is 1.7 em wide, with a 0.1 em border and a 1.15 em icon.
+        const BORDER_SHARE: f32 = 0.1 / 1.7;
+        const ICON_SHARE: f32 = 1.15 / 1.7;
+        let size = Vec2::splat(diameter);
+        // Keep the backdrop between the card face and the crescent in the depth sort.
+        let mut panel = self.place(at, size, 0.0);
+        panel.translation -= self.card.matrix3.z_axis * (self.own.lift * 0.5);
+        self.builder.draw(
+            self.band,
+            Draw::panel(
+                panel,
+                with_opacity(badge::COUNTER, self.opacity),
+                with_opacity(color::METAL_BRIGHT, self.opacity),
+                size,
+                diameter / 2.0,
+                diameter * BORDER_SHARE,
+            ),
+        );
+        self.icon(sprites::MOON, at, size * ICON_SHARE, color::MOON);
     }
 
     fn icon(&mut self, sprite: Sprite, at: Vec2, size: Vec2, tint: [u8; 4]) {

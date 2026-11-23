@@ -6,6 +6,7 @@ use app_client::{Client, Config};
 use beryl_protocol::protocol::{CardType, Combat, ObjectId, Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::{Affine3A, Vec3};
+use kit_base::tokens::{badge, color};
 use kit_frame::frame::{Band, Draw, Frame, Material, Sprite, sprites};
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Size};
@@ -81,31 +82,63 @@ fn card(frame: &Frame) -> Draw {
     *cards[0]
 }
 
-/// Where `draw`'s middle lies in the card's own space.
-fn on_card(frame: &Frame, draw: &Draw) -> Vec3 {
-    transform(&card(frame))
-        .inverse()
-        .transform_point3(transform(draw).translation.into())
+/// The draw of the dark circular backdrop on a summoning-sickness badge.
+fn moon_backdrops(frame: &Frame) -> impl Iterator<Item = (usize, &Draw)> {
+    frame.draws.iter().enumerate().filter(|(index, draw)| {
+        frame.band(*index) == Some(Band::TableMarks)
+            && draw.material == Material::Panel as u8
+            && draw.tint == badge::COUNTER
+    })
 }
 
 #[test]
-fn a_summoning_sick_creature_has_one_more_record_inside_its_corners() {
-    let well = show(&mut client(), &creature(Side::You, |_| {}), 0);
-    let sick = show(
-        &mut client(),
-        &creature(Side::You, |card| card.summoning_sick = true),
-        0,
-    );
-    assert_eq!(sick.draws.len(), well.draws.len() + 1);
-    let moons = marks(&sick, sprites::MOON);
-    assert_eq!(moons.len(), 1, "one moon");
-    let at = on_card(&sick, &moons[0].1);
-    assert!(
-        at.x.abs() < crate::test_data::data().card.width / 2.0
-            && at.y.abs() < crate::test_data::data().card.height / 2.0,
-        "{at}"
-    );
-    assert!(at.y < 0.0, "the moon is over the lower half: {at}");
+fn the_sickness_badge_follows_the_card_and_leaves_its_text_clear() {
+    for (side, tapped) in [(Side::You, false), (Side::Opponent, true)] {
+        let mut client = client();
+        let sick = show(
+            &mut client,
+            &creature(side, |card| {
+                card.tapped = tapped;
+                card.summoning_sick = true;
+            }),
+            0,
+        );
+        let moons = marks(&sick, sprites::MOON);
+        let backdrops: Vec<_> = moon_backdrops(&sick).collect();
+        assert_eq!(moons.len(), 1, "one crescent");
+        assert_eq!(backdrops.len(), 1, "one contrast backdrop");
+        let (moon_index, moon) = moons[0];
+        let (backdrop_index, backdrop) = backdrops[0];
+        assert!(
+            backdrop_index < moon_index,
+            "the crescent draws over its backdrop"
+        );
+        assert_eq!(moon.tint, color::MOON);
+
+        let to_card = transform(&card(&sick)).inverse();
+        let backdrop_on_card = to_card * transform(backdrop);
+        let moon_on_card = to_card * transform(&moon);
+        let card_size = &crate::test_data::data().card;
+        let center = backdrop_on_card.translation;
+        let diameter = backdrop_on_card.matrix3.x_axis.length();
+        let width_share = diameter / card_size.width;
+        assert!((0.28..0.30).contains(&width_share), "{width_share}");
+        let from_top = 0.5 - center.y / card_size.height;
+        assert!((0.40..0.44).contains(&from_top), "{from_top}");
+        assert!(center.x.abs() < 0.01, "centered on the card: {center}");
+        assert!(backdrop_on_card.matrix3.x_axis.y.abs() < 0.01);
+        let moon_offset = moon_on_card.translation - center;
+        assert!(Vec3::from(moon_offset).truncate().length() < 0.01);
+        assert!(moon_offset.z > 0.0, "the crescent lies above its backdrop");
+
+        let well = show(
+            &mut client,
+            &creature(side, |card| card.tapped = tapped),
+            MS,
+        );
+        assert!(marks(&well, sprites::MOON).is_empty());
+        assert_eq!(moon_backdrops(&well).count(), 0);
+    }
 }
 
 #[test]

@@ -439,10 +439,11 @@ fn tap(x: f32, y: f32) -> f32 {
     fill(band.min(arrow))
 }
 
-/// A moon: a wide crescent, mostly disc, opening right.
+/// The two circular arcs of the web's `sick` icon in `Card.tsx`. The centres and radii
+/// are converted from its 16-unit SVG view box into atlas coordinates with y pointing up.
 fn moon(x: f32, y: f32) -> f32 {
-    let outer = length(x, y) - 0.9;
-    let inner = length(x - 0.6, y + 0.15) - 0.6;
+    let outer = length(x - 0.08310, y + 0.00370) - 0.875;
+    let inner = length(x - 0.59041, y - 0.22509) - 0.7;
     fill(outer.max(-inner))
 }
 
@@ -461,6 +462,12 @@ fn coin(x: f32, y: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_moon_opens_toward_the_upper_right() {
+        assert!(moon(-0.36, -0.33) > 0.99);
+        assert!(moon(0.25, 0.52) < 0.01);
+    }
 
     #[test]
     fn every_cell_of_sprites_has_a_shape() {

@@ -326,8 +326,9 @@ pub const PARTICLES: usize = 2000;
 /// have one, and a line is too long to fit in every card's share.
 pub const TEXT_RECORDS: usize = 2048;
 /// The most records a frame holds, so that ordering the largest board allocates nothing.
+/// Each object can also draw the backdrop of its summoning-sickness badge.
 pub const DRAWS: usize =
-    (OBJECTS + ABILITIES) * RECORDS_PER_OBJECT + LAYER_RECORDS + PARTICLES + TEXT_RECORDS;
+    (OBJECTS + ABILITIES) * RECORDS_PER_OBJECT + OBJECTS + LAYER_RECORDS + PARTICLES + TEXT_RECORDS;
 /// How many bands there are (`Band`).
 pub const BANDS: usize = Band::Foreground as usize + 1;
 /// The most elements of the flat layer a frame holds.
