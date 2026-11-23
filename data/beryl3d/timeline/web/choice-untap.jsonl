@@ -13,20 +13,20 @@
 {"seat":"opponent","view":2,"beat":3,"step":0,"verb":"vanish","case":"exiled","start":2250,"end":2670,"effects":["blanch@start"],"sounds":[["shatter","start",null]]}
 {"seat":"opponent","view":2,"beat":4,"step":0,"verb":"set","case":"library shuffled","start":2670,"end":2670,"effects":[],"sounds":[["fan","start",null]]}
 {"seat":"opponent","view":2,"beat":4,"step":1,"verb":"set","case":"library shuffled","start":2670,"end":2670,"effects":[],"sounds":[["fan","start",null]]}
-{"seat":"opponent","view":2,"beat":5,"step":0,"verb":"fly","case":"opponent draw","start":2670,"end":3145,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":5,"step":1,"verb":"fly","case":"opponent draw","start":2903,"end":3378,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":5,"step":2,"verb":"fly","case":"opponent draw","start":3136,"end":3611,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":5,"step":3,"verb":"fly","case":"opponent draw","start":3369,"end":3844,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":5,"step":4,"verb":"fly","case":"opponent draw","start":3602,"end":4077,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":5,"step":5,"verb":"fly","case":"opponent draw","start":3835,"end":4310,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":5,"step":6,"verb":"fly","case":"opponent draw","start":4068,"end":4543,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":6,"step":0,"verb":"fly","case":"draw of several","start":4543,"end":5243,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":6,"step":1,"verb":"fly","case":"draw of several","start":4776,"end":5476,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":6,"step":2,"verb":"fly","case":"draw of several","start":5009,"end":5709,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":6,"step":3,"verb":"fly","case":"draw of several","start":5242,"end":5942,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":6,"step":4,"verb":"fly","case":"draw of several","start":5475,"end":6175,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":6,"step":5,"verb":"fly","case":"draw of several","start":5708,"end":6408,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":2,"beat":6,"step":6,"verb":"fly","case":"draw of several","start":5941,"end":6641,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":5,"step":0,"verb":"fly","case":"opponent draw","start":2670,"end":3503,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":5,"step":1,"verb":"fly","case":"opponent draw","start":2884.286,"end":3717.286,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":5,"step":2,"verb":"fly","case":"opponent draw","start":3098.571,"end":3931.571,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":5,"step":3,"verb":"fly","case":"opponent draw","start":3312.857,"end":4145.857,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":5,"step":4,"verb":"fly","case":"opponent draw","start":3527.143,"end":4360.143,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":5,"step":5,"verb":"fly","case":"opponent draw","start":3741.429,"end":4574.429,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":5,"step":6,"verb":"fly","case":"opponent draw","start":3955.714,"end":4788.714,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":6,"step":0,"verb":"fly","case":"draw of several","start":4788.714,"end":5788.714,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":6,"step":1,"verb":"fly","case":"draw of several","start":5003,"end":6003,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":6,"step":2,"verb":"fly","case":"draw of several","start":5217.286,"end":6217.286,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":6,"step":3,"verb":"fly","case":"draw of several","start":5431.571,"end":6431.571,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":6,"step":4,"verb":"fly","case":"draw of several","start":5645.857,"end":6645.857,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":6,"step":5,"verb":"fly","case":"draw of several","start":5860.143,"end":6860.143,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":2,"beat":6,"step":6,"verb":"fly","case":"draw of several","start":6074.429,"end":7074.429,"effects":[],"sounds":[["slide","start",null]]}
 {"seat":"you","view":1,"beat":0,"step":0,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
 {"seat":"you","view":2,"beat":0,"step":0,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
 {"seat":"you","view":2,"beat":0,"step":0,"verb":"fly","case":"own spell cast","start":0,"end":370,"effects":[],"sounds":[["cast","start",null]]}
@@ -43,20 +43,20 @@
 {"seat":"you","view":2,"beat":2,"step":0,"verb":"vanish","case":"exiled","start":1420,"end":1840,"effects":["blanch@start"],"sounds":[["shatter","start",null]]}
 {"seat":"you","view":2,"beat":3,"step":0,"verb":"set","case":"library shuffled","start":1840,"end":1840,"effects":[],"sounds":[["fan","start",null]]}
 {"seat":"you","view":2,"beat":3,"step":1,"verb":"set","case":"library shuffled","start":1840,"end":1840,"effects":[],"sounds":[["fan","start",null]]}
-{"seat":"you","view":2,"beat":4,"step":0,"verb":"fly","case":"draw of several","start":1840,"end":2540,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":4,"step":1,"verb":"fly","case":"draw of several","start":2073,"end":2773,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":4,"step":2,"verb":"fly","case":"draw of several","start":2306,"end":3006,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":4,"step":3,"verb":"fly","case":"draw of several","start":2539,"end":3239,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":4,"step":4,"verb":"fly","case":"draw of several","start":2772,"end":3472,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":4,"step":5,"verb":"fly","case":"draw of several","start":3005,"end":3705,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":4,"step":6,"verb":"fly","case":"draw of several","start":3238,"end":3938,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":5,"step":0,"verb":"fly","case":"opponent draw","start":3938,"end":4413,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":5,"step":1,"verb":"fly","case":"opponent draw","start":4171,"end":4646,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":5,"step":2,"verb":"fly","case":"opponent draw","start":4404,"end":4879,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":5,"step":3,"verb":"fly","case":"opponent draw","start":4637,"end":5112,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":5,"step":4,"verb":"fly","case":"opponent draw","start":4870,"end":5345,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":5,"step":5,"verb":"fly","case":"opponent draw","start":5103,"end":5578,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":2,"beat":5,"step":6,"verb":"fly","case":"opponent draw","start":5336,"end":5811,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":4,"step":0,"verb":"fly","case":"draw of several","start":1840,"end":2840,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":4,"step":1,"verb":"fly","case":"draw of several","start":2054.286,"end":3054.286,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":4,"step":2,"verb":"fly","case":"draw of several","start":2268.571,"end":3268.571,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":4,"step":3,"verb":"fly","case":"draw of several","start":2482.857,"end":3482.857,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":4,"step":4,"verb":"fly","case":"draw of several","start":2697.143,"end":3697.143,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":4,"step":5,"verb":"fly","case":"draw of several","start":2911.429,"end":3911.429,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":4,"step":6,"verb":"fly","case":"draw of several","start":3125.714,"end":4125.714,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":5,"step":0,"verb":"fly","case":"opponent draw","start":4125.714,"end":4958.714,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":5,"step":1,"verb":"fly","case":"opponent draw","start":4340,"end":5173,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":5,"step":2,"verb":"fly","case":"opponent draw","start":4554.286,"end":5387.286,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":5,"step":3,"verb":"fly","case":"opponent draw","start":4768.571,"end":5601.571,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":5,"step":4,"verb":"fly","case":"opponent draw","start":4982.857,"end":5815.857,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":5,"step":5,"verb":"fly","case":"opponent draw","start":5197.143,"end":6030.143,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":2,"beat":5,"step":6,"verb":"fly","case":"opponent draw","start":5411.429,"end":6244.429,"effects":[],"sounds":[["slide","start",null]]}
 {"seat":"you","view":2,"beat":0,"step":0,"verb":"mark","case":"selected","start":0,"end":0,"effects":[],"sounds":[],"own":true}
 {"seat":"you","view":2,"beat":0,"step":1,"verb":"mark","case":"selected","start":0,"end":0,"effects":[],"sounds":[],"own":true}
 {"seat":"you","view":2,"beat":0,"step":2,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}

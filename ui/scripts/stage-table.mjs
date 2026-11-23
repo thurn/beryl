@@ -236,7 +236,7 @@ export function recorder() {
 
 /** How long a hand takes to regroup as a card joins or leaves it, as the session sends it
  * (data/ui-conventions.json, fly's `regroup`). */
-export const REGROUP = 170;
+export const REGROUP = 250;
 
 /** What makes room in a step of `act` unless a test says otherwise: as the session times
  * a step that takes a card into or out of a hand (beryl_protocol's `script::timing`), the

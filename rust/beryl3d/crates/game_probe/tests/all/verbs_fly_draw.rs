@@ -185,9 +185,14 @@ type Case = (&'static str, GameUpdate, (GameUpdate, Vec<StepTiming>));
 /// The cases of a draw, each with the session's timing.
 fn cases() -> Vec<Case> {
     let (before, cards) = table();
-    let alone = after(&before, &[&[(cards.library[0], ZoneName::Hand)]]);
+    let mut beginning = before.clone();
+    beginning.view.turn.step = beryl_protocol::protocol::Step::Draw;
+    let mut main = before.clone();
+    main.view.turn.step = beryl_protocol::protocol::Step::PrecombatMain;
+    let turn_draw = after(&beginning, &[&[(cards.library[0], ZoneName::Hand)]]);
+    let fast_draw = after(&main, &[&[(cards.library[0], ZoneName::Hand)]]);
     let several = after(
-        &before,
+        &main,
         &[&[
             (cards.library[0], ZoneName::Hand),
             (cards.library[1], ZoneName::Hand),
@@ -196,8 +201,9 @@ fn cases() -> Vec<Case> {
     );
     let theirs = after(&before, &[&[(cards.their_library[0], ZoneName::Hand)]]);
     vec![
-        ("draw", before.clone(), alone),
-        ("draw of several", before.clone(), several),
+        ("draw", beginning, turn_draw),
+        ("fast draw", main.clone(), fast_draw),
+        ("draw of several", main, several),
         ("opponent draw", before, theirs),
     ]
 }
@@ -330,6 +336,28 @@ fn an_opponents_draw_follows_the_four_node_spline_face_down() {
     assert!(
         apex_pos.x < drop_pos.x - 40.0 && apex_pos.y > end_pos.y + 40.0,
         "sweeps left across upper centre before entering hand: {apex_pos:?}"
+    );
+    // Opponent hand is mirrored across the table so a newly drawn card enters the leftmost slot,
+    // sweeping continuously left without hooking back to the right.
+    assert!(
+        end_pos.x < apex_pos.x,
+        "newly drawn opponent card lands to the left of the sweep apex: {end_pos:?} vs {apex_pos:?}"
+    );
+    let existing_x = on_screen(
+        &show,
+        flight(&show)
+            .finals
+            .get(usize::from(cards.their_spell.0))
+            .copied()
+            .flatten()
+            .expect("existing opponent hand card is placed"),
+    )
+    .x;
+    assert!(
+        end_pos.x < existing_x,
+        "newly drawn opponent card lands left of existing hand cards: {} vs {}",
+        end_pos.x,
+        existing_x
     );
     let camera = show.table().camera();
     for share in [0.0, 0.25, 0.5, 0.75, 1.0] {

@@ -5,12 +5,17 @@
 //! turning across edge-on in mid-flight, leaning into a 3D flourish, pausing at a hold point, and
 //! settling into rest (or dropping down a flank and sweeping across the frame).
 //!
-//! `Spline` packs its control nodes and timing curve into 80 bytes so `Shape` and `Segment` stay
-//! compact, `Copy`, and zero-allocation on animation frames.
+//! Positions are interpolated in homogeneous camera-ray space `(ray * w, w)` weighted by each
+//! node's reference frustum depth ratio `w = 1 / rel_scale`, then placed along the active camera
+//! depth curve. That reproduces a reference camera's exact screen-space trajectory and velocity
+//! profile even when the endpoints sit at very different depths in the local camera frustum.
+//!
+//! `Spline` packs its control nodes and timing curve into 86 bytes (align 2) so `Shape` stays 88
+//! bytes and `Segment` stays 248 bytes, `Copy`, and zero-allocation on animation frames.
 
 use std::f32::consts::{FRAC_1_SQRT_2, PI};
 
-use glam::{Quat, Vec3};
+use glam::{Quat, Vec3, Vec4};
 
 use super::Pose;
 
@@ -21,14 +26,19 @@ pub const MAX_SPLINE_INTERIOR: usize = 4;
 /// Maximum number of keyframes in a piecewise cubic Hermite timing curve.
 pub const MAX_HERMITE_KEYS: usize = 4;
 
-/// Position quantization resolution in millimetres (`0.25 mm`, covering `+-8191 mm` from `to`).
-const POS_SCALE: f32 = 4.0;
+/// Camera eye quantization resolution (`0.5 mm`, covering `+-16383 mm`).
+const EYE_SCALE: f32 = 2.0;
+/// Unit-depth camera ray XY quantization (covering `+-2.0` at `0.000061` precision).
+const RAY_SCALE: f32 = 16384.0;
+/// Node depth quantization (`0.25 mm`, covering `0..16383 mm`).
+const DEPTH_SCALE: f32 = 4.0;
 /// Seen-scale ratio quantization (`ratio = seen / to_seen`, covering `0..8x`).
 const RATIO_SCALE: f32 = 8191.0;
 /// Hermite slope quantization (covering `-8..+8`).
 const SLOPE_SCALE: f32 = 4096.0;
-/// Camera eye projection quantization (`0.5 mm`, covering `0..32767 mm`).
-const EYE_SCALE: f32 = 2.0;
+/// Six-bit frustum depth weight range `[WEIGHT_MIN, WEIGHT_MIN + WEIGHT_SPAN]`.
+const WEIGHT_MIN: f32 = 0.5;
+const WEIGHT_SPAN: f32 = 1.0;
 
 const FLAG_FLIPS: u8 = 1 << 4;
 const FLAG_HALF_TURN: u8 = 1 << 5;
@@ -106,6 +116,9 @@ pub struct SplineNode {
     /// Apparent screen scale (`scale / depth`), preserving exact on-screen card size regardless
     /// of how far the card sits in front of the camera.
     pub seen_scale: f32,
+    /// Reference frustum depth ratio (`1 / rel_scale`) used as the homogeneous weight for
+    /// perspective-matched Catmull-Rom ray interpolation.
+    pub weight: f32,
 }
 
 /// Compact 12-byte representation of a 3- or 4-keyframe draw timing curve starting at `(0, 0)`
@@ -168,12 +181,26 @@ impl PackedHermite {
     }
 }
 
+/// Unpacked node in homogeneous ray space used during spline evaluation.
+#[derive(Clone, Copy)]
+struct EvalNode {
+    ray: Vec3,
+    depth: f32,
+    weight: f32,
+    rotation: Quat,
+    seen_scale: f32,
+}
+
 /// A resolved multi-node card spline between `Segment::from` (node `0`) and `Segment::to`
-/// (node `count + 1`), packed into 80 bytes so `Segment` stays compact and `Copy`.
+/// (node `count + 1`), packed into 86 bytes (align 2) so `Segment` stays compact and `Copy`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Spline {
-    /// Interior positions relative to `Segment::to.position`, quantized at `0.25 mm`.
-    interior_pos: [[i16; 3]; MAX_SPLINE_INTERIOR],
+    /// Camera eye position in millimetres, quantized at `0.5 mm`.
+    eye: [i16; 3],
+    /// Interior unit-depth camera ray `(x, y)` coordinates (`z` reconstructed from `ray · back = -1`).
+    interior_ray_xy: [[i16; 2]; MAX_SPLINE_INTERIOR],
+    /// Interior depths in front of `eye`, quantized at `0.25 mm`.
+    interior_depth: [u16; MAX_SPLINE_INTERIOR],
     /// Interior rotations as smallest-three unit quaternions.
     interior_rot: [[i16; 3]; MAX_SPLINE_INTERIOR],
     /// Interior apparent screen scales as ratios of `to`'s apparent scale.
@@ -182,11 +209,11 @@ pub struct Spline {
     ease: PackedHermite,
     /// Camera backward unit vector (`x, y` quantized; `z` reconstructed from unit length).
     camera_back_xy: [i16; 2],
-    /// `camera.eye.dot(camera_back)` quantized at `0.5 mm`.
-    eye_along_back: u16,
     /// When retargeted mid-flight by `Segment::through`, the eased progress `u0` at which
     /// `Segment::from` was replaced with the instantaneous pose.
     anchor_u: u16,
+    /// Five 6-bit homogeneous frustum depth weights (`from` followed by up to 4 interior nodes).
+    weights: [u8; 4],
     /// Two-bit largest-component index for each of the four smallest-three quaternions.
     rot_largest: u8,
     /// Low 3 bits: interior node count (`1..=4`); bit 3: 4-key Hermite curve; high 4 bits: flags.
@@ -223,6 +250,28 @@ fn pack_scaled_i16(value: f32, scale: f32) -> i16 {
 )]
 fn pack_scaled_u16(value: f32, scale: f32) -> u16 {
     (value * scale).round().clamp(0.0, f32::from(u16::MAX)) as u16
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "weight is clamped to [0, 63]"
+)]
+fn pack_weights(values: [f32; 5]) -> [u8; 4] {
+    let mut bits = 0u32;
+    for (i, &w) in values.iter().enumerate() {
+        let q = (((w - WEIGHT_MIN) / WEIGHT_SPAN).clamp(0.0, 1.0) * 63.0).round() as u32;
+        bits |= (q & 0x3f) << (i * 6);
+    }
+    bits.to_le_bytes()
+}
+
+fn unpack_weight(bytes: [u8; 4], index: usize) -> f32 {
+    let bits = u32::from_le_bytes(bytes);
+    let q = (bits >> (index * 6)) & 0x3f;
+    #[expect(clippy::cast_precision_loss, reason = "q is 0..64")]
+    let share = q as f32 / 63.0;
+    WEIGHT_MIN + share * WEIGHT_SPAN
 }
 
 /// Packs a unit quaternion into its 3 smallest components plus a 2-bit largest-component index.
@@ -280,12 +329,13 @@ fn catmull_rom_f32(p: f32, c: f32, f: f32, ff: f32, t: f32) -> f32 {
         + (-p + 3.0 * c - 3.0 * f + ff) * t3)
 }
 
-/// Evaluates one 3D uniform cubic Catmull-Rom segment between `c` and `f`.
-fn catmull_rom_vec3(p: Vec3, c: Vec3, f: Vec3, ff: Vec3, t: f32) -> Vec3 {
-    Vec3::new(
+/// Evaluates one 4D homogeneous uniform cubic Catmull-Rom segment between `c` and `f`.
+fn catmull_rom_vec4(p: Vec4, c: Vec4, f: Vec4, ff: Vec4, t: f32) -> Vec4 {
+    Vec4::new(
         catmull_rom_f32(p.x, c.x, f.x, ff.x, t),
         catmull_rom_f32(p.y, c.y, f.y, ff.y, t),
         catmull_rom_f32(p.z, c.z, f.z, ff.z, t),
+        catmull_rom_f32(p.w, c.w, f.w, ff.w, t),
     )
 }
 
@@ -304,32 +354,48 @@ impl Spline {
     #[must_use]
     pub fn new(
         nodes: &[SplineNode],
+        from_weight: f32,
         to: &Pose,
         ease: HermiteCurve,
         (flips, start_half_turn): (bool, bool),
-        (camera_back, eye_along_back): (Vec3, f32),
+        (camera_eye, camera_back): (Vec3, Vec3),
     ) -> Self {
         let count = nodes.len().min(MAX_SPLINE_INTERIOR);
         let back = camera_back.normalize();
-        let to_depth = (eye_along_back - to.position.dot(back)).max(1.0);
+        let eye_packed = [
+            pack_scaled_i16(camera_eye.x, EYE_SCALE),
+            pack_scaled_i16(camera_eye.y, EYE_SCALE),
+            pack_scaled_i16(camera_eye.z, EYE_SCALE),
+        ];
+        let eye = Vec3::new(
+            f32::from(eye_packed[0]) / EYE_SCALE,
+            f32::from(eye_packed[1]) / EYE_SCALE,
+            f32::from(eye_packed[2]) / EYE_SCALE,
+        );
+        let to_depth = (eye - to.position).dot(back).max(1.0);
         let to_seen = (to.scale / to_depth).max(1e-6);
 
-        let mut interior_pos = [[0i16; 3]; MAX_SPLINE_INTERIOR];
+        let mut interior_ray_xy = [[0i16; 2]; MAX_SPLINE_INTERIOR];
+        let mut interior_depth = [0u16; MAX_SPLINE_INTERIOR];
         let mut interior_rot = [[0i16; 3]; MAX_SPLINE_INTERIOR];
         let mut interior_scale = [0u16; MAX_SPLINE_INTERIOR];
+        let mut weight_list = [1.0f32; 5];
+        weight_list[0] = from_weight;
         let mut rot_largest = 0u8;
 
         for (i, node) in nodes.iter().take(count).enumerate() {
-            let delta = node.position - to.position;
-            interior_pos[i] = [
-                pack_scaled_i16(delta.x, POS_SCALE),
-                pack_scaled_i16(delta.y, POS_SCALE),
-                pack_scaled_i16(delta.z, POS_SCALE),
+            let depth = (eye - node.position).dot(back).max(1.0);
+            let ray = (node.position - eye) / depth;
+            interior_ray_xy[i] = [
+                pack_scaled_i16(ray.x, RAY_SCALE),
+                pack_scaled_i16(ray.y, RAY_SCALE),
             ];
+            interior_depth[i] = pack_scaled_u16(depth, DEPTH_SCALE);
             let (packed_q, largest) = pack_quat(node.rotation);
             interior_rot[i] = packed_q;
             rot_largest |= (largest & 3) << (i * 2);
             interior_scale[i] = pack_scaled_u16(node.seen_scale / to_seen, RATIO_SCALE);
+            weight_list[i + 1] = if node.weight > 0.0 { node.weight } else { 1.0 };
         }
 
         let (packed_ease, four_keys) = PackedHermite::pack(ease);
@@ -349,7 +415,9 @@ impl Spline {
         }
 
         Self {
-            interior_pos,
+            eye: eye_packed,
+            interior_ray_xy,
+            interior_depth,
             interior_rot,
             interior_scale,
             ease: packed_ease,
@@ -357,8 +425,8 @@ impl Spline {
                 pack_scaled_i16(back.x, f32::from(i16::MAX)),
                 pack_scaled_i16(back.y, f32::from(i16::MAX)),
             ],
-            eye_along_back: pack_scaled_u16(eye_along_back, EYE_SCALE),
             anchor_u: 0,
+            weights: pack_weights(weight_list),
             rot_largest,
             flags,
         }
@@ -384,6 +452,14 @@ impl Spline {
         self.flags & FLAG_RETARGETED != 0
     }
 
+    fn eye(&self) -> Vec3 {
+        Vec3::new(
+            f32::from(self.eye[0]) / EYE_SCALE,
+            f32::from(self.eye[1]) / EYE_SCALE,
+            f32::from(self.eye[2]) / EYE_SCALE,
+        )
+    }
+
     fn camera_back(&self) -> Vec3 {
         let x = f32::from(self.camera_back_xy[0]) / f32::from(i16::MAX);
         let y = f32::from(self.camera_back_xy[1]) / f32::from(i16::MAX);
@@ -396,13 +472,9 @@ impl Spline {
         Vec3::new(x, y, z)
     }
 
-    fn eye_along_back(&self) -> f32 {
-        f32::from(self.eye_along_back) / EYE_SCALE
-    }
-
     /// Distance of `position` in front of the camera eye, along the line of sight.
-    fn depth(&self, position: Vec3) -> f32 {
-        (self.eye_along_back() - position.dot(self.camera_back())).max(1.0)
+    fn depth(position: Vec3, eye: Vec3, back: Vec3) -> f32 {
+        (eye - position).dot(back).max(1.0)
     }
 
     /// Total number of nodes including endpoints (`2..=MAX_SPLINE_INTERIOR + 2`).
@@ -411,9 +483,10 @@ impl Spline {
     }
 
     /// Control node `index` in `0..self.total_nodes()`, clamping endpoints to `from` and `to`.
-    fn node(&self, from: &Pose, to: &Pose, index: usize) -> SplineNode {
+    fn node(&self, from: &Pose, to: &Pose, index: usize, eye: Vec3, back: Vec3) -> EvalNode {
         let last = self.total_nodes() - 1;
         if index == 0 {
+            let depth = Self::depth(from.position, eye, back);
             let base_rot = if self.flips() {
                 effective_rotation(from)
             } else {
@@ -424,36 +497,46 @@ impl Spline {
             } else {
                 base_rot
             };
-            SplineNode {
-                position: from.position,
+            EvalNode {
+                ray: (from.position - eye) / depth,
+                depth,
+                weight: unpack_weight(self.weights, 0),
                 rotation,
-                seen_scale: from.scale / self.depth(from.position),
+                seen_scale: from.scale / depth,
             }
         } else if index >= last {
-            SplineNode {
-                position: to.position,
+            let depth = Self::depth(to.position, eye, back);
+            EvalNode {
+                ray: (to.position - eye) / depth,
+                depth,
+                weight: 1.0,
                 rotation: if self.flips() {
                     effective_rotation(to)
                 } else {
                     to.rotation
                 },
-                seen_scale: to.scale / self.depth(to.position),
+                seen_scale: to.scale / depth,
             }
         } else {
             let slot = index - 1;
-            let raw_pos = self.interior_pos[slot];
-            let position = to.position
-                + Vec3::new(
-                    f32::from(raw_pos[0]) / POS_SCALE,
-                    f32::from(raw_pos[1]) / POS_SCALE,
-                    f32::from(raw_pos[2]) / POS_SCALE,
-                );
+            let rx = f32::from(self.interior_ray_xy[slot][0]) / RAY_SCALE;
+            let ry = f32::from(self.interior_ray_xy[slot][1]) / RAY_SCALE;
+            let bz = if back.z.abs() > 1e-4 {
+                back.z
+            } else {
+                1.0f32.copysign(back.z)
+            };
+            let rz = (-1.0 - rx * back.x - ry * back.y) / bz;
+            let depth = (f32::from(self.interior_depth[slot]) / DEPTH_SCALE).max(40.0);
             let largest = (self.rot_largest >> (slot * 2)) & 3;
             let rotation = unpack_quat(self.interior_rot[slot], largest);
-            let to_seen = to.scale / self.depth(to.position);
+            let to_depth = Self::depth(to.position, eye, back);
+            let to_seen = to.scale / to_depth;
             let seen_scale = to_seen * (f32::from(self.interior_scale[slot]) / RATIO_SCALE);
-            SplineNode {
-                position,
+            EvalNode {
+                ray: Vec3::new(rx, ry, rz),
+                depth,
+                weight: unpack_weight(self.weights, index),
                 rotation,
                 seen_scale,
             }
@@ -461,7 +544,7 @@ impl Spline {
     }
 
     /// Evaluates raw position, orientation, and apparent screen scale at eased progress `u`.
-    fn raw_at(&self, from: &Pose, to: &Pose, u: f32) -> (Vec3, Quat, f32) {
+    fn raw_at(&self, from: &Pose, to: &Pose, u: f32, eye: Vec3, back: Vec3) -> (Vec3, Quat, f32) {
         let total = self.total_nodes();
         let spans = total - 1;
         #[expect(
@@ -481,20 +564,27 @@ impl Spline {
         )]
         let local_t = (scaled - index as f32).clamp(0.0, 1.0);
 
-        let c = self.node(from, to, index);
-        let f = self.node(from, to, index + 1);
-        let p_pos = if index == 0 {
-            c.position * 2.0 - f.position
+        let c = self.node(from, to, index, eye, back);
+        let f = self.node(from, to, index + 1, eye, back);
+        let hom = |n: EvalNode| (n.ray * n.weight).extend(n.weight);
+        let (hc, hf) = (hom(c), hom(f));
+        let (hp, dp) = if index == 0 {
+            (hc * 2.0 - hf, c.depth * 2.0 - f.depth)
         } else {
-            self.node(from, to, index - 1).position
+            let prev = self.node(from, to, index - 1, eye, back);
+            (hom(prev), prev.depth)
         };
-        let ff_pos = if index + 2 >= total {
-            f.position * 2.0 - c.position
+        let (hff, dff) = if index + 2 >= total {
+            (hf * 2.0 - hc, f.depth * 2.0 - c.depth)
         } else {
-            self.node(from, to, index + 2).position
+            let next = self.node(from, to, index + 2, eye, back);
+            (hom(next), next.depth)
         };
 
-        let position = catmull_rom_vec3(p_pos, c.position, f.position, ff_pos, local_t);
+        let h_u = catmull_rom_vec4(hp, hc, hf, hff, local_t);
+        let ray = h_u.truncate() / h_u.w.max(1e-4);
+        let depth = catmull_rom_f32(dp, c.depth, f.depth, dff, local_t).max(40.0);
+        let position = eye + ray * depth;
         let rotation = c.rotation.slerp(f.rotation, local_t);
         let seen_scale = c.seen_scale + (f.seen_scale - c.seen_scale) * local_t;
         (position, rotation, seen_scale)
@@ -503,9 +593,12 @@ impl Spline {
     /// Evaluates the full `Pose` at normalized elapsed time `elapsed` in `[0, 1]`.
     #[must_use]
     pub fn pose_at(&self, from: &Pose, to: &Pose, elapsed: f32) -> Pose {
+        let eye = self.eye();
+        let camera_back = self.camera_back();
         let curve = self.ease.unpack(self.four_keys());
         let u = curve.evaluate(elapsed);
-        let (mut position, mut world_rot, mut seen_scale) = self.raw_at(from, to, u);
+        let (mut position, mut world_rot, mut seen_scale) =
+            self.raw_at(from, to, u, eye, camera_back);
 
         // After a mid-flight resize (`Segment::through`), `from` holds the exact pose at
         // `anchor_u`. Blend smoothly from `from` (weight 1 at `anchor_u`) onto the spline
@@ -520,14 +613,13 @@ impl Spline {
             } else {
                 from.rotation
             };
-            let anchor_seen = from.scale / self.depth(from.position);
+            let anchor_seen = from.scale / Self::depth(from.position, eye, camera_back);
             position = position.lerp(from.position, keep);
             world_rot = world_rot.slerp(anchor_rot, keep);
             seen_scale = seen_scale + (anchor_seen - seen_scale) * keep;
         }
 
-        let scale = seen_scale.max(1e-6) * self.depth(position);
-        let camera_back = self.camera_back();
+        let scale = seen_scale.max(1e-6) * Self::depth(position, eye, camera_back);
         let (rotation, turn) = if self.flips() {
             let front_faces_camera = (world_rot * Vec3::Z).dot(camera_back) >= 0.0;
             if front_faces_camera {
@@ -583,171 +675,5 @@ impl Spline {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::pose::Segment;
-
-    fn local_ease() -> HermiteCurve {
-        HermiteCurve {
-            keys: [
-                HermiteKey {
-                    time: 0.0,
-                    value: 0.0,
-                    in_slope: 0.0,
-                    out_slope: 0.0,
-                },
-                HermiteKey {
-                    time: 0.57859,
-                    value: 0.8,
-                    in_slope: 0.0,
-                    out_slope: 0.0,
-                },
-                HermiteKey {
-                    time: 0.70068,
-                    value: 0.8,
-                    in_slope: 0.0,
-                    out_slope: 0.0,
-                },
-                HermiteKey {
-                    time: 0.94951,
-                    value: 1.0,
-                    in_slope: 0.0,
-                    out_slope: 0.0,
-                },
-            ],
-            len: 4,
-        }
-    }
-
-    fn opponent_ease() -> HermiteCurve {
-        HermiteCurve {
-            keys: [
-                HermiteKey {
-                    time: 0.0,
-                    value: 0.0,
-                    in_slope: 0.0,
-                    out_slope: 0.0,
-                },
-                HermiteKey {
-                    time: 0.04998,
-                    value: 0.0,
-                    in_slope: 0.0,
-                    out_slope: 1.03272,
-                },
-                HermiteKey {
-                    time: 1.0,
-                    value: 1.0,
-                    in_slope: 0.0,
-                    out_slope: 0.0,
-                },
-                HermiteKey::default(),
-            ],
-            len: 3,
-        }
-    }
-
-    #[test]
-    fn segment_stays_within_value_size_budget() {
-        assert!(
-            std::mem::size_of::<Segment>() <= 256,
-            "Segment grew to {} bytes",
-            std::mem::size_of::<Segment>()
-        );
-    }
-
-    #[test]
-    fn hermite_local_draw_holds_flat_plateau_and_settles_at_one() {
-        let curve = local_ease();
-        assert!((curve.evaluate(0.0) - 0.0).abs() < 1e-6);
-        assert!((curve.evaluate(0.57859) - 0.8).abs() < 1e-6);
-        assert!((curve.evaluate(0.64) - 0.8).abs() < 1e-6);
-        assert!((curve.evaluate(0.70068) - 0.8).abs() < 1e-6);
-        assert!((curve.evaluate(0.94951) - 1.0).abs() < 1e-6);
-        assert!((curve.evaluate(1.0) - 1.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn hermite_opponent_draw_pauses_then_launches_monotonically() {
-        let curve = opponent_ease();
-        assert!((curve.evaluate(0.0) - 0.0).abs() < 1e-6);
-        assert!((curve.evaluate(0.04998) - 0.0).abs() < 1e-6);
-        let early = curve.evaluate(0.15);
-        assert!(early > 0.1, "sharp launch after pause: {early}");
-        assert!((curve.evaluate(1.0) - 1.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn spline_interpolates_control_nodes_and_preserves_transform_across_flip() {
-        let from = Pose {
-            position: Vec3::new(-300.0, -200.0, 0.0),
-            rotation: Quat::IDENTITY,
-            scale: 0.625,
-            turn: 1.0,
-            ..Pose::default()
-        };
-        let to = Pose {
-            position: Vec3::new(0.0, -150.0, 900.0),
-            rotation: Quat::IDENTITY,
-            scale: 0.25,
-            turn: 0.0,
-            ..Pose::default()
-        };
-        let hold = Vec3::new(200.0, -50.0, 950.0);
-        let nodes = [
-            SplineNode {
-                position: Vec3::new(-150.0, -80.0, 300.0),
-                rotation: Quat::from_rotation_x(PI * 1.15),
-                seen_scale: 0.00055,
-            },
-            SplineNode {
-                position: Vec3::new(40.0, 10.0, 600.0),
-                rotation: Quat::from_rotation_x(-0.6),
-                seen_scale: 0.00065,
-            },
-            SplineNode {
-                position: Vec3::new(140.0, 20.0, 850.0),
-                rotation: Quat::from_euler(glam::EulerRot::YXZ, 0.3, -0.2, -0.35),
-                seen_scale: 0.00080,
-            },
-            SplineNode {
-                position: hold,
-                rotation: Quat::IDENTITY,
-                seen_scale: 0.00108,
-            },
-        ];
-        let spline = Spline::new(&nodes, &to, local_ease(), (true, false), (Vec3::Z, 1200.0));
-
-        // At hold plateau (u = 0.8), card rests at interior node 3 (node 4 of 6).
-        let at_hold = spline.pose_at(&from, &to, 0.64);
-        assert!(at_hold.position.distance(hold) < 0.5);
-        assert!(at_hold.turn < 0.5);
-
-        // Before edge-on it is face down (turn == 1.0); after edge-on it is face up (turn == 0.0).
-        let early = spline.pose_at(&from, &to, 0.10);
-        assert!(early.turn > 0.5);
-        let late = spline.pose_at(&from, &to, 0.45);
-        assert!(late.turn < 0.5);
-
-        // Mid-flight resize continuity (`through`) hits target exactly and lands at `to`.
-        let mid_t = 0.35;
-        let current = spline.pose_at(&from, &to, mid_t);
-        let shifted_to = Pose {
-            position: Vec3::new(20.0, -140.0, 910.0),
-            scale: 0.28,
-            ..to
-        };
-        let mut adjusted = spline;
-        let mut adjusted_from = from;
-        adjusted.through(&mut adjusted_from, mid_t, current);
-        let kept = adjusted.pose_at(&adjusted_from, &shifted_to, mid_t);
-        assert!(kept.position.distance(current.position) < 1e-2);
-        assert!((kept.scale - current.scale).abs() < 1e-3);
-        let eff_kept = effective_rotation(&kept);
-        let eff_cur = effective_rotation(&current);
-        assert!(eff_kept.dot(eff_cur).abs() > 1.0 - 1e-4);
-
-        let end = adjusted.pose_at(&adjusted_from, &shifted_to, 1.0);
-        assert!(end.position.distance(shifted_to.position) < 1e-2);
-        assert!((end.scale - shifted_to.scale).abs() < 1e-3);
-    }
-}
+#[path = "spline_tests.rs"]
+mod tests;

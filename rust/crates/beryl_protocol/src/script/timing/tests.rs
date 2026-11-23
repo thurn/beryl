@@ -102,6 +102,8 @@ fn data_cases() -> BTreeSet<String> {
 #[allow(clippy::too_many_lines)] // One act per case.
 fn each_case_of_the_data_is_found_on_one_act() {
     let table = Table::empty(20);
+    let mut beginning = Table::empty(20);
+    beginning.turn.step = TurnStep::Draw;
     let mut stack = Table::empty(20);
     stack
         .objects
@@ -212,7 +214,8 @@ fn each_case_of_the_data_is_found_on_one_act() {
             &table,
             vec![],
         ),
-        ("draw", drawn.clone(), &table, vec![]),
+        ("draw", drawn.clone(), &beginning, vec![]),
+        ("fast draw", drawn.clone(), &table, vec![]),
         ("draw of several", drawn.clone(), &table, vec![&other]),
         (
             "opponent draw",
@@ -532,7 +535,7 @@ fn a_step_says_when_what_it_makes_room_among_moves_and_a_strike_its_phases() {
         Why::Draw,
         card(1, ZoneName::Hand, Side::You),
     );
-    assert_eq!(time(&draw).room, Room::For { ms: 170.0 });
+    assert_eq!(time(&draw).room, Room::For { ms: 250.0 });
 
     let mut land = card(2, ZoneName::Battlefield, Side::You);
     land.tapped = true;

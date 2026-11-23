@@ -1498,7 +1498,7 @@
         "stagger": 326,
         "curve": "ease-out"
       },
-      "regroup": 170,
+      "regroup": 250,
       "cases": {
         "land played": {
           "duration": 315,
@@ -1537,21 +1537,27 @@
           "curve": "ease-out"
         },
         "draw": {
-          "duration": 1050,
+          "duration": 1429,
           "delay": null,
           "stagger": null,
           "curve": "ease-out"
         },
-        "draw of several": {
-          "duration": 700,
+        "fast draw": {
+          "duration": 1000,
           "delay": null,
-          "stagger": 233,
+          "stagger": 250,
+          "curve": "ease-out"
+        },
+        "draw of several": {
+          "duration": 1000,
+          "delay": null,
+          "stagger": 250,
           "curve": "ease-out"
         },
         "opponent draw": {
-          "duration": 475,
+          "duration": 833,
           "delay": null,
-          "stagger": 233,
+          "stagger": 250,
           "curve": "ease-out"
         }
       },

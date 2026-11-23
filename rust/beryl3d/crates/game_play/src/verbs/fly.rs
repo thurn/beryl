@@ -90,7 +90,7 @@ fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
     let mine = object.controller == Side::You;
     let toward = if mine { 1.0 } else { -1.0 };
     match case {
-        Some("draw" | "draw of several") => return Path::DrawLocal,
+        Some("draw" | "fast draw" | "draw of several") => return Path::DrawLocal,
         Some("opponent draw") => {
             return if mine {
                 Path::DrawLocal
@@ -290,7 +290,6 @@ fn local_draw_spline(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
     let spec = &step.verbs.fly.draw.local;
     let camera = step.places.camera();
     let camera_back = camera.axes()[2];
-    let eye_along_back = camera.eye.dot(camera_back);
     let from_depth = camera.depth(from.position);
     let to_depth = camera.depth(to.position);
     let from_seen = from.scale / from_depth;
@@ -361,15 +360,17 @@ fn local_draw_spline(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
             position: clamped.position,
             rotation,
             seen_scale,
+            weight: 1.0 / node.rel_scale,
         };
     }
 
     Shape::Spline(Spline::new(
         &interior,
+        1.0 / spec.from_rel_scale,
         &to,
         spec.curve(),
         (flips, false),
-        (camera_back, eye_along_back),
+        (camera.eye, camera_back),
     ))
 }
 
@@ -380,7 +381,6 @@ fn opponent_draw_spline(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
     let spec = &step.verbs.fly.draw.opponent;
     let camera = step.places.camera();
     let camera_back = camera.axes()[2];
-    let eye_along_back = camera.eye.dot(camera_back);
     let from_depth = camera.depth(from.position);
     let to_depth = camera.depth(to.position);
     let from_seen = from.scale / from_depth;
@@ -427,15 +427,17 @@ fn opponent_draw_spline(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
             position: clamped.position,
             rotation,
             seen_scale,
+            weight: 1.0 / node.rel_scale,
         };
     }
 
     Shape::Spline(Spline::new(
         &interior,
+        1.0 / spec.from_rel_scale,
         &to,
         spec.curve(),
         (false, start_half_turn),
-        (camera_back, eye_along_back),
+        (camera.eye, camera_back),
     ))
 }
 

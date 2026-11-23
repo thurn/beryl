@@ -28,7 +28,7 @@
 {"seat":"opponent","view":11,"beat":1,"step":1,"verb":"tap","case":"untap","start":58,"end":228,"effects":[],"sounds":[["untap","start",null]]}
 {"seat":"opponent","view":11,"beat":2,"step":0,"verb":"set","case":"step begins","start":228,"end":286,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"opponent","view":12,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
-{"seat":"opponent","view":12,"beat":1,"step":0,"verb":"fly","case":"draw","start":58,"end":1108,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":12,"beat":1,"step":0,"verb":"fly","case":"draw","start":58,"end":1487,"effects":[],"sounds":[["slide","start",null]]}
 {"seat":"opponent","view":13,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"opponent","view":15,"beat":0,"step":0,"verb":"fly","case":"own spell cast","start":0,"end":370,"effects":[],"sounds":[["cast","start",null]]}
 {"seat":"opponent","view":15,"beat":1,"step":0,"verb":"tap","case":"tap","start":370,"end":740,"effects":[],"sounds":[["tap","start",null]]}
@@ -77,7 +77,7 @@
 {"seat":"you","view":11,"beat":1,"step":1,"verb":"tap","case":"untap","start":58,"end":228,"effects":[],"sounds":[["untap","start",null]]}
 {"seat":"you","view":11,"beat":2,"step":0,"verb":"set","case":"step begins","start":228,"end":286,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"you","view":12,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
-{"seat":"you","view":12,"beat":1,"step":0,"verb":"fly","case":"opponent draw","start":58,"end":533,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":12,"beat":1,"step":0,"verb":"fly","case":"opponent draw","start":58,"end":891,"effects":[],"sounds":[["slide","start",null]]}
 {"seat":"you","view":13,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"you","view":15,"beat":0,"step":0,"verb":"fly","case":"opponent spell cast","start":0,"end":400,"effects":[],"sounds":[["cast","start",null]]}
 {"seat":"you","view":15,"beat":1,"step":0,"verb":"tap","case":"tap","start":400,"end":770,"effects":[],"sounds":[["tap","start",null]]}

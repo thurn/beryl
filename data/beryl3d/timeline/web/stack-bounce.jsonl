@@ -14,9 +14,9 @@
 {"seat":"opponent","view":3,"beat":2,"step":0,"verb":"dwell","case":null,"start":803,"end":1603,"effects":[],"sounds":[]}
 {"seat":"opponent","view":3,"beat":3,"step":0,"verb":"point","case":"end","start":1603,"end":1636,"effects":[],"sounds":[]}
 {"seat":"opponent","view":3,"beat":4,"step":0,"verb":"fly","case":null,"start":1636,"end":2111,"effects":[],"sounds":[["shatter","start",null]]}
-{"seat":"opponent","view":3,"beat":5,"step":0,"verb":"fly","case":"opponent draw","start":2111,"end":2586,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"opponent","view":3,"beat":6,"step":0,"verb":"vanish","case":"resolved instant or sorcery","start":2846,"end":3196,"effects":["dim@start"],"sounds":[["resolve","start",null]]}
-{"seat":"opponent","view":3,"beat":7,"step":0,"verb":"set","case":"step begins","start":3196,"end":3254,"effects":[],"sounds":[["step","start",null]]}
+{"seat":"opponent","view":3,"beat":5,"step":0,"verb":"fly","case":"opponent draw","start":2111,"end":2944,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":3,"beat":6,"step":0,"verb":"vanish","case":"resolved instant or sorcery","start":3204,"end":3554,"effects":["dim@start"],"sounds":[["resolve","start",null]]}
+{"seat":"opponent","view":3,"beat":7,"step":0,"verb":"set","case":"step begins","start":3554,"end":3612,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"opponent","view":4,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"opponent","view":5,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"opponent","view":6,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
@@ -28,7 +28,7 @@
 {"seat":"opponent","view":9,"beat":1,"step":1,"verb":"tap","case":"untap","start":58,"end":228,"effects":[],"sounds":[["untap","start",null]]}
 {"seat":"opponent","view":9,"beat":2,"step":0,"verb":"set","case":"step begins","start":228,"end":286,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"opponent","view":10,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
-{"seat":"opponent","view":10,"beat":1,"step":0,"verb":"fly","case":"opponent draw","start":58,"end":533,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":10,"beat":1,"step":0,"verb":"fly","case":"opponent draw","start":58,"end":891,"effects":[],"sounds":[["slide","start",null]]}
 {"seat":"opponent","view":11,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"opponent","view":13,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"opponent","view":14,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
@@ -51,9 +51,9 @@
 {"seat":"you","view":3,"beat":1,"step":3,"verb":"streak","case":"mana","start":403,"end":678,"effects":["glow@start","flash@end"],"sounds":[["mana","start",null]]}
 {"seat":"you","view":3,"beat":2,"step":0,"verb":"point","case":"end","start":773,"end":806,"effects":[],"sounds":[]}
 {"seat":"you","view":3,"beat":3,"step":0,"verb":"vanish","case":"bounced","start":1066,"end":1366,"effects":["glow@start"],"sounds":[["shatter","start",null]]}
-{"seat":"you","view":3,"beat":4,"step":0,"verb":"fly","case":"draw","start":1486,"end":2536,"effects":[],"sounds":[["slide","start",null]]}
-{"seat":"you","view":3,"beat":5,"step":0,"verb":"vanish","case":"resolved instant or sorcery","start":2796,"end":3146,"effects":["dim@start"],"sounds":[["resolve","start",null]]}
-{"seat":"you","view":3,"beat":6,"step":0,"verb":"set","case":"step begins","start":3286,"end":3344,"effects":[],"sounds":[["step","start",null]]}
+{"seat":"you","view":3,"beat":4,"step":0,"verb":"fly","case":"fast draw","start":1486,"end":2486,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":3,"beat":5,"step":0,"verb":"vanish","case":"resolved instant or sorcery","start":2746,"end":3096,"effects":["dim@start"],"sounds":[["resolve","start",null]]}
+{"seat":"you","view":3,"beat":6,"step":0,"verb":"set","case":"step begins","start":3236,"end":3294,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"you","view":4,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"you","view":5,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"you","view":6,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
@@ -65,7 +65,7 @@
 {"seat":"you","view":9,"beat":1,"step":1,"verb":"tap","case":"untap","start":58,"end":228,"effects":[],"sounds":[["untap","start",null]]}
 {"seat":"you","view":9,"beat":2,"step":0,"verb":"set","case":"step begins","start":228,"end":286,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"you","view":10,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
-{"seat":"you","view":10,"beat":1,"step":0,"verb":"fly","case":"draw","start":58,"end":1108,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":10,"beat":1,"step":0,"verb":"fly","case":"draw","start":58,"end":1487,"effects":[],"sounds":[["slide","start",null]]}
 {"seat":"you","view":11,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"you","view":12,"beat":0,"step":0,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
 {"seat":"you","view":12,"beat":0,"step":1,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}

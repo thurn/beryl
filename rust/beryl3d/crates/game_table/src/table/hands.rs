@@ -71,19 +71,31 @@ pub(super) fn hand(
             (before, after),
         );
     }
-    for (object, laid) in objects.iter().zip(&solved.items) {
-        placement.set(
-            object.slot,
-            Rest {
-                pose: Pose {
-                    turn: turn(object),
-                    ..laid.pose
+    let place_card =
+        |placement: &mut Placement, object: &ObjectView, laid: &kit_space::arrange::Placed| {
+            placement.set(
+                object.slot,
+                Rest {
+                    pose: Pose {
+                        turn: turn(object),
+                        ..laid.pose
+                    },
+                    place,
+                    visible: laid.in_view,
+                    copies: 1,
                 },
-                place,
-                visible: laid.in_view,
-                copies: 1,
-            },
-        );
+            );
+        };
+    if yours {
+        for (object, laid) in objects.iter().zip(&solved.items) {
+            place_card(placement, object, laid);
+        }
+    } else {
+        // Mirror the opponent's hand across the table so newly drawn cards enter the leftmost
+        // slot, matching MTG Arena's across-the-table perspective.
+        for (object, laid) in objects.iter().zip(solved.items.iter().rev()) {
+            place_card(placement, object, laid);
+        }
     }
     super::lifted::lay_picked(&picked, side, (layout, camera, lift), placement);
 }

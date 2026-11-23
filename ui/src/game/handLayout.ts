@@ -148,7 +148,9 @@ export function heldPlacements(cards: ObjectView[]): Placement[] {
   // · dx, is how far a back turns.
   const bend = HELD_RISE / heldReach() ** 2;
   return cards.map((o, i) => {
-    const dx = (i - mid) * spacing;
+    // Mirror across the table so newly drawn cards join the leftmost slot, matching MTG Arena.
+    const slotIndex = n - 1 - i;
+    const dx = (slotIndex - mid) * spacing;
     const turn = (Math.atan(-2 * bend * dx) * 180) / Math.PI;
     // The foot on the arc, and the card's middle half a card up from it along its turn: the
     // card lies upside down about that middle, as the opponent holds it, facing them.
@@ -165,7 +167,7 @@ export function heldPlacements(cards: ObjectView[]): Placement[] {
       width: BACK_WIDTH,
       span: BACK_WIDTH,
       opacity: 1,
-      z: 100 + i,
+      z: 100 + slotIndex,
       ...turned(
         middle[0] - BACK_WIDTH / 2,
         middle[1] - height / 2,

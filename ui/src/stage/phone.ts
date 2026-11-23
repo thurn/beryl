@@ -196,10 +196,12 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
     (o) => !o.hiddenPick,
   );
   theirs.forEach((object, i) => {
-    const place = backSpot(bands, viewport.width, i, theirs.length);
+    // Mirror across the table so newly drawn cards join the leftmost slot, matching MTG Arena.
+    const slotIndex = theirs.length - 1 - i;
+    const place = backSpot(bands, viewport.width, slotIndex, theirs.length);
     out.set(object.slot, {
       object,
-      pose: upright(place, DEPTH.backs + i, "back"),
+      pose: upright(place, DEPTH.backs + slotIndex, "back"),
       dress: dressed("hand", "held", BACKS.width, true),
     });
   });

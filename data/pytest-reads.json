@@ -164,8 +164,8 @@
       "rust/crates/beryl_table_session/Cargo.toml"
     ],
     "tools/src/beryl_tools/ignite/beryl3d_match.py": [
-      "data/beryl3d/match/web/combat-attackers_you_1600x900@2_118000ms.json",
       "data/beryl3d/match/web/combat-attackers_you_1600x900@2_step_163.1.2_205ms.json",
+      "data/beryl3d/match/web/combat-attackers_you_1600x900@2_step_177.1.0.json",
       "data/beryl3d/match/web/game-over_you_1600x900@2.json",
       "data/beryl3d/match/web/game-over_you_393x759.json",
       "data/beryl3d/match/web/opening-keep_you_1600x900@2.json",

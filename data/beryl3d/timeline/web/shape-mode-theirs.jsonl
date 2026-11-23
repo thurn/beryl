@@ -16,7 +16,7 @@
 {"seat":"opponent","view":12,"beat":2,"step":0,"verb":"point","case":"source line end","start":2254,"end":2287,"effects":[],"sounds":[]}
 {"seat":"opponent","view":12,"beat":3,"step":0,"verb":"vanish","case":"ability finished","start":2287,"end":2287,"effects":["dissolve@start"],"sounds":[]}
 {"seat":"opponent","view":12,"beat":4,"step":0,"verb":"set","case":"step begins","start":2287,"end":2345,"effects":[],"sounds":[["step","start",null]]}
-{"seat":"opponent","view":12,"beat":5,"step":0,"verb":"fly","case":"draw","start":2345,"end":3395,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":12,"beat":5,"step":0,"verb":"fly","case":"draw","start":2345,"end":3774,"effects":[],"sounds":[["slide","start",null]]}
 {"seat":"opponent","view":13,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"opponent","view":14,"beat":0,"step":0,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
 {"seat":"opponent","view":14,"beat":0,"step":1,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
@@ -37,5 +37,5 @@
 {"seat":"you","view":12,"beat":3,"step":0,"verb":"point","case":"source line end","start":2953,"end":2986,"effects":[],"sounds":[]}
 {"seat":"you","view":12,"beat":4,"step":0,"verb":"vanish","case":"ability finished","start":2986,"end":2986,"effects":["dissolve@start"],"sounds":[]}
 {"seat":"you","view":12,"beat":5,"step":0,"verb":"set","case":"step begins","start":2986,"end":3044,"effects":[],"sounds":[["step","start",null]]}
-{"seat":"you","view":12,"beat":6,"step":0,"verb":"fly","case":"opponent draw","start":3044,"end":3519,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":12,"beat":6,"step":0,"verb":"fly","case":"opponent draw","start":3044,"end":3877,"effects":[],"sounds":[["slide","start",null]]}
 {"seat":"you","view":13,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}

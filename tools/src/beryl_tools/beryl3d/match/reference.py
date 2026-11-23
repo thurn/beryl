@@ -69,8 +69,9 @@ MOMENTS: tuple[tuple[str, str], ...] = (
     # change duration.
     ("combat-attackers", "step:163.1.2+205ms"),
     # Blockers declared: an attacking token with its wedge, and the line of combat from the
-    # creature that blocks it.
-    ("combat-attackers", "118000ms"),
+    # creature that blocks it. Anchoring to the step keeps the sample with this combat when
+    # earlier animations change duration.
+    ("combat-attackers", "step:177.1.0"),
 )
 
 

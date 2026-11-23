@@ -27,7 +27,7 @@ use super::{
     Act, Arrow, Fact, Mark, Notice, Script, Span, Stream, Subject, Table, Tally, Verb, replay,
 };
 use crate::protocol::{
-    CardHandling, Counter, ObjectId, ObjectView, Side, StackItem, Why, ZoneName,
+    CardHandling, Counter, ObjectId, ObjectView, Side, StackItem, Step as TurnStep, Why, ZoneName,
 };
 
 /// How one step is played. Times are in milliseconds.
@@ -200,9 +200,9 @@ pub fn case_of(act: &Act, found: &Table, beside: &[&Act]) -> Option<&'static str
                 "opponent land played"
             }),
             (ZoneName::Hand, ZoneName::Graveyard) => Some("discard"),
-            // Yours, drawn alone, is held up to be read; one of several passes at its own
-            // size, and a card no one reads flies face down. Each takes its own time, and a
-            // card an effect puts into a hand the time any card flies.
+            // Yours, drawn alone during the beginning phase, plays at Arena's slower turn-draw
+            // speed (0.7x); draws outside the beginning phase and multi-draws play at full speed
+            // (1.0x), and cards no one reads fly face down (1.2x).
             (ZoneName::Library, ZoneName::Hand) => {
                 if !draws(act) {
                     None
@@ -213,8 +213,13 @@ pub fn case_of(act: &Act, found: &Table, beside: &[&Act]) -> Option<&'static str
                     .any(|other| !ptr::eq(*other, act) && draws_to_read(other))
                 {
                     Some("draw of several")
-                } else {
+                } else if matches!(
+                    found.turn.step,
+                    TurnStep::Untap | TurnStep::Upkeep | TurnStep::Draw
+                ) {
                     Some("draw")
+                } else {
+                    Some("fast draw")
                 }
             }
             _ => None,
@@ -540,8 +545,21 @@ fn motion(
     }
     // The cards of one draw are all in the hand as the first leaves the library: the hand
     // opens their places once, and each card then flies to a place that stays where it is.
+    // Compress multi-draw stagger so total stagger time never exceeds 1500 ms.
     if draws(act) {
-        return StepTiming { ahead: true, ..own };
+        let count = beside.iter().filter(|other| draws(other)).count();
+        let stagger = if count > 1 && own.stagger > 0.0 {
+            #[allow(clippy::cast_precision_loss)]
+            let capped = 1500.0 / count as f64;
+            own.stagger.min(capped)
+        } else {
+            own.stagger
+        };
+        return StepTiming {
+            ahead: true,
+            stagger,
+            ..own
+        };
     }
     // The blow a creature deals back is one with the strike at it, the step `before`.
     if meets(act, before) {

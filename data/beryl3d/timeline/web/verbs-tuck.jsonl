@@ -39,7 +39,7 @@
 {"seat":"opponent","view":13,"beat":2,"step":0,"verb":"set","case":"step begins","start":228,"end":286,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"opponent","view":13,"beat":3,"step":0,"verb":"set","case":null,"start":286,"end":311,"effects":[],"sounds":[]}
 {"seat":"opponent","view":14,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
-{"seat":"opponent","view":14,"beat":1,"step":0,"verb":"fly","case":"opponent draw","start":58,"end":533,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"opponent","view":14,"beat":1,"step":0,"verb":"fly","case":"opponent draw","start":58,"end":891,"effects":[],"sounds":[["slide","start",null]]}
 {"seat":"opponent","view":15,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"you","view":2,"beat":0,"step":0,"verb":"fly","case":"opponent spell cast","start":0,"end":400,"effects":[],"sounds":[["cast","start",null]]}
 {"seat":"you","view":2,"beat":1,"step":0,"verb":"tap","case":"tap","start":400,"end":770,"effects":[],"sounds":[["tap","start",null]]}
@@ -86,6 +86,6 @@
 {"seat":"you","view":13,"beat":2,"step":0,"verb":"set","case":"step begins","start":228,"end":286,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"you","view":13,"beat":3,"step":0,"verb":"set","case":null,"start":286,"end":311,"effects":[],"sounds":[]}
 {"seat":"you","view":14,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
-{"seat":"you","view":14,"beat":1,"step":0,"verb":"fly","case":"draw","start":58,"end":1108,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":14,"beat":1,"step":0,"verb":"fly","case":"draw","start":58,"end":1487,"effects":[],"sounds":[["slide","start",null]]}
 {"seat":"you","view":15,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
 {"seat":"you","view":16,"beat":0,"step":0,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}

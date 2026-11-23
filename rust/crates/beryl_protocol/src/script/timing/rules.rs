@@ -348,3 +348,65 @@ fn the_end_of_a_game_is_left_longer_than_a_spell_to_be_read() {
     };
     assert_eq!(case_of(&changed, &Table::empty(20), &[&changed]), None);
 }
+
+/// Beginning-phase draws play at Arena's slower 0.7x speed (1429 ms), non-beginning draws play at
+/// 1.0x (1000 ms), opponent draws play at 1.2x (833 ms), and batches over 6 cards compress their
+/// stagger so total stagger time stays within 1500 ms.
+#[test]
+fn draw_timing_splits_by_phase_and_compresses_large_batch_stagger() {
+    use crate::protocol::Step as TurnStep;
+    let mut beginning = Table::empty(20);
+    beginning.turn.step = TurnStep::Draw;
+    let main = Table::empty(20);
+
+    let drawn = fly(
+        ZoneName::Library,
+        Why::Draw,
+        card(1, ZoneName::Hand, Side::You),
+    );
+    let opp_drawn = fly(
+        ZoneName::Library,
+        Why::Draw,
+        ObjectView::hidden(ObjectId(1), ZoneName::Hand, Side::Opponent, Side::Opponent),
+    );
+
+    assert_eq!(
+        timing_of(&drawn, &beginning, None, &[&drawn]).duration,
+        1429.0
+    );
+    assert_eq!(timing_of(&drawn, &main, None, &[&drawn]).duration, 1000.0);
+    assert_eq!(
+        timing_of(&opp_drawn, &beginning, None, &[&opp_drawn]).duration,
+        833.0
+    );
+
+    let batch_three: Vec<Act> = (1..=3)
+        .map(|slot| {
+            fly(
+                ZoneName::Library,
+                Why::Draw,
+                card(slot, ZoneName::Hand, Side::You),
+            )
+        })
+        .collect();
+    let refs_three: Vec<&Act> = batch_three.iter().collect();
+    assert_eq!(
+        timing_of(&batch_three[0], &main, None, &refs_three).stagger,
+        250.0
+    );
+
+    let batch_ten: Vec<Act> = (1..=10)
+        .map(|slot| {
+            fly(
+                ZoneName::Library,
+                Why::Draw,
+                card(slot, ZoneName::Hand, Side::You),
+            )
+        })
+        .collect();
+    let refs_ten: Vec<&Act> = batch_ten.iter().collect();
+    assert_eq!(
+        timing_of(&batch_ten[0], &main, None, &refs_ten).stagger,
+        150.0
+    );
+}
