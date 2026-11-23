@@ -282,7 +282,13 @@ def test_a_batch_across_recordings_runs_only_its_recordings(
 
 
 def frame(index: int, **counts: float) -> dict[str, object]:
-    keys = [*gate.COUNTERS, *gate.LOAD, "frame_allocations"]
+    keys = [
+        *gate.COUNTERS,
+        *gate.LOAD,
+        *gate.BLENDED_AREA,
+        *gate.BLENDED_AREAS_BY_BAND,
+        "frame_allocations",
+    ]
     every = {c: 1.0 for c in keys}
     every["frame_allocations"] = 0
     return {"frame": index, "ms": index * 16, "phase": "rest", **every, **counts}

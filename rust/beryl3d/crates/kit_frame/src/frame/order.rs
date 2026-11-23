@@ -208,6 +208,7 @@ pub(super) fn finish(frame: &mut Frame) {
 /// fifth of the instructions of a stress board's frame between scripts.
 pub(super) fn areas(frame: &Frame) -> super::Areas {
     let opaque = frame.opaque as usize;
+    let shadows_end = frame.bands[Band::TableMarks as usize] as usize;
     let moving_opaque = frame.bands[Band::MovingOpaque as usize] as usize
         ..frame.bands[Band::Moving as usize] as usize;
     let mut areas = super::Areas::default();
@@ -217,6 +218,13 @@ pub(super) fn areas(frame: &Frame) -> super::Areas {
             areas.opaque += area;
         } else {
             areas.blended += area;
+            if index < shadows_end {
+                areas.contact_shadows += area;
+            } else if index < frame.layer as usize {
+                areas.scene_blended += area;
+            } else {
+                areas.layer_blended += area;
+            }
         }
     }
     areas

@@ -87,7 +87,13 @@ COUNTERS: tuple[str, ...] = (
     "steps",
 )
 # The draw list's load (`kit_frame::frame::Load`) held to a budget.
-LOAD = ("draw_calls", "upload_bytes", "blended_area")
+LOAD = ("draw_calls", "upload_bytes")
+BLENDED_AREA = ("blended_area",)
+BLENDED_AREAS_BY_BAND = (
+    "shadow_blended_area",
+    "scene_blended_area",
+    "layer_blended_area",
+)
 
 
 @dataclass(frozen=True)
@@ -233,14 +239,14 @@ def worst(frames: list[Frame], count: str) -> Measured:
     return Measured(f"worst_frame_{count}", frame.counts[count], frame)
 
 
-def measure(board: Board) -> list[Measured]:
-    """Every number the gate holds for `board`, in the order it reports them."""
+def measure(board: Board, areas: tuple[str, ...] = BLENDED_AREA) -> list[Measured]:
+    """Every number the gate holds for `board`, with the selected area counters."""
     measured: list[Measured] = []
     for counter in COUNTERS:
         measured.append(worst(board.frames, counter))
         total = sum(f.counts[counter] for f in board.frames)
         measured.append(Measured(f"total_{counter}", total, None))
-    measured.extend(worst(board.frames, load) for load in LOAD)
+    measured.extend(worst(board.frames, load) for load in (*LOAD, *areas))
     measured.append(
         Measured("handle_allocations", float(board.handle_allocations), None)
     )
@@ -259,7 +265,14 @@ def failures(boards: list[Board], budgets: dict[str, dict[str, Budget]]) -> list
     lines: list[str] = []
     for board in boards:
         board_budgets = budgets.get(board.name, {})
-        for m in measure(board):
+        # Crowded native boards budget each part of blending independently, so that a
+        # larger shadow allowance cannot hide a rise in other materials' screen coverage.
+        areas = (
+            BLENDED_AREA
+            if "worst_frame_blended_area" in board_budgets
+            else BLENDED_AREAS_BY_BAND
+        )
+        for m in measure(board, areas):
             where = f"{board.name} {m.frame.moment() if m.frame else 'in total'}"
             shown = number(m.key, m.value)
             if m.key == "frame_allocations":
@@ -286,7 +299,10 @@ def report(boards: list[Board], enhanced: list[Tiered]) -> dict[str, dict[str, f
     """One map of measurements per board, including counters without a budget."""
     measurements: dict[str, dict[str, float]] = {
         board.name: {
-            **{m.key: number(m.key, m.value) for m in measure(board)},
+            **{
+                m.key: number(m.key, m.value)
+                for m in measure(board, (*BLENDED_AREA, *BLENDED_AREAS_BY_BAND))
+            },
             "worst_frame_instances": int(worst(board.frames, "instances").value),
             "worst_frame_resolved": int(worst(board.frames, "resolved").value),
             "frames": len(board.frames),

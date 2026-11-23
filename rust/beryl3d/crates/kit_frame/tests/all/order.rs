@@ -144,6 +144,10 @@ fn screen_areas_are_counted_in_screens() {
         Band::Opaque,
         Draw::card(half_card, tag(1), FaceSize::Board, 0, 0, 0.0, 0.0),
     );
+    builder.draw(
+        Band::ContactShadows,
+        Draw::contact_shadow(half_card, [0, 0, 0, 128], 2.0),
+    );
     // A unit quad covers a quarter of the screen.
     builder.draw(Band::Glows, quad(2, 0.0));
     // A quad four screens across covers the whole screen and no more.
@@ -162,7 +166,10 @@ fn screen_areas_are_counted_in_screens() {
     builder.draw(Band::Glows, quad(4, -1.0));
     let areas = builder.finish().areas();
     assert!((areas.opaque - 0.25).abs() < 1e-6, "{areas:?}");
-    assert!((areas.blended - 1.25).abs() < 1e-6, "{areas:?}");
+    assert!((areas.blended - 1.5).abs() < 1e-6, "{areas:?}");
+    assert!((areas.contact_shadows - 0.25).abs() < 1e-6, "{areas:?}");
+    assert!((areas.scene_blended - 0.25).abs() < 1e-6, "{areas:?}");
+    assert!((areas.layer_blended - 1.0).abs() < 1e-6, "{areas:?}");
 }
 
 /// Where a small record lies with the identity camera: `x` across the screen, which is 2 wide,

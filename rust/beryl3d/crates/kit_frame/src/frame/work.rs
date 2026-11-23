@@ -19,6 +19,12 @@ pub struct Areas {
     pub opaque: f32,
     /// The screen area of the blended records.
     pub blended: f32,
+    /// The screen area of contact shadows cast on the table.
+    pub contact_shadows: f32,
+    /// The screen area of other blended records before the flat layer.
+    pub scene_blended: f32,
+    /// The screen area of blended records in the flat layer and the bands above it.
+    pub layer_blended: f32,
 }
 
 /// The work the client core did, counted so that the gates can hold it.

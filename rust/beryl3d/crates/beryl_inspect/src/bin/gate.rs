@@ -109,6 +109,7 @@ fn measure(name: &str) -> Option<Value> {
             first_allocation = Some(moment.frame);
         }
         let (work, load) = (frame.work, frame.load);
+        let areas = frame.areas();
         frames.push(json!({
             "frame": moment.frame,
             "ms": moment.now / 1_000_000,
@@ -123,7 +124,10 @@ fn measure(name: &str) -> Option<Value> {
             "draw_calls": load.draw_calls,
             "instances": load.instances,
             "upload_bytes": load.upload_bytes,
-            "blended_area": frame.areas().blended,
+            "blended_area": areas.blended,
+            "shadow_blended_area": areas.contact_shadows,
+            "scene_blended_area": areas.scene_blended,
+            "layer_blended_area": areas.layer_blended,
             "frame_allocations": allocations,
             "resolved": frame.resolved.len(),
         }));

@@ -504,7 +504,10 @@ an ordinary recording may never reach.
   over the passes of a frame. The count excludes fragments rejected before
   shading. The shader-cost check independently limits expressions and texture
   samples by material. Draw calls, uploads and blended area expose work that
-  fragment counts alone cannot explain.
+  fragment counts alone cannot explain. The crowded board and simultaneous verb
+  replays hold separate screen-area budgets for contact shadows, other blended
+  scene draws, and blended overlay draws. The total blended area is still
+  reported for comparison across revisions.
 
 ### Finding the worst frame
 

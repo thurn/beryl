@@ -33,6 +33,9 @@ def output(
             "instances": n,
             "upload_bytes": 80 * n,
             "blended_area": 0.123401,
+            "shadow_blended_area": 0.055,
+            "scene_blended_area": 0.031,
+            "layer_blended_area": 0.037401,
             "frame_allocations": 0,
             "resolved": 10,
         }
@@ -105,6 +108,31 @@ def test_a_count_under_its_budget_passes() -> None:
     assert gate.failures([board], {board.name: budgets}) == []
 
 
+@pytest.mark.parametrize(
+    ("area", "value"),
+    [
+        ("shadow_blended_area", 0.055),
+        ("scene_blended_area", 0.031),
+        ("layer_blended_area", 0.037401),
+    ],
+)
+def test_each_blend_band_can_fail_with_headroom_in_the_other_bands(
+    area: str, value: float
+) -> None:
+    [board] = gate.parse(output([3, 5]))
+    budgets = board_budgets(board)
+    del budgets["worst_frame_blended_area"]
+    for part in gate.BLENDED_AREAS_BY_BAND:
+        budgets[f"worst_frame_{part}"] = gate.Budget(max=1.0, why="test budget")
+    assert gate.failures([board], {board.name: budgets}) == []
+
+    budget = budgets[f"worst_frame_{area}"]
+    budget["max"] = 0.03
+    assert gate.failures([board], {board.name: budgets}) == [
+        f"stress-255 frame 0 (0 ms, rest): worst_frame_{area} is {value}, over its budget 0.03"
+    ]
+
+
 def test_json_reports_the_measurements_even_when_a_budget_fails(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -128,6 +156,7 @@ def test_json_reports_the_measurements_even_when_a_budget_fails(
     measured = json.loads(captured.out)["boards"][board.name]
     assert all(measured[m.key] == m.value for m in gate.measure(board))
     assert measured["worst_frame_blended_area"] == 0.123401
+    assert measured["worst_frame_shadow_blended_area"] == 0.055
     assert measured["enhanced_worst_frame_particles"] == 6
     assert "particles is 6, over its budget 5" in captured.err
 

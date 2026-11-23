@@ -59,9 +59,17 @@
         "max": 327680,
         "why": "Documented Baseline upload ceiling, enough for 4,096 records of 80 bytes."
       },
-      "worst_frame_blended_area": {
-        "max": 0.0846,
-        "why": "Measured 0.05634272 screens with 50% headroom, rounded up."
+      "worst_frame_shadow_blended_area": {
+        "max": 0.128,
+        "why": "Native contact shadows peak at 0.11636 screens. Allow 10% headroom, rounded up."
+      },
+      "worst_frame_scene_blended_area": {
+        "max": 0.0227,
+        "why": "Native scene draws apart from contact shadows peak at 0.02063 blended screens. Allow 10% headroom, rounded up."
+      },
+      "worst_frame_layer_blended_area": {
+        "max": 0.021,
+        "why": "The flat layer and bands above it peak at 0.01900 blended screens. Allow 10% headroom, rounded up."
       },
       "handle_allocations": {
         "max": 5684,
@@ -149,9 +157,17 @@
         "max": 327680,
         "why": "Documented Baseline upload ceiling, enough for 4,096 records of 80 bytes."
       },
-      "worst_frame_blended_area": {
-        "max": 0.0855,
-        "why": "Measured 0.05697544 screens with 50% headroom, rounded up."
+      "worst_frame_shadow_blended_area": {
+        "max": 0.1314,
+        "why": "Native contact shadows peak at 0.11945 screens. Allow 10% headroom, rounded up."
+      },
+      "worst_frame_scene_blended_area": {
+        "max": 0.0229,
+        "why": "Native scene draws apart from contact shadows peak at 0.02074 blended screens. Allow 10% headroom, rounded up."
+      },
+      "worst_frame_layer_blended_area": {
+        "max": 0.0216,
+        "why": "The flat layer and bands above it peak at 0.01963 blended screens. Allow 10% headroom, rounded up."
       },
       "handle_allocations": {
         "max": 14315,
@@ -427,9 +443,17 @@
         "max": 327680,
         "why": "Documented Baseline upload ceiling, enough for 4,096 records of 80 bytes."
       },
-      "worst_frame_blended_area": {
-        "max": 1.3978,
-        "why": "Measured 0.93182135 screens with 50% headroom, rounded up."
+      "worst_frame_shadow_blended_area": {
+        "max": 0.4679,
+        "why": "Native contact shadows peak at 0.42536 screens. Allow 10% headroom, rounded up."
+      },
+      "worst_frame_scene_blended_area": {
+        "max": 1.2248,
+        "why": "Native scene draws apart from contact shadows peak at 1.11337 blended screens with simultaneous effects. Allow 10% headroom, rounded up."
+      },
+      "worst_frame_layer_blended_area": {
+        "max": 0.7358,
+        "why": "The flat layer and bands above it peak at 0.66887 blended screens. Allow 10% headroom, rounded up."
       },
       "handle_allocations": {
         "max": 4296,
