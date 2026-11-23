@@ -5,11 +5,13 @@
 use beryl_cards::props::Prop;
 use beryl_cards::{CARDS, names};
 use beryl_engine::card::{Part, Place, Purpose, Shape};
+use beryl_engine::layout::Queue;
 use beryl_engine::{
-    Bitboard, Candidates, Decision, DecisionKind, Opt, Scratch, State, Zone, ZoneKey, view,
+    Bitboard, Candidates, Decision, DecisionKind, GameTable, Layout, Opt, Scratch, State, Zone,
+    ZoneKey, view,
 };
-use beryl_scenario::Scenario;
 use beryl_scenario::prelude::{ME, P0, P1, Resolve, THEM, TurnStep, advance_to, stack};
+use beryl_scenario::{DecisionVisitor, Scenario, visit_with_layout};
 
 /// Every decision the scenarios reach, with the state it is asked in. For a question a
 /// resolving spell or ability asks, the state includes the effects resolved so far.
@@ -23,7 +25,7 @@ fn decisions(scenarios: &[Scenario], mut each: impl FnMut(&str, &State, &Decisio
 }
 
 /// The objects a decision's candidates name, for picks among objects.
-fn offered(d: &Decision) -> Bitboard {
+fn offered<L: Layout>(d: &Decision<L>) -> Bitboard<L::Slot> {
     match &d.candidates {
         Candidates::Objects(cards) => *cards,
         Candidates::Options(opts) => opts
@@ -39,42 +41,58 @@ fn offered(d: &Decision) -> Bitboard {
 #[test]
 fn every_decision_says_a_prompt_its_shape_and_part_allow() {
     for &(card, scenarios) in beryl_cards::scenarios() {
-        decisions(scenarios, |scenario, _, d| {
-            let at = format!("{card} / {scenario}: {d:?}");
-            let (shape, part) = (d.prompt.shape(), d.prompt.part);
-            // Each part belongs to the shapes whose runs have it.
-            let fits = match part {
-                Part::Pick => !matches!(shape, Shape::Split),
-                Part::Whether | Part::Instead | Part::Count => shape == Shape::Pick,
-                Part::First | Part::Second => shape == Shape::Split,
-                Part::Aim => shape == Shape::Declare,
-                Part::Plan => shape == Shape::Pay,
+        for scenario in scenarios {
+            let mut check = CheckPrompt {
+                card,
+                scenario: scenario.name,
             };
-            assert!(fits, "{part:?} is no part of {shape:?}: {at}");
-            // A yes or no is a prompt of that shape, or opens a pick's run.
-            if d.kind == DecisionKind::YesNo {
-                assert!(
-                    shape == Shape::YesNo || matches!(part, Part::Whether | Part::Instead),
-                    "{at}"
-                );
+            visit_with_layout(&CARDS, scenario, &mut check).unwrap_or_else(|e| panic!("{e}"));
+        }
+    }
+}
+
+struct CheckPrompt<'a> {
+    card: &'a str,
+    scenario: &'a str,
+}
+
+impl DecisionVisitor for CheckPrompt<'_> {
+    fn decision<L: Layout>(&mut self, _: &GameTable, _: &State<L>, d: &Decision<L>) {
+        let Self { card, scenario } = self;
+        let at = format!("{card} / {scenario}: {d:?}");
+        let (shape, part) = (d.prompt.shape(), d.prompt.part);
+        // Each part belongs to the shapes whose runs have it.
+        let fits = match part {
+            Part::Pick => !matches!(shape, Shape::Split),
+            Part::Whether | Part::Instead | Part::Count => shape == Shape::Pick,
+            Part::First | Part::Second => shape == Shape::Split,
+            Part::Aim => shape == Shape::Declare,
+            Part::Plan => shape == Shape::Pay,
+        };
+        assert!(fits, "{part:?} is no part of {shape:?}: {at}");
+        // A yes or no is a prompt of that shape, or opens a pick's run.
+        if d.kind == DecisionKind::YesNo {
+            assert!(
+                shape == Shape::YesNo || matches!(part, Part::Whether | Part::Instead),
+                "{at}"
+            );
+        }
+        // The object set is what the shape and part say it is, and nothing elsewhere.
+        match (shape, part) {
+            (_, Part::Whether | Part::Instead | Part::Aim) => {
+                assert!(!d.about.is_empty(), "nothing to pick among or aim: {at}");
             }
-            // The object set is what the shape and part say it is, and nothing elsewhere.
-            match (shape, part) {
-                (_, Part::Whether | Part::Instead | Part::Aim) => {
-                    assert!(!d.about.is_empty(), "nothing to pick among or aim: {at}");
-                }
-                (Shape::YesNo | Shape::Mode, _) => {}
-                // The pick after a `Whether` keeps the set its candidates stand for.
-                _ => assert!(
-                    (offered(d) & !d.about).is_empty() || d.about.is_empty(),
-                    "{at}"
-                ),
-            }
-            // A split names where its first cards go.
-            if shape == Shape::Split {
-                assert_ne!(d.prompt.places[0], Place::None, "{at}");
-            }
-        });
+            (Shape::YesNo | Shape::Mode, _) => {}
+            // The pick after a `Whether` keeps the set its candidates stand for.
+            _ => assert!(
+                (offered(d) & !d.about).is_empty() || d.about.is_empty(),
+                "{at}"
+            ),
+        }
+        // A split names where its first cards go.
+        if shape == Shape::Split {
+            assert_ne!(d.prompt.places[0], Place::None, "{at}");
+        }
     }
 }
 

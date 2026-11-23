@@ -60,8 +60,9 @@ pub fn outcome_with(
         cards,
         scenario,
         Slots::Dealt,
-        |t, s| snapshot_from(Runner::from_position(t, s), scenario, small),
-        |t, s| snapshot_from(Runner::from_position(t, s), scenario, large),
+        scenario,
+        |t, s, scenario| snapshot_from(Runner::from_position(t, s), scenario, small),
+        |t, s, scenario| snapshot_from(Runner::from_position(t, s), scenario, large),
     )
 }
 
@@ -97,13 +98,7 @@ pub fn trace_with(
     scenario: &Scenario,
     slots: Slots,
 ) -> Result<Vec<Position>, Failure> {
-    with_layout(
-        cards,
-        scenario,
-        slots,
-        |t, s| trace_from(t, s, scenario),
-        |t, s| trace_from(t, s, scenario),
-    )
+    with_layout(cards, scenario, slots, scenario, trace_from, trace_from)
 }
 
 fn trace_from<L: Layout>(
@@ -119,9 +114,9 @@ fn trace_from<L: Layout>(
     )
 }
 
-/// Runs a scenario like [`run`], showing `visit` the table, the state and the open decision
-/// each action other than an assertion answers or passes through: for tests of what a
-/// decision says beyond the engine, such as the protocol's views of it.
+/// Runs a scenario in Small, showing `visit` the table, the state and the open decision
+/// at each action other than an assertion. Use [`visit_with_layout`] for scenarios that
+/// need Large, including those that can start a subgame.
 pub fn visit(
     cards: &'static CardTable,
     scenario: &Scenario,
@@ -131,6 +126,42 @@ pub fn visit(
         Runner::new(cards, scenario, Slots::Dealt)?,
         scenario,
         &mut visit,
+        &mut |_, _, _| {},
+    )
+    .map(|_| ())
+}
+
+/// Examines scenario decisions in either engine layout.
+pub trait DecisionVisitor {
+    fn decision<L: Layout>(&mut self, table: &GameTable, state: &State<L>, decision: &Decision<L>);
+}
+
+/// Runs a scenario with the same layout selection and assertions as [`run`]. The visitor
+/// sees the open decision at each action other than an assertion, in the game that asks it.
+pub fn visit_with_layout(
+    cards: &'static CardTable,
+    scenario: &Scenario,
+    visitor: &mut impl DecisionVisitor,
+) -> Result<(), Failure> {
+    with_layout(
+        cards,
+        scenario,
+        Slots::Dealt,
+        (scenario, visitor),
+        visit_from,
+        visit_from,
+    )
+}
+
+fn visit_from<L: Layout, V: DecisionVisitor>(
+    table: GameTable,
+    state: State<L>,
+    (scenario, visitor): (&Scenario, &mut V),
+) -> Result<(), Failure> {
+    walk(
+        Runner::from_position(table, state),
+        scenario,
+        &mut |t, s, d| visitor.decision(t, s, d),
         &mut |_, _, _| {},
     )
     .map(|_| ())

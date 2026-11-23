@@ -29,8 +29,9 @@ pub use beryl_scenario_types::{
 pub use exhaust::{Bounds, Check, Found, Searched, exhaust, invariants};
 pub use json::{Json, to_json};
 pub use run::{
-    LayoutComparison, Live, answer, describe, outcome, outcome_with, plays_alike_in_both_layouts,
-    run, trace, trace_with, visit, watch, watch_tagged, watch_with,
+    DecisionVisitor, LayoutComparison, Live, answer, describe, outcome, outcome_with,
+    plays_alike_in_both_layouts, run, trace, trace_with, visit, visit_with_layout, watch,
+    watch_tagged, watch_with,
 };
 pub use script::{script, setup_source, source};
 pub use setup::{Slots, position};

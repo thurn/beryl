@@ -65,12 +65,13 @@ pub(crate) fn setup(
 
 /// Starts in Small if the deal fits and the cards cannot start a subgame. Scenarios can
 /// inspect decisions in a subgame by starting in Large.
-pub(crate) fn with_layout<T>(
+pub(crate) fn with_layout<T, Context>(
     cards: &'static CardTable,
     scenario: &Scenario,
     slots: Slots,
-    small: impl FnOnce(GameTable, State) -> Result<T, Failure>,
-    large: impl FnOnce(GameTable, State<Large>) -> Result<T, Failure>,
+    context: Context,
+    small: impl FnOnce(GameTable, State, Context) -> Result<T, Failure>,
+    large: impl FnOnce(GameTable, State<Large>, Context) -> Result<T, Failure>,
 ) -> Result<T, Failure> {
     let t = table(cards, scenario)?;
     let seed = scenario.setup.seed;
@@ -78,12 +79,12 @@ pub(crate) fn with_layout<T>(
         && let Ok(s) = State::new(&t, seed, Profile::EXACT)
     {
         let s = arrange(&t, s, scenario, slots)?;
-        small(t, s)
+        small(t, s, context)
     } else {
         let s = State::<Large>::deal(&t, seed, Profile::EXACT)
             .map_err(|error| setup_failure(scenario, error.to_string()))?;
         let s = arrange(&t, s, scenario, slots)?;
-        large(t, s)
+        large(t, s, context)
     }
 }
 

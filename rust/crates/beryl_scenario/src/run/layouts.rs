@@ -20,13 +20,14 @@ pub fn plays_alike_in_both_layouts(
         cards,
         scenario,
         Slots::Dealt,
-        |t, s| {
+        scenario,
+        |t, s, scenario| {
             let comparison = Box::new(LayoutComparison::new(&s));
             let mut runner = Runner::from_position(t, s);
             runner.comparison = Some(comparison);
             play_actions(runner, scenario)
         },
-        |t, s| play_actions(Runner::from_position(t, s), scenario),
+        |t, s, scenario| play_actions(Runner::from_position(t, s), scenario),
     )
 }
 

@@ -14,8 +14,8 @@ use beryl_cards::{CARDS, library, names};
 use beryl_engine::card::{ManaCost, Part, Prompt, Purpose, Shape};
 use beryl_engine::state::Pending;
 use beryl_engine::two_player::TwoPlayerSeat as _;
-use beryl_engine::{Observation, Scratch, view};
-use beryl_scenario::Scenario;
+use beryl_engine::{Decision, GameTable, Layout, Observation, Scratch, State, view};
+use beryl_scenario::{DecisionVisitor, Scenario, visit_with_layout};
 use beryl_session::prompt::{Lies, PlaceName, PromptView, ShapeBody, shape_name};
 use beryl_session::protocol::{CardHandling, DecisionView, Moment, Side, player_view};
 use beryl_session::{DecisionId, SessionId, Status, StopsSetting};
@@ -90,31 +90,37 @@ fn decisions(scenarios: &[Scenario]) -> Vec<DecisionView> {
 fn asked_in(scenarios: &[Scenario]) -> Vec<(DecisionView, Prompt)> {
     let mut seen = Vec::new();
     for scenario in scenarios {
-        beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
-            let mut x = Scratch::new();
-            // A paused resolution's entry is still on top of the committed stack.
-            let resolving = matches!(s.pending(), Pending::Resolving(_))
-                .then(|| s.stack().last())
-                .flatten();
-            let id = DecisionId {
-                session: SessionId(1),
-                seq: 1,
-            };
-            let v = player_view(
-                t,
-                Observation::new(view(s, t, &mut x), d.decider),
-                Moment::Deciding(id, d, resolving),
-                StopsSetting::SMART,
-                &[],
-            );
-            let Status::Deciding { decision } = v.status else {
-                panic!("no decision is open");
-            };
-            seen.push((decision, d.prompt));
-        })
-        .unwrap_or_else(|e| panic!("{e}"));
+        visit_with_layout(&CARDS, scenario, &mut CollectPrompts(&mut seen))
+            .unwrap_or_else(|e| panic!("{e}"));
     }
     seen
+}
+
+struct CollectPrompts<'a>(&'a mut Vec<(DecisionView, Prompt)>);
+
+impl DecisionVisitor for CollectPrompts<'_> {
+    fn decision<L: Layout>(&mut self, t: &GameTable, s: &State<L>, d: &Decision<L>) {
+        let mut x = Scratch::new();
+        // A paused resolution's entry is still on top of the committed stack.
+        let resolving = matches!(s.pending(), Pending::Resolving(_))
+            .then(|| s.stack().last())
+            .flatten();
+        let id = DecisionId {
+            session: SessionId(1),
+            seq: 1,
+        };
+        let v = player_view(
+            t,
+            Observation::new(view(s, t, &mut x), d.decider),
+            Moment::Deciding(id, d, resolving),
+            StopsSetting::SMART,
+            &[],
+        );
+        let Status::Deciding { decision } = v.status else {
+            panic!("no decision is open");
+        };
+        self.0.push((decision, d.prompt));
+    }
 }
 
 /// The distinct prompts of `purposes` that these scenarios reach, in the order they first
@@ -453,6 +459,34 @@ fn abhorrent_oculus_asks_for_graveyard_cards_then_a_card_to_manifest() {
              >battlefield >graveyard you's library"
         )
     );
+}
+
+#[test]
+fn a_subgame_mulligan_prompt_counts_the_subgame_hand() {
+    use beryl_engine::DecisionKind;
+    use beryl_scenario::{Action, P0, P1, Pick};
+    use beryl_session::protocol::Candidate;
+
+    const SCENARIO: Scenario = Scenario::new("Shahrazad offers to keep each subgame hand")
+        .hand(P0, &[names::SHAHRAZAD])
+        .battlefield(P0, &[names::PLAINS; 2])
+        .library(P0, &[names::PLAINS; 8])
+        .library(P1, &[names::MOUNTAIN; 3])
+        .actions(&[
+            Action::cast(P0, names::SHAHRAZAD),
+            Action::Resolve,
+            Action::answer(P1, DecisionKind::KeepOrMulligan, Pick::Keep),
+            Action::answer(P0, DecisionKind::KeepOrMulligan, Pick::Keep),
+        ]);
+
+    let keep_labels: Vec<_> = decisions(&[SCENARIO])
+        .into_iter()
+        .filter(|decision| decision.prompt.is(Purpose::Mulligan))
+        .flat_map(|decision| decision.candidates)
+        .filter(|candidate| candidate.option == Candidate::Keep)
+        .map(|candidate| candidate.label)
+        .collect();
+    assert_eq!(keep_labels, ["Keep 3", "Keep 7"]);
 }
 
 /// Every prompt the cards' scenarios reach is sent whole, whatever card asks it and whatever
