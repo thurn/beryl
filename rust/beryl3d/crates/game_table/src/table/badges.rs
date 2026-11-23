@@ -360,7 +360,10 @@ impl Badges {
         let card = on.pose.upward();
         let mut left = BUDGET;
         let corner = self.sizes().card.half();
-        if let Some((label, fill)) = plaque(object, face) {
+        // Copies beneath the top card peek out of the pile but share its plaque.
+        if copies > 0
+            && let Some((label, fill)) = plaque(object, face)
+        {
             let height = self.tuning().plaque.height * self.em();
             let numerals = self.tuning().plaque.numerals * self.em();
             let width = (self.width(&label, numerals)

@@ -248,7 +248,7 @@ impl<'a> Motion<'a> {
         &mut self,
         dirty: &[bool],
         subject: Option<usize>,
-        (number, own, still): (usize, Interval, bool),
+        (number, own, verb): (usize, Interval, Verb),
     ) {
         self.affected.clear();
         self.removed.clear();
@@ -256,6 +256,7 @@ impl<'a> Motion<'a> {
             self.affected.extend(subject);
             return;
         }
+        let still = verb == Verb::Set;
         let before = &self.rests.rests;
         let after = &self.fresh.rests;
         let end = before.len().max(after.len());
@@ -274,9 +275,17 @@ impl<'a> Motion<'a> {
         let mut changed = |slot, before: Option<&Rest>, after: Option<&Rest>| {
             let counts = (copies(before), copies(after));
             if counts.0 != counts.1 && !lifting.iter().any(|id| usize::from(id.0) == slot) {
+                // An appearing card fades in at its resting pose. If that pose is
+                // beneath a pile's top card, it shares the plaque from its first frame.
+                let covered_on_arrival =
+                    verb == Verb::Appear && subject == Some(slot) && counts.1 == 0;
                 self.written.pile_counts.push(game_table::table::PileCount {
                     slot,
-                    at: if still { own.from } else { own.to },
+                    at: if still || covered_on_arrival {
+                        own.from
+                    } else {
+                        own.to
+                    },
                     step: number,
                     copies: counts.1,
                 });
@@ -412,7 +421,7 @@ impl<'a> Motion<'a> {
         // place as the step begins. Only the cards that stay in a hand regroup round one it
         // takes out of the fan or puts back, as on the web stage (`carried` in `tracks.ts`).
         let still = verb == Verb::Set;
-        self.mark_affected(&dirty, subject, (number, own, still));
+        self.mark_affected(&dirty, subject, (number, own, verb));
         let affected = std::mem::take(&mut self.affected);
         // A step that moves no card of its own (a player's, an ability's, a span's) has its verb
         // play it first. The cards a look lifts or puts back are the `lift` verb's to move, so

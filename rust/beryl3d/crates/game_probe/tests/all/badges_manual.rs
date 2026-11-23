@@ -2,20 +2,14 @@
 //! untap flags"): a named counter wears its shortened name before its count, in a row above the
 //! plaque, and a permanent that doesn't untap wears a lock in its top left corner.
 
+use crate::badges::{badged, glyphs_of, table_records};
 use crate::common::{MS, empty_frame, frame, show};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{CardType, NamedCounter, ObjectId, Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
-use game_play::play::Show;
 use game_table::table::badges::{name_style, style};
-use glam::{Vec2, Vec3};
+use glam::Vec2;
 use kit_frame::frame::{Frame, Material};
-use kit_text::text::{Glyphs, Text, TypeStyle, glyph_key};
-use kit_ui::input::{GlyphCell, GlyphKey, IconCell};
-use kit_ui::widgets::icons::{LOCK, LOCK_SIDE};
-
-/// The window's physical pixels per logical point, as `common::window` sets it.
-const SCALE: f32 = 2.0;
 
 /// A relic on the viewer's battlefield with `counters` and, if `locked`, flagged as skipping
 /// its untap, at rest, and its slot.
@@ -36,61 +30,6 @@ fn relic(counters: &[(&str, i32)], locked: bool) -> (GameUpdate, ObjectId) {
     (update, slot)
 }
 
-/// A show that has taken `update` with its badges and named counters shaped, every glyph of
-/// both badge styles in the atlas on page 1 at the x of its number, and the lock on page 2.
-fn badged(update: &GameUpdate) -> Show {
-    let mut show = show();
-    show.push(Box::new(update.clone()), Vec::new());
-    let mut wanted = Glyphs::default();
-    show.shape_badges(&mut Text::new(), &mut wanted, SCALE);
-    let _: Vec<GlyphKey> = wanted.drain_wanted().collect();
-    let cells: Vec<GlyphCell> = [
-        style(&crate::test_data::data().badges),
-        name_style(&crate::test_data::data().badges),
-    ]
-    .into_iter()
-    .flat_map(|style| {
-        (0..2_000).map(move |glyph| GlyphCell {
-            key: glyph_key(style, SCALE, glyph),
-            rect: [glyph, 0, 16, 20],
-            bearing: [0, -20],
-        })
-    })
-    .collect();
-    let badges = show.badges_mut();
-    badges.add(1, &cells);
-    badges.add_icons(
-        2,
-        &[IconCell {
-            icon: LOCK,
-            size: LOCK_SIDE,
-            rect: [0, 0, 48, 48],
-            shadow: 0,
-        }],
-    );
-    show
-}
-
-/// The records of the table in `frame` drawn with `material`: the x of each one's atlas cell
-/// and where its middle is in the table's space.
-fn table_records(frame: &Frame, material: Material) -> Vec<(u16, Vec3)> {
-    frame.draws[..frame.layer as usize]
-        .iter()
-        .filter(|draw| draw.material == material as u8)
-        .map(|draw| {
-            let model = draw.model;
-            (draw.uv[0], Vec3::new(model[3], model[7], model[11]))
-        })
-        .collect()
-}
-
-/// The glyphs `text` is shaped into in `style`.
-fn glyphs_of(text: &str, style: TypeStyle) -> Vec<u16> {
-    let mut shaper = Text::new();
-    let block = shaper.block(text, style, &[], None);
-    block.glyphs.iter().map(|glyph| glyph.glyph).collect()
-}
-
 /// The corners on the screen of the card in `slot` in `frame`.
 fn corners(frame: &Frame, slot: ObjectId) -> [Vec2; 4] {
     (frame.resolved.iter())
@@ -102,7 +41,7 @@ fn corners(frame: &Frame, slot: ObjectId) -> [Vec2; 4] {
 #[test]
 fn a_named_counter_wears_its_shortened_name_before_its_count() {
     let (update, _) = relic(&[("Corruption", 2), ("Ki", 4)], false);
-    let mut show = badged(&update);
+    let mut show = badged(show(), &update);
     let drawn = frame(&mut show, &mut empty_frame(), 100 * MS);
     // Records are drawn farthest first, so read them as rows: the lower row first, each left
     // to right on the screen.
@@ -137,11 +76,11 @@ fn a_named_counter_wears_its_shortened_name_before_its_count() {
 #[test]
 fn a_permanent_that_doesnt_untap_wears_a_lock_in_its_top_left_corner() {
     let (update, slot) = relic(&[], true);
-    let mut show = badged(&update);
-    let drawn = frame(&mut show, &mut empty_frame(), 100 * MS);
+    let mut locked = badged(show(), &update);
+    let drawn = frame(&mut locked, &mut empty_frame(), 100 * MS);
     let icons = table_records(&drawn, Material::Icon);
     assert_eq!(icons.len(), 1, "one lock");
-    let camera = show.table().camera();
+    let camera = locked.table().camera();
     let lock = camera.to_screen(icons[0].1);
     let card = corners(&drawn, slot);
     let (low, high) = card.iter().fold(
@@ -155,8 +94,8 @@ fn a_permanent_that_doesnt_untap_wears_a_lock_in_its_top_left_corner() {
     );
 
     let (update, _) = relic(&[("Corruption", 2)], true);
-    let mut show = badged(&update);
-    let drawn = frame(&mut show, &mut empty_frame(), 100 * MS);
+    let mut locked = badged(show(), &update);
+    let drawn = frame(&mut locked, &mut empty_frame(), 100 * MS);
     assert_eq!(table_records(&drawn, Material::Icon).len(), 1);
     assert_eq!(
         table_records(&drawn, Material::Glyph).len(),
@@ -165,8 +104,8 @@ fn a_permanent_that_doesnt_untap_wears_a_lock_in_its_top_left_corner() {
     );
 
     let (update, _) = relic(&[], false);
-    let mut show = badged(&update);
-    let drawn = frame(&mut show, &mut empty_frame(), 100 * MS);
+    let mut unlocked = badged(show(), &update);
+    let drawn = frame(&mut unlocked, &mut empty_frame(), 100 * MS);
     assert!(
         table_records(&drawn, Material::Icon).is_empty(),
         "a permanent that untaps wears no lock"

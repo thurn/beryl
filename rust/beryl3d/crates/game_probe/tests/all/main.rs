@@ -4,6 +4,7 @@
 mod test_data;
 
 mod agent;
+mod badges;
 mod badges_manual;
 #[path = "../common/mod.rs"]
 mod common;

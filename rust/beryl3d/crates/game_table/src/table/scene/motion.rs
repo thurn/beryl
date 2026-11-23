@@ -21,7 +21,7 @@ pub struct Motion<'a> {
     /// When cards show the record the script leads to, where a step says (`Turn`), sorted by
     /// slot and then time.
     pub turns: &'a [Turn],
-    /// Pile counts applied as steps finish changing card placement.
+    /// Pile counts applied as steps change where cards are drawn.
     pub pile_counts: &'a [PileCount],
 }
 
@@ -38,7 +38,7 @@ pub struct Turn {
     pub step: usize,
 }
 
-/// A new pile count for a card once a step has finished changing its placement.
+/// A new pile count for a card when a step changes its placement.
 #[derive(Clone, Copy, Debug)]
 pub struct PileCount {
     pub slot: usize,
