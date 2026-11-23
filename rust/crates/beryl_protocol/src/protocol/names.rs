@@ -7,13 +7,12 @@ use beryl_kernel::decision::StallReason;
 use beryl_kernel::event::Reason;
 use beryl_kernel::state::MulliganStatus;
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 /// The engine's enums, mirrored so the protocol owns its wire names.
 macro_rules! mirror {
     ($(#[$meta:meta])* $name:ident from $engine:ty { $($variant:ident),* $(,)? }) => {
         $(#[$meta])*
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
         #[serde(rename_all = "camelCase")]
         pub enum $name {
             $($variant),*
@@ -61,7 +60,7 @@ mirror! {
 }
 
 /// A zone on the wire. Only manual tables show the sideboard during play.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ZoneName {
     Library,
@@ -148,7 +147,7 @@ mirror! {
 }
 
 /// A card type (CR 300.1), those the implemented cards use.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CardType {
     Artifact,
@@ -161,7 +160,7 @@ pub enum CardType {
 }
 
 /// A keyword ability a permanent can show (CR 702), those implemented permanents use in combat.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Keyword {
     FirstStrike,

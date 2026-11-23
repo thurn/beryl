@@ -9,9 +9,6 @@ publish = false
 [lints]
 workspace = true
 
-[features]
-ts = ["dep:ts-rs"]
-
 [dependencies]
 # Supplies printed card facts from the shared store for host-side actions.
 beryl_card_store = { path = "../beryl_card_store" }
@@ -21,13 +18,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 # Writes the append-only JSON table save without a handwritten codec.
 serde_json = "1.0.154"
 
-# Generates client action types from the same schema as the host log.
-ts-rs = { version = "12.0.1", features = ["no-serde-warnings"], optional = true }
-
 [dev-dependencies]
-# With TypeScript types, as beryl_protocol and beryl_session build it, so that a build of
-# this package's tests alone reuses the whole workspace's build (see beryl_workspace_hack).
-beryl_table = { path = ".", features = ["ts"] }
 # Every shared dependency with the whole workspace's features, so that a build of this
 # package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
 beryl_workspace_hack = { path = "../beryl_workspace_hack" }

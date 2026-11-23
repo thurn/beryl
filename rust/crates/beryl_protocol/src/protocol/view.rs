@@ -2,7 +2,6 @@
 
 use beryl_kernel::SlotId;
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use super::{
     CardType, Counter, DecisionView, Declaration, FaceName, GameEvent, Keyword, ManualAbility,
@@ -11,9 +10,8 @@ use super::{
 
 /// An object on the wire: its public slot, the number a [`Subject::Object`](crate::script::Subject) and an
 /// [`ObjectView`](crate::protocol::ObjectView) name it by.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
-#[ts(type = "number")]
 pub struct ObjectId(pub u16);
 
 impl ObjectId {
@@ -48,17 +46,15 @@ impl From<ObjectId> for u16 {
 /// A session emits a view as the game starts, as each step of the turn begins, before and so
 /// after each of the opponent's decisions, at each of the viewer's, and at the end: every
 /// event of the game is in exactly one view.
-#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerView {
     pub status: Status,
     /// Public scope of the opponent's card handling while their decision is open.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub handling: Option<CardHandling>,
     /// Public attackers whose destination is still being chosen.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub pending_attackers: Option<Vec<ObjectId>>,
     pub turn: TurnView,
     pub players: Players,
@@ -80,11 +76,9 @@ pub struct PlayerView {
     /// ([`crate::script`]): every view a game in progress sends has one. A view built on its
     /// own, and one recorded before scripts were, has none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub script: Option<crate::script::Script>,
     /// The manual table's controls and state for this viewer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub table: Option<TableView>,
 }
 
@@ -101,7 +95,7 @@ impl PlayerView {
 }
 
 /// Where the game stands for the viewer.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Status {
     /// The viewer must decide; the game waits for their answer.
@@ -124,7 +118,7 @@ pub enum Status {
 }
 
 /// A player, relative to the viewer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Side {
     You,
@@ -133,7 +127,7 @@ pub enum Side {
 
 /// Which part of the table the opponent is handling. The scope names a zone and how
 /// much of it is in use, without the candidates, their identities or any picks.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "zone", rename_all = "camelCase")]
 pub enum CardHandling {
     /// The top `count` cards, or the whole library during a search.
@@ -141,7 +135,6 @@ pub enum CardHandling {
         side: Side,
         count: Option<u8>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         scry: Option<bool>,
     },
     Hand {
@@ -159,7 +152,7 @@ pub enum CardHandling {
 /// Face up or face down
 /// ([CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105)): one of a permanent's
 /// statuses. Cards elsewhere are face up.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Facing {
     Up,
@@ -167,12 +160,12 @@ pub enum Facing {
 }
 
 /// A game session, numbered from 1 in the order sessions start.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct SessionId(pub u32);
 
 /// Names one decision of the human's in one session. The UI echoes the one it received to
 /// answer it, and never looks inside.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DecisionId {
     pub session: SessionId,
@@ -181,7 +174,7 @@ pub struct DecisionId {
 }
 
 /// A candidate of a decision, by its position in [`DecisionView::candidates`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CandidateIndex(pub u16);
 
 /// The count of the active player's own turns, the current one included, when the game's
@@ -193,7 +186,7 @@ pub const fn own_number(number: u16) -> u16 {
     number.div_ceil(2)
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnView {
     /// The game's turns so far, both players' together: 0 before the first turn. Orders turns.
@@ -217,11 +210,10 @@ pub struct TurnView {
     ///
     /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub controlled_by: Option<Side>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Players {
     pub you: PlayerState,
@@ -230,7 +222,7 @@ pub struct Players {
 
 /// One player's public state and their ordered zones. Their hand and exile are the objects
 /// they own in those zones.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerState {
     pub life: i32,
@@ -247,12 +239,11 @@ pub struct PlayerState {
     /// The emblems' names.
     pub emblems: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    #[ts(optional, as = "Option<_>")]
     pub named_counters: Vec<NamedCounter>,
 }
 
 /// Mana by type.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ManaPool {
     pub white: u32,
@@ -264,7 +255,7 @@ pub struct ManaPool {
 }
 
 /// One object, with its identity only if the viewer knows it.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[expect(
     clippy::struct_excessive_bools,
@@ -277,7 +268,6 @@ pub struct ObjectView {
     /// The player whose zone contains this card, when it differs from its owner.
     /// Only the manual table can put a card in another player's pile or hand.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub zone_side: Option<Side>,
     pub controller: Side,
     /// The name of the face up, which keys its record in the card store
@@ -286,7 +276,6 @@ pub struct ObjectView {
     pub name: Option<String>,
     /// The other face of a known multi-face card, when one of its faces is up.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub other_face: Option<String>,
     /// Whether a permanent is face up or face down, part of its status (CR 110.5). A face-down
     /// one is a 2/2 creature with no name or text, whatever its card (CR 708.2a).
@@ -314,7 +303,6 @@ pub struct ObjectView {
     ///
     /// [CR 605.1a]: https://yawgatog.com/resources/magic-rules/#R6051a
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    #[ts(optional, as = "Option<_>")]
     pub mana_ability: bool,
     pub attached_to: Option<ObjectId>,
     /// The permanent that exiled it until it leaves (CR 610.3).
@@ -328,60 +316,47 @@ pub struct ObjectView {
     ///
     /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    #[ts(optional, as = "Option<_>")]
     pub phased_out: bool,
     /// In the merged zone: the merged permanent this card is part of, drawn under it
     /// ([CR 731.2]).
     ///
     /// [CR 731.2]: https://yawgatog.com/resources/magic-rules/#R7312
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub part_of: Option<ObjectId>,
     /// On the battlefield, for a card a copy effect gives another card's values: the name of
     /// the card it really is ([CR 707.2]), while `name` is the copied card's.
     ///
     /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub really: Option<String>,
     /// On the battlefield: the value it chose as it entered, by name ("Red", "Goblin",
     /// "Counterspell", "Another card")
     /// ([CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub chosen: Option<String>,
     /// The rules text and type line as a text-changing effect changed them (CR 612.1), in
     /// place of its card's printed ones; none while they read as printed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub text: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub type_line: Option<String>,
     /// A custom token's colors, including an empty list for colorless tokens.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub custom_colors: Option<Box<[String]>>,
     /// The record key of an exact token printing on a manual table.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub token_printing: Option<Box<str>>,
     pub combat: Option<Combat>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub note: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub pinned: Option<RowName>,
     /// Which face the manual table is showing. The engine uses `name` and `facing`.
     #[serde(default, skip_serializing_if = "FaceName::is_front")]
-    #[ts(optional, as = "Option<_>")]
     pub face: FaceName,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    #[ts(optional, as = "Option<_>")]
     pub named_counters: Vec<NamedCounter>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    #[ts(optional, as = "Option<_>")]
     pub doesnt_untap: bool,
     /// In a hand: its player picked it in a hidden pick of the resolution that is paused,
     /// which puts the cards picked onto the battlefield once every player has picked. Which
@@ -391,18 +366,17 @@ pub struct ObjectView {
     ///
     /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    #[ts(optional, as = "Option<_>")]
     pub hidden_pick: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PowerToughness {
     pub power: i32,
     pub toughness: i32,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CounterView {
     pub kind: Counter,
@@ -410,7 +384,7 @@ pub struct CounterView {
 }
 
 /// A creature's part in combat.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Combat {
     /// Attacking a player or the named planeswalker, or still in combat after the target left.
@@ -418,7 +392,6 @@ pub enum Combat {
     Attacking {
         planeswalker: Option<ObjectId>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         target_departed: Option<bool>,
         blocked: bool,
     },
@@ -428,7 +401,7 @@ pub enum Combat {
 }
 
 /// A spell or ability on the stack.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum StackItem {
     /// The spell in `slot`, whose object says what it is and who controls it.
@@ -455,7 +428,6 @@ pub enum StackItem {
         /// Its cost lets permanents be tapped in place of mana, each a pick of its
         /// controller's: the taps are seen before the ability is.
         #[serde(default, rename = "tapsToPay", skip_serializing_if = "Option::is_none")]
-        #[ts(optional, rename = "tapsToPay")]
         taps_to_pay: Option<bool>,
         /// How many paragraphs of its face's text say abilities of its kind (triggered, or
         /// activated) before the one that says it, so the UI finds its paragraph.
@@ -465,12 +437,10 @@ pub enum StackItem {
         /// paragraphs of its kind, as a token's or an emblem's with no text in the card store
         /// is. None where the UI finds the `nth` paragraph.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         text: Option<String>,
         controller: Side,
         /// Present only on manual table markers.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         manual: Option<ManualAbility>,
         targets: Vec<TargetRef>,
         /// The announced value of X.
@@ -482,7 +452,7 @@ pub enum StackItem {
 /// ([CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b)): "If the spell has
 /// alternative or additional costs that will be paid as it's being cast ... the player
 /// announces their intentions to pay any or all of those costs".
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PaidCost {
     Kicker,
@@ -496,7 +466,7 @@ pub enum PaidCost {
 }
 
 /// A player or an object, as a target or a recipient of damage.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum TargetRef {
     Player {

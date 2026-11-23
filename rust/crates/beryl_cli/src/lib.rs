@@ -24,7 +24,6 @@ pub mod positions;
 pub mod review;
 pub mod screen;
 pub mod script_check;
-pub mod serve;
 pub mod specs;
 pub mod tournament;
 pub mod transcript;

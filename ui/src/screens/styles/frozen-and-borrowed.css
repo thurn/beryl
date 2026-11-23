@@ -1,9 +1,0 @@
-/* While the page is frozen, a CSS animation that starts stays on its first frame. */
-.page-frozen *:not([data-unfrozen], [data-unfrozen] *) {
-  animation-play-state: paused !important;
-}
-/* A pile's viewer owns this card's face while it lists it (game/Piles.tsx). */
-[data-card-borrowed] {
-  visibility: hidden;
-  pointer-events: none;
-}

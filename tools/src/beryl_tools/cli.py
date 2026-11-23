@@ -6,11 +6,10 @@ import argparse
 import os
 import subprocess
 import sys
+from functools import partial
 from types import ModuleType
 
 from . import (
-    android,
-    app,
     audio,
     bench,
     bugs,
@@ -20,25 +19,16 @@ from . import (
     citations,
     conventions,
     count_gate,
-    coverage,
-    deps,
-    design_tokens,
     disk_usage,
     edit,
     efficiency_merge,
     fseventsd,
-    mobile,
-    mobile_bugs,
-    motion,
     oracle_discovery,
     oracles,
     paths,
     set_plan,
     scale,
-    shots,
-    specs,
     system,
-    ui_counts,
     video,
     vm_host,
     workspace_hack,
@@ -65,8 +55,6 @@ def utf8_rerun(argv: list[str] | None) -> int | None:
 
 
 MODULES: tuple[ModuleType, ...] = (
-    android,
-    app,
     audio,
     bench,
     beryl3d_cli,
@@ -77,27 +65,45 @@ MODULES: tuple[ModuleType, ...] = (
     citations,
     conventions,
     count_gate,
-    coverage,
-    deps,
-    design_tokens,
     disk_usage,
     edit,
     fseventsd,
-    mobile,
-    mobile_bugs,
-    motion,
     oracle_discovery,
     oracles,
     set_plan,
     scale,
-    shots,
-    specs,
     system,
-    ui_counts,
     video,
     vm_host,
     workspace_hack,
 )
+
+
+# The public app commands share Beryl 3D's argument parsers and runners.
+NATIVE_APP_COMMANDS = {
+    "dev": "app",
+    "bundle": "release",
+    "smoke": "smoke",
+    "table-pair": "table-pair",
+    "mobile-setup": "mobile-setup",
+    "ios": "ios",
+    "ios-smoke": "ios-smoke",
+    "ios-device": "ios-device",
+    "android": "android",
+    "android-smoke": "android-smoke",
+    "mobile-bugs": "mobile-bugs",
+}
+
+
+def run_native(command: str, args: argparse.Namespace) -> int:
+    return beryl3d_cli.main([command, *args.extra])
+
+
+def register_native(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    native = {command.name: command.summary for command in beryl3d_cli.COMMANDS}
+    for name, target in NATIVE_APP_COMMANDS.items():
+        parser = sub.add_parser(name, help=native[target], add_help=False)
+        parser.set_defaults(func=partial(run_native, target), passthrough=True)
 
 
 def commands() -> dict[str, str]:
@@ -112,6 +118,8 @@ def commands() -> dict[str, str]:
             func = sub.choices[name].get_default("func")
             owner = func.__module__ if func is not None else module.__name__
             found[name] = str(owner).rsplit(".", 1)[-1]
+    register_native(sub)
+    found.update({name: "cli" for name in NATIVE_APP_COMMANDS})
     return found
 
 
@@ -123,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     for module in MODULES:
         module.register(sub)
+    register_native(sub)
     # Commands marked `passthrough` hand arguments they don't know to another tool.
     args, extra = parser.parse_known_args(argv)
     if extra and not getattr(args, "passthrough", False):

@@ -4,7 +4,6 @@ use beryl_table::state::Seat;
 // The assists and settings a lobby names, for clients that do not depend on beryl_table.
 pub use beryl_table::state::{Assist, LobbySettings};
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use crate::protocol::{Answer, TableAction};
 
@@ -18,7 +17,7 @@ pub const TABLE_LINK: &str = "table-link";
 pub const TABLE_LOBBY_COMMAND: &str = "table_lobby";
 pub const TABLE_LOBBY: &str = "table-lobby";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TableLink {
     Iroh,
@@ -27,39 +26,37 @@ pub enum TableLink {
     Memory,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TableHostSettings {
     pub name: String,
-    #[ts(optional)]
     pub starting_life: Option<i32>,
-    #[ts(optional)]
     pub starting_hand_size: Option<u16>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TableHostRequest {
     pub link: TableLink,
     pub settings: TableHostSettings,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TableHostReply {
     pub invite: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TableJoinRequest {
     pub invite: String,
     pub name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TableResumeRequest {
     pub id: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedTable {
     pub id: String,
     pub host: String,
@@ -67,13 +64,13 @@ pub struct SavedTable {
 }
 
 /// Profile settings for linked tables. A null relay selects iroh's public relays.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TableSettings {
     pub relay: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TableConnectionError {
     pub reason: String,
 }
@@ -86,7 +83,7 @@ impl TableConnectionError {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LobbySeat {
     pub seat: Seat,
@@ -99,7 +96,7 @@ pub struct LobbySeat {
 }
 
 /// A seat's own deck and the public information about the table.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LobbyView {
     pub you: Seat,
@@ -116,21 +113,20 @@ pub struct LobbyView {
 }
 
 /// A null view means the current table has started playing.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LobbyUpdate {
     pub view: Option<LobbyView>,
     // The lobby shown as information while the game is in progress.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub game: Option<Box<LobbyView>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TableLobbyRequest {
     pub change: LobbyChange,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TableAnswerRequest {
     pub answer: Answer,
 }
@@ -144,7 +140,7 @@ pub enum TableRequest {
     Action(TableAction),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
     rename_all = "snake_case",

@@ -1,12 +1,11 @@
 //! The game events a view carries.
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use super::{Counter, Mana, ObjectId, Side, StackItem, Step, TargetRef, Why, ZoneName};
 
 /// One thing that happened (architecture §8.1), by public slot and relative to the viewer.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum GameEvent {
     /// The object now in `slot` arrived from another zone.
@@ -17,7 +16,6 @@ pub enum GameEvent {
         reason: Why,
         /// Whether a spell went to the top or the bottom of its owner's library.
         #[serde(rename = "libraryTop", skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         library_top: Option<bool>,
     },
     Damage {
@@ -31,7 +29,6 @@ pub enum GameEvent {
         cards: u8,
         /// The public slots drawn, top first. Older recordings carry only the count.
         #[serde(skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         slots: Option<Vec<ObjectId>>,
     },
     Scry {

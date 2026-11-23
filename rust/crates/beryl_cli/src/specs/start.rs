@@ -5,6 +5,9 @@ use std::sync::Arc;
 
 use beryl_scenario::Action;
 use beryl_search::GameAgent;
+use beryl_session::protocol::{
+    Candidate, CandidateIndex, DecisionId, GameEvent, ObjectId, PlayerView, Side,
+};
 use beryl_session::{GameUpdate, Prepared, Seat, Sessions, Status, StopsSetting};
 
 use super::{Moment, View};
@@ -220,4 +223,60 @@ pub fn review_position(
             return Err("game ended during setup".to_owned());
         }
     }
+}
+
+/// Follow the recorded casts only while the game takes them in order. The other seat may
+/// take the next legal cast explicitly, by the same decision ID as a click in the game.
+pub fn recorded_cast_moves(
+    remaining: &mut &'static [Action],
+    updates: &[GameUpdate; 2],
+) -> [Option<(DecisionId, CandidateIndex)>; 2] {
+    if remaining.is_empty() {
+        return [None; 2];
+    }
+    let first = &updates[0].view;
+    for event in &first.events {
+        if let GameEvent::Cast {
+            slot, controller, ..
+        } = *event
+        {
+            let matches = remaining.first().is_some_and(|action| {
+                matches!(*action, Action::Cast { player, card, .. }
+                    if (player.index() == 0) == (controller == Side::You)
+                        && named(first, slot, card))
+            });
+            *remaining = if matches { &remaining[1..] } else { &[] };
+        }
+    }
+    let Some(Action::Cast {
+        player,
+        card,
+        face,
+        costs,
+    }) = remaining.first().copied()
+    else {
+        return [None; 2];
+    };
+    let view = &updates[player.index()].view;
+    let Status::Deciding { decision } = &view.status else {
+        return [None; 2];
+    };
+    let mut choices = decision.candidates.iter().enumerate().filter(|(_, c)| {
+        matches!(&c.option, Candidate::Cast { slot, face: f, costs: paid }
+            if *f == face.get() && paid.iter().copied().eq(costs.indices().map(beryl_engine::card::CastingIx::get)) && named(view, *slot, card))
+    });
+    let mut moves = [None; 2];
+    if let Some((i, _)) = choices.next()
+        && choices.next().is_none()
+        && let Ok(index) = u16::try_from(i)
+    {
+        moves[1 - player.index()] = Some((decision.id, CandidateIndex(index)));
+    }
+    moves
+}
+
+fn named(view: &PlayerView, slot: ObjectId, card: &str) -> bool {
+    view.objects
+        .iter()
+        .any(|o| o.slot == slot && o.name.as_deref() == Some(card))
 }

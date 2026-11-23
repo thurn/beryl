@@ -194,19 +194,8 @@ pub(super) fn markdown(m: &Markdown<'_>) -> String {
         )
         .expect("writes");
     }
-    if m.report.updates.is_empty() {
-        if m.report.spec.is_none() {
-            writeln!(out, "- The page: `{}`", m.report.page.url).expect("writes");
-        }
-    } else {
-        writeln!(
-            out,
-            "- The screen, its latest views replayed: copy `fixture.json` to \
-             `ui/public/fixtures/bug-{id}.json` and open `/?fixture=bug-{id}#/game` \
-             (`&at=-1` stops a view short, and the next answer plays the last)",
-            id = m.id
-        )
-        .expect("writes");
+    if m.report.spec.is_none() {
+        writeln!(out, "- The reported screen: `{}`", m.report.page.url).expect("writes");
     }
     out.push_str("\n## Files\n\n");
     for (name, about) in m.files {
@@ -241,9 +230,7 @@ pub(super) fn spec_lines(out: &mut String, spec: &SpecMoment) {
     writeln!(
         out,
         "- The spec moment, as text from both seats:\n  \
-         `just specs {card} --describe --moment {moment}`\n\
-         - Its page, both seats side by side: `/specs/{card}/{moment}` (`just specs {card}`); \
-         this seat full size: `/specs/{spec}`",
+         `just b3d spec {card} {moment}`",
         card = spec.card,
         moment = spec.moment,
     )

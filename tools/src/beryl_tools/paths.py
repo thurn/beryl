@@ -13,8 +13,6 @@ REPO: Path = Path(__file__).resolve().parents[3]
 # `by`, run by a `by` command as a child with the same interpreter.
 BY: list[str] = [sys.executable, "-m", "beryl_tools.cli"]
 RUST: Path = REPO / "rust"
-UI: Path = REPO / "ui"
-APP: Path = RUST / "crates" / "beryl_app"
 TOOLS: Path = REPO / "tools"
 
 # Environment variables that mark a run as an agent's: it must stay windowless and silent.
@@ -84,11 +82,6 @@ def worktree_names() -> list[str]:
     return [path.name for path in worktree_paths()]
 
 
-# The Tauri CLI's builds get their own target directory: it sets environment variables that
-# Tauri's build scripts track, so sharing one with plain cargo would rebuild Tauri every time
-# the two alternate, and parallel builds would wait on each other's build lock.
-TAURI_TARGET: Path = RUST / "target" / "tauri"
-
 # Clippy gets its own target directory too. Cargo holds one lock on a target directory for the
 # whole of a command, and clippy's units (check metadata) are not the ones `cargo build` and
 # `cargo test` produce, so the two share no work but did wait on each other: in the old fast
@@ -151,13 +144,3 @@ def run_env() -> dict[str, str]:
 def clippy_env() -> dict[str, str]:
     """The environment for cargo clippy ([`CLIPPY_TARGET`])."""
     return {**os.environ, "CARGO_TARGET_DIR": str(CLIPPY_TARGET)}
-
-
-def tauri_env() -> dict[str, str]:
-    """The environment for the Tauri CLI, run from ui/: it finds the app crate through
-    TAURI_APP_PATH."""
-    return {
-        **os.environ,
-        "TAURI_APP_PATH": str(APP),
-        "CARGO_TARGET_DIR": str(TAURI_TARGET),
-    }

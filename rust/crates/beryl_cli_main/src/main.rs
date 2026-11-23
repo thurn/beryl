@@ -29,9 +29,8 @@
 //! - The budget flags `--iterations N` and `--trees K` set a searching agent's iterations
 //!   per decision and how many independent trees share them (`beryl_search::Budget`).
 //! - `beryl_cli record-fixture <definitions.json> <out-dir> [name...]` plays the seeded games,
-//!   boards and manual tables a definitions file describes. It writes the messages the UI's
-//!   fixture transport replays (`ui/src/ipc.ts`) to `<out-dir>/<name>.json`. `just ui-shots`
-//!   runs it over `ui/fixtures.json`, so fixtures are generated, never committed.
+//!   boards and manual tables in a definitions file such as `data/beryl3d/fixtures.json`.
+//!   It writes a stream of recorded session messages to `<out-dir>/<name>.json`.
 //! - `beryl_cli eval-fit [--games N] [--seed N]` fits the board evaluation's weights on
 //!   seeded games and prints them ([`evalfit`]).
 //! - `beryl_cli review <replay.json> [--agent NAME] [--turn N] [--out FILE]` replays an app game's replay
@@ -40,10 +39,7 @@
 //! - `beryl_cli freeze-saves <dir> [--games N] [--seed N] [--replay FILE]` adds saves to the
 //!   frozen corpus at `<dir>`: a small set of seeded games between them covering the implemented cards'
 //!   cards and every kind of decision, or the given replay file ([`freeze`]).
-//! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
-//!   browser to play live games through (`just ui-live`, [`serve`]).
-//! - `beryl_cli specs-serve [--port N]` serves the cards' specs, each moment a live game, for
-//!   the spec page (`just specs`, [`specs::serve`]); `beryl_cli specs-check [card...]` lists
+//! - `beryl_cli specs-check [card...]` lists
 //!   each generated moment and the candidates generation skipped;
 //!   `beryl_cli specs-describe [--views] <card> [moment]` prints what each moment shows from
 //!   each seat, each view whole with `--views`; `beryl_cli specs-script <card> [moment]`
@@ -55,7 +51,7 @@ use std::process::ExitCode;
 use beryl_cli::transcript::Transcript;
 use beryl_cli::{
     Catalog, agreement, anchor_replay, blunders, evalfit, fit, fixture, freeze, game, gate, hunt,
-    ladder, number, positions, review, screen, script_check, serve, specs, tournament, why,
+    ladder, number, positions, review, screen, script_check, specs, tournament, why,
 };
 use beryl_search::Budget;
 
@@ -75,8 +71,6 @@ const USAGE: &str = "usage:
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
   beryl_cli eval-fit [--games N] [--seed N]
   beryl_cli fit <match-dir>... [--seed N] [--out FILE]
-  beryl_cli serve [--port N]
-  beryl_cli specs-serve [--port N]
   beryl_cli specs-check [card...]
   beryl_cli script-check <definitions.json> [--dump DIR] [check...]
   beryl_cli specs-describe [--views] <card> [moment]
@@ -98,11 +92,6 @@ static CATALOG: Catalog = Catalog {
     fuzz_deck_from: beryl_cards::decks::fuzz_deck_from,
     keystone_family: beryl_cards::decks::keystone_family,
 };
-
-/// The port `serve` listens on unless told otherwise.
-const DEFAULT_PORT: u16 = 1421;
-/// The port `specs-serve` listens on unless told otherwise.
-const SPECS_PORT: u16 = 1422;
 
 fn main() -> ExitCode {
     let c = &CATALOG;
@@ -134,14 +123,6 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "why" => why::main(c, rest),
         [command, rest @ ..] if command == "screen" => screen::main(c, rest),
         [command, rest @ ..] if command == "positions" => positions::main(c, rest),
-        [command] if command == "serve" => serve::serve(c, DEFAULT_PORT),
-        [command, flag, port] if command == "serve" && flag == "--port" => {
-            number(flag, port).and_then(|port| serve::serve(c, port))
-        }
-        [command] if command == "specs-serve" => specs::serve::serve(c, SPECS_PORT),
-        [command, flag, port] if command == "specs-serve" && flag == "--port" => {
-            number(flag, port).and_then(|port| specs::serve::serve(c, port))
-        }
         [command, cards @ ..] if command == "specs-check" => specs::check_all(c, cards),
         [command, definitions, checks @ ..] if command == "script-check" => {
             script_check::main(c, Path::new(definitions), checks)

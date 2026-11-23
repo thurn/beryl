@@ -1,11 +1,10 @@
 //! How a game ended, and the abilities that name its cause.
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use super::{Side, Stall};
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum OutcomeView {
     Win {
@@ -23,7 +22,7 @@ pub enum OutcomeView {
 }
 
 /// Why a player lost the game.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LossReason {
     /// [CR 704.5a](https://yawgatog.com/resources/magic-rules/#R7045a): "If a player has 0 or
@@ -44,7 +43,7 @@ pub enum LossReason {
 
 /// The card that ended the game: the one whose effect had a player win or lose, or the source
 /// of the damage that took a player's last life.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Culprit {
     /// The name of its face.
@@ -55,12 +54,11 @@ pub struct Culprit {
     /// The ability's rules text, when the printed text of its face has no paragraph that
     /// says it ([`StackItem::Ability`](super::StackItem::Ability)'s `text`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub text: Option<String>,
 }
 
 /// One of a face's abilities, as its rules text finds it: the `nth` of its `kind`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AbilityRef {
     pub kind: AbilityClass,
@@ -71,7 +69,7 @@ pub struct AbilityRef {
 /// ([CR 113.3](https://yawgatog.com/resources/magic-rules/#R1133)): "There are four general
 /// categories of abilities", of which spell abilities have no paragraph of their own and mana
 /// abilities are written as activated ones are.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AbilityClass {
     Triggered,

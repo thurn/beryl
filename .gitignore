@@ -1,18 +1,10 @@
-# Build output: Rust, Tauri's generated schemas, the UI, Python.
+# Rust and Python build output.
 /rust/target/
 /rust/beryl3d/target/
-/rust/crates/*/gen/schemas/
-/ui/node_modules/
 # The temporary names warm.py clones and moves the caches through (`clone_into`, `replace`).
-# Untracked files reach every check that lists files with git, and the repo lane's markdown
-# step once failed on the README files inside a node_modules clone another lane was making.
 .*.tmp-[0-9]*/
 *.tmp-[0-9]*/
 *.old-[0-9]*/
-/ui/dist/
-/ui/*.tsbuildinfo
-# Fixture streams beryl_cli records for the UI's fixture transport; generated, never committed.
-/ui/public/fixtures/
 /tools/.venv/
 /tools/.pyre/
 /.pyre/

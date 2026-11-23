@@ -543,16 +543,6 @@ pub fn automated(variant: &Variant, view: View) -> bool {
         .is_some_and(|seat| seat != view.seat())
 }
 
-pub fn listing(playground: &Playground) -> Value {
-    json!({ "examples": playground.examples.iter().map(|e| json!({
-        "title": e.title,
-        "variants": e.variants.iter().map(|v| json!({
-            "name": v.moment.name, "title": v.moment.title, "group": v.moment.group,
-            "plays": true, "first": v.controller.name(), "label": v.label,
-        })).collect::<Vec<_>>()
-    })).collect::<Vec<_>>(), "missing": playground.missing })
-}
-
 pub fn find(catalog: &'static Catalog, card: &str, name: &str) -> Option<&'static Variant> {
     if !name.starts_with("playground-") {
         return None;

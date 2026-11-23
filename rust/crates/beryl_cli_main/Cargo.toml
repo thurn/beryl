@@ -28,10 +28,6 @@ beryl_search = { path = "../beryl_search" }
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 
 [dev-dependencies]
-# The linked-table test drives the binary's live server over the session protocol.
-beryl_session = { path = "../beryl_session" }
-beryl_table = { path = "../beryl_table" }
-tempfile = "3"
 # Every shared dependency with the whole workspace's features, so that a build of this
 # package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
 beryl_workspace_hack = { path = "../beryl_workspace_hack" }

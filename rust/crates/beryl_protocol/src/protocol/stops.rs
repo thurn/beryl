@@ -3,12 +3,11 @@
 use beryl_card::TurnStep;
 use beryl_kernel::profile::{StepStops, Stops};
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use super::Step;
 
 /// Where the viewer gets priority (architecture §15, decision D13).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct StopsSetting {
     /// Full control: every priority the viewer receives, even where passing is all they can
@@ -18,11 +17,9 @@ pub struct StopsSetting {
     pub full_control: bool,
     /// The steps of the viewer's own turns where they stop with the stack empty, as Arena's
     /// phase stops: by default their main phases, and combat once creatures attack.
-    #[ts(as = "Vec<Step>")]
     pub yours: StepSet,
     /// The steps of the opponent's turns where the viewer stops with the stack empty: by
     /// default combat once creatures attack, and the end step.
-    #[ts(as = "Vec<Step>")]
     pub theirs: StepSet,
 }
 

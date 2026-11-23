@@ -31,7 +31,7 @@
 //!
 //! Every title and label comes from one table keyed by purpose (`wording.rs`), filled from
 //! the record and the view. A new purpose is one entry of the purposes' list and one of the
-//! table; on the wire it is its name, one of TypeScript's `Purpose` literals.
+//! table. On the wire it is the purpose's name.
 //!
 //! # Clicks
 //!

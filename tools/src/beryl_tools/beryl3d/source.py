@@ -28,7 +28,6 @@ SOURCES: tuple[str, ...] = (
     # Includes the native fixture definitions, tuning data, design tokens and audio assets.
     "data",
     "docs/sample-decks",
-    "ui/src/generated",
 )
 # In the machine: where the sources arrive, and the copy the gates build from.
 INCOMING = "$HOME/b3d-incoming"

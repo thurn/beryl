@@ -1,6 +1,5 @@
 """`just b3d motion-film <verb> [case]`: Beryl 3D's frames of a verb beside Arena's, for the
-motion-review and arena-pixel-match skills, as `just motion --film` films the web interface's
-(tools/src/beryl_tools/motion_film.py).
+motion-review and arena-pixel-match skills.
 
 It finds a recording that plays the verb (the verb's entry in `data/beryl3d/motion-recordings.json`, or
 `--recording`), reads Beryl 3D's timeline of it from each seat (`just b3d timeline`, with each
@@ -29,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .. import motion, video
+from .. import video
 from .. import motion_film as arena_film
 from . import paths
 from .command import Command
@@ -223,7 +222,9 @@ def arena_side(
     """Arena's instances of the verb cut into `folder`, and why each one left out was."""
     cut: list[dict[str, Any]] = []
     missing: list[str] = []
-    for n, instance in enumerate(arena_film.chosen(motion.motion(), verb, case, most)):
+    for n, instance in enumerate(
+        arena_film.chosen(arena_film.reference(), verb, case, most)
+    ):
         take = arena_film.retake(instance)
         name = f"{instance.get('case')} · {take.recording} {video.clock(take.start, 2)}"
         try:

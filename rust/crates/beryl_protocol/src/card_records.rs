@@ -6,7 +6,6 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 /// Scryfall's card image host: `<version>/<side>/<id[0]>/<id[1]>/<id>.jpg`.
 const IMAGES: &str = "https://cards.scryfall.io";
@@ -21,7 +20,7 @@ pub const CARD_BACK_ID: &str = "0aeebaf5-8c7d-4636-9e82-8c27447861f7";
 pub const NAMELESS_TOKEN_ID: &str = "6870a2af-80e1-4813-a332-2b1bd789f1c1";
 
 /// The [`CARD_RECORDS`](crate::ipc::CARD_RECORDS) command's request.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CardRecordsRequest {
     /// Card, face, token and emblem names, as the engine gives them.
@@ -30,7 +29,7 @@ pub struct CardRecordsRequest {
 
 /// The records found for a [`CardRecordsRequest`]'s names, each under the name asked for. A
 /// name may be both a card's and a token's (a card and the offspring token it makes).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CardRecords {
     /// The image of Magic's card back.
     pub card_back: String,
@@ -43,7 +42,7 @@ pub struct CardRecords {
 }
 
 /// A card's printing and faces, as the UI draws them.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CardEntry {
     pub name: String,
     pub scryfall_id: String,
@@ -54,31 +53,26 @@ pub struct CardEntry {
     pub faces: Vec<CardFace>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CardFace {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub mana_cost: Option<String>,
     pub type_line: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub oracle_text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub power: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub toughness: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub loyalty: Option<String>,
     pub colors: Vec<String>,
     pub images: CardImages,
 }
 
 /// A face's image URLs on Scryfall, by version.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CardImages {
     pub art_crop: String,
     pub normal: String,

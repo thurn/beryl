@@ -25,17 +25,6 @@ fn normalize(tokens: TokenStream) -> TokenStream {
                 continue;
             }
         }
-        if is(first, "use")
-            && let Some((import, tail)) = rest.split_at_checked(5)
-            && import
-                .iter()
-                .zip(["ts_rs", ":", ":", "TS", ";"])
-                .all(|(token, text)| is(token, text))
-        {
-            remaining = tail;
-            continue;
-        }
-
         let token = match first {
             TokenTree::Group(group) => {
                 TokenTree::Group(Group::new(group.delimiter(), normalize(group.stream())))
@@ -51,37 +40,24 @@ fn normalize(tokens: TokenStream) -> TokenStream {
 fn normalize_attribute(group: &Group) -> Option<Group> {
     let tokens: Vec<_> = group.stream().into_iter().collect();
     let (name, rest) = tokens.split_first()?;
-    if is(name, "doc") || is(name, "ts") {
+    if is(name, "doc") {
         return None;
     }
-    if let [TokenTree::Group(arguments)] = rest {
-        let clauses: Vec<_> = arguments.stream().into_iter().collect();
-        let mut clauses = clauses
+    // Canonicalize derive lists so a trailing comma does not change the handshake.
+    if is(name, "derive")
+        && let [TokenTree::Group(arguments)] = rest
+    {
+        let tokens: Vec<_> = arguments.stream().into_iter().collect();
+        let paths = tokens
             .split(|token| is(token, ","))
             .filter(|clause| !clause.is_empty())
-            .map(|clause| clause.iter().cloned().collect::<TokenStream>().to_string());
-        // The manual table uses cfg_attr for its optional legacy exports.
-        if is(name, "cfg_attr")
-            && clauses.next().as_deref() == Some("feature = \"ts\"")
-            && clauses.all(|clause| clause == "derive (ts_rs :: TS)" || clause.starts_with("ts ("))
-        {
-            return None;
-        }
-        if is(name, "derive") {
-            let paths = clauses
-                .filter(|path| path != "TS" && path != "ts_rs :: TS")
-                .collect::<Vec<_>>();
-            if paths.is_empty() {
-                return None;
-            }
-            let attribute = format!("derive({})", paths.join(","));
-            return Some(Group::new(
-                Delimiter::Bracket,
-                attribute
-                    .parse()
-                    .expect("the retained derive paths are Rust tokens"),
-            ));
-        }
+            .map(|clause| clause.iter().cloned().collect::<TokenStream>().to_string())
+            .collect::<Vec<_>>();
+        let attribute = format!("derive({})", paths.join(","));
+        return Some(Group::new(
+            Delimiter::Bracket,
+            attribute.parse().expect("the derive paths are Rust tokens"),
+        ));
     }
     Some(group.clone())
 }

@@ -5,14 +5,13 @@
 //! Arena evidence is given as `<recording id> <time>`, for `just video film`.
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 /// A fieldless enum whose wire name, text name and data name are one string, with the list of
 /// them all: a `const fn` cannot enumerate an enum's variants.
 macro_rules! names {
     ($(#[$meta:meta])* $name:ident { $($(#[$doc:meta])* $variant:ident = $text:literal),* $(,)? }) => {
         $(#[$meta])*
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
         pub enum $name {
             $($(#[$doc])* #[serde(rename = $text)] $variant),*
         }
@@ -160,7 +159,7 @@ names! {
 
 /// Which end of an arrow, a mark or a lift a step is. The end repeats its beginning exactly:
 /// what was begun and not ended is still shown, across scripts.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Span {
     Begin,

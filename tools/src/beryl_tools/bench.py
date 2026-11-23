@@ -56,7 +56,6 @@ COUNT_SOURCES = (
     "rust-toolchain.toml",
     "data",
     "docs/sample-decks",
-    "ui/src/generated",
 )
 # A Cargo profile can't set the CPU, so the recipes building the `search` profile pass it: off
 # Apple silicon, this machine's own (the justfile's `search_cpu`).

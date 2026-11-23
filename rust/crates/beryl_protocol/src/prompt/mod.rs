@@ -13,11 +13,3 @@ pub use view::{
     ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, Pair, PartName, Pile, PlaceName,
     PromptButton, PromptView, ShapeBody, Share, TapPreview, Words, shape_name,
 };
-
-/// The TypeScript type of a [`Purpose`]: the union of every purpose's name.
-pub fn purpose_decl() -> String {
-    let names: Vec<String> = (Purpose::ALL.iter())
-        .map(|purpose| format!("\"{}\"", purpose.name()))
-        .collect();
-    format!("type Purpose = {};", names.join(" | "))
-}

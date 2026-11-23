@@ -12,7 +12,6 @@ import pytest
 from beryl_tools import (
     citations,
     conventions,
-    design_tokens,
     file_length,
     paths,
     scryfall,
@@ -167,9 +166,9 @@ def test_markdown_must_be_formatted_as_mdformat_writes_it(tmp_path: Path) -> Non
 def test_file_length_holds_a_tree_to_its_allowlist(tmp_path: Path) -> None:
     root = repository(tmp_path)
     write(root, "data/file-length-allowlist.json", "{}")
-    write(root, "ui/src/a.ts", "x\n" * 800)
+    write(root, "tools/src/a.py", "x\n" * 800)
     assert passes("file-length", root)
-    write(root, "ui/src/b.ts", "x\n" * 801)
+    write(root, "tools/src/b.py", "x\n" * 801)
     assert outcome("file-length", root)["outcome"] == "fail"
 
 
@@ -302,14 +301,10 @@ def test_generated_pages_are_held_to_their_data(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = repository(tmp_path)
-    assert passes("conventions", root) and passes("design-tokens", root)
+    assert passes("conventions", root)
     write(tmp_path, "page.md", "stale\n")
-    write(tmp_path, "tokens.css", "stale\n")
     monkeypatch.setattr(conventions, "PAGE", tmp_path / "page.md")
-    monkeypatch.setattr(design_tokens, "STYLESHEET", tmp_path / "tokens.css")
     result = outcome("conventions", root)
-    assert result["outcome"] == "fail" and "is stale" in str(result["message"])
-    result = outcome("design-tokens", root)
     assert result["outcome"] == "fail" and "is stale" in str(result["message"])
 
 
@@ -348,7 +343,7 @@ def test_every_family_lists_its_checks_with_their_own_inputs(
     # The always set of docs/ignite.md.
     wanted = {
         "commit-subject", "conflict-markers", "file-length", "markdown-format",
-        "justfile-format", "conventions", "design-tokens", "card-names", "two-player",
+        "justfile-format", "conventions", "card-names", "two-player",
         "board-door", "discarded-push", "plan-references", "citations", "rulings",
         "rule-ownership", "divergences",
     }  # fmt: skip

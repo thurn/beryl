@@ -21,7 +21,6 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use ts_rs::TS;
 
 /// How many records the ring keeps.
 pub const CAPACITY: usize = 4000;
@@ -29,7 +28,7 @@ pub const CAPACITY: usize = 4000;
 pub const ROTATE_BYTES: u64 = 16 * 1024 * 1024;
 
 /// How serious a record is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Level {
     /// Routine traffic: each view, each command.

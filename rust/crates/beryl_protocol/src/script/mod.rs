@@ -135,7 +135,6 @@ mod timing;
 mod verb;
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 pub use act::{Act, Fact, Notice, Stream, Tally};
 pub use check::{Open, carried};
@@ -153,13 +152,12 @@ use crate::protocol::{GameEvent, ObjectView, PlayerView};
 use crate::protocol::{ObjectId, Side};
 
 /// What one seat's screen does between the view before and the view this came with.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Script {
     /// The stage starts over from the view's table, with no motion: a seat's first view, and
     /// an undone one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub reset: Option<Reset>,
     /// In order; the steps of one beat happen together.
     pub beats: Vec<Vec<Step>>,
@@ -186,7 +184,7 @@ impl Script {
 }
 
 /// A fresh start from a view.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Reset {
     /// The numbers of the abilities on the view's stack, bottom first.
@@ -194,20 +192,18 @@ pub struct Reset {
 }
 
 /// One verb applied to one thing, and what it came from.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[ts(rename = "ScriptStep")]
 pub struct Step {
     pub act: Act,
     /// The spell, ability, permanent or player responsible; none for the rules of the game.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub cause: Option<Subject>,
 }
 
 /// A card, an ability on the stack or a player: what a step is about, an end of an arrow, or
 /// a cause.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Subject {
     /// A card or token, by slot. A spell on the stack is its card.

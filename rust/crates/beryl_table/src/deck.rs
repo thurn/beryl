@@ -11,8 +11,6 @@ mod storage;
 
 pub use cod::parse_cod;
 pub use storage::Decks;
-
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableDeck"))]
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Deck {
     pub name: String,

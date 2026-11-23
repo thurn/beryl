@@ -17,21 +17,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from . import paths
-
 WINDOWS: bool = sys.platform == "win32"
 
 
 def exe(path: Path) -> Path:
     """`path` as an executable's name: with `.exe` on Windows."""
     return path.with_name(path.name + ".exe") if WINDOWS else path
-
-
-def npm_bin(name: str) -> str:
-    """A command node_modules/.bin installed in ui/: a `.cmd` shim on Windows."""
-    return str(
-        paths.UI / "node_modules" / ".bin" / (name + (".cmd" if WINDOWS else ""))
-    )
 
 
 def which(name: str) -> str:

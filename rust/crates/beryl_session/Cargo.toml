@@ -23,15 +23,10 @@ beryl_engine = { path = "../beryl_engine" }
 # The wire types this crate builds and re-exports at the same paths.
 beryl_protocol = { path = "../beryl_protocol" }
 beryl_search = { path = "../beryl_search" }
-# Generates viewer table commands from the action schema shared with the host log.
-beryl_table = { path = "../beryl_table", features = ["ts"] }
 # The frozen save corpus is gzipped (`corpus`): a save's JSON shrinks twentyfold.
 flate2 = "1.1.10"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-# A prompt's purpose is written by its name (`purpose_name`), with its TypeScript type
-# given by hand: ts-rs would warn that it cannot read that serde attribute.
-ts-rs = { version = "12.0.1", features = ["no-serde-warnings"] }
 tempfile = "3"
 # Replaces nothing: the session never calls it. It turns on the features of `getrandom` (which
 # `tempfile` uses) that the tests' `proptest` turns on, so that `cargo test` and the checks'
@@ -42,6 +37,8 @@ uuid = { version = "1", features = ["v4"] }
 zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
+# Exercises manual table actions through the shared table schema.
+beryl_table = { path = "../beryl_table" }
 # Opens repository files and records each read, so Ignite reruns the tests when one changes.
 beryl_test_files = { path = "../beryl_test_files" }
 # Every shared dependency with the whole workspace's features, so that a build of this

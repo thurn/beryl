@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import paths
 
-SCANNED = ("rust", "ui/src", "ui/scripts", "tools/src")
+SCANNED = ("rust", "tools/src")
 SUFFIXES: frozenset[str] = frozenset(
     {".rs", ".toml", ".ts", ".tsx", ".mjs", ".js", ".py"}
 )

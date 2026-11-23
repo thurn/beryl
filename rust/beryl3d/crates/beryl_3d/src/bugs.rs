@@ -2,7 +2,7 @@
 //! On `Request::FreezeFrame` the host reads back the next frame it draws, which shows the
 //! frozen table with nothing of the report, and the element tree of that frame is kept beside
 //! it as `just b3d tree` prints it. On `Request::SaveBug` the report is written with
-//! `beryl_session::bugs::write_attached` into the bugs folder the web app uses, off the frame
+//! `beryl_session::bugs::write_attached` into the shared bugs folder, off the frame
 //! thread: on the session thread in a live game, so that the replay and the latest view are the
 //! game's as of the commands sent before it, and on a thread of its own for a replayed
 //! recording. Beside the files the web's report has, it holds `tree.txt` and the frame log.

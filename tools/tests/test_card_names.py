@@ -44,11 +44,6 @@ def test_a_card_in_code_counts_but_not_in_a_comment_a_doc_or_a_test(
     write(tmp_path, f"{ENGINE}/expert/d.rs", 'const T: &str = "Ponder";\n')
     write(
         tmp_path,
-        "ui/src/e.tsx",
-        "// Ponder\nconst e = <p>don't</p>; const x = 'Ponder';\n",
-    )
-    write(
-        tmp_path,
         "tools/src/beryl_tools/f.py",
         '"""Ponder."""\n# Ponder\nX = "Ponder"\n',
     )
@@ -56,7 +51,6 @@ def test_a_card_in_code_counts_but_not_in_a_comment_a_doc_or_a_test(
     hits = card_names.scan(tmp_path, INDEX)
     assert {path: [n for _, n in found] for path, found in hits.items()} == {
         f"{ENGINE}/a.rs": ["Ponder", "Jace", "Ponder"],
-        "ui/src/e.tsx": ["Ponder"],
         "tools/src/beryl_tools/f.py": ["Ponder"],
     }
     assert hits[f"{ENGINE}/a.rs"][0][0] == 3

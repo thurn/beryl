@@ -1,8 +1,0 @@
-/* A permanent attached to the one the pointer is over, or that it is attached to: a pale ring,
-   apart from the gold, cyan and ember ones. */
-.card-linked {
-  box-shadow:
-    0 0 0 2px rgb(236 240 255 / 95%),
-    0 0 12px 3px rgb(200 214 255 / 55%),
-    var(--card-shadow, var(--shadow-card));
-}

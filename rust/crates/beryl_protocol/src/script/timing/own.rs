@@ -6,7 +6,6 @@
 //! stage makes these steps in `ui/src/stage/prompt.ts`.
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use super::conventions::Conventions;
 use super::{Room, StepTiming, effects_of, timing_of};
@@ -14,7 +13,7 @@ use crate::protocol::ObjectId;
 use crate::script::{Act, Arrow, Mark, Span, Subject, Table, Verb};
 
 /// One shape of step a client makes itself while a prompt is open.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum OwnStep {
     /// A mark of the prompt's comes up on a card or a player.
@@ -59,7 +58,7 @@ impl OwnStep {
 }
 
 /// How a step of one shape is played.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OwnTiming {
     pub step: OwnStep,
@@ -72,7 +71,7 @@ pub struct OwnTiming {
 }
 
 /// The timing of every shape of step a client makes itself.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OwnTimings {
     pub entries: Vec<OwnTiming>,

@@ -13,6 +13,5 @@ mod screen;
 mod script_check;
 mod specs_mod;
 mod specs_script;
-mod specs_serve;
 mod tournament;
 mod why;

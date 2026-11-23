@@ -19,7 +19,6 @@ use std::fmt;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 pub use beryl_card::Seat;
 pub use performance_probe::performance_probe;
@@ -39,7 +38,7 @@ pub fn wire_hash(extra: &[&str]) -> String {
 }
 
 /// An agent a human can play against.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentView {
     pub name: String,
@@ -49,7 +48,7 @@ pub struct AgentView {
 }
 
 /// A view of one session, as the app sends it to the UI.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GameUpdate {
     /// Session numbers only grow, so the UI can drop a view from a replaced game.
@@ -58,7 +57,7 @@ pub struct GameUpdate {
 }
 
 /// Why a session could not start or take a command. Commands return it to the UI as is.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum SessionError {
     UnknownAgent {
@@ -159,7 +158,7 @@ impl std::error::Error for SessionError {}
 
 /// The UI's request for a game: the default deck's mirror against `agent`, the human in seat 0
 /// under the smart stops.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartRequest {
     pub agent: String,

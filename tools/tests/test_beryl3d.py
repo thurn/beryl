@@ -37,7 +37,7 @@ def test_clippy_builds_in_its_own_target_directory(
 ) -> None:
     seen: list[dict[str, str] | None] = []
     monkeypatch.setattr(
-        beryl3d_cli, "cargo", lambda arguments, env=None: seen.append(env) or 0
+        beryl3d_cli.cargo, "run", lambda arguments, env=None: seen.append(env) or 0
     )
     assert beryl3d_cli.run_clippy(argparse.Namespace()) == 0
     env = seen[0]

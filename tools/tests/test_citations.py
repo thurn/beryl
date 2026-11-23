@@ -102,10 +102,10 @@ def test_a_dead_anchor_wrong_anchor_or_dead_bare_number_is_reported(
         "// [CR 712.6](https://yawgatog.com/resources/magic-rules/#R712)\n"
         "// (CR 712.11)\n"
     )
-    assert problems(tmp_path, "ui/src/a.ts", text) == [
-        "ui/src/a.ts:1: CR 712.8e: no such rule",
-        "ui/src/a.ts:2: CR 712.6: the anchor is #R712, not #R7126",
-        "ui/src/a.ts:3: CR 712.11: no such rule",
+    assert problems(tmp_path, "tools/src/a.py", text) == [
+        "tools/src/a.py:1: CR 712.8e: no such rule",
+        "tools/src/a.py:2: CR 712.6: the anchor is #R712, not #R7126",
+        "tools/src/a.py:3: CR 712.11: no such rule",
     ]
 
 

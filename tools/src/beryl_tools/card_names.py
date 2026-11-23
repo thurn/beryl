@@ -1,7 +1,7 @@
-"""The card-names check: no card name in the kernel, rules, session, generic search or UI.
+"""The card-names check: no card name in the kernel, rules, session or generic search.
 
 Generic code works from definitions and the protocol, never from which card it is looking at
-. The check scans the code of every generic crate and the UI,
+. The check scans the code of the generic crates,
 and compares each file's count of card names with `data/card-names-allowlist.json`, the
 project's burn-down list: a count may only fall, and a file the list lacks may not appear. The
 list's second section names the one-card mechanics by identifier, so their removal is tracked.
@@ -36,8 +36,6 @@ SCOPE = (
     "rust/crates/beryl_scenario/src",
     "rust/crates/beryl_scenario_types/src",
     "rust/crates/beryl_search/src",
-    "rust/crates/beryl_app/src",
-    "ui/src",
     "tools/src/beryl_tools",
 )
 EXEMPT_DIRECTORIES = {

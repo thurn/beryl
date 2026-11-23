@@ -103,7 +103,7 @@ fn counter_review_starts_before_the_target_spell_is_cast() {
     let casts = std::sync::Mutex::new(counter.review_casts);
     let sessions = start_review(&TEST, &counter.moment, move |updates, live| {
         if live {
-            let steps = serve::recorded_cast_moves(&mut casts.lock().unwrap(), &updates);
+            let steps = recorded_cast_moves(&mut casts.lock().unwrap(), &updates);
             if at_checkpoint(&updates, live) {
                 let _ = send.send((updates, steps));
             }

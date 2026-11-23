@@ -25,7 +25,6 @@ pub mod save;
 pub mod script;
 mod session;
 mod sessions;
-pub mod typescript;
 
 pub use beryl_engine::Seat;
 use beryl_engine::{GameTable, State};

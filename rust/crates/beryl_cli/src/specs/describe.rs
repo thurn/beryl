@@ -335,7 +335,7 @@ pub fn describe(
             for view in View::ALL {
                 let (shown, views_shown) = trace(catalog, m, view)?;
                 println!("{}:", view.name());
-                // The first view shown animates nothing (`specs-serve` clears its events).
+                // The opening view shows the settled position.
                 for (n, v) in views_shown.iter().skip(1).enumerate() {
                     if views {
                         println!("  view {}", n + 1);

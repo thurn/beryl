@@ -1,13 +1,12 @@
 //! The decision types: what the viewer is asked and what they may answer.
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use super::{DecisionId, Kind, Mana, ObjectId, Side, StackItem, Step, TargetRef};
 use crate::prompt::PromptView;
 
 /// The viewer's decision, its candidates in the order a [`CandidateIndex`] counts them.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DecisionView {
     /// What an answer names.
@@ -60,12 +59,11 @@ pub struct DecisionView {
     ///
     /// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub acting_for: Option<Side>,
 }
 
 /// A card in the viewer's hand they may neither cast nor play as a land now.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Refused {
     pub slot: ObjectId,
@@ -74,7 +72,7 @@ pub struct Refused {
 
 /// Why a card can't be played ([`Refusal`](beryl_engine::Refusal)), by public slot: the first rule its most nearly
 /// legal way of being played breaks.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum RefusalView {
     /// Only at sorcery speed, which it is not. `by`: the opponent's permanent limiting the
@@ -92,7 +90,7 @@ pub enum RefusalView {
 }
 
 /// Where passing priority takes the viewer if the other player passes too ([`NextStop`](beryl_engine::NextStop)).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum PassTo {
     /// The top of the stack resolves.
@@ -105,7 +103,7 @@ pub enum PassTo {
     NextTurn,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CandidateView {
     /// A short English description, such as "Cast Mana Drain".
@@ -126,7 +124,6 @@ pub struct CandidateView {
     /// ability's rules text, when the printed text of its face has no paragraph for it, as
     /// [`StackItem::Ability`]'s `text` says. None otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub text: Option<String>,
     /// For a candidate that announces one or more targets: what the first of them may be, one
     /// of each set of interchangeable objects (§7.2), so the UI can take the count and the
@@ -137,7 +134,7 @@ pub struct CandidateView {
 /// One way a cast or activation is paid, found by playing it out on a copy of the game: the
 /// value of X and the payment plan it takes, where the cast asks for them, and the permanents
 /// it taps. The engine's default payment is the first with a given X.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Payment {
     pub x: Option<u8>,
@@ -152,7 +149,7 @@ pub struct Payment {
 }
 
 /// What a candidate does, by public slot (architecture §7.1).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Candidate {
     /// The object in this slot, for a decision among objects.
@@ -205,7 +202,6 @@ pub enum Candidate {
         ability: u8,
         granted: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         merged: Option<u8>,
     },
     Mana {

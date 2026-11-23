@@ -131,7 +131,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_a_card_asked_for_lists_its_checks_with_its_own_file(repo: Path) -> None:
-    listed = adapter.list_checks("script", repo, ["Alpha"])
+    listed = adapter.script_checks(repo, ["Alpha"])
     assert listed == [
         {
             "check": f"script:alpha/start/{seat}",
@@ -147,21 +147,21 @@ def test_a_split_card_slug_maps_to_its_card_file(repo: Path) -> None:
     alpha = folder / "alpha.rs"
     alpha.write_text(alpha.read_text() + "const OTHER: &str = Card::FireIce;\n")
 
-    assert adapter.list_checks("script", repo, ["Fire // Ice"]) == [
+    assert adapter.script_checks(repo, ["Fire // Ice"]) == [
         {
             "check": f"script:fire-ice/start/{seat}",
             "inputs": ["rust/cards/cards_1/set/fire_ice.rs"],
         }
         for seat in ("yours", "theirs")
     ]
-    assert adapter.list_checks("script", repo, ["Alpha"])[0]["inputs"] == [
+    assert adapter.script_checks(repo, ["Alpha"])[0]["inputs"] == [
         "rust/cards/cards_1/set/alpha.rs",
         "rust/cards/cards_1/set/fire_ice.rs",
     ]
 
 
 def test_every_card_and_fixture_is_listed_without_a_card(repo: Path) -> None:
-    names = [c["check"] for c in adapter.list_checks("script", repo, [])]
+    names = [c["check"] for c in adapter.script_checks(repo, [])]
     assert "script:beta/start/theirs" in names
     assert "script:fixtures/table-opening/yours" in names
     assert "script:fixtures/second/theirs" in names
@@ -169,7 +169,7 @@ def test_every_card_and_fixture_is_listed_without_a_card(repo: Path) -> None:
 
 def test_an_unknown_card_is_an_error(repo: Path) -> None:
     with pytest.raises(ValueError):
-        adapter.list_checks("script", repo, ["gamma"])
+        adapter.script_checks(repo, ["gamma"])
 
 
 def digest(root: Path, paths_read: list[str]) -> str:
@@ -184,7 +184,7 @@ def test_editing_another_cards_file_leaves_a_checks_inputs_unchanged(
     def hashes() -> dict[str, str]:
         return {
             c["check"]: digest(repo, c["inputs"])
-            for c in adapter.list_checks("script", repo, [])
+            for c in adapter.script_checks(repo, [])
             if c["check"].startswith("script:alpha/") or "beta" in c["check"]
         }
 
@@ -197,8 +197,7 @@ def test_editing_another_cards_file_leaves_a_checks_inputs_unchanged(
 
 def test_run_reports_each_result_with_the_panic_of_a_failure(repo: Path) -> None:
     results = repo / "results.jsonl"
-    adapter.run_checks(
-        "script",
+    adapter.run_script(
         ["script:alpha/start/yours", "script:beta/start/yours"],
         repo,
         results,
@@ -211,16 +210,6 @@ def test_run_reports_each_result_with_the_panic_of_a_failure(repo: Path) -> None
             "outcome": "fail",
             "message": "thread panicked: boom",
         },
-    ]
-
-
-def test_app_and_mobile_list_one_check_per_target(repo: Path) -> None:
-    assert [c["check"] for c in adapter.list_checks("app", repo, [])] == ["app:smoke"]
-    assert [c["check"] for c in adapter.list_checks("mobile", repo, [])] == [
-        "mobile:aarch64-apple-ios-sim",
-    ]
-    assert [c["check"] for c in adapter.list_checks("android", repo, [])] == [
-        "android:aarch64-linux-android",
     ]
 
 
@@ -238,29 +227,6 @@ def test_android_uses_the_pinned_windows_tools(
     assert env["CFLAGS_aarch64_linux_android"] == "--target=aarch64-linux-android24"
 
 
-def test_only_the_ios_simulator_check_clears_swift_caches(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    cleared: list[Path] = []
-    environments: list[dict[str, str] | None] = []
-    android_env = {"CC_aarch64_linux_android": "clang"}
-
-    def cargo(
-        command: list[str], *, env: dict[str, str] | None, **kwargs: Any
-    ) -> subprocess.CompletedProcess[str]:
-        environments.append(env)
-        return subprocess.CompletedProcess[str](command, 0, "", "")
-
-    monkeypatch.setattr(adapter, "clear_swift_module_caches", cleared.append)
-    monkeypatch.setattr(android_sdk, "ndk_env", lambda: android_env)
-    monkeypatch.setattr(subprocess, "run", cargo)
-
-    assert adapter.run_mobile("aarch64-apple-ios-sim", tmp_path) == {"outcome": "pass"}
-    assert adapter.run_mobile("aarch64-linux-android", tmp_path) == {"outcome": "pass"}
-    assert cleared == [tmp_path]
-    assert environments == [None, android_env]
-
-
 def test_a_card_whose_scenarios_use_another_card_lists_that_cards_file_too(
     repo: Path,
 ) -> None:
@@ -268,13 +234,13 @@ def test_a_card_whose_scenarios_use_another_card_lists_that_cards_file_too(
     alpha.write_text(
         alpha.read_text() + 'Scenario::new("steals").hand(P1, &[Card::Beta]);\n'
     )
-    listed = adapter.list_checks("script", repo, ["Alpha"])
+    listed = adapter.script_checks(repo, ["Alpha"])
     assert listed[0]["inputs"] == [
         "rust/cards/cards_1/set/alpha.rs",
         "rust/cards/cards_1/set/beta.rs",
     ]
     # Beta's checks do not read Alpha's file.
-    assert adapter.list_checks("script", repo, ["Beta"])[0]["inputs"] == [
+    assert adapter.script_checks(repo, ["Beta"])[0]["inputs"] == [
         "rust/cards/cards_1/set/beta.rs"
     ]
 
@@ -299,7 +265,7 @@ def test_a_card_named_by_its_spelled_out_name_or_through_another_card_is_read(
         alpha.read_text()
         + 'Scenario::new("Alpha meets Beta").hand(P1, &["Beta", Token::Gamma]);\n'
     )
-    listed = adapter.list_checks("script", repo, ["Alpha"])
+    listed = adapter.script_checks(repo, ["Alpha"])
     assert listed[0]["inputs"] == [
         f"rust/cards/cards_1/set/{name}.rs"
         for name in ("alpha", "beta", "delta", "gamma")
@@ -316,7 +282,7 @@ def test_card_references_match_names_variants_and_constants() -> None:
 def test_a_fixture_check_reads_native_definitions_and_every_card_file(
     repo: Path,
 ) -> None:
-    checks = {c["check"]: c for c in adapter.list_checks("script", repo, [])}
+    checks = {c["check"]: c for c in adapter.script_checks(repo, [])}
     assert checks["script:fixtures/table-opening/yours"]["inputs"] == [
         "data/beryl3d/fixtures.json",
         "rust/cards",

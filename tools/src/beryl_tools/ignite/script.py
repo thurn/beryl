@@ -1,4 +1,4 @@
-"""The script, app, mobile and Android check families' adapter. The families are declared in
+"""The shared game recording and scenario check adapter, declared in
 `ignite/checks/script.toml`.
 
 Run from the repository's root as `python -m beryl_tools.ignite.script <verb> <family> ...`:
@@ -21,9 +21,6 @@ The families:
   file of every card that file names (`used_files`), and the file of every card their
   definitions name, so that editing a card leaves the checks of cards that do not use it as
   they were.
-- `app`: `just smoke`, one check, `app:smoke`.
-- `mobile`: `cargo check` of the app for the iOS Simulator.
-- `android`: `cargo check` of the app for Android.
 """
 
 from __future__ import annotations
@@ -31,7 +28,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -40,17 +36,12 @@ from pathlib import Path
 from typing import Any
 
 RESULTS_ENV = "IGNITE_RESULTS"
-FAMILIES = ("script", "app", "mobile", "android")
 CARDS = "rust/cards"
 FIXTURES = "data/beryl3d/fixtures.json"
 # The seats of a card's moment, as `beryl_cli` names them.
 SEATS = ("yours", "theirs")
 # The longest message a result carries.
 MESSAGE_LIMIT = 300
-# `just smoke`'s exit code when its build failed: the app was never launched.
-CANNOT_RUN = 125
-
-IOS_SIMULATOR = "aarch64-apple-ios-sim"
 
 
 def slug(name: str) -> str:
@@ -230,21 +221,6 @@ def script_checks(root: Path, cards: Sequence[str]) -> list[dict[str, Any]]:
     return out
 
 
-def list_checks(family: str, root: Path, cards: Sequence[str]) -> list[dict[str, Any]]:
-    if family == "script":
-        return script_checks(root, cards)
-    if family == "app":
-        return [{"check": "app:smoke", "inputs": []}]
-    if family == "mobile":
-        return [{"check": f"mobile:{IOS_SIMULATOR}", "inputs": []}]
-    from beryl_tools import android_sdk
-
-    return [{"check": f"android:{android_sdk.TARGET}", "inputs": []}]
-
-
-# --- run ---
-
-
 def clip(text: str) -> str:
     text = " ".join(text.split())
     return text if len(text) <= MESSAGE_LIMIT else text[: MESSAGE_LIMIT - 1] + "…"
@@ -306,99 +282,21 @@ def run_script(names: Sequence[str], root: Path, results: Path) -> None:
         append(results, lines)
 
 
-def run_app(root: Path) -> dict[str, Any] | None:
-    done = subprocess.run(
-        ["just", "smoke"], cwd=root, capture_output=True, text=True, check=False
-    )
-    if done.returncode == 0:
-        return {"outcome": "pass"}
-    if done.returncode == CANNOT_RUN:
-        return None
-    return {
-        "outcome": "fail",
-        "message": clip((done.stdout + done.stderr)[-2000:]) or "smoke failed",
-    }
-
-
-def clear_swift_module_caches(root: Path) -> None:
-    """Deletes the Swift module caches that `swift-rs` build scripts left under `rust/target`.
-
-    A tree's `target` directory can be a copy of another tree's. Swift's precompiled modules
-    record the absolute path of the cache they were built in, so in the copy the Swift build
-    fails with "was compiled with module cache path ...", and `cargo check` for the iOS
-    Simulator fails on that machine only. The caches are cheap to regenerate and cargo needs
-    them only when the build script runs again, so deleting them is always safe."""
-    for cache in (root / "rust" / "target").glob(
-        "*/debug/build/*/out/swift-rs/*/*/debug/ModuleCache"
-    ):
-        shutil.rmtree(cache, ignore_errors=True)
-
-
-def run_mobile(target: str, root: Path) -> dict[str, Any] | None:
-    env = None
-    if target == IOS_SIMULATOR:
-        clear_swift_module_caches(root)
-    else:
-        from beryl_tools import android_sdk
-
-        env = android_sdk.ndk_env()
-    # From ui/, where Xcode's and Gradle's build scripts run cargo, so this resolves the
-    # toolchain the way the phone builds do.
-    done = subprocess.run(
-        [
-            "cargo",
-            "check",
-            "--locked",
-            "--manifest-path",
-            str(root / "rust" / "Cargo.toml"),
-            "-p",
-            "beryl_app",
-            "--target",
-            target,
-        ],
-        cwd=root / "ui",
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if done.returncode == 0:
-        return {"outcome": "pass"}
-    # Cargo exits 101 when compiling failed; another code is a failure to run it.
-    if done.returncode != 101:
-        return None
-    return {"outcome": "fail", "message": clip(done.stderr[-2000:])}
-
-
-def run_checks(family: str, names: Sequence[str], root: Path, results: Path) -> None:
-    if family == "script":
-        run_script(names, root, results)
-        return
-    for name in names:
-        result = (
-            run_app(root)
-            if family == "app"
-            else run_mobile(name.removeprefix(f"{family}:"), root)
-        )
-        if result is not None:
-            append(results, [{"check": name, **result}])
-
-
 def main(argv: Sequence[str]) -> int:
     root = Path.cwd()
-    if len(argv) < 2 or argv[0] not in ("list", "run") or argv[1] not in FAMILIES:
+    if len(argv) < 2 or argv[0] not in ("list", "run") or argv[1] != "script":
         print(__doc__, file=sys.stderr)
         return 1
-    verb, family, rest = argv[0], argv[1], list(argv[2:])
+    verb, rest = argv[0], list(argv[2:])
     if verb == "list":
-        for line in list_checks(family, root, rest):
+        for line in script_checks(root, rest):
             print(json.dumps(line))
         return 0
     results = os.environ.get(RESULTS_ENV)
     if not results:
         print(f"{RESULTS_ENV} is not set", file=sys.stderr)
         return 1
-    run_checks(family, rest, root, Path(results))
+    run_script(rest, root, Path(results))
     return 0
 
 

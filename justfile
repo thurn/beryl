@@ -32,17 +32,17 @@ awake := if os() == "windows" { by_anywhere + " low --awake --" } else { "caffei
 default:
     @just --list --unsorted
 
-# The app with hot reload, in a window (agents use `smoke`)
+# Launch the native desktop app (agents use `smoke`)
 [group('app')]
 dev *args:
     {{ by }} dev "$@"
 
-# Build once and open a host and guest at the same local table (humans)
+# Start a host and guest at a shared local table (--headless for agents)
 [group('app')]
 table-pair *args:
     {{ by }} table-pair "$@"
 
-# Build the debug app and launch it headless until its UI loads (--seconds N, --no-build)
+# Build the native app and check its headless start screen (--no-build)
 [group('app')]
 smoke *args:
     {{ by }} smoke "$@"
@@ -52,22 +52,22 @@ smoke *args:
 b3d *args:
     @{{ by }} b3d "$@"
 
-# Install the phone apps' toolchains: Rust targets, CocoaPods, the iOS Simulator runtime, the Android SDK (idempotent)
+# Install the native phone build toolchains
 [group('app')]
-mobile-setup:
-    {{ by }} mobile-setup
+mobile-setup *args:
+    {{ by }} mobile-setup "$@"
 
 # Build the debug iOS app, boot the Beryl iPhone simulator and launch it there (--no-build)
 [group('app')]
 ios *args:
     {{ by }} ios "$@"
 
-# Build the debug iOS app and launch it in a headless simulator until its UI loads (--seconds N, --no-build)
+# Replay a recording headlessly in the native iOS Simulator app
 [group('app')]
 ios-smoke *args:
     {{ by }} ios-smoke "$@"
 
-# Build and sign the release iOS app and install it on the paired iPhone (--no-install, --user-asked)
+# Build the release iOS app and install it on the paired iPhone when asked
 [group('app')]
 ios-device *args:
     {{ by }} ios-device "$@"
@@ -77,7 +77,7 @@ ios-device *args:
 android *args:
     {{ by }} android "$@"
 
-# Build the debug Android app and launch it in a headless emulator until its UI loads (--seconds N, --no-build)
+# Replay a recording headlessly in the native Android emulator app
 [group('app')]
 android-smoke *args:
     {{ by }} android-smoke "$@"
@@ -87,73 +87,19 @@ android-smoke *args:
 mobile-bugs *args:
     {{ by }} mobile-bugs "$@"
 
-# Screenshot UI states headless into the cache and print the paths (shot names; ui/shots.json)
-[group('app')]
-ui-shots *args:
-    {{ by }} ui-shots "$@"
-
-# Type-check the UI with tsc, first restoring ui/node_modules from the cache
-[group('app')]
-ui-typecheck:
-    {{ by }} deps
-    cd ui && npm run --silent typecheck
-
-# Run the UI's tests that need no browser (ui/scripts/*.test.mjs), first restoring ui/node_modules
-[group('app')]
-ui-unit:
-    {{ by }} deps
-    cd ui && npm test --silent
-
-# Play the game screen headless through a recorded fixture: drag, click, hover (title filters)
-[group('app')]
-ui-test *args:
-    {{ by }} ui-test "$@"
-
-# Play every recorded fixture to its end on the stage, both layouts, under the audits (fixture names)
-[group('app')]
-ui-play *args:
-    {{ by }} ui-play "$@"
-
-# Time the frames of fixtures played live on a production build (--verbs, --phone, --browser chromium --throttle N)
-[group('app')]
-ui-perf *args:
-    {{ by }} ui-perf "$@"
-
-# Count the UI's renders, DOM mutations and style and layout work playing fixtures (--phone, --components, --gate [--update])
-[group('app')]
-ui-counts *args:
-    {{ by }} ui-counts "$@"
-
-# Live games in a headless page an agent drives over HTTP, until interrupted (--release, --port N)
-[group('app')]
-ui-live *args:
-    {{ by }} ui-live "$@"
-
-# The cards' spec pages, each moment a live game
-[group('app')]
-specs *args:
-    {{ by }} specs "$@"
-
 # Arena recordings indexed into ~/arena as a UI reference: list, index, find, film, cards or card
 video *args:
     {{ by }} video "$@"
-
-# Playable card review and the reproducible scenario viewer.
-playground *args:
-    {{ by }} playground "$@"
-
-scenarios *args:
-    {{ by }} scenarios "$@"
 
 # The app's bug reports: list, import a ZIP, file tickets, or mark done
 [group('app')]
 bugs *args:
     {{ by }} bugs "$@"
 
-# The release Beryl.app, under rust/target/tauri/release/bundle/macos (Windows: an installer under bundle/nsis)
+# Package the native release app for macOS or Windows
 [group('app')]
-bundle:
-    {{ by }} bundle
+bundle *args:
+    {{ by }} bundle "$@"
 
 # Time benchmarks under the search profile, refusing a busy, unplugged or throttled machine (cargo bench flags; --force)
 [group('bench')]
@@ -219,11 +165,6 @@ citations *args:
 conventions *args:
     {{ by }} conventions "$@"
 
-# Write ui/src/design/tokens.css from data/design-tokens.json (--check)
-[group('data')]
-design-tokens *args:
-    {{ by }} design-tokens "$@"
-
 # Transcode Beryl 3D's music and sounds from the staged CC0 packs into data/audio/assets (--check)
 [group('data')]
 audio *args:
@@ -260,11 +201,6 @@ fuzz games="10000":
     cd rust && export BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true && \
     cargo test --release -p beryl_search --test all -- games:: shrink:: families:: --nocapture --include-ignored && \
     cargo test --release -p beryl_session --test session fuzz:: -- --nocapture --include-ignored
-
-# The stage's verbs held to Arena's numbers: captured in stepped stage time and measured as Arena's clips were (--values: durations, delays and staggers only)
-[group('test')]
-motion *args:
-    {{ by }} motion "$@"
 
 # Every decision sequence from the scenarios' end positions, deeper than the fast check: one card's or all (--depth N, --nodes N per scenario)
 [group('test')]
@@ -375,11 +311,6 @@ disk-usage *args:
 test-py *args:
     cd tools && uv run --quiet pytest "$@"
 
-# The source lines each browser check runs, at low priority, into the cache (--commit REF, default origin/ignite/staging; --here)
-[group('checks')]
-coverage *args:
-    {{ low }} {{ by }} coverage "$@"
-
 # The file-event daemon's memory footprint, and whether the watchdog that restarts it is installed
 [group('checks')]
 fseventsd:
@@ -391,12 +322,11 @@ fseventsd:
 edit *args:
     @{{ by_anywhere }} edit "$@"
 
-# Format everything: black, rustfmt, prettier, mdformat (80 columns), the justfile
+# Format everything: black, rustfmt, mdformat (80 columns), the justfile
 [group('checks')]
 fmt:
     uv run --quiet --project tools black --quiet tools efficiency
     cd rust && uv run --quiet --project ../tools python -m beryl_tools.card_files rustfmt
-    {{ by }} deps
-    cd ui && node_modules/.bin/prettier --write --log-level warn .
+    {{ by }} b3d fmt
     just --fmt --unstable
     git ls-files -co --exclude-standard '*.md' | grep -v -e '^.agents/' | xargs uv run --quiet --project tools mdformat

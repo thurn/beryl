@@ -11,8 +11,9 @@ from subprocess import CompletedProcess
 
 import pytest
 
-from beryl_tools import android, bugs, mobile, mobile_bugs, mobile_sdk
-from beryl_tools.beryl3d import cli
+from beryl_tools import bugs, mobile_bugs, mobile_sdk
+from beryl_tools.beryl3d import bug, phone
+from beryl_tools import cli
 
 ID = "20261113-102030-phone-report"
 
@@ -58,10 +59,12 @@ def test_android_tar_uses_run_as_and_adopts_report(
         for folder in (source, invalid):
             for file in folder.iterdir():
                 archive.add(file, arcname=f"./{folder.name}/{file.name}")
-    monkeypatch.setattr(android, "running", lambda: True)
-    monkeypatch.setattr(
-        android, "adb", lambda *args: CompletedProcess(args, 0, f"./files/bugs\n", "")
-    )
+
+    def adb(*args: str) -> CompletedProcess[str]:
+        output = "device" if args == ("get-state",) else "./files/bugs\n"
+        return CompletedProcess[str](args, 0, output, "")
+
+    monkeypatch.setattr(phone, "adb", adb)
     commands: list[list[str]] = []
 
     def fake_run(command: list[str], **_kwargs: object) -> CompletedProcess[bytes]:
@@ -69,18 +72,18 @@ def test_android_tar_uses_run_as_and_adopts_report(
         return CompletedProcess[bytes](command, 0, payload.getvalue(), b"")
 
     monkeypatch.setattr(mobile_bugs.subprocess, "run", fake_run)
-    assert mobile_bugs.android_reports(tmp_path / "local") == (1, 0)
+    assert bug.android_reports(tmp_path / "local") == (1, 0)
     assert commands[0] == [
-        android.tool("platform-tools", "adb"),
+        str(phone.adb_binary()),
         "-s",
-        android.SERIAL,
+        phone.SERIAL,
         "exec-out",
         "run-as",
-        android.PACKAGE,
+        phone.BUNDLE,
         "tar",
         "c",
         "-C",
-        "./files/bugs",
+        bug.ANDROID_REPORTS,
         ".",
     ]
     assert (tmp_path / "local" / ID / "window.png").read_bytes() == b"PNG"
@@ -101,7 +104,9 @@ def test_device_copy_command_is_only_used_on_explicit_path(
         return CompletedProcess[str](command, 0, "", "")
 
     monkeypatch.setattr(mobile_bugs.subprocess, "run", fake_run)
-    assert mobile_bugs.device_reports(tmp_path / "local") == (1, 0)
+    assert mobile_bugs.device_reports(
+        tmp_path / "local", phone.BUNDLE, bug.IOS_REPORTS
+    ) == (1, 0)
     assert commands[0][:7] == [
         "xcrun",
         "devicectl",
@@ -113,9 +118,9 @@ def test_device_copy_command_is_only_used_on_explicit_path(
     ]
     assert commands[0][-6:-2] == [
         "--domain-identifier",
-        mobile.BUNDLE_ID,
+        phone.BUNDLE,
         "--source",
-        str(mobile_bugs.BUGS_RELATIVE),
+        str(bug.IOS_REPORTS),
     ]
 
 
@@ -130,7 +135,7 @@ def test_shared_zip_uses_existing_import(
         return 0
 
     monkeypatch.setattr(bugs, "import_cmd", fake_import)
-    assert mobile_bugs.run(argparse.Namespace(bundle=bundle, device=False)) == 0
+    assert cli.main(["mobile-bugs", str(bundle)]) == 0
     assert bundles == [bundle]
 
 
@@ -149,14 +154,14 @@ def test_one_source_failure_does_not_stop_other_sources(
         return (1, 0)
 
     monkeypatch.setattr(mobile_bugs, "simulator_container", failed_simulator)
-    monkeypatch.setattr(mobile_bugs, "android_reports", working_android)
+    monkeypatch.setattr(bug, "android_reports", working_android)
 
-    def working_device(_root: Path) -> tuple[int, int]:
+    def working_device(_root: Path, _bundle: str, _source: Path) -> tuple[int, int]:
         calls.append("device")
         return (1, 0)
 
     monkeypatch.setattr(mobile_bugs, "device_reports", working_device)
-    assert mobile_bugs.run(argparse.Namespace(bundle=None, device=True)) == 1
+    assert cli.main(["mobile-bugs", "--device"]) == 1
     assert set(calls) == {"simulator", "android", "device"}
 
 
@@ -193,6 +198,6 @@ def test_native_mobile_bugs_adopts_from_the_simulator_documents_folder(
         "beryl_tools.beryl3d.phone.adb",
         lambda *args: CompletedProcess(args, 1, "", ""),
     )
-    assert cli.main(["mobile-bugs"]) == 0
+    assert cli.main(["b3d", "mobile-bugs"]) == 0
     assert (local / ID / "window.png").read_bytes() == b"PNG"
     assert (original / "report.md").is_file()

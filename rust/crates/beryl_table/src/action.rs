@@ -5,7 +5,6 @@ use crate::state::{Assist, Card, Face, LobbySettings, ObjectId, Phase, Row, Seat
 mod references;
 
 /// The ids and the zone they occupied when the sender chose them.
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableSelection"))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Selection<Id = ObjectId> {
     pub objects: Vec<Id>,
@@ -14,35 +13,24 @@ pub struct Selection<Id = ObjectId> {
 }
 
 /// A secondary target carries the same staleness information as the selection.
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableSeenObject"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SeenObject<Id = ObjectId> {
     pub id: Id,
     #[serde(rename = "in")]
     pub zone: Zone,
 }
-
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableTarget"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Target<Id = ObjectId> {
     Object(SeenObject<Id>),
     Player(Seat),
 }
-
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableDestination"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Destination {
     Zone(Zone),
     Computed(ComputedDestination),
 }
-
-#[cfg_attr(
-    feature = "ts",
-    derive(ts_rs::TS),
-    ts(rename = "TableComputedDestination")
-)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ComputedDestination {
@@ -51,7 +39,6 @@ pub enum ComputedDestination {
 }
 
 /// `Nth(0)` means the top. The index is measured after excluding the moving cards.
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TablePosition"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Position {
@@ -66,8 +53,6 @@ impl Position {
         *self == Self::Top
     }
 }
-
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableAdjustment"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Adjustment {
@@ -83,8 +68,6 @@ impl Adjustment {
         }
     }
 }
-
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TablePortion"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Portion {
@@ -93,8 +76,6 @@ pub enum Portion {
     Top(u16),
     Bottom(u16),
 }
-
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableSortBy"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SortBy {
@@ -102,8 +83,6 @@ pub enum SortBy {
     Type,
     ManaValue,
 }
-
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableFlow"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Flow {
@@ -111,8 +90,6 @@ pub enum Flow {
     Surveil,
     LookAtTop,
 }
-
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableActionOf"))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[serde(bound(deserialize = "Id: Deserialize<'de>"))]
@@ -124,10 +101,8 @@ pub enum Action<Id = ObjectId> {
         #[serde(default, skip_serializing_if = "Position::is_top")]
         position: Position,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(feature = "ts", ts(optional))]
         face: Option<Face>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(feature = "ts", ts(optional))]
         tapped: Option<bool>,
     },
     Reorder {
@@ -205,7 +180,6 @@ pub enum Action<Id = ObjectId> {
         attached_to: Option<SeenObject<Id>>,
         note: Option<String>,
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-        #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
         face_down: bool,
     },
     Marker {
@@ -245,10 +219,8 @@ pub enum Action<Id = ObjectId> {
         zone: Zone,
         /// With neither objects nor a count, reveal the whole zone.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(feature = "ts", ts(optional))]
         objects: Option<Vec<Id>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(feature = "ts", ts(optional))]
         random: Option<u16>,
         to: Vec<Seat>,
     },
@@ -318,11 +290,9 @@ pub enum Action<Id = ObjectId> {
         first: Seat,
         // Deal the opening hands and leave the first turn for a phase action.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-        #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
         opening: bool,
     },
     /// The host has selected who answers play or draw.
-    #[cfg_attr(feature = "ts", ts(skip))]
     ChooseFirst {
         chooser: Seat,
     },
@@ -340,7 +310,6 @@ pub enum Action<Id = ObjectId> {
         flow: Flow,
         count: u16,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(feature = "ts", ts(optional))]
         source: Option<SeenObject<Id>>,
     },
     /// The host's completed sort, applied and undone as one batch of moves.
@@ -353,7 +322,6 @@ pub enum Action<Id = ObjectId> {
     Undo {
         /// A seat can name its own draw or a batch from either seat.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(feature = "ts", ts(optional))]
         entry: Option<u32>,
     },
     Rewind {

@@ -2,7 +2,6 @@
 
 use beryl_card::{Part, Place, Purpose, Shape};
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use crate::protocol::{DecisionId, ObjectId, Side, ZoneName};
 use crate::script::{Arrow, Mark, Subject};
@@ -14,15 +13,14 @@ use crate::script::{Arrow, Mark, Subject};
 /// It is the decision's [`Prompt`](beryl_card::Prompt) by public slot and relative to
 /// the viewer, in words, with the prompt's state where the session holds it. No field is for
 /// one card's question: a card that asks a known purpose changes nothing here.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptView {
     /// Counts this prompt's states from 0. A click names the state it was made on.
     pub revision: u32,
     /// What the prompt is for. Its [`Shape`] is the purpose's ([`Purpose::shape`]). The wire
-    /// writes it as its name, and TypeScript has the closed list of names.
+    /// writes it as its name.
     #[serde(with = "purpose_name")]
-    #[ts(type = "Purpose")]
     pub purpose: Purpose,
     /// Which part of the shape the open decision's pick answers: a prompt is a run of picks.
     pub part: PartName,
@@ -106,7 +104,7 @@ mod purpose_name {
 }
 
 /// Which part of a prompt a pick answers ([`Part`]).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PartName {
     Pick,
@@ -135,7 +133,7 @@ impl From<Part> for PartName {
 }
 
 /// Whose cards and where they lie.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Lies {
     pub player: Side,
@@ -147,7 +145,7 @@ pub struct Lies {
 /// have is empty. `{picked}` stands for how many are picked, `{of}` for how many the prompt
 /// takes and `{s}` for the plural's letter unless one is picked, which only the holder of the
 /// state knows.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Words {
     /// The button that answers with what is picked.
@@ -169,7 +167,7 @@ pub struct Words {
 }
 
 /// The permanents that paying for one card taps, by the payment a click on it makes.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TapPreview {
     pub card: ObjectId,
@@ -177,7 +175,7 @@ pub struct TapPreview {
 }
 
 /// A mark on one thing.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Marked {
     pub on: Subject,
@@ -185,7 +183,7 @@ pub struct Marked {
 }
 
 /// A button of a prompt.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptButton {
     pub id: ButtonId,
@@ -200,7 +198,7 @@ pub struct PromptButton {
 }
 
 /// Which button of a prompt: what a click on it names, and where the stage puts it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ButtonId {
     /// Answers with what the player has put together.
@@ -227,7 +225,7 @@ pub enum ButtonId {
 
 /// What a prompt's player has put together so far, tagged by its [`Shape`]; or that the
 /// session holds no state for the prompt.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "shape", rename_all = "camelCase")]
 pub enum ShapeBody {
     /// Objects picked one click at a time.
@@ -335,7 +333,7 @@ impl ShapeBody {
 }
 
 /// One pile of a split.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pile {
     /// Where its cards go; none where they stay where they lie, as the cards a put-back
@@ -351,7 +349,7 @@ pub struct Pile {
 }
 
 /// One recipient's share of a division.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Share {
     pub on: Subject,
@@ -360,7 +358,7 @@ pub struct Share {
 
 /// An object and what it is aimed at: an attacker and the player or planeswalker it attacks,
 /// a blocker and the attacker it blocks.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pair {
     pub from: ObjectId,
@@ -368,7 +366,7 @@ pub struct Pair {
 }
 
 /// Where a pile's cards go ([`Place`]).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PlaceName {
     Top,
@@ -398,7 +396,7 @@ impl PlaceName {
 
 /// What a click on an open prompt names. The UI sends what was clicked and decides nothing:
 /// whether the click picks, unpicks, aims or does nothing is the session's.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Click {
     /// A card, an ability on the stack or a player.
@@ -416,7 +414,7 @@ pub enum Click {
 }
 
 /// The click command's request.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClickRequest {
     /// The open decision the UI received.
@@ -429,7 +427,7 @@ pub struct ClickRequest {
 
 /// The click command's reply. A click changes no game state until it answers the prompt, so
 /// the new state is the reply, not a view: nothing else on the screen has changed.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ClickReply {
     /// The prompt goes on, in this state. A click that does nothing returns the state it was

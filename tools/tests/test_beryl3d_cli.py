@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from beryl_tools import cli as public_cli
 from beryl_tools import paths
 from beryl_tools.beryl3d import app, cli, phone
 
@@ -370,6 +371,34 @@ def test_native_phone_commands_have_help(command: str) -> None:
     with pytest.raises(SystemExit) as exited:
         cli.main([command, "--help"])
     assert exited.value.code == 0
+
+
+@pytest.mark.parametrize(
+    ("public", "native"),
+    [
+        ("dev", "app"),
+        ("bundle", "release"),
+        ("smoke", "smoke"),
+        ("table-pair", "table-pair"),
+        ("mobile-setup", "mobile-setup"),
+        ("ios", "ios"),
+        ("ios-smoke", "ios-smoke"),
+        ("ios-device", "ios-device"),
+        ("android", "android"),
+        ("android-smoke", "android-smoke"),
+        ("mobile-bugs", "mobile-bugs"),
+    ],
+)
+def test_public_app_commands_use_the_native_parser(
+    public: str, native: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as public_exit:
+        public_cli.main([public, "--help"])
+    public_help = capsys.readouterr().out
+    with pytest.raises(SystemExit) as native_exit:
+        cli.main([native, "--help"])
+    assert public_exit.value.code == native_exit.value.code == 0
+    assert public_help == capsys.readouterr().out
 
 
 def test_picture_commands_hand_every_argument_to_the_b3d_render_program(

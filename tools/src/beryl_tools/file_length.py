@@ -3,7 +3,7 @@
 A file over the limit is on `data/file-length-allowlist.json` with its length, the burn-down
 list of splits: a listed file may not grow, and the check fails when one is shorter than its
 entry (lower the number) or under the limit (remove the entry). Tests, generated and frozen
-code, the Playwright drivers, the expert system and the long-think searcher are exempt.
+code, the expert system and the long-think searcher are exempt.
 """
 
 from __future__ import annotations
@@ -21,22 +21,18 @@ SCOPE = (
     "rust/crates",
     "rust/cards",
     "rust/beryl3d/crates",
-    "ui/src",
-    "ui/scripts",
     "tools/src",
 )
-SUFFIXES = {".rs", ".ts", ".tsx", ".css", ".py", ".mjs"}
+SUFFIXES = {".rs", ".py"}
 # Paths from the repository root: a directory (its whole subtree) or a file.
 EXEMPT = (
-    "ui/src/generated",
     "rust/crates/beryl_search/src/frozen",
-    "ui/scripts/drive.mjs",
     "rust/crates/beryl_search/src/expert",
     "rust/crates/beryl_search/src/long.rs",
 )
 # Tests live in `tests` directories (Rust's `tests/` and `src/tests`, tools/tests) or in
 # files named tests.rs.
-SKIPPED_DIRECTORIES = {"tests", "node_modules", "target"}
+SKIPPED_DIRECTORIES = {"tests", "target"}
 
 
 def exempt(rel: str) -> bool:

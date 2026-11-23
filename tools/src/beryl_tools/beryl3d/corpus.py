@@ -36,7 +36,6 @@ SHARED = (
     "data/save-breaks.json",
     "data/ui-conventions.json",
     "docs/sample-decks",
-    "ui/src/generated",
     "tools/src/beryl_tools/beryl3d/corpus.py",
     "tools/src/beryl_tools/beryl3d/pack.py",
     "tools/src/beryl_tools/card_files.py",

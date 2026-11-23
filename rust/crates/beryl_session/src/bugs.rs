@@ -8,12 +8,11 @@
 //! - `replay.json`, the game's replay file as of its latest decision, which reproduces it bit
 //!   for bit (`just review replay.json --turn N`);
 //! - `view.json`, the latest view the session emitted;
-//! - `fixture.json`, the latest views the UI received as a UI fixture, which replays them on
-//!   the game screen (`/?fixture=<name>#/game`);
+//! - `fixture.json`, the latest game updates the client received, in the recording format;
 //! - `ui.json`, the page and the UI's own log: its commands, events, errors and console;
 //! - `journal.jsonl`, the latest records of the process's [`journal`].
 //!
-//! A note from a spec page (`specs-serve`) names its moment ([`SpecMoment`]): the front
+//! A report from spec inspection names its moment ([`SpecMoment`]): the front
 //! matter's `spec`, and the commands that show it again under Reproduce. [`open_by_card`]
 //! counts the open ones by card, for the spec index.
 //!
@@ -34,7 +33,6 @@ use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use ts_rs::TS;
 
 use crate::ipc::{CHOOSE, Fixture, FixtureMessage, GAME_UPDATE, Platform, SET_STOPS};
 use crate::journal::{self, Level};
@@ -44,7 +42,7 @@ use crate::{SessionError, Sessions};
 const JOURNAL_RECORDS: usize = 2000;
 
 /// The UI's report.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BugReport {
     /// What the player says went wrong.
@@ -58,19 +56,15 @@ pub struct BugReport {
     /// Where the region lies in the window, in CSS pixels.
     pub region: Option<Region>,
     pub page: PageInfo,
-    /// The UI's log ([`ui/src/diagnostics.ts`]): commands, events, errors, console.
-    #[ts(type = "unknown")]
+    /// The client log.
     pub ui_log: Value,
     /// The latest game updates the UI received, oldest first.
-    #[ts(type = "unknown[]")]
     pub updates: Vec<Value>,
-    /// The spec moment it is about, which the spec server fills in: never the UI's to say.
+    /// The spec moment recorded by the report writer.
     #[serde(skip)]
-    #[ts(skip)]
     pub spec: Option<SpecMoment>,
-    /// The spec server marks reports about the viewer page itself.
+    /// Whether the report concerns the spec viewer itself.
     #[serde(skip)]
-    #[ts(skip)]
     pub spec_viewer: bool,
 }
 
@@ -104,7 +98,7 @@ impl std::fmt::Display for SpecMoment {
 }
 
 /// A rectangle of the window, in CSS pixels.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Region {
     pub x: f64,
@@ -114,7 +108,7 @@ pub struct Region {
 }
 
 /// The page the report came from.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PageInfo {
     pub url: String,
@@ -172,7 +166,7 @@ pub fn open_by_moment(dir: &Path) -> std::collections::BTreeMap<String, usize> {
 }
 
 /// Where a report was written.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BugSaved {
     pub id: String,
@@ -181,18 +175,17 @@ pub struct BugSaved {
 }
 
 /// The UI's records for the journal ([`crate::ipc::UI_LOG`]).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiLogRequest {
     pub entries: Vec<UiLogEntry>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiLogEntry {
     pub level: Level,
     pub message: String,
-    #[ts(type = "unknown")]
     pub data: Value,
 }
 
@@ -698,7 +691,7 @@ mod tests {
         assert!(viewer_md.contains("/specs/llanowar-elves#tap-theirs"));
         let md = std::fs::read_to_string(PathBuf::from(&first.path).join("report.md")).unwrap();
         assert!(md.contains("spec: llanowar-elves/tap/theirs\n"));
-        assert!(md.contains("`just specs llanowar-elves --describe --moment tap`"));
+        assert!(md.contains("`just b3d spec llanowar-elves tap`"));
         assert_eq!(open_by_card(&dir).get("llanowar-elves"), Some(&2));
         assert_eq!(
             open_by_moment(&dir).get("llanowar-elves/tap/theirs"),

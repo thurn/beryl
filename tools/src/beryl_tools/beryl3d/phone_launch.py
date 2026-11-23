@@ -129,25 +129,37 @@ COMMANDS = (
     Command(
         "ios-build",
         "builds the native iOS Simulator app without launching it",
-        (("just b3d ios-build", "print the unsigned simulator app's path"),),
+        (
+            ("just b3d ios-build", "print the unsigned simulator app's path"),
+            ("just b3d ios-build --help", "show the command options"),
+        ),
         phone.checked(ios_build),
     ),
     Command(
         "android-build",
         "builds the native Android APK without launching it",
-        (("just b3d android-build", "print the debug APK's path"),),
+        (
+            ("just b3d android-build", "print the debug APK's path"),
+            ("just b3d android-build --help", "show the command options"),
+        ),
         phone.checked(android_build),
     ),
     Command(
         "mobile-check",
         "builds the native phone apps supported by this host",
-        (("just b3d mobile-check", "build the supported phone hosts"),),
+        (
+            ("just b3d mobile-check", "build the supported phone hosts"),
+            ("just b3d mobile-check --help", "show the command options"),
+        ),
         phone.checked(build_only),
     ),
     Command(
         "mobile-setup",
         "installs the native phone build toolchains",
-        (("just b3d mobile-setup", "install missing build tools"),),
+        (
+            ("just b3d mobile-setup", "install missing build tools"),
+            ("just b3d mobile-setup --help", "show the command options"),
+        ),
         phone.checked(setup),
     ),
 )

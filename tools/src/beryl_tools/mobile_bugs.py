@@ -16,7 +16,6 @@ from typing import Any
 
 from . import bugs, mobile_sdk
 
-BUGS_RELATIVE: Path = Path("Library/Application Support/ca.thurn.beryl/bugs")
 ReportCounts = tuple[int, int]
 
 
@@ -55,7 +54,7 @@ def copy_reports(source: Path, root: Path) -> tuple[int, int]:
     return brought, already
 
 
-def simulator_container(bundle: str = "ca.thurn.beryl") -> Path | None:
+def simulator_container(bundle: str) -> Path | None:
     """Returns only an already booted Beryl simulator's app data container."""
     listed = mobile_sdk.run("xcrun", "simctl", "list", "devices", "--json")
     if listed.returncode != 0:
@@ -78,32 +77,6 @@ def simulator_container(bundle: str = "ca.thurn.beryl") -> Path | None:
                 if data.returncode == 0:
                     return Path(data.stdout.strip())
     return None
-
-
-def android_reports(root: Path) -> ReportCounts | None:
-    from . import android
-
-    if not android.running():
-        return None
-    found = android.adb(
-        "shell", "run-as", android.PACKAGE, "find", ".", "-type", "d", "-name", "bugs"
-    )
-    if found.returncode != 0:
-        return None
-    folders = [
-        line.strip()
-        for line in found.stdout.splitlines()
-        if line.strip().endswith("/bugs")
-    ]
-    if not folders:
-        return (0, 0)
-    return pull_android_archive(
-        root,
-        android.tool("platform-tools", "adb"),
-        android.SERIAL,
-        android.PACKAGE,
-        folders[0],
-    )
 
 
 def pull_android_archive(
@@ -165,9 +138,7 @@ def pull_android_archive(
         return brought, already
 
 
-def device_reports(
-    root: Path, bundle: str = "ca.thurn.beryl", source: Path = BUGS_RELATIVE
-) -> ReportCounts | None:
+def device_reports(root: Path, bundle: str, source: Path) -> ReportCounts | None:
     """Copies from a paired iPhone only when the caller explicitly asked for it."""
     device = mobile_sdk.paired_device()
     if device is None:
@@ -206,15 +177,6 @@ def device_reports(
         return copy_reports(received, root)
 
 
-def run(args: argparse.Namespace) -> int:
-    return pull(
-        args,
-        lambda root: simulator_reports(root, "ca.thurn.beryl", BUGS_RELATIVE),
-        android_reports,
-        device_reports,
-    )
-
-
 def simulator_reports(root: Path, bundle: str, source: Path) -> ReportCounts | None:
     container = simulator_container(bundle)
     return copy_reports(container / source, root) if container is not None else None
@@ -251,14 +213,6 @@ def pull(
 
 def print_counts(source: str, counts: tuple[int, int]) -> None:
     print(f"{source}: {counts[0]} brought, {counts[1]} already saved")
-
-
-def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = sub.add_parser(
-        "mobile-bugs", help="pull phone reports or import a shared ZIP"
-    )
-    arguments(parser)
-    parser.set_defaults(func=run)
 
 
 def arguments(parser: argparse.ArgumentParser) -> None:

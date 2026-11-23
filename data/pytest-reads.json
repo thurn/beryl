@@ -35,9 +35,6 @@
     "tools/src/beryl_tools/beryl3d/tiers.py": [
       "data/beryl3d/frame-rate.json"
     ],
-    "tools/src/beryl_tools/beryl3d/timeline.py": [
-      "data/ui-conventions.json"
-    ],
     "tools/src/beryl_tools/card_crates.py": [
       "rust/cards",
       "rust/crates/beryl_cards/Cargo.toml"
@@ -72,10 +69,6 @@
       "data/arena-motion.json",
       "data/ui-conventions.json",
       "docs/ui-conventions.md"
-    ],
-    "tools/src/beryl_tools/design_tokens.py": [
-      "data/design-tokens.json",
-      "ui/src/design/tokens.css"
     ],
     "tools/src/beryl_tools/disk_usage.py": [
       "tools/src/beryl_tools/disk_usage_apfs.cc"
@@ -152,61 +145,6 @@
       "rust/crates/beryl_table/Cargo.toml",
       "rust/crates/beryl_table_session/Cargo.toml"
     ],
-    "tools/src/beryl_tools/ignite/browser.py": [
-      "data/ui-counts.json",
-      "ui/scripts/audit.mjs",
-      "ui/scripts/capture.mjs",
-      "ui/scripts/check-report.mjs",
-      "ui/scripts/hang.mjs",
-      "ui/scripts/kept-aim.mjs",
-      "ui/scripts/kept-bug-reports.mjs",
-      "ui/scripts/kept-command-list.mjs",
-      "ui/scripts/kept-crowded.mjs",
-      "ui/scripts/kept-harness.mjs",
-      "ui/scripts/kept-mobile.mjs",
-      "ui/scripts/kept-opening.mjs",
-      "ui/scripts/kept-pile-look.mjs",
-      "ui/scripts/kept-piles.mjs",
-      "ui/scripts/kept-play.mjs",
-      "ui/scripts/kept-pointer.mjs",
-      "ui/scripts/kept-result.mjs",
-      "ui/scripts/kept-screens.mjs",
-      "ui/scripts/kept-table-abilities.mjs",
-      "ui/scripts/kept-table-arrows.mjs",
-      "ui/scripts/kept-table-assists-play.mjs",
-      "ui/scripts/kept-table-assists.mjs",
-      "ui/scripts/kept-table-cardstate.mjs",
-      "ui/scripts/kept-table-click.mjs",
-      "ui/scripts/kept-table-drag.mjs",
-      "ui/scripts/kept-table-flows.mjs",
-      "ui/scripts/kept-table-keys.mjs",
-      "ui/scripts/kept-table-link.mjs",
-      "ui/scripts/kept-table-lobby-pair.mjs",
-      "ui/scripts/kept-table-lobby.mjs",
-      "ui/scripts/kept-table-log.mjs",
-      "ui/scripts/kept-table-menu.mjs",
-      "ui/scripts/kept-table-players.mjs",
-      "ui/scripts/kept-table-prompts.mjs",
-      "ui/scripts/kept-table-qa.mjs",
-      "ui/scripts/kept-table-select.mjs",
-      "ui/scripts/kept-table-start.mjs",
-      "ui/scripts/kept-table-touch-2.mjs",
-      "ui/scripts/kept-table-touch.mjs",
-      "ui/scripts/kept-table-turn.mjs",
-      "ui/scripts/kept-table-viewers.mjs",
-      "ui/scripts/kept-table.mjs",
-      "ui/scripts/kept.mjs",
-      "ui/scripts/phone-faults.mjs",
-      "ui/scripts/screen-faults.mjs",
-      "ui/scripts/slots.mjs",
-      "ui/scripts/table.mjs"
-    ],
-    "tools/src/beryl_tools/motion_film.py": [
-      "ui/verbs.json"
-    ],
-    "tools/src/beryl_tools/motion_measure.py": [
-      "data/arena-motion.json"
-    ],
     "tools/src/beryl_tools/oracle_discovery.py": [
       "data/oracle-candidates.json"
     ],
@@ -236,10 +174,6 @@
     ],
     "tools/src/beryl_tools/store_cards.py": [
       "rust/crates/beryl_card/src/characteristics.rs"
-    ],
-    "tools/src/beryl_tools/suites.py": [
-      "ui/shapes.json",
-      "ui/verbs.json"
     ],
     "tools/src/beryl_tools/vocabulary.py": [
       "rust/crates/beryl_card/src"
@@ -310,9 +244,6 @@
       "justfile",
       "rust/Cargo.toml"
     ],
-    "tools/tests/test_design_tokens.py": [
-      "ui/src/design/tokens.css"
-    ],
     "tools/tests/test_draft.py": [
       "tools/tests/fixtures/phase-draft.json"
     ],
@@ -323,9 +254,6 @@
       "ignite.toml",
       "ignite/checks/beryl3d.toml",
       "rust/beryl3d/crates"
-    ],
-    "tools/tests/test_ignite_browser.py": [
-      "data/ui-counts.json"
     ],
     "tools/tests/test_ignite_commands.py": [
       "ignite/checks"
@@ -347,9 +275,6 @@
     ],
     "tools/tests/test_phase_draft.py": [
       "tools/tests/fixtures/phase-draft.json"
-    ],
-    "tools/tests/test_ui_counts.py": [
-      "data/ui-counts.json"
     ],
     "tools/tests/test_xmage.py": [
       "tools/tests/fixtures/scenario-xmage-paid-onto-stack.json",

@@ -20,19 +20,56 @@ fn serde_names_and_types_affect_the_wire_fingerprint() {
 }
 
 #[test]
-fn legacy_export_attributes_and_documentation_do_not_affect_the_wire_fingerprint() {
-    let exported = r#"//! Module docs.
-        use ts_rs::TS;
-        #[derive(Serialize, Deserialize, TS)]
-        #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "Export"))]
+fn documentation_and_trailing_derive_commas_do_not_affect_the_wire_fingerprint() {
+    let documented = r"//! Module docs.
+        #[derive(Serialize, Deserialize,)]
         enum Message {
             /// Variant docs.
-            Update(#[ts(type = "number")] u32),
-        }"#;
+            Update(u32),
+        }";
     let rust = "#[derive(Serialize, Deserialize)] enum Message { Update(u32), }";
-    assert_eq!(fingerprint(exported), fingerprint(rust));
+    assert_eq!(fingerprint(documented), fingerprint(rust));
+}
+
+#[test]
+fn the_wire_hash_covers_additional_definitions() {
+    use beryl_protocol::{WIRE_HASH, wire_hash};
+
+    assert_eq!(WIRE_HASH.len(), 16);
+    assert!(WIRE_HASH.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(wire_hash(&[]), WIRE_HASH);
+    assert_ne!(wire_hash(&["action"]), WIRE_HASH);
     assert_ne!(
-        fingerprint(&exported.replace("ts(rename", "serde(rename")),
-        fingerprint(rust)
+        wire_hash(&["action", "lobby"]),
+        wire_hash(&["action", "log"])
     );
+    assert_ne!(wire_hash(&["act", "ion"]), wire_hash(&["action"]));
+}
+
+#[test]
+fn each_prompt_purpose_round_trips_as_its_name() {
+    use beryl_protocol::prompt::{PartName, PromptView, Purpose, ShapeBody, Words};
+
+    for &purpose in Purpose::ALL {
+        let view = PromptView {
+            revision: 0,
+            purpose,
+            part: PartName::Pick,
+            title: String::new(),
+            words: Words::default(),
+            count: None,
+            about: Vec::new(),
+            from: None,
+            marks: Vec::new(),
+            previews: Vec::new(),
+            buttons: Vec::new(),
+            body: ShapeBody::Candidates,
+        };
+        let json = serde_json::to_value(&view).unwrap();
+        assert_eq!(json["purpose"], purpose.name());
+        assert_eq!(
+            serde_json::from_value::<PromptView>(json).unwrap().purpose,
+            purpose
+        );
+    }
 }

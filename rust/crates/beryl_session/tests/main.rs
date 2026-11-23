@@ -67,7 +67,6 @@ mod stop_places;
 mod streaming;
 mod subgame;
 mod table_actions;
-mod typescript;
 mod undo;
 mod zone_picks;
 

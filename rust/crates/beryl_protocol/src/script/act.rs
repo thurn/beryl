@@ -1,7 +1,6 @@
 //! What a step does: one variant per [`Verb`], carrying all that it changes on the table.
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use super::{Arrow, Mark, Span, Subject, Verb};
 use crate::protocol::ObjectId;
@@ -12,7 +11,7 @@ use crate::protocol::{
 
 /// A verb with what it is applied to. An `object` is always the object's whole record once
 /// the step is done, and replaces the one the table held.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "verb", rename_all = "camelCase")]
 pub enum Act {
     /// The object travels to where its record puts it: another zone, another controller's
@@ -25,15 +24,12 @@ pub enum Act {
         /// the bottom of a pile, the left end of a hand or the first permanent. With no
         /// index, the card joins the end of a new pile or stays where it was in the same one.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         at: Option<u16>,
         /// The spell it becomes, when it goes to the stack.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         item: Option<StackItem>,
         /// Where an anonymous flight starts when the old slot was forgotten.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         origin: Option<ZoneRef>,
     },
     /// The object is at its place with no flight: a new one (a token, a copy) from
@@ -43,10 +39,8 @@ pub enum Act {
         why: Why,
         object: ObjectView,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         at: Option<u16>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         item: Option<StackItem>,
     },
     /// The card or ability goes from where it is with no flight, as `why` says: destroyed,
@@ -58,10 +52,8 @@ pub enum Act {
         from: ZoneName,
         why: Why,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         object: Option<ObjectView>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         at: Option<u16>,
     },
     /// The ability `item` goes on top of the stack, out of its source if it names one, and is
@@ -71,7 +63,6 @@ pub enum Act {
         item: StackItem,
         /// Bottom-first stack position on a manual table.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         at: Option<u16>,
     },
     /// The object turns over in place: its record's `facing`, or whether it has a name, says
@@ -90,7 +81,6 @@ pub enum Act {
         to: Subject,
         amount: u8,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         object: Option<ObjectView>,
     },
     /// A streak from `from` lands on `to`: mana on what it pays for, or noncombat damage on
@@ -99,13 +89,11 @@ pub enum Act {
         /// A player, for mana out of their pool. None when the source has no place on the
         /// table.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         from: Option<Subject>,
         to: Subject,
         stream: Stream,
         amount: u8,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
         object: Option<ObjectView>,
     },
     /// A number on the table is now this.
@@ -220,7 +208,7 @@ impl Act {
 }
 
 /// What a streak is made of.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Stream {
     Mana { color: Mana },
@@ -228,7 +216,7 @@ pub enum Stream {
 }
 
 /// A number on the table, at its new value.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Tally {
     Life {
@@ -269,7 +257,7 @@ pub enum Tally {
 // Other `Act` variants already carry an `ObjectView`. Boxing this record
 // would add an allocation without shrinking the script's steps.
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Fact {
     /// A step of the turn began.
@@ -299,7 +287,7 @@ pub enum Fact {
 }
 
 /// What an `announce` says. The stage turns these values into banner or pill text.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Notice {
     /// "Your Turn" or "Opponent's Turn".

@@ -1,13 +1,8 @@
-//! The app's IPC surface: each command's name, request, result and error, the events, and
-//! the messages a UI fixture records. `beryl_app` registers a Tauri command under each name
-//! here (checked when it compiles), each taking its request as one argument named `request`;
-//! `beryl_cli` records fixtures with them, and `beryl_session::typescript` writes the `Commands` and
-//! `Events` maps `ui/src/ipc.ts` types its transport with.
+//! App commands, requests, replies and recorded fixture messages.
 
 use beryl_table::Refusal;
 use beryl_table::deck::Deck;
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use crate::GameUpdate;
 use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting, TableAction};
@@ -97,19 +92,18 @@ pub const GAME_UPDATE: &str = "game-update";
 pub const TABLE_QUIT_ASKED: &str = "table-quit-asked";
 
 /// The [`CHOOSE`] command's request.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChooseRequest {
     /// The decision the UI received.
     pub decision: DecisionId,
     pub index: CandidateIndex,
     /// Joins a follow-up answer to the preceding choice for Undo.
-    #[ts(optional)]
     pub continuation: Option<bool>,
 }
 
 /// The [`SET_STOPS`] command's request.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetStopsRequest {
     pub session: SessionId,
@@ -117,7 +111,7 @@ pub struct SetStopsRequest {
 }
 
 /// The [`CANCEL`] command's request.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CancelRequest {
     /// The open decision the UI received, part of the cast.
@@ -125,7 +119,7 @@ pub struct CancelRequest {
 }
 
 /// The [`UNDO`] command's request.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UndoRequest {
     /// The open decision the UI received.
@@ -133,7 +127,7 @@ pub struct UndoRequest {
 }
 
 /// The [`PASS_ON`] command's request.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PassOnRequest {
     /// The open decision the UI received.
@@ -141,42 +135,42 @@ pub struct PassOnRequest {
 }
 
 /// The [`CONCEDE`] command's request.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConcedeRequest {
     pub session: SessionId,
 }
 
 /// The [`SHARE_BUG`] command's request.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareBugRequest {
     pub id: String,
 }
 
 /// The [`STAGE_ANIMATING`] command's request.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StageAnimatingRequest {
     pub animating: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TableSoloRequest {
     pub deck: Deck,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TableActRequest {
     pub action: TableAction,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TableKeysRequest {
     pub on: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TableRefusalReason {
     Permission,
@@ -184,11 +178,10 @@ pub enum TableRefusalReason {
     Invalid,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TableRefused {
     pub refused: TableRefusalReason,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub blocked_by: Option<Vec<u32>>,
 }
 
@@ -210,13 +203,10 @@ impl From<Refusal> for TableRefused {
 }
 
 /// A rejected action is a normal reply the stage can use for gesture feedback.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum TableActReply {
-    Ok {
-        #[ts(type = "true")]
-        ok: bool,
-    },
+    Ok { ok: bool },
     Refused(TableRefused),
 }
 
@@ -230,7 +220,7 @@ impl From<Result<(), Refusal>> for TableActReply {
 }
 
 /// The operating system hosting the app or live server.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Platform {
     Macos,
@@ -267,7 +257,7 @@ impl Platform {
 }
 
 /// What the app is, including its wire fingerprint for multiplayer compatibility.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppInfo {
     pub version: String,
@@ -281,31 +271,26 @@ pub struct AppInfo {
 }
 
 /// A recorded stream of the app's messages, which the UI's fixture transport replays.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Fixture {
     pub messages: Vec<FixtureMessage>,
 }
 
 /// One recorded message: a command's response, or an event the app emitted.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum FixtureMessage {
     Response {
-        #[ts(type = "keyof Commands")]
         command: String,
         /// The request it answered, where a replay holds the UI to it: a click on a prompt,
         /// whose reply is the state after that click and no other.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional, type = "unknown")]
         request: Option<serde_json::Value>,
-        #[ts(type = "unknown")]
         value: serde_json::Value,
     },
     Event {
-        #[ts(type = "keyof Events")]
         event: String,
-        #[ts(type = "unknown")]
         payload: serde_json::Value,
     },
 }

@@ -44,7 +44,6 @@ from .. import (
     check_inputs,
     citations,
     conventions,
-    design_tokens,
     discarded_push,
     file_length,
     justfile_format,
@@ -313,18 +312,6 @@ def conventions_check(root: Path) -> list[str]:
     ]
 
 
-def design_tokens_check(root: Path) -> list[str]:
-    try:
-        if not design_tokens.stale(design_tokens.DATA, design_tokens.STYLESHEET):
-            return []
-    except (ValueError, KeyError) as error:
-        return [str(error)]
-    sheet, data = design_tokens.STYLESHEET, design_tokens.DATA
-    return [
-        f"{sheet.name} is stale: edit {data.name}, run `just design-tokens` and commit both"
-    ]
-
-
 MARKDOWN = ["*.md", "**/*.md"]
 CITING: tuple[str, ...] = citations.ROOTS
 CITED_CODE: list[str] = [
@@ -385,7 +372,6 @@ CHECKS: tuple[Check, ...] = (
         (
             "rust/**",
             "ignite/crates/**",
-            "ui/**",
             "data/**",
             "docs/sample-decks/**",
             "docs/incidents/**",
@@ -518,16 +504,6 @@ CHECKS: tuple[Check, ...] = (
             "data/arena-motion.json",
             "docs/ui-conventions.md",
             module("conventions"),
-        ),
-    ),
-    Check(
-        "design-tokens",
-        "repository",
-        design_tokens_check,
-        (
-            "data/design-tokens.json",
-            "ui/src/design/tokens.css",
-            module("design_tokens"),
         ),
     ),
 )

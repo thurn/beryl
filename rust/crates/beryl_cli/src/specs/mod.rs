@@ -18,11 +18,8 @@
 
 pub mod auto;
 pub mod describe;
-mod listing;
 pub mod playground;
-pub mod reviews;
 pub mod script;
-pub mod serve;
 pub mod start;
 
 use std::sync::OnceLock;
@@ -38,8 +35,8 @@ use describe::reach;
 pub use describe::{Unreached, describe, trace};
 pub use script::scripts;
 pub(crate) use script::text as script_text;
-pub use start::{FAULTS, Phase, start};
-use start::{at_checkpoint, review_position, start_guarded, start_review};
+pub use start::{FAULTS, Phase, recorded_cast_moves, start};
+use start::{review_position, start_guarded, start_review};
 
 /// The specs, one per implemented card, each generated on its first request: asking for one
 /// card's moments plays no other card's.
@@ -246,22 +243,6 @@ impl Spec {
         self.checkpoints.get_or_init(|| {
             auto::checkpoints(self.catalog, self.def, scenarios(self.catalog, self.def))
         })
-    }
-
-    /// The original replay, if it shows this card being cast from hand.
-    fn replay_from_hand(&self, group: &str) -> Option<&str> {
-        self.moments()
-            .iter()
-            .find(|m| {
-                m.group == group
-                    && m.title == "Start"
-                    && m.play.iter().any(|a| {
-                        matches!(a, Action::Cast { player, card, .. }
-                        if *card == self.card
-                            && m.board.setup.players[player.index()].hand.contains(card))
-                    })
-            })
-            .map(|m| m.name)
     }
 }
 

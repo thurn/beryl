@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import deps, paths, system
+from . import paths, system
 from .ignite import rules as check_rules
 
 # Exit code Ignite returns when an operation is still running and names a handle to wait on.
@@ -37,7 +37,6 @@ WAIT_HANDLE: re.Pattern[str] = re.compile(r"\bignite wait ([A-Za-z0-9_.-]+)")
 GENERATORS: dict[str, tuple[str, ...]] = {
     "data/ui-conventions.json": ("conventions",),
     "data/arena-motion.json": ("conventions",),
-    "data/design-tokens.json": ("design-tokens",),
 }
 
 # The subject Ignite's landing formatter commits under, when a landing adds a format commit.
@@ -295,22 +294,6 @@ def run_generators(tree: Path, edited: str) -> list[str]:
     return errors
 
 
-def _formatter_program(words: list[str], workdir: Path, tree: Path) -> list[str]:
-    """Prepares a formatter command from `[format].rules`: restores `ui/node_modules` when a
-    rule runs from `node_modules/.bin/`, and adapts `.cmd` shims on Windows."""
-    if not words:
-        return words
-    program = words[0]
-    if program.startswith("node_modules/.bin/"):
-        if workdir == tree / "ui":
-            deps.ensure_node_modules(tree)
-        if system.WINDOWS and not program.endswith(".cmd"):
-            return [f"{program}.cmd", *words[1:]]
-    elif system.WINDOWS:
-        return [system.which(program), *words[1:]]
-    return words
-
-
 def run_formatters(tree: Path, changed: Sequence[str]) -> list[str]:
     """Runs every `[format]` rule in `tree / "ignite.toml"` that matches any existing file in
     `changed`. Returns failure messages (empty when all succeeded)."""
@@ -322,9 +305,11 @@ def run_formatters(tree: Path, changed: Sequence[str]) -> list[str]:
         if not matched:
             continue
         workdir = tree / rule.dir if rule.dir else tree
-        words = _formatter_program(rule.words(matched), workdir, tree)
+        words = rule.words(matched)
         if not words:
             continue
+        if system.WINDOWS:
+            words[0] = system.which(words[0])
         print(f"Formatting: {' '.join(words)}")
         try:
             result = subprocess.run(words, cwd=workdir, env=env, check=False)

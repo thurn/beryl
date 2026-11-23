@@ -20,7 +20,6 @@ pub use own::{OwnStep, OwnTiming, OwnTimings, own_timings};
 use std::ptr;
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use self::conventions::{Conventions, curve, snap};
 use super::{
@@ -31,13 +30,12 @@ use crate::protocol::{
 };
 
 /// How one step is played. Times are in milliseconds.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(clippy::struct_excessive_bools)] // Each flag is one independent rule of the wire format.
 pub struct StepTiming {
     /// The verb's case in `data/ui-conventions.json`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub case: Option<String>,
     /// How long its motion takes.
     pub duration: f64,
@@ -49,7 +47,6 @@ pub struct StepTiming {
     pub curve: Curve,
     /// For a step that moves several cards one after another, how long each one moves.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub each: Option<f64>,
     /// It takes the turn of the step before it.
     pub with: bool,
@@ -57,7 +54,6 @@ pub struct StepTiming {
     pub after: Vec<Subject>,
     /// It ends a span, and waits until the span has stood whole this long.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub hold: Option<f64>,
     /// What follows it waits until it is over.
     pub leads: bool,
@@ -71,7 +67,6 @@ pub struct StepTiming {
     pub ahead: bool,
     /// How long what it left room for takes to close up after it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub closes: Option<f64>,
     /// How what it makes room among (the cards whose resting place its act changed but that
     /// it does not move itself) goes to its new place. Where `opens` or `closes` is set, it
@@ -88,7 +83,7 @@ pub struct StepTiming {
 }
 
 /// How what a step makes room among goes to its new place.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Room {
     /// Over the step.
@@ -105,7 +100,7 @@ pub enum Room {
 }
 
 /// One named phase of a step's motion.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Phase {
     /// The phase's name in the data (`poise`, `hit`).
@@ -115,7 +110,7 @@ pub struct Phase {
 }
 
 /// An effect a step begins.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StepEffect {
     /// The effect's name in the data.
@@ -124,15 +119,12 @@ pub struct StepEffect {
     pub when: Edge,
     /// What it is on, where that is not the step's own subject.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub on: Option<Subject>,
     /// How far through the step it begins, from 0 to 1, where that is not an edge of it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub into: Option<f64>,
     /// How long it lasts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub duration: Option<f64>,
     /// How long after it begins it starts to show.
     pub delay: f64,
@@ -141,7 +133,7 @@ pub struct StepEffect {
 }
 
 /// The easing of a motion or an effect.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Curve {
     Linear,
@@ -151,7 +143,7 @@ pub enum Curve {
 }
 
 /// An end of a step.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Edge {
     Start,
