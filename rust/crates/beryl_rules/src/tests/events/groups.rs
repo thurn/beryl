@@ -449,18 +449,17 @@ fn the_cards_a_cost_exiles_leave_as_one_event_after_the_last_is_chosen() {
     let cards = ["Group Bear", "Group Ogre", "Group Aura"].map(|c| g.give(me, c, Zone::Graveyard));
     let delver = g.give(me, "Group Delver", Zone::Hand);
     g.pick(cast(delver));
-    // Each card is chosen by its own answer, and none leaves until the last is chosen.
-    let mut picks = 0;
-    while g.current().kind == DecisionKind::ChooseObject {
+    // Start with the bottom card so two different cards remain legal for the second pick.
+    // Neither card leaves until the second choice is made.
+    for &card in &cards[..2] {
+        assert_eq!(g.current().kind, DecisionKind::ChooseObject);
         assert!(
             cards
                 .iter()
                 .all(|&c| g.s.object(c).zone() == Zone::Graveyard)
         );
-        g.choose(Choice(0));
-        picks += 1;
+        g.pick_object(card);
     }
-    assert_eq!(picks, 2);
     let events = told(&mut g);
     // CR 601.2h: "The player pays the total cost." The two cards are one payment of one
     // cost, exiled at once, after the mana.
