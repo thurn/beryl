@@ -337,7 +337,7 @@ impl Client {
             self.features.update_table(Change::Summary(over));
             self.show_screen();
         }
-        if let (Some(pick), Some(mouse)) = (self.features.table().picking, self.mouse()) {
+        if let (Some(pick), Some(mouse)) = (self.features.table().picking, self.table_mouse()) {
             self.show.lit_mut().set_aims([arrows::aim(pick, mouse)]);
         }
     }

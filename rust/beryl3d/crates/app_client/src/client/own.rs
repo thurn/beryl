@@ -7,7 +7,7 @@ use game_hud::hud::{counts, notices, rows};
 impl Client {
     /// Plays prompt-owned steps and tracks the pointer's aiming arrows.
     pub(super) fn advance_prompt(&mut self, table_now: u64) {
-        let mouse = self.mouse();
+        let mouse = self.table_mouse();
         self.features
             .prompts
             .own(table_now, self.views, &mut self.show, &self.step_timings);

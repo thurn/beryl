@@ -323,6 +323,16 @@ impl Client {
         self.routes.router.mouse()
     }
 
+    /// The cursor used to aim on the table. The report still routes its own pointer events,
+    /// but the table's pointer keeps the position it had when the report opened.
+    pub(super) fn table_mouse(&self) -> Option<Vec2> {
+        if self.bug_open() {
+            self.show.pointer().position()
+        } else {
+            self.mouse()
+        }
+    }
+
     pub(super) fn end_control(&mut self) {
         self.routes.action = None;
         match std::mem::take(&mut self.routes.control) {

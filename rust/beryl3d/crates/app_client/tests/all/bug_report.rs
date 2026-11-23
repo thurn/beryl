@@ -491,6 +491,69 @@ fn editing_the_report_over_a_table_menu_keeps_focus_in_the_description() {
 }
 
 #[test]
+fn a_targeting_arrow_stays_frozen_during_region_selection() {
+    use game_probe::story::{Body, Story};
+
+    let catalog = app_client::stories::embedded();
+    let source = catalog
+        .iter()
+        .find(|source| source.name == "story/app_screens/bug-report-over-game")
+        .expect("the reporter story");
+    let story = Story::parse(&source.text).expect("the reporter story parses");
+    let Body::Capture { capture, .. } = story.body else {
+        panic!("the embedded reporter story is a capture");
+    };
+    let mut page = Page::new(
+        crate::test_data::data(),
+        Recording(capture.messages).into(),
+        Side::You,
+        SIZE,
+    )
+    .expect("the reporter story plays");
+    page.still();
+
+    let aim = |page: &mut Page| {
+        let frame = page.frame();
+        let index = locate(frame, "arrow \"hostile-target\"").expect("the aim is drawn");
+        frame.resolved[index as usize].corners
+    };
+    let before = Vec2::new(800.0, 670.0);
+    page.move_to(before);
+    let frozen = aim(&mut page);
+    assert_eq!(frozen[3], before, "the live arrow aims at the mouse");
+    let source = "card \"Jace, Wielder of Mysteries\"";
+    let card = page.find(source).rect();
+
+    open(&mut page);
+    page.find("text \"Drag to select\"");
+    assert_eq!(aim(&mut page), frozen, "opening the report keeps the aim");
+    let start = Vec2::new(300.0, 200.0);
+    mouse(&mut page, PointerPhase::Down, start);
+    for end in [Vec2::new(500.0, 260.0), Vec2::new(700.0, 400.0)] {
+        mouse(&mut page, PointerPhase::Move, end);
+        assert_eq!(
+            page.find("region \"region\"").rect(),
+            Rect {
+                x: start.x,
+                y: start.y,
+                width: end.x - start.x,
+                height: end.y - start.y,
+            },
+            "the selection follows the mouse"
+        );
+        assert_eq!(page.find(source).rect(), card, "the table stays in place");
+        assert_eq!(aim(&mut page), frozen, "the arrow keeps its whole curve");
+    }
+
+    page.key(KeyCode::Escape);
+    assert!(page.try_find("region \"bug report\"").is_err());
+    page.find("text \"Choose a target.\"");
+    let after = Vec2::new(800.0, 135.0);
+    page.move_to(after);
+    assert_eq!(aim(&mut page)[3], after, "the live arrow tracks again");
+}
+
+#[test]
 fn ctrl_b_freezes_the_table_then_a_drag_chooses_the_region_and_submit_sends_it() {
     let mut page = sample();
     requests(&mut page);
