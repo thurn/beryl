@@ -9,11 +9,12 @@ import sys
 import tomllib
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
-from beryl_tools import paths
+from beryl_tools import android_sdk, paths
 from beryl_tools.ignite import script as adapter
 
 MANIFEST: Path = paths.REPO / "ignite" / "checks" / "script.toml"
@@ -27,9 +28,9 @@ FORBIDDEN: list[str] = [
 ]
 
 
-def test_the_manifest_declares_the_three_families_and_their_product() -> None:
+def test_the_manifest_declares_the_families_and_their_products() -> None:
     manifest = tomllib.loads(MANIFEST.read_text())
-    assert set(manifest["family"]) == {"script", "app", "mobile"}
+    assert set(manifest["family"]) == {"script", "app", "mobile", "android"}
     assert manifest["family"]["script"]["needs"] == ["cli", "python-env"]
     for name, family in manifest["family"].items():
         assert family["adapter"] == "jsonl"
@@ -37,8 +38,9 @@ def test_the_manifest_declares_the_three_families_and_their_product() -> None:
         assert f"list {name}" in family["list"]
         assert "{checks}" in family["run"]
         assert family["inputs"]
-    assert manifest["family"]["app"]["platforms"] == ["macos"]
+    assert manifest["family"]["app"]["platforms"] == ["macos", "windows"]
     assert manifest["family"]["mobile"]["platforms"] == ["macos"]
+    assert manifest["family"]["android"]["platforms"] == ["macos", "windows"]
     # A card is its own check's input, so the family must not read every card's file.
     assert not any(
         p.startswith("rust/cards/") and p.count("/") >= 4
@@ -211,8 +213,47 @@ def test_app_and_mobile_list_one_check_per_target(repo: Path) -> None:
     assert [c["check"] for c in adapter.list_checks("app", repo, [])] == ["app:smoke"]
     assert [c["check"] for c in adapter.list_checks("mobile", repo, [])] == [
         "mobile:aarch64-apple-ios-sim",
-        "mobile:aarch64-linux-android",
     ]
+    assert [c["check"] for c in adapter.list_checks("android", repo, [])] == [
+        "android:aarch64-linux-android",
+    ]
+
+
+def test_android_uses_the_pinned_windows_tools(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sdk = tmp_path / "Android SDK"
+    monkeypatch.setattr(android_sdk, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setenv("ANDROID_HOME", str(sdk))
+    monkeypatch.setenv("NDK_HOME", str(sdk / "ndk" / "other"))
+    env = android_sdk.ndk_env()
+    tools = sdk / "ndk/28.2.13676358/toolchains/llvm/prebuilt/windows-x86_64/bin"
+    assert Path(env["CC_aarch64_linux_android"]) == tools / "clang.exe"
+    assert Path(env["AR_aarch64_linux_android"]) == tools / "llvm-ar.exe"
+    assert env["CFLAGS_aarch64_linux_android"] == "--target=aarch64-linux-android24"
+
+
+def test_only_the_ios_simulator_check_clears_swift_caches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cleared: list[Path] = []
+    environments: list[dict[str, str] | None] = []
+    android_env = {"CC_aarch64_linux_android": "clang"}
+
+    def cargo(
+        command: list[str], *, env: dict[str, str] | None, **kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        environments.append(env)
+        return subprocess.CompletedProcess[str](command, 0, "", "")
+
+    monkeypatch.setattr(adapter, "clear_swift_module_caches", cleared.append)
+    monkeypatch.setattr(android_sdk, "ndk_env", lambda: android_env)
+    monkeypatch.setattr(subprocess, "run", cargo)
+
+    assert adapter.run_mobile("aarch64-apple-ios-sim", tmp_path) == {"outcome": "pass"}
+    assert adapter.run_mobile("aarch64-linux-android", tmp_path) == {"outcome": "pass"}
+    assert cleared == [tmp_path]
+    assert environments == [None, android_env]
 
 
 def test_a_card_whose_scenarios_use_another_card_lists_that_cards_file_too(

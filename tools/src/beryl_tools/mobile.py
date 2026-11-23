@@ -15,7 +15,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import app, paths, system
+from . import android_sdk, app, paths, system
+from .android_sdk import MIN_SDK as MIN_SDK
+from .android_sdk import NDK_VERSION as NDK_VERSION
 
 BUNDLE_ID = "ca.thurn.beryl"
 APPLE: Path = paths.APP / "gen" / "apple"
@@ -29,22 +31,22 @@ IOS_TARGETS = ("aarch64-apple-ios", "aarch64-apple-ios-sim")
 IOS_FORMULAE = ("cocoapods", "xcodegen")
 
 # The Android SDK, where Android Studio would put it; recipes set its variables themselves.
-ANDROID_HOME: Path = Path.home() / "Library" / "Android" / "sdk"
+ANDROID_HOME: Path = android_sdk.sdk_root()
 ANDROID_API = "36"
-NDK_VERSION = "28.2.13676358"
-# gen/android/app/build.gradle.kts's minSdk.
-MIN_SDK = 24
 ANDROID_SYSTEM_IMAGE: str = f"system-images;android-{ANDROID_API};google_apis;arm64-v8a"
+ANDROID_BUILD_PACKAGES: tuple[str, ...] = (
+    f"platforms;android-{ANDROID_API}",
+    "build-tools;36.0.0",
+    f"ndk;{NDK_VERSION}",
+)
 ANDROID_PACKAGES: tuple[str, ...] = (
     "cmdline-tools;latest",
     "platform-tools",
     "emulator",
-    f"platforms;android-{ANDROID_API}",
-    "build-tools;36.0.0",
-    f"ndk;{NDK_VERSION}",
+    *ANDROID_BUILD_PACKAGES,
     ANDROID_SYSTEM_IMAGE,
 )
-ANDROID_TARGETS = ("aarch64-linux-android",)
+ANDROID_TARGETS: tuple[str] = (android_sdk.TARGET,)
 # The Android Gradle Plugin runs on a JDK it supports, not the newest.
 JDK_FORMULA = "openjdk@21"
 
@@ -128,23 +130,18 @@ def android_env() -> dict[str, str]:
     }
 
 
-def ndk_env() -> dict[str, str]:
-    """The environment for plain cargo building C for Android (ring's, under rustls) with
-    the NDK's clang; Tauri's CLI sets it up itself."""
-    prebuilt = ANDROID_HOME / "ndk" / NDK_VERSION / "toolchains" / "llvm" / "prebuilt"
-    clang = prebuilt / "darwin-x86_64" / "bin" / f"aarch64-linux-android{MIN_SDK}-clang"
-    return {
-        **os.environ,
-        "CC_aarch64_linux_android": str(clang),
-        "AR_aarch64_linux_android": str(clang.with_name("llvm-ar")),
-    }
-
-
 def check(args: argparse.Namespace) -> int:
-    """Type-checks the app crate for the iOS Simulator and Android (`by mobile-check`): the
-    phone builds themselves take minutes, but a check takes seconds on a warm cache."""
+    """Type-checks the phone targets supported by this host (`by mobile-check`)."""
+    if sys.platform not in ("darwin", "win32"):
+        print("mobile-check: supported on macOS and Windows", file=sys.stderr)
+        return 2
     manifest = str(paths.RUST / "Cargo.toml")
-    for target in ("aarch64-apple-ios-sim", "aarch64-linux-android"):
+    targets: tuple[str, ...] = (
+        ("aarch64-apple-ios-sim", *ANDROID_TARGETS)
+        if sys.platform == "darwin"
+        else ANDROID_TARGETS
+    )
+    for target in targets:
         started = time.monotonic()
         # From ui/, where Xcode's and Gradle's build scripts run cargo, so this
         # resolves the toolchain the way the phone builds do.
@@ -161,7 +158,7 @@ def check(args: argparse.Namespace) -> int:
                 target,
             ],
             cwd=paths.UI,
-            env=ndk_env(),
+            env=android_sdk.ndk_env() if target == android_sdk.TARGET else None,
             check=False,
         ).returncode
         print(f"mobile-check: {target} in {time.monotonic() - started:.0f} s")
@@ -177,20 +174,33 @@ def android_setup() -> int:
     code = rust_targets(ANDROID_TARGETS)
     if code != 0:
         return code
-    if not (java_home() / "bin" / "java").exists():
+    if system.WINDOWS:
+        java = os.environ.get("JAVA_HOME", "")
+        if not java or not (Path(java) / "bin" / "java.exe").is_file():
+            print("mobile-setup: set JAVA_HOME to your JDK 21", file=sys.stderr)
+            return 2
+    elif not (java_home() / "bin" / "java").exists():
         print(f"mobile-setup: brew install {JDK_FORMULA}")
         code = subprocess.run(["brew", "install", JDK_FORMULA], check=False).returncode
         if code != 0:
             return code
     # A package `a;b;c` installs into the SDK's a/b/c.
+    packages = ANDROID_BUILD_PACKAGES if system.WINDOWS else ANDROID_PACKAGES
     missing = [
         p
-        for p in ANDROID_PACKAGES
+        for p in packages
         if not (ANDROID_HOME.joinpath(*p.split(";")) / "package.xml").exists()
     ]
     if missing:
-        sdkmanager = ANDROID_HOME / "cmdline-tools" / "latest" / "bin" / "sdkmanager"
+        manager = "sdkmanager.bat" if system.WINDOWS else "sdkmanager"
+        sdkmanager = ANDROID_HOME / "cmdline-tools" / "latest" / "bin" / manager
         if not sdkmanager.exists():
+            if system.WINDOWS:
+                print(
+                    f"mobile-setup: install the Android command-line tools in {sdkmanager.parent.parent}",
+                    file=sys.stderr,
+                )
+                return 2
             # Homebrew's command-line tools bootstrap the SDK's own.
             if shutil.which("sdkmanager") is None:
                 print("mobile-setup: brew install --cask android-commandlinetools")
@@ -202,7 +212,7 @@ def android_setup() -> int:
                     return code
             sdkmanager = Path(shutil.which("sdkmanager") or "sdkmanager")
         command = [str(sdkmanager), f"--sdk_root={ANDROID_HOME}"]
-        env = {**os.environ, "JAVA_HOME": str(java_home())}
+        env = None if system.WINDOWS else {**os.environ, "JAVA_HOME": str(java_home())}
         print(f"mobile-setup: sdkmanager {' '.join(missing)}")
         subprocess.run(
             [*command, "--licenses"],
@@ -249,8 +259,10 @@ def simulator_runtime() -> str | None:
 
 
 def setup(args: argparse.Namespace) -> int:
+    if system.WINDOWS:
+        return android_setup()
     if sys.platform != "darwin":
-        print("mobile-setup: the phone apps build on macOS", file=sys.stderr)
+        print("mobile-setup: supported on macOS and Windows", file=sys.stderr)
         return 2
     return ios_setup() or android_setup()
 
@@ -506,7 +518,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "mobile-setup", help="install the phone apps' toolchains (idempotent)"
     ).set_defaults(func=setup)
     sub.add_parser(
-        "mobile-check", help="cargo check the app for the iOS Simulator and Android"
+        "mobile-check", help="cargo check the phone targets supported by this host"
     ).set_defaults(func=check)
     p = sub.add_parser("ios", help="build the iOS app and launch it in the Simulator")
     p.add_argument("--no-build", action="store_true")

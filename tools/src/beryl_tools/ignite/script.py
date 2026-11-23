@@ -1,4 +1,4 @@
-"""The script, app and mobile check families' adapter. The families are declared in
+"""The script, app, mobile and Android check families' adapter. The families are declared in
 `ignite/checks/script.toml`.
 
 Run from the repository's root as `python -m beryl_tools.ignite.script <verb> <family> ...`:
@@ -22,7 +22,8 @@ The families:
   definitions name, so that editing a card leaves the checks of cards that do not use it as
   they were.
 - `app`: `just smoke`, one check, `app:smoke`.
-- `mobile`: `cargo check` of the app for the iOS Simulator and for Android, one check per target.
+- `mobile`: `cargo check` of the app for the iOS Simulator.
+- `android`: `cargo check` of the app for Android.
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 RESULTS_ENV = "IGNITE_RESULTS"
-FAMILIES = ("script", "app", "mobile")
+FAMILIES = ("script", "app", "mobile", "android")
 CARDS = "rust/cards"
 FIXTURES = "ui/fixtures.json"
 # The seats of a card's moment, as `beryl_cli` names them.
@@ -49,12 +50,7 @@ MESSAGE_LIMIT = 300
 # `just smoke`'s exit code when its build failed: the app was never launched.
 CANNOT_RUN = 125
 
-MOBILE_TARGETS = ("aarch64-apple-ios-sim", "aarch64-linux-android")
-# The Android toolchain `by mobile-setup` installs (tools/src/beryl_tools/mobile.py, which cannot
-# be imported here because it reaches the orchestration code).
-ANDROID_HOME: Path = Path.home() / "Library" / "Android" / "sdk"
-NDK_VERSION = "28.2.13676358"
-MIN_SDK = 24
+IOS_SIMULATOR = "aarch64-apple-ios-sim"
 
 
 def slug(name: str) -> str:
@@ -239,7 +235,11 @@ def list_checks(family: str, root: Path, cards: Sequence[str]) -> list[dict[str,
         return script_checks(root, cards)
     if family == "app":
         return [{"check": "app:smoke", "inputs": []}]
-    return [{"check": f"mobile:{t}", "inputs": []} for t in MOBILE_TARGETS]
+    if family == "mobile":
+        return [{"check": f"mobile:{IOS_SIMULATOR}", "inputs": []}]
+    from beryl_tools import android_sdk
+
+    return [{"check": f"android:{android_sdk.TARGET}", "inputs": []}]
 
 
 # --- run ---
@@ -320,17 +320,6 @@ def run_app(root: Path) -> dict[str, Any] | None:
     }
 
 
-def ndk_env() -> dict[str, str]:
-    """The environment for plain cargo building C for Android with the NDK's clang."""
-    prebuilt = ANDROID_HOME / "ndk" / NDK_VERSION / "toolchains" / "llvm" / "prebuilt"
-    clang = prebuilt / "darwin-x86_64" / "bin" / f"aarch64-linux-android{MIN_SDK}-clang"
-    return {
-        **os.environ,
-        "CC_aarch64_linux_android": str(clang),
-        "AR_aarch64_linux_android": str(clang.with_name("llvm-ar")),
-    }
-
-
 def clear_swift_module_caches(root: Path) -> None:
     """Deletes the Swift module caches that `swift-rs` build scripts left under `rust/target`.
 
@@ -346,7 +335,13 @@ def clear_swift_module_caches(root: Path) -> None:
 
 
 def run_mobile(target: str, root: Path) -> dict[str, Any] | None:
-    clear_swift_module_caches(root)
+    env = None
+    if target == IOS_SIMULATOR:
+        clear_swift_module_caches(root)
+    else:
+        from beryl_tools import android_sdk
+
+        env = android_sdk.ndk_env()
     # From ui/, where Xcode's and Gradle's build scripts run cargo, so this resolves the
     # toolchain the way the phone builds do.
     done = subprocess.run(
@@ -362,7 +357,7 @@ def run_mobile(target: str, root: Path) -> dict[str, Any] | None:
             target,
         ],
         cwd=root / "ui",
-        env=ndk_env(),
+        env=env,
         capture_output=True,
         text=True,
         check=False,
@@ -383,7 +378,7 @@ def run_checks(family: str, names: Sequence[str], root: Path, results: Path) -> 
         result = (
             run_app(root)
             if family == "app"
-            else run_mobile(name.removeprefix("mobile:"), root)
+            else run_mobile(name.removeprefix(f"{family}:"), root)
         )
         if result is not None:
             append(results, [{"check": name, **result}])

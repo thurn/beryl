@@ -267,7 +267,8 @@ os = "macos"
 oracle = 1
 
 # The Windows PC (12 cores, 20 threads, 32 GB) with a 128 GB Dev Drive (ReFS) at D:.
-# The browser and app families require the Mac's WebKit or desktop runtime.
+# Legacy browser checks still use the macOS WebKit setup. Desktop smoke uses WebView2 here.
+# The Android check uses the pinned NDK installed by `just mobile-setup`.
 # Oracle checks use the pinned JDK and Maven builds from `just oracle-setup`.
 # Rollout counts use the `beryl-bench` WSL distribution from `just bench-count`.
 # Frame instruction counts use the `beryl3d-bench` WSL distribution from `just b3d vm`.
@@ -281,6 +282,7 @@ os = "windows"
 families = [
   "rust", "doctests", "clippy", "rust-format", "ignite", "ignite-lint", "source", "markdown",
   "repository", "commit", "black", "pytest", "pyre", "b3d-format", "b3d-source", "ignite-platform",
+  "app", "android",
   "counts", "allocations", "card-text", "script", "scale", "iroh", "fuzz", "exhaust",
   "oracle", "oracle-generated", "ui-format", "ui-types", "ui-unit",
   "b3d-clippy", "b3d-validation", "b3d-test", "b3d-interface", "b3d-every-tick", "b3d-corpus",

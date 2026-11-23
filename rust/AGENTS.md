@@ -132,7 +132,12 @@ heavy command.
 - `just smoke` builds the debug app and launches it without a window or Dock
   icon, and waits until the UI reports over IPC that it has loaded (about a
   second once built). It fails on a build error or if the UI never loads.
-- `just mobile-setup` installs the phone toolchains, once per machine.
+- `just mobile-setup` installs the phone toolchains, once per machine. On
+  Windows, install JDK 21 and set `JAVA_HOME`. Put the Android command-line
+  tools in `cmdline-tools/latest` under `ANDROID_HOME` (default
+  `%LOCALAPPDATA%\Android\sdk`). The recipe installs the pinned Android SDK
+  packages and Rust target for `ignite test android:`.
+  [Android command-line tools download](https://developer.android.com/studio#command-tools).
 - `just ios-smoke` builds the iOS app and launches it in a headless iOS
   Simulator until the UI loads. `just ios` launches it in a simulator, which you
   can drive with the iOS Simulator tool.

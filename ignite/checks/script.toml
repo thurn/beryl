@@ -59,11 +59,11 @@ inputs = [
 ]
 
 # `just smoke`: builds the debug app and launches it headless until the UI reports that it
-# loaded. It builds for itself, and a desktop window system exists only on a Mac.
+# loaded. The native app uses WKWebView on macOS and WebView2 on Windows.
 [family.app]
 kind = "regression"
 adapter = "jsonl"
-platforms = ["macos"]
+platforms = ["macos", "windows"]
 needs = ["python-env", "ui-deps"]
 # The list is the one check `app:smoke`, so it needs no `npm ci`.
 list_needs = ["python-env"]
@@ -76,11 +76,13 @@ inputs = [
   "docs/sample-decks/**",
   "justfile",
   "tools/src/beryl_tools/app.py",
+  "tools/src/beryl_tools/deps.py",
   "tools/src/beryl_tools/ignite/script.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/system.py",
 ]
 
-# `cargo check` of the app for the iOS Simulator and for Android, one check each. The phone
-# toolchains exist only on the Mac.
+# `cargo check` of the app for the iOS Simulator, which requires Xcode.
 [family.mobile]
 kind = "regression"
 adapter = "jsonl"
@@ -94,5 +96,23 @@ inputs = [
   "data/**",
   "ui/src/generated/**",
   "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/script.py",
+]
+
+# `cargo check` of the arm64 Android app using the host's pinned Android NDK.
+[family.android]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos", "windows"]
+needs = ["python-env"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.script list android"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.script run android {checks}"
+inputs = [
+  "crate:beryl_app",
+  "crate:beryl-mobile",
+  "data/**",
+  "ui/src/generated/**",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/android_sdk.py",
   "tools/src/beryl_tools/ignite/script.py",
 ]
