@@ -130,6 +130,22 @@ def test_web_only_hand_cost_is_excluded_from_shared_counts() -> None:
     assert reference.count(web, native)["unmatched"] == 2
 
 
+def test_native_fps_monitor_is_excluded_from_shared_counts() -> None:
+    label = element(role="text", name="FPS monitor", key=None, text=[])
+    toggle = element(role="toggle", name="FPS monitor", key=None, text=[])
+    toggle_text = element(role="text", name="Off", key=None, parent=1, text=[])
+    audio = element(role="toggle", name="Audio", key=None, text=[])
+    sound = element(role="text", name="Sound", key=None, parent=3, text=[])
+    web = [audio, {**sound, "parent": 0}]
+    native = [label, toggle, toggle_text, audio, sound]
+
+    assert reference.count_shared(web, native) == dict.fromkeys(
+        reference.RECORD_COUNTS, 0
+    )
+    assert reference.count_shared(web, native[:-1])["unmatched"] == 1
+    assert reference.count(web, native)["unmatched"] == 3
+
+
 def document(*elements: dict[str, object]) -> dict[str, object]:
     return {
         "target": "b3d:opening-play/you/1600x900@2",

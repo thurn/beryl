@@ -23,7 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -181,23 +181,36 @@ def load(t: Target) -> list[Element] | None:
 
 
 def count_shared(web: Sequence[Element], b3d: Sequence[Element]) -> dict[str, int]:
-    """Compare the shared UI. The web floats mana costs above hand cards, as documented
-    in UI Conventions. Keep those records for web drift and omit their subtrees here.
+    """Compare shared elements. The web floats mana costs above cards in hand, and
+    Beryl 3D has an FPS monitor setting. Both are documented in UI Conventions.
     """
+    web_shared = without_subtrees(
+        web, lambda element: element.get("role") == "hand-cost"
+    )
+    b3d_shared = without_subtrees(
+        b3d,
+        lambda element: element.get("name") == "FPS monitor"
+        and element.get("role") in ("text", "toggle"),
+    )
+    return count(web_shared, b3d_shared)
+
+
+def without_subtrees(
+    elements: Sequence[Element], omit: Callable[[Element], bool]
+) -> list[Element]:
+    """Drop the given elements and their descendants, remapping retained parent indexes."""
     shared: list[Element] = []
     kept: dict[int, int] = {}
-    # The capture writes parents before children. Remap each parent to its retained index.
-    for index, element in enumerate(web):
+    # The capture writes parents before children.
+    for index, element in enumerate(elements):
         parent = joined.parent(element)
-        if element.get("role") == "hand-cost" or (
-            parent is not None and parent not in kept
-        ):
+        if omit(element) or (parent is not None and parent not in kept):
             continue
         kept[index] = len(shared)
         shared.append(
             {**element, "parent": kept[parent] if parent is not None else None}
         )
-    return count(shared, b3d)
+    return shared
 
 
 def count(web: Sequence[Element], b3d: Sequence[Element]) -> dict[str, int]:
