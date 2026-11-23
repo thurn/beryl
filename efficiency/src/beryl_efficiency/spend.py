@@ -70,7 +70,18 @@ IGNITE_KINDS: frozenset[str] = frozenset(
 )
 # Tools that start or reach other agents, besides every other MCP tool.
 AGENT_KINDS: frozenset[str] = frozenset(
-    {"Agent", "Task", "ToolSearch", "Skill", "WebFetch", "WebSearch"}
+    {
+        "Agent",
+        "Task",
+        "ToolSearch",
+        "Skill",
+        "WebFetch",
+        "WebSearch",
+        "invoke_subagent",
+        "run_workflow",
+        "search_web",
+        "swarm",
+    }
 )
 # The token classes, in the order the `dollars` segments list them.
 CLASSES: tuple[str, ...] = ("input", "cache_write", "cache_read", "output")
@@ -404,6 +415,7 @@ def windows(
     plan: plan_usage.Plan | None = None,
     *,
     codex_plan: plan_usage.Plan | None = None,
+    plans: dict[str, plan_usage.Plan] | None = None,
 ) -> list[dict[str, object]]:
     """Every ticket window of `host` that ended at or after `since` (all when None), with its
     share of the plan when an estimate is available."""
@@ -422,10 +434,14 @@ def windows(
     calls: list[tuple[str, str, str]] = []
     commands: dict[str, str] = {}
     kind_of: dict[str, str] = {}
-    plans = {"claude": plan, "codex": codex_plan}
+    by_provider: dict[str, plan_usage.Plan] = dict(plans or {})
+    if plan is not None:
+        by_provider["claude"] = plan
+    if codex_plan is not None:
+        by_provider["codex"] = codex_plan
     for provider, session, transcript, start, end, bead in rows:
         key = (host, str(provider), str(transcript))
-        subscription = plans.get(key[1])
+        subscription = by_provider.get(key[1])
         if loaded != key[1:]:
             loaded = (str(provider), str(transcript))
             spans = timing.spans_of(db, *key, heavy)
@@ -466,13 +482,12 @@ def for_hub(
     db: sqlite3.Connection, host: str, since: str | None
 ) -> list[dict[str, object]]:
     """Repost windows whose factor can still change as quota samples arrive."""
-    claude = plan_usage.load(db)
-    codex = plan_usage.load_codex(db, host)
-    for subscription in (claude, codex):
+    plans = plan_usage.load_providers(db, host)
+    for subscription in plans.values():
         unsettled = subscription.unsettled_since()
         if since is not None and unsettled is not None:
             since = min(since, unsettled)
-    return windows(db, host, since, claude, codex_plan=codex)
+    return windows(db, host, since, plans=plans)
 
 
 # Raised whenever a change here changes the segments of windows already sent.

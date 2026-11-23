@@ -15,6 +15,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from . import (
+    agy,
     bead,
     cards,
     changes,
@@ -62,6 +63,7 @@ def sources() -> list[ingest.Source]:
         claude.Sessions(paths.claude_sessions(), checkout, host),
         claude.Transcripts(paths.claude_projects(), checkout, host),
         codex.Rollouts(paths.codex_sessions(), checkout, host),
+        agy.Transcripts(paths.agy_home(), checkout, host),
         commits.Commits.here(checkout),
         *ignite.sources(cache, host),
     ]

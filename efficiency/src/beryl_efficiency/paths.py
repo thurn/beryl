@@ -67,6 +67,11 @@ def codex_sessions() -> list[Path]:
     return [home / "sessions", home / "archived_sessions"]
 
 
+def agy_home() -> Path:
+    """Where Antigravity CLI keeps its conversation transcripts and summary database."""
+    return Path.home() / ".gemini" / "antigravity-cli"
+
+
 def project_name(path: str) -> str:
     """The transcript folder Claude Code names for the working directory `path`: every
     character that is not a letter or digit becomes `-`, so `/Users/a/beryl` is

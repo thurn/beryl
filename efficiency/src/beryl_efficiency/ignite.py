@@ -372,9 +372,9 @@ def resets_text(value: object) -> str | None:
 
 
 class PlanSamples(CursorSource):
-    """The Claude plan's usage samples in the hub's `metrics` (source `plan_usage`), after the
-    latest arrival read, in milliseconds, as `Imports` reads. A sample whose status is not
-    `ok` holds no window and is left out."""
+    """Per-provider plan usage samples in the hub's `metrics` (source `plan_usage`), after
+    the latest arrival read, in milliseconds, as `Imports` reads. A sample whose status is
+    not `ok` holds no window and is left out."""
 
     name = "ignite-plan-usage"
     SOURCE = "plan_usage"
@@ -405,12 +405,18 @@ class PlanSamples(CursorSource):
                 percent, window = data.get("percent_used"), data.get("window")
                 if data.get("status") != "ok" or percent is None or not window:
                     continue
+                provider = data.get("provider")
                 rows.append(
                     (
                         "_sample",
                         {
                             "machine": str(r["machine"]),
                             "name": str(r["name"]),
+                            "provider": (
+                                str(provider)
+                                if isinstance(provider, str) and provider
+                                else "claude"
+                            ),
                             "at": iso(utc(data["at"])),
                             "window": str(window),
                             "percent_used": float(percent),

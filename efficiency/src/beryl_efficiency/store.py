@@ -612,6 +612,26 @@ MIGRATIONS: tuple[str, ...] = (
     DROP TABLE IF EXISTS compile_timings;
     DELETE FROM sources WHERE source = 'timings';
     """,
+    """
+    -- Scope plan_usage samples by provider so Claude, Antigravity Gemini, and Antigravity
+    -- Claude windows stay separate. Replay retained hub plan_usage metrics once so each
+    -- sample records its provider.
+    CREATE TABLE plan_usage_new (
+        host TEXT NOT NULL,
+        machine TEXT NOT NULL,
+        provider TEXT NOT NULL DEFAULT 'claude',
+        at TEXT NOT NULL,
+        window TEXT NOT NULL,
+        percent_used REAL NOT NULL,
+        resets_at TEXT,
+        PRIMARY KEY (machine, provider, at, window)
+    );
+    INSERT INTO plan_usage_new (host, machine, provider, at, window, percent_used, resets_at)
+        SELECT host, machine, 'claude', at, window, percent_used, resets_at FROM plan_usage;
+    DROP TABLE plan_usage;
+    ALTER TABLE plan_usage_new RENAME TO plan_usage;
+    DELETE FROM sources WHERE source = 'ignite-plan-usage';
+    """,
 )
 
 

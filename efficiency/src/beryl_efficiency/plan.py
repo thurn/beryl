@@ -316,12 +316,28 @@ def requests_of(
     ]
 
 
-def load(db: sqlite3.Connection) -> Plan:
-    """Every sample in the store, fitted to the Claude requests around them."""
+def _has_provider_column(db: sqlite3.Connection) -> bool:
+    return any(
+        str(row[1]) == "provider" for row in db.execute("PRAGMA table_info(plan_usage)")
+    )
+
+
+def load(db: sqlite3.Connection, provider: str = "claude") -> Plan:
+    """Every sample for `provider` in `plan_usage`, fitted to its requests around them."""
     samples: dict[str, list[Sample]] = defaultdict(list)
-    for at, window, percent, resets in db.execute(
-        "SELECT at, window, percent_used, resets_at FROM plan_usage ORDER BY at"
-    ):
+    if _has_provider_column(db):
+        rows = db.execute(
+            "SELECT at, window, percent_used, resets_at FROM plan_usage "
+            "WHERE provider = ? ORDER BY at",
+            (provider,),
+        )
+    elif provider == "claude":
+        rows = db.execute(
+            "SELECT at, window, percent_used, resets_at FROM plan_usage ORDER BY at"
+        )
+    else:
+        return Plan({}, [])
+    for at, window, percent, resets in rows:
         try:
             reset = seconds(str(resets)) if resets else None
         except ValueError:
@@ -331,7 +347,27 @@ def load(db: sqlite3.Connection) -> Plan:
         return Plan({}, [])
     first = min(s.at for found in samples.values() for s in found) - LOOKBACK_SECONDS
     since = datetime.fromtimestamp(first, timezone.utc).isoformat(timespec="seconds")
-    return Plan(dict(samples), requests_of(db, "AND time >= ?", (since[:19],)))
+    return Plan(
+        dict(samples),
+        requests_of(db, "AND time >= ?", (since[:19],), provider=provider),
+    )
+
+
+def load_providers(db: sqlite3.Connection, host: str) -> dict[str, Plan]:
+    """The fitted plan for every provider with usage samples, including Codex's local
+    weekly counter."""
+    found: dict[str, Plan] = {}
+    if _has_provider_column(db):
+        for (provider,) in db.execute(
+            "SELECT DISTINCT provider FROM plan_usage ORDER BY provider"
+        ):
+            name = str(provider)
+            if name == "codex":
+                continue
+            found[name] = load(db, name)
+    found.setdefault("claude", load(db, "claude"))
+    found["codex"] = load_codex(db, host)
+    return found
 
 
 def load_codex(db: sqlite3.Connection, host: str) -> Plan:

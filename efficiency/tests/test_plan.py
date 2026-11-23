@@ -43,11 +43,17 @@ def request(
 
 
 def sample(
-    db: sqlite3.Connection, moment: str, window: str, percent: float, resets: str
+    db: sqlite3.Connection,
+    moment: str,
+    window: str,
+    percent: float,
+    resets: str,
+    provider: str = "claude",
 ) -> None:
     db.execute(
-        "INSERT INTO plan_usage VALUES (?, 'm-1', ?, ?, ?, ?)",
-        (HOST, moment, window, percent, resets),
+        "INSERT INTO plan_usage (host, machine, provider, at, window, percent_used, "
+        "resets_at) VALUES (?, 'm-1', ?, ?, ?, ?, ?)",
+        (HOST, provider, moment, window, percent, resets),
     )
 
 
@@ -163,12 +169,67 @@ def test_samples_are_read_from_the_hubs_metrics(tmp_path: Path) -> None:
     db = store.open_store(tmp_path / "store.sqlite")
     ingest.ingest(db, [ignite.PlanSamples(tmp_path / "hub.db")], HOST)
     found = db.execute(
-        "SELECT host, window, percent_used, resets_at FROM plan_usage ORDER BY window"
+        "SELECT host, provider, window, percent_used, resets_at FROM plan_usage "
+        "ORDER BY provider, window"
     ).fetchall()
     assert found == [
-        ("jarvis", "5-hour", 3.0, "2025-11-16T00:00:00.000Z"),
-        ("jarvis", WEEKLY, 20.0, RESETS),
+        ("jarvis", "claude", "5-hour", 3.0, "2025-11-16T00:00:00.000Z"),
+        ("jarvis", "claude", WEEKLY, 20.0, RESETS),
     ]
     # A second ingest reads nothing new.
     ingest.ingest(db, [ignite.PlanSamples(tmp_path / "hub.db")], HOST)
     assert db.execute("SELECT count(*) FROM plan_usage").fetchone()[0] == 2
+
+
+def test_plan_usage_keeps_providers_separate(tmp_path: Path) -> None:
+    hub = sqlite3.connect(tmp_path / "hub.db")
+    hub.executescript(HUB_SCHEMA)
+    hub.execute(
+        "INSERT INTO machines VALUES ('m-1', 'Jarvis.local', 'macos', 8, 1, '[]', 'i1', ?)",
+        (at(15, 9),),
+    )
+    rows = [
+        {
+            "provider": "claude",
+            "at": at(15, 10),
+            "status": "ok",
+            "window": WEEKLY,
+            "percent_used": 20.0,
+            "resets_at": RESETS,
+        },
+        {
+            "provider": "agy-gemini",
+            "at": at(15, 10),
+            "status": "ok",
+            "window": WEEKLY,
+            "percent_used": 17.0,
+            "resets_at": RESETS,
+        },
+        {
+            "provider": "agy-claude",
+            "at": at(15, 10),
+            "status": "ok",
+            "window": WEEKLY,
+            "percent_used": 5.0,
+            "resets_at": RESETS,
+        },
+    ]
+    hub.executemany(
+        "INSERT INTO metrics VALUES ('m-1', 'plan_usage', ?, ?)",
+        [(json.dumps(r), at(15, 12)) for r in rows],
+    )
+    hub.commit()
+    db = store.open_store(tmp_path / "store.sqlite")
+    ingest.ingest(db, [ignite.PlanSamples(tmp_path / "hub.db")], HOST)
+    found = db.execute(
+        "SELECT provider, window, percent_used FROM plan_usage ORDER BY provider"
+    ).fetchall()
+    assert found == [
+        ("agy-claude", WEEKLY, 5.0),
+        ("agy-gemini", WEEKLY, 17.0),
+        ("claude", WEEKLY, 20.0),
+    ]
+    # Claude's plan only sees Claude's sample, never agy's.
+    claude_plan = plan.load(db, "claude")
+    assert len(claude_plan.periods[WEEKLY]) == 1
+    assert claude_plan.periods[WEEKLY][0].samples == 1
