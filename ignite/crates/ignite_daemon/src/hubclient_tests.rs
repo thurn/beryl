@@ -478,6 +478,69 @@ fn listings_are_looked_up_and_stored_by_family_and_hash() {
 }
 
 #[test]
+fn large_native_listings_are_returned_in_request_order_with_missing_slots() {
+    use crate::checks::adapters::Listed;
+    use crate::checks::listings::Kept;
+
+    let key = |family: &str| ListingKey {
+        family: family.to_owned(),
+        hash: ignite_core::ids::InputHash::new("b".repeat(64)).unwrap(),
+    };
+    let keys = [
+        key("native-detail"),
+        key("native-missing"),
+        key("native-interface"),
+    ];
+    let listing = |key: &ListingKey| {
+        let checks = (0..6000)
+            .map(|index| Listed {
+                check: format!("{}:case-{index}", key.family).parse().unwrap(),
+                inputs: (0..16)
+                    .map(|part| {
+                        format!(
+                            "fixtures/{}/scenario_{index}/recording_{part}/expected.json",
+                            key.family
+                        )
+                    })
+                    .collect(),
+                digest: None,
+                package: None,
+                target: None,
+                refused: None,
+            })
+            .collect();
+        serde_json::to_string(&Kept {
+            sources: key.hash.clone(),
+            checks,
+            reads: None,
+            packages: None,
+        })
+        .unwrap()
+    };
+    let expected = [Some(listing(&keys[0])), None, Some(listing(&keys[2]))];
+    let reply = |listings| serde_json::to_string(&ListingReply { listings }).unwrap();
+    let default_limit = 10 * 1024 * 1024;
+    for listing in expected.iter().flatten() {
+        assert!(reply(vec![Some(listing.clone())]).len() < default_limit);
+    }
+    let body = reply(expected.to_vec());
+    assert!(body.len() > default_limit);
+
+    let hub = FakeHttpHub::start(move |_, _, _| (200, body.clone()));
+    let found = hub.client().listings(&keys).unwrap();
+    assert!(
+        found == expected,
+        "the listings and missing slot must match"
+    );
+    let seen = hub.seen();
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0].url, "/test/api/listings/lookup");
+    let sent: ListingLookup = serde_json::from_str(&seen[0].body).unwrap();
+    assert_eq!(sent.keys, keys);
+    assert!(!sent.presence_only);
+}
+
+#[test]
 fn verdicts_are_looked_up_and_stored_by_their_routes() {
     use ignite_core::protocol::hub::{Verdict, VerdictKey};
     let key = VerdictKey {

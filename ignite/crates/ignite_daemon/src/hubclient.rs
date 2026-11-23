@@ -244,7 +244,7 @@ impl HubClient {
     /// `GET <path>` with the query's pairs.
     fn get<R: DeserializeOwned>(&self, path: &str, query: &[(&str, String)]) -> Result<R> {
         let url = format!("{}{path}", self.base);
-        let answer = self.with_retries(path, || {
+        let answer = self.with_retries(path, None, || {
             let mut request = self.authorized(self.agent.get(&url));
             for (key, value) in query {
                 request = request.query(*key, value);
@@ -255,11 +255,16 @@ impl HubClient {
     }
 
     fn post<B: Serialize, R: DeserializeOwned>(&self, path: &str, body: &B) -> Result<R> {
-        let answer = self.post_raw(path, body)?;
+        let answer = self.post_raw(path, body, None)?;
         decode(path, &self.ok(path, answer)?.body)
     }
 
-    fn post_raw<B: Serialize>(&self, path: &str, body: &B) -> Result<Answer> {
+    fn post_raw<B: Serialize>(
+        &self,
+        path: &str,
+        body: &B,
+        success_body_limit: Option<u64>,
+    ) -> Result<Answer> {
         let bytes = serde_json::to_vec(body).map_err(|e| Error::Invalid(e.to_string()))?;
         // The hub answers an oversized body with 413 and closes the connection before reading
         // it, so the client, still writing, sees a broken pipe instead of the 413. Checking the
@@ -272,7 +277,7 @@ impl HubClient {
             )));
         }
         let url = format!("{}{path}", self.base);
-        self.with_retries(path, || {
+        self.with_retries(path, success_body_limit, || {
             self.authorized(self.agent.post(&url))
                 .header("Content-Type", "application/json")
                 .send(&bytes[..])
@@ -293,6 +298,7 @@ impl HubClient {
     fn with_retries(
         &self,
         path: &str,
+        success_body_limit: Option<u64>,
         send: impl Fn() -> std::result::Result<ureq::http::Response<ureq::Body>, ureq::Error>,
     ) -> Result<Answer> {
         let began = std::time::Instant::now();
@@ -306,10 +312,12 @@ impl HubClient {
             let restarting = match send() {
                 Ok(response) => {
                     let status = response.status().as_u16();
-                    let body = response
-                        .into_body()
-                        .read_to_vec()
-                        .map_err(|e| Error::Unreachable(format!("{path}: {e}")));
+                    let mut body = response.into_body();
+                    let body = match success_body_limit.filter(|_| (200..=299).contains(&status)) {
+                        Some(limit) => body.with_config().limit(limit).read_to_vec(),
+                        None => body.read_to_vec(),
+                    }
+                    .map_err(|e| Error::Unreachable(format!("{path}: {e}")));
                     match body {
                         Ok(_) if status == 401 && !reread && self.reread_token() => {
                             reread = true;
@@ -472,7 +480,7 @@ impl Hub for HubClient {
 
     fn lease(&self, name: &str, op: LeaseOp) -> Result<LeaseReply> {
         let path = format!("/leases/{name}");
-        let answer = self.post_raw(&path, &op)?;
+        let answer = self.post_raw(&path, &op, None)?;
         if answer.status == 409 {
             return Ok(LeaseReply::Busy(decode::<LeaseBusy>(&path, &answer.body)?));
         }
@@ -485,7 +493,7 @@ impl Hub for HubClient {
     fn feed(&self, since: Seq, wait_s: u32) -> Result<FeedBatch> {
         let url = format!("{}/feed", self.base);
         let timeout = REQUEST_TIMEOUT + Duration::from_secs(u64::from(wait_s));
-        let answer = self.with_retries("/feed", || {
+        let answer = self.with_retries("/feed", None, || {
             self.authorized(self.agent.get(&url))
                 .query("since", since.0.to_string())
                 .query("wait", wait_s.to_string())
@@ -648,7 +656,7 @@ impl Hub for HubClient {
             let bytes = serde_json::to_vec(&FleetUpdate { version, settings })
                 .map_err(|e| Error::Invalid(e.to_string()))?;
             let url = format!("{}/fleet", client.base);
-            let reply = client.with_retries("/fleet", || {
+            let reply = client.with_retries("/fleet", None, || {
                 client
                     .authorized(client.agent.put(&url))
                     .header("Content-Type", "application/json")
@@ -686,7 +694,12 @@ impl Hub for HubClient {
             keys: keys.to_vec(),
             presence_only: false,
         };
-        let reply: ListingReply = self.post("/listings/lookup", &request)?;
+        // The hub sends several separately stored listings in one reply. Give that reply as
+        // much room as the hub allows for an upload so the HTTP client's default cap doesn't
+        // make all of the requested listings appear missing during tip verification.
+        let path = "/listings/lookup";
+        let answer = self.post_raw(path, &request, Some(MAX_BODY_BYTES))?;
+        let reply: ListingReply = decode(path, &self.ok(path, answer)?.body)?;
         Ok(reply.listings)
     }
 
@@ -759,7 +772,7 @@ impl Hub for HubClient {
             query.push(("after", after.to_string()));
         }
         let url = format!("{}/export", self.base);
-        let answer = self.with_retries("/export", || {
+        let answer = self.with_retries("/export", None, || {
             let mut request = self.authorized(self.agent.get(&url));
             for (key, value) in &query {
                 request = request.query(*key, value);
