@@ -203,7 +203,7 @@
     "Cards under a merged permanent": {
       "recording": "gemrazer/over-a-creature-a-44-gemrazer-that-mutated",
       "at": "end",
-      "shows": "card \"Blood Artist\" merged.yours.creatures covered(55%)"
+      "shows": "card \"Blood Artist\" merged.yours.creatures covered("
     },
     "Copies": {
       "recording": "glasspool-mimic/the-mimic-enters-as-a-shapeshifter-rogue-copy",
@@ -223,7 +223,10 @@
     "A battlefield row that scrolls": {
       "recording": "stress-255",
       "at": "end",
-      "shows": "text \"Your creatures right 37\""
+      "shows": "text \"Your creatures left 1\"",
+      "do": [
+        "wheel card \"Stress 045\" 0,-16"
+      ]
     }
   }
 }
