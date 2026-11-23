@@ -80,7 +80,6 @@ const fn split(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
         .hand(P0, &[STOCK_UP, COUNTERSPELL])
-        .hand(P1, &[PLAINS, ISLAND])
         .permanents(P0, SPLITTERS)
         .permanents(P1, WATCHERS)
         .library(
@@ -337,7 +336,9 @@ pub(super) const SHAPES: &[Scenario] = &[
     // The fixtures' clicks play these.
     pay("shape-pay"),
     declare("shape-declare", 4, P1).actions(ATTACK),
-    split("shape-split").actions(&[Action::activate(P0, AANGS_ICEBERG, 1)]),
+    split("shape-split")
+        .hand(P1, &[PLAINS, ISLAND])
+        .actions(&[Action::activate(P0, AANGS_ICEBERG, 1)]),
     zone("shape-zone"),
     order("shape-order"),
     // The same plays, for the seat across the table to watch: the scry, with one card put
