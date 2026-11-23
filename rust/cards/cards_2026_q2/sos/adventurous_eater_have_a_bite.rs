@@ -38,7 +38,7 @@ pub mod scenarios {
     const ISLAND: &str = Card::Island;
     const PLAINS: &str = Card::Plains;
     const BOLT: &str = Card::LightningBolt;
-    const COUNTER: &str = Card::Counterspell;
+    const COUNTER: &str = Prop::Instant;
     const OKO: &str = Card::OkoThiefOfCrowns;
     const OTHER: &str = Prop::Vanilla;
     const ENTRY: Scenario = Scenario::setup()
@@ -112,7 +112,6 @@ pub mod scenarios {
             ]),
         ENTRY
             .titled("Countering Have a Bite leaves Adventurous Eater unprepared")
-            .interaction(&[COUNTER])
             .battlefield(P1, &[ISLAND, ISLAND])
             .hand(P1, &[COUNTER])
             .actions(&[

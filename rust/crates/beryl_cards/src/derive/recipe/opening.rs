@@ -183,6 +183,14 @@ pub(super) fn open_recipe(def: &'static CardDef, place: Place, recipe: Recipe) -
     let out = match recipe {
         // Existing openings already play the source from each zone where the engine offers it.
         Recipe::PlaySource => return None,
+        Recipe::CastPrepared => {
+            let mut out = new("cast the prepare spell");
+            out.stimuli.extend([
+                Stimulus::CastFrom(P0, def.face_name(FaceIx::FRONT), Zone::Hand),
+                Stimulus::CastFrom(P0, def.face_name(FaceIx::BACK), Zone::Exile),
+            ]);
+            out
+        }
         Recipe::Chapter(chapter) => return chapter_opening(def, place, chapter),
         Recipe::ClassLevel(level) => return super::designation::reach_level(def, place, level),
         Recipe::Attack(_) | Recipe::AttackWithout(_) => {

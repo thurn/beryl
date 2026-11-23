@@ -1,6 +1,7 @@
 //! Starting positions and game actions that exercise a card's abilities. Recipes change
 //! only their own starting positions, so ordinary openings keep their original setup.
 
+use beryl_card::definition::Shape;
 use beryl_card::{
     Ability, AbilityKind, Amount, Behavior, CardDef, Comparison, Condition, CounterKind,
     Designation, Effect, Filter, Governed, Modification, Objects, Players, Replaced, Rewrite, Seat,
@@ -19,6 +20,7 @@ use opening::{Opening, open_recipe};
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Recipe {
     PlaySource,
+    CastPrepared,
     Attack(Seat),
     AttackWithout(Filter),
     Step(Seat, TurnStep),
@@ -192,6 +194,12 @@ fn recipes(def: &'static CardDef, place: Place) -> Vec<Recipe> {
             recipes.extend(trigger(*triggered));
         }
         if let Some(replaced) = ability.replacement() {
+            if place == Place::Hand
+                && def.shape == Shape::Prepared
+                && replaced.rewrite == Rewrite::EntersPrepared
+            {
+                recipes.push(Recipe::CastPrepared);
+            }
             let works_here = if matches!(replaced.rewrite, Rewrite::Dredge(_)) {
                 zone == Zone::Graveyard
             } else {
