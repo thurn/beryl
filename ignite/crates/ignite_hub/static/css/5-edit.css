@@ -670,7 +670,7 @@ details[open] > summary > .c-tool-chevron {
   height: 0.5rem;
 }
 
-.c-fleet-meter::after {
+.c-fleet-meter[style]::after {
   position: absolute;
   inset-block: 0;
   left: clamp(0px, var(--fleet-stop), calc(100% - 2px));

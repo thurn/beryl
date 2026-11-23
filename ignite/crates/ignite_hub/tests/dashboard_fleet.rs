@@ -277,6 +277,7 @@ fn configure_providers(settings: &mut FleetSettings) {
                 enabled,
                 share,
                 stop_percent,
+                ignore_usage_threshold: name == "codex",
             },
         );
     }
@@ -288,10 +289,13 @@ fn assert_provider_controls(body: &str) {
         r#"aria-label="codex enabled" checked"#,
         r#"data-fleet-field="share" aria-label="codex share""#,
         r#"data-fleet-field="stop_percent""#,
+        r#"aria-label="codex continue past usage threshold" checked"#,
         ">50%<",
     ] {
         assert!(codex.contains(expected), "expected {expected} in {codex}");
     }
+    let claude = provider_row(body, "claude");
+    assert!(claude.contains(r#"aria-label="claude continue past usage threshold">"#));
 }
 
 fn assert_machine_controls(body: &str) {
@@ -365,6 +369,7 @@ fn fleet_renders_provider_shares_usage_holds_and_workers() {
     }
     assert!(!claude.contains("91%"));
     assert!(provider_row(&body, "codex").contains("0 of 1 by share"));
+    assert!(provider_row(&body, "codex").contains("Continue past threshold"));
     assert!(provider_row(&body, "disabled").contains(">Off<"));
     assert!(provider_row(&body, "standby").contains(">Standby<"));
 }

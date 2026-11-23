@@ -76,12 +76,16 @@ pub fn held(
 ) -> Result<BTreeMap<String, Vec<Hold>>> {
     let mut holds = BTreeMap::<String, Vec<Hold>>::new();
     for sample in latest(conn)? {
+        let setting = settings.provider(&sample.provider);
+        if setting.ignore_usage_threshold && sample.status != "limit" {
+            continue;
+        }
         if let Some(label) = sample.label.as_deref()
             && let Some(held) = hold(
                 label,
                 sample.percent_used,
                 sample.resets_at.as_deref(),
-                settings.provider(&sample.provider).stop_percent,
+                setting.stop_percent,
                 now,
             )
         {

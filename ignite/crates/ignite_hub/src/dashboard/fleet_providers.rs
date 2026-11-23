@@ -58,7 +58,8 @@ pub(super) fn section(
             let workers = format!("{running} of {} by share", decimal(total_workers * fraction));
             let controls = settings_fields(name, setting, &share, workers, editable);
             let holds = hold_rows(name, setting, view, &providers);
-            let usage = usage_rows(name, setting.stop_percent, &view.usage);
+            let stop = (!setting.ignore_usage_threshold).then_some(setting.stop_percent);
+            let usage = usage_rows(name, stop, &view.usage);
             let probes = probe_rows(name, &view.machines);
             format!(
                 r#"<div class="c-fleet-provider" data-fleet-provider="{name}"><h3 class="c-subsection-title">{name}</h3>{controls}{holds}{usage}{probes}</div>"#,
@@ -115,11 +116,17 @@ fn settings_fields(
         enabled,
         share,
         stop_percent,
+        ignore_usage_threshold,
     } = setting;
     let state = if enabled { "On" } else { "Off" };
-    let (state, share, stop) = if editable {
+    let (state, share, stop, usage_policy) = if editable {
         let name = esc(name);
         let checked = if enabled { " checked" } else { "" };
+        let (ignore_checked, threshold_readonly) = if ignore_usage_threshold {
+            (" checked", " readonly")
+        } else {
+            ("", "")
+        };
         (
             format!(
                 r#"<label class="c-fleet-switch"><input type="checkbox" role="switch" autocomplete="off" data-fleet-field="enabled" aria-label="{name} enabled"{checked}>{state}</label>"#
@@ -128,7 +135,10 @@ fn settings_fields(
                 r#"<div class="c-edit-form"><input type="number" autocomplete="off" data-fleet-field="share" aria-label="{name} share" min="0" max="1000" step="1" required value="{share}"></div>"#
             ),
             format!(
-                r#"<div class="c-edit-form"><input type="number" autocomplete="off" data-fleet-field="stop_percent" aria-label="{name} stop percentage" min="1" max="100" step="1" required value="{stop_percent}"></div>"#
+                r#"<div class="c-edit-form"><input type="number" autocomplete="off" data-fleet-field="stop_percent" aria-label="{name} stop percentage" min="1" max="100" step="1" required value="{stop_percent}"{threshold_readonly}></div>"#
+            ),
+            format!(
+                r#"<label class="c-fleet-switch"><input type="checkbox" autocomplete="off" data-fleet-field="ignore_usage_threshold" aria-label="{name} continue past usage threshold"{ignore_checked}>Continue past threshold</label>"#
             ),
         )
     } else {
@@ -136,12 +146,19 @@ fn settings_fields(
             state.to_owned(),
             share.to_string(),
             format!("{stop_percent}%"),
+            if ignore_usage_threshold {
+                "Continue past threshold"
+            } else {
+                "Stop at threshold"
+            }
+            .to_owned(),
         )
     };
     c::meta(&[
         ("State".to_owned(), state),
         ("Share".to_owned(), share + &c::muted(share_label)),
         ("Stop percentage".to_owned(), stop),
+        ("Usage policy".to_owned(), usage_policy),
         ("Workers now".to_owned(), workers),
     ])
 }
@@ -212,7 +229,7 @@ fn reset_time(at: &str) -> String {
     c::time(Some(&at), "Unknown")
 }
 
-fn usage_rows(name: &str, stop: u32, samples: &[ProviderSample]) -> String {
+fn usage_rows(name: &str, stop: Option<u32>, samples: &[ProviderSample]) -> String {
     let windows: Vec<_> = samples
         .iter()
         .filter(|sample| sample.provider == name)
@@ -226,14 +243,23 @@ fn usage_rows(name: &str, stop: u32, samples: &[ProviderSample]) -> String {
     c::subsection("Plan usage", &body, None, 4)
 }
 
-fn usage_row(sample: &ProviderSample, stop: u32) -> Option<String> {
+fn usage_row(sample: &ProviderSample, stop: Option<u32>) -> Option<String> {
     let label = esc(sample.label.as_deref()?);
     let usage = sample.percent_used.filter(|used| used.is_finite()).map_or_else(
         || c::muted("Usage unavailable"),
         |used| {
             let fill = used.clamp(0.0, 100.0);
+            let (description, marker) = stop.map_or_else(
+                || (String::new(), String::new()),
+                |stop| {
+                    (
+                        format!(", stop at {stop}%"),
+                        format!(r#" style="--fleet-stop:{stop}%""#),
+                    )
+                },
+            );
             format!(
-                r#"<span class="c-progress" role="meter" aria-label="{label} usage, stop at {stop}%" aria-valuenow="{fill}" aria-valuemin="0" aria-valuemax="100"><span class="c-progress-track c-fleet-meter" style="--fleet-stop:{stop}%"><span class="c-progress-fill" style="width:{fill}%"></span></span>{}</span>"#,
+                r#"<span class="c-progress" role="meter" aria-label="{label} usage{description}" aria-valuenow="{fill}" aria-valuemin="0" aria-valuemax="100"><span class="c-progress-track c-fleet-meter"{marker}><span class="c-progress-fill" style="width:{fill}%"></span></span>{}</span>"#,
                 percent(used),
             )
         },

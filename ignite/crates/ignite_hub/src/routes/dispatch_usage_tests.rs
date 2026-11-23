@@ -16,12 +16,13 @@ fn sample(
     provider: &str,
     window: &str,
     percent: f64,
+    status: &str,
     seconds: f64,
 ) {
     let body = json!({
         "machine": machine, "source": "plan_usage", "rows": [{
             "provider": provider, "window": window, "percent_used": percent,
-            "status": "ok", "at": at(seconds), "resets_at": at(60.0)
+            "status": status, "at": at(seconds), "resets_at": at(60.0)
         }]
     });
     let request = Request {
@@ -71,7 +72,7 @@ fn codex_free() -> Value {
 fn a_sample_holds_only_its_provider_on_another_machine_until_the_reset() {
     let mut conn = setup();
     let ids = file(&mut conn, &[("one", &[], &[]), ("two", &[], &[])]);
-    sample(&mut conn, "m-1", "codex", "5-hour", 95.0, 1.0);
+    sample(&mut conn, "m-1", "codex", "5-hour", 95.0, "ok", 1.0);
     let request = codex_free();
     let (_, reply) = post(&mut conn, "/next", &request, at(2.0));
     assert!(
@@ -101,12 +102,54 @@ fn a_sample_holds_only_its_provider_on_another_machine_until_the_reset() {
 }
 
 #[test]
+fn an_override_bypasses_usage_samples_but_honors_rejections() {
+    let mut conn = setup();
+    let id = file(&mut conn, &[("one", &[], &[])])[0].clone();
+    sample(&mut conn, "m-1", "codex", "5-hour", 100.0, "ok", 1.0);
+    sample(&mut conn, "m-1", "claude", "5-hour", 100.0, "ok", 1.0);
+
+    let mut settings = fleet_settings::settings(&conn).unwrap();
+    settings
+        .providers
+        .get_mut("codex")
+        .unwrap()
+        .ignore_usage_threshold = true;
+    fleet_settings::put(&mut conn, settings.version, settings, "operator", at(2.0)).unwrap();
+
+    let (_, heartbeat) = post(
+        &mut conn,
+        "/machines/heartbeat",
+        &json!({"machine": "m-2", "version": "d97ed0e", "workers": []}),
+        at(3.0),
+    );
+    assert!(heartbeat["fleet"]["holds"].get("codex").is_none());
+    assert_eq!(
+        heartbeat["fleet"]["holds"]["claude"][0]["percent_used"],
+        100.0
+    );
+
+    sample(&mut conn, "m-1", "codex", "5-hour", 100.0, "limit", 4.0);
+    let (_, reply) = post(&mut conn, "/next", &codex_free(), at(5.0));
+    assert!(
+        reply["nothing"]
+            .as_str()
+            .unwrap()
+            .contains("codex is on a usage hold"),
+        "{reply}"
+    );
+
+    sample(&mut conn, "m-1", "codex", "5-hour", 100.0, "ok", 6.0);
+    let (_, reply) = post(&mut conn, "/next", &codex_free(), at(7.0));
+    assert_eq!(reply["ticket"], id.as_str());
+}
+
+#[test]
 fn an_older_upload_cannot_undo_a_newer_lower_sample() {
     let mut conn = setup();
     let id = file(&mut conn, &[("one", &[], &[])])[0].clone();
-    sample(&mut conn, "m-1", "codex", "5-hour", 95.0, 1.0);
-    sample(&mut conn, "m-2", "codex", "5-hour", 89.0, 3.0);
-    sample(&mut conn, "m-1", "codex", "5-hour", 97.0, 2.0);
+    sample(&mut conn, "m-1", "codex", "5-hour", 95.0, "ok", 1.0);
+    sample(&mut conn, "m-2", "codex", "5-hour", 89.0, "ok", 3.0);
+    sample(&mut conn, "m-1", "codex", "5-hour", 97.0, "ok", 2.0);
     let (_, reply) = post(&mut conn, "/next", &codex_free(), at(4.0));
     assert_eq!(reply["ticket"], id.as_str());
     let count: i64 = conn
@@ -130,7 +173,15 @@ fn a_family_hold_uses_the_worker_model_ids_including_the_default() {
             ("opus", &["tier:opus"], &[]),
         ],
     );
-    sample(&mut conn, "m-1", "claude", "Weekly · Sonnet", 99.0, 1.0);
+    sample(
+        &mut conn,
+        "m-1",
+        "claude",
+        "Weekly · Sonnet",
+        99.0,
+        "ok",
+        1.0,
+    );
     let mut request = free("m-2", &["claude-idle"]);
     request["idle_workers"][0]["models"] = json!(["light", "opus"]);
     request["idle_workers"][0]["model_ids"] =

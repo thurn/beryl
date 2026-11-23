@@ -43,6 +43,9 @@ pub enum FleetCommand {
         /// Hold at this percentage of a plan window, from 1 to 100.
         #[arg(long)]
         stop_percent: Option<u32>,
+        /// Continue past the usage threshold and let the provider enforce its limits.
+        #[arg(long, action = clap::ArgAction::Set)]
+        ignore_usage_threshold: Option<bool>,
     },
 }
 
@@ -94,8 +97,14 @@ impl FleetCommand {
                 off,
                 share,
                 stop_percent,
+                ignore_usage_threshold,
             } => {
-                if !*on && !*off && share.is_none() && stop_percent.is_none() {
+                if !*on
+                    && !*off
+                    && share.is_none()
+                    && stop_percent.is_none()
+                    && ignore_usage_threshold.is_none()
+                {
                     return;
                 }
                 let mut provider = settings.provider(name);
@@ -107,6 +116,9 @@ impl FleetCommand {
                 }
                 if let Some(stop_percent) = stop_percent {
                     provider.stop_percent = *stop_percent;
+                }
+                if let Some(ignore) = ignore_usage_threshold {
+                    provider.ignore_usage_threshold = *ignore;
                 }
                 settings.providers.insert(name.clone(), provider);
             }
@@ -217,8 +229,9 @@ fn render(view: &FleetView) -> String {
         let state = if setting.enabled { "on" } else { "off" };
         let _ = writeln!(
             text,
-            "  provider {name}: {state}, share {}, stop at {}%",
-            setting.share, setting.stop_percent,
+            "  provider {name}: {state}, share {}, {}",
+            setting.share,
+            setting.usage_policy(),
         );
         for sample in view.usage.iter().filter(|sample| &sample.provider == name) {
             let label = sample.label.as_deref().unwrap_or("Usage");
@@ -256,6 +269,7 @@ mod tests {
             off: false,
             share: Some(50),
             stop_percent: None,
+            ignore_usage_threshold: None,
         };
         let mut current = FleetSettings {
             version: 2,

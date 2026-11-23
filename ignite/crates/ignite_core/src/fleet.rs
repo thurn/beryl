@@ -183,6 +183,9 @@ pub struct ProviderSetting {
     pub enabled: bool,
     pub share: u32,
     pub stop_percent: u32,
+    /// Keep offering work when a usage sample reaches the stop percentage.
+    #[serde(default)]
+    pub ignore_usage_threshold: bool,
 }
 
 impl Default for ProviderSetting {
@@ -191,6 +194,17 @@ impl Default for ProviderSetting {
             enabled: true,
             share: 0,
             stop_percent: DEFAULT_HOLD_PERCENT,
+            ignore_usage_threshold: false,
+        }
+    }
+}
+
+impl ProviderSetting {
+    pub fn usage_policy(self) -> String {
+        if self.ignore_usage_threshold {
+            "continue past usage threshold".to_owned()
+        } else {
+            format!("stop at {}%", self.stop_percent)
         }
     }
 }
@@ -285,8 +299,9 @@ pub fn summary(before: &FleetSettings, after: &FleetSettings) -> String {
             Some(setting) if before.providers.get(name) != Some(setting) => {
                 let state = if setting.enabled { "on" } else { "off" };
                 changes.push(format!(
-                    "provider {name}: {state}, share {}, stop at {}%",
-                    setting.share, setting.stop_percent
+                    "provider {name}: {state}, share {}, {}",
+                    setting.share,
+                    setting.usage_policy()
                 ));
             }
             None => changes.push(format!("provider {name}: defaults restored")),
@@ -409,6 +424,7 @@ mod tests {
                         enabled: false,
                         share,
                         stop_percent,
+                        ..ProviderSetting::default()
                     },
                 )]),
                 ..FleetSettings::default()
