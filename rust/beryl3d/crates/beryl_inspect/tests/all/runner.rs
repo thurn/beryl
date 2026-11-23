@@ -331,6 +331,28 @@ fn the_median_frame_limit_leaves_out_card_spec_moments() {
     assert!(limits.over(&outcomes, true).is_empty());
 }
 
+#[test]
+fn the_frame_limit_runner_counts_the_frames_the_full_audit_evaluates() {
+    use app_client::driver::Mode;
+
+    let windows = Windows::Class(SizeClass::Regular);
+    let tests: Vec<Test> = ["verbs-zones/you/1440x900", "screen/start/you/1440x900"]
+        .iter()
+        .flat_map(|prefix| runner::tests(prefix, windows).expect("the pack opens"))
+        .collect();
+    assert_eq!(tests.len(), 2);
+    let audit = runner::run(&tests, Mode::AtCheckTimes);
+    let counts = runner::frame_counts(&tests);
+    for (full, scheduled) in audit.iter().zip(&counts) {
+        assert_eq!(full.test, scheduled.test);
+        assert!(full.error.is_none(), "{:?}", full.error);
+        assert!(scheduled.error.is_none(), "{:?}", scheduled.error);
+        assert!(full.frames > 0, "{}", full.test.name());
+        assert_eq!(full.frames, scheduled.frames, "{}", full.test.name());
+    }
+    assert_eq!(counts.len(), tests.len());
+}
+
 /// The verdict the run log gets for `name` when `b3d test` runs it against its entry in the
 /// list of allowed faults with `allowed` `rule` faults besides (none when `allowed` is `None`),
 /// and the exit status.

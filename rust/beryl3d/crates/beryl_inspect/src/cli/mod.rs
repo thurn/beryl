@@ -309,6 +309,7 @@ const COMMANDS: &[Command] = &[
                 test::COMPACT_ONLY,
                 test::LIST,
                 test::ALL,
+                test::FRAME_LIMITS,
             ],
         },
         own: &[
@@ -320,6 +321,10 @@ const COMMANDS: &[Command] = &[
             (
                 "--every-tick",
                 "check every tick instead of the check times, as the sweep does",
+            ),
+            (
+                "--frame-limits",
+                "count the frames scheduled across the default corpus and check its limits",
             ),
             (
                 "--update",

@@ -58,7 +58,8 @@ ROOTS: tuple[str, ...] = ("beryl_inspect", "beryl_record")
 CARDS: Path = paths.REPO / "rust" / "cards"
 DECKS: Path = paths.REPO / "docs" / "sample-decks"
 
-FRAME_LIMITS = "frame-limits"
+FRAME_LIMITS_FAMILY = "b3d-interface-frame-limits"
+FRAME_LIMITS = f"{FRAME_LIMITS_FAMILY}:corpus"
 
 
 def run_out(
@@ -288,16 +289,18 @@ def recording_of(test: str) -> str:
 
 
 def interface_list(family: str) -> list[Listed]:
-    """One check per interface test, each reading the card files its recording plays. A stress
-    board, which `beryl_inspect` makes with no recording, reads none. [`FRAME_LIMITS`] reads
-    every test's."""
+    """One check per interface test, hashed over the card files its recording plays."""
     cards = cards_by_recording()
-    tests = test_names()
-    checks = [Listed(f"{family}:{t}", cards.get(recording_of(t), [])) for t in tests]
-    if family == "b3d-interface":
-        every = sorted({c for t in tests for c in cards.get(recording_of(t), [])})
-        checks.append(Listed(f"{family}:{FRAME_LIMITS}", every))
-    return checks
+    return [
+        Listed(f"{family}:{t}", cards.get(recording_of(t), [])) for t in test_names()
+    ]
+
+
+def frame_limits_list() -> list[Listed]:
+    """The corpus-wide check reads the union of the ordinary checks' card files."""
+    cards = cards_by_recording()
+    every = sorted({c for t in test_names() for c in cards.get(recording_of(t), [])})
+    return [Listed(FRAME_LIMITS, every)]
 
 
 def common_prefix(names: list[str]) -> str:
@@ -316,8 +319,8 @@ def interface_results(
 ) -> list[Result]:
     """Each wanted check's result from `b3d test --json`'s output: a test passes or fails by its
     entry in `results`, which counts a fault over the list of allowed faults and an entry of the
-    list that is now too high, and [`FRAME_LIMITS`] by `over_limits`. A test the run did not
-    play is left out, so incomplete."""
+    list that is now too high. A test the run did not play is left out, so incomplete.
+    """
 
     def rows(key: str) -> list[object]:
         found = output.get(key)
@@ -340,17 +343,7 @@ def interface_results(
     results: list[Result] = []
     for name in wanted:
         check = f"{family}:{name}"
-        if name == FRAME_LIMITS:
-            if (
-                outcomes
-                and output.get("deferred") == 0
-                and isinstance(output.get("over_limits"), list)
-            ):
-                over = [str(o) for o in rows("over_limits")]
-                results.append(
-                    Result(check, "fail" if over else "pass", "\n".join(over))
-                )
-        elif name in outcomes:
+        if name in outcomes:
             text = "\n".join(messages.get(name, []))
             if outcomes[name] == "fail" and not text:
                 text = f"just b3d test {name}"
@@ -372,24 +365,32 @@ def prefix_groups(tests: list[str]) -> list[str]:
 
 def interface_run(family: str, checks: list[str], switches: list[str]) -> list[Result]:
     wanted = asked(family, checks)
-    if not wanted:
-        return []
-    tests = [w for w in wanted if w != FRAME_LIMITS]
-    # The median of the frame limits is held only over a run of every test, which also plays
-    # every named test.
-    prefixes = [""] if FRAME_LIMITS in wanted else prefix_groups(tests)
     results: list[Result] = []
-    for prefix in prefixes:
-        command = [str(exe(DEBUG / "b3d")), "test", "--json", *switches]
-        command[2:2] = [prefix] if prefix else []
-        done = run_out(command)
-        try:
-            output = json.loads(done.stdout)
-        except json.JSONDecodeError:
-            print(done.stderr or done.stdout, file=sys.stderr)
-            continue
-        results += interface_results(output, family, wanted)
+    for prefix in prefix_groups(wanted):
+        output = replay_output([prefix, *switches])
+        if output is not None:
+            results += interface_results(output, family, wanted)
     return results
+
+
+def replay_output(arguments: list[str]) -> dict[str, object] | None:
+    done = run_out([str(exe(DEBUG / "b3d")), "test", *arguments, "--json"])
+    try:
+        output = json.loads(done.stdout)
+    except json.JSONDecodeError:
+        print(done.stderr or done.stdout, file=sys.stderr)
+        return None
+    return output if isinstance(output, dict) else None
+
+
+def frame_limits_run(checks: list[str]) -> list[Result]:
+    output = replay_output(["--frame-limits"]) if FRAME_LIMITS in checks else None
+    if output is None:
+        return []
+    tests, over = output.get("tests"), output.get("over_limits")
+    if not isinstance(tests, int) or tests <= 0 or not isinstance(over, list):
+        return []
+    return [Result(FRAME_LIMITS, "fail" if over else "pass", "\n".join(map(str, over)))]
 
 
 # The native frame gate.
@@ -658,6 +659,7 @@ def source_run(checks: list[str]) -> list[Result]:
 LIST_NEEDS_BUILD: frozenset[str] = frozenset(
     {
         "b3d-interface",
+        FRAME_LIMITS_FAMILY,
         "b3d-every-tick",
         "b3d-gate",
         "b3d-timeline",
@@ -721,6 +723,7 @@ LISTS: dict[str, Callable[[], list[Listed]]] = {
     ],
     "b3d-validation": beryl3d_validation.checks,
     "b3d-interface": lambda: interface_list("b3d-interface"),
+    FRAME_LIMITS_FAMILY: frame_limits_list,
     "b3d-every-tick": lambda: interface_list("b3d-every-tick"),
     "b3d-gate": gate_list,
     "b3d-timeline": timeline_list,
@@ -738,6 +741,7 @@ RUNS: dict[str, Callable[[list[str]], list[Result]]] = {
     "b3d-source": source_run,
     "b3d-validation": lambda c: beryl3d_validation.run(DEBUG, c),
     "b3d-interface": lambda c: interface_run("b3d-interface", c, []),
+    FRAME_LIMITS_FAMILY: frame_limits_run,
     "b3d-every-tick": lambda c: interface_run("b3d-every-tick", c, ["--every-tick"]),
     "b3d-gate": gate_run,
     "b3d-timeline": timeline_run,

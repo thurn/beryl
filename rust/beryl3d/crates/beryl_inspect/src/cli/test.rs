@@ -50,6 +50,9 @@ pub(super) const LIST: &str = "--list";
 /// The switch that runs the full pack.
 pub(super) const ALL: &str = "--all";
 
+/// Runs the frame schedule for the default native matrix and evaluates its limits.
+pub(super) const FRAME_LIMITS: &str = "--frame-limits";
+
 /// How many rules the closing summary names as having the most listed faults.
 const MOST_RULES: usize = 3;
 
@@ -76,14 +79,21 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
             )));
         }
     };
+    if options.switch(FRAME_LIMITS) {
+        frame_limits(options, prefix)
+    } else {
+        audit(options, prefix)
+    }
+}
+
+fn audit(options: &Options, prefix: &str) -> Result<Printed, Usage> {
     let (mode, windows) = switches(options)?;
     let default_matrix = windows == Windows::Class(SizeClass::Regular);
     let stop = stop(options)?;
     let all = options.switch(ALL);
     let tests = selected_tests(prefix, windows, all)?;
     if options.switch(LIST) {
-        let names: String = tests.iter().map(|test| test.name() + "\n").collect();
-        return Ok(Printed::text(names));
+        return Ok(list_tests(&tests));
     }
     let limits = match (mode, windows) {
         (_, Windows::Profile(_)) | (Mode::EveryTick, _) => None,
@@ -168,6 +178,54 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
         report.json()
     } else {
         report.text()
+    };
+    Ok(Printed { text, fault })
+}
+
+fn list_tests(tests: &[Test]) -> Printed {
+    Printed::text(
+        tests
+            .iter()
+            .map(|test| test.name() + "\n")
+            .collect::<String>(),
+    )
+}
+
+fn frame_limits(options: &Options, prefix: &str) -> Result<Printed, Usage> {
+    let (mode, windows) = switches(options)?;
+    if !prefix.is_empty()
+        || windows != Windows::Class(SizeClass::Regular)
+        || options.switch(ALL)
+        || stop(options)?.is_some()
+        || mode != Mode::AtCheckTimes
+        || options.switch(UPDATE)
+    {
+        return Err(Usage(format!(
+            "{FRAME_LIMITS} needs the default test matrix"
+        )));
+    }
+    let tests = selected_tests(prefix, windows, false)?;
+    if options.switch(LIST) {
+        return Ok(list_tests(&tests));
+    }
+    let limits = Limits::read().map_err(Usage)?;
+    let outcomes = runner::frame_counts(&tests);
+    if let Some(failed) = outcomes.iter().find(|outcome| outcome.error.is_some()) {
+        return Err(Usage(format!(
+            "{}: {}",
+            failed.test.name(),
+            failed.error.as_deref().unwrap_or_default()
+        )));
+    }
+    let over = limits.over(&outcomes, true);
+    let fault = !over.is_empty();
+    let tests = outcomes.len();
+    let text = if options.json {
+        json!({"tests": tests, "over_limits": over}).to_string()
+    } else if fault {
+        over.join("\n")
+    } else {
+        format!("{tests} tests within frame limits")
     };
     Ok(Printed { text, fault })
 }

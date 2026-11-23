@@ -94,6 +94,15 @@ struct Judged {
     under_opening: bool,
 }
 
+struct CheckSchedule {
+    checked: BTreeSet<u64>,
+    found: Vec<Found>,
+    judged: Vec<Judged>,
+    naming: BTreeSet<u64>,
+    sampled: BTreeSet<u64>,
+    all: BTreeSet<u64>,
+}
+
 impl Page {
     pub(super) fn context(&self) -> Context {
         let data = self.client.data();
@@ -119,22 +128,25 @@ impl Page {
         times(&played.given_at, &played.client, end)
     }
 
-    /// Runs every interface check over the whole recording, as it plays with no action taken,
-    /// on the frames `mode` names, and returns the faults and how many frames were evaluated.
-    pub fn check_all(&mut self, mode: Mode) -> Checked {
+    /// Counts the frames an ordinary interface audit schedules over this recording.
+    /// Playback determines the schedule before the audit draws those frames for its probes.
+    #[must_use]
+    pub fn scheduled_frame_count(&self) -> usize {
         let (played, end) = self.played();
-        let history = played.client.history().to_vec();
+        self.check_schedule(&played, end, Mode::AtCheckTimes)
+            .all
+            .len()
+    }
+
+    fn check_schedule(&self, played: &Page, end: u64, mode: Mode) -> CheckSchedule {
+        let history = played.client.history();
         let audit = played.client.data().audit;
         let checked: Vec<u64> = match mode {
             Mode::AtCheckTimes => times(&played.given_at, &played.client, end),
             Mode::EveryTick => every_tick(self.tick.0, end),
         };
-        let found = steps::segment_checks(&history, audit);
-        let mut tally = agent::Judged::default();
-        for script in &history {
-            steps::count_script(&mut tally, script);
-        }
-        let mut judged = judged(&history, played.client.table().camera(), audit);
+        let found = steps::segment_checks(history, audit);
+        let judged = judged(history, played.client.table().camera(), audit);
         // The frames that name the objects of the faults the segment checks found.
         let naming: BTreeSet<u64> = found.iter().map(|found| found.at).collect();
         // "Every step shown" judges the share of frames in which a step's subject is seen, so
@@ -147,7 +159,34 @@ impl Page {
             .chain(naming.iter().copied())
             .chain(sampled.iter().copied())
             .collect();
-        let checked: BTreeSet<u64> = checked.into_iter().collect();
+        CheckSchedule {
+            checked: checked.into_iter().collect(),
+            found,
+            judged,
+            naming,
+            sampled,
+            all,
+        }
+    }
+
+    /// Runs every interface check over the whole recording, as it plays with no action taken,
+    /// on the frames `mode` names, and returns the faults and how many frames were evaluated.
+    pub fn check_all(&mut self, mode: Mode) -> Checked {
+        let (played, end) = self.played();
+        let CheckSchedule {
+            checked,
+            found,
+            mut judged,
+            naming,
+            sampled,
+            all,
+        } = self.check_schedule(&played, end, mode);
+        let history = played.client.history();
+        let audit = played.client.data().audit;
+        let mut tally = agent::Judged::default();
+        for script in history {
+            steps::count_script(&mut tally, script);
+        }
 
         let mut page = self.fresh(true);
         let mut faults = Vec::new();

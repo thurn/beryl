@@ -65,7 +65,12 @@ def test_the_programs_that_reread_their_grant_ask_for_one_that_grows() -> None:
     loaded = manifest()
     assert loaded["product"]["b3d"].get("grows") is True
     growing = {n for n, f in loaded["family"].items() if f.get("grows")}
-    assert growing == {"b3d-interface", "b3d-every-tick", "b3d-test"}
+    assert growing == {
+        "b3d-interface",
+        adapter.FRAME_LIMITS_FAMILY,
+        "b3d-every-tick",
+        "b3d-test",
+    }
 
 
 def test_the_validations_use_the_shared_build_and_source_checks_run_anywhere() -> None:
@@ -93,6 +98,7 @@ def test_the_families_that_read_recordings_name_every_crate_the_recorder_is_buil
     assert "rust/crates/beryl_session/**" in crates
     for name in (
         "b3d-interface",
+        adapter.FRAME_LIMITS_FAMILY,
         "b3d-every-tick",
         "b3d-gate",
         "b3d-timeline",
@@ -168,30 +174,81 @@ def test_interface_results_follow_each_tests_outcome() -> None:
         "deferred": 0,
         "over_limits": ["a/you/1440x900 drew 900 frames, over `most_frames` 800"],
     }
-    wanted = ["a/you/1440x900", "b/you/1440x900", "c/you/1440x900", "frame-limits"]
+    wanted = ["a/you/1440x900", "b/you/1440x900", "c/you/1440x900"]
     results = adapter.interface_results(output, "b3d-interface", wanted)
     outcomes = {r.check: r.outcome for r in results}
     assert outcomes == {
         "b3d-interface:a/you/1440x900": "pass",
         "b3d-interface:b/you/1440x900": "fail",
-        "b3d-interface:frame-limits": "fail",
     }
     assert "reachable" in results[1].message
 
 
-def test_frame_limits_need_a_complete_replay() -> None:
-    wanted = [adapter.FRAME_LIMITS]
-    family = "b3d-interface"
-    output: dict[str, object] = {
-        "results": [{"test": "b3d:a/you/1440x900", "outcome": "pass"}],
-        "deferred": 1,
-        "over_limits": [],
-    }
-    assert adapter.interface_results(output, family, wanted) == []
-    output["deferred"] = 0
-    assert adapter.interface_results(output, family, wanted) == [
-        adapter.Result("b3d-interface:frame-limits", "pass")
+def test_frame_limits_have_a_separate_native_family_with_all_card_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    families = manifest()["family"]
+    aggregate = families[adapter.FRAME_LIMITS_FAMILY]
+    interface = families["b3d-interface"]
+    assert aggregate["kind"] == "regression"
+    assert aggregate["platforms"] == interface["platforms"] == ["macos", "windows"]
+    assert aggregate["needs"] == interface["needs"]
+    assert aggregate["inputs"] == interface["inputs"]
+    config = tomllib.loads((paths.REPO / "ignite.toml").read_text())
+    assert adapter.FRAME_LIMITS_FAMILY in config["machine"]["cygnus"]["families"]
+    monkeypatch.setattr(
+        adapter, "test_names", lambda: ["a/you/1440x900", "b/you/1440x900"]
+    )
+    monkeypatch.setattr(
+        adapter,
+        "cards_by_recording",
+        lambda: {"a": ["card-a"], "b": ["card-a", "card-b"], "c": ["card-c"]},
+    )
+    assert [entry.check for entry in adapter.LISTS["b3d-interface"]()] == [
+        "b3d-interface:a/you/1440x900",
+        "b3d-interface:b/you/1440x900",
     ]
+    assert adapter.LISTS[adapter.FRAME_LIMITS_FAMILY]() == [
+        adapter.Listed(adapter.FRAME_LIMITS, ["card-a", "card-b"])
+    ]
+
+
+@pytest.mark.parametrize(
+    "native_report,expected",
+    [
+        ({"tests": 2, "over_limits": []}, "pass"),
+        ({"tests": 2, "over_limits": ["median exceeded"]}, "fail"),
+        ({"tests": 0, "over_limits": []}, ""),
+        ({}, ""),
+    ],
+)
+def test_frame_limits_publish_only_a_complete_native_verdict(
+    native_report: dict[str, object],
+    expected: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "results.jsonl"
+    monkeypatch.setenv(RESULTS_ENV, str(output))
+
+    def fake(command: list[str]) -> subprocess.CompletedProcess[str]:
+        assert command[1:] == ["test", "--frame-limits", "--json"]
+        return subprocess.CompletedProcess(
+            command, int(expected != "pass"), json.dumps(native_report), ""
+        )
+
+    monkeypatch.setattr(adapter, "run_out", fake)
+    status = adapter.main([adapter.FRAME_LIMITS_FAMILY, "run", adapter.FRAME_LIMITS])
+    assert status == int(expected == "fail")
+    verdicts = [json.loads(line) for line in output.read_text().splitlines()]
+    if expected:
+        assert len(verdicts) == 1
+        assert verdicts[0]["check"] == adapter.FRAME_LIMITS
+        assert verdicts[0]["outcome"] == expected
+        if expected == "fail":
+            assert verdicts[0]["message"] == "median exceeded"
+    else:
+        assert verdicts == []
 
 
 def test_a_run_of_some_tests_plays_only_their_common_prefix() -> None:
@@ -201,6 +258,7 @@ def test_a_run_of_some_tests_plays_only_their_common_prefix() -> None:
 
 def test_a_batch_across_recordings_runs_only_its_recordings(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     universe: list[str] = [
         f"{r}/{s}/1440x900" for r in "abc" for s in ("you", "opponent")
@@ -219,15 +277,13 @@ def test_a_batch_across_recordings_runs_only_its_recordings(
         )
 
     monkeypatch.setattr(adapter, "run_out", fake)
-    results = adapter.interface_run(
-        "b3d-interface",
-        ["b3d-interface:a/you/1440x900", "b3d-interface:c/opponent/1440x900"],
-        [],
-    )
+    output = tmp_path / "results.jsonl"
+    monkeypatch.setenv(RESULTS_ENV, str(output))
+    checks = ["b3d-interface:a/you/1440x900", "b3d-interface:c/opponent/1440x900"]
+    assert adapter.main(["b3d-interface", "run", *checks]) == 0
     assert sorted(played) == ["a/you/1440x900", "c/opponent/1440x900"]
-    assert [(r.check, r.outcome) for r in results] == [
-        ("b3d-interface:a/you/1440x900", "pass"),
-        ("b3d-interface:c/opponent/1440x900", "pass"),
+    assert [json.loads(line) for line in output.read_text().splitlines()] == [
+        {"check": check, "outcome": "pass"} for check in checks
     ]
 
 

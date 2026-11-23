@@ -286,6 +286,7 @@ families = [
   "counts", "allocations", "card-text", "script", "scale", "iroh", "fuzz", "exhaust",
   "oracle", "oracle-generated", "ui-format", "ui-types", "ui-unit",
   "b3d-clippy", "b3d-validation", "b3d-test", "b3d-interface", "b3d-every-tick", "b3d-corpus",
+  "b3d-interface-frame-limits",
   "b3d-gate", "b3d-frame-counts", "b3d-frame-trend",
 ]
 

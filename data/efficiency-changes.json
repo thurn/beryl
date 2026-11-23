@@ -865,5 +865,10 @@
     "label": "The counts checks count every family in one run of the benchmark virtual machine instead of one run per family, so a full counts run no longer outlasts its hang limit.",
     "metric": "ignite.gate-wait-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D counts the frames scheduled by the native replay runner in its own family, so ordinary interface batches can keep publishing during the corpus-wide frame-limit check.",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

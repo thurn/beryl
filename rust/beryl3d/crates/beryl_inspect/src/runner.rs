@@ -17,7 +17,7 @@ use app_client::driver::{Mode, Page};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
 use kit_base::data::profiles::SizeClass;
-use kit_probe::agent::{Count, Fault, Judged, Rule};
+use kit_probe::agent::{Checked, Count, Fault, Judged, Rule};
 use kit_ui::input::Size;
 
 use crate::cli::options::side_of;
@@ -178,6 +178,29 @@ pub fn run(tests: &[Test], mode: Mode) -> Vec<Outcome> {
 /// longest start first, those are short.
 #[must_use]
 pub fn run_until(tests: &[Test], mode: Mode, stop: Option<Instant>) -> Vec<Outcome> {
+    run_with(tests, stop, |test| {
+        play(test, mode, |mut page| page.check_all(mode))
+    })
+}
+
+/// Counts the audit's scheduled frames for each test at its check times.
+#[must_use]
+pub fn frame_counts(tests: &[Test]) -> Vec<Outcome> {
+    run_with(tests, None, |test| {
+        play(test, Mode::AtCheckTimes, |page| Checked {
+            frames: page.scheduled_frame_count(),
+            faults: Vec::new(),
+            line_pairs: 0,
+            judged: Judged::default(),
+        })
+    })
+}
+
+fn run_with(
+    tests: &[Test],
+    stop: Option<Instant>,
+    play: impl Fn(Test) -> Outcome + Sync,
+) -> Vec<Outcome> {
     let mut order: Vec<usize> = (0..tests.len()).collect();
     order.sort_by_cached_key(|&at| {
         let test = &tests[at];
@@ -194,7 +217,7 @@ pub fn run_until(tests: &[Test], mode: Mode, stop: Option<Instant>) -> Vec<Outco
     let mut outcomes: Vec<Option<Outcome>> = (0..tests.len()).map(|_| None).collect();
     let played = each(&order, |&at| {
         let late = stop.is_some_and(|stop| Instant::now() >= stop);
-        (!late).then(|| play(tests[at].clone(), mode))
+        (!late).then(|| play(tests[at].clone()))
     });
     for (at, outcome) in order.into_iter().zip(played) {
         outcomes[at] = outcome;
@@ -203,14 +226,14 @@ pub fn run_until(tests: &[Test], mode: Mode, stop: Option<Instant>) -> Vec<Outco
 }
 
 /// Plays one test.
-fn play(test: Test, mode: Mode) -> Outcome {
+fn play(test: Test, mode: Mode, check_page: impl FnOnce(Page) -> Checked) -> Outcome {
     let started = Instant::now();
     let ran = caught(|| {
         if test.recording.starts_with(crate::stories::PREFIX) {
             crate::scene::Scene::open(&test.recording, test.seat, None, test.size, test.scale)
                 .map(|mut scene| scene.check_all(mode))
         } else {
-            test.page().map(|mut page| page.check_all(mode))
+            test.page().map(check_page)
         }
     })
     .and_then(|ran| ran);

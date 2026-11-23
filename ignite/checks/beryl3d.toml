@@ -320,9 +320,7 @@ inputs = [
 # Every interface test (`just b3d test`): each recording from each seat in each desktop window,
 # `b3d-interface:<recording>/<seat>/<window>`, with the checks applied at the check times
 # (docs/beryl-3d.md, "Test speed"), held to data/beryl3d/test-faults.json. Each check reads the
-# card files its recording plays. `b3d-interface:frame-limits` holds the frames drawn to the
-# limits under `tests` in data/beryl3d/gates.json, whose median is over every test, so it runs
-# them all.
+# card files its recording plays.
 #
 # Tip verification scores the two families independently. Substituting `b3d-every-tick`
 # discarded the failure history of `b3d-interface` before scoring, so the tip budget deferred
@@ -338,6 +336,92 @@ list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-
 # that edits only comments keeps the listing and builds nothing to list.
 listing_ignores_comments = true
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_names/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_cli/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_link/**",
+  "rust/crates/beryl_link_iroh/**",
+  "rust/crates/beryl_protocol/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/crates/beryl_search/**",
+  "rust/crates/beryl_session/**",
+  "rust/crates/beryl_table/**",
+  "rust/crates/beryl_table_session/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "ui/src/generated/**",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+  "tools/src/beryl_tools/ignite/beryl3d_validation.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/beryl3d/__init__.py",
+  "tools/src/beryl_tools/beryl3d/gate.py",
+  "tools/src/beryl_tools/beryl3d/pack.py",
+  "tools/src/beryl_tools/beryl3d/paths.py",
+  "tools/src/beryl_tools/beryl3d/purity.py",
+  "tools/src/beryl_tools/beryl3d/timeline.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
+
+# The full native replay matrix supplies the frame limits in data/beryl3d/gates.json.
+# A separate family lets tip verification publish ordinary interface batches while the
+# corpus-wide median and maximum are still running. It reads every recording's card files.
+[family.b3d-interface-frame-limits]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos", "windows"]
+needs = ["python-env", "b3d"]
+grows = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface-frame-limits list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface-frame-limits run {checks}"
 inputs = [
   "crate:beryl_inspect",
   "crate:beryl_record",
