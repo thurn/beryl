@@ -362,7 +362,19 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         Opt::Yes => "yes".to_owned(),
         Opt::No => "no".to_owned(),
         Opt::Done => "done".to_owned(),
-        Opt::Attack(slot) => format!("attack with {}", named(slot)),
+        Opt::Attack { slot, band: None } => format!("attack with {}", named(slot)),
+        Opt::Attack {
+            slot,
+            band: Some(first),
+        } if slot == first => {
+            format!("start a band with {}", named(slot))
+        }
+        Opt::Attack {
+            slot,
+            band: Some(first),
+        } => {
+            format!("attack with {} in {}’s band", named(slot), named(first))
+        }
         Opt::Defender(None) => "the player".to_owned(),
         Opt::Defender(Some(slot)) | Opt::Object(slot) => named(slot),
         Opt::Block(slot) => format!("block with {}", named(slot)),

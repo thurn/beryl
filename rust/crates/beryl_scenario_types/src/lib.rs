@@ -331,6 +331,11 @@ pub enum Pick {
     Card {
         card: &'static str,
     },
+    /// Declare an attacker in a band started by `first`. If omitted, start a new band.
+    Band {
+        card: &'static str,
+        first: Option<&'static str>,
+    },
     /// The offered cast of this card with this face and these casting options.
     Cast {
         card: &'static str,

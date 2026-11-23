@@ -267,6 +267,27 @@ pub struct LethalAssignment<L: Layout = Small> {
     pub target: L::Slot,
 }
 
+/// An exact amount assigned in the current combat damage step. A missing target denotes
+/// the player or planeswalker attacked by the source.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct DamageShare<L: Layout = Small> {
+    pub source: L::Slot,
+    pub target: Option<L::Slot>,
+    pub amount: u8,
+}
+
+/// The exact combat damage division while the current source is still assigning.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DamageDivision<L: Layout = Small> {
+    pub source: L::Slot,
+    pub done: Bitboard<L::Slot>,
+    pub recipients: Bitboard<L::Slot>,
+    pub remaining: u8,
+    pub shares: L::Queue<DamageShare<L>, 32>,
+}
+
+impl Copy for DamageDivision<Small> {}
+
 /// The open question when it belongs to a machine step rather than to priority. Flat, like
 /// the rest of the state.
 #[allow(clippy::large_enum_variant)]
@@ -349,6 +370,8 @@ pub enum Pending<L: Layout = Small> {
     },
     /// Beginning the next turn, paused to ask about replacing that event (see CR 614.10).
     TurnStart(Resolving<L>),
+    /// Combat that has banding assigns exact amounts before damage is dealt.
+    ExactCombatDamage(DamageDivision<L>),
 }
 
 // The original derived hash wrote each variant's tag as an isize. The enum now has a
@@ -396,6 +419,7 @@ impl<L: Layout> std::hash::Hash for Pending<L> {
                 (15_isize, slot, kind, pay_life).hash(state);
             }
             Self::ManaColor { slot, ability } => (16_isize, slot, ability).hash(state),
+            Self::ExactCombatDamage(dividing) => (18_isize, dividing).hash(state),
         }
     }
 }
@@ -452,6 +476,7 @@ impl<L: Layout> State<L> {
             | Pending::DeclareAttackers { .. }
             | Pending::DeclareBlockers { .. }
             | Pending::CombatDamage { .. }
+            | Pending::ExactCombatDamage(_)
             | Pending::Casting(_)
             | Pending::StepActions(_)
             | Pending::TurnStart(_)
@@ -491,6 +516,7 @@ impl<L: Layout> State<L> {
             | Pending::DeclareAttackers { .. }
             | Pending::DeclareBlockers { .. }
             | Pending::CombatDamage { .. }
+            | Pending::ExactCombatDamage(_)
             | Pending::Casting(_)
             | Pending::Resolving(_)
             | Pending::TurningFaceUp { .. }
@@ -534,6 +560,7 @@ impl<L: Layout> State<L> {
             | Pending::DeclareAttackers { .. }
             | Pending::DeclareBlockers { .. }
             | Pending::CombatDamage { .. }
+            | Pending::ExactCombatDamage(_)
             | Pending::Casting(_)
             | Pending::TurningFaceUp { .. }
             | Pending::OrderEntered { .. }

@@ -573,6 +573,12 @@ impl<L: Layout> Policy<'_, L> {
             })
     }
 
+    /// The attacker’s value as a score above passing, if it can attack safely.
+    #[inline]
+    pub(super) fn attack_score(&self, attacker: L::Slot) -> Option<i32> {
+        self.safe_attack(attacker).then(|| 1 + self.value(attacker))
+    }
+
     /// The score of attacking `walker`, against 0 for the player: its value, unless the
     /// attackers already declared at it deal all its loyalty. Damage dealt to a planeswalker
     /// removes that much loyalty

@@ -457,6 +457,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn remove_from_combat(&mut self, permanent: Permanent<L>) {
         let slot = permanent.slot();
+        self.forget_combat_bands(Some(slot));
         self.object_mut(slot).combat = CombatRole::None;
         for i in 0..self.battlefield.len() {
             let other = self.battlefield.as_slice()[i];
@@ -472,6 +473,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn end_combat(&mut self) {
         self.turn.attacked = false;
+        self.forget_combat_bands(None);
         for i in 0..self.battlefield.len() {
             let slot = self.battlefield.as_slice()[i];
             self.object_mut(slot).combat = CombatRole::None;

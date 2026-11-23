@@ -63,6 +63,7 @@ pub(crate) fn step_actions<L: Layout>(
         | Pending::DeclareAttackers { .. }
         | Pending::DeclareBlockers { .. }
         | Pending::CombatDamage { .. }
+        | Pending::ExactCombatDamage(_)
         | Pending::Casting(_)
         | Pending::Resolving(_)
         | Pending::TurningFaceUp { .. }

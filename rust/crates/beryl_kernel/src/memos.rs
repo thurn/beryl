@@ -33,6 +33,7 @@ use crate::state::{State, Zone};
 use crate::store::{Duration, Ended, Store};
 use crate::table::GameTable;
 
+mod combat;
 mod designation;
 mod value;
 
@@ -141,6 +142,9 @@ pub enum Memo<L: Layout = Small> {
     ///
     /// [CR 720.3b]: https://yawgatog.com/resources/magic-rules/#R7203b
     Solved,
+    /// This attacker is in the band identified by the first member's slot number at
+    /// declaration. The number still identifies the band if that creature leaves combat.
+    CombatBand(L::Slot),
 }
 
 /// The kinds of memo among a store's entries: its index by kind, so that a reader of a kind
@@ -163,6 +167,7 @@ impl Kinds {
     const MORPHED: u32 = 1 << 17;
     const CLASS_LEVEL: u32 = 1 << 18;
     const SOLVED: u32 = 1 << 19;
+    const COMBAT_BAND: u32 = 1 << 20;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u32 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL | Kinds::PUT_WITH | Kinds::PART_OF;
     /// The kinds whose memo ends as a new object arrives in the slot it names
@@ -285,6 +290,7 @@ impl<L: Layout> Store<L> for Memos<L> {
     }
 
     fn fits<M: Layout>(&self) -> Result<(), Misfit> {
+        self.combat_fits::<M>()?;
         room(
             "the memos",
             self.entries.len(),
@@ -397,6 +403,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::ClassLevel(_)
+            | Memo::CombatBand(_)
             | Memo::Solved => None,
         })
     }
@@ -417,6 +424,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::ClassLevel(_)
+            | Memo::CombatBand(_)
             | Memo::Solved => None,
         })
     }
@@ -437,6 +445,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::ClassLevel(_)
+            | Memo::CombatBand(_)
             | Memo::Solved => None,
         })
     }

@@ -107,7 +107,15 @@ pub mod decks {
             "designations",
             &[names::WIZARD_CLASS, names::CASE_OF_THE_CRIMSON_PULSE],
         ),
-        ("combat", &[names::PALACE_GUARD, names::FENCING_ACE]),
+        (
+            "combat",
+            &[
+                names::PALACE_GUARD,
+                names::FENCING_ACE,
+                names::BENALISH_HERO,
+                names::BENALISH_INFANTRY,
+            ],
+        ),
         (
             "split",
             &[

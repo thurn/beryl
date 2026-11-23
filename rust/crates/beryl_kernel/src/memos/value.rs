@@ -21,6 +21,7 @@ impl<L: Layout> Memo<L> {
             Memo::Morphed => Kinds::MORPHED,
             Memo::ClassLevel(_) => Kinds::CLASS_LEVEL,
             Memo::Solved => Kinds::SOLVED,
+            Memo::CombatBand(_) => Kinds::COMBAT_BAND,
         }
     }
 
@@ -38,6 +39,7 @@ impl<L: Layout> Memo<L> {
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::ClassLevel(_)
+            | Memo::CombatBand(_)
             | Memo::Solved => Zone::Battlefield,
             Memo::ExiledWith(_) | Memo::ExiledUntil(_) => Zone::Exile,
             Memo::PartOf(_) => Zone::Merged,
@@ -66,6 +68,7 @@ impl<L: Layout> Memo<L> {
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::ClassLevel(_)
+            | Memo::CombatBand(_)
             | Memo::Solved => None,
             Memo::ExiledWith(by)
             | Memo::ExiledUntil(by)
@@ -83,7 +86,11 @@ impl<L: Layout> Memo<L> {
             Memo::ClassLevel(level) => level > 1,
             Memo::Paid(paid) => !paid.is_empty(),
             Memo::Chosen(value) => value.holds(),
-            Memo::Really(_) | Memo::PhasedOutUnder(_) | Memo::Morphed | Memo::Solved => true,
+            Memo::Really(_)
+            | Memo::PhasedOutUnder(_)
+            | Memo::Morphed
+            | Memo::Solved
+            | Memo::CombatBand(_) => true,
             // Somebody knew the face-down card: at least its controller (see CR 708.5).
             Memo::FaceDownUnder(knew) => !knew.is_empty(),
             // What exiled it left a card or a token in its slot.
@@ -111,6 +118,7 @@ impl<L: Layout> Memo<L> {
             Memo::Morphed => Memo::Morphed,
             Memo::ClassLevel(level) => Memo::ClassLevel(level),
             Memo::Solved => Memo::Solved,
+            Memo::CombatBand(band) => Memo::CombatBand(slot(band)),
         }
     }
 

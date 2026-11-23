@@ -5,7 +5,7 @@
 //!
 //! Implements: CR 510, CR 702.4, CR 702.19b, CR 702.19d
 
-use super::damage;
+use super::{banding, damage};
 use super::{blockers_of, has, in_combat_now};
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Prompt, Purpose};
@@ -20,7 +20,11 @@ use crate::replacement::event::{Recipient, Sink};
 use crate::state::{
     AttackTarget, BATTLEFIELD, CombatRole, LethalAssignment, ObjectRef, Pending, State, TurnStep,
 };
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
+
+mod exact_damage;
+
+pub(crate) use exact_damage::decision as exact_decision;
 
 const STRIKES_FIRST: Keywords = Keywords::FIRST_STRIKE.union(Keywords::DOUBLE_STRIKE);
 
@@ -50,7 +54,7 @@ pub(crate) fn first_strike_step<L: Layout>(s: &State<L>) -> bool {
 /// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
 /// [CR 702.4c]: https://yawgatog.com/resources/magic-rules/#R7024c
 /// [CR 702.4d]: https://yawgatog.com/resources/magic-rules/#R7024d
-fn assigns_now<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
+pub(super) fn assigns_now<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     if !in_combat_now(s, slot) {
         return false;
     }
@@ -66,7 +70,7 @@ fn assigns_now<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
 /// this way don't assign combat damage at all."
 ///
 /// [CR 510.1a]: https://yawgatog.com/resources/magic-rules/#R5101a
-fn power<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
+pub(super) fn power<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
     u8::try_from(s.derived(slot).power.max(0)).unwrap_or(0)
 }
 
@@ -75,14 +79,14 @@ fn power<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
 /// toughness, that creature has been dealt lethal damage". At least 1.
 ///
 /// [CR 120.6]: https://yawgatog.com/resources/magic-rules/#R1206
-fn lethal_damage<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
+pub(super) fn lethal_damage<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
     let left = i16::from(s.derived(slot).toughness) - i16::from(s.object(slot).damage());
     u8::try_from(left.clamp(1, 255)).unwrap_or(1)
 }
 
 /// What an attacker attacks, as a recipient of its damage: nothing once a planeswalker it
 /// attacked has left the battlefield (CR 510.1b).
-fn attacked<L: Layout>(s: &State<L>, target: AttackTarget<L>) -> Option<Recipient<L>> {
+pub(super) fn attacked<L: Layout>(s: &State<L>, target: AttackTarget<L>) -> Option<Recipient<L>> {
     match target {
         AttackTarget::Player(player) => Some(Recipient::Player(player)),
         AttackTarget::Planeswalker(walker) => Some(Recipient::Permanent(s.object_ref(walker))),
@@ -98,7 +102,12 @@ fn attacked<L: Layout>(s: &State<L>, target: AttackTarget<L>) -> Option<Recipien
 ///
 /// [CR 510.1c]: https://yawgatog.com/resources/magic-rules/#R5101c
 /// [CR 510.1d]: https://yawgatog.com/resources/magic-rules/#R5101d
-pub fn assigner<L: Layout>(s: &State<L>, creature: L::Slot) -> Seat {
+pub fn assigner<L: Layout>(s: &State<L>, t: &GameTable, creature: L::Slot) -> Seat {
+    if t.can(Capability::Banding)
+        && let Some(player) = banding::assigner(s, creature)
+    {
+        return player;
+    }
     s.controller(creature)
 }
 
@@ -147,7 +156,7 @@ fn next_blocker<L: Layout>(s: &State<L>, done: Bitboard<L::Slot>) -> Option<L::S
     })
 }
 
-fn recipients<L: Layout>(s: &State<L>, source: L::Slot) -> Bitboard<L::Slot> {
+pub(super) fn recipients<L: Layout>(s: &State<L>, source: L::Slot) -> Bitboard<L::Slot> {
     match s.object(source).combat() {
         CombatRole::Blocking { attackers, .. } => attackers.iter().collect(),
         CombatRole::Attacking { .. } => blockers_of(s, source),
@@ -178,6 +187,9 @@ pub(crate) fn begin_damage<L: Layout>(
             }
         }
     }
+    if t.can(Capability::Banding) && banding::affects_damage(s) {
+        return exact_damage::begin(s, t, sink);
+    }
     if let Some(source) = next_division(s, t, Bitboard::EMPTY) {
         s.ask(Pending::CombatDamage {
             source,
@@ -194,8 +206,8 @@ pub(crate) fn begin_damage<L: Layout>(
 /// one. Picks represent which creatures receive lethal damage from this source. They cannot
 /// express different nonlethal splits or overkill, including damage from several sources that
 /// adds up to lethal or changes what other creatures can trample over. Those cases need amounts
-/// when the split changes the outcome. Banding also needs amounts when the chooser wants to
-/// leave trampling damage on a blocker instead of assigning it to the attacked player.
+/// when the split changes the outcome. Combats with banding use exact amounts
+/// (see [`exact_damage`]).
 pub(crate) fn division_decision<L: Layout>(
     s: &State<L>,
     source: L::Slot,
@@ -215,7 +227,7 @@ pub(crate) fn division_decision<L: Layout>(
     Candidates::<L>::extend_options(&mut list, collapse(s, more), |out, slot| {
         out.push(Opt::Lethal(slot))
     })?;
-    let player = assigner(s, source);
+    let player = s.controller(source);
     Ok(Decision {
         player,
         decider: player,
@@ -273,6 +285,9 @@ pub(crate) fn divide<L: Layout>(
     sink: &mut Sink<L>,
     opt: Opt<L>,
 ) -> Result<(), Full> {
+    if let Pending::ExactCombatDamage(dividing) = s.pending() {
+        return exact_damage::answer(s, t, sink, dividing.clone(), opt);
+    }
     let Pending::CombatDamage {
         mut source,
         mut done,

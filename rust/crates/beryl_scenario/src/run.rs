@@ -590,6 +590,7 @@ impl<L: Layout> Runner<L> {
         }
         Position {
             subgame_depth: self.s.subgame_depth(),
+            damage_choice: self.damage_choice(step),
             forced: std::mem::take(&mut self.forced),
             creatures,
             flashback,
@@ -617,6 +618,20 @@ impl<L: Layout> Runner<L> {
             taps,
             mana,
         }
+    }
+
+    fn damage_choice(&self, step: &Step<L>) -> Option<crate::DamageChoice> {
+        let (Pending::ExactCombatDamage(dividing), Step::Decide(d)) = (self.s.pending(), step)
+        else {
+            return None;
+        };
+        let recipient = d.about.sole()?;
+        Some(crate::DamageChoice {
+            source: self.name(dividing.source),
+            recipient: self.name(recipient),
+            remaining: dividing.remaining,
+            recipients: dividing.recipients.count(),
+        })
     }
 
     fn name(&self, slot: L::Slot) -> &'static str {

@@ -240,7 +240,11 @@ pub enum Opt<L: Layout = Small> {
     /// Finish a declaration or a division.
     Done,
     /// Declare the creature in this slot as an attacker.
-    Attack(L::Slot),
+    Attack {
+        slot: L::Slot,
+        /// None attacks alone; the attacker's own slot starts a band.
+        band: Option<L::Slot>,
+    },
     /// Attack the planeswalker in this slot, or, for `None`, the defending player.
     Defender(Option<L::Slot>),
     /// Declare the creature in this slot as a blocker.
@@ -283,6 +287,11 @@ pub enum Opt<L: Layout = Small> {
 const _: () = assert!(size_of::<Opt<Small>>() == 4);
 
 impl<L: Layout> Opt<L> {
+    /// Declares an attacker without joining a band.
+    pub const fn attack(slot: L::Slot) -> Self {
+        Opt::Attack { slot, band: None }
+    }
+
     /// The object this option names, if it names one: the card to play, cast, activate or
     /// turn face up, a creature to attack or block with, a blocker, a mana source, a
     /// planeswalker to attack, an object chosen, or a waiting trigger's or a targeted
@@ -290,7 +299,7 @@ impl<L: Layout> Opt<L> {
     pub fn object_named(self, s: &State<L>) -> Option<L::Slot> {
         match self {
             Opt::PlayLand(slot)
-            | Opt::Attack(slot)
+            | Opt::Attack { slot, .. }
             | Opt::Block(slot)
             | Opt::Lethal(slot)
             | Opt::Cast { slot, .. }

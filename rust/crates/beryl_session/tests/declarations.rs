@@ -46,7 +46,7 @@ impl<L: Layout> Agent<L> for AttackAll {
     fn choose(&mut self, _: Observation<'_, L>, d: &Decision<L>, _: AgentDecision) -> Choice {
         let attack = match &d.candidates {
             Candidates::Options(options) => {
-                (options.iter()).position(|o| matches!(o, Opt::Attack(_)))
+                (options.iter()).position(|o| matches!(o, Opt::Attack { .. }))
             }
             Candidates::Objects(_) => None,
         };

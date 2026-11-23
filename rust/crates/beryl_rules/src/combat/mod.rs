@@ -18,13 +18,16 @@ use crate::layout::{Layout, Queue};
 use crate::replacement::event::{self, Event, Sink};
 use crate::replacement::protection;
 use crate::state::{AttackTarget, CombatRole, Pending, State, TurnStep};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
 mod assignment;
+mod banding;
 pub mod damage;
 
 pub use assignment::{assigner, preferred_damage};
-pub(crate) use assignment::{begin_damage, divide, division_decision, first_strike_step};
+pub(crate) use assignment::{
+    begin_damage, divide, division_decision, exact_decision, first_strike_step,
+};
 
 fn is_creature<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     s.derived(slot).types.contains(Types::CREATURE)
@@ -113,10 +116,11 @@ pub(crate) fn attack_decision<L: Layout>(
     let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     let (player, kind, part) = if attacker.is_none() {
         list.push(Opt::Done)?;
-        let able = eligible_attackers(s, t).collect();
-        Candidates::<L>::extend_options(&mut list, collapse(s, able), |out, slot| {
-            out.push(Opt::Attack(slot))
-        })?;
+        if t.can(Capability::Banding) {
+            banding::attack_options(s, t, &mut list)?;
+        } else {
+            ordinary_attack_options(s, t, &mut list)?;
+        }
         (s.turn().active(), DecisionKind::Attacker, Part::Pick)
     } else {
         list = attack_targets(s)?;
@@ -131,6 +135,20 @@ pub(crate) fn attack_decision<L: Layout>(
         prompt: Prompt::new(Purpose::Attack).part(part),
         about: attacker.map_or(Bitboard::EMPTY, Bitboard::single),
     })
+}
+
+/// Lists attackers for the declaration (see CR 508.1a). The banding path also
+/// uses the resulting set to offer the same creatures a place in a band.
+#[inline]
+fn ordinary_attack_options<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    list: &mut L::Queue<Opt<L>, OPTIONS>,
+) -> Result<Bitboard<L::Slot>, Full> {
+    let able = eligible_attackers(s, t).collect();
+    let attackers = collapse(s, able);
+    Candidates::<L>::extend_options(list, attackers, |out, slot| out.push(Opt::attack(slot)))?;
+    Ok(attackers)
 }
 
 /// What a creature can attack ([CR 506.2]): "that player, planeswalkers they control, and
@@ -158,18 +176,17 @@ pub(crate) fn attack<L: Layout>(
     opt: Opt<L>,
 ) -> Result<(), Full> {
     match opt {
-        Opt::Attack(slot) => {
-            // CR 508.1k: "Each chosen creature still controlled by the active player becomes
-            // an attacking creature."
-            let attacker = s.permanent_at(slot).expect("a declared attacker");
-            let mut defending = s.players_in_turn_order(s.defending_players());
-            let player = defending.next().expect("combat has a defending player");
-            s.declare_attacker(attacker, player);
+        Opt::Attack { slot, band: None } => {
+            declare_attacker(s, slot);
             s.ask(Pending::DeclareAttackers {
                 attacker: Some(slot),
             });
             Ok(())
         }
+        Opt::Attack {
+            slot,
+            band: Some(first),
+        } => banding::attack(s, slot, first),
         Opt::Defender(target) => {
             let Pending::DeclareAttackers {
                 attacker: Some(attacker),
@@ -207,6 +224,18 @@ pub(crate) fn attack<L: Layout>(
         | Opt::Object(_)
         | Opt::TurnFaceUp(_) => finish_attack(s, t, sink),
     }
+}
+
+/// Makes the chosen creature an attacker. Under [CR 508.1k], "Each chosen creature still
+/// controlled by the active player becomes an attacking creature."
+///
+/// [CR 508.1k]: https://yawgatog.com/resources/magic-rules/#R5081k
+#[inline]
+fn declare_attacker<L: Layout>(s: &mut State<L>, slot: L::Slot) {
+    let attacker = s.permanent_at(slot).expect("a declared attacker");
+    let mut defending = s.players_in_turn_order(s.defending_players());
+    let player = defending.next().expect("combat has a defending player");
+    s.declare_attacker(attacker, player);
 }
 
 /// Finishes the attack declaration: the attackers tap, then attack triggers trigger.
@@ -465,7 +494,7 @@ pub(crate) fn choose_blocker<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, op
         | Opt::Yes
         | Opt::No
         | Opt::Done
-        | Opt::Attack(_)
+        | Opt::Attack { .. }
         | Opt::Defender(_)
         | Opt::Lethal(_)
         | Opt::Cast { .. }
@@ -501,7 +530,11 @@ pub(crate) fn block_with<L: Layout>(s: &mut State<L>, blocker: L::Slot) {
 /// or more creatures declared as blockers for it becomes a blocked creature". It becomes blocked as
 /// soon as its first blocker is chosen, so a blocked and an unblocked attacker are never offered as
 /// interchangeable to the next blocker.
-pub(crate) fn block_attacker<L: Layout>(s: &mut State<L>, attacker: L::Slot) -> Result<(), Full> {
+pub(crate) fn block_attacker<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    attacker: L::Slot,
+) -> Result<(), Full> {
     let Pending::DeclareBlockers {
         blocker: Some(blocker),
     } = *s.pending()
@@ -511,6 +544,9 @@ pub(crate) fn block_attacker<L: Layout>(s: &mut State<L>, attacker: L::Slot) -> 
     let blocker = s.permanent_at(blocker).expect("a declared blocker");
     let attacker = s.permanent_at(attacker).expect("a declared attacker");
     s.block(blocker, attacker)?;
+    if t.can(Capability::Banding) {
+        banding::spread_block(s, blocker, attacker)?;
+    }
     s.ask(Pending::DeclareBlockers { blocker: None });
     Ok(())
 }

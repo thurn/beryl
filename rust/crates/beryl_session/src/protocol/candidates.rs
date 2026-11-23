@@ -93,8 +93,8 @@ pub(super) fn candidate<L: Layout>(
         Opt::Yes => ("Yes".to_owned(), Candidate::Yes),
         Opt::No => ("No".to_owned(), Candidate::No),
         Opt::Done => ("Done".to_owned(), Candidate::Done),
-        Opt::Attack(slot) => (
-            format!("Attack with {}", named(slot)),
+        Opt::Attack { slot, band } => (
+            attack_label(slot, band, named),
             Candidate::Attack { slot: id(slot) },
         ),
         Opt::Defender(None) => (
@@ -155,6 +155,14 @@ pub(super) fn candidate<L: Layout>(
         nth: ability_nth(t, obs, o),
         text: ability_text(t, obs, o),
         targets: Vec::new(),
+    }
+}
+
+fn attack_label<S: SlotId>(slot: S, band: Option<S>, name: impl Fn(S) -> &'static str) -> String {
+    match band {
+        None => format!("Attack with {}", name(slot)),
+        Some(first) if first == slot => format!("Start a band with {}", name(slot)),
+        Some(first) => format!("Attack with {} in {}’s band", name(slot), name(first)),
     }
 }
 

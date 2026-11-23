@@ -139,6 +139,7 @@ impl<'a, L: Layout> Observation<'a, L> {
             | Pending::DeclareAttackers { .. }
             | Pending::DeclareBlockers { .. }
             | Pending::CombatDamage { .. }
+            | Pending::ExactCombatDamage(_)
             | Pending::Casting(_)
             | Pending::Resolving(_)
             | Pending::StepActions(_)

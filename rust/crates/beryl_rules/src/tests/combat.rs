@@ -357,8 +357,8 @@ fn unblocked_attackers_each_record_a_combat_damage_event() {
     let bear = g.put(g.attacker, "Bear");
     let other = g.put(g.attacker, "Bear");
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(bear.min(other)));
-    g.pick(DecisionKind::Attacker, Opt::Attack(bear.max(other)));
+    g.pick(DecisionKind::Attacker, Opt::attack(bear.min(other)));
+    g.pick(DecisionKind::Attacker, Opt::attack(bear.max(other)));
     stop_at(&mut g, TurnStep::DeclareAttackers);
     g.s.board().set_step(TurnStep::CombatDamage);
     crate::combat::begin_damage(&mut g.s, &g.t, &mut g.x.events).unwrap();
@@ -421,8 +421,8 @@ fn flying_attackers_are_blocked_only_by_flying_or_reach() {
     let ground = g.put(d, "Bear");
     let spider = g.put(d, "Spider");
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(bird));
-    g.pick(DecisionKind::Attacker, Opt::Attack(bear));
+    g.pick(DecisionKind::Attacker, Opt::attack(bird));
+    g.pick(DecisionKind::Attacker, Opt::attack(bear));
     let blockers = g.expect(DecisionKind::Blocker);
     assert_eq!(blockers.player, d);
     // Blockers are offered in slot order, which the deal decides.
@@ -464,7 +464,7 @@ fn a_division_among_blockers_is_offered_by_which_blockers_die() {
         let bear = g.put(d, "Bear");
         let spider = g.put(d, "Spider");
         g.pass_to_combat();
-        g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
+        g.pick(DecisionKind::Attacker, Opt::attack(ogre));
         g.pick(DecisionKind::Blocker, Opt::Block(bear));
         g.pick(DecisionKind::Blocker, Opt::Block(spider));
         let division = g.expect(DecisionKind::DamageDivision);
@@ -496,7 +496,7 @@ fn a_division_that_must_kill_asks_only_how_many() {
     let x = g.put(d, "Bear");
     let y = g.put(d, "Bear");
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(giant));
+    g.pick(DecisionKind::Attacker, Opt::attack(giant));
     g.pick(DecisionKind::Blocker, Opt::Block(x.min(y)));
     g.pick(DecisionKind::Blocker, Opt::Block(x.max(y)));
     let division = g.expect(DecisionKind::DamageDivision);
@@ -520,7 +520,7 @@ fn damage_below_lethal_goes_onto_blockers_in_the_order_they_entered() {
     g.put_slot(high);
     g.put_slot(low);
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
+    g.pick(DecisionKind::Attacker, Opt::attack(ogre));
     g.pick(DecisionKind::Blocker, Opt::Block(low));
     g.pick(DecisionKind::Blocker, Opt::Block(high));
     g.finish_combat();
@@ -544,8 +544,8 @@ fn creatures_dying_together_reach_the_graveyard_in_the_order_they_entered() {
     g.put_slot(high);
     g.put_slot(low);
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
-    g.pick(DecisionKind::Attacker, Opt::Attack(bear));
+    g.pick(DecisionKind::Attacker, Opt::attack(ogre));
+    g.pick(DecisionKind::Attacker, Opt::attack(bear));
     // The defender's Bears are alike: the lower slot answers for both, then the other.
     g.pick(DecisionKind::Blocker, Opt::Block(low));
     g.pick_object(DecisionKind::BlockTarget, ogre);
@@ -562,7 +562,7 @@ fn a_first_striker_held_back_does_not_add_a_combat_damage_step() {
     g.put(g.attacker, "Knight");
     let blocker = g.put(g.defender(), "Bear");
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(bear));
+    g.pick(DecisionKind::Attacker, Opt::attack(bear));
     g.pick(DecisionKind::Attacker, Opt::Done);
     g.pick(DecisionKind::Blocker, Opt::Block(blocker));
     assert!(!crate::combat::first_strike_step(&g.s));
@@ -581,7 +581,7 @@ fn an_attacker_whose_planeswalker_left_deals_no_damage() {
     let ogre = g.put(a, "Ogre");
     let walker = g.put(d, "Walker");
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
+    g.pick(DecisionKind::Attacker, Opt::attack(ogre));
     g.pick(DecisionKind::AttackTarget, Opt::Defender(Some(walker)));
     stop_at(&mut g, TurnStep::DeclareAttackers);
     let target = |g: &Game| g.s.object(ogre).attack_target();
@@ -609,7 +609,7 @@ fn combat_goes_on_when_every_declared_attacker_is_removed() {
     let mut g = Game::new();
     let bear = g.put(g.attacker, "Bear");
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(bear));
+    g.pick(DecisionKind::Attacker, Opt::attack(bear));
     stop_at(&mut g, TurnStep::DeclareAttackers);
     g.s.move_object(
         &mut crate::replacement::event::Sink::off(),
@@ -637,8 +637,8 @@ fn attackers_blocked_by_different_creatures_are_not_interchangeable() {
     let sentry = g.put(d, "Sentry");
     let spider = g.put(d, "Spider");
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(first));
-    g.pick(DecisionKind::Attacker, Opt::Attack(second));
+    g.pick(DecisionKind::Attacker, Opt::attack(first));
+    g.pick(DecisionKind::Attacker, Opt::attack(second));
     // The Bear's two attackers are still interchangeable: it blocks the first silently.
     g.pick(DecisionKind::Blocker, Opt::Block(bear));
     g.pick(DecisionKind::Blocker, Opt::Block(sentry));
@@ -674,8 +674,8 @@ fn a_creature_put_onto_the_battlefield_attacking_was_never_declared() {
     let captain = g.put(a, "Captain");
     g.pass_to_combat();
     let attackers = g.expect(DecisionKind::Attacker);
-    assert_eq!(options(&attackers), vec![Opt::Done, Opt::Attack(captain)]);
-    g.pick(DecisionKind::Attacker, Opt::Attack(captain));
+    assert_eq!(options(&attackers), vec![Opt::Done, Opt::attack(captain)]);
+    g.pick(DecisionKind::Attacker, Opt::attack(captain));
     stop_at(&mut g, TurnStep::DeclareAttackers);
     while !g.s.stack().is_empty() {
         g.pick(DecisionKind::Priority, Opt::Pass);
@@ -700,7 +700,7 @@ fn smart_stops_come_after_attackers_and_after_blockers_are_declared() {
     let a = g.attacker;
     let bear = g.put(a, "Bear");
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(bear));
+    g.pick(DecisionKind::Attacker, Opt::attack(bear));
     let smart = Profile::SMART;
     for step in [TurnStep::DeclareAttackers, TurnStep::DeclareBlockers] {
         g.s.board().set_step(step);
@@ -758,7 +758,7 @@ fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of
             .contains(g.t.subtypes(), Subtype::Vehicle)
     );
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(wagon));
+    g.pick(DecisionKind::Attacker, Opt::attack(wagon));
     g.finish_combat();
     assert_eq!(g.life(d), 17);
     // Until end of turn: at the next turn's first stop it is an artifact again.
@@ -885,7 +885,7 @@ fn passing_goes_to_the_next_smart_stop() {
         NextStop::Step(TurnStep::BeginningOfCombat, _)
     ));
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(bear));
+    g.pick(DecisionKind::Attacker, Opt::attack(bear));
     // Blockers being declared, passing deals combat damage.
     g.pick(DecisionKind::Blocker, Opt::Block(ogre));
     assert_eq!(g.s.turn().step(), TurnStep::DeclareBlockers);

@@ -143,7 +143,7 @@ impl Sim<'_> {
     fn attack_plans(&self, start: &State, d: &Decision) -> Vec<Vec<Declare>> {
         // A creature without power deals nothing, and Jace would rather loot.
         let attackers = offered(start, d, |o| match o {
-            Opt::Attack(slot) if start.derived(slot).power > 0 => Some(slot),
+            Opt::Attack { slot, band: None } if start.derived(slot).power > 0 => Some(slot),
             _ => None,
         });
         // A creature an untapped blocker would kill for nothing attacks only all in, as does
@@ -588,10 +588,21 @@ fn declare(s: &State, d: &Decision, want: Declare) -> Option<Choice> {
     options
         .iter()
         .position(|&o| match (want, o) {
-            (Declare::Attack(a, _), Opt::Attack(b)) | (Declare::Block(a, _), Opt::Block(b)) => {
-                like(s, a, b)
-            }
-            (Declare::Every(_), Opt::Attack(b)) => s.derived(b).power > 0,
+            (
+                Declare::Attack(a, _),
+                Opt::Attack {
+                    slot: b,
+                    band: None,
+                },
+            )
+            | (Declare::Block(a, _), Opt::Block(b)) => like(s, a, b),
+            (
+                Declare::Every(_),
+                Opt::Attack {
+                    slot: b,
+                    band: None,
+                },
+            ) => s.derived(b).power > 0,
             _ => false,
         })
         .map(|i| Choice(i as u16))

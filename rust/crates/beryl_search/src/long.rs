@@ -1783,7 +1783,7 @@ fn shows<L: Layout>(opt: Opt<L>) -> bool {
 fn names_slot<L: Layout>(opt: Opt<L>) -> Option<L::Slot> {
     match opt {
         Opt::PlayLand(slot)
-        | Opt::Attack(slot)
+        | Opt::Attack { slot, band: None }
         | Opt::Block(slot)
         | Opt::Lethal(slot)
         | Opt::Object(slot)
@@ -1800,7 +1800,7 @@ fn names_slot<L: Layout>(opt: Opt<L>) -> Option<L::Slot> {
 fn with_slot<L: Layout>(opt: Opt<L>, to: L::Slot) -> Opt<L> {
     match opt {
         Opt::PlayLand(_) => Opt::PlayLand(to),
-        Opt::Attack(_) => Opt::Attack(to),
+        Opt::Attack { band: None, .. } => Opt::attack(to),
         Opt::Block(_) => Opt::Block(to),
         Opt::Lethal(_) => Opt::Lethal(to),
         Opt::Object(_) => Opt::Object(to),

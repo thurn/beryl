@@ -1073,7 +1073,7 @@ public final class BerylForgeHarness {
                 "SWAMPWALK", "Landwalk:Swamp", "MOUNTAINWALK", "Landwalk:Mountain",
                 "FORESTWALK", "Landwalk:Forest");
         static final Set<Keyword> SNAPSHOT_KEYWORDS = Set.of(
-                Keyword.FIRST_STRIKE, Keyword.DOUBLE_STRIKE, Keyword.FLYING, Keyword.REACH,
+                Keyword.BANDING, Keyword.FIRST_STRIKE, Keyword.DOUBLE_STRIKE, Keyword.FLYING, Keyword.REACH,
                 Keyword.VIGILANCE,
                 Keyword.FLASH, Keyword.HASTE, Keyword.DELVE, Keyword.TRAMPLE, Keyword.LIFELINK,
                 Keyword.INDESTRUCTIBLE, Keyword.CHANGELING);

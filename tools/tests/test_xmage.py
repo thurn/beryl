@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -526,7 +527,6 @@ def test_a_blocked_trampler_queues_lethal_damage_for_its_lone_blocker() -> None:
     export = xmage_java.Export(card=attacker, scenario="trample", method="trample")
     faces = xmage_java.Faces.load(card_store.STORE, [attacker, blocker])
     writer = xmage.Exporter(entry, faces, export)
-    writer.attackers = {1: [attacker]}
     position = xmage.Position(
         turn=1,
         step="DeclareBlockers",
@@ -542,10 +542,15 @@ def test_a_blocked_trampler_queues_lethal_damage_for_its_lone_blocker() -> None:
         creatures=[1, 1],
     )
     writer.answer(
+        {"player": 0, "kind": "Attacker", "pick": {"pick": "Card", "card": attacker}},
+        replace(position, step="DeclareAttackers", decider=0, kind="Attacker"),
+    )
+    writer.answer(
         {"player": 1, "kind": "Blocker", "pick": {"pick": "Card", "card": blocker}},
         position,
     )
     assert export.body == [
+        'attack(1, playerA, "Colossal Dreadmaw", playerB);',
         'block(1, playerB, "Snapcaster Mage", "Colossal Dreadmaw");',
         "setChoiceAmount(playerA, 1);",
     ]

@@ -339,7 +339,7 @@ fn a_blocker_may_block_the_attackers_its_evasion_allows() {
             DecisionKind::Blocker => break d,
             DecisionKind::Attacker => opts
                 .iter()
-                .position(|o| matches!(o, Opt::Attack(_)))
+                .position(|o| matches!(o, Opt::Attack { .. }))
                 .unwrap_or(0),
             _ => opts.iter().position(|o| *o == Opt::Pass).unwrap_or(0),
         };

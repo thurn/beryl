@@ -91,7 +91,12 @@ impl Number {
 
     pub(crate) fn show(&self, view: &mut PromptView) {
         let value = &self.values[self.at];
-        view.marks = (value.taps.iter())
+        let marked = if self.purpose == Purpose::CombatDamage {
+            &view.about
+        } else {
+            &value.taps
+        };
+        view.marks = (marked.iter())
             .map(|&slot| Marked {
                 on: Subject::Object { slot },
                 mark: Mark::Suggested,
@@ -101,7 +106,11 @@ impl Number {
         view.buttons = vec![PromptButton {
             id: ButtonId::Confirm,
             label: self.confirm.clone(),
-            caption: X_VALUE.replace("{n}", &value.n.to_string()),
+            caption: if self.purpose == Purpose::CombatDamage {
+                value.n.to_string()
+            } else {
+                X_VALUE.replace("{n}", &value.n.to_string())
+            },
             enabled: true,
             primary: true,
         }];

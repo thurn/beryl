@@ -166,7 +166,9 @@ impl RolloutPolicy {
                 None => Some(0),
             }),
             DecisionKind::Attacker => best(d, |c| match c.option() {
-                Some(Opt::Attack(slot)) => p.safe_attack(slot).then(|| 1 + p.value(slot)),
+                Some(Opt::Attack { slot, band: None }) => {
+                    p.safe_attack(slot).then(|| 1 + p.value(slot))
+                }
                 _ => Some(0),
             }),
             DecisionKind::AttackTarget => best(d, |c| match c.option() {

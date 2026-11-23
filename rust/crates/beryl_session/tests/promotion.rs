@@ -55,7 +55,7 @@ impl<L: Layout> Agent<L> for Script {
             self.casts.pop_front();
             return c;
         }
-        let more = |o: Opt<L>| matches!(o, Opt::Attack(_) | Opt::Object(_));
+        let more = |o: Opt<L>| matches!(o, Opt::Attack { .. } | Opt::Object(_));
         if self.eager
             && let Some(c) = (0..d.len() as u16)
                 .map(Choice)

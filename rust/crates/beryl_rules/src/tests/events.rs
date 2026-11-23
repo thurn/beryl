@@ -1953,7 +1953,7 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
         let choice = match d.kind {
             DecisionKind::Attacker if !declared => {
                 declared = true;
-                pick(Opt::Attack(cathar))
+                pick(Opt::attack(cathar))
             }
             DecisionKind::Attacker => pick(Opt::Done),
             // The declared attacker attacks the player; the Human, as it is created, the

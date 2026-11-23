@@ -1,5 +1,6 @@
 //! Keyword abilities ([CR 702](https://yawgatog.com/resources/magic-rules/#R702)).
 
+pub mod banding;
 pub mod evasion;
 pub mod flashback;
 pub mod indestructible;

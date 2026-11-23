@@ -97,6 +97,7 @@ fn replay_paused<'a, L: Layout>(
         | Pending::DeclareAttackers { .. }
         | Pending::DeclareBlockers { .. }
         | Pending::CombatDamage { .. }
+        | Pending::ExactCombatDamage(_)
         | Pending::Casting(_)
         | Pending::TurningFaceUp { .. }
         | Pending::OrderEntered { .. }
@@ -511,7 +512,7 @@ fn perform_priority<L: Layout>(
         | Opt::Yes
         | Opt::No
         | Opt::Done
-        | Opt::Attack(_)
+        | Opt::Attack { .. }
         | Opt::Defender(_)
         | Opt::Block(_)
         | Opt::Lethal(_)
@@ -563,7 +564,7 @@ fn take_action<L: Layout>(
         | Opt::Yes
         | Opt::No
         | Opt::Done
-        | Opt::Attack(_)
+        | Opt::Attack { .. }
         | Opt::Defender(_)
         | Opt::Block(_)
         | Opt::Lethal(_)
@@ -617,7 +618,7 @@ fn perform<L: Layout>(
             | Opt::Yes
             | Opt::No
             | Opt::Done
-            | Opt::Attack(_)
+            | Opt::Attack { .. }
             | Opt::Defender(_)
             | Opt::Block(_)
             | Opt::Lethal(_)
@@ -637,7 +638,7 @@ fn perform<L: Layout>(
             combat::choose_blocker(s, sink, option());
             Ok(())
         }
-        DecisionKind::BlockTarget => combat::block_attacker(s, object()),
+        DecisionKind::BlockTarget => combat::block_attacker(s, t, object()),
         DecisionKind::DamageDivision => combat::divide(s, t, sink, option()),
         DecisionKind::X
         | DecisionKind::TargetCount

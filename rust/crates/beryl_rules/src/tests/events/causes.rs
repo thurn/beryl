@@ -530,7 +530,7 @@ fn combat_and_the_untap_step_are_the_rules_doing() {
     let mut attacked = false;
     while g.s.turn().number() < 3 || g.s.turn().step() != TurnStep::PrecombatMain {
         let d = g.decide();
-        let attack = index_of(&d, Opt::Attack(bear)).filter(|_| !attacked);
+        let attack = index_of(&d, Opt::attack(bear)).filter(|_| !attacked);
         attacked |= attack.is_some();
         g.choose(attack.unwrap_or(Choice(0)));
         assert!(

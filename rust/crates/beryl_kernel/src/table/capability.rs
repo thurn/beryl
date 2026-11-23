@@ -5,8 +5,8 @@
 use beryl_card::definition::Shape;
 use beryl_card::{
     Ability, AbilityKind, Amount, Behavior, CardDef, Condition, CostAction, CostPart, Designation,
-    Draws, Effect, FACE_DOWN, Face, Modification, Node, Objects, Replaced, Replacement, Rewrite,
-    Subtype, Words, Zone,
+    Draws, Effect, FACE_DOWN, Face, Keywords, Modification, Node, Objects, Replaced, Replacement,
+    Rewrite, Subtype, Words, Zone,
 };
 
 use crate::event::Listens;
@@ -128,10 +128,12 @@ pub enum Capability {
     CastWhileSearching,
     /// A cast trigger reads the card types of the spell that caused it to trigger.
     ReadsDepartedTriggeringSpell,
+    /// A card has banding, so combat can declare attacking bands and change who assigns damage.
+    Banding,
 }
 
 // The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::ReadsDepartedTriggeringSpell as u32) < u32::BITS);
+const _: () = assert!((Capability::Banding as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -160,10 +162,7 @@ impl Capability {
 
     /// The capabilities a face gives a game that can contain it.
     fn of(face: &Face) -> u32 {
-        let mut found = casting_capabilities(face);
-        if face.keywords.contains(beryl_card::Keywords::DELVE) {
-            found |= Capability::Delve.bit();
-        }
+        let mut found = casting_capabilities(face) | keyword_capabilities(face.keywords);
         if Inputs::of(face) != Inputs::NONE {
             found |= Capability::LayerInputs.bit();
         }
@@ -266,6 +265,18 @@ impl Capability {
     pub(super) const fn bit(self) -> u32 {
         1 << (self as u32)
     }
+}
+
+/// The capabilities that come from a face's keyword abilities.
+fn keyword_capabilities(keywords: Keywords) -> u32 {
+    let mut found = 0;
+    if keywords.contains(Keywords::DELVE) {
+        found |= Capability::Delve.bit();
+    }
+    if keywords.contains(Keywords::BANDING) {
+        found |= Capability::Banding.bit();
+    }
+    found
 }
 
 /// The capabilities that come from a face's casting options, costs and permissions.

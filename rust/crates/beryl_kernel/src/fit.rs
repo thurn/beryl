@@ -217,6 +217,10 @@ impl<L: Layout> State<L> {
                 capacity(|p: &Player<M>| &p.emblems),
             )?;
         }
+        self.pending_fits::<M>()
+    }
+
+    fn pending_fits<M: Layout>(&self) -> Result<(), Misfit> {
         match &self.pending {
             Pending::Resolving(paused)
             | Pending::StepActions(paused)
@@ -225,6 +229,11 @@ impl<L: Layout> State<L> {
                 "combat damage assignments",
                 lethal.len(),
                 <M::Queue<crate::pending::LethalAssignment<M>, 32> as Queue<_>>::CAPACITY,
+            ),
+            Pending::ExactCombatDamage(dividing) => room(
+                "combat damage shares",
+                dividing.shares.len(),
+                <M::Queue<crate::pending::DamageShare<M>, 32> as Queue<_>>::CAPACITY,
             ),
             Pending::None
             | Pending::PlayOrDraw { .. }

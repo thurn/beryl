@@ -940,16 +940,20 @@ would also distinguish sublethal splits, cumulative damage from multiple sources
 and a choice to keep excess trampling damage on a blocker. Banding needs amounts
 for those assignments when they affect the outcome.
 
-**Banding** ([CR 702.22j](https://yawgatog.com/resources/magic-rules/#R70222j),
-[CR 702.22k](https://yawgatog.com/resources/magic-rules/#R70222k)) is then three
-additions behind `Capability::Banding`:
+**Banding** ([CR 702.22](https://yawgatog.com/resources/magic-rules/#R70222)) is
+behind `Capability::Banding`:
 
-- attackers are declared in bands: `Opt::Attack` gains the band an attacker
-  joins, and the bands of this combat are a short list of sets in the combat
-  state, kept only while the capability is present;
-- a creature that blocks one member of a band blocks them all;
-- `combat::assigner` answers the defending player for an attacker blocked by a
-  bander, and the active player for a blocker of a bander.
+- `Opt::Attack` can start a band or join one with the same attack target. Each
+  band member has a combat memo that names its band. At most one member can join
+  without banding. A member's memo ends when it leaves combat or combat ends.
+- A defender who can block any member of a band blocks the entire band. Losing
+  the banding ability leaves the band in place.
+- `combat::assigner` gives the defending player the attacker’s assignment when a
+  blocker has banding, and the active player the blocker’s assignment when an
+  attacker has banding. The damage step offers exact shares for each creature
+  and deals the assigned damage together. A trampler can keep excess damage on
+  its blockers and can count damage already assigned by other attackers that
+  step.
 
 "Bands with other" (Master of the Hunt's Wolves) is a band whose membership rule
 is a quality instead of the keyword.

@@ -204,6 +204,16 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("library", names::JACE_THE_MIND_SCULPTOR, library::PUT_BACK),
     ("library", names::SUBTLETY, library::TOP_OR_BOTTOM),
     (
+        "keywords::banding",
+        names::BENALISH_HERO,
+        keywords::banding::HERO_SCENARIOS,
+    ),
+    (
+        "keywords::banding",
+        names::BENALISH_INFANTRY,
+        keywords::banding::INFANTRY_SCENARIOS,
+    ),
+    (
         "keywords::evasion",
         keywords::evasion::FLYER,
         keywords::evasion::SCENARIOS,

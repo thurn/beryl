@@ -388,6 +388,9 @@ restore the old behavior.
 Built from motions and shapes Beryl already has. Arena has these, but the
 recordings do not show them.
 
+- **Banding.** When an attacker can start or join a band, the choice uses the
+  existing option buttons. Assign Damage uses the number control to assign a
+  share to each creature in turn.
 - **Notes on manual cards.** A card shows its table note on one line, with an
   ellipsis when it runs out of room. Its inspection panel shows the full note.
 - **A card picked face down.** While the other player still has to pick, as for

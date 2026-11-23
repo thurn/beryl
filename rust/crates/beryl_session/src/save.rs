@@ -389,6 +389,11 @@ pub enum Act {
     Attack {
         creature: Obj,
     },
+    AttackInBand {
+        creature: Obj,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        first: Option<Box<Obj>>,
+    },
     /// What an attacker attacks: a planeswalker, or for none the defending player.
     Defender {
         planeswalker: Option<Obj>,
@@ -473,6 +478,7 @@ impl Act {
         match self {
             Act::PlayLand { card }
             | Act::Attack { creature: card }
+            | Act::AttackInBand { creature: card, .. }
             | Act::Block { creature: card }
             | Act::Lethal { blocker: card }
             | Act::Cast { card, .. }
@@ -491,6 +497,7 @@ impl Act {
         match self {
             Act::PlayLand { card }
             | Act::Attack { creature: card }
+            | Act::AttackInBand { creature: card, .. }
             | Act::Block { creature: card }
             | Act::Lethal { blocker: card }
             | Act::Cast { card, .. }
@@ -569,7 +576,7 @@ impl Act {
             Opt::Yes => Act::Yes,
             Opt::No => Act::No,
             Opt::Done => Act::Done,
-            Opt::Attack(slot) => Act::Attack {
+            Opt::Attack { slot, band: None } => Act::Attack {
                 creature: obj(slot),
             },
             Opt::Defender(slot) => Act::Defender {
@@ -577,6 +584,13 @@ impl Act {
             },
             Opt::Block(slot) => Act::Block {
                 creature: obj(slot),
+            },
+            Opt::Attack {
+                slot,
+                band: Some(first),
+            } => Act::AttackInBand {
+                creature: obj(slot),
+                first: (slot != first).then(|| Box::new(obj(first))),
             },
             Opt::Lethal(slot) => Act::Lethal { blocker: obj(slot) },
             Opt::Cast { slot, face, costs } => {

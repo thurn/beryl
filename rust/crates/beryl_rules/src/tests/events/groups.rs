@@ -369,7 +369,7 @@ fn a_declaration_is_one_event_and_so_is_the_combat_damage() {
             g.pick_object(bear);
             continue;
         }
-        let wanted = [Opt::Attack(bear), Opt::Attack(ogre), Opt::Block(blocker)];
+        let wanted = [Opt::attack(bear), Opt::attack(ogre), Opt::Block(blocker)];
         let wanted = wanted.into_iter().find_map(|opt| index_of(&d, opt));
         g.choose(wanted.unwrap_or(Choice(0)));
     }

@@ -58,8 +58,8 @@ fn a_blocker_of_two_attacks_divides_for_its_controller() {
     let second = g.put(a, "Test Weak");
     let guard = g.put(d, "Test Guard");
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(first));
-    g.pick(DecisionKind::Attacker, Opt::Attack(second));
+    g.pick(DecisionKind::Attacker, Opt::attack(first));
+    g.pick(DecisionKind::Attacker, Opt::attack(second));
     g.pick(DecisionKind::Blocker, Opt::Block(guard));
     g.pick_object(DecisionKind::BlockTarget, first);
     g.pick(DecisionKind::Blocker, Opt::Block(guard));
@@ -69,8 +69,8 @@ fn a_blocker_of_two_attacks_divides_for_its_controller() {
         (divide.player, divide.decider, divide.about.sole()),
         (d, d, Some(guard))
     );
-    assert_eq!(crate::combat::assigner(&g.s, first), a);
-    assert_eq!(crate::combat::assigner(&g.s, guard), d);
+    assert_eq!(crate::combat::assigner(&g.s, &g.t, first), a);
+    assert_eq!(crate::combat::assigner(&g.s, &g.t, guard), d);
     assert!(options(&divide).contains(&Opt::Lethal(second)));
     g.pick(DecisionKind::DamageDivision, Opt::Lethal(second));
     g.finish_combat();
@@ -143,8 +143,8 @@ fn regular_damage_uses_first_step_history_and_current_double_strike() {
             );
         }
         g.pass_to_combat();
-        g.pick(DecisionKind::Attacker, Opt::Attack(striker));
-        g.pick(DecisionKind::Attacker, Opt::Attack(regular));
+        g.pick(DecisionKind::Attacker, Opt::attack(striker));
+        g.pick(DecisionKind::Attacker, Opt::attack(regular));
         stop_at(&mut g, TurnStep::FirstStrikeDamage);
         assert_eq!(g.life(d), 18);
 

@@ -19,7 +19,7 @@ fn trample_reaches_the_player_only_once_every_blocker_is_dealt_lethal_damage() {
         let x = g.put(d, "Bear");
         let y = g.put(d, "Bear");
         g.pass_to_combat();
-        g.pick(DecisionKind::Attacker, Opt::Attack(wurm));
+        g.pick(DecisionKind::Attacker, Opt::attack(wurm));
         g.pick(DecisionKind::Blocker, Opt::Block(x.min(y)));
         g.pick(DecisionKind::Blocker, Opt::Block(x.max(y)));
         let division = g.expect(DecisionKind::DamageDivision);
@@ -45,7 +45,7 @@ fn a_trampler_whose_blockers_all_left_assigns_its_damage_to_the_player() {
     let wurm = g.put(a, "Wurm");
     let bear = g.put(d, "Bear");
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(wurm));
+    g.pick(DecisionKind::Attacker, Opt::attack(wurm));
     g.pick(DecisionKind::Blocker, Opt::Block(bear));
     stop_at(&mut g, TurnStep::DeclareBlockers);
     g.s.move_object(&mut Sink::off(), bear, Zone::Graveyard, Place::Top)
@@ -63,7 +63,7 @@ fn indestructible_survives_lethal_damage_and_destruction() {
     let giant = g.put(a, "Giant");
     let golem = g.put(d, "Golem");
     g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(giant));
+    g.pick(DecisionKind::Attacker, Opt::attack(giant));
     g.pick(DecisionKind::Blocker, Opt::Block(golem));
     g.finish_combat();
     assert!(g.on_battlefield(golem));

@@ -67,6 +67,16 @@ pub(crate) fn pick<L: Layout>(
             costs,
         });
     }
+    if let Some(Opt::Attack {
+        slot,
+        band: Some(first),
+    }) = d.candidates.option(c)
+    {
+        return Some(Pick::Band {
+            card: s.name(t, slot),
+            first: (first != slot).then(|| s.name(t, first)),
+        });
+    }
     let named = d
         .candidates
         .object(c)

@@ -108,6 +108,7 @@ pub(crate) fn decision<L: Layout>(
         Pending::CombatDamage {
             source, ref lethal, ..
         } => combat::division_decision(s, source, lethal.as_slice()),
+        Pending::ExactCombatDamage(ref dividing) => combat::exact_decision(s, t, dividing),
         Pending::Casting(c) => casting::decision(s, t, sink, &c),
         Pending::TurningFaceUp {
             slot,
@@ -198,7 +199,7 @@ pub(super) fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
             | Opt::Yes
             | Opt::No
             | Opt::Done
-            | Opt::Attack(_)
+            | Opt::Attack { .. }
             | Opt::Defender(_)
             | Opt::Block(_)
             | Opt::Lethal(_)
@@ -361,6 +362,7 @@ pub(super) fn perform_machine<L: Layout>(
         | Pending::Mulligans
         | Pending::DeclareAttackers { .. }
         | Pending::DeclareBlockers { .. }
-        | Pending::CombatDamage { .. } => return None,
+        | Pending::CombatDamage { .. }
+        | Pending::ExactCombatDamage(_) => return None,
     })
 }

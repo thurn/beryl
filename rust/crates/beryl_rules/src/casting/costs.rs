@@ -202,6 +202,7 @@ pub fn cost_being_cast<L: Layout>(s: &State<L>, t: &GameTable, x: u8) -> Option<
         | Pending::DeclareAttackers { .. }
         | Pending::DeclareBlockers { .. }
         | Pending::CombatDamage { .. }
+        | Pending::ExactCombatDamage(_)
         | Pending::Resolving(_)
         | Pending::StepActions(_)
         | Pending::TurnStart(_)

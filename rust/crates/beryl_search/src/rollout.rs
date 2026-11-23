@@ -333,7 +333,7 @@ impl RolloutPolicy {
                 None => Some(0),
             }),
             DecisionKind::Attacker => pick.choose(d, |c| match c.option() {
-                Some(Opt::Attack(slot)) => p.safe_attack(slot).then(|| 1 + p.value(slot)),
+                Some(Opt::Attack { slot, band: None }) => p.attack_score(slot),
                 _ => Some(0),
             }),
             DecisionKind::AttackTarget => pick.choose(d, |c| match c.option() {

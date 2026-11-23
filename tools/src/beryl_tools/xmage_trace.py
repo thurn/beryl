@@ -4,12 +4,16 @@ without asking."""
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from .card_facts import ESCAPE, Cards, Json, Unsupported, as_their_own
-from .xmage_java import java_string
+from .xmage_java import Faces, java_string, trample_amount
+
+if TYPE_CHECKING:
+    from .xmage import Exporter
 
 # Questions with one answer, which Beryl answers silently, that XMage asks anyway: by kind,
 # targets (with none to choose too) and X, whose limit XMage leaves to the payment; by what the
@@ -49,6 +53,8 @@ class Position:
     enter_as_copy: bool = False
     # The face-down permanents cast as morphs.
     morphed: list[str] = field(default_factory=list)
+
+    damage_choice: Json | None = None
 
     def supported_castings(self, action: Json) -> int:
         """The casting options, if XMage can offer the cast before payment."""
@@ -136,6 +142,7 @@ class Position:
         """The position one entry of the dump's trace records. A decision one player answers
         for another who they control is the other's (`as_their_own`)."""
         return Position(
+            damage_choice=cast(Json | None, t.get("damage_choice")),
             turn=cast(int, t["turn"]),
             step=cast(str, t["step"]),
             decider=cast("int | None", t.get("decides_for", t["decider"])),
@@ -207,3 +214,204 @@ def cast_targets(
                 break
             answers.append(forced)
     return answers
+
+
+class Combat:
+    def __init__(self, faces: Faces) -> None:
+        self.faces = faces
+        self.attackers: dict[int, list[str]] = {}
+        self.targets: dict[int, dict[str, str]] = {}
+        self.members: dict[int, dict[str, list[str]]] = {}
+        self.blocks: dict[int, dict[str, str]] = {}
+        self.trampled: set[int] = set()
+
+    def has_banding(self, card: str) -> bool:
+        return bool(re.search(r"^Banding\b", self.faces.oracle.get(card, ""), re.M))
+
+    def answer(self, export: Exporter, action: Json, p: Position) -> None:
+        pick = cast(Json, action["pick"])
+        kind, what = action["kind"], pick["pick"]
+        if kind in ("Attacker", "Blocker") and what == "Done":
+            return
+        who = export.player(action["player"])
+        if kind == "Attacker" and what in ("Card", "Band"):
+            self.attack(
+                export,
+                p,
+                who,
+                cast(str, pick["card"]),
+                cast(str | None, pick.get("first")),
+            )
+        elif kind == "Blocker" and what == "Card":
+            self.block(
+                export, p, who, cast(str, pick["card"]), cast(int, action["player"])
+            )
+        elif kind == "DamageDivision" and what == "Number" and p.damage_choice:
+            self.damage(export, p, who, cast(int, pick["n"]))
+        elif kind == "AttackTarget":
+            raise Unsupported(
+                "choosing what a creature put onto the battlefield attacks"
+            )
+        else:
+            raise Unsupported(f"answering {kind} with {what}")
+
+    def attack(
+        self, export: Exporter, p: Position, who: str, card: str, first: str | None
+    ) -> None:
+        """XMage schedules individual attacks, then asks banders about joining same-target attackers."""
+        targets = self.targets.setdefault(p.turn, {})
+        self.attackers.setdefault(p.turn, []).append(card)
+        if first is not None:
+            defender = targets[first]
+        else:
+            defender = "playerB" if who == "playerA" else "playerA"
+            following = export.actions[export.index + 1 : export.index + 2]
+            if following and following[0].get("kind") == "AttackTarget":
+                target = cast(Json, following[0]["pick"])
+                export.taken.add(id(following[0]))
+                if target["pick"] != "DefendingPlayer":
+                    defender = java_string(cast(str, target["card"]))
+        targets[card] = defender
+        export.emit(
+            f"attack({export.turn(p.turn)}, {who}, {java_string(card)}, {defender});"
+        )
+
+        if any(
+            later.turn == p.turn
+            and later.step == p.step
+            and a.get("kind") == "Attacker"
+            for a, later in zip(
+                export.actions[export.index + 1 :], export.trace[export.index + 1 :]
+            )
+        ):
+            return
+        bands: dict[str, list[str]] = {}
+        for a, later in zip(export.actions[: export.index + 1], export.trace):
+            if (
+                later.turn == p.turn
+                and later.step == p.step
+                and a.get("kind") == "Attacker"
+            ):
+                choice = cast(Json, a["pick"])
+                if choice["pick"] == "Band":
+                    chosen = cast(str, choice["card"])
+                    leader = cast(str | None, choice.get("first"))
+                    if leader is None:
+                        bands[chosen] = [chosen]
+                    else:
+                        bands[leader].append(chosen)
+        if bands and len(self.attackers[p.turn]) != len(targets):
+            raise Unsupported("two attackers with the same name forming a band")
+        self.members[p.turn] = bands
+        grouped: set[str] = set()
+        for attacker, target in targets.items():
+            if attacker in grouped or not self.has_banding(attacker):
+                continue
+            partners = bands.get(attacker, [attacker])[1:]
+            others = {
+                name
+                for name, to in targets.items()
+                if name != attacker and to == target
+            }
+            for member in partners:
+                export.emit(f"setChoice({who}, true);")
+                export.emit(f"setChoice({who}, {java_string(member)});")
+                others.remove(member)
+            if not any(not self.has_banding(member) for member in partners):
+                eligible = others - grouped
+            else:
+                eligible = {
+                    member for member in others - grouped if self.has_banding(member)
+                }
+            if eligible:
+                export.emit(f"setChoice({who}, false);")
+            grouped.update(partners)
+
+    def block(
+        self, export: Exporter, p: Position, who: str, card: str, seat: int
+    ) -> None:
+        attackers = self.attackers.get(p.turn, [])
+        if len(attackers) == 1:
+            attacker = attackers[0]
+        elif self.members.get(p.turn):
+            i = export.index + 1
+            following = export.actions[i]
+            if following.get("kind") == "BlockTarget":
+                export.taken.add(id(following))
+                selected = cast(Json, following["pick"])
+            else:
+                selected = next(
+                    (
+                        cast(Json, a["pick"])
+                        for a in export.trace[i].forced
+                        if a["kind"] == "BlockTarget"
+                    ),
+                    {},
+                )
+            attacker = cast(str, selected.get("card"))
+            if not attacker:
+                raise Unsupported("a band member chosen as a block target")
+        else:
+            raise Unsupported(f"a block among {len(attackers)} declared attackers")
+        blocks = self.blocks.setdefault(p.turn, {})
+        blocks[card] = attacker
+        export.emit(
+            f"block({export.turn(p.turn)}, {who}, {java_string(card)}, {java_string(attacker)});"
+        )
+        amount = trample_amount(self.faces, attacker, card)
+        has_exact_pick = any(
+            later.turn == p.turn
+            and later.damage_choice
+            and later.damage_choice["source"] == attacker
+            for later in export.trace[export.index + 1 :]
+        )
+        if amount is not None and not has_exact_pick:
+            if p.turn in self.trampled:
+                raise Unsupported("a trampler blocked by more than one creature")
+            self.trampled.add(p.turn)
+            export.emit(f"setChoiceAmount({export.player(1 - seat)}, {amount});")
+
+    def damage(self, export: Exporter, p: Position, who: str, amount: int) -> None:
+        """XMage takes one list per source. Infer the last creature's share for two-way divisions."""
+        choice = p.damage_choice
+        assert choice is not None
+        source = cast(str, choice["source"])
+        first = cast(str, choice["recipient"])
+        blocks = self.blocks.get(p.turn, {})
+        if (
+            source in self.targets.get(p.turn, {})
+            and sum(
+                bool(re.search(r"\btrample\b", self.faces.oracle.get(card, ""), re.I))
+                for card in self.targets[p.turn]
+            )
+            > 1
+        ):
+            raise Unsupported(
+                "trample assignments that depend on another trampler's choice"
+            )
+        if choice["recipients"] == 1:
+            amounts = [amount]
+        elif choice["recipients"] == 2:
+            if source in blocks:
+                target = blocks[source]
+                group = next(
+                    (
+                        members
+                        for members in self.members.get(p.turn, {}).values()
+                        if target in members
+                    ),
+                    [target],
+                )
+                order = [name for name in self.targets[p.turn] if name in group]
+            else:
+                order = [name for name, target in blocks.items() if target == source]
+            if len(order) != 2 or first not in order:
+                raise Unsupported(
+                    "an exact damage share with ambiguous combat recipients"
+                )
+            other = cast(int, choice["remaining"]) - amount
+            amounts = [amount if name == first else other for name in order]
+        else:
+            raise Unsupported("exact combat damage among more than two creatures")
+        joined = ", ".join(map(str, amounts))
+        export.emit(f"setChoiceAmount({who}, {joined});")

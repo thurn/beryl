@@ -89,6 +89,7 @@ fn resolve_top<L: Layout>(
         | Pending::DeclareAttackers { .. }
         | Pending::DeclareBlockers { .. }
         | Pending::CombatDamage { .. }
+        | Pending::ExactCombatDamage(_)
         | Pending::Casting(_)
         | Pending::StepActions(_)
         | Pending::TurnStart(_)

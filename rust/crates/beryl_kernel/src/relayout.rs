@@ -342,6 +342,26 @@ impl<L: Layout> Relayout for Resolving<L> {
     }
 }
 
+impl<L: Layout> Relayout for crate::pending::DamageDivision<L> {
+    type In<M: Layout> = crate::pending::DamageDivision<M>;
+
+    fn relayout<M: Layout>(&self) -> Self::In<M> {
+        crate::pending::DamageDivision {
+            source: slot(self.source),
+            done: bits(self.done),
+            recipients: bits(self.recipients),
+            remaining: self.remaining,
+            shares: queue(self.shares.as_slice(), |share| {
+                crate::pending::DamageShare {
+                    source: slot(share.source),
+                    target: share.target.map(slot),
+                    amount: share.amount,
+                }
+            }),
+        }
+    }
+}
+
 impl<L: Layout> Relayout for Pending<L> {
     type In<M: Layout> = Pending<M>;
 
@@ -388,6 +408,7 @@ impl<L: Layout> Relayout for Pending<L> {
                     target: slot(choice.target),
                 }),
             },
+            Pending::ExactCombatDamage(dividing) => Pending::ExactCombatDamage(dividing.relayout()),
             &Pending::Casting(c) => Pending::Casting(Casting {
                 player: c.player,
                 kind: c.kind,
@@ -452,7 +473,13 @@ impl<L: Layout> Relayout for Opt<L> {
             Opt::Yes => Opt::Yes,
             Opt::No => Opt::No,
             Opt::Done => Opt::Done,
-            Opt::Attack(s) => Opt::Attack(slot(s)),
+            Opt::Attack {
+                slot: attacker,
+                band,
+            } => Opt::Attack {
+                slot: slot(attacker),
+                band: band.map(slot),
+            },
             Opt::Defender(s) => Opt::Defender(s.map(slot)),
             Opt::Block(s) => Opt::Block(slot(s)),
             Opt::Lethal(s) => Opt::Lethal(slot(s)),

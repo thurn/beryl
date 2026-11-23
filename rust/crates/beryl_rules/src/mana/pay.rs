@@ -545,7 +545,7 @@ pub(crate) fn manual_pay<L: Layout>(
         | Opt::Yes
         | Opt::No
         | Opt::Done
-        | Opt::Attack(_)
+        | Opt::Attack { .. }
         | Opt::Defender(_)
         | Opt::Block(_)
         | Opt::Lethal(_)

@@ -105,6 +105,18 @@ impl Held {
             {
                 Shaped::Mode(Mode::open(purpose, decision))
             }
+            Shape::Declare
+                if d.is_some_and(|d| {
+                    options(d)
+                        .iter()
+                        .any(|opt| matches!(opt, Opt::Attack { band: Some(_), .. }))
+                }) =>
+            {
+                Shaped::Mode(Mode::open(purpose, decision))
+            }
+            Shape::Pick if purpose == Purpose::CombatDamage && record.part == Part::Count => {
+                Shaped::Number(Number::open(purpose, decision)?)
+            }
             Shape::Pick => Shaped::Pick(Pick::open(&table, purpose, decision)?),
             Shape::Order => Shaped::Order(Order::open(&table, decision)?),
             Shape::Split => Shaped::Split(Split::open(&table, decision)?),
@@ -568,7 +580,7 @@ pub(crate) fn named<L: Layout>(d: &Decision<L>, options: &[Opt<L>], on: Subject)
         (
             Opt::Object(slot)
             | Opt::Lethal(slot)
-            | Opt::Attack(slot)
+            | Opt::Attack { slot, band: None }
             | Opt::Block(slot)
             | Opt::Defender(Some(slot)),
             Subject::Object { slot: wanted },
@@ -594,7 +606,7 @@ pub(crate) fn alike<L: Layout>(s: &State<L>, options: &[Opt<L>], on: Subject) ->
     options.iter().position(|&o| {
         matches!(
             o,
-            Opt::Object(slot) | Opt::Lethal(slot) | Opt::Attack(slot) | Opt::Block(slot)
+            Opt::Object(slot) | Opt::Lethal(slot) | Opt::Attack { slot, band: None } | Opt::Block(slot)
                 if interchangeable(s, slot, wanted)
         )
     })

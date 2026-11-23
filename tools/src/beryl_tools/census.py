@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import card_store, forge, paths, vocabulary
+from . import card_store, paths, vocabulary
 
 COVERAGE: Path = paths.REPO / "data" / "census-coverage.json"
 
@@ -136,7 +136,9 @@ def top(r: Report, count: int) -> list[str]:
 
 
 def run(args: argparse.Namespace) -> int:
-    scripts = forge.scripts()
+    from . import oracles
+
+    scripts = oracles.checkout(oracles.FORGE) / "forge-gui" / "res" / "cardsfolder"
     if not scripts.is_dir():
         print(f"no Forge scripts at {scripts}; run `just oracle-setup`")
         return 1

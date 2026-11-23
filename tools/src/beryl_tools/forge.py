@@ -42,13 +42,6 @@ HARNESS_CLASS = "beryl.BerylForgeHarness"
 JsonObject = dict[str, object]
 
 
-def scripts() -> Path:
-    """Forge's card scripts in the cached checkout (read only by the census, census.py)."""
-    from . import oracles
-
-    return oracles.checkout(oracles.FORGE) / "forge-gui" / "res" / "cardsfolder"
-
-
 # Beryl's TurnStep variants as Forge's PhaseType names.
 PHASES: Mapping[str, str] = {
     "Untap": "UNTAP",
@@ -325,6 +318,10 @@ def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject
         return advance_step(action)
     if kind == "Answer":
         pick = cast(JsonObject, action["pick"])
+        if pick["pick"] == "Band":
+            raise Unsupported("declaring an attacking band")
+        if action["kind"] == "DamageDivision" and pick["pick"] == "Number":
+            raise Unsupported("assigning an exact share of combat damage")
         if pick["pick"] == "Plan":
             raise Unsupported("a chosen payment plan")
         if action["kind"] == "Priority" and pick["pick"] == "Card":

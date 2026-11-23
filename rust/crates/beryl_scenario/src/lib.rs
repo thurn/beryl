@@ -93,6 +93,9 @@ pub struct Position {
     pub purpose: Option<Purpose>,
     /// Whether the open decision chooses objects that pay a spell or ability cost.
     pub paying_objects: bool,
+    /// The current exact combat damage assignment, when there is a choice of amounts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub damage_choice: Option<DamageChoice>,
     /// How many actual cards each player has in their graveyard.
     pub graveyard_cards: [usize; 2],
     /// Bottom first.
@@ -139,6 +142,15 @@ pub struct Position {
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde requires a reference
 fn is_main_game(depth: &usize) -> bool {
     *depth == 0
+}
+
+/// The source, the creature being assigned a share, and the damage still to assign.
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct DamageChoice {
+    pub source: &'static str,
+    pub recipient: &'static str,
+    pub remaining: u8,
+    pub recipients: u32,
 }
 
 /// One mana that a permanent or a spell made ([CR 106.4]): "When an effect instructs a player

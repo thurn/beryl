@@ -353,7 +353,7 @@ fn attacks_with_everything_for_lethal() {
             d.kind == DecisionKind::Attacker
         });
         match chosen(&d, c) {
-            Opt::Attack(_) => attackers += 1,
+            Opt::Attack { .. } => attackers += 1,
             _ => break,
         }
         let mut x = Scratch::new();

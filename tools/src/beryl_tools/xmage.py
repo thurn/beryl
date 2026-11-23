@@ -33,6 +33,7 @@ from . import card_facts
 from .card_facts import Cards, Json, Unsupported, as_their_own, payment_position
 from .xmage_payment import Payments
 from .xmage_trace import (
+    Combat,
     FORCED_ASKED,
     FORCED_CHOICES,
     FORCED_COSTS,
@@ -63,7 +64,6 @@ from .xmage_java import (
     spell_cast,
     outcome_lines,
     sideboard_setup_cards,
-    trample_amount,
     turn_face_up_rule,
 )
 
@@ -85,8 +85,7 @@ class Exporter:
         )
         self.active: int = cast(int, setup["active"])
         self.lines: list[str] = export.body
-        # The creatures declared as attackers this turn, for blocks.
-        self.attackers: dict[int, list[str]] = {}
+        self.combat = Combat(faces)
         self.last: tuple[int, int] = (1, ORDER.index(cast(str, setup["step"])))
         # The players who must pass before their next command at an empty stack in this step
         # (`prepare`).
@@ -119,8 +118,6 @@ class Exporter:
         # The `Cards.unless_pays` counterspells on the stack whose payer Beryl has not asked yet, with
         # that payer.
         self.unless_pays: dict[str, str] = {}
-        # The turns in which a trampler was blocked (`xmage_java.trample_amount`).
-        self.trampled: set[int] = set()
         # What the test checks after the game has run, for an outcome assertion.
         self.ending: list[str] = []
 
@@ -623,31 +620,14 @@ class Exporter:
                 self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
             elif source is not None and n < self.most_targets(source):
                 self.targets_short = n
-        elif kind == "Attacker" and card is not None:
-            self.attack(who, card, p)
-        elif kind in ("Attacker", "Blocker") and what == "Done":
-            pass
-        elif kind == "AttackTarget":
-            # One that follows its attacker went with it (`attack`).
-            raise Unsupported(
-                "choosing what a creature put onto the battlefield attacks"
-            )
-        elif kind == "Blocker" and card is not None:
-            attackers = self.attackers.get(p.turn, [])
-            if len(attackers) != 1:
-                raise Unsupported(f"a block among {len(attackers)} declared attackers")
-            self.emit(
-                f"block({self.turn(p.turn)}, {who}, {java_string(card)}, "
-                f"{java_string(attackers[0])});"
-            )
-            # XMage asks a blocked trampler's division, which Beryl makes silently.
-            amount = trample_amount(self.faces, attackers[0], card)
-            if amount is not None:
-                if p.turn in self.trampled:
-                    raise Unsupported("a trampler blocked by more than one creature")
-                self.trampled.add(p.turn)
-                attacking = self.player(1 - cast(int, action["player"]))
-                self.emit(f"setChoiceAmount({attacking}, {amount});")
+        elif kind in (
+            "Attacker",
+            "AttackTarget",
+            "Blocker",
+            "BlockTarget",
+            "DamageDivision",
+        ):
+            self.combat.answer(self, action, p)
         elif kind == "TriggerOrder" and card and self.cards.first_trigger_text(card):
             text = java_string(cast(str, self.cards.first_trigger_text(card)))
             self.emit(f"setChoice({who}, {text});")
@@ -729,22 +709,6 @@ class Exporter:
             "ChooseUpTo",
         )
         return "addTarget" if targets else "setChoice"
-
-    def attack(self, who: str, card: str, p: Position) -> None:
-        """Declares an attacker, at what the AttackTarget answer after it chooses, if any."""
-        turn = self.turn(p.turn)
-        self.attackers.setdefault(p.turn, []).append(card)
-        target = None
-        following = self.actions[self.index + 1 : self.index + 2]
-        if following and following[0].get("kind") == "AttackTarget":
-            target = cast(Json, following[0]["pick"])
-            self.taken.add(id(following[0]))
-        if target is None or target["pick"] == "DefendingPlayer":
-            defender = "playerB" if who == "playerA" else "playerA"
-            self.emit(f"attack({turn}, {who}, {java_string(card)}, {defender});")
-        else:
-            planeswalker = java_string(cast(str, target["card"]))
-            self.emit(f"attack({turn}, {who}, {java_string(card)}, {planeswalker});")
 
     def check(self, assertion: Json, p: Position) -> None:
         what = cast(str, assertion["assert"])

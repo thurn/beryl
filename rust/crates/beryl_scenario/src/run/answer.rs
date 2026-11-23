@@ -99,6 +99,15 @@ pub(super) fn pick_in<L: Layout>(
                     .is_some_and(|slot| s.name(t, slot) == card)
             });
         }
+        Pick::Band { card, first } => {
+            return option_index(d, |o| {
+                matches!(o, Opt::Attack { slot, band: Some(leader) }
+                if s.name(t, slot) == card
+                    && first.map_or(slot == leader, |name| {
+                        slot != leader && s.name(t, leader) == name
+                    }))
+            });
+        }
         Pick::Cast { card, face, costs } => {
             return option_index(d, |o| {
                 matches!(o, Opt::Cast { slot, face: f, costs: m }

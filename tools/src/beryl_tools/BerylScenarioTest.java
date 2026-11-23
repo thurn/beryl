@@ -22,6 +22,7 @@ import mage.abilities.Ability;
 import mage.abilities.TriggeredAbility;
 import mage.abilities.common.SagaAbility;
 import mage.abilities.keyword.ChangelingAbility;
+import mage.abilities.keyword.BandingAbility;
 import mage.abilities.keyword.DoubleStrikeAbility;
 import mage.abilities.keyword.DelveAbility;
 import mage.abilities.keyword.FirstStrikeAbility;
@@ -605,6 +606,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
     static {
         SNAPSHOT_KEYWORDS.put("FIRST_STRIKE", FirstStrikeAbility.class);
         SNAPSHOT_KEYWORDS.put("DOUBLE_STRIKE", DoubleStrikeAbility.class);
+        SNAPSHOT_KEYWORDS.put("BANDING", BandingAbility.class);
         SNAPSHOT_KEYWORDS.put("FLYING", FlyingAbility.class);
         SNAPSHOT_KEYWORDS.put("REACH", ReachAbility.class);
         SNAPSHOT_KEYWORDS.put("VIGILANCE", VigilanceAbility.class);
