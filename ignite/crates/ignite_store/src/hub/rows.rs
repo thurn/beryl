@@ -404,7 +404,10 @@ crate::tables! {
     ClassRate = "class_rates" { day: String, class: String, rate: Option<f64> }
 
     /// `kind` is the export table the row came from, NULL for a header or a findings report.
-    Metric = "metrics" { machine: String, source: String, data: String, at: String, kind: Option<String> }
+    Metric = "metrics" {
+        machine: String, source: String, data: String, at: String, kind: Option<String>,
+        ingest_id: Option<i64>,
+    }
 
     /// One ticket window's time and dollar segments, as a machine posted them.
     TicketSpend = "ticket_spend" { machine: String, window: String, ticket: String, start: String, end: String, data: String, at: String }

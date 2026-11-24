@@ -8,6 +8,7 @@ pub mod check_state;
 pub mod checks;
 pub mod cycles;
 pub mod edges;
+pub mod efficiency;
 pub mod emergency;
 pub mod feed;
 pub mod filer_deps;
@@ -319,6 +320,11 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 53,
         sql: "ALTER TABLE regressions ADD COLUMN landing_attribution TEXT;",
         code: None,
+    },
+    Migration {
+        version: 54,
+        sql: include_str!("metrics_ingest.sql"),
+        code: Some(metrics::number_existing_rows),
     },
 ];
 

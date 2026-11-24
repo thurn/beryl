@@ -70,3 +70,36 @@ fn the_kind_migration_drops_rebuilt_rows_and_fills_kinds() {
     kinds.sort();
     assert_eq!(kinds, vec![None, Some("window_dollars".to_owned())]);
 }
+
+#[test]
+fn the_ingestion_migration_preserves_rows_and_never_reuses_a_cursor() {
+    let mut conn = Connection::open_in_memory().unwrap();
+    let migrations = crate::hub::MIGRATIONS;
+    let before = migrations.iter().position(|m| m.version == 54).unwrap();
+    migrate::apply(&mut conn, &migrations[..before]).unwrap();
+    let at = "2026-11-24T00:00:00.000Z";
+    let old = r#"{"table":"requests","row":{}}"#;
+    let header = r#"{"export":1,"host":"host","schema":42}"#;
+    insert(&conn, old, at);
+    insert(&conn, header, at);
+    migrate::apply(&mut conn, migrations).unwrap();
+
+    let page = crate::hub::efficiency::metrics(&mut conn, 0, 10).unwrap();
+    assert_eq!(page.rows.len(), 2);
+    assert_eq!(page.rows[0].data, header);
+    assert_eq!(page.rows[1].data, old);
+    assert_eq!(page.rows[1].at, at);
+    assert_eq!(page.headers[0].data, header);
+    let last_id = page.last_id;
+
+    let now: Timestamp = "2026-12-31T00:00:00.000Z".parse().unwrap();
+    assert_eq!(delete_expired(&conn, now).unwrap(), 2);
+    assert_eq!(count(&conn), 0);
+    // An older release can open the migrated database and insert with its old columns.
+    migrate::apply(&mut conn, &migrations[..before]).unwrap();
+    insert(&conn, old, at);
+    let page = crate::hub::efficiency::metrics(&mut conn, last_id, 10).unwrap();
+    assert!(page.last_id > last_id);
+    assert_eq!(page.rows.len(), 1);
+    assert_eq!(page.rows[0].data, old);
+}

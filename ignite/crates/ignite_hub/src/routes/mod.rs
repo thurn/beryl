@@ -6,6 +6,7 @@ pub mod check_state;
 pub mod checks;
 pub mod commands;
 pub mod dispatch;
+pub mod efficiency;
 pub mod feed;
 pub mod fleet;
 pub mod listings;
