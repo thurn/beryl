@@ -49,7 +49,7 @@ REFLOG: list[str] = [
 MASTER = "refs/heads/master"
 # Separates the two commands' output in one snapshot.
 SEPARATOR = b"\x1d"
-CARDS = "rust/cards/"
+CARDS = ("engine/cards/", "rust/cards/")
 
 
 def is_card(path: str) -> bool:

@@ -1,0 +1,566 @@
+//! The text commands of `just client` (docs/beryl-3d.md, "The agent interface"), run as the `client`
+//! program runs them: every output can be pasted into the next command, and a wrong command
+//! line exits with status 2 and names what would work.
+
+use app_client::driver::Moment;
+use beryl_inspect::cli::line::Line;
+use beryl_inspect::cli::options::{Options, Spec};
+use beryl_inspect::cli::{Ran, main};
+use beryl_inspect::pages;
+use beryl_inspect::scene::Scene;
+use beryl_protocol::protocol::Side;
+use game_hud::labels::GAME_LABELS;
+use kit_base::data::profiles::SizeClass;
+use kit_ui::input::{Insets, Size};
+use serde_json::Value;
+
+const RECORDING: &str = "verbs-zones";
+/// A recording with no fault from either seat, for `check`, which exits with 1 on a fault.
+const CLEAN: &str = "pay-default";
+
+fn run(line: &[&str]) -> Ran {
+    let args: Vec<String> = line.iter().map(|&arg| arg.to_owned()).collect();
+    main(&args)
+}
+
+/// Runs a command line that must succeed, and returns what it printed.
+fn ok(line: &[&str]) -> String {
+    let ran = run(line);
+    assert_eq!(
+        ran.code, 0,
+        "{line:?} failed:\n{}{}",
+        ran.stdout, ran.stderr
+    );
+    ran.stdout
+}
+
+/// Runs a command line that must be refused, and returns its message.
+fn refused(line: &[&str]) -> String {
+    let ran = run(line);
+    assert_eq!(ran.code, 2, "{line:?} was not refused:\n{}", ran.stdout);
+    assert!(ran.stdout.is_empty(), "{}", ran.stdout);
+    ran.stderr
+}
+
+#[test]
+fn every_tree_line_after_the_header_follows_the_grammar() {
+    for at in ["0ms", "1500ms", "end"] {
+        let printed = ok(&["tree", RECORDING, "--at", at, "--full"]);
+        let mut lines = printed.lines();
+        let command = lines.next().unwrap();
+        assert!(
+            command.starts_with("just client tree verbs-zones --seat you"),
+            "{command}"
+        );
+        let header = lines.next().unwrap();
+        assert!(header.starts_with("view "), "{header}");
+        let mut elements = 0;
+        for line in lines {
+            match Line::parse_with_labels(line, &GAME_LABELS) {
+                Ok(Line::Element { .. }) => elements += 1,
+                Ok(_) => {}
+                Err(why) => panic!("{why}"),
+            }
+        }
+        assert!(elements > 0, "{printed}");
+    }
+    // A cut place prints a cut line, which the grammar reads too.
+    let cut = ok(&["tree", RECORDING, "--at", "1500ms"]);
+    assert!(
+        cut.lines().skip(2).any(|line| matches!(
+            Line::parse_with_labels(line, &GAME_LABELS),
+            Ok(Line::Cut { .. })
+        )),
+        "{cut}"
+    );
+}
+
+#[test]
+fn every_moment_info_prints_is_accepted_by_at() {
+    let printed = ok(&["info", RECORDING, "--full"]);
+    let moments: Vec<&str> = printed
+        .lines()
+        .skip(2)
+        .take_while(|line| !line.starts_with("Each line"))
+        .map(|line| line.split_whitespace().next().unwrap())
+        .collect();
+    assert!(moments.iter().any(|m| m.starts_with("step:")), "{printed}");
+    assert!(
+        moments.iter().any(|m| m.starts_with("prompt:")),
+        "{printed}"
+    );
+    let size = Size {
+        width: 1600.0,
+        height: 900.0,
+    };
+    let mut page = pages::page(RECORDING, Side::You, SizeClass::Regular, size).unwrap();
+    let end = page.moments().last().unwrap().1.0;
+    for moment in &moments {
+        let parsed: Moment = moment.parse().unwrap_or_else(|e| panic!("{moment}: {e}"));
+        let time = page
+            .time_of(&parsed)
+            .unwrap_or_else(|e| panic!("{moment}: {e}"));
+        assert!(time <= end, "{moment} lies past the end");
+    }
+    // And through the command itself, for one of each kind.
+    for kind in ["start", "view:", "step:", "prompt:", "end"] {
+        let moment = moments.iter().find(|m| m.starts_with(kind)).unwrap();
+        ok(&["tree", RECORDING, "--at", moment]);
+    }
+}
+
+#[test]
+fn an_unknown_recording_exits_2_and_lists_the_nearest_names() {
+    let message = refused(&["tree", "verbs-zone", "--at", "1500ms"]);
+    assert!(
+        message.contains("no recording is named 'verbs-zone'"),
+        "{message}"
+    );
+    let listed: Vec<&str> = message.lines().filter(|l| l.starts_with("  ")).collect();
+    assert_eq!(listed.len(), 5, "{message}");
+    assert_eq!(listed[0].trim(), "verbs-zones", "{message}");
+}
+
+#[test]
+fn wrong_command_lines_exit_2_and_name_what_would_work() {
+    let past = refused(&["tree", RECORDING, "--at", "99s"]);
+    assert!(
+        past.contains("past the end") && past.contains("just client info"),
+        "{past}"
+    );
+    let two = refused(&[
+        "tree",
+        RECORDING,
+        "--at",
+        "1500ms",
+        "--do",
+        "hover card \"Plains\"",
+    ]);
+    assert!(
+        two.contains("elements match") && two.contains("Narrow it with an #id"),
+        "{two}"
+    );
+    let command = refused(&["trea", RECORDING]);
+    assert!(command.contains("the nearest are tree"), "{command}");
+    let duration = refused(&["tree", RECORDING, "--at", "15x0ms"]);
+    assert!(duration.contains("as in 850ms or 1.25s"), "{duration}");
+    let option = refused(&["tree", RECORDING, "--whithin", "hand.yours"]);
+    assert!(option.contains("--within"), "{option}");
+}
+
+#[test]
+fn a_diff_of_a_moment_with_itself_prints_nothing() {
+    let printed = ok(&["diff", RECORDING, "--from", "1500ms", "--to", "1500ms"]);
+    assert_eq!(printed.lines().count(), 1, "{printed}");
+    let moved = ok(&["diff", RECORDING, "--from", "800ms", "--to", "1500ms"]);
+    assert!(moved.lines().count() > 1, "{moved}");
+    for line in moved.lines().skip(1) {
+        let element = line.rsplit_once("  (").unwrap().0;
+        assert!(
+            matches!(
+                Line::parse_with_labels(element, &GAME_LABELS),
+                Ok(Line::Element { .. })
+            ),
+            "{line}"
+        );
+    }
+}
+
+#[test]
+fn records_to_a_later_moment_print_one_line_a_frame_60_to_the_second() {
+    let printed = ok(&[
+        "tree",
+        RECORDING,
+        "--at",
+        "1400ms",
+        "--to",
+        "1450ms",
+        "--records",
+    ]);
+    let frames: Vec<Value> = (printed.lines())
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let times: Vec<f64> = (frames.iter())
+        .map(|frame| frame["t_ms"].as_f64().unwrap())
+        .collect();
+    assert_eq!(times, [1400.0, 1416.667, 1433.333, 1450.0], "{printed}");
+    for (at, frame) in frames.iter().enumerate() {
+        assert_eq!(frame["frame"], at, "{frame}");
+        assert!(!frame["elements"].as_array().unwrap().is_empty(), "{frame}");
+    }
+    let back = refused(&[
+        "tree",
+        RECORDING,
+        "--at",
+        "1450ms",
+        "--to",
+        "1400ms",
+        "--records",
+    ]);
+    assert!(back.contains("before --at"), "{back}");
+    let bare = refused(&["tree", RECORDING, "--at", "1400ms", "--to", "1450ms"]);
+    assert!(bare.contains("give --records"), "{bare}");
+}
+
+/// While the lands tap for the spell, a glow plays on each of them, which `--records` lists
+/// after the elements as an element of role `effect`, named by the effect and with the land's
+/// slot as its object.
+#[test]
+fn records_list_each_effect_under_way_as_an_element() {
+    let printed = ok(&["tree", RECORDING, "--at", "1000ms", "--records"]);
+    let frame: Value = serde_json::from_str(printed.trim()).unwrap();
+    let elements = frame["elements"].as_array().unwrap();
+    let glows: Vec<&Value> = (elements.iter())
+        .filter(|element| element["role"] == "effect" && element["name"] == "glow")
+        .collect();
+    assert!(!glows.is_empty(), "{printed}");
+    let first = elements
+        .iter()
+        .position(|element| element["role"] == "effect");
+    assert!(
+        elements[first.unwrap()..]
+            .iter()
+            .all(|element| element["role"] == "effect"),
+        "effects come after every element"
+    );
+    for glow in glows {
+        assert!(glow["object"].is_u64(), "{glow}");
+        let key = glow["key"].as_str().unwrap();
+        assert_eq!(key, format!("effect \"glow\" on {}", glow["object"]));
+        let size = &glow["box"];
+        assert!(size[2].as_f64().unwrap() > 0.0 && size[3].as_f64().unwrap() > 0.0);
+        let opacity = glow["style"]["opacity"].as_f64().unwrap();
+        assert!(opacity > 0.0 && opacity <= 1.0, "{glow}");
+    }
+    let views_given = frame["views_given_ms"].as_array().unwrap();
+    assert_eq!(views_given.len(), frame["view"].as_u64().unwrap() as usize);
+}
+
+#[test]
+fn json_output_parses() {
+    for line in [
+        &["list", RECORDING][..],
+        &["info", RECORDING],
+        &["tree", RECORDING, "--at", "1500ms"],
+        &["diff", RECORDING, "--from", "800ms", "--to", "1500ms"],
+        &["check", CLEAN],
+    ] {
+        let mut line = line.to_vec();
+        line.push("--json");
+        let printed = ok(&line);
+        let value: Value =
+            serde_json::from_str(&printed).unwrap_or_else(|e| panic!("{line:?}: {e}\n{printed}"));
+        assert!(
+            value["command"].as_str().unwrap().contains("--json"),
+            "{value}"
+        );
+    }
+}
+
+#[test]
+fn hovering_a_tree_line_changes_that_elements_states() {
+    let printed = ok(&["tree", RECORDING, "--at", "prompt:2", "--role", "button"]);
+    let button = printed
+        .lines()
+        .find(|line| line.trim_start().starts_with("button "))
+        .unwrap()
+        .trim();
+    assert!(!button.contains("hovered"), "{button}");
+    let hover = format!("hover {button}");
+    let after = ok(&[
+        "tree", RECORDING, "--at", "prompt:2", "--role", "button", "--do", &hover,
+    ]);
+    let locator = button.split(" #").next().unwrap();
+    let hovered = after
+        .lines()
+        .find(|line| line.trim_start().starts_with(locator))
+        .unwrap();
+    assert!(hovered.contains(" hovered"), "{after}");
+    // The printed command carries the action, so it prints the same tree again.
+    assert!(
+        after
+            .lines()
+            .next()
+            .unwrap()
+            .contains(" --do 'hover button "),
+        "{after}"
+    );
+}
+
+#[test]
+fn check_runs_every_tick_and_closes_with_one_line() {
+    let printed = ok(&["check", CLEAN]);
+    let last = printed.lines().last().unwrap();
+    assert!(
+        last.starts_with("1 test, ") && last.contains(" faults in "),
+        "{printed}"
+    );
+    let refused = refused(&["check", RECORDING, "--do", "still"]);
+    assert!(refused.contains("tree or diff"), "{refused}");
+}
+
+#[test]
+fn an_explicit_shipped_layout_also_controls_placement_at_a_conflicting_size() {
+    let mut automatic = table_page(&["--size", "800x600"]);
+    let mut explicit = table_page(&["--layout", "phone", "--size", "800x600"]);
+    let profile = explicit.data().profiles.for_size(explicit.size());
+    assert_eq!(profile.name, "phone");
+    assert!((profile.checks.target_points - 44.0).abs() < f32::EPSILON);
+    let insets = profile.test_safe_area();
+    assert_ne!(insets, Insets::default());
+    assert!(explicit.inputs().iter().any(|input| matches!(
+        input,
+        app_client::Input::Device(kit_ui::input::Input::Surface { safe_area, .. })
+            if *safe_area == insets
+    )));
+    assert_ne!(automatic.tree(), explicit.tree());
+}
+
+#[test]
+fn a_compact_size_alone_uses_the_same_insets_and_checks_as_its_matrix_window() {
+    let sized = check_json(&["screen/table-left", "--size", "375x647"]);
+    let matrix = check_json(&["client:screen/table-left/you/375x647"]);
+    assert_eq!(sized["faults"], matrix["faults"]);
+    let mut automatic = table_page(&["--size", "375x647"]);
+    let mut inset = table_page(&["--layout", "phone", "--size", "375x647"]);
+    assert_eq!(automatic.tree(), inset.tree());
+}
+
+#[test]
+fn a_preview_fault_reopens_the_preview_at_the_checked_scale() {
+    let usual = check_json(&["screen/table-left", "--profile", "wide-compact"]);
+    assert!(
+        usual["command"]
+            .as_str()
+            .unwrap()
+            .contains("--profile wide-compact --size 759x393"),
+        "{usual}"
+    );
+    // The usual window fits the connection notice. A shorter window overlaps the notice
+    // with the life totals and lets this test exercise the command printed for a fault.
+    let checked = check_json(&[
+        "screen/table-left",
+        "--layout",
+        "desktop",
+        "--profile",
+        "wide-compact",
+        "--size",
+        "120x92",
+        "--scale",
+        "2",
+    ]);
+    let faults = checked["faults"].as_array().unwrap();
+    let show = faults
+        .iter()
+        .find(|fault| fault["rule"] == "text-overlap")
+        .unwrap_or_else(|| panic!("expected an overlap: {checked}"))["show"]
+        .as_str()
+        .unwrap();
+    assert!(show.contains("--profile wide-compact"), "{show}");
+    assert!(show.contains("--size 120x92 --scale 2"), "{show}");
+    assert!(!show.contains("--layout"), "{show}");
+    ok(&show.split_whitespace().skip(2).collect::<Vec<_>>());
+}
+
+fn table_page(args: &[&str]) -> app_client::driver::Page {
+    let args = std::iter::once("screen/table-left")
+        .chain(args.iter().copied())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    let options = Options::parse(
+        "check",
+        &args,
+        Spec {
+            recording: true,
+            ..Spec::default()
+        },
+    )
+    .unwrap();
+    let Scene::Recording(page) = beryl_inspect::cli::open(&options).unwrap() else {
+        panic!("the table screen must open as a recording");
+    };
+    *page
+}
+
+fn check_json(args: &[&str]) -> Value {
+    let ran = run(&[&["check", "--json"][..], args].concat());
+    assert!(ran.code <= 1, "{}", ran.stderr);
+    serde_json::from_str(&ran.stdout).unwrap()
+}
+
+#[test]
+fn every_time_info_prints_is_accepted_by_at() {
+    // Times are printed rounded down, so even the last, the recording's end, lies within it.
+    let printed = ok(&["info", RECORDING, "--full"]);
+    let times: Vec<&str> = printed
+        .lines()
+        .skip(2)
+        .take_while(|line| !line.starts_with("Each line"))
+        .map(|line| line.split_whitespace().nth(1).unwrap())
+        .collect();
+    let end = printed
+        .lines()
+        .nth(1)
+        .and_then(|summary| summary.rsplit_once("ends at "))
+        .unwrap()
+        .1;
+    assert_eq!(times.last(), Some(&end), "{printed}");
+    ok(&["tree", RECORDING, "--at", end]);
+}
+
+#[test]
+fn info_names_the_card_each_moving_step_moves() {
+    let printed = ok(&["info", RECORDING]);
+    let named = printed
+        .lines()
+        .filter(|line| line.starts_with("step:") && line.contains(" card "))
+        .count();
+    assert!(named > 0, "{printed}");
+}
+
+#[test]
+fn list_cuts_its_output_unless_full() {
+    let cut = ok(&["list"]);
+    assert!(cut.lines().count() <= 100, "{} lines", cut.lines().count());
+    assert!(cut.contains("just client list --full"), "{cut}");
+    let full = ok(&["list", "--full"]);
+    assert!(full.lines().count() > 100, "{full}");
+}
+
+#[test]
+fn a_misspelt_prefix_of_a_long_name_finds_that_name() {
+    // Missing a letter of a long name's start finds that name, not the short names a few
+    // letters away from the whole text.
+    let names = [
+        "converter-exiled",
+        "table-piles",
+        "winds-of-abandon/exiles-a-token-before-its-controller-searches",
+    ];
+    let near = beryl_inspect::cli::options::nearest("winds-of-abandn/exiles", &names);
+    assert_eq!(near[0], names[2], "{near:?}");
+}
+
+#[test]
+fn an_unknown_action_says_so_once() {
+    let message = refused(&["tree", RECORDING, "--do", "hover:card"]);
+    assert_eq!(message.matches("is not an action").count(), 1, "{message}");
+    assert!(message.contains("The actions are press"), "{message}");
+}
+
+const TIMELINE_KEYS: [&str; 11] = [
+    "recording",
+    "seat",
+    "view",
+    "beat",
+    "step",
+    "verb",
+    "case",
+    "start",
+    "end",
+    "effects",
+    "sounds",
+];
+
+/// The JSON lines `timeline` printed after its first line, the command that prints them again.
+fn timeline_lines(printed: &str) -> Vec<&str> {
+    printed.lines().skip(1).collect()
+}
+
+/// The session's steps print one line each, as `info` lists them. A line with `"own":true` is
+/// a step the client made itself for a prompt, which `info` does not list.
+#[test]
+fn timeline_prints_one_line_for_each_step_info_lists() {
+    let info = ok(&["info", RECORDING]);
+    let steps: usize = info
+        .lines()
+        .nth(1)
+        .and_then(|summary| summary.split(" prompts, ").nth(1))
+        .and_then(|rest| rest.split(' ').next())
+        .and_then(|count| count.parse().ok())
+        .unwrap_or_else(|| panic!("{info}"));
+    let printed = ok(&["timeline", RECORDING]);
+    let session = timeline_lines(&printed)
+        .into_iter()
+        .filter(|line| !line.ends_with(",\"own\":true}"));
+    assert_eq!(session.count(), steps, "{printed}");
+}
+
+#[test]
+fn every_timeline_line_is_json_with_its_keys_in_order() {
+    let printed = ok(&["timeline", RECORDING, "--seat", "opponent"]);
+    assert!(
+        printed.starts_with("just client timeline verbs-zones --seat opponent"),
+        "{printed}"
+    );
+    for line in timeline_lines(&printed) {
+        let value: Value = serde_json::from_str(line).unwrap_or_else(|e| panic!("{line}: {e}"));
+        assert_eq!(value["seat"], "opponent", "{line}");
+        // The line's keys are in the order given, which parsing into a map would hide.
+        let mut at = 0;
+        for key in TIMELINE_KEYS {
+            let found = line[at..]
+                .find(&format!("\"{key}\":"))
+                .unwrap_or_else(|| panic!("no {key} after byte {at} of {line}"));
+            at += found;
+        }
+        assert!(value["end"].as_f64() >= value["start"].as_f64(), "{line}");
+        assert!(value["effects"].is_array(), "{line}");
+        assert!(value["sounds"].is_array(), "{line}");
+    }
+}
+
+#[test]
+fn two_timeline_runs_print_identical_bytes() {
+    assert_eq!(ok(&["timeline", RECORDING]), ok(&["timeline", RECORDING]),);
+}
+
+#[test]
+fn export_writes_the_messages_find_gives_after_the_own_timings() {
+    use beryl_protocol::ipc::{FixtureMessage, STAGE_TIMINGS};
+    let directory = std::env::temp_dir().join(format!("client-export-{}", std::process::id()));
+    let printed = ok(&["export", directory.to_str().unwrap()]);
+    let file = directory.join(format!("{RECORDING}.you.json"));
+    let read: Vec<FixtureMessage> = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    let found = beryl_inspect::recordings::find(RECORDING, beryl_protocol::Seat::P0).unwrap();
+    // The web interface's timeline times the steps a prompt makes itself by this response.
+    let timings = FixtureMessage::response(STAGE_TIMINGS, &beryl_protocol::script::own_timings());
+    assert_eq!(read, [&[timings][..], &found].concat());
+    assert!(printed.contains(" files"), "{printed}");
+    std::fs::remove_dir_all(&directory).unwrap();
+}
+
+#[test]
+fn timeline_names_the_nearest_recordings_for_a_wrong_name() {
+    let message = refused(&["timeline", "verbs-zone"]);
+    assert!(message.contains("verbs-zones"), "{message}");
+}
+
+#[test]
+fn default_interface_run_lists_the_corpus_and_standalone_scenes() {
+    use std::collections::BTreeSet;
+
+    let corpus = beryl_test_files::read_to_string("data/client/corpus.txt").unwrap();
+    let default = ok(&["test", "--list"]);
+    let all = ok(&["test", "--all", "--list"]);
+    let names = |text: &str| {
+        text.lines()
+            .map(|test| {
+                test.trim_start_matches("client:")
+                    .rsplitn(3, '/')
+                    .last()
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect::<BTreeSet<_>>()
+    };
+    let selected = names(&default);
+    let available = names(&all);
+    assert!(selected.is_subset(&available));
+    assert!(corpus.lines().all(|name| selected.contains(name)));
+    assert!(selected.contains(RECORDING));
+    assert!(selected.iter().any(|name| name.starts_with("stress-")));
+    if let Some(omitted) = available.difference(&selected).next() {
+        let prefix_listing = ok(&["test", omitted, "--list"]);
+        assert!(names(&prefix_listing).contains(omitted));
+    }
+}

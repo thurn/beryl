@@ -4,7 +4,7 @@
 Run from the repository's root as `python -m beryl_tools.ignite.script <verb> <family> ...`:
 
 - `list <family> [card...]` prints one JSON line per check: `{"check": "script:<card>/<moment>/
-  <seat>", "inputs": ["rust/cards/<crate>/<set>/<card>.rs"]}`. The inputs are the paths that
+  <seat>", "inputs": ["engine/cards/<crate>/<set>/<card>.rs"]}`. The inputs are the paths that
   check reads in addition to the family's own `inputs` in the manifest. For `script`, naming
   cards (by name or slug; `fixtures` for the fixture recordings) lists only theirs.
 - `run <family> <check>...` runs the checks named and writes one JSON line per check that reached
@@ -36,8 +36,8 @@ from pathlib import Path
 from typing import Any
 
 RESULTS_ENV = "IGNITE_RESULTS"
-CARDS = "rust/cards"
-FIXTURES = "data/beryl3d/fixtures.json"
+CARDS = "engine/cards"
+FIXTURES = "data/client/fixtures.json"
 # The seats of a card's moment, as `beryl_cli` names them.
 SEATS = ("yours", "theirs")
 # The longest message a result carries.
@@ -93,7 +93,7 @@ CARD_REFERENCE: re.Pattern[str] = re.compile(
 )
 
 # Where a card file's scenarios start: the generated card list reads them from
-# `pub mod scenarios {` (`has_scenarios` in rust/crates/beryl_card_build/src/generate.rs).
+# `pub mod scenarios {` (`has_scenarios` in engine/crates/beryl_card_build/src/generate.rs).
 SCENARIOS: re.Pattern[str] = re.compile(r"^\s*pub\s+mod\s+scenarios\s*\{", re.MULTILINE)
 
 
@@ -155,7 +155,7 @@ def used_files(root: Path, own: str, files: dict[str, str]) -> list[str]:
 
 def binary(root: Path) -> Path:
     """The debug `beryl_cli` the `cli` product builds."""
-    target = Path(os.environ.get("CARGO_TARGET_DIR", root / "rust" / "target"))
+    target = Path(os.environ.get("CARGO_TARGET_DIR", root / "engine" / "target"))
     return target / "debug" / ("beryl_cli.exe" if os.name == "nt" else "beryl_cli")
 
 
@@ -167,7 +167,7 @@ def moments(root: Path, cards: Sequence[str]) -> list[tuple[str, str]]:
     failure to run raises, which leaves the family `incomplete`."""
     done = subprocess.run(
         [str(binary(root)), "specs-check", *cards],
-        cwd=root / "rust",
+        cwd=root / "engine",
         capture_output=True,
         text=True,
     )
@@ -260,7 +260,7 @@ def run_script(names: Sequence[str], root: Path, results: Path) -> None:
                 str(root / FIXTURES),
                 *[n.removeprefix("script:") for n in names],
             ],
-            cwd=root / "rust",
+            cwd=root / "engine",
             env={**os.environ, "BERYL_CHECK_RESULTS": str(scratch_results)},
             stdin=subprocess.DEVNULL,
             capture_output=True,

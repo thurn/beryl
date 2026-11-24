@@ -287,9 +287,9 @@ def ignite_ticket(*args: str) -> Any:
         raise TicketError(f"ignite ticket {args[0]}: not JSON: {error}") from error
 
 
-def beryl3d_epic(report: Report, scratch: Path) -> str | None:
-    """Find or create the epic for a Beryl 3D launch."""
-    run = report.fields.get("beryl3d_run", "")
+def client_epic(report: Report, scratch: Path) -> str | None:
+    """Find or create the epic for a the client launch."""
+    run = report.fields.get("client_run") or report.fields.get("beryl3d_run", "")
     if not re.fullmatch(r"[0-9a-f]{32}", run):
         return None
     label = f"{RUN_LABEL}:{run}"
@@ -298,7 +298,7 @@ def beryl3d_epic(report: Report, scratch: Path) -> str | None:
         return str(epics[0]["id"])
 
     date = report.fields.get("created", "")[:16].replace("T", " ")
-    title = f"Beryl 3D bug reports ({date} UTC)" if date else "Beryl 3D bug reports"
+    title = f"Client bug reports ({date} UTC)" if date else "Client bug reports"
     batch = scratch / "epic.json"
     # Filings from different report folders can reach Ignite at the same time. The
     # request key makes both creates return the same epic if neither saw it in the list.
@@ -314,7 +314,7 @@ def beryl3d_epic(report: Report, scratch: Path) -> str | None:
                             "type": "epic",
                             "labels": [label],
                             "allocation": 0,
-                            "body": "Bug reports submitted during one launch of Beryl 3D.",
+                            "body": "Bug reports submitted during one launch of the client.",
                         },
                     }
                 ]
@@ -341,7 +341,7 @@ def file_bead(report: Report) -> str:
         scratch = Path(folder)
         body = scratch / "body.md"
         body.write_text(bead_description(report), encoding="utf-8")
-        epic = beryl3d_epic(report, scratch)
+        epic = client_epic(report, scratch)
         created = ignite_ticket(
             "create",
             report.title or report.id,

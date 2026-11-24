@@ -182,7 +182,7 @@ def lines(
 
 def binary(repo: Path) -> Path:
     """The `beryl_scenario` binary the `scenario-dump` build product makes."""
-    return system.exe(repo / "rust" / "target" / "debug" / "beryl_scenario")
+    return system.exe(repo / "engine" / "target" / "debug" / "beryl_scenario")
 
 
 def dump(

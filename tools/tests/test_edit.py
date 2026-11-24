@@ -172,7 +172,7 @@ def test_format_rule_matches_and_expands_files() -> None:
     )
     assert md.matches("AGENTS.md")
     assert md.matches("docs/ignite.md")
-    assert not md.matches(".agents/skills/b3d/SKILL.md")
+    assert not md.matches(".agents/skills/client/SKILL.md")
     assert not md.matches("docs/ignite.txt")
 
     ui = edit.FormatRule(
@@ -199,7 +199,7 @@ def test_commit_subject_defaults_and_validation() -> None:
     )
     assert edit.default_subject("ignite.toml") == "chore: edit ignite.toml"
 
-    long_path = "rust/crates/very_long_crate_name/src/deeply/nested/module/file.rs"
+    long_path = "engine/crates/very_long_crate_name/src/deeply/nested/module/file.rs"
     assert edit.default_subject(long_path) == "chore: edit file.rs"
     assert len(edit.default_subject(long_path)) <= 60
 

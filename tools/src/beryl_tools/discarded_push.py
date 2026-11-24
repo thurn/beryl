@@ -20,7 +20,7 @@ from pathlib import Path
 from . import paths, two_player
 
 # The kernel beside where the rules live: its mutators fill the state's lists.
-SCANNED: tuple[str, ...] = ("rust/crates/beryl_kernel/src", *two_player.RULES)
+SCANNED: tuple[str, ...] = ("engine/crates/beryl_kernel/src", *two_player.RULES)
 # A push whose result is bound to nothing or turned into an option nobody reads. The
 # statement may run over several lines: a `;` ends it. A match arm's `_ =>` binds nothing.
 DISCARDED: re.Pattern[str] = re.compile(

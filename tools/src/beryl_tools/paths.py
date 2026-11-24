@@ -12,7 +12,7 @@ REPO: Path = Path(__file__).resolve().parents[3]
 
 # `by`, run by a `by` command as a child with the same interpreter.
 BY: list[str] = [sys.executable, "-m", "beryl_tools.cli"]
-RUST: Path = REPO / "rust"
+ENGINE: Path = REPO / "engine"
 TOOLS: Path = REPO / "tools"
 
 # Environment variables that mark a run as an agent's: it must stay windowless and silent.
@@ -88,14 +88,14 @@ def worktree_names() -> list[str]:
 # check, clippy printed "Blocking waiting for file lock on build directory" while the browser,
 # script and oracle steps built `beryl_cli` ([`CLI_BUILD`]), and from 2026-11-14 to 16 it was killed at
 # the 180 s hard limit in 102 of 160 runs. In its own directory it runs beside the build.
-CLIPPY_TARGET: Path = RUST / "target" / "clippy"
+CLIPPY_TARGET: Path = ENGINE / "target" / "clippy"
 
 
 # The target directory of the binaries `by` runs while other work builds: on Windows, one of
 # their own. Windows replaces no running binary, so a Rust test build would fail to relink
 # a binary a browser check is running, and the other way round.
 RUN_TARGET: Path = (
-    RUST / "target" / "run" if sys.platform == "win32" else RUST / "target"
+    ENGINE / "target" / "run" if sys.platform == "win32" else ENGINE / "target"
 )
 
 

@@ -174,7 +174,7 @@ def proper_ancestor(head: str) -> Callable[[str], bool]:
 
 
 def rust_commits(old: str, new: str) -> list[str]:
-    _, out = git("log", "--format=%h %s", f"{old}..{new}", "--", "rust/")
+    _, out = git("log", "--format=%h %s", f"{old}..{new}", "--", "engine/")
     return out.splitlines()
 
 
@@ -188,25 +188,25 @@ def open_bead(label: str, store: Tickets) -> str | None:
 
 def creep_body(head: str, why: str, f: Findings) -> str:
     commits = rust_commits(f.previous.commit, head) if f.previous else []
-    listed = "\n".join(f"- {c}" for c in commits) or "- (none under rust/)"
+    listed = "\n".join(f"- {c}" for c in commits) or "- (none under engine/)"
     since = f.previous.commit[:12] if f.previous else "the last measured tip"
     return (
         f"The count gate measured the rollout benchmark at {head[:12]}: {why}. The "
         f"gate itself still passed (tools/src/beryl_tools/count_trend.py).\n\n"
-        f"Commits under rust/ since {since}:\n{listed}\n\n"
+        f"Commits under engine/ since {since}:\n{listed}\n\n"
         f"Find what added the instructions (`just bench-count` on both commits, then "
         f"`callgrind_annotate` on the two `callgrind.rollouts.corpus.out` files in the "
         f"`beryl-bench` VM) and win it back: keep paths these decks never take `#[cold]` "
         f"and out of line, and avoid compiling shared code twice. If the work itself "
         f"changed (`rollouts_never_change` was updated), say so here and close this ticket. "
-        f"The rules for moving the bar are in rust/crates/beryl_bench/count-gate.toml."
+        f"The rules for moving the bar are in engine/crates/beryl_bench/count-gate.toml."
     )
 
 
 def lower_body(head: str, why: str, verifier: str) -> str:
     return (
         f"The count gate measured the rollout benchmark at {head[:12]}: {why}. Set "
-        f"`profile.{verifier}.limits.instructions` in rust/crates/beryl_bench/count-gate.toml "
+        f"`profile.{verifier}.limits.instructions` in engine/crates/beryl_bench/count-gate.toml "
         f"to the count measured by that verifier on current staging (`just count-gate`). "
         f"Record the measured revision in the profile. The commit body names the old and new counts."
     )

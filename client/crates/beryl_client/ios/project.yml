@@ -1,0 +1,61 @@
+# The iOS host of the client (docs/beryl-3d.md, "Hosts"). `just client ios-smoke` and
+# `just client ios-device` generate the Xcode project from this file with xcodegen into
+# $BERYL_CACHE/b3d/ios, build the Rust library, and pass the folder holding it as
+# BERYL_CLIENT_LIB_DIR and beryl_client's crate folder as BERYL_CLIENT_CRATE_DIR, since the project is not
+# beside its sources. Info.plist says the app runs full screen in portrait or landscape and lets
+# devicectl copy its frame logs off a phone (UIFileSharingEnabled). BerylUITests is the UI
+# test that `just client ios-smoke --touch` runs.
+name: Beryl
+options:
+  bundleIdPrefix: ca.thurn
+  deploymentTarget:
+    iOS: "15.0"
+targets:
+  Beryl:
+    type: application
+    platform: iOS
+    sources:
+      - path: Beryl
+        excludes: [Info.plist]
+    settings:
+      base:
+        # Different from the Tauri app's ca.thurn.beryl, so both can be installed.
+        PRODUCT_BUNDLE_IDENTIFIER: ca.thurn.beryl
+        DEVELOPMENT_TEAM: D77745XTVL
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_VERSION: "5.0"
+        SWIFT_OBJC_BRIDGING_HEADER: $(BERYL_CLIENT_CRATE_DIR)/ios/Beryl/Bridging.h
+        HEADER_SEARCH_PATHS: $(BERYL_CLIENT_CRATE_DIR)/include
+        LIBRARY_SEARCH_PATHS: $(BERYL_CLIENT_LIB_DIR)
+        OTHER_LDFLAGS: [-lberyl_client, -lc++]
+        TARGETED_DEVICE_FAMILY: "1"
+        # The Rust library is built for arm64 alone, on the Simulator as on a phone.
+        ARCHS: arm64
+        ONLY_ACTIVE_ARCH: false
+        ENABLE_BITCODE: false
+        INFOPLIST_FILE: $(BERYL_CLIENT_CRATE_DIR)/ios/Beryl/Info.plist
+        GENERATE_INFOPLIST_FILE: false
+    dependencies:
+      # iroh uses these for network reachability and system DNS.
+      - sdk: SystemConfiguration.framework
+      - sdk: libresolv.tbd
+    scheme:
+      testTargets: [BerylUITests]
+  BerylUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: BerylUITests
+    dependencies:
+      - target: Beryl
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ca.thurn.beryl.uitests
+        DEVELOPMENT_TEAM: D77745XTVL
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        ARCHS: arm64
+        ONLY_ACTIVE_ARCH: false
+        GENERATE_INFOPLIST_FILE: true
+        TEST_TARGET_NAME: Beryl

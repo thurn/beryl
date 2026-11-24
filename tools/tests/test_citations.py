@@ -91,7 +91,7 @@ def test_a_true_citation_is_clean(tmp_path: Path) -> None:
         f"/// A link with no quotation, {cite('712.6')}, is only checked for its rule,\n"
         '/// as is a bare CR 712.6a, and a bare one in quotes, "CR 712.6".\n'
     )
-    assert problems(tmp_path, "rust/crates/a/src/lib.rs", text) == []
+    assert problems(tmp_path, "engine/crates/a/src/lib.rs", text) == []
 
 
 def test_a_dead_anchor_wrong_anchor_or_dead_bare_number_is_reported(
@@ -114,9 +114,9 @@ def test_a_quotation_the_rule_lacks_is_reported_per_segment(tmp_path: Path) -> N
         f'/// {cite("712.6")}: "Each face of a double-faced card ... has two sets."\n'
         '/// CR 712.6a: "it has both faces"\n'
     )
-    assert problems(tmp_path, "rust/crates/a/src/lib.rs", text) == [
-        'rust/crates/a/src/lib.rs:1: CR 712.6: the rule does not say "has two sets."',
-        'rust/crates/a/src/lib.rs:2: CR 712.6a: the rule does not say "it has both faces"',
+    assert problems(tmp_path, "engine/crates/a/src/lib.rs", text) == [
+        'engine/crates/a/src/lib.rs:1: CR 712.6: the rule does not say "has two sets."',
+        'engine/crates/a/src/lib.rs:2: CR 712.6a: the rule does not say "it has both faces"',
     ]
 
 
@@ -124,7 +124,7 @@ def test_text_outside_the_roots_and_a_quotation_not_after_the_link_are_ignored(
     tmp_path: Path,
 ) -> None:
     text = f'// {cite("712.6")} says things "that the page never does".\n'
-    assert problems(tmp_path, "rust/crates/a/src/lib.rs", text) == []
+    assert problems(tmp_path, "engine/crates/a/src/lib.rs", text) == []
     assert problems(tmp_path, "tools/tests/a.py", f"# {cite('1.1')}\n") == []
 
 
@@ -137,16 +137,16 @@ def test_a_reference_is_held_to_its_rule_and_needs_a_definition(tmp_path: Path) 
         f"/// [CR 712.6]: {link}R7126\n"
         f"/// [CR 712.6a]: {link}R7126\n"
     )
-    assert problems(tmp_path, "rust/crates/a/src/lib.rs", text) == [
-        "rust/crates/a/src/lib.rs:2: CR 712.6d: no link definition "
+    assert problems(tmp_path, "engine/crates/a/src/lib.rs", text) == [
+        "engine/crates/a/src/lib.rs:2: CR 712.6d: no link definition "
         f"`[CR 712.6d]: {link}R7126d` in the file",
-        'rust/crates/a/src/lib.rs:2: CR 712.6a: the rule does not say "a set it lacks"',
-        "rust/crates/a/src/lib.rs:5: CR 712.6a: the anchor is #R7126, not #R7126a",
+        'engine/crates/a/src/lib.rs:2: CR 712.6a: the rule does not say "a set it lacks"',
+        "engine/crates/a/src/lib.rs:5: CR 712.6a: the anchor is #R7126, not #R7126a",
     ]
 
 
 def migrate(tmp_path: Path, text: str) -> tuple[str, list[str], list[str]]:
-    path = write(tmp_path, "rust/crates/a/src/lib.rs", text)
+    path = write(tmp_path, "engine/crates/a/src/lib.rs", text)
     moved, notes = citation_migrate.migrate(
         tmp_path, citations.parse_rules(OLD), citations.parse_rules(NEW), write=True
     )
@@ -185,15 +185,15 @@ def test_migration_leaves_what_it_cannot_place_and_reports_it(tmp_path: Path) ->
     )
     after, moved, notes = migrate(tmp_path, text)
     assert moved == [
-        "rust/crates/a/src/lib.rs:1: CR 712.8e -> CR 712.6d",
+        "engine/crates/a/src/lib.rs:1: CR 712.8e -> CR 712.6d",
     ]
     assert notes[0].startswith(
-        "rust/crates/a/src/lib.rs:1: CR 712.8e: the quotation was not the old rule's "
+        "engine/crates/a/src/lib.rs:1: CR 712.8e: the quotation was not the old rule's "
         "text either; requote from CR 712.6d:"
     )
     assert (
         notes[1]
-        == "rust/crates/a/src/lib.rs:2: CR 712.9: no such rule in either release"
+        == "engine/crates/a/src/lib.rs:2: CR 712.9: no such rule in either release"
     )
     assert "CR 712.9 is no rule" in after
 
@@ -242,7 +242,7 @@ def test_the_step_holds_the_tree_or_the_files_named_to_the_cached_text(
     assert citations.step(wrong) == 1
     capsys.readouterr()
     # A file the branch deleted, or one that cites no rules, is passed over.
-    assert citations.step(right, "docs/gone.md", "rust/crates/a/target/b.rs") == 0
+    assert citations.step(right, "docs/gone.md", "engine/crates/a/target/b.rs") == 0
     assert capsys.readouterr().out == ""
 
 
@@ -306,8 +306,8 @@ def test_a_doc_line_starting_with_a_non_link_definition_is_reported(
         "///\n"
         f"/// [CR 712.6]: {link}R7126\n"
     )
-    assert problems(tmp_path, "rust/crates/a/src/lib.rs", text) == [
-        "rust/crates/a/src/lib.rs:1: CR 712.6: a doc line that starts with "
+    assert problems(tmp_path, "engine/crates/a/src/lib.rs", text) == [
+        "engine/crates/a/src/lib.rs:1: CR 712.6: a doc line that starts with "
         "`[CR 712.6]:` is read as a link definition, so rustdoc drops the rest of "
         "the line; write the citation as an inline link there"
     ]

@@ -115,20 +115,20 @@ it cannot (several movers), read the frames.
 
 The same moment, the whole table, stepped stage time:
 
-- A verb: `just b3d motion-film <verb> [case]` films the first step of each
+- A verb: `just client motion-film <verb> [case]` films the first step of each
   case from both seats in both layouts at 15 frames a second and 760 px wide,
   and cuts Arena's instances of the same case beside it. It prints each pair of
-  paths: Arena's folder of frames and Beryl 3D's grid of frames, one a
+  paths: Arena's folder of frames and the client's grid of frames, one a
   fifteenth of a second apart, so frame `n` of one lines up with frame `n` of
   the other.
-- Any other span: `just b3d film <recording> --from <moment> --to <moment>
+- Any other span: `just client film <recording> --from <moment> --to <moment>
   --rate 15 --frame-width 760`, at most 24 frames a picture.
-- One frame: `just b3d png <recording> --at <moment> --tree`, which prints the
+- One frame: `just client png <recording> --at <moment> --tree`, which prints the
   tree of the same frame too, with every element's place and size.
 
 Film a second situation as well as the fixture's: another hand size, the other
 seat, a card whose id sorts elsewhere, a spell on the stack. Check that the behavior holds in both situations. If a fixture is missing,
-add one to `data/beryl3d/fixtures.json` using the shared Rust fixture builders,
+add one to `data/client/fixtures.json` using the shared Rust fixture builders,
 or use a card spec moment from the [specs skill](../specs/SKILL.md).
 
 ### 5. Pair them at one scale and one clock
@@ -138,7 +138,7 @@ visible change. For a span of about 400 ms at 15 frames a second:
 
 ```sh
 just video film <id> 17:46.1 --span 0.4 --fps 15 --cols 7 --width 480
-just b3d film <recording> --from <start> --to <end> --rate 15 --frame-width 480
+just client film <recording> --from <start> --to <end> --rate 15 --frame-width 480
 ```
 
 Use the captions to align the first frame of motion. For a still, crop or
@@ -149,7 +149,7 @@ magick arena-frame.png beryl-frame.png -compose blend \
   -define compose:args=50 -composite over.png
 ```
 
-For a verb case, `just b3d motion-film` prints the corresponding Arena frame
+For a verb case, `just client motion-film` prints the corresponding Arena frame
 folder and Beryl film paths. Use whole-table instances in
 `data/arena-motion.json` for comparisons of overall placement.
 

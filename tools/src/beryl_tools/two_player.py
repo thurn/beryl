@@ -18,15 +18,15 @@ from . import paths
 # Where the rules live: the rules' modules, the facade in front of them, which is held as
 # they are so that no rule is written there, and the card definitions.
 RULES = (
-    "rust/crates/beryl_rules/src",
-    "rust/crates/beryl_engine/src",
-    "rust/crates/beryl_cards/src",
-    "rust/crates/beryl_card_shared/src",
-    "rust/cards",
+    "engine/crates/beryl_rules/src",
+    "engine/crates/beryl_engine/src",
+    "engine/crates/beryl_cards/src",
+    "engine/crates/beryl_card_shared/src",
+    "engine/cards",
 )
 # The facade other crates import the kernel through re-exports the module, and the rules'
 # tests set up tables of two.
-EXEMPT = ("rust/crates/beryl_engine/src/lib.rs",)
+EXEMPT = ("engine/crates/beryl_engine/src/lib.rs",)
 SKIPPED_DIRECTORIES = {"tests"}
 NAMED: re.Pattern[str] = re.compile(r"\btwo_player\b")
 ADVICE = (

@@ -1,0 +1,40 @@
+[package]
+name = "beryl_render"
+version = "0.1.0"
+description = "The client's renderer: draws a scene with wgpu"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+kit_base.workspace = true
+kit_frame.workspace = true
+# The card faces it uploads: their formats and layers, as the asset workers prepare them.
+beryl_assets = { path = "../beryl_assets" }
+# Casts draw records to bytes for upload, in place of hand-written unsafe casts.
+bytemuck = { version = "1.25.2", features = ["derive"] }
+# The key light's matrix and directions, in the client core's own math types, in place of
+# hand-written matrix code.
+glam = "0.34.3"
+# Writes a rendered frame as a PNG picture, in place of a hand-written encoder.
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+# Blocks on wgpu's adapter and device requests, in place of an async runtime.
+pollster = "1.0.1"
+# The GPU API (Metal on this Mac).
+wgpu = "30.0.2"
+
+[dev-dependencies]
+# Reads data/client/lighting.json for the tests and records the read for Ignite's input hash.
+beryl_test_files = { path = "../../../engine/crates/beryl_test_files" }
+kit_space.workspace = true
+kit_text.workspace = true
+# Parses the shader to count each material's texture samples and expressions, in place of Arm's
+# offline compiler, whose installer needs a person. The release wgpu 30.0.2 compiles with.
+naga = { version = "30.0.2", features = ["wgsl-in"] }
+# Reads the material limits in data/client/gates.json and prints the counts.
+serde_json = "1.0.154"
+# Finds the glyphs of the test text in its font: the release beryl_assets rasterizes with.
+swash = "=0.2.10"

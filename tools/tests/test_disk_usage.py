@@ -16,7 +16,7 @@ def test_git_worktree_list_does_not_repeat_the_main_checkout(tmp_path: Path) -> 
     managed_tree = managed / "tree-01"
     legacy = tmp_path / "beryl-fixes"
     linked = legacy / "old-fix"
-    for path in (managed_tree, linked, checkout / "rust"):
+    for path in (managed_tree, linked, checkout / "engine"):
         path.mkdir(parents=True)
 
     roots = disk.disjoint(
@@ -26,7 +26,7 @@ def test_git_worktree_list_does_not_repeat_the_main_checkout(tmp_path: Path) -> 
     )
 
     assert {(root.area, root.path) for root in roots} == {
-        (disk.MAIN, (checkout / "rust").resolve()),
+        (disk.MAIN, (checkout / "engine").resolve()),
         (disk.WORKTREES, managed_tree.resolve()),
         (disk.CHECKOUTS, legacy.resolve()),
     }

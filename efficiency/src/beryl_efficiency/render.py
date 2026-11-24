@@ -49,7 +49,7 @@ FIELDS: dict[str, str] = {
     "rework_percent": "rework as a percent of the ticket's direct dollars",
     "rework_from": "the tickets whose direct dollars the rework is part of, and by which rule",
     "commits": "commits the ticket landed, from its enact_commits",
-    "cards": "card files under rust/cards/ that the ticket's commits added first",
+    "cards": "card files under engine/cards/ that the ticket's commits added first",
     "queue_minutes": "minutes from the ticket's creation to its start",
     "work_minutes": "minutes from the ticket's start to its close",
     "to_master_minutes": "minutes from the ticket's last commit on staging to that commit "

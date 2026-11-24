@@ -297,7 +297,7 @@ def report(manifest: Manifest, card: str | None = None) -> list[Finding]:
     with tempfile.TemporaryDirectory(prefix="beryl-oracle-candidates-") as tmp:
         log = Path(tmp) / "build.log"
         oracles.run(
-            paths.CLI_BUILD, log, paths.RUST, CARGO_TARGET_DIR=str(paths.RUN_TARGET)
+            paths.CLI_BUILD, log, paths.ENGINE, CARGO_TARGET_DIR=str(paths.RUN_TARGET)
         )
         binary = system.exe(paths.RUN_TARGET / "debug" / "beryl_scenario")
         registry = Registry.from_inventory(

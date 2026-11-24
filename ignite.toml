@@ -35,7 +35,7 @@ test_paths = [
   "**/*_tests.rs",              # Rust unit tests in sibling modules.
   "**/tests.rs",                # Rust unit tests in a standalone tests module.
   "tools/tests/**",             # Python tests and fixtures.
-  "data/beryl3d/fixtures.json",  # Game setups for native recordings and script checks.
+  "data/client/fixtures.json",  # Game setups for native recordings and script checks.
   "ignite/checks/**",           # Check family declarations and commands.
 ]
 
@@ -109,7 +109,8 @@ rules = [
   { paths = ["ignite/**/*.rs"], dir = "ignite", command = "cargo fmt" },
   # `cargo fmt` does not reach the card files, whose `mod` lines a build script writes, so the
   # files are named directly, as `beryl_tools.card_files rustfmt` does.
-  { paths = ["rust/**/*.rs"], dir = "rust", command = "rustfmt --edition 2024 {files}" },
+  { paths = ["engine/**/*.rs"], dir = "engine", command = "rustfmt --edition 2024 {files}" },
+  { paths = ["client/**/*.rs"], dir = "client", command = "rustfmt --edition 2024 {files}" },
   { paths = ["**/*.md"], exclude = [".agents/**"], command = "uv run --quiet --project tools mdformat {files}" },
   { paths = ["tools/**/*.py", "efficiency/**/*.py"], command = "uv run --quiet --project tools black --quiet {files}" },
   { paths = ["justfile"], command = "just --fmt --unstable" },
@@ -258,10 +259,10 @@ oracle = 1
 
 # The Windows PC (12 cores, 20 threads, 32 GB) with a 128 GB Dev Drive (ReFS) at D:.
 # Desktop smoke runs the native client headlessly. The Android APK build uses the pinned
-# NDK installed by `just b3d mobile-setup`.
+# NDK installed by `just client mobile-setup`.
 # Oracle checks use the pinned JDK and Maven builds from `just oracle-setup`.
 # Rollout counts use the `beryl-bench` WSL distribution from `just bench-count`.
-# Frame instruction counts use the `beryl3d-bench` WSL distribution from `just b3d vm`.
+# Frame instruction counts use the `beryl3d-bench` WSL distribution from `just client vm`.
 #
 # `families` lists the checks Cygnus can run. Pytest runs natively and Pyre uses WSL.
 # `ignite-platform` must pass on Windows. Cygnus is the only Windows machine, so it must be
@@ -270,13 +271,13 @@ oracle = 1
 os = "windows"
 families = [
   "rust", "doctests", "clippy", "rust-format", "ignite", "ignite-lint", "source", "markdown",
-  "repository", "commit", "black", "pytest", "pyre", "b3d-format", "b3d-source", "ignite-platform",
+  "repository", "commit", "black", "pytest", "pyre", "client-format", "client-source", "ignite-platform",
   "native-app", "native-android",
   "counts", "allocations", "card-text", "script", "scale", "iroh", "fuzz", "exhaust",
   "oracle", "oracle-generated",
-  "b3d-clippy", "b3d-validation", "b3d-test", "b3d-interface", "b3d-every-tick", "b3d-corpus",
-  "b3d-interface-frame-limits",
-  "b3d-gate", "b3d-frame-counts", "b3d-frame-trend",
+  "client-clippy", "client-validation", "client-test", "client-interface", "client-every-tick", "client-corpus",
+  "client-interface-frame-limits",
+  "client-gate", "client-frame-counts", "client-frame-trend",
 ]
 
 [machine.cygnus.resources]
@@ -286,44 +287,44 @@ oracle = 1
 [[rebuild]]
 name = "kernel-body"
 edit = "append a no-op item to a module of beryl_kernel"
-file = "rust/crates/beryl_kernel/src/counters.rs"
+file = "engine/crates/beryl_kernel/src/counters.rs"
 append = "\nconst _: () = ();\n"
 products = ["clippy", "rust-tests"]
 
 [[rebuild]]
 name = "one-card"
 edit = "append a no-op item to one card file"
-file = "rust/cards/cards_1993/lea/animate_dead.rs"
+file = "engine/cards/cards_1993/lea/animate_dead.rs"
 append = "\nconst _: () = ();\n"
 products = ["clippy", "rust-tests"]
 
 [[rebuild]]
-name = "b3d-prompt-body"
-edit = "append a no-op item to the Beryl 3D prompt bar module"
-file = "rust/beryl3d/crates/game_hud/src/prompts/bar/view.rs"
+name = "client-prompt-body"
+edit = "append a no-op item to the the client prompt bar module"
+file = "client/crates/game_hud/src/prompts/bar/view.rs"
 append = "\nconst _: () = ();\n"
-products = ["b3d"]
+products = ["client"]
 
 [[rebuild]]
-name = "b3d-widget-body"
-edit = "append a no-op item to the Beryl 3D button widget module"
-file = "rust/beryl3d/crates/kit_ui/src/widgets/button.rs"
+name = "client-widget-body"
+edit = "append a no-op item to the the client button widget module"
+file = "client/crates/kit_ui/src/widgets/button.rs"
 append = "\nconst _: () = ();\n"
-products = ["b3d"]
+products = ["client"]
 
 [[rebuild]]
-name = "b3d-table-body"
-edit = "append a no-op item to the Beryl 3D battlefield rows module"
-file = "rust/beryl3d/crates/game_table/src/table/rows.rs"
+name = "client-table-body"
+edit = "append a no-op item to the the client battlefield rows module"
+file = "client/crates/game_table/src/table/rows.rs"
 append = "\nconst _: () = ();\n"
-products = ["b3d"]
+products = ["client"]
 
 [[rebuild]]
-name = "b3d-flat-tuning"
-edit = "append JSON whitespace to the bundled Beryl 3D flat-layer tuning"
-file = "data/beryl3d/flat.json"
+name = "client-flat-tuning"
+edit = "append JSON whitespace to the bundled the client flat-layer tuning"
+file = "data/client/flat.json"
 append = "\n"
-products = ["b3d"]
+products = ["client"]
 
 # The efficiency dashboard's commands. Each daemon runs them when the session transcripts grow and
 # posts the export to the hub (docs/ignite.md, "Records and metrics").

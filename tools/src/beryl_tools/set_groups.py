@@ -15,7 +15,7 @@ sets alone, so a set moves only when its year or half first grows past `CAP`, an
 then moves its card files. The cap keeps the one-edit rebuild in budget: it is mostly the
 recheck of the edited crate, which grows with the crate's cards (K8, Measurements).
 
-A card's file is `rust/cards/<crate>/<set module>/<card module>.rs` (`SetGroups.card_path`): a
+A card's file is `engine/cards/<crate>/<set module>/<card module>.rs` (`SetGroups.card_path`): a
 set's module is its code (`m10`), and a card's is its name in lowercase ASCII words joined by
 underscores, accents and apostrophes dropped (`lim_duls_vault`, `fire_ice`). A module name that
 would start with a digit or be a Rust keyword takes a prefix spelled out: `set_10e`, `set_mod`,
@@ -40,7 +40,7 @@ from typing import cast
 from . import paths
 
 GROUPS: Path = paths.REPO / "data" / "set-groups.json"
-CARDS: Path = paths.REPO / "rust" / "cards"
+CARDS: Path = paths.REPO / "engine" / "cards"
 CAP = 1200
 RULE = (
     "Crates of card files (`by cards`, `card crates`; tools/src/beryl_tools/set_groups.py "
@@ -233,7 +233,7 @@ class SetGroups:
 
     def card_path(self, record: Json, root: Path = CARDS) -> Path:
         """Where a card record's file belongs:
-        `rust/cards/<crate>/<set module>/<card module>.rs`."""
+        `engine/cards/<crate>/<set module>/<card module>.rs`."""
         return (
             root
             / self.group_of(record)

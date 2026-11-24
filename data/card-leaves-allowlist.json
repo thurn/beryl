@@ -1,6 +1,6 @@
 {
   "crates": [
-    "beryl_3d",
+    "beryl_client",
     "beryl_bench",
     "beryl_cards",
     "beryl_cli_main",

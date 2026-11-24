@@ -61,7 +61,7 @@ def test_a_rewrite_replaces_the_header_and_keeps_the_notes_below_it() -> None:
 
 
 def test_a_stale_header_is_found(tmp_path: Path) -> None:
-    real = paths.REPO / "rust/cards/cards_1993/lea/counterspell.rs"
+    real = paths.REPO / "engine/cards/cards_1993/lea/counterspell.rs"
     copy = tmp_path / "lea" / "counterspell.rs"
     copy.parent.mkdir()
     shutil.copy(real, copy)
@@ -74,7 +74,7 @@ def test_a_stale_header_is_found(tmp_path: Path) -> None:
 def test_the_step_passes_on_a_card_file_with_a_current_header(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    counterspell = "rust/cards/cards_1993/lea/counterspell.rs"
+    counterspell = "engine/cards/cards_1993/lea/counterspell.rs"
     assert card_header.step(counterspell) == 0
     assert card_files.FILE.match(counterspell)
     assert capsys.readouterr().out == ""

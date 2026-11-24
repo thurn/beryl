@@ -413,13 +413,13 @@ def test_the_gate_counts_the_current_files_of_an_unmounted_worktree(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     main, lease = tmp_path / "main", tmp_path / "trees" / "lease"
-    (main / "rust").mkdir(parents=True)
-    (main / ".gitignore").write_text("/rust/target/\n")
+    (main / "engine").mkdir(parents=True)
+    (main / ".gitignore").write_text("/engine/target/\n")
     (main / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "stable"\n')
-    (main / "rust" / "Cargo.lock").write_text(
+    (main / "engine" / "Cargo.lock").write_text(
         '[[package]]\nname = "gungraun"\nversion = "0.20.0"\n'
     )
-    (main / "rust" / "deleted.rs").touch()
+    (main / "engine" / "deleted.rs").touch()
     git = [
         "git",
         "-C",
@@ -435,10 +435,10 @@ def test_the_gate_counts_the_current_files_of_an_unmounted_worktree(
         [*git, "-c", "commit.gpgsign=false", "commit", "-qm", "source"], check=True
     )
     subprocess.run([*git, "worktree", "add", "-q", "--detach", str(lease)], check=True)
-    (lease / "rust" / "deleted.rs").unlink()
-    (lease / "rust" / "added file.rs").write_text("lease sources")
-    (lease / "rust" / "target").mkdir()
-    (lease / "rust" / "target" / "artifact").touch()
+    (lease / "engine" / "deleted.rs").unlink()
+    (lease / "engine" / "added file.rs").write_text("lease sources")
+    (lease / "engine" / "target").mkdir()
+    (lease / "engine" / "target" / "artifact").touch()
     (lease / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "beta"\n')
 
     lima_home = tmp_path / "lima"
@@ -448,7 +448,7 @@ def test_the_gate_counts_the_current_files_of_an_unmounted_worktree(
     )
     monkeypatch.setenv("LIMA_HOME", str(lima_home))
     monkeypatch.setattr(bench.paths, "REPO", lease)
-    monkeypatch.setattr(bench.paths, "RUST", lease / "rust")
+    monkeypatch.setattr(bench.paths, "ENGINE", lease / "engine")
     monkeypatch.setattr(bench.system, "WINDOWS", False)
     profile = calibration.Profile("mac", "a" * 40, "fixture", {}, {})
     monkeypatch.setattr(
@@ -471,8 +471,8 @@ def test_the_gate_counts_the_current_files_of_an_unmounted_worktree(
         with tarfile.open(fileobj=kwargs["stdin"], mode="r:") as archive:
             assert set(archive.getnames()) == {
                 "rust-toolchain.toml",
-                "rust/Cargo.lock",
-                "rust/added file.rs",
+                "engine/Cargo.lock",
+                "engine/added file.rs",
             }
             edited = archive.extractfile("rust-toolchain.toml")
             assert edited is not None and b"beta" in edited.read()
@@ -520,14 +520,14 @@ def test_the_windows_gate_counts_from_the_mounted_worktree(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     lease = tmp_path / "lease"
-    rust: Path = lease / "rust"
+    rust: Path = lease / "engine"
     rust.mkdir(parents=True)
     (rust / "Cargo.lock").write_text(
         '[[package]]\nname = "gungraun"\nversion = "0.20.0"\n'
     )
     (lease / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "beta"\n')
     monkeypatch.setattr(bench.paths, "REPO", lease)
-    monkeypatch.setattr(bench.paths, "RUST", rust)
+    monkeypatch.setattr(bench.paths, "ENGINE", rust)
     monkeypatch.setattr(bench.paths, "worktree_names", lambda: ["lease"])
     monkeypatch.setattr(bench.system, "WINDOWS", True)
     profile = calibration.Profile("windows", "a" * 40, "fixture", {}, {})

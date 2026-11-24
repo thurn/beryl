@@ -18,7 +18,7 @@ Independent means two things:
 
 ## What you are given
 
-Read the saved `just b3d motion-film` output first. It identifies the verb
+Read the saved `just client motion-film` output first. It identifies the verb
 and each case, the Arena recordings and times, and the Beryl films from both
 seats on desktop and phone. The output lists each step's start and duration,
 the steps playing alongside it and a line for each sampled frame.

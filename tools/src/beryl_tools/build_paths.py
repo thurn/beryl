@@ -8,7 +8,7 @@ from pathlib import Path
 from . import paths
 
 # `env!` of a build path fixes the compiling worktree's absolute path into the binary. The warm
-# cache clones `rust/target` into other worktrees with test binaries cargo counts as fresh, which
+# cache clones `engine/target` into other worktrees with test binaries cargo counts as fresh, which
 # would then run a deleted worktree's binary or read its files, and pass against the wrong code.
 BAKED_PATH: re.Pattern[str] = re.compile(
     r'(?<!\w)(?:option_)?env!\s*\(\s*"(CARGO_BIN_EXE_\w+|CARGO_MANIFEST_DIR)"'
@@ -41,7 +41,7 @@ def baked_build_paths(directory: Path) -> list[str]:
 
 
 def step() -> int:
-    found = baked_build_paths(paths.RUST / "crates")
+    found = baked_build_paths(paths.ENGINE / "crates")
     for place in found:
         print(f"build-paths: {place}")
     return 1 if found else 0

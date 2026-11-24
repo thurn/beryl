@@ -17,34 +17,34 @@
     "tools/src/beryl_tools/bench.py": [
       "rust-toolchain.toml"
     ],
-    "tools/src/beryl_tools/beryl3d/camera.py": [
-      "data/beryl3d/camera-fit.json"
+    "tools/src/beryl_tools/client/camera.py": [
+      "data/client/camera-fit.json"
     ],
-    "tools/src/beryl_tools/beryl3d/cli.py": [
-      "data/beryl3d/corpus.txt"
+    "tools/src/beryl_tools/client/cli.py": [
+      "data/client/corpus.txt"
     ],
-    "tools/src/beryl_tools/beryl3d/frame_profiles.py": [
-      "data/beryl3d/frame-calibration.json"
+    "tools/src/beryl_tools/client/frame_profiles.py": [
+      "data/client/frame-calibration.json"
     ],
-    "tools/src/beryl_tools/beryl3d/gate.py": [
-      "data/beryl3d/budgets.json"
+    "tools/src/beryl_tools/client/gate.py": [
+      "data/client/budgets.json"
     ],
-    "tools/src/beryl_tools/beryl3d/motion_film.py": [
-      "data/beryl3d/motion-recordings.json"
+    "tools/src/beryl_tools/client/motion_film.py": [
+      "data/client/motion-recordings.json"
     ],
-    "tools/src/beryl_tools/beryl3d/tiers.py": [
-      "data/beryl3d/frame-rate.json"
+    "tools/src/beryl_tools/client/tiers.py": [
+      "data/client/frame-rate.json"
     ],
     "tools/src/beryl_tools/card_crates.py": [
-      "rust/cards",
-      "rust/crates/beryl_cards/Cargo.toml"
+      "engine/cards",
+      "engine/crates/beryl_cards/Cargo.toml"
     ],
     "tools/src/beryl_tools/card_files.py": [
       "docs/sample-decks",
-      "rust/cards"
+      "engine/cards"
     ],
     "tools/src/beryl_tools/card_header.py": [
-      "rust/cards/cards_1993/lea/counterspell.rs"
+      "engine/cards/cards_1993/lea/counterspell.rs"
     ],
     "tools/src/beryl_tools/card_store.py": [
       "data/card-store.tsv"
@@ -76,74 +76,74 @@
     "tools/src/beryl_tools/forge.py": [
       "data/oracle-divergences.json"
     ],
-    "tools/src/beryl_tools/ignite/beryl3d.py": [
-      "rust/beryl3d/crates/beryl_inspect/Cargo.toml",
-      "rust/beryl3d/crates/beryl_record/Cargo.toml",
-      "rust/beryl3d/crates/app_client/Cargo.toml",
-      "rust/cards/cards_1993/Cargo.toml",
-      "rust/cards/cards_1994/Cargo.toml",
-      "rust/cards/cards_1995/Cargo.toml",
-      "rust/cards/cards_1996/Cargo.toml",
-      "rust/cards/cards_1997/Cargo.toml",
-      "rust/cards/cards_1998/Cargo.toml",
-      "rust/cards/cards_1999/Cargo.toml",
-      "rust/cards/cards_2000/Cargo.toml",
-      "rust/cards/cards_2001/Cargo.toml",
-      "rust/cards/cards_2002/Cargo.toml",
-      "rust/cards/cards_2003/Cargo.toml",
-      "rust/cards/cards_2004/Cargo.toml",
-      "rust/cards/cards_2005/Cargo.toml",
-      "rust/cards/cards_2006/Cargo.toml",
-      "rust/cards/cards_2007/Cargo.toml",
-      "rust/cards/cards_2008/Cargo.toml",
-      "rust/cards/cards_2009/Cargo.toml",
-      "rust/cards/cards_2010/Cargo.toml",
-      "rust/cards/cards_2011/Cargo.toml",
-      "rust/cards/cards_2012/Cargo.toml",
-      "rust/cards/cards_2013/Cargo.toml",
-      "rust/cards/cards_2014/Cargo.toml",
-      "rust/cards/cards_2015/Cargo.toml",
-      "rust/cards/cards_2016/Cargo.toml",
-      "rust/cards/cards_2017/Cargo.toml",
-      "rust/cards/cards_2018/Cargo.toml",
-      "rust/cards/cards_2019_h1/Cargo.toml",
-      "rust/cards/cards_2019_h2/Cargo.toml",
-      "rust/cards/cards_2020_h1/Cargo.toml",
-      "rust/cards/cards_2020_h2/Cargo.toml",
-      "rust/cards/cards_2021_h1/Cargo.toml",
-      "rust/cards/cards_2021_h2/Cargo.toml",
-      "rust/cards/cards_2022_h1/Cargo.toml",
-      "rust/cards/cards_2022_h2/Cargo.toml",
-      "rust/cards/cards_2023_h1/Cargo.toml",
-      "rust/cards/cards_2023_h2/Cargo.toml",
-      "rust/cards/cards_2024_h1/Cargo.toml",
-      "rust/cards/cards_2024_h2/Cargo.toml",
-      "rust/cards/cards_2025_h1/Cargo.toml",
-      "rust/cards/cards_2025_h2/Cargo.toml",
-      "rust/cards/cards_2026_q1/Cargo.toml",
-      "rust/cards/cards_2026_q2/Cargo.toml",
-      "rust/cards/cards_2026_q3/Cargo.toml",
-      "rust/cards/cards_2026_q4/Cargo.toml",
-      "rust/crates/beryl_card/Cargo.toml",
-      "rust/crates/beryl_card_build/Cargo.toml",
-      "rust/crates/beryl_card_names/Cargo.toml",
-      "rust/crates/beryl_card_records/Cargo.toml",
-      "rust/crates/beryl_card_shared/Cargo.toml",
-      "rust/crates/beryl_card_store/Cargo.toml",
-      "rust/crates/beryl_cards/Cargo.toml",
-      "rust/crates/beryl_cli/Cargo.toml",
-      "rust/crates/beryl_engine/Cargo.toml",
-      "rust/crates/beryl_kernel/Cargo.toml",
-      "rust/crates/beryl_link/Cargo.toml",
-      "rust/crates/beryl_link_iroh/Cargo.toml",
-      "rust/crates/beryl_protocol/Cargo.toml",
-      "rust/crates/beryl_rules/Cargo.toml",
-      "rust/crates/beryl_scenario/Cargo.toml",
-      "rust/crates/beryl_scenario_types/Cargo.toml",
-      "rust/crates/beryl_search/Cargo.toml",
-      "rust/crates/beryl_session/Cargo.toml",
-      "rust/crates/beryl_table/Cargo.toml",
-      "rust/crates/beryl_table_session/Cargo.toml"
+    "tools/src/beryl_tools/ignite/client.py": [
+      "client/crates/beryl_inspect/Cargo.toml",
+      "client/crates/beryl_record/Cargo.toml",
+      "client/crates/app_client/Cargo.toml",
+      "engine/cards/cards_1993/Cargo.toml",
+      "engine/cards/cards_1994/Cargo.toml",
+      "engine/cards/cards_1995/Cargo.toml",
+      "engine/cards/cards_1996/Cargo.toml",
+      "engine/cards/cards_1997/Cargo.toml",
+      "engine/cards/cards_1998/Cargo.toml",
+      "engine/cards/cards_1999/Cargo.toml",
+      "engine/cards/cards_2000/Cargo.toml",
+      "engine/cards/cards_2001/Cargo.toml",
+      "engine/cards/cards_2002/Cargo.toml",
+      "engine/cards/cards_2003/Cargo.toml",
+      "engine/cards/cards_2004/Cargo.toml",
+      "engine/cards/cards_2005/Cargo.toml",
+      "engine/cards/cards_2006/Cargo.toml",
+      "engine/cards/cards_2007/Cargo.toml",
+      "engine/cards/cards_2008/Cargo.toml",
+      "engine/cards/cards_2009/Cargo.toml",
+      "engine/cards/cards_2010/Cargo.toml",
+      "engine/cards/cards_2011/Cargo.toml",
+      "engine/cards/cards_2012/Cargo.toml",
+      "engine/cards/cards_2013/Cargo.toml",
+      "engine/cards/cards_2014/Cargo.toml",
+      "engine/cards/cards_2015/Cargo.toml",
+      "engine/cards/cards_2016/Cargo.toml",
+      "engine/cards/cards_2017/Cargo.toml",
+      "engine/cards/cards_2018/Cargo.toml",
+      "engine/cards/cards_2019_h1/Cargo.toml",
+      "engine/cards/cards_2019_h2/Cargo.toml",
+      "engine/cards/cards_2020_h1/Cargo.toml",
+      "engine/cards/cards_2020_h2/Cargo.toml",
+      "engine/cards/cards_2021_h1/Cargo.toml",
+      "engine/cards/cards_2021_h2/Cargo.toml",
+      "engine/cards/cards_2022_h1/Cargo.toml",
+      "engine/cards/cards_2022_h2/Cargo.toml",
+      "engine/cards/cards_2023_h1/Cargo.toml",
+      "engine/cards/cards_2023_h2/Cargo.toml",
+      "engine/cards/cards_2024_h1/Cargo.toml",
+      "engine/cards/cards_2024_h2/Cargo.toml",
+      "engine/cards/cards_2025_h1/Cargo.toml",
+      "engine/cards/cards_2025_h2/Cargo.toml",
+      "engine/cards/cards_2026_q1/Cargo.toml",
+      "engine/cards/cards_2026_q2/Cargo.toml",
+      "engine/cards/cards_2026_q3/Cargo.toml",
+      "engine/cards/cards_2026_q4/Cargo.toml",
+      "engine/crates/beryl_card/Cargo.toml",
+      "engine/crates/beryl_card_build/Cargo.toml",
+      "engine/crates/beryl_card_names/Cargo.toml",
+      "engine/crates/beryl_card_records/Cargo.toml",
+      "engine/crates/beryl_card_shared/Cargo.toml",
+      "engine/crates/beryl_card_store/Cargo.toml",
+      "engine/crates/beryl_cards/Cargo.toml",
+      "engine/crates/beryl_cli/Cargo.toml",
+      "engine/crates/beryl_engine/Cargo.toml",
+      "engine/crates/beryl_kernel/Cargo.toml",
+      "engine/crates/beryl_link/Cargo.toml",
+      "engine/crates/beryl_link_iroh/Cargo.toml",
+      "engine/crates/beryl_protocol/Cargo.toml",
+      "engine/crates/beryl_rules/Cargo.toml",
+      "engine/crates/beryl_scenario/Cargo.toml",
+      "engine/crates/beryl_scenario_types/Cargo.toml",
+      "engine/crates/beryl_search/Cargo.toml",
+      "engine/crates/beryl_session/Cargo.toml",
+      "engine/crates/beryl_table/Cargo.toml",
+      "engine/crates/beryl_table_session/Cargo.toml"
     ],
     "tools/src/beryl_tools/oracle_discovery.py": [
       "data/oracle-candidates.json"
@@ -158,10 +158,10 @@
     "tools/src/beryl_tools/scale_workspace.py": [
       "data/card-store.tsv",
       "data/catalogs.json",
-      "rust/Cargo.lock",
-      "rust/Cargo.toml",
-      "rust/cards",
-      "rust/crates/beryl_card/src/characteristics.rs"
+      "engine/Cargo.lock",
+      "engine/Cargo.toml",
+      "engine/cards",
+      "engine/crates/beryl_card/src/characteristics.rs"
     ],
     "tools/src/beryl_tools/scryfall.py": [
       "tools/tests/fixtures/scryfall-sample.jsonl"
@@ -173,68 +173,68 @@
       "data/catalogs.json"
     ],
     "tools/src/beryl_tools/store_cards.py": [
-      "rust/crates/beryl_card/src/characteristics.rs"
+      "engine/crates/beryl_card/src/characteristics.rs"
     ],
     "tools/src/beryl_tools/vocabulary.py": [
-      "rust/crates/beryl_card/src"
+      "engine/crates/beryl_card/src"
     ],
     "tools/src/beryl_tools/workspace_hack.py": [
-      "rust/Cargo.lock",
-      "rust/Cargo.toml",
-      "rust/cards",
-      "rust/crates"
+      "engine/Cargo.lock",
+      "engine/Cargo.toml",
+      "engine/cards",
+      "engine/crates"
     ],
     "tools/src/beryl_tools/xmage_java.py": [
       "tools/src/beryl_tools/BerylScenarioTest.java"
     ],
     "tools/tests/test_bench.py": [
-      "rust/crates/beryl_bench/count-gate.toml"
+      "engine/crates/beryl_bench/count-gate.toml"
     ],
-    "tools/tests/test_beryl3d_camera.py": [
-      "data/beryl3d/profiles/desktop.json"
+    "tools/tests/test_client_camera.py": [
+      "data/client/profiles/desktop.json"
     ],
-    "tools/tests/test_beryl3d_new.py": [
-      "data/beryl3d/effects/glow.json",
-      "data/beryl3d/profiles/wide-compact.json",
+    "tools/tests/test_client_new.py": [
+      "data/client/effects/glow.json",
+      "data/client/profiles/wide-compact.json",
       "data/ui-conventions.json",
-      "rust/beryl3d/crates/app_client/src/client/features.rs",
-      "rust/beryl3d/crates/app_client/src/client/features/prompt.rs",
-      "rust/beryl3d/crates/app_client/tests/all/main.rs",
-      "rust/beryl3d/crates/app_screens/src/screens/mod.rs",
-      "rust/beryl3d/crates/beryl_inspect/src/pages.rs",
-      "rust/beryl3d/crates/beryl_inspect/tests/all/main.rs",
-      "rust/beryl3d/crates/game_hud/src/prompts/mod.rs",
-      "rust/beryl3d/crates/game_play/src/sound.rs",
-      "rust/beryl3d/crates/game_play/src/verbs/mod.rs",
-      "rust/beryl3d/crates/game_probe/src/signature.rs",
-      "rust/beryl3d/crates/game_table/src/profiles/mod.rs",
-      "rust/beryl3d/crates/kit_probe/src/story/mod.rs",
-      "rust/beryl3d/crates/kit_probe/src/story/parse.rs",
-      "rust/beryl3d/crates/kit_probe/src/story/style.rs",
-      "rust/beryl3d/crates/kit_space/src/arrange.rs",
-      "rust/beryl3d/crates/kit_space/src/arrange/layout.rs",
-      "rust/beryl3d/crates/kit_space/tests/all/arrange.rs",
-      "rust/beryl3d/crates/kit_ui/src/widgets/catalog.rs",
-      "rust/beryl3d/crates/kit_ui/src/widgets/mod.rs",
-      "rust/beryl3d/crates/kit_ui/tests/all/main.rs",
-      "rust/crates/beryl_protocol/src/prompt/text.rs",
-      "rust/crates/beryl_protocol/src/prompt/view.rs",
-      "rust/crates/beryl_protocol/src/script/act.rs",
-      "rust/crates/beryl_protocol/src/script/table.rs",
-      "rust/crates/beryl_protocol/src/script/text.rs",
-      "rust/crates/beryl_protocol/src/script/timing.rs",
-      "rust/crates/beryl_protocol/src/script/verb.rs"
+      "client/crates/app_client/src/client/features.rs",
+      "client/crates/app_client/src/client/features/prompt.rs",
+      "client/crates/app_client/tests/all/main.rs",
+      "client/crates/app_screens/src/screens/mod.rs",
+      "client/crates/beryl_inspect/src/pages.rs",
+      "client/crates/beryl_inspect/tests/all/main.rs",
+      "client/crates/game_hud/src/prompts/mod.rs",
+      "client/crates/game_play/src/sound.rs",
+      "client/crates/game_play/src/verbs/mod.rs",
+      "client/crates/game_probe/src/signature.rs",
+      "client/crates/game_table/src/profiles/mod.rs",
+      "client/crates/kit_probe/src/story/mod.rs",
+      "client/crates/kit_probe/src/story/parse.rs",
+      "client/crates/kit_probe/src/story/style.rs",
+      "client/crates/kit_space/src/arrange.rs",
+      "client/crates/kit_space/src/arrange/layout.rs",
+      "client/crates/kit_space/tests/all/arrange.rs",
+      "client/crates/kit_ui/src/widgets/catalog.rs",
+      "client/crates/kit_ui/src/widgets/mod.rs",
+      "client/crates/kit_ui/tests/all/main.rs",
+      "engine/crates/beryl_protocol/src/prompt/text.rs",
+      "engine/crates/beryl_protocol/src/prompt/view.rs",
+      "engine/crates/beryl_protocol/src/script/act.rs",
+      "engine/crates/beryl_protocol/src/script/table.rs",
+      "engine/crates/beryl_protocol/src/script/text.rs",
+      "engine/crates/beryl_protocol/src/script/timing.rs",
+      "engine/crates/beryl_protocol/src/script/verb.rs"
     ],
-    "tools/tests/test_beryl3d_profiles.py": [
-      "rust/beryl3d/Cargo.toml"
+    "tools/tests/test_client_profiles.py": [
+      "client/Cargo.toml"
     ],
     "tools/tests/test_card.py": [
-      "rust/crates/beryl_card/src/effect/build.rs",
-      "rust/crates/beryl_card/src/effect/mod.rs",
-      "rust/crates/beryl_card/src/target.rs"
+      "engine/crates/beryl_card/src/effect/build.rs",
+      "engine/crates/beryl_card/src/effect/mod.rs",
+      "engine/crates/beryl_card/src/target.rs"
     ],
     "tools/tests/test_card_header.py": [
-      "rust/cards/cards_1993/lea/counterspell.rs"
+      "engine/cards/cards_1993/lea/counterspell.rs"
     ],
     "tools/tests/test_card_store.py": [
       "data/card-store.tsv"
@@ -242,7 +242,7 @@
     "tools/tests/test_cli_build.py": [
       "ignite/checks/rust.toml",
       "justfile",
-      "rust/Cargo.toml"
+      "engine/Cargo.toml"
     ],
     "tools/tests/test_draft.py": [
       "tools/tests/fixtures/phase-draft.json"
@@ -250,10 +250,10 @@
     "tools/tests/test_forge.py": [
       "tools/tests/fixtures/scenarios-forge.json"
     ],
-    "tools/tests/test_ignite_beryl3d.py": [
+    "tools/tests/test_ignite_client.py": [
       "ignite.toml",
-      "ignite/checks/beryl3d.toml",
-      "rust/beryl3d/crates"
+      "ignite/checks/client.toml",
+      "client/crates"
     ],
     "tools/tests/test_ignite_commands.py": [
       "ignite/checks"

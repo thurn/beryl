@@ -25,8 +25,8 @@ def test_a_test_that_opens_the_checkout_through_cargo_manifest_dir_is_reported(
     found = run(
         tmp_path,
         {
-            "rust/crates/a/Cargo.toml": "",
-            "rust/crates/a/tests/reads.rs": "\n".join(
+            "engine/crates/a/Cargo.toml": "",
+            "engine/crates/a/tests/reads.rs": "\n".join(
                 [
                     "fn root() -> PathBuf {",
                     '    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")',
@@ -38,7 +38,7 @@ def test_a_test_that_opens_the_checkout_through_cargo_manifest_dir_is_reported(
         },
     )
     assert found == [
-        "rust/crates/a/tests/reads.rs:2: opens the checkout through CARGO_MANIFEST_DIR"
+        "engine/crates/a/tests/reads.rs:2: opens the checkout through CARGO_MANIFEST_DIR"
     ]
 
 
@@ -48,8 +48,8 @@ def test_a_repository_literal_in_a_raw_read_is_reported_but_not_in_other_stateme
     found = run(
         tmp_path,
         {
-            "rust/crates/a/Cargo.toml": "",
-            "rust/crates/a/tests/reads.rs": "\n".join(
+            "engine/crates/a/Cargo.toml": "",
+            "engine/crates/a/tests/reads.rs": "\n".join(
                 [
                     'let a = fs::read_to_string(root().join("data/x.json"));',
                     'let name = "data/x.json";',
@@ -63,15 +63,15 @@ def test_a_repository_literal_in_a_raw_read_is_reported_but_not_in_other_stateme
         },
         ["data/x.json"],
     )
-    assert found == ["rust/crates/a/tests/reads.rs:1: reads data/x.json"]
+    assert found == ["engine/crates/a/tests/reads.rs:1: reads data/x.json"]
 
 
 def test_a_read_through_the_helper_is_not_reported(tmp_path: Path) -> None:
     found = run(
         tmp_path,
         {
-            "rust/crates/a/Cargo.toml": "",
-            "rust/crates/a/tests/reads.rs": "\n".join(
+            "engine/crates/a/Cargo.toml": "",
+            "engine/crates/a/tests/reads.rs": "\n".join(
                 [
                     'let a = beryl_test_files::read_to_string("data/x.json");',
                     'let b = ignite_core::test_files::read("data/x.json");',
@@ -88,8 +88,8 @@ def test_code_outside_tests_and_build_scripts_is_not_read(tmp_path: Path) -> Non
     found = run(
         tmp_path,
         {
-            "rust/crates/a/Cargo.toml": "",
-            "rust/crates/a/src/lib.rs": "\n".join(
+            "engine/crates/a/Cargo.toml": "",
+            "engine/crates/a/src/lib.rs": "\n".join(
                 [
                     'fn dev() { fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR"))); }',
                     "#[cfg(test)]",
@@ -99,12 +99,12 @@ def test_code_outside_tests_and_build_scripts_is_not_read(tmp_path: Path) -> Non
                     "",
                 ]
             ),
-            "rust/crates/a/build.rs": 'fn main() { fs::read_to_string(env!("CARGO_MANIFEST_DIR")); }\n',
+            "engine/crates/a/build.rs": 'fn main() { fs::read_to_string(env!("CARGO_MANIFEST_DIR")); }\n',
         },
     )
     # Only the line in the test module is reported.
     assert found == [
-        "rust/crates/a/src/lib.rs:4: opens the checkout through CARGO_MANIFEST_DIR"
+        "engine/crates/a/src/lib.rs:4: opens the checkout through CARGO_MANIFEST_DIR"
     ]
 
 
@@ -112,8 +112,8 @@ def test_an_env_remove_of_the_variable_is_not_a_read(tmp_path: Path) -> None:
     found = run(
         tmp_path,
         {
-            "rust/crates/a/Cargo.toml": "",
-            "rust/crates/a/tests/run.rs": "\n".join(
+            "engine/crates/a/Cargo.toml": "",
+            "engine/crates/a/tests/run.rs": "\n".join(
                 [
                     'cmd.env_remove("CARGO_MANIFEST_DIR");',
                     "fs::read_to_string(dir.join(name));",

@@ -174,7 +174,7 @@ def test_file_and_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(bugs.reports(tmp_path, done=True)) == 1
 
 
-def test_beryl3d_reports_from_a_run_share_one_epic(
+def test_client_reports_from_a_run_share_one_epic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
@@ -184,7 +184,7 @@ def test_beryl3d_reports_from_a_run_share_one_epic(
         folder = report(tmp_path, f"20261108-14301{index}-report")
         saved = bugs.load(folder)
         assert saved is not None
-        bugs.update(saved, beryl3d_run=run)
+        bugs.update(saved, client_run=run)
         assert cli.main(["bugs", "file", folder.name]) == 0
         epic = ignite.issues[-1]
         assert epic["type"] == "epic" and epic["allocation"] == 0

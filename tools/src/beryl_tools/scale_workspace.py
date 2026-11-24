@@ -4,12 +4,12 @@ clones of the real card files in place of the real cards.
 The workspace at `root` is laid out as the repository is, so the build helper finds what it
 reads where it reads it in the tree:
 
-- `rust/cards/<crate>/<set>/<card>.rs`: the clones, in set crates whose `Cargo.toml`,
+- `engine/cards/<crate>/<set>/<card>.rs`: the clones, in set crates whose `Cargo.toml`,
   `build.rs` and `lib.rs` are those `just card crates` writes (card_crates.py), with only the
   paths to the checkout's crates made absolute. Each crate's build script is the tree's,
   `beryl_card_build::set_crate`, so it writes the crate's modules, tables, `names` and
   `printed` faces from the scratch store, and checks each clone as it checks a real file.
-- `rust/crates/beryl_cards`: the registry over the set crates, whose build script is
+- `engine/crates/beryl_cards`: the registry over the set crates, whose build script is
   `beryl_card_build::registry`, as `beryl_cards`' is, and whose `lib.rs` joins the set
   crates' tables in a `CardTable`, as `beryl_cards` does. Its binary, `all`, reads every card through
   `std::hint::black_box`, so a release build links every definition.
@@ -17,7 +17,7 @@ reads where it reads it in the tree:
   and placed in its scratch set), the real records of the cards the clones' files name, and
   every token. `data/set-groups.json` gives each scratch crate its sets; `data/catalogs.json`
   and `beryl_card`'s `characteristics.rs` are copied from the tree.
-- `rust/Cargo.toml`: the tree's workspace manifest, with the scratch crates as its members, so
+- `engine/Cargo.toml`: the tree's workspace manifest, with the scratch crates as its members, so
   the lints, edition and release profile are the tree's.
 
 A clone of card file `f` numbered `i` is `f` with its card renamed "<name> i" (each face
@@ -44,7 +44,7 @@ from typing import cast
 
 from . import card_crates, card_files, card_store, paths, set_groups
 
-CRATES: Path = paths.RUST / "crates"
+CRATES: Path = paths.ENGINE / "crates"
 # The registry crate's name in the workspace, and its binary's.
 REGISTRY = "beryl_cards"
 BINARY = "all"
@@ -53,7 +53,7 @@ BINARY = "all"
 # Cargo will not build by name.
 WARM = "warm"
 # What the build helper reads under the repository's root besides the store and the groups.
-COPIED = ("data/catalogs.json", "rust/crates/beryl_card/src/characteristics.rs")
+COPIED = ("data/catalogs.json", "engine/crates/beryl_card/src/characteristics.rs")
 # A constant a card file reads from the crate's `names` or `printed` module.
 CONSTANT: re.Pattern[str] = re.compile(r"\b(names|printed)::([A-Z0-9_]+)\b")
 # The same read from the crate's generated `Card` or `Printed` type.
@@ -376,7 +376,7 @@ def generate(root: Path, plan_: list[Crate], pool: list[Source]) -> list[str]:
     lines = store_lines(pool)
     index = 0
     for crate in plan_:
-        directory = root / "rust" / "cards" / crate.name
+        directory = root / "engine" / "cards" / crate.name
         for file, text in set_crate_files(crate.name).items():
             directory.mkdir(parents=True, exist_ok=True)
             (directory / file).write_text(text)
@@ -406,26 +406,26 @@ def generate(root: Path, plan_: list[Crate], pool: list[Source]) -> list[str]:
         (root / copied).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(paths.REPO / copied, root / copied)
     names = [c.name for c in plan_]
-    registry = root / "rust" / "crates" / REGISTRY
+    registry = root / "engine" / "crates" / REGISTRY
     (registry / "src").mkdir(parents=True)
     (registry / "Cargo.toml").write_text(registry_manifest(names))
     (registry / "build.rs").write_text(REGISTRY_BUILD)
     (registry / "src" / "lib.rs").write_text(REGISTRY_LIB)
     (registry / "src" / "main.rs").write_text(REGISTRY_MAIN)
-    warm = root / "rust" / "crates" / WARM
+    warm = root / "engine" / "crates" / WARM
     (warm / "src").mkdir(parents=True)
     (warm / "Cargo.toml").write_text(warm_manifest())
     (warm / "src" / "lib.rs").write_text("")
     (root / "docs" / "sample-decks").mkdir(parents=True)
-    tree = (paths.RUST / "Cargo.toml").read_text()
-    (root / "rust" / "Cargo.toml").write_text(workspace_manifest(tree))
-    shutil.copy(paths.RUST / "Cargo.lock", root / "rust" / "Cargo.lock")
+    tree = (paths.ENGINE / "Cargo.toml").read_text()
+    (root / "engine" / "Cargo.toml").write_text(workspace_manifest(tree))
+    shutil.copy(paths.ENGINE / "Cargo.lock", root / "engine" / "Cargo.lock")
     return names
 
 
 def edit_card(root: Path, crates: list[str]) -> Path:
     """Changes the code of the first clone's file of the first crate, as an edit would: a new
     item, so the compiler has more than a comment to read again. Returns the file."""
-    path = sorted((root / "rust" / "cards" / crates[0]).glob("*/*.rs"))[0]
+    path = sorted((root / "engine" / "cards" / crates[0]).glob("*/*.rs"))[0]
     path.write_text(path.read_text() + f"\nconst _: u64 = {time.time_ns()};\n")
     return path

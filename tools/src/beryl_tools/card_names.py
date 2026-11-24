@@ -27,15 +27,15 @@ ALLOWLIST: Path = paths.REPO / "data" / "card-names-allowlist.json"
 # The generic code, as directories under the repository root. `expert` and `frozen` are the
 # expert system and its frozen copy, which this project leaves alone.
 SCOPE = (
-    "rust/crates/beryl_card/src",
-    "rust/crates/beryl_card_build/src",
-    "rust/crates/beryl_kernel/src",
-    "rust/crates/beryl_rules/src",
-    "rust/crates/beryl_engine/src",
-    "rust/crates/beryl_session/src",
-    "rust/crates/beryl_scenario/src",
-    "rust/crates/beryl_scenario_types/src",
-    "rust/crates/beryl_search/src",
+    "engine/crates/beryl_card/src",
+    "engine/crates/beryl_card_build/src",
+    "engine/crates/beryl_kernel/src",
+    "engine/crates/beryl_rules/src",
+    "engine/crates/beryl_engine/src",
+    "engine/crates/beryl_session/src",
+    "engine/crates/beryl_scenario/src",
+    "engine/crates/beryl_scenario_types/src",
+    "engine/crates/beryl_search/src",
     "tools/src/beryl_tools",
 )
 EXEMPT_DIRECTORIES = {
@@ -301,7 +301,7 @@ def rust_sources(root: Path) -> list[str]:
     """Every crate's Rust source with comments and literals blanked, tests included."""
     return [
         lex_c_like(p.read_text(errors="replace"), rust=True)[1]
-        for p in sorted((root / "rust" / "crates").glob("*/src/**/*.rs"))
+        for p in sorted((root / "engine" / "crates").glob("*/src/**/*.rs"))
         if not EXEMPT_DIRECTORIES.intersection(p.parts[:-1])
     ]
 

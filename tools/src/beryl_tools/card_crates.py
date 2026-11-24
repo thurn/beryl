@@ -1,4 +1,4 @@
-"""`card crates`: writes the set crates under `rust/cards` from `data/set-groups.json`, and the
+"""`card crates`: writes the set crates under `engine/cards` from `data/set-groups.json`, and the
 list of them in `beryl_cards`' manifest, the one list Cargo makes someone keep.
 
 It first groups the store's sets again (`set_groups.update`), moves each card file whose set
@@ -22,7 +22,7 @@ from pathlib import Path
 
 from . import card_files, card_store, paths, set_groups, store_cards
 
-REGISTRY: Path = paths.RUST / "crates" / "beryl_cards" / "Cargo.toml"
+REGISTRY: Path = paths.ENGINE / "crates" / "beryl_cards" / "Cargo.toml"
 # A set crate's line among `beryl_cards`' dependencies, and among its `scenarios` feature's.
 DEPENDENCY: re.Pattern[str] = re.compile(
     r'^cards_\w+ = \{ path = "\.\./\.\./cards/cards_\w+" \}\n', re.M
@@ -243,7 +243,7 @@ def run(_args: argparse.Namespace) -> int:
 def register(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     c = commands.add_parser(
         "crates",
-        help="write the set crates under rust/cards from data/set-groups.json",
+        help="write the set crates under engine/cards from data/set-groups.json",
     )
     c.set_defaults(func=run)
 

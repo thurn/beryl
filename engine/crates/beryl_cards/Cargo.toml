@@ -1,0 +1,146 @@
+[package]
+name = "beryl_cards"
+version = "0.1.0"
+description = "The generated registry over every set crate, the card names and the decklists"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# The vocabulary a card's effect data is written in.
+beryl_card = { path = "../beryl_card" }
+# The card names and the fixed decklists, re-exported here.
+beryl_card_names = { path = "../beryl_card_names" }
+# The tokens and props card files share, re-exported here.
+beryl_card_shared = { path = "../beryl_card_shared" }
+beryl_engine = { path = "../beryl_engine" }
+# The mutation runner uses the trigger matcher to reject neighbours the engine cannot play.
+beryl_kernel = { path = "../beryl_kernel", optional = true }
+# The mutation command reports counts and surviving nodes to card check as JSON.
+serde_json = { version = "1", optional = true }
+# Behind the `scenarios` feature: the scenarios' value types, all a card file's
+# scenarios name, and the runner, for the rules library's scenarios, the generators and the
+# dump binary.
+beryl_scenario = { path = "../beryl_scenario", optional = true }
+beryl_scenario_types = { path = "../beryl_scenario_types", optional = true }
+# The set crates, `engine/cards/*`: one per group of data/set-groups.json that has a card file.
+# Cargo makes this the one list kept by hand, with the feature's below; the build script says
+# so when a new crate is missing from either.
+cards_1993 = { path = "../../cards/cards_1993" }
+cards_1994 = { path = "../../cards/cards_1994" }
+cards_1995 = { path = "../../cards/cards_1995" }
+cards_1996 = { path = "../../cards/cards_1996" }
+cards_1997 = { path = "../../cards/cards_1997" }
+cards_1998 = { path = "../../cards/cards_1998" }
+cards_1999 = { path = "../../cards/cards_1999" }
+cards_2000 = { path = "../../cards/cards_2000" }
+cards_2001 = { path = "../../cards/cards_2001" }
+cards_2002 = { path = "../../cards/cards_2002" }
+cards_2003 = { path = "../../cards/cards_2003" }
+cards_2004 = { path = "../../cards/cards_2004" }
+cards_2005 = { path = "../../cards/cards_2005" }
+cards_2006 = { path = "../../cards/cards_2006" }
+cards_2007 = { path = "../../cards/cards_2007" }
+cards_2008 = { path = "../../cards/cards_2008" }
+cards_2009 = { path = "../../cards/cards_2009" }
+cards_2010 = { path = "../../cards/cards_2010" }
+cards_2011 = { path = "../../cards/cards_2011" }
+cards_2012 = { path = "../../cards/cards_2012" }
+cards_2013 = { path = "../../cards/cards_2013" }
+cards_2014 = { path = "../../cards/cards_2014" }
+cards_2015 = { path = "../../cards/cards_2015" }
+cards_2016 = { path = "../../cards/cards_2016" }
+cards_2017 = { path = "../../cards/cards_2017" }
+cards_2018 = { path = "../../cards/cards_2018" }
+cards_2019_h1 = { path = "../../cards/cards_2019_h1" }
+cards_2019_h2 = { path = "../../cards/cards_2019_h2" }
+cards_2020_h1 = { path = "../../cards/cards_2020_h1" }
+cards_2020_h2 = { path = "../../cards/cards_2020_h2" }
+cards_2021_h1 = { path = "../../cards/cards_2021_h1" }
+cards_2021_h2 = { path = "../../cards/cards_2021_h2" }
+cards_2022_h1 = { path = "../../cards/cards_2022_h1" }
+cards_2022_h2 = { path = "../../cards/cards_2022_h2" }
+cards_2023_h1 = { path = "../../cards/cards_2023_h1" }
+cards_2023_h2 = { path = "../../cards/cards_2023_h2" }
+cards_2024_h1 = { path = "../../cards/cards_2024_h1" }
+cards_2024_h2 = { path = "../../cards/cards_2024_h2" }
+cards_2025_h1 = { path = "../../cards/cards_2025_h1" }
+cards_2025_h2 = { path = "../../cards/cards_2025_h2" }
+cards_2026_q1 = { path = "../../cards/cards_2026_q1" }
+cards_2026_q2 = { path = "../../cards/cards_2026_q2" }
+cards_2026_q3 = { path = "../../cards/cards_2026_q3" }
+cards_2026_q4 = { path = "../../cards/cards_2026_q4" }
+
+[build-dependencies]
+# Lists the set crates and writes the tables over them.
+beryl_card_build = { path = "../beryl_card_build" }
+
+[dev-dependencies]
+# Opens repository files and records each read, so Ignite reruns the tests when one changes.
+beryl_test_files = { path = "../beryl_test_files" }
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }
+# Tests read every card's scenarios and check them for surviving mutants.
+beryl_cards = { path = ".", features = ["scenarios"] }
+
+[features]
+# Every card's scenarios, the `SCENARIOS` table, the generated positions and the dump binary.
+# Tests and tools turn it on; the app never does.
+scenarios = [
+    "dep:beryl_kernel",
+    "dep:beryl_scenario",
+    "dep:beryl_scenario_types",
+    "dep:serde_json",
+    "cards_1993/scenarios",
+    "cards_1994/scenarios",
+    "cards_1995/scenarios",
+    "cards_1996/scenarios",
+    "cards_1997/scenarios",
+    "cards_1998/scenarios",
+    "cards_1999/scenarios",
+    "cards_2000/scenarios",
+    "cards_2001/scenarios",
+    "cards_2002/scenarios",
+    "cards_2003/scenarios",
+    "cards_2004/scenarios",
+    "cards_2005/scenarios",
+    "cards_2006/scenarios",
+    "cards_2007/scenarios",
+    "cards_2008/scenarios",
+    "cards_2009/scenarios",
+    "cards_2010/scenarios",
+    "cards_2011/scenarios",
+    "cards_2012/scenarios",
+    "cards_2013/scenarios",
+    "cards_2014/scenarios",
+    "cards_2015/scenarios",
+    "cards_2016/scenarios",
+    "cards_2017/scenarios",
+    "cards_2018/scenarios",
+    "cards_2019_h1/scenarios",
+    "cards_2019_h2/scenarios",
+    "cards_2020_h1/scenarios",
+    "cards_2020_h2/scenarios",
+    "cards_2021_h1/scenarios",
+    "cards_2021_h2/scenarios",
+    "cards_2022_h1/scenarios",
+    "cards_2022_h2/scenarios",
+    "cards_2023_h1/scenarios",
+    "cards_2023_h2/scenarios",
+    "cards_2024_h1/scenarios",
+    "cards_2024_h2/scenarios",
+    "cards_2025_h1/scenarios",
+    "cards_2025_h2/scenarios",
+    "cards_2026_q1/scenarios",
+    "cards_2026_q2/scenarios",
+    "cards_2026_q3/scenarios",
+    "cards_2026_q4/scenarios",
+]
+
+[[bin]]
+name = "beryl_scenario"
+required-features = ["scenarios"]

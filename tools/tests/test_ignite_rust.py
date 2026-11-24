@@ -34,8 +34,8 @@ def message(reason: str, package_id: str, **fields: object) -> str:
     return json.dumps({"reason": reason, "package_id": package_id, **fields})
 
 
-KERNEL = "path+file:///w/rust/crates/beryl_kernel#0.1.0"
-RULES = "path+file:///w/rust/crates/beryl_rules#beryl_rules@0.1.0"
+KERNEL = "path+file:///w/engine/crates/beryl_kernel#0.1.0"
+RULES = "path+file:///w/engine/crates/beryl_rules#beryl_rules@0.1.0"
 BUILD_FINISHED: str = json.dumps({"reason": "build-finished", "success": True})
 
 
@@ -69,7 +69,7 @@ def test_clippy_fails_a_package_with_a_warning_and_passes_one_without() -> None:
             "clippy:beryl_rules",
             "fail",
             "warning: needless borrow",
-            "rust/crates/beryl_rules/src/a.rs:7",
+            "engine/crates/beryl_rules/src/a.rs:7",
         ),
         ignite.Result(
             "clippy:beryl_cli",

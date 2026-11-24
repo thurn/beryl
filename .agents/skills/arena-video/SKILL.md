@@ -131,9 +131,9 @@ The kinds of event:
    a banner, a glow) it says so and draws what moved: crop closer or move the
    span, and where that fails, read the motion from a filmstrip.
 
-5. **Compare with Beryl.** Use `just b3d spec <card> <moment> --film` for
-   a card or `just b3d png <recording> --at <moment> --tree` for a still.
-   Use `just b3d motion-film <verb> [case]` for a verb with Arena samples.
+5. **Compare with Beryl.** Use `just client spec <card> <moment> --film` for
+   a card or `just client png <recording> --at <moment> --tree` for a still.
+   Use `just client motion-film <verb> [case]` for a verb with Arena samples.
    Compare what is highlighted and when, the prompt and its buttons, the
    path of each object, and how long each beat lasts.
 

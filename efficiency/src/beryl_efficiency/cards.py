@@ -1,6 +1,6 @@
 """`just efficiency cards --by <key>`: the card cohort's cost per card (docs/efficiency-
 dashboard.md, "Units" and "Rework"). The card cohort is the closed tickets whose commits first
-added a card file under `rust/cards/`. Per card is over the card files those tickets added:
+added a card file under `engine/cards/`. Per card is over the card files those tickets added:
 direct dollars and agent minutes, rework dollars beside them, and the share of the cards a
 later `fix` commit by another ticket changed. The metrics of cards, rework and lead time are
 registered here too."""

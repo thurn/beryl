@@ -32,8 +32,8 @@ Glossary
 Glossary
 """
 LINK = "https://yawgatog.com/resources/magic-rules/#"
-KERNEL = "rust/crates/beryl_kernel/src"
-RULES = "rust/crates/beryl_rules/src"
+KERNEL = "engine/crates/beryl_kernel/src"
+RULES = "engine/crates/beryl_rules/src"
 
 
 def write(root: Path, rel: str, text: str) -> None:
@@ -403,7 +403,7 @@ def test_a_documentation_change_reruns_only_the_markdown_checks() -> None:
         "citations-docs",
     }
     # And a change to rules code reads the rules checks, not the Markdown ones.
-    code = reading("rust/crates/beryl_rules/src/combat/mod.rs")
+    code = reading("engine/crates/beryl_rules/src/combat/mod.rs")
     assert {"two-player", "board-door", "file-length", "rule-ownership"} <= code
     assert not code & {"markdown-format", "citations-docs"}
 

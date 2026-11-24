@@ -22,7 +22,7 @@
 #   with the other test binaries, and the checks hold no cores while it builds.
 
 # The rollout benchmark's instruction count against the bar in
-# rust/crates/beryl_bench/count-gate.toml (that file's comments say when the bar may move), as
+# engine/crates/beryl_bench/count-gate.toml (that file's comments say when the bar may move), as
 # `counts:rollouts`, and each family's present cost against its ratio there, as
 # `counts:family/<name>` on both platforms. Each verifier uses its own calibrated limits
 # and trend. Missing or incompatible calibration makes the check incomplete.
@@ -44,10 +44,10 @@ list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list co
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run counts {checks}"
 inputs = [
   "crate:beryl_bench",
-  "rust/crates/beryl_bench/count-gate.toml",
-  "rust/Cargo.toml",
-  "rust/crates/beryl_link/src/wire/envelope.rs",
-  "rust/Cargo.lock",
+  "engine/crates/beryl_bench/count-gate.toml",
+  "engine/Cargo.toml",
+  "engine/crates/beryl_link/src/wire/envelope.rs",
+  "engine/Cargo.lock",
   "rust-toolchain.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
@@ -89,7 +89,7 @@ run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run fuzz
 inputs = [
   "crate:beryl_search",
   "crate:beryl_session",
-  "rust/Cargo.toml",
+  "engine/Cargo.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",
@@ -124,23 +124,23 @@ list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list ex
 next = "uv run --quiet --project tools python -m beryl_tools.ignite.rest next exhaust"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run exhaust {checks}"
 inputs = [
-  "rust/Cargo.toml",
-  "rust/Cargo.lock",
-  "rust/crates/beryl_card/**",
-  "rust/crates/beryl_card_build/**",
-  "rust/crates/beryl_card_names/**",
-  "rust/crates/beryl_card_records/**",
-  "rust/crates/beryl_card_shared/**",
-  "rust/crates/beryl_card_store/**",
-  "rust/crates/beryl_cards/**",
-  "rust/crates/beryl_engine/**",
-  "rust/crates/beryl_kernel/**",
-  "rust/crates/beryl_rules/**",
-  "rust/crates/beryl_scenario/**",
-  "rust/crates/beryl_scenario_types/**",
-  "rust/cards/*/Cargo.toml",
-  "rust/cards/*/build.rs",
-  "rust/cards/*/lib.rs",
+  "engine/Cargo.toml",
+  "engine/Cargo.lock",
+  "engine/crates/beryl_card/**",
+  "engine/crates/beryl_card_build/**",
+  "engine/crates/beryl_card_names/**",
+  "engine/crates/beryl_card_records/**",
+  "engine/crates/beryl_card_shared/**",
+  "engine/crates/beryl_card_store/**",
+  "engine/crates/beryl_cards/**",
+  "engine/crates/beryl_engine/**",
+  "engine/crates/beryl_kernel/**",
+  "engine/crates/beryl_rules/**",
+  "engine/crates/beryl_scenario/**",
+  "engine/crates/beryl_scenario_types/**",
+  "engine/cards/*/Cargo.toml",
+  "engine/cards/*/build.rs",
+  "engine/cards/*/lib.rs",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",
@@ -174,12 +174,12 @@ run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run scal
 inputs = [
   "tools/pyproject.toml",
   "tools/uv.lock",
-  "rust/cards/**",
-  "rust/crates/beryl_card/**",
-  "rust/crates/beryl_card_build/**",
-  "rust/crates/beryl_card_names/**",
-  "rust/crates/beryl_card_store/**",
-  "rust/crates/beryl_cards/**",
+  "engine/cards/**",
+  "engine/crates/beryl_card/**",
+  "engine/crates/beryl_card_build/**",
+  "engine/crates/beryl_card_names/**",
+  "engine/crates/beryl_card_store/**",
+  "engine/crates/beryl_cards/**",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",
@@ -212,7 +212,7 @@ list = "cargo nextest list --locked -p beryl_link_iroh --message-format json"
 # listing and builds nothing to list (docs/ignite.md, "Declaring a family").
 listing_ignores_comments = true
 run = "cargo nextest run --locked --cargo-quiet -p beryl_link_iroh --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
-inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
+inputs = ["crate-closure", "engine/Cargo.toml", "engine/.config/nextest.toml"]
 
 # Every test of Ignite's own workspace, as `ignite:<binary id>::<test>`. The workspace shares
 # nothing with the game's, so only a change under `ignite/` (or to `ignite.toml`) selects these
@@ -223,7 +223,7 @@ inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
 # Each test hashes its own package and the packages that package depends on (`crate-closure`),
 # not all of `ignite/`. With `ignite/**` as the input, every edit to a check manifest in this
 # directory, and every Ignite change that landed before a landing, changed the hash of all 1562
-# tests: on 2026-11-19 a Beryl 3D change that edited beryl3d.toml ran the whole workspace's tests
+# tests: on 2026-11-19 a client change that edited client.toml ran the whole workspace's tests
 # on each of its four landing passes, 40 to 200 s each.
 #
 # The tests run under cargo-nextest, which runs every test binary at once, from the build of
@@ -332,19 +332,19 @@ inputs = [
 # The rest of the workspace can still build without compiling the iroh transport.
 [product.iroh-tests]
 build = "cargo nextest run --no-run --locked --cargo-quiet -p beryl_link_iroh"
-dir = "rust"
-inputs = ["crate:beryl_link_iroh", "rust/Cargo.toml"]
-outputs = ["rust/target"]
+dir = "engine"
+inputs = ["crate:beryl_link_iroh", "engine/Cargo.toml"]
+outputs = ["engine/target"]
 
 # The integration test binaries the fuzz runner selects, optimized with debug assertions and
 # overflow checks on. The `rust` and `allocations` families build their own test binaries.
 [product.fuzz-tests]
 build = "cargo test --release --config profile.release.debug-assertions=true --config profile.release.overflow-checks=true --locked --no-run -p beryl_search -p beryl_session --test all --test session"
-dir = "rust"
+dir = "engine"
 inputs = [
   "crate:beryl_search",
   "crate:beryl_session",
-  "rust/Cargo.toml",
+  "engine/Cargo.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",
@@ -352,16 +352,16 @@ inputs = [
   "data/ui-conventions.json",
   "docs/sample-decks/**",
   "data/set-groups.json",
-  "rust/crates/beryl_link/src/wire/envelope.rs",
+  "engine/crates/beryl_link/src/wire/envelope.rs",
 ]
-outputs = ["rust/target"]
+outputs = ["engine/target"]
 
 # The exhaustive search's test binary, built the same way.
 [product.exhaust-tests]
 build = "cargo test --release --config profile.release.debug-assertions=true --config profile.release.overflow-checks=true --locked --no-run -p beryl_cards --test exhaust"
-dir = "rust"
-inputs = ["crate:beryl_cards", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "docs/sample-decks/**", "data/set-groups.json"]
-outputs = ["rust/target"]
+dir = "engine"
+inputs = ["crate:beryl_cards", "engine/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "docs/sample-decks/**", "data/set-groups.json"]
+outputs = ["engine/target"]
 
 # The test binaries of Ignite's workspace, which has its own lock file and target directory. The
 # `ignite` family's nextest run reuses this build. Its inputs are the workspace's crates, which

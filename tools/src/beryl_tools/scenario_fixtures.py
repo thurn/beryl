@@ -10,7 +10,7 @@ from .card_names import lex_c_like
 
 ADVICE = (
     "selects a card-file scenario; give the test its own Scenario constants "
-    "or use rust/crates/beryl_cards/src/library/"
+    "or use engine/crates/beryl_cards/src/library/"
 )
 SELECTORS: set[str] = {
     "filter",
@@ -154,11 +154,11 @@ def check(root: Path, files: Iterable[str]) -> list[str]:
     """Check Rust sources outside the card files that own the scenarios."""
     found = []
     for rel in sorted(files):
-        if not rel.endswith(".rs") or rel.startswith("rust/cards/"):
+        if not rel.endswith(".rs") or rel.startswith("engine/cards/"):
             continue
         path = root / rel
         if path.is_file():
-            in_registry = rel.startswith("rust/crates/beryl_cards/src/")
+            in_registry = rel.startswith("engine/crates/beryl_cards/src/")
             for line in borrowed_lines(path.read_text(), in_registry):
                 found.append(f"{rel}:{line}: {ADVICE}")
     return found

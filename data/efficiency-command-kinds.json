@@ -14,7 +14,7 @@
   {"kind": "ignite", "pattern": "^\\S*ignite\\s+\\S"},
   {"kind": "card tools", "pattern": "^just (card|cards|census|citations)\\b", "heavy": true},
   {"kind": "oracle", "pattern": "^just (oracle|xmage|forge)\\b", "heavy": true},
-  {"kind": "beryl 3d", "pattern": "^just b3d\\b", "heavy": true},
+  {"kind": "client", "pattern": "^just (?:client|b3d)\\b", "heavy": true},
   {"kind": "ui typecheck and unit", "pattern": "^just (ui-typecheck|ui-unit)\\b|\\b(tsc|vitest)\\b", "heavy": true},
   {"kind": "tournament", "pattern": "^just (tournament|play|review|bench)\\b", "heavy": true},
   {"kind": "python checks", "pattern": "\\b(pytest|pyre|black)\\b", "heavy": true},

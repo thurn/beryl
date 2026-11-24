@@ -41,7 +41,7 @@ SCOPE: list[str] = ["--workspace", "--exclude", LEFT_OUT]
 CLIPPY_TARGET = "target/clippy"
 
 # Clippy with every lint capped at a warning. The workspace denies every warning
-# (`[workspace.lints.rust] warnings = "deny"` in rust/Cargo.toml), so without the cap a lint
+# (`[workspace.lints.rust] warnings = "deny"` in engine/Cargo.toml), so without the cap a lint
 # fails its crate's unit, cargo keeps no result for it, and the run after the `clippy` product
 # would compile that crate again. Capped, every unit succeeds and cargo replays its cached
 # warnings on the next run, which reads each workspace package's warning as that package's
@@ -96,7 +96,7 @@ def packages() -> list[Package]:
     """The workspace's packages but `LEFT_OUT`, from `cargo metadata`."""
     run = subprocess.run(
         ["cargo", "metadata", "--format-version", "1", "--no-deps", "--locked"],
-        cwd=paths.RUST,
+        cwd=paths.ENGINE,
         capture_output=True,
         text=True,
         check=True,
@@ -158,7 +158,7 @@ def clippy_results(
     returncode: int,
     *,
     family: str = "clippy",
-    directory: str = "rust",
+    directory: str = "engine",
 ) -> list[Result]:
     """A package warning or error is a failure. A pass needs both an artifact for the
     package and a completed Cargo build, since later targets may still have diagnostics.
@@ -219,14 +219,14 @@ def diagnostic_result(
 
 
 def clippy_build() -> int:
-    return subprocess.run(CLIPPY, cwd=paths.RUST, check=False).returncode
+    return subprocess.run(CLIPPY, cwd=paths.ENGINE, check=False).returncode
 
 
 def clippy_run(
     checks: list[str],
     *,
     command: list[str] = CLIPPY,
-    workspace: Path = paths.RUST,
+    workspace: Path = paths.ENGINE,
     family: str = "clippy",
 ) -> list[Result]:
     wanted = asked(family, checks)
@@ -292,7 +292,7 @@ def format_run(checks: list[str]) -> list[Result]:
         files = rust_files(package)
         run = subprocess.run(
             ["rustfmt", "--check", "--edition", "2024", *map(str, files)],
-            cwd=paths.RUST,
+            cwd=paths.ENGINE,
             capture_output=True,
             text=True,
             errors="replace",
@@ -382,7 +382,7 @@ def doctests_run(checks: list[str]) -> list[Result]:
         # Not `-q`: it hides cargo's `Doc-tests <crate>` lines, which say whose results follow.
         ["cargo", "test", "--locked", "--no-fail-fast", "--doc"]
         + [a for name in wanted for a in ("-p", name)],
-        cwd=paths.RUST,
+        cwd=paths.ENGINE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -428,7 +428,7 @@ def allocations_run(checks: list[str]) -> list[Result]:
         ["cargo", "nextest", "list", "--locked", "--cargo-quiet"]
         + ["--list-type", "binaries-only", "--message-format", "json"]
         + [a for name in wanted for a in ("-p", name)],
-        cwd=paths.RUST,
+        cwd=paths.ENGINE,
         capture_output=True,
         text=True,
         check=False,
@@ -460,7 +460,7 @@ def allocations_run(checks: list[str]) -> list[Result]:
 
 
 def card_check(path: Path) -> str:
-    """A card file's check: `card-text:<crate>/<set>/<card>`, its path under rust/cards."""
+    """A card file's check: `card-text:<crate>/<set>/<card>`, its path under engine/cards."""
     from .. import card_files
 
     return "card-text:" + path.relative_to(card_files.CARDS).with_suffix("").as_posix()
@@ -512,7 +512,7 @@ def card_text_run(checks: list[str]) -> list[Result]:
     wanted = [c for c in checks if c.startswith("card-text:")]
     if not wanted:
         return []
-    texts = render_diff.rendered([], system.exe(paths.RUST / SCENARIO_BINARY))
+    texts = render_diff.rendered([], system.exe(paths.ENGINE / SCENARIO_BINARY))
     if isinstance(texts, str):
         print(f"card-text: {texts}", file=sys.stderr)
         return []

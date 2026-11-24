@@ -129,7 +129,7 @@ def card(name: str) -> str:
 
 
 def repository(root: Path) -> None:
-    cards = root / "rust" / "cards" / "cards_1" / "set"
+    cards = root / "engine" / "cards" / "cards_1" / "set"
     cards.mkdir(parents=True)
     (cards / "alpha.rs").write_text(card("Alpha"))
     (cards / "beta_gamma.rs").write_text(card("Beta Gamma"))
@@ -214,11 +214,11 @@ def test_exhaust_yields_a_check_per_card_with_the_card_file_as_input(
     assert found == [
         {
             "check": "exhaust:alpha/depth6-nodes20000",
-            "inputs": ["rust/cards/cards_1/set/alpha.rs"],
+            "inputs": ["engine/cards/cards_1/set/alpha.rs"],
         },
         {
             "check": "exhaust:beta-gamma/depth6-nodes20000",
-            "inputs": ["rust/cards/cards_1/set/beta_gamma.rs"],
+            "inputs": ["engine/cards/cards_1/set/beta_gamma.rs"],
         },
     ]
     assert adapter.card_names(tmp_path)["beta-gamma"] == "Beta Gamma"

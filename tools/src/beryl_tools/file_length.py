@@ -18,17 +18,17 @@ LIMIT = 800
 ALLOWLIST: Path = paths.REPO / "data" / "file-length-allowlist.json"
 
 SCOPE = (
-    "rust/crates",
-    "rust/cards",
-    "rust/beryl3d/crates",
+    "engine/crates",
+    "engine/cards",
+    "client/crates",
     "tools/src",
 )
 SUFFIXES = {".rs", ".py"}
 # Paths from the repository root: a directory (its whole subtree) or a file.
 EXEMPT = (
-    "rust/crates/beryl_search/src/frozen",
-    "rust/crates/beryl_search/src/expert",
-    "rust/crates/beryl_search/src/long.rs",
+    "engine/crates/beryl_search/src/frozen",
+    "engine/crates/beryl_search/src/expert",
+    "engine/crates/beryl_search/src/long.rs",
 )
 # Tests live in `tests` directories (Rust's `tests/` and `src/tests`, tools/tests) or in
 # files named tests.rs.

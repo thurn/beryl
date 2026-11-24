@@ -7,11 +7,11 @@ directory `IGNITE_READS` names. A test that opens a repository file with `std::f
 cached result after that file changes, and only a cache audit, which reruns 0.5% of hits,
 would notice.
 
-So this check reads the test code of the `rust/` and `ignite/` workspaces and reports a raw
+So this check reads the test code of the `engine/`, `client/` and `ignite/` workspaces and reports a raw
 read (`fs::read`, `fs::read_to_string`, `fs::read_dir`, `File::open`) that opens a repository
 path. It tells a repository path from a temporary folder in two ways:
 
-- A file whose test code names `CARGO_MANIFEST_DIR` (or Beryl 3D's `recordings::root()`,
+- A file whose test code names `CARGO_MANIFEST_DIR` (or The client's `recordings::root()`,
   which is built from it) and also makes a raw read opens the checkout through it. Every line
   that names it is reported. A test that reads only temporary folders never names it.
 - A raw read in a statement with a string literal that names a tracked repository path, such
@@ -40,14 +40,14 @@ from pathlib import Path
 from . import paths
 
 # The workspaces whose test code is read.
-SCOPE = ("rust/", "ignite/")
+SCOPE = ("engine/", "client/", "ignite/")
 # A raw read of the filesystem. A call through a helper (`test_files::read_to_string`) is
 # not one.
 RAW_READ: re.Pattern[str] = re.compile(
     r"(?<!test_files::)\b(?:fs::read_dir|fs::read_to_string|fs::read|File::open)\b"
 )
 # A way to name the checkout other than the helper: the variable Cargo sets to a package's
-# directory, and Beryl 3D's `recordings::root()`, which is built from it.
+# directory, and The client's `recordings::root()`, which is built from it.
 ROOTS: re.Pattern[str] = re.compile(r"CARGO_MANIFEST_DIR|recordings::root\(\)")
 # A plain string literal on one line.
 LITERAL: re.Pattern[str] = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
@@ -58,7 +58,7 @@ STATEMENT_LINES = 3
 NOT_MATCHED = ("ignite/",)
 # The helpers themselves.
 HELPERS = (
-    "rust/crates/beryl_test_files/",
+    "engine/crates/beryl_test_files/",
     "ignite/crates/ignite_core/src/test_files.rs",
 )
 
@@ -137,7 +137,13 @@ def reads(path: str, text: str, known: set[str]) -> list[str]:
         if named is not None and "env_remove" not in line:
             found.append(f"{path}:{i + 1}: opens the checkout through {named.group()}")
     if not path.startswith(NOT_MATCHED):
-        bases = (posixpath.dirname(path), package_dir(path, known), "rust", "")
+        bases = (
+            posixpath.dirname(path),
+            package_dir(path, known),
+            "engine",
+            "client",
+            "",
+        )
         code_lines = {i for i, _ in code}
         for i in raw:
             for number in range(max(0, i - STATEMENT_LINES), i + 1):

@@ -19,7 +19,7 @@ The families:
 
 - `counts`: `counts:rollouts` is the rollout benchmark's instruction count against its bar, and
   `counts:family/<name>` a family's present cost against its ratio, both in
-  `rust/crates/beryl_bench/count-gate.toml`. The count runs in the `beryl-bench` virtual machine
+  `engine/crates/beryl_bench/count-gate.toml`. The count runs in the `beryl-bench` virtual machine
   under Lima or WSL. After `counts:rollouts` a run in the `tip` class (`IGNITE_CLASS`)
   stores the verified count for its verifier and calibration and files `count-creep` and
   `count-lower` tickets through `ignite ticket`, as `count_trend.py` does; they never change the
@@ -69,7 +69,7 @@ CANNOT_RUN = 125
 # The ticket client. `IGNITE_BIN` names it when it is not on the path.
 IGNITE_ENV = "IGNITE_BIN"
 
-GATE_FILE = Path("rust/crates/beryl_bench/count-gate.toml")
+GATE_FILE = Path("engine/crates/beryl_bench/count-gate.toml")
 ROLLOUTS = "counts:rollouts"
 FAMILY_PREFIX = "counts:family/"
 
@@ -119,11 +119,11 @@ CARD_READERS = (
 )
 # What those tests read besides the modules they import.
 SCALE_INPUTS = [
-    "rust/cards",
-    "rust/crates/beryl_card",
-    "rust/crates/beryl_card_build",
-    "rust/crates/beryl_card_store",
-    "rust/crates/beryl_cards",
+    "engine/cards",
+    "engine/crates/beryl_card",
+    "engine/crates/beryl_card_build",
+    "engine/crates/beryl_card_store",
+    "engine/crates/beryl_cards",
     "data/card-store.tsv",
     "data/set-groups.json",
 ]
@@ -177,7 +177,7 @@ def list_counts(root: Path) -> list[dict[str, Any]]:
 def card_names(root: Path) -> dict[str, str]:
     """Each card file's slug mapped to the card's name, which the exhaustive search takes."""
     names: dict[str, str] = {}
-    for file in sorted((root / "rust" / "cards").glob("*/*/*.rs")):
+    for file in sorted((root / "engine" / "cards").glob("*/*/*.rs")):
         name = card_name(file.read_text())
         if name:
             names[slug(name)] = name
@@ -299,7 +299,7 @@ def cargo(
 ) -> tuple[int, str]:
     done = subprocess.run(
         ["cargo", *args],
-        cwd=root / "rust",
+        cwd=root / "engine",
         env={**os.environ, **(env or {})},
         stdin=subprocess.DEVNULL,
         capture_output=True,

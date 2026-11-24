@@ -1,6 +1,6 @@
 # Rust and Python build output.
-/rust/target/
-/rust/beryl3d/target/
+/engine/target/
+/client/target/
 # The temporary names warm.py clones and moves the caches through (`clone_into`, `replace`).
 .*.tmp-[0-9]*/
 *.tmp-[0-9]*/

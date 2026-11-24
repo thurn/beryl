@@ -6,7 +6,7 @@ uses tens of megabytes. Its memory appears to grow with every file path it has e
 never shrinks: cargo names each build's object files anew, and every worktree, clone and
 temporary directory adds paths. A sample of 20 minutes of file events that day held 142,115
 events on 102,907 distinct paths. Beryl's tools now make fewer new paths (`coverage.in_tree`
-reuses one tree path; `just b3d` clones its build directory once per tree), but builds still
+reuses one tree path; `just client` clones its build directory once per tree), but builds still
 make them, so only a restart gives the memory back. launchd starts the daemon again at once.
 
 Restarting it takes root, so this file installs itself as a launchd daemon, which needs the

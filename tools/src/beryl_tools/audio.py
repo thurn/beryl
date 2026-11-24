@@ -1,4 +1,4 @@
-"""`by audio`: Beryl 3D's music and sound effects, transcoded from the CC0 packs staged in
+"""`by audio`: The client's music and sound effects, transcoded from the CC0 packs staged in
 $BERYL_CACHE/audio-sources into data/audio/assets, as data/audio/manifest.json selects them.
 
 The outputs are committed, so the app and its CI never need the packs or ffmpeg; this command

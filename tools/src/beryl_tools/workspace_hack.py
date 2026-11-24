@@ -15,8 +15,8 @@ resolves differently, with the union of the features the whole workspace and the
 it. It lists them twice: as `[dependencies]` for the target side of the build and as
 `[build-dependencies]` for the host side, which build scripts and proc macros use and which
 Cargo resolves separately. Every workspace package names it as a dev-dependency, never a
-normal one: the kernel, rules and card crates have no runtime dependencies, and the Beryl 3D
-workspace (rust/beryl3d) depends on beryl_cli, whose normal dependencies it resolves with its
+normal one: the kernel, rules and card crates have no runtime dependencies, and the the client
+workspace (client) depends on beryl_cli, whose normal dependencies it resolves with its
 own versions. A plain build of the whole workspace still turns on what its tests do
 (tools/tests/test_cli_build.py), because the hack crate is a workspace member. The reference
 includes the iroh transport so its tests can run separately and share the other artifacts.
@@ -49,7 +49,7 @@ from pathlib import Path
 from . import paths
 
 HACK = "beryl_workspace_hack"
-MANIFEST: Path = paths.RUST / "crates" / HACK / "Cargo.toml"
+MANIFEST: Path = paths.ENGINE / "crates" / HACK / "Cargo.toml"
 NATIVE_TARGETS = {"darwin": "macos", "win32": "windows"}
 
 HEADER = """# Written by `just workspace-hack` (tools/src/beryl_tools/workspace_hack.py), which says why
@@ -105,7 +105,7 @@ def feature_tree(
             "{p}|{f}",
             *selection,
         ],
-        cwd=paths.RUST,
+        cwd=paths.ENGINE,
         capture_output=True,
         text=True,
         check=True,
@@ -145,10 +145,10 @@ def members() -> list[str]:
     """The names of the workspace's packages, read from their manifests. The reads
     are recorded in data/pytest-reads.json so an edit to any manifest reruns the
     feature checks."""
-    workspace = tomllib.loads((paths.RUST / "Cargo.toml").read_text())["workspace"]
+    workspace = tomllib.loads((paths.ENGINE / "Cargo.toml").read_text())["workspace"]
     names: list[str] = []
     for pattern in workspace["members"]:
-        for directory in sorted(paths.RUST.glob(pattern)):
+        for directory in sorted(paths.ENGINE.glob(pattern)):
             manifest_path = directory / "Cargo.toml"
             if manifest_path.is_file():
                 names.append(

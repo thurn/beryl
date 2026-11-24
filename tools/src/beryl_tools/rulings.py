@@ -15,7 +15,7 @@ Json = card_store.Json
 Key = tuple[str, str]
 
 LEDGER: Path = paths.REPO / "data" / "rulings-ledger.json"
-LIBRARY: Path = paths.REPO / "rust" / "crates" / "beryl_cards" / "src" / "library"
+LIBRARY: Path = paths.REPO / "engine" / "crates" / "beryl_cards" / "src" / "library"
 DISPOSITIONS = {"scenario", "covered", "untestable"}
 IDENTITY = {"published_at", "hash"}
 SCENARIO_BUILDER: re.Pattern[str] = re.compile(

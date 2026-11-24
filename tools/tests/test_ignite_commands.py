@@ -5,11 +5,11 @@ Ignite splits a family's `list` and `run` commands on whitespace and runs them w
 characters. For a `nextest` family it appends `-E <filterset>` naming the tests to run, and reads
 each test's outcome from the libtest JSON in the command's output; `{checks}` is replaced only in
 a `jsonl` family's `run`. The first landing gate after the switch to Ignite failed on both: the
-`b3d-test` family's run passed nextest the literal filterset `{checks}`, and the `rust` family's
+`client-test` family's run passed nextest the literal filterset `{checks}`, and the `rust` family's
 list passed `'not` and `binary(allocations)'` as two arguments. A `nextest` family's commands run
 in the directory of the first product it needs (`nextest_dir` in
 ignite/crates/ignite_daemon/src/checks/execute.rs), so the `rust` family, run in rust/, named
-rust/rust/Cargo.toml as its manifest.
+rust/engine/Cargo.toml as its manifest.
 """
 
 from __future__ import annotations

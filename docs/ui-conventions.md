@@ -105,7 +105,7 @@ restore the old behavior.
 - **A finished ability.** It is removed at once, with no fade (by-c8b).
 - **Wording.** Arena's exactly, case and punctuation too: "All Attack", "Choose
   attackers." Every prompt's title and buttons are one table in the session
-  (`rust/crates/beryl_session/src/prompt/wording.rs`), each entry beside the
+  (`engine/crates/beryl_session/src/prompt/wording.rs`), each entry beside the
   recording moments that show it. A browser's title is the line that asks: its
   sentence of rules text, or its heading where the line under it only says how
   to drag. A pick is confirmed by "Submit" and the number picked, an arrangement
@@ -225,7 +225,7 @@ restore the old behavior.
   about 14 card widths across, on the desktop and the phone. A card's turn and
   how far it sinks follow its distance from the fan's middle, so a crowded hand
   lies nearly flat and a spread one curves, and no card turns or drops further
-  than its neighbors. Beryl 3D shows the printed cost on the card face.
+  than its neighbors. the client shows the printed cost on the card face.
   Inspecting a card reveals its printed cost when a neighbor covers it. Measured
   from whole-table frames: a card's turn grows by about 0.0275° for each pixel
   it lies from the middle, with cards 180 pixels wide on a table 1920 wide, at
@@ -637,7 +637,7 @@ recordings do not show them.
 - **Controlling another player.** While the viewer controls the opponent's turn,
   each decision they make for the opponent says "For opponent" before what it
   asks; a priority says only that.
-- **A hand in two rows.** In Beryl 3D, a hand with more cards than one fan
+- **A hand in two rows.** In the client, a hand with more cards than one fan
   across the window holds with a strip of each uncovered, such as 60 cards, is
   laid in two or more fans, one behind and above the other, in hand order from
   the back fan to the front. Each card keeps a strip to press, and raises under
@@ -651,11 +651,11 @@ recordings do not show them.
 
 Every change on the table is shown by one of these, applied to a card, an
 ability or a player by a step of the script the session sends
-(`rust/crates/beryl_protocol/src/script`, K23). The list is closed: what Arena
+(`engine/crates/beryl_protocol/src/script`, K23). The list is closed: what Arena
 does not show is composed from these. A verb's duration, delay, stagger and
 curve, and each case's, are the values below. The session reads them to time
-each step of the script (`beryl_protocol/src/script/timing.rs`). Beryl 3D plays
-that timing. `just b3d check` checks the motion in a recording, and
+each step of the script (`beryl_protocol/src/script/timing.rs`). the client
+plays that timing. `just client check` checks the motion in a recording, and
 `data/arena-motion.json` holds Arena's measured instances (K27).
 
 - **fly.** A card travels from where it is to its new place, and flashes as it
@@ -906,7 +906,7 @@ An effect is light or a change of surface on one card or one player's life
 total, begun by a step of a verb as it starts, as it ends or as its blow lands
 and played on the client's script clock. Effects leave card placement and script
 timing alone. The list is closed. Each effect has one look defined under
-`data/beryl3d/effects/`, and a verb names the effects its steps begin. A mark
+`data/client/effects/`, and a verb names the effects its steps begin. A mark
 says what a player may do; an effect says what just happened, and is gone.
 
 - **glow.** A halo of warm light around a card, bright at once, that spreads and

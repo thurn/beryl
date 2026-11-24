@@ -9,7 +9,7 @@ Find what is wrong with Beryl's UI the way a strong Magic player would find it o
 their first evening with the app, but with a QA engineer's instruments. The
 output is a ranked list of defects, each with steps to reproduce and evidence.
 
-You are judging the experience, not the code. Read `rust/beryl3d/` freely to learn
+You are judging the experience, not the code. Read `client/` freely to learn
 what something is meant to do, but every finding must be something a player
 sees, waits through, or cannot do.
 
@@ -100,15 +100,15 @@ when it affects something players do every turn, and Design otherwise.
 ## Native harness
 
 ```bash
-just b3d play --for 20m
-just b3d live tree --app <pid>
-just b3d live png --app <pid>
-just b3d live do 'press button "Keep"' --app <pid>
-just b3d frames
-just b3d live quit --app <pid>
+just client play --for 20m
+just client live tree --app <pid>
+just client live png --app <pid>
+just client live do 'press button "Keep"' --app <pid>
+just client frames
+just client live quit --app <pid>
 ```
 
-- **Start** with `just b3d play --for <duration>` (at most 1h; `--opponent
+- **Start** with `just client play --for <duration>` (at most 1h; `--opponent
   <agent>` picks another, `mcts-hidden` by default). It opens the windowless app
   on a fresh game, waits until the tree shows the `game` region and prints the
   process id, the socket and the commands below. The app ends itself after
@@ -118,15 +118,15 @@ just b3d live quit --app <pid>
   pictures with `live png` and read the PNG it names, before and after every
   action.
 - **Act** with `live do '<action>'`: `press`, `hover`, `drag` and the other
-  actions in the [b3d skill](../b3d/SKILL.md). Use the tree to locate targets
+  actions in the [client skill](../client/SKILL.md). Use the tree to locate targets
   and the picture to judge which targets a player can discover and reach.
 - **Measure** with the tree's clock for waits (take the `t=` before and after an
-  action, and until the next prompt appears), and `just b3d frames` for frame
+  action, and until the next prompt appears), and `just client frames` for frame
   times, late frames and the worst frames of the run.
 - **Quit** with `live quit`. Do it after a failed check too.
 
-Use `just b3d list` to find recordings for states live play cannot reach.
-`data/beryl3d/fixtures.json` defines the named fixtures. `just b3d check`
+Use `just client list` to find recordings for states live play cannot reach.
+`data/client/fixtures.json` defines the named fixtures. `just client check`
 reports interface faults in a recording. Use `tree`, `diff`, `png` and
 `film` to inspect its actions at specific times and test it in both layouts.
 
@@ -135,7 +135,7 @@ reports interface faults in a recording. Use `tree`, `diff`, `png` and
 Keep a ledger as you go and do not stop until it is full:
 
 - **Every decision kind.** The prompt shapes and purposes in
-  `rust/crates/beryl_protocol/src/protocol/` describe what the engine can ask. For each kind, meet it live if you can (or else in a
+  `engine/crates/beryl_protocol/src/protocol/` describe what the engine can ask. For each kind, meet it live if you can (or else in a
   fixture), answer it at least two different ways, and note how it was asked.
 - **Every piece of state.** `ObjectView`, `PlayerView` and `StackItem` in the
   protocol module list what the engine tells the UI. For every field of those types,
@@ -155,7 +155,7 @@ Keep a ledger as you go and do not stop until it is full:
 - **Every multi-pick.** Meet each decision that takes several picks with at
   least three eligible choices. That includes assigning several of your
   creatures to one of theirs, as when two block one attacker. Set the state up
-  in play, or use a fixture from `data/beryl3d/fixtures.json` that names it.
+  in play, or use a fixture from `data/client/fixtures.json` that names it.
 - **Every row swept.** Move the pointer across each row of cards, in an early
   state and on a crowded board.
 - **Every opponent.** The start screen lists agents. Play at least one full game
@@ -180,7 +180,7 @@ At every step, do this:
 2. **Check the state.** Use `live tree` to compare the visible board and
    prompt with the resolved elements and their states. For a wrong motion,
    find the same case in a recording or card spec and inspect its script
-   steps with `just b3d timeline`.
+   steps with `just client timeline`.
 3. **Act as a player would.** Use the pointer, at visible points, and the
    gestures the UI seems to invite (drag for cards, click for buttons). If the
    way to do something is not obvious, record that before you read the code to

@@ -1,0 +1,84 @@
+{
+  "crates": {
+    "kit_base": {
+      "level": "toolkit",
+      "order": 0
+    },
+    "kit_text": {
+      "level": "toolkit",
+      "order": 1
+    },
+    "kit_frame": {
+      "level": "toolkit",
+      "order": 2
+    },
+    "kit_ui": {
+      "level": "toolkit",
+      "order": 3
+    },
+    "kit_space": {
+      "level": "toolkit",
+      "order": 4
+    },
+    "kit_fx": {
+      "level": "toolkit",
+      "order": 5
+    },
+    "kit_scene": {
+      "level": "toolkit",
+      "order": 6
+    },
+    "kit_probe": {
+      "level": "toolkit",
+      "order": 7
+    },
+    "game_table": {
+      "level": "game",
+      "order": 8
+    },
+    "game_play": {
+      "level": "game",
+      "order": 9
+    },
+    "game_hud": {
+      "level": "game",
+      "order": 10
+    },
+    "game_manual": {
+      "level": "game",
+      "order": 11
+    },
+    "game_probe": {
+      "level": "game",
+      "order": 12
+    },
+    "app_screens": {
+      "level": "app",
+      "order": 13
+    },
+    "app_client": {
+      "level": "app",
+      "order": 14
+    }
+  },
+  "cap_lines": 12000,
+  "cap_allowances": {},
+  "protocol_literals": {},
+  "profile_words": {},
+  "web_citations": {
+    "app_client": 26,
+    "app_screens": 10,
+    "beryl_client": 1,
+    "beryl_assets": 8,
+    "beryl_inspect": 2,
+    "beryl_render": 1,
+    "game_hud": 78,
+    "game_manual": 55,
+    "game_play": 40,
+    "game_probe": 4,
+    "game_table": 42,
+    "kit_base": 16,
+    "kit_text": 0,
+    "kit_ui": 21
+  }
+}

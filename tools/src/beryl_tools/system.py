@@ -179,7 +179,7 @@ def descendants_cpu_seconds(pid: int) -> float:
 
     A check step killed at its limit is reaped only after its children were killed with it, so
     `wait4` gives the step's own usage and nothing of the cargo and rustc processes under it,
-    and the run log recorded about 0.4 CPU seconds for Beryl 3D `record` steps cut off after
+    and the run log recorded about 0.4 CPU seconds for the client `record` steps cut off after
     180 s whether they had compiled for all of it or waited on a lock. So the step runner reads
     this just before the kill."""
     if WINDOWS:

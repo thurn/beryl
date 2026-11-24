@@ -10,7 +10,7 @@ from pathlib import Path
 
 from . import card_names, citations, paths
 
-SOURCE_ROOTS = ("rust/crates/beryl_kernel/src", "rust/crates/beryl_rules/src")
+SOURCE_ROOTS = ("engine/crates/beryl_kernel/src", "engine/crates/beryl_rules/src")
 ALLOWLIST = "data/rule-ownership-allowlist.json"
 HEADER = "//! Implements:"
 SEE: re.Pattern[str] = re.compile(r"\bsee[\s(]*$", re.IGNORECASE)

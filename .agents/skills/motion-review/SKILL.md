@@ -22,8 +22,8 @@ is ever committed.
 
 ## 1. Film the verb
 
-Run `just b3d motion-film <verb> [case]` and save its output for the reviewer.
-The tool selects a recording from `data/beryl3d/motion-recordings.json` or
+Run `just client motion-film <verb> [case]` and save its output for the reviewer.
+The tool selects a recording from `data/client/motion-recordings.json` or
 uses `--recording <name>`. It films the first step of each case from both
 seats in both layouts at 15 frames per second and 760 pixels wide. It cuts
 available Arena instances at the same rate and width. Use `--instances N`
@@ -32,7 +32,7 @@ to choose how many Arena instances to cut.
 The output names each film and Arena frame folder and lists the step, any
 steps playing at the same time and what moves in each frame. The tool reports
 missing Arena recordings. For a closer look at one instant, run
-`just b3d png <recording> --at <moment> --tree`.
+`just client png <recording> --at <moment> --tree`.
 
 ## 2. Hand it to a fresh reviewer
 

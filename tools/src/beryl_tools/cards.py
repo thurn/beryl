@@ -3,8 +3,8 @@ of every card (scryfall.py downloads it into the cache and reuses it for a week,
 `--refresh`), in one pass with no per-card request, and writes data/card-store.tsv, the card
 store (card_store.py specifies it): a record for every card in the pool and every token or
 emblem a pool card makes (its `all_parts`). The app serves the UI the records it asks for by
-name (rust/crates/beryl_session/src/card_records.rs) and downloads the images themselves on
-demand (rust/crates/beryl_art/src/lib.rs). Beside the store it writes set-groups.json, the
+name (engine/crates/beryl_session/src/card_records.rs) and downloads the images themselves on
+demand (engine/crates/beryl_art/src/lib.rs). Beside the store it writes set-groups.json, the
 crates card files go in by first-printing set (set_groups.py), and catalogs.json, Scryfall's
 type and keyword catalogs and the pool's counter kinds (catalogs.py).
 

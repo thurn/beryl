@@ -13,7 +13,7 @@ import tempfile
 import tomllib
 
 from . import bench, paths, system, video
-from .beryl3d import vm
+from .client import vm
 
 SCANNER: Path = Path(__file__).with_name("disk_usage_apfs.cc")
 WORKTREES = "Ignite-managed worktrees"
@@ -165,7 +165,7 @@ def mobile_roots(home: Path) -> list[Root]:
     roots.extend(
         Root(MOBILE, "Xcode DerivedData", path)
         for path in children(library / "Xcode/DerivedData")
-        if path.name.casefold().startswith(("beryl3d-", "beryl_app-"))
+        if path.name.casefold().startswith(("beryl-client-", "beryl3d-", "beryl_app-"))
     )
     for device in (library / "CoreSimulator/Devices").glob("*/device.plist"):
         try:
@@ -181,7 +181,7 @@ def mobile_roots(home: Path) -> list[Root]:
 def app_roots(home: Path) -> list[Root]:
     library = home / "Library"
     locations = {
-        "Application Support": ("ca.thurn.beryl", "beryl3d"),
+        "Application Support": ("ca.thurn.beryl", "beryl"),
         "Caches": ("beryl-before", "ca.thurn.beryl"),
         "Logs": ("ca.thurn.beryl",),
         "WebKit": ("beryl", "beryl-before", "ca.thurn.beryl"),

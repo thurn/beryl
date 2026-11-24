@@ -3,7 +3,7 @@ name: arena-re
 description: >-
   Reverse-engineer how MTG Arena implements a visual effect, shader, animation,
   highlight, spline, or combat/UI indicator from the locally installed macOS
-  MTGA client, and translate it clean-room into Beryl 3D. Use when designing or
+  MTGA client, and translate it clean-room into the client. Use when designing or
   matching complex Arena VFX, shaders, particle systems, card highlights,
   targeting lines, or multi-stage animations where video frames alone do not
   reveal the underlying rendering technique.
@@ -13,7 +13,7 @@ description: >-
 
 Use this skill alongside `arena-video` and `arena-pixel-match` when building
 rich VFX, shaders, particle systems, highlights, or card-motion animations in
-Beryl 3D and gameplay video alone does not explain *how* MTG Arena renders or
+the client and gameplay video alone does not explain *how* MTG Arena renders or
 evaluates them (blend modes, UV distortion math, color transfer curves, spline
 interpolation, Hermite timing curves, state flags, or layer stacking).
 
@@ -251,23 +251,23 @@ Common things C# disassembly resolves in minutes that video alone hides:
 - **Adaptive stagger caps**: e.g., `ZoneTransferGroup` compressing `0.25 s`
   stagger to `1.5 / count` when `0.25 * count > 1.5 s`.
 
-### 5. Author clean-room Rust + WGSL for Beryl 3D
+### 5. Author clean-room Rust + WGSL for the client
 
-Translate the *technique* cleanly into Beryl 3D's architecture
-(`docs/beryl-3d.md` and `rust/beryl3d/AGENTS.md`):
+Translate the *technique* cleanly into the client's architecture
+(`docs/beryl-3d.md` and `client/AGENTS.md`):
 
 #### For VFX & Shaders
 
 - **Baseline vs. Enhanced split (Decision C8)**: Leave Baseline's frozen
-  `rust/beryl3d/crates/beryl_render/src/shader.wgsl` untouched (1 texture sample
+  `client/crates/beryl_render/src/shader.wgsl` untouched (1 texture sample
   per fragment, 2015 floor / OpenGL ES 3.0 budget). Put rich procedural noise,
   UV distortion, Fresnel rims, bloom, and extra particles in the **Enhanced**
-  tier (`rust/beryl3d/crates/beryl_render/src/enhanced/`).
+  tier (`client/crates/beryl_render/src/enhanced/`).
 - **`Draw` record & `shader_cost` awareness**: `kit_frame::frame::Draw` is fixed
   at 80 bytes (`uv: [u16; 4]`, `params: [f32; 4]`). Adding branches to `fs_lit`
   in `enhanced/entry.wgsl` increases entry-point naga expressions charged to
   every Enhanced material (`beryl_render/tests/all/shader_cost.rs`). For a
-  single lightweight material, update `data/beryl3d/gates.json` deliberately;
+  single lightweight material, update `data/client/gates.json` deliberately;
   for multiple bespoke VFX shaders, add a dedicated Enhanced VFX render pipeline
   instead of expanding `fs_lit`.
 - **Bloom routing**: `enhanced/bloom.rs` only blooms `Band::Glows` and
@@ -276,7 +276,7 @@ Translate the *technique* cleanly into Beryl 3D's architecture
   overlapping glows and arrows do not clip to pure white.
 - **Premultiplied body + additive rim**: Combine a premultiplied translucent
   colored plasma/curtain (`alpha > 0`) with additive bright rims and halos
-  (`alpha = 0` contribution) in the same fragment output—Beryl 3D's premultiplied
+  (`alpha = 0` contribution) in the same fragment output—the client's premultiplied
   blend state (`One`, `OneMinusSrcAlpha`) supports both simultaneously in one
   pass.
 - **Procedural noise vs. code-generated atlas**: Simple effects run cleanly with
@@ -293,23 +293,23 @@ Translate the *technique* cleanly into Beryl 3D's architecture
 
 #### For 3D Card Motion, Splines & Timing
 
-Key Beryl 3D files to read and update together:
+Key the client files to read and update together:
 
 - **Step durations, phase splits, stagger & regrouping**:
-  `data/ui-conventions.json`, `rust/crates/beryl_protocol/src/script/timing.rs`
+  `data/ui-conventions.json`, `engine/crates/beryl_protocol/src/script/timing.rs`
   (and `timing/rules.rs` and `timing/tests.rs`).
 - **Compact 3D spline & Hermite curve engine**:
-  `rust/beryl3d/crates/kit_base/src/pose/spline.rs` (`Shape::Spline`,
+  `client/crates/kit_base/src/pose/spline.rs` (`Shape::Spline`,
   `HermiteCurve`, `SplineNode`) and
-  `rust/beryl3d/crates/kit_base/src/pose/segment.rs`.
-- **Data-driven verb tuning & layout profiles**: `data/beryl3d/verbs.json`,
-  `rust/beryl3d/crates/kit_base/src/data/verbs.rs`,
-  `data/beryl3d/profiles/desktop.json` and `phone.json`.
+  `client/crates/kit_base/src/pose/segment.rs`.
+- **Data-driven verb tuning & layout profiles**: `data/client/verbs.json`,
+  `client/crates/kit_base/src/data/verbs.rs`,
+  `data/client/profiles/desktop.json` and `phone.json`.
 - **Verb playback & camera projection**:
-  `rust/beryl3d/crates/game_play/src/verbs/fly.rs`.
+  `client/crates/game_play/src/verbs/fly.rs`.
 - **Resting zone and hand order**:
-  `rust/beryl3d/crates/game_table/src/table/hands.rs`.
-- **Probe tests**: `rust/beryl3d/crates/game_probe/tests/all/verbs_fly_draw.rs`.
+  `client/crates/game_table/src/table/hands.rs`.
+- **Probe tests**: `client/crates/game_probe/tests/all/verbs_fly_draw.rs`.
 
 Essential motion translation rules:
 
@@ -318,10 +318,10 @@ Essential motion translation rules:
   an 833 ms opponent draw into 475 ms) distorts the pause shoulders and flight
   feel. Update `data/ui-conventions.json` and `beryl_protocol::script::timing`,
   run `just conventions`, and inspect the updated playback with
-  `just b3d timeline <recording>`.
+  `just client timeline <recording>`.
 - **Avoid camera depth-ratio speed warp**: Arena's camera sits far enough back
   that library-to-hand depth varies by only `~1.6:1`, so 3D world Catmull-Rom
-  maps evenly to screen speed. Beryl 3D's camera puts the table at `~1300 mm`
+  maps evenly to screen speed. The client's camera puts the table at `~1300 mm`
   and the hand at `~300 mm` (`~4.8:1` ratio), which warps screen-space velocity
   if Catmull-Rom runs directly in Beryl world coordinates. Use `Shape::Spline`'s
   **homogeneous camera-ray Catmull-Rom** (`(ray * w, w)` weighted by Arena's
@@ -343,10 +343,10 @@ Essential motion translation rules:
   - `kit_base::pose::Segment` must stay `<= 256` bytes
     (`clippy::large_types_passed_by_value` across `game_play`) and `Shape`
     variant size spread `< 200` bytes (`clippy::large_enum_variant`), with zero
-    heap allocations in `Client::frame` (`b3d-gate`). Quantize spline nodes
+    heap allocations in `Client::frame` (`client-gate`). Quantize spline nodes
     (`i16`/`u16`, smallest-three quaternions) and assert the size budget in
     tests (`pose::spline::tests::segment_stays_within_value_size_budget`).
-  - `kit_base` is a toolkit crate enforced by `just b3d levels`: never mention
+  - `kit_base` is a toolkit crate enforced by `just client levels`: never mention
     Magic domain terms (`library`, `hand`, `opponent`, `card`) in `kit_base`
     code or comments.
 - **Respect Beryl conventions**: Check `docs/ui-conventions.md` (for example,
@@ -356,14 +356,14 @@ Essential motion translation rules:
 
 ### 6. Iterate side-by-side (`arena-pixel-match` style)
 
-Render Beryl 3D at 1× playback speed (`--no-catch-up`) and compare filmstrips
+Render the client at 1× playback speed (`--no-catch-up`) and compare filmstrips
 directly beside the Arena clips from step 1:
 
 ```bash
-just b3d png <scene> --at <moment> --tier enhanced --scale 2
+just client png <scene> --at <moment> --tier enhanced --scale 2
 # Note: step:V.B.S is the step's MIDPOINT. Use --no-catch-up and ±half-duration
 # to film a full 1x animation from start to end:
-just b3d film <scene> --seat you --no-catch-up \
+just client film <scene> --seat you --no-catch-up \
   --from step:V.B.S-<half>ms --to step:V.B.S+<half>ms --frames 15
 ```
 
@@ -386,8 +386,8 @@ Check these failure modes that static asset reading and unit tests miss:
 
 ## Common pitfalls
 
-- **Forgetting `--no-catch-up` or midpoint math in `just b3d film`**: Without
-  `--no-catch-up`, Beryl 3D replays queued scripts at 2×–4× speed; and
+- **Forgetting `--no-catch-up` or midpoint math in `just client film`**: Without
+  `--no-catch-up`, the client replays queued scripts at 2×–4× speed; and
   `step:V.B.S` resolves to the step's **midpoint**, not its start.
 - **Trusting video-estimated durations over serialized `Speed` + curve**:
   Zero-slope Hermite ease-in keeps a card visually over its starting pile for
@@ -416,6 +416,6 @@ Check these failure modes that static asset reading and unit tests miss:
   variants. Always match on actual `.sample(` calls inside `fragment `.
 - **Over-interpreting raw HDR floats**: Multiply material colors by vertex
   colors and check the actual video frame before picking Beryl's palette.
-- **Dual Rust workspaces formatting**: `just fmt` formats `rust/`, JS, Python,
-  and Markdown, while `rust/beryl3d/` is a separate Cargo workspace that also
-  needs `cargo fmt --manifest-path rust/beryl3d/Cargo.toml --all`.
+- **Dual Rust workspaces formatting**: `just fmt` formats `engine/` and `client/`, JS, Python,
+  and Markdown, while `client/` is a separate Cargo workspace that also
+  needs `cargo fmt --manifest-path client/Cargo.toml --all`.

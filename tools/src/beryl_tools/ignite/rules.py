@@ -4,7 +4,7 @@
 Two commands, both run from the checkout's root:
 
 - `list <family>` prints one JSON line per check of the family:
-  `{"check": "source:file-length", "inputs": ["rust/crates/**", ...]}`. `inputs` are the
+  `{"check": "source:file-length", "inputs": ["engine/crates/**", ...]}`. `inputs` are the
   paths and patterns that check reads beyond the family's own `inputs`. The commit check adds
   a `digest` of the commit subjects since `IGNITE_BASE`, which it reads and no tree ID
   covers, so Ignite reuses its pass only for the same subjects.
@@ -278,7 +278,7 @@ def rulings_check(root: Path) -> list[str]:
                 f"machine fault, not the change's: {bulk} is not cached and downloading "
                 f"it failed ({error})"
             ) from error
-    library = root / "rust" / "crates" / "beryl_cards" / "src" / "library"
+    library = root / "engine" / "crates" / "beryl_cards" / "src" / "library"
     try:
         return rulings.audit(
             root / "data" / "rulings-ledger.json", bulk, library=library
@@ -337,8 +337,8 @@ CARD_NAME_MODULES: list[str] = [
 
 CARD_NAME_INPUTS: list[str] = [
     *CARD_NAME_TREE,
-    "rust/crates/**",
-    "rust/cards/**",
+    "engine/crates/**",
+    "engine/cards/**",
     "docs/sample-decks/**",
     "data/card-store.tsv",
     allowlist("card-names"),
@@ -367,10 +367,11 @@ CHECKS: tuple[Check, ...] = (
         "check-inputs",
         "source",
         check_inputs_check,
-        # The check reads the test code of the Rust files under rust/ and ignite/, and the
-        # tracked paths that its literals might name, which are anywhere in the repository.
+        # The check reads the test code of the Rust files under engine/, client/ and ignite/,
+        # and the tracked paths that its literals might name, which are anywhere in the repository.
         (
-            "rust/**",
+            "engine/**",
+            "client/**",
             "ignite/crates/**",
             "data/**",
             "docs/sample-decks/**",
@@ -411,10 +412,10 @@ CHECKS: tuple[Check, ...] = (
         "source",
         lambda root: card_leaves.check(root),
         (
-            "rust/crates/*/Cargo.toml",
-            "rust/crates/*/src/**",
-            "rust/beryl3d/crates/*/Cargo.toml",
-            "rust/beryl3d/crates/*/src/**",
+            "engine/crates/*/Cargo.toml",
+            "engine/crates/*/src/**",
+            "client/crates/*/Cargo.toml",
+            "client/crates/*/src/**",
             allowlist("card-leaves"),
             module("card_leaves"),
         ),
@@ -467,10 +468,10 @@ CHECKS: tuple[Check, ...] = (
         (
             "data/rulings-ledger.json",
             "data/card-store.tsv",
-            "rust/cards/**",
-            "rust/crates/beryl_cards/src/library/**",
+            "engine/cards/**",
+            "engine/crates/beryl_cards/src/library/**",
             "data/set-groups.json",
-            "rust/crates/beryl_card/src/**",
+            "engine/crates/beryl_card/src/**",
             module("rulings"),
         ),
     ),

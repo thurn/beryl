@@ -1,6 +1,6 @@
-"""The card files under `rust/cards` and the cards they define, read as text: nothing is built.
+"""The card files under `engine/cards` and the cards they define, read as text: nothing is built.
 
-A card's file is `rust/cards/<crate>/<set module>/<card module>.rs` (set_groups.py), and no list
+A card's file is `engine/cards/<crate>/<set module>/<card module>.rs` (set_groups.py), and no list
 of them is kept: this finds each file's card in the card store by the set and module of its
 path, as the set crates' build scripts do (`beryl_card_build`), and gives the constants of
 `beryl_cards::names`, which that crate's build script writes for the cards of the decklists in
@@ -23,7 +23,7 @@ DECKS: Path = paths.REPO / "docs" / "sample-decks"
 BASIC_LANDS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
 # A card's file by its path from the repository's root: its crate, set and card modules. A
 # crate's own `lib.rs` and `build.rs` sit a directory higher.
-FILE: re.Pattern[str] = re.compile(r"^rust/cards/(\w+)/(\w+)/(\w+)\.rs$")
+FILE: re.Pattern[str] = re.compile(r"^engine/cards/(\w+)/(\w+)/(\w+)\.rs$")
 # A decklist's line: `<count> <name>`.
 DECK_LINE: re.Pattern[str] = re.compile(r"^\d+ (.+?)\s*$", re.M)
 
@@ -85,7 +85,7 @@ def deck_names(decks: Path = DECKS) -> list[str]:
 
 
 def rustfmt_step(*args: str) -> int:
-    """Formats the workspace in the working directory, `rust/`, or with `--check` says what is
+    """Formats the workspace in the working directory, `engine/`, or with `--check` says what is
     not formatted: `cargo fmt --all`, then the card files, which rustfmt does not reach from a
     crate's root because a build script writes their `mod` lines."""
     cards = [str(path) for path in files(Path("cards"))]
@@ -106,7 +106,7 @@ def constants(root: Path = CARDS, decks: Path = DECKS) -> dict[str, str]:
 
 
 if __name__ == "__main__":
-    # `python -m beryl_tools.card_files rustfmt [--check]`, run in `rust/` by `just fmt`.
+    # `python -m beryl_tools.card_files rustfmt [--check]`, run in `engine/` by `just fmt`.
     if sys.argv[1:2] != ["rustfmt"]:
         sys.exit("usage: python -m beryl_tools.card_files rustfmt [--check]")
     sys.exit(rustfmt_step(*sys.argv[2:]))

@@ -14,7 +14,7 @@ reproduce, fix, verify, and close reports.
 ## Read the reports
 
 Use the named epics. With no IDs, list Ignite's open and pending epics and
-select the parked bug-report epics. Beryl 3D creates one per app launch with a
+select the parked bug-report epics. the client creates one per app launch with a
 `bug-report-run:<run id>` label. Start with `ignite ticket children <epic>` and
 `ignite ticket show <ids...> --comments`. Read the graph for existing
 dependencies and find relevant open and closed reports and fixes. Compare
@@ -26,7 +26,7 @@ its evidence under `$BERYL_BUGS` (default
 `~/Library/Application Support/ca.thurn.beryl/bugs`). If the local folder is
 unavailable, `ignite ticket attachment get <id> screenshot.png` downloads the
 attached crop. Use `window.png` for context. A spec report names its card,
-moment, and seat instead. `just b3d bug <id>` reads a local Beryl 3D capture and
+moment, and seat instead. `just client bug <id>` reads a local the client capture and
 prints the recorded state and applicable reproduction commands. Read targeted
 code or history where it helps identify a shared mechanism or hand a worker a
 useful starting path. Record gaps in the evidence and how the worker can
@@ -101,14 +101,14 @@ reconstruct the failure in a deterministic case. If a specific landed commit
 already resolves a report, verify the original expectation on a build
 containing it and record the evidence and commit.
 
-- For Beryl 3D use [b3d](../b3d/SKILL.md), including native rendered captures for
+- For the client use [client](../client/SKILL.md), including native rendered captures for
   visual claims. A live capture may require replaying from before the reported
   decision to see a transient event. For web UI use the report's fixture or
   [specs](../specs/SKILL.md), and use [arena-video](../arena-video/SKILL.md)
   where Arena is the reference.
 - For a wrong arrow, combat line, or animation, inspect the script before
   changing the client. A wrong script comes from
-  `rust/crates/beryl_session/src/script/`. A correct script played incorrectly
+  `engine/crates/beryl_session/src/script/`. A correct script played incorrectly
   belongs to the client.
 - For rules or AI use the saved replay with `just review`. For an AI report,
   check `searches.json` and judge the line using the information the agent had.

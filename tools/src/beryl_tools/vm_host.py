@@ -1,10 +1,10 @@
 """The Lima virtual machines' share of this Mac: their priority and memory.
 
-The engine's count gate runs in `beryl-bench` (4 CPUs, 4 GiB) and Beryl 3D's frame counts in
+The engine's count gate runs in `beryl-bench` (4 CPUs, 4 GiB) and The client's frame counts in
 `beryl3d-bench` (8 CPUs, 12 GiB). On 2026-11-15 they escaped two of the ways the machine shares
 its cores and memory:
 
-- **Priority.** A Beryl 3D run of low priority ran its slow part at utility priority (`system.utility`) so
+- **Priority.** A the client run of low priority ran its slow part at utility priority (`system.utility`) so
   that every other process got the CPU first. But macOS starts a Lima machine's process, the
   Virtualization framework's `com.apple.Virtualization.VirtualMachine` service, through
   launchd, so it inherits nothing from the command that asked for it. `beryl3d-bench` ran at

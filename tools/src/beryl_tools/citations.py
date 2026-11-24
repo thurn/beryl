@@ -5,7 +5,7 @@ AGENTS.md has rules code cite the rules with yawgatog links and quotations. Each
 renumbers and rewords rules, which turns a citation into a dead anchor, a quotation the rule no
 longer contains, or a bare rule number that silently names another rule. So the tree cites one
 release, pinned in `data/rules-version.json`, and this check holds each citation in a file under
-`rust/crates`, `rust/cards`, `tools/src`, `data` and `docs` to that release's text:
+`engine/crates`, `engine/cards`, `tools/src`, `data` and `docs` to that release's text:
 
 - a link's anchor is the rule number without its dots, with an `R` before it. A citation
   may be a link, `[CR 118.12a](https://yawgatog.com/...#R11812a)`, or a reference,
@@ -43,7 +43,7 @@ from pathlib import Path
 from . import paths
 
 VERSION_FILE = "data/rules-version.json"
-ROOTS = ("rust/crates", "rust/cards", "tools/src", "data", "docs")
+ROOTS = ("engine/crates", "engine/cards", "tools/src", "data", "docs")
 EXTENSIONS = {".rs", ".ts", ".tsx", ".py", ".md", ".json"}
 # Directories under the roots that hold no source of ours.
 SKIPPED_DIRECTORIES = {"node_modules", "target", "generated"}

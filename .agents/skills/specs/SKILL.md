@@ -1,6 +1,6 @@
 ---
 name: specs
-description: Inspect, drive and verify a card's Beryl 3D spec moments from both seats. Use when implementing or fixing a card's UI, reproducing a card-specific report or extending what specs generate. The native tools print prompts, element trees and check results, and draw filmstrips.
+description: Inspect, drive and verify a card's the client spec moments from both seats. Use when implementing or fixing a card's UI, reproducing a card-specific report or extending what specs generate. The native tools print prompts, element trees and check results, and draw filmstrips.
 ---
 
 # Card specs
@@ -13,8 +13,8 @@ need to see what changed, where it went and which choice caused it.
 ## Reproduce and check
 
 ```sh
-just b3d spec counterspell
-just b3d spec counterspell counters-a-spell-into-its-owners-graveyard --seat you --film
+just client spec counterspell
+just client spec counterspell counters-a-spell-into-its-owners-graveyard --seat you --film
 ```
 
 The first command lists every moment from both seats, with prompts, element
@@ -24,19 +24,19 @@ prints suggestions.
 
 For a closer look, use the recording name and seat printed by `spec`:
 
-1. Run `just b3d info <recording> --seat <seat>` for views, script steps and
-   prompt times. Run `just b3d timeline <recording> --seat <seat>` to see
+1. Run `just client info <recording> --seat <seat>` for views, script steps and
+   prompt times. Run `just client timeline <recording> --seat <seat>` to see
    when each step begins and ends and which cues play. A wrong script points
    to the session builder. A correct script played incorrectly points to the
    client.
-2. Run `just b3d tree <recording> --at prompt:1 --seat <seat>` for the
+2. Run `just client tree <recording> --at prompt:1 --seat <seat>` for the
    prompt's options and locators. Append `--do 'press button "Cancel"'` when
    that button is present, or use another locator from the tree. See the
-   [b3d skill](../b3d/SKILL.md) for drag, hover and time-step actions.
-3. Run `just b3d check <recording> --seat <seat>` for interface faults and
+   [client skill](../client/SKILL.md) for drag, hover and time-step actions.
+3. Run `just client check <recording> --seat <seat>` for interface faults and
    use its printed `show:` commands. Add `--layout phone` when checking the
-   phone layout. Use `just b3d png <recording> --at <moment> --tree` for a
-   still or `just b3d film <recording> --from <start> --to <end>` to see
+   phone layout. Use `just client png <recording> --at <moment> --tree` for a
+   still or `just client film <recording> --from <start> --to <end>` to see
    motion around a step. Pass the same seat and layout to each command.
 
 Use an existing spec moment for regression coverage when it reaches the broken
@@ -44,7 +44,7 @@ state. Add a scenario in the card's file when the state is missing.
 
 ## How a spec is generated
 
-`rust/crates/beryl_cli/src/specs/auto.rs` builds each card's moments from two
+`engine/crates/beryl_cli/src/specs/auto.rs` builds each card's moments from two
 sources, with short general labels:
 
 - **The definition.** A permanent with activated abilities (not mana abilities)
@@ -135,8 +135,8 @@ Fix it in this order, preferring the general fix:
    or a zone, never to one card, so fix it where every card with that shape gets
    it, and audit a few other cards that open it. A wrong motion, arrow or combat
    line can come from the script builder in
-   `rust/crates/beryl_session/src/script/` or playback in
-   `rust/beryl3d/crates/game_play/`. See the [bugfix worker handoff](../bugfix/SKILL.md#worker-fixing-one-report).
+   `engine/crates/beryl_session/src/script/` or playback in
+   `client/crates/game_play/`. See the [bugfix worker handoff](../bugfix/SKILL.md#worker-fixing-one-report).
 
 There are no hand-written moments: a case only one card has is a scenario in its
 file. A fixed engine bug gets its entry in `docs/bugs.md`.

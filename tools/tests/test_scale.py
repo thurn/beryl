@@ -83,7 +83,7 @@ def test_the_workspace_is_the_trees_structure(tmp_path: Path) -> None:
     crates = scale_workspace.plan(len(pool) + 3, 2, [(2, 1)])
     names = scale_workspace.generate(tmp_path, crates, pool)
     assert names == ["cards_s000", "cards_s001"]
-    files = sorted((tmp_path / "rust" / "cards").glob("*/*/*.rs"))
+    files = sorted((tmp_path / "engine" / "cards").glob("*/*/*.rs"))
     assert len(files) == len(pool) + 3
     # Each clone has a record in the scratch store, first printed in its directory's set.
     with card_store.Store(tmp_path / "data" / "card-store.tsv") as store:
@@ -91,17 +91,19 @@ def test_the_workspace_is_the_trees_structure(tmp_path: Path) -> None:
             name = scale_workspace.card_files.name_of(path, store)
             assert name is not None, path
     # The set crates are the tree's but for their paths to the checkout.
-    crate = tmp_path / "rust" / "cards" / "cards_s000"
+    crate = tmp_path / "engine" / "cards" / "cards_s000"
     assert (crate / "build.rs").read_text() == (scale_workspace.card_crates.BUILD)
     assert (scale_workspace.CRATES / "beryl_card_build").as_posix() in (
         crate / "Cargo.toml"
     ).read_text()
-    registry = (tmp_path / "rust" / "crates" / "beryl_cards" / "Cargo.toml").read_text()
+    registry = (
+        tmp_path / "engine" / "crates" / "beryl_cards" / "Cargo.toml"
+    ).read_text()
     for name in names:
         assert f"\n{name} = " in registry and f'"{name}/scenarios"' in registry
     groups = json.loads((tmp_path / "data" / "set-groups.json").read_text())
     assert [g["crate"] for g in groups["groups"]] == names
-    workspace = (tmp_path / "rust" / "Cargo.toml").read_text()
+    workspace = (tmp_path / "engine" / "Cargo.toml").read_text()
     assert 'members = ["cards/*", "crates/beryl_cards", "crates/warm"]' in workspace
     assert "[profile.release]" in workspace
     for copied in scale_workspace.COPIED:
@@ -115,7 +117,7 @@ def test_regenerating_keeps_the_target_directory(tmp_path: Path) -> None:
     (tmp_path / "target" / "built").write_text("x")
     scale_workspace.generate(tmp_path, scale_workspace.plan(3, 1, [(1, 1)]), pool)
     assert (tmp_path / "target" / "built").exists()
-    assert not (tmp_path / "rust" / "cards" / "cards_s001").exists()
+    assert not (tmp_path / "engine" / "cards" / "cards_s001").exists()
 
 
 def test_time_report_parsing() -> None:

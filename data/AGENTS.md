@@ -2,9 +2,8 @@
 
 This adds to the root `AGENTS.md`, whose rules all apply here.
 
-- The [Beryl 3D data guide](beryl3d/AGENTS.md) describes the files in
-  `beryl3d/`.
-- `audio/manifest.json` selects the sources and variants for Beryl 3D's music
+- The [client data guide](client/AGENTS.md) describes the files in `client/`.
+- `audio/manifest.json` selects the sources and variants for the client's music
   and sound effects. `just audio` writes the media under `audio/assets/` and the
   exact music loop lengths to `audio/loops.json`.
 - `pytest-reads.json` maps each Python module of `tools/` and `efficiency/` to
@@ -160,5 +159,5 @@ The app downloads card images on demand and caches them through `beryl_art`.
 
 `audio/manifest.json` and `audio/loops.json` describe the files under
 `audio/assets/`. `just audio` regenerates those files from the staged source
-packs. See [Beryl 3D data](beryl3d/AGENTS.md) for game fixtures, layout profiles
+packs. See [client data](client/AGENTS.md) for game fixtures, layout profiles
 and motion tuning. No images are committed.

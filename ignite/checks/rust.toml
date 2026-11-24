@@ -1,4 +1,4 @@
-# The Rust workspace in rust/: its tests, clippy, formatting, doctests, the `allocations`
+# The Rust workspace in engine/: its tests, clippy, formatting, doctests, the `allocations`
 # binaries and the card-text check, with the build products they need. See docs/ignite.md,
 # "Declaring a family" and "Builds".
 #
@@ -34,7 +34,7 @@
 # Ignite appends `-E <filterset>` for the tests it chose, and reads each test's outcome from the
 # libtest JSON that `--message-format libtest-json-plus` prints (see "Reporting results" in
 # docs/ignite.md). A `nextest` family's commands run in the directory of the first product it
-# needs, here rust/ (`rust-tests`), not the checkout's root. tools/tests/test_ignite_commands.py
+# needs, here engine/ (`rust-tests`), not the checkout's root. tools/tests/test_ignite_commands.py
 # checks these rules.
 #
 # A `list` command leaves out `--cargo-quiet`, so Cargo's "Blocking waiting for file lock" and
@@ -59,7 +59,7 @@ list = "cargo nextest list --locked {packages} --message-format json -E !binary(
 # listing and builds nothing to list (docs/ignite.md, "Declaring a family").
 listing_ignores_comments = true
 run = "cargo nextest run --locked --cargo-quiet {packages} --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
-inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
+inputs = ["crate-closure", "engine/Cargo.toml", "engine/.config/nextest.toml"]
 
 # What `beryl_cli`'s tests read at run time beyond the inputs above, hashed into that package's
 # tests alone. Its blunder code, which tests and the `blunders` command share, opens the blunder
@@ -82,10 +82,10 @@ list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust doctest
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust doctests run {checks}"
 # The package manifests decide which packages `list` looks at.
 inputs = [
-  "rust/Cargo.toml",
-  "rust/crates/beryl_link/src/wire/envelope.rs",
-  "rust/crates/*/Cargo.toml",
-  "rust/cards/*/Cargo.toml",
+  "engine/Cargo.toml",
+  "engine/crates/beryl_link/src/wire/envelope.rs",
+  "engine/crates/*/Cargo.toml",
+  "engine/cards/*/Cargo.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",
@@ -114,7 +114,7 @@ list_needs = ["python-env"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust allocations list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust allocations run {checks}"
 inputs = [
-  "rust/Cargo.toml",
+  "engine/Cargo.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",
@@ -145,7 +145,7 @@ builds = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy run {checks}"
 inputs = [
-  "rust/Cargo.toml",
+  "engine/Cargo.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/set-groups.json",
@@ -171,10 +171,10 @@ list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust rust-fo
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust rust-format run {checks}"
 # The workspace manifest and each package's manifest decide which packages are listed.
 inputs = [
-  "rust/rustfmt.toml",
-  "rust/Cargo.toml",
-  "rust/crates/*/Cargo.toml",
-  "rust/cards/*/Cargo.toml",
+  "rustfmt.toml",
+  "engine/Cargo.toml",
+  "engine/crates/*/Cargo.toml",
+  "engine/cards/*/Cargo.toml",
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/rust.py",
   "tools/src/beryl_tools/__init__.py",
@@ -195,7 +195,7 @@ list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust card-te
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust card-text run {checks}"
 inputs = [
   "crate:beryl_scenario",
-  "rust/Cargo.toml",
+  "engine/Cargo.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",
@@ -237,10 +237,10 @@ inputs = [
 [product.rust-tests]
 build = "cargo nextest run --no-run --locked --cargo-quiet {packages}"
 exclude = ["beryl_link_iroh"]
-dir = "rust"
+dir = "engine"
 inputs = [
   "crate-closure",
-  "rust/Cargo.toml",
+  "engine/Cargo.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",
@@ -248,13 +248,13 @@ inputs = [
   "data/ui-conventions.json",
   "docs/sample-decks/**",
   "data/set-groups.json",
-  "rust/crates/beryl_link/src/wire/envelope.rs",
+  "engine/crates/beryl_link/src/wire/envelope.rs",
 ]
-outputs = ["rust/target"]
+outputs = ["engine/target"]
 
-# Clippy's pass over the workspace in its own target directory, rust/target/clippy. Cargo holds
+# Clippy's pass over the workspace in its own target directory, engine/target/clippy. Cargo holds
 # one lock on a target directory for the whole of a command, and clippy's check units are not the
-# ones a build or test makes, so in rust/target the two shared no work and only waited on each
+# ones a build or test makes, so in engine/target the two shared no work and only waited on each
 # other: from 2026-11-14 to 16 the old fast check killed clippy at its 180 s limit in 102 of 160
 # runs while it printed "Blocking waiting for file lock on build directory". Lints are capped at warnings so that
 # every unit's result is kept and the `clippy` family's run replays them (rust.py, `CLIPPY`).
@@ -262,10 +262,10 @@ outputs = ["rust/target"]
 compiles = true
 build = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy build"
 inputs = [
-  "rust/crates/**",
-  "rust/cards/**",
-  "rust/Cargo.toml",
-  "rust/Cargo.lock",
+  "engine/crates/**",
+  "engine/cards/**",
+  "engine/Cargo.toml",
+  "engine/Cargo.lock",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",
@@ -275,21 +275,21 @@ inputs = [
   "data/set-groups.json",
   "tools/src/beryl_tools/ignite/rust.py",
 ]
-outputs = ["rust/target/clippy"]
+outputs = ["engine/target/clippy"]
 
 # The command-line tool, which the script and oracle checks run. Built over the whole
 # workspace's libraries in the `test` profile, as the test binaries are, so that neither build
 # compiles a library the other did (tools/src/beryl_tools/paths.py, `CLI_BUILD`, says why): with
 # `--bin` alone, beryl_kernel, beryl_table, beryl_rules and beryl_engine compiled a second time.
 # tools/tests/test_cli_build.py fails if a dev-dependency turns on a feature that no normal
-# dependency does, which would split the two builds again. The binary lands in rust/target/debug.
+# dependency does, which would split the two builds again. The binary lands in engine/target/debug.
 [product.cli]
 build = "cargo build --locked --quiet --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_cli"
-dir = "rust"
+dir = "engine"
 inputs = [
   "crate:beryl_cli_main",
   "crate:beryl_workspace_hack",
-  "rust/Cargo.toml",
+  "engine/Cargo.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",
@@ -297,21 +297,21 @@ inputs = [
   "data/ui-conventions.json",
   "docs/sample-decks/**",
   "data/set-groups.json",
-  "rust/crates/beryl_link/src/wire/envelope.rs",
+  "engine/crates/beryl_link/src/wire/envelope.rs",
 ]
-outputs = ["rust/target"]
+outputs = ["engine/target"]
 
 # `beryl_scenario`, which dumps the oracle scenarios and renders the cards' rules text, built
-# the same way as `cli`. The `test` profile builds at opt-level 1 (rust/Cargo.toml): an
+# the same way as `cli`. The `test` profile builds at opt-level 1 (engine/Cargo.toml): an
 # unoptimized `beryl_scenario` took 48 s to dump the scenarios, against 4.5 s.
 [product.scenario-dump]
 build = "cargo build --locked --quiet --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_scenario"
-dir = "rust"
+dir = "engine"
 inputs = [
   "crate:beryl_scenario",
   "crate:beryl_protocol",
   "crate:beryl_workspace_hack",
-  "rust/Cargo.toml",
+  "engine/Cargo.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",
@@ -319,6 +319,6 @@ inputs = [
   "data/ui-conventions.json",
   "docs/sample-decks/**",
   "data/set-groups.json",
-  "rust/crates/beryl_link/src/wire/envelope.rs",
+  "engine/crates/beryl_link/src/wire/envelope.rs",
 ]
-outputs = ["rust/target"]
+outputs = ["engine/target"]

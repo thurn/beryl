@@ -7,7 +7,7 @@ NAMES = ["Ponder", "Jace, the Mind Sculptor", "Jace", "Aang's Iceberg", "Island"
 INDEX = card_names.NameIndex(
     [n for n in NAMES if n not in card_names.BASIC_LAND_TYPES], {"PONDER"}
 )
-ENGINE = "rust/crates/beryl_rules/src"
+ENGINE = "engine/crates/beryl_rules/src"
 
 
 def write(root: Path, rel: str, text: str) -> None:
@@ -47,7 +47,7 @@ def test_a_card_in_code_counts_but_not_in_a_comment_a_doc_or_a_test(
         "tools/src/beryl_tools/f.py",
         '"""Ponder."""\n# Ponder\nX = "Ponder"\n',
     )
-    write(tmp_path, "rust/crates/beryl_cards/src/g.rs", 'const T: &str = "Ponder";\n')
+    write(tmp_path, "engine/crates/beryl_cards/src/g.rs", 'const T: &str = "Ponder";\n')
     hits = card_names.scan(tmp_path, INDEX)
     assert {path: [n for _, n in found] for path, found in hits.items()} == {
         f"{ENGINE}/a.rs": ["Ponder", "Jace", "Ponder"],
@@ -121,23 +121,23 @@ def test_the_check_over_a_tree(tmp_path: Path) -> None:
 
 
 def test_a_card_file_names_its_card_by_its_path(tmp_path: Path) -> None:
-    lea, wwk = "rust/cards/cards_1993/lea", "rust/cards/cards_2010/wwk"
+    lea, wwk = "engine/cards/cards_1993/lea", "engine/cards/cards_2010/wwk"
     for path in (
         f"{lea}/counterspell.rs",
         f"{wwk}/jace_the_mind_sculptor.rs",
         # A file in a set its card was not first printed in, and a crate's own files.
         f"{wwk}/counterspell.rs",
-        "rust/cards/cards_1993/lib.rs",
-        "rust/crates/beryl_rules/src/blue/counterspell.rs",
+        "engine/cards/cards_1993/lib.rs",
+        "engine/crates/beryl_rules/src/blue/counterspell.rs",
     ):
         write(tmp_path, path, "")
     changed = [
         f"{wwk}/jace_the_mind_sculptor.rs",
         f"{lea}/counterspell.rs",
         f"{wwk}/counterspell.rs",
-        "rust/cards/cards_1993/lib.rs",
+        "engine/cards/cards_1993/lib.rs",
         f"{lea}/deleted.rs",
-        "rust/crates/beryl_rules/src/blue/counterspell.rs",
+        "engine/crates/beryl_rules/src/blue/counterspell.rs",
         f"{lea}/counterspell.rs",
     ]
     assert card_files.cards_in(changed, tmp_path) == [

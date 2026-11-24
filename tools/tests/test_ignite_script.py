@@ -49,7 +49,7 @@ def test_the_manifest_declares_the_families_and_their_products() -> None:
     assert families["native-android"]["platforms"] == ["macos", "windows"]
     # A card is its own check's input, so the family must not read every card's file.
     assert not any(
-        p.startswith("rust/cards/") and p.count("/") >= 4 for p in script["inputs"]
+        p.startswith("engine/cards/") and p.count("/") >= 4 for p in script["inputs"]
     )
 
 
@@ -94,12 +94,12 @@ elif sys.argv[1] == 'script-check':
 
 
 def repository(root: Path) -> None:
-    cards = root / "rust" / "cards" / "cards_1" / "set"
+    cards = root / "engine" / "cards" / "cards_1" / "set"
     cards.mkdir(parents=True)
     (cards / "alpha.rs").write_text(card("Alpha", "{U}"))
     (cards / "beta.rs").write_text(card("Beta"))
-    (root / "data" / "beryl3d").mkdir(parents=True)
-    (root / "data/beryl3d/fixtures.json").write_text(
+    (root / "data" / "client").mkdir(parents=True)
+    (root / "data/client/fixtures.json").write_text(
         json.dumps(
             {
                 "fixtures": [
@@ -135,14 +135,14 @@ def test_a_card_asked_for_lists_its_checks_with_its_own_file(repo: Path) -> None
     assert listed == [
         {
             "check": f"script:alpha/start/{seat}",
-            "inputs": ["rust/cards/cards_1/set/alpha.rs"],
+            "inputs": ["engine/cards/cards_1/set/alpha.rs"],
         }
         for seat in ("yours", "theirs")
     ]
 
 
 def test_a_split_card_slug_maps_to_its_card_file(repo: Path) -> None:
-    folder = repo / "rust/cards/cards_1/set"
+    folder = repo / "engine/cards/cards_1/set"
     (folder / "fire_ice.rs").write_text(card("Fire", "{1}{R}"))
     alpha = folder / "alpha.rs"
     alpha.write_text(alpha.read_text() + "const OTHER: &str = Card::FireIce;\n")
@@ -150,13 +150,13 @@ def test_a_split_card_slug_maps_to_its_card_file(repo: Path) -> None:
     assert adapter.script_checks(repo, ["Fire // Ice"]) == [
         {
             "check": f"script:fire-ice/start/{seat}",
-            "inputs": ["rust/cards/cards_1/set/fire_ice.rs"],
+            "inputs": ["engine/cards/cards_1/set/fire_ice.rs"],
         }
         for seat in ("yours", "theirs")
     ]
     assert adapter.script_checks(repo, ["Alpha"])[0]["inputs"] == [
-        "rust/cards/cards_1/set/alpha.rs",
-        "rust/cards/cards_1/set/fire_ice.rs",
+        "engine/cards/cards_1/set/alpha.rs",
+        "engine/cards/cards_1/set/fire_ice.rs",
     ]
 
 
@@ -189,7 +189,7 @@ def test_editing_another_cards_file_leaves_a_checks_inputs_unchanged(
         }
 
     before = hashes()
-    (repo / "rust/cards/cards_1/set/beta.rs").write_text(card("Beta", "{R}"))
+    (repo / "engine/cards/cards_1/set/beta.rs").write_text(card("Beta", "{R}"))
     after = hashes()
     assert after["script:alpha/start/yours"] == before["script:alpha/start/yours"]
     assert after["script:beta/start/yours"] != before["script:beta/start/yours"]
@@ -230,25 +230,25 @@ def test_android_uses_the_pinned_windows_tools(
 def test_a_card_whose_scenarios_use_another_card_lists_that_cards_file_too(
     repo: Path,
 ) -> None:
-    alpha = repo / "rust/cards/cards_1/set/alpha.rs"
+    alpha = repo / "engine/cards/cards_1/set/alpha.rs"
     alpha.write_text(
         alpha.read_text() + 'Scenario::new("steals").hand(P1, &[Card::Beta]);\n'
     )
     listed = adapter.script_checks(repo, ["Alpha"])
     assert listed[0]["inputs"] == [
-        "rust/cards/cards_1/set/alpha.rs",
-        "rust/cards/cards_1/set/beta.rs",
+        "engine/cards/cards_1/set/alpha.rs",
+        "engine/cards/cards_1/set/beta.rs",
     ]
     # Beta's checks do not read Alpha's file.
     assert adapter.script_checks(repo, ["Beta"])[0]["inputs"] == [
-        "rust/cards/cards_1/set/beta.rs"
+        "engine/cards/cards_1/set/beta.rs"
     ]
 
 
 def test_a_card_named_by_its_spelled_out_name_or_through_another_card_is_read(
     repo: Path,
 ) -> None:
-    folder = repo / "rust/cards/cards_1/set"
+    folder = repo / "engine/cards/cards_1/set"
     (folder / "gamma.rs").write_text(
         card("Gamma") + "const FOUND: &str = names::DELTA;\n"
     )
@@ -267,7 +267,7 @@ def test_a_card_named_by_its_spelled_out_name_or_through_another_card_is_read(
     )
     listed = adapter.script_checks(repo, ["Alpha"])
     assert listed[0]["inputs"] == [
-        f"rust/cards/cards_1/set/{name}.rs"
+        f"engine/cards/cards_1/set/{name}.rs"
         for name in ("alpha", "beta", "delta", "gamma")
     ]
 
@@ -284,8 +284,8 @@ def test_a_fixture_check_reads_native_definitions_and_every_card_file(
 ) -> None:
     checks = {c["check"]: c for c in adapter.script_checks(repo, [])}
     assert checks["script:fixtures/table-opening/yours"]["inputs"] == [
-        "data/beryl3d/fixtures.json",
-        "rust/cards",
+        "data/client/fixtures.json",
+        "engine/cards",
     ]
 
 

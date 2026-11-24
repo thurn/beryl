@@ -12,5 +12,5 @@
   "files.exclude": {
     "**/.worktrees": true
   },
-  "rust-analyzer.files.excludeDirs": [".worktrees", "rust/target", "rust/beryl3d/target"]
+  "rust-analyzer.files.excludeDirs": [".worktrees", "engine/target", "client/target"]
 }

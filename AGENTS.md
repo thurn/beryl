@@ -1,8 +1,8 @@
 # Working on Project Beryl
 
 Project Beryl is a research project to build a Magic: The Gathering AI that
-plays as well as a strong human player. Beryl 3D is its native Rust client for
-macOS, Windows, iOS and Android. The repository is public.
+plays as well as a strong human player, with a native Rust 3D client for macOS,
+Windows, iOS and Android. The repository is public.
 
 The goal is to support 50,000+ different card definitions, so write modular code
 that scales to that size.
@@ -23,7 +23,7 @@ reference, `[CR 118.12a]`, and define its link at the end of the comment;
 not rules engine code: it cites a rule only where the card relies on something
 no vocabulary entry says, such as a ruling about an unusual interaction.
 
-This file holds the rules that apply to every change. `rust/`, `data/` and
+This file holds the rules that apply to every change. `engine/`, `data/` and
 `tools/` each have their own `AGENTS.md` with the reference material for work in
 that directory, and `ignite/checks/` declares the checks. Read the one for the
 area you are changing.
@@ -60,17 +60,16 @@ write:
 
 ## Layout
 
-- `rust/` is the Cargo workspace (`rust/AGENTS.md`).
-  - Keep game rules and AI in their own library crates under `rust/crates/`.
+- `engine/` is the Cargo workspace (`engine/AGENTS.md`).
+  - Keep game rules and AI in their own library crates under `engine/crates/`.
     They build and test independently of the client.
-  - Each card is one file, `rust/cards/<crate>/<set>/<card>.rs`. Adding a card
+  - Each card is one file, `engine/cards/<crate>/<set>/<card>.rs`. Adding a card
     means adding a file: build scripts generate every list of cards, and each
     card's mana cost, type line and header comment are generated from the card
     store.
-- `rust/beryl3d/` is the native client's Cargo workspace
-  (`rust/beryl3d/AGENTS.md`). The `beryl_3d` crate has the desktop entry point
-  and the Swift and Kotlin hosts. The layout and fixture data live under
-  `data/beryl3d/`.
+- `client/` is the native client's Cargo workspace (`client/AGENTS.md`). The
+  `beryl_client` crate has the desktop entry point and the Swift and Kotlin
+  hosts. The layout and fixture data live under `data/client/`.
 - `data/` holds data files, each described in `data/AGENTS.md`. The card store,
   `card-store.tsv`, is built by `just cards` and embedded in the app. The UI
   bundles no card data of its own.
@@ -86,7 +85,7 @@ write:
   knows about this repository.
 - Outside the repository:
   - `~/Library/Caches/beryl` (`$BERYL_CACHE`) holds the oracle builds and their
-    last report (`oracles/logs/oracle.json`), the Beryl 3D recordings packs, and
+    last report (`oracles/logs/oracle.json`), the client's recordings packs, and
     screenshots.
   - `~/arena` (`$BERYL_ARENA`) holds indexes of the MTG Arena gameplay
     recordings in `~/Movies/arena`, which are the reference for the UI. Use
@@ -138,7 +137,7 @@ situation, and a command names the topic when it applies.
   plans with epic allocation zero. The operator activates them through
   Allocation on the dashboard or
   `ignite ticket update <epic> --allocation <weight>`. The user can authorize
-  activation of this session's tickets with `/release`. Beryl 3D bug-report
+  activation of this session's tickets with `/release`. the client bug-report
   epics start at zero. `/bugfix` releases an epic by setting its allocation to
   1. Its reports use the epic's allocation.
 - A ticket's acceptance names a deterministic result that someone can observe:
@@ -177,7 +176,7 @@ runs the checks you name, and `ignite check` runs what the landing gate would.
 and the `cifix` skill adds Beryl's.
 
 The native interface checks replay recordings and stories at the windows in
-`data/beryl3d/profiles/`. Run `just b3d test <prefix> --phone-only` for a
+`data/client/profiles/`. Run `just client test <prefix> --phone-only` for a
 focused pass over the phone windows.
 
 - A UI bug fix adds the broken state as a fixture or spec moment, so the generic
@@ -189,8 +188,8 @@ focused pass over the phone windows.
 - The counts in an allowlist under `data/` may only go down.
 - A check's cost is measured, and a check that costs much and catches nothing is
   replaced by a cheaper deterministic test or deleted.
-- Run only the interface checks your change needs. Use `just b3d spec <card>`
-  for a card or `just b3d test <prefix>` for a recording or story.
+- Run only the interface checks your change needs. Use `just client spec <card>`
+  for a card or `just client test <prefix>` for a recording or story.
 
 ## Code structure
 
@@ -238,30 +237,30 @@ focused pass over the phone windows.
 ## Testing your work
 
 Use the cheapest test that covers your change. Agents use windowless commands
-such as `just smoke` and `just b3d test`.
+such as `just smoke` and `just client test`.
 
 1. Logic: `ignite test <names>` runs the Rust tests you name in your tree, and
    `just test-rust` runs the workspace's tests under cargo-nextest. Test engine
-   and AI behavior here, not through the app. `rust/AGENTS.md` lists the card
+   and AI behavior here, not through the app. `engine/AGENTS.md` lists the card
    tools: the XMage and Forge oracles, the citation check, the fuzzer and
    `just card brief <name>` for starting a new card. To write a card, follow the
    `card-writing` skill. Prefer fast tests of what a player or caller can
    observe (a decision, a protocol message, a saved file) over unit tests of
    private code, which mostly detect change rather than bugs.
-2. UI: use `just b3d tree`, `diff` and `check` to inspect the native client, and
-   `png` and `film` to see what it draws. For a card's behavior, use the `specs`
-   skill. See "Seeing the result" in `rust/beryl3d/AGENTS.md`.
+2. UI: use `just client tree`, `diff` and `check` to inspect the native client,
+   and `png` and `film` to see what it draws. For a card's behavior, use the
+   `specs` skill. See "Seeing the result" in `client/AGENTS.md`.
 3. Desktop: `just smoke` builds the debug app and checks its first frame and
    start screen without a window.
 4. Phone: `just ios-smoke` and `just android-smoke` replay a recording
-   headlessly and save a screenshot and frame log (`rust/beryl3d/AGENTS.md`).
+   headlessly and save a screenshot and frame log (`client/AGENTS.md`).
    `just mobile-bugs` pulls their saved bug reports into the Mac's bugs folder;
    `--device` also pulls from a paired iPhone. Agents install onto the user's
    iPhone only when the user asks, with `just ios-device --user-asked`.
 
 Benchmarks follow `docs/benchmarking.md`. Tournaments (`just tournament`,
 `just play` and `just review --agent`) use the whole machine for minutes to
-hours, so read "Tournaments" in `rust/AGENTS.md` before running one.
+hours, so read "Tournaments" in `engine/AGENTS.md` before running one.
 
 ## UI
 
@@ -274,7 +273,7 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
 
 - Animations follow Arena in what they show and when: what changed, who did it,
   where it went, in what order, and what stays still. No review is required to
-  land an animation: `just b3d check` checks motion in a replay, and the
+  land an animation: `just client check` checks motion in a replay, and the
   `motion-review` skill runs only when the user asks for it.
 - Beryl keeps its own visual style: colors, fonts, icon artwork, card frames,
   and full-size cards that tap.

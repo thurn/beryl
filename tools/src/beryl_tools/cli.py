@@ -33,7 +33,7 @@ from . import (
     vm_host,
     workspace_hack,
 )
-from .beryl3d import cli as beryl3d_cli
+from .client import cli as client_cli
 
 
 def utf8_rerun(argv: list[str] | None) -> int | None:
@@ -57,7 +57,7 @@ def utf8_rerun(argv: list[str] | None) -> int | None:
 MODULES: tuple[ModuleType, ...] = (
     audio,
     bench,
-    beryl3d_cli,
+    client_cli,
     bugs,
     card,
     cards,
@@ -79,7 +79,7 @@ MODULES: tuple[ModuleType, ...] = (
 )
 
 
-# The public app commands share Beryl 3D's argument parsers and runners.
+# The public app commands share The client's argument parsers and runners.
 NATIVE_APP_COMMANDS = {
     "dev": "app",
     "bundle": "release",
@@ -96,11 +96,11 @@ NATIVE_APP_COMMANDS = {
 
 
 def run_native(command: str, args: argparse.Namespace) -> int:
-    return beryl3d_cli.main([command, *args.extra])
+    return client_cli.main([command, *args.extra])
 
 
 def register_native(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    native = {command.name: command.summary for command in beryl3d_cli.COMMANDS}
+    native = {command.name: command.summary for command in client_cli.COMMANDS}
     for name, target in NATIVE_APP_COMMANDS.items():
         parser = sub.add_parser(name, help=native[target], add_help=False)
         parser.set_defaults(func=partial(run_native, target), passthrough=True)

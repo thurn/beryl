@@ -42,7 +42,7 @@ def test_selecting_from_the_card_files_fails(code: str, line: int) -> None:
 def test_corpus_sweeps_and_local_cases_pass(tmp_path: Path) -> None:
     for rel, source in [
         (
-            "rust/crates/example/tests/cases.rs",
+            "engine/crates/example/tests/cases.rs",
             """
             // beryl_cards::scenarios()[0] used to be brittle.
             let example = "beryl_cards::scenarios()[0]";
@@ -54,7 +54,7 @@ def test_corpus_sweeps_and_local_cases_pass(tmp_path: Path) -> None:
             """,
         ),
         (
-            "rust/cards/example/set/card.rs",
+            "engine/cards/example/set/card.rs",
             "beryl_cards::scenarios()[0];",
         ),
     ]:

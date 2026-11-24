@@ -534,7 +534,7 @@ def dump_scenarios(path: Path, log: Path, cards: list[str]) -> list[card_store.J
     built an unoptimized one, whose dump took 48 s against 4.5 s, and compiled the rules and
     card crates a second time.
     """
-    run(paths.CLI_BUILD, log, paths.RUST, CARGO_TARGET_DIR=str(paths.RUN_TARGET))
+    run(paths.CLI_BUILD, log, paths.ENGINE, CARGO_TARGET_DIR=str(paths.RUN_TARGET))
     binary = system.exe(paths.RUN_TARGET / "debug" / "beryl_scenario")
     named = [arg for card in cards for arg in ("--card", card)]
     run([str(binary), "dump", str(path), "--generated", str(GENERATED), *named], log)

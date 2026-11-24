@@ -21,7 +21,7 @@ from . import card_store, paths
 Json = card_store.Json
 
 # Where `Keywords` is defined, from the repository's root.
-KEYWORDS_SOURCE_REL = "rust/crates/beryl_card/src/characteristics.rs"
+KEYWORDS_SOURCE_REL = "engine/crates/beryl_card/src/characteristics.rs"
 KEYWORDS_SOURCE: Path = paths.REPO / KEYWORDS_SOURCE_REL
 # A constant of the `Keywords` bitset: `NAME = bit,`.
 CONSTANT: re.Pattern[str] = re.compile(r"^\s*([A-Z][A-Z0-9_]*) = \d+,\s*$")

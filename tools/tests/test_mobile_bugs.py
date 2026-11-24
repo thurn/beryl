@@ -12,7 +12,7 @@ from subprocess import CompletedProcess
 import pytest
 
 from beryl_tools import bugs, mobile_bugs, mobile_sdk
-from beryl_tools.beryl3d import bug, phone
+from beryl_tools.client import bug, phone
 from beryl_tools import cli
 
 ID = "20261113-102030-phone-report"
@@ -188,16 +188,16 @@ def test_native_mobile_bugs_adopts_from_the_simulator_documents_folder(
             "simctl",
             "get_app_container",
             "sim",
-            "ca.thurn.beryl3d",
+            "ca.thurn.beryl",
             "data",
         )
         return CompletedProcess(args, 0, str(container), "")
 
     monkeypatch.setattr(mobile_sdk, "run", simctl)
     monkeypatch.setattr(
-        "beryl_tools.beryl3d.phone.adb",
+        "beryl_tools.client.phone.adb",
         lambda *args: CompletedProcess(args, 1, "", ""),
     )
-    assert cli.main(["b3d", "mobile-bugs"]) == 0
+    assert cli.main(["client", "mobile-bugs"]) == 0
     assert (local / ID / "window.png").read_bytes() == b"PNG"
     assert (original / "report.md").is_file()

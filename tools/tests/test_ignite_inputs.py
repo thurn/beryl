@@ -144,7 +144,7 @@ def test_every_crate_input_names_a_workspace_package() -> None:
     so each would be `incomplete` forever. Cargo package names may use `-` where the
     directory uses `_`."""
     packages: set[str] = set()
-    for lock in sorted(REPO.glob("rust/**/Cargo.lock")):
+    for lock in (REPO / "engine" / "Cargo.lock", REPO / "client" / "Cargo.lock"):
         if "target" in lock.relative_to(REPO).parts:
             continue
         out = subprocess.run(

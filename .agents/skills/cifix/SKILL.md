@@ -58,7 +58,7 @@ nothing caught.
    run, a temporary path or cache shared between trees, a download); then the
    check alone (a wall-clock threshold, a sleep, a first animation frame, a hash
    map's order, two processes writing one file, free disk, a port, an app process). Try to reproduce it under load: run it 10 to 20 times beside a full
-   `just test-rust` or `just b3d test`. Load of 20 to 40 is this machine's normal
+   `just test-rust` or `just client test`. Load of 20 to 40 is this machine's normal
    state, so a check has to pass under it.
 3. **Choose one remedy, in this order,** and record which and why on the
    ticket:
@@ -78,7 +78,7 @@ nothing caught.
 4. **Never cut a protected check**: the families and checks listed under
    `protected` in `ignite.toml` (native app startup, Clippy, Pyre, the
    source rules and the oracle families).
-5. **An interface check** follows `rust/beryl3d/AGENTS.md`. When you delete
+5. **An interface check** follows `client/AGENTS.md`. When you delete
    one, verify that the recording or story still exercises the behavior and
    that the generic interface rules cover it.
 6. **Verify.** Run a replaced or changed check 10 times under the same load as

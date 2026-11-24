@@ -1,0 +1,37 @@
+[package]
+name = "beryl_assets"
+version = "0.1.0"
+description = "The client's assets: card pictures decoded and packed for the renderer"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+kit_frame.workspace = true
+kit_base.workspace = true
+kit_text.workspace = true
+# The scan cache and Scryfall's download queue, shared with the Tauri app.
+beryl_art = { path = "../../../engine/crates/beryl_art" }
+# Compresses faces to ASTC, ETC2 and BC7 with their mipmaps, in place of hand-written texture
+# encoders. Default features off: they add encoders that link prebuilt ISPC kernels, which do not
+# exist for iOS or Android (docs/beryl-3d.md, "Card faces").
+ctt = { version = "=0.6.1", default-features = false, features = ["encoder-astcenc", "encoder-etcpak", "encoder-bc7f"] }
+# Decodes JPEG card scans and PNG pictures, in place of hand-written decoders.
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+# Shapes and breaks Beryl's drawn card frame's text into lines, in place of a hand-written
+# shaper. The version and features the client core's text layout uses.
+parley = { version = "0.13.0", default-features = false, features = ["std"] }
+# Rasterizes glyph outlines to coverage bitmaps, in place of a hand-written TrueType and CFF
+# rasterizer. Pinned to the release the cross-target probe built for every platform.
+swash = "=0.2.10"
+# Fills and strokes the interface's icons from their SVG paths into coverage, and draws Beryl's
+# card frame's shapes and gradients, in place of a hand-written path rasterizer. The version the lockfile already has (through winit's window
+# decorations), with only the `std` and `simd` features: no PNG support.
+tiny-skia = { version = "=0.11.4", default-features = false, features = ["std", "simd"] }
+
+[dev-dependencies]
+# Opens repository files and records each read, so Ignite reruns the tests when one changes.
+beryl_test_files = { path = "../../../engine/crates/beryl_test_files" }

@@ -6,7 +6,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 
-from ..beryl3d import app, phone_build
+from ..client import app, phone_build
 from . import Listed, Result, listed, report
 
 CHECKS = {
@@ -23,7 +23,7 @@ def desktop() -> None:
 
 def ios() -> None:
     bundle = phone_build.ios_app(phone_build.IOS_SIMULATOR, release=False, sign=False)
-    if not (bundle / "Beryl3D").is_file():
+    if not (bundle / "Beryl").is_file():
         raise RuntimeError(f"iOS built no executable in {bundle}")
 
 

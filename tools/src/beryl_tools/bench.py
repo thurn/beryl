@@ -52,7 +52,7 @@ VM_OWNER = ".beryl-checkout"
 GATE_NAME = "count-gate"
 COUNT_BENCHES = ["--bench", "*_counts"]
 COUNT_SOURCES = (
-    "rust",
+    "engine",
     "rust-toolchain.toml",
     "data",
     "docs/sample-decks",
@@ -237,7 +237,7 @@ def bench(args: argparse.Namespace) -> int:
     profile, env = timing_build(extra)
     env = {**os.environ, **env}
     build = subprocess.run(
-        cargo_bench(extra, "--no-run", *profile), cwd=paths.RUST, env=env, check=False
+        cargo_bench(extra, "--no-run", *profile), cwd=paths.ENGINE, env=env, check=False
     )
     if build.returncode != 0:
         return build.returncode
@@ -250,7 +250,7 @@ def bench(args: argparse.Namespace) -> int:
         return 2
     log(f"timing under load: {load(before)}")
     run = cargo_bench(extra, *profile)
-    code = subprocess.run(run, cwd=paths.RUST, env=env, check=False).returncode
+    code = subprocess.run(run, cwd=paths.ENGINE, env=env, check=False).returncode
     log(f"load after timing: {load(probe())}")
     return code
 
@@ -297,9 +297,9 @@ fi
 
 
 def vm_command(script: str, vm: str = VM, workdir: str | None = None) -> list[str]:
-    """`script` run in `vm`'s login shell from `workdir`, by default this checkout's rust/
+    """`script` run in `vm`'s login shell from `workdir`, by default this checkout's engine/
     directory. Scripts that send sources from an unmounted worktree start at `/`."""
-    where = str(paths.RUST) if workdir is None else workdir
+    where = str(paths.ENGINE) if workdir is None else workdir
     if system.WINDOWS:
         # Windows' command line would mangle the script's quotes on the way through wsl.exe:
         # it goes as base64, and runs from a file so that its commands' stdin is not it.
@@ -329,7 +329,7 @@ def locked(script: str, background: bool | None = None, *, wait: bool = True) ->
     """`script` holding the VM's lock, which the kernel drops when the shell exits, however. A
     run someone waits for holds `VM_TURN` shared while it waits and runs; a low-priority run
     (`background`, by default `vm_host.background`) takes `VM_LOCK` only while it can hold
-    `VM_TURN` alone. `flock` hands a freed lock to any waiter, so a worker's `just b3d gate
+    `VM_TURN` alone. `flock` hands a freed lock to any waiter, so a worker's `just client gate
     --gpu` once waited 66 minutes behind low-priority runs. A run that has started still goes
     first. With `wait=False`, try both locks once without taking a turn ahead of a waiter.
     """
@@ -471,11 +471,11 @@ def run_count(
     then: list[list[str]] | None = None,
     capture: bool = True,
 ) -> tuple[int, str]:
-    runner = locked_version((paths.RUST / "Cargo.lock").read_text(), "gungraun")
+    runner = locked_version((paths.ENGINE / "Cargo.lock").read_text(), "gungraun")
     if runner is None:
-        log("no gungraun in rust/Cargo.lock")
+        log("no gungraun in engine/Cargo.lock")
         return 2, ""
-    mounted = vm_host.vm_sees(paths.RUST, VM)
+    mounted = vm_host.vm_sees(paths.ENGINE, VM)
     script = count_script(
         provision_script(toolchain(), runner),
         cargo,

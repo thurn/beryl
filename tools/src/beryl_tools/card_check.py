@@ -63,7 +63,7 @@ class Outcome:
 
 
 def command(
-    args: list[str], cwd: Path = paths.RUST
+    args: list[str], cwd: Path = paths.ENGINE
 ) -> subprocess.CompletedProcess[str]:
     """Runs a step's command with the binaries' target directory, capturing what it says."""
     return subprocess.run(

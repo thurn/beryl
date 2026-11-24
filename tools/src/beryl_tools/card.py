@@ -29,11 +29,11 @@ with Beryl (card_diverge.py).
 `card render <name>...` (or `--all`) prints a card's rendered rules text and its diff against its
 Oracle text (render_diff.py).
 
-`card crates` writes the set crates under rust/cards from data/set-groups.json (card_crates.py).
+`card crates` writes the set crates under engine/cards from data/set-groups.json (card_crates.py).
 
 `card header <name>` (or `--all`) rewrites a card file's generated header (card_header.py).
 
-`card path <name>` prints the card's file, `rust/cards/<crate>/<set>/<card>.rs` by its first
+`card path <name>` prints the card's file, `engine/cards/<crate>/<set>/<card>.rs` by its first
 printing (set_groups.py). A card complete from the store (store_cards.py) needs no file: it
 says so and exits 0. Another card with no file yet is a record in the store alone: it says so,
 with where the file would go, and exits 1. `card brief` says so of a complete card too.
@@ -76,7 +76,7 @@ ESCALATIONS: Path = paths.REPO / "data" / "card-escalations.json"
 @dataclass(frozen=True)
 class Sources:
     """Where a brief reads from: the card store, beryl_card's source (the vocabulary) and
-    the card files under rust/cards (the implemented cards). The rulings and XMage's checkout are in the cache.
+    the card files under engine/cards (the implemented cards). The rulings and XMage's checkout are in the cache.
     """
 
     store: Path = card_store.STORE

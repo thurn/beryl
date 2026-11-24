@@ -47,10 +47,10 @@ table-pair *args:
 smoke *args:
     {{ by }} smoke "$@"
 
-# Beryl 3D's commands (docs/beryl-3d.md): `just b3d` lists them, `just b3d <command> --help` explains one
+# The client's commands (docs/beryl-3d.md): `just client` lists them, `just client <command> --help` explains one
 [group('app')]
-b3d *args:
-    @{{ by }} b3d "$@"
+client *args:
+    @{{ by }} client "$@"
 
 # Install the native phone build toolchains
 [group('app')]
@@ -165,7 +165,7 @@ citations *args:
 conventions *args:
     {{ by }} conventions "$@"
 
-# Transcode Beryl 3D's music and sounds from the staged CC0 packs into data/audio/assets (--check)
+# Transcode the client's music and sounds from the staged CC0 packs into data/audio/assets (--check)
 [group('data')]
 audio *args:
     {{ by }} audio "$@"
@@ -188,7 +188,7 @@ oracle-smoke *args:
 # The Rust workspace's tests under cargo-nextest (-p beryl_app, a name filter, other nextest flags); `ignite test` runs them as the gate does
 [group('test')]
 test-rust *args:
-    cd rust && cargo nextest run "$@"
+    cd engine && cargo nextest run "$@"
 
 # Write beryl_workspace_hack's manifest, so a build of any one Rust package gives its dependencies the whole workspace's features
 [group('test')]
@@ -198,7 +198,7 @@ workspace-hack:
 # Random-game fuzzing at length: N engine games (and N/4 per keystone family), then N session games with every script checked, optimized but with debug assertions on (with the fuzz tests no check runs, which are ignored)
 [group('test')]
 fuzz games="10000":
-    cd rust && export BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true && \
+    cd engine && export BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true && \
     cargo test --release -p beryl_search --test all -- games:: shrink:: families:: --nocapture --include-ignored && \
     cargo test --release -p beryl_session --test session fuzz:: -- --nocapture --include-ignored
 
@@ -211,19 +211,19 @@ exhaust *args:
         --nodes) nodes="$2"; shift 2 ;; \
         *) card="$1"; shift ;; \
     esac; done; \
-    cd rust && BERYL_EXHAUST_CARD="$card" BERYL_EXHAUST_DEPTH="$depth" BERYL_EXHAUST_NODES="$nodes" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release -p beryl_cards --test exhaust every_scenario -- --nocapture
+    cd engine && BERYL_EXHAUST_CARD="$card" BERYL_EXHAUST_DEPTH="$depth" BERYL_EXHAUST_NODES="$nodes" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release -p beryl_cards --test exhaust every_scenario -- --nocapture
 
 # Adds saves to the frozen corpus, weekly or so: seeded games covering every card and decision, or one replay (--replay FILE, --games N, --seed N)
 [group('test')]
 [no-cd]
 freeze-saves *args:
-    cargo run --quiet --release --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- freeze-saves {{ quote(justfile_directory() / "rust" / "crates" / "beryl_session" / "tests" / "saves") }} "$@"
+    cargo run --quiet --release --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- freeze-saves {{ quote(justfile_directory() / "engine" / "crates" / "beryl_session" / "tests" / "saves") }} "$@"
 
 # A seeded WU Control mirror game between two agents at low priority, as a transcript (--seed N, --out FILE)
 [group('agents')]
 [no-cd]
 play *args:
-    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- play "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- play "$@"
 
 # An app game's transcript from the shared test-profile build; `--agent recorded` (or NAME) adds its searches from a search build at low priority (REPLAY.json, --turn N, --out FILE)
 [group('agents')]
@@ -231,7 +231,7 @@ play *args:
 review *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    manifest={{ quote(justfile_directory() / "rust" / "Cargo.toml") }}
+    manifest={{ quote(justfile_directory() / "engine" / "Cargo.toml") }}
     case " $* " in
       *" --agent greedy "*) search=false ;;
       *" --agent "*) search=true ;;
@@ -251,55 +251,55 @@ review *args:
 [group('agents')]
 [no-cd]
 tournament *args:
-    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- tournament "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- tournament "$@"
 
 # A paired match against the champion, at low priority (--vs NAME, --work 3M, --bar stronger|plausible|audit, --cap N, --seed N, --out DIR)
 [group('agents')]
 [no-cd]
 ladder *args:
-    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- ladder "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- ladder "$@"
 
 # Fit rollout values to accepted paired overrides from ladder match directories
 [group('agents')]
 [no-cd]
 fit *args:
-    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- fit "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- fit "$@"
 
 # The ladder's start positions, cut from champion games at low priority: build [--games N] [--seed N] [--work 3M] [--out DIR], or sample [--count N] DIR
 [group('agents')]
 [no-cd]
 positions *args:
-    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- positions "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- positions "$@"
 
 # A challenger's differing moves over the champion's last match, re-searched, at low priority (<challenger> <match-dir> --vs NAME, --recheck N, --work 3M, --games N)
 [group('agents')]
 [no-cd]
 screen *args:
-    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- screen "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- screen "$@"
 
 # The blunder suite against an agent, the champion by default, at low priority ([agent] --work 3M,30M, --seeds 5, --only NAME,..., --json FILE)
 [group('agents')]
 [no-cd]
 blunders *args:
-    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- blunders "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- blunders "$@"
 
 # Compare paired rollouts and search branches at a blunder-suite position ([--family FAMILY] [--tree --work 3M --seed 0])
 [group('agents')]
 [no-cd]
 why *args:
-    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- why "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- why "$@"
 
 # Report both blunder suites and their totals without a verdict (<challenger> --claims NAME,...|none [--vs NAME])
 [group('agents')]
 [no-cd]
 gate *args:
-    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- gate "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- gate "$@"
 
 # Discover candidate blunders for later LLM review; six hours by default (--hours 6, --out DIR, --seed N, --inspect CASE.json)
 [group('agents')]
 [no-cd]
 blunder-hunt *args:
-    RUSTFLAGS="{{ search_cpu }}" {{ low }} {{ awake }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli_main -- blunder-hunt "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} {{ awake }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- blunder-hunt "$@"
 
 # Physical disk usage on macOS, counting APFS clones once (--details for individual paths)
 [group('checks')]
@@ -326,7 +326,7 @@ edit *args:
 [group('checks')]
 fmt:
     uv run --quiet --project tools black --quiet tools efficiency
-    cd rust && uv run --quiet --project ../tools python -m beryl_tools.card_files rustfmt
-    {{ by }} b3d fmt
+    cd engine && uv run --quiet --project ../tools python -m beryl_tools.card_files rustfmt
+    {{ by }} client fmt
     just --fmt --unstable
     git ls-files -co --exclude-standard '*.md' | grep -v -e '^.agents/' | xargs uv run --quiet --project tools mdformat

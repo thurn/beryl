@@ -98,7 +98,7 @@ def test_only_files_waiting_on_a_declaration_belong_on_the_allowlist(
     write(tmp_path, done, "//! Implements: none. Holds scratch buffers.\n")
     write(tmp_path, f"{KERNEL}/tests.rs", "// CR 601")
     write(tmp_path, f"{RULES}/tests/nested/example.rs", "// CR 602")
-    write(tmp_path, "rust/cards/set/example.rs", "// CR 602")
+    write(tmp_path, "engine/cards/set/example.rs", "// CR 602")
     assert audit(tmp_path, old, done) == [
         f"{new}: missing an Implements declaration",
         f"{rule_ownership.ALLOWLIST}: remove {done}",

@@ -1,0 +1,960 @@
+# the client, the native client in its own Cargo workspace, client: its formatting, clippy,
+# source rules, tests, replays, interface tests and frame gates, with the build product they
+# share. See docs/ignite.md, "Declaring a family" and "Builds".
+#
+# Commands run from the checkout's root. The `python-env` product is in python.toml.
+# The adapter for every `jsonl` family here is
+# tools/src/beryl_tools/ignite/client.py, which runs the programs the `client` product built
+# rather than `just client`, whose commands build again. A `jsonl` family's `list` prints one JSON
+# object per check, with the inputs of its own, and its `run` appends one JSON line per check to
+# $IGNITE_RESULTS.
+#
+# The native build and replay checks run on macOS and Windows.
+# The pure source checks run on any platform.
+#
+# Programs that spread their work over threads (the recorder and replay checks) size them by the grant:
+# `IGNITE_CORES` when they start, and the file `IGNITE_CORES_FILE` names while they run
+# (`runner::threads` and `runner::granted` in client/crates/beryl_inspect/src/runner.rs).
+# A grant fixed when such a program started made it run on one or two threads after the cores
+# freed up: `client test` took 150 s instead of 11-13 s. So the `client` product, whose build ends with
+# `record`, and the families that run `client test` say `grows = true`, and the scheduler gives
+# them cores as they free up. Nextest also passes the growing grant to its replay tests.
+#
+# Inputs outside The client's own crates. The client's crates depend on main-workspace crates by
+# path, which `crate:` does not follow out of its own workspace, so the families name those
+# crates' directories. The recordings are played by `beryl_cli`, so the families that read the
+# recordings pack name every crate `record`, `client` and `gate` are built from
+# (tools/tests/test_ignite_client.py holds the list to the crates' manifests), the files
+# those crates embed or read (the fixture definitions, the sample decks, UI conventions, the
+# card store and set groups, the table commands, the save breaks) and The client's tuning,
+# audio manifests and design tokens. The fixture definitions are part of the top-level the client
+# JSON inputs. Each replay check lists the card files its recording plays.
+
+# The build that the tests, `record` and `gate` share, then the recordings pack. Every
+# `just client` command starts with one today. The shared build is every target that
+# `cargo nextest run --workspace` builds, in cargo's `test` profile, with each program built as
+# a program: building `record` or `client` alone resolved other features and compiled the engine
+# and `beryl_scene` three times after an edit to `beryl_scene`. The pack goes to
+# $BERYL_CACHE/b3d, named for a hash of what a recording reads, and is built only when missing.
+[product.client]
+compiles = true
+# Nextest uses the same Cargo configuration as the shared build from this directory.
+dir = "client"
+build = "uv run --quiet --project ../tools python -m beryl_tools.ignite.client build"
+grows = true
+inputs = [
+  ".cargo/config.toml",
+  "client/**",
+  "engine/crates/**",
+  "engine/cards/**",
+  "engine/Cargo.toml",
+  "data/client/*.json",
+  "data/client/conventions/**",
+  "data/client/corpus.txt",
+  "data/client/effects/**",
+  "data/client/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "data/audio/manifest.json",
+  "data/audio/loops.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+  "tools/src/beryl_tools/system.py",
+]
+outputs = ["client/target"]
+
+# rustfmt over each package of the workspace, one check per package, hashed over its directory.
+[family.client-format]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env"]
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-format list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-format run {checks}"
+inputs = [
+  "rustfmt.toml",
+  "client/Cargo.toml",
+  "client/crates/*/Cargo.toml",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/client/__init__.py",
+  "tools/src/beryl_tools/client/gate.py",
+  "tools/src/beryl_tools/client/pack.py",
+  "tools/src/beryl_tools/client/paths.py",
+  "tools/src/beryl_tools/client/purity.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
+
+# Clippy over the workspace, one check per package. It builds in its own target directory,
+# client/target/clippy: its check units are not the ones a build makes, so in the shared
+# directory it would share no work with the `client` build, only Cargo's lock on it, and wait for
+# it. Lints are capped at warnings so that cargo keeps every unit's result and a later run
+# replays them (`CLIPPY` in tools/src/beryl_tools/ignite/client.py).
+#
+# It is in the always set only for a change to The client's own files, its toolchain or this
+# family's commands. Its run checks the game's crates once more in its own target directory, so
+# on every change to the game it cost about 1,900 billion instructions, four times the gate's
+# whole budget: four minutes of a one-card change's landing. It never failed after a change
+# that touched only the game's crates. Such a change can break it only through the API the client
+# calls, which the `client` build of the scored the client families also compiles; otherwise it is
+# scored, and tip verification runs it.
+[family.client-clippy]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos", "windows"]
+needs = ["python-env"]
+always = true
+# A build check: a failure means the code does not type-check, so `green` does not move.
+builds = true
+always_when = [
+  "client/**",
+  ".cargo/config.toml",
+  "rust-toolchain.toml",
+  "ignite/checks/client.toml",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/client.py",
+]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-clippy list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-clippy run {checks}"
+inputs = [
+  ".cargo/config.toml",
+  "engine/crates/**",
+  "engine/cards/**",
+  "engine/Cargo.toml",
+  "client/Cargo.toml",
+  "client/crates/*/Cargo.toml",
+  "data/client/*.json",
+  "data/client/conventions/**",
+  "data/client/corpus.txt",
+  "data/client/effects/**",
+  "data/client/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/audio/manifest.json",
+  "data/audio/loops.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/client/__init__.py",
+  "tools/src/beryl_tools/client/gate.py",
+  "tools/src/beryl_tools/client/pack.py",
+  "tools/src/beryl_tools/client/paths.py",
+  "tools/src/beryl_tools/client/purity.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
+
+# The source rules of tools/src/beryl_tools/client/purity.py inspect the checkout without
+# building the client. One check per rule.
+[family.client-source]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env"]
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-source list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-source run {checks}"
+inputs = [
+  "client/**",
+  "engine/Cargo.toml",
+  "data/client/*.json",
+  "data/client/conventions/**",
+  "data/client/corpus.txt",
+  "data/client/effects/**",
+  "data/client/profiles/**",
+  "data/ui-conventions.json",
+  "tools/src/beryl_tools/client/purity.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/client/__init__.py",
+  "tools/src/beryl_tools/client/gate.py",
+  "tools/src/beryl_tools/client/pack.py",
+  "tools/src/beryl_tools/client/paths.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
+
+# The inspector validates the checkout's tuning files, and the recordings pack shows which
+# corpus names the recorder found. Both use the shared build so a cold Cargo build
+# cannot hold up the source checks.
+[family.client-validation]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos", "windows"]
+needs = ["python-env", "client"]
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-validation list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-validation run {checks}"
+inputs = [
+  "tools/src/beryl_tools/client/pack.py",
+  "tools/src/beryl_tools/client/paths.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/client/__init__.py",
+  "tools/src/beryl_tools/client/gate.py",
+  "tools/src/beryl_tools/client/purity.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/system.py",
+]
+
+# Every test of the workspace that cargo-nextest runs, each hashed over the package that holds
+# it and the client packages it depends on, and over the main workspace, which `crate-closure`
+# does not follow into. The tests read the recordings, so they need the `client` product, whose
+# shared build is the one nextest would make. As for the `rust` family (rust.toml), Ignite
+# appends the filterset of the tests to run and reads their outcomes from the libtest JSON.
+#
+# Ignite hashes a `nextest` family's tests over what their builds were observed to read rather
+# than over the path inputs of the products the family needs (docs/ignite.md, "Observed
+# inputs"), so the script that builds the `client` product and the recordings is listed here too.
+[family.client-test]
+kind = "regression"
+adapter = "nextest"
+platforms = ["macos", "windows"]
+needs = ["client"]
+# The differential replay and full-pack tests use the inspector runner's growing grant.
+grows = true
+list = "cargo nextest list --locked --cargo-quiet --workspace --message-format json"
+# Test names do not depend on comments, so a change that edits only comments keeps the
+# listing and builds nothing to list (docs/ignite.md, "Declaring a family").
+listing_ignores_comments = true
+run = "cargo nextest run --locked --cargo-quiet --workspace --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
+inputs = [
+  ".cargo/config.toml",
+  "crate-closure",
+  "client/.config/nextest.toml",
+  "engine/crates/**",
+  "engine/cards/**",
+  "engine/Cargo.toml",
+  "data/client/*.json",
+  "data/client/conventions/**",
+  "data/client/corpus.txt",
+  "data/client/effects/**",
+  "data/client/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "data/audio/manifest.json",
+  "data/audio/loops.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+]
+
+# Every interface test (`just client test`): each recording from each seat in each desktop window,
+# `client-interface:<recording>/<seat>/<window>`, with the checks applied at the check times
+# (docs/beryl-3d.md, "Test speed"), held to data/client/test-faults.json. Each check reads the
+# card files its recording plays.
+#
+# Tip verification scores the two families independently. Substituting `client-every-tick`
+# discarded the failure history of `client-interface` before scoring, so the tip budget deferred
+# the replacement checks for regressions the landing gate was already finding.
+[family.client-interface]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos", "windows"]
+needs = ["python-env", "client"]
+grows = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-interface list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-interface run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "engine/crates/beryl_card/**",
+  "engine/crates/beryl_card_build/**",
+  "engine/crates/beryl_card_names/**",
+  "engine/crates/beryl_card_records/**",
+  "engine/crates/beryl_card_shared/**",
+  "engine/crates/beryl_card_store/**",
+  "engine/crates/beryl_cards/**",
+  "engine/crates/beryl_cli/**",
+  "engine/crates/beryl_engine/**",
+  "engine/crates/beryl_kernel/**",
+  "engine/crates/beryl_link/**",
+  "engine/crates/beryl_link_iroh/**",
+  "engine/crates/beryl_protocol/**",
+  "engine/crates/beryl_rules/**",
+  "engine/crates/beryl_scenario/**",
+  "engine/crates/beryl_scenario_types/**",
+  "engine/crates/beryl_search/**",
+  "engine/crates/beryl_session/**",
+  "engine/crates/beryl_table/**",
+  "engine/crates/beryl_table_session/**",
+  "engine/cards/*/Cargo.toml",
+  "engine/cards/*/build.rs",
+  "engine/cards/*/lib.rs",
+  "engine/Cargo.toml",
+  "data/client/*.json",
+  "data/client/conventions/**",
+  "data/client/corpus.txt",
+  "data/client/effects/**",
+  "data/client/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "data/audio/manifest.json",
+  "data/audio/loops.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/client/__init__.py",
+  "tools/src/beryl_tools/client/gate.py",
+  "tools/src/beryl_tools/client/pack.py",
+  "tools/src/beryl_tools/client/paths.py",
+  "tools/src/beryl_tools/client/purity.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
+
+# The full native replay matrix supplies the frame limits in data/client/gates.json.
+# A separate family lets tip verification publish ordinary interface batches while the
+# corpus-wide median and maximum are still running. It reads every recording's card files.
+[family.client-interface-frame-limits]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos", "windows"]
+needs = ["python-env", "client"]
+grows = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-interface-frame-limits list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-interface-frame-limits run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "engine/crates/beryl_card/**",
+  "engine/crates/beryl_card_build/**",
+  "engine/crates/beryl_card_names/**",
+  "engine/crates/beryl_card_records/**",
+  "engine/crates/beryl_card_shared/**",
+  "engine/crates/beryl_card_store/**",
+  "engine/crates/beryl_cards/**",
+  "engine/crates/beryl_cli/**",
+  "engine/crates/beryl_engine/**",
+  "engine/crates/beryl_kernel/**",
+  "engine/crates/beryl_link/**",
+  "engine/crates/beryl_link_iroh/**",
+  "engine/crates/beryl_protocol/**",
+  "engine/crates/beryl_rules/**",
+  "engine/crates/beryl_scenario/**",
+  "engine/crates/beryl_scenario_types/**",
+  "engine/crates/beryl_search/**",
+  "engine/crates/beryl_session/**",
+  "engine/crates/beryl_table/**",
+  "engine/crates/beryl_table_session/**",
+  "engine/cards/*/Cargo.toml",
+  "engine/cards/*/build.rs",
+  "engine/cards/*/lib.rs",
+  "engine/Cargo.toml",
+  "data/client/*.json",
+  "data/client/conventions/**",
+  "data/client/corpus.txt",
+  "data/client/effects/**",
+  "data/client/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "data/audio/manifest.json",
+  "data/audio/loops.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/client/__init__.py",
+  "tools/src/beryl_tools/client/gate.py",
+  "tools/src/beryl_tools/client/pack.py",
+  "tools/src/beryl_tools/client/paths.py",
+  "tools/src/beryl_tools/client/purity.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
+
+# Sweep all card recordings and report interface faults or signatures missing from the corpus.
+[family.client-corpus]
+# The landing gate checks the corpus and fixtures. The full sweep runs on idle cores.
+kind = "exploration"
+# The adapter reports one result per card crate as soon as its sweep finishes.
+adapter = "jsonl"
+# The sweep uses the native the client recorder and inspector.
+platforms = ["macos", "windows"]
+# The sweep needs both native binaries and starts from the corpus pack made by `client`.
+needs = ["python-env", "client"]
+# Listing needs the Python environment before either native binary is built.
+list_needs = ["python-env"]
+# List one check per card crate found in the checkout.
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-corpus list"
+# Each crate's digest changes when its cards or shared recording and interface inputs change.
+next = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-corpus next"
+# Run the named crate sweeps, reusing results already saved for those digests.
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-corpus run {checks}"
+# The sweep uses the same native code and data as the interface checks, plus its own adapter.
+# The `client` product covers card definitions and `next` hashes them by crate.
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "engine/crates/beryl_card/**",
+  "engine/crates/beryl_card_build/**",
+  "engine/crates/beryl_card_names/**",
+  "engine/crates/beryl_card_records/**",
+  "engine/crates/beryl_card_shared/**",
+  "engine/crates/beryl_card_store/**",
+  "engine/crates/beryl_cards/**",
+  "engine/crates/beryl_cli/**",
+  "engine/crates/beryl_engine/**",
+  "engine/crates/beryl_kernel/**",
+  "engine/crates/beryl_link/**",
+  "engine/crates/beryl_link_iroh/**",
+  "engine/crates/beryl_protocol/**",
+  "engine/crates/beryl_rules/**",
+  "engine/crates/beryl_scenario/**",
+  "engine/crates/beryl_scenario_types/**",
+  "engine/crates/beryl_search/**",
+  "engine/crates/beryl_session/**",
+  "engine/crates/beryl_table/**",
+  "engine/crates/beryl_table_session/**",
+  "engine/cards/*/Cargo.toml",
+  "engine/cards/*/build.rs",
+  "engine/cards/*/lib.rs",
+  "engine/Cargo.toml",
+  "data/client/*.json",
+  "data/client/conventions/**",
+  "data/client/corpus.txt",
+  "data/client/effects/**",
+  "data/client/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "data/audio/manifest.json",
+  "data/audio/loops.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+  "tools/src/beryl_tools/ignite/client_corpus.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/client/__init__.py",
+  "tools/src/beryl_tools/client/corpus.py",
+  "tools/src/beryl_tools/client/gate.py",
+  "tools/src/beryl_tools/client/pack.py",
+  "tools/src/beryl_tools/client/paths.py",
+  "tools/src/beryl_tools/client/purity.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
+
+# The interface tests with the checks applied on every tick (`just client test --every-tick`): the
+# second way to sample the same recordings, held to the same list of allowed faults.
+[family.client-every-tick]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos", "windows"]
+needs = ["python-env", "client"]
+grows = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-every-tick list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-every-tick run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "engine/crates/beryl_card/**",
+  "engine/crates/beryl_card_build/**",
+  "engine/crates/beryl_card_names/**",
+  "engine/crates/beryl_card_records/**",
+  "engine/crates/beryl_card_shared/**",
+  "engine/crates/beryl_card_store/**",
+  "engine/crates/beryl_cards/**",
+  "engine/crates/beryl_cli/**",
+  "engine/crates/beryl_engine/**",
+  "engine/crates/beryl_kernel/**",
+  "engine/crates/beryl_link/**",
+  "engine/crates/beryl_link_iroh/**",
+  "engine/crates/beryl_protocol/**",
+  "engine/crates/beryl_rules/**",
+  "engine/crates/beryl_scenario/**",
+  "engine/crates/beryl_scenario_types/**",
+  "engine/crates/beryl_search/**",
+  "engine/crates/beryl_session/**",
+  "engine/crates/beryl_table/**",
+  "engine/crates/beryl_table_session/**",
+  "engine/cards/*/Cargo.toml",
+  "engine/cards/*/build.rs",
+  "engine/cards/*/lib.rs",
+  "engine/Cargo.toml",
+  "data/client/*.json",
+  "data/client/conventions/**",
+  "data/client/corpus.txt",
+  "data/client/effects/**",
+  "data/client/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "data/audio/manifest.json",
+  "data/audio/loops.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/client/__init__.py",
+  "tools/src/beryl_tools/client/gate.py",
+  "tools/src/beryl_tools/client/pack.py",
+  "tools/src/beryl_tools/client/paths.py",
+  "tools/src/beryl_tools/client/purity.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
+
+# The native frame gate (`just client gate`): one check per gated board, holding its work counters,
+# draw load and allocations to the limits under `boards.<board>` in data/client/budgets.json,
+# in Baseline and Enhanced, using the registered native verifier's calibration.
+[family.client-gate]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos", "windows"]
+machine_relative = true
+needs = ["python-env", "client"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-gate list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-gate run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "engine/crates/beryl_card/**",
+  "engine/crates/beryl_card_build/**",
+  "engine/crates/beryl_card_names/**",
+  "engine/crates/beryl_card_records/**",
+  "engine/crates/beryl_card_shared/**",
+  "engine/crates/beryl_card_store/**",
+  "engine/crates/beryl_cards/**",
+  "engine/crates/beryl_cli/**",
+  "engine/crates/beryl_engine/**",
+  "engine/crates/beryl_kernel/**",
+  "engine/crates/beryl_link/**",
+  "engine/crates/beryl_link_iroh/**",
+  "engine/crates/beryl_protocol/**",
+  "engine/crates/beryl_rules/**",
+  "engine/crates/beryl_scenario/**",
+  "engine/crates/beryl_scenario_types/**",
+  "engine/crates/beryl_search/**",
+  "engine/crates/beryl_session/**",
+  "engine/crates/beryl_table/**",
+  "engine/crates/beryl_table_session/**",
+  "engine/cards/*/Cargo.toml",
+  "engine/cards/*/build.rs",
+  "engine/cards/*/lib.rs",
+  "engine/Cargo.toml",
+  "data/client/*.json",
+  "data/client/conventions/**",
+  "data/client/corpus.txt",
+  "data/client/effects/**",
+  "data/client/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "data/audio/manifest.json",
+  "data/audio/loops.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/client/gate.py",
+  "tools/src/beryl_tools/client/frame_profiles.py",
+  "rust-toolchain.toml",
+  "tools/src/beryl_tools/calibration.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/client/__init__.py",
+  "tools/src/beryl_tools/client/pack.py",
+  "tools/src/beryl_tools/client/paths.py",
+  "tools/src/beryl_tools/client/purity.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
+
+# Instructions per frame of every gated board, counted under Callgrind in `beryl3d-bench`.
+# The gate holds `worst_frame_instructions` and `total_instructions` and checks scaling between
+# `stress-255` and `stress-1024` (tools/src/beryl_tools/client/counts.py). Callgrind counts every
+# board in one run. Each verifier uses its own Linux guest profile and takes the `bench-vm`
+# resource. The run builds in the guest and reads the recordings pack from the `client` product.
+[family.client-frame-counts]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos", "windows"]
+machine_relative = true
+needs = ["python-env", "client"]
+resources = ["bench-vm"]
+# Listing reads board metadata from the host and probes the guest's tool versions.
+list_without_resources = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-frame-counts list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-frame-counts run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "engine/crates/beryl_card/**",
+  "engine/crates/beryl_card_build/**",
+  "engine/crates/beryl_card_names/**",
+  "engine/crates/beryl_card_records/**",
+  "engine/crates/beryl_card_shared/**",
+  "engine/crates/beryl_card_store/**",
+  "engine/crates/beryl_cards/**",
+  "engine/crates/beryl_cli/**",
+  "engine/crates/beryl_engine/**",
+  "engine/crates/beryl_kernel/**",
+  "engine/crates/beryl_link/**",
+  "engine/crates/beryl_link_iroh/**",
+  "engine/crates/beryl_protocol/**",
+  "engine/crates/beryl_rules/**",
+  "engine/crates/beryl_scenario/**",
+  "engine/crates/beryl_scenario_types/**",
+  "engine/crates/beryl_search/**",
+  "engine/crates/beryl_session/**",
+  "engine/crates/beryl_table/**",
+  "engine/crates/beryl_table_session/**",
+  "engine/cards/*/Cargo.toml",
+  "engine/cards/*/build.rs",
+  "engine/cards/*/lib.rs",
+  "engine/Cargo.toml",
+  "data/client/*.json",
+  "data/client/conventions/**",
+  "data/client/corpus.txt",
+  "data/client/effects/**",
+  "data/client/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "data/audio/manifest.json",
+  "data/audio/loops.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/client/**",
+  "tools/src/beryl_tools/bench.py",
+  "tools/src/beryl_tools/vm_host.py",
+  "tools/src/beryl_tools/ignite/client_frame_counts.py",
+  "rust-toolchain.toml",
+  "tools/src/beryl_tools/calibration.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
+
+# Frame work trends across verified commits, using the same boards as the native frame gate.
+[family.client-frame-trend]
+# Idle work samples verified commits and reports increases without holding a landing.
+kind = "exploration"
+# The Python adapter emits one JSONL result for each sampled commit.
+adapter = "jsonl"
+# Sample each registered verifier's native build and, when free, its Callgrind guest.
+platforms = ["macos", "windows"]
+needs = ["python-env", "client"]
+# Both list and next offer the checkout's commit when its calibration's history lacks it.
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-frame-trend list"
+next = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-frame-trend next"
+# Record native counters on every run. The adapter takes the benchmark VM's guest locks only
+# for optional Callgrind sampling, so this family needs no scheduler reservation for bench-vm.
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-frame-trend run {checks}"
+# The gate binaries and recordings share these inputs with the frame gates. The trend and
+# counting modules also read the board budgets and produce the optional instruction counts.
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "engine/crates/beryl_card/**",
+  "engine/crates/beryl_card_build/**",
+  "engine/crates/beryl_card_names/**",
+  "engine/crates/beryl_card_records/**",
+  "engine/crates/beryl_card_shared/**",
+  "engine/crates/beryl_card_store/**",
+  "engine/crates/beryl_cards/**",
+  "engine/crates/beryl_cli/**",
+  "engine/crates/beryl_engine/**",
+  "engine/crates/beryl_kernel/**",
+  "engine/crates/beryl_link/**",
+  "engine/crates/beryl_link_iroh/**",
+  "engine/crates/beryl_protocol/**",
+  "engine/crates/beryl_rules/**",
+  "engine/crates/beryl_scenario/**",
+  "engine/crates/beryl_scenario_types/**",
+  "engine/crates/beryl_search/**",
+  "engine/crates/beryl_session/**",
+  "engine/crates/beryl_table/**",
+  "engine/crates/beryl_table_session/**",
+  "engine/cards/*/Cargo.toml",
+  "engine/cards/*/build.rs",
+  "engine/cards/*/lib.rs",
+  "engine/Cargo.toml",
+  "data/client/*.json",
+  "data/client/conventions/**",
+  "data/client/corpus.txt",
+  "data/client/effects/**",
+  "data/client/profiles/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "data/audio/manifest.json",
+  "data/audio/loops.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/client/**",
+  "tools/src/beryl_tools/bench.py",
+  "tools/src/beryl_tools/vm_host.py",
+  "tools/src/beryl_tools/ignite/client_frame_counts.py",
+  "rust-toolchain.toml",
+  "tools/src/beryl_tools/calibration.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/client.py",
+  "tools/src/beryl_tools/ignite/client_validation.py",
+  "tools/src/beryl_tools/ignite/client_frame_trend.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]

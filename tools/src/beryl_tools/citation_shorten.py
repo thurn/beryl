@@ -165,7 +165,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument(
         "paths",
         nargs="*",
-        default=[str(paths.REPO / "rust" / "cards")],
-        help="files or directories (default: rust/cards)",
+        default=[str(paths.REPO / "engine" / "cards")],
+        help="files or directories (default: engine/cards)",
     )
     p.set_defaults(func=run)

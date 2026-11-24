@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import nearest, paths
 
-SOURCES: Path = paths.RUST / "crates" / "beryl_card" / "src"
+SOURCES: Path = paths.ENGINE / "crates" / "beryl_card" / "src"
 
 ENUM: re.Pattern[str] = re.compile(r"^\s*pub enum (\w+)")
 # The body of a `bitset! { Keywords(u64) { FLYING = 8, ... } }`: its constants are entries like

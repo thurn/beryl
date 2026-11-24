@@ -60,7 +60,9 @@ def test_the_cli_builds_over_the_tests_steps_packages_in_its_profile() -> None:
         *[flag for name in product["exclude"] for flag in ("--exclude", name)],
     ]
     assert scope == paths.BUILD_SCOPE
-    profile = tomllib.loads((paths.RUST / "Cargo.toml").read_text())["profile"]["test"]
+    profile = tomllib.loads((paths.ENGINE / "Cargo.toml").read_text())["profile"][
+        "test"
+    ]
     for setting in ("opt-level", "debug"):
         assert profile["build-override"][setting] == profile[setting], setting
     for label, command in cli_commands().items():

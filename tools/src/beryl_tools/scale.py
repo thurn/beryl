@@ -2,7 +2,7 @@
 copes with 50,000 implemented cards.
 
 `scale` writes a scratch workspace under `$BERYL_CACHE/scale` (never in the tree) that builds
-what the tree builds: set crates written and built as `rust/cards/*` are, by the same build
+what the tree builds: set crates written and built as `engine/cards/*` are, by the same build
 helper, a registry built as `beryl_cards` is, and a scratch card store, with N clones of the real
 card files in place of the real cards (scale_workspace.py says how). It builds the workspace and
 prints what that cost against the plan's budgets ([`BUDGETS`]):
@@ -60,7 +60,7 @@ from pathlib import Path
 from typing import IO
 
 from . import card_store, nearest, paths, system
-from .beryl3d.paths import FIXTURE_DEFINITIONS
+from .client.paths import FIXTURE_DEFINITIONS
 from .scale_workspace import (
     BINARY,
     REGISTRY,
@@ -145,7 +145,7 @@ def timed(cmd: list[str], root: Path) -> Run:
     ends the run with the compiler's output."""
     run = subprocess.run(
         ["/usr/bin/time", "-l", *cmd],
-        cwd=root / "rust",
+        cwd=root / "engine",
         env=cargo_env(root),
         capture_output=True,
         text=True,
@@ -282,7 +282,7 @@ def build_checker() -> bool:
     `paths.RUN_TARGET`; whether it built."""
     built = subprocess.run(
         paths.CLI_BUILD,
-        cwd=paths.RUST,
+        cwd=paths.ENGINE,
         env=paths.run_env(),
         stdin=subprocess.DEVNULL,
         check=False,
@@ -297,7 +297,7 @@ def run_checker(only: list[str], results: Path, out: IO[str]) -> int:
     definitions = paths.REPO / FIXTURE_DEFINITIONS
     return subprocess.run(
         [str(binary), "script-check", str(definitions), *only],
-        cwd=paths.RUST,
+        cwd=paths.ENGINE,
         env={**os.environ, "BERYL_CHECK_RESULTS": str(results)},
         stdin=subprocess.DEVNULL,
         stdout=out,
@@ -368,7 +368,7 @@ def scale(args: argparse.Namespace) -> int:
     # cold build warm.
     subprocess.run(
         ["cargo", "clean", *[f"--package={n}" for n in [REGISTRY, *names]]],
-        cwd=root / "rust",
+        cwd=root / "engine",
         env=cargo_env(root),
         capture_output=True,
         check=False,

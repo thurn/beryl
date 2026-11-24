@@ -13,7 +13,7 @@ description: Write or finish one Beryl card from its drafted definition and Orac
    If it says "Complete from the store", the card needs no file. If it shows
    an escalation, proceed only if the mechanic it names is now available.
 3. Run `just card new "<name>"` for an unwritten card. It writes
-   `rust/cards/<crate>/<set>/<card>.rs` with the generated header and draft,
+   `engine/cards/<crate>/<set>/<card>.rs` with the generated header and draft,
    then prints its render status. Keep the header as generated. Check the
    draft sentence by sentence against the Oracle text and rulings, including
    keywords, costs, targets, conditions and order. Use "Composing a
@@ -56,13 +56,13 @@ code as a source for a definition.
 
 - Use `use crate::prelude::*;` at the top and in `scenarios`. Use `Card::X`
   for cards, `Printed::X` for faces, `Token::X` for tokens and `Prop::X` for
-  scenario stand-ins. See `rust/cards/cards_1993/lea/counterspell.rs` for a
+  scenario stand-ins. See `engine/cards/cards_1993/lea/counterspell.rs` for a
   definition with generated coverage.
 - Build the definition from static and const data using vocabulary
   constructors. Keep straightforward
   expressions such as `draw(you(), 3)` inline. A small `const fn` in
   `scenarios` can share setup. A documented prelude function in
-  `rust/crates/beryl_card/src/phrases.rs` can name a reusable composition.
+  `engine/crates/beryl_card/src/phrases.rs` can name a reusable composition.
   Pass details that vary by card as arguments.
 - A single face usually starts with `Printed::X.abilities(&[...]).card()`.
   `Printed::X` carries printed characteristics. Add keywords explicitly with
@@ -94,7 +94,7 @@ For each surviving mutant, write a scenario whose outcome changes under that
 mutation. If all generated scenarios are unsupported by the oracles, write a
 scenario an oracle can play. Use the smallest board and sequence of decisions
 that shows the difference, and assert the result using `ME` and `THEM`. See
-`rust/crates/beryl_scenario_types/src/player.rs` for their methods.
+`engine/crates/beryl_scenario_types/src/player.rs` for their methods.
 
 - `ME.casts(card)` puts the spell on the stack. Each `Resolve` resolves one
   object, so an enters trigger needs a separate resolve from its spell.
@@ -124,7 +124,7 @@ ruling. Complete each entry with exactly one of these fields.
 ## Cards for scenarios
 
 Use a `Prop::` stand-in when its contract in
-`rust/crates/beryl_card_shared/src/props.rs` promises what the scenario needs.
+`engine/crates/beryl_card_shared/src/props.rs` promises what the scenario needs.
 Describe the role in the scenario and use assertions for stats that matter.
 If the scenario needs a behavior beyond the contract, use a named card and
 `Scenario::interaction`.
@@ -177,9 +177,9 @@ Keep the card out of staging until the check passes.
 ## Escalating
 
 Before deciding that a mechanic is missing, search
-`rust/crates/beryl_card/src` for its key words or Comprehensive Rules number
+`engine/crates/beryl_card/src` for its key words or Comprehensive Rules number
 and read similar cards. The module map in
-`rust/crates/beryl_rules/src/lib.rs` points to the rules implementation.
+`engine/crates/beryl_rules/src/lib.rs` points to the rules implementation.
 A compile or assertion error alone does not establish a gap. Escalate if no existing composition expresses the clause.
 
 Add an entry to `data/card-escalations.json` in card-name order. Use the

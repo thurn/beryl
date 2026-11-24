@@ -20,7 +20,7 @@ from .deps import CANNOT_RUN
 # The instruction-count gate. Its bar, and when to move it, are in
 # GATE_FILE's comments.
 
-GATE_FILE = Path("rust/crates/beryl_bench/count-gate.toml")
+GATE_FILE = Path("engine/crates/beryl_bench/count-gate.toml")
 
 
 @dataclass
@@ -221,7 +221,7 @@ def observe_runtime(root: Path) -> dict[str, str]:
     channel = tomllib.loads((root / "rust-toolchain.toml").read_text())["toolchain"][
         "channel"
     ]
-    runner = bench.locked_version((root / "rust/Cargo.lock").read_text(), "gungraun")
+    runner = bench.locked_version((root / "engine/Cargo.lock").read_text(), "gungraun")
     script = f"""set -e
 . /etc/os-release
 . "$HOME/.cargo/env"

@@ -1,7 +1,7 @@
 """Rules texts compared by the words they share: the implemented cards nearest a card, for
 `specs` and `card brief`, and what a rules text has in common with any other text.
 
-The implemented cards are the files under `rust/cards` (card_files.py).
+The implemented cards are the files under `engine/cards` (card_files.py).
 """
 
 from __future__ import annotations

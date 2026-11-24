@@ -1,9 +1,8 @@
 # Project Beryl
 
 A research project to build a Magic: The Gathering AI that plays at the level of
-a strong human player. Beryl 3D is its native Rust client for macOS, Windows,
-iOS and Android. The project is free and open source under the Apache License
-2.0.
+a strong human player, with a native Rust 3D client for macOS, Windows, iOS and
+Android. The project is free and open source under the Apache License 2.0.
 
 - [AGENTS.md](AGENTS.md): how every change is made, tested and delivered.
 - [docs/engine-architecture.md](docs/engine-architecture.md): the rules engine's
@@ -53,15 +52,15 @@ and `BERYL_CACHE` on one Dev Drive (ReFS): copies there are block clones, as
 APFS clones are on macOS, and Defender's scans slow builds less.
 
 Run `just dev` to build and open the native desktop app or `just bundle` to
-package a release. On macOS the bundle is `Beryl 3D.app`. On Windows keep
-`beryl3d.exe` beside the packaged `audio/` directory. `just smoke` checks
-desktop startup without a window, and `ignite check` runs the landing gate.
-`just` lists the public commands and `just b3d` lists the client tools.
+package a release. On macOS the bundle is `Beryl.app`. On Windows keep
+`beryl.exe` beside the packaged `audio/` directory. `just smoke` checks desktop
+startup without a window, and `ignite check` runs the landing gate. `just` lists
+the public commands and `just client` lists the client tools.
 
 On macOS, install full Xcode for iOS builds and run `just mobile-setup` for the
 phone toolchains. Use `just ios` or `just android` to launch the app in the
 simulator or emulator. Run `just ios-smoke` or `just android-smoke` to replay a
-recording headlessly. Both phone apps use `ca.thurn.beryl3d`. See
+recording headlessly. Both phone apps use `ca.thurn.beryl`. See
 [Hosts](docs/beryl-3d.md#hosts) for platform requirements and
 [Desktop data](docs/beryl-3d.md#desktop-data) for saved games, decks and
 profiles.

@@ -428,7 +428,7 @@ def test_build_binary() -> Path | str:
     scope = paths.BUILD_SCOPE
     run = subprocess.run(
         ["cargo", "test", "--locked", *scope, "--no-run", "--message-format=json"],
-        cwd=paths.RUST,
+        cwd=paths.ENGINE,
         env=paths.run_env(),
         capture_output=True,
         text=True,
@@ -462,7 +462,7 @@ def rendered(names: list[str], binary: Path | None = None) -> Rendered | str:
     return parse(
         subprocess.run(
             command,
-            cwd=paths.RUST,
+            cwd=paths.ENGINE,
             env=paths.run_env(),
             capture_output=True,
             text=True,

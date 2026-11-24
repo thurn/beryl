@@ -3,7 +3,7 @@
 Cargo rebuilds every crate that depends on a changed crate. `beryl_cards` depends on every
 set crate (`cards_1993`, ...), so a crate that depends on `beryl_cards` is rebuilt, and its
 tests are relinked, by an edit to any card file. A card edit must rebuild only the leaves
-that need the cards: the apps, the benchmark, the command line and Beryl 3D. Everything else
+that need the cards: the apps, the benchmark, the command line and the client. Everything else
 (the kernel, the rules, the search, the sessions) is generic and is tested against cards
 through the leaves' own `tests/` directories or as a dev-dependency, which Cargo does not
 rebuild a library for.
@@ -29,7 +29,7 @@ from pathlib import Path
 from . import paths
 
 ALLOWLIST = "data/card-leaves-allowlist.json"
-MANIFEST_ROOTS = ("rust/crates", "rust/beryl3d/crates")
+MANIFEST_ROOTS = ("engine/crates", "client/crates")
 NORMAL_TABLES = ("dependencies", "build-dependencies")
 CARD_CRATE: re.Pattern[str] = re.compile(r"^(beryl_cards|cards_\d\w*)$")
 NAMED: re.Pattern[str] = re.compile(r"\b(beryl_cards|cards_\d\w*)\b")
