@@ -38,6 +38,29 @@ pub(super) fn reserve(rig: &Rig, ticket: &str, key: &str, labels: &[&str]) {
     offer(rig, ticket, "claude", key);
 }
 
+/// Gives `claude` and `codex` a share of one in a hub database. A provider without a share
+/// takes no work.
+fn share_providers(conn: &mut rusqlite::Connection) {
+    use ignite_core::fleet::ProviderSetting;
+    let mut settings = ignite_store::hub::fleet_settings::settings(conn).unwrap();
+    let version = settings.version;
+    for name in ["claude", "codex"] {
+        let share = ProviderSetting {
+            share: 1,
+            ..ProviderSetting::default()
+        };
+        settings.providers.insert(name.to_owned(), share);
+    }
+    ignite_store::hub::fleet_settings::put(
+        conn,
+        version,
+        settings,
+        "test",
+        ignite_core::time::Timestamp::EPOCH,
+    )
+    .unwrap();
+}
+
 fn offer(rig: &Rig, ticket: &str, provider: &str, key: &str) {
     queue_offer(rig, ticket, provider, key, false);
 }
@@ -123,6 +146,7 @@ fn a_room_based_dispatch_ask_gets_a_reservation_from_the_hub() {
         wordmark: None,
     };
     let mut db = hub::open(&server.database).unwrap();
+    share_providers(&mut db);
     let token = hub::tokens::issue(&db, &rig.ctx.machine).unwrap();
     let request = serde_json::from_value(json!({
         "ops": [{"op": "create", "fields": {"title": "Ready work"}}]
@@ -507,7 +531,9 @@ fn hub_with_lost_landing_reply(rig: &Rig) -> crate::hubclient::tests::FakeHttpHu
         body: body.as_bytes().to_vec(),
         headers: Vec::new(),
     };
-    let db = Mutex::new(ignite_store::hub::open_in_memory().unwrap());
+    let mut db = ignite_store::hub::open_in_memory().unwrap();
+    share_providers(&mut db);
+    let db = Mutex::new(db);
     let landing_requests = AtomicUsize::new(0);
     FakeHttpHub::start(move |method, url, body| {
         let path = url.strip_prefix("/test/api").unwrap();

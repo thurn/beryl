@@ -5,9 +5,9 @@ use rusqlite::Connection;
 use serde_json::{Value, json};
 
 use ignite_core::ids::MachineId;
-use ignite_store::hub::{self, tickets, tokens};
+use ignite_store::hub::{tickets, tokens};
 
-use super::tests::{at, claim, file, post, start};
+use super::tests::{at, claim, file, open, post, start};
 use super::{Request, handle};
 use crate::auth::Writer;
 
@@ -45,7 +45,7 @@ fn register_as(
 
 #[test]
 fn registering_a_machine_that_has_a_token_needs_that_token() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let (status, first) = register_as(&mut conn, "m-9", None, None);
     assert_eq!(status, 200, "{first}");
     let token = first["token"].as_str().unwrap().to_owned();
@@ -77,7 +77,7 @@ fn registering_a_machine_that_has_a_token_needs_that_token() {
 
 #[test]
 fn a_body_naming_another_machine_than_the_token_is_refused() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(&mut conn, &[("one", &[], &[])]);
     let body = json!({"ticket": ids[0].as_str(), "machine": "m-2", "session": "local_x",
                       "tree": "tree-01"});
@@ -106,7 +106,7 @@ fn a_body_naming_another_machine_than_the_token_is_refused() {
 
 #[test]
 fn a_claim_records_the_session_and_tree_and_drops_the_reservation_together() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(&mut conn, &[("one", &[], &[])]);
     let (status, brief) = post(
         &mut conn,
@@ -139,7 +139,7 @@ fn a_claim_records_the_session_and_tree_and_drops_the_reservation_together() {
 
 #[test]
 fn a_ticket_is_claimed_by_its_id_with_or_without_the_t_or_by_alias() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(
         &mut conn,
         &[("one", &[], &[]), ("two", &[], &[]), ("three", &[], &[])],
@@ -184,7 +184,7 @@ fn a_ticket_is_claimed_by_its_id_with_or_without_the_t_or_by_alias() {
 
 #[test]
 fn a_machine_may_pause_itself_or_every_machine_but_not_another_alone() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let pause_as = |conn: &mut Connection, writer: &str, machine: Value| {
         let request = Request {
             method: "POST".into(),

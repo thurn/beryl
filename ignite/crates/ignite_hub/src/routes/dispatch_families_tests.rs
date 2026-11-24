@@ -7,10 +7,10 @@ use ignite_core::dispatch_pressure::DispatchPressure;
 use ignite_core::ids::TicketId;
 use ignite_core::manifest::Manifest;
 use ignite_core::time::Timestamp;
-use ignite_store::hub::{self, placement_deferrals};
+use ignite_store::hub::placement_deferrals;
 
 use super::super::placement_tests::{capacity, record};
-use super::super::tests::{at, file, free, post, start};
+use super::super::tests::{at, file, free, open, post, start};
 use super::publish;
 
 fn declare(conn: &Connection, platforms: &str) {
@@ -72,7 +72,7 @@ fn ask(conn: &mut Connection, free: &Value, now: Timestamp) -> Value {
 
 #[test]
 fn ordinary_dispatch_uses_the_registered_family_list_and_the_reviewed_inputs() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     declare(&conn, "\"any\"");
     register(&mut conn, "m-1", "macos", &["portable"]);
     let ticket = ticket(&mut conn);
@@ -95,7 +95,7 @@ fn ordinary_dispatch_uses_the_registered_family_list_and_the_reviewed_inputs() {
 
 #[test]
 fn a_family_platform_applies_even_on_a_machine_with_an_unrestricted_family_list() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     declare(&conn, "[\"macos\"]");
     register(&mut conn, "m-win", "windows", &[]);
     register(&mut conn, "m-mac", "macos", &[]);
@@ -147,7 +147,7 @@ inputs = ["engine/crates/**", "client/**"]
         (engine, Some("macos"), false, false),
         (engine, None, true, false),
     ] {
-        let mut conn = hub::open_in_memory().unwrap();
+        let mut conn = open();
         publish(&conn, &manifest).unwrap();
         register(&mut conn, "m-win", "windows", &["portable"]);
         register(&mut conn, "m-mac", "macos", &["portable", "simulator"]);
@@ -181,7 +181,7 @@ inputs = ["engine/crates/**", "client/**"]
 
 #[test]
 fn a_warm_machine_without_the_family_cannot_defer_a_suitable_asker() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     declare(&conn, "\"any\"");
     register(&mut conn, "m-1", "macos", &["native"]);
     register(&mut conn, "m-2", "macos", &["portable"]);
@@ -203,7 +203,7 @@ fn a_warm_machine_without_the_family_cannot_defer_a_suitable_asker() {
 
 #[test]
 fn only_a_suitable_active_machine_blocks_checks_only_fallback() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     declare(&conn, "\"any\"");
     register(&mut conn, "m-1", "macos", &["native"]);
     register(&mut conn, "m-2", "macos", &["portable"]);

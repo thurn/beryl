@@ -7,6 +7,7 @@ use rusqlite::Connection;
 use serde_json::{Value, json};
 
 use ignite_core::config::Os;
+use ignite_core::fleet::ProviderSetting;
 use ignite_core::ids::{MachineId, TicketId};
 use ignite_core::protocol::hub::{IdleWorker, MachineFree};
 use ignite_core::protocol::tickets::{
@@ -135,6 +136,31 @@ pub(super) fn file_under(
     (epic, ids)
 }
 
+/// A migrated hub database where `claude` and `codex` each have a share of one. A provider
+/// without a share takes no work, so the tests that only exercise the queue start here.
+pub(super) fn open() -> Connection {
+    let mut conn = hub::open_in_memory().unwrap();
+    share_providers(&mut conn, &["claude", "codex"]);
+    conn
+}
+
+/// Gives each named provider a share of one, replacing the saved provider settings.
+pub(super) fn share_providers(conn: &mut Connection, names: &[&str]) {
+    let mut settings = hub::fleet_settings::settings(conn).unwrap();
+    let version = settings.version;
+    settings.providers.clear();
+    for name in names {
+        settings.providers.insert(
+            (*name).to_owned(),
+            ProviderSetting {
+                share: 1,
+                ..ProviderSetting::default()
+            },
+        );
+    }
+    hub::fleet_settings::put(conn, version, settings, "operator", start()).unwrap();
+}
+
 pub(super) fn register(conn: &mut Connection) {
     let register = json!({"machine": "m-1", "name": "jarvis", "os": "macos", "cores": 18,
                           "memory_mb": 65536, "families": [], "version": "d97ed0e"});
@@ -202,6 +228,7 @@ fn two_machines_asking_at_once_never_get_one_ticket() {
     let path = dir.join("hub.sqlite");
     let _ = std::fs::remove_file(&path);
     let mut conn = hub::open(&path).unwrap();
+    share_providers(&mut conn, &["claude", "codex"]);
     let specs: Vec<(String, &[&str], &[usize])> = (0..12)
         .map(|i| (format!("ticket {i}"), &[][..], &[][..]))
         .collect();
@@ -251,7 +278,7 @@ fn two_machines_asking_at_once_never_get_one_ticket() {
 
 #[test]
 fn a_lapsed_reservation_is_offered_again() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let id = file(&mut conn, &[("only", &[], &[])]).remove(0);
     let (_, first) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
     assert_eq!(first["ticket"], id.as_str());
@@ -288,7 +315,7 @@ fn a_lapsed_reservation_is_offered_again() {
 
 #[test]
 fn a_worker_asking_again_gets_its_reservation_back_not_another() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     file(&mut conn, &[("one", &[], &[]), ("two", &[], &[])]);
     let (_, first) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
     assert!(first["ticket"].is_string());
@@ -302,7 +329,7 @@ fn a_worker_asking_again_gets_its_reservation_back_not_another() {
 
 #[test]
 fn a_session_whose_claim_was_lost_gets_409() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let id = file(&mut conn, &[("contested", &[], &[])]).remove(0);
     let id = id.as_str();
     assert_eq!(
@@ -338,7 +365,7 @@ fn a_session_whose_claim_was_lost_gets_409() {
 /// that changes neither (a comment and a metadata key, as `ignite tell` writes) cannot fail it.
 #[test]
 fn a_write_between_reservation_and_claim_does_not_fail_the_holders_claim() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let id = file(&mut conn, &[("handed off", &[], &[])]).remove(0);
     let (_, reserved) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
     assert_eq!(reserved["ticket"], id.as_str());
@@ -403,7 +430,7 @@ fn a_write_between_reservation_and_claim_does_not_fail_the_holders_claim() {
 
 #[test]
 fn a_released_ticket_returns_to_the_queue_with_a_comment() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let id = file(&mut conn, &[("given back", &[], &[])]).remove(0);
     let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
     let (status, _) = post(
@@ -445,7 +472,7 @@ fn a_released_ticket_returns_to_the_queue_with_a_comment() {
 
 #[test]
 fn a_summary_files_and_claims_an_adhoc_ticket() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let body = json!({"summary": "Fix the flaky badge test", "machine": "m-1",
                       "session": "local_a", "tree": "tree-02"});
     let (status, brief) = post(&mut conn, "/claims", &body, start());
@@ -459,7 +486,7 @@ fn a_summary_files_and_claims_an_adhoc_ticket() {
 
 #[test]
 fn registration_issues_a_token_and_heartbeats_need_a_registered_machine() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let beat = json!({"machine": "m-7f3a", "version": "d97ed0e", "workers": []});
     assert_eq!(
         post(&mut conn, "/machines/heartbeat", &beat, start()).0,
@@ -484,7 +511,7 @@ fn registration_issues_a_token_and_heartbeats_need_a_registered_machine() {
 
 #[test]
 fn writes_need_a_writer_and_other_paths_are_not_ours() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let request = |path: &str, method: &str| Request {
         method: method.into(),
         path: path.into(),
@@ -512,7 +539,7 @@ fn a_ticket_names_backquoted_paths() {
 
 #[test]
 fn an_open_regression_goes_before_older_work() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(
         &mut conn,
         &[("old work", &[], &[]), ("fix a check", &[], &[])],
@@ -555,7 +582,7 @@ pub(super) fn set_workers(conn: &mut Connection, epic: &TicketId, workers: u32) 
 
 #[test]
 fn only_an_active_epic_loose_or_the_hub_s_own_tickets_are_offered() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let (epic, waiting) = file_under(&mut conn, Parent::Epic(None), &[("backlog", &[], &[])]);
     let (_, stopped) = file_under(&mut conn, Parent::Epic(Some(0)), &[("stopped", &[], &[])]);
     // A new idle worker each time, since a worker holding a reservation is offered nothing.
@@ -583,7 +610,7 @@ fn only_an_active_epic_loose_or_the_hub_s_own_tickets_are_offered() {
 
 #[test]
 fn a_ticket_needing_a_person_is_not_offered() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let ids = file(
         &mut conn,
@@ -608,7 +635,7 @@ fn a_ticket_needing_a_person_is_not_offered() {
 
 #[test]
 fn a_reserved_ticket_is_claimed_only_with_its_code_from_its_machine() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let id = file(&mut conn, &[("reserved", &[], &[])]).remove(0);
     let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
     let code = reservation["code"].as_str().unwrap();
@@ -634,7 +661,7 @@ fn a_reserved_ticket_is_claimed_only_with_its_code_from_its_machine() {
 
 #[test]
 fn a_code_whose_reservation_lapsed_claims_nothing() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     file(&mut conn, &[("late", &[], &[])]);
     let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
     let (status, _) = post(
@@ -648,7 +675,7 @@ fn a_code_whose_reservation_lapsed_claims_nothing() {
 
 #[test]
 fn a_paused_machine_gets_nothing_while_another_still_does() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     file(
         &mut conn,
         &[("a", &[], &[]), ("b", &[], &[]), ("c", &[], &[])],
@@ -674,7 +701,7 @@ fn a_paused_machine_gets_nothing_while_another_still_does() {
 
 #[test]
 fn a_release_saves_its_branch_note_and_need_for_the_next_claim() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let id = file(&mut conn, &[("half done", &[], &[])]).remove(0);
     let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
@@ -718,7 +745,7 @@ fn a_release_saves_its_branch_note_and_need_for_the_next_claim() {
 
 #[test]
 fn a_close_with_no_landing_closes_the_ticket_and_frees_the_worker() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let id = file(&mut conn, &[("obsolete", &[], &[])]).remove(0);
     let id = id.as_str();

@@ -55,8 +55,9 @@ pub(super) fn legacy_blocker(
     worker: &IdleWorker,
     ticket: &ReadyTicket,
 ) -> Option<String> {
-    if !settings.provider(&worker.app).enabled {
-        return Some(format!("{} is off", worker.app));
+    let setting = settings.provider(&worker.app);
+    if !setting.takes_work() {
+        return Some(format!("{} is {}", worker.app, setting.state()));
     }
     let hold = blocking_hold(holds, worker, ticket)?;
     Some(format!(

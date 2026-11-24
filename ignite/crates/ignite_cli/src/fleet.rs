@@ -37,7 +37,7 @@ pub enum FleetCommand {
         on: bool,
         #[arg(long)]
         off: bool,
-        /// Relative weight, from 0 to 1000.
+        /// Relative weight, from 0 to 1000. Zero turns the provider off.
         #[arg(long)]
         share: Option<u32>,
         /// Hold at this percentage of a plan window, from 1 to 100.
@@ -226,10 +226,10 @@ fn render(view: &FleetView) -> String {
         .collect();
     for name in providers {
         let setting = view.settings.provider(name);
-        let state = if setting.enabled { "on" } else { "off" };
         let _ = writeln!(
             text,
-            "  provider {name}: {state}, share {}, {}",
+            "  provider {name}: {}, share {}, {}",
+            setting.state(),
             setting.share,
             setting.usage_policy(),
         );

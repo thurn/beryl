@@ -5,12 +5,12 @@ use serde_json::{Value, json};
 
 use ignite_core::config::Os;
 use ignite_core::protocol::tickets::BatchRequest;
-use ignite_store::hub::{self, batch, tickets};
+use ignite_store::hub::{batch, tickets};
 
-use super::tests::{at, claim_reserved, file, free, landed, post, register, release, start};
+use super::tests::{at, claim_reserved, file, free, landed, open, post, register, release, start};
 
 fn two_machines() -> Connection {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let second = json!({"machine": "m-2", "name": "cygnus", "os": "windows",
                         "cores": 8, "memory_mb": 16384, "families": [], "version": "v"});

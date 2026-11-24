@@ -5,12 +5,12 @@ use std::collections::BTreeMap;
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
-use ignite_core::fleet::{Allocations, FleetSettings};
+use ignite_core::fleet::Allocations;
 use ignite_core::ids::TicketId;
 use ignite_core::shares::Source;
 use ignite_store::hub::{self, batch, flaky_triage, fleet_settings};
 
-use super::tests::{at, claim, claim_reserved, free, landed, post, register, start};
+use super::tests::{at, claim, claim_reserved, free, landed, open, post, register, start};
 
 fn write(conn: &mut Connection, ops: &Value) -> Vec<TicketId> {
     let body = serde_json::from_value(json!({"ops": ops})).unwrap();
@@ -31,7 +31,7 @@ fn ask(conn: &mut Connection, n: u32) -> (String, Value) {
 
 #[test]
 fn one_flaky_triage_reservation_or_claim_occupies_the_fleet_slot() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let second_machine = json!({"machine": "m-2", "name": "other", "os": "macos", "cores": 18,
                                 "memory_mb": 65536, "families": [], "version": "d97ed0e"});
@@ -99,7 +99,7 @@ fn one_flaky_triage_reservation_or_claim_occupies_the_fleet_slot() {
 
 #[test]
 fn six_workers_balance_at_four_and_two_and_refill_the_pool_that_finished() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let mut ops = vec![
         json!({"op":"create","fields":{"type":"epic","title":"Wide","allocation":200}}),
@@ -161,7 +161,7 @@ fn six_workers_balance_at_four_and_two_and_refill_the_pool_that_finished() {
 
 #[test]
 fn source_pool_and_general_pool_can_be_parked_without_stopping_a_regression() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = write(
         &mut conn,
         &json!([
@@ -172,20 +172,19 @@ fn source_pool_and_general_pool_can_be_parked_without_stopping_a_regression() {
             {"op":"create","fields":{"title":"Pending flaky check","status":"pending_approval","labels":["flaky","hub"]}}
         ]),
     );
-    let set = |conn: &mut Connection, version, general, flaky| {
-        let settings = FleetSettings {
-            allocations: Some(Allocations {
-                general: Some(general),
-                sources: BTreeMap::from([(Source::Flaky, flaky)]),
-            }),
-            ..FleetSettings::default()
-        };
+    let set = |conn: &mut Connection, general, flaky| {
+        let mut settings = fleet_settings::settings(conn).unwrap();
+        let version = settings.version;
+        settings.allocations = Some(Allocations {
+            general: Some(general),
+            sources: BTreeMap::from([(Source::Flaky, flaky)]),
+        });
         assert!(matches!(
             fleet_settings::put(conn, version, settings, "test", start()).unwrap(),
             fleet_settings::PutOutcome::Stored(_)
         ));
     };
-    set(&mut conn, 0, 0, 0);
+    set(&mut conn, 0, 0);
     conn.execute(
         "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state)
          VALUES ('test:failed', ?1, 'bad', 'good', 'open')",
@@ -194,10 +193,10 @@ fn source_pool_and_general_pool_can_be_parked_without_stopping_a_regression() {
     .unwrap();
     assert_eq!(ask(&mut conn, 1).1["ticket"], ids[3].as_str());
     assert_eq!(ask(&mut conn, 2).1, Value::Null);
-    set(&mut conn, 1, 0, 200);
+    set(&mut conn, 0, 200);
     assert_eq!(ask(&mut conn, 3).1["ticket"], ids[1].as_str());
     assert_eq!(ask(&mut conn, 4).1, Value::Null);
-    set(&mut conn, 2, 100, 200);
+    set(&mut conn, 100, 200);
     assert_eq!(ask(&mut conn, 5).1["ticket"], ids[0].as_str());
     assert_eq!(ask(&mut conn, 6).1, Value::Null);
 }
@@ -233,6 +232,7 @@ fn a_database_from_before_allocation_keeps_its_eligible_and_parked_work() {
            VALUES ('E200.1', 6, 'seed', '2026-11-17T12:00:00Z', '{}');",
     ).unwrap();
     ignite_store::migrate::apply(&mut conn, migrations).unwrap();
+    super::tests::share_providers(&mut conn, &["claude"]);
 
     let load = |id| hub::tickets::load(&conn, id).unwrap().unwrap();
     assert_eq!(load("E100").allocation, Some(6));

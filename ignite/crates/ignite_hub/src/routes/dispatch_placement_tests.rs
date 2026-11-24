@@ -12,12 +12,12 @@ use ignite_core::protocol::machine_state::MachineSnapshot;
 use ignite_core::time::Timestamp;
 use ignite_store::hub::{self, machine_snapshots, placement_deferrals};
 
-use super::tests::{at, claim, file, free, landed, post, register, start};
+use super::tests::{at, claim, file, free, landed, open, post, register, start};
 
 const OUTPUT: &str = "engine/target";
 
 fn machines() -> Connection {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let second = json!({"machine": "m-2", "name": "remote", "os": "macos",
                         "cores": 20, "memory_mb": 16384, "families": [], "version": "v"});

@@ -5,10 +5,10 @@ use serde_json::{Value, json};
 
 use ignite_core::fleet::ProviderSample;
 use ignite_core::time::Timestamp;
-use ignite_store::hub::{fleet_settings, open_in_memory, provider_usage};
+use ignite_store::hub::{fleet_settings, provider_usage};
 
 use super::Request;
-use super::tests::{at, claim_reserved, file, free, landed, post, release, start};
+use super::tests::{at, claim_reserved, file, free, landed, open, post, release, start};
 use crate::auth::Writer;
 use crate::routes::fleet;
 
@@ -90,7 +90,7 @@ fn claim_provider(conn: &Connection, ticket: &str) -> Option<String> {
 
 #[test]
 fn equal_shares_alternate_across_machines_counting_claims_and_reservations() {
-    let mut conn = open_in_memory().unwrap();
+    let mut conn = open();
     set_mix(&mut conn, [50, 50, 0], true);
     file(
         &mut conn,
@@ -136,7 +136,7 @@ fn equal_shares_alternate_across_machines_counting_claims_and_reservations() {
 fn releasing_a_claim_and_lapsing_a_reservation_each_free_provider_load() {
     use ignite_store::hub::fleet::RESERVATION_SECONDS;
 
-    let mut conn = open_in_memory().unwrap();
+    let mut conn = open();
     set_mix(&mut conn, [50, 50, 0], false);
     file(
         &mut conn,
@@ -178,7 +178,7 @@ fn releasing_a_claim_and_lapsing_a_reservation_each_free_provider_load() {
 
 #[test]
 fn an_older_daemon_cannot_start_work_with_a_disabled_provider() {
-    let mut conn = open_in_memory().unwrap();
+    let mut conn = open();
     set_mix(&mut conn, [50, 50, 0], false);
     let ticket = file(&mut conn, &[("work", &[], &[])]).remove(0);
     let mut machine = free("m-1", &["third-idle"]);
@@ -190,8 +190,8 @@ fn an_older_daemon_cannot_start_work_with_a_disabled_provider() {
 }
 
 #[test]
-fn the_third_provider_takes_work_during_holds_and_yields_at_reset() {
-    let mut conn = open_in_memory().unwrap();
+fn a_provider_with_zero_share_takes_no_work_even_while_the_others_are_held() {
+    let mut conn = open();
     set_mix(&mut conn, [60, 40, 0], true);
     file(
         &mut conn,
@@ -212,18 +212,22 @@ fn the_third_provider_takes_work_during_holds_and_yields_at_reset() {
     hold_provider(&conn, "claude", "5-hour", at(5.0));
     assert_eq!(ask(&mut conn, &machine, at(2.0))["provider"], "codex");
     hold_provider(&conn, "codex", "5-hour", at(10.0));
-    assert_eq!(ask(&mut conn, &machine, at(3.0))["provider"], "third");
+    let mut explained = machine.clone();
+    explained["explain"] = json!(true);
+    let reply = ask(&mut conn, &explained, at(3.0));
+    let reason = reply["nothing"].as_str().unwrap();
+    assert!(reason.contains("third is off (share 0)"), "{reason}");
     assert_eq!(ask(&mut conn, &machine, at(5.0))["provider"], "claude");
 }
 
 #[test]
 fn a_pin_overrides_share_but_still_waits_for_holds_and_enabled_providers() {
-    let mut conn = open_in_memory().unwrap();
-    set_mix(&mut conn, [0, 100, 100], false);
+    let mut conn = open();
+    set_mix(&mut conn, [1, 100, 100], false);
     let tickets = file(
         &mut conn,
         &[
-            ("pinned standby", &["provider:Claude"], &[]),
+            ("pinned to the smaller share", &["provider:Claude"], &[]),
             ("pinned off", &["provider:third"], &[0]),
         ],
     );
@@ -269,8 +273,8 @@ fn a_pin_overrides_share_but_still_waits_for_holds_and_enabled_providers() {
 
 #[test]
 fn the_machine_only_gets_providers_it_offers_and_the_reason_names_absent_ones() {
-    let mut conn = open_in_memory().unwrap();
-    set_mix(&mut conn, [100, 50, 0], true);
+    let mut conn = open();
+    set_mix(&mut conn, [100, 50, 1], true);
     file(&mut conn, &[("one", &[], &[]), ("two", &[], &[])]);
     let machine = machine_room("m-1", 2, &["third"]);
     assert_eq!(ask(&mut conn, &machine, start())["provider"], "third");
@@ -291,7 +295,7 @@ fn the_machine_only_gets_providers_it_offers_and_the_reason_names_absent_ones() 
 
 #[test]
 fn new_settings_apply_to_the_next_reservation_without_changing_existing_ones() {
-    let mut conn = open_in_memory().unwrap();
+    let mut conn = open();
     set_mix(&mut conn, [100, 0, 0], true);
     file(
         &mut conn,
@@ -318,7 +322,7 @@ fn new_settings_apply_to_the_next_reservation_without_changing_existing_ones() {
 
 #[test]
 fn ordinary_work_waits_for_pending_reservations_and_regressions_bypass_room() {
-    let mut conn = open_in_memory().unwrap();
+    let mut conn = open();
     set_mix(&mut conn, [100, 0, 0], true);
     let tickets = file(
         &mut conn,
@@ -368,7 +372,7 @@ fn ordinary_work_waits_for_pending_reservations_and_regressions_bypass_room() {
 
 #[test]
 fn a_lane_continues_on_its_provider_even_after_the_shares_change() {
-    let mut conn = open_in_memory().unwrap();
+    let mut conn = open();
     set_mix(&mut conn, [100, 0, 0], true);
     let tickets = file(
         &mut conn,
@@ -388,7 +392,7 @@ fn a_lane_continues_on_its_provider_even_after_the_shares_change() {
         .0,
         200
     );
-    set_mix(&mut conn, [0, 100, 0], true);
+    set_mix(&mut conn, [1, 100, 0], true);
     let landing = landed(tickets[0].as_str(), session, "done");
     let (status, reply) = post(&mut conn, "/landed", &landing, at(2.0));
     assert_eq!(status, 200);
@@ -400,8 +404,8 @@ fn a_lane_continues_on_its_provider_even_after_the_shares_change() {
 
 #[test]
 fn a_family_hold_uses_the_model_under_the_tier() {
-    let mut conn = open_in_memory().unwrap();
-    set_mix(&mut conn, [100, 0, 0], true);
+    let mut conn = open();
+    set_mix(&mut conn, [100, 1, 0], true);
     file(
         &mut conn,
         &[
@@ -441,8 +445,8 @@ fn a_family_hold_uses_the_model_under_the_tier() {
 
 #[test]
 fn an_older_daemon_gets_its_idle_worker_and_can_retry() {
-    let mut conn = open_in_memory().unwrap();
-    set_mix(&mut conn, [0, 100, 0], true);
+    let mut conn = open();
+    set_mix(&mut conn, [1, 100, 0], true);
     file(&mut conn, &[("one", &[], &[]), ("two", &[], &[])]);
     let machine = free("m-1", &["local_a"]);
     let first = ask(&mut conn, &machine, start());
@@ -453,7 +457,7 @@ fn an_older_daemon_gets_its_idle_worker_and_can_retry() {
 
 #[test]
 fn an_existing_claim_counts_when_its_worker_reported_the_provider() {
-    let mut conn = open_in_memory().unwrap();
+    let mut conn = open();
     set_mix(&mut conn, [50, 50, 0], true);
     let tickets = file(&mut conn, &[("one", &[], &[]), ("two", &[], &[])]);
     let ticket = tickets[0].as_str();
@@ -476,7 +480,7 @@ fn a_batch_claim_cannot_take_a_live_reservation() {
     use ignite_core::protocol::tickets::{BatchRequest, Operation};
     use ignite_store::hub::batch;
 
-    let mut conn = open_in_memory().unwrap();
+    let mut conn = open();
     let id = file(&mut conn, &[("work", &[], &[])]).remove(0);
     let machine = machine_room("m-1", 1, &["claude"]);
     let reserved = ask(&mut conn, &machine, start());
@@ -505,9 +509,8 @@ fn a_batch_claim_cannot_take_a_live_reservation() {
 #[test]
 fn refusing_a_reservation_frees_its_ticket_and_a_stale_refusal_is_harmless() {
     use super::tests::{free, post};
-    use ignite_store::hub;
 
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let tickets = super::tests::file(&mut conn, &[("ticket", &[], &[])]);
     let (_, first) = post(&mut conn, "/next", &free("m-1", &["first"]), start());
     assert_eq!(first["ticket"], tickets[0].as_str());
@@ -535,7 +538,7 @@ fn refusing_a_reservation_frees_its_ticket_and_a_stale_refusal_is_harmless() {
 }
 
 fn repair_world() -> (Connection, ignite_core::ids::TicketId) {
-    let mut conn = open_in_memory().unwrap();
+    let mut conn = open();
     super::tests::register(&mut conn);
     let machine = json!({"machine": "m-2", "name": "remote", "os": "macos",
                          "cores": 8, "memory_mb": 16384, "families": [], "version": "v"});
@@ -558,7 +561,7 @@ fn repair_world() -> (Connection, ignite_core::ids::TicketId) {
         200
     );
     // With no transcript to consider, the mix would give the ticket to Claude.
-    set_mix(&mut conn, [100, 0, 0], false);
+    set_mix(&mut conn, [100, 1, 0], false);
     (conn, culprit)
 }
 

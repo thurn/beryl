@@ -2,9 +2,9 @@ use ignite_core::protocol::hub::{
     CheckFix, FixOutcome, FixSource, FlakyReport, FoundBy, RegressionReport,
 };
 use ignite_core::protocol::tickets::{BatchRequest, Operation};
-use ignite_store::hub::{self, batch, checks, findings, fix_outcomes};
+use ignite_store::hub::{batch, checks, findings, fix_outcomes};
 
-use super::tests::{at, claim, file, landed, post, post_with_test_paths, register, start};
+use super::tests::{at, claim, file, landed, open, post, post_with_test_paths, register, start};
 use super::{Connection, Request, Timestamp, json};
 use crate::upkeep::{Upkeep, filing::UPKEEP, regressions};
 
@@ -39,7 +39,7 @@ fn history(conn: &mut Connection, query: (&str, &str), now: Timestamp) -> Vec<Ch
 
 #[test]
 fn closing_regressions_records_every_check_and_each_close_once() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let config = ["**/tests/**".to_owned(), "**/*_tests.rs".to_owned()];
     for (index, (files, outcome)) in [
@@ -126,7 +126,7 @@ fn closing_regressions_records_every_check_and_each_close_once() {
 
 #[test]
 fn closing_a_flaky_ticket_by_batch_records_each_grouped_check_once() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     for check in ["unit:a", "unit:b"] {
         checks::register(&conn, check).unwrap();
         for commit in ["aaaa", "bbbb"] {
@@ -167,7 +167,7 @@ fn closing_a_flaky_ticket_by_batch_records_each_grouped_check_once() {
 
 #[test]
 fn an_ordinary_batch_records_outcomes_only_on_the_repair_ticket() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     for check in ["unit:fixed", "unit:unresolved"] {
         let report = FlakyReport {
@@ -224,7 +224,7 @@ fn an_ordinary_batch_records_outcomes_only_on_the_repair_ticket() {
 
 #[test]
 fn only_product_landings_credit_exploration() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let ids = file(
         &mut conn,
@@ -258,7 +258,7 @@ fn a_test_only_close_follows_up_each_registered_check_and_leaves_protected_check
     use ignite_core::protocol::hub::CheckState;
     use ignite_store::hub::{check_state, tickets};
 
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let names = ["ordinary", "protected", "unknown"];
     for name in &names[..2] {
@@ -354,7 +354,7 @@ fn the_culprit_tickets_own_test_update_and_scenario_changes_do_not_switch_checks
     use ignite_core::protocol::hub::CheckState;
     use ignite_store::hub::check_state;
 
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     for (name, path) in [
         ("own-update", "tests/regression.rs"),

@@ -4386,8 +4386,9 @@ Its edit commands are:
   space divided by the ceiling gives the number of build slots, rounded down to
   a minimum of one.
 - `ignite fleet provider <name> [--on|--off] [--share <n>] [--stop-percent <n>]`
-  edits provider policy. A share is a weight from 0 to 1,000. Zero makes an
-  enabled provider a standby. The stop percentage is from 1 to 100.
+  edits provider policy. A share is a weight from 0 to 1,000. A share of zero
+  turns the provider off, the same as `--off`. The stop percentage is from 1 to
+  100\.
 
 An **active** machine takes tickets and verifies tips. A **checks only** machine
 verifies tips and can take one regression or justiciar ticket at a time when no
@@ -4407,8 +4408,10 @@ clears an emergency pause.
 The hub stores versioned settings and an audit log. Each change records the
 actor, time, summary and resulting policy. A new database seeds the machines and
 providers named in `ignite.toml` with the standard defaults: active machines
-with the default tree settings, and enabled providers with zero share and a 99%
-stop percentage. Missing entries use the same defaults. Saved settings persist
+with the default tree settings, and providers with the switch on, zero share and
+a 99% stop percentage. Zero share means a provider takes no work until an
+operator gives it a share, so a provider added to `ignite.toml` never starts
+workers by itself. Missing entries use the same defaults. Saved settings persist
 across upgrades.
 
 `GET /fleet` under the project API returns the view also available through
@@ -4472,21 +4475,20 @@ without a tier uses the provider's configured `sonnet` model if present, or the
 model used for its health probe.
 
 The hub chooses a provider for each reservation. It considers providers that are
-enabled, have passed their CLI probe and are available on the requesting
-machine, offer the ticket's model tier, and satisfy the ticket's provider pin
-and current usage holds. It counts live reservations and claimed tickets across
-the fleet.
+on with a positive share, have passed their CLI probe and are available on the
+requesting machine, offer the ticket's model tier, and satisfy the ticket's
+provider pin and current usage holds. It counts live reservations and claimed
+tickets across the fleet.
 
-1. Among eligible providers with a positive share, choose the fewest tickets per
-   unit of share. Break ties by larger share, then provider name.
-2. If only standbys are eligible, choose the fewest tickets, then provider name.
-3. If none are eligible, skip the ticket on this machine and report why.
+1. Among eligible providers, choose the fewest tickets per unit of share. Break
+   ties by larger share, then provider name.
+2. If none are eligible, skip the ticket on this machine and report why.
 
 A share edit applies to the next reservation. A reservation and its claim keep
 the chosen provider, and a lane successor stays with the session that finished
 the previous ticket if its provider remains eligible. Older daemons that offer
 particular idle workers can still receive reservations when their providers are
-enabled and clear of applicable usage holds.
+on with a positive share and clear of applicable usage holds.
 
 ### Usage and failover
 
@@ -4499,9 +4501,9 @@ a future reset from the turn or the last stored sample for that window. If
 neither supplies one, it sets the reset one hour ahead. For providers that
 report no utilization, a plan-limit end is the source of usage holds.
 
-Other eligible providers divide the work while a provider is held. A standby
-takes work when no provider with a positive share can take it. When the hold
-ends, the provider returns to the mix at its configured share.
+Other eligible providers divide the work while a provider is held. A provider
+with zero share never takes work, even when every other provider is held. When
+the hold ends, the provider returns to the mix at its configured share.
 
 ### Check families in dispatch
 
@@ -5265,10 +5267,12 @@ placement cases.
   a ticket that either can run, then swap the shares on Fleet. Expect the
   existing reservation to keep its provider and the next one to name the new
   provider with a positive share.
-- **Failover.** With the second provider on standby, report usage at the first
-  provider's stop percentage for an all-model window. Expect Fleet to show the
-  hold and reset and the next reservation to go to the standby. After the reset,
-  expect the first provider to take the next reservation.
+- **Failover.** Give both providers a positive share, then report usage at the
+  first provider's stop percentage for an all-model window. Expect Fleet to show
+  the hold and reset and the next reservation to go to the second provider.
+  After the reset, expect the first provider to take the next reservation. Set
+  the second provider's share to zero and repeat: expect no reservation while
+  the first provider is held.
 - **A machine off and on.** Use a fixture with a check that requires a pass on a
   platform served by one machine. Switch that machine off and let the heartbeat
   deliver its state. Expect no new ticket hand-offs, tip claims or idle jobs

@@ -14,7 +14,7 @@ use ignite_core::protocol::tickets::Status;
 use ignite_core::time::Timestamp;
 use ignite_store::hub;
 
-use crate::routes::dispatch::tests::{at, file, free, post, start};
+use crate::routes::dispatch::tests::{at, file, free, open, post, start};
 use crate::upkeep::{filing::UPKEEP, justiciar, stuck};
 
 fn pause(conn: &mut Connection, machine: &Value, paused: bool) {
@@ -85,7 +85,7 @@ fn approve(conn: &mut Connection, ticket: &str, now: Timestamp) {
 
 #[test]
 fn checks_only_takes_one_tip_repair_with_no_worker_room() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register_windows(&mut conn, "m-win", "windows-host");
     register_windows(&mut conn, "m-other", "other-host");
     pause(&mut conn, &json!("m-win"), true);
@@ -190,7 +190,7 @@ fn checks_only_takes_one_tip_repair_with_no_worker_room() {
 
 #[test]
 fn retrying_a_reservation_reflects_a_later_blocking_sighting_of_the_same_cause() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register_windows(&mut conn, "m-win", "windows-host");
     let mut report = windows_incomplete("abcd", "rust:paths", false);
     let filed = stuck::incomplete(&mut conn, UPKEEP, &report, at(1.0)).unwrap();
@@ -216,7 +216,7 @@ fn retrying_a_reservation_reflects_a_later_blocking_sighting_of_the_same_cause()
 
 #[test]
 fn a_paused_machine_gets_the_tickets_holding_master_back_one_at_a_time() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(
         &mut conn,
         &[
@@ -262,7 +262,7 @@ fn checks_only_offers_the_escalation_when_its_repair_lacks_a_provider() {
 }
 
 fn stalled_repair(labels: &[&str]) -> (Connection, TicketId, String, Timestamp) {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     crate::routes::dispatch::tests::register(&mut conn);
     pause(&mut conn, &json!("m-1"), true);
     let ids = file(
@@ -294,7 +294,7 @@ fn stalled_repair(labels: &[&str]) -> (Connection, TicketId, String, Timestamp) 
 
 #[test]
 fn a_paused_machine_is_offered_a_reopened_regression_but_never_feature_work() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(
         &mut conn,
         &[("feature", &[], &[]), ("fix a check", &[], &[])],
@@ -316,7 +316,7 @@ fn a_paused_machine_is_offered_a_reopened_regression_but_never_feature_work() {
 
 #[test]
 fn a_pause_of_every_machine_stops_even_the_tickets_holding_master_back() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(&mut conn, &[("ignite is stuck", &["justiciar"], &[])]);
     pause(&mut conn, &Value::Null, true);
     let (_, nothing) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(1.0));
@@ -334,7 +334,7 @@ fn a_pause_of_every_machine_stops_even_the_tickets_holding_master_back() {
 
 #[test]
 fn a_daemon_paused_on_its_own_asks_only_for_tickets_holding_master_back() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(
         &mut conn,
         &[
@@ -355,7 +355,7 @@ fn a_daemon_paused_on_its_own_asks_only_for_tickets_holding_master_back() {
 
 #[test]
 fn checks_only_takes_a_windows_regression_while_an_active_mac_is_heard_from() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     crate::routes::dispatch::tests::register(&mut conn);
     register_windows(&mut conn, "m-win", "windows-host");
     let ids = file(
@@ -388,7 +388,7 @@ fn checks_only_takes_a_windows_regression_while_an_active_mac_is_heard_from() {
 
 #[test]
 fn checks_only_defers_to_a_recent_active_machine_unless_the_pin_excludes_it() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     crate::routes::dispatch::tests::register(&mut conn);
     let beat = json!({"machine": "m-1", "version": "v", "workers": [], "cli_apps": ["claude"]});
     assert_eq!(
@@ -418,7 +418,7 @@ fn checks_only_defers_to_a_recent_active_machine_unless_the_pin_excludes_it() {
 
 #[test]
 fn checks_only_takes_a_blocker_when_the_active_machines_model_is_held() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     crate::routes::dispatch::tests::register(&mut conn);
     pause(&mut conn, &json!("m-2"), true);
     let ticket = file(
@@ -463,7 +463,7 @@ fn fleet_put_turns_off_dispatch_and_the_next_heartbeat_carries_the_policy() {
     use ignite_core::fleet::ProviderSample;
     use ignite_store::hub::provider_usage;
 
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     crate::routes::dispatch::tests::register(&mut conn);
     let ids = file(&mut conn, &[("ignite is stuck", &["justiciar"], &[])]);
     let asking = free("m-1", &["local_a"]);
@@ -499,14 +499,14 @@ fn fleet_put_turns_off_dispatch_and_the_next_heartbeat_carries_the_policy() {
                 "settings": {
                     "version": version,
                     "machines": {"jarvis": {"state": state, "tree_space_gb": 450}},
-                    "providers": {}
+                    "providers": {"claude": {"enabled": true, "share": 1, "stop_percent": 99}}
                 }
             }))
             .unwrap(),
         };
         assert_eq!(fleet::handle(conn, &request, at(2.0)).unwrap().status, 200);
     };
-    put(&mut conn, 0, "off");
+    put(&mut conn, 1, "off");
     let (_, nothing) = post(&mut conn, "/next", &asking, at(3.0));
     assert_eq!(
         nothing,
@@ -517,14 +517,14 @@ fn fleet_put_turns_off_dispatch_and_the_next_heartbeat_carries_the_policy() {
     let (status, reply) = post(&mut conn, "/machines/heartbeat", &beat, at(3.0));
     assert_eq!(status, 200, "{reply}");
     let policy = &reply["fleet"];
-    assert_eq!(policy["version"], 1);
+    assert_eq!(policy["version"], 2);
     assert_eq!(policy["state"], "off");
     assert_eq!(policy["state_actor"], "operator");
     assert_eq!(policy["tree_space_gb"], 450);
     assert_eq!(policy["off_platforms"], json!(["macos"]));
     assert_eq!(policy["holds"]["codex"].as_array().unwrap().len(), 1);
 
-    put(&mut conn, 1, "active");
+    put(&mut conn, 2, "active");
     let (_, resumed) = post(&mut conn, "/next", &asking, at(4.0));
     assert_eq!(resumed, existing);
     let (_, reply) = post(&mut conn, "/machines/heartbeat", &beat, at(5.0));
@@ -537,7 +537,7 @@ fn only_platforms_without_an_online_active_machine_are_deferred() {
     use ignite_core::fleet::MachineState;
     use ignite_store::hub::fleet_settings;
 
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     crate::routes::dispatch::tests::register(&mut conn);
     for (machine, name) in [("m-2", "cygnus"), ("m-3", "spare")] {
         let register = json!({"machine": machine, "name": name, "os": "windows", "cores": 4,

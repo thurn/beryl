@@ -10,7 +10,9 @@ use ignite_core::ids::TicketId;
 use ignite_core::manifest::Manifest;
 use ignite_store::hub;
 
-use super::tests::{at, claim, claim_reserved, file, free, landed, post, register, release, start};
+use super::tests::{
+    at, claim, claim_reserved, file, free, landed, open, post, register, release, start,
+};
 
 fn ask(conn: &mut Connection, session: &str, pressure: &DispatchPressure, seconds: f64) -> Value {
     ask_with_cores(conn, session, pressure, seconds, None)
@@ -44,7 +46,7 @@ fn classify(conn: &Connection, ticket: &TicketId, cores: f64, body: &str) {
 
 #[test]
 fn polling_reserves_an_ordinary_ticket_when_the_queue_is_long_and_the_host_has_room() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(&mut conn, &[("docs", &[], &[])]);
     classify(&conn, &ids[0], 0.1, "Edit `docs/guide.md`");
     let mut pressure = DispatchPressure {
@@ -63,7 +65,7 @@ fn polling_reserves_an_ordinary_ticket_when_the_queue_is_long_and_the_host_has_r
 
 #[test]
 fn polling_explains_slot_and_queue_waits_together() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let ids = file(&mut conn, &[("build", &[], &[])]);
     classify(&conn, &ids[0], 1.0, "Edit `app/src/main.rs`");
@@ -100,7 +102,7 @@ fn polling_explains_slot_and_queue_waits_together() {
 
 #[test]
 fn a_build_ticket_waits_for_a_slot_but_a_light_ticket_can_start() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let ids = file(&mut conn, &[("build", &[], &[]), ("docs", &[], &[])]);
     classify(&conn, &ids[0], 1.0, "Edit `app/src/main.rs`");
@@ -131,7 +133,7 @@ fn a_build_ticket_waits_for_a_slot_but_a_light_ticket_can_start() {
 
 #[test]
 fn a_reservation_counts_until_its_claim_already_holds_a_slot() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(&mut conn, &[("first", &[], &[]), ("second", &[], &[])]);
     for ticket in &ids {
         classify(&conn, ticket, 1.0, "Edit `app/src/main.rs`");
@@ -172,7 +174,7 @@ fn a_reservation_counts_until_its_claim_already_holds_a_slot() {
 
 #[test]
 fn a_daemon_without_slot_fields_can_only_receive_light_work() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(&mut conn, &[("build", &[], &[]), ("docs", &[], &[])]);
     classify(&conn, &ids[0], 1.0, "Edit `app/src/main.rs`");
     classify(&conn, &ids[1], 0.1, "Edit `docs/guide.md`");
@@ -205,7 +207,7 @@ fn build_handoffs_start_in_threes_then_wait_for_recovery_and_ramp_one_at_a_time(
 }
 
 fn check_ramp(admit_cores: Option<f64>) {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(
         &mut conn,
         &[
@@ -259,7 +261,7 @@ fn check_ramp(admit_cores: Option<f64>) {
 
 #[test]
 fn six_shared_cores_admit_three_builds_even_after_the_ramp_wait() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(
         &mut conn,
         &[
@@ -371,7 +373,7 @@ outputs = ["tools/environment"]
 #[test]
 fn a_build_reservation_from_polling_limits_a_lane_successor_and_vice_versa() {
     for lane_first in [false, true] {
-        let mut conn = hub::open_in_memory().unwrap();
+        let mut conn = open();
         register(&mut conn);
         publish_build_checks(&conn);
         let [rust, config, predecessor, polling, lane, light] = file(
@@ -451,7 +453,7 @@ fn a_build_reservation_from_polling_limits_a_lane_successor_and_vice_versa() {
 
 #[test]
 fn a_light_claim_that_acquires_a_build_slot_counts_against_the_core_limit() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let ids = file(&mut conn, &[("tool", &[], &[]), ("build", &[], &[])]);
     classify(&conn, &ids[0], 0.1, "Edit `tools/verify.py`");
@@ -493,7 +495,7 @@ fn a_light_claim_that_acquires_a_build_slot_counts_against_the_core_limit() {
 #[test]
 fn a_lane_successor_can_use_the_build_capacity_its_predecessor_releases() {
     for first_uses_build_capacity in [false, true] {
-        let mut conn = hub::open_in_memory().unwrap();
+        let mut conn = open();
         register(&mut conn);
         let ids = file(
             &mut conn,
@@ -562,7 +564,7 @@ fn a_lane_successor_can_use_the_build_capacity_its_predecessor_releases() {
 
 #[test]
 fn a_landing_can_close_while_its_lane_successor_waits_for_a_build_slot() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let ids = file(
         &mut conn,
@@ -604,7 +606,7 @@ fn a_landing_can_close_while_its_lane_successor_waits_for_a_build_slot() {
 
 #[test]
 fn landing_reserves_the_chain_and_its_brief_carries_the_note() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let ids = file(
         &mut conn,

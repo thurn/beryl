@@ -14,8 +14,8 @@ pub struct ProviderLoad {
     pub holds: Vec<Hold>,
 }
 
-/// Pick the least loaded provider per unit of share, falling back to standbys when
-/// no provider with a share fits. If none fits, explain each provider's blocker.
+/// Pick the least loaded provider per unit of share. A provider with a share of zero is off.
+/// If none fits, explain each provider's blocker.
 pub fn choose<'a>(
     loads: &'a [ProviderLoad],
     offered: &[ProviderOffer],
@@ -46,20 +46,13 @@ pub fn choose<'a>(
 fn compare(first: &ProviderLoad, second: &ProviderLoad) -> Ordering {
     let first_share = first.setting.share;
     let second_share = second.setting.share;
-    let load_order = match (first_share, second_share) {
-        (0, 0) => first.in_progress.cmp(&second.in_progress),
-        (0, _) => Ordering::Greater,
-        (_, 0) => Ordering::Less,
-        _ => {
-            // Compare ratios exactly by cross multiplying. A product of two u32s fits in u64.
-            let first_weighted = u64::from(first.in_progress) * u64::from(second_share);
-            let second_weighted = u64::from(second.in_progress) * u64::from(first_share);
-            first_weighted
-                .cmp(&second_weighted)
-                .then_with(|| second_share.cmp(&first_share))
-        }
-    };
-    load_order.then_with(|| first.name.cmp(&second.name))
+    // Compare ratios exactly by cross multiplying. A product of two u32s fits in u64.
+    let first_weighted = u64::from(first.in_progress) * u64::from(second_share);
+    let second_weighted = u64::from(second.in_progress) * u64::from(first_share);
+    first_weighted
+        .cmp(&second_weighted)
+        .then_with(|| second_share.cmp(&first_share))
+        .then_with(|| first.name.cmp(&second.name))
 }
 
 fn blocker(
@@ -72,8 +65,8 @@ fn blocker(
     if pinned.is_some_and(|pin| !pin.eq_ignore_ascii_case(name)) {
         return Some(format!("{name} is excluded by the provider pin"));
     }
-    if !load.setting.enabled {
-        return Some(format!("{name} is off"));
+    if !load.setting.takes_work() {
+        return Some(format!("{name} is {}", load.setting.state()));
     }
     let Some(offer) = offer else {
         return Some(format!("{name} has no CLI on this machine"));

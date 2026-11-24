@@ -6,10 +6,10 @@ use serde_json::{Value, json};
 use ignite_core::protocol::tickets::{
     BatchRequest, Operation, Saving, Status, TicketFields, TicketType,
 };
-use ignite_store::hub::{self, batch, findings, rows, tickets};
+use ignite_store::hub::{batch, findings, rows, tickets};
 
 use super::tests::{
-    Parent, at, claim, claim_reserved, file, file_under, free, post, register, start,
+    Parent, at, claim, claim_reserved, file, file_under, free, open, post, register, start,
 };
 
 #[test]
@@ -23,14 +23,14 @@ fn every_label_the_hub_files_with_is_offered_under_an_inactive_epic() {
         "flaky",
         "justiciar",
     ] {
-        let mut conn = hub::open_in_memory().unwrap();
+        let mut conn = open();
         let (_, ids) = file_under(&mut conn, Parent::Epic(None), &[("fault", &[label], &[])]);
         let (_, reply) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
         assert_eq!(reply["ticket"], ids[0].as_str(), "label {label}");
     }
     // A ticket with no such label under an inactive epic is still not offered, and `needs:` still
     // applies.
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     file_under(
         &mut conn,
         Parent::Epic(None),
@@ -45,7 +45,7 @@ fn every_label_the_hub_files_with_is_offered_under_an_inactive_epic() {
 
 #[test]
 fn a_scheduled_ticket_s_copy_is_offered_and_an_allocation_of_zero_parks_it() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let request = BatchRequest {
         preconditions: Vec::new(),
         ops: vec![Operation::Create {
@@ -77,7 +77,7 @@ fn a_scheduled_ticket_s_copy_is_offered_and_an_allocation_of_zero_parks_it() {
     assert_eq!(reply["ticket"], copies[0].as_str());
 
     // A person can still park the schedule's work, as with an epic.
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let (meta, _) = schedule(&mut conn);
     super::tests::set_workers(&mut conn, &meta, 0);
     let (_, reply) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
@@ -86,7 +86,7 @@ fn a_scheduled_ticket_s_copy_is_offered_and_an_allocation_of_zero_parks_it() {
 
 #[test]
 fn a_justiciar_ticket_is_offered_before_a_regression() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(
         &mut conn,
         &[
@@ -106,7 +106,7 @@ fn a_justiciar_ticket_is_offered_before_a_regression() {
 
 #[test]
 fn a_claim_retried_after_a_lost_reply_gets_the_same_brief() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     file(&mut conn, &[("work", &[], &[])]);
     let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
     let body = claim_reserved(&reservation, "local_a");
@@ -123,7 +123,7 @@ fn a_claim_retried_after_a_lost_reply_gets_the_same_brief() {
 
 #[test]
 fn a_cap_on_an_outer_epic_limits_the_epics_inside_it() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let epic = |title: &str, parent: Option<&str>, workers, max_workers| Operation::Create {
         fields: TicketFields {
             title: Some(title.to_owned()),
@@ -166,7 +166,7 @@ fn a_cap_on_an_outer_epic_limits_the_epics_inside_it() {
 
 #[test]
 fn a_close_resent_after_a_batch_closed_the_ticket_frees_the_worker_and_the_finding() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let id = file(&mut conn, &[("improve", &[], &[])]).remove(0);
     let id = id.as_str();
@@ -233,7 +233,7 @@ fn make_improvement(conn: &rusqlite::Connection, id: &str) {
 
 #[test]
 fn an_improvement_respects_its_epic_s_cap() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let (epic, ids) = file_under(
         &mut conn,
@@ -260,7 +260,7 @@ fn an_improvement_respects_its_epic_s_cap() {
 
 #[test]
 fn a_lapsed_improvement_does_not_count_toward_the_improvement_share() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(&mut conn, &[("work", &[], &[]), ("improve", &[], &[])]);
     make_improvement(&conn, ids[1].as_str());
     // Lower priority, so that the improvement goes first only while improvements are due.
@@ -288,7 +288,7 @@ fn a_lapsed_improvement_does_not_count_toward_the_improvement_share() {
 
 #[test]
 fn a_ticket_filed_with_an_estimated_saving_is_handed_off_as_an_improvement() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let work = file(&mut conn, &[("work", &[], &[])]);
     let request = BatchRequest {
         preconditions: Vec::new(),
@@ -327,7 +327,7 @@ fn a_machine_whose_scheduler_is_full_is_offered_what_its_held_tickets_leave_room
     // A landing fills the scheduler, so it has no cores free at this moment, but the machine
     // admits six cores and each ticket expects three. The expected use fills the core budget
     // after two tickets, before the concurrent build limit of three.
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(
         &mut conn,
         &[("one", &[], &[]), ("two", &[], &[]), ("three", &[], &[])],
@@ -361,7 +361,7 @@ fn a_machine_whose_scheduler_is_full_is_offered_what_its_held_tickets_leave_room
 /// `database is locked`. With the table renamed away, any read of it fails the request.
 #[test]
 fn a_hand_off_reads_no_metrics_rows() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let ids = file(
         &mut conn,
         &[("plain", &[], &[]), ("saving", &["improvement"], &[])],

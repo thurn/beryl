@@ -50,13 +50,16 @@ fn setup() -> Connection {
         200
     );
     let mut settings = FleetSettings::default();
-    settings.providers.insert(
-        "codex".to_owned(),
-        ProviderSetting {
-            stop_percent: 90,
-            ..ProviderSetting::default()
-        },
-    );
+    for (name, stop_percent) in [("claude", 99), ("codex", 90)] {
+        settings.providers.insert(
+            name.to_owned(),
+            ProviderSetting {
+                share: 1,
+                stop_percent,
+                ..ProviderSetting::default()
+            },
+        );
+    }
     fleet_settings::put(&mut conn, 0, settings, "operator", at(0.0)).unwrap();
     conn
 }

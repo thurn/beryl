@@ -10,9 +10,9 @@ use ignite_core::protocol::hub::{
 };
 use ignite_core::protocol::tickets::Status;
 use ignite_core::time::Timestamp;
-use ignite_store::hub::{self, releases, tickets, tips};
+use ignite_store::hub::{releases, tickets, tips};
 
-use super::tests::{at, claim, claim_reserved, file, free, landed, post, release};
+use super::tests::{at, claim, claim_reserved, file, free, landed, open, post, release};
 use super::{Request, Response};
 use crate::auth::Writer;
 use crate::upkeep::{Upkeep, filing::UPKEEP, justiciar, regressions};
@@ -97,7 +97,7 @@ fn update(conn: &mut Connection, ticket: &str, set: &Value) {
 
 #[test]
 fn two_sessions_releasing_a_ticket_hold_it_back_and_file_one_justiciar_ticket() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let id = file(&mut conn, &[("needs a fixture", &[], &[])]).remove(0);
     let id = id.as_str();
     work_and_release(
@@ -145,7 +145,7 @@ fn two_sessions_releasing_a_ticket_hold_it_back_and_file_one_justiciar_ticket() 
 
 #[test]
 fn a_third_session_comments_on_the_justiciar_ticket_instead_of_filing_another() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let id = file(&mut conn, &[("impossible", &[], &[])]).remove(0);
     let id = id.as_str();
     work_and_release(&mut conn, id, "local_a", "first", None, at(0.0));
@@ -159,7 +159,7 @@ fn a_third_session_comments_on_the_justiciar_ticket_instead_of_filing_another() 
 
 #[test]
 fn a_release_at_the_plan_limit_or_with_needs_is_not_counted() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let id = file(&mut conn, &[("ordinary", &[], &[])]).remove(0);
     let id = id.as_str();
     work_and_release(&mut conn, id, "local_a", "gave up", None, at(0.0));
@@ -188,7 +188,7 @@ fn a_release_at_the_plan_limit_or_with_needs_is_not_counted() {
 
 #[test]
 fn editing_the_acceptance_offers_the_ticket_again() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let id = file(&mut conn, &[("vague", &[], &[])]).remove(0);
     let id = id.as_str();
     work_and_release(&mut conn, id, "local_a", "first", None, at(0.0));
@@ -211,7 +211,7 @@ fn editing_the_acceptance_offers_the_ticket_again() {
 
 #[test]
 fn releasing_the_ticket_again_offers_it_again() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let id = file(&mut conn, &[("blocked", &[], &[])]).remove(0);
     let id = id.as_str();
     work_and_release(&mut conn, id, "local_a", "first", None, at(0.0));
@@ -281,7 +281,7 @@ fn verify(conn: &mut Connection, tip: &TipVerified, seconds: f64) {
 
 #[test]
 fn workers_stop_getting_the_grouped_regression_when_the_last_check_passes() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let rust = [
         "rust:suite::one",
         "rust:suite::two",
@@ -386,7 +386,7 @@ fn workers_stop_getting_the_grouped_regression_when_the_last_check_passes() {
 
 #[test]
 fn dispatch_and_repeated_release_filing_skip_a_passing_regression_before_upkeep() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let id = regression(&mut conn, "rust:check", 1.0);
     let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(2.0));
     assert_eq!(reservation["ticket"], id);
@@ -435,7 +435,7 @@ fn dispatch_and_repeated_release_filing_skip_a_passing_regression_before_upkeep(
 
 #[test]
 fn a_newest_tip_missing_an_enabled_check_cannot_use_an_older_tips_pass() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     let id = regression(&mut conn, "rust:one", 1.0);
     assert_eq!(regression(&mut conn, "rust:two", 2.0), id);
     tips::verified(

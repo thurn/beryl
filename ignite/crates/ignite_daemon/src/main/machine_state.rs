@@ -363,6 +363,16 @@ mod tests {
         let machine = "m-test".parse::<ignite_core::ids::MachineId>().unwrap();
         let start = Timestamp::EPOCH;
         register(&conn, &machine, 16, start);
+        // A provider without a share takes no work.
+        let mut settings = hub::fleet_settings::settings(&conn).unwrap();
+        settings.providers.insert(
+            "codex".to_owned(),
+            ignite_core::fleet::ProviderSetting {
+                share: 1,
+                ..Default::default()
+            },
+        );
+        hub::fleet_settings::put(&mut conn, 0, settings, "test", start).unwrap();
         conn.execute_batch(
             "INSERT INTO tickets
              (id, title, type, status, priority, created_at, updated_at, created_by, version, cores)

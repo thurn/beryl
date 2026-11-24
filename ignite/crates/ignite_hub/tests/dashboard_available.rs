@@ -69,6 +69,12 @@ fn free(machine: &str, idle: &[&str], trees: u32) -> MachineFree {
 /// allocation and `p1` is set aside for a person.
 fn seeded() -> Connection {
     let conn = hub::open_in_memory().unwrap();
+    // A provider without a share takes no work.
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES ('fleet', ?1)",
+        [r#"{"version":1,"machines":{},"providers":{"claude":{"enabled":true,"share":1,"stop_percent":99}}}"#],
+    )
+    .unwrap();
     conn.execute_batch(
         "INSERT INTO machines (id, name, os, cores, memory_mb, families, version, last_seen) VALUES
            ('m-j', 'jarvis', 'macos', 18, 65536, '[]', 'abc1234', '2026-11-17T11:59:30.000Z'),
@@ -301,8 +307,8 @@ fn the_available_page_shows_build_slots_and_accounts_for_earlier_tickets() {
 fn a_checks_only_machine_says_it_takes_only_tickets_that_hold_master_back() {
     let conn = seeded();
     conn.execute(
-        "INSERT INTO meta (key, value) VALUES ('fleet', ?1)",
-        [r#"{"version":1,"machines":{"cygnus":{"state":"checks-only"}},"providers":{}}"#],
+        "INSERT OR REPLACE INTO meta (key, value) VALUES ('fleet', ?1)",
+        [r#"{"version":1,"machines":{"cygnus":{"state":"checks-only"}},"providers":{"claude":{"enabled":true,"share":1,"stop_percent":99}}}"#],
     )
     .unwrap();
     machine_asks::record(
@@ -358,7 +364,7 @@ fn the_available_page_uses_worker_room_and_explains_provider_constraints() {
 fn the_available_page_explains_why_a_legacy_worker_cannot_take_work() {
     let conn = seeded();
     conn.execute(
-        "INSERT INTO meta (key, value) VALUES ('fleet', ?1)",
+        "INSERT OR REPLACE INTO meta (key, value) VALUES ('fleet', ?1)",
         [r#"{"version":1,"machines":{},"providers":{"claude":{"enabled":false,"share":1,"stop_percent":99}}}"#],
     )
     .unwrap();

@@ -50,7 +50,7 @@ pub(super) fn section(
                 0.0
             };
             let share = if setting.enabled && setting.share == 0 {
-                "Standby".to_owned()
+                "Off".to_owned()
             } else {
                 percent(fraction * 100.0)
             };
@@ -185,17 +185,13 @@ fn hold_rows(
         .collect::<String>();
     let failover = if enabled_share(setting) > 0.0 {
         let whole_provider = holds.iter().any(|hold| hold.family.is_none());
-        let (shared, standby): (Vec<_>, Vec<_>) = providers
+        let available = providers
             .iter()
             .filter(|&(&other, setting)| {
                 other != name
-                    && setting.enabled
+                    && setting.takes_work()
                     && can_take_work(view.holds.get(other).map(Vec::as_slice), holds)
             })
-            .partition(|(_, setting)| setting.share > 0);
-        let available = if shared.is_empty() { standby } else { shared };
-        let available = available
-            .into_iter()
             .map(|(name, _)| esc(name))
             .collect::<Vec<_>>();
         let message = if available.is_empty() {

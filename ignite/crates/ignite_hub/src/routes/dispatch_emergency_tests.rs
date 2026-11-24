@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use ignite_core::protocol::emergency::EMERGENCY_LASTS_S;
 use ignite_store::hub;
 
-use super::tests::{Parent, at, claim, file_under, free, post, register};
+use super::tests::{Parent, at, claim, file_under, free, open, post, register};
 
 fn declare(ticket: &str, session: &str) -> Value {
     json!({"change": "declare", "ticket": ticket, "session": session, "machine": "m-1"})
@@ -18,7 +18,7 @@ fn beat() -> Value {
 
 #[test]
 fn a_declared_emergency_rides_every_heartbeat_until_every_machine_resumes() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let (_, ids) = file_under(
         &mut conn,
@@ -54,7 +54,7 @@ fn a_declared_emergency_rides_every_heartbeat_until_every_machine_resumes() {
 
 #[test]
 fn worker_hand_offs_resume_when_a_full_emergency_becomes_landings_only() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let (_, ids) = file_under(
         &mut conn,
@@ -92,7 +92,7 @@ fn worker_hand_offs_resume_when_a_full_emergency_becomes_landings_only() {
 
 #[test]
 fn an_emergency_nobody_renews_lapses_and_only_its_justiciar_allows_tickets() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let (_, ids) = file_under(
         &mut conn,
@@ -133,7 +133,7 @@ fn an_emergency_nobody_renews_lapses_and_only_its_justiciar_allows_tickets() {
 
 #[test]
 fn only_the_holder_of_a_labelled_ticket_can_declare_an_emergency() {
-    let mut conn = hub::open_in_memory().unwrap();
+    let mut conn = open();
     register(&mut conn);
     let (_, ids) = file_under(
         &mut conn,

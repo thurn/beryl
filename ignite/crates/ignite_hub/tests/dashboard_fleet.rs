@@ -319,7 +319,7 @@ fn fleet_renders_provider_shares_usage_holds_and_workers() {
     let mut conn = seeded();
     let now = Timestamp::parse(NOW).unwrap();
     conn.execute_batch(
-        r#"UPDATE machines SET cli_apps = '["claude","standby"]' WHERE name = 'jarvis';
+        r#"UPDATE machines SET cli_apps = '["claude","unshared"]' WHERE name = 'jarvis';
            UPDATE tickets SET provider = 'claude' WHERE id IN ('e1.1', 'e1.5');
            UPDATE tickets SET session = 'local_short' WHERE id = 'e1.2';"#,
     )
@@ -371,7 +371,7 @@ fn fleet_renders_provider_shares_usage_holds_and_workers() {
     assert!(provider_row(&body, "codex").contains("0 of 1 by share"));
     assert!(provider_row(&body, "codex").contains("Continue past threshold"));
     assert!(provider_row(&body, "disabled").contains(">Off<"));
-    assert!(provider_row(&body, "standby").contains(">Standby<"));
+    assert!(provider_row(&body, "unshared").contains(">Off<"));
 }
 
 #[test]

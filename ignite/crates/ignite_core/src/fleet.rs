@@ -181,6 +181,8 @@ impl fmt::Display for MachineState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderSetting {
     pub enabled: bool,
+    /// The provider's weight in the mix of new work. Zero turns the provider off, like
+    /// `enabled: false`, so a provider without a setting takes no work.
     pub share: u32,
     pub stop_percent: u32,
     /// Keep offering work when a usage sample reaches the stop percentage.
@@ -200,6 +202,20 @@ impl Default for ProviderSetting {
 }
 
 impl ProviderSetting {
+    /// Whether new work may go to this provider: it is on and has a positive share.
+    pub fn takes_work(self) -> bool {
+        self.enabled && self.share > 0
+    }
+
+    /// `on`, or `off` with the reason when the switch is on but the share is zero.
+    pub fn state(self) -> &'static str {
+        match (self.enabled, self.share) {
+            (false, _) => "off",
+            (true, 0) => "off (share 0)",
+            (true, _) => "on",
+        }
+    }
+
     pub fn usage_policy(self) -> String {
         if self.ignore_usage_threshold {
             "continue past usage threshold".to_owned()
@@ -297,9 +313,9 @@ pub fn summary(before: &FleetSettings, after: &FleetSettings) -> String {
     {
         match after.providers.get(name) {
             Some(setting) if before.providers.get(name) != Some(setting) => {
-                let state = if setting.enabled { "on" } else { "off" };
                 changes.push(format!(
-                    "provider {name}: {state}, share {}, {}",
+                    "provider {name}: {}, share {}, {}",
+                    setting.state(),
                     setting.share,
                     setting.usage_policy()
                 ));
