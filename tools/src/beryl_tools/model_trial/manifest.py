@@ -3,6 +3,10 @@
 
 - `pairs.jsonl`: one row per change to a pair. A pair's latest row is its state.
 - `grades.jsonl`: one row per arm of each graded pair.
+- `reviews.jsonl`: one row per blind reviewer run.
+- `verdicts.jsonl`: one row per verdict the user gave on the judging page. His latest verdict on
+  a pair counts.
+- `judging.json`: which pairs the judging page shows, and which arm is A on each.
 """
 
 from __future__ import annotations
@@ -188,3 +192,78 @@ def read_grades(trial: str) -> list[Grade]:
 def append_grade(grade: Grade) -> None:
     grade.graded_at = now()
     _append(grades_path(grade.trial), grade)
+
+
+@dataclass
+class Review:
+    """One run of the blind reviewer on a pair. `answer` is the reviewer's JSON, in its own A
+    and B terms; `a_arm` says which arm (`source` or `copy`) it saw as A."""
+
+    pair: str
+    trial: str
+    run: int
+    # The run's A is drawn from `seed`; each later run of the pair swaps A and B.
+    seed: int
+    a_arm: str
+    reviewer_model: str
+    # A hash of the reviewer's prompt file, so that a changed prompt is a different rubric.
+    rubric_version: str
+    ok: bool
+    answer: dict[str, Any] = field(default_factory=dict)
+    cost_usd: float = 0.0
+    attempts: int = 0
+    error: str | None = None
+    reviewed_at: str = ""
+
+
+def reviews_path(trial: str) -> Path:
+    return trial_dir(trial) / "reviews.jsonl"
+
+
+def read_reviews(trial: str) -> list[Review]:
+    return [_build(Review, row) for row in _read(reviews_path(trial))]
+
+
+def append_review(review: Review) -> None:
+    review.reviewed_at = now()
+    _append(reviews_path(review.trial), review)
+
+
+@dataclass
+class Verdict:
+    """The user's blind picks on one pair: each `A`, `B` or `none` (no preference), where
+    `a_arm` is the arm the page showed as A."""
+
+    pair: str
+    trial: str
+    a_arm: str
+    quality: str
+    initiative: str
+    overall: str
+    judged_at: str = ""
+
+
+def verdicts_path(trial: str) -> Path:
+    return trial_dir(trial) / "verdicts.jsonl"
+
+
+def read_verdicts(trial: str) -> list[Verdict]:
+    """The user's latest verdict on each pair."""
+    latest: dict[str, Verdict] = {}
+    for row in _read(verdicts_path(trial)):
+        verdict = _build(Verdict, row)
+        latest[verdict.pair] = verdict
+    return list(latest.values())
+
+
+def append_verdict(verdict: Verdict) -> None:
+    verdict.judged_at = now()
+    _append(verdicts_path(verdict.trial), verdict)
+
+
+def latest_grades(grades: list[Grade]) -> dict[str, dict[str, Grade]]:
+    """Each graded pair's latest row per arm, by pair token and then arm."""
+    found: dict[str, dict[str, Grade]] = {}
+    for grade in grades:
+        found.setdefault(grade.pair, {})[grade.arm] = grade
+    return {p: arms for p, arms in found.items() if {"source", "copy"} <= set(arms)}

@@ -48,3 +48,17 @@ first 300 characters and no output. It reads output and the model's messages
 from the session's Claude transcript, whose path the store's `sources` table
 records, when the transcript is on the grading machine. It reads check verdicts
 from the store's `lane_runs` table, by commit.
+
+`review` runs a headless `claude -p` reviewer on each graded pair that is not
+void, twice with A and B swapped, and appends its answers to `reviews.jsonl`.
+`blind.py` decides what the reviewer and the user's page see: the ticket text,
+each side's diff, a snapshot of its files made with `git archive` (so that no
+commit message or ref names a ticket), its closing note, comments, filed tickets
+and images. It scrubs model names, session IDs, the pair's ticket IDs, costs and
+times from that text, and a test checks it. The prompt is `reviewer_prompt.txt`,
+and its hash is the rubric version that each review row records, so editing the
+prompt starts a new rubric. `report` prints the table (`--comment <ticket>` also
+posts it, and two `--trial`s compare trials), `list` prints every trial in the
+cache, and `judge` serves the user's blind page on 127.0.0.1 and appends the
+user's picks to `verdicts.jsonl`. Tests: `tools/tests/test_model_trial.py` and
+`tools/tests/test_model_trial_report.py`.

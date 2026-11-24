@@ -10,7 +10,7 @@ import argparse
 import sys
 from collections.abc import Callable
 
-from . import candidates, grade, io, pair
+from . import candidates, grade, io, judge, pair, report, review
 from .spec import Spec, SpecError, from_notes
 
 Command = Callable[[argparse.Namespace, Spec], int]
@@ -56,6 +56,27 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     found.add_argument("--epic", action="append", help="only tickets under this epic")
     found.add_argument("--label", action="append", help="only tickets with this label")
     _command(verbs, "grade", "measure every finished pair", grade.cmd_grade)
+    _command(
+        verbs,
+        "review",
+        "run the blind reviewer on every graded pair",
+        review.cmd_review,
+    )
+    shown = verbs.add_parser("report", help="print the trial's table")
+    shown.add_argument(
+        "--trial",
+        action="append",
+        required=True,
+        help="the trial's epic; give two or more to compare trials",
+    )
+    shown.add_argument("--comment", help="also post the table on this ticket")
+    shown.set_defaults(func=report.cmd_report)
+    listed = verbs.add_parser("list", help="every trial with records on this machine")
+    listed.set_defaults(func=report.cmd_list)
+    page = _command(verbs, "judge", "serve the blind judging page", judge.cmd_judge)
+    page.add_argument(
+        "--port", type=int, default=judge.PORT, help="0 for any free port"
+    )
 
     pairs = verbs.add_parser("pair", help="list, mark, plant, title and file pairs")
     steps = pairs.add_subparsers(dest="step", required=True)

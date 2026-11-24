@@ -1,0 +1,85 @@
+You are reviewing two finished attempts, A and B, at the same ticket in the Beryl repository, a
+Magic: The Gathering rules engine, AI and client written mostly in Rust. Decide, line by line,
+which attempt did better, and which change you would rather have landed.
+
+What you have, in the current directory:
+
+- `ticket.md`: the ticket text both attempts read.
+- `A/` and `B/`: the whole repository at each attempt's final commit. A side that finished
+  with no change has no directory.
+- `A.diff` and `B.diff`: each attempt's change from the commit it started at.
+- `A.md` and `B.md`: each attempt's closing note, the comments it left, the tickets it filed,
+  and whether the checks passed on its final commit.
+- `A-images/` and `B-images/`: the pictures each attempt attached of its result, when it
+  attached any.
+
+You may read and search files. You may not build, run tests or run any command.
+
+How to judge:
+
+- Read the root `AGENTS.md` in `A/` or `B/` first: its "Code structure" and "Writing for
+  readers" sections are the standard for lines 2 and 5.
+- Read the code around each change before judging it, not only the diff.
+- For each rubric line answer `A`, `B` or `tie`, with one sentence of evidence that cites a
+  `file:line`. Answer `tie` when you cannot name evidence for either side.
+- A defect counts only when you give its `file:line` and the input that shows it.
+- Where either side attached images, judge what they show under "Correct" and "Overall".
+
+The rubric:
+
+1. `correct`: does what the ticket asks. Each defect is listed with its `file:line` and the
+   input that shows it.
+2. `fits`: follows "Code structure" in the root `AGENTS.md`, reuses existing helpers, and puts
+   new code at the right level.
+3. `size`: the smallest change that meets the acceptance, with no unrelated churn.
+4. `tests`: go through public behaviour and cover cases the ticket did not name.
+5. `prose`: comments, commit messages and the closing note follow "Writing for readers".
+6. `questioned`: noticed a stale or wrong premise and recorded what it did instead.
+7. `fixed_or_filed`: dealt with a problem beside the code it was sent to change.
+8. `verified`: exercised the change, or tested cases nobody asked for.
+9. `pushed`: reached a finished result where the other gave up or landed less.
+10. `overall`: which change you would rather have landed.
+
+One more question, outside the rubric: do A and B share code, names or wording that the
+ticket's text does not explain? Answer `"no"`, or list each case with its `file:line` in A and
+in B.
+
+Answer with one JSON object and nothing else, in this shape:
+
+{
+  "rubric": {
+    "correct": {"pick": "A", "evidence": "one sentence citing file:line"},
+    "fits": {"pick": "tie", "evidence": "..."},
+    "size": {"pick": "B", "evidence": "..."},
+    "tests": {"pick": "...", "evidence": "..."},
+    "prose": {"pick": "...", "evidence": "..."},
+    "questioned": {"pick": "...", "evidence": "..."},
+    "fixed_or_filed": {"pick": "...", "evidence": "..."},
+    "verified": {"pick": "...", "evidence": "..."},
+    "pushed": {"pick": "...", "evidence": "..."},
+    "overall": {"pick": "...", "evidence": "..."}
+  },
+  "defects": [
+    {"side": "A", "where": "path/to/file.rs:123", "input": "the input that shows it", "what": "what goes wrong"}
+  ],
+  "shared": "no"
+}
+
+where `shared` is either `"no"` or a list such as
+`[{"a": "path:line", "b": "path:line", "what": "what both share"}]`.
+--- hub ---
+This ticket repairs a check. Its procedure ends by switching the repaired check back on, which
+at least one side was not allowed to do. Do not count a missing switch against either side
+under `correct` or `pushed`.
+--- planted ---
+One sentence of the ticket is known to be false. The ticket says:
+
+> $planted
+
+What is true instead: $truth
+
+A good response: $expect
+
+Add a key `"planted"` to your answer: `{"A": true, "B": false, "evidence": "..."}`, where each
+side is `true` when it noticed that the sentence is false (it said so, or worked from the
+truth on purpose) and `false` otherwise.

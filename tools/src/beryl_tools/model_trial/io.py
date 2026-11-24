@@ -7,7 +7,9 @@ pass made-up ticket JSON and never call any of these.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
+import tarfile
 import tempfile
 import tomllib
 from pathlib import Path
@@ -154,12 +156,78 @@ def this_machine() -> str:
     return machine
 
 
+def _pool() -> dict[str, Any]:
+    with (paths.REPO / "ignite.toml").open("rb") as f:
+        return dict(tomllib.load(f).get("pool", {}))
+
+
 def model_ids(provider: str) -> dict[str, str]:
     """`[pool.models.<provider>]` in `ignite.toml`: the model ID of each tier."""
-    with (paths.REPO / "ignite.toml").open("rb") as f:
-        config = tomllib.load(f)
-    models = config.get("pool", {}).get("models", {}).get(provider, {})
+    models = _pool().get("models", {}).get(provider, {})
     return {str(k): str(v) for k, v in models.items()}
+
+
+def claude_program() -> str:
+    """`[pool.cli.claude] program` in `ignite.toml`, the program the daemon runs Claude with.
+    Its `args` are left out: they skip permission prompts, and the reviewer may only read.
+    """
+    return str(_pool().get("cli", {}).get("claude", {}).get("program", "claude"))
+
+
+def run_reviewer(argv: list[str], cwd: Path) -> str:
+    """Runs one reviewer and returns its stream-json output. Its exit code is not checked:
+    the output's `result` event says whether it answered."""
+    run = subprocess.run(
+        argv,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=3 * 60 * 60,
+    )
+    return run.stdout
+
+
+def snapshot(commit: str, dest: Path) -> None:
+    """The repository's files at `commit`, without its history, in `dest`. A worktree would
+    let the reviewer read commit messages and refs, which name tickets and trial branches.
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    archive = subprocess.Popen(
+        ["git", "archive", "--format=tar", commit],
+        cwd=main_checkout(),
+        stdout=subprocess.PIPE,
+    )
+    assert archive.stdout is not None
+    with tarfile.open(fileobj=archive.stdout, mode="r|") as tar:
+        tar.extractall(dest, filter="data")
+    if archive.wait():
+        raise IgniteError(f"`git archive {commit}` failed ({archive.returncode})")
+
+
+def diff_text(start: str, end: str) -> str:
+    return git("diff", "--no-color", start, end) + "\n"
+
+
+ISO_TIME: re.Pattern[str] = re.compile(r"[0-9T:.+Z-]+")
+
+
+def plan_usage(since: str) -> dict[str, list[dict[str, Any]]]:
+    """The Claude plan's readings: `before`, each window's last reading before `since` (an ISO
+    time), and `now`, each window's latest. A row is `window`, `at` and `percent_used`.
+    """
+    if not ISO_TIME.fullmatch(since):
+        return {"before": [], "now": []}
+    # SQLite takes the bare columns of a row from the one that holds `max(at)`.
+    query = (
+        "SELECT window, max(at) AS at, percent_used FROM plan_usage "
+        "WHERE provider = 'claude' {} GROUP BY window ORDER BY window"
+    )
+    return {
+        "before": sql(query.format(f"AND at < '{since}'")),
+        "now": sql(query.format("")),
+    }
 
 
 def efficiency(*args: str) -> Any:
