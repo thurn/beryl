@@ -186,6 +186,10 @@ def test_a_pairs_latest_row_is_its_state() -> None:
             "machine:multivac, which has no worker",
         ),
         ({"labels": ["tier:opus", "trial:copy"]}, "already in a trial"),
+        (
+            {"metadata": {"saved_branch": "refs/ignite/tickets/E1.1"}},
+            "has a saved branch",
+        ),
     ],
 )
 def test_each_exclusion_reason(fields: dict[str, Any], reason: str) -> None:
@@ -251,9 +255,34 @@ def test_pair_next_takes_listed_tickets_in_order() -> None:
         for i in (3, 1, 2)
     ]
     pairs.append(filed_pair(pair="p0", source="E1.0", order=0, state=FILED))
-    marked = pair.mark_block(pairs, block=1, count=2, limit=24)
+    marked, skipped = pair.mark_block(pairs, block=1, count=2, limit=24)
     assert [p.source for p in marked] == ["E1.1", "E1.2"]
     assert all(p.block == 1 and p.state == MARKED for p in marked)
+    assert skipped == []
+
+
+def test_pair_next_skips_a_ticket_that_can_no_longer_be_an_arm() -> None:
+    pairs = [
+        filed_pair(pair=f"p{i}", source=f"E1.{i}", order=i, state=LISTED)
+        for i in range(4)
+    ]
+    marked, skipped = pair.mark_block(
+        pairs,
+        block=1,
+        count=2,
+        limit=24,
+        excluded=lambda p: "has a saved branch" if p.source == "E1.1" else None,
+    )
+    assert [p.source for p in marked] == ["E1.0", "E1.2"]
+    assert [(p.source, p.state) for p in skipped] == [("E1.1", manifest.SKIPPED)]
+    note = skipped[0].note
+    assert note is not None and "saved branch" in note
+    assert pairs[3].state == LISTED
+
+
+def test_a_skipped_source_gets_its_allocation_back() -> None:
+    p = filed_pair(state=manifest.SKIPPED, previous_allocation=50)
+    assert pair.unpark(p) == {"op": "update", "id": "E1.1", "set": {"allocation": 50}}
 
 
 def test_pair_next_never_passes_the_trials_limit() -> None:
@@ -262,7 +291,7 @@ def test_pair_next_never_passes_the_trials_limit() -> None:
         for i in range(5)
     ]
     pairs[0].state = FILED
-    assert len(pair.mark_block(pairs, block=1, count=6, limit=3)) == 2
+    assert len(pair.mark_block(pairs, block=1, count=6, limit=3)[0]) == 2
 
 
 def test_a_planted_sentence_must_appear_exactly_once() -> None:
@@ -322,7 +351,13 @@ def test_the_source_update_adds_only_the_source_arms_labels() -> None:
     assert len(update) == 1
     assert update[0]["id"] == "E1.1"
     assert update[0]["add_labels"] == ["provider:claude", "effort:medium"]
-    assert update[0]["set"] == {"allocation": None}
+    assert update[0]["set"] == {"allocation": None, "priority": 1}
+
+
+def test_both_arms_of_a_filed_pair_run_first() -> None:
+    f = filing(filed_pair(), ticket(priority=4), epic=epic(allocation=None))
+    assert ops(f, "update")[0]["set"]["priority"] == 1
+    assert ops(f, "create")[0]["fields"]["priority"] == 1
 
 
 def test_a_hub_source_gets_the_source_arms_tier() -> None:

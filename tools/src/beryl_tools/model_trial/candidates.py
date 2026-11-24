@@ -21,6 +21,10 @@ HUB_LABEL = "hub"
 REVIEW_LABEL = "review"
 # A lead's worker verifies and closes its followers, so a copy would close real tickets.
 LEAD: re.Pattern[str] = re.compile(r"\*\*Lead\.\*\*|\bFollowers:")
+# The metadata key of a released ticket's saved work. The source's session resumes that work,
+# while the copy starts from a commit that does not hold it, so the two arms would not be doing
+# the same job.
+SAVED_BRANCH = "saved_branch"
 # `blocked_by` rules (`ignite_core::ready`) that mean waiting on another ticket: its own
 # dependency (2), an ancestor's dependency (3), or a `last` ticket's siblings (4).
 WAITING_RULES = (2, 3, 4)
@@ -164,6 +168,8 @@ def exclusion(ticket: dict[str, Any], ctx: Context) -> str | None:
         return "a review: its main output is tickets, which a copy would file twice"
     if LEAD.search(ticket_text(ticket)):
         return "a lead whose worker closes its followers, which a copy would close too"
+    if (ticket.get("metadata") or {}).get(SAVED_BRANCH):
+        return "has a saved branch of earlier work, which the source would resume and the copy cannot"
     pin = machine_pin(ticket, ctx.tickets)
     if pin is not None and pin not in ctx.workers:
         return f"pinned to machine:{pin}, which has no worker"

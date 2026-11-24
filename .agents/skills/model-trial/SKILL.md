@@ -102,7 +102,11 @@ block becomes ready when both tickets of every pair this block files have closed
    comment on the epic that the cap was reached, close this ticket and every later block
    ticket with that reason, and stop. The report ticket then becomes ready.
 7. **Mark.** Run `just model-trial pair next --trial <epic> --block <N>`. It marks the next
-   `block_size` listed tickets without filing anything, never passing `max_pairs`. If it marks
+   `block_size` listed tickets without filing anything, never passing `max_pairs`. A listed
+   ticket that can no longer be an arm (by the same reasons as `candidates`, such as a saved
+   branch of earlier work that its session would resume while the copy starts from nothing)
+   is skipped, given back its allocation so that the pool works it as usual, and the next one
+   is taken in its place. Record each skipped ticket in a comment on the epic. If it marks
    none, the list is used up: close this ticket and every later block ticket saying so, and
    stop. Then read each marked ticket and the code it names.
 8. **Copy titles.** Give each marked pair's copy a title with
@@ -121,8 +125,8 @@ block becomes ready when both tickets of every pair this block files have closed
 10. **File.** Run `just model-trial pair file --trial <epic> --then <next>`, where `<next>` is
     the ticket that depends on this one (`ignite ticket dep list <this ticket>`). Filing sets
     both tickets of each pair to P1, so that the trial runs as fast as its slowest source. It
-    skips a source that is no longer open and unclaimed; record each one skipped on this
-    ticket.
+    checks each source again, skips one that can no longer be an arm (no longer open and
+    unclaimed, say) and gives it back its allocation; record each one skipped on this ticket.
 11. **Close** this ticket with `ignite close -m`, listing each pair's source, copy and token.
 
 ## Writing the final reading

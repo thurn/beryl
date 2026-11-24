@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -21,6 +22,10 @@ from .spec import Spec
 
 # Words that would tell either session its ticket is one arm of a trial.
 MARKING_WORDS = ("trial", "copy", "sonnet", "opus", "duplicate", "pilot")
+# Both arms of a filed pair run before other work, so that a block waits as little as it can
+# for its slowest source. A source is real work the pool does anyway, so moving it up costs
+# nothing.
+FILED_PRIORITY = 1
 
 
 class PairError(ValueError):
@@ -38,18 +43,45 @@ def new_pair(trial: str, ticket: dict[str, Any], order: int) -> Pair:
     )
 
 
-def mark_block(pairs: list[Pair], block: int, count: int, limit: int) -> list[Pair]:
+def mark_block(
+    pairs: list[Pair],
+    block: int,
+    count: int,
+    limit: int,
+    excluded: Callable[[Pair], str | None] = lambda _: None,
+) -> tuple[list[Pair], list[Pair]]:
     """Marks the next `count` listed pairs, in list order, as block `block`, never taking the
-    trial past `limit` marked or filed pairs. Returns the pairs it marked."""
+    trial past `limit` marked or filed pairs. A listed pair whose source can no longer be an
+    arm (`excluded` gives the reason) is skipped and the next one taken in its place. Returns
+    the pairs it marked and the pairs it skipped."""
     taken = sum(p.state in (MARKED, FILED) for p in pairs)
     room = max(0, min(count, limit - taken))
-    chosen = [p for p in sorted(pairs, key=lambda p: p.order) if p.state == LISTED][
-        :room
-    ]
-    for pair in chosen:
+    chosen: list[Pair] = []
+    skipped: list[Pair] = []
+    for pair in sorted(pairs, key=lambda p: p.order):
+        if len(chosen) >= room:
+            break
+        if pair.state != LISTED:
+            continue
+        reason = excluded(pair)
+        if reason is not None:
+            pair.state, pair.note = SKIPPED, f"skipped by pair next: {reason}"
+            skipped.append(pair)
+            continue
         pair.state = MARKED
         pair.block = block
-    return chosen
+        chosen.append(pair)
+    return chosen, skipped
+
+
+def unpark(pair: Pair) -> dict[str, Any]:
+    """The update that gives a skipped source back the allocation `pair add` took from it, so
+    that the pool works it as the real ticket it is."""
+    return {
+        "op": "update",
+        "id": pair.source,
+        "set": {"allocation": pair.previous_allocation},
+    }
 
 
 def plant(
@@ -138,7 +170,10 @@ def build_filing(
     wanted = [f"provider:{spec.source.provider}", f"effort:{spec.source.effort}"]
     if not candidates.label_values(source, "tier:"):
         wanted.append(f"tier:{spec.source.tier}")
-    update: dict[str, Any] = {"allocation": pair.previous_allocation}
+    update: dict[str, Any] = {
+        "allocation": pair.previous_allocation,
+        "priority": FILED_PRIORITY,
+    }
     if source.get("status") == "pending_approval":
         update["status"] = "open"
         opened.append(
@@ -177,7 +212,7 @@ def build_filing(
         "body": copytext.body(source, parent, start_commit, pair.plant, interface),
         "acceptance": copytext.acceptance(source, pair.plant),
         "type": source.get("type") or "task",
-        "priority": source.get("priority", 2),
+        "priority": FILED_PRIORITY,
         "labels": copy_labels,
         "status": "open",
     }
@@ -242,10 +277,27 @@ def cmd_add(args: argparse.Namespace, spec: Spec) -> int:
     return 1 if refused else 0
 
 
+def exclusions(spec: Spec, pairs: list[Pair]) -> Callable[[Pair], str | None]:
+    """Why each pair's source can no longer be an arm, read from the tickets as they are now."""
+    tickets = io.with_ancestors(io.show([p.source for p in pairs]))
+    ours = {p.source for p in pairs}
+    ctx = candidates.Context(
+        spec, tickets, io.machine_workers(), candidates.trialed_tickets() - ours
+    )
+    return lambda p: candidates.exclusion(tickets[p.source], ctx)
+
+
 def cmd_next(args: argparse.Namespace, spec: Spec) -> int:
     pairs = manifest.read_pairs(args.trial)
     count = args.count if args.count is not None else spec.block_size
-    marked = mark_block(pairs, args.block, count, spec.pair_limit)
+    listed = [p for p in pairs if p.state == LISTED]
+    excluded = exclusions(spec, listed) if listed else (lambda _: None)
+    marked, skipped = mark_block(pairs, args.block, count, spec.pair_limit, excluded)
+    for pair in skipped:
+        manifest.save_pair(pair)
+        print(f"{pair.source}: {pair.note}; its allocation is restored")
+    if skipped:
+        io.batch({"ops": [unpark(p) for p in skipped]})
     for pair in marked:
         manifest.save_pair(pair)
         print(f"{pair.pair}  {pair.source}  {pair.kind}")
@@ -303,6 +355,17 @@ def cmd_file(args: argparse.Namespace, spec: Spec) -> int:
     if not marked:
         print("No marked pair to file.")
         return 0
+    # Skip a source that can no longer be an arm before asking for titles, so that a skipped
+    # pair needs none.
+    excluded = exclusions(spec, marked)
+    skipped = [p for p in marked if excluded(p) is not None]
+    for pair in skipped:
+        pair.state, pair.note = SKIPPED, f"skipped by pair file: {excluded(pair)}"
+        manifest.save_pair(pair)
+        print(f"{pair.source}: {pair.note}; its allocation is restored")
+    if skipped:
+        io.batch({"ops": [unpark(p) for p in skipped]})
+    marked = [p for p in marked if p.state == MARKED]
     untitled = [p.source for p in marked if not p.copy_title]
     if untitled:
         raise PairError(
@@ -313,7 +376,7 @@ def cmd_file(args: argparse.Namespace, spec: Spec) -> int:
         "copy": io.model_ids(spec.copy.provider).get(spec.copy.tier, ""),
     }
     home = io.this_machine()
-    failed = 0
+    failed = len(skipped)
     for pair in marked:
         source = io.ticket(pair.source)
         tickets = io.with_ancestors([source])
@@ -324,7 +387,8 @@ def cmd_file(args: argparse.Namespace, spec: Spec) -> int:
         if reason is not None:
             pair.state, pair.note = SKIPPED, f"skipped by pair file: {reason}"
             manifest.save_pair(pair)
-            print(f"{pair.source}: skipped, {reason}")
+            io.batch({"ops": [unpark(pair)]})
+            print(f"{pair.source}: {pair.note}; its allocation is restored")
             failed += 1
             continue
         parent = str(source.get("parent") or "")
