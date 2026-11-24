@@ -45,26 +45,37 @@ fn file(
     id: &str,
 ) -> std::io::Result<()> {
     let root = std::path::absolute(root)?;
-    let mut command = std::process::Command::new(uv);
-    if let Some(path) = tool_path {
-        command.env("PATH", path);
-    }
-    let output = command
-        .current_dir(repo)
-        .env("BERYL_BUGS", root)
-        .args([
-            "run",
-            "--quiet",
-            "--no-sync",
-            "--project",
-            "tools",
-            "by",
-            "bugs",
-            "file",
-            "--",
-            id,
-        ])
-        .output()?;
+    let run = |program: &str| {
+        let mut command = std::process::Command::new(program);
+        if let Some(path) = tool_path {
+            command.env("PATH", path);
+        }
+        command
+            .current_dir(repo)
+            .env("BERYL_BUGS", &root)
+            .args([
+                "run",
+                "--quiet",
+                "--no-sync",
+                "--project",
+                "tools",
+                "by",
+                "bugs",
+                "file",
+                "--",
+                id,
+            ])
+            .output()
+    };
+    let output = match run(uv) {
+        // Windows Command looks for uv.exe under the bare name. Try the batch shim explicitly.
+        Err(error)
+            if cfg!(windows) && uv == "uv" && error.kind() == std::io::ErrorKind::NotFound =>
+        {
+            run("uv.cmd")
+        }
+        result => result,
+    }?;
     if !output.status.success() {
         return Err(std::io::Error::other(
             String::from_utf8_lossy(&output.stderr).trim(),

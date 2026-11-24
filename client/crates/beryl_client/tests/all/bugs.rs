@@ -9,7 +9,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use beryl_client::bugs::SAVED;
-#[cfg(unix)]
 use beryl_session::bugs::filing::FINISHED;
 
 /// The app, stopped when dropped.
@@ -38,15 +37,13 @@ at 60000ms move 10,10
 
 #[test]
 fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
-    let temp = std::env::temp_dir().join(format!("client-bugs-{}", std::process::id()));
+    let temp = std::env::temp_dir().join(format!("client bugs {}", std::process::id()));
     let _ = std::fs::remove_dir_all(&temp);
     std::fs::create_dir_all(&temp).expect("a temporary folder");
     let bugs = temp.join("bugs");
     let script = temp.join("report.drive");
     std::fs::write(&script, SCRIPT).expect("the script is written");
     let mut command = Command::new(env!("CARGO_BIN_EXE_beryl"));
-    command.env_remove("BERYL_FILE_BUGS");
-    #[cfg(unix)]
     stub_filing(&mut command, &temp);
     let mut child = command
         .args([
@@ -72,7 +69,6 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
     let [first, second] = saved_reports(&mut output);
     for folder in [&first, &second] {
         assert_report_files(&bugs, folder);
-        #[cfg(unix)]
         assert_filing(&temp, folder);
     }
 
@@ -117,10 +113,8 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
 /// Collects saves and filing outcomes together because either thread can print first.
 fn saved_reports(output: &mut impl BufRead) -> [PathBuf; 2] {
     let saved = format!("{SAVED} ");
-    let mut reports = Vec::new();
-    #[cfg(unix)]
     let finished = format!("{FINISHED} ");
-    #[cfg(unix)]
+    let mut reports = Vec::new();
     let mut filed = Vec::new();
 
     for line in output.lines() {
@@ -128,7 +122,6 @@ fn saved_reports(output: &mut impl BufRead) -> [PathBuf; 2] {
         if let Some(folder) = line.strip_prefix(&saved) {
             reports.push(PathBuf::from(folder));
         }
-        #[cfg(unix)]
         if let Some(outcome) = line.strip_prefix(&finished) {
             let (id, status) = outcome
                 .split_once(' ')
@@ -136,22 +129,16 @@ fn saved_reports(output: &mut impl BufRead) -> [PathBuf; 2] {
             assert_eq!(status, "ok", "filing report {id}");
             filed.push(id.to_owned());
         }
-        let complete = reports.len() == 2;
-        #[cfg(unix)]
-        let complete = complete && filed.len() == 2;
-        if complete {
+        if reports.len() == 2 && filed.len() == 2 {
             break;
         }
     }
 
     let reports: [PathBuf; 2] = reports.try_into().expect("the app saves two reports");
-    #[cfg(unix)]
-    {
-        let mut expected = reports.each_ref().map(|folder| report_id(folder));
-        expected.sort_unstable();
-        filed.sort_unstable();
-        assert_eq!(filed, expected, "one filing outcome per saved report");
-    }
+    let mut expected = reports.each_ref().map(|folder| report_id(folder));
+    expected.sort_unstable();
+    filed.sort_unstable();
+    assert_eq!(filed, expected, "one filing outcome per saved report");
     reports
 }
 
@@ -196,8 +183,16 @@ fn assert_replay_moment(saved_ui: &str) {
 }
 
 /// Stands in for `uv`, checking that the app's report is already on disk when filing starts.
-#[cfg(unix)]
 fn stub_filing(command: &mut Command, checkout: &Path) {
+    write_filing_stub(checkout);
+    // Keep an installed uv.exe out of the app's search path so filing reaches the stub.
+    command
+        .env("PATH", checkout)
+        .env("BERYL_FILE_BUGS", checkout);
+}
+
+#[cfg(unix)]
+fn write_filing_stub(checkout: &Path) {
     use std::os::unix::fs::PermissionsExt;
 
     let uv = checkout.join("uv");
@@ -218,17 +213,29 @@ printf '%s\n' "$@" > "filed-${10}"
     .expect("write the filing stub");
     std::fs::set_permissions(uv, std::fs::Permissions::from_mode(0o755))
         .expect("make the stub executable");
-    let paths = std::env::var_os("PATH").unwrap_or_default();
-    let path = std::env::join_paths(
-        [checkout.to_owned()]
-            .into_iter()
-            .chain(std::env::split_paths(&paths)),
-    )
-    .expect("the stub's PATH");
-    command.env("PATH", path).env("BERYL_FILE_BUGS", checkout);
 }
 
-#[cfg(unix)]
+#[cfg(windows)]
+fn write_filing_stub(checkout: &Path) {
+    let script = r#"@echo off
+setlocal EnableExtensions DisableDelayedExpansion
+shift /1
+set "report_id=%~9"
+for %%f in (report.md window.png) do (
+    if not exist "%BERYL_BUGS%\%report_id%\%%f" (
+        >&2 echo Missing report file %%f when filing started
+        exit /b 1
+    )
+)
+> "filed-%report_id%" (
+    for %%a in (%*) do echo %%a
+)
+exit /b %errorlevel%
+"#;
+    std::fs::write(checkout.join("uv.cmd"), script.replace('\n', "\r\n"))
+        .expect("write the filing stub");
+}
+
 fn report_id(report: &Path) -> &str {
     report
         .file_name()
@@ -236,13 +243,23 @@ fn report_id(report: &Path) -> &str {
         .expect("a UTF-8 report ID")
 }
 
-#[cfg(unix)]
 fn assert_filing(checkout: &Path, report: &Path) {
     let report_id = report_id(report);
     let marker = checkout.join(format!("filed-{report_id}"));
     let invocation = std::fs::read_to_string(marker).expect("the app asks to file the report");
     assert_eq!(
-        invocation,
-        format!("run\n--quiet\n--no-sync\n--project\ntools\nby\nbugs\nfile\n--\n{report_id}\n")
+        invocation.lines().collect::<Vec<_>>(),
+        [
+            "run",
+            "--quiet",
+            "--no-sync",
+            "--project",
+            "tools",
+            "by",
+            "bugs",
+            "file",
+            "--",
+            report_id,
+        ]
     );
 }
