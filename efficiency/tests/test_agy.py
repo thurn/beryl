@@ -142,8 +142,10 @@ def test_gemini_and_claude_transcripts_split_providers_and_price_tokens(
     tmp_path: Path,
 ) -> None:
     agy_root = tmp_path / "agy"
-    register_summary(agy_root, GEMINI_CONV, [f"file://{CHECKOUT}"])
-    register_summary(agy_root, CLAUDE_CONV, [f"file://{CHECKOUT}"])
+    checkout = tmp_path / "checkout"
+    readme = str(checkout / "README.md")
+    register_summary(agy_root, GEMINI_CONV, [checkout.as_uri()])
+    register_summary(agy_root, CLAUDE_CONV, [checkout.as_uri()])
     register_summary(agy_root, SUB_CONV, ["file:///tmp/sub"], parent=GEMINI_CONV)
     register_summary(agy_root, OTHER_CONV, ["file:///work/unrelated"])
 
@@ -158,7 +160,7 @@ def test_gemini_and_claude_transcripts_split_providers_and_price_tokens(
             1_000,
             tools=[
                 ("run_command", {"CommandLine": "ignite start by-a"}),
-                ("read_file", {"Path": f"{CHECKOUT}/README.md"}),
+                ("read_file", {"Path": readme}),
             ],
         )
         .generic("2026-11-15T10:00:02Z", "2026-11-15T10:00:05Z", "started")
@@ -211,7 +213,7 @@ def test_gemini_and_claude_transcripts_split_providers_and_price_tokens(
     )
 
     beads = listing(bead_record("by-a"), bead_record("by-b"))
-    db = run(tmp_path, beads=beads)
+    db = run(tmp_path, checkout, beads=beads)
 
     providers = dict(
         db.execute(
@@ -243,7 +245,7 @@ def test_gemini_and_claude_transcripts_split_providers_and_price_tokens(
     ).fetchall()
     assert calls == [
         ("Bash", "ignite start by-a", "2026-11-15T10:00:05.000Z", None),
-        ("read_file", f"{CHECKOUT}/README.md", "2026-11-15T10:00:03.000Z", None),
+        ("read_file", readme, "2026-11-15T10:00:03.000Z", None),
         ("Bash", "cd rust && cargo test", "2026-11-15T10:00:30.000Z", 6.5),
     ]
 

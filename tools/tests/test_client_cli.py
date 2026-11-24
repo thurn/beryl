@@ -7,6 +7,7 @@ import subprocess
 import sys
 from collections.abc import Iterator
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,8 +20,6 @@ def test_release_replaces_the_macos_app_with_a_signed_bundle(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     binary = tmp_path / "release" / "beryl"
-    if sys.platform == "win32":
-        binary = binary.with_suffix(".exe")
     binary.parent.mkdir()
     binary.write_bytes(b"release executable")
     binary.chmod(0o755)
@@ -54,14 +53,12 @@ def test_release_replaces_the_macos_app_with_a_signed_bundle(
     monkeypatch.setattr(app.paths, "WORKSPACE", tmp_path)
     monkeypatch.setattr(app.paths, "build_lock", lambda: tmp_path / "build.lock")
     monkeypatch.setattr(app.audio, "OUTPUT", audio_root)
+    monkeypatch.setattr(
+        app, "sys", SimpleNamespace(platform="darwin", stderr=sys.stderr)
+    )
     monkeypatch.setattr(subprocess, "run", sign)
 
     assert cli.main(["release"]) == 0
-    if sys.platform != "darwin":
-        assert f"release: {binary}" in capsys.readouterr().out
-        assert binary.read_bytes() == b"release executable"
-        assert (bundle / "old").exists()
-        return
     assert f"release: {bundle}" in capsys.readouterr().out
     contents = bundle / "Contents"
     info = plistlib.loads((contents / "Info.plist").read_bytes())

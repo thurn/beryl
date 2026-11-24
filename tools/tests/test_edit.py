@@ -244,10 +244,11 @@ def test_edit_formats_commits_and_lands(
         "    p.write_text(p.read_text().upper())\n",
         encoding="utf-8",
     )
+    command = json.dumps(f"{sys.executable} {formatter.as_posix()} {{files}}")
     ignite_toml = (
         "[format]\n"
         "rules = [\n"
-        f'  {{ paths = ["**/*.md"], exclude = [".agents/**"], command = "{sys.executable} {formatter.as_posix()} {{files}}" }},\n'
+        f'  {{ paths = ["**/*.md"], exclude = [".agents/**"], command = {command} }},\n'
         '  { paths = ["**/*.rs"], command = "should-not-run {files}" },\n'
         "]\n"
     )

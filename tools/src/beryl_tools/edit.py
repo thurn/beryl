@@ -170,6 +170,31 @@ def file_exists_in_repo(repo: Path, rel: str) -> bool:
     return False
 
 
+def _windows_editor_arguments(command: str) -> list[str]:
+    """Split a Windows command line using the native rules for quotes and backslashes."""
+    import ctypes
+    from ctypes import wintypes
+
+    command = command.lstrip()
+    if not command:
+        return []
+    libraries = ctypes.windll  # pyre-ignore[16]: Windows only
+    parse = libraries.shell32.CommandLineToArgvW
+    parse.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_int)]
+    parse.restype = ctypes.POINTER(wintypes.LPWSTR)
+    free = libraries.kernel32.LocalFree
+    free.argtypes = [wintypes.HLOCAL]
+    free.restype = wintypes.HLOCAL
+    count = ctypes.c_int()
+    arguments = parse(command, ctypes.byref(count))
+    if not arguments:
+        raise EditError("cannot split the Windows editor command")
+    try:
+        return [arguments[index] for index in range(count.value)]
+    finally:
+        free(arguments)
+
+
 def resolve_editor(
     explicit: str | None,
     repo: Path,
@@ -190,7 +215,7 @@ def resolve_editor(
             raw = probe.stdout.strip()
     if not raw:
         raw = "notepad" if system.WINDOWS else "vi"
-    words = shlex.split(raw, posix=not system.WINDOWS)
+    words = _windows_editor_arguments(raw) if system.WINDOWS else shlex.split(raw)
     if not words:
         raise EditError("editor command is empty")
     program = words[0]

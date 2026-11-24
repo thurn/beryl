@@ -120,7 +120,7 @@ def test_device_copy_command_is_only_used_on_explicit_path(
         "--domain-identifier",
         phone.BUNDLE,
         "--source",
-        str(bug.IOS_REPORTS),
+        "Documents/bugs",
     ]
 
 
