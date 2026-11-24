@@ -62,6 +62,10 @@ fn prints_both_tree_branches() {
             "--tree",
             "--work",
             "100k",
+            // The default family's turn search records no decision levels, so name a
+            // resampling-tree family, the one this report lists below each branch.
+            "--family",
+            "pimc72/hidden/rollout/tuned/anchor+guard+prior",
         ]
         .map(str::to_owned),
     )
@@ -119,7 +123,8 @@ fn tree_report_counts_the_ordinary_search_visits() {
     let candidates = labels(&at.t, &at.s, &at.d);
     let choices = ["cast Oust", "pass"]
         .map(|name| Choice(candidates.iter().position(|label| label == name).unwrap() as u16));
-    for method in [DEEP_SEARCHER.method, Method::Ismcts { trees: 4 }] {
+    // Turn search keeps no decision levels, so only the resampling-tree methods are traced.
+    for method in [Method::Pimc { worlds: 72 }, Method::Ismcts { trees: 4 }] {
         let family = Family {
             method,
             ..DEEP_SEARCHER
