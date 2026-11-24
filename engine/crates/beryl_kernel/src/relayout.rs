@@ -554,7 +554,9 @@ impl<L: Layout> Relayout for Refusal<L> {
 
     fn relayout<M: Layout>(&self) -> Refusal<M> {
         match *self {
-            Refusal::Timing { by } => Refusal::Timing { by: by.map(slot) },
+            Refusal::Timing { by } => Refusal::Timing {
+                by: by.as_ref().map(Relayout::relayout),
+            },
             Refusal::LandPlayed => Refusal::LandPlayed,
             Refusal::Mana => Refusal::Mana,
             Refusal::Cost => Refusal::Cost,

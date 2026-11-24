@@ -12,6 +12,7 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
+use crate::reference::Permanent;
 use crate::state::{StackEntry, State};
 use beryl_card::{Castings, FaceIx, ManaColor, ObjectAbility, Prompt};
 
@@ -220,6 +221,14 @@ impl<L: Layout> Candidates<L> {
 }
 
 /// One option of a decision whose candidates are not simply objects.
+///
+/// An option names an object by its bare slot, not by an
+/// [`ObjectRef`](crate::state::ObjectRef) or a typed reference: a decision is answered in the
+/// state that offered it, where the slot names the object it named as it was offered. A
+/// reference holds an incarnation too, which would make an option at least six bytes where it
+/// is four, paid in each of a [`Small`] decision's [`OPTIONS`] places on every engine step. The
+/// slots of [`Candidates::Objects`], [`Decision::about`] and an open question
+/// ([`crate::state::Pending`]) are bare for the same reason.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Opt<L: Layout = Small> {
     /// Pass priority.
@@ -351,7 +360,7 @@ pub enum Outcome {
 pub enum Refusal<L: Layout = Small> {
     /// Only at sorcery speed, which it is not: an opponent's permanent `by` limits the player
     /// to casting spells at sorcery speed, if the card could be cast now without it.
-    Timing { by: Option<L::Slot> },
+    Timing { by: Option<Permanent<L>> },
     /// A land, and the player has played their land this turn.
     LandPlayed,
     /// Its mana cost can't be paid.

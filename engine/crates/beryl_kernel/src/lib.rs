@@ -115,7 +115,8 @@
 //! Rules actions take [`reference::Permanent`] for battlefield actions, [`reference::Spell`]
 //! for spell objects and [`reference::CardIn`] or [`reference::Cards`] for cards in one zone.
 //! Ability entries use stack places. At an old caller use
-//! `let Some(permanent) = s.permanent(raw) else { return Ok(()); };`.
+//! `let Some(permanent) = s.permanent(raw) else { return Ok(()); };`. Decisions and open
+//! questions keep bare slots, which name objects only in the state that asked ([`decision::Opt`]).
 //! Check [`State::current`] immediately before mutating through a stored reference. Phasing
 //! keeps the same incarnation, so validate a stored battlefield reference with
 //! [`State::permanent`] before use. For a slot from the current battlefield or a new arrival,
@@ -242,8 +243,9 @@
 //! `u64`, 16 with padding. It is 20,184 since a [`query::Copiable`] holds three copy exceptions,
 //! 40 bytes more in all. It was 20,216 when phasing began (32 bytes that no change reported
 //! came between), and is 20,248 since the set of phased-out permanents ([`phasing`]), 32 bytes.
-//! The limit is 20,480. Each bead may change the size at its own push by at most its allotment,
-//! whatever landed before it, and reports the size as it reports the count:
+//! It is 20,456 with the turn plan; the limit is 20,480. Each bead may change the size at its own
+//! push by at most its allotment, whatever landed before it, and reports the size as it reports
+//! the count:
 //!
 //! | Bead | Allotment | Why |
 //! | --- | --- | --- |
@@ -263,8 +265,6 @@
 //! | by-bajq.8.3 | +16 (landed: +16) | the count of mandatory resolutions in a row and the hash it compares, padded |
 //! | by-bajq.8.4 | +32 (landed: +32) | a set of the phased-out permanents' slots |
 //! | Turn plan | +208 | the queue of 24 remaining steps and their positions |
-//!
-//! With the turn plan, `State<Small>` is 20,448 bytes.
 //!
 //! ### Affected sides and payloads
 //!

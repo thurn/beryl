@@ -289,7 +289,11 @@ pub struct DamageDivision<L: Layout = Small> {
 impl Copy for DamageDivision<Small> {}
 
 /// The open question when it belongs to a machine step rather than to priority. Flat, like
-/// the rest of the state.
+/// the rest of the state. Its slots are bare, as [`crate::decision::Opt`]'s are: they are
+/// written as the question is asked and read as it is answered, in the same state.
+///
+/// A new variant goes last and takes the next unused tag in the `Hash` impl below, so that
+/// every state the benchmark corpora pin by its hash keeps that hash.
 #[allow(clippy::large_enum_variant)]
 #[repr(u8)]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

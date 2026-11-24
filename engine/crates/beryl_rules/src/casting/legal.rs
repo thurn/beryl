@@ -335,7 +335,8 @@ pub(crate) fn refusal<L: Layout>(
         if let Some(face) = instant {
             let limit = RuleKind::CastOnlyAsSorcery;
             most = Some(Refusal::Timing {
-                by: rule_change::maker(s, t, limit, player, face),
+                by: rule_change::maker(s, t, limit, player, face)
+                    .and_then(|slot| s.permanent_at(slot)),
             });
         }
     }

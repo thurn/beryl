@@ -88,7 +88,7 @@ pub(super) fn refused<L: Layout>(t: &GameTable, obs: Observation<'_, L>) -> Vec<
         .filter_map(|slot| {
             let reason = match refusal(obs, t, slot)? {
                 Refusal::Timing { by } => RefusalView::Timing {
-                    by: by.map(|slot| ObjectId(slot.num())),
+                    by: by.map(|permanent| ObjectId(permanent.slot().num())),
                 },
                 Refusal::LandPlayed => RefusalView::LandPlayed,
                 Refusal::Mana => RefusalView::Mana,
