@@ -208,26 +208,7 @@ impl Processes for Native {
     /// Starts `command` in a job of its own. This sets the command's creation flags, replacing
     /// any it had.
     fn spawn_group(&self, command: &mut Command) -> io::Result<Group> {
-        let mut child = command.creation_flags(CREATE_SUSPENDED).spawn()?;
-        let id = u64::from(child.id());
-        let started = create_job(id, child.as_raw_handle()).and_then(|job| {
-            resume(child.id())?;
-            Ok(job)
-        });
-        match started {
-            Ok(job) => {
-                JOBS.lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .get_or_insert_with(HashMap::new)
-                    .insert(id, job);
-                Ok(Group { child, id })
-            }
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                Err(error)
-            }
-        }
+        spawn_group_with(command, create_job)
     }
 
     fn end_group(&self, group: &mut Group) -> io::Result<()> {
@@ -288,9 +269,51 @@ impl Native {
     }
 }
 
+/// Starts the command once its PID can name a new job. The test can supply a job creator that
+/// forces a collision.
+fn spawn_group_with(
+    command: &mut Command,
+    mut create: impl FnMut(u64, HANDLE) -> io::Result<Option<Job>>,
+) -> io::Result<Group> {
+    let mut rejected = Vec::new();
+    command.creation_flags(CREATE_SUSPENDED);
+    loop {
+        let mut child = command.spawn()?;
+        let id = u64::from(child.id());
+        let started = create(id, child.as_raw_handle()).and_then(|job| {
+            if job.is_some() {
+                resume(child.id())?;
+            }
+            Ok(job)
+        });
+        match started {
+            Ok(Some(job)) => {
+                JOBS.lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .get_or_insert_with(HashMap::new)
+                    .insert(id, job);
+                return Ok(Group { child, id });
+            }
+            Ok(None) => {
+                child.kill()?;
+                child.wait()?;
+                // Windows can reuse a PID once all handles to the process are closed. Hold
+                // this handle until a retry succeeds so it cannot pick the same PID again.
+                rejected.push(child);
+            }
+            Err(error) => {
+                if child.kill().is_ok() {
+                    let _ = child.wait();
+                }
+                return Err(error);
+            }
+        }
+    }
+}
+
 /// Creates the job for group `id`, set to end its processes when its last handle closes, and
-/// puts `process` in it.
-fn create_job(id: u64, process: HANDLE) -> io::Result<Job> {
+/// puts `process` in it. Returns `None` if an older job still holds the name for this PID.
+fn create_job(id: u64, process: HANDLE) -> io::Result<Option<Job>> {
     let name = job_name(id);
     // SAFETY: `name` is a NUL-terminated wide string; a null security record means the default.
     let handle = unsafe { CreateJobObjectW(ptr::null(), name.as_ptr()) };
@@ -300,11 +323,7 @@ fn create_job(id: u64, process: HANDLE) -> io::Result<Job> {
     let job = Job(handle);
     // SAFETY: plain call that reads the thread's last error, set by `CreateJobObjectW`.
     if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
-        // The process ID was reused while an earlier command's job is still held open.
-        return Err(io::Error::new(
-            io::ErrorKind::AddrInUse,
-            format!("a job for process {id} already exists"),
-        ));
+        return Ok(None);
     }
     let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
     limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
@@ -324,7 +343,7 @@ fn create_job(id: u64, process: HANDLE) -> io::Result<Job> {
     if unsafe { AssignProcessToJobObject(job.0, process) } == 0 {
         return Err(io::Error::last_os_error());
     }
-    Ok(job)
+    Ok(Some(job))
 }
 
 /// Resumes the threads of the suspended process `pid`. A process created suspended has one.
@@ -410,6 +429,7 @@ mod tests {
     };
 
     use super::*;
+    use crate::usage::{ProcessUsage, TreeMeter};
 
     /// The variable that tells [`helper`] what to do.
     const ROLE: &str = "IGNITE_TEST_PROC_ROLE";
@@ -424,7 +444,7 @@ mod tests {
     }
 
     /// Run by the tests below as a separate process. `parent` starts two `sleep` children,
-    /// prints `pid <id>` for each and waits for them; `sleep` sleeps.
+    /// prints `pid <id>` for each and waits for them; `sleep` prints `ready` and sleeps.
     #[test]
     #[ignore = "run by the other proc tests"]
     fn helper() {
@@ -448,7 +468,10 @@ mod tests {
                     let _ = child.wait();
                 }
             }
-            "sleep" => thread::sleep(Duration::from_secs(1000)),
+            "sleep" => {
+                println!("ready");
+                thread::sleep(Duration::from_secs(1000));
+            }
             other => panic!("unknown role {other}"),
         }
         std::process::exit(0);
@@ -507,6 +530,45 @@ mod tests {
         Native.end_group_id(group.id).unwrap();
         assert!(!group.child.wait().unwrap().success());
         Native.end_group(&mut group).unwrap();
+    }
+
+    #[test]
+    fn a_reused_job_name_retries_with_a_fresh_pid() {
+        let mut old = Native
+            .spawn_group(helper_command("sleep").stdout(Stdio::null()))
+            .unwrap();
+        let mut old_id = Some(old.id);
+        let mut attempted = Vec::new();
+        let mut group = spawn_group_with(
+            helper_command("sleep").stdout(Stdio::piped()),
+            |id, process| {
+                attempted.push(id);
+                create_job(old_id.take().unwrap_or(id), process)
+            },
+        )
+        .unwrap();
+        assert_eq!(attempted.len(), 2);
+        assert_ne!(attempted[0], attempted[1]);
+        assert_eq!(group.id, u64::from(group.child.id()));
+        assert_eq!(Native.group_members(group.id).unwrap(), [group.child.id()]);
+        assert_eq!(Native.group_members(old.id).unwrap(), [old.child.id()]);
+
+        let lines = BufReader::new(group.child.stdout.take().unwrap()).lines();
+        assert!(
+            lines
+                .map(Result::unwrap)
+                .any(|line| line.ends_with("ready"))
+        );
+        let mut meter = TreeMeter::new(group.id, group.child.id());
+        meter.sample().unwrap();
+        assert!(meter.finish(ProcessUsage::default()).peak_bytes > 0);
+
+        Native.end_group_id(group.id).unwrap();
+        assert!(!group.child.wait().unwrap().success());
+        assert!(old.child.try_wait().unwrap().is_none());
+        assert_eq!(Native.group_members(old.id).unwrap(), [old.child.id()]);
+        Native.end_group(&mut group).unwrap();
+        Native.end_group(&mut old).unwrap();
     }
 
     #[test]
