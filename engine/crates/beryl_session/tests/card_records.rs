@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use beryl_card::definition::Shape;
+use beryl_card::{Colors, FaceIx, ManaCost, Subtype, Subtypes, Supertypes, Types, Words, mana};
 use beryl_card_store::{Face, STORE};
-use beryl_cards::CARDS;
+use beryl_cards::{CARDS, names, tokens};
 use beryl_session::card_records::{
     CARD_BACK_ID, CardRecordsRequest, NAMELESS_TOKEN_ID, card_records, card_records_among,
 };
@@ -68,6 +70,51 @@ fn the_nameless_token_is_a_copy_token_in_the_store() {
             .nameless_token
             .contains("/art_crop/front/6/8/6870a2af-")
     );
+}
+
+#[test]
+fn compiled_faces_have_their_printed_characteristics() {
+    let split = CARDS.get(names::FIRE_ICE).unwrap();
+    assert_eq!(split.shape, Shape::Split { fuse: false });
+    for (index, name, cost, colors) in [
+        (FaceIx::FRONT, "Fire", mana("{1}{R}"), Colors::RED),
+        (FaceIx::BACK, "Ice", mana("{1}{U}"), Colors::BLUE),
+    ] {
+        let face = split.face(index);
+        assert_eq!(face.name, name);
+        assert_eq!(face.cost, cost, "{name}");
+        assert_eq!(face.types, Types::INSTANT, "{name}");
+        assert_eq!(face.colors, colors, "{name}");
+    }
+
+    let adeline = CARDS.get(names::ADELINE_RESPLENDENT_CATHAR).unwrap();
+    let face = adeline.front();
+    assert_eq!(face.name, adeline.name);
+    assert_eq!(face.cost, mana("{1}{W}{W}"));
+    assert_eq!(face.supertypes, Supertypes::LEGENDARY);
+    assert_eq!(face.types, Types::CREATURE);
+    assert_eq!(
+        face.subtypes.read(&Words::NONE),
+        Subtypes::of(&[Subtype::Human, Subtype::Knight]),
+    );
+    assert_eq!(face.colors, Colors::WHITE);
+    // The ability sets Adeline's power during play. The printed star starts at zero.
+    assert_eq!((face.power, face.toughness), (Some(0), Some(4)));
+
+    // The store also has a 0/1 Human with the same name. Adeline links to a 1/1.
+    let [human] = adeline.tokens else {
+        panic!("expected Adeline's Human token");
+    };
+    let face = human.front();
+    assert_eq!(face.name, tokens::HUMAN_TOKEN);
+    assert_eq!(face.cost, ManaCost::NONE);
+    assert_eq!(face.types, Types::CREATURE);
+    assert_eq!(
+        face.subtypes.read(&Words::NONE),
+        Subtypes::of(&[Subtype::Human])
+    );
+    assert_eq!(face.colors, Colors::WHITE);
+    assert_eq!((face.power, face.toughness), (Some(1), Some(1)));
 }
 
 /// Many tokens share a name: a card's is the one its record links, whichever the store lists
