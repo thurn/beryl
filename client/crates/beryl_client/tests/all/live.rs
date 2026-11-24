@@ -16,7 +16,7 @@ use socket2::{Domain, SockAddr, Socket as UnixStream, Type};
 const CARD: &str = "card \"Staff of the Storyteller\"";
 
 /// The app, stopped when dropped.
-struct App(Child);
+pub(super) struct App(pub(super) Child);
 
 impl Drop for App {
     fn drop(&mut self) {
@@ -39,7 +39,7 @@ fn connect(path: &Path) -> std::io::Result<UnixStream> {
 
 /// Sends `request` to the socket at `path` and reads the answer through the end of the
 /// connection.
-fn exchange(path: &str, request: &str) -> String {
+pub(super) fn exchange(path: &str, request: &str) -> String {
     let mut stream = connect(Path::new(path)).expect("the socket accepts");
     writeln!(stream, "{request}").expect("the request is sent");
     let mut answer = String::new();

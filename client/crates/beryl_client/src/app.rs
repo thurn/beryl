@@ -42,6 +42,8 @@ const SIZE: Size = Size {
 const WINDOWLESS_HZ: f32 = 60.0;
 /// The line the app prints when its first frame is shown, which `just client smoke` waits for.
 pub const FIRST_SHOWN: &str = "beryl: first frame shown";
+/// The line the app prints when it receives new tuning from `--watch`.
+pub const DATA_RELOADED: &str = "beryl: data reloaded";
 /// The line the app prints when a replayed recording's last script has ended.
 pub const FIXTURE_ENDED: &str = "beryl: fixture ended";
 /// The line the app prints when a view first says the game is over.
@@ -185,8 +187,10 @@ impl Feed for AppFeed {
     }
 
     fn input(&mut self, input: &Input) {
-        if let Input::DataError(error) = input {
-            eprintln!("beryl: data reload failed: {error}");
+        match input {
+            Input::Data(_) => println!("{DATA_RELOADED}"),
+            Input::DataError(error) => eprintln!("beryl: data reload failed: {error}"),
+            _ => {}
         }
         if let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
             log.input(input);

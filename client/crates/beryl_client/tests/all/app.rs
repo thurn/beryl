@@ -4,16 +4,19 @@
 //! `--replay` names a file that exists.
 
 use std::fs::{self, OpenOptions};
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use app_client::{Client, Config, Input};
+use beryl_client::app::{DATA_RELOADED, FIRST_SHOWN, LIVE_SOCKET};
 use beryl_client::frame_log;
 use beryl_client::options::Options;
 use beryl_inspect::data::{Snapshot, TUNING_FILES};
 use kit_base::data::profiles;
+
+use super::live::{App, exchange};
 
 #[test]
 fn a_fixture_with_no_window_runs_for_its_time_and_logs_its_frames() {
@@ -34,7 +37,7 @@ fn a_fixture_with_no_window_runs_for_its_time_and_logs_its_frames() {
         "the app failed: {}\n{stdout}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(stdout.contains(beryl_client::app::FIRST_SHOWN), "{stdout}");
+    assert!(stdout.contains(FIRST_SHOWN), "{stdout}");
     let path = stdout
         .lines()
         .find_map(|line| line.strip_prefix("frame log: "))
@@ -55,6 +58,7 @@ fn a_watched_app_probes_with_checkout_tuning_and_reloads_when_paused() {
         r#"{"frames":1,"share":0.3333}"#,
     )
     .unwrap();
+    // The runtime limit catches a missing reload. A successful run ends on the live quit request.
     let mut child = Command::new(env!("CARGO_BIN_EXE_beryl"))
         .args([
             "--fixture",
@@ -62,52 +66,52 @@ fn a_watched_app_probes_with_checkout_tuning_and_reloads_when_paused() {
             "--window",
             "none",
             "--for",
-            "3000",
+            "120s",
             "--watch",
             "--pause-at",
             "0ms",
             "--tier",
             "automatic",
         ])
+        .env_remove("TMPDIR")
         .env("BERYL_CLIENT_DATA", &directory)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
         .spawn()
         .expect("the app starts");
-    let mut stdout = BufReader::new(child.stdout.take().unwrap());
-    let mut text = String::new();
-    loop {
-        let start = text.len();
-        let read = stdout.read_line(&mut text).unwrap();
-        if read == 0 {
-            break;
-        }
-        if text[start..].starts_with(beryl_client::app::FIRST_SHOWN) {
-            let verbs = OpenOptions::new()
-                .write(true)
-                .open(directory.join("verbs.json"))
-                .unwrap();
-            let modified = verbs.metadata().unwrap().modified().unwrap();
-            verbs
-                .set_modified(modified - Duration::from_secs(1))
-                .unwrap();
-            break;
-        }
-    }
-    stdout.read_to_string(&mut text).unwrap();
-    let result = child.wait_with_output().unwrap();
-    fs::remove_dir_all(directory).unwrap();
+    let stdout = child.stdout.take().expect("the app's output is a pipe");
+    let mut app = App(child);
+    let mut lines = BufReader::new(stdout).lines().map_while(Result::ok);
+    let socket_prefix = format!("{LIVE_SOCKET} ");
+    let socket = lines
+        .find_map(|line| line.strip_prefix(&socket_prefix).map(str::to_owned))
+        .expect("the app names its live socket");
     assert!(
-        result.status.success(),
-        "{}\n{text}",
-        String::from_utf8_lossy(&result.stderr)
+        lines.by_ref().any(|line| line.starts_with(FIRST_SHOWN)),
+        "the app exited before showing its first frame"
     );
-    let path = text
-        .lines()
-        .find_map(|line| line.strip_prefix("frame log: "))
+    let verbs = OpenOptions::new()
+        .write(true)
+        .open(directory.join("verbs.json"))
         .unwrap();
-    let log = frame_log::read(path.as_ref()).unwrap();
+    let modified = verbs.metadata().unwrap().modified().unwrap();
+    verbs
+        .set_modified(modified - Duration::from_secs(1))
+        .unwrap();
+    drop(verbs);
+
+    assert!(
+        lines.by_ref().any(|line| line == DATA_RELOADED),
+        "the app exited before reloading the edit at the pause"
+    );
+    assert_eq!(exchange(&socket, "quit"), "ok\n");
+    let path = lines
+        .find_map(|line| line.strip_prefix("frame log: ").map(PathBuf::from))
+        .expect("the app names its frame log");
+    assert!(app.0.wait().expect("the app ends after quit").success());
+    fs::remove_dir_all(directory).unwrap();
+    let log = frame_log::read(&path).unwrap();
     fs::remove_file(path).unwrap();
+    assert_eq!(log.run.pause_at_ms, Some(0.0));
     let tier = log.tier.unwrap();
     assert_eq!(tier.setting, "automatic");
     assert_eq!(tier.probe_frames, Some(1));
