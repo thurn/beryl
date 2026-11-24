@@ -36,6 +36,10 @@ test_paths = [
   "**/tests.rs",                # Rust unit tests in a standalone tests module.
   "tools/tests/**",             # Python tests and fixtures.
   "data/client/fixtures.json",  # Game setups for native recordings and script checks.
+  "data/client/budgets.json",   # Limits for native frame checks.
+  "data/client/gates.json",     # Limits for shader and interface audit checks.
+  "data/client/conventions/**", # Recordings and moments that demonstrate UI conventions.
+  "data/client/screens.json",   # Expected screens and prompts in recorded examples.
   "ignite/checks/**",           # Check family declarations and commands.
 ]
 

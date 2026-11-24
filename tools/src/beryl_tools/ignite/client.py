@@ -60,6 +60,10 @@ DECKS: Path = paths.REPO / "docs" / "sample-decks"
 
 FRAME_LIMITS_FAMILY = "client-interface-frame-limits"
 FRAME_LIMITS = f"{FRAME_LIMITS_FAMILY}:corpus"
+BUDGET_SUITES: dict[str, str] = {
+    FRAME_LIMITS_FAMILY: FRAME_LIMITS,
+    "client-gate": "client-gate:boards",
+}
 
 
 def run_out(
@@ -594,6 +598,32 @@ def frame_trend_run(checks: list[str]) -> list[Result]:
     return client_frame_trend.run(checks)
 
 
+def budget_sample_name(family: str) -> str:
+    """Offer one sample per verified commit without building the client to list it."""
+    from ..client.trend import current_commit
+
+    return f"{BUDGET_SUITES[family]}/{current_commit()}"
+
+
+def budget_sample_run(family: str, check: str) -> Result:
+    current = budget_sample_name(family)
+    if check != current:
+        # A saved idle run can start again after the verified checkout moves.
+        return Result(check, "incomplete", f"Checkout now offers {current}.")
+    if family == FRAME_LIMITS_FAMILY:
+        results = frame_limits_run([FRAME_LIMITS])
+    else:
+        results = gate_run([f"client-gate:{board}" for board in gate_boards()])
+    if not results:
+        return Result(check, "incomplete", "The native runner did not report a sample.")
+    problems = [row for row in results if row.outcome != "pass"]
+    if not problems:
+        return Result(check, "pass")
+    message = "\n".join(f"{row.check}: {row.message}" for row in problems)
+    outcome = "fail" if any(row.outcome == "fail" for row in problems) else "incomplete"
+    return Result(check, outcome, message)
+
+
 LISTS: dict[str, Callable[[], list[Listed]]] = {
     "client-format": lambda: [
         Listed(f"client-format:{n}", [f"{d}/**"]) for n, d in package_dirs().items()
@@ -645,6 +675,15 @@ def main(args: list[str]) -> int:
             from .client_corpus import main as corpus_main
 
             return corpus_main(rest, DEBUG)
+        case [family, "next"] if family in BUDGET_SUITES:
+            listed([Listed(budget_sample_name(family))])
+            return 0
+        case [family, "run", check] if family in BUDGET_SUITES and check.startswith(
+            f"{BUDGET_SUITES[family]}/"
+        ):
+            result = budget_sample_run(family, check)
+            report([result])
+            return int(result.outcome == "fail")
         case [family, "list"] if family in LISTS:
             if family in LIST_NEEDS_BUILD and not exe(DEBUG / "record").is_file():
                 built = build(to_stderr=True)

@@ -422,17 +422,17 @@ inputs = [
   "tools/src/beryl_tools/xmage_classes.py",
 ]
 
-# The full native replay matrix supplies the frame limits in data/client/gates.json.
-# A separate family lets tip verification publish ordinary interface batches while the
-# corpus-wide median and maximum are still running. It reads every recording's card files.
+# The full native replay matrix measures the corpus limits in data/client/gates.json.
+# Run it on idle cores because expected frame-count changes can exceed those limits.
 [family.client-interface-frame-limits]
-kind = "regression"
+kind = "exploration"
 adapter = "jsonl"
 platforms = ["macos", "windows"]
 defer_platforms = ["windows"]
 needs = ["python-env", "client"]
 grows = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-interface-frame-limits list"
+next = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-interface-frame-limits next"
 # The listing comes from what a built program does, which comments cannot change, so a change
 # that edits only comments keeps the listing and builds nothing to list.
 listing_ignores_comments = true
@@ -696,14 +696,15 @@ inputs = [
 # The native frame gate (`just client gate`): one check per gated board, holding its work counters,
 # draw load and allocations to the limits under `boards.<board>` in data/client/budgets.json,
 # in Baseline and Enhanced, using the registered native verifier's calibration.
+# Idle work samples the boards together. Intentional layout changes can move blended area.
 [family.client-gate]
-kind = "regression"
+kind = "exploration"
 adapter = "jsonl"
 platforms = ["macos", "windows"]
 defer_platforms = ["windows"]
-machine_relative = true
 needs = ["python-env", "client"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-gate list"
+next = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-gate next"
 # The listing comes from what a built program does, which comments cannot change, so a change
 # that edits only comments keeps the listing and builds nothing to list.
 listing_ignores_comments = true

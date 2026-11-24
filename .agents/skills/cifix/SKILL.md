@@ -30,14 +30,22 @@ remote branch `origin/staging` (`git rev-parse origin/staging` after
 2. **Find the cause.** When the product broke, fix the product: a rules engine
    bug also gets an entry in `docs/bugs.md` (root `AGENTS.md`, Conventions), and
    a UI break adds the broken state as a fixture or spec moment (root
-   `AGENTS.md`, Checks). When the fix changes only the test, delete it or
-   redesign it to prevent the same invalid failure, using "A check to change"
-   below. Adjusting the assertion alone leaves the cause in place. Record the
-   remedy on the ticket. Card and rules definitions and the oracle scenarios
-   they produce count as product code. Fix a failure caused by a machine's
+   `AGENTS.md`, Checks). When the fix changes only the test, choose a remedy
+   under "A check to change" below. Adjusting the assertion alone leaves the
+   cause in place. Record the remedy on the ticket. Card and rules definitions
+   and the oracle scenarios they produce count as product code. Fix a failure
+   caused by a machine's
    state, such as a full disk or a stale cache, in `tools/` or in the family's
    declaration so it cannot recur.
-3. **Verify** that `ignite test <check>` passes at the staging tip, using
+3. **Check what the assertion caught.** For a threshold, micro-budget or
+   exact-coordinate fixture failure, read the change and inspect the affected
+   behavior. If the check failed because the product changed as intended,
+   delete the check when it protects no needed behavior, rewrite it to assert
+   a property users rely on, or move it to idle exploration when the
+   measurement is still worth collecting. Record what you observed and why
+   you chose the remedy. Leave the JSON thresholds and hardcoded screen
+   coordinates alone.
+4. **Verify** that `ignite test <check>` passes at the staging tip, using
    the replacement's name when you replaced the check. If you deleted it,
    verify that its family no longer lists it.
 
@@ -71,7 +79,10 @@ nothing caught.
      a controlled clock. Count work instead of timing it.
      Keep a timeout only to catch a hang, at about ten times the loaded
      duration. Then delete the old check.
-   - **Delete it** when it has never caught a bug.
+   - **Move it to idle exploration** when routine intentional changes cause
+     failures but the measurements are still worth collecting.
+   - **Delete it** when it has never caught a bug and the measurements are
+     no longer useful.
 
    Loosening a threshold, adding a retry and raising a limit are not remedies.
 4. **Never cut a protected check**: the families and checks listed under

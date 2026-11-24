@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from beryl_tools import calibration, paths
-from beryl_tools.client import frame_profiles, gate, pack
+from beryl_tools.client import frame_profiles, gate, pack, trend
 from beryl_tools.ignite import RESULTS_ENV, Result
 from beryl_tools.ignite import client as adapter
 
@@ -47,10 +47,10 @@ def test_each_jsonl_family_is_listed_and_run_by_its_own_name() -> None:
     for name, family in manifest()["family"].items():
         if family["adapter"] != "jsonl":
             continue
-        if name == "client-corpus":
-            # The corpus streams results through its own command dispatch.
+        if family["kind"] == "exploration":
             assert str(family["next"]).endswith(f"client {name} next")
-        else:
+        # The corpus streams results through its own command dispatch.
+        if name != "client-corpus":
             assert name in adapter.LISTS and name in adapter.RUNS, name
         assert family["list"] == (
             f"uv run --quiet --project tools python -m beryl_tools.ignite.client {name} list"
@@ -102,6 +102,19 @@ def test_windows_replay_and_stress_checks_defer_until_after_promotion() -> None:
     for name in ("client-clippy", "client-validation"):
         assert families[name]["platforms"] == ["macos", "windows"], name
         assert "defer_platforms" not in families[name], name
+
+
+def test_frame_budgets_are_advisory_and_client_expectations_are_test_paths() -> None:
+    families = manifest()["family"]
+    for name in (adapter.FRAME_LIMITS_FAMILY, "client-gate"):
+        assert families[name]["kind"] == "exploration", name
+    config = tomllib.loads((paths.REPO / "ignite.toml").read_text())
+    assert {
+        "data/client/budgets.json",
+        "data/client/gates.json",
+        "data/client/conventions/**",
+        "data/client/screens.json",
+    } <= set(config["repository"]["test_paths"])
 
 
 def test_the_families_that_read_recordings_name_every_crate_the_recorder_is_built_from() -> (
@@ -203,7 +216,6 @@ def test_frame_limits_have_a_separate_native_family_with_all_card_inputs(
     families = manifest()["family"]
     aggregate = families[adapter.FRAME_LIMITS_FAMILY]
     interface = families["client-interface"]
-    assert aggregate["kind"] == "regression"
     assert aggregate["platforms"] == interface["platforms"] == ["macos", "windows"]
     assert aggregate["needs"] == interface["needs"]
     assert aggregate["inputs"] == interface["inputs"]
@@ -224,6 +236,65 @@ def test_frame_limits_have_a_separate_native_family_with_all_card_inputs(
     assert adapter.LISTS[adapter.FRAME_LIMITS_FAMILY]() == [
         adapter.Listed(adapter.FRAME_LIMITS, ["card-a", "card-b"])
     ]
+
+
+@pytest.mark.parametrize(
+    ("family", "suite", "runner", "checks", "outcome"),
+    [
+        (
+            adapter.FRAME_LIMITS_FAMILY,
+            "corpus",
+            "frame_limits_run",
+            [adapter.FRAME_LIMITS],
+            "pass",
+        ),
+        (
+            "client-gate",
+            "boards",
+            "gate_run",
+            ["client-gate:pay-default", "client-gate:stress-255"],
+            "fail",
+        ),
+    ],
+)
+def test_budget_exploration_runs_only_its_verified_checkout(
+    family: str,
+    suite: str,
+    runner: str,
+    checks: list[str],
+    outcome: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "results.jsonl"
+    monkeypatch.setenv(RESULTS_ENV, str(output))
+    monkeypatch.setattr(trend, "current_commit", lambda: "a" * 40)
+    assert adapter.main([family, "next"]) == 0
+    (listing,) = capsys.readouterr().out.splitlines()
+    check = json.loads(listing)["check"]
+    assert check == f"{family}:{suite}/" + "a" * 40
+
+    def run(wanted: list[str]) -> list[Result]:
+        assert wanted == checks
+        return [
+            Result(name, outcome if index == len(wanted) - 1 else "pass", "over budget")
+            for index, name in enumerate(wanted)
+        ]
+
+    monkeypatch.setattr(adapter, runner, run)
+    monkeypatch.setattr(adapter, "gate_boards", lambda: ["pay-default", "stress-255"])
+    assert adapter.main([family, "run", check]) == int(outcome == "fail")
+
+    monkeypatch.setattr(trend, "current_commit", lambda: "b" * 40)
+    assert adapter.main([family, "run", check]) == 0
+    measured, skipped = [json.loads(line) for line in output.read_text().splitlines()]
+    assert measured["check"] == skipped["check"] == check
+    assert measured["outcome"] == outcome
+    if outcome == "fail":
+        assert measured["message"] == "client-gate:stress-255: over budget"
+    assert skipped["outcome"] == "incomplete"
+    assert "b" * 40 in skipped["message"]
 
 
 @pytest.mark.parametrize(

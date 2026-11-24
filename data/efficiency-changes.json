@@ -900,5 +900,10 @@
     "label": "Ignite uses cached passes to promote verified ancestors when newer tips fail.",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Native replay frame limits and board budgets run on idle cores, so expected frame-count and blended-area changes no longer stall master promotion.",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]
