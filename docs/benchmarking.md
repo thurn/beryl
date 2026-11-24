@@ -59,7 +59,7 @@ just bench -p beryl_bench --bench example_timing
 
 - `just count-gate` counts only `rollout_counts`' `rollouts` subject in the VM,
   about 15 s once built, and fails when it runs more than the tolerance above
-  the verifier's bar in `rust/crates/beryl_bench/count-gate.toml`. Compare
+  the verifier's bar in `engine/crates/beryl_bench/count-gate.toml`. Compare
   counts taken on the same verifier with the same calibration. Ignite keeps a
   separate trend for each calibration. The file's comments say when a bar may
   rise. `just count-gate --family <name>` gates a family's present cost
@@ -204,6 +204,12 @@ or JSON mapping keyed by verifier ID. Each entry has `revision`, `fixture`,
 that will run the measurement and validates its own limits. Use `Profile.digest`
 in the machine-relative Ignite listing and to scope the trend. Runtime or
 profile errors give setup or incomplete results.
+
+For Windows qualification, run
+`ignite test --rerun counts:* client-frame-counts:*` on Cygnus. Record the
+verifier, checkout revision, and selected guest profiles. A cached pass from
+another verifier or calibration cannot establish the new baseline. See
+[qualifying Windows checks](ignite.md#qualifying-windows-checks).
 
 [Frame calibrations](beryl-3d.md#frame-calibrations) describes the native and
 Callgrind profiles for Beryl 3D.

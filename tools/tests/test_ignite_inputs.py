@@ -21,6 +21,7 @@ import tomllib
 from pathlib import Path
 
 from beryl_tools.ignite import python
+from beryl_tools.ignite.windows_parity import evidence_gaps, windows_inventory
 
 REPO: Path = Path(__file__).resolve().parents[2]
 ADAPTER: re.Pattern[str] = re.compile(r"-m (beryl_tools\.ignite\.\w+)")
@@ -123,6 +124,43 @@ def undeclared() -> dict[str, list[str]]:
 
 def test_every_family_declares_the_modules_its_adapter_loads() -> None:
     assert undeclared() == {}
+
+
+def test_every_in_scope_family_can_run_on_cygnus() -> None:
+    _, gaps = windows_inventory(REPO)
+    assert gaps == []
+
+
+def test_windows_evidence_requires_every_listed_check_and_local_measurement() -> None:
+    def passed(check: str, machine: str = "cygnus-id") -> dict[str, object]:
+        return {
+            "check": check,
+            "outcome": "pass",
+            "cached": False,
+            "machine": machine,
+            "os": "windows",
+            "revision": "verified-tip",
+        }
+
+    listings = {"counts": ["counts:rollouts"], "rust": ["rust:a", "rust:b"]}
+    expected = {*listings, "exhaust"}
+    evidence = {
+        "listings": listings,
+        "results": [passed("counts:rollouts", "other-windows-id"), passed("rust:a")],
+    }
+    assert evidence_gaps(expected, evidence, "verified-tip", "cygnus-id") == [
+        "exhaust: no listing or idle sample",
+        "counts:rollouts: verdict is from a different verifier or revision",
+        "rust:b: missing verdict",
+    ]
+    evidence = {
+        "listings": {**listings, "exhaust": ["exhaust:sample"]},
+        "results": [
+            passed(check)
+            for check in ["counts:rollouts", "rust:a", "rust:b", "exhaust:sample"]
+        ],
+    }
+    assert evidence_gaps(expected, evidence, "verified-tip", "cygnus-id") == []
 
 
 def test_the_closure_follows_imports_at_load_and_skips_those_in_functions(

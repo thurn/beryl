@@ -1600,7 +1600,7 @@ the inputs, build products, platforms and commands for the family.
 `ignite/checks/script.toml` declares the shared script checks and the app
 families. `native-app` starts the desktop client headlessly. `native-ios` builds
 an unsigned Simulator app on macOS, and `native-android` builds an Android APK
-on macOS and Windows. `ignite/checks/beryl3d.toml` declares the native
+on macOS and Windows. `ignite/checks/client.toml` declares the native
 workspace's build, source, replay, corpus, interface and frame checks.
 
 ```toml
@@ -1609,7 +1609,7 @@ kind = "regression"
 adapter = "nextest"
 platforms = "any"
 needs = ["rust-tests"]
-inputs = ["crate-closure", "rust/.config/nextest.toml"]
+inputs = ["crate-closure", "engine/.config/nextest.toml"]
 ```
 
 ```toml
@@ -3717,8 +3717,10 @@ A machine can take a ticket when all of these hold:
   the tickets already in progress there. See
   [Light and heavy tickets](#light-and-heavy-tickets).
 - The machine runs the ticket's required operating system, if it has one.
-- The machine can run every check family that the ticket's named files could
-  bring into its gate. Cygnus never takes a ticket that names UI files.
+- The machine can run every check family that Ignite requires for the ticket's
+  named files. For example, the macOS Simulator build reads both workspaces, so
+  shared paths can route work to a Mac even when Cygnus runs the relevant native
+  client and engine checks.
 
 Not every ticket is offered:
 
@@ -4295,6 +4297,44 @@ after another, and their reports are joined.
 A machine lists a family it does not run only to key the checks other machines
 run. It keeps that listing, or its failure, for the family's current inputs, so
 a family it cannot build is not tried again on every tip round.
+
+### Qualifying Windows checks
+
+Cygnus runs the native desktop, Android, engine, client, Python, and oracle
+families. The iOS Simulator build remains on macOS. The Windows audit also
+excludes the retired browser families `ui-test`, `ui-smoke`, `shots`, `motion`,
+`ui-counts`, and `b3d-web-drift`. The browser-free `ui-format`, `ui-types`,
+`ui-unit`, `b3d-timeline`, `b3d-timeline-drift`, and `b3d-web-match` families
+were retired with the web client. The native replay checks cover the former
+every-tick family as well.
+
+Use the account running the daemon for these setup commands. Install the pinned
+Windows Rust toolchain, cargo-nextest, `uv`, and `just`. Put Linux `uv` on the
+default WSL distribution's path so Pyre can use the locked Linux environment.
+Run `just oracle-setup` for XMage and Forge. Provision the pinned Android SDK
+and NDK with `just mobile-setup` after installing JDK 21 and the Android
+command-line tools. Run `just bench-count` and `just client vm` to provision the
+WSL counting guests. Keep `oracle` and `bench-vm` in Cygnus's resource
+declaration. Use the daemon's registered verifier ID for both counting profiles.
+See
+[calibrating instruction counts](benchmarking.md#calibrating-instruction-counts).
+
+Add any new Windows family to Cygnus's `families` and declare the resources it
+needs. The `test_ignite_inputs.py` pytest checks enrollment against all current
+declarations. To qualify a revision, use a clean Windows lease and record its
+commit and verifier ID. List the applicable finite checks with their native
+adapters. Run them with `ignite test --rerun --json` and explicit `family:*`
+selectors. Generate and run a fixed sample from each exploration family's `next`
+command. Keep the native listings and results with the ticket evidence. A shared
+cache hit, partial result, skip or nonpassing verdict leaves that check
+unqualified.
+
+`uv run --project tools python -m beryl_tools.ignite.windows_parity` compares
+the evidence with the current manifest. Supply the JSON file, `--revision`, and
+`--verifier`. The file's `listings` object maps each family to its independent
+check names. Its `results` array contains one row per check with `check`,
+`outcome`, `cached`, `machine`, `os`, and `revision` from the observed run. Use
+`cached: false` only for locally executed checks. Keep run output out of Git.
 
 ## Dynamic scaling
 

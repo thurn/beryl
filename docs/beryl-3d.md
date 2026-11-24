@@ -527,22 +527,22 @@ GPU check renders the highest-ranked frames in both tiers. The Callgrind run
 collects a separate dump for each frame in one replay, then reports the largest
 count and the total. It also checks that the instruction peak is among the
 native candidates. A failure to rank that peak means the cheap counters need to
-account for the missing work. `just b3d gate --json` reports measured work
+account for the missing work. `just client gate --json` reports measured work
 alongside any budget failures.
 
 ### Frame calibrations
 
-`data/beryl3d/frame-calibration.json` records the reference revision, fixture,
+`data/client/frame-calibration.json` records the reference revision, fixture,
 and runtime for each registered Ignite verifier. Native checks use the work
 budgets in `budgets.json` with any calibrated per-board overrides. Instruction
 checks use the verifier's measured per-board budgets and scaling limits.
 `budgets.json` still records the original limits. Ignite reports a missing or
 incompatible profile as incomplete.
 
-Use `just b3d vm` to provision the guest. To enroll a verifier or rebase a
+Use `just client vm` to provision the guest. To enroll a verifier or rebase a
 profile, use an Ignite lease at an accepted revision. Run the native `gate`
 binary and measure the same board list twice through `counts.measure` in
-`tools/src/beryl_tools/beryl3d/counts.py`. It reports the guest runtime and the
+`tools/src/beryl_tools/client/counts.py`. It reports the guest runtime and the
 instruction count of every frame. Confirm the counts repeat and that a lowered
 limit fails. Record the revision and runtimes under the verifier ID, and keep
 the zero-allocation and native rank assertions.
@@ -563,7 +563,7 @@ the zero-allocation and native rank assertions.
 ## Checks and isolation
 
 Ignite declares source, replay, interface, corpus and frame checks in
-`ignite/checks/beryl3d.toml`. The shared script checks, windowless desktop
+`ignite/checks/client.toml`. The shared script checks, windowless desktop
 startup, iOS Simulator build and Android APK build are in
 `ignite/checks/script.toml`. The gate uses automated checks.
 

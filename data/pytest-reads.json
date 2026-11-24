@@ -145,6 +145,10 @@
       "engine/crates/beryl_table/Cargo.toml",
       "engine/crates/beryl_table_session/Cargo.toml"
     ],
+    "tools/src/beryl_tools/ignite/windows_parity.py": [
+      "ignite.toml",
+      "ignite/checks"
+    ],
     "tools/src/beryl_tools/oracle_discovery.py": [
       "data/oracle-candidates.json"
     ],
