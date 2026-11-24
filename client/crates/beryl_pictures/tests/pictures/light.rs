@@ -13,11 +13,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use beryl_host::{Headless, Scans};
 use beryl_inspect::stress::Board;
 use beryl_inspect::{pages, recordings, runner};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
+use beryl_render::{Limits, Renderer, Target};
 use game_probe::driver::{Duration, Moment};
 use kit_base::data::profiles::SizeClass;
 use kit_frame::frame::{Draw, Frame, Material, Role, Sprite, sprites};
@@ -171,18 +171,24 @@ fn lit(pixels: &[u8]) -> usize {
 
 /// What drawing the recording `name` from `side` at `times` found: the kind of each light drawn,
 /// and a line for each that lit too few pixels.
-fn draw_lights(name: &str, side: Side, times: &BTreeSet<u64>) -> (Vec<String>, Vec<String>) {
-    let page = page(name, side).expect("a page");
-    let mut head = Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
-    // Making the host makes the client again, which forgets that it was looking.
-    head.page().set_looking(true);
+fn draw_lights(
+    renderer: &mut Renderer,
+    target: &mut Target,
+    name: &str,
+    side: Side,
+    times: &BTreeSet<u64>,
+) -> (Vec<String>, Vec<String>) {
+    let mut page = page(name, side).expect("a page");
     let mut kinds = Vec::new();
     let mut faults = Vec::new();
     for &time in times {
-        head.seek(&Moment::At(Duration(time))).expect("a moment");
-        for light in lights(head.frame()) {
-            let records: BTreeSet<usize> = light.records.iter().copied().collect();
-            let pixels = lit(&head.pixels_keeping_records(|_, at| records.contains(&at)));
+        page.seek(&Moment::At(Duration(time))).expect("a moment");
+        let frame = page.frame();
+        for light in lights(frame) {
+            let mut isolated = frame.clone();
+            isolated.keep_records(|at| light.records.binary_search(&at).is_ok());
+            renderer.render(&isolated, target);
+            let pixels = lit(&renderer.read(target));
             if pixels < LEAST_PIXELS {
                 let seat = if side == Side::You { "you" } else { "opponent" };
                 faults.push(format!(
@@ -199,7 +205,7 @@ fn draw_lights(name: &str, side: Side, times: &BTreeSet<u64>) -> (Vec<String>, V
     (kinds, faults)
 }
 
-/// Windows runs the replay scan and renderer readbacks with up to three workers. At ten
+/// Windows runs the replay scan with up to three workers. At ten
 /// workers on the shared verifier, memory pressure drove the same check past its hang limit.
 fn each_replay<T: Sync, R: Send>(items: &[T], check: impl Fn(&T) -> R + Sync) -> Vec<R> {
     if !cfg!(windows) {
@@ -249,12 +255,19 @@ fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn() {
         .map(|((name, side), times)| (name.as_str(), *side, times))
         .filter(|(_, _, times)| !times.is_empty())
         .collect();
-    let found = each_replay(&lit_tests, |(name, side, times)| {
-        draw_lights(name, *side, times)
-    });
+    // The isolated records sample the same light atlas as the host. They can all share one
+    // device and target. Opening a device and loading card art for each replay stalled on Windows.
+    let tuning = beryl_inspect::data::checkout().expect("tuning");
+    let mut renderer = Renderer::headless(Limits::Default, tuning.lighting).expect("a GPU");
+    let mut target = Target::offscreen(&renderer, WINDOW.width as u32, WINDOW.height as u32);
+    assert!(
+        renderer.upload_page(&beryl_assets::light::prepared(&tuning.light, &tuning.own)),
+        "the shapes of light are uploaded"
+    );
     let mut drawn: BTreeMap<String, usize> = BTreeMap::new();
     let mut faults: Vec<String> = Vec::new();
-    for (kinds, more) in found {
+    for (name, side, times) in &lit_tests {
+        let (kinds, more) = draw_lights(&mut renderer, &mut target, name, *side, times);
         for kind in kinds {
             *drawn.entry(kind).or_default() += 1;
         }

@@ -932,7 +932,7 @@
     "expect": "down"
   },
   {
-    "label": "The arrow and combat-mark rendering check releases decoded recordings after each replay so the full corpus can fit in verifier memory.",
+    "label": "The arrow and combat-mark rendering check releases each decoded replay and reuses one offscreen renderer for every light.",
     "metric": "ignite.gate-wait-seconds",
     "expect": "down"
   }
