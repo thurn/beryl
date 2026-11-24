@@ -140,10 +140,8 @@ each finding before reporting it:
    finding happened, by their earliest and latest timestamps. The store keeps
    UTC. `git log` prints the committer's local time unless you pass
    `--date=iso-strict`, so convert before you compare.
-2. **Look for fixes since then.** Fetch Ignite's integration ref first,
-   `git fetch origin refs/ignite/staging:refs/remotes/origin/ignite/staging`
-   (it is not a branch, so a plain `git fetch` skips it), then
-   `git log origin/ignite/staging --since=<earliest evidence> -- <paths>` over
+2. **Look for fixes since then.** Run `git fetch origin staging`, then
+   `git log origin/staging --since=<earliest evidence> -- <paths>` over
    the code behind the finding: the tool, check or script the waits ran. Also grep the
    subjects and bodies (`-i --grep=<term>`). Read the body of each likely fix.
    It says what someone saw and what changed, so you can tell whether it covers
@@ -153,7 +151,7 @@ each finding before reporting it:
    command and the symptom. A finding can also come from a ticket's own text:
    for example, the acceptance criteria that a tool writes into the tickets it
    files can send workers to run a slow command.
-4. **Read the code as it is now** (`git show origin/ignite/staging:<path>`),
+4. **Read the code as it is now** (`git show origin/staging:<path>`),
    not the main checkout, which may lag behind. Confirm that the cause you inferred
    still exists, such as a lock, a priority class or a retry loop.
 5. **Re-measure only with enough data.** If a fix landed, compare the same query

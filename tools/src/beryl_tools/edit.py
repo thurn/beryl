@@ -159,7 +159,7 @@ def file_exists_in_repo(repo: Path, rel: str) -> bool:
     """Whether `rel` exists on disk in `repo` or in Ignite's newest fetched refs."""
     if (repo / rel).is_file():
         return True
-    for ref in ("origin/ignite/green", "origin/ignite/staging"):
+    for ref in ("origin/ignite/green", "origin/staging"):
         probe = subprocess.run(
             ["git", "-C", str(repo), "cat-file", "-e", f"{ref}:{rel}"],
             capture_output=True,

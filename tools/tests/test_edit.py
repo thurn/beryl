@@ -138,6 +138,26 @@ class FakeIgnite:
         raise AssertionError(f"unexpected ignite stream command: {cmd}")
 
 
+def test_edit_finds_a_file_landed_since_the_checkout_last_updated(
+    tmp_path: Path,
+) -> None:
+    repo = init_repo(tmp_path / "repo", {"existing.txt": "existing"})
+    (repo / "landed.txt").write_text("landed", encoding="utf-8")
+    subprocess.run(["git", "add", "landed.txt"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "feat: add landed file"], cwd=repo, check=True
+    )
+    subprocess.run(
+        ["git", "update-ref", "refs/remotes/origin/staging", "HEAD"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(["git", "switch", "--detach", "HEAD^"], cwd=repo, check=True)
+
+    assert not (repo / "landed.txt").exists()
+    assert edit.file_exists_in_repo(repo, "landed.txt")
+
+
 def test_resolve_path_handles_subdirectories_and_rejects_bad_targets(
     tmp_path: Path,
 ) -> None:
