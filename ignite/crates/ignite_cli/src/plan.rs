@@ -35,14 +35,18 @@ fn load(epic: &str) -> Result<Reply, Failure> {
     let epic_id = epic["id"].as_str().unwrap_or(epic_name(&epic)).to_owned();
     let query = [("ancestor", epic_id.clone()), ("all", "1".to_owned())];
     let tickets: Vec<Ticket> = decode(hub.get(&["tickets"], &query)?.json()?)?;
-    let graph: Graph = decode(hub.get(&["graph"], &[("all", "1".to_owned())])?.json()?)?;
+    // Only the live graph: with `all` the hub also sends every closed ticket it has ever held,
+    // which grows without bound and once took longer than the client waits for one reply. A
+    // closed ticket blocks nothing, so the edges between live tickets are the ones checked here.
+    let graph: Graph = decode(hub.get(&["graph"], &[])?.json()?)?;
     let ready: HashSet<String> = graph
         .tickets
         .iter()
         .filter(|ticket| ticket.ready)
         .map(|ticket| ticket.ticket.id.to_string())
         .collect();
-    let everything: Vec<Ticket> = graph.tickets.into_iter().map(|t| t.ticket).collect();
+    let live: Vec<Ticket> = graph.tickets.into_iter().map(|t| t.ticket).collect();
+    let everything = known(live, decode(epic)?, &tickets);
     let fleet: FleetView = decode(hub.get(&["fleet"], &[])?.json()?)?;
     let machines = fleet
         .machines
@@ -74,6 +78,19 @@ fn load(epic: &str) -> Result<Reply, Failure> {
         repository: repository.as_ref(),
     }
     .reply())
+}
+
+/// The live tickets, with the epic and its closed descendants added, since the live graph leaves
+/// out closed tickets and the forecast counts them.
+fn known(live: Vec<Ticket>, epic: Ticket, descendants: &[Ticket]) -> Vec<Ticket> {
+    let mut seen: HashSet<TicketId> = live.iter().map(|ticket| ticket.id.clone()).collect();
+    let mut known = live;
+    for ticket in std::iter::once(epic).chain(descendants.iter().cloned()) {
+        if seen.insert(ticket.id.clone()) {
+            known.push(ticket);
+        }
+    }
+    known
 }
 
 fn epic_name(epic: &Value) -> &str {

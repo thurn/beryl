@@ -6,7 +6,7 @@ use ignite_core::protocol::client::Exit;
 use ignite_core::protocol::tickets::{Edge, EdgeKind, Status, Ticket, TicketType};
 use serde_json::json;
 
-use super::Graphs;
+use super::{Graphs, known};
 
 const EPIC: &str = "ig9a";
 
@@ -303,4 +303,22 @@ fn a_plan_with_an_external_blocker_fails_and_names_the_edge() {
             .collect::<Vec<_>>(),
         ["external edge  Tig9a.1.1 depends on TOTHER outside epic Tig9a"]
     );
+}
+
+#[test]
+fn the_live_graph_gains_the_epic_and_its_closed_tickets_once_each() {
+    let mut epic = ticket(EPIC, "", "", &[]);
+    epic.ticket_type = TicketType::Epic;
+    epic.status = Status::Closed;
+    let open = ticket(&id(1), EPIC, "", &[]);
+    let mut closed = ticket(&id(2), EPIC, "", &[]);
+    closed.status = Status::Closed;
+    let elsewhere = ticket("TOTHER", "", "", &[]);
+    let everything = known(
+        vec![open.clone(), elsewhere],
+        epic,
+        &[open, closed],
+    );
+    let ids: Vec<&str> = everything.iter().map(|t| t.id.as_str()).collect();
+    assert_eq!(ids, [id(1).as_str(), "TOTHER", EPIC, id(2).as_str()]);
 }
