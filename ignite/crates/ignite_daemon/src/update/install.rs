@@ -353,10 +353,9 @@ pub enum PathLink {
     Advice(String),
 }
 
-/// Puts `ignite` on the search path as `~/.local/bin/ignite`, a link to `current`, the link to
-/// the newest stored build. It creates the link only when `~/.local/bin` is on `path` (the
-/// value of `PATH`), and replaces only a link that points into the executable store; anything
-/// else is left alone and the answer says where to link it.
+/// Puts `ignite` on the search path when `~/.local/bin` is on `path` (the value of `PATH`).
+/// macOS uses a symbolic link to `current`. Windows uses an `ignite.cmd` shim that runs
+/// `current.cmd`. An existing entry is replaced only if it belongs to Ignite.
 pub fn link_onto_path(current: &Path, home: Option<&Path>, path: Option<&OsStr>) -> PathLink {
     let advice = |why: &str| {
         PathLink::Advice(format!(
@@ -364,13 +363,27 @@ pub fn link_onto_path(current: &Path, home: Option<&Path>, path: Option<&OsStr>)
             current.display()
         ))
     };
-    if cfg!(windows) {
-        return advice("not linked on Windows");
-    }
     let Some(home) = home else {
-        return advice("HOME is not set");
+        return advice(if cfg!(windows) {
+            "neither HOME nor USERPROFILE is set"
+        } else {
+            "HOME is not set"
+        });
     };
     let dir = home.join(".local").join("bin");
+    #[cfg(unix)]
+    return link_on_unix(current, &dir, path, advice);
+    #[cfg(windows)]
+    return link_on_windows(current, &dir, path, advice);
+}
+
+#[cfg(unix)]
+fn link_on_unix(
+    current: &Path,
+    dir: &Path,
+    path: Option<&OsStr>,
+    advice: impl Fn(&str) -> PathLink,
+) -> PathLink {
     let link = dir.join("ignite");
     if let Ok(meta) = std::fs::symlink_metadata(&link) {
         let target = std::fs::read_link(&link).ok();
@@ -388,22 +401,107 @@ pub fn link_onto_path(current: &Path, home: Option<&Path>, path: Option<&OsStr>)
             return advice(&format!("{} is not on PATH", dir.display()));
         }
     }
-    match replace_link(&dir, &link, current) {
+    match replace_link(dir, &link, current) {
         Ok(()) => PathLink::Linked(link),
         Err(error) => advice(&format!("cannot link {}: {error}", link.display())),
     }
 }
 
 /// Points the symbolic link `link` in `dir` at `target`, replacing it in one step.
+#[cfg(unix)]
 fn replace_link(dir: &Path, link: &Path, target: &Path) -> io::Result<()> {
     std::fs::create_dir_all(dir)?;
     let partial = dir.join(format!("ignite.partial-{}", std::process::id()));
     let _ = std::fs::remove_file(&partial);
-    #[cfg(unix)]
     std::os::unix::fs::symlink(target, &partial)?;
-    #[cfg(windows)]
-    std::os::windows::fs::symlink_file(target, &partial)?;
     std::fs::rename(&partial, link)
+}
+
+#[cfg(windows)]
+const PATH_SHIM_MARKER: &str = "@rem Installed by ignite install\r\n";
+
+#[cfg(windows)]
+fn link_on_windows(
+    current: &Path,
+    dir: &Path,
+    path: Option<&OsStr>,
+    advice: impl Fn(&str) -> PathLink,
+) -> PathLink {
+    let on_path = path.is_some_and(|path| {
+        std::env::split_paths(path).any(|entry| {
+            entry
+                .components()
+                .map(|part| part.as_os_str().to_ascii_lowercase())
+                .eq(dir
+                    .components()
+                    .map(|part| part.as_os_str().to_ascii_lowercase()))
+        })
+    });
+    if !on_path {
+        return advice(&format!("{} is not on PATH", dir.display()));
+    }
+    let link = dir.join("ignite.cmd");
+    match write_path_shim(dir, &link, current) {
+        Ok(Some(true)) => PathLink::Linked(link),
+        Ok(Some(false)) => PathLink::Present(link),
+        Ok(None) => advice(&format!("{} is not Ignite's link", link.display())),
+        Err(error) => advice(&format!("cannot link {}: {error}", link.display())),
+    }
+}
+
+/// Writes the shim only if it is absent or has the installer marker.
+#[cfg(windows)]
+fn write_path_shim(dir: &Path, link: &Path, current: &Path) -> io::Result<Option<bool>> {
+    use std::io::{Read, Seek, Write as _};
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+
+    // Batch files double literal percent signs. Chaining to current.cmd without CALL avoids
+    // a second expansion of the arguments and leaves that batch file's exit status intact.
+    let target = ignite_os::paths::without_verbatim_prefix(std::path::absolute(current)?);
+    let target = target.to_string_lossy().replace('%', "%%");
+    let content =
+        format!("{PATH_SHIM_MARKER}@setlocal DisableDelayedExpansion\r\n@\"{target}\" %*\r\n");
+
+    std::fs::create_dir_all(dir)?;
+    let mut options = std::fs::OpenOptions::new();
+    // Keep the same file open from the ownership check through the write. Exclusive access
+    // prevents another install or a rename in between, and opening reparse points directly
+    // prevents a symlink at ignite.cmd from redirecting the write.
+    options
+        .read(true)
+        .write(true)
+        .share_mode(0)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let mut file = match options.open(link) {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            options
+                .create_new(true)
+                .open(link)?
+                .write_all(content.as_bytes())?;
+            return Ok(Some(true));
+        }
+        Err(error) => return Err(error),
+    };
+    if !file.metadata()?.is_file() {
+        return Ok(None);
+    }
+    let mut existing = Vec::new();
+    Read::by_ref(&mut file)
+        .take(content.len() as u64 + 1)
+        .read_to_end(&mut existing)?;
+    if !existing.starts_with(PATH_SHIM_MARKER.as_bytes()) {
+        return Ok(None);
+    }
+    if existing == content.as_bytes() {
+        return Ok(Some(false));
+    }
+    file.rewind()?;
+    file.write_all(content.as_bytes())?;
+    file.set_len(content.len() as u64)?;
+    Ok(Some(true))
 }
 
 /// How an exit code and a message answer a failed operation.

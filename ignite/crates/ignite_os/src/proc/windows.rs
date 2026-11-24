@@ -49,14 +49,18 @@ use crate::Native;
 /// How long [`Processes::end_group`] waits for the processes of a terminated job to exit.
 const END_WAIT: Duration = Duration::from_secs(10);
 
-/// A process opened so that its exit can be waited for.
-struct Exiting(HANDLE);
+/// An owned process handle, closed when dropped.
+struct ProcessHandle(HANDLE);
 
-impl Exiting {
-    fn open(pid: u32) -> Option<Exiting> {
-        // SAFETY: plain call; the handle, if any, is closed when the `Exiting` is dropped.
-        let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
-        (!handle.is_null()).then_some(Exiting(handle))
+impl ProcessHandle {
+    fn open(pid: u32, access: u32) -> Option<Self> {
+        // SAFETY: plain call; the handle, if any, is closed when this value is dropped.
+        let handle = unsafe { OpenProcess(access, 0, pid) };
+        if handle.is_null() {
+            None
+        } else {
+            Some(Self(handle))
+        }
     }
 
     /// Waits until the process has exited or `deadline` has passed.
@@ -68,7 +72,7 @@ impl Exiting {
     }
 }
 
-impl Drop for Exiting {
+impl Drop for ProcessHandle {
     fn drop(&mut self) {
         // SAFETY: the handle is open and owned here.
         unsafe { CloseHandle(self.0) };
@@ -231,10 +235,10 @@ impl Processes for Native {
             // is exiting has already left the job's list, so a caller that then deleted the tree
             // they ran in found their files still open. So each member is opened first and
             // waited for afterwards, for a bounded time.
-            let members: Vec<Exiting> = job
+            let members: Vec<ProcessHandle> = job
                 .members()?
                 .into_iter()
-                .filter_map(Exiting::open)
+                .filter_map(|pid| ProcessHandle::open(pid, PROCESS_SYNCHRONIZE))
                 .collect();
             job.terminate()?;
             let deadline = Instant::now() + END_WAIT;
@@ -264,6 +268,12 @@ impl Native {
         }
     }
 
+    /// The executable of process `pid`, if the process is still running and can be queried.
+    pub fn process_image(&self, pid: u32) -> Option<PathBuf> {
+        let process = ProcessHandle::open(pid, PROCESS_QUERY_LIMITED_INFORMATION)?;
+        process_image(process.0)
+    }
+
     /// Ends every process in the group `group`, which may have been started by another process.
     /// Does nothing if the group no longer exists.
     pub fn end_group_id(&self, group: u64) -> io::Result<()> {
@@ -281,12 +291,9 @@ impl Native {
             return Ok(false);
         };
         let access = PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | PROCESS_SYNCHRONIZE;
-        // SAFETY: plain call; the handle is owned by `Exiting` and closed on drop.
-        let handle = unsafe { OpenProcess(access, 0, pid) };
-        if handle.is_null() {
+        let Some(process) = ProcessHandle::open(pid, access) else {
             return Ok(false);
-        }
-        let process = Exiting(handle);
+        };
         let Some(image) = process_image(process.0) else {
             return Ok(false);
         };

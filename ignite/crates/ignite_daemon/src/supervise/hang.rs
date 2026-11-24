@@ -112,20 +112,20 @@ fn output_stalled(
     }
 }
 
-/// The processes in the group, one `<pid> <command>` per line, as `ps` prints them. Windows
-/// has no `ps`, so there the line holds the process ID alone.
+/// The processes in the group, one `<pid> <command>` per line. Windows reports the executable
+/// path when the process can still be queried.
 fn group_processes(group: u64) -> String {
     let pids = match Native.group_members(group) {
         Ok(pids) if !pids.is_empty() => pids,
         Ok(_) => return "(none)".to_owned(),
         Err(error) => return format!("(cannot list them: {error})"),
     };
-    let list: Vec<String> = pids.iter().map(u32::to_string).collect();
-    describe(&list)
+    describe(&pids)
 }
 
 #[cfg(unix)]
-fn describe(pids: &[String]) -> String {
+fn describe(pids: &[u32]) -> String {
+    let pids: Vec<String> = pids.iter().map(u32::to_string).collect();
     Command::new("/bin/ps")
         .args(["-o", "pid=,command=", "-p", &pids.join(",")])
         .output()
@@ -136,8 +136,14 @@ fn describe(pids: &[String]) -> String {
 }
 
 #[cfg(windows)]
-fn describe(pids: &[String]) -> String {
-    pids.join("\n")
+fn describe(pids: &[u32]) -> String {
+    pids.iter()
+        .map(|&pid| match Native.process_image(pid) {
+            Some(image) => format!("{pid} {}", image.display()),
+            None => format!("{pid} (image unavailable)"),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Sends `SIGTERM` or `SIGKILL` (`signal` is `TERM` or `KILL`) to every process in the group.
@@ -162,6 +168,19 @@ mod tests {
     use std::cell::Cell;
 
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn the_hang_report_names_the_executable_and_keeps_unavailable_pids() {
+        let pid = std::process::id();
+        let executable = std::env::current_exe().unwrap();
+        let image = executable.file_name().unwrap().to_string_lossy();
+        let report = describe(&[pid, 0]);
+        let (running, unavailable) = report.split_once('\n').unwrap();
+        assert!(running.starts_with(&format!("{pid} ")), "{report}");
+        assert!(running.ends_with(image.as_ref()), "{report}");
+        assert_eq!(unavailable, "0 (image unavailable)");
+    }
 
     /// The child writes a byte per entry in `writes` and exits at `exit_at`. All times
     /// are in seconds, and only the watchdog's waits advance the clock.

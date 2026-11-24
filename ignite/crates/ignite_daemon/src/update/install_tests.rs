@@ -643,51 +643,67 @@ fn the_main_checkout_of_a_linked_worktree_is_the_repository() {
     assert_eq!(main_checkout(&plain), plain);
 }
 
-/// A home folder and the store's `current` link to an executable in it.
-#[cfg(unix)]
+/// A home folder and the store's launcher for the current build.
 fn linking_home(name: &str) -> (PathBuf, PathBuf) {
     let home = tempdir(name);
     let bin = home.join(".config").join("ignite").join("bin");
-    script(&bin.join("1234abc").join("ignite"), "exit 0");
-    let current = bin.join("current");
-    std::os::unix::fs::symlink(bin.join("1234abc").join("ignite"), &current).unwrap();
+    let store = ExecutableStore::new(bin);
+    let built = commit("1234abc");
+    script(&store.path(&built), "exit 0");
+    store.point_current_at(&built).unwrap();
+    let current = store.current_link();
     (home, current)
 }
 
-#[cfg(unix)]
 #[test]
 fn install_links_ignite_onto_the_path_when_local_bin_is_on_it() {
     let (home, current) = linking_home("link-path");
     let local = home.join(".local").join("bin");
+    #[cfg(unix)]
     let path = std::env::join_paths(["/usr/bin".into(), local.clone()]).unwrap();
-    let link = local.join("ignite");
+    #[cfg(windows)]
+    let path = std::env::join_paths([local.with_file_name("BIN")]).unwrap();
+    let link = path_command(&local);
 
     assert_eq!(
         link_onto_path(&current, Some(&home), Some(&path)),
         PathLink::Linked(link.clone())
     );
+    #[cfg(unix)]
     assert_eq!(std::fs::read_link(&link).unwrap(), current);
+    #[cfg(windows)]
+    assert!(link.is_file());
     assert_eq!(
         link_onto_path(&current, Some(&home), Some(&path)),
         PathLink::Present(link.clone())
     );
-    // A link to a stored build, as made by hand, is Ignite's and is repointed.
-    std::fs::remove_file(&link).unwrap();
-    let stored = current.parent().unwrap().join("1234abc").join("ignite");
-    std::os::unix::fs::symlink(&stored, &link).unwrap();
-    assert_eq!(
-        link_onto_path(&current, Some(&home), Some(&path)),
-        PathLink::Linked(link.clone())
-    );
-    assert_eq!(std::fs::read_link(&link).unwrap(), current);
+    #[cfg(unix)]
+    {
+        // A link to a stored build, as made by hand, is Ignite's and is repointed.
+        std::fs::remove_file(&link).unwrap();
+        let stored = current.parent().unwrap().join("1234abc").join("ignite");
+        std::os::unix::fs::symlink(&stored, &link).unwrap();
+        assert_eq!(
+            link_onto_path(&current, Some(&home), Some(&path)),
+            PathLink::Linked(link.clone())
+        );
+        assert_eq!(std::fs::read_link(&link).unwrap(), current);
+    }
 }
 
-#[cfg(unix)]
+fn path_command(dir: &Path) -> PathBuf {
+    dir.join(if cfg!(windows) {
+        "ignite.cmd"
+    } else {
+        "ignite"
+    })
+}
+
 #[test]
 fn install_says_where_to_link_ignite_when_it_cannot() {
     let (home, current) = linking_home("link-advice");
     let local = home.join(".local").join("bin");
-    let link = local.join("ignite");
+    let link = path_command(&local);
     // `~/.local/bin` is not on the search path: nothing is created.
     let advice = link_onto_path(&current, Some(&home), Some(OsStr::new("/usr/bin")));
     let PathLink::Advice(text) = advice else {
@@ -706,6 +722,40 @@ fn install_says_where_to_link_ignite_when_it_cannot() {
         "{advice:?}"
     );
     assert_eq!(std::fs::read_to_string(&link).unwrap(), "someone else's");
+}
+
+#[cfg(windows)]
+#[test]
+fn the_path_shim_can_be_repointed_and_forwards_arguments_and_status() {
+    let (home, current) = linking_home("repoint-shim");
+    let local = home.join(".local").join("bin");
+    let path = std::env::join_paths([&local]).unwrap();
+    let link = path_command(&local);
+    assert_eq!(
+        link_onto_path(&current, Some(&home), Some(&path)),
+        PathLink::Linked(link.clone())
+    );
+
+    let bin = home.join("new store %IGNITE_TEST_PATH% !");
+    std::fs::create_dir_all(&bin).unwrap();
+    let moved = bin.join("current.cmd");
+    std::fs::write(&moved, "@echo \"%~1\"\r\n@echo \"%~2\"\r\n@exit /b 17\r\n").unwrap();
+    assert_eq!(
+        link_onto_path(&moved, Some(&home), Some(&path)),
+        PathLink::Linked(link.clone())
+    );
+    let output = Command::new(&link)
+        .args(["two words & punctuation!", "100%"])
+        .env("IGNITE_TEST_PATH", "expanded")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(17), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .collect::<Vec<_>>(),
+        ["\"two words & punctuation!\"", "\"100%\""]
+    );
 }
 
 #[test]
