@@ -264,8 +264,14 @@ def test_codex_samples_once_labelled_claude_are_deleted(
     the hub's replay stored them again under `codex`. Their Codex reset time put a second
     Claude period beside the real one, and tickets were priced by it."""
     path = tmp_path / "store.sqlite"
+    # The store as it was before the migration that deletes the duplicates.
+    before = next(
+        i
+        for i, script in enumerate(store.MIGRATIONS)
+        if "labelled every earlier sample" in script
+    )
     with monkeypatch.context() as legacy:
-        legacy.setattr(store, "MIGRATIONS", store.MIGRATIONS[:-1])
+        legacy.setattr(store, "MIGRATIONS", store.MIGRATIONS[:before])
         db = store.open_store(path)
     ghost = at(16, 12)
     for provider in ("claude", "codex"):
