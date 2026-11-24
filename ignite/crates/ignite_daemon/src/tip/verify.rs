@@ -147,12 +147,19 @@ impl TipVerifier {
         self.record_listing(&other);
         listing.append(other);
         require_running()?;
-        let regressions: HashSet<CheckName> = ctx
+        let mut regressions: HashSet<CheckName> = ctx
             .hub
             .open_regressions()
             .unwrap_or_default()
             .into_iter()
             .map(|regression| regression.check)
+            .collect();
+        let covered_by = self.work.covered_by();
+        let potentially_covered: HashSet<_> = listing
+            .checks
+            .iter()
+            .filter(|check| covered_by.contains_key(&check.family))
+            .map(|check| check.check.clone())
             .collect();
         let Required {
             checks,
@@ -163,7 +170,7 @@ impl TipVerifier {
             ctx,
             covered::drop_covered(
                 listing.checks,
-                &self.work.covered_by(),
+                &covered_by,
                 &regressions,
                 (!scope.catch_up_only()).then_some(&listing.defer_platforms),
             ),
@@ -204,14 +211,11 @@ impl TipVerifier {
         if last != tip {
             observe_failed_verdicts(ctx, tip, checks.iter(), &verdicts);
         }
-        let split = self.split(
-            ctx,
-            last,
-            tip,
-            &plan.queued,
-            &plan.recheck,
-            scope.catch_up_only(),
-        );
+        let split = self.split(ctx, last, tip, &plan, scope, &regressions)?;
+        require_running()?;
+        if let Some(by) = candidate::replacement(ctx, tip) {
+            return Ok(TipOutcome::Superseded { by });
+        }
         tally.budget.clone_from(&split.budget);
         if !broken {
             // Confirm cached failures before unrelated batches so a newer tip can be
@@ -245,11 +249,39 @@ impl TipVerifier {
             self.record_runs(&checks, runs, &mut verdicts, tally);
             self.run_rechecks(ctx, tip, &checks, &cache_disabled, &mut verdicts, tally);
         }
-        Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
-        require_running()?;
+        let peer_after = scope.peer_after(ctx, tip, &checks)?;
+        let after_budget = |check: &TipCheck| {
+            split.is_after(check) || (!check.runnable && peer_after.contains(&check.key))
+        };
+        Self::fill_from_cache(
+            ctx,
+            checks.iter().filter(|check| !after_budget(check)),
+            &mut verdicts,
+        )?;
+        let needs_confirmation = Self::refresh_deferred(
+            ctx,
+            checks.iter().filter(|check| after_budget(check)),
+            &mut verdicts,
+        )?;
+        // A regression can open while the checks run. The next listing has to include
+        // any newly required check that a covering family may have hidden in this one.
+        let mut newly_covered_regressions = Vec::new();
+        for regression in ctx.hub.open_regressions().unwrap_or_default() {
+            if regressions.insert(regression.check.clone())
+                && potentially_covered.contains(&regression.check)
+                && !checks.iter().any(|check| check.check == regression.check)
+            {
+                newly_covered_regressions.push(regression.check);
+            }
+        }
         if checks
             .iter()
-            .filter(|check| check.runnable && !split.is_after(check))
+            .filter(|check| {
+                check.runnable
+                    && (!after_budget(check)
+                        || !split::budget_eligible(check, &regressions)
+                        || needs_confirmation.contains(&check.key))
+            })
             .all(|check| {
                 verdicts
                     .get(&check.key)
@@ -257,17 +289,6 @@ impl TipVerifier {
             })
         {
             scope.publish_budget(ctx, tip, &split.after)?;
-        }
-        let peer_after = scope.peer_after(ctx, tip, &checks, &verdicts)?;
-        if !peer_after.is_empty() {
-            // The peer stored its pre-promotion results before sharing its plan.
-            Self::fill_from_cache(
-                ctx,
-                checks
-                    .iter()
-                    .filter(|check| !peer_after.contains(&check.key)),
-                &mut verdicts,
-            )?;
         }
         require_running()?;
         if let Some(by) = candidate::replacement(ctx, tip) {
@@ -285,19 +306,16 @@ impl TipVerifier {
         let explicitly_deferred_here = scope.local.is_some_and(|os| deferred.contains_key(&os));
 
         let mut failed: Vec<&TipCheck> = Vec::new();
-        let mut waiting: Vec<CheckName> = Vec::new();
+        let mut waiting = newly_covered_regressions;
         let mut blocked_here = unlisted.iter().any(|missing| missing.reportable);
         let now = ctx.clock.now();
         // The checks only another platform's machines can run, with their families.
         let mut elsewhere: BTreeMap<Os, Vec<(CheckName, String)>> = BTreeMap::new();
         for check in &checks {
             let verdict = verdicts.get(&check.key).map(|v| v.outcome);
-            let after = split.is_after(check)
-                || (!check.runnable
-                    && check.reuse
-                    && !check.is_build()
-                    && !regressions.contains(&check.check)
-                    && peer_after.contains(&check.key));
+            let after = after_budget(check)
+                && split::budget_eligible(check, &regressions)
+                && !needs_confirmation.contains(&check.key);
             if after && matches!(verdict, None | Some(Outcome::Incomplete)) {
                 if let Some(os) = check.key.platform {
                     deferred.entry(os).or_default().push(check.check.clone());
@@ -375,7 +393,7 @@ impl TipVerifier {
                 last != tip
                     && check.runnable
                     && scope.last_good_for(check).is_none()
-                    && !split.is_after(check)
+                    && (!split.is_after(check) || regressions.contains(&check.check))
             };
             let stall_at = failed
                 .iter()

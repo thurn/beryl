@@ -187,7 +187,6 @@ impl<'a> Scope<'a> {
         ctx: &Context,
         tip: &Commit,
         checks: &[TipCheck],
-        verdicts: &HashMap<ResultKey, TipRun>,
     ) -> Result<HashSet<ResultKey>> {
         if self.only.is_some() {
             return Ok(HashSet::new());
@@ -197,12 +196,7 @@ impl<'a> Scope<'a> {
             tip,
             checks
                 .iter()
-                .filter(|check| !check.runnable && check.reuse && !check.is_build())
-                .filter(|check| {
-                    verdicts
-                        .get(&check.key)
-                        .is_none_or(|run| run.outcome == Outcome::Incomplete)
-                }),
+                .filter(|check| !check.runnable && check.reuse && !check.is_build()),
         )
     }
 
@@ -308,9 +302,16 @@ pub(super) fn budget_after<'a>(
     checks: impl Iterator<Item = &'a TipCheck>,
 ) -> Result<HashSet<ResultKey>> {
     let platforms: BTreeSet<_> = checks.filter_map(|check| check.key.platform).collect();
+    if platforms.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let mut selection = ctx.hub.tip_selection(tip)?;
     let mut after = HashSet::new();
     for os in platforms {
-        if let Some(plan) = ctx.hub.tip_budget(tip, os)? {
+        if let Some(keys) = selection.as_mut().and_then(|plan| plan.native.remove(&os)) {
+            after.extend(keys);
+        } else if let Some(plan) = ctx.hub.tip_budget(tip, os)? {
+            // An older verifier publishes its native deferrals after its local gate passes.
             after.extend(plan.after);
         }
     }

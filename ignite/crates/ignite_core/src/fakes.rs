@@ -557,6 +557,17 @@ impl Hub for FakeHub {
         self.fake_put_tip_budget(plan)
     }
 
+    fn tip_selection(&self, commit: &Commit) -> Result<Option<crate::tipround::TipSelection>> {
+        self.fake_tip_selection(commit)
+    }
+
+    fn update_tip_selection(
+        &self,
+        update: &crate::tipround::TipSelectionUpdate,
+    ) -> Result<Option<bool>> {
+        self.fake_update_tip_selection(update)
+    }
+
     fn tip_coverage(&self) -> Result<TipCoverage> {
         self.fake_tip_coverage()
     }

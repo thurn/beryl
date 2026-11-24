@@ -7,7 +7,10 @@ use ignite_core::config::Os;
 use ignite_core::ids::Commit;
 use ignite_core::protocol::tickets::FeedChange;
 use ignite_core::time::Timestamp;
-use ignite_core::tipround::{PlatformVerification, TipBudgetPlan, TipCoverage, TipCoverageUpdate};
+use ignite_core::tipround::{
+    PlatformVerification, TipBudgetPlan, TipCoverage, TipCoverageUpdate, TipSelection,
+    TipSelectionUpdate,
+};
 use rusqlite::{Connection, TransactionBehavior};
 
 use super::{feed, fleet_settings, meta, tips};
@@ -86,4 +89,92 @@ pub fn put_budget(conn: &mut Connection, plan: &TipBudgetPlan) -> Result<bool> {
     meta::put(&tx, &format!("tip_budget.{}", plan.platform), plan)?;
     tx.commit()?;
     Ok(true)
+}
+
+/// One slot holds the candidate's budget decisions, keyed by exact result keys.
+const SELECTION_KEY: &str = "tip_selection";
+
+pub fn selection(conn: &Connection, commit: &Commit) -> Result<Option<TipSelection>> {
+    let selection: Option<TipSelection> = meta::get(conn, SELECTION_KEY)?;
+    Ok(selection.filter(|selection| selection.commit == *commit))
+}
+
+pub fn update_selection(conn: &mut Connection, update: &TipSelectionUpdate) -> Result<bool> {
+    if update.portable.as_ref().is_some_and(|portable| {
+        !portable.billions.is_finite()
+            || portable.billions < 0.0
+            || portable.after.iter().any(|key| key.platform.is_some())
+    }) || update
+        .native_after
+        .iter()
+        .any(|key| key.platform.is_none() || key.platform != update.platform)
+    {
+        return Err(StoreError::Invalid(
+            "tip selection has an invalid cost or a result key in the wrong partition".to_owned(),
+        ));
+    }
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    if tips::candidate(&tx)?.is_some_and(|candidate| candidate.commit != update.commit) {
+        return Ok(false);
+    }
+    let Some(selection) = update.apply(selection(&tx, &update.commit)?) else {
+        return Ok(false);
+    };
+    meta::put(&tx, SELECTION_KEY, &selection)?;
+    tx.commit()?;
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use ignite_core::time::Timestamp;
+    use ignite_core::tipround::{PortableTipBudget, TipCandidate, TipCandidateUpdate};
+
+    use super::*;
+
+    #[test]
+    fn a_racing_verifier_can_add_its_platform_but_cannot_replace_the_selection() {
+        let mut conn = super::super::open_in_memory().unwrap();
+        let commit = Commit::new("aaaa").unwrap();
+        let mut proposal = TipSelectionUpdate {
+            commit: commit.clone(),
+            portable: Some(PortableTipBudget {
+                after: Vec::new(),
+                billions: 10.0,
+            }),
+            platform: Some(Os::Macos),
+            native_after: Vec::new(),
+        };
+        assert!(update_selection(&mut conn, &proposal).unwrap());
+        proposal.platform = Some(Os::Windows);
+        proposal.portable.as_mut().unwrap().billions = 20.0;
+        assert!(!update_selection(&mut conn, &proposal).unwrap());
+        proposal.portable = None;
+        assert!(update_selection(&mut conn, &proposal).unwrap());
+        assert!(!update_selection(&mut conn, &proposal).unwrap());
+
+        let fixed = selection(&conn, &commit).unwrap().unwrap();
+        assert_eq!(
+            fixed.native.keys().copied().collect::<Vec<_>>(),
+            [Os::Macos, Os::Windows]
+        );
+        assert!((fixed.portable.billions - 10.0).abs() < f64::EPSILON);
+        let newer = Commit::new("bbbb").unwrap();
+        assert!(
+            tips::update_candidate(
+                &mut conn,
+                &TipCandidateUpdate {
+                    expected: None,
+                    replacement: TipCandidate {
+                        commit: newer.clone(),
+                        retry_on_new_tip: false
+                    },
+                },
+                Timestamp::EPOCH
+            )
+            .unwrap()
+        );
+        assert!(!update_selection(&mut conn, &proposal).unwrap());
+        assert!(selection(&conn, &newer).unwrap().is_none());
+    }
 }

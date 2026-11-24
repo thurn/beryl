@@ -30,7 +30,7 @@ use crate::protocol::tickets::{
 use crate::time::Timestamp;
 use crate::tipround::{
     TipBudgetPlan, TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage,
-    TipCoverageUpdate, TipRound, TipRoundFiled,
+    TipCoverageUpdate, TipRound, TipRoundFiled, TipSelection, TipSelectionUpdate,
 };
 
 /// Why an operation behind one of these traits failed.
@@ -436,6 +436,17 @@ pub trait Hub: Send + Sync {
     /// Shares the budget decision while the hub still has the same candidate.
     fn put_tip_budget(&self, _plan: &TipBudgetPlan) -> Result<bool> {
         Err(not_supported("share the native tip budget"))
+    }
+
+    /// The portable and native budget decisions already fixed for this candidate.
+    fn tip_selection(&self, _commit: &Commit) -> Result<Option<TipSelection>> {
+        Ok(None)
+    }
+
+    /// Adds a budget decision. False means the candidate or decision changed before the
+    /// write. An older hub that has no selection endpoint returns None.
+    fn update_tip_selection(&self, _update: &TipSelectionUpdate) -> Result<Option<bool>> {
+        Ok(None)
     }
 
     /// The platforms' verification coverage (`GET /tips/coverage`).

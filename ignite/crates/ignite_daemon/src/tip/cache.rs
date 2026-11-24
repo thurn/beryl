@@ -1,7 +1,7 @@
 //! The result cache in a round: the checks other machines answered meanwhile, and the records
 //! that let the hub count families answered wholly from the cache.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use ignite_core::ids::{Commit, Handle};
 use ignite_core::protocol::hub::{Record, ResultKey};
@@ -37,6 +37,35 @@ impl TipVerifier {
             }
         }
         Ok(())
+    }
+
+    /// Refreshes deferred checks even if we saw a pass earlier. A newly cached failure
+    /// must be confirmed on a runnable check before promotion. A peer's native failure
+    /// already stands here because this verifier cannot confirm it.
+    pub(super) fn refresh_deferred<'a>(
+        ctx: &Context,
+        checks: impl Iterator<Item = &'a TipCheck>,
+        verdicts: &mut HashMap<ResultKey, TipRun>,
+    ) -> Result<HashSet<ResultKey>> {
+        let checks: Vec<_> = checks.filter(|check| check.reuse).collect();
+        let keys: Vec<_> = checks.iter().map(|check| check.key.clone()).collect();
+        let mut confirm = HashSet::new();
+        if !keys.is_empty() {
+            for (check, hit) in checks.into_iter().zip(ctx.hub.lookup(&keys)?) {
+                let Some(hit) = hit else { continue };
+                let previous = verdicts.get(&check.key).map(|run| run.outcome);
+                if hit.outcome == Outcome::Fail && check.runnable && previous != Some(Outcome::Fail)
+                {
+                    verdicts.remove(&check.key);
+                    confirm.insert(check.key.clone());
+                } else if hit.outcome == Outcome::Fail
+                    || matches!(previous, None | Some(Outcome::Incomplete))
+                {
+                    verdicts.insert(check.key.clone(), verdict(check, hit.outcome, hit.output));
+                }
+            }
+        }
+        Ok(confirm)
     }
 
     /// Checks the shared cache even when the local verdicts already contain failures.

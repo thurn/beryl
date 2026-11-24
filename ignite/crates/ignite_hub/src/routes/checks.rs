@@ -50,7 +50,9 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/regressions/open"
         | "/tips/candidate"
         | "/tips/coverage" => ("GET", false),
-        "/tips/failures" | "/tips/budget" if request.method == "GET" => ("GET", false),
+        "/tips/failures" | "/tips/budget" | "/tips/selection" if request.method == "GET" => {
+            ("GET", false)
+        }
         "/regressions/landing" if request.method == "GET" => ("GET", true),
         "/tips/failures"
         | "/results/store"
@@ -72,7 +74,8 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/tips/waiting"
         | "/tips/candidate/update"
         | "/tips/coverage/update"
-        | "/tips/budget" => ("POST", true),
+        | "/tips/budget"
+        | "/tips/selection" => ("POST", true),
         _ => return None,
     };
     if request.method != method {
@@ -127,25 +130,7 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
                 })?;
             Ok(Response::json(200, &json!(updated)))
         }
-        "/tips/budget" if request.method == "GET" => {
-            let commit = request
-                .param("commit")
-                .and_then(|commit| ignite_core::ids::Commit::new(commit).ok())
-                .ok_or_else(|| failure(400, "a commit is required"))?;
-            let platform = match request.param("platform") {
-                Some("macos") => ignite_core::config::Os::Macos,
-                Some("windows") => ignite_core::config::Os::Windows,
-                _ => return Err(failure(400, "a platform is required")),
-            };
-            let plan =
-                tip_coverage::budget(conn, &commit, platform).map_err(|e| store_failure(&e))?;
-            Ok(Response::json(200, &json!(plan)))
-        }
-        "/tips/budget" => {
-            let stored =
-                tip_coverage::put_budget(conn, &body(request)?).map_err(|e| store_failure(&e))?;
-            Ok(Response::json(200, &json!(stored)))
-        }
+        "/tips/budget" | "/tips/selection" => tip_budget(conn, request),
         "/tips/claim" => {
             let claim: TipClaim = body(request)?;
             let reply = tips::claim(conn, &claim, now).map_err(|e| store_failure(&e))?;
@@ -190,6 +175,36 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
         "/incomplete" | "/audits" | "/finds" | "/justiciar" => report(conn, request, now),
         other => Err(failure(404, &format!("no route {other}"))),
     }
+}
+
+fn tip_budget(conn: &mut Connection, request: &Request) -> Result<Response, Response> {
+    let shared = request.path == "/tips/selection";
+    if request.method == "GET" {
+        let commit = request
+            .param("commit")
+            .and_then(|commit| ignite_core::ids::Commit::new(commit).ok())
+            .ok_or_else(|| failure(400, "a commit is required"))?;
+        if shared {
+            let selection =
+                tip_coverage::selection(conn, &commit).map_err(|error| store_failure(&error))?;
+            return Ok(Response::json(200, &json!(selection)));
+        }
+        let platform = match request.param("platform") {
+            Some("macos") => ignite_core::config::Os::Macos,
+            Some("windows") => ignite_core::config::Os::Windows,
+            _ => return Err(failure(400, "a platform is required")),
+        };
+        let plan =
+            tip_coverage::budget(conn, &commit, platform).map_err(|error| store_failure(&error))?;
+        return Ok(Response::json(200, &json!(plan)));
+    }
+    let stored = if shared {
+        tip_coverage::update_selection(conn, &body(request)?)
+    } else {
+        tip_coverage::put_budget(conn, &body(request)?)
+    }
+    .map_err(|error| store_failure(&error))?;
+    Ok(Response::json(200, &json!(stored)))
 }
 
 fn done() -> Response {

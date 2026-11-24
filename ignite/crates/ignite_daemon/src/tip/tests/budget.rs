@@ -140,8 +140,8 @@ fn both_platforms_verify_one_candidate_across_a_landing() {
     let world = World::new();
     let mut mac = world.ctx("m-1");
     mac.config.machine.get_mut("local").unwrap().os = Some(Os::Macos);
-    // Each round can afford only one portable check. The second round reuses the first
-    // pass and chooses the next check, in a different family with its own batch claim.
+    // The candidate can afford only one portable check. The second verifier reuses
+    // that selection even though its result is cached by the time this verifier starts.
     mac.config.tip.seconds = 150.0 / DEFAULT_TIP_RATE;
     let mut windows = world.ctx("m-2");
     windows.config.clone_from(&mac.config);
@@ -224,12 +224,11 @@ fn both_platforms_verify_one_candidate_across_a_landing() {
         [
             (vec!["platform:required".to_owned()], previous.clone()),
             (vec!["unit:first".to_owned()], previous.clone()),
-            (vec!["platform:required".to_owned()], previous.clone()),
-            (vec!["other:second".to_owned()], previous),
+            (vec!["platform:required".to_owned()], previous),
         ]
     );
     let budget = world.hub.tip_rounds().pop().unwrap().budget.unwrap();
-    assert_eq!(budget.unrun, BTreeMap::from([("other".to_owned(), 1)]));
+    assert_eq!(budget.unrun, BTreeMap::from([("other".to_owned(), 2)]));
     assert_eq!(budget.ended_by, Some(newer.clone()));
     assert_eq!(
         verifier.round(&windows, 0).unwrap(),
@@ -237,6 +236,8 @@ fn both_platforms_verify_one_candidate_across_a_landing() {
     );
     assert_eq!(world.master(), newer);
 }
+
+mod retries;
 
 #[test]
 fn a_failed_or_incomplete_native_check_holds_the_shared_candidate() {

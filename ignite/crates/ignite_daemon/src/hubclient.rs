@@ -38,7 +38,7 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::tipround::{
     LastTipRound, TipBudgetPlan, TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest,
-    TipCoverage, TipCoverageUpdate, TipRound, TipRoundFiled,
+    TipCoverage, TipCoverageUpdate, TipRound, TipRoundFiled, TipSelection, TipSelectionUpdate,
 };
 use ignite_core::traits::{Error, Hub, Result};
 
@@ -497,6 +497,24 @@ impl Hub for HubClient {
         match self.post("/tips/budget", plan) {
             Err(Error::NotFound(_)) => Ok(false),
             reply => reply,
+        }
+    }
+
+    fn tip_selection(&self, commit: &Commit) -> Result<Option<TipSelection>> {
+        match self.get_with_limit(
+            "/tips/selection",
+            &[("commit", commit.to_string())],
+            Some(MAX_BODY_BYTES),
+        ) {
+            Err(Error::NotFound(_)) => Ok(None),
+            reply => reply,
+        }
+    }
+
+    fn update_tip_selection(&self, update: &TipSelectionUpdate) -> Result<Option<bool>> {
+        match self.post("/tips/selection", update) {
+            Err(Error::NotFound(_)) => Ok(None),
+            reply => reply.map(Some),
         }
     }
 

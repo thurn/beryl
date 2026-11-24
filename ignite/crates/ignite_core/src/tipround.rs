@@ -57,6 +57,55 @@ pub struct TipBudgetPlan {
     pub after: Vec<ResultKey>,
 }
 
+/// The first scored split of the portable checks at a candidate.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PortableTipBudget {
+    pub after: Vec<ResultKey>,
+    /// The portable portion already charged to each platform's budget, including start-up.
+    pub billions: f64,
+}
+
+/// The budget decisions verifiers share for one candidate.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TipSelection {
+    pub commit: Commit,
+    pub portable: PortableTipBudget,
+    /// Exact keys each platform selected to run after promotion. An empty list is a decision.
+    pub native: BTreeMap<Os, Vec<ResultKey>>,
+}
+
+/// Fixes the portable decision and the first platform's decision together, or adds a
+/// platform's decision using the portable budget that was already fixed.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TipSelectionUpdate {
+    pub commit: Commit,
+    pub portable: Option<PortableTipBudget>,
+    pub platform: Option<Os>,
+    pub native_after: Vec<ResultKey>,
+}
+
+impl TipSelectionUpdate {
+    /// Adds only a previously undecided partition of this candidate's budget.
+    pub fn apply(&self, current: Option<TipSelection>) -> Option<TipSelection> {
+        let mut selection = match (current, &self.portable) {
+            (Some(selection), None) => selection,
+            (None, Some(portable)) => TipSelection {
+                commit: self.commit.clone(),
+                portable: portable.clone(),
+                native: BTreeMap::new(),
+            },
+            _ => return None,
+        };
+        if let Some(platform) = self.platform {
+            if selection.native.contains_key(&platform) {
+                return None;
+            }
+            selection.native.insert(platform, self.native_after.clone());
+        }
+        Some(selection)
+    }
+}
+
 /// The commits that bound a platform's unverified changes.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeferredPlatform {
@@ -247,6 +296,9 @@ pub struct TipRound {
 /// each check's recorded median cost.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct RoundBudget {
+    /// Only remaining runs are counted when the round uses a saved budget decision.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reused: bool,
     /// `[tip] seconds`.
     pub seconds: f64,
     /// Billions of instructions per second of wall time that seconds converted at: the hub's
@@ -290,6 +342,12 @@ impl RoundBudget {
             || "master did not move".to_owned(),
             |s| format!("master moved after {:.1} minutes", s / 60.0),
         );
+        if self.reused {
+            return format!(
+                "saved tip budget: {} checks before promotion, {} rechecks, {} after; {master}",
+                self.within, self.forced, self.after,
+            );
+        }
         format!(
             "budget {:.0} s at {:.1} billion/s = {} billion: {} checks within ({} billion), {} \
              forced ({} billion), {} after ({} billion); {master}",

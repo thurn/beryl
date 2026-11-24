@@ -1,10 +1,11 @@
 //! The tip budget: which of a round's checks run before `master` moves, and running the rest
 //! afterwards (see "Tip verification" in `docs/ignite.md`).
 //!
-//! - The checks a round still has to run are scored as the landing gate scores them, over the
-//!   areas the landings since the last promoted tip touched, and chosen best first until
-//!   `[tip] seconds` of running checks at the `tip` class's rate are spent. There is no
-//!   threshold, and builds are outside the budget.
+//! - The first verifier scores its remaining checks as the landing gate does and saves the
+//!   split at the candidate before running them. Portable checks and that platform's checks
+//!   share `[tip] seconds` at the `tip` class's rate. Other platforms reuse the portable
+//!   selection and spend what is left on their native checks. Retries reuse both decisions
+//!   even as cache hits arrive.
 //! - Some checks run before `master` moves whatever the budget: a cached failure being run
 //!   again, an always check, a check with an open regression ticket, and a check with no hub
 //!   record. Portable and platform-keyed checks share the budget. A reported failure among
@@ -15,9 +16,9 @@
 //!   its ticket; `master` has already moved and stays. A newer `staging` tip ends them at the
 //!   next family or batch, even with batches under way, since the tip loop starts no round
 //!   until this one ends.
-//! - Active peer platforms share which exact result keys fell past their own budgets. Their
-//!   other checks and missing listings still hold `master`. Unrun native checks past the budget
-//!   leave a coverage gap so their platform can catch up after promotion.
+//! - The saved split exempts only exact result keys. Required native checks and missing
+//!   listings still hold `master`. Unrun native checks past the budget leave a coverage gap
+//!   so their platform can catch up after promotion.
 //! - When nothing can be scored (the hub or git cannot be read), every check runs before
 //!   `master` moves, as before the budget.
 //! - With `repository.green` set, the checks of families declared `builds = true` (the build
@@ -27,17 +28,20 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ignite_core::budget::Budget;
+use ignite_core::config::Os;
 use ignite_core::gate::{self, GateCheck, GateInput};
 use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::ResultKey;
 use ignite_core::score::BILLIONS_PER_CPU_SECOND;
-use ignite_core::tipround::RoundBudget;
+use ignite_core::tipround::{PortableTipBudget, RoundBudget, TipSelection, TipSelectionUpdate};
 use ignite_core::traits::Result;
 
+use super::coverage::Scope;
 use super::families::RunPhase;
 use super::meter::Tally;
-use super::{TipCheck, TipRun, TipVerifier, settle_runs};
+use super::verify::RunPlan;
+use super::{TipCheck, TipRun, TipVerifier, candidate, settle_runs};
 use crate::checks::plan::class_rates;
 use crate::server::Context;
 
@@ -52,9 +56,63 @@ pub(super) struct Split<'a> {
     /// The split's figures; `None` when nothing could be scored.
     pub budget: Option<RoundBudget>,
     after_keys: HashSet<ResultKey>,
+    portable_billions: f64,
 }
 
-impl Split<'_> {
+impl<'a> Split<'a> {
+    fn unbudgeted(queued: &[&'a TipCheck], recheck: &[&'a TipCheck]) -> Self {
+        Self {
+            recheck: recheck.to_vec(),
+            within: queued.to_vec(),
+            after: Vec::new(),
+            budget: None,
+            after_keys: HashSet::new(),
+            portable_billions: 0.0,
+        }
+    }
+
+    fn reuse(
+        plan: &RunPlan<'a>,
+        saved: &TipSelection,
+        platform: Option<Os>,
+        regressions: &HashSet<CheckName>,
+    ) -> Self {
+        let mut after_keys: HashSet<_> = saved
+            .portable
+            .after
+            .iter()
+            .chain(
+                platform
+                    .and_then(|os| saved.native.get(&os))
+                    .into_iter()
+                    .flatten(),
+            )
+            .cloned()
+            .collect();
+        for check in &plan.recheck {
+            after_keys.remove(&check.key);
+        }
+        let (after, within): (Vec<_>, Vec<_>) = plan.queued.iter().copied().partition(|check| {
+            after_keys.contains(&check.key) && budget_eligible(check, regressions)
+        });
+        let budget = RoundBudget {
+            reused: true,
+            within: u32::try_from(within.len()).unwrap_or(u32::MAX),
+            forced: u32::try_from(plan.recheck.len()).unwrap_or(u32::MAX),
+            after: u32::try_from(after.len()).unwrap_or(u32::MAX),
+            unrun: unrun(after.iter(), &[]),
+            ..RoundBudget::default()
+        };
+        Self {
+            recheck: plan.recheck.clone(),
+            within,
+            after,
+            budget: Some(budget),
+            after_keys,
+            portable_billions: saved.portable.billions,
+        }
+    }
+
     /// Whether `check` waits until after `master` moves.
     pub fn is_after(&self, check: &TipCheck) -> bool {
         self.after_keys.contains(&check.key)
@@ -62,37 +120,93 @@ impl Split<'_> {
 }
 
 impl TipVerifier {
-    /// Splits the remaining runs by the tip budget. Rechecks run before `master` moves and
-    /// count as forced. Build checks already ran in their own phase, outside the budget.
+    /// Keeps the candidate's selection fixed even when its selected verdicts arrive on
+    /// different rounds. A racing proposal has to reuse the winning portable decision.
     pub(super) fn split<'a>(
         &self,
         ctx: &Context,
         last: &Commit,
         tip: &Commit,
-        to_run: &[&'a TipCheck],
-        recheck: &[&'a TipCheck],
-        catching_up: bool,
-    ) -> Split<'a> {
-        let unbudgeted = || Split {
-            recheck: recheck.to_vec(),
-            within: to_run.to_vec(),
-            after: Vec::new(),
-            budget: None,
-            after_keys: HashSet::new(),
-        };
-        if catching_up || (to_run.is_empty() && recheck.is_empty()) {
-            return unbudgeted();
+        plan: &RunPlan<'a>,
+        scope: &Scope<'_>,
+        regressions: &HashSet<CheckName>,
+    ) -> Result<Split<'a>> {
+        if scope.catch_up_only() {
+            return Ok(Split::unbudgeted(&plan.queued, &plan.recheck));
         }
-        let asked: Vec<&TipCheck> = to_run.iter().chain(recheck).copied().collect();
-        let Some(scoring) = self.work.scoring(ctx, last, tip, &asked) else {
-            return unbudgeted();
-        };
-        let budget = Budget {
-            threshold: 0.0,
-            seconds: ctx.config.tip.seconds,
-            rate: class_rates(ctx).tip(),
-        };
-        split_by(to_run, recheck, &scoring.areas, &scoring.checks, &budget)
+        loop {
+            let saved = ctx.hub.tip_selection(tip)?;
+            if let Some(saved) = &saved
+                && scope.local.is_none_or(|os| saved.native.contains_key(&os))
+            {
+                return Ok(Split::reuse(plan, saved, scope.local, regressions));
+            }
+            let local = |check: &&TipCheck| saved.is_none() || check.key.platform == scope.local;
+            let queued: Vec<_> = plan.queued.iter().copied().filter(local).collect();
+            let recheck: Vec<_> = plan.recheck.iter().copied().filter(local).collect();
+            let asked: Vec<_> = queued.iter().chain(&recheck).copied().collect();
+            let mut split = Split::unbudgeted(&queued, &recheck);
+            if !asked.is_empty() {
+                let Some(scoring) = self.work.scoring(ctx, last, tip, &asked) else {
+                    // A scoring error forces the new work for this round. A selection the hub
+                    // already fixed still applies to the portable checks.
+                    return Ok(saved.as_ref().map_or(split, |saved| {
+                        Split::reuse(plan, saved, scope.local, regressions)
+                    }));
+                };
+                let rate = class_rates(ctx).tip();
+                let portable = saved.as_ref().map_or(0.0, |saved| saved.portable.billions);
+                let budget = Budget {
+                    threshold: 0.0,
+                    seconds: (ctx.config.tip.seconds - portable / rate).max(0.0),
+                    rate,
+                };
+                split = split_by(
+                    &queued,
+                    &recheck,
+                    &scoring.areas,
+                    &scoring.checks,
+                    &budget,
+                    regressions,
+                );
+            }
+            let update = TipSelectionUpdate {
+                commit: tip.clone(),
+                platform: scope.local,
+                portable: saved.is_none().then(|| PortableTipBudget {
+                    after: split
+                        .after_keys
+                        .iter()
+                        .filter(|key| key.platform.is_none())
+                        .cloned()
+                        .collect(),
+                    billions: split.portable_billions,
+                }),
+                native_after: split
+                    .after_keys
+                    .iter()
+                    .filter(|key| key.platform.is_some() && key.platform == scope.local)
+                    .cloned()
+                    .collect(),
+            };
+            match ctx.hub.update_tip_selection(&update)? {
+                None => return Ok(split), // An older hub still uses the local split.
+                Some(true) => {
+                    return Ok(saved.map_or(split, |saved| {
+                        Split::reuse(
+                            plan,
+                            &update.apply(Some(saved)).expect("new platform"),
+                            scope.local,
+                            regressions,
+                        )
+                    }));
+                }
+                Some(false) if candidate::replacement(ctx, tip).is_some() => {
+                    return Ok(Split::unbudgeted(&plan.queued, &plan.recheck));
+                }
+                Some(false) => {} // Read the winning partition and use it.
+            }
+        }
     }
 
     /// Runs the checks past the budget once `master` has moved, and reports a failure among
@@ -168,6 +282,11 @@ impl TipVerifier {
     }
 }
 
+/// These checks cannot move after promotion, even if their keys are in a saved split.
+pub(super) fn budget_eligible(check: &TipCheck, regressions: &HashSet<CheckName>) -> bool {
+    check.reuse && !check.is_build() && !regressions.contains(&check.check)
+}
+
 /// For each family, how many of `set` have no run among `runs`.
 pub(super) fn unrun<'a>(
     set: impl Iterator<Item = &'a &'a TipCheck>,
@@ -199,6 +318,7 @@ fn split_by<'a>(
     areas: &[String],
     scored: &[GateCheck],
     budget: &Budget,
+    regressions: &HashSet<CheckName>,
 ) -> Split<'a> {
     let record: HashMap<&CheckName, &GateCheck> = scored.iter().map(|c| (&c.check, c)).collect();
     let cost = |check: &GateCheck| {
@@ -214,6 +334,7 @@ fn split_by<'a>(
         ..RoundBudget::default()
     };
     let mut forced: HashSet<&CheckName> = HashSet::new();
+    let mut portable: HashSet<&CheckName> = HashSet::new();
     let mut candidates: Vec<GateCheck> = Vec::new();
     for check in recheck {
         figures.forced += 1;
@@ -221,7 +342,14 @@ fn split_by<'a>(
     }
     for check in to_run {
         match record.get(&check.check) {
-            Some(scored) if !check.is_build() && !scored.always && scored.regression.is_none() => {
+            Some(scored)
+                if budget_eligible(check, regressions)
+                    && !scored.always
+                    && scored.regression.is_none() =>
+            {
+                if check.key.platform.is_none() {
+                    portable.insert(&check.check);
+                }
                 candidates.push(GateCheck {
                     edited: false,
                     cached: false,
@@ -253,6 +381,22 @@ fn split_by<'a>(
     );
     figures.within = u32::try_from(plan.run.len()).unwrap_or(u32::MAX);
     figures.within_billions = plan.scored_cost;
+    let mut portable_families = HashSet::new();
+    let portable_billions = plan
+        .run
+        .iter()
+        .filter(|check| portable.contains(&check.check))
+        .map(|check| {
+            let startup = if portable_families.insert(check.check.family()) {
+                record[&check.check]
+                    .family_startup
+                    .billions(BILLIONS_PER_CPU_SECOND)
+            } else {
+                0.0
+            };
+            check.cost + startup
+        })
+        .sum();
     let after_names: HashSet<&CheckName> = plan
         .past_budget
         .iter()
@@ -274,6 +418,7 @@ fn split_by<'a>(
         within,
         after,
         budget: Some(figures),
+        portable_billions,
     }
 }
 
@@ -347,7 +492,14 @@ mod tests {
             seconds: 200.0,
             rate: 1.0,
         };
-        let split = split_by(&to_run, &[], &["kernel".to_owned()], &records, &budget);
+        let split = split_by(
+            &to_run,
+            &[],
+            &["kernel".to_owned()],
+            &records,
+            &budget,
+            &HashSet::new(),
+        );
 
         let names = |list: &[&TipCheck]| -> Vec<String> {
             list.iter().map(|c| c.check.to_string()).collect()
@@ -404,6 +556,7 @@ mod tests {
             &["kernel".to_owned()],
             &records,
             &budget,
+            &HashSet::new(),
         );
         let figures = split.budget.as_ref().unwrap();
 
@@ -425,7 +578,7 @@ mod tests {
             seconds: 0.001,
             rate: 1.0,
         };
-        let split = split_by(&to_run, &[], &[], &[], &budget);
+        let split = split_by(&to_run, &[], &[], &[], &budget, &HashSet::new());
         assert_eq!(split.within.len(), 1);
         assert!(split.after.is_empty());
     }

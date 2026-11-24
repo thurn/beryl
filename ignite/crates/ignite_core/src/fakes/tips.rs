@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use crate::ids::Commit;
 use crate::tipround::{
     TipBudgetPlan, TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage,
-    TipCoverageUpdate, TipRound, TipRoundFiled,
+    TipCoverageUpdate, TipRound, TipRoundFiled, TipSelection, TipSelectionUpdate,
 };
 use crate::traits::Result;
 
@@ -23,6 +23,7 @@ pub(super) struct FakeTips {
     coverage: Mutex<TipCoverage>,
     budgets: Mutex<BTreeMap<crate::config::Os, TipBudgetPlan>>,
     candidate: Mutex<Option<TipCandidate>>,
+    selection: Mutex<Option<TipSelection>>,
     /// The open improvement ticket a slow round filed, if any.
     open_ticket: Mutex<Option<String>>,
     filed: Mutex<u32>,
@@ -67,6 +68,37 @@ impl FakeHub {
         }
         lock(&self.tips.budgets).insert(plan.platform, plan.clone());
         Ok(true)
+    }
+
+    pub(super) fn fake_tip_selection(&self, commit: &Commit) -> Result<Option<TipSelection>> {
+        self.reachable()?;
+        Ok(lock(&self.tips.selection)
+            .as_ref()
+            .filter(|selection| selection.commit == *commit)
+            .cloned())
+    }
+
+    pub(super) fn fake_update_tip_selection(
+        &self,
+        update: &TipSelectionUpdate,
+    ) -> Result<Option<bool>> {
+        self.reachable()?;
+        let candidate = lock(&self.tips.candidate);
+        if candidate
+            .as_ref()
+            .is_some_and(|tip| tip.commit != update.commit)
+        {
+            return Ok(Some(false));
+        }
+        let mut slot = lock(&self.tips.selection);
+        let current = slot
+            .as_ref()
+            .filter(|selection| selection.commit == update.commit);
+        let Some(selection) = update.apply(current.cloned()) else {
+            return Ok(Some(false));
+        };
+        *slot = Some(selection);
+        Ok(Some(true))
     }
 
     pub fn set_tip_coverage(&self, coverage: TipCoverage) {
