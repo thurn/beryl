@@ -696,6 +696,7 @@ impl Checks {
     ) -> (RunResult, Option<RecordId>, Option<CompileSpan>) {
         env.push((CLASS_ENV.to_owned(), options.class.as_str().to_owned()));
         env.push(("IGNITE_MACHINE".to_owned(), ctx.machine.to_string()));
+        env.push((supervise::HANG_ON_OUTPUT_IDLE.to_owned(), "1".to_owned()));
         let spec_env = env.clone();
         let slowest = self.cache.slowest_pass(name, command);
         let result = ctx.launcher.run(&CommandSpec {

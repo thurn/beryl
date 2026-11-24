@@ -25,8 +25,9 @@
 //!   outcomes are never cached.
 //! - A check whose command says it cannot run on this machine, and every check a command left
 //!   unreported when it ran past its hang limit, is `incomplete` at once and not run again.
-//!   The hang limit is four times the command's slowest pass in 30 days on this machine, at
-//!   least 15 minutes and at most 40, and 30 minutes with no pass on record.
+//!   A command reaches its hang limit when it has gone that long without writing to its log.
+//!   The limit is four times the command's slowest pass in 30 days on this machine, at least
+//!   15 minutes and at most 40, and 30 minutes with no pass on record.
 //! - A `jsonl` command that hung, or ended by a signal or an error no failing check explains,
 //!   may have been cut in the middle of a check's steps: the check of its last line is run
 //!   again alone instead of counting as a pass.

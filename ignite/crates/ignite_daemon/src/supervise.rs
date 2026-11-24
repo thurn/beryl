@@ -29,8 +29,8 @@
 //!
 //! A command with a hang limit that runs past it is ended by its supervisor with everything it
 //! started, after the supervisor has written the processes still running to its output. Its
-//! result says it hung. The limit counts from the command's start, so time spent waiting for
-//! cores does not count.
+//! result says it hung. The timer starts after the command starts, so time spent waiting for
+//! cores does not count. Check commands restart the timer when they write to the output log.
 //!
 //! The supervisor starts in a process group of its own, so ending the daemon (or its group)
 //! leaves the command running. The command runs in a second group, led by itself, so that
@@ -71,6 +71,7 @@ mod run_verb;
 use begin::Launch;
 use cancel::{end_when_cancelled, not_started, stopped};
 pub use grants::{GrantFile, STOP_GRACE_S};
+pub(crate) use hang::HANG_ON_OUTPUT_IDLE;
 use hang::{Watchdog, signal_group};
 use jobserver::{Jobserver, read_cores};
 use peaks::Peaks;
@@ -578,10 +579,14 @@ fn supervise_run(spec_file: &Path) -> io::Result<()> {
     let _ = writeln!(stdout, "{READY}").and_then(|()| stdout.flush());
     drop(stdout);
 
+    let output_idle = spec
+        .env
+        .iter()
+        .any(|(name, value)| name == HANG_ON_OUTPUT_IDLE && value == "1");
     let watchdog = match (&group, spec.hang_limit_s) {
         (Ok(group), Some(limit)) => {
             match output.try_clone().or_else(|_| append_to(&output_path)) {
-                Ok(copy) => Some(Watchdog::start(group.id, limit, copy)),
+                Ok(copy) => Some(Watchdog::start(group.id, limit, copy, output_idle)),
                 Err(error) => {
                     // Not worth giving up the command's result for: it runs without a limit.
                     let _ = writeln!(
@@ -717,7 +722,8 @@ fn start_command(
     command
         .args(rest)
         .current_dir(&spec.cwd)
-        .envs(spec.env.iter().map(|(k, v)| (k, v)))
+        .envs(spec.env.iter().map(|(name, value)| (name, value)))
+        .env_remove(HANG_ON_OUTPUT_IDLE)
         .stdin(Stdio::null())
         .stdout(output.try_clone()?)
         .stderr(output.try_clone()?);

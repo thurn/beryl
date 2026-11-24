@@ -169,6 +169,10 @@ fn each_command_is_told_its_class_and_given_a_hang_limit_from_its_slowest_pass()
     assert!(specs.iter().all(|s| {
         s.env
             .contains(&("IGNITE_CLASS".to_owned(), "agent".to_owned()))
+            && s.env.contains(&(
+                crate::supervise::HANG_ON_OUTPUT_IDLE.to_owned(),
+                "1".to_owned(),
+            ))
     }));
 }
 
