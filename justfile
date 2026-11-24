@@ -101,7 +101,7 @@ bugs *args:
 bundle *args:
     {{ by }} bundle "$@"
 
-# Time benchmarks under the search profile, refusing a busy, unplugged or throttled machine (cargo bench flags; --force)
+# Time benchmarks under the search profile (cargo bench flags; --force). Use --counts for instruction counts.
 [group('bench')]
 bench *args:
     {{ by }} bench "$@"

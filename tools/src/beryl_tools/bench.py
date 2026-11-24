@@ -26,6 +26,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -61,7 +62,7 @@ COUNT_SOURCES = (
 # Apple silicon, this machine's own (the justfile's `search_cpu`).
 SEARCH_CPU = (
     "-C target-cpu=apple-m4"
-    if platform.machine() in ("arm64", "aarch64")
+    if sys.platform == "darwin" and platform.machine() in ("arm64", "aarch64")
     else "-C target-cpu=native"
 )
 
@@ -232,10 +233,91 @@ def timing_build(extra: list[str]) -> tuple[list[str], dict[str, str]]:
     return ["--profile", "search"], {"RUSTFLAGS": SEARCH_CPU}
 
 
+def baseline_root() -> Path:
+    # A cache can be shared across machines. Keep absolute timings scoped to the host and OS.
+    host = f"{platform.system()}-{platform.machine()}-{platform.node()}".lower()
+    return paths.cache_root() / "bench" / re.sub(r"[^a-z0-9._-]", "_", host)
+
+
+@dataclass(frozen=True)
+class AbbaTiming:
+    a_ns: int
+    b_ns: int
+    ratio: float
+    low: float
+    high: float
+
+    def summary(self) -> str:
+        return (
+            f"A {self.a_ns} ns, B {self.b_ns} ns per call, B/A {self.ratio:.4f} "
+            f"(95% CI {self.low:.4f} to {self.high:.4f})"
+        )
+
+
+def abba_timings(report: str) -> dict[str, AbbaTiming]:
+    timings: dict[str, AbbaTiming] = {}
+    for row in report.splitlines():
+        a, b, ratio, low, high, name = row.split("\t", 5)
+        if name in timings:
+            raise ValueError(
+                f"Duplicate ABBA subject {name!r}. Select one benchmark with --bench."
+            )
+        timings[name] = AbbaTiming(
+            int(a), int(b), float(ratio), float(low), float(high)
+        )
+    if not timings:
+        raise ValueError(
+            "No ABBA results. Select a benchmark with --bench <name>_abba."
+        )
+    return timings
+
+
+def time_with_abba_baseline(
+    command: list[str], env: dict[str, str], root: Path, name: str, save: bool
+) -> int:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
+        log(
+            "an ABBA baseline name must start with a letter or digit and use only letters, digits, '.', '_' or '-'"
+        )
+        return 2
+    baseline = root / "abba" / f"baseline-{name}.tsv"
+    try:
+        prior = {} if save else abba_timings(baseline.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as scratch:
+            report = Path(scratch).resolve() / "report.tsv"
+            status = subprocess.run(
+                command,
+                cwd=paths.ENGINE,
+                env={**env, "BERYL_ABBA_REPORT": str(report)},
+                check=False,
+            ).returncode
+            if status != 0:
+                return status
+            content = report.read_text(encoding="utf-8") if report.exists() else ""
+        current = abba_timings(content)
+        if save:
+            system.write_atomic_text(baseline, content)
+            log(f"saved ABBA baseline {name!r} in {baseline}")
+        else:
+            if current.keys() != prior.keys():
+                raise ValueError(
+                    "ABBA subjects differ from the baseline. Use the same benchmark."
+                )
+            for subject, result in current.items():
+                log(f"{subject} in baseline {name!r}: {prior[subject].summary()}")
+                log(f"{subject} now: {result.summary()}")
+    except (OSError, ValueError) as error:
+        log(str(error))
+        return 2
+    return 0
+
+
 def bench(args: argparse.Namespace) -> int:
     extra: list[str] = args.extra
     profile, env = timing_build(extra)
     env = {**os.environ, **env}
+    root = baseline_root()
+    env.setdefault("CRITERION_HOME", str((root / "criterion").resolve()))
     build = subprocess.run(
         cargo_bench(extra, "--no-run", *profile), cwd=paths.ENGINE, env=env, check=False
     )
@@ -250,7 +332,12 @@ def bench(args: argparse.Namespace) -> int:
         return 2
     log(f"timing under load: {load(before)}")
     run = cargo_bench(extra, *profile)
-    code = subprocess.run(run, cwd=paths.ENGINE, env=env, check=False).returncode
+    save = args.save_abba_baseline is not None
+    name = args.save_abba_baseline if save else args.abba_baseline
+    if name is None:
+        code = subprocess.run(run, cwd=paths.ENGINE, env=env, check=False).returncode
+    else:
+        code = time_with_abba_baseline(run, env, root, name, save=save)
     log(f"load after timing: {load(probe())}")
     return code
 
@@ -403,7 +490,8 @@ fi
     env = f"CARGO_TARGET_DIR={target} GUNGRAUN_HOME={home}"
     commands = " && ".join(f"{env} {shlex.join(c)}" for c in [cargo, *(then or [])])
     # Parallel Rust compilers can exhaust the Lima guest's default 4 GiB on a cold build.
-    jobs = "" if system.WINDOWS else "export CARGO_BUILD_JOBS=1\n"
+    grant = os.environ.get("IGNITE_CORES") if system.WINDOWS else "1"
+    jobs = f"export CARGO_BUILD_JOBS={shlex.quote(grant)}\n" if grant else ""
     return locked(f"{source}{provision}{jobs}{prepare}{commands}\n")
 
 
@@ -475,7 +563,7 @@ def run_count(
     if runner is None:
         log("no gungraun in engine/Cargo.lock")
         return 2, ""
-    mounted = vm_host.vm_sees(paths.ENGINE, VM)
+    mounted = not system.WINDOWS and vm_host.vm_sees(paths.ENGINE, VM)
     script = count_script(
         provision_script(toolchain(), runner),
         cargo,
@@ -511,13 +599,31 @@ def bench_count(args: argparse.Namespace) -> int:
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "bench",
-        help="time benchmarks on this Mac, under its usual load (cargo bench flags)",
+        help="time benchmarks on this machine under its usual load (cargo bench flags)",
         allow_abbrev=False,
     )
     p.add_argument(
         "--force",
         action="store_true",
         help="time even on battery, in Low Power Mode or throttled",
+    )
+    modes = p.add_mutually_exclusive_group()
+    modes.add_argument(
+        "--counts",
+        dest="func",
+        action="store_const",
+        const=bench_count,
+        help="count instructions in Lima or WSL instead of timing",
+    )
+    modes.add_argument(
+        "--save-abba-baseline",
+        metavar="NAME",
+        help="save the ABBA timings in this machine's cache",
+    )
+    modes.add_argument(
+        "--abba-baseline",
+        metavar="NAME",
+        help="compare the ABBA timings with this machine's saved run",
     )
     p.set_defaults(func=bench, passthrough=True)
     p = sub.add_parser(

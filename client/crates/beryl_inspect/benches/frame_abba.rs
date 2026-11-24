@@ -8,7 +8,7 @@
 //! before the frame, then `Client::frame`. Each side plays its own copy of the board, and starts
 //! it again when its script has played out, so the time per call includes a board's setup
 //! spread over its frames, the same on both sides. The instruction-count gate holds the work
-//! itself; this times it on the Mac, where clocks and caches count.
+//! itself; this times it on the host, where clocks and caches count.
 
 use std::hint::black_box;
 
@@ -53,7 +53,7 @@ impl Looping {
 }
 
 fn main() {
-    if !cores::prefer_fastest_cores() && cfg!(target_os = "macos") {
+    if !cores::prefer_fastest_cores() && cfg!(any(target_os = "macos", windows)) {
         eprintln!("frame_abba: couldn't request the fastest cores");
     }
     let config = abba::Config::from_args(std::env::args().skip(1));
@@ -65,6 +65,6 @@ fn main() {
             || a.frame(),
             || b.frame(),
         );
-        print!("{report}");
+        report.print();
     }
 }

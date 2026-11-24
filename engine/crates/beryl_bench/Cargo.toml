@@ -20,6 +20,10 @@ beryl_session = { path = "../beryl_session" }
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2.191"
 
+[target.'cfg(windows)'.dependencies]
+# Sets the benchmark thread priority and CPU sets in place of hand-written Win32 declarations.
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_SystemInformation", "Win32_System_Threading"] }
+
 [dev-dependencies]
 # With its scenarios, as the whole workspace builds it, so that a build of this package's
 # tests alone reuses the whole workspace's build (see beryl_workspace_hack).

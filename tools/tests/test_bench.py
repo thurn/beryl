@@ -409,8 +409,9 @@ def test_the_vm_sees_only_checkouts_under_its_mounts(
     assert not bench.vm_host.vm_sees(Path("/anywhere"), "missing")
 
 
-def test_the_gate_counts_the_current_files_of_an_unmounted_worktree(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("windows", [False, True])
+def test_the_gate_counts_the_current_files_from_the_guest_filesystem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, windows: bool
 ) -> None:
     main, lease = tmp_path / "main", tmp_path / "trees" / "lease"
     (main / "engine").mkdir(parents=True)
@@ -449,23 +450,31 @@ def test_the_gate_counts_the_current_files_of_an_unmounted_worktree(
     monkeypatch.setenv("LIMA_HOME", str(lima_home))
     monkeypatch.setattr(bench.paths, "REPO", lease)
     monkeypatch.setattr(bench.paths, "ENGINE", lease / "engine")
-    monkeypatch.setattr(bench.system, "WINDOWS", False)
-    profile = calibration.Profile("mac", "a" * 40, "fixture", {}, {})
+    monkeypatch.setattr(bench.system, "WINDOWS", windows)
+    monkeypatch.setenv("IGNITE_CORES", "4")
+    profile = calibration.Profile("test-machine", "a" * 40, "fixture", {}, {})
     monkeypatch.setattr(
         count_gate, "load_gate", lambda _: count_gate.CalibratedGate(profile, GATE, {})
     )
     original_run: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run
 
     def count(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
-        if cmd[0] != "limactl":
+        if cmd[0] not in {"limactl", "wsl"}:
             return original_run(cmd, **kwargs)
-        assert kwargs["cwd"] == "/"
-        assert cmd[:5] == ["limactl", "shell", "--workdir", "/", bench.VM]
-        script = cmd[-1]
+        if windows:
+            assert kwargs["cwd"] is None
+            assert cmd[:7] == ["wsl", "-d", bench.VM, "--cd", "/", "--exec", "bash"]
+            script = base64.b64decode(cmd[-1].split("echo ")[1].split()[0]).decode()
+        else:
+            assert kwargs["cwd"] == "/"
+            assert cmd[:5] == ["limactl", "shell", "--workdir", "/", bench.VM]
+            script = cmd[-1]
+        jobs = 4 if windows else 1
         assert (
             script.index("flock -s 8")
             < script.index("tar -xf -")
-            < script.index("export CARGO_BUILD_JOBS=1")
+            < script.index('cd "$source/engine"')
+            < script.index(f"export CARGO_BUILD_JOBS={jobs}")
             < script.index("cargo bench")
         )
         with tarfile.open(fileobj=kwargs["stdin"], mode="r:") as archive:
@@ -516,45 +525,6 @@ def test_lima_starts_outside_the_worktree(
     assert [cmd[:2] for cmd in starts] == [["limactl", "start"]]
 
 
-def test_the_windows_gate_counts_from_the_mounted_worktree(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    lease = tmp_path / "lease"
-    rust: Path = lease / "engine"
-    rust.mkdir(parents=True)
-    (rust / "Cargo.lock").write_text(
-        '[[package]]\nname = "gungraun"\nversion = "0.20.0"\n'
-    )
-    (lease / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "beta"\n')
-    monkeypatch.setattr(bench.paths, "REPO", lease)
-    monkeypatch.setattr(bench.paths, "ENGINE", rust)
-    monkeypatch.setattr(bench.paths, "worktree_names", lambda: ["lease"])
-    monkeypatch.setattr(bench.system, "WINDOWS", True)
-    profile = calibration.Profile("windows", "a" * 40, "fixture", {}, {})
-    monkeypatch.setattr(
-        count_gate, "load_gate", lambda _: count_gate.CalibratedGate(profile, GATE, {})
-    )
-
-    def count(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        assert cmd[:7] == ["wsl", "-d", bench.VM, "--cd", str(rust), "--exec", "bash"]
-        script = base64.b64decode(cmd[-1].split("echo ")[1].split()[0]).decode()
-        assert "rustup toolchain install beta" in script
-        assert "cargo bench" in script
-        assert "tar -xf" not in script
-        assert "stdin" not in kwargs
-        return subprocess.CompletedProcess(
-            cmd, 0, summary(GATE.benchmark.rsplit("::", 1)[0], GATE.instructions)
-        )
-
-    monkeypatch.setattr(subprocess, "run", count)
-    assert (
-        count_gate.count_gate(
-            argparse.Namespace(family=None, measure=None, environment=False)
-        )
-        == 0
-    )
-
-
 def test_a_vm_that_stopped_mid_count_cannot_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -566,3 +536,56 @@ def test_a_vm_that_stopped_mid_count_cannot_run(
     assert bench.vm_host.vm_failed(255, "vm") == count_gate.CANNOT_RUN
     # A running VM whose script failed reports the script's code: a real failure.
     assert bench.vm_host.vm_failed(1, "vm") == 1
+
+
+def bench_args(*args: str) -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    bench.register(parser.add_subparsers())
+    parsed, extra = parser.parse_known_args(["bench", *args])
+    parsed.extra = extra
+    return parsed
+
+
+def test_bench_counts_alias_passes_cargo_flags_to_the_count_runner() -> None:
+    args = bench_args("--counts", "--bench", "example_counts")
+    assert args.func is bench.bench_count
+    assert args.extra == ["--bench", "example_counts"]
+
+
+def test_wall_clock_baselines_follow_the_machine_across_checkouts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
+    monkeypatch.delenv("CRITERION_HOME", raising=False)
+    monkeypatch.setattr(bench, "probe", plugged_in)
+    monkeypatch.setattr(bench.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(bench.platform, "machine", lambda: "AMD64")
+    monkeypatch.setattr(bench.platform, "node", lambda: "Cygnus")
+    root = tmp_path / "cache" / "bench" / "windows-amd64-cygnus"
+    criterion_homes: list[tuple[Path, str]] = []
+
+    def cargo(
+        cmd: list[str], *, cwd: Path, env: dict[str, str], check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        criterion_homes.append((cwd, env["CRITERION_HOME"]))
+        if "BERYL_ABBA_REPORT" in env:
+            duration = 50 if cwd.name == "before" else 40
+            Path(env["BERYL_ABBA_REPORT"]).write_text(
+                f"60\t{duration}\t0.8\t0.79\t0.81\ttest subject\n",
+                encoding="utf-8",
+            )
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(subprocess, "run", cargo)
+    monkeypatch.setattr(bench.paths, "ENGINE", tmp_path / "before")
+    assert bench.bench(bench_args("--save-abba-baseline", "before")) == 0
+    assert (root / "abba" / "baseline-before.tsv").is_file()
+    monkeypatch.setattr(bench.paths, "ENGINE", tmp_path / "after")
+    assert bench.bench(bench_args("--abba-baseline", "before")) == 0
+    report = capsys.readouterr().err
+    assert "in baseline 'before': A 60 ns, B 50 ns" in report
+    assert "now: A 60 ns, B 40 ns" in report
+    assert {cwd.name for cwd, _ in criterion_homes} == {"before", "after"}
+    assert {home for _, home in criterion_homes} == {str(root / "criterion")}
+    monkeypatch.setattr(bench.platform, "node", lambda: "Other")
+    assert bench.bench(bench_args("--abba-baseline", "before")) == 2

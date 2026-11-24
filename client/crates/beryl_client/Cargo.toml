@@ -81,6 +81,8 @@ ndk-sys = "0.6.0"
 [target.'cfg(windows)'.dependencies]
 # The debug app's local Unix socket, which the Windows Rust standard library does not expose.
 socket2 = { version = "0.6.5", optional = true }
+# Samples CPU utilization for frame logs in place of hand-written Win32 declarations.
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_SystemInformation", "Win32_System_Threading"] }
 
 [build-dependencies]
 # Compiles tests/c/header.c, the C program that tests include/beryl_client.h, for the test targets

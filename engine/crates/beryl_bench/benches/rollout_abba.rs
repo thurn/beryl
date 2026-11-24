@@ -9,7 +9,7 @@ use beryl_bench::rollout::{self, Workload};
 use beryl_bench::{abba, cores};
 
 fn main() {
-    if !cores::prefer_fastest_cores() && cfg!(target_os = "macos") {
+    if !cores::prefer_fastest_cores() && cfg!(any(target_os = "macos", windows)) {
         eprintln!("rollout_abba: couldn't request the fastest cores");
     }
     let config = abba::Config::from_args(std::env::args().skip(1));
@@ -22,26 +22,26 @@ fn main() {
         || rollout::copy_states(black_box(&w.starts), &mut sa),
         || rollout::copy_states(black_box(&w.starts), &mut sb),
     );
-    print!("{report}");
+    report.print();
     let report = abba::compare(
         "next_apply (A old, B new)",
         &config,
         || rollout::replay(&w.table, black_box(&w.scripts), &mut sa, &mut xa),
         || rollout::replay(&w.table, black_box(&w.scripts), &mut sb, &mut xb),
     );
-    print!("{report}");
+    report.print();
     let report = abba::compare(
         "policy (A old, B new)",
         &config,
         || rollout::decide(&w.table, black_box(&w.samples), &w.policy),
         || rollout::decide(&w.table, black_box(&w.samples), &w.policy),
     );
-    print!("{report}");
+    report.print();
     let report = abba::compare(
         "rollouts (A old, B new)",
         &config,
         || rollout::roll(&w.table, black_box(&w.starts), &w.policy, &mut sa, &mut xa),
         || rollout::roll(&w.table, black_box(&w.starts), &w.policy, &mut sb, &mut xb),
     );
-    print!("{report}");
+    report.print();
 }

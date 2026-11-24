@@ -940,5 +940,10 @@
     "label": "`ignite test` of a test the branch just added lists the families that are cheap to list first, and lists those whose listing needs a product build (the 3D client, the scenario dump) only when a name still matches nothing: two new engine tests took 1241 s, 888 s of it waiting for the client to build",
     "metric": "ignite.cycle-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Windows engine instruction counts build from WSL's Linux filesystem after copying the checkout into the guest.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

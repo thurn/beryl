@@ -54,6 +54,10 @@ harness = false
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 libc = "0.2.191"
 
+[target.'cfg(windows)'.dev-dependencies]
+# The shared ABBA benchmark selects CPU sets through Win32 bindings.
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_SystemInformation", "Win32_System_Threading"] }
+
 [dev-dependencies]
 # Opens repository files and records each read, so Ignite reruns the tests when one changes.
 beryl_test_files = { path = "../../../engine/crates/beryl_test_files" }

@@ -187,6 +187,7 @@ dependencies = [
  "criterion",
  "gungraun",
  "libc",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

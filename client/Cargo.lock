@@ -496,6 +496,7 @@ dependencies = [
  "serde_json",
  "socket2",
  "tempfile",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -565,6 +566,7 @@ dependencies = [
  "postcard",
  "serde",
  "serde_json",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

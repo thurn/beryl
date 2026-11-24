@@ -1,7 +1,7 @@
 # Benchmarking
 
 How to measure small optimizations in Beryl without fooling yourself. The
-`beryl_bench` crate (`rust/crates/beryl_bench`) holds the support code and a
+`beryl_bench` crate (`engine/crates/beryl_bench`) holds the support code and a
 worked example, `example_*`, that follows every rule here.
 
 The problem: a 2% speedup is smaller than the noise in a wall-clock benchmark on
@@ -16,10 +16,11 @@ load. We measure two ways, and believe a result only when they agree.
 2. **Count instructions** with Gungraun in a Linux VM (`just bench-count`).
    Exact, identical on every run, unaffected by load. The first and fastest
    answer.
-3. **Confirm with interleaved timing** on the Mac, under its normal load
-   (`just bench`): old and new in one executable, timed in A B B A order, with
-   the median ratio and its confidence interval as the spread. This catches what
-   counts miss: cache misses, branch mispredictions, the real allocator.
+3. **Confirm with interleaved timing** on macOS or Windows, under the machine's
+   normal load (`just bench`): old and new in one executable, timed in A B B A
+   order, with the median ratio and its confidence interval as the spread. This
+   catches what counts miss: cache misses, branch mispredictions, the real
+   allocator.
 4. **Track absolute times** with Criterion and saved baselines, for regressions
    over time.
 
@@ -45,17 +46,19 @@ just bench -p beryl_bench --bench example_timing
 
 - `just bench-count [cargo bench flags]` runs the Gungraun benchmarks (default
   `--bench '*_counts'`) in `beryl-bench` under Lima on macOS or WSL on Windows,
-  creating the Linux environment on first use. `just bench-count` and
-  `just bench` build `-p beryl_bench` unless the flags name a package: from the
-  whole workspace, Cargo would build in the features other members' tests turn
-  on, such as `coverage`, which no app or search build has.
+  creating the Linux environment on first use. `just bench --counts` runs the
+  same command. `just bench-count` and `just bench` build `-p beryl_bench`
+  unless the flags name a package: from the whole workspace, Cargo would build
+  in the features other members' tests turn on, such as `coverage`, which no app
+  or search build has.
 
 - `just bench [--force] [cargo bench flags] [-- harness flags]` builds, checks
   that the CPU is not slowed (battery, Low Power Mode, throttling), then times
   and logs the load before and after. `-- --quick` gives the ABBA harness 30
   rounds instead of 300; Criterion takes its own flags, such as
-  `-- --save-baseline before`. It builds under the `search` profile with
-  `-C target-cpu=apple-m4` unless the flags name a `--profile`.
+  `-- --save-baseline before`. It builds under the `search` profile unless the
+  flags name a `--profile`. The default CPU is `apple-m4` on ARM64 Macs and
+  `native` on Windows x86-64.
 
 - `just count-gate` counts only `rollout_counts`' `rollouts` subject in the VM,
   about 15 s once built, and fails when it runs more than the tolerance above
@@ -262,9 +265,11 @@ The VM:
 
 - Under Lima, `beryl-bench` is ARM64 Ubuntu on Apple's virtualization, with four
   CPUs and 4 GiB. It mounts only the main checkout, read-only. Under WSL, it is
-  a dedicated x86-64 Ubuntu distribution that mounts the Windows drives.
-  `by bench-count` installs Valgrind, the Rust pinned in `rust-toolchain.toml`
-  and the `gungraun-runner` matching `Cargo.lock`.
+  a dedicated x86-64 Ubuntu distribution. WSL receives the checkout as a tar
+  archive and builds from its ext4 filesystem. Lima uses the same transfer when
+  it cannot see the worktree. The transfer keeps unchanged source mtimes so
+  Cargo can reuse artifacts. `by bench-count` installs Valgrind, the Rust pinned
+  in `rust-toolchain.toml` and the `gungraun-runner` matching `Cargo.lock`.
 - Each worktree builds into a target directory of its own in the VM, so it
   counts its own code: Cargo names the engine's artifacts the same in every
   worktree and trusts file times. A new one starts as a copy of the count gate's
@@ -292,21 +297,18 @@ What counts don't tell you:
   not macOS, provides `malloc`, so allocation-heavy code counts differently from
   how it runs in the app.
 
-So counts say what changed; the Mac says what it's worth.
+Counts show what changed. Native wall-clock timings measure the effect.
 
-## Timing on the Mac
+## Timing on macOS and Windows
 
 ### Timing under load
 
 `just bench` times under whatever load the machine has. It builds first, then
-logs how much of the CPU is in use, the five busiest processes and any compiler
-that is running (`rustc`, `cargo`, `clippy-driver`, `clang`, `swift-frontend`),
-and logs the same again after timing, so a result carries the load it was taken
-under. It refuses to time only when the CPU is slowed for the whole run, which
-would make both versions look slower than the machine normally runs them:
-
-- the Mac is on battery, or in Low Power Mode;
-- macOS has recorded a thermal or performance warning, or a CPU speed limit.
+logs how much of the CPU is in use and which compilers are running (`rustc`,
+`cargo`, `clippy-driver`, `clang`, `swift-frontend`). On macOS it also logs the
+five busiest processes. It samples the load again after timing. It refuses to
+time on battery or in macOS Low Power Mode or Windows Energy Saver. On macOS it
+also checks thermal and performance warnings and CPU speed limits.
 
 `--force` times anyway, for checking that a harness works, not for numbers you
 keep.
@@ -330,7 +332,7 @@ To get an answer you can trust under load:
   cores and by the machine's speed factor), and alternate old and new runs (A B
   B A) for several rounds, reporting the median and the range.
 
-### Two kinds of core
+### Core performance classes
 
 Apple silicon has two core types that run the same code at different speeds.
 `sysctl hw.perflevel0` is the faster kind and `hw.perflevel1` the slower: 6
@@ -349,6 +351,10 @@ free. So:
   round with a block more than 25% off its version's median as disturbed (a
   slower core or an interruption), and notes when over a tenth of the rounds
   were. Its median and interval allow for them; more rounds narrow the interval.
+
+On Windows, `prefer_fastest_cores()` raises the calling thread's priority and
+requests the available CPU sets with the highest efficiency class. On CPUs with
+one class, it raises the priority and leaves Windows to place the thread.
 
 ### Old against new: the ABBA harness
 
@@ -383,6 +389,18 @@ To use it, keep the old version next to the new while you work (as in
 `example.rs`), and write a short `harness = false` benchmark like
 `benches/example_abba.rs`. Delete the old version once you've decided.
 
+To track absolute ABBA timings over time, save a named run and compare a later
+run on the same machine with the same benchmark and harness flags.
+
+```bash
+just bench --bench example_abba --save-abba-baseline before
+just bench --bench example_abba --abba-baseline before
+```
+
+The comparison shows the prior and current times per call, B/A ratios and
+intervals. Each interval describes its own run. Use the interleaved A/B
+comparison within one executable to measure the speedup from a code change.
+
 ### Criterion
 
 `benches/example_timing.rs` raises Criterion's defaults: 5 s warm-up, 20 s
@@ -400,6 +418,12 @@ just bench -p beryl_bench --bench example_timing -- --baseline before
 The two runs are minutes apart, so drift between them, including any change in
 the machine's load, is exactly what this compares. Trust a small change only
 when counts and ABBA agree.
+
+`just bench` keeps Criterion and ABBA baselines in
+`$BERYL_CACHE/bench/<os>-<arch>-<hostname>/` under `criterion/` and `abba/`.
+They are shared by worktrees on the same machine, including on Windows.
+Criterion honors `CRITERION_HOME` if you set it. Point it at an earlier
+checkout's `engine/target/criterion` directory to use baselines saved there.
 
 ## Optimizing something, step by step
 
@@ -422,15 +446,10 @@ when counts and ABBA agree.
   or page boundary and shift its time by a few percent. Counts don't move. Be
   skeptical of timing differences under about 2% that counts don't show.
 - **`just bench` builds the `search` profile** (fat LTO, `panic = "abort"`,
-  `codegen-units = 1`, the M4 CPU), as the headless research binaries are built.
-  `--profile bench` inherits the engine workspace's `release` profile;
-  `just bench-count` uses it, since Valgrind's CPU is not the M4. Never
-  benchmark a debug build.
+  `codegen-units = 1` and a machine-specific CPU), as the headless research
+  binaries are built. `--profile bench` inherits the engine workspace's
+  `release` profile; `just bench-count` uses it, since Valgrind's CPU is not the
+  M4. Never benchmark a debug build.
 - **Use deterministic work counts in checks.** Wall-clock timings depend on what
   else the machine is running. For native rendering, see
   [Beryl 3D frame gates](beryl-3d.md#performance-gates).
-
-## The Windows machine
-
-Use Cygnus for x86-64 instruction counts in WSL. Wall-clock benchmarks for
-shipping performance run on the Mac.

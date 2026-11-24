@@ -78,6 +78,32 @@ pub struct Report {
 }
 
 impl Report {
+    /// Prints the report. If the bench command requests a saved baseline, also writes the
+    /// numeric measurements it will save or compare.
+    pub fn print(&self) {
+        use std::io::Write as _;
+
+        print!("{self}");
+        if let Some(path) = std::env::var_os("BERYL_ABBA_REPORT") {
+            let mut file = std::fs::File::options()
+                .append(true)
+                .create(true)
+                .open(path)
+                .expect("open ABBA report file");
+            writeln!(
+                file,
+                "{}\t{}\t{}\t{}\t{}\t{}",
+                self.a.as_nanos(),
+                self.b.as_nanos(),
+                self.ratio,
+                self.low,
+                self.high,
+                self.name.escape_default(),
+            )
+            .expect("write ABBA report");
+        }
+    }
+
     pub fn verdict(&self) -> String {
         let percent = |r: f64| (1.0 - r).abs() * 100.0;
         if self.high < 1.0 {

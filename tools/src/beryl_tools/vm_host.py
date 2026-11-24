@@ -24,7 +24,8 @@ memory to macOS; booting it again takes about 10 s. `join` calls it for the othe
 `by vms-stop-idle` calls it on its own. Joining and stopping take the same lock, so a machine is
 never stopped under a command that has just joined it.
 
-Windows runs its machines as WSL distributions, which this module leaves alone.
+Windows runs its machines as WSL distributions. Builds receive their sources as tar
+archives so they can run on the guest's Linux filesystem.
 """
 
 from __future__ import annotations
@@ -290,6 +291,7 @@ fi
 rsync -rl --checksum --delete "$incoming/" "$source/"
 rm -rf -- "$incoming"
 cd "$source/engine"
+printf 'bench: using sources in %s\\n' "$PWD" >&2
 """
 
 

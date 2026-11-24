@@ -89,6 +89,7 @@ impl Drop for Load {
 
 /// The machine's load averages, where the system reports them: `sysctl` on macOS, the proc
 /// file on Linux. Read once, before the host starts.
+#[cfg(not(windows))]
 #[must_use]
 pub fn averages() -> Option<[f64; 3]> {
     let text = if cfg!(target_os = "macos") {
@@ -106,4 +107,75 @@ pub fn averages() -> Option<[f64; 3]> {
         .take(3)
         .collect();
     numbers.try_into().ok()
+}
+
+/// Samples the number of busy logical processors over 100 ms. Windows supplies no 1-, 5-
+/// or 15-minute load averages, so it uses the same sample for all three frame-log values.
+/// On machines with multiple processor groups, Windows reports the calling thread's group.
+#[cfg(windows)]
+#[must_use]
+pub fn averages() -> Option<[f64; 3]> {
+    let (idle_before, total_before) = windows::cpu_times()?;
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    let (idle_after, total_after) = windows::cpu_times()?;
+    let total = total_after.checked_sub(total_before)?;
+    if total == 0 {
+        return None;
+    }
+    let idle = idle_after.checked_sub(idle_before)?;
+    let processors = windows::processor_count()?;
+    let busy = 1.0 - idle as f64 / total as f64;
+    Some([busy.clamp(0.0, 1.0) * f64::from(processors); 3])
+}
+
+#[cfg(windows)]
+mod windows {
+    use windows_sys::Win32::Foundation::FILETIME;
+    use windows_sys::Win32::System::SystemInformation::GROUP_AFFINITY;
+    use windows_sys::Win32::System::Threading::{
+        GetActiveProcessorCount, GetCurrentThread, GetSystemTimes, GetThreadGroupAffinity,
+    };
+
+    #[expect(unsafe_code, reason = "samples cumulative Windows CPU times")]
+    pub(super) fn cpu_times() -> Option<(u64, u64)> {
+        let (mut idle, mut kernel, mut user) = (
+            FILETIME::default(),
+            FILETIME::default(),
+            FILETIME::default(),
+        );
+        // SAFETY: all three FILETIME output pointers are valid for the call.
+        let ok = unsafe { GetSystemTimes(&raw mut idle, &raw mut kernel, &raw mut user) };
+        let ticks =
+            |time: FILETIME| u64::from(time.dwHighDateTime) << 32 | u64::from(time.dwLowDateTime);
+        // Kernel time already includes idle time.
+        (ok != 0).then(|| (ticks(idle), ticks(kernel) + ticks(user)))
+    }
+
+    #[expect(
+        unsafe_code,
+        reason = "counts the active processors that GetSystemTimes samples"
+    )]
+    pub(super) fn processor_count() -> Option<u32> {
+        let mut affinity = GROUP_AFFINITY::default();
+        // SAFETY: the output pointer is valid, and the pseudo-handle names the calling thread.
+        let ok = unsafe { GetThreadGroupAffinity(GetCurrentThread(), &raw mut affinity) };
+        if ok == 0 {
+            return None;
+        }
+        // SAFETY: Group came from Windows and GetActiveProcessorCount takes no pointers.
+        let count = unsafe { GetActiveProcessorCount(affinity.Group) };
+        (count != 0).then_some(count)
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    #[test]
+    fn windows_load_reports_busy_logical_processors() {
+        let [now, five, fifteen] = super::averages().expect("Windows CPU times");
+        let processors = super::windows::processor_count().expect("processor count");
+        assert!((0.0..=f64::from(processors)).contains(&now));
+        assert_eq!(now.to_bits(), five.to_bits());
+        assert_eq!(now.to_bits(), fifteen.to_bits());
+    }
 }
