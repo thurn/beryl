@@ -18,8 +18,9 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::Pending;
 use beryl_engine::{
     CardId, CardIx, CardTable, Choice, Counts, Decision, Format, GameTable, Large, LargeCardIx,
-    LargeSlot, Layout, Misfit, Observation, Outcome, Profile, Relayout, Replay, Scratch, Seat,
-    Slot, SlotId, Small, StallReason, State, Step, Zone, ZoneKey, apply, next, observe,
+    LargeSlot, Layout, Misfit, Observation, Outcome, Placement, Profile, Relayout, Replay, Scratch,
+    Seat, Slot, SlotId, Small, StallReason, State, Step, TurnStep, Zone, ZoneKey, apply, next,
+    observe,
 };
 use beryl_search::{Agent, AgentDecision, GreedyAgent, RandomAgent};
 
@@ -371,6 +372,26 @@ fn a_game_past_small_does_not_narrow() {
         s.try_relayout::<Small>(&t).err(),
         Some(Misfit::PoolTooSmall { slots: 135 })
     );
+}
+
+/// A turn with more steps left than [`Small`]'s turn plan holds, as extra steps can make
+/// one, is refused there by name, not by a panic while the queue is copied.
+#[test]
+fn a_turn_past_small_does_not_narrow() {
+    let (t, small) = game(0);
+    let mut s = small.widen();
+    s.plan_turn(t.format()).unwrap();
+    for _ in 0..32 {
+        s.insert_step(TurnStep::Upkeep, Placement::After, TurnStep::Upkeep)
+            .unwrap();
+    }
+    assert!(matches!(
+        s.try_relayout::<Small>(&t),
+        Err(Misfit::ListTooLong {
+            list: "the steps left in the turn",
+            ..
+        })
+    ));
 }
 
 /// What a long run reached: how often each kind of decision came up, and the abilities and

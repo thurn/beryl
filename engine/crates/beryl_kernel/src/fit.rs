@@ -140,68 +140,123 @@ impl<L: Layout> State<L> {
     /// card of the table, those no object is yet among them; every object has a slot
     /// there at its place ([`SlotId::to`]); every list fits the room `M` gives it; and every
     /// recorded index is one `M` can name. A game that came from an `M` game always fits.
+    ///
+    /// Every field of the state is named here, so a new field does not compile until it says
+    /// whether it fits, as [`Relayout`] would otherwise panic on it.
+    #[allow(clippy::too_many_lines)] // A line for every field of the state.
     pub fn fits<M: Layout>(&self, t: &GameTable) -> Result<(), Misfit> {
+        let State {
+            // Each has a slot at its place in `M` ([`State::fits_slots`]).
+            objects: _,
+            battlefield,
+            // One entry per battlefield index: it fits wherever the battlefield does.
+            derived: _,
+            listening: _,
+            replacing: _,
+            layer_inputs: _,
+            static_rules: _,
+            // A library and a graveyard hold only their owner's cards, so they fit wherever
+            // the decks do ([`State::fits_slots`]).
+            zones: _,
+            players,
+            turn: _,
+            stack,
+            captured_words,
+            triggers,
+            delayed,
+            last_known,
+            departed_spells,
+            // The stores say for themselves ([`State::stores_fit`]).
+            effects: _,
+            keyed: _,
+            phased_out: _,
+            memos: _,
+            counters: _,
+            trackers: _,
+            // Its own match says ([`State::pending_fits`]).
+            pending: _,
+            knowledge: _,
+            rng: _,
+            repeats: _,
+            profile: _,
+            budgets: _,
+            flags: _,
+            outcome: _,
+            elsewhere,
+            sideboard_taken: _,
+            turn_plan,
+            // Asked as a game of its own, below.
+            outer: _,
+            subgame_turns,
+            restarted_turns: _,
+        } = self;
         t.fits::<M>()?;
-        if !M::Outer::SUPPORTED && (self.in_subgame() || self.subgame_turns.get() != 0) {
+        if !M::Outer::SUPPORTED && (self.in_subgame() || subgame_turns.get() != 0) {
             return Err(Misfit::Subgame);
         }
         if let Some(outer) = self.suspended_game() {
             outer.fits::<M>(t)?;
         }
         self.fits_slots::<M>()?;
-        for &slot in self.battlefield() {
+        for &slot in battlefield.iter() {
             room(
                 "a blocker's attackers",
                 self.object(slot).blocked_attackers().len(),
                 crate::object::SlotSet::<M>::CAPACITY,
             )?;
         }
-        room(
-            "the battlefield",
-            self.battlefield.len(),
-            capacity(|s: &State<M>| &s.battlefield),
-        )?;
-        room(
-            "the stack",
-            self.stack.len(),
-            capacity(|s: &State<M>| &s.stack),
-        )?;
-        room(
-            "the stack's captured text changes",
-            self.captured_words.len(),
-            capacity(|s: &State<M>| &s.captured_words),
-        )?;
-        for entry in self.stack.iter() {
+        let lists = [
+            (
+                "the battlefield",
+                battlefield.len(),
+                capacity(|s: &State<M>| &s.battlefield),
+            ),
+            ("the stack", stack.len(), capacity(|s: &State<M>| &s.stack)),
+            (
+                "the stack's captured text changes",
+                captured_words.len(),
+                capacity(|s: &State<M>| &s.captured_words),
+            ),
+            (
+                "the triggered abilities waiting",
+                triggers.len(),
+                capacity(|s: &State<M>| &s.triggers),
+            ),
+            (
+                "the delayed triggers",
+                delayed.len(),
+                capacity(|s: &State<M>| &s.delayed),
+            ),
+            (
+                "the last-known information",
+                last_known.len(),
+                capacity(|s: &State<M>| &s.last_known),
+            ),
+            (
+                "the spells kept as they left the stack",
+                departed_spells.len(),
+                capacity(|s: &State<M>| &s.departed_spells),
+            ),
+            (
+                "the effects that reach other zones",
+                elsewhere.len(),
+                capacity(|s: &State<M>| &s.elsewhere),
+            ),
+        ];
+        for (list, len, capacity) in lists {
+            room(list, len, capacity)?;
+        }
+        for entry in stack.iter() {
             room(
                 "a stack entry's targets",
                 entry.targets.len(),
                 capacity(|e: &StackEntry<M>| &e.targets),
             )?;
         }
-        room(
-            "the triggered abilities waiting",
-            self.triggers.len(),
-            capacity(|s: &State<M>| &s.triggers),
-        )?;
-        room(
-            "the delayed triggers",
-            self.delayed.len(),
-            capacity(|s: &State<M>| &s.delayed),
-        )?;
-        room(
-            "the last-known information",
-            self.last_known.len(),
-            capacity(|s: &State<M>| &s.last_known),
-        )?;
-        for row in self.last_known.iter() {
+        for row in last_known.iter() {
             row.copiable.fits::<M>()?;
         }
-        room(
-            "the spells kept as they left the stack",
-            self.departed_spells.len(),
-            capacity(|s: &State<M>| &s.departed_spells),
-        )?;
-        for row in self.departed_spells.iter() {
+        for row in departed_spells.iter() {
             row.copiable.fits::<M>()?;
             room(
                 "a kept spell's targets",
@@ -209,12 +264,18 @@ impl<L: Layout> State<L> {
                 capacity(|e: &StackEntry<M>| &e.targets),
             )?;
         }
+        turn_plan.fits::<M>()?;
         self.stores_fit::<M>()?;
-        for player in self.players.iter() {
+        for player in players.iter() {
             room(
                 "a player's emblems",
                 player.emblems.len(),
                 capacity(|p: &Player<M>| &p.emblems),
+            )?;
+            room(
+                "a player's mana that remembers its source",
+                player.remembered.len(),
+                capacity(|p: &Player<M>| &p.remembered),
             )?;
         }
         self.pending_fits::<M>()

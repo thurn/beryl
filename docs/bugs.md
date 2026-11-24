@@ -6,6 +6,18 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Narrowing a `Large` game into `Small` could panic instead of refusing it.**
+  `State::try_relayout` promises a `Misfit` for a game the target layout cannot
+  hold, but `State::fits` checked only the lists it named. It missed the steps
+  left in the turn (extra steps and phases can push them past `Small`'s 24), the
+  effects that reach other zones (four in `Small`) and each player's mana that
+  remembers its source (four in `Small`). A game past one of those passed the
+  check, and the copy that followed panicked on the full queue. `fits` now
+  checks all three. Prevention: `fits` destructures every field of `State`, as
+  `Layout::clone_state`, `State::hash_position` and `Relayout for State`
+  already did, so a new field does not compile until it says whether it fits.
+  `a_turn_past_small_does_not_narrow` in `beryl_search` covers the turn plan.
+
 - **A restarted game could deal a different mulligan hand after its slots were
   renumbered.** The shuffle took the returned cards in slot order. Restart
   mulligans now shuffle from the same card definition order used to return the

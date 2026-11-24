@@ -124,6 +124,15 @@ impl<L: Layout> TurnPlan<L> {
         self.next_id == 0 && self.ordinal == 0
     }
 
+    /// Whether layout `M` has room for the steps left in the turn.
+    pub(crate) fn fits<M: Layout>(&self) -> Result<(), crate::Misfit> {
+        crate::fit::room(
+            "the steps left in the turn",
+            self.remaining.len(),
+            M::Queue::<PlannedStep, CAPACITY>::CAPACITY,
+        )
+    }
+
     pub(crate) fn relayout<M: Layout>(&self) -> TurnPlan<M> {
         TurnPlan {
             remaining: crate::relayout::queue(self.remaining.as_slice(), |&step| step),
