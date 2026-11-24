@@ -890,5 +890,10 @@
     "label": "Ignite budgets platform-keyed tip checks and lets deferred platforms verify after master advances.",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Windows client replay and stress checks run after master advances, shortening tip verification while keeping Windows compile and portability checks in the promotion gate.",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

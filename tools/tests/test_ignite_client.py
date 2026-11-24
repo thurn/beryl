@@ -86,6 +86,24 @@ def test_the_validations_use_the_shared_build_and_source_checks_run_anywhere() -
     }
 
 
+def test_windows_replay_and_stress_checks_defer_until_after_promotion() -> None:
+    families = manifest()["family"]
+    for name in (
+        "client-interface",
+        "client-every-tick",
+        "client-test",
+        "client-corpus",
+        "client-gate",
+        adapter.FRAME_LIMITS_FAMILY,
+        "client-frame-counts",
+        "client-frame-trend",
+    ):
+        assert families[name]["defer_platforms"] == ["windows"], name
+    for name in ("client-clippy", "client-validation"):
+        assert families[name]["platforms"] == ["macos", "windows"], name
+        assert "defer_platforms" not in families[name], name
+
+
 def test_the_families_that_read_recordings_name_every_crate_the_recorder_is_built_from() -> (
     None
 ):

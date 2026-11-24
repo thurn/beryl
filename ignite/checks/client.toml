@@ -9,7 +9,11 @@
 # object per check, with the inputs of its own, and its `run` appends one JSON line per check to
 # $IGNITE_RESULTS.
 #
-# The native build and replay checks run on macOS and Windows.
+# The native build and replay checks run on macOS and Windows. The Windows
+# replay workload took over an hour per tip candidate without finding a
+# Windows-only defect, so those regression families defer Windows coverage
+# until after master moves. Windows compile and validation checks still
+# participate in tip verification.
 # The pure source checks run on any platform.
 #
 # Programs that spread their work over threads (the recorder and replay checks) size them by the grant:
@@ -290,6 +294,7 @@ inputs = [
 kind = "regression"
 adapter = "nextest"
 platforms = ["macos", "windows"]
+defer_platforms = ["windows"]
 needs = ["client"]
 # The differential replay and full-pack tests use the inspector runner's growing grant.
 grows = true
@@ -336,6 +341,7 @@ inputs = [
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos", "windows"]
+defer_platforms = ["windows"]
 needs = ["python-env", "client"]
 grows = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-interface list"
@@ -423,6 +429,7 @@ inputs = [
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos", "windows"]
+defer_platforms = ["windows"]
 needs = ["python-env", "client"]
 grows = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-interface-frame-limits list"
@@ -511,6 +518,7 @@ kind = "exploration"
 adapter = "jsonl"
 # The sweep uses the native the client recorder and inspector.
 platforms = ["macos", "windows"]
+defer_platforms = ["windows"]
 # The sweep needs both native binaries and starts from the corpus pack made by `client`.
 needs = ["python-env", "client"]
 # Listing needs the Python environment before either native binary is built.
@@ -604,6 +612,7 @@ inputs = [
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos", "windows"]
+defer_platforms = ["windows"]
 needs = ["python-env", "client"]
 grows = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-every-tick list"
@@ -691,6 +700,7 @@ inputs = [
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos", "windows"]
+defer_platforms = ["windows"]
 machine_relative = true
 needs = ["python-env", "client"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-gate list"
@@ -783,6 +793,7 @@ inputs = [
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos", "windows"]
+defer_platforms = ["windows"]
 machine_relative = true
 needs = ["python-env", "client"]
 resources = ["bench-vm"]
@@ -875,6 +886,7 @@ kind = "exploration"
 adapter = "jsonl"
 # Sample each registered verifier's native build and, when free, its Callgrind guest.
 platforms = ["macos", "windows"]
+defer_platforms = ["windows"]
 needs = ["python-env", "client"]
 # Both list and next offer the checkout's commit when its calibration's history lacks it.
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-frame-trend list"
