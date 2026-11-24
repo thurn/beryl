@@ -110,6 +110,76 @@ fn a_family_platform_applies_even_on_a_machine_with_an_unrestricted_family_list(
 }
 
 #[test]
+fn narrow_dispatch_paths_reserve_mac_workers_for_ios_work() {
+    let manifest = Manifest::from_files(&[(
+        PathBuf::from("mobile.toml"),
+        r#"
+[family.simulator]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+list = "list"
+run = "run"
+inputs = ["engine/crates/**", "client/**"]
+dispatch_paths = ["client/crates/native/ios/**"]
+
+[family.portable]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos", "windows"]
+list = "list"
+run = "run"
+inputs = ["engine/crates/**", "client/**"]
+"#
+        .to_owned(),
+    )])
+    .unwrap();
+    let engine = "engine/crates/kernel/src/lib.rs";
+    for (path, needs_os, regression, windows_can_take) in [
+        (engine, None, false, true),
+        (
+            "client/crates/native/android/app/build.gradle.kts",
+            None,
+            false,
+            true,
+        ),
+        ("client/crates/native/ios/project.yml", None, false, false),
+        (engine, Some("macos"), false, false),
+        (engine, None, true, false),
+    ] {
+        let mut conn = hub::open_in_memory().unwrap();
+        publish(&conn, &manifest).unwrap();
+        register(&mut conn, "m-win", "windows", &["portable"]);
+        register(&mut conn, "m-mac", "macos", &["portable", "simulator"]);
+        let ticket = file(&mut conn, &[("change the client", &[], &[])]).remove(0);
+        conn.execute(
+            "UPDATE tickets SET acceptance = ?1, needs_os = ?2 WHERE id = ?3",
+            (format!("Exercise `{path}`."), needs_os, ticket.as_str()),
+        )
+        .unwrap();
+        if regression {
+            conn.execute(
+                "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state)
+                 VALUES ('simulator:build', ?1, 'b1', 'a1', 'open')",
+                [ticket.as_str()],
+            )
+            .unwrap();
+        }
+
+        let mut windows = free("m-win", &["local_a"]);
+        windows["os"] = json!("windows");
+        let reply = ask(&mut conn, &windows, at(1.0));
+        if windows_can_take {
+            assert_eq!(reply["ticket"], ticket.as_str(), "{path}: {reply}");
+        } else {
+            assert_eq!(reply, Value::Null, "{path}, {needs_os:?}, {regression}");
+            let mac = ask(&mut conn, &free("m-mac", &["local_b"]), at(2.0));
+            assert_eq!(mac["ticket"], ticket.as_str(), "{path}: {mac}");
+        }
+    }
+}
+
+#[test]
 fn a_warm_machine_without_the_family_cannot_defer_a_suitable_asker() {
     let mut conn = hub::open_in_memory().unwrap();
     declare(&conn, "\"any\"");

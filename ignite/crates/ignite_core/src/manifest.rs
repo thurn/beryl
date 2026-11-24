@@ -143,6 +143,11 @@ pub struct Family {
     /// that this command has never printed before, such as scenarios from unplayed seeds.
     pub next: Option<String>,
     pub inputs: Vec<InputPattern>,
+    /// Repository paths or globs that require this family for ordinary ticket dispatch.
+    /// When omitted, dispatch uses the path patterns from `inputs`, `package_inputs`, and
+    /// `digest_inputs`. An empty list opts out of path-based dispatch for this family.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dispatch_paths: Option<Vec<String>>,
     /// Extra inputs of one package's checks, by package name: what that package's tests read
     /// beyond `inputs`, such as the card files a code generator's tests walk. Only the checks
     /// that package holds hash them, so the family's other checks keep their cached results

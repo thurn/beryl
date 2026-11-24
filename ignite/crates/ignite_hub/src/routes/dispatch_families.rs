@@ -20,6 +20,7 @@ const KEY: &str = "dispatch_check_families";
 #[derive(Deserialize, Serialize)]
 struct Declaration {
     platforms: Platforms,
+    /// Path patterns for ordinary ticket eligibility.
     paths: BTreeSet<String>,
     /// Present for families that list or run with a product that uses a build slot.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -71,7 +72,10 @@ pub fn publish(conn: &Connection, manifest: &Manifest) -> Result<()> {
                 name,
                 Declaration {
                     platforms: family.platforms.clone(),
-                    paths: paths(inputs),
+                    paths: family.dispatch_paths.as_ref().map_or_else(
+                        || paths(inputs),
+                        |patterns| patterns.iter().cloned().collect(),
+                    ),
                     build_paths,
                 },
             )

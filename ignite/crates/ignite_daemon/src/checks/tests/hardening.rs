@@ -66,6 +66,54 @@ fn families_this_machine_does_not_run_are_in_the_set_as_keys_only_others_can_pas
 }
 
 #[test]
+fn tip_verification_keys_shared_inputs_outside_the_dispatch_paths() {
+    let manifest = r#"
+[family.simulator]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+list = "lister"
+run = "runner {checks}"
+inputs = ["engine/crates/**", "client/**"]
+dispatch_paths = ["client/ios/**"]
+"#;
+    let world = world(manifest, &[], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() = listing(&["simulator:build"]);
+    let mut trees = FakeTrees::new(&world.dir, &[]);
+    trees.tracked = vec![
+        "engine/crates/kernel/src/lib.rs".to_owned(),
+        "client/ios/project.yml".to_owned(),
+    ];
+    let checks = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        trees,
+    );
+
+    world
+        .git
+        .set_object("client", Oid::new("c".repeat(40)).unwrap());
+    world
+        .git
+        .set_object("engine/crates", Oid::new("a".repeat(40)).unwrap());
+    let before = checks.regression_checks(&world.ctx, &tree()).unwrap();
+    world
+        .git
+        .set_object("engine/crates", Oid::new("b".repeat(40)).unwrap());
+    let after = checks.regression_checks(&world.ctx, &tree()).unwrap();
+
+    let [before] = before.checks.as_slice() else {
+        panic!("expected a Simulator check: {before:?}");
+    };
+    let [after] = after.checks.as_slice() else {
+        panic!("expected a Simulator check: {after:?}");
+    };
+    assert_eq!(before.key.platform, Some(Os::Macos));
+    assert_eq!(after.key.platform, Some(Os::Macos));
+    assert_ne!(before.key.hash, after.key.hash);
+}
+
+#[test]
 fn a_family_that_cannot_be_listed_leaves_the_others_and_is_named() {
     let manifest = [
         family("unit", "\"any\"", "lister", ""),

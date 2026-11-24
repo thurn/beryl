@@ -108,6 +108,8 @@ inputs = [
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
+# Only the iOS host requires a Mac worker. The Simulator result still hashes shared inputs.
+dispatch_paths = ["client/crates/beryl_client/ios/**"]
 needs = ["python-env"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.native_app list native-ios"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.native_app run native-ios {checks}"
