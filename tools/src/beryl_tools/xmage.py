@@ -267,6 +267,9 @@ class Exporter:
         # makes every run play the same game, as Forge's harness already does.
         self.emit(f"mage.util.RandomUtil.setSeed({cast(int, self.setup['seed'])}L);")
         start = cast(str, self.setup["step"])
+        # XMage runs the opening main phase's turn-based action before giving priority.
+        if ORDER.index(start) >= ORDER.index("PrecombatMain"):
+            self.emit("skipOpeningMainLore();")
         # XMage's duel skips its first draw (CR 103.8a). A later Beryl upkeep still has a draw.
         if self.restore_first_draw:
             self.emit(

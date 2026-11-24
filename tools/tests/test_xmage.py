@@ -88,6 +88,23 @@ def test_xmage_restores_the_draw_only_after_a_later_upkeep_setup(
     assert any("useNextSkipStep" in line for line in export.body) is restores_draw
 
 
+@pytest.mark.parametrize(
+    ("step", "skips_lore"),
+    [("Draw", False), ("PrecombatMain", True), ("BeginningOfCombat", True)],
+)
+def test_xmage_skips_opening_main_lore_only_when_the_setup_has_reached_main(
+    step: str, skips_lore: bool
+) -> None:
+    entry = next(
+        e for e in json.loads(FIXTURE.read_text()) if e["card"] == "Mana Drain"
+    )
+    entry["setup"]["step"] = step
+    faces = xmage_java.Faces.load(card_store.STORE)
+    export = xmage_java.Export(entry["card"], entry["name"], "opening_main")
+    xmage.Exporter(entry, faces, export).arrange()
+    assert ("skipOpeningMainLore();" in export.body) is skips_lore
+
+
 def test_a_command_after_the_opponents_spell_passes_priority_first() -> None:
     # Player 0 (playerB) casts Get Lost in player 1's (playerA's) main phase, then playerA
     # sacrifices a Map: without the pass, playerA would sacrifice before Get Lost was cast.

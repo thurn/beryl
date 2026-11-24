@@ -21,6 +21,8 @@ import mage.ObjectColor;
 import mage.abilities.Ability;
 import mage.abilities.TriggeredAbility;
 import mage.abilities.common.SagaAbility;
+import mage.abilities.common.SimpleStaticAbility;
+import mage.abilities.effects.ContinuousRuleModifyingEffectImpl;
 import mage.abilities.keyword.ChangelingAbility;
 import mage.abilities.keyword.BandingAbility;
 import mage.abilities.keyword.DoubleStrikeAbility;
@@ -43,20 +45,24 @@ import mage.abilities.mana.ActivatedManaAbilityImpl;
 import mage.cards.Card;
 import mage.cards.Cards;
 import mage.choices.Choice;
+import mage.constants.Duration;
 import mage.constants.ManaType;
 import mage.constants.Outcome;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.constants.SubType;
+import mage.constants.TurnPhase;
 import mage.constants.Zone;
 import mage.counters.CounterType;
 import mage.counters.Counters;
 import mage.game.ExileZone;
 import mage.game.Game;
+import mage.game.events.GameEvent;
 import mage.game.permanent.Permanent;
 import mage.game.permanent.PermanentToken;
 import mage.game.stack.Spell;
 import mage.game.stack.StackObject;
+import mage.game.turn.Step;
 import mage.player.ai.PossibleTargetsSelector;
 import mage.players.Player;
 import mage.target.Target;
@@ -446,6 +452,41 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
     /** Sets a setup permanent's lore before the first turn begins. */
     protected void setLoreAtStart(TestPlayer player, String alias, int count) {
         ((BerylTestPlayer) player).startingLore.put(alias, count);
+    }
+
+    /** The scenario starts with the opening main phase's turn-based lore action already done. */
+    protected void skipOpeningMainLore() {
+        currentGame.getState().addAbility(new SimpleStaticAbility(Zone.ALL, new OpeningMainLore()), null);
+    }
+
+    private static final class OpeningMainLore extends ContinuousRuleModifyingEffectImpl {
+        OpeningMainLore() {
+            super(Duration.EndOfTurn, Outcome.Neutral, false, false);
+        }
+
+        private OpeningMainLore(OpeningMainLore effect) {
+            super(effect);
+        }
+
+        @Override
+        public OpeningMainLore copy() {
+            return new OpeningMainLore(this);
+        }
+
+        @Override
+        public boolean checksEventType(GameEvent event, Game game) {
+            return event.getType() == GameEvent.EventType.ADD_COUNTERS;
+        }
+
+        @Override
+        public boolean applies(GameEvent event, Ability source, Game game) {
+            return event.getSourceId() == null
+                    && CounterType.LORE.getName().equals(event.getData())
+                    && game.getTurnNum() == 1
+                    && game.getTurnStepType() == PhaseStep.PRECOMBAT_MAIN
+                    && game.getPhase() == game.getState().getTurn().getPhase(TurnPhase.PRECOMBAT_MAIN)
+                    && game.getStep().getStepPart() == Step.StepPart.PRE;
+        }
     }
 
     /**
