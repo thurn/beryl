@@ -24,13 +24,18 @@ const CLEARED: &[&str] = &[
 ];
 
 /// A `git` command in `dir`, not yet run.
+/// Automatic maintenance can hold a fetch open while Git repacks the shared object store.
+/// Disable it for Ignite's commands so maintenance can run separately from the daemon's work.
 pub(crate) fn git<I, S>(dir: &Path, args: I) -> Command
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
     let mut command = Command::new("git");
-    command.current_dir(dir).args(args);
+    command
+        .current_dir(dir)
+        .args(["-c", "maintenance.auto=false"])
+        .args(args);
     for name in CLEARED {
         command.env_remove(name);
     }
@@ -101,6 +106,6 @@ mod tests {
         let Error::Io(message) = error else {
             panic!("expected an I/O error, got {error:?}");
         };
-        assert!(message.starts_with("git rev-parse --verify no-such-ref-anywhere failed"));
+        assert!(message.contains("rev-parse --verify no-such-ref-anywhere failed"));
     }
 }

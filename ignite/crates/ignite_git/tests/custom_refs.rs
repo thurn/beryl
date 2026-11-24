@@ -12,6 +12,34 @@ use support::{Scratch, commit_all, git, remote_and_clone, write};
 const STAGING: &str = "refs/ignite/staging";
 
 #[test]
+fn fetching_a_ref_does_not_run_automatic_maintenance() {
+    let scratch = Scratch::new("fetch-maintenance");
+    let (_, clone) = remote_and_clone(&scratch);
+    let expected = refs::head(&clone).unwrap();
+    git(&clone, &["config", "maintenance.auto", "true"]);
+    git(&clone, &["config", "maintenance.autoDetach", "false"]);
+    git(&clone, &["config", "maintenance.gc.enabled", "false"]);
+    git(
+        &clone,
+        &["config", "maintenance.commit-graph.enabled", "true"],
+    );
+    git(&clone, &["config", "maintenance.commit-graph.auto", "-1"]);
+    let commit_graph = clone.join(".git/objects/info/commit-graphs/commit-graph-chain");
+
+    assert_eq!(
+        refs::remote_tip(&clone, "origin", "main").unwrap(),
+        expected
+    );
+    assert!(!commit_graph.exists(), "fetch started maintenance");
+
+    git(&clone, &["maintenance", "run", "--auto"]);
+    assert!(
+        commit_graph.is_file(),
+        "maintenance did not write the graph"
+    );
+}
+
+#[test]
 fn a_custom_ref_is_pushed_replaced_fetched_saved_and_deleted_and_no_branch_appears() {
     let scratch = Scratch::new("custom-refs");
     let (remote, clone) = remote_and_clone(&scratch);
