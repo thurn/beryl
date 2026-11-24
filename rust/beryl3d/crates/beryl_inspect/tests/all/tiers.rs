@@ -1,17 +1,42 @@
-//! The two visual tiers differ only in shading (docs/beryl-3d.md, "The Enhanced tier"): on
-//! every gated board, each frame resolves the same elements and draws the same records in
-//! both, but for the records only one tier writes, contact shadows in Baseline and particles in
-//! Enhanced.
+//! On every gated board the visual tiers share layout and motion, including arrow paths and
+//! endpoints. The tiers draw arrows with different primitives (docs/beryl-3d.md, "The Enhanced
+//! tier").
 
 use beryl_inspect::gate::{BOARDS, Playback};
-use kit_frame::frame::{Draw, Frame, Material};
+use kit_frame::frame::{Draw, Frame, Material, Vfx, sprites};
 use kit_ui::input::Tier;
 
-/// The records of `frame` other than those of `material`.
-fn records_but(frame: &Frame, material: Material) -> Vec<Draw> {
-    (frame.draws.iter())
-        .filter(|draw| draw.material != material as u8)
-        .copied()
+/// Baseline arrows sample the core and lit columns of the ribbon cell. Its other columns
+/// supply a generic glow sprite used by effects that should still compare across tiers.
+fn baseline_line(draw: &Draw) -> bool {
+    let [x, y, width, height] = draw.uv;
+    let [cell_x, cell_y, _, cell_height] = sprites::RIBBON_CELL.rect;
+    let first = cell_x + sprites::RIBBON_LIT_FIRST;
+    let end = first + sprites::RIBBON_LIT_COLUMNS;
+    draw.material == Material::Glow as u8
+        && draw.layer == sprites::RIBBON_CELL.page
+        && (draw.uv == sprites::RIBBON_CORE.rect
+            || (y == cell_y
+                && height == cell_height
+                && (first..end).contains(&x)
+                && width <= end - x))
+}
+
+fn enhanced_line(draw: &Draw) -> bool {
+    draw.material == Material::Vfx as u8
+        && (draw.uv[0] == Vfx::LineRibbon as u16 || draw.uv[0] == Vfx::LineHead as u16)
+}
+
+fn shared_draws(frame: &Frame) -> Vec<&Draw> {
+    frame
+        .draws
+        .iter()
+        .filter(|draw| match frame.tier {
+            Tier::Baseline => {
+                draw.material != Material::ContactShadow as u8 && !baseline_line(draw)
+            }
+            Tier::Enhanced => draw.material != Material::Particle as u8 && !enhanced_line(draw),
+        })
         .collect()
 }
 
@@ -40,8 +65,8 @@ fn every_gated_board_resolves_and_draws_the_same_in_both_tiers() {
                 base.names == enhanced_frame.names,
                 "{name} frame {frame}: the names differ"
             );
-            let base_draws = records_but(base, Material::ContactShadow);
-            let enhanced_draws = records_but(enhanced_frame, Material::Particle);
+            let base_draws = shared_draws(base);
+            let enhanced_draws = shared_draws(enhanced_frame);
             if let Some(index) = (0..base_draws.len().max(enhanced_draws.len()))
                 .find(|&index| base_draws.get(index) != enhanced_draws.get(index))
             {
@@ -56,13 +81,29 @@ fn every_gated_board_resolves_and_draws_the_same_in_both_tiers() {
     }
 }
 
-/// A step down to Baseline in the middle of play moves nothing (docs/beryl-3d.md, "Choosing a
-/// tier"): on each gated board with particles, a playback that steps down on the first frame
-/// with particles, while a `vanish` is under way, draws every frame from then on exactly as a
-/// playback in Baseline from the start draws it.
+/// A step down in the middle of a `vanish` keeps its timing and the positions of its effects.
 #[test]
 fn a_step_down_in_the_middle_of_a_vanish_draws_what_baseline_draws() {
-    let mut stepped_any = false;
+    step_down_during(|frame| frame.load.particles > 0, "particles");
+}
+
+/// A step down while an arrow is visible switches it to its Baseline ribbon immediately.
+#[test]
+fn a_step_down_while_a_line_is_visible_draws_what_baseline_draws() {
+    step_down_during(
+        |frame| {
+            frame
+                .draws
+                .iter()
+                .any(|draw| enhanced_line(draw) && draw.tint[3] > 0)
+        },
+        "a visible line",
+    );
+}
+
+/// Compare every frame after a tier change with the same playback run in Baseline from the start.
+fn step_down_during(effect_is_visible: impl Fn(&Frame) -> bool, effect: &str) {
+    let mut compared_after_step = false;
     for name in BOARDS {
         let mut baseline = Playback::new(name)
             .expect("a gated board")
@@ -88,12 +129,15 @@ fn a_step_down_in_the_middle_of_a_vanish_draws_what_baseline_draws() {
                     base.draws == drawn.draws,
                     "{name} frame {frame}: the records differ after the step down"
                 );
-            } else if drawn.load.particles > 0 {
+                compared_after_step = true;
+            } else if effect_is_visible(drawn) {
                 stepped_at = Some(frame);
                 stepped.set_tier(Tier::Baseline);
             }
         }
-        stepped_any |= stepped_at.is_some();
     }
-    assert!(stepped_any, "no gated board has a frame with particles");
+    assert!(
+        compared_after_step,
+        "no gated board stepped down during {effect}"
+    );
 }

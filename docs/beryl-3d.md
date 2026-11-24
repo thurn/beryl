@@ -340,9 +340,9 @@ Enhanced adds a depth shadow map, lighting and sheen on the tabletop and cards,
 multisampling, bloom, and seeded particles for effects that specify them. It
 uses the same light direction as the contact shadows so changing tier keeps
 shadows on the same side. A frame can omit bloom work when it has nothing to
-bloom. The client uses the tier to omit records such as Baseline contact shadows
-or Enhanced particles. The tier checks compare shared resolved geometry and
-records.
+bloom. Baseline draws arrows as atlas ribbons. Enhanced follows the same paths
+with procedural ribbons and spearheads. The tier checks compare resolved
+geometry, including the arrow paths, and draw records shared by both tiers.
 
 ### Choosing a tier
 
