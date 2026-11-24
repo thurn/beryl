@@ -115,10 +115,15 @@ fn runs_of(home: &Path, session: &SessionId, turn: u32) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = entries
         .filter_map(std::result::Result::ok)
         .map(|entry| entry.path())
-        .filter(|dir| dir.join("lock").exists() && names_turn(dir, &wanted))
+        .filter(|dir| has_run_lock(dir) && names_turn(dir, &wanted))
         .collect();
     dirs.sort();
     dirs
+}
+
+/// A supervisor leaves its lock file behind even after it exits.
+pub(super) fn has_run_lock(dir: &Path) -> bool {
+    dir.join("lock").exists()
 }
 
 /// Whether the run in `dir` was started with [`TURN_VARIABLE`] set to `wanted`.
@@ -154,6 +159,11 @@ pub fn recover(home: &Path, session: &SessionId, turn: u32) -> Recovery {
     let Some(run) = find_run(home, session, turn) else {
         return Recovery::NotStarted;
     };
+    recover_run(&run)
+}
+
+/// Recovers a turn once its run is known.
+pub(super) fn recover_run(run: &Run) -> Recovery {
     let dir = run.dir();
     if let Some(result) = fs::read(dir.join("result.json"))
         .ok()

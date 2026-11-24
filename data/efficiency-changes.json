@@ -925,5 +925,10 @@
     "label": "The root AGENTS.md, which every session loads, drops what checks, Ignite's output and skills already say, going from 21 KB to 14 KB.",
     "metric": "bead.dollars",
     "expect": "down"
+  },
+  {
+    "label": "Ignite reuses CLI turn run paths so polling workers does not repeatedly read the run archive.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

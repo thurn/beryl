@@ -1,6 +1,7 @@
 //! The real [`Turns`]: each CLI turn is a supervised command started through `start`'s
 //! [`TurnLauncher`], found again among the runs in the Ignite home by the `IGNITE_CLI_TURN`
-//! variable in its `spec.json`, and read from that run's `output.log`.
+//! variable in its `spec.json`, and read from that run's `output.log`. Once a daemon finds the
+//! run, it remembers its path so the loop can poll it without rereading the archive.
 //!
 //! A turn's supervisor is detached from the daemon, so a daemon restart leaves it running and
 //! the next daemon follows it. A thread of the daemon that started it waits for the supervisor,
@@ -16,6 +17,7 @@
 //! This module also holds [`CliDaemon::recover`], which the daemon calls once at start, before
 //! its socket answers, for every slot whose turn was recorded as starting.
 
+use std::collections::VecDeque;
 use std::fs;
 use std::path::PathBuf;
 #[cfg(all(test, unix))]
@@ -31,9 +33,9 @@ use ignite_core::traits::{CommandSpec, Error, Result};
 
 #[cfg(all(test, unix))]
 use crate::supervise::Started;
-use crate::supervise::{ResultFile, peaks::WorkerPeaks};
+use crate::supervise::{ResultFile, Run, peaks::WorkerPeaks};
 
-use super::start::{Recovery, TurnLauncher, find_run, recover};
+use super::start::{Recovery, TurnLauncher, find_run, has_run_lock, recover_run};
 use super::{CliDaemon, Turns, slot_of};
 
 /// The name of a run's command output in its directory, as the supervisor writes it.
@@ -44,6 +46,51 @@ const OUTPUT: &str = "output.log";
 const GROUP: &str = "group";
 /// The spec of a run, written before its supervisor starts.
 const SPEC: &str = "spec.json";
+/// Keep enough paths for active workers while bounding memory spent on historical lookups.
+const RECENT_RUNS: usize = 128;
+
+#[derive(Default)]
+struct RunPaths {
+    recent: Mutex<VecDeque<((SessionId, u32), Run)>>,
+}
+
+impl RunPaths {
+    /// The lookup runs outside the cache lock so a slow search cannot block a cache hit.
+    fn get(
+        &self,
+        session: &SessionId,
+        turn: u32,
+        locate: impl FnOnce() -> Option<Run>,
+    ) -> Option<Run> {
+        let key = (session.clone(), turn);
+        let cached = {
+            let mut recent = super::lock(&self.recent);
+            let entry = recent
+                .iter()
+                .position(|(candidate, _)| *candidate == key)
+                .and_then(|index| recent.remove(index));
+            entry.map(|entry| {
+                let run = entry.1.clone();
+                recent.push_front(entry);
+                run
+            })
+        };
+        // Pruning can remove a collected run. Fall back to looking it up again in that case.
+        if let Some(run) = cached.filter(|run| has_run_lock(run.dir())) {
+            return Some(run);
+        }
+        let run = locate()?;
+        self.remember(key, run.clone());
+        Some(run)
+    }
+
+    fn remember(&self, key: (SessionId, u32), run: Run) {
+        let mut recent = super::lock(&self.recent);
+        recent.retain(|(candidate, _)| *candidate != key);
+        recent.push_front((key, run));
+        recent.truncate(RECENT_RUNS);
+    }
+}
 
 /// CLI turns run as supervised commands under the Ignite home.
 pub struct SupervisedTurns {
@@ -52,6 +99,7 @@ pub struct SupervisedTurns {
     home: PathBuf,
     /// Held while a turn's run is looked for and started, so one daemon starts it once.
     starting: Mutex<()>,
+    runs: RunPaths,
     worker_peaks: WorkerPeaks,
     #[cfg(all(test, unix))]
     test_supervisors: Option<Arc<Mutex<Vec<Started>>>>,
@@ -64,6 +112,7 @@ impl SupervisedTurns {
             worker_peaks: WorkerPeaks::load(home.join("runs/worker-peaks.json")),
             home,
             starting: Mutex::new(()),
+            runs: RunPaths::default(),
             #[cfg(all(test, unix))]
             test_supervisors: None,
         }
@@ -77,7 +126,12 @@ impl SupervisedTurns {
     }
 
     fn run_file(&self, session: &SessionId, turn: u32, name: &str) -> Option<PathBuf> {
-        find_run(&self.home, session, turn).map(|run| run.dir().join(name))
+        self.run(session, turn).map(|run| run.dir().join(name))
+    }
+
+    fn run(&self, session: &SessionId, turn: u32) -> Option<Run> {
+        self.runs
+            .get(session, turn, || find_run(&self.home, session, turn))
     }
 }
 
@@ -103,6 +157,10 @@ impl Turns for SupervisedTurns {
             .ensure(session, turn, &command.args)
             .map_err(|e| Error::Io(format!("turn {turn} of {session} did not start: {e}")))?;
         if let Some(started) = started {
+            if has_run_lock(started.run().dir()) {
+                self.runs
+                    .remember((session.clone(), turn), started.run().clone());
+            }
             #[cfg(all(test, unix))]
             if let Some(supervisors) = &self.test_supervisors {
                 super::lock(supervisors).push(started);
@@ -114,7 +172,9 @@ impl Turns for SupervisedTurns {
     }
 
     fn recover(&self, session: &SessionId, turn: u32) -> Recovery {
-        recover(&self.home, session, turn)
+        self.run(session, turn)
+            .as_ref()
+            .map_or(Recovery::NotStarted, recover_run)
     }
 
     fn output(&self, session: &SessionId, turn: u32) -> Option<String> {
@@ -123,7 +183,7 @@ impl Turns for SupervisedTurns {
     }
 
     fn grew_at(&self, session: &SessionId, turn: u32) -> Option<Timestamp> {
-        let run = find_run(&self.home, session, turn)?;
+        let run = self.run(session, turn)?;
         modified_at(&run.dir().join(OUTPUT)).or_else(|| modified_at(&run.dir().join(SPEC)))
     }
 
@@ -148,7 +208,7 @@ impl Turns for SupervisedTurns {
     }
 
     fn end(&self, session: &SessionId, turn: u32) -> Result<()> {
-        match find_run(&self.home, session, turn) {
+        match self.run(session, turn) {
             Some(run) => run.end().map_err(|e| Error::Io(e.to_string())),
             None => Ok(()),
         }
@@ -183,5 +243,60 @@ impl CliDaemon {
             }
         }
         first.map_or(Ok(started), Err)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::clid::start::TURN_VARIABLE;
+    use crate::supervise::SupervisedLauncher;
+    use std::path::Path;
+    use std::sync::Arc;
+
+    fn write_run(home: &Path, name: &str, session: &SessionId, output: &str) -> PathBuf {
+        let dir = home.join("runs").join(name);
+        fs::create_dir_all(&dir).unwrap();
+        let spec = serde_json::json!({
+            "args": ["fake-cli"],
+            "cwd": home,
+            "env": [[TURN_VARIABLE, format!("{session}:1")]],
+            "queued_s": 0.0,
+        });
+        fs::write(dir.join(SPEC), spec.to_string()).unwrap();
+        fs::write(dir.join("lock"), "").unwrap();
+        fs::write(dir.join(OUTPUT), output).unwrap();
+        dir
+    }
+
+    #[test]
+    fn polling_remembers_the_run_found_after_a_restart_until_it_is_pruned() {
+        let home = ignite_core::test_files::temp_dir().join("cli-turn-path");
+        let launcher = Arc::new(SupervisedLauncher::with_command(
+            Vec::new(),
+            home.join("runs"),
+        ));
+        let turns = SupervisedTurns::new(
+            TurnLauncher::with_command(launcher, Vec::new(), home.clone(), home.clone()),
+            home.clone(),
+        );
+        let session = SessionId::new("cli-fake-0a1b2c3d").unwrap();
+        assert_eq!(turns.output(&session, 1), None);
+
+        let first = write_run(&home, "01", &session, "first output");
+        write_run(&home, "02", &session, "duplicate output");
+        assert_eq!(turns.output(&session, 1).as_deref(), Some("first output"));
+
+        // Once the supervisor is identified, poll its files without reading its spec again.
+        fs::remove_file(first.join(SPEC)).unwrap();
+        assert_eq!(turns.output(&session, 1).as_deref(), Some("first output"));
+        assert!(turns.grew_at(&session, 1).is_some());
+        assert_eq!(turns.output(&session, 2), None);
+
+        fs::remove_dir_all(first).unwrap();
+        assert_eq!(
+            turns.output(&session, 1).as_deref(),
+            Some("duplicate output")
+        );
     }
 }
