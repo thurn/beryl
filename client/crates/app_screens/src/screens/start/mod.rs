@@ -233,7 +233,11 @@ mod tests {
 
     #[test]
     fn deep_searcher_is_the_default_opponent() {
-        let agents = [agent("expert"), agent("pimc72-hidden-30m-anchor"), agent("mcts-hidden")];
+        let agents = [
+            agent("expert"),
+            agent("pimc72-hidden-30m-anchor"),
+            agent("mcts-hidden"),
+        ];
         assert_eq!(first_agent(&agents), Some(1));
     }
 
