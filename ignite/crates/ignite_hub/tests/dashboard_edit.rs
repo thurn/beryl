@@ -255,7 +255,8 @@ fn fleet_writes_use_the_private_listener_and_check_the_version() {
     drop(conn);
 
     let before = get_fleet(private.address());
-    assert_eq!(before, get_fleet(public.address()));
+    // The public listener serves only the change feed of the API, not the fleet.
+    assert_eq!(send(public.address(), "GET", FLEET_PATH, &[], "").0, 404);
     assert_eq!(before.machines[0].name, "m1");
     assert_eq!(before.machines[0].id, sample.machine);
     assert_eq!(before.usage, [sample]);
@@ -346,8 +347,11 @@ families = ["rust"]
         database: dir.join("hub.sqlite"),
         wordmark: None,
     };
+    // The public listener serves no fleet route, so the database shows it seeded nothing.
     let public = server.start_read_only().unwrap();
-    assert_eq!(get_fleet(public.address()).settings.version, 0);
+    let conn = hub::open(&server.database).unwrap();
+    assert_eq!(hub::fleet_settings::settings(&conn).unwrap().version, 0);
+    drop(conn);
     public.stop();
 
     let private = server.start().unwrap();

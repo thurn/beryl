@@ -72,7 +72,6 @@ fn the_public_listener_serves_reads_and_refuses_writes_and_export() {
     let private = server.start().unwrap();
     let register = r#"{"machine":"intruder"}"#;
 
-    assert_eq!(status(public.address(), "GET", "/pj/api/tickets", ""), 200);
     assert_eq!(status(public.address(), "HEAD", "/", ""), 200);
     assert_eq!(status(public.address(), "GET", "/", ""), 200);
     // The project's old page address redirects to the root.
@@ -85,8 +84,21 @@ fn the_public_listener_serves_reads_and_refuses_writes_and_export() {
     ] {
         assert_eq!(status(public.address(), method, path, register), 405);
     }
-    assert_eq!(status(public.address(), "GET", "/pj/api/export", ""), 404);
-    assert_eq!(status(public.address(), "GET", "/pj/api/export/x", ""), 404);
+    // Only the API routes the public dashboard's script fetches are served; every other one,
+    // including those that only read, answers 404, so a new route is private by default.
+    for path in [
+        "/pj/api",
+        "/pj/api/export",
+        "/pj/api/export/x",
+        "/pj/api/tickets",
+        "/pj/api/fleet",
+        "/pj/api/machines/versions",
+        "/pj/api/checks/flaky",
+    ] {
+        assert_eq!(status(public.address(), "GET", path, ""), 404, "{path}");
+        assert_eq!(status(public.address(), "HEAD", path, ""), 404, "{path}");
+    }
+    assert_eq!(status(private.address(), "GET", "/pj/api/tickets", ""), 200);
     // A long poll without a token is answered at once and empty, so strangers cannot hold the
     // request threads. Had it waited instead, this would still pass, but only after a minute.
     let feed = reply(public.address(), "GET", "/api/feed?since=0&wait=60", "");

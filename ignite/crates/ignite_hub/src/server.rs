@@ -64,6 +64,13 @@ const EVALUATION_RETRY: Duration = Duration::from_secs(600);
 /// machine's first registration.
 pub const MAX_UNAUTHENTICATED_BODY: u64 = 64 * 1024;
 
+/// The only API routes the public listener serves: those the dashboard's own script fetches on
+/// a page without edit controls. Every other API route answers 404 there, so a route added
+/// later stays private until it is listed here. The dashboard's pages need no list: they
+/// answer only at the addresses `dashboard::serve` knows, and each page leaves out what only
+/// the private listener may show.
+pub const PUBLIC_API: &[&str] = &["/feed"];
+
 /// Where and how the hub serves.
 #[derive(Clone, Debug)]
 pub struct HubServer {
@@ -89,8 +96,8 @@ impl HubServer {
     }
 
     /// Like [`HubServer::start`], but the server answers only `GET` and `HEAD` requests and
-    /// refuses `/<project>/api/export`, so it is safe to publish beyond the private network
-    /// (Tailscale Funnel). It has its own request-thread cap and connection pool, so a flood
+    /// serves only the API routes in [`PUBLIC_API`], so it is safe to publish beyond the private
+    /// network (Tailscale Funnel). It has its own request-thread cap and connection pool, so a flood
     /// on it cannot starve the private listener.
     pub fn start_read_only(&self) -> io::Result<RunningHub> {
         self.start_with(true)
@@ -351,9 +358,9 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
         // The dashboard's pages are at the root, and their script follows the change feed at
         // `api/feed` relative to the root.
         .or_else(|| (path == "/api/feed").then_some("/feed"));
-    // `/export` dumps every ticket, which a public listener does not serve.
-    if shared.read_only && api.is_some_and(|api| api == "/export" || api.starts_with("/export/")) {
-        return failure(404, "Unknown route");
+    // Not cached, like the dashboard's own 404 page, so a cache never keeps the refusal.
+    if shared.read_only && api.is_some_and(|api| !PUBLIC_API.contains(&api)) {
+        return failure(404, "Unknown route").with_header("Cache-Control", "no-store".to_owned());
     }
     let headers: Vec<(String, String)> = http
         .headers()

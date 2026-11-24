@@ -94,7 +94,7 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
     .unwrap();
     let (status, reply) = browser_request(public.address(), "PUT", "/proj/api/fleet", &body);
     assert_eq!(status, 405, "{reply}");
-    assert_eq!(fleet_view(public.address()).settings, settings);
+    assert_eq!(fleet_view(private.address()).settings, settings);
 
     let (status, saved) = browser_request(private.address(), "PUT", "/proj/api/fleet", &body);
     assert_eq!(status, 200, "{saved}");
@@ -104,7 +104,7 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
     expected_trees.tree_ceiling_gb = 50;
     assert_eq!(saved.machine("cygnus").trees, expected_trees);
     assert_eq!(
-        fleet_view(public.address())
+        fleet_view(private.address())
             .settings
             .provider("codex")
             .share,

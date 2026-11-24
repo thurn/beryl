@@ -588,9 +588,11 @@ survive each other's restarts.
 - **The hub** runs on jarvis as a login service of its own, `ignite hub`,
   started from `bin/current`. It serves the shared database over HTTPS on the
   Tailscale network (`IGNITE_HUB_LISTEN`), and a read-only copy for the public
-  address (`IGNITE_HUB_PUBLIC_LISTEN`), and does nothing else. So a daemon
-  restart or crash loop on jarvis never takes the hub away from the other
-  machines, and the hub's own restart takes well under a second.
+  address (`IGNITE_HUB_PUBLIC_LISTEN`), and does nothing else. The public copy
+  serves the dashboard's pages and, of the API, only the change feed their
+  script follows; every other API route answers 404 there. So a daemon restart
+  or crash loop on jarvis never takes the hub away from the other machines, and
+  the hub's own restart takes well under a second.
 
 How the executable is installed and kept current:
 
