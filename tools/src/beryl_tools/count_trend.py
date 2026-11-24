@@ -16,12 +16,15 @@ verifier's counts go in [`history_path`] for its current calibration, and `repor
   [`LOWER_PERCENT`] below the bar, so a gain isn't left as slack for later rises to use up.
 
 While a ticket of either kind is open, a later finding of that kind is added to it as a comment.
+When a verified count clears the finding, the trend closes open tickets whose discussion and
+history show nobody has taken them up.
 Nothing here fails a run: the gate's own verdict does that.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -41,6 +44,12 @@ class Tickets(Protocol):
     def create_issue(
         self, *, title: str, body: str, priority: str, labels: str
     ) -> tuple[int, str]: ...
+
+    def inspect_issues(
+        self, *issues: str
+    ) -> tuple[int, list[dict[str, object]]] | None: ...
+
+    def close_issues(self, sequence: int, reasons: dict[str, str]) -> bool: ...
 
 
 # One tested range adding more than this files a creep ticket. Unrelated changes move the count
@@ -217,6 +226,99 @@ def file_or_comment(
     return f"filed {out.strip()}" if code == 0 else "ticket not filed"
 
 
+def open_issue_ids(label: str, store: Tickets) -> list[str]:
+    found = store.list_issues("--label", label, "--status", "open")
+    if not isinstance(found, list):
+        return []
+    return [
+        ticket["id"]
+        for ticket in found
+        if isinstance(ticket, dict)
+        and ticket.get("status") == "open"
+        and isinstance(ticket.get("id"), str)
+    ]
+
+
+def untouched(ticket: dict[str, object]) -> bool:
+    """Use the hub's clearing rules for comments, edits and claims."""
+    filer = ticket.get("created_by")
+    if (
+        ticket.get("status") != "open"
+        or ticket.get("assignee") is not None
+        or ticket.get("claimed_at") is not None
+        or not isinstance(filer, str)
+    ):
+        return False
+    automatic = (filer, "ignite-upkeep")
+    comments, history = ticket.get("comments"), ticket.get("history")
+    if not isinstance(comments, list) or not isinstance(history, list):
+        return False
+    if any(
+        not isinstance(c, dict) or c.get("author") not in automatic for c in comments
+    ):
+        return False
+    for row in history:
+        if not isinstance(row, dict) or not isinstance(row.get("change"), dict):
+            return False
+        change = row["change"]
+        status = change.get("status")
+        if isinstance(status, list) and "in_progress" in status:
+            return False
+        release = status == ["pending_approval", "open"] and change.keys() <= {
+            "status",
+            "updated_at",
+            "version",
+        }
+        if row.get("actor") not in automatic and not release:
+            return False
+    return True
+
+
+def creep_baseline(body: str) -> int | None:
+    """Read the original count in a step report or the floor in a drift report."""
+    match = re.search(
+        r"^The count gate measured the rollout benchmark at [^:\n]+: [+-][\d.]+% "
+        r"(?:since \S+ \(([\d,]+) to [\d,]+\)|above ([\d,]+), the lowest count since )",
+        body,
+        re.MULTILINE,
+    )
+    return int((match[1] or match[2]).replace(",", "")) if match else None
+
+
+def close_cleared(
+    head: str, measured: int, bar: int, store: Tickets, verifier: str, digest: str
+) -> list[str]:
+    creep = open_issue_ids(f"{CREEP_LABEL}:{digest}", store)
+    # Lowering the bar changes the calibration digest. The ticket body names its verifier.
+    lower = open_issue_ids(LOWER_LABEL, store) if bar <= measured else []
+    if not creep and not lower:
+        return []
+    snapshot = store.inspect_issues(*dict.fromkeys(creep + lower))
+    if snapshot is None:
+        return []
+    sequence, tickets = snapshot
+    reasons: dict[str, str] = {}
+    prefix = f"Closed by count_trend: the count at {head} is {measured:,}"
+    for ticket in tickets:
+        issue, body = ticket.get("id"), ticket.get("body")
+        if (
+            not isinstance(issue, str)
+            or not isinstance(body, str)
+            or not untouched(ticket)
+        ):
+            continue
+        baseline = creep_baseline(body) if issue in creep else None
+        if baseline is not None and measured <= baseline:
+            reasons[issue] = f"{prefix}, at or below {baseline:,} before the rise."
+        if issue in lower and f"`profile.{verifier}.limits.instructions`" in body:
+            reasons[issue] = (
+                f"{prefix}, and {verifier}'s bar is at or below it at {bar:,}."
+            )
+    if reasons and store.close_issues(sequence, reasons):
+        return [f"closed {issue}: {reason}" for issue, reason in reasons.items()]
+    return []
+
+
 def report_at(
     head: str | None,
     measured: int,
@@ -227,8 +329,8 @@ def report_at(
     digest: str,
 ) -> list[str]:
     """Records the count measured on the commit `head`, the verified one, and files the tickets its
-    trend calls for; returns lines to print. `head` of None only compares the count with the
-    earlier ones of HEAD's ancestors, and records and files nothing."""
+    trend calls for or closes those it clears; returns lines to print. `head` of None only
+    compares the count with the earlier ones of HEAD's ancestors."""
     path = history_path(verifier, digest)
     try:
         records = load(path.read_text()) if path.exists() else []
@@ -239,13 +341,15 @@ def report_at(
         f = judge(records, measured, bar, proper_ancestor(local))
         return [step_line(f)] if f.previous else []
     f = judge(records, measured, bar, proper_ancestor(head))
+    lines = [step_line(f)] if f.previous else []
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a") as out:
             out.write(dump(Record(head, measured, bar)) + "\n")
     except OSError as e:
         print(f"count history: {e}", file=sys.stderr)
-    lines = [step_line(f)] if f.previous else []
+    else:
+        lines.extend(close_cleared(head, measured, bar, store, verifier, digest))
     # A failing gate files a ticket of its own.
     if passed and f.creep:
         said = file_or_comment(

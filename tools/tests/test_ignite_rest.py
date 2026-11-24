@@ -390,21 +390,52 @@ def test_the_trend_files_a_count_creep_ticket_and_fails_nothing(
         "new-lima",
     )
     assert windows == recalibrated == []
-    assert not calls
+    assert all(call[2] == "list" for call in calls)
+    calls.clear()
     said = count_trend.report_at(
         "newcommit", 1_005_000, 1_100_000, True, adapter.IgniteTickets(), "mac", "lima"
     )
     assert any("count creep" in line and "filed Tnew1" in line for line in said)
     assert calls[0][1:5] == ["ticket", "list", "--label", "count-creep:lima"]
-    assert calls[1][1:4] == [
+    filed = next(call for call in calls if call[2] == "create")
+    assert filed[1:4] == [
         "ticket",
         "create",
         "Win back the rollout benchmark's creeping instruction count",
     ]
-    assert "count-creep,count-creep:lima,tier:opus" in calls[1]
+    assert "count-creep,count-creep:lima,tier:opus" in filed
     assert count_trend.load(history.read_text())[-1] == count_trend.Record(
         "newcommit", 1_005_000, 1_100_000
     )
+
+
+def test_a_comment_after_reading_the_ticket_blocks_the_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    detail: dict[str, object] = {"id": "T1234", "comments": [], "history": []}
+    sequence: int = 7
+
+    def ignite(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert args[-1] == "--json"
+        if args[2] == "show":
+            assert args[3:-1] == ["T1234", "--comments", "--history"]
+            return subprocess.CompletedProcess[str](args, 0, json.dumps(detail))
+        assert args[2] == "batch"
+        batch = json.loads(Path(args[3]).read_text())
+        if not batch["ops"]:
+            return subprocess.CompletedProcess[str](
+                args, 0, json.dumps({"results": [], "seq": sequence})
+            )
+        assert batch["ops"] == [{"op": "close", "id": "T1234", "reason": "recovered"}]
+        assert batch["if"] == [{"seq": 7}]
+        code = 0 if batch["if"] == [{"seq": sequence}] else 5
+        return subprocess.CompletedProcess[str](args, code, '{"results": []}')
+
+    monkeypatch.setattr(subprocess, "run", ignite)
+    store = adapter.IgniteTickets()
+    assert store.inspect_issues("T1234") == (7, [detail])
+    sequence += 1
+    assert not store.close_issues(7, {"T1234": "recovered"})
 
 
 def test_a_missing_ticket_client_files_nothing_and_raises_nothing(

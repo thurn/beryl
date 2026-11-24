@@ -22,8 +22,8 @@ The families:
   `engine/crates/beryl_bench/count-gate.toml`. The count runs in the `beryl-bench` virtual machine
   under Lima or WSL. After `counts:rollouts` a run in the `tip` class (`IGNITE_CLASS`)
   stores the verified count for its verifier and calibration and files `count-creep` and
-  `count-lower` tickets through `ignite ticket`, as `count_trend.py` does; they never change the
-  check's outcome.
+  `count-lower` tickets through `ignite ticket`. It also closes untouched tickets when the
+  count clears them. Ticket operations never change the check's outcome.
 - `fuzz`: batches of random games, `fuzz:<target>/<first seed>+<games>`, played by the tests of
   `beryl_search` and `beryl_session` that `just fuzz` runs.
 - `exhaust`: `exhaust:<card>/depth<d>-nodes<n>`, every decision sequence from the end positions of
@@ -348,18 +348,21 @@ class IgniteTickets:
             return 127, str(error)
         return done.returncode, done.stdout
 
+    def json_reply(self, *args: str) -> Any:
+        code, out = self.call(*args, "--json")
+        if code != 0:
+            return None
+        try:
+            return json.loads(out)
+        except ValueError:
+            return None
+
     def list_issues(self, *filters: str, include_closed: bool = False) -> object:
         extra = ["--all"] if include_closed else []
-        code, out = self.call("list", *filters, *extra, "--json")
-        if code != 0:
-            return []
-        try:
-            found = json.loads(out)
-        except ValueError:
-            return []
+        found = self.json_reply("list", *filters, *extra)
         if isinstance(found, dict):
             found = found.get("tickets", found.get("results", []))
-        return found
+        return found if found is not None else []
 
     def add_comment(self, issue: str, comment: str) -> tuple[int, str]:
         return self.call("comment", issue, "--", comment)
@@ -382,6 +385,36 @@ class IgniteTickets:
                 # Filed by a check, so it stays on the machine that measured it.
                 "--automatic",
             )
+
+    def batch(self, request: dict[str, object]) -> Any:
+        with tempfile.TemporaryDirectory() as scratch:
+            batch_file = Path(scratch) / "batch.json"
+            batch_file.write_text(json.dumps(request))
+            return self.json_reply("batch", str(batch_file))
+
+    def inspect_issues(
+        self, *issues: str
+    ) -> tuple[int, list[dict[str, object]]] | None:
+        # An empty batch reads the hub sequence without changing any tickets.
+        before = self.batch({"ops": []})
+        if not isinstance(before, dict) or not isinstance(before.get("seq"), int):
+            return None
+        found = self.json_reply("show", *issues, "--comments", "--history")
+        details = found if isinstance(found, list) else [found]
+        return before["seq"], [ticket for ticket in details if isinstance(ticket, dict)]
+
+    def close_issues(self, sequence: int, reasons: dict[str, str]) -> bool:
+        # A comment advances the hub sequence but leaves the ticket version alone.
+        result = self.batch(
+            {
+                "if": [{"seq": sequence}],
+                "ops": [
+                    {"op": "close", "id": issue, "reason": reason}
+                    for issue, reason in reasons.items()
+                ],
+            }
+        )
+        return isinstance(result, dict) and isinstance(result.get("results"), list)
 
 
 def git(root: Path, *args: str) -> str:
@@ -422,7 +455,7 @@ def run_gate(args: Sequence[str], root: Path) -> tuple[int, str]:
 def trend(
     root: Path, measured: int, bar: int, ok: bool, verifier: str, digest: str
 ) -> None:
-    """Stores the verified commit's count and files what the trend calls for. A failure here
+    """Stores the verified commit's count and updates tickets the trend calls for. A failure here
     never changes the check's outcome."""
     try:
         for line in count_trend.report_at(
