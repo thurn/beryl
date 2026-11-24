@@ -31,7 +31,6 @@ which propose manual actions for the player to apply.
 - [iroh](https://docs.iroh.computer/) and its
   [relay documentation](https://docs.iroh.computer/concepts/relays): the
   peer-to-peer transport and public relay service.
-- The images below are interface mockups.
 
 ## Decisions
 
@@ -769,8 +768,6 @@ A right-click on a card or pile opens a menu for it, or for the selection if the
 card is selected. The menu is a list of commands and nothing else, by decision
 T10. This is the menu for a creature token on the battlefield.
 
-![The context menu for a permanent](ui_mockups/manual_card_menu.png)
-
 - **A header** names the card and whose it is.
 - **Every row is a plain label,** with its key at the right edge. No row holds a
   button, a stepper, an icon or any other control.
@@ -801,12 +798,10 @@ The menu for a library has the same form. Rows that belong to an assist sit
 under an "Assists" heading, and appear only when the player has switched that
 assist on.
 
-![The context menu for a library](ui_mockups/manual_library_menu.png)
-
 Three rules hold for every menu.
 
-- **No submenu is deeper than one level.** "Bottom of library" in the image is
-  the deepest the menu goes.
+- **No submenu is deeper than one level.** "Bottom of library" is the deepest
+  the menu goes.
 - **The menu never asks a question the next step could take.** "Attach to…" and
   "Draw arrow…" open no dialog. Each closes the menu and starts an arrow from
   the card, and the click that ends the arrow picks the target.
@@ -838,8 +833,6 @@ Cockatrice, with the prompt in the corner instead of a dialog over the table.
 Cmd+K opens a list of every command, filtered as the player types. It is where
 rarely used commands live. The forty-odd library actions Cockatrice nests three
 levels deep are each one search away.
-
-![The command list](ui_mockups/manual_palette.png)
 
 - **It acts on the current selection,** or the pile or card under the pointer,
   and says which in the field.
@@ -983,8 +976,6 @@ A proposal or label is shown only to a player who has that assist on. The combat
 proposal is shown to each such player, and either may apply it. The turn upkeep
 proposal is shown only to the player whose turn is beginning.
 
-![A combat proposal](ui_mockups/manual_combat_proposal.png)
-
 A batch is one log entry, and either player may undo it.
 
 ### Turn upkeep
@@ -1124,8 +1115,6 @@ which Cockatrice has no way to show.
 The **lobby** is where players load decks, choose opening settings and prepare
 for the next game. The start screen also offers **Resume table** when the
 profile holds a saved hosted or joined table.
-
-![The lobby](ui_mockups/manual_lobby.png)
 
 - **The host's lobby shows the invite code** and, once the guest connects, their
   name and the state of the connection.

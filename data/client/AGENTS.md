@@ -1,4 +1,4 @@
-# the client data
+# Client data
 
 The app embeds runtime data. Tools load it from the checkout or from
 `BERYL_CLIENT_DATA`. The host passes validated `kit_base::data::Data` to the

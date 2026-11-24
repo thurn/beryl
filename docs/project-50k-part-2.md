@@ -42,8 +42,8 @@ to change:
 - This plan's documentation ticket retires both plan documents into the
   technical documents, and takes over the list that epic's documentation pass
   had: sections 4, 5, 7, 8, 9, 10, 13 and 20 of the architecture document, the
-  two contracts, `rust/AGENTS.md` and [benchmarking.md](benchmarking.md) for the
-  present-cost gate, and the census section.
+  two contracts, `engine/AGENTS.md` and [benchmarking.md](benchmarking.md) for
+  the present-cost gate, and the census section.
 
 ## Status
 

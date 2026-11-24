@@ -7,7 +7,7 @@ draws the game with a GPU and uses Beryl's session and rules engine.
 crate boundaries, scene tree, layout profiles, arrangement, features and checks.
 This document describes what the client draws, the frame it hands to the
 renderer and how the hosts run it. Start with the
-[workspace guide](../rust/beryl3d/AGENTS.md) for build and test commands.
+[workspace guide](../client/AGENTS.md) for build and test commands.
 
 The requirements, in priority order:
 

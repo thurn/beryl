@@ -57,8 +57,10 @@ work:
 Ask the person only about what an agent cannot do or may not decide, one
 question at a time, each with your recommendation. Settle everything else
 yourself: take the least-blocking default and write it, with its reason, in the
-epic. A point that cannot be resolved is cut from scope or stops the plan. Never
-file a ticket that needs a person later.
+epic. Write the design and the contract between the tickets into the epic too,
+and never file a ticket whose work is to figure out the design. A point that
+cannot be resolved is cut from scope or stops the plan. Never file a ticket
+that needs a person later.
 
 When the task is a sentence or two, ask a few clarifying questions at the
 start, because the person may not be there later.

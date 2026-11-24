@@ -920,5 +920,10 @@
     "label": "Ignite records confirmed baseline failures before probing historical commits, so landing gates can proceed while culprit searches run.",
     "metric": "ignite.gate-wait-seconds",
     "expect": "down"
+  },
+  {
+    "label": "The root AGENTS.md, which every session loads, drops what checks, Ignite's output and skills already say, going from 21 KB to 14 KB.",
+    "metric": "bead.dollars",
+    "expect": "down"
   }
 ]

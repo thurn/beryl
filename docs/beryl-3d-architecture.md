@@ -431,8 +431,8 @@ architecture tools:
 
 The guides are held to sizes:
 
-- `rust/beryl3d/AGENTS.md` is at most 150 lines, and says what the levels are
-  and where to look.
+- `client/AGENTS.md` is at most 150 lines, and says what the levels are and
+  where to look.
 - Each crate has an `AGENTS.md` of at most 60 lines.
 - Each kind of thing that `just b3d new` writes has a recipe of at most 30
   lines.

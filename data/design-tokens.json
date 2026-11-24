@@ -4,7 +4,7 @@
       "name": "table",
       "kind": "color",
       "value": "#6b5f56",
-      "note": "Design tokens from docs/ui_mockups/ui_system.png (\"01 Foundations\"), as its swatches render: the swatches' labels (#625C56, #242321, #F2ECE1, #E9AD4A, #38DCFF) differ a little from the colors they show, and the screens are painted in the shown ones."
+      "note": "Design tokens from the design system image (\"01 Foundations\"), as its swatches render: the swatches' labels (#625C56, #242321, #F2ECE1, #E9AD4A, #38DCFF) differ a little from the colors they show, and the screens are painted in the shown ones."
     },
     {
       "name": "surface",

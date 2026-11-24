@@ -2,8 +2,8 @@
 
 This adds to the root `AGENTS.md`, whose rules all apply here.
 
-the client, the native 3D client, is a separate workspace in `client` with its
-own build and checks; see `client/AGENTS.md`.
+The native client is a separate workspace in `client/` with its own build and
+checks; see `client/AGENTS.md`.
 
 In a build tree, the `cargo` on `PATH` runs through Ignite, which gives the
 command cores from the daemon and records it, so a build may wait a moment for
@@ -44,8 +44,29 @@ heavy command.
   `Card::Counterspell` and import everything with `use crate::prelude::*;`; code
   outside the card files uses `beryl_card_names::names` (also re-exported as
   `beryl_cards::names`).
-- The test decks are `decks::WU_CONTROL` and, before it,
-  `decks::VINTAGE_WU_CONTROL`.
+- The test decks are `decks::WU_CONTROL` and `decks::VINTAGE_WU_CONTROL`.
+
+## Rules the checks hold
+
+Each of these checks explains itself when it fails.
+
+- `file-length`: no source file is over 800 lines, with exceptions in
+  `data/file-length-allowlist.json`.
+- `rule-ownership`: kernel and rules modules declare the rules they implement in
+  an `Implements:` header and mark cross-references with `see`.
+- `card-names`: no card names in generic code, with exceptions in its allowlist.
+- `two-player`: rules code and card code never assume there is exactly one other
+  player. They ask the game state for a player's opponents, the defending
+  players or the next player in turn order ("Players" in `beryl_kernel`'s
+  contract).
+- `board-door`: rules code and card code never access the board directly through
+  `.board()` or `board::Board`. They change the game state through mutator
+  functions ("Mutators" in `beryl_kernel`'s contract).
+- `discarded-push`: kernel, rules and card code never ignore a failed push onto
+  a fixed-capacity list. If you can argue the list can't overflow, use
+  `Queue::push_bounded`, which checks that claim in debug builds. Otherwise
+  propagate the `Full` error, which makes the game switch to the slower `Large`
+  state representation, which has room to grow.
 
 ## Testing rules and cards
 
@@ -72,13 +93,16 @@ heavy command.
 - `just oracle <card names>` plays a card's generated, rules-library and
   hand-written scenarios against XMage and Forge. It needs `just oracle-setup`
   once per machine.
-- `just citations` checks every Comprehensive Rules citation and quote in the
-  code against the rules release pinned in `data/rules-version.json`.
-  `just citations migrate <date>` moves the code to a newer rules release: it
-  renumbers the citations it can match and lists the ones that need a human
-  decision. `just citations shorten <paths>` rewrites the inline links in doc
-  comments as references, `[CR 118.12a]`, with the links defined at the end of
-  each comment.
+- Rules engine code cites the Comprehensive Rules by linking to
+  https://yawgatog.com/resources/magic-rules/ and quoting the relevant text from
+  the rules release pinned in `data/rules-version.json`. In a doc comment, cite
+  as a reference, `[CR 118.12a]`, and define its link at the end of the comment.
+  `just citations` checks every citation and quote in the code against the
+  pinned release. `just citations migrate <date>` moves the code to a newer
+  rules release: it renumbers the citations it can match and lists the ones that
+  need a human decision. `just citations shorten <paths>` rewrites the inline
+  links in doc comments as references, `[CR 118.12a]`, with the links defined at
+  the end of each comment.
 - `just fuzz` plays long random games, and `just exhaust` tries every sequence
   of decisions near the end positions of the scenarios.
 - Follow the [card-writing skill](../.agents/skills/card-writing/SKILL.md) to
@@ -114,8 +138,8 @@ heavy command.
   what they need and writes `$BERYL_CACHE/set-plan-<code>.json`. The `drafted`
   tier records complete drafts; each new definition still goes through render
   and card checks. The planner reuses the local renderer and census report when
-  available. Add `--beads` to print draft ticket commands for vocabulary groups
-  and batches of drafted or composed cards.
+  available. Add `--tickets` to print draft ticket commands for vocabulary
+  groups and batches of drafted or composed cards.
 - `just census` counts which mechanics Forge's card scripts use that
   `beryl_card` has no entry for, and how many cards each one blocks, from the
   mapping in `data/census-coverage.json`. It writes its report to
@@ -153,7 +177,3 @@ robin for over 2 hours.
   busy.
 - Reviewers (the sessions that evaluate AI changes) rerun only the matches that
   decide whether a change is accepted, never the ones that are only reported.
-- The "long-think arena" is retired and its command deleted: it used the machine
-  for days, and the AI now improves through the ladder's head-to-head matches
-  instead (`docs/ai-plan.md` §4). Its last run is recorded in
-  `docs/longthink-run-003.md`.

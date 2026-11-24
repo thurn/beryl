@@ -82,8 +82,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   `python -m beryl_tools.card_names --shrink` (from `tools/`) lowers them after
   you remove some.
 - `file-length-allowlist.json`: source files allowed to be over 800 lines.
-- `ui-counts.json`: limits on the UI's renders, DOM mutations and style and
-  layout work for a few fixtures, held by the `ui-counts` check family.
+- `blunders.json`: the blunder suite, positions from recorded games where the AI
+  made a play no strong player would. Each entry names the incident, the board
+  in `blunders/`, the play that was made and the plays that are forbidden there.
+  `just blunders` runs the suite against an agent.
 - `save-breaks.json`: saved games in the corpus that can't be migrated past a
   particular change.
 - `arena-motion.json`: MTG Arena's animation timings for each animation "verb"

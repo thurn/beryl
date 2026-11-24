@@ -2,48 +2,37 @@
 
 Project Beryl is a research project to build a Magic: The Gathering AI that
 plays as well as a strong human player, with a native Rust 3D client for macOS,
-Windows, iOS and Android. The repository is public.
+Windows, iOS and Android. Games are two-player, best of three with sideboards,
+between fixed decklists. There is no drafting.
 
-The goal is to support 50,000+ different card definitions, so write modular code
-that scales to that size.
+The goal is 50,000+ card definitions. The rules engine and the AI are both
+expected to handle every card that is implemented. The WU Control mirror
+(`decks::WU_CONTROL`, from `docs/sample-decks/`) is the cheapest test bed, not a
+limit on what either must play well. Never delete a card implementation.
 
-Games are two-player, best of three with sideboards, between fixed decklists.
-There is no drafting. The card pool is the cards in the decklists kept in
-`docs/sample-decks/`, and the rules engine and AI only need to handle those
-cards. Until more decks are implemented, we test with the WU Control mirror in
-`docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`
-(`decks::WU_CONTROL`). Never delete a card implementation.
+The repository is public. Never commit logs, screenshots, transcripts or other
+output from a run.
 
-All rules engine code must have comments that point to the part of the
-Comprehensive Rules it implements. Link to
-https://yawgatog.com/resources/magic-rules/ and quote the relevant text from the
-rules release pinned in `data/rules-version.json`. In a doc comment, cite as a
-reference, `[CR 118.12a]`, and define its link at the end of the comment;
-`just citations shorten <paths>` rewrites inline links that way. A card file is
-not rules engine code: it cites a rule only where the card relies on something
-no vocabulary entry says, such as a ruling about an unusual interaction.
-
-This file holds the rules that apply to every change. `engine/`, `data/` and
-`tools/` each have their own `AGENTS.md` with the reference material for work in
-that directory, and `ignite/checks/` declares the checks. Read the one for the
-area you are changing.
+This file holds the standing rules for every change. `engine/`, `client/`,
+`data/`, `tools/`, `ignite/` and `efficiency/` each have an `AGENTS.md` with the
+reference material for that directory: read it before you change anything there.
+Procedures are skills in `.agents/skills/`.
 
 ## Writing for readers
 
 This applies to code comments, commit messages, tickets and reports, and to this
 file.
 
-- Write for a reader who knows Magic, Rust and TypeScript but has not read the
-  code you just changed. If a sentence only makes sense after reading the diff,
-  rewrite it.
+- Write for a reader who knows Magic and Rust but has not read the code you just
+  changed. If a sentence only makes sense after reading the diff, rewrite it.
 - Start with what someone saw (the symptom), then why it happened, then what you
   changed.
 - Refer to things by their identifier in backticks, or describe them in plain
   words. Don't invent metaphors ("dressed", "lifted", "the door"). When you use
   a project term, say briefly what it is the first time.
 - Write complete sentences with articles and ordinary verbs, one idea per
-  sentence. The "half the words" rule in Workflow is for on-screen UI labels
-  only, never for prose.
+  sentence. The rule in UI about halving labels is for on-screen text only,
+  never for prose.
 - Check: would a colleague reading it have to ask "meaning what?" If so, put the
   answer in the text.
 
@@ -58,209 +47,80 @@ write:
 > library were drawn as the library's top card, stacked above the pile, so the
 > library looked empty underneath them.
 
-## Layout
-
-- `engine/` is the Cargo workspace (`engine/AGENTS.md`).
-  - Keep game rules and AI in their own library crates under `engine/crates/`.
-    They build and test independently of the client.
-  - Each card is one file, `engine/cards/<crate>/<set>/<card>.rs`. Adding a card
-    means adding a file: build scripts generate every list of cards, and each
-    card's mana cost, type line and header comment are generated from the card
-    store.
-- `client/` is the native client's Cargo workspace (`client/AGENTS.md`). The
-  `beryl_client` crate has the desktop entry point and the Swift and Kotlin
-  hosts. The layout and fixture data live under `data/client/`.
-- `data/` holds data files, each described in `data/AGENTS.md`. The card store,
-  `card-store.tsv`, is built by `just cards` and embedded in the app. The UI
-  bundles no card data of its own.
-- `docs/ui_mockups/`: generated images of the UI, kept as visual references.
-  They disagree with each other in details, so they are not a spec. Never tune
-  UI values to match one image.
-- `tools/`: `by`, the Python CLI behind the justfile. Run `just` to list the
-  commands.
-- `efficiency/`: the efficiency dashboard, `just efficiency`, a standalone
-  Python project (`efficiency/AGENTS.md`).
-- `ignite/`: Ignite, the build, check and delivery system, a Cargo workspace of
-  its own (`ignite/AGENTS.md`). `ignite.toml` and `ignite/checks/` say what it
-  knows about this repository.
-- Outside the repository:
-  - `~/Library/Caches/beryl` (`$BERYL_CACHE`) holds the oracle builds and their
-    last report (`oracles/logs/oracle.json`), the client's recordings packs, and
-    screenshots.
-  - `~/arena` (`$BERYL_ARENA`) holds indexes of the MTG Arena gameplay
-    recordings in `~/Movies/arena`, which are the reference for the UI. Use
-    `just video` or the `arena-video` skill.
-  - Never run `find` over `~` or `/`.
-
-## Ignite
-
-Ignite builds, checks and delivers every change, and holds the tickets
-(`docs/ignite.md`). `ignite prime` prints the workflow every change follows:
-`ignite start`, the work, `ignite test` and `ignite check`, then `ignite land`.
-Follow what each command prints. `ignite guide <topic>` holds the rules for one
-situation, and a command names the topic when it applies.
-
-- Every change, whoever makes it, starts with `ignite start <ticket>` (or
-  `ignite start "<summary>"` for a task with no ticket) and lands with
-  `ignite land`. Work only in the build tree it prints. Never edit or commit in
-  the main checkout, and never push to `master` or `staging` yourself. The one
-  exception is an incident commander, a session the operator started with `/ic`
-  to command every session for one emergency. Ignite escalates faults
-  automatically to workers holding `justiciar` tickets. An emergency order
-  starts with `Message about <ticket>:`. Use `ignite ticket show` on the
-  emergency ticket named in the order and verify that it is labelled `incident`
-  or `justiciar` and held by the session the order names.
-- `ignite land` lands a change that passed `ignite check` by rebasing it onto
-  `staging` and pushing, without checking it again when other changes landed
-  meanwhile. Two changes that each pass alone can still break the build
-  together. A landing that breaks the build is reverted by a tip round (the
-  check that runs on the newest `staging` commit after landings), and its ticket
-  opens again with the compiler's output. Every other failing check is fixed
-  forward: the round files a regression ticket and the fix lands on top. A
-  change to Ignite's own source (files under `ignite/`) lands on its own, never
-  mixed with other files, so `ignite land` refuses a mixed change and says to
-  split it into two tickets.
-- **Desktop session titles show status**: `⚒️ [<ticket>] <short summary>` while
-  working, `🚒` instead while working a regression ticket (a check that tip
-  verification found failing, which holds `master` back), `🔍` while waiting on
-  the person's answer (only when a person is there), `✅` when done and `⛔` when
-  stopped unfinished. `ignite start` prints the title to set. Use `✅`, `⛔` or
-  `🔍` only when you end the turn with nothing still running. `⛔` releases the
-  ticket. In Claude Desktop, use `set_session_title` on `self`. In Codex, use
-  `set_thread_title`. Headless CLI workers skip titles and follow
-  `ignite guide cli-worker`.
-- File tickets freely and in parallel with `ignite ticket create`, and record
-  plans, designs and decisions on their tickets. Merge conflicts are cheap:
-  `ignite land` rebases, and you fix and land again. A standalone ticket is
-  filed `open`, so the pool can pick it up within minutes if its allocation
-  allows: land what it depends on first or give it the dependency. File new
-  plans with epic allocation zero. The operator activates them through
-  Allocation on the dashboard or
-  `ignite ticket update <epic> --allocation <weight>`. The user can authorize
-  activation of this session's tickets with `/release`. the client bug-report
-  epics start at zero. `/bugfix` releases an epic by setting its allocation to
-  1. Its reports use the epic's allocation.
-- A ticket's acceptance names a deterministic result that someone can observe:
-  what was built, a decision, a file. A timing measured on a shared machine is
-  recorded as information, never the gate. File a ticket whose acceptance is
-  "run X and see Y" only after X has been run once.
-- Every session has to spend time learning the code it touches, so each ticket
-  names the files, helpers and tests it needs by path, so that its session can
-  read them all in its first message.
-- Give each ticket a model tier: `tier:opus` for design work and `tier:sonnet`
-  for mechanical work. **No Fable without an explicit ask**: never label a
-  ticket `tier:fable`, and never start a session or subagent on a Fable model,
-  unless the user has explicitly asked for it. Never put a tier label on an
-  epic, because its children inherit it.
-- **Long non-coding work needs an explicit ask**: before filing a ticket whose
-  work includes more than 30 minutes of anything other than writing code, such
-  as running simulations or tournaments, collecting logs, lengthy manual QA or
-  monitoring something, ask the user in chat and file it only after a clear yes.
-  This covers tickets filed as part of an epic. Running a check or test suite
-  while writing code does not count.
-- No plan, ticket or skill includes a step that waits for the user's approval.
-  Where his judgement might be wanted, go ahead with a sensible default and
-  record the choice on the ticket you're working on. Never file a ticket asking
-  him to look at something. The exceptions are the count gate (K1 in
-  `docs/engine-architecture.md`), adding a UI exception (see UI) and filing a
-  ticket for long non-coding work (above).
-- `/ignite <ticket or task>` does work in the current session, and
-  `/ignite <plan>` files an epic of tickets for the worker pool.
-
-## Checks
-
-Ignite's checks are declared in `ignite/checks/*.toml`, one family per kind of
-check, with the reason for each setting in a comment beside it. `ignite test`
-runs the checks you name, and `ignite check` runs what the landing gate would.
-`ignite guide flaky-checks` holds the general rules for a ticket about a check,
-and the `cifix` skill adds Beryl's.
-
-The native interface checks replay recordings and stories at the windows in
-`data/client/profiles/`. Run `just client test <prefix> --phone-only` for a
-focused pass over the phone windows.
-
-- A UI bug fix adds the broken state as a fixture or spec moment, so the generic
-  UI checks (overlap, off-screen, reachability, duplicate objects, page errors,
-  motion) cover it. If the bug is a new kind of problem, extend one of those
-  checks. Use a focused native integration test only when none of the generic
-  checks can express the property. Explain why in a comment (K20 in
-  `docs/engine-architecture.md`).
-- The counts in an allowlist under `data/` may only go down.
-- A check's cost is measured, and a check that costs much and catches nothing is
-  replaced by a cheaper deterministic test or deleted.
-- Run only the interface checks your change needs. Use `just client spec <card>`
-  for a card or `just client test <prefix>` for a recording or story.
-
 ## Code structure
 
-- Spell words out. Never misspell a name to avoid a keyword (`static_ability`,
-  not `statik`).
-- Don't write procedural macros in this repo. Use `macro_rules!` only where a
-  `const fn` can't remove the repetition.
-- No source file may be over 800 lines (the `file-length` check, with exceptions
-  in `data/file-length-allowlist.json`).
-- Kernel and rules modules declare the rules they implement in an `Implements:`
-  header and mark cross-references with `see` (the `rule-ownership` check).
-- No card names in generic code (the `card-names` check, with exceptions in its
-  allowlist). If a mechanic only exists for one card, that usually means a
-  general abstraction is missing.
-- Rules code and card code never assume there is exactly one other player (the
-  `two-player` check). They ask the game state for a player's opponents, the
-  defending players or the next player in turn order (see "Players" in
-  `beryl_kernel`'s contract).
-- Rules code and card code never access the board directly through `.board()` or
-  `board::Board` (the `board-door` check). They change the game state through
-  mutator functions (see "Mutators" in `beryl_kernel`'s contract).
-- Kernel, rules and card code never ignore a failed push onto a fixed-capacity
-  list (the `discarded-push` check). If you can argue the list can't overflow,
-  use `Queue::push_bounded`, which checks that claim in debug builds. Otherwise
-  propagate the `Full` error, which makes the game switch to the slower `Large`
-  state representation, which has room to grow.
+Every design has to hold at 50,000 cards. A mechanic that exists for one card
+means a general abstraction is missing, so add the abstraction.
+
+- No card names in generic code. A card's behavior is data in the card
+  vocabulary (`beryl_card`) that one interpreter runs. When the vocabulary can't
+  say a clause, add a vocabulary entry that other cards can use.
+- A card definition implements every clause of its Oracle text, including one
+  that no deck makes happen yet. A clause the vocabulary can't say yet is
+  escalated in `data/card-escalations.json`, never left out with a comment.
 - State that a card creates goes in a store, not in a new field on `Player`,
   `Object` or `State` (K4 in `docs/engine-architecture.md`).
-- Put reusable card compositions that clarify their callers in documented
-  prelude functions. Pass details that vary by card as arguments and keep
-  straightforward builder calls inline. Shared tokens and scenario props go in
-  `beryl_card_shared`.
-- A card definition implements every clause of its Oracle text, including one
-  that no card in the decks makes happen yet. A clause the vocabulary can't say
-  is escalated in `data/card-escalations.json`, never left out with a comment.
-- It's fine to implement a card that is in no deck only so that scenarios can
-  use it (Leonin Scimitar exists to be stolen by Thieving Skydiver). Pick a real
-  card, so that XMage and Forge can play the same scenarios.
+- A rule or card that a game does not use costs that game nothing. The count
+  gate (`engine/crates/beryl_bench/count-gate.toml`) measures this and says when
+  its limit may rise.
+- All rules engine code has comments that cite and quote the part of the
+  Comprehensive Rules it implements (`engine/AGENTS.md` gives the format). A
+  card file is not rules engine code: it cites a rule only where the card relies
+  on something no vocabulary entry says, such as a ruling about an unusual
+  interaction.
 - The kernel, rules and card crates have no runtime dependencies. When you add a
   dependency elsewhere, its `Cargo.toml` comment says what it replaces.
 - Forge is used only as a test oracle and, in `just census`, as a count of which
   mechanics its scripts use. No card data, vocabulary or design may come from
   its scripts or code.
+- Don't write procedural macros. Use `macro_rules!` only where a `const fn`
+  can't remove the repetition.
+
+The `source` checks hold the mechanical rules, such as the 800-line limit on a
+source file, and each explains itself when it fails. `engine/AGENTS.md` lists
+the ones for engine code.
 
 ## Testing your work
 
-Use the cheapest test that covers your change. Agents use windowless commands
-such as `just smoke` and `just client test`.
+Use the cheapest test that covers your change, and run only the checks the
+change needs. Agents never open a window.
 
-1. Logic: `ignite test <names>` runs the Rust tests you name in your tree, and
-   `just test-rust` runs the workspace's tests under cargo-nextest. Test engine
-   and AI behavior here, not through the app. `engine/AGENTS.md` lists the card
-   tools: the XMage and Forge oracles, the citation check, the fuzzer and
-   `just card brief <name>` for starting a new card. To write a card, follow the
-   `card-writing` skill. Prefer fast tests of what a player or caller can
-   observe (a decision, a protocol message, a saved file) over unit tests of
-   private code, which mostly detect change rather than bugs.
-2. UI: use `just client tree`, `diff` and `check` to inspect the native client,
-   and `png` and `film` to see what it draws. For a card's behavior, use the
-   `specs` skill. See "Seeing the result" in `client/AGENTS.md`.
-3. Desktop: `just smoke` builds the debug app and checks its first frame and
-   start screen without a window.
-4. Phone: `just ios-smoke` and `just android-smoke` replay a recording
-   headlessly and save a screenshot and frame log (`client/AGENTS.md`).
-   `just mobile-bugs` pulls their saved bug reports into the Mac's bugs folder;
-   `--device` also pulls from a paired iPhone. Agents install onto the user's
-   iPhone only when the user asks, with `just ios-device --user-asked`.
+1. Logic: `ignite test <names>` runs the Rust tests you name in your tree. Test
+   engine and AI behavior here, not through the app. To write a card, follow the
+   `card-writing` skill.
+2. UI: `just client tree`, `diff` and `check` inspect what the player sees, and
+   `png` and `film` draw it. Use `just client spec <card>` for a card and
+   `just client test <prefix>` for a recording or story.
+3. Desktop and phone: `just smoke`, `just ios-smoke` and `just android-smoke`
+   start the app without a window (`client/AGENTS.md`).
 
-Benchmarks follow `docs/benchmarking.md`. Tournaments (`just tournament`,
-`just play` and `just review --agent`) use the whole machine for minutes to
-hours, so read "Tournaments" in `engine/AGENTS.md` before running one.
+- Prefer fast tests of what a player or caller can observe (a decision, a
+  protocol message, a saved file) over unit tests of private code, which mostly
+  detect change rather than bugs.
+- Tests fail deterministically, so delete flaky ones. A timeout only catches a
+  hang: a slow test never fails for being slow. Avoid slow integration tests,
+  and prefer a fast test that keeps most of their value.
+- "No card with this behavior is implemented yet" is never a reason to skip a
+  test. Implement a card that has it, even one in no deck, and pick a real card
+  so that XMage and Forge can play the same scenario. File a ticket under your
+  epic only for a really major item.
+- Benchmarks follow `docs/benchmarking.md`. Tournaments (`just tournament`,
+  `just play` and `just review --agent`) use the whole machine for minutes to
+  hours, so read "Tournaments" in `engine/AGENTS.md` before running one.
+
+## Checks
+
+Ignite's checks are declared in `ignite/checks/*.toml`, with the reason for each
+setting in a comment beside it. `ignite guide flaky-checks` and the `cifix`
+skill hold the rules for a ticket about a check.
+
+- A UI bug fix adds the broken state as a fixture or spec moment, so the generic
+  UI checks (overlap, off-screen, reachability, duplicate objects, motion) cover
+  it. If the bug is a new kind of problem, extend one of those checks. Use a
+  focused native integration test only when none of the generic checks can
+  express the property, and explain why in a comment (K20 in
+  `docs/engine-architecture.md`).
+- The counts in an allowlist under `data/` may only go down.
 
 ## UI
 
@@ -268,8 +128,7 @@ MTG Arena is the reference for Beryl's game flow, the order and timing of
 events, the table layout and the wording (K22 in `docs/engine-architecture.md`).
 Before you design or change a prompt, animation, arrow or label, look up how
 Arena does it with the `arena-video` skill. A screenshot or filmstrip answers
-questions that a description can't. To make something match Arena as closely as
-possible, pixel for pixel, use the `arena-pixel-match` skill.
+questions that a description can't.
 
 - Animations follow Arena in what they show and when: what changed, who did it,
   where it went, in what order, and what stays still. No review is required to
@@ -286,33 +145,74 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
   Build what it asks for, and change or remove the matching exception in the
   same change.
 - Explicitly confirm with the user before adding a numbered exception to UI
-  Conventions. Ask in chat, and add it only after a clear yes; never infer one
+  Conventions. Ask in chat, and add it only after a clear yes. Never infer one
   from an old report or a design choice nobody asked for.
 - Anything the recordings don't show is built from animations and prompt types
   Beryl already has, never a new look, and listed in UI Conventions under "Not
   seen in Arena".
-- Never wait on the user for a UI decision. Go ahead based on Arena or the
-  closest existing behavior. Never file a ticket asking him to look at it.
+- On-screen text uses Arena's wording exactly. Where Arena shows no label, cut
+  your first draft of the label to half as many words.
+- Never give players priority when they would only pass, such as when their own
+  spell is alone on the stack.
 
-## Workflow
+## Ignite
 
-- Send reads together. Every request reads the whole conversation again, so
-  three requests that each read one file cost about three times as much as one
-  request that reads all three. Before reading, work out every file and search
-  you need and send them in one message as parallel tool calls, or as one shell
-  command.
-- When launching more than one subagent at a time, always use Sonnet.
-- On-screen UI text uses Arena's wording exactly. Where Arena shows no label,
-  cut your first draft of the label to half as many words. (This applies to
-  on-screen text only, not to comments or commit messages.)
-- Never ask the player a yes/no question when the next screen could carry the
-  answer. Open the choice directly, with a way to decline (for example, show the
-  search with a "find nothing" option instead of asking "Search?" first). This
-  rule is a Beryl exception: Arena asks first. Also never give players priority
-  when they would only pass, such as when their own spell is alone on the stack.
-- It's fine to file your own tickets while working on something else, but in
-  that case offer to fix them in the current session rather than just adding
-  them to the backlog.
+Ignite builds, checks and lands every change, and holds the tickets
+(`docs/ignite.md`). Run `ignite prime` before your first change and follow what
+each command prints. `ignite guide <topic>` holds the rules for one situation.
+
+- Every change, whoever makes it, starts with `ignite start <ticket>` (or
+  `ignite start "<summary>"` for a task with no ticket) and lands with
+  `ignite land`. Work only in the build tree it prints. Never edit or commit in
+  the main checkout, and never push to `master` or `staging` yourself.
+- No plan, ticket or skill includes a step that waits for the user's approval.
+  Where his judgement might be wanted, go ahead with a sensible default and
+  record the choice on your ticket. Never file a ticket asking him to look at
+  something.
+- Ask the user in chat, and go ahead only after a clear yes, in three cases: the
+  count gate (K1 in `docs/engine-architecture.md`), adding a UI exception (see
+  UI), and filing a ticket whose work includes more than 30 minutes of anything
+  other than writing code, such as simulations, tournaments, collecting logs,
+  manual QA or monitoring. That covers a ticket filed as part of an epic.
+  Running a check or test suite while writing code does not count.
+- **No Fable without an explicit ask**: never label a ticket `tier:fable`, and
+  never start a session or subagent on a Fable model, unless the user has
+  explicitly asked for it. When launching more than one subagent at a time,
+  always use Sonnet.
+- Whoever files an epic settles its design: the design and the contract between
+  its tickets are written in the epic, and no ticket's work is to figure out the
+  design. File the epic with allocation zero, because the user decides when the
+  worker pool starts on it (`/ignite <plan>` and the `ignite` skill).
+- Each ticket names the files, helpers and tests it needs by path, so that its
+  session can read them all in its first message, and has a model tier:
+  `tier:opus` for design work, `tier:sonnet` for mechanical work. An epic gets
+  no tier label, because its children inherit it.
+- The worker pool can pick up a standalone ticket within minutes, so land what
+  it depends on first or give it the dependency. When you file a ticket for
+  something you found while working with the user, offer to fix it in the
+  current session.
+
+## Layout
+
+- `engine/`: the Cargo workspace of the rules engine and the AI, as library
+  crates under `engine/crates/` that build and test without the client. Each
+  card is one file, `engine/cards/<crate>/<set>/<card>.rs`. Adding a card means
+  adding a file: build scripts generate every list of cards, and each card's
+  mana cost, type line and header comment, from the card store.
+- `client/`: the native client's Cargo workspace, with the desktop entry point
+  and the Swift and Kotlin hosts. Its layout and fixture data are in
+  `data/client/`.
+- `data/`: data files, each described in `data/AGENTS.md`. The card store,
+  `card-store.tsv`, is built by `just cards` and embedded in the app.
+- `tools/`: `by`, the Python CLI behind the justfile. `just` lists the commands.
+- `efficiency/`: the efficiency dashboard, a standalone Python project.
+- `ignite/`: Ignite's own Cargo workspace. `ignite.toml` and `ignite/checks/`
+  say what it knows about this repository.
+- Outside the repository, `$BERYL_CACHE` holds the oracle builds, the client's
+  recording packs and screenshots, and `$BERYL_ARENA` holds the indexes of the
+  MTG Arena recordings that the `arena-video` skill reads. Name these by their
+  variables: the agents run on macOS and Windows, so never write a path that
+  exists on only one of them.
 
 ## Conventions
 
@@ -321,39 +221,30 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
   enforces this). Add a body for every fix and for any change whose reason a
   reader couldn't guess from the subject. The body follows "Writing for
   readers": what was wrong as someone would have seen it, why, and what changed.
-- `just fmt` formats everything: black, rustfmt, mdformat (80 columns) and the
-  justfile. Python is typed (pyre, strict), Rust passes clippy (pedantic) with
-  `-D warnings`, and TypeScript is strict.
-- Scripts are Python in `tools/`, using only the standard library unless a
-  dependency is clearly worth it.
-- Agents don't add Markdown files unless explicitly asked. README.md, the
-  `AGENTS.md` files and `docs/` are the only Markdown; plans, designs and notes
-  go in tickets. Each `AGENTS.md` has a one-line `CLAUDE.md` beside it that
-  imports it. Keep this root file to rules that apply to every change: reference
-  material for one area goes in that directory's `AGENTS.md`, a procedure goes
-  in a skill, and a rule that a check already explains when it fails needs one
-  line at most.
-- Never commit logs, screenshots or other output from a run.
+- `just fmt` formats everything. Scripts are Python in `tools/`, using only the
+  standard library unless a dependency is clearly worth it.
+- Send reads together. Every request reads the whole conversation again, so work
+  out every file and search you need and send them in one message as parallel
+  tool calls, or as one shell command.
+- When you fix a rules engine bug, including one in your own code from the same
+  session, add an entry to `docs/bugs.md`: a short description of the bug, and
+  the guard that now stops its class (a lint, a type, a check or a differential
+  test), added in the same change where you can, or why none can. Link the
+  fixing commit's hash when the bug wasn't found and fixed in the same session.
 - A change made to save time or tokens adds its entry to
   `data/efficiency-changes.json` in the same commit.
-- When you fix a rules engine bug, including one in your own code from the same
-  session, add an entry to `docs/bugs.md`: a short description of the bug and
-  how similar bugs could be prevented in future (for example, through the type
-  system). Name the guard that now stops its class (a lint, a type, a check or a
-  differential test), adding it in the same change where you can, or say why
-  none can. Link the fixing commit's hash when the bug wasn't found and fixed in
-  the same session.
-- Do not directly reference planning documents or tickets in code (e.g. "plan
-  K16"), this gets stale fast. If you touch code with such references, delete
-  them.
-- Never put a ticket number (an Ignite ticket ID such as `TCJHB`, or an epic's
-  ID) in code, comments or documentation, including `docs/`, the `AGENTS.md`
-  files and skills. A ticket closes and its number then tells a reader nothing,
-  so say what the ticket would have said. Ticket numbers belong in commit
-  messages, landing notes and other tickets.
-- Timeouts only catch hangs: a slow test or run never fails a check for being
-  slow. Tests fail deterministically; delete flaky ones. Avoid slow integration
-  tests: prefer a fast test that keeps most of their value.
-- Never use "no card with this behavior is implemented yet, so I can't write a
-  test" as an excuse. Implement additional cards or file a ticket under your
-  current epic for really major items.
+- Never put a ticket number or a reference to a plan in code, comments or
+  documentation, including `docs/`, the `AGENTS.md` files and skills. A ticket
+  closes and its number then tells a reader nothing, so say what the ticket
+  would have said, and delete such references from code you touch. Ticket
+  numbers belong in commit messages, landing notes and other tickets.
+- Agents don't add Markdown files unless explicitly asked. README.md, the
+  `AGENTS.md` files and `docs/` are the only Markdown, and plans, designs and
+  notes go in tickets. Each `AGENTS.md` has a one-line `CLAUDE.md` beside it
+  that imports it.
+- Before you add a line to this file, check three things. It is a standing rule
+  for every change, not a remark the user made about one case. No check, command
+  output or skill already says it at the moment it matters. A sensible engineer
+  would not do it anyway. Reference material for one area goes in that
+  directory's `AGENTS.md`, and a procedure goes in a skill. When you add a line
+  here, look for one to remove.
