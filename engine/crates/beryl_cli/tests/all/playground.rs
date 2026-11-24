@@ -1,7 +1,8 @@
 use crate::common::TEST;
+use beryl_cards::names::ADVENTUROUS_EATER_HAVE_A_BITE;
 use beryl_cli::specs::playground::*;
 use beryl_cli::specs::{Phase, View};
-use beryl_engine::card::Types;
+use beryl_engine::card::{FaceIx, Types};
 use beryl_session::protocol::{Candidate, Side, Status, ZoneName};
 use std::sync::mpsc::channel;
 use std::time::Duration;
@@ -68,11 +69,12 @@ fn first_example_offers_the_card_in_hand() {
         assert_eq!(first.title, "Play from hand", "{card}");
         let variant = &first.variants[0];
         let view = first_decision(variant, variant.controller);
+        let hand_name = TEST.cards.get(card).unwrap().face_name(FaceIx::FRONT);
         let card = view
             .objects
             .iter()
             .find(|o| {
-                o.name.as_deref() == Some(card)
+                o.name.as_deref() == Some(hand_name)
                     && o.zone == ZoneName::Hand
                     && o.controller == Side::You
             })
@@ -82,6 +84,33 @@ fn first_example_offers_the_card_in_hand() {
         };
         assert!(decision.candidates.iter().any(|c| matches!(c.option, Candidate::Cast { slot, .. } | Candidate::PlayLand { slot } if slot == card.slot)), "card is not playable: {:?}", decision.candidates);
     }
+}
+
+#[test]
+fn preparing_a_spell_offers_its_copy_in_a_separate_example() {
+    let spec = beryl_cli::specs::spec(&TEST, ADVENTUROUS_EATER_HAVE_A_BITE).unwrap();
+    let playground = spec.playground();
+    let example = playground
+        .examples
+        .iter()
+        .find(|example| example.title == "Cast")
+        .expect("a separate example for casting the prepared spell");
+    let variant = &example.variants[0];
+    let view = first_decision(variant, variant.controller);
+    let copy = view
+        .objects
+        .iter()
+        .find(|object| {
+            object.zone == ZoneName::Exile && object.name.as_deref() == Some("Have a Bite")
+        })
+        .expect("the prepared spell in exile");
+    let Status::Deciding { decision } = view.status else {
+        panic!("game ended");
+    };
+    assert!(decision.candidates.iter().any(|candidate| matches!(
+        candidate.option,
+        Candidate::Cast { slot, face, .. } if slot == copy.slot && face == FaceIx::BACK.get()
+    )));
 }
 
 #[test]

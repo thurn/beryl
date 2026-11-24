@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use beryl_engine::Seat;
-use beryl_engine::card::{AbilityKind, CardDef, TargetKind, Types, Words};
+use beryl_engine::card::{AbilityKind, CardDef, FaceIx, TargetKind, Types, Words};
 use beryl_engine::filter::Evaluate;
 use beryl_scenario::{Action, Permanent, Scenario};
 use beryl_search::{Agent, AgentDecision};
@@ -360,8 +360,14 @@ fn add_scenarios(
             } else {
                 actor(&actions[i]).unwrap_or(Seat::P0).index()
             };
-            let from_hand = matches!(actions[i], Action::Cast { .. } | Action::PlayLand { .. })
-                && scenario.setup.players[controller].hand.contains(&card);
+            // A prepared spell is cast from its own copy even if the card starts in hand.
+            let can_play_from_hand = match actions[i] {
+                Action::Cast { face, .. } => face != FaceIx::BACK || def.shape.can_cast_back(),
+                Action::PlayLand { .. } => true,
+                _ => false,
+            };
+            let from_hand =
+                can_play_from_hand && scenario.setup.players[controller].hand.contains(&card);
             let title = if from_hand {
                 "Play from hand".to_owned()
             } else {

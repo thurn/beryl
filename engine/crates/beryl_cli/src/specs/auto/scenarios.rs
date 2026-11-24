@@ -355,7 +355,11 @@ pub(in crate::specs) fn heading(def: &'static CardDef, scenario: &Scenario) -> &
 /// What a scenario's action of the card is, as its moment's label: "Cast", "{T}", "−3".
 pub(in crate::specs) fn label_of(def: &'static CardDef, action: &Action) -> Option<String> {
     match *action {
-        Action::Cast { card, .. } if card == def.name => Some("Cast".to_owned()),
+        Action::Cast { card, .. }
+            if card == def.name || def.face_ixs().any(|face| card == def.face_name(face)) =>
+        {
+            Some("Cast".to_owned())
+        }
         Action::PlayLand { card, .. } if card == def.name => Some("Play".to_owned()),
         Action::TurnFaceUp { card, .. } if card == def.name => Some("Turn up".to_owned()),
         Action::Activate {
