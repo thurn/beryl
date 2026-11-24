@@ -93,7 +93,7 @@ fn watched(conn: &Connection) -> Result<Vec<String>> {
 
 /// Whether anyone but the ticket's filers and upkeep commented on, edited or claimed it. A
 /// release, which only moves it from `pending_approval` to `open`, does not count.
-fn touched(conn: &Connection, ticket: &Ticket) -> Result<bool> {
+pub(crate) fn touched(conn: &Connection, ticket: &Ticket) -> Result<bool> {
     let mut automatic: BTreeSet<String> =
         strings(&ticket.metadata, FILERS_KEY).into_iter().collect();
     if automatic.is_empty() {
@@ -208,7 +208,7 @@ fn act(conn: &mut Connection, ticket: &Ticket, verdict: Verdict, now: Timestamp)
 }
 
 /// An update that only sets and unsets metadata.
-pub(super) fn meta(id: &str, set: BTreeMap<&str, Value>, unset: &[&str]) -> Operation {
+pub(crate) fn meta(id: &str, set: BTreeMap<&str, Value>, unset: &[&str]) -> Operation {
     Operation::Update {
         id: id.to_owned(),
         set: None,

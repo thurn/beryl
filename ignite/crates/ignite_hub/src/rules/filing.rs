@@ -10,10 +10,14 @@
 //! - Every other finding is stored without a ticket, so the dashboard shows it. Those rows are
 //!   rebuilt on each evaluation; a row with a ticket keeps it, and only its cost and saving
 //!   follow the latest finding.
+//! - An untouched, unclaimed improvement closes when its rule and subject have been absent
+//!   from completed evaluations for a week.
 //! - Seven days after an improvement lands, its ticket gets a comment with the rule's measure
 //!   for the subject before and after.
 
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use std::collections::{BTreeMap, BTreeSet};
+
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 use serde_json::{Value, json};
 
 use ignite_core::config;
@@ -22,11 +26,11 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{findings, rows};
+use ignite_store::hub::{findings, rows, tickets};
 use ignite_store::{Result, StoreError};
 
-use super::{Finding, Rule, minimum};
-use crate::routes::dispatch::set_columns;
+use super::{Finding, Rule, WEEK_SECONDS, minimum};
+use crate::upkeep::clearing;
 
 /// The author of the tickets and comments the rules write.
 pub const ACTOR: &str = "ignite-hub";
@@ -35,8 +39,8 @@ pub const ACTOR: &str = "ignite-hub";
 const EVERY_SECONDS: f64 = 3600.0;
 /// Where the time of the last evaluation is kept, in `meta`.
 const LAST_KEY: &str = "rules_evaluated_at";
-/// How long after landing an improvement's measure is taken again.
-const FOLLOW_UP_DAYS: f64 = 7.0;
+/// Ticket metadata: the first completed evaluation that did not find its rule and subject.
+const MISSING_SINCE_KEY: &str = "finding_missing_since";
 /// Ticket metadata: the subject's cost when its ticket was filed, and the cost seven days
 /// after it landed.
 const BEFORE_KEY: &str = "measure_before";
@@ -49,6 +53,8 @@ pub struct Evaluation {
     pub filed: Vec<String>,
     /// The findings stored for the dashboard without a ticket.
     pub reported: Vec<Finding>,
+    /// The tickets closed because their findings cleared.
+    pub closed: Vec<String>,
     /// The landed improvements that got their measure after seven days.
     pub measured: Vec<String>,
 }
@@ -81,47 +87,110 @@ pub fn evaluate_if_due(
     Ok(Some(evaluation))
 }
 
-/// Evaluates `rules` now: files tickets, stores the other findings and takes the measures of
-/// improvements that landed seven days ago.
+/// Evaluates `rules` now, reconciles the findings and their tickets, and measures improvements
+/// that landed seven days ago.
 pub fn evaluate(
     conn: &mut Connection,
     rules: &[Box<dyn Rule>],
     config: &config::Rules,
     now: Timestamp,
 ) -> Result<Evaluation> {
-    let mut evaluation = Evaluation::default();
-    // The findings without a ticket are rebuilt at the end in one transaction, so a failure
-    // part way leaves the dashboard's earlier rows in place instead of a half-built set.
-    let mut unticketed: Vec<rows::Finding> = Vec::new();
+    // Finish the rule reads before judging absence or taking the write lock.
+    let mut found = Vec::new();
     for rule in rules {
         for finding in rule.find(conn, now)? {
             let report_only = rule.report_only() || config.report_only.contains(&finding.rule);
-            let held = held_ticket(conn, &finding)?;
-            if !findings::may_file(conn, &finding.rule, &finding.subject, now)? {
-                if let Some((ticket, closed_at)) = held {
-                    findings::upsert(conn, &row(&finding, Some(ticket), closed_at))?;
-                }
-                continue;
-            }
-            let enough = minimum(&finding.unit).is_some_and(|least| finding.saving >= least);
-            if report_only || !enough {
-                unticketed.push(row(&finding, None, None));
-                evaluation.reported.push(finding);
-                continue;
-            }
-            let ticket = file(conn, &finding, now)?;
-            findings::upsert(conn, &row(&finding, Some(ticket.clone()), None))?;
-            evaluation.filed.push(ticket);
+            found.push((finding, report_only));
         }
     }
-    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+
+    let mut evaluation = Evaluation::default();
+    let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     tx.execute("DELETE FROM findings WHERE ticket IS NULL", [])?;
-    for finding in &unticketed {
-        findings::upsert(&tx, finding)?;
+    evaluation.closed = close_cleared(&mut tx, &found, now)?;
+    for (finding, report_only) in found {
+        if !findings::may_file(&tx, &finding.rule, &finding.subject, now)? {
+            if let Some((ticket, closed_at)) = held_ticket(&tx, &finding)? {
+                findings::upsert(&tx, &row(&finding, Some(ticket), closed_at))?;
+            }
+            continue;
+        }
+        let enough = minimum(&finding.unit).is_some_and(|least| finding.saving >= least);
+        if report_only || !enough {
+            // An unticketed finding can replace an old ticket's row after the re-file guard ends.
+            findings::upsert(&tx, &row(&finding, None, None))?;
+            evaluation.reported.push(finding);
+            continue;
+        }
+        let ticket = file(&mut tx, &finding, now)?;
+        findings::upsert(&tx, &row(&finding, Some(ticket.clone()), None))?;
+        evaluation.filed.push(ticket);
     }
     tx.commit()?;
     evaluation.measured = follow_up(conn, rules, now)?;
     Ok(evaluation)
+}
+
+fn close_cleared(
+    tx: &mut Transaction<'_>,
+    found: &[(Finding, bool)],
+    now: Timestamp,
+) -> Result<Vec<String>> {
+    let present: BTreeSet<_> = found
+        .iter()
+        .map(|(finding, _)| (finding.rule.as_str(), finding.subject.as_str()))
+        .collect();
+    let mut closed = Vec::new();
+    for finding in findings::open(tx)? {
+        let Some(id) = finding.ticket else {
+            continue;
+        };
+        let Some(ticket) = tickets::load(tx, &id)? else {
+            continue;
+        };
+        if !matches!(ticket.status, Status::Open | Status::PendingApproval)
+            || ticket.assignee.is_some()
+            || ticket.landed_at.is_some()
+        {
+            continue;
+        }
+        let since = ticket
+            .metadata
+            .get(MISSING_SINCE_KEY)
+            .and_then(Value::as_str)
+            .and_then(|at| Timestamp::parse(at).ok());
+        let found = present.contains(&(finding.rule.as_str(), finding.subject.as_str()));
+        let operation = match (found, since) {
+            (true, Some(_)) => clearing::meta(&id, BTreeMap::new(), &[MISSING_SINCE_KEY]),
+            (false, None) => clearing::meta(
+                &id,
+                BTreeMap::from([(MISSING_SINCE_KEY, json!(now.to_string()))]),
+                &[],
+            ),
+            (false, Some(since)) if now.seconds_since(since) >= WEEK_SECONDS => Operation::Close {
+                id: id.clone(),
+                reason: format!(
+                    "{} rule `{}` found nothing for `{}` for a week of evaluations.",
+                    clearing::CLOSE_PREFIX,
+                    finding.rule,
+                    finding.subject
+                ),
+                include_ready: false,
+            },
+            (true, None) | (false, Some(_)) => continue,
+        };
+        // The write lock covers the history check and close because comments do not bump
+        // the ticket version.
+        if clearing::touched(tx, &ticket)? {
+            continue;
+        }
+        let closing = matches!(operation, Operation::Close { .. });
+        apply_in(tx, vec![operation], now)?;
+        if closing {
+            closed.push(id);
+        }
+    }
+    Ok(closed)
 }
 
 fn row(finding: &Finding, ticket: Option<String>, closed_at: Option<String>) -> rows::Finding {
@@ -149,7 +218,7 @@ fn held_ticket(conn: &Connection, finding: &Finding) -> Result<Option<(String, O
 }
 
 /// Files the finding's ticket and records its estimated saving; returns its ID.
-fn file(conn: &mut Connection, finding: &Finding, now: Timestamp) -> Result<String> {
+fn file(tx: &mut Transaction<'_>, finding: &Finding, now: Timestamp) -> Result<String> {
     let create = Operation::Create {
         fields: TicketFields {
             title: Some(finding.title.clone()),
@@ -163,6 +232,12 @@ fn file(conn: &mut Connection, finding: &Finding, now: Timestamp) -> Result<Stri
                 format!("rule:{}", finding.rule),
             ]),
             metadata: Some([(BEFORE_KEY.to_owned(), json!(finding.cost))].into()),
+            saving: Some(Saving {
+                rule: finding.rule.clone(),
+                subject: finding.subject.clone(),
+                unit: finding.unit.clone(),
+                amount: finding.saving,
+            }),
             ..TicketFields::default()
         },
         parent: None,
@@ -174,27 +249,16 @@ fn file(conn: &mut Connection, finding: &Finding, now: Timestamp) -> Result<Stri
             now.day()
         )),
     };
-    let id = apply(conn, vec![create], now)?;
-    let saving = Saving {
-        rule: finding.rule.clone(),
-        subject: finding.subject.clone(),
-        unit: finding.unit.clone(),
-        amount: finding.saving,
-    };
-    let saving = serde_json::to_value(saving).map_err(|e| StoreError::Invalid(e.to_string()))?;
-    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    set_columns(&tx, &id, ACTOR, &[("saving", saving)], now)?;
-    tx.commit()?;
-    Ok(id)
+    apply_in(tx, vec![create], now)
 }
 
-/// Applies the operations as the rules' actor; returns the first operation's ticket.
-fn apply(conn: &mut Connection, ops: Vec<Operation>, now: Timestamp) -> Result<String> {
+/// Applies the operations as the rules' actor and returns the first operation's ticket.
+fn apply_in(tx: &mut Transaction<'_>, ops: Vec<Operation>, now: Timestamp) -> Result<String> {
     let request = BatchRequest {
         preconditions: Vec::new(),
         ops,
     };
-    match batch::apply_automatic(conn, &request, ACTOR, "", now)? {
+    match batch::apply_automatic_in(tx, &request, ACTOR, "", now)? {
         BatchOutcome::Applied(reply) => Ok(reply.results[0].id.to_string()),
         BatchOutcome::Conflict(conflict) => Err(StoreError::Invalid(format!(
             "the rules' batch conflicted: {conflict:?}"
@@ -209,7 +273,7 @@ fn follow_up(
     rules: &[Box<dyn Rule>],
     now: Timestamp,
 ) -> Result<Vec<String>> {
-    let due = now.plus_seconds(-FOLLOW_UP_DAYS * 86_400.0).to_string();
+    let due = now.plus_seconds(-WEEK_SECONDS).to_string();
     let landed: Vec<(String, String, String)> = {
         let mut statement = conn.prepare(
             "SELECT id, saving, metadata FROM tickets
@@ -266,7 +330,9 @@ fn follow_up(
                 unset_meta: Vec::new(),
             },
         ];
-        apply(conn, ops, now)?;
+        let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        apply_in(&mut tx, ops, now)?;
+        tx.commit()?;
         measured.push(id);
     }
     Ok(measured)

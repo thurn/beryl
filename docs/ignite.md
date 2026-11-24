@@ -4614,11 +4614,20 @@ measure: rebuild count `session-body`, now 1,450 billion
 
 Rules for filing:
 
-- The hub evaluates the rules when new records arrive. It files a ticket for a
-  finding with no open ticket for the same rule and subject.
+- The hub evaluates the rules when new records arrive, at most once an hour. It
+  files a ticket for a finding with no open ticket for the same rule and
+  subject.
 - Nothing is filed under a minimum saving. A finding must reach $25, 2
   agent-hours or 10 core-hours a week, in whichever unit its rule measures.
 - A rule files nothing for a subject within 30 days of closing a ticket for it.
+- When a rule stops producing a finding for a subject, the first evaluation
+  without it starts a seven-day wait. If the finding returns, the wait starts
+  over the next time it disappears. After seven days, a completed evaluation
+  that still finds nothing closes the ticket and names the rule and subject in
+  the close reason. Ignite leaves tickets in progress and tickets people have
+  edited, commented on or claimed alone. Releasing a ticket from pending
+  approval still lets Ignite close it. Only improvements that land get a
+  follow-up measurement after seven days.
 - A rule measures what the work costs now, never how much a number grew. Code
   that gets larger as features are added files nothing unless agents pay for it
   often enough to clear the minimum.

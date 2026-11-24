@@ -4,8 +4,10 @@ use rusqlite::{Connection, params};
 use serde_json::json;
 
 use ignite_core::config;
+use ignite_core::protocol::tickets::{BatchRequest, Operation, Status, TicketFields};
 use ignite_core::time::Timestamp;
-use ignite_store::hub::{self, findings};
+use ignite_store::hub::batch::{self, BatchOutcome};
+use ignite_store::hub::{self, findings, tickets};
 
 use super::filing::{self, Evaluation};
 use super::{backlog, efficiency};
@@ -185,6 +187,156 @@ fn a_closed_ticket_blocks_its_subject_for_30_days() {
     assert!(evaluate(&mut conn, later(29.0)).filed.is_empty());
     assert_eq!(evaluate(&mut conn, later(31.0)).filed.len(), 1);
     assert_eq!(ticket_count(&conn), 2);
+}
+
+fn at_day(days: f64) -> Timestamp {
+    now().plus_seconds(days * DAY)
+}
+
+fn retime_records(conn: &Connection, at: Timestamp) {
+    conn.execute("UPDATE records SET at = ?1", [at.to_string()])
+        .unwrap();
+}
+
+fn person_acts(conn: &mut Connection, ops: Vec<Operation>, at: Timestamp) {
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops,
+    };
+    assert!(matches!(
+        batch::apply(conn, &request, "person", "", at).unwrap(),
+        BatchOutcome::Applied(_)
+    ));
+}
+
+fn update(id: &str, fields: TicketFields) -> Operation {
+    Operation::Update {
+        id: id.to_owned(),
+        set: Some(fields),
+        add_labels: Vec::new(),
+        remove_labels: Vec::new(),
+        set_meta: [].into(),
+        unset_meta: Vec::new(),
+    }
+}
+
+#[test]
+fn an_absent_finding_closes_its_released_ticket_after_a_week_and_keeps_the_refile_guard() {
+    let mut conn = hub::open_in_memory().unwrap();
+    rebuilds(&conn, "crate_a", 30, 4000.0);
+    let id = evaluate(&mut conn, now()).filed.remove(0);
+    person_acts(
+        &mut conn,
+        vec![update(
+            &id,
+            TicketFields {
+                status: Some(Status::Open),
+                ..TicketFields::default()
+            },
+        )],
+        at_day(1.0),
+    );
+
+    // The records have aged out. The wait starts at the first observed absence, even
+    // though this evaluation was long after the last sighting.
+    assert!(evaluate(&mut conn, at_day(14.0)).closed.is_empty());
+    let close_at = at_day(21.0);
+    assert!(
+        evaluate(&mut conn, close_at.plus_seconds(-1.0))
+            .closed
+            .is_empty()
+    );
+    assert_eq!(
+        evaluate(&mut conn, close_at).closed,
+        std::slice::from_ref(&id)
+    );
+    let ticket = tickets::load(&conn, &id).unwrap().unwrap();
+    assert_eq!(ticket.status, Status::Closed);
+    assert_eq!(ticket.closed_at, Some(close_at));
+    let reason = ticket.close_reason.unwrap();
+    assert!(
+        reason.contains("`slow-crate` found nothing for `crate_a`"),
+        "{reason}"
+    );
+    assert_eq!(ticket.landed_at, None);
+    assert!(findings::open(&conn).unwrap().is_empty());
+    let later = evaluate(&mut conn, at_day(28.0));
+    assert!(later.closed.is_empty());
+    assert!(later.measured.is_empty());
+    assert!(tickets::comments(&conn, &id).unwrap().is_empty());
+
+    retime_records(&conn, at_day(50.0));
+    assert!(evaluate(&mut conn, at_day(50.0)).filed.is_empty());
+    let refiled = evaluate(&mut conn, at_day(51.0)).filed;
+    assert_eq!(refiled.len(), 1);
+    assert_ne!(refiled[0], id);
+}
+
+#[test]
+fn a_finding_that_returns_under_the_filing_minimum_restarts_the_wait() {
+    let mut conn = hub::open_in_memory().unwrap();
+    rebuilds(&conn, "crate_a", 30, 4000.0);
+    let id = evaluate(&mut conn, now()).filed.remove(0);
+    assert!(evaluate(&mut conn, at_day(8.0)).closed.is_empty());
+    retime_records(&conn, at_day(9.0));
+    conn.execute("UPDATE compile_units SET cpu_s = 500", [])
+        .unwrap();
+    assert!(evaluate(&mut conn, at_day(9.0)).filed.is_empty());
+    conn.execute("UPDATE compile_units SET crate_name = 'crate_b'", [])
+        .unwrap();
+    retime_records(&conn, at_day(10.0));
+
+    assert!(evaluate(&mut conn, at_day(10.0)).closed.is_empty());
+    assert!(evaluate(&mut conn, at_day(16.0)).closed.is_empty());
+    let expired = evaluate(&mut conn, at_day(17.0));
+    assert_eq!(expired.closed, [id]);
+    assert_eq!(expired.reported[0].subject, "crate_b");
+}
+
+#[test]
+fn work_or_a_persons_edit_or_comment_protects_an_improvement_ticket() {
+    for expected in [Status::InProgress, Status::Open, Status::PendingApproval] {
+        let mut conn = hub::open_in_memory().unwrap();
+        rebuilds(&conn, "crate_a", 30, 4000.0);
+        let id = evaluate(&mut conn, now()).filed.remove(0);
+        assert!(evaluate(&mut conn, at_day(8.0)).closed.is_empty());
+        let ops = match expected {
+            Status::InProgress => vec![Operation::Claim { id: id.clone() }],
+            Status::Open => vec![update(
+                &id,
+                TicketFields {
+                    status: Some(Status::Open),
+                    title: Some("Use a smaller crate".to_owned()),
+                    ..TicketFields::default()
+                },
+            )],
+            Status::PendingApproval => vec![Operation::Comment {
+                id: id.clone(),
+                text: "I have more data on this.".to_owned(),
+            }],
+            _ => unreachable!(),
+        };
+        person_acts(&mut conn, ops, at_day(9.0));
+
+        assert!(evaluate(&mut conn, at_day(15.0)).closed.is_empty());
+        assert_eq!(tickets::load(&conn, &id).unwrap().unwrap().status, expected);
+    }
+}
+
+#[test]
+fn an_incomplete_evaluation_does_not_start_the_wait() {
+    let mut conn = hub::open_in_memory().unwrap();
+    rebuilds(&conn, "crate_a", 30, 4000.0);
+    let id = evaluate(&mut conn, now()).filed.remove(0);
+    conn.execute("ALTER TABLE metrics RENAME TO metrics_away", [])
+        .unwrap();
+    let config = config::Rules::default();
+    assert!(filing::evaluate(&mut conn, &super::all(&config), &config, at_day(8.0)).is_err());
+    conn.execute("ALTER TABLE metrics_away RENAME TO metrics", [])
+        .unwrap();
+
+    assert!(evaluate(&mut conn, at_day(15.0)).closed.is_empty());
+    assert_eq!(evaluate(&mut conn, at_day(22.0)).closed, [id]);
 }
 
 #[test]
@@ -373,8 +525,7 @@ fn a_landed_improvement_gets_its_measure_seven_days_later_once() {
 
 #[test]
 fn a_landed_ticket_with_an_estimated_saving_gets_no_measure() {
-    use ignite_core::protocol::tickets::{BatchRequest, Operation, Saving, TicketFields};
-    use ignite_store::hub::batch::{self, BatchOutcome};
+    use ignite_core::protocol::tickets::Saving;
 
     let mut conn = hub::open_in_memory().unwrap();
     // A session filed this ticket with its own estimate, and it landed over a week ago. No rule
