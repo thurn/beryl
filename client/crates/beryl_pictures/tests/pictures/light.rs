@@ -116,7 +116,9 @@ fn lights(frame: &Frame) -> Vec<Light> {
 /// The recording `name` from `side` in the window, its frames `looking` so that each record
 /// names its element.
 fn page(name: &str, side: Side) -> Result<app_client::driver::Page, String> {
-    let mut page = pages::page(name, side, SizeClass::Regular, WINDOW)?;
+    // The scan visits the whole pack. Keeping every decoded recording resident put the
+    // Windows verifier under memory pressure before it could finish the check.
+    let mut page = pages::uncached_page(name, side, SizeClass::Regular, WINDOW)?;
     page.set_looking(true);
     Ok(page)
 }

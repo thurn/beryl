@@ -930,5 +930,10 @@
     "label": "Ignite reuses CLI turn run paths so polling workers does not repeatedly read the run archive.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The arrow and combat-mark rendering check releases decoded recordings after each replay so the full corpus can fit in verifier memory.",
+    "metric": "ignite.gate-wait-seconds",
+    "expect": "down"
   }
 ]

@@ -60,10 +60,7 @@ pub fn messages(name: &str, seat: Seat) -> Arc<[FixtureMessage]> {
 /// when it could not be recorded.
 pub fn find(name: &str, seat: Seat) -> Result<Arc<[FixtureMessage]>, String> {
     let opened = opened()?;
-    let at = opened
-        .entries
-        .binary_search_by(|e| (e.name, e.seat).cmp(&(name, seat.get())))
-        .map_err(|_| missing(&opened.entries, name, seat))?;
+    let at = entry_index(&opened.entries, name, seat)?;
     let parsed = || {
         opened
             .parsed
@@ -77,6 +74,19 @@ pub fn find(name: &str, seat: Seat) -> Result<Arc<[FixtureMessage]>, String> {
     // recordings at once. Two threads may parse the same one; the first to finish keeps it.
     let messages: Arc<[FixtureMessage]> = pack::messages(&opened.entries[at])?.into();
     Ok(Arc::clone(parsed().entry(at).or_insert(messages)))
+}
+
+/// Reads a recording whose decoded messages can be dropped when its page closes.
+pub(crate) fn decode(name: &str, seat: Seat) -> Result<Recording, String> {
+    let entries = entries()?;
+    let at = entry_index(entries, name, seat)?;
+    pack::messages(&entries[at]).map(Recording)
+}
+
+fn entry_index(entries: &[Entry<'_>], name: &str, seat: Seat) -> Result<usize, String> {
+    entries
+        .binary_search_by(|entry| (entry.name, entry.seat).cmp(&(name, seat.get())))
+        .map_err(|_| missing(entries, name, seat))
 }
 
 /// The pack's entries in name and seat order, without decoding their messages.

@@ -178,6 +178,22 @@ pub fn page(name: &str, seat: Side, size_class: SizeClass, size: Size) -> Result
     page_with_profile(name, seat, size, 1.0, Some(size_class), None)
 }
 
+/// Opens a page for a corpus scan. Its decoded recording is released when the page drops.
+///
+/// # Errors
+///
+/// When the recording or its layout cannot be opened.
+pub fn uncached_page(
+    name: &str,
+    seat: Side,
+    size_class: SizeClass,
+    size: Size,
+) -> Result<Page, String> {
+    let (data, window) = scene_window(size, 1.0, Some(size_class), None)?;
+    let recording = recording_with(name, seat, recordings::decode)?;
+    page_with_messages(name, recording, seat, data, window, None)
+}
+
 pub(crate) fn page_with_profile(
     name: &str,
     seat: Side,
@@ -301,6 +317,16 @@ pub(crate) fn page_with_messages(
 ///
 /// When there is no such recording for `seat`, or it could not be recorded.
 pub fn recording(name: &str, seat: Side) -> Result<Recording, String> {
+    recording_with(name, seat, |name, seat| {
+        recordings::find(name, seat).map(|messages| Recording(messages.to_vec()))
+    })
+}
+
+fn recording_with(
+    name: &str,
+    seat: Side,
+    read_packed: impl FnOnce(&str, Seat) -> Result<Recording, String>,
+) -> Result<Recording, String> {
     let seat = match seat {
         Side::You => Seat::P0,
         Side::Opponent => Seat::P1,
@@ -319,7 +345,7 @@ pub fn recording(name: &str, seat: Side) -> Result<Recording, String> {
         }
         return Err(format!("{story_name} must hold a table or feature replay"));
     }
-    recordings::find(name, seat).map(|messages| Recording(messages.to_vec()))
+    read_packed(name, seat)
 }
 
 /// The driver inputs of a story that plays over time.
