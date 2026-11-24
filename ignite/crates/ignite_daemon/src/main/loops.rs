@@ -117,7 +117,7 @@ impl Parts {
         };
         self.spawn_sender(db, server.clone());
         self.spawn_tip(server.clone());
-        self.spawn_main();
+        self.spawn_main(server.clone());
         self.spawn_claims();
         self.spawn_idle(server.clone());
         self.spawn_tree_maintenance();
@@ -228,11 +228,20 @@ impl Parts {
     /// (see `crate::manifests`). This ran after each tip round until 2026-11-20, when a round
     /// that took over an hour left the checkout's `ignite.toml`, which the hub reads, an hour
     /// behind `staging`.
-    fn spawn_main(&self) {
+    fn spawn_main(&self, server: Arc<Server>) {
+        let ctx = self.ctx.clone();
+        let attribution = Arc::new(crate::land::attribution::AttributionVerb {
+            landing: self.landing.clone(),
+            landing_trees: self.trees.landing_count(),
+        });
         let (trees, manifests) = (self.trees.clone(), self.manifests.clone());
         self.start_loop("ignite-main", MAIN_STALLS_AFTER, move |ticker| {
+            let mut search = None;
             loop {
                 ticker.round(|| main_round(&trees, || manifests.run()));
+                if let Err(error) = attribution.drive(&ctx, &server, &mut search) {
+                    eprintln!("ignite: landing attribution: {error}");
+                }
                 thread::sleep(MAIN_EVERY);
             }
         });

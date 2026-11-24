@@ -915,5 +915,10 @@
     "label": "Ignite runs each native interface replay in a single CI family, retaining its failure history and avoiding a second pass on every tick.",
     "metric": "slow-ci.cpu-seconds-per-run",
     "expect": "down"
+  },
+  {
+    "label": "Ignite records confirmed baseline failures before probing historical commits, so landing gates can proceed while culprit searches run.",
+    "metric": "ignite.gate-wait-seconds",
+    "expect": "down"
   }
 ]

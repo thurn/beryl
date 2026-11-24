@@ -8,26 +8,21 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use ignite_core::fakes::{FakeClock, FakeHub};
-use ignite_core::ids::{CheckName, Commit, InputHash, Oid, RecordId, Seq, TicketId, TreeId};
+use ignite_core::fakes::FakeClock;
+use ignite_core::ids::{CheckName, Commit, InputHash, Oid, RecordId, TicketId, TreeId};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::{
-    CachedResult, Claim, FlakyReport, Landed, LandedCommit, LandedReply, MachineFree,
-    MetricsImport, NewResult, Record, RegressionFiled, RegressionReport, Reservation, ResultKey,
-    TicketBrief, TipClaim, TipClaimReply, TipVerified, Verdict, VerdictKey,
-};
-use ignite_core::protocol::tickets::{
-    FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply, TicketDetail,
-};
+use ignite_core::protocol::hub::{NewResult, ResultKey};
 use ignite_core::time::Timestamp;
-use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
-use ignite_core::traits::{Clock, Error, Git, Hub, Push, Rebase, Result};
+use ignite_core::traits::{Error, Git, Push, Rebase, Result};
 
 use crate::checks::{Carried, CheckRun, Excused, Failure, GateRun, RunOptions};
 use crate::land::env::{CheckVerdict, GateTree, LandGate, LandTrees, TicketTree};
 use crate::server::Context;
 
+mod hub;
+
 pub use super::repo::{Repo, edits, hex};
+pub use hub::LeaseHub;
 
 #[derive(Default)]
 pub struct TestGit {
@@ -264,154 +259,6 @@ impl Git for TestGit {
     }
 }
 
-/// The fake hub, with leases that expire by the clock. `landed_down` makes only `POST /landed`
-/// fail as an outage would.
-pub struct LeaseHub {
-    pub hub: FakeHub,
-    pub clock: Arc<FakeClock>,
-    pub leases: Mutex<HashMap<String, (String, Timestamp)>>,
-    pub landed_down: AtomicBool,
-    /// Makes the next acquisition succeed and then, at once, hands the lease to another holder,
-    /// as if it had expired and been taken over before the landing used it.
-    pub steal_after_acquire: AtomicBool,
-}
-
-impl LeaseHub {
-    pub fn holder(&self, name: &str) -> Option<String> {
-        let leases = self.leases.lock().unwrap();
-        let now = self.clock.now();
-        leases
-            .get(name)
-            .filter(|(_, expires)| *expires > now)
-            .map(|(holder, _)| holder.clone())
-    }
-}
-
-impl Hub for LeaseHub {
-    fn audit(
-        &self,
-        report: &ignite_core::protocol::hub::AuditReport,
-    ) -> Result<ignite_core::protocol::hub::ReportFiled> {
-        self.hub.audit(report)
-    }
-    fn find(
-        &self,
-        find: &ignite_core::protocol::hub::ExplorationFind,
-    ) -> Result<ignite_core::protocol::hub::ReportFiled> {
-        self.hub.find(find)
-    }
-    fn lookup(&self, keys: &[ResultKey]) -> Result<Vec<Option<CachedResult>>> {
-        self.hub.lookup(keys)
-    }
-    fn store(&self, results: &[NewResult]) -> Result<()> {
-        self.hub.store(results)
-    }
-    fn next(&self, free: &MachineFree) -> Result<Option<Reservation>> {
-        self.hub.next(free)
-    }
-    fn claim(&self, claim: &Claim) -> Result<TicketBrief> {
-        self.hub.claim(claim)
-    }
-    fn ticket(&self, id: &TicketId) -> Result<TicketDetail> {
-        self.hub.ticket(id)
-    }
-    fn landed(&self, landed: &Landed) -> Result<LandedReply> {
-        if self.landed_down.load(Ordering::SeqCst) {
-            return Err(Error::Unreachable("hub down".to_owned()));
-        }
-        self.hub.landed(landed)
-    }
-    fn lease(&self, name: &str, op: LeaseOp) -> Result<LeaseReply> {
-        let now = self.clock.now();
-        let mut leases = self.leases.lock().unwrap();
-        let live = leases
-            .get(name)
-            .filter(|(_, expires)| *expires > now)
-            .cloned();
-        match op {
-            ref op @ (LeaseOp::Acquire {
-                ref holder, ttl_s, ..
-            }
-            | LeaseOp::Renew {
-                ref holder, ttl_s, ..
-            }) => {
-                let holder = holder.clone();
-                if let Some((other, expires)) = live.filter(|(h, _)| *h != holder) {
-                    return Ok(LeaseReply::Busy(LeaseBusy {
-                        holder: Some(other),
-                        expires_at: Some(expires),
-                        position: None,
-                        seq: None,
-                    }));
-                }
-                #[allow(clippy::cast_precision_loss)]
-                let expires_at = now.plus_seconds(ttl_s as f64);
-                leases.insert(name.to_owned(), (holder.clone(), expires_at));
-                if matches!(op, LeaseOp::Acquire { .. })
-                    && self.steal_after_acquire.swap(false, Ordering::SeqCst)
-                {
-                    leases.insert("staging".to_owned(), ("thief".to_owned(), expires_at));
-                }
-                Ok(LeaseReply::Held(Lease {
-                    name: name.to_owned(),
-                    holder,
-                    machine: String::new(),
-                    expires_at,
-                    payload: serde_json::Value::Null,
-                    waiters: Vec::new(),
-                }))
-            }
-            LeaseOp::Release { holder, .. } => {
-                if live.is_some_and(|(h, _)| h == holder) {
-                    leases.remove(name);
-                }
-                Ok(LeaseReply::Busy(LeaseBusy {
-                    holder: None,
-                    expires_at: None,
-                    position: None,
-                    seq: None,
-                }))
-            }
-        }
-    }
-    fn feed(&self, since: Seq, wait_s: u32) -> Result<FeedBatch> {
-        self.hub.feed(since, wait_s)
-    }
-    fn records(&self, batch: &[Record]) -> Result<()> {
-        self.hub.records(batch)
-    }
-    fn metrics(&self, import: &MetricsImport) -> Result<()> {
-        self.hub.metrics(import)
-    }
-    fn flaky(&self, report: &FlakyReport) -> Result<()> {
-        self.hub.flaky(report)
-    }
-    fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply> {
-        self.hub.tip_claim(claim)
-    }
-    fn tip_candidate(&self) -> Result<Option<TipCandidate>> {
-        self.hub.tip_candidate()
-    }
-    fn update_tip_candidate(&self, update: &TipCandidateUpdate) -> Result<bool> {
-        self.hub.update_tip_candidate(update)
-    }
-    fn tip_verified(&self, verified: &TipVerified) -> Result<()> {
-        self.hub.tip_verified(verified)
-    }
-    fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled> {
-        self.hub.regression(report)
-    }
-    fn landed_commits(&self, commits: &[Commit]) -> Result<Vec<LandedCommit>> {
-        self.hub.landed_commits(commits)
-    }
-    fn verdict(&self, key: &VerdictKey) -> Result<Option<Verdict>> {
-        self.hub.verdict(key)
-    }
-    fn store_verdict(&self, verdict: &Verdict) -> Result<()> {
-        self.hub.store_verdict(verdict)
-    }
-}
-
 /// Ticket trees in a map, and free landing trees in a list.
 #[derive(Default)]
 pub struct TestTrees {
@@ -470,14 +317,23 @@ impl LandTrees for TestTrees {
         // The integration branch is linear, so its history is the commits that reached it.
         Ok(self.git.repo.lock().unwrap().history.contains(ancestor))
     }
-    fn lease_landing(&self, holder: &str, at: &Commit) -> Result<Option<GateTree>> {
+    fn lease_landing_keeping(
+        &self,
+        holder: &str,
+        at: &Commit,
+        keep_free: usize,
+    ) -> Result<Option<GateTree>> {
         let mut held = self.held.lock().unwrap();
         let kept = held
             .iter()
             .find(|(h, _)| h == holder)
             .map(|(_, t)| t.clone());
         let tree = kept.or_else(|| {
-            let tree = self.landing.lock().unwrap().pop();
+            let mut free = self.landing.lock().unwrap();
+            if free.len() <= keep_free {
+                return None;
+            }
+            let tree = free.pop();
             if let Some(tree) = &tree {
                 held.push((holder.to_owned(), tree.clone()));
                 self.leased.lock().unwrap().push(tree.tree.clone());
@@ -550,6 +406,7 @@ pub struct CacheGate {
     pub broken_by: Mutex<Vec<(&'static str, &'static str, &'static str)>>,
     /// The checks each `run_checks` ran, not answered from the cache, with the tree it ran in.
     pub checks_runs: Mutex<Vec<(PathBuf, Vec<String>)>>,
+    pub on_historical_check: Mutex<Option<Hook>>,
 }
 
 impl LandGate for CacheGate {
@@ -610,13 +467,21 @@ impl LandGate for CacheGate {
         if let Some(hook) = hook {
             hook();
         }
+        let mut known = excused.clone();
+        known.extend(
+            ctx.hub
+                .open_regressions()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|regression| (regression.check, regression.ticket)),
+        );
         let keys: Vec<ResultKey> = self
             .checks
             .iter()
             .filter(|(name, _)| {
                 let family = CheckName::new(*name).unwrap().family().to_owned();
                 judged.contains(&family)
-                    && !excused.contains_key(&CheckName::new(*name).unwrap())
+                    && !known.contains_key(&CheckName::new(*name).unwrap())
                     && !self.left.contains(name)
                     && !self.cold.contains(&family.as_str())
             })
@@ -653,7 +518,7 @@ impl LandGate for CacheGate {
             run,
             scoped,
             carried,
-            known_failing: excused.clone().into_iter().collect(),
+            known_failing: known.into_iter().collect(),
             ..GateRun::default()
         };
         self.leave(&judged, &mut gated);
@@ -667,8 +532,14 @@ impl LandGate for CacheGate {
         ctx: &Context,
         tree: &GateTree,
         checks: &[CheckName],
-        _options: &RunOptions,
+        options: &RunOptions,
     ) -> Vec<CheckVerdict> {
+        if options.verb == crate::land::attribution::NAME {
+            let hook = self.on_historical_check.lock().unwrap().take();
+            if let Some(hook) = hook {
+                hook();
+            }
+        }
         let mut verdicts = Vec::new();
         let mut ran = Vec::new();
         for (name, paths) in &self.checks {

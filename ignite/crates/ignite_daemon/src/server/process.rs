@@ -62,6 +62,7 @@ pub const PROCESS_VERBS: &[&str] = &[
     "audit",
     "idle-job",
     crate::tip::ROUND_VERB,
+    crate::land::attribution::NAME,
 ];
 
 /// The verbs among [`PROCESS_VERBS`] that the daemon runs again, on a thread of its own, when

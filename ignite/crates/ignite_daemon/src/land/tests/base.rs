@@ -2,14 +2,18 @@
 //! the landing compares the check there, from the cache or by running it, and lands with the
 //! check known to fail only when it fails there too.
 
-use ignite_core::config::LandMode;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 
+use ignite_core::config::LandMode;
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::client::Exit;
+use ignite_core::traits::Hub;
 
 use super::fakes::{key, store};
 use super::{World, world_with_checks};
+use crate::land::attribution::AttributionVerb;
+use crate::server::Verb;
 
 /// A world whose `unit:both` reads `a.txt` and `b.txt` and fails where `file` holds `text`.
 fn broken(file: &'static str, text: &'static str) -> World {
@@ -73,6 +77,93 @@ fn a_check_that_fails_at_the_tip_too_is_known_failing_and_its_regression_is_file
         [(PathBuf::from(LANDING_TREE), vec!["unit:both".to_owned()])]
     );
     assert_eq!(world.git.pushes().len(), 1);
+}
+
+#[test]
+fn a_landing_uses_the_hub_regression_while_the_historical_probe_is_blocked() {
+    let world = broken("b.txt", "broken");
+    world.enable_regression_routes();
+    world.add_landing_tree("landing-2");
+    let verified = world.git.tip_now();
+    world
+        .git
+        .repo
+        .lock()
+        .unwrap()
+        .other_tips
+        .insert("master".to_owned(), verified.clone());
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world.hold("tree-02", "t.2", "local_b", &[("c.txt", "another edit")]);
+    world.git.land_other(&[("b.txt", "still passes")]);
+    let historical_pass = world.git.tip_now();
+    world.git.land_other(&[("b.txt", "broken")]);
+    let baseline = world.git.tip_now();
+
+    let first = world.land_as("tree-01", "local_a");
+    assert_eq!(first.exit, Exit::Success, "{}", first.text);
+    let pending = world.hub.next_landing_attribution().unwrap().unwrap();
+    assert_eq!(pending.baseline.report.first_bad, baseline);
+    assert_eq!(pending.baseline.report.last_good, verified);
+    assert!(pending.baseline.report.search.is_none());
+    let open = world.hub.open_regressions().unwrap();
+    assert_eq!(open.len(), 1);
+    assert_eq!(open[0].ticket, pending.ticket);
+    assert_eq!(open[0].check.as_str(), "unit:both");
+    let checks_before_probe = checks_runs(&world);
+    assert_eq!(checks_before_probe.len(), 1);
+
+    let request = AttributionVerb::request(&world.ctx, &pending).unwrap();
+    let verb = AttributionVerb {
+        landing: world.landing.clone(),
+        landing_trees: 2,
+    };
+    let (probe_event, events) = mpsc::channel();
+    let probe_started = probe_event.clone();
+    let (resume, blocked) = mpsc::channel();
+    *world.gate.on_historical_check.lock().unwrap() = Some(Box::new(move || {
+        probe_started.send(true).unwrap();
+        let _ = blocked.recv();
+    }));
+    std::thread::scope(|scope| {
+        let ctx = &world.ctx;
+        let search = scope.spawn(move || {
+            let reply = verb.run(ctx, &request);
+            let _ = probe_event.send(false);
+            reply
+        });
+        let resume = resume;
+        assert!(
+            events.recv().unwrap(),
+            "the search must run a historical check"
+        );
+        let unrelated = world.land_as("tree-02", "local_b");
+        assert_eq!(unrelated.exit, Exit::Success, "{}", unrelated.text);
+        assert!(
+            unrelated.text.contains(pending.ticket.as_str()),
+            "{}",
+            unrelated.text
+        );
+        assert_eq!(world.git.pushes().len(), 2);
+        assert_eq!(checks_runs(&world), checks_before_probe);
+        assert_eq!(
+            world.hub.next_landing_attribution().unwrap(),
+            Some(pending.clone())
+        );
+
+        resume.send(()).unwrap();
+        let reply = search.join().unwrap();
+        assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    });
+    assert_eq!(world.hub.next_landing_attribution().unwrap(), None);
+    let db = world.hub.regression_db.lock().unwrap();
+    let db = db.as_ref().unwrap();
+    let comments = ignite_store::hub::tickets::comments(db, pending.ticket.as_str()).unwrap();
+    assert!(comments.iter().any(|comment| {
+        comment
+            .text
+            .contains("The culprit search for unit:both finished.")
+            && comment.text.contains(historical_pass.as_str())
+    }));
 }
 
 #[test]
@@ -149,6 +240,26 @@ fn a_pass_cached_at_the_tip_refuses_the_landing_without_running_the_check_there(
         checks_runs(&world),
         [(PathBuf::from(LANDING_TREE), Vec::new())]
     );
+}
+
+#[test]
+fn an_inconclusive_baseline_keeps_the_failure_unexcused() {
+    let world = broken("a.txt", "mine");
+    cache_at_tip(&world, Outcome::Incomplete);
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::CheckFailed, "{}", reply.text);
+    assert!(
+        reply
+            .text
+            .contains("unit:both has no conclusive result at the base"),
+        "{}",
+        reply.text
+    );
+    assert!(world.hub.hub.regressions().is_empty());
+    assert!(world.git.pushes().is_empty());
 }
 
 /// The landing gates in the machine's only landing tree, so it checks the tip out there for the

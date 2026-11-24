@@ -32,7 +32,7 @@ use std::fmt::Write as _;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde_json::{Value, json};
 
-use ignite_core::protocol::hub::RegressionReport;
+use ignite_core::protocol::hub::{LandingRegression, RegressionReport};
 use ignite_core::protocol::tickets::{
     BatchRequest, CAUSED_BY_KEY, CULPRIT_AFFINITY_KEY, CulpritAffinity, Dependency, EdgeKind,
     Operation, Status, Ticket, TicketFields, TicketType, regression_culprit,
@@ -46,6 +46,7 @@ use super::culprit_affinity;
 use super::filing::{self, Author};
 use crate::routes::dispatch::set_columns;
 
+pub(crate) mod landing;
 mod resolution;
 pub use resolution::{passing, settle};
 
@@ -88,6 +89,16 @@ pub fn file(
     conn: &mut Connection,
     author: Author,
     report: &RegressionReport,
+    now: Timestamp,
+) -> Result<(String, Outcome)> {
+    file_report(conn, author, report, None, now)
+}
+
+fn file_report(
+    conn: &mut Connection,
+    author: Author,
+    report: &RegressionReport,
+    baseline: Option<&LandingRegression>,
     now: Timestamp,
 ) -> Result<(String, Outcome)> {
     let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -155,6 +166,9 @@ pub fn file(
         tips::regression_fixed(&tx, check)?;
     }
     tips::regression(&tx, report, &ticket)?;
+    if let Some(baseline) = baseline {
+        landing::queue(&tx, &ticket, author.machine, baseline)?;
+    }
     tx.commit()?;
     // A landing found the failure before tip verification did. Recording why must not
     // keep the regression from being filed.
@@ -177,7 +191,8 @@ fn update_open(
         // A grouped check can get a confirmed culprit without changing the ticket's routing.
         tx.execute(
             "UPDATE regressions SET first_bad = ?2, last_good = ?3,
-                culprit_ticket = ?4, failure_output = COALESCE(NULLIF(?5, ''), failure_output)
+                culprit_ticket = ?4, failure_output = COALESCE(NULLIF(?5, ''), failure_output),
+                landing_attribution = NULL
              WHERE check_name = ?1",
             params![
                 check,
@@ -555,6 +570,10 @@ pub fn details(report: &RegressionReport) -> String {
     // Without this line a range read as if its newest commit were the culprit.
     if let Some(search) = &report.search {
         let _ = writeln!(text, "culprit: {}", search.words());
+    } else if report.found_by == ignite_core::protocol::hub::FoundBy::Landing
+        && report.detected_at.as_ref() == Some(&report.first_bad)
+    {
+        let _ = writeln!(text, "culprit: historical search runs separately");
     }
     let _ = writeln!(
         text,

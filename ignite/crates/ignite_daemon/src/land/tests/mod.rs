@@ -92,6 +92,7 @@ fn world_with(
     let hub = Arc::new(LeaseHub {
         hub: FakeHub::default(),
         clock: clock.clone(),
+        regression_db: Mutex::new(None),
         leases: Mutex::new(HashMap::new()),
         landed_down: AtomicBool::new(false),
         steal_after_acquire: AtomicBool::new(false),
@@ -156,6 +157,18 @@ fn world_with(
 }
 
 impl World {
+    fn enable_regression_routes(&self) {
+        *self.hub.regression_db.lock().unwrap() =
+            Some(ignite_store::hub::open_in_memory().unwrap());
+    }
+
+    fn add_landing_tree(&self, id: &str) {
+        self.trees.landing.lock().unwrap().push(GateTree {
+            tree: id.parse().unwrap(),
+            path: PathBuf::from(format!("/ignite-test-trees/{id}")),
+        });
+    }
+
     /// Leases `tree` to `ticket` for `session_name`, with `changes` committed on its branch.
     fn hold(&self, tree: &str, ticket: &str, session_name: &str, changes: &[(&str, &str)]) {
         let path = PathBuf::from(format!("/ignite-test-trees/{tree}"));

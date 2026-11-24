@@ -73,7 +73,16 @@ pub trait LandTrees: Send + Sync {
     /// Leases a free landing tree checked out at `at`; `None` when every one is busy. Asked
     /// again by a landing that holds a tree, it returns that tree checked out at `at`, so the
     /// landing's next pass builds only what changed since its last.
-    fn lease_landing(&self, holder: &str, at: &Commit) -> Result<Option<GateTree>>;
+    fn lease_landing(&self, holder: &str, at: &Commit) -> Result<Option<GateTree>> {
+        self.lease_landing_keeping(holder, at, 0)
+    }
+    /// Leases a landing tree while leaving at least `keep_free` other trees available.
+    fn lease_landing_keeping(
+        &self,
+        holder: &str,
+        at: &Commit,
+        keep_free: usize,
+    ) -> Result<Option<GateTree>>;
     /// Frees a landing tree; `built_at` is the commit its builds now match.
     fn release_landing(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()>;
     /// Whether a landing that changes `change` builds less at `head` in its ticket tree, whose
@@ -240,12 +249,16 @@ impl LandTrees for MachineTrees {
 
     /// Leases the tree under the handle of the verb asking, when it has one, so that a restarted
     /// daemon keeps the tree for that verb when it runs it again (see [`Trees::lease_landing_for`]).
-    fn lease_landing(&self, holder: &str, at: &Commit) -> Result<Option<GateTree>> {
+    fn lease_landing_keeping(
+        &self,
+        holder: &str,
+        at: &Commit,
+        keep_free: usize,
+    ) -> Result<Option<GateTree>> {
         let owner = crate::steps::current().and_then(|activity| activity.handle());
-        let lease = match &owner {
-            Some(owner) => self.trees.lease_landing_for(holder, owner, at)?,
-            None => self.trees.lease_landing(holder, at)?,
-        };
+        let lease = self
+            .trees
+            .lease_landing_keeping(holder, owner.as_ref(), at, keep_free)?;
         Ok(lease.map(|lease| GateTree {
             tree: lease.tree,
             path: lease.path,

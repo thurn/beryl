@@ -2,7 +2,8 @@
 //! `/checks/stats`, `/checks/fix-outcomes`, `/tips/claim`, `/tips/verified`, `/landings/lookup`, `/regressions`, `/reverted`,
 //! `/records`, `/metrics/import`, and the reports that file tickets: `/incomplete`, `/audits`,
 //! `/finds` and `/tips/waiting`. `/tips/failures` records and reads failures observed at
-//! the selected candidate while its required checks are still running.
+//! the selected candidate while its required checks are still running. The landing regression
+//! routes record a confirmed baseline and let its machine update it after attribution.
 //! `/results/store` also files a ticket when a pass replaces another machine's failure.
 //!
 //! The tickets a report files are written by `crate::upkeep`, which also matches them against
@@ -10,8 +11,8 @@
 //!
 //! Each route decodes its body with the types of `ignite_core::protocol::hub`, calls the store in
 //! `ignite_store::hub` and encodes the reply. Every route except `/results/lookup`,
-//! `/landings/lookup` and the GET routes writes to the database and needs an
-//! authorized writer (HTTP 401 otherwise).
+//! `/landings/lookup` and the GET routes writes to the database. Writes and a machine's
+//! pending attribution lookup require a registered machine's token.
 
 use std::collections::BTreeMap;
 
@@ -24,8 +25,8 @@ use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     AuditReport, ExplorationFind, FlakyReport, IncompleteReport, JusticiarCleared, JusticiarReport,
     LandingsReply, LandingsRequest, LookupReply, LookupRequest, MetricsImport, NewResult,
-    OpenRegression, OpenRegressions, RecordBatch, RegressionReport, ReportFiled, RevertFiled,
-    Reverted, StoreRequest, TipClaim, TipVerified, TipWaiting, TipWaitingFiled,
+    OpenRegression, OpenRegressions, RecordBatch, ReportFiled, RevertFiled, Reverted, StoreRequest,
+    TipClaim, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
@@ -42,7 +43,7 @@ const BILLION: f64 = 1e9;
 
 /// The response if this module owns the request's path.
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
-    let (method, writes) = match request.path.as_str() {
+    let (method, needs_token) = match request.path.as_str() {
         "/results/lookup" | "/landings/lookup" => ("POST", false),
         "/checks/stats"
         | "/checks/fix-outcomes"
@@ -50,6 +51,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/tips/candidate"
         | "/tips/coverage" => ("GET", false),
         "/tips/failures" | "/tips/budget" if request.method == "GET" => ("GET", false),
+        "/regressions/landing" if request.method == "GET" => ("GET", true),
         "/tips/failures"
         | "/results/store"
         | "/flaky"
@@ -57,6 +59,8 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/tips/claim"
         | "/tips/verified"
         | "/regressions"
+        | "/regressions/landing"
+        | "/regressions/attribution"
         | "/reverted"
         | "/records"
         | "/metrics/import"
@@ -74,8 +78,13 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
     if request.method != method {
         return Some(failure(405, &format!("use {method} for {}", request.path)));
     }
-    if writes && request.writer.is_none() {
-        return Some(failure(401, "writes need a registered machine's token"));
+    if needs_token && request.writer.is_none() {
+        let message = if method == "GET" {
+            "pending attribution needs a registered machine's token"
+        } else {
+            "writes need a registered machine's token"
+        };
+        return Some(failure(401, message));
     }
     Some(route(conn, request, now).unwrap_or_else(|response| response))
 }
@@ -157,7 +166,9 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
             Ok(Response::json(200, &json!(LandingsReply { commits })))
         }
         "/tips/waiting" => tip_waiting(conn, request, &body(request)?, now),
-        "/regressions" => regression(conn, request, &body(request)?, now),
+        "/regressions" | "/regressions/landing" | "/regressions/attribution" => {
+            regression(conn, request, now)
+        }
         "/reverted" => reverted(conn, request, &body(request)?, now),
         "/records" => {
             let batch: RecordBatch = body(request)?;
@@ -446,11 +457,10 @@ fn open_regressions(conn: &Connection) -> Result<Response, Response> {
     Ok(Response::json(200, &json!(OpenRegressions { regressions })))
 }
 
-/// Records the regression and returns the ticket for it (see `upkeep::regressions`).
+/// Records regressions and attaches later attribution to the original open ticket.
 fn regression(
     conn: &mut Connection,
     request: &Request,
-    report: &RegressionReport,
     now: Timestamp,
 ) -> Result<Response, Response> {
     let writer = request.writer.as_ref().expect("checked in handle");
@@ -458,11 +468,31 @@ fn regression(
         actor: &writer.actor,
         machine: writer.machine.as_str(),
     };
-    let (ticket, _) = regressions::file(conn, author, report, now).map_err(|e| match e {
+    let report_error = |error| match error {
         StoreError::Rejected(message) => failure(409, &message),
         other => store_failure(&other),
-    })?;
-    filed_reply(&ticket)
+    };
+    match (request.method.as_str(), request.path.as_str()) {
+        ("GET", _) => {
+            let pending = regressions::landing::next(conn, author.machine).map_err(report_error)?;
+            Ok(Response::json(200, &json!(pending)))
+        }
+        (_, "/regressions") => {
+            let (ticket, _) =
+                regressions::file(conn, author, &body(request)?, now).map_err(report_error)?;
+            filed_reply(&ticket)
+        }
+        (_, "/regressions/landing") => {
+            let ticket = regressions::landing::file(conn, author, &body(request)?, now)
+                .map_err(report_error)?;
+            filed_reply(&ticket)
+        }
+        _ => {
+            regressions::landing::finish(conn, author, &body(request)?, now)
+                .map_err(report_error)?;
+            Ok(done())
+        }
+    }
 }
 
 /// Reopens the ticket of a reverted landing (see `upkeep::reverted`).

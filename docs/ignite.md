@@ -2486,16 +2486,20 @@ releases the lease and exits with code 4.
   in its own landing tree, which it then checks out at the landing's commit
   again. Each check is answered from the result cache where that commit's input
   hash has a result. A check that fails there too is reported to the hub as a
-  regression (by verdict, only when the base is the tip). The landing searches
-  for the culprit in the same tree before it files the report. It uses the same
-  bounded search as tip verification and files the remaining range if the search
-  cannot name one landing. If every failure fails there too, the gate runs again
-  with those checks `known-failing`, for the rest of the landing, and the checks
-  that already passed come from the cache. If any passes at the tip, the landing
-  is refused as before, and the `base` line says which check passed there. A
-  check that fails at the tip counts as known to fail even when its failure in
-  the landing says something different, such as more findings: the adapters
-  report no list of findings to compare.
+  regression (by verdict, only when the base is the tip). The hub records the
+  failure immediately, so other gates can use the ticket as a known failure. If
+  every failure fails there too, the gate runs again with those checks
+  `known-failing`, and the checks that already passed come from the cache. If
+  any passes at the tip, the landing is refused and the `base` line says which
+  check passed there. A check that fails at the tip counts as known to fail even
+  when its failure in the landing reports more findings, because the adapters
+  report no list of individual findings to compare.
+- The reporting daemon later runs the same bounded culprit search as tip
+  verification in a separate command. A historical probe leases a landing tree
+  only while another tree stays free. On a machine with one landing tree, the
+  search reports when it cannot narrow the range because it needs a probe. The
+  result updates the original open regression with its culprit or remaining
+  range.
 
 ### Express landings
 

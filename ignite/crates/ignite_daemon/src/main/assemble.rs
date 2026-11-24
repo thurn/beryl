@@ -374,6 +374,13 @@ pub fn verb_side(
         tree: None,
     };
     let mut verbs = long_verbs(&checks, &landing, &idle);
+    verbs.push((
+        Box::new(crate::land::attribution::AttributionVerb {
+            landing,
+            landing_trees: trees.landing_count(),
+        }),
+        false,
+    ));
     let tip_work = CheckTipWork {
         checks: checks.clone(),
         trees: landing_trees,

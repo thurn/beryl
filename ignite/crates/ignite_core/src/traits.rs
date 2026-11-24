@@ -16,10 +16,11 @@ use crate::protocol::Usage;
 use crate::protocol::cli::TranscriptAppend;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, IncompleteReport,
-    JusticiarCleared, JusticiarReport, Landed, LandedCommit, LandedReply, ListingKey, MachineFree,
-    MetricsImport, NewResult, OpenRegression, Pause, Record, RegressionFiled, RegressionReport,
-    ReportFiled, Reservation, ResultKey, SessionTitle, StoredListing, TicketBrief,
-    TipCheckFailures, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    JusticiarCleared, JusticiarReport, Landed, LandedCommit, LandedReply, LandingAttribution,
+    LandingRegression, ListingKey, MachineFree, MetricsImport, NewResult, OpenRegression, Pause,
+    Record, RegressionAttribution, RegressionFiled, RegressionReport, ReportFiled, Reservation,
+    ResultKey, SessionTitle, StoredListing, TicketBrief, TipCheckFailures, TipClaim, TipClaimReply,
+    TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::hub::{RevertFiled, Reverted, Verdict, VerdictKey};
 use crate::protocol::tickets::{
@@ -447,6 +448,18 @@ pub trait Hub: Send + Sync {
     }
     /// Reports a regression; the hub files or reopens its ticket (`POST /regressions`).
     fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled>;
+    /// Records a failure confirmed by a landing and makes its attribution available separately.
+    fn landing_regression(&self, failure: &LandingRegression) -> Result<RegressionFiled> {
+        self.regression(&failure.report)
+    }
+    /// The next open baseline failure this machine confirmed and still needs to attribute.
+    fn next_landing_attribution(&self) -> Result<Option<LandingAttribution>> {
+        Ok(None)
+    }
+    /// Adds search diagnostics to the original open failure.
+    fn attribute_regression(&self, _attribution: &RegressionAttribution) -> Result<()> {
+        Err(not_supported("attribute a landing regression"))
+    }
     /// Every check with an open regression and the open ticket that holds it, including checks
     /// the hub grouped onto another check's ticket (`GET /regressions/open`).
     fn open_regressions(&self) -> Result<Vec<OpenRegression>> {

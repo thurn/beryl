@@ -289,7 +289,7 @@ pub fn regression(conn: &Connection, report: &RegressionReport, ticket: &str) ->
         Some(FIXED) => {
             conn.execute(
                 "UPDATE regressions SET state = ?2, first_bad = ?3, last_good = ?4, platform = ?5,
-                    culprit_ticket = ?6, failure_output = ?7
+                    culprit_ticket = ?6, failure_output = ?7, landing_attribution = NULL
                  WHERE check_name = ?1",
                 params![
                     report.check.as_str(),
@@ -315,7 +315,8 @@ pub fn regression(conn: &Connection, report: &RegressionReport, ticket: &str) ->
 /// Marks a check's regression fixed, after the check passes at a later tip.
 pub fn regression_fixed(conn: &Connection, check: &str) -> Result<()> {
     conn.execute(
-        "UPDATE regressions SET state = ?2 WHERE check_name = ?1 AND state != ?2",
+        "UPDATE regressions SET state = ?2, landing_attribution = NULL
+         WHERE check_name = ?1 AND state != ?2",
         params![check, FIXED],
     )?;
     Ok(())

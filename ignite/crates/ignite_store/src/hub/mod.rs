@@ -315,6 +315,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: "ALTER TABLE tips ADD COLUMN observed_failures TEXT;",
         code: None,
     },
+    Migration {
+        version: 53,
+        sql: "ALTER TABLE regressions ADD COLUMN landing_attribution TEXT;",
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

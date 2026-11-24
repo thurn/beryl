@@ -55,6 +55,7 @@
 //! succeeds. A push the remote rejects lets the landing be stopped again.
 
 mod args;
+pub(crate) mod attribution;
 mod base;
 pub(crate) mod by_verdict;
 pub mod env;

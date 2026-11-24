@@ -299,12 +299,17 @@ impl LandTrees for RemoteLandTrees {
         self.local.is_ancestor(path, ancestor, descendant)
     }
 
-    fn lease_landing(&self, holder: &str, at: &Commit) -> Result<Option<GateTree>> {
+    fn lease_landing_keeping(
+        &self,
+        holder: &str,
+        at: &Commit,
+        keep_free: usize,
+    ) -> Result<Option<GateTree>> {
         let call = LeaseLanding {
             handle: self.remote.link.handle().clone(),
             holder: holder.to_owned(),
             commit: at.clone(),
-            keep_free: 0,
+            keep_free: u32::try_from(keep_free).unwrap_or(u32::MAX),
         };
         Ok(match self.remote.link.lease_landing(&call)? {
             LeaseLandingReply::Leased { tree, path, .. } => Some(GateTree { tree, path }),

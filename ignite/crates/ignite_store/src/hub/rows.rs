@@ -227,6 +227,8 @@ crate::tables! {
         platform: Option<String>,
         culprit_ticket: Option<String>,
         failure_output: Option<String>,
+        /// The reporting machine and baseline report awaiting historical attribution, as JSON.
+        landing_attribution: Option<String>,
     }
 
     Tip = "tips" {

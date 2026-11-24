@@ -9,13 +9,18 @@ use ignite_core::config::LandMode;
 use ignite_core::ids::{Commit, SessionId, TicketId};
 use ignite_core::protocol::client::Exit;
 use ignite_core::protocol::hub::{Landed, Verdict, VerdictKey, verdict_settings};
-use ignite_core::protocol::tickets::LandedWork;
+use ignite_core::protocol::tickets::{
+    BatchRequest, EdgeKind, LandedWork, Operation, TicketFields, regression_culprit,
+};
 use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::{Clock, Git, Hub};
+use ignite_store::hub::{batch, edges, tickets};
 
 use super::express::{FakeExpress, express_world};
 use super::{World, ticket_titled, world, world_with_checks};
+use crate::land::attribution::AttributionVerb;
 use crate::land::records::RecordState;
+use crate::server::Verb;
 
 const TREE: &str = "/ignite-test-trees/tree-01";
 
@@ -391,14 +396,40 @@ fn broken_b() -> World {
     world
 }
 
-/// Records another worker's landing and returns the commit it pushed.
-fn land_on_tip(world: &World, id: &str, changes: &[(&str, &str)]) -> Commit {
+/// Records another worker's landing and returns the commit and ticket the search will find.
+fn land_on_tip(world: &World, changes: &[(&str, &str)]) -> (Commit, TicketId) {
+    let ticket = {
+        let mut db = world.hub.regression_db.lock().unwrap();
+        let request = BatchRequest {
+            preconditions: Vec::new(),
+            ops: vec![Operation::Create {
+                fields: TicketFields {
+                    title: Some("Earlier landing".to_owned()),
+                    ..TicketFields::default()
+                },
+                parent: None,
+                deps: Vec::new(),
+                request_key: None,
+            }],
+        };
+        let batch::BatchOutcome::Applied(created) = batch::apply(
+            db.as_mut().unwrap(),
+            &request,
+            "test",
+            "m-1",
+            world.clock.now(),
+        )
+        .unwrap() else {
+            panic!("could not create ticket for an earlier landing");
+        };
+        created.results[0].id.clone()
+    };
     world.git.land_other(changes);
     let commit = world.git.tip_now();
     world
         .hub
         .landed(&Landed {
-            ticket: TicketId::new(id).unwrap(),
+            ticket: ticket.clone(),
             machine: world.ctx.machine.clone(),
             session: SessionId::new("local_other").unwrap(),
             work: LandedWork {
@@ -410,11 +441,13 @@ fn land_on_tip(world: &World, id: &str, changes: &[(&str, &str)]) -> Commit {
             defer_successor: false,
         })
         .unwrap();
-    commit
+    (commit, ticket)
 }
 
 fn search_world() -> World {
     let world = broken_b();
+    world.enable_regression_routes();
+    world.add_landing_tree("landing-2");
     let master = world.git.tip_now();
     world
         .git
@@ -426,36 +459,55 @@ fn search_world() -> World {
     world
 }
 
+fn finish_search(world: &World, baseline: &Commit) -> TicketId {
+    let pending = world.hub.next_landing_attribution().unwrap().unwrap();
+    assert_eq!(&pending.baseline.report.first_bad, baseline);
+    assert_eq!(pending.baseline.report.detected_at.as_ref(), Some(baseline));
+    assert!(pending.baseline.report.search.is_none());
+    let request = AttributionVerb::request(&world.ctx, &pending).unwrap();
+    let reply = AttributionVerb {
+        landing: world.landing.clone(),
+        landing_trees: 2,
+    }
+    .run(&world.ctx, &request);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(world.hub.next_landing_attribution().unwrap().is_none());
+    pending.ticket
+}
+
 #[test]
-fn a_gate_finds_the_culprit_before_reporting_a_regression() {
+fn a_reported_regression_gets_its_culprit_after_the_search() {
     let world = search_world();
-    let last_good = land_on_tip(&world, "t.2", &[("b.txt", "passing")]);
-    let first_bad = land_on_tip(&world, "t.3", &[("b.txt", "broken")]);
-    let tip = land_on_tip(&world, "t.4", &[("c.txt", "later")]);
+    let (last_good, _) = land_on_tip(&world, &[("b.txt", "passing")]);
+    let (first_bad, culprit) = land_on_tip(&world, &[("b.txt", "broken")]);
+    let (tip, _) = land_on_tip(&world, &[("c.txt", "later")]);
     world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
 
     let reply = world.land_as("tree-01", "local_a");
 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    let reports = world.hub.hub.regressions();
-    let [report] = reports.as_slice() else {
-        panic!("expected one report, got {reports:?}");
-    };
-    assert_eq!(report.caused_by, Some(TicketId::new("t.3").unwrap()));
-    assert_eq!(report.first_bad, first_bad);
-    assert_eq!(report.last_good, last_good);
-    assert_eq!(report.detected_at, Some(tip));
-    assert_eq!(report.search, Some(CulpritSearch::Bisected { runs: 1 }));
+    let regression = finish_search(&world, &tip);
+    let db = world.hub.regression_db.lock().unwrap();
+    let db = db.as_ref().unwrap();
+    let ticket = tickets::load(db, regression.as_str()).unwrap().unwrap();
+    assert_eq!(regression_culprit(&ticket), Some(culprit.clone()));
+    assert_eq!(
+        edges::kind(db, regression.as_str(), culprit.as_str()).unwrap(),
+        Some(EdgeKind::DiscoveredFrom)
+    );
+    let body = ticket.body;
+    assert!(body.contains(&format!("first bad {first_bad}, last good {last_good}")));
+    assert!(body.contains(&CulpritSearch::Bisected { runs: 1 }.words()));
 }
 
 #[test]
-fn a_gate_reports_the_range_when_its_culprit_probe_is_incomplete() {
+fn a_reported_regression_gets_the_range_when_its_culprit_probe_is_incomplete() {
     use super::fakes::{key, store};
     use ignite_core::protocol::Outcome;
 
     let world = search_world();
-    let middle = land_on_tip(&world, "t.2", &[("b.txt", "passing")]);
-    let tip = land_on_tip(&world, "t.3", &[("b.txt", "broken")]);
+    let (middle, first) = land_on_tip(&world, &[("b.txt", "passing")]);
+    let (tip, second) = land_on_tip(&world, &[("b.txt", "broken")]);
     let landing = Path::new("/ignite-test-trees/landing-1");
     world.git.check_out(landing, &middle);
     let key = key(&world.ctx, landing, "unit:both", &["a.txt", "b.txt"]);
@@ -465,24 +517,27 @@ fn a_gate_reports_the_range_when_its_culprit_probe_is_incomplete() {
     let reply = world.land_as("tree-01", "local_a");
 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    let reports = world.hub.hub.regressions();
-    let [report] = reports.as_slice() else {
-        panic!("expected one report, got {reports:?}");
-    };
-    assert_eq!(report.caused_by, None);
-    assert_eq!(report.first_bad, tip);
-    assert_eq!(
-        report.suspects,
-        [TicketId::new("t.2").unwrap(), TicketId::new("t.3").unwrap()]
-    );
-    assert_eq!(
-        report.search,
-        Some(CulpritSearch::EndedEarly {
-            runs: 1,
-            candidates: 2,
-            why: format!("the run at {middle} was incomplete"),
-        })
-    );
+    let regression = finish_search(&world, &tip);
+    let db = world.hub.regression_db.lock().unwrap();
+    let db = db.as_ref().unwrap();
+    let ticket = tickets::load(db, regression.as_str()).unwrap().unwrap();
+    assert_eq!(regression_culprit(&ticket), None);
+    for suspect in [first, second] {
+        assert_eq!(
+            edges::kind(db, regression.as_str(), suspect.as_str()).unwrap(),
+            Some(EdgeKind::DiscoveredFrom)
+        );
+    }
+    let summary = CulpritSearch::EndedEarly {
+        runs: 1,
+        candidates: 2,
+        why: format!("the run at {middle} was incomplete"),
+    }
+    .words();
+    let comments = tickets::comments(db, regression.as_str()).unwrap();
+    assert!(comments.iter().any(|comment| {
+        comment.text.contains(&summary) && comment.text.contains(&format!("first bad {tip}"))
+    }));
 }
 
 /// The gate in the ticket tree fails on a check that fails at the base too. When the base is
