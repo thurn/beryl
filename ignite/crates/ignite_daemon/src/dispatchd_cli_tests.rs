@@ -437,6 +437,7 @@ fn an_unprobed_or_held_provider_is_not_offered() {
             since: rig.clock.now(),
             cli_version: Some("2.1.323".to_owned()),
             message: "Invalid API key".to_owned(),
+            latest_probe_failure: None,
         }),
     );
     tick(&rig);
@@ -659,6 +660,7 @@ fn capacity_reports_probe_and_hold_independently() {
             since: rig.clock.now(),
             cli_version: None,
             message: "The plan is at its limit".into(),
+            latest_probe_failure: None,
         }),
     );
     let mut expected = ProviderCapacity {

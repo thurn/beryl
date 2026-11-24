@@ -758,18 +758,7 @@ impl CliPool for CliDaemon {
     fn held(&self, app: &str) -> Option<Hold> {
         let holds = self.database(|conn| store::holds(conn)).ok()?;
         let row = holds.into_iter().find(|h| h.app == app)?;
-        Some(Hold {
-            app: row.app,
-            // A reason this build does not know still holds the app.
-            reason: HoldReason::parse(&row.reason).unwrap_or(HoldReason::ApiError),
-            since: row
-                .since
-                .as_deref()
-                .and_then(|t| Timestamp::parse(t).ok())
-                .unwrap_or_else(|| self.now()),
-            cli_version: row.cli_version,
-            message: row.message.unwrap_or_default(),
-        })
+        Some(health::hold_of(&row, self.now()))
     }
 
     fn probed(&self, app: &str) -> bool {

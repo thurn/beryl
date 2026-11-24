@@ -170,6 +170,7 @@ fn a_provider_held_after_reservation_returns_it_without_parking_a_worker() {
             since: rig.clock.now(),
             cli_version: None,
             message: "login expired".to_owned(),
+            latest_probe_failure: None,
         }),
     );
     tick(&rig);

@@ -296,11 +296,26 @@ fn a_successful_probe_ends_the_hold_and_unparks_its_slots() {
     );
     rig.put_slot(3, Some("exit Some(7) that decide cannot place".to_owned()));
 
-    // A failing probe five minutes in keeps the hold and records the probe's time.
+    // A failed probe keeps the original hold and parked slots while adding its own cause.
+    let parked = rig.slots();
     rig.advance(PROBE_EVERY_S);
     rig.failing_probe();
     rig.tick();
-    assert!(rig.health.hold("fake").is_some());
+    let updated = rig.health_clone().hold("fake").unwrap();
+    assert_eq!(
+        updated,
+        Hold {
+            latest_probe_failure: Some(ProbeFailure {
+                reason: HoldReason::NoFirstLine,
+                message: "exited 1 before its first line".to_owned(),
+            }),
+            ..hold
+        }
+    );
+    assert_eq!(rig.slots(), parked);
+    assert!(!rig.health.may_start("fake"));
+    assert!(!rig.health.offers("fake"));
+    assert_eq!(rig.notes.lock().unwrap().len(), 1);
     assert_eq!(rig.launcher.scripted.runs().len(), 1);
     rig.advance(PROBE_EVERY_S - 1.0);
     rig.tick();

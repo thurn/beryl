@@ -23,7 +23,9 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use ignite_core::cli::{CliApp, Hold, HoldReason, SlotState, TurnEnd, TurnSpec, UsageSample};
+use ignite_core::cli::{
+    CliApp, Hold, HoldReason, ProbeFailure, SlotState, TurnEnd, TurnSpec, UsageSample,
+};
 use ignite_core::config::Config;
 use ignite_core::plan_usage::parse_resets_at;
 use ignite_core::protocol::Class;
@@ -176,7 +178,7 @@ fn store_error(error: &ignite_store::StoreError) -> Error {
 
 /// The hold a `cli_holds` row stores. A reason this build does not know still holds, as an API
 /// error, so that a newer build's hold is never ignored.
-fn hold_of(row: &CliHold) -> Hold {
+pub(super) fn hold_of(row: &CliHold, fallback_since: Timestamp) -> Hold {
     let reason = HoldReason::parse(&row.reason).unwrap_or(HoldReason::ApiError);
     Hold {
         app: row.app.clone(),
@@ -185,9 +187,33 @@ fn hold_of(row: &CliHold) -> Hold {
             .since
             .as_deref()
             .and_then(|at| Timestamp::parse(at).ok())
-            .unwrap_or_else(|| Timestamp::from_millis(0)),
+            .unwrap_or(fallback_since),
         cli_version: row.cli_version.clone(),
         message: row.message.clone().unwrap_or_default(),
+        latest_probe_failure: row.probe_reason.as_deref().map(|reason| ProbeFailure {
+            reason: HoldReason::parse(reason).unwrap_or(HoldReason::ApiError),
+            message: row.probe_message.clone().unwrap_or_default(),
+        }),
+    }
+}
+
+fn hold_row(
+    app: &str,
+    reason: HoldReason,
+    message: &str,
+    cli_version: Option<&str>,
+    now: Timestamp,
+) -> CliHold {
+    CliHold {
+        app: app.to_owned(),
+        reason: reason.as_str().to_owned(),
+        since: Some(now.to_string()),
+        cli_version: cli_version.map(str::to_owned),
+        message: Some(first_line(message)),
+        probed_at: None,
+        reported: 0,
+        probe_reason: None,
+        probe_message: None,
     }
 }
 
@@ -250,7 +276,10 @@ impl Health {
     /// Every app's CLI hold. A database that cannot be read reports none, and says so.
     pub fn holds(&self) -> Vec<Hold> {
         match self.pool.with_database(|conn| cli_slots::holds(conn)) {
-            Ok(rows) => rows.iter().map(hold_of).collect(),
+            Ok(rows) => rows
+                .iter()
+                .map(|row| hold_of(row, Timestamp::EPOCH))
+                .collect(),
             Err(error) => {
                 eprintln!("ignite: CLI holds not read: {error}");
                 Vec::new()
@@ -285,23 +314,19 @@ impl Health {
         cli_version: Option<&str>,
         now: Timestamp,
     ) -> Result<bool> {
-        let row = CliHold {
-            app: app.to_owned(),
-            reason: reason.as_str().to_owned(),
-            since: Some(now.to_string()),
-            cli_version: cli_version.map(str::to_owned),
-            message: Some(first_line(message)),
-            probed_at: None,
-            reported: 0,
-        };
+        self.record_hold(&hold_row(app, reason, message, cli_version, now))
+    }
+
+    fn record_hold(&self, row: &CliHold) -> Result<bool> {
         let new = {
             let _admission = super::lock(&self.pool.cli_admission);
             self.pool
-                .with_database(|conn| cli_slots::start_hold(conn, &row))
+                .with_database(|conn| cli_slots::record_hold(conn, row))
                 .map_err(|e| store_error(&e))?
         };
         if new {
-            let hold = hold_of(&row);
+            let hold = hold_of(row, Timestamp::EPOCH);
+            let app = &hold.app;
             (self.notify)(
                 &format!("Ignite holds {app} CLI workers on {}", self.host),
                 &format!(
@@ -431,7 +456,7 @@ impl Health {
     }
 
     /// Probes `app` and acts on the result: a pass ends its hold, if any, and lets its slots be
-    /// offered; a failure starts a hold, or records the probe's time on the one it is on.
+    /// offered; a failure records the probe's time and cause and starts a hold if needed.
     fn probe_and_apply(&self, ctx: &Context, name: &str, app: &dyn CliApp) {
         let outcome = self.probe(ctx, name, app);
         let now = ctx.clock.now();
@@ -445,13 +470,13 @@ impl Health {
             },
             Probe::Failed { end } => {
                 let (reason, message) = hold_cause(end);
-                if let Err(error) = self.start_hold(name, reason, &message, None, now) {
+                let mut row = hold_row(name, reason, &message, None, now);
+                row.probed_at.clone_from(&row.since);
+                row.probe_reason = Some(row.reason.clone());
+                row.probe_message.clone_from(&row.message);
+                if let Err(error) = self.record_hold(&row) {
                     eprintln!("ignite: the {name} CLI hold was not stored: {error}");
                 }
-                let at = now.to_string();
-                let _ = self
-                    .pool
-                    .with_database(|conn| cli_slots::hold_probed(conn, name, &at));
             }
         }
     }
@@ -475,7 +500,7 @@ impl Health {
                         .probed_at
                         .as_deref()
                         .and_then(|at| Timestamp::parse(at).ok());
-                    probe_due(&hold_of(row), last, now)
+                    probe_due(&hold_of(row, Timestamp::EPOCH), last, now)
                 }
             };
             if due {
@@ -493,7 +518,7 @@ impl Health {
             .with_database(|conn| cli_slots::holds(conn))
             .unwrap_or_default();
         for row in rows.iter().filter(|row| row.reported == 0) {
-            let hold = hold_of(row);
+            let hold = hold_of(row, Timestamp::EPOCH);
             let report = JusticiarReport {
                 subject: format!("cli-hold:{}", hold.app),
                 title: format!(

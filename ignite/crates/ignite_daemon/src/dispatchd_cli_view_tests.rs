@@ -1,6 +1,6 @@
 //! What `ignite pool list` and `ignite pool watch` show for an app in CLI mode.
 
-use ignite_core::cli::{Hold, HoldReason, Slot, SlotState};
+use ignite_core::cli::{Hold, HoldReason, ProbeFailure, Slot, SlotState};
 use ignite_core::protocol::cli::{TranscriptKind, TranscriptLine};
 use ignite_core::protocol::client::Exit;
 use ignite_core::traits::Clock;
@@ -58,6 +58,10 @@ fn pool_list_shows_a_running_a_parked_and_a_free_cli_slot() {
             since: now.plus_seconds(-90.0),
             cli_version: None,
             message: "log in".to_owned(),
+            latest_probe_failure: Some(ProbeFailure {
+                reason: HoldReason::ApiError,
+                message: "service unavailable".to_owned(),
+            }),
         }),
     );
 
@@ -71,7 +75,8 @@ fn pool_list_shows_a_running_a_parked_and_a_free_cli_slot() {
     assert_eq!(
         slots,
         [
-            "hold     claude CLI hold for 2m (not_logged_in): log in",
+            "hold     claude CLI hold for 2m (not_logged_in): log in | \
+             Latest probe failed (api_error): service unavailable",
             "slot     claude 1  turn 3 running for 4m  T.1  cli-claude-00000001",
             "slot     claude 2  parked for 2h after turn 5  T.2  cli-claude-00000002",
             "slot     claude 3  free",

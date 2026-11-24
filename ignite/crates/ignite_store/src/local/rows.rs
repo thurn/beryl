@@ -314,6 +314,8 @@ crate::tables! {
         probed_at: Option<String>,
         /// 1 once the hold's notification and justiciar report were sent.
         reported: i64,
+        probe_reason: Option<String>,
+        probe_message: Option<String>,
     }
 
     /// The latest outcome of one check for one session (see `results::note_sighting`).

@@ -53,6 +53,7 @@ fn on_hold() -> Hold {
         since: NOW,
         cli_version: None,
         message: "not logged in".to_owned(),
+        latest_probe_failure: None,
     }
 }
 

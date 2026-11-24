@@ -83,6 +83,8 @@ fn read_hold(row: &Row<'_>) -> rusqlite::Result<CliHold> {
         message: row.get("message")?,
         probed_at: row.get("probed_at")?,
         reported: row.get("reported")?,
+        probe_reason: row.get("probe_reason")?,
+        probe_message: row.get("probe_message")?,
     })
 }
 
@@ -441,12 +443,13 @@ fn verify_table(
     Ok(())
 }
 
-/// Puts `hold.app` on `hold` unless it is already on one, which keeps its first reason and
-/// time. Returns whether the hold is new.
-pub fn start_hold(conn: &Connection, hold: &CliHold) -> Result<bool> {
-    let inserted = conn.execute(
+/// Starts a hold or records the time and cause of a failed probe on an existing hold.
+/// The original cause and time stay with the hold until it ends. Returns whether it is new.
+pub fn record_hold(conn: &mut Connection, hold: &CliHold) -> Result<bool> {
+    let transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let inserted = transaction.execute(
         &format!(
-            "INSERT OR IGNORE INTO cli_holds ({}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT OR IGNORE INTO cli_holds ({}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             columns(CliHold::COLUMNS)
         ),
         params![
@@ -456,24 +459,24 @@ pub fn start_hold(conn: &Connection, hold: &CliHold) -> Result<bool> {
             hold.cli_version,
             hold.message,
             hold.probed_at,
-            hold.reported
+            hold.reported,
+            hold.probe_reason,
+            hold.probe_message,
         ],
-    )?;
-    Ok(inserted > 0)
+    )? > 0;
+    if !inserted && let Some(at) = &hold.probed_at {
+        transaction.execute(
+            "UPDATE cli_holds SET probed_at = ?2, probe_reason = ?3, probe_message = ?4 WHERE app = ?1",
+            params![hold.app, at, hold.probe_reason, hold.probe_message],
+        )?;
+    }
+    transaction.commit()?;
+    Ok(inserted)
 }
 
 /// Ends `app`'s hold. Returns whether it was on one.
 pub fn end_hold(conn: &Connection, app: &str) -> Result<bool> {
     Ok(conn.execute("DELETE FROM cli_holds WHERE app = ?1", [app])? > 0)
-}
-
-/// Records when the last probe turn of `app`'s hold ran.
-pub fn hold_probed(conn: &Connection, app: &str, at: &str) -> Result<()> {
-    conn.execute(
-        "UPDATE cli_holds SET probed_at = ?2 WHERE app = ?1",
-        params![app, at],
-    )?;
-    Ok(())
 }
 
 /// Marks `app`'s hold as reported to the justiciar.
@@ -640,8 +643,8 @@ mod tests {
     }
 
     #[test]
-    fn a_hold_starts_once_and_ends() {
-        let conn = open_in_memory().unwrap();
+    fn a_hold_keeps_its_first_cause_and_replaces_its_latest_probe_failure() {
+        let mut conn = open_in_memory().unwrap();
         let hold = CliHold {
             app: "claude".to_owned(),
             reason: "not_logged_in".to_owned(),
@@ -650,20 +653,34 @@ mod tests {
             message: Some("Invalid API key".to_owned()),
             probed_at: None,
             reported: 0,
+            probe_reason: None,
+            probe_message: None,
         };
-        assert!(start_hold(&conn, &hold).unwrap());
-        let later = CliHold {
+        assert!(record_hold(&mut conn, &hold).unwrap());
+        hold_reported(&conn, "claude").unwrap();
+        let mut later = CliHold {
             reason: "api_error".to_owned(),
+            since: Some("2026-11-20T12:05:00.000Z".to_owned()),
+            message: Some("Overloaded".to_owned()),
             ..hold.clone()
         };
-        assert!(!start_hold(&conn, &later).unwrap());
-        hold_probed(&conn, "claude", "2026-11-20T12:05:00.000Z").unwrap();
-        hold_reported(&conn, "claude").unwrap();
-        let stored = holds(&conn).unwrap();
-        assert_eq!(stored[0].reason, "not_logged_in");
+        later.probed_at.clone_from(&later.since);
+        later.probe_reason = Some(later.reason.clone());
+        later.probe_message.clone_from(&later.message);
+        assert!(!record_hold(&mut conn, &later).unwrap());
+        later.probed_at = Some("2026-11-20T12:10:00.000Z".to_owned());
+        later.probe_message = Some("Service unavailable".to_owned());
+        assert!(!record_hold(&mut conn, &later).unwrap());
+        assert!(!record_hold(&mut conn, &hold).unwrap());
         assert_eq!(
-            (stored[0].probed_at.as_deref(), stored[0].reported),
-            (Some("2026-11-20T12:05:00.000Z"), 1)
+            holds(&conn).unwrap(),
+            [CliHold {
+                probed_at: later.probed_at,
+                reported: 1,
+                probe_reason: later.probe_reason,
+                probe_message: later.probe_message,
+                ..hold
+            }]
         );
         assert!(end_hold(&conn, "claude").unwrap());
         assert!(!end_hold(&conn, "claude").unwrap());

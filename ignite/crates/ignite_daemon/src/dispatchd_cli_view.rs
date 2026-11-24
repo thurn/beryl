@@ -62,13 +62,24 @@ pub fn digest_text(lines: &[TranscriptLine], after: usize) -> String {
 }
 
 fn describe_hold(hold: &Hold, now: Timestamp) -> String {
-    format!(
+    let mut line = format!(
         "hold     {} CLI hold for {} ({}): {}",
         hold.app,
         duration(now.seconds_since(hold.since)),
         hold.reason.as_str(),
         hold.message
-    )
+    );
+    if let Some(failure) = &hold.latest_probe_failure
+        && (failure.reason != hold.reason || failure.message != hold.message)
+    {
+        let _ = write!(
+            line,
+            " | Latest probe failed ({}): {}",
+            failure.reason.as_str(),
+            failure.message
+        );
+    }
+    line
 }
 
 impl HeadlessDispatch {
