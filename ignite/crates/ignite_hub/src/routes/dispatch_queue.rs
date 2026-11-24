@@ -77,7 +77,7 @@ pub fn next(
     let settings = fleet_settings::settings(conn)?;
     let name = free.name.as_deref().unwrap_or(machine);
     let state = settings.machine(name).state;
-    let paused = held::paused(conn, free, state)?;
+    let paused = held::paused(conn, free, state, now)?;
     if paused == Paused::Everything {
         let reason = if state == MachineState::Off {
             "this machine is off"
@@ -304,10 +304,14 @@ pub(super) fn peer_free_build_handoffs(
 }
 
 /// Lane hand-offs can start ordinary work, so only an Active machine can continue a chain.
-pub(super) fn chain_machine(conn: &Connection, machine: &MachineId) -> Result<Option<String>> {
+pub(super) fn chain_machine(
+    conn: &Connection,
+    machine: &MachineId,
+    now: Timestamp,
+) -> Result<Option<String>> {
     let name = fleet::name_of(conn, machine.as_str())?.unwrap_or_else(|| machine.to_string());
     let active = fleet_settings::settings(conn)?.machine(&name).state == MachineState::Active;
-    Ok((active && !fleet::paused_everywhere(conn)?).then_some(name))
+    Ok((active && !fleet::paused_everywhere(conn, now)?).then_some(name))
 }
 
 /// The next ready ticket of the `lane:` chain `lane`, reserved for the session that finished
@@ -322,7 +326,7 @@ pub fn chain_next(
     now: Timestamp,
     pressure: Option<&DispatchPressure>,
 ) -> Result<Option<Reservation>> {
-    let Some(name) = chain_machine(conn, machine)? else {
+    let Some(name) = chain_machine(conn, machine, now)? else {
         return Ok(None);
     };
     let snapshot = Snapshot::load(conn, now)?;

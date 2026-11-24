@@ -423,7 +423,7 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp, test_paths: &[
     let ticket = load(&tx, id)?;
     if ticket.status == Status::Closed && ticket.session.as_ref() == Some(&landed.session) {
         if ticket.landed.as_ref() != Some(&landed.work)
-            || queue::chain_machine(&tx, &landed.machine)
+            || queue::chain_machine(&tx, &landed.machine, now)
                 .map_err(|e| store_failure(&e))?
                 .is_none()
         {

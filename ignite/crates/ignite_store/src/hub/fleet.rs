@@ -6,7 +6,7 @@ use ignite_core::config::Os;
 use ignite_core::protocol::hub::{Heartbeat, MachineRegister, Reservation};
 use ignite_core::time::Timestamp;
 
-use crate::hub::rows;
+use crate::hub::{emergency, rows};
 use crate::{Result, StoreError};
 
 /// How long a reservation waits for `ignite start` to claim it before it lapses.
@@ -319,8 +319,11 @@ pub fn set_paused_everywhere(conn: &Connection, paused: bool, now: Timestamp) ->
     Ok(())
 }
 
-/// Whether hand-offs to every machine are paused (`ignite pool pause --all`).
-pub fn paused_everywhere(conn: &Connection) -> Result<bool> {
+/// Whether an operator pause or a full emergency pauses hand-offs to every machine.
+pub fn paused_everywhere(conn: &Connection, now: Timestamp) -> Result<bool> {
+    if emergency::dispatch_hold(conn, now)?.is_some() {
+        return Ok(true);
+    }
     Ok(conn.query_row(
         "SELECT EXISTS (SELECT 1 FROM pauses WHERE machine = ?1)",
         [ALL_MACHINES],

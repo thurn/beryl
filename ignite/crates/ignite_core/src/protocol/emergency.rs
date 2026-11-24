@@ -1,11 +1,10 @@
-//! The emergency pause makes every machine refuse verbs that start heavy work. The hub keeps
-//! the flag, and a session holding an `incident` or `justiciar` ticket can declare it.
+//! The emergency pause makes every machine refuse new landings or all new heavy work. The hub
+//! keeps the flag, and a session holding an `incident` or `justiciar` ticket can declare it.
 //!
 //! The holder runs `ignite emergency declare <ticket>`. Daemons hear it
-//! in each heartbeat's reply ([`super::hub::HeartbeatReply::emergency`]) and refuse `start`,
-//! `test`, `check`, `land` and the other verbs that build, from every session except the
-//! declaring session and sessions working the emergency ticket or tickets it allows. Running
-//! commands continue.
+//! in each heartbeat's reply ([`super::hub::HeartbeatReply::emergency`]). They refuse the
+//! verbs covered by the scope except for the declaring session and sessions working the
+//! emergency ticket or tickets it allows. Running commands continue.
 //!
 //! The flag lapses [`EMERGENCY_LASTS_S`] after the last declaration.
 //! `ignite pool resume --all` ends it at once.
@@ -29,6 +28,17 @@ pub fn has_emergency_label(labels: &[String]) -> bool {
 /// How long an emergency lasts after it was declared or last renewed: two hours.
 pub const EMERGENCY_LASTS_S: f64 = 2.0 * 60.0 * 60.0;
 
+/// Which work pauses during an emergency.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EmergencyScope {
+    /// New heavy verbs and worker hand-offs.
+    #[default]
+    All,
+    /// New landings only.
+    Landings,
+}
+
 /// An emergency in force at the hub.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Emergency {
@@ -41,6 +51,9 @@ pub struct Emergency {
     pub declared_at: Timestamp,
     /// When it was last declared again, which starts its two hours over.
     pub renewed_at: Timestamp,
+    /// The work paused by the latest declaration. Older records have a full scope.
+    #[serde(default)]
+    pub scope: EmergencyScope,
     /// The tickets whose sessions the declaring session lets run heavy verbs.
     #[serde(default)]
     pub allowed: Vec<Allowance>,
@@ -87,6 +100,8 @@ pub enum EmergencyChange {
         ticket: TicketId,
         session: SessionId,
         machine: MachineId,
+        #[serde(default)]
+        scope: EmergencyScope,
     },
     /// Adds an allowance. Only the emergency's own session may.
     Allow {
@@ -114,9 +129,11 @@ pub fn apply(
             ticket,
             session,
             machine,
+            scope,
         } => Ok(match current {
             Some(mut same) if &same.session == session && &same.ticket == ticket => {
                 same.renewed_at = now;
+                same.scope = *scope;
                 same
             }
             _ => Emergency {
@@ -125,6 +142,7 @@ pub fn apply(
                 machine: machine.clone(),
                 declared_at: now,
                 renewed_at: now,
+                scope: *scope,
                 allowed: Vec::new(),
             },
         }),
@@ -155,6 +173,7 @@ mod tests {
             ticket: TicketId::new(ticket).unwrap(),
             session: SessionId::new(session).unwrap(),
             machine: MachineId::new("m-1").unwrap(),
+            scope: EmergencyScope::All,
         }
     }
 
@@ -178,6 +197,52 @@ mod tests {
         let renewed = apply(Some(first), &declare("local_j", "TJUS1"), later).unwrap();
         assert_eq!(renewed.declared_at, start);
         assert!(renewed.active(start.plus_seconds(EMERGENCY_LASTS_S + 60.0)));
+    }
+
+    #[test]
+    fn a_renewal_changes_scope_and_keeps_allowances() {
+        let now = Timestamp::EPOCH;
+        let change = |scope| EmergencyChange::Declare {
+            ticket: TicketId::new("TJUS1").unwrap(),
+            session: SessionId::new("local_j").unwrap(),
+            machine: MachineId::new("m-1").unwrap(),
+            scope,
+        };
+        let first = apply(None, &change(EmergencyScope::Landings), now).unwrap();
+        assert_eq!(first.scope, EmergencyScope::Landings);
+        let allowed = apply(Some(first), &allow("local_j", "TWORK", Some("land")), now).unwrap();
+        let renewed = apply(
+            Some(allowed),
+            &change(EmergencyScope::All),
+            now.plus_seconds(60.0),
+        )
+        .unwrap();
+        assert_eq!(renewed.scope, EmergencyScope::All);
+        assert_eq!(renewed.declared_at, now);
+        assert!(renewed.allows(&TicketId::new("TWORK").unwrap(), "land"));
+    }
+
+    #[test]
+    fn old_declarations_and_records_default_to_a_full_pause() {
+        let old = serde_json::json!({
+            "ticket": "TJUS1",
+            "session": "local_j",
+            "machine": "m-1",
+        });
+        let mut declaration = old.clone();
+        declaration["change"] = serde_json::json!("declare");
+        assert_eq!(
+            serde_json::from_value::<EmergencyChange>(declaration).unwrap(),
+            declare("local_j", "TJUS1")
+        );
+
+        let mut record = old;
+        record["declared_at"] = serde_json::json!(Timestamp::EPOCH);
+        record["renewed_at"] = serde_json::json!(Timestamp::EPOCH);
+        assert_eq!(
+            serde_json::from_value::<Emergency>(record).unwrap().scope,
+            EmergencyScope::All
+        );
     }
 
     #[test]

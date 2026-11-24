@@ -15,6 +15,7 @@ fn emergency(at: Timestamp) -> Emergency {
         machine: MachineId::new("m-2").unwrap(),
         declared_at: at,
         renewed_at: at,
+        scope: EmergencyScope::All,
         allowed: vec![Allowance {
             ticket: TicketId::new("TWORK").unwrap(),
             verb: Some("land".to_owned()),
@@ -157,6 +158,10 @@ fn status_and_doctor_show_the_emergency_with_its_age_and_owner() {
         lines[0].starts_with("TJUS1, declared by local_j on m-2 25 min ago"),
         "{lines:?}"
     );
+    assert!(
+        lines[0].contains("pauses heavy verbs and worker hand-offs"),
+        "{lines:?}"
+    );
     assert!(lines[0].contains("lapses in 1 h 35 min"), "{lines:?}");
     assert_eq!(lines[1], "allowed TWORK (land)");
     let finding = emergencies.finding().unwrap();
@@ -187,11 +192,11 @@ fn waiting_returns_the_all_clear_once_the_emergency_ends() {
 }
 
 /// A heavy verb that always succeeds.
-struct Heavy;
+struct Heavy(&'static str);
 
 impl Verb for Heavy {
     fn name(&self) -> &'static str {
-        "test"
+        self.0
     }
 
     fn needs_the_tree_lease(&self) -> bool {
@@ -258,18 +263,13 @@ fn the_server_refuses_a_heavy_verb_until_every_machine_resumes() {
     let hub = Arc::new(FakeHub::default());
     let emergencies = Arc::new(Emergencies::new(clock(), None));
     let mut registry = Registry::default();
-    registry.register(Box::new(Heavy));
+    registry.register(Box::new(Heavy("test")));
     registry.register(Box::new(EmergencyVerb(emergencies.clone())));
     let mut server = Server::new(context(hub.clone()), registry, None).unwrap();
     server.enforce_emergency(emergencies.clone());
 
     let declared = server.handle(&request("emergency", &["declare", "TJUS1"], "local_j"));
     assert_eq!(declared.exit, Exit::Success, "{}", declared.text);
-    assert_eq!(
-        hub.pauses().len(),
-        1,
-        "declaring pauses hand-offs everywhere"
-    );
     assert_eq!(
         server.handle(&request("test", &["unit"], "local_w")).exit,
         Exit::Paused
@@ -290,4 +290,70 @@ fn the_server_refuses_a_heavy_verb_until_every_machine_resumes() {
     );
     let waited = server.handle(&waiting());
     assert_eq!(waited.exit, Exit::Success, "{}", waited.text);
+}
+
+#[test]
+fn a_landings_only_declaration_refuses_land_until_the_ticket_is_allowed() {
+    let emergencies = Arc::new(Emergencies::new(clock(), None));
+    let mut registry = Registry::default();
+    for &verb in HEAVY_VERBS {
+        registry.register(Box::new(Heavy(verb)));
+    }
+    registry.register(Box::new(EmergencyVerb(emergencies.clone())));
+    let hub = Arc::new(FakeHub::default());
+    let mut server = Server::new(context(hub.clone()), registry, None).unwrap();
+    server.enforce_emergency(emergencies.clone());
+
+    let declare = request(
+        "emergency",
+        &["declare", "TJUS1", "--landings-only"],
+        "local_j",
+    );
+    let declared = server.handle(&declare);
+    assert_eq!(declared.exit, Exit::Success, "{}", declared.text);
+    assert!(declared.text.contains("landings only"), "{}", declared.text);
+    assert_eq!(
+        emergencies.in_force().unwrap().scope,
+        EmergencyScope::Landings
+    );
+    assert!(emergencies.lines()[0].contains("pauses landings only"));
+    assert!(
+        emergencies
+            .finding()
+            .unwrap()
+            .line()
+            .contains("pauses landings only")
+    );
+    assert!(hub.pauses().is_empty());
+
+    let refused = server.handle(&request("land", &[], "local_w"));
+    assert_eq!(refused.exit.code(), 6, "{}", refused.text);
+    for verb in ["start", "test", "check", "run", "rebuild", "audit"] {
+        let reply = server.handle(&request(verb, &[], "local_w"));
+        assert_eq!(reply.exit, Exit::Success, "{verb}: {}", reply.text);
+    }
+    assert_eq!(
+        server.handle(&request("land", &[], "local_j")).exit,
+        Exit::Success
+    );
+
+    let repair = ticket("TWORK");
+    assert!(emergencies.refusal("land", None, Some(&repair)).is_some());
+    let allowed = server.handle(&request(
+        "emergency",
+        &["allow", "TWORK", "land"],
+        "local_j",
+    ));
+    assert_eq!(allowed.exit, Exit::Success, "{}", allowed.text);
+    assert!(emergencies.refusal("land", None, Some(&repair)).is_none());
+    assert!(
+        emergencies
+            .refusal("land", None, Some(&ticket("TJUS1")))
+            .is_none()
+    );
+    assert!(
+        emergencies
+            .refusal("land", None, Some(&ticket("TOTHR")))
+            .is_some()
+    );
 }

@@ -173,7 +173,7 @@ pub enum Command {
         #[arg(required = true)]
         reason: Vec<String>,
     },
-    /// The emergency pause, which refuses heavy verbs on every machine while it is in force.
+    /// Pause new landings or all new heavy work across the fleet during an emergency.
     Emergency {
         #[command(subcommand)]
         command: Option<crate::emergency::EmergencyCommand>,

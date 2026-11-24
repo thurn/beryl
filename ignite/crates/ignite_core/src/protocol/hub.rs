@@ -103,8 +103,7 @@ pub struct HeartbeatReply {
     /// [`super::emergency`]). A hub that predates it sends none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emergency: Option<super::emergency::Emergency>,
-    /// Hand-offs are paused on every machine (`ignite pool pause --all`), so not even the
-    /// tickets that hold `master` back are handed off. `ignite status` says so.
+    /// A full emergency or `ignite pool pause --all` pauses hand-offs on every machine.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub paused_everywhere: bool,
     /// Fleet settings and provider holds for this machine.

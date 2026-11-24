@@ -52,9 +52,14 @@ pub enum Paused {
 
 /// A daemon can ask for master blockers only even on an Active machine, for example when
 /// its commands are waiting for cores. Only `ChecksOnly` machines defer to `Active` machines.
-pub fn paused(conn: &Connection, free: &MachineFree, state: MachineState) -> Result<Paused> {
+pub fn paused(
+    conn: &Connection,
+    free: &MachineFree,
+    state: MachineState,
+    now: Timestamp,
+) -> Result<Paused> {
     Ok(
-        if state == MachineState::Off || fleet::paused_everywhere(conn)? {
+        if state == MachineState::Off || fleet::paused_everywhere(conn, now)? {
             Paused::Everything
         } else if state == MachineState::ChecksOnly || free.master_only {
             Paused::MasterOnly

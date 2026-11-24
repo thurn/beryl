@@ -58,6 +58,23 @@ fn land_needs_no_message() {
     assert!(matches!(parsed, Command::Land { note: Some(_) }));
 }
 
+#[test]
+fn a_landings_only_declaration_passes_the_flag_to_the_daemon() {
+    let raw = ["ignite", "emergency", "declare", "TJUS1", "--landings-only"].map(str::to_owned);
+    let cli = Cli::try_parse_from(&raw).unwrap();
+    assert!(matches!(
+        &cli.command,
+        Command::Emergency {
+            command: Some(crate::emergency::EmergencyCommand::Declare {
+                ticket,
+                landings_only: true,
+            }),
+        } if ticket == "TJUS1"
+    ));
+    let request = crate::client::request(cli.command.verb(), &raw, PathBuf::default(), None);
+    assert_eq!(request.args, ["declare", "TJUS1", "--landings-only"]);
+}
+
 /// `ignite pool usage` reaches the daemon's `pool` verb, which prints the plan's usage.
 #[test]
 fn parses_pool_usage() {

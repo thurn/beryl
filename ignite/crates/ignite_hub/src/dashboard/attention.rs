@@ -205,7 +205,7 @@ fn regression_items(
     root: &str,
     now: Timestamp,
 ) -> Result<Vec<(Tone, String)>, ReadError> {
-    if !fleet::paused_everywhere(conn)? {
+    if !fleet::paused_everywhere(conn, now)? {
         let mut candidates = conn.prepare(
             "SELECT name, last_seen FROM machines WHERE json_array_length(cli_apps) > 0",
         )?;
@@ -258,8 +258,9 @@ fn held_items(
     conn: &Connection,
     settings: &FleetSettings,
     root: &str,
+    now: Timestamp,
 ) -> Result<Vec<(Tone, String)>, ReadError> {
-    let everywhere = fleet::paused_everywhere(conn)?;
+    let everywhere = fleet::paused_everywhere(conn, now)?;
     let limited = settings
         .machines
         .values()
@@ -326,7 +327,7 @@ fn warning_items(
     found.extend(machine_items(conn, &settings, now)?);
     found.extend(usage_items(conn, now)?);
     found.extend(regression_items(conn, &settings, root, now)?);
-    found.extend(held_items(conn, &settings, root)?);
+    found.extend(held_items(conn, &settings, root, now)?);
     found.extend(stranded_items(conn, root)?);
     Ok(found)
 }

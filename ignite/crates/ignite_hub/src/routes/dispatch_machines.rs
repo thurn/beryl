@@ -126,7 +126,8 @@ pub(super) fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp)
         // A hub that never recorded its version asks no machine to update.
         hub_version: hub_version.unwrap_or_else(|| beat.version.clone()),
         emergency: emergency::in_force(&snapshot, now).map_err(|e| store_failure(&e))?,
-        paused_everywhere: fleet::paused_everywhere(&snapshot).map_err(|e| store_failure(&e))?,
+        paused_everywhere: fleet::paused_everywhere(&snapshot, now)
+            .map_err(|e| store_failure(&e))?,
     };
     snapshot.commit().map_err(sql_failure)?;
     if let Some(sample) = &beat.sample

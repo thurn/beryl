@@ -1,11 +1,11 @@
 //! The daemon's side of the emergency pause (see `ignite_core::protocol::emergency`).
 //!
 //! - An incident commander or justiciar runs `ignite emergency declare <ticket>` to set the
-//!   flag at the hub and pause hand-offs across the fleet. Each daemon hears the flag in its
-//!   heartbeat reply and keeps it in the local database across restarts and hub outages.
-//! - While the flag is in force, the [heavy verbs](HEAVY_VERBS) refuse with exit code 6
-//!   ([`Exit::Paused`]). Reads and running commands continue. To stop a running command,
-//!   use `ignite stop`.
+//!   flag at the hub. Each daemon hears the flag in its heartbeat reply and keeps it in the local
+//!   database across restarts and hub outages.
+//! - A full emergency pauses hand-offs and refuses the [heavy verbs](HEAVY_VERBS). With
+//!   `--landings-only`, only `land` refuses. Both use exit code 6 ([`Exit::Paused`]). Reads
+//!   and running commands continue. To stop a running command, use `ignite stop`.
 //! - The declaring session and sessions working its ticket can still run heavy verbs.
 //!   The declaring session may grant other tickets exceptions with `ignite emergency allow`.
 //! - The flag lapses two hours after it was last declared. `ignite pool resume --all` ends it on
@@ -13,7 +13,6 @@
 //!   operator stuck behind a flag nobody can end.
 //! - `ignite wait emergency` returns when the flag clears, with the all-clear.
 
-use std::fmt::Write as _;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
@@ -21,8 +20,7 @@ use rusqlite::Connection;
 
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
-use ignite_core::protocol::emergency::{Allowance, Emergency, EmergencyChange};
-use ignite_core::protocol::hub::Pause;
+use ignite_core::protocol::emergency::{Allowance, Emergency, EmergencyChange, EmergencyScope};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
 use ignite_store::local::{pool as settings, trees};
@@ -144,16 +142,20 @@ impl Emergencies {
             return None;
         }
         let emergency = self.in_force()?;
-        if session == Some(&emergency.session) || ticket.is_some_and(|t| emergency.allows(t, verb))
+        if (emergency.scope == EmergencyScope::Landings && verb != "land")
+            || session == Some(&emergency.session)
+            || ticket.is_some_and(|t| emergency.allows(t, verb))
         {
             return None;
         }
         Some(Reply::text(
             Exit::Paused,
             format!(
-                "paused   Ignite is paused for emergency {} (declared by {}); `ignite wait \
-                 emergency` returns when it ends. Running commands go on; this one did not start.",
-                emergency.ticket, emergency.session
+                "paused   emergency {} (declared by {}) pauses {}. `ignite wait \
+                 emergency` returns when it ends. Commands already running continue.",
+                emergency.ticket,
+                emergency.session,
+                paused_work(emergency.scope)
             ),
         ))
     }
@@ -212,7 +214,7 @@ impl Emergencies {
         let emergency = self.in_force()?;
         Some(Finding::warning(
             "emergency",
-            format!("{}; heavy verbs refuse.", self.describe(&emergency)),
+            self.describe(&emergency),
             "wait with `ignite wait emergency`. If the declaring session is gone, \
              `ignite emergency clear --local` lifts it on this machine.",
         ))
@@ -221,13 +223,21 @@ impl Emergencies {
     fn describe(&self, emergency: &Emergency) -> String {
         let now = self.clock.now();
         format!(
-            "{}, declared by {} on {} {} ago, lapses in {} unless renewed",
+            "{}, declared by {} on {} {} ago, pauses {}, lapses in {} unless renewed",
             emergency.ticket,
             emergency.session,
             emergency.machine,
             span(now.seconds_since(emergency.declared_at)),
+            paused_work(emergency.scope),
             span(emergency.expires_at().seconds_since(now)),
         )
+    }
+}
+
+fn paused_work(scope: EmergencyScope) -> &'static str {
+    match scope {
+        EmergencyScope::All => "heavy verbs and worker hand-offs",
+        EmergencyScope::Landings => "landings only",
     }
 }
 
@@ -276,11 +286,11 @@ impl StatusSection for EmergencySection {
     }
 }
 
-/// `ignite emergency [declare <ticket> | allow <ticket> [<verb>] | clear --local]`.
+/// `ignite emergency [declare <ticket> [--landings-only] | allow <ticket> [<verb>] | clear --local]`.
 pub struct EmergencyVerb(pub Arc<Emergencies>);
 
-const USAGE: &str = "usage    ignite emergency [declare <ticket> | allow <ticket> [<verb>] | clear \
-                     --local]; `ignite pool resume --all` ends it";
+const USAGE: &str = "usage    ignite emergency [declare <ticket> [--landings-only] | allow \
+                     <ticket> [<verb>] | clear --local]; `ignite pool resume --all` ends it";
 
 impl Verb for EmergencyVerb {
     fn name(&self) -> &'static str {
@@ -299,7 +309,10 @@ impl Verb for EmergencyVerb {
         let words: Vec<&str> = req.args.iter().map(String::as_str).collect();
         match words.as_slice() {
             [] => self.show(),
-            ["declare", ticket] => self.declare(ctx, req, ticket),
+            ["declare", ticket, "--landings-only"] | ["declare", "--landings-only", ticket] => {
+                self.declare(ctx, req, ticket, EmergencyScope::Landings)
+            }
+            ["declare", ticket] => self.declare(ctx, req, ticket, EmergencyScope::All),
             ["allow", ticket, verb @ ..] if verb.len() <= 1 => {
                 self.allow(ctx, req, ticket, verb.first().copied())
             }
@@ -345,7 +358,7 @@ impl EmergencyVerb {
         }
     }
 
-    fn declare(&self, ctx: &Context, req: &Request, ticket: &str) -> Reply {
+    fn declare(&self, ctx: &Context, req: &Request, ticket: &str, scope: EmergencyScope) -> Reply {
         let Some(session) = ctx.session.clone().or_else(|| req.session.clone()) else {
             return Reply::text(
                 Exit::Usage,
@@ -359,24 +372,22 @@ impl EmergencyVerb {
             ticket,
             session,
             machine: ctx.machine.clone(),
+            scope,
         };
         let emergency = match self.change(ctx, &change) {
             Ok(emergency) => emergency,
             Err(reply) => return reply,
         };
-        let mut text = format!(
-            "declared emergency {}: heavy verbs refuse on every machine for every session but \
-             yours\nlapses   {} unless you declare it again\nends     `ignite pool resume --all`",
-            emergency.ticket,
-            emergency.expires_at()
-        );
-        if let Err(error) = ctx.hub.pause(&Pause {
-            machine: None,
-            paused: true,
-        }) {
-            let _ = write!(text, "\nfailed   hand-offs were not paused: {error}");
-        }
-        Reply::text(Exit::Success, text)
+        Reply::text(
+            Exit::Success,
+            format!(
+                "declared emergency {} pauses {} across the fleet\nlapses   {} unless you \
+                 declare it again\nends     `ignite pool resume --all`",
+                emergency.ticket,
+                paused_work(emergency.scope),
+                emergency.expires_at()
+            ),
+        )
     }
 
     fn allow(&self, ctx: &Context, req: &Request, ticket: &str, verb: Option<&str>) -> Reply {

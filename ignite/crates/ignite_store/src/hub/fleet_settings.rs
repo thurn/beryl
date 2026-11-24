@@ -363,7 +363,7 @@ mod tests {
             Some("legacy pool pause")
         );
         fleet::set_paused_everywhere(&conn, false, now).unwrap();
-        assert!(!fleet::paused_everywhere(&conn).unwrap());
+        assert!(!fleet::paused_everywhere(&conn, now).unwrap());
         assert_eq!(
             settings(&conn).unwrap().machine("host").state,
             MachineState::ChecksOnly

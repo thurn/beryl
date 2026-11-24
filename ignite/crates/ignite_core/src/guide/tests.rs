@@ -105,7 +105,9 @@ fn the_incident_guide_connects_operator_authority_to_the_pause_and_orders() {
     for phrase in [
         "The operator appoints one incident commander",
         "--labels incident",
-        "ignite emergency declare <ticket>",
+        "ignite emergency declare <ticket> --landings-only",
+        "within 30 minutes of declaring the incident",
+        "close the incident ticket once master advances",
         "ignite tell --all",
         "ignite pool resume --all",
     ] {

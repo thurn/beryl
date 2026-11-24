@@ -166,13 +166,13 @@ fn pause_block(
     sample: &MachineSample,
     now: Timestamp,
 ) -> Result<Option<(StartBlock, String)>> {
-    if let Some(emergency) = emergency::in_force(conn, now)? {
+    if let Some(emergency) = emergency::dispatch_hold(conn, now)? {
         return Ok(Some((
             StartBlock::Emergency,
             format!("Emergency {}", emergency.ticket),
         )));
     }
-    if state == MachineState::Off || fleet::paused_everywhere(conn)? {
+    if state == MachineState::Off || fleet::paused_everywhere(conn, now)? {
         let reason = if state == MachineState::Off {
             "This machine is off"
         } else {

@@ -4097,24 +4097,36 @@ harm, restore service, resume the fleet and verify the repair. The commander or
 the operator ends the emergency. Each mitigation on the incident ticket has the
 same root-cause requirement as a justiciar mitigation.
 
+When `master` stalls while `green` advances, the commander uses
+`ignite emergency declare <ticket> --landings-only`. The target is to move
+`master` within 30 minutes of declaring the incident. If slow checks on a
+secondary platform still hold promotion at that point,
+[defer that platform](#tip-verification-and-machines-that-are-off) and record
+the checks to rerun. If a known culprit still blocks promotion, revert it. Once
+`master` advances, record the recovery and close the incident ticket. Reserve a
+full pause for a broken build, hub or daemon fault, or resource exhaustion.
+
 ### The emergency pause
 
 - `ignite emergency declare <ticket>`, run by the holder of an incident or
   justiciar ticket, sets an emergency flag at the hub naming the ticket and its
-  holder. It pauses hand-offs on every machine. Each daemon hears the flag in
-  its next heartbeat's reply (within 10 seconds) and keeps it in its local
-  database, so a restart or a hub outage does not lift it.
-- While the flag is in force, the verbs that start heavy work (`start`, `test`,
-  `check`, `land`, `run`, `rebuild` and `audit`) refuse with exit code 6 and one
-  line naming the emergency. Verbs that only read keep working. To end a command
-  that is already running, use `ignite stop --force`.
+  holder. Each daemon hears the flag in its next heartbeat's reply (within 10
+  seconds) and keeps it in its local database, so a restart or a hub outage does
+  not lift it.
+- A full pause refuses new heavy verbs (`start`, `test`, `check`, `land`, `run`,
+  `rebuild` and `audit`) and stops worker hand-offs. With `--landings-only`,
+  only `land` refuses and hand-offs continue. Refused verbs exit with code 6 and
+  name the emergency. Read-only verbs keep working. To end a command that is
+  already running, use `ignite stop --force`. Use `--landings-only` once the hub
+  and daemons support it. Older daemons enforce the landings-only scope as a
+  full pause.
 - The session that declared the emergency, any session working the emergency
   ticket, and tickets allowed with `ignite emergency allow <ticket> [<verb>]`
   can still run those verbs.
 - `ignite wait emergency` returns when the flag clears and prints the all-clear.
-- The flag lapses two hours after it was declared unless the holder renews it.
-  `ignite status` and `ignite doctor` show its age and the session that declared
-  it.
+- The flag lapses two hours after it was declared unless the holder renews it. A
+  renewal sets the scope for the next two hours. `ignite status` and
+  `ignite doctor` show the scope, age and declaring session.
 - A commander or justiciar sends orders when the fault needs action beyond the
   pause, such as stopping a running command that is causing harm. For CLI
   workers, `ignite tell` delivers the message as

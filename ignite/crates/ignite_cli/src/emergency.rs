@@ -5,10 +5,15 @@ use clap::Subcommand;
 
 #[derive(Debug, Subcommand)]
 pub enum EmergencyCommand {
-    /// Declare or renew an emergency for an incident or justiciar ticket you hold. Heavy verbs
-    /// refuse across the fleet for two hours, with exceptions for the declaring session, its
-    /// ticket and any allowances it grants.
-    Declare { ticket: String },
+    /// Declare or renew an emergency for an incident or justiciar ticket you hold. By default,
+    /// heavy verbs and worker hand-offs pause across the fleet for two hours. The declaring
+    /// session, its ticket and tickets it allows can still run the paused verbs.
+    Declare {
+        ticket: String,
+        /// Pause landings only. Workers can still claim tickets, build, and run checks.
+        #[arg(long)]
+        landings_only: bool,
+    },
     /// Let one ticket's session run a heavy verb, or every heavy verb, during the emergency.
     Allow {
         ticket: String,
@@ -44,7 +49,9 @@ mod tests {
         ));
         assert!(matches!(
             parse("ignite emergency declare TJUS1"),
-            Command::Emergency { command: Some(EmergencyCommand::Declare { ticket }) } if ticket == "TJUS1"
+            Command::Emergency {
+                command: Some(EmergencyCommand::Declare { ticket, landings_only: false })
+            } if ticket == "TJUS1"
         ));
         assert!(matches!(
             parse("ignite emergency allow TWORK land"),

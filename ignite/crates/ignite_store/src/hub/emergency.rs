@@ -3,7 +3,9 @@
 
 use rusqlite::{Connection, OptionalExtension, params};
 
-use ignite_core::protocol::emergency::{self, Emergency, EmergencyChange, has_emergency_label};
+use ignite_core::protocol::emergency::{
+    self, Emergency, EmergencyChange, EmergencyScope, has_emergency_label,
+};
 use ignite_core::protocol::tickets::Status;
 use ignite_core::time::Timestamp;
 
@@ -34,6 +36,11 @@ pub fn in_force(conn: &Connection, now: Timestamp) -> Result<Option<Emergency>> 
     Ok(stored(conn)?.filter(|e| e.active(now)))
 }
 
+/// The active emergency that pauses worker hand-offs, if any.
+pub fn dispatch_hold(conn: &Connection, now: Timestamp) -> Result<Option<Emergency>> {
+    Ok(in_force(conn, now)?.filter(|e| e.scope == EmergencyScope::All))
+}
+
 /// Applies `change` at `now` and returns the emergency it leaves. Only the session holding an
 /// incident or justiciar ticket may declare. A change the rules refuse is [`StoreError::Rejected`].
 pub fn change(conn: &Connection, change: &EmergencyChange, now: Timestamp) -> Result<Emergency> {
@@ -42,6 +49,7 @@ pub fn change(conn: &Connection, change: &EmergencyChange, now: Timestamp) -> Re
         ticket,
         session,
         machine,
+        ..
     } = change
         && !tickets::load(&tx, ticket.as_str())?.is_some_and(|held| {
             held.status == Status::InProgress
@@ -96,6 +104,7 @@ mod tests {
             ticket: TicketId::new("IP4R7").unwrap(),
             session: SessionId::new("local_i").unwrap(),
             machine: MachineId::new("m-1").unwrap(),
+            scope: EmergencyScope::All,
         };
         let declared = change(&conn, &declare, now).unwrap();
         assert_eq!(in_force(&conn, now).unwrap(), Some(declared));
