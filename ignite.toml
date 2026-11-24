@@ -255,9 +255,19 @@ os = "macos"
 oracle = 1
 bench-vm = 1
 
-# The MacBook Pro.
+# The MacBook Pro has no benchmark guests or Callgrind calibration. Jarvis and
+# Cygnus run the two instruction-count gates with their own calibrated guests.
 [machine.multivac]
 os = "macos"
+families = [
+  "rust", "doctests", "clippy", "rust-format", "ignite", "ignite-lint", "source", "markdown",
+  "repository", "commit", "black", "pytest", "pyre", "client-format", "client-source", "ignite-platform",
+  "native-app", "native-ios", "native-android",
+  "allocations", "card-text", "script", "scale", "iroh", "fuzz", "exhaust",
+  "oracle", "oracle-generated",
+  "client-clippy", "client-validation", "client-test", "client-interface", "client-corpus",
+  "client-interface-frame-limits", "client-gate", "client-frame-trend",
+]
 
 [machine.multivac.resources]
 oracle = 1
