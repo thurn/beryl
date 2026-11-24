@@ -175,10 +175,10 @@ def build_filing(
     wanted = [f"provider:{spec.source.provider}", f"effort:{spec.source.effort}"]
     if not candidates.label_values(source, "tier:"):
         wanted.append(f"tier:{spec.source.tier}")
-    update: dict[str, Any] = {
-        "allocation": pair.previous_allocation,
-        "priority": FILED_PRIORITY,
-    }
+    # The hub keeps a ticket's priority as a band of its allocation, and an allocation sent
+    # beside a priority wins, so the update sends the priority alone. It replaces the zero
+    # allocation `pair add` parked the source with.
+    update: dict[str, Any] = {"priority": FILED_PRIORITY}
     if source.get("status") == "pending_approval":
         update["status"] = "open"
         opened.append(

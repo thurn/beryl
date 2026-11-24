@@ -350,12 +350,12 @@ def test_the_source_update_adds_only_the_source_arms_labels() -> None:
     assert len(update) == 1
     assert update[0]["id"] == "E1.1"
     assert update[0]["add_labels"] == ["provider:claude", "effort:medium"]
-    assert update[0]["set"] == {"allocation": None, "priority": 1}
+    assert update[0]["set"] == {"priority": 1}
 
 
 def test_both_arms_of_a_filed_pair_run_first() -> None:
     f = filing(filed_pair(), ticket(priority=4), epic=epic(allocation=None))
-    assert ops(f, "update")[0]["set"]["priority"] == 1
+    assert ops(f, "update")[0]["set"] == {"priority": 1}
     assert ops(f, "create")[0]["fields"]["priority"] == 1
 
 
