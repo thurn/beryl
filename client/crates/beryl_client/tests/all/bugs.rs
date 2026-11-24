@@ -5,10 +5,12 @@
 //! it also hands that report's ID to the filing command.
 
 use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use beryl_client::bugs::SAVED;
+#[cfg(unix)]
+use beryl_session::bugs::filing::FINISHED;
 
 /// The app, stopped when dropped.
 struct App(Child);
@@ -21,7 +23,7 @@ impl Drop for App {
 }
 
 /// Submits two reports after the replay starts. The last line keeps the run going while
-/// they are written, since a drive script ends the run after its last action.
+/// they are saved and filed. It bounds a missing save or filing outcome by closing stdout.
 const SCRIPT: &str = "\
 at 1000ms key Cmd+B
 at 1500ms key space
@@ -31,7 +33,7 @@ at 5000ms key Cmd+B
 at 5500ms key space
 at 6000ms type field \"description\" \"another report in this run\"
 at 6500ms press button \"Submit\"
-at 30000ms move 10,10
+at 60000ms move 10,10
 ";
 
 #[test]
@@ -65,35 +67,16 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
         .spawn()
         .expect("the app starts");
     let stdout = child.stdout.take().expect("the app's output is a pipe");
-    let _app = App(child);
-    // Kept open to the end: the app dies when it prints to a closed pipe.
-    let mut lines = BufReader::new(stdout).lines();
-    let folder = lines
-        .by_ref()
-        .map_while(Result::ok)
-        .find_map(|line| line.strip_prefix(&format!("{SAVED} ")).map(str::to_owned))
-        .expect("the app saves the report");
-    let folder = Path::new(&folder);
-    assert_eq!(
-        folder.parent(),
-        Some(bugs.as_path()),
-        "{}",
-        folder.display()
-    );
-
-    for file in [
-        "report.md",
-        "screenshot.png",
-        "window.png",
-        "tree.txt",
-        "frames.jsonl",
-        "fixture.json",
-        "ui.json",
-        "journal.jsonl",
-    ] {
-        assert!(folder.join(file).is_file(), "{file} is in the report");
+    let app = App(child);
+    let mut output = BufReader::new(stdout);
+    let [first, second] = saved_reports(&mut output);
+    for folder in [&first, &second] {
+        assert_report_files(&bugs, folder);
+        #[cfg(unix)]
+        assert_filing(&temp, folder);
     }
-    let read = |file: &str| std::fs::read_to_string(folder.join(file)).expect("a text file");
+
+    let read = |file: &str| std::fs::read_to_string(first.join(file)).expect("a text file");
     let report = read("report.md");
     assert!(report.contains("status: open\n"), "{report}");
     assert!(report.contains("the pay bar never filled"), "{report}");
@@ -118,25 +101,78 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
     // The report records where the replay was, so `just client tree` can reopen it with no game.
     assert_replay_moment(&read("ui.json"));
     // The window is the app's 1600 by 900 points at the scale of a run with no window.
-    let window = std::fs::read(folder.join("window.png")).expect("the picture");
+    let window = std::fs::read(first.join("window.png")).expect("the picture");
     let scale = u32::from(beryl_client::options::WINDOWLESS_SCALE);
     let size = [1600 * scale, 900 * scale].map(u32::to_be_bytes).concat();
     assert_eq!(&window[16..24], size.as_slice(), "a 1600 by 900 point PNG");
-    #[cfg(unix)]
-    assert_filing(&temp, folder);
-
-    let second = lines
-        .map_while(Result::ok)
-        .find_map(|line| line.strip_prefix(&format!("{SAVED} ")).map(str::to_owned))
-        .expect("the second report is saved");
-    let second = Path::new(&second);
     let second_report =
         std::fs::read_to_string(second.join("report.md")).expect("the second report");
     assert!(second_report.contains("another report in this run"));
     assert!(second_report.contains(&format!("client_run: {run}\n")));
-    #[cfg(unix)]
-    assert_filing(&temp, second);
+    // Keep stdout open until the app stops.
+    drop(app);
     let _ = std::fs::remove_dir_all(&temp);
+}
+
+/// Collects saves and filing outcomes together because either thread can print first.
+fn saved_reports(output: &mut impl BufRead) -> [PathBuf; 2] {
+    let saved = format!("{SAVED} ");
+    let mut reports = Vec::new();
+    #[cfg(unix)]
+    let finished = format!("{FINISHED} ");
+    #[cfg(unix)]
+    let mut filed = Vec::new();
+
+    for line in output.lines() {
+        let line = line.expect("read the app's output");
+        if let Some(folder) = line.strip_prefix(&saved) {
+            reports.push(PathBuf::from(folder));
+        }
+        #[cfg(unix)]
+        if let Some(outcome) = line.strip_prefix(&finished) {
+            let (id, status) = outcome
+                .split_once(' ')
+                .expect("report ID and filing outcome");
+            assert_eq!(status, "ok", "filing report {id}");
+            filed.push(id.to_owned());
+        }
+        let complete = reports.len() == 2;
+        #[cfg(unix)]
+        let complete = complete && filed.len() == 2;
+        if complete {
+            break;
+        }
+    }
+
+    let reports: [PathBuf; 2] = reports.try_into().expect("the app saves two reports");
+    #[cfg(unix)]
+    {
+        let mut expected = reports.each_ref().map(|folder| report_id(folder));
+        expected.sort_unstable();
+        filed.sort_unstable();
+        assert_eq!(filed, expected, "one filing outcome per saved report");
+    }
+    reports
+}
+
+fn assert_report_files(root: &Path, folder: &Path) {
+    assert_eq!(folder.parent(), Some(root), "{}", folder.display());
+    for file in [
+        "report.md",
+        "screenshot.png",
+        "window.png",
+        "tree.txt",
+        "frames.jsonl",
+        "fixture.json",
+        "ui.json",
+        "journal.jsonl",
+    ] {
+        assert!(
+            folder.join(file).is_file(),
+            "{file} is in {}",
+            folder.display()
+        );
+    }
 }
 
 /// Checks that opening the report froze the replay at the captured moment.
@@ -170,10 +206,13 @@ fn stub_filing(command: &mut Command, checkout: &Path) {
         r#"#!/bin/sh
 set -eu
 report="$BERYL_BUGS/${10}"
-test -f "$report/report.md"
-test -f "$report/window.png"
-printf '%s\n' "$@" > "$report/filed.tmp"
-mv "$report/filed.tmp" "filed-${10}"
+for file in report.md window.png; do
+    if [ ! -f "$report/$file" ]; then
+        printf 'report file missing when filing started: %s\n' "$report/$file" >&2
+        exit 1
+    fi
+done
+printf '%s\n' "$@" > "filed-${10}"
 "#,
     )
     .expect("write the filing stub");
@@ -190,19 +229,17 @@ mv "$report/filed.tmp" "filed-${10}"
 }
 
 #[cfg(unix)]
-fn assert_filing(checkout: &Path, report: &Path) {
-    use std::time::{Duration, Instant};
-
-    let report_id = report
+fn report_id(report: &Path) -> &str {
+    report
         .file_name()
         .and_then(std::ffi::OsStr::to_str)
-        .expect("a UTF-8 report ID");
+        .expect("a UTF-8 report ID")
+}
+
+#[cfg(unix)]
+fn assert_filing(checkout: &Path, report: &Path) {
+    let report_id = report_id(report);
     let marker = checkout.join(format!("filed-{report_id}"));
-    // Filing happens on a background thread. Wait for its output, bounding a missing invocation.
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !marker.exists() && Instant::now() < deadline {
-        std::thread::sleep(Duration::from_millis(10));
-    }
     let invocation = std::fs::read_to_string(marker).expect("the app asks to file the report");
     assert_eq!(
         invocation,

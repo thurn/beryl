@@ -7,6 +7,9 @@ use serde_json::json;
 
 use crate::journal;
 
+/// The stdout line for a completed filing attempt, followed by the report ID and outcome.
+pub const FINISHED: &str = "beryl: bug report filing finished";
+
 /// Queues a saved report for local filing. The saved report remains available if filing fails.
 pub fn enqueue(root: &Path, id: &str, bundled: Option<(&'static str, &'static str, &'static str)>) {
     let (repo, uv, tool_path) = match (std::env::var_os("BERYL_FILE_BUGS"), bundled) {
@@ -27,6 +30,9 @@ pub fn enqueue(root: &Path, id: &str, bundled: Option<(&'static str, &'static st
             if journal::path().is_none() {
                 eprintln!("bugs: {id}: local filing failed: {error}");
             }
+            println!("{FINISHED} {id} failed: {error:?}");
+        } else {
+            println!("{FINISHED} {id} ok");
         }
     });
 }
