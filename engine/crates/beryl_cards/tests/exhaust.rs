@@ -9,8 +9,8 @@
 use std::panic::catch_unwind;
 
 use beryl_cards::{CARDS, names, props};
-use beryl_engine::{GameTable, State};
-use beryl_scenario::{Action, Bounds, Check, Live, P0, P1, Scenario, exhaust, invariants};
+use beryl_engine::{GameTable, Large, Layout, Seat, State};
+use beryl_scenario::{Action, Bounds, Live, P0, P1, Scenario, exhaust, invariants, outcome_with};
 
 /// The default bounds: the whole corpus in a few seconds of a debug build.
 const BOUNDS: Bounds = Bounds {
@@ -59,8 +59,8 @@ fn scenarios() -> Vec<(&'static str, &'static Scenario)> {
     chosen
 }
 
-/// Searches `scenarios` under `check`, printing what it covered, and returns the failures.
-fn search(scenarios: &[(&str, &'static Scenario)], bounds: Bounds, check: Check) -> Vec<String> {
+/// Checks the invariants from each scenario, prints what it covered, and returns the failures.
+fn search(scenarios: &[(&str, &'static Scenario)], bounds: Bounds) -> Vec<String> {
     let (mut nodes, mut capped, mut failures) = (0, Vec::new(), Vec::new());
     // The scenarios shared among threads, the results kept in their order.
     let threads = std::thread::available_parallelism().map_or(4, usize::from);
@@ -73,7 +73,11 @@ fn search(scenarios: &[(&str, &'static Scenario)], bounds: Bounds, check: Check)
                     chunk
                         .iter()
                         .map(|&(card, scenario)| {
-                            (card, scenario, exhaust(&CARDS, scenario, bounds, check))
+                            (
+                                card,
+                                scenario,
+                                exhaust(&CARDS, scenario, bounds, invariants, invariants),
+                            )
                         })
                         .collect::<Vec<_>>()
                 })
@@ -111,7 +115,7 @@ fn search(scenarios: &[(&str, &'static Scenario)], bounds: Bounds, check: Check)
 #[test]
 fn every_scenario_keeps_the_invariants_to_a_depth() {
     let bounds = bounds();
-    let failures = search(&scenarios(), bounds, invariants);
+    let failures = search(&scenarios(), bounds);
     let mut unexpected = Vec::new();
     for failure in &failures {
         if SKIPPED
@@ -143,7 +147,7 @@ fn every_scenario_keeps_the_invariants_to_a_depth() {
 #[test]
 fn a_broken_invariant_is_found_and_replays() {
     #[allow(clippy::unnecessary_wraps)] // A `Check`, failing by panicking.
-    fn stack_stays_empty(_: &GameTable, s: &State) -> Result<(), String> {
+    fn stack_stays_empty<L: Layout>(_: &GameTable, s: &State<L>) -> Result<(), String> {
         assert!(s.stack().is_empty(), "something is on the stack");
         Ok(())
     }
@@ -163,12 +167,52 @@ fn a_broken_invariant_is_found_and_replays() {
         .hand(P0, &[props::ARTIFACT.card])
         .battlefield(P1, &[names::ISLAND; 2])
         .hand(P1, &[names::COUNTERSPELL]);
-    let found = exhaust(&CARDS, &SCENARIO, BOUNDS, stack_stays_empty)
-        .expect_err("casting the spell breaks the invariant");
+    let found = exhaust(
+        &CARDS,
+        &SCENARIO,
+        BOUNDS,
+        stack_stays_empty,
+        stack_stays_empty,
+    )
+    .expect_err("casting the spell breaks the invariant");
     assert!(found.searched > 0, "{found}");
     assert!(found.why.contains("something is on the stack"), "{found}");
     assert!(breaks(
         found.scenario.as_ref().expect("a scriptable sequence")
     ));
     println!("{found}");
+}
+
+#[test]
+fn a_counterexample_replays_inside_a_subgame() {
+    const SCENARIO: Scenario = Scenario::new("Players choose opening hands in a subgame")
+        .hand(P0, &[names::SHAHRAZAD])
+        .battlefield(P0, &[names::PLAINS; 2])
+        .library(P0, &[names::PLAINS; 8])
+        .library(P1, &[names::ISLAND; 8])
+        .actions(&[Action::cast(P0, names::SHAHRAZAD), Action::Resolve]);
+
+    fn mulliganed_in_subgame(state: &State<Large>) -> bool {
+        state.subgame_depth() == 1
+            && Seat::BOTH
+                .into_iter()
+                .any(|seat| state.player(seat).mulligans() > 0)
+    }
+    let found = exhaust(&CARDS, &SCENARIO, BOUNDS, invariants, |_, state| {
+        if mulliganed_in_subgame(state) {
+            return Err("a player mulliganed in the subgame".to_owned());
+        }
+        Ok(())
+    })
+    .expect_err("the search should find a mulligan in the subgame");
+    assert_eq!(found.why, "a player mulliganed in the subgame");
+    let mut replayed_violation = false;
+    outcome_with(
+        &CARDS,
+        found.scenario.as_ref().expect("a scriptable sequence"),
+        |_, _| panic!("a subgame scenario must use Large"),
+        |state, _| replayed_violation = mulliganed_in_subgame(state),
+    )
+    .expect("the counterexample should replay");
+    assert!(replayed_violation, "{found}");
 }

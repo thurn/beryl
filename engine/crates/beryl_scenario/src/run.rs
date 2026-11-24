@@ -276,15 +276,15 @@ struct Runner<L: Layout = beryl_engine::Small> {
 
 /// A copy at the same position, with fresh working memory: a [`Scratch`] is never copied
 /// with the state it works on.
-impl Clone for Runner {
-    fn clone(&self) -> Runner {
+impl<L: Layout> Clone for Runner<L> {
+    fn clone(&self) -> Self {
         Runner {
             t: self.t.clone(),
-            s: self.s,
+            s: self.s.clone(),
             x: Scratch::recording(),
             comparison: None,
             upcoming: self.upcoming,
-            position: self.position,
+            position: self.position.clone(),
             enter_as_copy: self.enter_as_copy,
             forced: self.forced.clone(),
             permanents: self.permanents.clone(),

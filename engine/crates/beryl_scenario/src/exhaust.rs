@@ -3,7 +3,7 @@
 //! samples whole games; this enumerates the games near positions a card's author chose
 //! because they matter.
 //!
-//! The state is `Copy`, so each branch plays on its own copy and nothing is undone. Chance is
+//! Each branch clones the state and plays on that copy without undoing any moves. Chance is
 //! not enumerated: a copy carries the game's seeded randomness, so every branch draws the
 //! same. A position reached again with no more depth left to search than before is skipped,
 //! by its state's hash, and a cap on the decisions taken from each scenario keeps one wide
@@ -16,18 +16,19 @@ use std::hash::{Hash, Hasher};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use beryl_engine::{
-    CardTable, Choice, Decision, DecisionKind, GameTable, Outcome, Replay, Scratch, StallReason,
-    State, Step, apply, next,
+    CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Outcome, Replay, Scratch,
+    Small, StallReason, State, Step, apply, next,
 };
 
 use crate::run::TRACED;
+use crate::setup::{Slots, with_layout};
 use crate::{Action, Live, Scenario, answer, describe, script, setup_source, source};
 
 /// What must hold at every position the search reaches.
-pub type Check = fn(&GameTable, &State) -> Result<(), String>;
+pub type Check<L = Small> = fn(&GameTable, &State<L>) -> Result<(), String>;
 
 /// The engine's own checks: its invariants and its references (§17.4).
-pub fn invariants(t: &GameTable, s: &State) -> Result<(), String> {
+pub fn invariants<L: Layout>(t: &GameTable, s: &State<L>) -> Result<(), String> {
     s.check_invariants(t)
         .map_err(|v| format!("an engine invariant broke: {v:?}"))?;
     beryl_engine::check_references(s, t)
@@ -72,22 +73,60 @@ impl fmt::Display for Found {
     }
 }
 
+impl Found {
+    fn before_search(scenario: &Scenario, why: String) -> Self {
+        Self {
+            text: format!("// {}: {why}\n", scenario.name),
+            why,
+            scenario: None,
+            searched: 0,
+        }
+    }
+}
+
 /// Searches every sequence of decisions within `bounds` from the end of `scenario`, its
-/// assertions aside, checking `check` at every position and that nothing panics. A scenario
-/// that fails to play to its end is a failure with no sequence.
+/// assertions aside, using the same layout selection as [`crate::run`]. The check for that
+/// layout must pass at every position. A scenario that fails to play to its end is a failure
+/// with no sequence.
 pub fn exhaust(
     cards: &'static CardTable,
     scenario: &Scenario,
     bounds: Bounds,
-    check: Check,
+    small: Check,
+    large: Check<Large>,
 ) -> Result<Searched, Box<Found>> {
-    let failed = |why: String| Found {
-        text: format!("// {}: {why}\n", scenario.name),
-        why,
-        scenario: None,
-        searched: 0,
-    };
-    let mut live = Live::new(cards, scenario).map_err(|f| failed(f.message))?;
+    with_layout(
+        cards,
+        scenario,
+        Slots::Dealt,
+        (),
+        |t, s, ()| {
+            Ok(exhaust_from(
+                Live::from_position(t, s),
+                scenario,
+                bounds,
+                small,
+            ))
+        },
+        |t, s, ()| {
+            Ok(exhaust_from(
+                Live::from_position(t, s),
+                scenario,
+                bounds,
+                large,
+            ))
+        },
+    )
+    .map_err(|f| Found::before_search(scenario, f.message))?
+}
+
+fn exhaust_from<L: Layout>(
+    mut live: Live<L>,
+    scenario: &Scenario,
+    bounds: Bounds,
+    check: Check<L>,
+) -> Result<Searched, Box<Found>> {
+    let failed = |why| Found::before_search(scenario, why);
     for &action in scenario.actions {
         if !matches!(action, Action::Assert { .. }) {
             live.act(action).map_err(failed)?;
@@ -102,7 +141,7 @@ pub fn exhaust(
     else {
         return Ok(Searched::default());
     };
-    let mut root = *live.state();
+    let mut root = live.state().clone();
     root.set_profile(TRACED);
     let t = live.table();
     let mut search = Search {
@@ -133,10 +172,10 @@ pub fn exhaust(
     }
 }
 
-struct Search<'a> {
+struct Search<'a, L: Layout> {
     t: &'a GameTable,
-    check: Check,
-    x: Scratch,
+    check: Check<L>,
+    x: Scratch<L>,
     bounds: Bounds,
     /// The positions searched, by hash, with the depth left when they were.
     seen: HashMap<u64, u8>,
@@ -145,9 +184,9 @@ struct Search<'a> {
     searched: Searched,
 }
 
-impl Search<'_> {
+impl<L: Layout> Search<'_, L> {
     /// Searches from `s`, before `next`, with `depth` decisions left.
-    fn from(&mut self, mut s: State, depth: u8) -> Result<(), String> {
+    fn from(&mut self, mut s: State<L>, depth: u8) -> Result<(), String> {
         match settle(self.t, &mut s, &mut self.x, self.check)? {
             Some(d) => self.at(&s, &d, depth),
             None => Ok(()),
@@ -155,7 +194,7 @@ impl Search<'_> {
     }
 
     /// Searches from `s`, where `d` is open, with `depth` decisions left.
-    fn at(&mut self, s: &State, d: &Decision, depth: u8) -> Result<(), String> {
+    fn at(&mut self, s: &State<L>, d: &Decision<L>, depth: u8) -> Result<(), String> {
         if depth == 0 {
             return Ok(());
         }
@@ -175,7 +214,7 @@ impl Search<'_> {
             }
             self.searched.nodes += 1;
             self.path.push(c);
-            let mut child = *s;
+            let mut child = s.clone();
             apply(&mut child, self.t, &mut self.x, &mut Replay, c);
             self.from(child, depth - 1)?;
             self.path.pop();
@@ -187,12 +226,12 @@ impl Search<'_> {
 /// Advances `s` to its next decision as the scenario runner does, answering each question
 /// with one answer and checking `check` at every position: the decision, or `None` once the
 /// game is over.
-fn settle(
+fn settle<L: Layout>(
     t: &GameTable,
-    s: &mut State,
-    x: &mut Scratch,
-    check: Check,
-) -> Result<Option<Decision>, String> {
+    s: &mut State<L>,
+    x: &mut Scratch<L>,
+    check: Check<L>,
+) -> Result<Option<Decision<L>>, String> {
     loop {
         let step = next(s, t, x, &mut Replay);
         check(t, s)?;
@@ -221,11 +260,11 @@ fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
 /// The failing sequence `path` from `root`, the scenario's end where `first` is open, after the
 /// scenario's own actions: each decision on the path is replayed to name its choice, and the
 /// last choice, the one that fails, is named but not taken.
-fn found(
+fn found<L: Layout>(
     t: &GameTable,
     scenario: &Scenario,
-    mut s: State,
-    first: &Decision,
+    mut s: State<L>,
+    first: &Decision<L>,
     path: &[Choice],
     why: String,
 ) -> Found {
@@ -247,7 +286,7 @@ fn found(
     lines.push("        // The search from here:".to_owned());
     for (i, &c) in path.iter().enumerate() {
         let d = if i == 0 {
-            *first
+            first.clone()
         } else {
             let Ok(Some(d)) = settle(t, &mut s, &mut x, |_, _| Ok(())) else {
                 unreachable!("the path replays to a decision");
