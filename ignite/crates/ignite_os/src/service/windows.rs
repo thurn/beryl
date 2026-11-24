@@ -172,25 +172,35 @@ fn current_user() -> io::Result<String> {
 }
 
 /// The task definition: a logon trigger and a principal for `user`, with no time limit. A
-/// [`Schedule::Interval`] task also repeats forever at its interval; a [`Schedule::KeepAlive`]
-/// task restarts every minute after a failure.
+/// [`Schedule::Interval`] task repeats forever from both logon and task registration (so
+/// reinstalling or refreshing the task keeps its interval running without waiting for the next
+/// logon); a [`Schedule::KeepAlive`] task restarts every minute after a failure.
 fn task_xml(user: &str, executable: &str, args: &[String], schedule: Schedule) -> String {
-    let (repetition, restart, description) = match schedule {
+    let (repetition, registration_trigger, restart, description) = match schedule {
         Schedule::KeepAlive => (
+            String::new(),
             String::new(),
             "<RestartOnFailure>\n      <Interval>PT1M</Interval>\n      <Count>999</Count>\n    \
              </RestartOnFailure>"
                 .to_owned(),
             "Starts the Ignite daemon at logon.",
         ),
-        Schedule::Interval(seconds) => (
-            format!(
+        Schedule::Interval(seconds) => {
+            let repeat = format!(
                 "<Repetition>\n        <Interval>PT{seconds}S</Interval>\n        \
                  <StopAtDurationEnd>false</StopAtDurationEnd>\n      </Repetition>\n      "
-            ),
-            String::new(),
-            "Checks the Ignite daemon at logon and every two minutes.",
-        ),
+            );
+            let registration = format!(
+                "\n    <RegistrationTrigger>\n      {repeat}<Enabled>true</Enabled>\n    \
+                 </RegistrationTrigger>"
+            );
+            (
+                repeat,
+                registration,
+                String::new(),
+                "Checks the Ignite daemon at logon and every two minutes.",
+            )
+        }
     };
     let user = escape(user);
     let arguments = args
@@ -210,7 +220,7 @@ fn task_xml(user: &str, executable: &str, args: &[String], schedule: Schedule) -
     <LogonTrigger>
       {repetition}<Enabled>true</Enabled>
       <UserId>{user}</UserId>
-    </LogonTrigger>
+    </LogonTrigger>{registration_trigger}
   </Triggers>
   <Principals>
     <Principal id="Author">
@@ -323,8 +333,13 @@ mod tests {
             &[],
             Schedule::Interval(120),
         );
-        assert!(xml.contains("<Interval>PT120S</Interval>"));
-        assert!(xml.contains("<StopAtDurationEnd>false</StopAtDurationEnd>"));
+        assert_eq!(xml.matches("<Interval>PT120S</Interval>").count(), 2);
+        assert_eq!(
+            xml.matches("<StopAtDurationEnd>false</StopAtDurationEnd>")
+                .count(),
+            2
+        );
+        assert!(xml.contains("<RegistrationTrigger>"));
         assert!(!xml.contains("RestartOnFailure"));
     }
 }
