@@ -20,7 +20,7 @@ from pathlib import Path
 from .. import card_files, card_store, paths, set_groups
 from ..client import gate, pack, purity
 from ..client import paths as client_paths
-from ..system import WINDOWS, exe
+from ..system import WINDOWS, exe, write_atomic_text
 from . import Listed, Result, client_validation, listed, report
 from .rust import asked, parse_packages, unformatted
 from .rust import clippy_run as run_clippy
@@ -259,9 +259,11 @@ def cards_by_recording() -> dict[str, list[str]]:
     except ValueError as error:
         raise SystemExit(f"{path}: {error}") from error
     found = recording_cards(pack.names_seen(entries, names), names, by_deck)
-    partial = kept.with_name(f"{kept.name}.{os.getpid()}.tmp")
-    partial.write_text(json.dumps(found))
-    os.replace(partial, kept)
+    try:
+        write_atomic_text(kept, json.dumps(found))
+    except PermissionError:
+        if not (WINDOWS and kept.is_file()):
+            raise
     return found
 
 

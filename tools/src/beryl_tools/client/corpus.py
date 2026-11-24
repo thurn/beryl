@@ -13,7 +13,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import card_files, paths
+from .. import card_files, paths, system
 from . import pack
 from . import paths as client_paths
 
@@ -166,9 +166,11 @@ def sweep(
             done = inspect(inspector, selected, "--against", str(baseline))
             body = output(done, (0, 1))
             result = Sweep(**json.loads(body))
-            temporary = kept.with_suffix(f".{os.getpid()}.tmp")
-            temporary.write_text(body, encoding="utf-8")
-            os.replace(temporary, kept)
+            try:
+                system.write_atomic_text(kept, body)
+            except PermissionError:
+                if not (system.WINDOWS and kept.is_file()):
+                    raise
             yield part, result
 
 

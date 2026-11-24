@@ -191,11 +191,15 @@ def pull(
     if args.bundle is not None:
         return bugs.import_cmd(argparse.Namespace(bundle=args.bundle))
     root = bugs.bugs_dir()
-    sources = [
-        ("iOS Simulator", simulator, "no booted Beryl simulator or installed app"),
-        ("Android emulator", android, "not running or Beryl is not installed"),
-    ]
-    if args.device:
+    sources: list[tuple[str, Callable[[Path], ReportCounts | None], str]] = []
+    if sys.platform == "darwin":
+        sources.append(
+            ("iOS Simulator", simulator, "no booted Beryl simulator or installed app")
+        )
+    sources.append(
+        ("Android emulator", android, "not running or Beryl is not installed")
+    )
+    if args.device and sys.platform == "darwin":
         sources.append(("iPhone", device, "no paired device"))
     failed = False
     for label, fetch, missing in sources:

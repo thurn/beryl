@@ -21,8 +21,8 @@
   {"kind": "just other", "pattern": "^just\\b"},
   {"kind": "git", "pattern": "^git\\b|^gh\\b"},
   {"kind": "bd", "pattern": "^bd\\b"},
-  {"kind": "read and search", "pattern": "^(rg|grep|egrep|sed|awk|cat|ls|head|tail|wc|find|fd|jq|diff|stat|file|tree|sort|uniq|cut|tr|echo|printf|pwd|which|du|test|\\[)\\b"},
-  {"kind": "shell scripts", "pattern": "^(bash|sh|zsh)\\b|^\\S+\\.sh\\b"},
+  {"kind": "read and search", "pattern": "^(rg|grep|egrep|sed|awk|cat|ls|head|tail|wc|find|fd|jq|diff|stat|file|tree|sort|uniq|cut|tr|echo|printf|pwd|which|du|test|\\[)\\b|(?i:^(?:get-(?:content|childitem|item|itemproperty|location|process|service|ciminstance|wmiobject|winevent|date|command|scheduledtask|history)|select-(?:string|object)|where-object|sort-object|measure-object|format-(?:list|table)|write-(?:output|host)|test-path|split-path|resolve-path|dir|type|where|tasklist|schtasks)\\b)"},
+  {"kind": "shell scripts", "pattern": "^(bash|sh|zsh)\\b|^\\S+\\.sh\\b|(?i:^(?:pwsh|powershell)(?:\\.exe)?\\b|^\\S+\\.(?:ps1|cmd|bat)\\b)"},
   {"kind": "python scripts", "pattern": "^\\S*python[0-9.]*\\b|^uv run\\b"},
-  {"kind": "sleep", "pattern": "^sleep\\b"}
+  {"kind": "sleep", "pattern": "^sleep\\b|(?i:^start-sleep\\b)"}
 ]

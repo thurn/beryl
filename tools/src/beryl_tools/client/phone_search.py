@@ -278,9 +278,9 @@ def run_phone_search(args: argparse.Namespace) -> int:
     run = phone.out_dir("phone") / f"{phone.run_name()}-search"
     run.mkdir()
     print(f"phone-search: frame logs in {run}")
-    one, five, fifteen = os.getloadavg()
+    one, five, fifteen = system.loadavg()
     print(
-        f"phone-search: Mac load average {one:.1f} {five:.1f} {fifteen:.1f} at the start"
+        f"phone-search: host load average {one:.1f} {five:.1f} {fifteen:.1f} at the start"
     )
     platforms: list[tuple[str, Callable[[], tuple[str | None, str | None]]]] = [
         ("ios", lambda: run_ios(run)),
@@ -299,8 +299,8 @@ def run_phone_search(args: argparse.Namespace) -> int:
         if fault or found is None:
             print(f"{label}: FAILED: {fault or 'the frame log holds no summary'}")
             failed = True
-    one, five, fifteen = os.getloadavg()
+    one, five, fifteen = system.loadavg()
     print(
-        f"phone-search: Mac load average {one:.1f} {five:.1f} {fifteen:.1f} at the end"
+        f"phone-search: host load average {one:.1f} {five:.1f} {fifteen:.1f} at the end"
     )
     return 1 if failed else 0

@@ -244,6 +244,10 @@ def test_a_change_to_the_kinds_table_gives_every_call_its_kind_again(
             False,
         ),
         ("git commit -F - <<EOF\ncargo build ran\nEOF", "git", False),
+        ("Get-Content build.log -Tail 20", "read and search", False),
+        ("Get-ChildItem D:\\beryl", "read and search", False),
+        ("pwsh -File check.ps1", "shell scripts", False),
+        ("Start-Sleep -Seconds 5", "sleep", False),
     ],
 )
 def test_a_command_is_classified_by_what_follows_its_prefix(

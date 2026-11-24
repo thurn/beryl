@@ -289,7 +289,7 @@ if ! command -v rsync >/dev/null; then
 fi
 rsync -rl --checksum --delete "$incoming/" "$source/"
 rm -rf -- "$incoming"
-cd "$source/rust"
+cd "$source/engine"
 """
 
 

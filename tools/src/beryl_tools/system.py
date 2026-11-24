@@ -278,6 +278,31 @@ def file_lock(path: Path, timeout: float | None = None) -> Iterator[None]:
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
+def write_atomic_text(path: Path, text: str) -> None:
+    """Writes `text` to `path` via a temp file and atomic rename. Serializes concurrent writers
+    with a lock file beside `path` and cleans up the temp file on failure so Windows readers do
+    not leave orphaned `*.tmp` files behind."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    with file_lock(path.with_name(f"{path.name}.lock")):
+        try:
+            partial.write_text(text, encoding="utf-8")
+            for attempt in range(5):
+                try:
+                    os.replace(partial, path)
+                    return
+                except PermissionError:
+                    if not WINDOWS or attempt == 4:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
+        finally:
+            if partial.exists():
+                try:
+                    partial.unlink()
+                except OSError:
+                    pass
+
+
 # The environment of work at low priority: no CPU tokens (tokens.py), and browser waits long
 # enough for a starved page (ui/scripts/hang.mjs).
 LOW_ENV: dict[str, str] = {"BERYL_CPU_POOL": "0", "BERYL_LOW_PRIORITY": "1"}

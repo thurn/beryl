@@ -143,6 +143,7 @@ def test_one_source_failure_does_not_stop_other_sources(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls: list[str] = []
+    monkeypatch.setattr(mobile_bugs.sys, "platform", "darwin")
     monkeypatch.setattr(bugs, "bugs_dir", lambda: tmp_path)
 
     def failed_simulator(_bundle: str) -> Path:
@@ -171,6 +172,7 @@ def test_native_mobile_bugs_adopts_from_the_simulator_documents_folder(
     container: Path = tmp_path / "container"
     original = report(container / "Documents" / "bugs")
     local = tmp_path / "local"
+    monkeypatch.setattr(mobile_bugs.sys, "platform", "darwin")
     monkeypatch.setattr(bugs, "bugs_dir", lambda: local)
 
     def simctl(*args: str) -> CompletedProcess[str]:
@@ -201,3 +203,24 @@ def test_native_mobile_bugs_adopts_from_the_simulator_documents_folder(
     assert cli.main(["client", "mobile-bugs"]) == 0
     assert (local / ID / "window.png").read_bytes() == b"PNG"
     assert (original / "report.md").is_file()
+
+
+def test_non_macos_skips_ios_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(mobile_bugs.sys, "platform", "win32")
+    monkeypatch.setattr(bugs, "bugs_dir", lambda: tmp_path)
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("iOS source must not run off macOS")
+
+    def working_android(_root: Path) -> tuple[int, int]:
+        calls.append("android")
+        return (0, 0)
+
+    monkeypatch.setattr(mobile_bugs, "simulator_container", fail_if_called)
+    monkeypatch.setattr(mobile_bugs, "device_reports", fail_if_called)
+    monkeypatch.setattr(bug, "android_reports", working_android)
+    assert cli.main(["mobile-bugs", "--device"]) == 0
+    assert calls == ["android"]

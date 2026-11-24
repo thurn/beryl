@@ -46,6 +46,12 @@ CLIPPY_TARGET = "target/clippy"
 # would compile that crate again. Capped, every unit succeeds and cargo replays its cached
 # warnings on the next run, which reads each workspace package's warning as that package's
 # failure. A type error is still an error, and fails the product's build.
+# The Windows target sets its own rustflags in .cargo/config.toml, which overrides build.rustflags.
+CLIPPY_FLAGS: str = (
+    "target.x86_64-pc-windows-msvc.rustflags"
+    if sys.platform == "win32"
+    else "build.rustflags"
+)
 CLIPPY: list[str] = [
     "cargo",
     "clippy",
@@ -55,7 +61,7 @@ CLIPPY: list[str] = [
     "--target-dir",
     CLIPPY_TARGET,
     "--config",
-    'build.rustflags=["--cap-lints=warn"]',
+    f'{CLIPPY_FLAGS}=["--cap-lints=warn"]',
 ]
 
 # Where the `scenario-dump` product leaves `beryl_scenario`, relative to `rust/`: it builds in

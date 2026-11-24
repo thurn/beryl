@@ -205,3 +205,12 @@ def test_report_appends_to_the_results_file(
         {"check": "clippy:a", "outcome": "pass"},
         {"check": "clippy:b", "outcome": "fail", "message": "bad", "at": "x.rs:1"},
     ]
+
+
+def test_clippy_uses_target_rustflags_on_windows() -> None:
+    expected = (
+        'target.x86_64-pc-windows-msvc.rustflags=["--cap-lints=warn"]'
+        if sys.platform == "win32"
+        else 'build.rustflags=["--cap-lints=warn"]'
+    )
+    assert expected in rust.CLIPPY

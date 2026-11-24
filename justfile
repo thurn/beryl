@@ -27,7 +27,7 @@ low := if os() == "windows" { by_anywhere + " low --" } else { "env BERYL_LOW_PR
 
 # Low priority, kept awake, for a blunder hunt that runs for hours.
 
-awake := if os() == "windows" { by_anywhere + " low --awake --" } else { "caffeinate -i nice -n 10" }
+awake := if os() == "windows" { by_anywhere + " low --awake --" } else { "caffeinate -i env BERYL_LOW_PRIORITY=1 taskpolicy -c utility nice -n 10" }
 
 default:
     @just --list --unsorted
@@ -229,22 +229,20 @@ play *args:
 [group('agents')]
 [no-cd]
 review *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    manifest={{ quote(justfile_directory() / "engine" / "Cargo.toml") }}
-    case " $* " in
-      *" --agent greedy "*) search=false ;;
-      *" --agent "*) search=true ;;
-      *) search=false ;;
-    esac
-    if $search; then
-      RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path "$manifest" -p beryl_cli_main -- review "$@"
-    else
-      target="${CARGO_TARGET_DIR:-${manifest%/*}/target}"
-      cargo build --locked --quiet --manifest-path "$manifest" --target-dir "$target" --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_cli
-      binary="$target/debug/beryl_cli"
-      if [[ -f "$binary.exe" ]]; then binary="$binary.exe"; fi
-      exec "$binary" review "$@"
+    @manifest={{ quote(justfile_directory() / "engine" / "Cargo.toml") }}; \
+    case " $* " in \
+      *" --agent greedy "*) search=false ;; \
+      *" --agent "*) search=true ;; \
+      *) search=false ;; \
+    esac; \
+    if $search; then \
+      RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path "$manifest" -p beryl_cli_main -- review "$@"; \
+    else \
+      target="${CARGO_TARGET_DIR:-${manifest%/*}/target}"; \
+      cargo build --locked --quiet --manifest-path "$manifest" --target-dir "$target" --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_cli; \
+      binary="$target/debug/beryl_cli"; \
+      if [ -f "$binary.exe" ]; then binary="$binary.exe"; fi; \
+      exec "$binary" review "$@"; \
     fi
 
 # A round robin between agents, games in parallel at low priority (--games N, --seed N, --json FILE, --check)
@@ -299,7 +297,7 @@ gate *args:
 [group('agents')]
 [no-cd]
 blunder-hunt *args:
-    RUSTFLAGS="{{ search_cpu }}" {{ low }} {{ awake }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- blunder-hunt "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ awake }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- blunder-hunt "$@"
 
 # Physical disk usage on macOS, counting APFS clones once (--details for individual paths)
 [group('checks')]

@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .. import deps, paths as repo_paths
+from .. import deps, paths as repo_paths, system
 from . import app, paths
 from .command import Command
 
@@ -112,7 +112,7 @@ def verb_lines(late: list[dict[str, Any]]) -> list[str]:
 
 
 def load_line() -> str:
-    one, five, fifteen = os.getloadavg()
+    one, five, fifteen = system.loadavg()
     return f"load average {one:.2f} {five:.2f} {fifteen:.2f} (times are reported with it, never gated)"
 
 

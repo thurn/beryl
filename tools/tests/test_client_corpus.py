@@ -135,3 +135,20 @@ def test_a_card_change_in_one_crate_invalidates_every_crate(
     after = {part.crate: part.digest for part in corpus.parts(corpus.crates())}
     assert after["cards_b"] != before["cards_b"]
     assert after["cards_a"] != before["cards_a"]
+
+
+def test_write_atomic_text_cleans_up_temp_file_on_replace_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from beryl_tools import system
+
+    target = tmp_path / "cache.json"
+
+    def fail_replace(_src: object, _dst: object) -> None:
+        raise PermissionError("held by reader")
+
+    monkeypatch.setattr(system.os, "replace", fail_replace)
+    monkeypatch.setattr(system.time, "sleep", lambda _s: None)
+    with pytest.raises(PermissionError):
+        system.write_atomic_text(target, "{}")
+    assert not list(tmp_path.glob("*.tmp"))

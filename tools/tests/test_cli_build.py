@@ -39,9 +39,10 @@ def cli_commands() -> dict[str, list[str]]:
         check=True,
     )
     review_build = next(
-        line.strip()
+        part.strip()
         for line in review.stderr.splitlines()
-        if line.strip().startswith("cargo build ")
+        for part in line.split(";")
+        if part.strip().startswith("cargo build ")
     )
     return {
         "cli": shlex.split(products["cli"]["build"]),
