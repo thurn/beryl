@@ -371,9 +371,15 @@ fn the_compact_fps_monitor_leaves_room_for_the_table_and_settings() {
             target: Some(120),
             cadence: Some(120),
         });
+        // The widest tier word, so that the row's room is checked with it.
+        client.handle(Input::Device(DeviceInput::Tier(
+            kit_ui::input::Tier::Enhanced,
+        )));
         let frame = client.frame(MS);
         let (left, top, right, bottom) = edges(frame, find(frame, Role::Region, "FPS monitor"));
+        assert!(has(frame, Role::Text, "Enhanced"));
         let (_, orb_top, _, _) = edges(frame, find(frame, Role::Region, "opponent's orb"));
+
         assert!(left >= SAFE.left && right <= width - SAFE.right);
         assert!(top >= SAFE.top && bottom <= orb_top);
         assert!(layer_faults(frame, window(width, height)).is_empty());

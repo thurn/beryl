@@ -311,8 +311,10 @@ impl Client {
     /// Takes the tier the host's rate rule chose, unless memory has run low, after which the
     /// tier stays Baseline (docs/beryl-3d.md, "Choosing a tier").
     fn set_tier(&mut self, tier: Tier) {
-        if !self.low_memory {
+        if !self.low_memory && self.tier != tier {
             self.tier = tier;
+            // The FPS monitor names the tier.
+            self.refresh_frame_rates();
         }
     }
 
@@ -320,7 +322,10 @@ impl Client {
     /// which the renderer has freed, and draws in the Baseline tier for the rest of the session.
     fn low_memory(&mut self) {
         self.low_memory = true;
-        self.tier = Tier::Baseline;
+        if self.tier != Tier::Baseline {
+            self.tier = Tier::Baseline;
+            self.refresh_frame_rates();
+        }
         self.show.faces_mut().low_memory();
     }
 

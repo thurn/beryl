@@ -571,11 +571,15 @@ def report(path: Path, *, latest: bool = False) -> str:
 
 def tier_line(tier: dict[str, Any]) -> str:
     """The tier chosen at startup (docs/beryl-3d.md, 'Choosing a tier'), one line."""
-    measured = (
-        f"slowest measured frame {tier['slowest_ms']:.1f} ms"
-        if tier.get("slowest_ms") is not None
-        else "nothing measured"
-    )
+    if tier.get("slowest_ms") is None:
+        measured = "nothing measured"
+    elif tier.get("median_ms") is not None:
+        measured = (
+            f"median measured frame {tier['median_ms']:.1f} ms,"
+            f" slowest {tier['slowest_ms']:.1f} ms"
+        )
+    else:
+        measured = f"slowest measured frame {tier['slowest_ms']:.1f} ms"
     return (
         f"tier: {tier['tier']} at startup (setting {tier['setting']}, {measured},"
         f" interval {tier['interval_ms']:.1f} ms; {tier.get('took_ms', 0.0):.0f} ms before the first frame)"

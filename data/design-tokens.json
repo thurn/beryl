@@ -1413,8 +1413,8 @@
         "note": "The diameter of the FPS monitor's pacing indicator."
       },
       "FPS_MONITOR_BAND": {
-        "value": 48,
-        "note": "The room for the compact FPS monitor above the table."
+        "value": 52,
+        "note": "The room for the compact FPS monitor above the table: two lines of labels, for the target and the display link's rate."
       },
       "FPS_MONITOR_TOGGLE": {
         "value": 68,

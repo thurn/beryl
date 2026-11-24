@@ -217,3 +217,42 @@ fn the_fps_setting_shows_a_passive_readout_and_saves_both_states() {
     assert!(!saved(&mut client).expect("settings saved").fps_monitor);
     assert!(monitor(&mut client).is_none());
 }
+
+#[test]
+fn the_fps_monitor_names_the_tier_and_follows_a_drop() {
+    use kit_ui::input::Tier;
+
+    /// The tier words the FPS monitor's panel holds.
+    fn shown(client: &mut Client) -> Vec<String> {
+        let frame = client.frame(1);
+        let (left, top, right, bottom) = edges(frame, find(frame, Role::Region, "FPS monitor"));
+        frame
+            .resolved
+            .iter()
+            .enumerate()
+            .filter(|(_, element)| element.role == Role::Text)
+            .filter(|(index, _)| {
+                let (l, t, r, b) = edges(frame, *index);
+                l >= left && r <= right && t >= top && b <= bottom
+            })
+            .map(|(_, element)| frame.name(element.name).to_owned())
+            .filter(|name| name == "Enhanced" || name == "Baseline")
+            .collect()
+    }
+
+    let mut client = in_game();
+    click(&mut client, Role::Button, "Settings");
+    click(&mut client, Role::Toggle, "FPS monitor");
+    click(&mut client, Role::Button, "close");
+    client.set_frame_rates(app_client::FrameRates {
+        current: Some(118),
+        low: Some(60),
+        target: Some(120),
+        cadence: Some(120),
+    });
+    client.handle(Input::Device(DeviceInput::Tier(Tier::Enhanced)));
+    assert_eq!(shown(&mut client), ["Enhanced"]);
+    // The rate rule drops the tier during play.
+    client.handle(Input::Device(DeviceInput::Tier(Tier::Baseline)));
+    assert_eq!(shown(&mut client), ["Baseline"]);
+}

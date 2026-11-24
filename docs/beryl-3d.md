@@ -347,11 +347,15 @@ geometry, including the arrow paths, and draw records shared by both tiers.
 ### Choosing a tier
 
 Automatic graphics mode starts with a short offscreen Enhanced probe on a
-crowded board at the window's size. The slowest measured draw has to fit within
-the headroom set by the startup tuning. The warmup draw is excluded because it
-creates resources and first uses the pipelines. The result is logged. Repeated
-late animation frames step down to Baseline for the rest of the run. Choosing
-Baseline or Enhanced explicitly fixes the tier.
+crowded board at the window's size. The median measured draw has to fit within
+the headroom set by the startup tuning. The median decides, not the slowest
+draw, because each draw is timed on the wall clock: on a loaded machine one slow
+draw in 30 reflects the load, not the GPU, and a wrong choice of Enhanced
+corrects itself when the rate rule drops the tier. The warmup draw is excluded
+because it creates resources and first uses the pipelines. The result is logged
+with the median and the slowest draw. Repeated late animation frames step down
+to Baseline for the rest of the run. Choosing Baseline or Enhanced explicitly
+fixes the tier.
 
 ## Card faces
 

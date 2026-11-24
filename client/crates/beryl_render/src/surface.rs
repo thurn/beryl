@@ -62,6 +62,19 @@ impl Surface {
     }
 }
 
+/// The limits a desktop window's device asks for on an adapter with `adapter`'s limits: wgpu's
+/// default limits when the adapter has them, which the Enhanced tier requires, and wgpu's limits
+/// for OpenGL ES 3.0 otherwise, as on the floor's 2013 integrated GPUs.
+#[must_use]
+pub fn window_limits(adapter: &wgpu::Limits) -> wgpu::Limits {
+    let default = wgpu::Limits::default();
+    if default.check_limits(adapter) {
+        default
+    } else {
+        wgpu::Limits::downlevel_webgl2_defaults()
+    }
+}
+
 impl Renderer {
     pub fn gpu_timer(&self, epoch: Instant, worker_setup: fn()) -> Option<crate::GpuTimer> {
         crate::GpuTimer::new(
@@ -73,10 +86,11 @@ impl Renderer {
     }
 
     /// A renderer on the GPU adapter that can present to `window`, and the window's surface,
-    /// `width` by `height` physical pixels. The device asks for wgpu's limits for OpenGL ES 3.0,
-    /// as a phone's does, with the adapter's own texture size: the floor's 2013 integrated GPUs
-    /// may lack wgpu's default limits, and a desktop run that outgrew the floor would fail here
-    /// rather than on the floor. `lighting` is as for [`Renderer::new`].
+    /// `width` by `height` physical pixels. The device asks for the limits [`window_limits`]
+    /// chooses from the adapter's, with the adapter's own texture size: wgpu's default limits,
+    /// which the Enhanced tier needs, wherever the adapter has them. The floor's limits are
+    /// still exercised by the phones' hosts and by the native surface test host, which asks for
+    /// `Limits::Downlevel`. `lighting` is as for [`Renderer::new`].
     pub fn for_window<W>(
         window: W,
         width: u32,
@@ -90,14 +104,7 @@ impl Renderer {
         let surface = instance
             .create_surface(window)
             .map_err(|error| format!("no surface for the window: {error}"))?;
-        Self::on_surface(
-            instance,
-            surface,
-            width,
-            height,
-            wgpu::Limits::downlevel_webgl2_defaults(),
-            lighting,
-        )
+        Self::on_surface(instance, surface, width, height, window_limits, lighting)
     }
 
     /// A renderer on the GPU adapter that can present to a phone's `native` surface, and that
@@ -131,7 +138,7 @@ impl Renderer {
             surface,
             width,
             height,
-            wgpu::Limits::downlevel_webgl2_defaults(),
+            |_| wgpu::Limits::downlevel_webgl2_defaults(),
             lighting,
         )
     }
@@ -158,14 +165,14 @@ impl Renderer {
         configure(&self.device, adapter, surface, width, height)
     }
 
-    /// A renderer on the GPU adapter that can present to `surface`, with `limits`, lit by
-    /// `lighting`.
+    /// A renderer on the GPU adapter that can present to `surface`, with the limits `limits`
+    /// chooses from the adapter's own, lit by `lighting`.
     fn on_surface(
         instance: wgpu::Instance,
         surface: wgpu::Surface<'static>,
         width: u32,
         height: u32,
-        limits: wgpu::Limits,
+        limits: fn(&wgpu::Limits) -> wgpu::Limits,
         lighting: Lighting,
     ) -> Result<(Self, Surface), String> {
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -185,7 +192,7 @@ impl Renderer {
                 } else {
                     wgpu::Features::empty()
                 },
-            required_limits: limits.using_resolution(adapter.limits()),
+            required_limits: limits(&adapter.limits()).using_resolution(adapter.limits()),
             ..Default::default()
         }))
         .map_err(|error| format!("no GPU device: {error}"))?;
@@ -358,4 +365,23 @@ unsafe fn create_native(
     // surface is dropped, which the caller promises.
     unsafe { instance.create_surface_unsafe(target) }
         .map_err(|error| format!("no surface for the native {native:?}: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::window_limits;
+
+    #[test]
+    fn a_window_asks_for_the_defaults_where_the_adapter_has_them() {
+        let mut larger = wgpu::Limits::default();
+        larger.max_texture_dimension_2d *= 2;
+        larger.max_storage_buffers_per_shader_stage += 4;
+        assert_eq!(window_limits(&larger), wgpu::Limits::default());
+        assert_eq!(
+            window_limits(&wgpu::Limits::default()),
+            wgpu::Limits::default()
+        );
+        let floor = wgpu::Limits::downlevel_webgl2_defaults();
+        assert_eq!(window_limits(&floor), floor);
+    }
 }

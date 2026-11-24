@@ -1003,7 +1003,7 @@
     {
       "kind": "not-seen",
       "name": "FPS monitor",
-      "rule": "Settings can show a read-only panel at the top left of the native client. It reports current FPS, the lowest frame rate implied by a frame gap in the last minute, the app’s target and the display link’s rate when available."
+      "rule": "Settings can show a read-only panel at the top left of the native client. It reports current FPS, the lowest frame rate implied by a frame gap in the last minute, the app’s target, the display link’s rate when available, and the graphics tier being drawn, Enhanced or Baseline, in the settings sheet’s words."
     },
     {
       "kind": "not-seen",

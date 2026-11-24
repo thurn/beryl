@@ -3,6 +3,7 @@
 use std::convert::Infallible;
 
 use game_hud::hud::FloatFeature;
+use kit_base::atlas::Tier;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_scene::{Context, Feature};
 use kit_ui::element::{Align, Element, FloatId, Justify, column, floats, holder, row, text};
@@ -23,13 +24,23 @@ pub struct FrameRates {
     pub cadence: Option<u16>,
 }
 
+/// What the client tells the monitor beside the host's rates: its own state, which the panel
+/// is laid out again for whenever it changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MonitorView {
+    /// Whether the window is compact, where the panel is one row.
+    pub compact: bool,
+    /// The tier the client draws in.
+    pub tier: Tier,
+}
+
 impl Feature for FpsMonitor {
     const SOURCE: &'static str = file!();
 
     type State = FrameRates;
     type Message = FrameRates;
-    type Inputs<'a> = bool;
-    type ViewKey = bool;
+    type Inputs<'a> = MonitorView;
+    type ViewKey = MonitorView;
     type Command = Infallible;
     type Request = Infallible;
 
@@ -41,12 +52,12 @@ impl Feature for FpsMonitor {
         std::mem::replace(state, *message) != *message
     }
 
-    fn view_key(_: &FrameRates, compact: &bool) -> bool {
-        *compact
+    fn view_key(_: &FrameRates, view: &MonitorView) -> MonitorView {
+        *view
     }
 
-    fn view(state: &FrameRates, compact: bool) -> Element {
-        monitor(*state, compact)
+    fn view(state: &FrameRates, view: MonitorView) -> Element {
+        monitor(*state, view)
     }
 }
 
@@ -56,7 +67,8 @@ impl FloatFeature for FpsMonitor {
     }
 }
 
-fn monitor(rates: FrameRates, compact: bool) -> Element {
+fn monitor(rates: FrameRates, view: MonitorView) -> Element {
+    let compact = view.compact;
     let accent = pace_color(rates);
     let current = row()
         .align_items(Align::Center)
@@ -89,6 +101,14 @@ fn monitor(rates: FrameRates, compact: bool) -> Element {
     let cadence = rates
         .cadence
         .map(|rate| label(&format!("{rate} Hz link"), color::TEXT_DIM));
+    // The settings sheet's words for the graphics choices.
+    let tier = label(
+        match view.tier {
+            Tier::Enhanced => "Enhanced",
+            Tier::Baseline => "Baseline",
+        },
+        color::TEXT_DIM,
+    );
     let panel = column()
         .name("FPS monitor")
         .background(color::PANEL)
@@ -104,8 +124,14 @@ fn monitor(rates: FrameRates, compact: bool) -> Element {
                 .gap(space::M)
                 .child(current)
                 .child(low)
-                .child(target)
-                .children(cadence),
+                // Stacked, so that the row with the tier word fits a 375-point phone.
+                .child(
+                    column()
+                        .align_items(Align::End)
+                        .child(target)
+                        .children(cadence),
+                )
+                .child(tier),
         );
     }
     panel
@@ -121,7 +147,8 @@ fn monitor(rates: FrameRates, compact: bool) -> Element {
                     column()
                         .align_items(Align::End)
                         .child(target)
-                        .children(cadence),
+                        .children(cadence)
+                        .child(tier),
                 ),
         )
         .child(holder().height(1.0).background(color::ICON_BUTTON_RIM))

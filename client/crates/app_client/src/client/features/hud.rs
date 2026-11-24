@@ -1,6 +1,6 @@
 //! Mounts the HUD floats and routes their updates.
 
-use app_screens::performance::{FpsMonitor, FrameRates};
+use app_screens::performance::{FpsMonitor, FrameRates, MonitorView};
 use beryl_protocol::prompt::Click;
 use game_hud::hud::FloatFeature;
 use game_hud::hud::banner::Banner;
@@ -52,9 +52,9 @@ impl Features {
             .0
     }
 
-    pub fn fps_monitor_view(&mut self, compact: bool) -> kit_ui::element::Element {
+    pub fn fps_monitor_view(&mut self, view: MonitorView) -> kit_ui::element::Element {
         Self::slot::<FpsMonitor>(&mut self.slots, FPS_MONITOR)
-            .view(compact)
+            .view(view)
             .clone()
     }
 

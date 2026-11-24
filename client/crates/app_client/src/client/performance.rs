@@ -1,5 +1,6 @@
 //! The host's frame rate readout floats over the current screen.
 
+use app_screens::performance::MonitorView;
 use app_screens::screens::{Screen, settings::GEAR_INSET};
 use glam::Vec2;
 use kit_base::geometry::Window;
@@ -53,7 +54,10 @@ impl Client {
             return;
         }
         let compact = self.window.size_class == Some(SizeClass::Compact);
-        let monitor = self.features.fps_monitor_view(compact);
+        let monitor = self.features.fps_monitor_view(MonitorView {
+            compact,
+            tier: self.tier,
+        });
         self.layer.float(floats::FRAME_RATES, Some(monitor));
         self.place_frame_rates(compact);
     }

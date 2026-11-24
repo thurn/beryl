@@ -1,9 +1,12 @@
 //! Choosing the tier at startup (docs/beryl-3d.md, "Choosing a tier"). Before the first frame,
 //! with the setting at Automatic, the app draws the `stress-255` board in the Enhanced tier
 //! into an offscreen target of the window's size once unmeasured and then
-//! `frames` from `tier-probe.json` times, waiting for the GPU after each, and chooses Enhanced when the slowest of them took less than
-//! `share` of the display's refresh interval. The setting at Baseline or
-//! Enhanced fixes the tier instead, and measures nothing.
+//! `frames` from `tier-probe.json` times, waiting for the GPU after each, and chooses Enhanced
+//! when the median of them took less than `share` of the display's refresh interval. The
+//! median, not the slowest: each frame is timed on the wall clock, so on a loaded machine one
+//! slow frame in 30 says more about the load than about the GPU. A wrong choice of Enhanced
+//! corrects itself, because the rate rule drops the tier when frames stay late. The setting at
+//! Baseline or Enhanced fixes the tier instead, and measures nothing.
 //!
 //! On this Mac (an Apple M5 Max at 1600 by 900 points, scale 1, while the machine ran other
 //! sessions' checks) choosing the tier took about 50 ms, which is the time the measurement
@@ -37,6 +40,8 @@ pub struct Probe {
     /// The slowest of the frames drawn, or `None` when none was, because the renderer has no
     /// Enhanced tier.
     pub slowest: Option<Duration>,
+    /// The median of the frames drawn, which decides, or `None` when none was.
+    pub median: Option<Duration>,
     /// The display's refresh interval.
     pub interval: Duration,
     /// The tier the measurement chose.
@@ -58,6 +63,10 @@ pub struct Tiered {
     pub setting: String,
     /// The slowest measured frame, in milliseconds, when frames were measured.
     pub slowest_ms: Option<f64>,
+    /// The median measured frame, in milliseconds, when frames were measured. The tier is
+    /// chosen by this one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub median_ms: Option<f64>,
     /// How long choosing the tier took before the first frame, in milliseconds.
     #[serde(default)]
     pub took_ms: f64,
@@ -86,6 +95,7 @@ pub fn probe(
         return Probe {
             frames: tuning.frames,
             slowest: None,
+            median: None,
             interval,
             chosen: Tier::Baseline,
         };
@@ -110,21 +120,36 @@ pub fn probe(
     // and depth buffers and first uses each pipeline, which took ten times an ordinary frame.
     renderer.render(frame, &mut target);
     renderer.finish();
-    let mut slowest = Duration::ZERO;
-    for _ in 0..tuning.frames {
-        let started = Instant::now();
-        renderer.render(frame, &mut target);
-        renderer.finish();
-        slowest = slowest.max(started.elapsed());
-    }
-    let chosen = if slowest.as_secs_f64() < f64::from(tuning.share) * interval.as_secs_f64() {
-        Tier::Enhanced
-    } else {
-        Tier::Baseline
+    let times: Vec<Duration> = (0..tuning.frames)
+        .map(|_| {
+            let started = Instant::now();
+            renderer.render(frame, &mut target);
+            renderer.finish();
+            started.elapsed()
+        })
+        .collect();
+    judge(&times, interval, tuning.share)
+}
+
+/// The verdict on measured frame `times` at a refresh `interval`: Enhanced when their median
+/// took less than `share` of the interval. With an even count the median is the slower of the
+/// two middle frames. No frames choose Baseline.
+#[must_use]
+pub fn judge(times: &[Duration], interval: Duration, share: f32) -> Probe {
+    let mut sorted = times.to_vec();
+    sorted.sort_unstable();
+    let median = sorted.get(sorted.len() / 2).copied();
+    let slowest = sorted.last().copied();
+    let chosen = match median {
+        Some(median) if median.as_secs_f64() < f64::from(share) * interval.as_secs_f64() => {
+            Tier::Enhanced
+        }
+        _ => Tier::Baseline,
     };
     Probe {
-        frames: tuning.frames,
-        slowest: Some(slowest),
+        frames: times.len(),
+        slowest,
+        median,
         interval,
         chosen,
     }
@@ -174,6 +199,9 @@ pub fn choose(
         slowest_ms: measurement
             .and_then(|probe| probe.slowest)
             .map(|slowest| slowest.as_secs_f64() * 1e3),
+        median_ms: measurement
+            .and_then(|probe| probe.median)
+            .map(|median| median.as_secs_f64() * 1e3),
         took_ms: started.elapsed().as_secs_f64() * 1e3,
         probe_frames: measurement.map(|probe| probe.frames),
         interval_ms: interval.as_secs_f64() * 1e3,
@@ -232,4 +260,28 @@ pub fn graphics(word: &str) -> Option<Graphics> {
     [Graphics::Automatic, Graphics::Baseline, Graphics::Enhanced]
         .into_iter()
         .find(|graphics| self::word(*graphics) == word)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Duration, Tier, judge};
+
+    /// The bar at 120 Hz with the repository's share: a third of 8.33 ms, about 2.8 ms.
+    fn verdict(over: usize) -> Tier {
+        let interval = Duration::from_secs_f64(1.0 / 120.0);
+        let mut times = vec![Duration::from_micros(1500); 30 - over];
+        times.extend(std::iter::repeat_n(Duration::from_millis(9), over));
+        judge(&times, interval, 0.3333).chosen
+    }
+
+    #[test]
+    fn one_slow_frame_in_thirty_still_chooses_enhanced() {
+        assert_eq!(verdict(1), Tier::Enhanced);
+    }
+
+    #[test]
+    fn most_frames_over_the_bar_choose_baseline() {
+        assert_eq!(verdict(16), Tier::Baseline);
+        assert_eq!(verdict(0), Tier::Enhanced);
+    }
 }
