@@ -1,6 +1,7 @@
 # The ladder
 
-Champion: pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired
+Champion:
+turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker
 
 One row a match or audit, newest first. docs/ai-plan.md §4 says how each row is
 made. Rows up to 2026-11-13 were made by the plan before it, whose gate stopped
@@ -8,9 +9,10 @@ a rung at the suite on any one lower entry.
 
 | Date       | Challenger                                                                             | Champion                                                                         | Budget | Games | Score | Elo (95%)        | Verdict             | Suite open / fixed | Human games |
 | ---------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------ | ----- | ----- | ---------------- | ------------------- | ------------------ | ----------- |
-| 2026-11-21 | turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M | pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M | 3M     | 1200  | 52.6% | +23 [+1, +45]    | undecided           | 1 / 19 (398/400)   | ?           |
+| 2026-11-21 | turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M | pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M | 3M     | 1200  | 52.6% | +23 [+1, +45]    | undecided, promoted | 1 / 19 (398/400)   | ?           |
 | 2026-11-19 | turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M | pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M | 3M     | 600   | 54.3% | +39 [+7, +71]    | undecided           | 1 / 19 (398/400)   | ?           |
 | 2026-11-18 | turn72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M       | pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M | 3M     | 156   | 40.4% | -77 [-142, -17]  | fail                | 2 / 18 (396/400)   | ?           |
+| 2026-11-18 | pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M       | pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired@3M        | 3M     | 2000  | 50.2% | +21 [-31, +74]   | undecided, promoted | 2 / 18 (376/400)   | ?           |
 | 2026-11-17 | pimc72/hidden/rollout/fitted/anchor+guard+hold+waste+combat+sure+paired@3M             | pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired@3M        | 3M     | 322   | 46.3% | -30 [-71, +11]   | fail                | 1 / 19 (381/400)   | ?           |
 | 2026-11-16 | pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired@1M              | pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired@1M              | 1M     | 148   | 62.8% | +130 [+55, +217] | pass                | 3 / 17 (356/400)   | ?           |
 | 2026-11-16 | pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired+prior@3M              | pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired@3M              | 3M     | 60    | 23.3% | -174 [-309, -73] | fail                | 2 / 18 (369/400)   | ?           |

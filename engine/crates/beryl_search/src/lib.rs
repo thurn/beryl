@@ -374,9 +374,11 @@ pub const DEEP_SEER: Family = Family {
     },
 };
 
-/// `pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired@30M`.
-/// It deals 72 worlds using the searcher's visible information and spends up to 30M engine
-/// steps a decision across all cores, regardless of the caller's `budget`.
+/// `turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@30M`.
+/// At its own priority in its own turn with an empty stack, it scores continuations of the
+/// whole turn in as many worlds, dealt from what it can see, as the work budget allows. At
+/// every other decision it deals 72 worlds as PIMC does. It spends up to 30M engine steps a
+/// decision across all cores, regardless of the caller's `budget`.
 ///
 /// The ladder's champion: always the current best fair agent, so a
 /// promotion changes [`DEEP_SEARCHER`], and its comment names the match that made it.
@@ -390,8 +392,12 @@ fn deep_searcher(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent
 /// It added `sure`, `hold` and `combat` after a score of 53.3% over 430 games at 3M steps.
 /// The ladder added `paired` after scoring 55.0% over 318 games at 3M steps.
 /// It added `waste` after scoring 62.8% over 148 games at 1M steps.
+/// It added `walker` after scoring 50.25% over 2,000 games at 3M steps, a match that ended
+/// undecided at its cap while the blunder suite rose from 356 to 376 of 400.
+/// It moved to the budgeted turn search (`turnbudget72`) after scoring 54.3% over 600 games
+/// and 52.6% over 1,200 more at 3M steps, while the suite rose from 376 to 398 of 400.
 pub const DEEP_SEARCHER: Family = Family {
-    method: Method::Pimc { worlds: 72 },
+    method: Method::TurnBudget,
     sight: Sight::Hidden,
     leaf: Leaf::Rollout,
     knowledge: Knowledge::Tuned,
@@ -408,7 +414,7 @@ pub const DEEP_SEARCHER: Family = Family {
         sure: true,
         paired: true,
         first: false,
-        walker: false,
+        walker: true,
         prior: false,
     },
 };
