@@ -16,8 +16,9 @@ prints what that cost against the plan's budgets ([`BUDGETS`]):
 - one-edit rebuild: the same `cargo check` after a change to one card file, which reruns that
   crate's build script and rechecks it and the registry; the median of
   `--edits` edits ([`REBUILDS`] by default), with each edit's time printed as the spread.
-- largest compiler process: the highest peak resident set of any single process of the three
-  builds (`/usr/bin/time -l`), which is a `rustc`.
+- largest compiler process: the highest peak memory of any single process of the three builds,
+  which is a `rustc`. macOS uses resident set size from `/usr/bin/time -l`. Windows uses the
+  job object's peak committed memory per process.
 - build directory size: the logical bytes in Cargo's `target` directory after the release
   build and again after all the one-card edits. These measurements have no budget. The build
   report is also saved to `$BERYL_CACHE/scale/build-report.txt`.
@@ -46,6 +47,7 @@ per card and extrapolated to the N clones, reported with no bar.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import math
 import os
@@ -55,6 +57,8 @@ import sys
 import tempfile
 import time
 from collections.abc import Iterable
+from contextlib import ExitStack
+from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
@@ -114,11 +118,11 @@ BUDGETS: dict[str, Budget] = {
 @dataclass
 class Run:
     """One timed build: its wall seconds, its CPU-seconds (user and system, every process it
-    waited for) and its largest process's peak resident set in bytes."""
+    waited for) and its largest process's peak memory in bytes."""
 
     seconds: float
     cpu: float
-    rss: int
+    peak_memory: int
 
 
 def parse_time(output: str) -> tuple[float, float, int]:
@@ -141,20 +145,175 @@ def cargo_env(root: Path) -> dict[str, str]:
 
 
 def timed(cmd: list[str], root: Path) -> Run:
-    """Runs `cmd` in the workspace's `rust` directory under `/usr/bin/time -l`; a failure
-    ends the run with the compiler's output."""
-    run = subprocess.run(
-        ["/usr/bin/time", "-l", *cmd],
-        cwd=root / "engine",
-        env=cargo_env(root),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if run.returncode != 0:
-        sys.exit(f"scale: {' '.join(cmd)} failed:\n{run.stderr[-6000:]}")
-    wall, cpu, rss = parse_time(run.stderr)
-    return Run(wall, cpu, rss)
+    """Runs a timed build in the scratch workspace and shows compiler diagnostics on failure."""
+    cwd, env = root / "engine", cargo_env(root)
+    try:
+        if system.WINDOWS:
+            return timed_windows(cmd, cwd, env)
+        run = subprocess.run(
+            ["/usr/bin/time", "-l", *cmd],
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as error:
+        sys.exit(f"scale: {' '.join(cmd)} failed:\n{error.stderr[-6000:]}")
+    return Run(*parse_time(run.stderr))
+
+
+class JobAccounting(ctypes.Structure):
+    """JOBOBJECT_BASIC_ACCOUNTING_INFORMATION."""
+
+    _fields_ = [
+        ("user_ticks", wintypes.LARGE_INTEGER),
+        ("kernel_ticks", wintypes.LARGE_INTEGER),
+        ("period_user_ticks", wintypes.LARGE_INTEGER),
+        ("period_kernel_ticks", wintypes.LARGE_INTEGER),
+        ("page_faults", wintypes.DWORD),
+        ("processes", wintypes.DWORD),
+        ("active_processes", wintypes.DWORD),
+        ("terminated_processes", wintypes.DWORD),
+    ]
+
+
+class JobBasicLimits(ctypes.Structure):
+    """JOBOBJECT_BASIC_LIMIT_INFORMATION."""
+
+    _fields_ = [
+        ("process_user_ticks", wintypes.LARGE_INTEGER),
+        ("job_user_ticks", wintypes.LARGE_INTEGER),
+        ("flags", wintypes.DWORD),
+        ("minimum_working_set", ctypes.c_size_t),
+        ("maximum_working_set", ctypes.c_size_t),
+        ("active_process_limit", wintypes.DWORD),
+        ("affinity", ctypes.c_size_t),
+        ("priority_class", wintypes.DWORD),
+        ("scheduling_class", wintypes.DWORD),
+    ]
+
+
+class JobExtendedLimits(ctypes.Structure):
+    """JOBOBJECT_EXTENDED_LIMIT_INFORMATION, including the six IO_COUNTERS."""
+
+    _fields_: list[
+        tuple[
+            str,
+            type[JobBasicLimits | ctypes.Array[ctypes.c_ulonglong] | ctypes.c_size_t],
+        ]
+    ] = [
+        ("basic", JobBasicLimits),
+        ("io_counters", ctypes.c_ulonglong * 6),
+        ("process_memory_limit", ctypes.c_size_t),
+        ("job_memory_limit", ctypes.c_size_t),
+        ("peak_process_memory", ctypes.c_size_t),
+        ("peak_job_memory", ctypes.c_size_t),
+    ]
+
+
+def timed_windows(cmd: list[str], cwd: Path, env: dict[str, str]) -> Run:
+    """Measures Cargo and its descendants with a Win32 Job Object."""
+    import _winapi
+    import msvcrt
+
+    # Pyre checks from macOS or Linux, where these Windows APIs are absent.
+    # pyre-ignore[16]: Windows only
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    close_handle = _winapi.CloseHandle  # pyre-ignore[16]: Windows only
+    create_process = _winapi.CreateProcess  # pyre-ignore[16]: Windows only
+    create = kernel.CreateJobObjectW
+    create.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    create.restype = wintypes.HANDLE
+    assign = kernel.AssignProcessToJobObject
+    assign.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    resume = kernel.ResumeThread
+    resume.argtypes = [wintypes.HANDLE]
+    resume.restype = wintypes.DWORD
+    query = kernel.QueryInformationJobObject
+    job_info_args = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    ]
+    query.argtypes = [*job_info_args, ctypes.c_void_p]
+    set_info = kernel.SetInformationJobObject
+    set_info.argtypes = job_info_args
+    accounting_class, extended_limits_class = 1, 9
+    kill_on_close, create_suspended = 0x2000, 0x0004
+
+    with ExitStack() as handles:
+        job = create(None, None)
+        if not job:
+            raise ctypes.WinError()  # pyre-ignore[16]: Windows only
+        handles.callback(close_handle, job)
+        limits = JobExtendedLimits()
+        limits.basic.flags = kill_on_close
+        if not set_info(
+            job, extended_limits_class, ctypes.byref(limits), ctypes.sizeof(limits)
+        ):
+            raise ctypes.WinError()  # pyre-ignore[16]: Windows only
+
+        # A file lets Cargo write diagnostics while the parent waits, even if they exceed a
+        # pipe buffer. Inherit only the handles used for the child's standard streams.
+        with (
+            open(os.devnull, "r+b") as discard,
+            tempfile.TemporaryFile(mode="w+t", errors="replace") as stderr,
+        ):
+            get_os_handle = msvcrt.get_osfhandle  # pyre-ignore[16]: Windows only
+            null_handle = get_os_handle(discard.fileno())
+            err_handle = get_os_handle(stderr.fileno())
+            for handle in (null_handle, err_handle):
+                os.set_handle_inheritable(handle, True)  # pyre-ignore[16]: Windows only
+            # pyre-ignore[16]: Windows only
+            use_std_handles = subprocess.STARTF_USESTDHANDLES
+            startup = subprocess.STARTUPINFO(  # pyre-ignore[16]: Windows only
+                dwFlags=use_std_handles,
+                hStdInput=null_handle,
+                hStdOutput=null_handle,
+                hStdError=err_handle,
+                lpAttributeList={"handle_list": [null_handle, err_handle]},
+            )
+            started = time.perf_counter()
+            # Keep the primary thread handle so Cargo can enter the job before it runs rustc.
+            process, thread, _, _ = create_process(
+                None,
+                subprocess.list2cmdline(cmd),
+                None,
+                None,
+                True,
+                create_suspended,
+                env,
+                str(cwd),
+                startup,
+            )
+            handles.callback(close_handle, process)
+            handles.callback(close_handle, thread)
+            if not assign(job, process) or resume(thread) == 0xFFFFFFFF:
+                error = ctypes.WinError()  # pyre-ignore[16]: Windows only
+                _winapi.TerminateProcess(process, 1)  # pyre-ignore[16]: Windows only
+                raise error
+
+            # pyre-ignore[16]: Windows only
+            _winapi.WaitForSingleObject(process, _winapi.INFINITE)
+            wall = time.perf_counter() - started
+            code = _winapi.GetExitCodeProcess(process)  # pyre-ignore[16]: Windows only
+            if code:
+                stderr.seek(0)
+                raise subprocess.CalledProcessError(code, cmd, stderr=stderr.read())
+
+        accounting = JobAccounting()
+        for info_class, info in (
+            (accounting_class, accounting),
+            (extended_limits_class, limits),
+        ):
+            if not query(
+                job, info_class, ctypes.byref(info), ctypes.sizeof(info), None
+            ):
+                raise ctypes.WinError()  # pyre-ignore[16]: Windows only
+        cpu = (accounting.user_ticks + accounting.kernel_ticks) / 10_000_000
+        return Run(wall, cpu, limits.peak_process_memory)
 
 
 def median(runs: list[Run]) -> Run:
@@ -168,7 +327,7 @@ def measures(runs: dict[str, Run]) -> dict[str, float]:
         "cold check": runs["cold check"].seconds,
         "release build": runs["release build"].seconds,
         "one-edit rebuild": runs["one-edit rebuild"].seconds,
-        "largest compiler process": float(max(r.rss for r in runs.values())),
+        "largest compiler process": float(max(r.peak_memory for r in runs.values())),
     }
 
 
@@ -196,6 +355,7 @@ def report(
 ) -> str:
     """Build timings, budget margins, compiler memory, and build directory sizes."""
     how = "as --crates gave" if chosen else "as the tree's grouping gives"
+    memory_kind = " committed" if system.WINDOWS else ""
     lines = [
         f"{cards:,} cards: clones of {pool} real card files, in {crates} set crates "
         f"({how})",
@@ -216,7 +376,7 @@ def report(
         if run is not None:
             line += (
                 f"\n{'':<26}{run.cpu:>10.0f} s CPU, "
-                f"peak process {run.rss / GIB:.2f} GiB"
+                f"peak process {run.peak_memory / GIB:.2f} GiB{memory_kind}"
             )
         lines.append(line)
     for name, size in (

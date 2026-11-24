@@ -2,6 +2,7 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -40,13 +41,17 @@ def test_a_clone_renames_only_its_own_card_and_faces() -> None:
     assert record["name"] == "Counterspell 7" and record["first_set"] == "z00001"
 
 
-def test_a_card_of_two_faces_renames_each_face() -> None:
+def test_a_card_of_two_faces_renames_each_face_and_its_shape() -> None:
     pool, _ = scale_workspace.sources()
-    several = next(s for s in pool if len(s.faces()) > 1)
+    several = next(s for s in pool if len(s.faces()) > 1 and "PrintedShape::" in s.text)
     renamed = scale_workspace.renames(several, 3)
     faces = [scale_workspace.set_groups.constant(f) for f in several.faces()]
     assert all(renamed[face] == f"{face}_3" for face in faces)
     assert scale_workspace.clone_name(several, 3).endswith(" 3")
+    shape = re.findall(r"PrintedShape::(\w+)", several.text)
+    assert len(shape) == 1
+    cloned = scale_workspace.clone(several, 3)
+    assert f"PrintedShape::{shape[0]}3" in cloned
 
 
 def test_the_scratch_store_keeps_the_cards_read_through_the_card_type() -> None:
@@ -124,6 +129,41 @@ def test_time_report_parsing() -> None:
     assert scale.parse_time(TIME) == (3.21, 11.0, 987654321)
 
 
+def test_windows_timing_includes_descendant_cpu_and_peak_memory(tmp_path: Path) -> None:
+    if not scale.system.WINDOWS:
+        pytest.skip("requires Win32 Job Objects")
+    (tmp_path / "engine").mkdir()
+    grandchild = """\
+import time
+data = bytearray(64 * 1024 * 1024)
+deadline = time.process_time() + 0.2
+while time.process_time() < deadline:
+    pass
+"""
+    child = (
+        "import subprocess, sys; "
+        f"subprocess.run([sys.executable, '-c', {grandchild!r}], check=True)"
+    )
+    measured = scale.timed([sys.executable, "-c", child], tmp_path)
+    assert measured.seconds > 0
+    assert measured.cpu >= 0.2
+    assert measured.peak_memory >= 64 * 1024 * 1024
+
+
+def test_windows_timing_reports_a_failed_builds_stderr(tmp_path: Path) -> None:
+    if not scale.system.WINDOWS:
+        pytest.skip("requires Win32 Job Objects")
+    (tmp_path / "engine").mkdir()
+    # Check the child's own working directory and environment via its diagnostic.
+    child = (
+        "import os, sys; "
+        "sys.exit(os.path.basename(os.getcwd()) + ' ' + os.environ['CARGO_TARGET_DIR'])"
+    )
+    with pytest.raises(SystemExit) as error:
+        scale.timed([sys.executable, "-c", child], tmp_path)
+    assert str(error.value).splitlines()[-1] == f"engine {tmp_path / 'target'}"
+
+
 def runs(check: float) -> dict[str, scale.Run]:
     return {
         "cold check": scale.Run(check, 100.0, 2**30),
@@ -153,11 +193,14 @@ def test_scale_reports_target_bytes_before_and_after_edits_under_assert(
     target = tmp_path / "scale" / "target"
     release: Path = target / "release" / "all"
     incremental: Path = target / "debug" / "incremental"
-    timing: str = TIME.replace("3.21 real", "1.21 real")
 
-    def cargo(
+    def clean(
         command: list[str], **_kwargs: object
     ) -> subprocess.CompletedProcess[str]:
+        assert command[:2] == ["cargo", "clean"]
+        return subprocess.CompletedProcess[str](command, 0)
+
+    def timed_cargo(command: list[str], _root: Path) -> scale.Run:
         if "--bin=all" in command:
             release.parent.mkdir(parents=True)
             release.write_bytes(b"release")
@@ -166,9 +209,10 @@ def test_scale_reports_target_bytes_before_and_after_edits_under_assert(
             artifact = incremental / "objects"
             with artifact.open("ab") as file:
                 file.write(b"debug")
-        return subprocess.CompletedProcess[str](command, 0, "", timing)
+        return scale.Run(1.21, 11.0, 987654321)
 
-    monkeypatch.setattr(scale.subprocess, "run", cargo)
+    monkeypatch.setattr(scale.subprocess, "run", clean)
+    monkeypatch.setattr(scale, "timed", timed_cargo)
     parser = argparse.ArgumentParser()
     scale.register(parser.add_subparsers())
     args = parser.parse_args("scale --cards 3 --edits 2 --no-scripts --assert".split())
@@ -184,7 +228,7 @@ def test_scale_reports_target_bytes_before_and_after_edits_under_assert(
 def test_the_memory_assertion_ignores_times() -> None:
     slow = runs(61.0)
     assert scale.missed(scale.measures(slow), times=False) == []
-    slow["release build"].rss = 5 * 2**30
+    slow["release build"].peak_memory = 5 * 2**30
     assert scale.missed(scale.measures(slow), times=False) == [
         "largest compiler process"
     ]

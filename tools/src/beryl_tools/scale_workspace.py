@@ -22,7 +22,8 @@ reads where it reads it in the tree:
 
 A clone of card file `f` numbered `i` is `f` with its card renamed "<name> i" (each face
 "<face> i" for a card with several faces): every `names::` and `printed::` constant, and
-every `Card::` and `Printed::` one, of the card and its faces becomes the clone's, so it keeps its abilities, faces and scenarios.
+every `Card::`, `Printed::` and `PrintedShape::` one, of the card and its faces becomes the
+clone's, so it keeps its abilities, faces and scenarios.
 
 The crates follow the shipped grouping (data/set-groups.json: the first-printing sets of a year,
 or of a half or quarter of one, of at most 1,200 cards): with no `--crates`, there are as many as N cards make at the tree's mean
@@ -56,8 +57,10 @@ WARM = "warm"
 COPIED = ("data/catalogs.json", "engine/crates/beryl_card/src/characteristics.rs")
 # A constant a card file reads from the crate's `names` or `printed` module.
 CONSTANT: re.Pattern[str] = re.compile(r"\b(names|printed)::([A-Z0-9_]+)\b")
-# The same read from the crate's generated `Card` or `Printed` type.
-CAMEL: re.Pattern[str] = re.compile(r"\b(Card|Printed)::([A-Z][A-Za-z0-9]*)\b")
+# The same read from the crate's generated `Card`, `Printed` or `PrintedShape` type.
+CAMEL: re.Pattern[str] = re.compile(
+    r"\b(Card|Printed|PrintedShape)::([A-Z][A-Za-z0-9]*)\b"
+)
 FIRST_SET: re.Pattern[str] = re.compile(r'"first_set":"([^"]+)"')
 
 
