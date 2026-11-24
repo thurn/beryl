@@ -89,6 +89,10 @@ pub struct AbilityFacts {
     /// none, where an oracle may ask whether to copy first.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub enters_as_copy: bool,
+    /// A level up ability (CR 702.87a), which an oracle names by its keyword rather than by
+    /// a cost and effect its Oracle text does not write out.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub level_up: bool,
 }
 
 /// A cost: its mana in Scryfall's notation, then its other parts in the order printed.
@@ -356,6 +360,7 @@ fn ability_facts(index: String, ability: &Ability) -> AbilityFacts {
         enters_as_copy: ability
             .replacement()
             .is_some_and(|r| matches!(r.rewrite, beryl_card::Rewrite::EnterAsCopy { .. })),
+        level_up: ability.is_level_up(),
     }
 }
 

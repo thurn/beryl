@@ -788,6 +788,7 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
         | Effect::ReturnTransformed(_)
         | Effect::Explore(_)
         | Effect::Mutate(_)
+        | Effect::RemoveAllCounters(_)
         | Effect::FlipCoin(_)
         | Effect::AddMana { .. }
         | Effect::GetEmblem { .. } => {}

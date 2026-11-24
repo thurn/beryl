@@ -65,6 +65,7 @@ COUNTERS: Mapping[str, str] = {
     "Story": "STORY",
     "Ice": "ICE",
     "Chorus": "CHORUS",
+    "Level": "LEVEL",
 }
 
 # Beryl's Zone variants as Forge's ZoneType names.

@@ -458,6 +458,7 @@ impl Effect {
                 | Effect::Mutate(_)
                 | Effect::AddCounters { .. }
                 | Effect::RemoveCounters { .. }
+                | Effect::RemoveAllCounters(_)
                 | Effect::AddMana { .. }
                 | Effect::AddManaOfKind { .. }
                 | Effect::ExchangeControl(..)

@@ -119,6 +119,34 @@ pub(crate) fn remove_instruction<L: Layout>(
     change(run, objects, kind, count, remove)
 }
 
+/// [`Effect::RemoveAllCounters`](beryl_card::Effect::RemoveAllCounters): "Remove all
+/// counters from [objects]", every kind each has (see CR 122.1). The outcome is the counters
+/// removed.
+pub(crate) fn remove_all_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    objects: Objects,
+) -> Result<Outcome<L>, Full> {
+    let permanents = run.permanents(objects);
+    let counters = |run: &Run<'_, '_, L>| -> u32 {
+        let s = run.state();
+        permanents
+            .slots()
+            .sum(|slot| s.counters(slot).iter().map(|(_, n)| u32::from(n)).sum())
+    };
+    let before = counters(run);
+    let mut left = permanents;
+    while let Some(object) = run.next_permanent(&mut left) {
+        // Each kind it has; `remove` takes as many as there are.
+        for &kind in CounterKind::ALL {
+            remove(run.game(), object, kind, u8::MAX)?;
+        }
+    }
+    Ok(Outcome::of(
+        permanents.slots(),
+        counters(run).abs_diff(before),
+    ))
+}
+
 /// Puts counters on each permanent `objects` names, or removes them, with `change`, in the
 /// order the permanents entered the battlefield.
 fn change<L: Layout>(

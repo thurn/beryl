@@ -510,6 +510,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::PreventDamage { .. }
         | Effect::AddCounters { .. }
         | Effect::RemoveCounters { .. }
+        | Effect::RemoveAllCounters(_)
         | Effect::Modify { .. }
         | Effect::ChangeText { .. }
         | Effect::ExchangeControl(..)

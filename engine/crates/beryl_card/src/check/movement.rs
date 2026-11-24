@@ -63,6 +63,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::Mutate(_)
         | Effect::AddCounters { .. }
         | Effect::RemoveCounters { .. }
+        | Effect::RemoveAllCounters(_)
         | Effect::AddMana { .. }
         | Effect::AddManaOfKind { .. }
         | Effect::Modify { .. }

@@ -1,8 +1,8 @@
 //! Class level bars, Case keywords and Saga chapter numerals.
 
 use super::Ctx;
-use super::words::capitalized;
-use crate::{Ability, Designation};
+use super::words::{capitalized, keywords};
+use crate::{Ability, Amount, Designation, Modification};
 
 impl Ctx {
     pub(super) fn designation_paragraph(&mut self, ability: &Ability) -> Option<String> {
@@ -24,6 +24,35 @@ impl Ctx {
             | Designation::Solved
             | Designation::Imprint => None,
         }
+    }
+
+    /// A leveler's level symbol and what it gives, a line each (see CR 711.2a): the symbol
+    /// as LEVEL 2-6 or LEVEL 7+, then the base power and toughness, then each ability.
+    pub(super) fn level_symbol_paragraph(&mut self, ability: &Ability) -> Option<String> {
+        let layer = ability.layer()?;
+        let (from, to) = layer.level_band()?;
+        let mut lines = vec![match to {
+            Some(to) => format!("LEVEL {from}-{to}"),
+            None => format!("LEVEL {from}+"),
+        }];
+        for &modification in layer.modifications {
+            let line =
+                if let Modification::SetBasePt(Amount::Fixed(p), Amount::Fixed(t)) = modification {
+                    format!("{p}/{t}")
+                } else if let Modification::AddKeywords(set) = modification {
+                    capitalized(&keywords(set).join(", "))
+                } else if let Modification::Grant(ix) = modification {
+                    // A level symbol's abilities are printed bare, each its own paragraph.
+                    match self.face.and_then(|face| face.grants.get(ix.index())) {
+                        Some(granted) => self.paragraph(granted),
+                        None => "[granted ability]".to_owned(),
+                    }
+                } else {
+                    "[unsupported level symbol part]".to_owned()
+                };
+            lines.push(line);
+        }
+        Some(lines.join("\n"))
     }
 }
 

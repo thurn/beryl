@@ -2108,6 +2108,36 @@
       "covered": "TargetSpec::ability"
     }
   ],
+  "Student of Warfare": [
+    {
+      "published_at": "2010-06-15",
+      "hash": "dd8f28331ecd",
+      "scenario": [
+        "Seven levels make Student of Warfare a 4/4 with double strike",
+        "Vampire Hexmage takes Student of Warfare back to level 0"
+      ]
+    },
+    {
+      "published_at": "2010-06-15",
+      "hash": "63ab69c9d68d",
+      "scenario": ["A +1/+1 counter and an Anthem apply on top of a level's 3/3"]
+    },
+    {
+      "published_at": "2010-06-15",
+      "hash": "c9d09554c0ce",
+      "scenario": ["A copy of a leveled Student of Warfare is a 1/1"]
+    },
+    {
+      "published_at": "2010-06-15",
+      "hash": "b3405cd1c28d",
+      "scenario": ["Diminish overrides a level's base power and toughness"]
+    },
+    {
+      "published_at": "2010-06-15",
+      "hash": "e2fa75244cba",
+      "scenario": ["Seven levels make Student of Warfare a 4/4 with double strike"]
+    }
+  ],
   "Sundial of the Infinite": [
     {
       "published_at": "2011-09-22",

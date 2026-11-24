@@ -86,19 +86,17 @@ pub enum Effect {
     /// instruction at all ([`Effect::NOTHING`]).
     Sequence(&'static [Effect]),
     /// "If [condition], [then]. Otherwise, [otherwise]." The condition is read as the
-    /// instruction is reached
-    /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect
-    /// requires information from the game ..., the answer is determined only once, when the
-    /// effect is applied."
+    /// instruction is reached ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)):
+    /// "If an effect requires information from the game ..., the answer is determined only
+    /// once, when the effect is applied."
     If {
         condition: Condition,
         then: &'static Effect,
         otherwise: Option<&'static Effect>,
     },
     /// "[Player] may [effect]": the player chooses as the instruction is reached
-    /// ([CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d)): "If an effect of a
-    /// spell or ability offers any choices ..., the player announces these while applying the
-    /// effect."
+    /// ([CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d)): "If an effect of a spell
+    /// or ability offers any choices ..., the player announces these while applying the effect."
     May {
         player: Players,
         effect: &'static Effect,
@@ -239,8 +237,7 @@ pub enum Effect {
     ExileLinked(Objects),
     /// "Sacrifice [permanents]": each one's controller does
     /// ([CR 701.21a](https://yawgatog.com/resources/magic-rules/#R70121a)): "To sacrifice a
-    /// permanent, its controller moves it from the battlefield directly to its owner's
-    /// graveyard."
+    /// permanent, its controller moves it from the battlefield directly to its owner's graveyard."
     Sacrifice(Objects),
     /// "Return [objects] to their owners' hands"
     /// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object would
@@ -490,6 +487,8 @@ pub enum Effect {
         kind: CounterKind,
         count: Amount,
     },
+    /// "Remove all counters from [objects]": every counter of every kind (CR 122.1).
+    RemoveAllCounters(Objects),
     /// "[Player] adds [mana]"
     /// ([CR 106.3](https://yawgatog.com/resources/magic-rules/#R1063)): "A spell or ability
     /// that produces mana instructs a player to add that mana." Where the set has several
@@ -761,6 +760,7 @@ impl Effect {
             | Effect::BecomeCopy { .. }
             | Effect::AddCounters { .. }
             | Effect::RemoveCounters { .. }
+            | Effect::RemoveAllCounters(_)
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
             | Effect::Modify { .. }

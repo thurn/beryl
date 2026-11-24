@@ -222,6 +222,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::Mutate(_)
             | Effect::AddCounters { .. }
             | Effect::RemoveCounters { .. }
+            | Effect::RemoveAllCounters(_)
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
             | Effect::Modify { .. }
@@ -394,6 +395,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 kind,
                 count,
             } => counters::remove_instruction(self, objects, kind, count)?,
+            Effect::RemoveAllCounters(objects) => counters::remove_all_instruction(self, objects)?,
             Effect::AddMana { player, mana } => mana::add_instruction(self, player, mana),
             Effect::AddManaOfKind {
                 player,
@@ -685,6 +687,7 @@ fn at_once(effect: &Effect) -> bool {
             | Effect::CreateCopies { .. }
             | Effect::AddCounters { .. }
             | Effect::RemoveCounters { .. }
+            | Effect::RemoveAllCounters(_)
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
             | Effect::UntapUpTo { .. }

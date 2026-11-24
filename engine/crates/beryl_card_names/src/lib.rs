@@ -105,7 +105,13 @@ pub mod decks {
     pub const KEYSTONE_FAMILIES: &[(&str, &[&str])] = &[
         (
             "designations",
-            &[names::WIZARD_CLASS, names::CASE_OF_THE_CRIMSON_PULSE],
+            &[
+                names::WIZARD_CLASS,
+                names::CASE_OF_THE_CRIMSON_PULSE,
+                names::STUDENT_OF_WARFARE,
+                names::VAMPIRE_HEXMAGE,
+                names::DIMINISH,
+            ],
         ),
         (
             "combat",

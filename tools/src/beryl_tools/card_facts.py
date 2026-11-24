@@ -761,8 +761,12 @@ def cost_text(ability: Json, cost: Json, parts: list[Json]) -> str | None:
 
 def keyword_cost(ability: Json, cost: Json, parts: list[Json]) -> str | None:
     """An activated ability's keyword and its cost where its cost is a keyword's (cycling,
-    crew, waterbend) or the ability is a keyword's (equip), as its text starts; None for any
+    crew, waterbend) or the ability is a keyword's (equip, level up), as its text starts; None for any
     other."""
+    if ability.get("level_up"):
+        # CR 702.87a: "Level up [cost]" means "[Cost]: Put a level counter on this permanent.
+        # Activate only as a sorcery."
+        return f"Level up {cost.get('mana', '')}"
     actions = [p["action"] for p in parts]
     instructions = cast(list[Json], ability.get("instructions", []))
     if actions == ["Discard"] and parts[0].get("of") == "This":

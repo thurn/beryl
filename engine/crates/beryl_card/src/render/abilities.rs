@@ -46,6 +46,9 @@ impl Ctx {
         if let Some(text) = self.designation_paragraph(ability) {
             return text;
         }
+        if let Some(text) = self.level_symbol_paragraph(ability) {
+            return text;
+        }
         if let Some(keyword) = Ctx::keyword_line(ability) {
             return keyword;
         }
@@ -462,6 +465,10 @@ impl Ctx {
             return None;
         }
         let cost = ability.cost();
+        // Level up's whole ability (CR 702.87a).
+        if ability.is_level_up() && cost.parts().is_empty() {
+            return Some(format!("Level up {}", mana_text(cost.mana)));
+        }
         if let Some(Measure::TotalPower(n)) = cost.measure() {
             return Some(format!("Crew {n}"));
         }

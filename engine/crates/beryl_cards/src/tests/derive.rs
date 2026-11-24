@@ -32,6 +32,17 @@ const UNREACHED: &[(&str, &str)] = &[
          several kinds as the lowest of them, {W}",
     ),
     (
+        "Student of Warfare: ability 1 (Static)",
+        "its level 2-6 symbol needs two level counters, and a generated scenario levels up \
+         once, since a witness adds permanents beside the card and never counters on it; the \
+         card's hand-written scenarios start it with level counters and level it up twice",
+    ),
+    (
+        "Student of Warfare: ability 2 (Static)",
+        "its level 7+ symbol needs seven level counters, which no generated scenario puts on \
+         it, as for its level 2-6 symbol",
+    ),
+    (
         "Thundertrap Trainer: ability 0 (Triggered)",
         "offspring's trigger goes on the stack with the card's own enters trigger, an order a \
          script names only by the card, and the look that follows asks a question the oracles \

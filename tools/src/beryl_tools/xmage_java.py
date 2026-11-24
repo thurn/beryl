@@ -79,6 +79,7 @@ COUNTERS: dict[str, str] = {
     "Story": "STORY",
     "Ice": "ICE",
     "Chorus": "CHORUS",
+    "Level": "LEVEL",
 }
 MANA: dict[str, str] = {
     "White": "WHITE",

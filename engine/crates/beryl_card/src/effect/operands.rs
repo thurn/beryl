@@ -162,7 +162,8 @@ impl Effect {
             | Effect::Explore(objects)
             | Effect::Mutate(objects)
             | Effect::Modify { objects, .. }
-            | Effect::ChangeText { objects, .. } => Operands::of_objects(objects),
+            | Effect::ChangeText { objects, .. }
+            | Effect::RemoveAllCounters(objects) => Operands::of_objects(objects),
             // The player who will control the permanents.
             Effect::PutOntoBattlefield(PutOnto { objects, under, .. }) => Operands {
                 others: under.as_ref(),

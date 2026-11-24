@@ -644,6 +644,11 @@ pub const fn add_counters(objects: Objects, kind: CounterKind, count: u8) -> Eff
     }
 }
 
+/// [`Effect::RemoveAllCounters`]: "remove all counters from [objects]".
+pub const fn remove_all_counters(objects: Objects) -> Effect {
+    Effect::RemoveAllCounters(objects)
+}
+
 /// [`Effect::RemoveCounters`]: "remove [count] [kind] counters from [objects]".
 pub const fn remove_counters(objects: Objects, kind: CounterKind, count: u8) -> Effect {
     Effect::RemoveCounters {

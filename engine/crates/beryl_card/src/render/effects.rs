@@ -353,6 +353,10 @@ impl Ctx {
                 let on = format!(" on {}", self.objects(objects));
                 vec![self.clause(Players::You, ("put", "puts"), |_| format!("{counters}{on}"))]
             }
+            Effect::RemoveAllCounters(objects) => {
+                let from = format!("all counters from {}", self.objects(objects));
+                vec![self.clause(Players::You, ("remove", "removes"), |_| from.clone())]
+            }
             Effect::RemoveCounters {
                 objects,
                 kind,

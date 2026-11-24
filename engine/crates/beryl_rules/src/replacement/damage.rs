@@ -401,6 +401,7 @@ fn prevention_filter(effect: &'static Effect) -> Option<&'static Filter> {
         | Effect::Mutate(_)
         | Effect::AddCounters { .. }
         | Effect::RemoveCounters { .. }
+        | Effect::RemoveAllCounters(_)
         | Effect::AddMana { .. }
         | Effect::AddManaOfKind { .. }
         | Effect::Modify { .. }
