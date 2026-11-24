@@ -16,6 +16,7 @@ pub mod checks;
 pub mod claim;
 pub mod clid;
 pub mod crash;
+mod daemon_log;
 pub mod deploy;
 pub mod dispatchd;
 pub mod doctor;

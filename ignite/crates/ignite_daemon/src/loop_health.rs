@@ -10,6 +10,7 @@
 //! given a class with [`LoopTicker::with_class`] runs its builds in that class.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -145,6 +146,7 @@ pub(crate) fn span(seconds: f64) -> String {
 #[derive(Clone)]
 pub struct LoopHealth {
     clock: Arc<dyn Clock>,
+    daemon_home: Option<PathBuf>,
     loops: Arc<Mutex<BTreeMap<String, LoopReport>>>,
     steps: Arc<Steps>,
     /// The round each loop is in, by loop name.
@@ -156,9 +158,16 @@ impl LoopHealth {
         Self {
             steps: Arc::new(Steps::new(clock.clone())),
             clock,
+            daemon_home: None,
             loops: Arc::new(Mutex::new(BTreeMap::new())),
             rounds: Arc::new(Mutex::new(BTreeMap::new())),
         }
+    }
+
+    /// Retains failed rounds in the Windows daemon's log for the justiciar monitor.
+    pub(crate) fn with_daemon_log(mut self, home: PathBuf) -> Self {
+        self.daemon_home = Some(home);
+        self
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<String, LoopReport>> {
@@ -224,11 +233,12 @@ impl LoopHealth {
         self.reports().iter().map(|r| r.line(now)).collect()
     }
 
-    fn update(&self, name: &str, change: impl FnOnce(&mut LoopReport, Timestamp)) {
+    fn update(&self, name: &str, change: impl FnOnce(&mut LoopReport, Timestamp)) -> Timestamp {
         let now = self.clock.now();
         if let Some(report) = self.lock().get_mut(name) {
             change(report, now);
         }
+        now
     }
 }
 
@@ -271,7 +281,7 @@ impl LoopTicker {
         let outcome = work();
         drop(entered);
         round.finish();
-        self.health.update(&self.name, |report, now| {
+        let finished = self.health.update(&self.name, |report, now| {
             report.in_round = false;
             report.last_finished = Some(now);
             report.rounds += 1;
@@ -283,6 +293,14 @@ impl LoopTicker {
                 }
             }
         });
+        if let (Err(error), Some(home)) = (&outcome, &self.health.daemon_home) {
+            crate::daemon_log::record(
+                home,
+                finished,
+                &self.name,
+                format_args!("round failed: {error}"),
+            );
+        }
         outcome.ok()
     }
 }

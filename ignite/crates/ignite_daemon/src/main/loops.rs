@@ -1,6 +1,6 @@
 //! The daemon's background threads, and the hub that the hub's machine serves in a process of
-//! its own (`ignite hub`). Each loop reports a failed round on standard error and tries again, so an
-//! unreachable hub or a busy tree never stops the daemon.
+//! its own (`ignite hub`). Each loop reports failed rounds to the loop tracker and tries again,
+//! so an unreachable hub or a busy tree never stops the daemon.
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};

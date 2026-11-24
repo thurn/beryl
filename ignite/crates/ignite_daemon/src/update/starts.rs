@@ -213,7 +213,7 @@ pub fn record_clean_stop(home: &Home, reason: &str) {
 }
 
 /// The home that holds `store`.
-fn home_of(store: &ExecutableStore) -> Option<Home> {
+pub(crate) fn home_of(store: &ExecutableStore) -> Option<Home> {
     store.root.parent().map(|root| Home {
         root: root.to_owned(),
     })

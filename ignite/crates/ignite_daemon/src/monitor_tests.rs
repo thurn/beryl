@@ -126,6 +126,46 @@ fn seen(running: bool, answered: bool) -> Observation {
     }
 }
 
+#[cfg(windows)]
+#[test]
+fn the_windows_monitor_reads_a_failed_round_after_the_loop_recovers() {
+    use std::sync::Arc;
+
+    use ignite_core::fakes::FakeClock;
+
+    let home = home();
+    let failed_at = at(30.0);
+    {
+        let clock = Arc::new(FakeClock::new(at(0.0)));
+        let health =
+            crate::loop_health::LoopHealth::new(clock.clone()).with_daemon_log(home.root.clone());
+        let ticker = health.register("ignite-main", Duration::from_secs(60));
+        clock.advance(30.0);
+        assert_eq!(
+            ticker
+                .round(|| Err::<(), _>("main checkout not fast-forwarded: fetch timed out".into())),
+            None,
+        );
+        clock.advance(30.0);
+        assert_eq!(ticker.round(|| Ok(())), Some(()));
+        assert_eq!(health.reports()[0].consecutive_errors, 0);
+    }
+
+    let monitor = NativeMachine {
+        socket: home.root.join("unused-socket"),
+        home: home.root,
+    };
+    let tail = monitor.daemon_log_tail(1);
+    assert!(
+        tail.starts_with(&format!("{failed_at} [ignite-main]")),
+        "{tail}"
+    );
+    assert!(
+        tail.ends_with("round failed: main checkout not fast-forwarded: fetch timed out"),
+        "{tail}"
+    );
+}
+
 #[test]
 fn a_daemon_that_answers_resets_the_failures() {
     let mut state = MonitorState {

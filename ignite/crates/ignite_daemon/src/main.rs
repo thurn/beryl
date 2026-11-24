@@ -108,7 +108,8 @@ impl Daemon {
         };
         let desks = assemble::desks(&base, &ctx, &machinery)?;
         let cli = cli::cli_mode(&base, &ctx, &machinery, &desks)?;
-        let health = LoopHealth::new(base.clock.clone());
+        let health =
+            LoopHealth::new(base.clock.clone()).with_daemon_log(base.options.home.root.clone());
         let parts = loops::Parts {
             ctx: ctx.clone(),
             client: base.client.clone(),
@@ -369,7 +370,7 @@ pub fn run_daemon(cwd: &Path) -> i32 {
         Ok(lock) => lock,
         Err(error) => {
             crate::update::forget_start(&home);
-            eprintln!("ignite: {error}");
+            crate::daemon_log::report(&home.root, format_args!("{error}"));
             return 1;
         }
     };
@@ -392,9 +393,9 @@ pub fn run_daemon(cwd: &Path) -> i32 {
     if let Some(own) = &own
         && let Startup::RollBack { to, reason } = store.startup(own, crate::update::started_at())
     {
-        eprintln!("ignite: rolling back: {reason}");
+        crate::daemon_log::report(&home.root, format_args!("rolling back: {reason}"));
         let error = crate::update::restart_into(&ExecRestart, &store.path(&to));
-        eprintln!("ignite: {error}");
+        crate::daemon_log::report(&home.root, format_args!("{error}"));
         return 1;
     }
     if let Some(own) = own {
@@ -410,27 +411,11 @@ pub fn run_daemon(cwd: &Path) -> i32 {
         version,
         feed_wait_s: 60,
     };
-    // The socket is served before the rest of the start: a request that arrives meanwhile
-    // waits for the daemon to be ready instead of being refused (see `crate::server::Starting`).
-    let socket = crate::server::default_socket();
-    let listener = match listen(&socket) {
-        Ok(listener) => listener,
-        Err(error) => {
-            eprintln!("ignite: cannot serve the socket: {error}");
-            return 1;
-        }
-    };
     let starting = crate::server::Starting::new();
-    let accept = {
-        let starting = starting.clone();
-        std::thread::Builder::new()
-            .name("ignite-accept".to_owned())
-            .spawn(move || crate::server::serve_starting(&starting, listener.as_ref()))
-    };
-    let accept = match accept {
+    let accept = match accept_during_start(starting.clone()) {
         Ok(accept) => accept,
         Err(error) => {
-            eprintln!("ignite: cannot start the thread that serves the socket: {error}");
+            crate::daemon_log::report(&home.root, format_args!("{error}"));
             return 1;
         }
     };
@@ -449,23 +434,41 @@ pub fn run_daemon(cwd: &Path) -> i32 {
     let daemon = match started {
         Ok(daemon) => daemon,
         Err(reason) => {
-            eprintln!("ignite: {reason}");
+            crate::daemon_log::report(&home.root, format_args!("{reason}"));
             starting.failed(reason);
             // Gives the requests that waited for the start a moment to read why it failed.
             std::thread::sleep(std::time::Duration::from_millis(500));
             return 1;
         }
     };
+    crate::daemon_log::record(
+        &home.root,
+        daemon.parts.health.now(),
+        "daemon",
+        format_args!("started {}", daemon.options.version),
+    );
     starting.ready(daemon.server.clone());
     daemon.run_loops();
     match accept.join() {
         Ok(Ok(())) => 0,
         Ok(Err(error)) => {
-            eprintln!("ignite: cannot serve the socket: {error}");
+            crate::daemon_log::report(&home.root, format_args!("cannot serve the socket: {error}"));
             1
         }
         Err(_) => 1,
     }
+}
+
+/// Serves the socket during startup so that requests can wait for the daemon to be ready.
+fn accept_during_start(
+    starting: Arc<crate::server::Starting>,
+) -> std::result::Result<std::thread::JoinHandle<std::io::Result<()>>, String> {
+    let socket = crate::server::default_socket();
+    let listener = listen(&socket).map_err(|error| format!("cannot serve the socket: {error}"))?;
+    std::thread::Builder::new()
+        .name("ignite-accept".to_owned())
+        .spawn(move || crate::server::serve_starting(&starting, listener.as_ref()))
+        .map_err(|error| format!("cannot start the thread that serves the socket: {error}"))
 }
 
 /// Listens on the daemon's socket. With the machine's lock held, a listener already on it can

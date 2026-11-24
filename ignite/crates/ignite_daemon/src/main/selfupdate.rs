@@ -717,6 +717,14 @@ impl SelfUpdate {
         eprintln!("ignite: restarting into {}: {reason}", executable.display());
         crate::update::record_clean_stop_from(&self.store, reason);
         let error = restart_into(self.restart.as_ref(), executable);
+        if let Some(home) = crate::update::home_of(&self.store) {
+            crate::daemon_log::record(
+                &home.root,
+                self.clock.now(),
+                "self-update",
+                format_args!("{error}"),
+            );
+        }
         eprintln!("ignite: {error}");
         if let Some(drain) = drain {
             drain.undrain();

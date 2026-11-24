@@ -422,21 +422,27 @@ impl Machine for NativeMachine {
     }
 
     fn daemon_log_tail(&self, lines: usize) -> String {
-        // The log file the daemon's login service writes on macOS (`ignite_os::service`).
-        let Some(user_home) = ignite_core::config::home_dir(|name| std::env::var_os(name)) else {
+        let bytes = if cfg!(windows) {
+            crate::daemon_log::read(&self.home)
+        } else {
+            // The log file launchd writes on macOS (`ignite_os::service`).
+            let Some(user_home) = ignite_core::config::home_dir(|name| std::env::var_os(name))
+            else {
+                return String::new();
+            };
+            fs::read(
+                user_home
+                    .join("Library")
+                    .join("Logs")
+                    .join("ignite.daemon.log"),
+            )
+        };
+        let Ok(bytes) = bytes else {
             return String::new();
         };
-        let log = user_home
-            .join("Library")
-            .join("Logs")
-            .join("ignite.daemon.log");
-        fs::read_to_string(log).map_or_else(
-            |_| String::new(),
-            |text| {
-                let all: Vec<&str> = text.lines().collect();
-                all[all.len().saturating_sub(lines)..].join("\n")
-            },
-        )
+        let text = String::from_utf8_lossy(&bytes);
+        let all: Vec<&str> = text.lines().collect();
+        all[all.len().saturating_sub(lines)..].join("\n")
     }
 }
 
