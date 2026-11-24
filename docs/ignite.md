@@ -262,11 +262,12 @@ This section names the parts. Each has its own section below.
   landing rebases the commits onto the newest commit and pushes them without
   checking again.
 - The **tip** is the newest commit on `staging`. **Tip verification** runs the
-  checks the gate left out, once per tip. It runs the build checks first and
-  moves the **`green`** ref, where new tickets start, to a tip that compiles;
-  then it moves `master` forward once the budgeted checks pass. A landing that
-  broke the build is **reverted**; any other failure gets a regression ticket
-  and is fixed forward.
+  checks the gate left out. It runs the build checks first and moves the
+  **`green`** ref, where new tickets start, to a tip that compiles. Then it
+  moves `master` forward once the budgeted checks pass. A landing that broke the
+  build or caused a required check to stall `master` can be
+  [**reverted**](#a-broken-build-is-reverted). Other failures get regression
+  tickets and are fixed forward.
 - **Ignite's branches and internal refs**: `staging` and `master` are explicit
   remote branches (`refs/heads/staging` and `refs/heads/master`, tracked as
   `origin/staging` and `origin/master`), and the main checkout keeps local
@@ -707,9 +708,10 @@ How the executable is installed and kept current:
   or `"verdict"`, which this repository sets) with `max_base_age_hours` (default
   12; see [Landing](#landing)), `repository.green` (unset by default; it must
   differ from `staging` and `master`), which gives tip rounds a build step (see
-  [Tip verification](#tip-verification)), `[revert] broken_build` (default
-  false; see [A broken build is reverted](#a-broken-build-is-reverted)). Their
-  defaults keep every landing checked on the exact tip.
+  [Tip verification](#tip-verification)), and `[revert]` settings `broken_build`
+  (default false) and `stall_minutes` (unset by default, see
+  [A broken build is reverted](#a-broken-build-is-reverted)). Their defaults
+  keep every landing checked on the exact tip.
 - A setting in `ignite.toml` takes effect when the process that uses it next
   starts and reads the file from the main checkout. `ignite.toml` is not
   Ignite's source, so a change to it builds no release and restarts nothing.
@@ -2212,8 +2214,9 @@ without building or checking anything again, however many landings reached
 `staging` meanwhile. What the gate could not see, two changes that each pass
 alone and fail together, is found after landing by
 [Tip verification](#tip-verification): a tip that no longer compiles is repaired
-by reverting the landing that broke it, and any other failure by a regression
-ticket that is fixed forward. `master` still moves only to a tip whose budgeted
+by reverting the landing that broke it. A required non-build failure can also
+trigger a revert during a prolonged stall. Other failures are fixed forward
+through regression tickets. `master` still moves only to a tip whose budgeted
 checks passed.
 
 This is `[land] mode = "verdict"`, which this repository sets. The default,
@@ -2736,12 +2739,11 @@ Since a change lands by the verdict it earned on its own base (see
 [Landing](#landing)), tip verification is also where two changes that each
 passed alone and fail together are found. A round first runs the build checks
 and moves `green`, the ref new tickets start from, to a tip that compiles. When
-a build check fails, the round reverts the one landing that broke it (see
-[A broken build is reverted](#a-broken-build-is-reverted)). Every other failure
-is fixed forward: the round reports a regression, the hub files a regression
-ticket, and the fix lands on top (see
-[Regression tickets](#regression-tickets)). `master` moves only once the
-budgeted checks pass, as before.
+a build check fails or a required non-build check is still blocking `master`
+past the stall threshold, the round can revert the landing that caused it (see
+[A broken build is reverted](#a-broken-build-is-reverted)). Other failures are
+fixed forward through [regression tickets](#regression-tickets). `master` moves
+once the budgeted checks pass.
 
 How a daemon verifies a tip:
 
@@ -2977,19 +2979,21 @@ A landing type-checks on the tree it was gated in, not on the exact tip, so two
 landings that each compile alone can leave a tip that does not compile. While it
 stays that way `green` cannot move, tip rounds build nothing, and later landings
 pile onto code nobody can compile. With `[revert] broken_build = true`, a tip
-round removes such a landing instead of waiting tens of minutes for a fix. Any
-other failing check is fixed forward through a regression ticket, as below.
+round can remove such a landing. This applies to checks of a family declared
+`builds = true` when `repository.green` is set.
 
-Nothing but a broken build is reverted. A revert pulls code out from under
-tickets that already build on it, and it is a second way for work to move
-through the system. A failing test stops nobody from working: the tip still
-compiles, `green` still moves, and only `master` waits for the fix. An earlier
-design reverted the landing behind any failing check and was cut down to this
-for those reasons.
+Non-build failures normally get regression tickets. A prolonged stall can leave
+`master` behind a series of fix-forward landings, each awaiting another round.
+With `[revert] stall_minutes = 120`, a required non-build failure also qualifies
+for a revert once the oldest landing between `master` and the tip has waited at
+least 120 minutes, measured from the committer date of the last commit in that
+landing. A settled tip with a required failure gets one more round when the
+stall threshold is reached. Checks past the tip budget and native checks
+catching up on older coverage still get regression tickets. The stall setting is
+optional and independent of `broken_build`.
 
-A failing build check (a check of a family declared `builds = true`, run only
-when `repository.green` is set) reverts its culprit when all of these hold, and
-is otherwise reported as a regression:
+An eligible failure reverts its culprit when all of these hold, and otherwise
+gets a regression ticket:
 
 - the search ended at one landing: the only candidate, or found by bisection;
 - the check fails again when the round runs it at the tip once more, ignoring
@@ -3027,7 +3031,7 @@ machine and provider that ran the landing, as for a regression. The worker
 resumes that transcript with the revert details. The brief of `ignite start`
 prints a `reverted` line with the revert commit, the checks and the command to
 apply the work again. If the hub misses the report, the verifier sends it again
-at the start of the next round. Another build check that failed with the same
+at the start of the next round. Another eligible check that failed with the same
 landing is covered by the same revert once it passes at that revert commit.
 
 ### Regression tickets
@@ -4833,9 +4837,9 @@ Each topic is printed by the command that makes it relevant.
 - `reverted`, on `ignite start` of a ticket whose landing a tip round reverted,
   and named by `ignite prime` for a session told that a ticket its own depends
   on was reverted. The reopened ticket starts again, applies its work with the
-  `git revert --no-edit <revert commit>` its brief gives, fixes the build and
-  lands; a dependent ticket is released and handed out again when the reverted
-  one lands.
+  `git revert --no-edit <revert commit>` its brief gives, fixes the failing
+  check and lands. A dependent ticket is released and handed out again when the
+  reverted one lands.
 - `regression`, on `ignite start` of a regression ticket. Reproduce it first and
   read the ticket that caused it. Fix forward. A fault of the product is fixed
   in the product, and a test that fails while the product is right is probably
@@ -5004,7 +5008,8 @@ These are the choices that were weighed against measurements and set aside.
   branch that always passes, so `staging` does not need to be one.
 - **Reverting the landing behind any failing check.** A revert pulls code out
   from under tickets that build on it, and a failing test stops nobody from
-  working. Only a broken build is reverted (see
+  working. Automatic reverts are reserved for broken builds and required
+  failures during prolonged stalls (see
   [A broken build is reverted](#a-broken-build-is-reverted)).
 - **More cores.** A larger machine shortens every build and leaves the race and
   the repeated builds growing as before.

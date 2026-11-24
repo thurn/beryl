@@ -121,7 +121,7 @@ fn reverted_prompt(detail: &TicketDetail, reserved: &Reserved) -> String {
         })
         .unwrap_or_default();
     format!(
-        "your landing of {} was reverted: the tip did not build with it ({checks}). Run `ignite \
+        "your landing of {} was reverted: checks failed at the tip ({checks}). Run `ignite \
          start {}`",
         reserved.ticket,
         start_arguments(reserved)

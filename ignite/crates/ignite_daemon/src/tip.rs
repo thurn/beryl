@@ -43,8 +43,8 @@
 //!   ticket's commits, as the hub recorded them when the ticket landed, so a report names the
 //!   ticket whose landing caused the failure.
 //! - With `[revert] broken_build` set, a failing build check whose search ends at one landing
-//!   reverts that landing instead of reporting a regression, when the conditions in `revert`
-//!   hold.
+//!   can revert that landing. With `[revert] stall_minutes` set, a required non-build failure
+//!   can also revert a landing if `master` is stalled (see `revert`).
 //! - When the tips since the last verified commit have waited [`MACHINE_WAIT_S`] for checks
 //!   only another platform's machines can run, the hub is told once per tip and platform, and
 //!   files a P1 ticket naming those machines. `master` keeps waiting. When no machine of that
@@ -370,6 +370,8 @@ pub struct TipVerifier {
     settled: Option<Commit>,
     /// The exact keys that held the last failed tip, also saved before culprit searches.
     failed: Option<state::FailedTip>,
+    /// When a failed tip gets one more round to consider a revert after a master stall.
+    retry_for_stall: Option<(Commit, Timestamp)>,
     /// Policy under which the last round started. An operator may make the same tip runnable.
     fleet_version: Option<u64>,
     /// Where master was at the start of the most recent round.
@@ -428,6 +430,7 @@ impl TipVerifier {
             since: Seq(0),
             settled: None,
             failed: None,
+            retry_for_stall: None,
             fleet_version: None,
             master_at_start: None,
             reported: HashSet::new(),
@@ -487,7 +490,7 @@ impl TipVerifier {
     }
 
     /// Whether `tip` needs a round. A settled failure is due again once the hub has passes
-    /// for all of its failed keys.
+    /// for all of its failed keys, or when a required failure qualifies for stall reverts.
     pub fn due(&self, ctx: &Context, tip: &Commit) -> bool {
         let notice = self.fleet_notice();
         if notice
@@ -505,7 +508,12 @@ impl TipVerifier {
             return true;
         }
         if settled {
-            return self.failure_recovered(ctx, tip, None);
+            return (ctx.config.revert.stall_minutes.is_some()
+                && self
+                    .retry_for_stall
+                    .as_ref()
+                    .is_some_and(|(failed, at)| failed == tip && ctx.clock.now() >= *at))
+                || self.failure_recovered(ctx, tip, None);
         }
         !resting
     }

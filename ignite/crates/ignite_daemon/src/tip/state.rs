@@ -31,6 +31,7 @@ pub(super) struct Memory {
     since: Seq,
     settled: Option<Commit>,
     failed: Option<FailedTip>,
+    retry_for_stall: Option<(Commit, Timestamp)>,
     fleet_version: Option<u64>,
     master_at_start: Option<Commit>,
     reported: Vec<ResultKey>,
@@ -125,6 +126,7 @@ impl TipVerifier {
         self.since = memory.since;
         self.settled = memory.settled;
         self.failed = memory.failed;
+        self.retry_for_stall = memory.retry_for_stall;
         self.fleet_version = memory.fleet_version;
         self.master_at_start = memory.master_at_start;
         self.reported = set(memory.reported);
@@ -148,6 +150,7 @@ impl TipVerifier {
             since: self.since,
             settled: self.settled.clone(),
             failed: self.failed.clone(),
+            retry_for_stall: self.retry_for_stall.clone(),
             fleet_version: self.fleet_version,
             master_at_start: self.master_at_start.clone(),
             reported: listed(self.reported.iter().cloned()),

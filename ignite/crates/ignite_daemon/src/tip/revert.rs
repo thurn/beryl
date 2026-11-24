@@ -1,5 +1,5 @@
-//! Reverting the landing that broke the build, instead of reporting a regression (see "A broken
-//! build is reverted" in `docs/ignite.md`).
+//! Reverting the landing that broke a build or held back master (see "A broken build is
+//! reverted" in `docs/ignite.md`).
 //!
 //! A landing no longer type-checks on the exact tip, so two landings that each compile alone can
 //! leave a tip that does not compile. Until someone fixes it, `green` cannot move and tip rounds
@@ -7,8 +7,9 @@
 //! written by an agent takes tens of minutes; removing the landing takes one round.
 //!
 //! With `[revert] broken_build` set, a failing check of the round's build group (the families
-//! declared `builds = true`, see `green`) is reverted when all of these hold, and otherwise
-//! reported as a regression exactly as any other failing check is:
+//! declared `builds = true`, see `green`) can trigger a revert. With `[revert] stall_minutes`
+//! set, a required non-build check can also trigger one once the oldest unverified landing
+//! has waited that long. The round reports a regression unless all of these hold:
 //!
 //! - the culprit search ended at one landing ([`CulpritSearch::OneCandidate`] or
 //!   [`CulpritSearch::Bisected`]);
@@ -26,7 +27,7 @@
 //! The revert commit is pushed to `staging` under the hub's lease, as a landing pushes. When the
 //! tip moved meanwhile, the revert is built again on the new tip, [`MAX_ATTEMPTS`] times at most;
 //! a new tip that changed what the check reads (a fix, or another machine's revert) is left to
-//! the next round, which runs the check there first. Another build check blamed on a landing
+//! the next round, which runs the check there first. Another check blamed on a landing
 //! the round reverted already needs only to pass at that revert.
 //! The hub is then told with [`Hub::reverted`](ignite_core::traits::Hub::reverted), which
 //! reopens the landing's ticket. A report the hub did not take is kept in the verifier's memory
@@ -40,6 +41,7 @@ use serde_json::json;
 use ignite_core::ids::{Commit, TicketId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::Reverted;
+use ignite_core::time::Timestamp;
 use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::{Push, RevertOutcome};
 
@@ -98,8 +100,27 @@ impl TipVerifier {
         self
     }
 
-    /// Reverts the landing `culprit` names for `check`, a check that failed at `tip` with
-    /// `output`, when the module's conditions hold, and says what `blame` does next.
+    /// When the oldest landing between `master` and the failed tip has waited long enough
+    /// to allow a non-build revert. The last commit of that landing supplies its committer
+    /// date, so quiet time before the first unverified landing never counts toward the stall.
+    pub(super) fn stall_revert_at(
+        &self,
+        ctx: &Context,
+        master: &Commit,
+        tip: &Commit,
+    ) -> Option<Timestamp> {
+        let minutes = ctx.config.revert.stall_minutes?;
+        let delay = i64::try_from(minutes).ok()?.checked_mul(60_000)?;
+        let landings = self.work.landings(ctx, master, tip).ok()?;
+        let oldest = landings.first()?.last()?;
+        let landed_at = ctx.git.committed_at(&ctx.repo, oldest).ok()?;
+        Some(Timestamp::from_millis(
+            landed_at.millis().checked_add(delay)?,
+        ))
+    }
+
+    /// Reverts the landing `culprit` names for a failure eligible for automatic revert, when
+    /// the module's conditions hold, and says what `blame` does next.
     pub(super) fn try_revert(
         &mut self,
         ctx: &Context,
@@ -108,16 +129,11 @@ impl TipVerifier {
         culprit: &Culprit,
         output: Option<&str>,
     ) -> Handled {
-        if !ctx.config.revert.broken_build
-            || (ctx.config.repository.green.is_none() || !check.is_build())
-        {
-            return Handled::Report;
-        }
         match self.revert(ctx, tip, check, culprit, output) {
             Ok(handled) => handled,
             Err(why) => {
                 eprintln!(
-                    "ignite: {} broke the build and was not reverted: {why}",
+                    "ignite: could not revert the culprit of {}: {why}",
                     check.check
                 );
                 Handled::Report
@@ -125,8 +141,7 @@ impl TipVerifier {
         }
     }
 
-    /// [`TipVerifier::try_revert`] once the check is known to be a build check, with the
-    /// reason when nothing was reverted.
+    /// [`TipVerifier::try_revert`] with the reason when nothing was reverted.
     fn revert(
         &mut self,
         ctx: &Context,
@@ -143,11 +158,11 @@ impl TipVerifier {
         if landing.commits.is_empty() {
             return Err("the landing has no commits".to_owned());
         }
-        // Another build check that failed with the same landing was reverted already. The
+        // A previous check in this round already triggered a revert of this landing. The
         // revert stands for this check too once the check passes there.
         if let Some((_, revert)) = self.reverted.iter().find(|(c, _)| *c == landing.commits) {
             let revert = revert.clone();
-            if !self.passes_at(ctx, &revert, check, false) {
+            if !self.passes_at(ctx, &revert, check) {
                 return Err(format!("the check does not pass at the revert {revert}"));
             }
             if let Some(report) = self.unsent_reverts.iter_mut().find(|r| r.revert == revert) {
@@ -179,7 +194,7 @@ impl TipVerifier {
         }
         // One failed run may be a fault of that run, and a revert reopens a ticket, so the
         // check runs at the tip once more, ignoring cached results.
-        if self.passes_at(ctx, tip, check, true) {
+        if self.outcome_at(ctx, tip, check, true) != Some(Outcome::Fail) {
             return Err(format!("the check did not fail again at {tip}"));
         }
         let message = message(tip, check, landing, &subjects);
@@ -211,15 +226,26 @@ impl TipVerifier {
         Ok(Handled::Reverted)
     }
 
-    /// Whether `check` passes at `at`, run here; `rerun` ignores cached results.
-    fn passes_at(&self, ctx: &Context, at: &Commit, check: &TipCheck, rerun: bool) -> bool {
-        let outcome = self
-            .work
+    /// Whether `check` passes at the proposed revert. A cached pass counts.
+    fn passes_at(&self, ctx: &Context, at: &Commit, check: &TipCheck) -> bool {
+        matches!(
+            self.outcome_at(ctx, at, check, false),
+            Some(Outcome::Pass | Outcome::Flaky)
+        )
+    }
+
+    fn outcome_at(
+        &self,
+        ctx: &Context,
+        at: &Commit,
+        check: &TipCheck,
+        rerun: bool,
+    ) -> Option<Outcome> {
+        self.work
             .run(ctx, at, std::slice::from_ref(&check.check), rerun)
             .into_iter()
             .find(|r| r.check == check.check)
-            .map(|r| r.outcome);
-        matches!(outcome, Some(Outcome::Pass | Outcome::Flaky))
+            .map(|r| r.outcome)
     }
 
     /// Builds the revert of `landing` on the `staging` tip, checks that `check` passes there,
@@ -263,7 +289,7 @@ impl TipVerifier {
                     ));
                 }
             };
-            if !self.passes_at(ctx, &revert, check, false) {
+            if !self.passes_at(ctx, &revert, check) {
                 return Err(format!("the check does not pass at the revert {revert}"));
             }
             let held = self.take_lease(ctx, &holder, landing)?;
@@ -272,6 +298,15 @@ impl TipVerifier {
             }
             if ctx.git.tip(staging).map_err(|e| e.to_string())? != base {
                 continue;
+            }
+            if !check.is_build() {
+                let master = ctx
+                    .git
+                    .tip(&ctx.config.repository.master)
+                    .map_err(|e| e.to_string())?;
+                if self.master_at_start.as_ref() != Some(&master) {
+                    return Err(format!("master advanced to {master} during the round"));
+                }
             }
             // Keep the round alive until a pushed revert has been reported or saved for
             // retry, so the landing's ticket can be reopened.
@@ -373,7 +408,7 @@ fn message(tip: &Commit, check: &TipCheck, landing: &TipLanding, subjects: &[Str
         .map(|(commit, line)| format!("{commit} {line}"))
         .collect();
     format!(
-        "{subject}\n\nThe build check {} failed at {tip} with {landed}, and passed with \
+        "{subject}\n\nThe check {} failed at {tip} with {landed}, and passed with \
          them undone. This commit undoes:\n\n{}\n",
         check.check,
         undone.join("\n")

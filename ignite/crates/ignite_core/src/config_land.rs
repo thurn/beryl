@@ -1,5 +1,5 @@
 //! The `[land]` and `[revert]` sections of `ignite.toml`: how `ignite land` decides that a change
-//! may land, and what a tip round does when a landing broke the build. Every key is optional,
+//! may land, and when a tip round reverts a landing. Every key is optional,
 //! and the defaults are the strict landing that runs the gate on the rebased commit, with no
 //! automatic revert.
 
@@ -49,6 +49,10 @@ pub struct Revert {
     /// declared `builds = true`), instead of only reporting a regression.
     #[serde(default)]
     pub broken_build: bool,
+    /// How long the oldest unverified landing may wait before a required non-build check can
+    /// trigger a revert. Unset leaves those failures to regression tickets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stall_minutes: Option<u64>,
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 //! Culprit searches over commits the hub recorded no landing for, and the revert of a landing
-//! that broke the build.
+//! that broke the build or held back master.
 
 use std::sync::Mutex;
 
@@ -237,15 +237,108 @@ fn a_failing_check_outside_the_build_group_is_reported() {
 }
 
 #[test]
-fn a_landing_that_changed_ignites_source_is_reported() {
-    let failing = vet("a", 'a');
-    let paths = ["src/a/lib.rs", "ignite/crates/ignite_core/src/lib.rs"];
-    let (world, ctx, tip) = broken(&failing, &paths, true);
+fn a_required_failure_can_revert_at_the_stall_threshold_after_being_reported() {
+    let failing = check("a", 'a');
+    let (world, mut ctx, tip) = broken(&failing, &["src/a/lib.rs"], false);
+    ctx.config.revert.stall_minutes = Some(120);
+    // Master has been quiet for longer than two hours, but the landing has waited 119 minutes.
+    world
+        .git
+        .set_committed_at(&tip, Timestamp::EPOCH.plus_seconds(3_600.0));
+    world.clock.advance(3_600.0 + 119.0 * 60.0);
     clean_revert(&world);
+    let mut verifier = reverting(&world);
+
+    verifier.round_at(&ctx, &tip, Seq(0)).unwrap();
+
+    reported_not_reverted(&world);
+    assert_eq!(world.hub.regressions()[0].caused_by, Some(ticket("tk.40")));
+    assert!(!verifier.due(&ctx, &tip));
+
+    world.clock.advance(60.0);
+    assert!(verifier.due(&ctx, &tip));
+    verifier.round_at(&ctx, &tip, Seq(0)).unwrap();
+
+    assert_eq!(staging_pushes(&world), [commit("cccc000")]);
+    let reports = world.hub.reverted_landings();
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].ticket, Some(ticket("tk.40")));
+    assert_eq!(reports[0].checks, std::slice::from_ref(&failing.check));
+    assert_eq!(reports[0].search, CulpritSearch::OneCandidate);
+    assert_eq!(world.hub.regressions().len(), 1, "reported once");
+    assert!(!verifier.due(&ctx, &tip));
+    let runs = world.work.runs();
+    let (_, at, checks, rerun) = &runs[runs.len() - 2];
+    assert_eq!(at, &tip);
+    assert_eq!(checks, &[failing.check]);
+    assert!(*rerun);
+    assert_eq!(runs.last().unwrap().1, commit("cccc000"));
+}
+
+#[test]
+fn a_required_failure_with_multiple_suspects_is_reported_during_a_stall() {
+    let failing = check("a", 'a');
+    let (world, mut ctx, tip) = broken(&failing, &["src/a/lib.rs"], false);
+    ctx.config.revert.stall_minutes = Some(120);
+    world.clock.advance(121.0 * 60.0);
+    clean_revert(&world);
+    world.work.landings.lock().unwrap().insert(
+        0,
+        TipLanding {
+            ticket: Some(ticket("tk.39")),
+            commits: vec![commit("abab000")],
+            paths: vec!["src/a/main.rs".to_owned()],
+        },
+    );
+    world
+        .work
+        .set_outcome(&commit("abab000"), &failing.check, Outcome::Incomplete);
 
     reverting(&world).verify(&ctx, &tip).unwrap();
 
     reported_not_reverted(&world);
+    let reports = world.hub.regressions();
+    assert_eq!(reports[0].suspects, [ticket("tk.39"), ticket("tk.40")]);
+    assert!(matches!(
+        reports[0].search,
+        Some(CulpritSearch::EndedEarly { .. })
+    ));
+}
+
+#[test]
+fn an_incomplete_rerun_cannot_confirm_a_revert_during_a_stall() {
+    let failing = check("a", 'a');
+    let (world, mut ctx, tip) = broken(&failing, &["src/a/lib.rs"], false);
+    ctx.config.revert.stall_minutes = Some(120);
+    world.clock.advance(121.0 * 60.0);
+    clean_revert(&world);
+    let work = world.work.clone();
+    let (at, check) = (tip.clone(), failing.check.clone());
+    on_second_run(
+        &world,
+        &tip,
+        Arc::new(move || work.set_outcome(&at, &check, Outcome::Incomplete)),
+    );
+
+    reverting(&world).verify(&ctx, &tip).unwrap();
+
+    reported_not_reverted(&world);
+}
+
+#[test]
+fn a_landing_that_changed_ignites_source_is_reported() {
+    let failing = vet("a", 'a');
+    let paths = ["src/a/lib.rs", "ignite/crates/ignite_core/src/lib.rs"];
+    for failing in [failing, check("a", 'a')] {
+        let (world, mut ctx, tip) = broken(&failing, &paths, true);
+        ctx.config.revert.stall_minutes = Some(120);
+        world.clock.advance(121.0 * 60.0);
+        clean_revert(&world);
+
+        reverting(&world).verify(&ctx, &tip).unwrap();
+
+        reported_not_reverted(&world);
+    }
 }
 
 #[test]

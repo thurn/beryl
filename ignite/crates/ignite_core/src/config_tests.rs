@@ -65,6 +65,23 @@ fn parses_the_document_examples() {
 }
 
 #[test]
+fn stall_reverts_are_opt_in() {
+    let text = format!("{DOCUMENT_EXAMPLES}\n[revert]\nbroken_build = true\n");
+    assert_eq!(
+        Config::parse("ignite.toml", &text)
+            .unwrap()
+            .revert
+            .stall_minutes,
+        None
+    );
+
+    let text = format!("{text}stall_minutes = 120\n");
+    let (config, unknown) = Config::parse_with_unknown("ignite.toml", &text).unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
+    assert_eq!(config.revert.stall_minutes, Some(120));
+}
+
+#[test]
 fn machines_are_found_whatever_the_hostname_case() {
     let config = Config::parse("ignite.toml", DOCUMENT_EXAMPLES).unwrap();
     let declared = config.machine("jarvis").unwrap();

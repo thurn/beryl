@@ -327,7 +327,7 @@ fn reverted_line(ticket: &Ticket) -> Option<String> {
         .map(|checks| checks.iter().filter_map(Value::as_str).collect())
         .unwrap_or_default();
     Some(format!(
-        "{} undid your landing: the tip did not build with it ({}); apply your work again with: \
+        "{} undid your landing: checks failed at the tip ({}); apply your work again with: \
          git revert --no-edit {revert}",
         revert.get(..7).unwrap_or(revert),
         checks.join(", ")

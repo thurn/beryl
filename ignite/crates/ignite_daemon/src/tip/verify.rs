@@ -50,6 +50,7 @@ impl TipVerifier {
     pub fn verify(&mut self, ctx: &Context, tip: &Commit) -> Result<TipOutcome> {
         self.require_machine_on()?;
         self.failed = None;
+        self.retry_for_stall = None;
         crate::steps::step(format!("verifying tip {tip}"));
         let last = ctx.git.tip(&ctx.config.repository.master)?;
         self.master_at_start = Some(last.clone());
@@ -370,6 +371,21 @@ impl TipVerifier {
                     return Ok(TipOutcome::Recovered);
                 }
             }
+            let can_revert = |check: &TipCheck| {
+                last != tip
+                    && check.runnable
+                    && scope.last_good_for(check).is_none()
+                    && !split.is_after(check)
+            };
+            let stall_at = failed
+                .iter()
+                .any(|check| !check.is_build() && can_revert(check))
+                .then(|| self.stall_revert_at(ctx, last, tip))
+                .flatten();
+            let now = ctx.clock.now();
+            self.retry_for_stall = stall_at.filter(|at| now < *at).map(|at| (tip.clone(), at));
+            let stalled = stall_at.is_some_and(|at| now >= at);
+
             let mut culprits = HashSet::new();
             let mut blame_complete = true;
             for check in &failed {
@@ -382,7 +398,12 @@ impl TipVerifier {
                     tip,
                     check,
                     output.as_deref(),
-                    last != tip && prior.is_none(),
+                    can_revert(check)
+                        && if check.is_build() {
+                            ctx.config.revert.broken_build && ctx.config.repository.green.is_some()
+                        } else {
+                            stalled
+                        },
                 ) {
                     Ok(culprit) => culprits.extend(culprit),
                     Err(error) => {

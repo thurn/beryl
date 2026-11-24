@@ -630,7 +630,7 @@ fn the_brief_of_a_reverted_ticket_says_how_to_apply_its_work_again() {
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
     assert!(
         reply.text.contains(
-            "reverted abcdef0 undid your landing: the tip did not build with it (rust:a::b); \
+            "reverted abcdef0 undid your landing: checks failed at the tip (rust:a::b); \
              apply your work again with: git revert --no-edit abcdef0123456789"
         ),
         "{}",

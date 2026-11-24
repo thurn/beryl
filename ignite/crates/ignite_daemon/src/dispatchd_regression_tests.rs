@@ -85,7 +85,7 @@ fn a_reverted_ticket_requests_the_previous_landing_transcript() {
     let prompt = resume.prompt;
     assert!(
         prompt.contains(
-            "your landing of T.1 was reverted: the tip did not build with it (rust:a::b). Run \
+            "your landing of T.1 was reverted: checks failed at the tip (rust:a::b). Run \
              `ignite start T.1 --reservation 7f3a`"
         ),
         "{prompt}"

@@ -158,9 +158,9 @@ impl TipVerifier {
     }
 
     /// Finds the culprit of a check that failed at `tip` and reports the regression, or reverts
-    /// the culprit of a broken build (see `revert`), unless this failure was reported already,
-    /// or a newer tip changed the check's inputs and the check has not been left to a later
-    /// round before (its next round runs the check there first).
+    /// a landing when the check qualifies for automatic revert (see `revert`). A failure
+    /// already reported can qualify for a revert once the stall threshold is reached. A newer
+    /// tip that changed the check's inputs gets one chance to run the check first.
     ///
     /// A check only another platform can run is left to that platform's machines: a search here
     /// would run this platform's version of the check, which passes at every commit, and blame
@@ -175,7 +175,8 @@ impl TipVerifier {
         allow_revert: bool,
     ) -> Result<Option<Commit>> {
         super::round::require_running()?;
-        if !check.runnable || self.reported.contains(&check.key) {
+        let reported = self.reported.contains(&check.key);
+        if !check.runnable || (reported && (check.is_build() || !allow_revert)) {
             return Ok(None);
         }
         // Where git cannot say, the failure is reported, which at worst repeats a report.
@@ -212,7 +213,7 @@ impl TipVerifier {
             .as_ref()
             .ok()
             .and_then(|culprit| culprit.as_ref()?.suspects.last()?.commits.first().cloned());
-        // A build check broken by one landing is reverted instead, when `revert` allows it.
+        // An eligible failure can revert a single confirmed landing.
         if allow_revert && let Ok(Some(found)) = &culprit {
             match self.try_revert(ctx, tip, check, found, output) {
                 Handled::Reverted => {
@@ -228,6 +229,9 @@ impl TipVerifier {
             }
         }
         super::round::require_running()?;
+        if reported {
+            return Ok(cutoff);
+        }
         let report = RegressionReport {
             check: check.check.clone(),
             first_bad: tip.clone(),

@@ -152,10 +152,11 @@ rules = [
 # Landing by verdict can leave a tip that does not compile: two changes that each build alone.
 # Until it is fixed `green` cannot move and later landings pile onto it, and a fix written by an
 # agent takes tens of minutes, so a tip round reverts the one landing that broke a build check.
-# Every other failing check is fixed forward through a regression ticket (docs/ignite.md, "A
-# broken build is reverted").
+# A confirmed culprit of a required check can also be reverted once master has been held back
+# for two hours, the same threshold upkeep uses to escalate master lag.
 [revert]
 broken_build = true
+stall_minutes = 120
 
 [self_update]
 quiet_seconds = 5

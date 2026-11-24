@@ -59,6 +59,8 @@ fn master_moves_once_the_budgeted_checks_pass_and_a_later_failure_holds_it() {
     let mut ctx = world.ctx("m-1");
     // 250 billion at the default rate: two checks of 100 billion fit, a third does not.
     ctx.config.tip.seconds = 250.0 / DEFAULT_TIP_RATE;
+    ctx.config.revert.stall_minutes = Some(120);
+    world.clock.advance(121.0 * 60.0);
     let mut verifier = world.verifier();
     world.work.add_landing("tk.30", &["bbbb000"], &["src/c"]);
     *world.work.scoring.lock().unwrap() = Some(Scoring {
@@ -99,6 +101,7 @@ fn master_moves_once_the_budgeted_checks_pass_and_a_later_failure_holds_it() {
     let reports = world.hub.regressions();
     assert_eq!(reports.len(), 1);
     assert_eq!(reports[0].check, name("unit:c"));
+    assert!(world.hub.reverted_landings().is_empty());
     // The round's record says how the budget split the checks.
     let round = world.hub.tip_rounds().pop().unwrap();
     let budget = round.budget.unwrap();

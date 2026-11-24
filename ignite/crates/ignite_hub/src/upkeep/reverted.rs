@@ -1,4 +1,4 @@
-//! Landings a tip round reverted because the tip did not build with them (`POST /reverted`).
+//! Landings a tip round reverted because required checks failed (`POST /reverted`).
 //!
 //! - The ticket that landed the commits is reopened at priority 0, in one batch with its
 //!   metadata [`KEY`] (the revert commit, the landed commits and the failing checks) and a
@@ -145,7 +145,7 @@ fn details(report: &Reverted) -> String {
     let lines: Vec<&str> = report.output.lines().collect();
     let tail = lines[lines.len().saturating_sub(OUTPUT_LINES)..].join("\n");
     format!(
-        "A tip round reverted this landing: the tip did not build with it ({checks}).\n\
+        "A tip round reverted this landing: checks failed at the tip ({checks}).\n\
          culprit: {search}\n\
          landed {landed}\n\
          reverted by {revert}, found on {machine}\n\
@@ -195,8 +195,8 @@ fn tell_dependents(conn: &Connection, reverted: &str, report: &Reverted) -> Resu
         ops.push(Operation::Comment {
             id: src.clone(),
             text: format!(
-                "{reverted}, which this ticket depends on, was reverted because the tip did not \
-                 build with it ({checks}). Its code is gone from the tip. Release this ticket \
+                "{reverted}, which this ticket depends on, was reverted because checks \
+                 failed at the tip ({checks}). Its code is gone from the tip. Release this ticket \
                  with `ignite release`; it is handed out again when {reverted} lands.",
                 checks = report
                     .checks
