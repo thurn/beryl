@@ -1,0 +1,206 @@
+"""What the trial tool reads from and writes to the world: tickets through `ignite ticket ...
+--json`, costs through `just efficiency ... --json`, commits through git in the main checkout,
+and model IDs from `ignite.toml`. Everything else in the package is pure, so that its tests
+pass made-up ticket JSON and never call any of these.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import tempfile
+import tomllib
+from pathlib import Path
+from typing import Any
+
+from .. import paths
+
+
+class IgniteError(RuntimeError):
+    pass
+
+
+def _run(args: list[str], cwd: Path | None = None) -> str:
+    run = subprocess.run(
+        args,
+        cwd=cwd or paths.REPO,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if run.returncode:
+        raise IgniteError(
+            f"`{' '.join(args)}` failed ({run.returncode}): {run.stderr.strip() or run.stdout.strip()}"
+        )
+    return run.stdout
+
+
+def ignite(*args: str) -> Any:
+    out = _run(["ignite", *args, "--json"])
+    return json.loads(out) if out.strip() else None
+
+
+def show(
+    ids: list[str], *, history: bool = False, comments: bool = False
+) -> list[dict[str, Any]]:
+    if not ids:
+        return []
+    flags = [*(["--history"] if history else []), *(["--comments"] if comments else [])]
+    found = ignite("ticket", "show", *ids, *flags)
+    if isinstance(found, dict) and "tickets" in found:
+        found = found["tickets"]
+    return found if isinstance(found, list) else [found]
+
+
+def ticket(
+    ticket_id: str, *, history: bool = False, comments: bool = False
+) -> dict[str, Any]:
+    return show([ticket_id], history=history, comments=comments)[0]
+
+
+def with_ancestors(tickets: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """`tickets` and every ancestor of theirs, by ID."""
+    known = {str(t["id"]): t for t in tickets}
+    missing = {str(t["parent"]) for t in tickets if t.get("parent")} - set(known)
+    while missing:
+        for found in show(sorted(missing)):
+            known[str(found["id"])] = found
+        missing = {str(t["parent"]) for t in known.values() if t.get("parent")} - set(
+            known
+        )
+    return known
+
+
+def open_tickets() -> list[dict[str, Any]]:
+    """Every open and pending ticket, with the detail `show` gives (labels, `blocked_by`)."""
+    listed: list[dict[str, Any]] = []
+    for status in ("open", "pending_approval"):
+        found = ignite("ticket", "list", "--status", status, "--limit", "100000")
+        listed += found if isinstance(found, list) else found.get("tickets", [])
+    ids = [str(t["id"]) for t in listed]
+    detail: list[dict[str, Any]] = []
+    for start in range(0, len(ids), 200):
+        detail += show(ids[start : start + 200])
+    return detail
+
+
+def batch(body: dict[str, Any]) -> dict[str, Any]:
+    with tempfile.NamedTemporaryFile(
+        "w", suffix=".json", encoding="utf-8", delete=False
+    ) as out:
+        json.dump(body, out)
+        path = Path(out.name)
+    try:
+        return ignite("ticket", "batch", str(path))
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def set_allocation(ticket_id: str, allocation: int | None) -> None:
+    """`ignite ticket update` has no way to clear an allocation, so this goes through a batch."""
+    batch(
+        {"ops": [{"op": "update", "id": ticket_id, "set": {"allocation": allocation}}]}
+    )
+
+
+def comment(ticket_id: str, text: str) -> None:
+    _run(["ignite", "ticket", "comment", ticket_id, text])
+
+
+def attachments(ticket_id: str) -> list[dict[str, Any]]:
+    found = ignite("ticket", "attachment", "list", ticket_id)
+    return list(found.get("attachments", [])) if isinstance(found, dict) else []
+
+
+def get_attachment(ticket_id: str, name: str, out: Path) -> Path:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    _run(
+        ["ignite", "ticket", "attachment", "get", ticket_id, name, "--output", str(out)]
+    )
+    return out
+
+
+def attach(ticket_id: str, file: Path, name: str, caption: str | None) -> None:
+    args = [
+        "ignite",
+        "ticket",
+        "attach",
+        ticket_id,
+        str(file),
+        "--name",
+        name,
+        "--no-comment",
+    ]
+    _run([*args, *(["--caption", caption] if caption else [])])
+
+
+def machine_workers() -> set[str]:
+    """The machines whose pool takes tickets: those in the `active` state."""
+    fleet = ignite("fleet")
+    machines = (
+        fleet.get("settings", {}).get("machines", {}) if isinstance(fleet, dict) else {}
+    )
+    return {name for name, m in machines.items() if m.get("state") == "active"}
+
+
+def this_machine() -> str:
+    """This machine's name in the fleet."""
+    status = ignite("status")
+    machine = str(status.get("machine", ""))
+    for m in ignite("fleet").get("machines", []):
+        if m.get("id") == machine:
+            return str(m.get("name", machine))
+    return machine
+
+
+def model_ids(provider: str) -> dict[str, str]:
+    """`[pool.models.<provider>]` in `ignite.toml`: the model ID of each tier."""
+    with (paths.REPO / "ignite.toml").open("rb") as f:
+        config = tomllib.load(f)
+    models = config.get("pool", {}).get("models", {}).get(provider, {})
+    return {str(k): str(v) for k, v in models.items()}
+
+
+def efficiency(*args: str) -> Any:
+    out = _run(["just", "efficiency", *args, "--json"])
+    return json.loads(out) if out.strip() else None
+
+
+def sql(query: str) -> list[dict[str, Any]]:
+    """The rows of a read-only query of the efficiency store, as dicts by column."""
+    found = efficiency("sql", "--no-ingest", query)
+    columns = [str(c) for c in found.get("columns", [])]
+    return [dict(zip(columns, row)) for row in found.get("rows", [])]
+
+
+def main_checkout() -> Path:
+    return paths.main_checkout() or paths.REPO
+
+
+def git(*args: str) -> str:
+    return _run(["git", *args], cwd=main_checkout()).strip()
+
+
+def git_ok(*args: str) -> bool:
+    try:
+        git(*args)
+    except IgniteError:
+        return False
+    return True
+
+
+STAGING = "origin/staging"
+
+
+def staging_tip() -> str:
+    git("fetch", "--quiet", "origin", "staging")
+    return git("rev-parse", STAGING)
+
+
+def export() -> list[dict[str, Any]]:
+    """Every ticket with its comments and history (`ignite ticket export`): about 100 MB, read
+    once per grading run to find the tickets and comments each arm's session left elsewhere.
+    """
+    out = _run(["ignite", "ticket", "export"])
+    return [json.loads(line) for line in out.splitlines() if line.strip()]

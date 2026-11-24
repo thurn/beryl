@@ -120,6 +120,11 @@ efficiency_priority := if env_var_or_default("IGNITE_CORES", "") == "" { low } e
 efficiency *args:
     @{{ if args =~ '^serve( |$)' { "" } else { efficiency_priority } }} uv run --quiet --no-dev --project efficiency beryl-efficiency "$@"
 
+# Model trials: file Sonnet copies of real tickets and grade both arms (candidates, pair, grade; --trial <epic>)
+[group('bench')]
+model-trial *args:
+    {{ by }} model-trial "$@"
+
 # Gungraun instruction counts in the Lima VM (cargo bench flags; default -p beryl_bench --bench '*_counts')
 [group('bench')]
 bench-count *args:
