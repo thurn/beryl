@@ -125,7 +125,13 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     audit.add_argument("--harm", required=True, help="`none` or `fixed:<ticket>`")
     audit.add_argument("--note", required=True)
     filing = _command(steps, "file", "file every marked pair", pair.cmd_file)
-    filing.add_argument("--then", help="a ticket to wait on both arms of every pair")
+    filing.add_argument(
+        "--then", help="the next block or report ticket, which filing defers"
+    )
+    wait = _command(
+        steps, "wait", "exit 3 while a filed pair has an arm unfinished", pair.cmd_wait
+    )
+    wait.add_argument("--defer", help="a released ticket to defer while that is so")
     taint = _command(
         steps, "contamination", "void or clear a suspect pair", pair.cmd_contamination
     )

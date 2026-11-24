@@ -14,9 +14,10 @@ import argparse
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from . import candidates, copytext, io, manifest
+from . import candidates, copytext, grade, io, manifest
 from .manifest import FILED, LISTED, MARKED, SKIPPED, Pair
 from .spec import Spec
 
@@ -26,6 +27,11 @@ MARKING_WORDS = ("trial", "copy", "sonnet", "opus", "duplicate", "pilot")
 # for its slowest source. A source is real work the pool does anyway, so moving it up costs
 # nothing.
 FILED_PRIORITY = 1
+# How long the next block ticket is deferred each time it finds an arm still unfinished. The
+# hub refuses a dependency from a ticket in the trial's epic on a ticket outside it, which
+# every source and copy is, so the next block cannot simply depend on them. A pair takes
+# hours, so a block that checks every two hours costs a few session starts.
+WAIT = timedelta(hours=2)
 
 
 class PairError(ValueError):
@@ -126,13 +132,12 @@ def build_filing(
     source: dict[str, Any],
     tickets: dict[str, dict[str, Any]],
     start_commit: str,
-    then: str | None,
     siblings_parked: dict[str, int | None],
     home_machine: str | None,
 ) -> Filing:
     """The batch that files `pair`: it opens the source's parked epic (when every other listed
     ticket of that epic is parked by its own allocation, given in `siblings_parked`), updates
-    the source, creates the copy and makes `then` wait on both."""
+    the source and creates the copy."""
     if not pair.copy_title:
         raise PairError(
             f"pair {pair.pair} ({pair.source}) has no copy title: run `pair title` first"
@@ -222,9 +227,6 @@ def build_filing(
         fields["estimate_minutes"] = source["estimate_minutes"]
     copy_index = len(ops)
     ops.append({"op": "create", "fields": fields})
-    if then:
-        ops.append({"op": "dep_add", "id": then, "on": sid})
-        ops.append({"op": "dep_add", "id": then, "on": f"${copy_index}"})
     body: dict[str, Any] = {"ops": ops}
     if source.get("version") is not None:
         body["if"] = [{"id": sid, "version": source["version"]}]
@@ -403,9 +405,7 @@ def cmd_file(args: argparse.Namespace, spec: Spec) -> int:
             if str(t.get("parent") or "") == parent and parent
         }
         start = io.staging_tip()
-        filing = build_filing(
-            pair, spec, source, tickets, start, args.then, siblings, home
-        )
+        filing = build_filing(pair, spec, source, tickets, start, siblings, home)
         reply = io.batch(filing.body)
         results = reply.get("results", []) if isinstance(reply, dict) else []
         pair.copy = str(results[filing.copy_index]["id"])
@@ -414,7 +414,48 @@ def cmd_file(args: argparse.Namespace, spec: Spec) -> int:
         pair.copied_attachments = copy_attachments(trial, pair)
         manifest.save_pair(pair)
         print(f"{pair.source} -> copy {pair.copy}, from {start[:12]}")
+    if args.then:
+        defer(args.then)
     return 1 if failed else 0
+
+
+def unfinished(pairs: list[Pair], tickets: dict[str, dict[str, Any]]) -> list[str]:
+    """The arms of filed pairs whose first claim has not ended: not yet claimed, or still being
+    worked. A source whose first session released it has ended, even though the pool goes on
+    to finish it as the real ticket it is."""
+    found: list[str] = []
+    for p in pairs:
+        if p.state != FILED:
+            continue
+        for tid in (p.source, str(p.copy)):
+            ticket = tickets.get(tid)
+            claim = grade.first_claim(ticket) if ticket is not None else None
+            if claim is None or claim.ended is None:
+                found.append(tid)
+    return found
+
+
+def defer(ticket: str) -> None:
+    until = datetime.now(timezone.utc) + WAIT
+    stamp = until.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    io.ignite("ticket", "defer", ticket, "--until", stamp)
+    print(f"{ticket} is deferred until {stamp}.")
+
+
+def cmd_wait(args: argparse.Namespace, spec: Spec) -> int:
+    """Exits 0 when every filed pair's two arms have ended, else lists the unfinished arms,
+    defers `--defer` (the block ticket, after its session released it) and exits 3."""
+    pairs = [p for p in manifest.read_pairs(args.trial) if p.state == FILED]
+    ids = [t for p in pairs for t in (p.source, str(p.copy))]
+    tickets = {str(t["id"]): t for t in io.show(ids, history=True)}
+    waiting = unfinished(pairs, tickets)
+    if not waiting:
+        print("Both arms of every filed pair have ended.")
+        return 0
+    print(f"Not ended yet: {', '.join(waiting)}")
+    if args.defer:
+        defer(args.defer)
+    return 3
 
 
 def copy_attachments(trial: str, pair: Pair) -> list[str]:

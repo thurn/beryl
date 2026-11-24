@@ -97,7 +97,6 @@ def filing(p: Pair, source: dict[str, Any], **kwargs: Any) -> pair.Filing:
         source,
         known,
         START,
-        kwargs.pop("then", None),
         kwargs.pop("siblings", {}),
         kwargs.pop("home", None),
     )
@@ -442,8 +441,8 @@ def test_an_interface_copy_must_attach_captures() -> None:
     assert "attach to this ticket" not in other["body"]
 
 
-def test_filing_opens_a_parked_epic_and_waits_the_next_ticket_on_both() -> None:
-    f = filing(filed_pair(), ticket(), then="T1.3", siblings={"E1.2": 0})
+def test_filing_opens_a_parked_epic() -> None:
+    f = filing(filed_pair(), ticket(), siblings={"E1.2": 0})
     assert ops(f, "update")[0] == {"op": "update", "id": "E1", "set": {"allocation": 1}}
     assert f.opened[0] == {
         "ticket": "E1",
@@ -451,10 +450,7 @@ def test_filing_opens_a_parked_epic_and_waits_the_next_ticket_on_both() -> None:
         "before": 0,
         "after": 1,
     }
-    assert ops(f, "dep_add") == [
-        {"op": "dep_add", "id": "T1.3", "on": "E1.1"},
-        {"op": "dep_add", "id": "T1.3", "on": f"${f.copy_index}"},
-    ]
+    assert ops(f, "dep_add") == []
     assert f.body["if"] == [{"id": "E1.1", "version": 7}]
 
 
@@ -694,3 +690,29 @@ def test_lines_the_ticket_dictates_are_not_suspect() -> None:
         {in_start},
     )
     assert found == []
+
+
+# Waiting for a block's pairs.
+
+
+def test_the_next_block_waits_until_both_arms_of_every_pair_have_ended() -> None:
+    claimed = ("2026-11-24T10:00:00Z", {"assignee": [None, "cli-claude-11111111"]})
+    closed = ("2026-11-24T11:00:00Z", {"status": ["in_progress", "closed"]})
+    released = ("2026-11-24T11:00:00Z", {"assignee": ["cli-claude-11111111", None]})
+    tickets = {
+        "E1.1": ticket("E1.1", history=history(claimed, closed)),
+        "C1": ticket("C1", history=history(claimed)),
+        "E1.2": ticket("E1.2", history=history(claimed, released)),
+        "C2": ticket("C2", history=history()),
+    }
+    pairs = [
+        filed_pair(pair="p1", source="E1.1", copy="C1", state=FILED),
+        filed_pair(pair="p2", source="E1.2", copy="C2", state=FILED),
+        filed_pair(pair="p3", source="E1.3", state=MARKED),
+    ]
+    # C1 is still being worked and C2 was never claimed. E1.2's first session released it,
+    # which ends its arm although the ticket stays open.
+    assert pair.unfinished(pairs, tickets) == ["C1", "C2"]
+    tickets["C1"] = ticket("C1", history=history(claimed, closed))
+    tickets["C2"] = ticket("C2", history=history(claimed, closed))
+    assert pair.unfinished(pairs, tickets) == []

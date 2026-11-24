@@ -72,9 +72,17 @@ starts before its block.
 
 A block ticket names its trial (its parent epic) and its number. Read the trial spec in the
 epic's notes first: the block size, cap, reserve and number to plant come from it. Run heavy
-commands through `ignite run --` and wait on them. Never wait for a pair to finish: the next
-block becomes ready when both tickets of every pair this block files have closed.
+commands through `ignite run --` and wait on them. Never wait for a pair to finish.
 
+The hub refuses a dependency from a ticket in the trial's epic on a ticket outside it, and
+every source and copy is outside it, so the next block cannot depend on this block's pairs.
+Instead `pair file --then <next>` defers the next ticket for two hours, and each block and the
+report ticket start with `pair wait`, which defers them again while any arm is unfinished.
+
+0. **Wait.** Run `just model-trial pair wait --trial <epic>`. It exits 0 when both arms of
+   every filed pair have ended (closed, or released by their first session). If it exits 3,
+   run `ignite release -m "<the arms it listed are not finished>"` and then, in the same
+   command, `just model-trial pair wait --trial <epic> --defer <this ticket>`, and stop.
 1. **Grade and review.** Run `just efficiency ingest`, then
    `ignite run -- just model-trial grade --trial <epic>` and
    `ignite run -- just model-trial review --trial <epic>`. They cover every pair that has
@@ -123,7 +131,8 @@ block becomes ready when both tickets of every pair this block files have closed
    lands, so pick a sentence whose false version would not lead a session that believed it
    into harmful work. The sentence goes into the real ticket, so both arms read the same words.
 10. **File.** Run `just model-trial pair file --trial <epic> --then <next>`, where `<next>` is
-    the ticket that depends on this one (`ignite ticket dep list <this ticket>`). Filing sets
+    the ticket that depends on this one (`ignite ticket dep list <this ticket>`), which filing
+    defers. Filing sets
     both tickets of each pair to P1, so that the trial runs as fast as its slowest source. It
     checks each source again, skips one that can no longer be an arm (no longer open and
     unclaimed, say) and gives it back its allocation; record each one skipped on this ticket.
@@ -134,7 +143,8 @@ block becomes ready when both tickets of every pair this block files have closed
 The report ticket runs when the last block's pairs have closed, or when the cap or the end of
 the list ended the trial.
 
-1. Run `just efficiency ingest`, then `grade` and `review` through `ignite run --`. Close any
+1. Wait as in step 0 of "Running a block". Then run `just efficiency ingest`, and `grade` and
+   `review` through `ignite run --`. Close any
    copy released or stopped unfinished, decide any suspect pair, and audit any planted pair
    whose source landed since the last block, as in "Running a block".
 2. Check that `ignite ticket list --label trial:copy --json` shows every copy of this trial
