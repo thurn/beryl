@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only inspector for the locally installed macOS MTG Arena Unity client.
+"""Read-only inspector for the locally installed macOS or Windows MTG Arena client.
 
 Supports clean-room VFX and animation research by inspecting:
   - Manifest_*.mtga JSON entries (mapping bundle names to Unity Assets/... paths)
@@ -7,9 +7,10 @@ Supports clean-room VFX and animation research by inspecting:
   - UnityFS v8 (LZ4HC) AssetBundle unpacking (pure stdlib, no external packages)
   - Prefab component/state strings and external CAB-* dependency resolution
   - Unity Material serialized colors, floats, and texture transform scales
-  - Plain-text Metal Shading Language (MSL) fragment/vertex shaders inside Shader_* bundles
-  - Unobfuscated C# identifiers, types/fields/methods in IL2CPP global-metadata.dat
-  - ARM64 disassembly of C# methods from GameAssembly.dylib via llvm-objdump
+  - Plain-text shaders inside Shader_* bundles (MSL on macOS, GLSL on Windows)
+  - Unobfuscated C# identifiers, types/fields/methods, and method disassembly
+    (IL2CPP global-metadata.dat + ARM64 GameAssembly.dylib on macOS;
+    Mono MTGA_Data/Managed/Core.dll ECMA-335 metadata + CIL on Windows)
 
 Strictly read-only. Never exports or copies proprietary textures, meshes, or shaders.
 """
@@ -26,9 +27,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from il2cpp import cmd_disasm, cmd_types
+from il2cpp import cmd_disasm as cmd_il2cpp_disasm
+from il2cpp import cmd_types as cmd_il2cpp_types
+from mono import cmd_mono_disasm, cmd_mono_symbols, cmd_mono_types
 
-DEFAULT_MTGA = Path.home() / "Library/Application Support/Steam/steamapps/common/MTGA"
+DEFAULT_MTGA = (
+    Path(r"C:\Program Files (x86)\Steam\steamapps\common\MTGA")
+    if sys.platform == "win32"
+    else Path.home() / "Library/Application Support/Steam/steamapps/common/MTGA"
+)
 
 MATERIAL_PROPS = [
     b"_TintColor",
@@ -113,8 +120,11 @@ def lz4_decompress(src: bytes) -> bytes:
                 if extra != 255:
                     break
         start = len(out) - offset
-        for k in range(match_len):
-            out.append(out[start + k])
+        if offset >= match_len:
+            out.extend(out[start : start + match_len])
+        else:
+            for k in range(match_len):
+                out.append(out[start + k])
     return bytes(out)
 
 
@@ -370,9 +380,78 @@ def cmd_materials(mtga: Path, args: argparse.Namespace) -> None:
                 )
 
 
+def _read_vec_vec_u32(buf: bytes, pos: int) -> tuple[list[list[int]], int]:
+    outer = struct.unpack("<I", buf[pos : pos + 4])[0]
+    pos += 4
+    res: list[list[int]] = []
+    for _ in range(outer):
+        inner = struct.unpack("<I", buf[pos : pos + 4])[0]
+        pos += 4
+        res.append(list(struct.unpack(f"<{inner}I", buf[pos : pos + 4 * inner])))
+        pos += 4 * inner
+    return res, pos
+
+
+def _extract_windows_glsl(
+    sf: bytes, data_off: int, bundle_name: str, args: argparse.Namespace
+) -> bool:
+    """Extracts plain-text GLSL (platform 15 / glcore) from a Windows Shader bundle."""
+    # Unity Shader binary layout ends with:
+    #   vector<u32> platforms; vector<vector<u32>> offsets, compressedLengths,
+    #   decompressedLengths; vector<u8> compressedBlob;
+    hdr = sf.find(struct.pack("<III", 2, 4, 15), data_off)
+    if hdr == -1:
+        return False
+    pos = hdr + 12
+    offs, pos = _read_vec_vec_u32(sf, pos)
+    clens, pos = _read_vec_vec_u32(sf, pos)
+    _dlens, pos = _read_vec_vec_u32(sf, pos)
+    blob_len = struct.unpack("<I", sf[pos : pos + 4])[0]
+    blob_start = pos + 4
+    if blob_start + blob_len > len(sf) or len(offs) < 2:
+        return False
+    hits = 0
+    seen: set[int] = set()
+    for off, clen in zip(offs[1], clens[1]):
+        dec = lz4_decompress(sf[blob_start + off : blob_start + off + clen])
+        if b"#version" not in dec:
+            continue
+        txt = dec.decode("utf-8", "replace")
+        for part in txt.split("#version ")[1:]:
+            end = part.find("\x00")
+            if end != -1:
+                part = part[:end]
+            is_frag = "SV_Target" in part or "gl_FragColor" in part
+            is_vert = "gl_Position" in part
+            if args.stage == "fragment" and not is_frag:
+                continue
+            if args.stage == "vertex" and not is_vert:
+                continue
+            mpos = part.find("void main()")
+            body = part[mpos:] if mpos != -1 else part
+            if all(tok in body for tok in args.match):
+                sig = hash(body[:400])
+                if sig not in seen:
+                    seen.add(sig)
+                    hits += 1
+                    print(
+                        f"\n=== {bundle_name} {args.stage} GLSL #{hits} ({len(body)} chars) ==="
+                    )
+                    print(body[: args.max_chars])
+                    if hits >= args.limit:
+                        return True
+    if hits == 0:
+        print(f"# no {args.stage} GLSL programs matched {args.match} in {bundle_name}")
+    return True
+
+
 def cmd_shader(mtga: Path, args: argparse.Namespace) -> None:
     bundle = find_bundle(mtga, args.bundle)
-    sf, _data_off, _ = first_serialized_file(bundle)
+    sf, data_off, _ = first_serialized_file(bundle)
+    if b"metal_stdlib" not in sf and _extract_windows_glsl(
+        sf, data_off, bundle.name, args
+    ):
+        return
     stage_token = f"{args.stage} "
     pos = 0
     hits = 0
@@ -447,7 +526,18 @@ def cmd_shader(mtga: Path, args: argparse.Namespace) -> None:
         print(f"# no {args.stage} MSL programs matched {args.match} in {bundle.name}")
 
 
+def _is_mono_install(mtga: Path) -> bool:
+    il2cpp_meta = (
+        mtga
+        / "MTGA.app/Contents/Resources/Data/il2cpp_data/Metadata/global-metadata.dat"
+    )
+    return not il2cpp_meta.is_file() and (mtga / "MTGA_Data/Managed/Core.dll").is_file()
+
+
 def cmd_symbols(mtga: Path, args: argparse.Namespace) -> None:
+    if _is_mono_install(mtga):
+        cmd_mono_symbols(mtga, args)
+        return
     meta = (
         mtga
         / "MTGA.app/Contents/Resources/Data/il2cpp_data/Metadata/global-metadata.dat"
@@ -468,6 +558,20 @@ def cmd_symbols(mtga: Path, args: argparse.Namespace) -> None:
     print(f"# {len(matches)} matches (showing up to {args.limit}):")
     for s in matches[: args.limit]:
         print(f"  {s}")
+
+
+def cmd_types(mtga: Path, args: argparse.Namespace) -> None:
+    if _is_mono_install(mtga):
+        cmd_mono_types(mtga, args)
+        return
+    cmd_il2cpp_types(mtga, args)
+
+
+def cmd_disasm(mtga: Path, args: argparse.Namespace) -> None:
+    if _is_mono_install(mtga):
+        cmd_mono_disasm(mtga, args)
+        return
+    cmd_il2cpp_disasm(mtga, args)
 
 
 def cmd_alt(mtga: Path, args: argparse.Namespace) -> None:
@@ -588,7 +692,8 @@ def main() -> None:
     p_mat.add_argument("bundle", help="Bundle filename or substring")
 
     p_shd = sub.add_parser(
-        "shader", help="Extract MSL shader bodies from a Shader_* bundle"
+        "shader",
+        help="Extract plain-text shader bodies (MSL on macOS, GLSL on Windows) from a Shader_* bundle",
     )
     p_shd.add_argument("bundle", help="Shader bundle filename or substring")
     p_shd.add_argument("--stage", choices=["fragment", "vertex"], default="fragment")
@@ -599,21 +704,24 @@ def main() -> None:
     p_shd.add_argument("--max-chars", type=int, default=4500)
 
     p_sym = sub.add_parser(
-        "symbols", help="Search unobfuscated identifiers in global-metadata.dat"
+        "symbols",
+        help="Search unobfuscated C# identifiers (global-metadata.dat on macOS, Managed/*.dll on Windows)",
     )
     p_sym.add_argument("pattern", help="Regex pattern")
     p_sym.add_argument("--limit", type=int, default=60)
 
     p_typ = sub.add_parser(
         "types",
-        help="Dump fields and method tokens for C# types in global-metadata.dat",
+        help="Dump fields and method tokens for C# types (global-metadata.dat or Managed/<assembly>)",
     )
     p_typ.add_argument("pattern", help="Regex matching Namespace.TypeName")
+    p_typ.add_argument("--assembly", default="Core.dll")
     p_typ.add_argument("--limit", type=int, default=10)
     p_typ.add_argument("--max-members", type=int, default=40)
 
     p_dis = sub.add_parser(
-        "disasm", help="Disassemble ARM64 C# method(s) from GameAssembly.dylib"
+        "disasm",
+        help="Disassemble C# method(s) (ARM64 from GameAssembly.dylib on macOS, CIL from Managed/<assembly> on Windows)",
     )
     p_dis.add_argument("type_pattern", help="Regex matching Namespace.TypeName")
     p_dis.add_argument("method_pattern", help="Regex matching method name")

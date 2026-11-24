@@ -2,11 +2,11 @@
 name: arena-re
 description: >-
   Reverse-engineer how MTG Arena implements a visual effect, shader, animation,
-  highlight, spline, or combat/UI indicator from the locally installed macOS
-  MTGA client, and translate it clean-room into the client. Use when designing or
-  matching complex Arena VFX, shaders, particle systems, card highlights,
-  targeting lines, or multi-stage animations where video frames alone do not
-  reveal the underlying rendering technique.
+  highlight, spline, or combat/UI indicator from the locally installed macOS or
+  Windows MTGA client, and translate it clean-room into the client. Use when
+  designing or matching complex Arena VFX, shaders, particle systems, card
+  highlights, targeting lines, or multi-stage animations where video frames
+  alone do not reveal the underlying rendering technique.
 ---
 
 # Arena Reverse-Engineering Reference (Clean-Room VFX & Animation)
@@ -24,62 +24,80 @@ proprietary asset or code from the MTG Arena installation:
 
 - Never import, convert, or trace MTGA textures (`.png`, `.tga`), 3D meshes,
   prefabs, animation clips, fonts, or audio files.
-- Never paste or mechanically port decompiled C# or extracted Metal Shading
-  Language (MSL) code into Beryl.
+- Never paste or mechanically port decompiled C# or extracted shader code
+  (Metal Shading Language, GLSL, or Direct3D bytecode) into Beryl.
 - **Do** inspect MTGA strictly read-only to learn the *technique*: selection
   rules, spline/easing math, layer stack, blend mode, state transitions, UV
   scroll/polar coordinates, contrast/ramp math, and particle behavior. Then
   author original procedural WGSL, Rust geometry/splines, or code-generated
   sprites (`beryl_assets`) and tune visually against `arena-video` recordings.
 
-## Where MTGA lives on macOS and how it is structured
-
-This skill and its helper scripts read the macOS build only. The Windows build
-is laid out differently (`GameAssembly.dll`, Direct3D shaders), and a Windows
-machine without the Mac client can still film Arena with `arena-video`.
+## Where MTGA lives and how it is structured
 
 Default Steam installation on macOS:
 
 - App bundle: `~/Library/Application Support/Steam/steamapps/common/MTGA/MTGA.app`
 - Downloaded assets: `~/Library/Application Support/Steam/steamapps/common/MTGA/MTGA_Data/Downloads/`
+- C# metadata & binary (IL2CPP): `MTGA.app/Contents/Resources/Data/il2cpp_data/Metadata/global-metadata.dat` and `MTGA.app/Contents/Frameworks/GameAssembly.dylib`
 
-Key facts about the macOS Unity build (Unity 6 / IL2CPP):
+Default Steam installation on Windows:
+
+- Install directory & executable: `C:\Program Files (x86)\Steam\steamapps\common\MTGA\MTGA.exe`
+- Downloaded assets: `C:\Program Files (x86)\Steam\steamapps\common\MTGA\MTGA_Data\Downloads\`
+- Managed C# assemblies (Mono): `C:\Program Files (x86)\Steam\steamapps\common\MTGA\MTGA_Data\Managed\` (`Core.dll`, `Assembly-CSharp.dll`, `Wizards.*.dll`), with the Mono runtime at `MonoBleedingEdge\EmbedRuntime\mono-2.0-bdwgc.dll`
+- Player log: `%USERPROFILE%\AppData\LocalLow\Wizards Of The Coast\MTGA\Player.log`
+
+Key facts about the Unity 6 build on both platforms:
 
 - **~85% of Arena's VFX and animations live in data-driven AssetBundles and
-  Asset Lookup Trees (ALTs)**, not hardcoded in C#. C# (`GameAssembly.dylib`)
-  mainly evaluates generic spline/easing engines, toggles animator states,
-  assigns highlight types, and triggers prefab playback. Always inspect ALTs,
-  the Manifest, Prefabs, Materials, and Shaders before touching IL2CPP
-  disassembly.
+  Asset Lookup Trees (ALTs)**, not hardcoded in C#. C# (`GameAssembly.dylib` on
+  macOS, `MTGA_Data\Managed\Core.dll` on Windows) mainly evaluates generic
+  spline/easing engines, toggles animator states, assigns highlight types, and
+  triggers prefab playback. Always inspect ALTs, the Manifest, Prefabs,
+  Materials, and Shaders before reading disassembly.
 - **Asset Lookup Trees (`MTGA_Data/Downloads/ALT/ALT_*.mtga`)**: plain-text JSON
   decision trees (`Root`, `Nodes`, `Connections`) that map game context
   (`FromZone`, `FromOwner`, `ToZone`, `ToOwner`, `GameState_Phase`,
   `CardData_FaceDown`, `ZoneTransferReason`) to specific spline, VFX, SFX, and
-  stagger assets. These are **not** UnityFS bundles.
-- **Manifest (`Manifest_*.mtga`)**: plain-text JSON indexing every downloaded
-  `.mtga` bundle to its original Unity `Assets/...` source paths.
-- **AssetBundles (`AssetBundle/*.mtga`)**: standard unencrypted `UnityFS` (v8,
-  LZ4HC) archives containing one or more `SerializedFile` (v22) objects with
-  embedded TypeTrees. Scene bundles like `Bucket_Scenes.ScenePayloads_*` hold
-  many `SerializedFile` nodes (one per scene), not just `nodes[0]`.
-- **Shaders (`Shader_*.mtga` and `globalgamemanagers.assets`)**: on macOS,
-  Unity embeds LZ4-compressed **plain-text Metal Shading Language (MSL)**
-  (`#include <metal_stdlib>`, `xlatMtlMain`) alongside serialized blend, depth,
-  and stencil states.
-- **C# metadata (`il2cpp_data/Metadata/global-metadata.dat`)**: unencrypted
-  Unity IL2CPP v39 metadata (`0xFAB11BAF`) with unobfuscated C# namespaces,
-  types, fields, methods, and metadata tokens (`0x06xxxxxx`).
-- **Compiled C# (`MTGA.app/Contents/Frameworks/GameAssembly.dylib`)**: universal
-  Mach-O (`0xcafebabe`) with an ARM64 slice using chained fixups (`ptr & ((1 <<
-  36) - 1)`). `Il2CppCodeGenModule` tables map each method token to its exact
-  ARM64 virtual address for `xcrun lldb -b` batch disassembly.
-- **Live GPU capture**: `MTGA.app` is signed without Hardened Runtime
+  stagger assets. These are **not** UnityFS bundles, and their layout is
+  identical on macOS and Windows.
+- **Manifest (`MTGA_Data/Downloads/Manifest_*.mtga`)**: plain-text JSON indexing
+  every downloaded `.mtga` bundle to its original Unity `Assets/...` source
+  paths. Identical layout on macOS and Windows.
+- **AssetBundles (`MTGA_Data/Downloads/AssetBundle/*.mtga`)**: standard
+  unencrypted `UnityFS` (v8, LZ4HC) archives containing one or more
+  `SerializedFile` (v22) objects with embedded TypeTrees. Scene bundles like
+  `Bucket_Scenes.ScenePayloads_*` hold many `SerializedFile` nodes (one per
+  scene), not just `nodes[0]`. Identical format on macOS and Windows.
+- **Shaders (`Shader_*.mtga` and `MTGA_Data/globalgamemanagers.assets`)**:
+  - On macOS, Unity embeds LZ4-compressed **plain-text Metal Shading Language
+    (MSL)** (`#include <metal_stdlib>`, `xlatMtlMain`) alongside serialized
+    blend, depth, and stencil states.
+  - On Windows, Unity embeds both Direct3D 11 DXBC bytecode (platform `4`,
+    disassemblable via Windows' built-in `d3dcompiler_47.dll` or `fxc.exe`) and
+    LZ4-compressed **plain-text OpenGL Core GLSL** (platform `15`, `#version 330`,
+    HLSLcc output with `texture(...)` and `SV_Target0`).
+- **C# metadata and code**:
+  - On macOS (IL2CPP): unobfuscated Unity IL2CPP v39 metadata (`0xFAB11BAF`) in
+    `MTGA.app/Contents/Resources/Data/il2cpp_data/Metadata/global-metadata.dat`
+    and a universal Mach-O (`0xcafebabe`) `GameAssembly.dylib` with an ARM64
+    slice using chained fixups (`ptr & ((1 << 36) - 1)`). `Il2CppCodeGenModule`
+    tables map each method token (`0x06xxxxxx`) to its ARM64 virtual address
+    for `xcrun lldb -b` batch disassembly.
+  - On Windows (Mono, not IL2CPP): there is no `GameAssembly.dll` or
+    `global-metadata.dat`. Instead, `MTGA_Data\Managed\` holds unobfuscated
+    standard ECMA-335 `.NET` assemblies (`Core.dll`, `Assembly-CSharp.dll`,
+    `Wizards.*.dll`) whose metadata tables and CIL bytecode are read directly.
+- **Live GPU capture**: On macOS, `MTGA.app` is signed without Hardened Runtime
   (`codesign` flags `0x0`), so Xcode Metal Frame Capture can inspect live draw
-  calls, bound uniforms, and pass order whenever static inspection is ambiguous.
+  calls, bound uniforms, and pass order. On Windows, use RenderDoc or PIX on
+  Windows against `MTGA.exe` whenever static inspection is ambiguous.
 
 ## Helper script
 
-Use the read-only, standard-library helper in this skill's directory:
+Use the read-only, standard-library helper in this skill's directory. It picks
+the default Steam folder automatically on both macOS and Windows, and detects
+MSL vs. GLSL shaders and IL2CPP vs. Mono C# assemblies automatically:
 
 ```bash
 SCRIPT=.agents/skills/arena-re/scripts/inspect_mtga.py
@@ -89,24 +107,32 @@ python3 "$SCRIPT" alt ALT_ZoneTransfer "Stagger"
 python3 "$SCRIPT" prefab Bucket_Card.AttackerIcon_0
 python3 "$SCRIPT" cabs Bucket_Card.AttackerIcon_0
 python3 "$SCRIPT" materials Bucket_Card.AttackerIcon_0
+# macOS (MSL):
 python3 "$SCRIPT" shader Shader_ParticleUber --match "_DistTex.sample" --match "_MultTex.sample"
+# Windows (GLSL):
+python3 "$SCRIPT" shader Shader_ParticleUber --match "texture(_DistTex" --match "texture(_MultTex"
 python3 "$SCRIPT" symbols "UpdateHalos|DrawCombatArrow|BattlefieldIcons"
 python3 "$SCRIPT" types "SplineMovementData|MovementData|ZoneTransferGroup"
 python3 "$SCRIPT" disasm "SplineData" "HermiteGetPoint|GetModifiedPositions"
 ```
 
-Pass `--mtga <path>` if MTGA is installed outside the default Steam folder.
+In PowerShell on Windows, set
+`$SCRIPT = ".agents\skills\arena-re\scripts\inspect_mtga.py"` and run
+`python3 $SCRIPT ...`. Pass `--mtga <path>` if MTGA is installed outside the
+default Steam folder.
 
 For numeric `MonoBehaviour` / `ScriptableObject` / `Transform` / `Camera` fields
 (`AnimationCurve` Hermite keyframes, `SplineData` node vectors/Eulers, camera
 FOV and root transform), run `UnityPy` on the fly with `uv` (always set
-`FALLBACK_UNITY_VERSION` because MTGA strips the version header from bundles):
+`FALLBACK_UNITY_VERSION` because MTGA strips the version header from bundles;
+on Windows PowerShell, pipe the script with `@' ... '@ | uv run --with UnityPy python -`
+so PowerShell does not strip inner quotes):
 
 ```bash
 uv run --with UnityPy python -c '
 import UnityPy
 UnityPy.config.FALLBACK_UNITY_VERSION = "2022.3.0f1"
-env = UnityPy.load(".../Bucket_Card.MovementPayload_Spline_0_....mtga")
+env = UnityPy.load(".../MTGA_Data/Downloads/AssetBundle/Bucket_Card.MovementPayload_Spline_0_....mtga")
 for obj in env.objects:
     if obj.type.name == "MonoBehaviour":
         tree = obj.read_typetree()
@@ -154,8 +180,9 @@ or zone layout behavior:
 ### 1. Film Arena first (`arena-video`)
 
 Before reading a single shader uniform or spline node, film the exact moment in
-`~/arena` using `arena-video` (whole table first, then high-resolution crop of
-the effect or a 12–15 fps strip for fast card flights):
+`$BERYL_ARENA` (`~/arena` on macOS, `%USERPROFILE%\arena` on Windows) using
+`arena-video` (whole table first, then high-resolution crop of the effect or a
+12–15 fps strip for fast card flights):
 
 ```bash
 just video film <id> <time> --span 4 --fps 2 --cols 4 --width 960
@@ -211,7 +238,10 @@ bundle:
 
 ```bash
 python3 "$SCRIPT" materials <bundle-prefix>
+# macOS (MSL):
 python3 "$SCRIPT" shader <shader-prefix> --match "<texture>.sample"
+# Windows (GLSL):
+python3 "$SCRIPT" shader <shader-prefix> --match "texture(<texture>"
 ```
 
 Extract only the rendering architecture and parameters:
@@ -227,14 +257,17 @@ Extract only the rendering architecture and parameters:
   `pow(alpha, 0.39)`, overlay-blends a hot core color weighted by
   `pow(t, 1.38)`, and sharpens the peak with `pow(mixed * 1.06, 5.48)`.
 - **Active shader keywords** on the material (`DISTTEX_ON`, `MASKTEX_ON`,
-  `MULTTEX_ON`, `FRESNEL_ON`). Filter `shader` by `.sample(` calls in the
-  fragment body, not by uniform names in `UnityPerMaterial_Type`, because uber
-  shaders declare every uniform struct field in every variant.
+  `MULTTEX_ON`, `FRESNEL_ON`). Filter `shader` by actual texture sample calls in
+  the fragment body (`.sample(` in macOS MSL, `texture(` in Windows GLSL), not
+  by uniform names in `UnityPerMaterial_Type`, because uber shaders declare
+  every uniform struct field in every variant.
 
-### 4. Inspect C# types and ARM64 disassembly when rules or math are in code
+### 4. Inspect C# types and disassembly when rules or math are in code
 
 Use `symbols`, `types`, and `disasm` when neither assets nor video answer
-orchestration, speed multipliers, stagger compression, or interpolation math:
+orchestration, speed multipliers, stagger compression, or interpolation math
+(prints ARM64 disassembly from `GameAssembly.dylib` on macOS, or CIL bytecode
+with resolved symbols from `MTGA_Data\Managed\Core.dll` on Windows):
 
 ```bash
 python3 "$SCRIPT" types "MovementData|SplineData"
@@ -407,17 +440,19 @@ Check these failure modes that static asset reading and unit tests miss:
 - **`UnityPy` version warning**: MTGA strips the Unity version string from
   bundles; set `UnityPy.config.FALLBACK_UNITY_VERSION = "2022.3.0f1"` before
   calling `read_typetree()`.
-- **Mach-O ARM64 chained fixups & `objdump` range bug**: Raw 64-bit pointers
-  inside `GameAssembly.dylib` `__DATA_CONST`/`__DATA` carry chained-fixup
-  metadata in their upper bits; mask with `(1 << 36) - 1` before comparing
-  against virtual addresses. Also, Apple's `objdump` / `xcrun llvm-objdump`
-  ignores `--start-address`/`--stop-address` when given `--arch=arm64` on a
-  universal binary (dumping millions of lines); use `xcrun lldb -b` (as
-  `inspect_mtga.py disasm` does) to disassemble a single function range in
-  under a second.
+- **Mach-O ARM64 chained fixups & `objdump` range bug (macOS)**: Raw 64-bit
+  pointers inside `GameAssembly.dylib` `__DATA_CONST`/`__DATA` carry
+  chained-fixup metadata in their upper bits; mask with `(1 << 36) - 1` before
+  comparing against virtual addresses. Also, Apple's `objdump` /
+  `xcrun llvm-objdump` ignores `--start-address`/`--stop-address` when given
+  `--arch=arm64` on a universal binary (dumping millions of lines); use
+  `xcrun lldb -b` (as `inspect_mtga.py disasm` does) to disassemble a single
+  function range in under a second.
 - **Uber-shader false positives**: `Shader_ParticleUber` declares `_DistTex`,
   `_MultTex`, and `_FresnelExp` inside `UnityPerMaterial_Type` for *all*
-  variants. Always match on actual `.sample(` calls inside `fragment `.
+  variants. Always match on actual sample calls inside the fragment body
+  (`.sample(` inside `fragment ` on macOS MSL; `texture(` inside `void main()`
+  on Windows GLSL).
 - **Over-interpreting raw HDR floats**: Multiply material colors by vertex
   colors and check the actual video frame before picking Beryl's palette.
 - **Dual Rust workspaces formatting**: `just fmt` formats `engine/` and `client/`, JS, Python,
