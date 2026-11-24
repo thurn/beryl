@@ -284,10 +284,10 @@ The sources use data that other tools already record.
   (`fleet.py`). The hub's private listener serves the same records, the rows
   other machines posted, and its tickets, tips, hand-offs, workers and
   regressions to a registered machine. Ingest finds the hub from `[hub]` in
-  `ignite.toml` and the machine's token where the `ignite` command finds it,
-  and resumes each feed from the position it stored with the last page read.
-  When the hub cannot be reached, those sources report an error and the local
-  sources below still answer.
+  `ignite.toml` and the machine's token where the `ignite` command finds it, and
+  resumes each feed from the position it stored with the last page read. When
+  the hub cannot be reached, those sources report an error and the local sources
+  below still answer.
 - **Local Ignite measurements**, read from `daemon.db` when the hub database is
   absent. They include check pass wall times, completed tip rounds and plan
   usage samples. Check passes are the script `local`, so they never add to the

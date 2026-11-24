@@ -50,16 +50,15 @@ module's header comment says what it reads and writes.
   name, and the SQLite schema.
 - `ingest.py`: the ingest framework. A `LineSource` reads files of lines from
   their recorded offsets, a `FileSource` reads small files whole when they
-  change, a `SnapshotSource` stores a command's output when its digest
-  changes, and a `CursorSource` or `TokenSource` reads pages after a stored
-  position.
+  change, a `SnapshotSource` stores a command's output when its digest changes,
+  and a `CursorSource` or `TokenSource` reads pages after a stored position.
 - Sources: `ignite.py` reads fleet records from the hub database, or tickets
   from the daemon's mirror. `fleet.py` reads the same fleet data from the hub's
   private listener on other machines, and measurements from the local daemon's
-  database. Tickets come first in `cli.sources()` because windows read them. `claude.py`,
-  `codex.py` and `agy.py` read the providers' transcripts. `commits.py` reads
-  `git log` of `staging` and `master`. `beads.py` and `ticket_ids.py` build
-  ticket rows and resolve ticket IDs.
+  database. Tickets come first in `cli.sources()` because windows read them.
+  `claude.py`, `codex.py` and `agy.py` read the providers' transcripts.
+  `commits.py` reads `git log` of `staging` and `master`. `beads.py` and
+  `ticket_ids.py` build ticket rows and resolve ticket IDs.
 - Derived rows: `windows.py` (ticket windows, from the `ignite start` commands a
   session ran), `kinds.py` and `timing.py` (each window's seconds by command
   kind), `tokens.py` (dollars), `cpu.py` (leases and CPU minutes per ticket),
