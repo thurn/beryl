@@ -116,10 +116,4 @@ impl<L: Layout> Asking<L> {
     pub fn paused(&self) -> bool {
         self.question.is_some()
     }
-
-    /// Takes the question the run stopped at, leaving the run open.
-    #[inline]
-    pub fn take_question(&mut self) -> Option<Decision<L>> {
-        self.question.take()
-    }
 }

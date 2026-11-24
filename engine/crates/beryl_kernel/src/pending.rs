@@ -357,8 +357,7 @@ pub enum Pending<L: Layout = Small> {
     /// A land being played asks its controller for the value of `kind` it chooses as it
     /// enters ([`beryl_card::Rewrite::Choose`]): playing a land is a special action, so
     /// nothing can pause in the middle of it to ask. `pay_life` is the answer to
-    /// [`Pending::EnterPayingLife`], asked first where the land asks both. Last among the variants, so the
-    /// others keep the discriminants a state's hash reads.
+    /// [`Pending::EnterPayingLife`], asked first where the land asks both.
     EnterChoosing {
         slot: L::Slot,
         kind: beryl_card::ChosenKind,
@@ -366,8 +365,7 @@ pub enum Pending<L: Layout = Small> {
     },
     /// The controller of the permanent in `slot` activates its mana ability `ability`, one
     /// activated only as an instant that makes one mana of any color, and chooses the color
-    /// before it is activated. Last among the variants, so the others keep the discriminants
-    /// a state's hash reads.
+    /// before it is activated.
     ManaColor {
         slot: L::Slot,
         ability: beryl_card::ObjectAbility,
@@ -430,6 +428,31 @@ impl<L: Layout> std::hash::Hash for Pending<L> {
 
 impl Copy for Pending<Small> {}
 
+impl<L: Layout> Pending<L> {
+    /// The paused run the question belongs to: a resolution, a step's turn-based actions or
+    /// the start of a turn, each run again from its start with the answers it records.
+    pub fn paused(&self) -> Option<&Resolving<L>> {
+        match self {
+            Pending::Resolving(r) | Pending::StepActions(r) | Pending::TurnStart(r) => Some(r),
+            Pending::None
+            | Pending::PlayOrDraw { .. }
+            | Pending::Mulligans
+            | Pending::Discard
+            | Pending::LegendRule { .. }
+            | Pending::EnterPayingLife { .. }
+            | Pending::DeclareAttackers { .. }
+            | Pending::DeclareBlockers { .. }
+            | Pending::CombatDamage { .. }
+            | Pending::ExactCombatDamage(_)
+            | Pending::Casting(_)
+            | Pending::TurningFaceUp { .. }
+            | Pending::OrderEntered { .. }
+            | Pending::EnterChoosing { .. }
+            | Pending::ManaColor { .. } => None,
+        }
+    }
+}
+
 impl<L: Layout> State<L> {
     /// Opens the question of a machine step, or replaces the one open with its next: a
     /// casting that reached its next step is asked again whole. A resolution pauses through
@@ -469,25 +492,10 @@ impl<L: Layout> State<L> {
         question: Decision<L>,
         asks_hidden: bool,
     ) {
-        let (knowledge, hidden) = match &self.pending {
-            Pending::Resolving(r) => (r.knowledge.clone(), r.hidden),
-            Pending::None
-            | Pending::PlayOrDraw { .. }
-            | Pending::Mulligans
-            | Pending::Discard
-            | Pending::LegendRule { .. }
-            | Pending::EnterPayingLife { .. }
-            | Pending::DeclareAttackers { .. }
-            | Pending::DeclareBlockers { .. }
-            | Pending::CombatDamage { .. }
-            | Pending::ExactCombatDamage(_)
-            | Pending::Casting(_)
-            | Pending::StepActions(_)
-            | Pending::TurnStart(_)
-            | Pending::TurningFaceUp { .. }
-            | Pending::OrderEntered { .. }
-            | Pending::EnterChoosing { .. }
-            | Pending::ManaColor { .. } => (self.knowledge.clone(), 0),
+        let (knowledge, hidden) = if let Pending::Resolving(r) = &self.pending {
+            (r.knowledge.clone(), r.hidden)
+        } else {
+            (self.knowledge.clone(), 0)
         };
         self.pending = Pending::Resolving(Resolving {
             record,
@@ -509,24 +517,10 @@ impl<L: Layout> State<L> {
         question: Decision<L>,
         starting_turn: bool,
     ) {
-        let knowledge = match &self.pending {
-            Pending::StepActions(r) | Pending::TurnStart(r) => r.knowledge.clone(),
-            Pending::None
-            | Pending::PlayOrDraw { .. }
-            | Pending::Mulligans
-            | Pending::Discard
-            | Pending::LegendRule { .. }
-            | Pending::EnterPayingLife { .. }
-            | Pending::DeclareAttackers { .. }
-            | Pending::DeclareBlockers { .. }
-            | Pending::CombatDamage { .. }
-            | Pending::ExactCombatDamage(_)
-            | Pending::Casting(_)
-            | Pending::Resolving(_)
-            | Pending::TurningFaceUp { .. }
-            | Pending::OrderEntered { .. }
-            | Pending::EnterChoosing { .. }
-            | Pending::ManaColor { .. } => self.knowledge.clone(),
+        let knowledge = if let Pending::StepActions(r) | Pending::TurnStart(r) = &self.pending {
+            r.knowledge.clone()
+        } else {
+            self.knowledge.clone()
         };
         let paused = Resolving {
             record,
@@ -543,33 +537,19 @@ impl<L: Layout> State<L> {
     }
 
     /// Settles the open question so that a resolution's body, or a step's turn-based
-    /// actions, run from their start. If it was paused, each player knows again what they knew as it began, which
-    /// [`State::pause_resolution`] kept: a run asks its questions with the candidates the
-    /// first run asked them with (architecture §7.3). Returns the cards some player knew
+    /// actions, run from their start. If it was paused, each player knows again what they knew
+    /// as it began, which [`State::pause_resolution`] kept: a run asks its questions with the
+    /// candidates the first run asked them with (architecture §7.3). Returns the cards some player knew
     /// beyond that, which the earlier runs revealed and chance must not count as revealed
     /// again ([`crate::chance`]); none for a resolution that was not paused.
     #[inline]
     pub fn resume_resolution(&mut self) -> Bitboard<L::Slot> {
-        let revealed = match &self.pending {
-            Pending::Resolving(r) | Pending::StepActions(r) | Pending::TurnStart(r) => {
+        let revealed = match self.pending.paused() {
+            Some(r) => {
                 let knowledge = r.knowledge.clone();
                 self.restore_knowledge(knowledge)
             }
-            Pending::None
-            | Pending::PlayOrDraw { .. }
-            | Pending::Mulligans
-            | Pending::Discard
-            | Pending::LegendRule { .. }
-            | Pending::EnterPayingLife { .. }
-            | Pending::DeclareAttackers { .. }
-            | Pending::DeclareBlockers { .. }
-            | Pending::CombatDamage { .. }
-            | Pending::ExactCombatDamage(_)
-            | Pending::Casting(_)
-            | Pending::TurningFaceUp { .. }
-            | Pending::OrderEntered { .. }
-            | Pending::EnterChoosing { .. }
-            | Pending::ManaColor { .. } => Bitboard::EMPTY,
+            None => Bitboard::EMPTY,
         };
         self.pending = Pending::None;
         revealed

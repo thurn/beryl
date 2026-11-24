@@ -129,26 +129,8 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// which one of them will choose who takes the first turn ... The player chosen to take
     /// the first turn is the starting player."
     pub fn starting_player(&self) -> Option<Seat> {
-        match self.state.pending() {
-            Pending::PlayOrDraw { .. } => None,
-            Pending::None
-            | Pending::Mulligans
-            | Pending::Discard
-            | Pending::LegendRule { .. }
-            | Pending::EnterPayingLife { .. }
-            | Pending::DeclareAttackers { .. }
-            | Pending::DeclareBlockers { .. }
-            | Pending::CombatDamage { .. }
-            | Pending::ExactCombatDamage(_)
-            | Pending::Casting(_)
-            | Pending::Resolving(_)
-            | Pending::StepActions(_)
-            | Pending::TurnStart(_)
-            | Pending::TurningFaceUp { .. }
-            | Pending::OrderEntered { .. }
-            | Pending::EnterChoosing { .. }
-            | Pending::ManaColor { .. } => Some(self.state.turn().starting_player),
-        }
+        let choosing = matches!(self.state.pending(), Pending::PlayOrDraw { .. });
+        (!choosing).then_some(self.state.turn().starting_player)
     }
 
     /// The objects in the zone `key` names: public, though the identities may not be.
@@ -348,27 +330,21 @@ impl<'a, L: Layout> Observation<'a, L> {
     ///
     /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
     pub fn hidden_picks(&self) -> Bitboard<L::Slot> {
-        let mut slots = Bitboard::EMPTY;
         if let Pending::Resolving(r) = self.root.pending() {
-            for slot in r.hidden_picks() {
-                slots.insert(slot);
-            }
+            r.hidden_picks().collect()
+        } else {
+            Bitboard::EMPTY
         }
-        slots
     }
 
     /// The hidden picks of the paused resolution whose cards the viewer does not know, and
     /// the filter each passed ([`HiddenPicks`]); none where there are none.
     fn unseen_hidden_picks(&self, t: &GameTable) -> Option<HiddenPicks<L>> {
-        let Pending::Resolving(r) = self.root.pending() else {
-            return None;
-        };
-        let mut slots = Bitboard::EMPTY;
-        for slot in r.hidden_picks() {
-            if !self.root.knows(self.viewer, slot) {
-                slots.insert(slot);
-            }
-        }
+        let picked = self.hidden_picks();
+        let slots: Bitboard<L::Slot> = picked
+            .iter()
+            .filter(|&slot| !self.root.knows(self.viewer, slot))
+            .collect();
         if slots.is_empty() {
             return None;
         }

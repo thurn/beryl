@@ -43,7 +43,7 @@ pub fn collapse<L: Layout>(s: &State<L>, candidates: Bitboard<L::Slot>) -> Bitbo
 #[inline(never)]
 fn collapse_several<L: Layout>(s: &State<L>, candidates: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
     // Of interchangeable objects the candidate is the first in candidate order.
-    collapse_ordered(s, candidates.iter())
+    collapse_in_order(s, candidates.iter())
 }
 
 /// Whether two object slots are represented by one candidate (architecture §7.2). Read-only
@@ -55,13 +55,6 @@ pub fn interchangeable<L: Layout>(s: &State<L>, a: L::Slot, b: L::Slot) -> bool 
 /// [`collapse`] keeping the first of interchangeable objects in the order of `slots`
 /// rather than the lowest slot.
 pub fn collapse_in_order<L: Layout>(
-    s: &State<L>,
-    slots: impl Iterator<Item = L::Slot>,
-) -> Bitboard<L::Slot> {
-    collapse_ordered(s, slots)
-}
-
-fn collapse_ordered<L: Layout>(
     s: &State<L>,
     slots: impl Iterator<Item = L::Slot>,
 ) -> Bitboard<L::Slot> {

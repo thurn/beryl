@@ -3,7 +3,6 @@
 //! each pick leaves.
 
 use beryl_engine::card::Types;
-use beryl_engine::state::Pending;
 use beryl_engine::{
     Choice, Decision, Layout, Profile, Refusal, Replay, Scratch, Seat, State, Step, Stops, Zone,
     ZoneKey, apply, next, observe, refusal,
@@ -22,10 +21,7 @@ use super::held::Table;
 /// take the recorded answer of the question after it.
 pub(crate) fn forced<L: Layout>(s: &State<L>) -> State<L> {
     let mut copy = s.clone();
-    if matches!(
-        s.pending(),
-        Pending::Resolving(_) | Pending::StepActions(_) | Pending::TurnStart(_)
-    ) {
+    if s.pending().paused().is_some() {
         return copy;
     }
     copy.set_profile(Profile {
