@@ -103,99 +103,28 @@ fn family_corpora_never_change() {
     );
 }
 
-/// Each family pairs nearly all its steps, which the gate needs (it fails past a tenth
-/// skipped), and the do-nothing family pairs every one.
+/// Each family pairs nearly all its steps, which `just count-gate --family` needs (it fails
+/// past a tenth skipped, `SKIPPED_LIMIT` in `tools/src/beryl_tools/count_gate.py`); the
+/// do-nothing family pairs every one; no rollout stalls on a full fixed-capacity list, whose
+/// steps would not be what a `Large` game costs; and the counts are the same on a second run,
+/// since the gate compares counts from separate runs. The exact counts are not pinned: they
+/// move with every change to the engine or the rollout policy, and the corpora themselves are
+/// pinned by `family_corpora_never_change`.
 #[test]
 fn families_pair_their_steps() {
-    let found: Vec<(&str, Pairing)> = FAMILIES
-        .iter()
-        .map(|f| (f.name, roll_paired(&FamilyWorkload::new(f.name))))
-        .collect();
-    assert_eq!(
-        found,
-        vec![
-            (
-                "blank",
-                Pairing {
-                    paired: 3_695,
-                    skipped: 0,
-                    capacity_stalls: 0,
-                    layer_recomputes: 1_439,
-                    transactions: 0
-                }
-            ),
-            (
-                "attachments",
-                Pairing {
-                    paired: 3_619,
-                    skipped: 30,
-                    capacity_stalls: 0,
-                    layer_recomputes: 821,
-                    transactions: 3_136
-                }
-            ),
-            (
-                "layers",
-                Pairing {
-                    paired: 1_700,
-                    skipped: 0,
-                    capacity_stalls: 0,
-                    layer_recomputes: 880,
-                    transactions: 0
-                }
-            ),
-            (
-                "replacement",
-                Pairing {
-                    paired: 2_775,
-                    skipped: 0,
-                    capacity_stalls: 0,
-                    layer_recomputes: 827,
-                    transactions: 7_700
-                }
-            ),
-            (
-                "costs",
-                Pairing {
-                    paired: 2_953,
-                    skipped: 0,
-                    capacity_stalls: 0,
-                    layer_recomputes: 1_278,
-                    transactions: 2_901
-                }
-            ),
-            (
-                "zones-and-text",
-                Pairing {
-                    paired: 2_662,
-                    skipped: 13,
-                    capacity_stalls: 0,
-                    layer_recomputes: 1_097,
-                    transactions: 2_515
-                }
-            ),
-            (
-                "copies",
-                Pairing {
-                    paired: 3_765,
-                    skipped: 162,
-                    capacity_stalls: 0,
-                    layer_recomputes: 1_252,
-                    transactions: 3_771
-                }
-            ),
-            (
-                // The rollout can target a manifested creature with a planeswalker's
-                // ability once its public creature characteristics are visible to the policy.
-                "identity",
-                Pairing {
-                    paired: 2_867,
-                    skipped: 99,
-                    capacity_stalls: 0,
-                    layer_recomputes: 1_346,
-                    transactions: 2_872
-                }
-            ),
-        ]
-    );
+    for f in FAMILIES {
+        let w = FamilyWorkload::new(f.name);
+        let p = roll_paired(&w);
+        assert!(p.paired > 0, "{}: {p:?}", f.name);
+        assert!(
+            p.skipped * 10 <= p.paired + p.skipped,
+            "{}: over a tenth of the steps skipped: {p:?}",
+            f.name
+        );
+        if f.name == "blank" {
+            assert_eq!(p.skipped, 0, "{p:?}");
+        }
+        assert_eq!(p.capacity_stalls, 0, "{}: {p:?}", f.name);
+        assert_eq!(roll_paired(&w), p, "{}: a second run differs", f.name);
+    }
 }
