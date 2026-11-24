@@ -128,4 +128,46 @@ fn the_main_checkout_keeps_its_local_branch_at_a_custom_ref() {
     );
     assert_eq!(refs::head(&clone).unwrap(), ahead);
     assert_eq!(refs::branch(&clone).unwrap().as_deref(), Some("staging"));
+    // A custom ref outside `refs/heads/` leaves upstream config alone.
+    assert_eq!(refs::branch_upstream(&clone, "staging").unwrap(), None);
+}
+
+#[test]
+fn main_checkout_repairs_branch_upstream_and_leaves_other_remotes_alone() {
+    let scratch = Scratch::new("branch-upstream-sync");
+    let (_, clone) = remote_and_clone(&scratch);
+    let start = refs::head(&clone).unwrap();
+    git(&clone, &["branch", "staging", start.as_str()]);
+    git(
+        &clone,
+        &["push", "--quiet", "origin", "staging:refs/heads/staging"],
+    );
+    // Simulate a checkout left over from when staging lived under `refs/ignite/staging`.
+    git(&clone, &["config", "branch.staging.remote", "origin"]);
+    git(
+        &clone,
+        &["config", "branch.staging.merge", "refs/ignite/staging"],
+    );
+
+    let done = fastforward::main_checkout(&clone, "origin", &["staging".to_owned()]).unwrap();
+    assert_eq!(
+        done,
+        FastForward::Branches(vec![("staging".to_owned(), Branch::Current)])
+    );
+    assert_eq!(
+        refs::branch_upstream(&clone, "staging").unwrap(),
+        Some(("origin".to_owned(), "refs/heads/staging".to_owned()))
+    );
+
+    // A branch explicitly tracking another remote is not overwritten.
+    git(&clone, &["config", "branch.staging.remote", "upstream"]);
+    git(
+        &clone,
+        &["config", "branch.staging.merge", "refs/heads/other"],
+    );
+    fastforward::main_checkout(&clone, "origin", &["staging".to_owned()]).unwrap();
+    assert_eq!(
+        refs::branch_upstream(&clone, "staging").unwrap(),
+        Some(("upstream".to_owned(), "refs/heads/other".to_owned()))
+    );
 }

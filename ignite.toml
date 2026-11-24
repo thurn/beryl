@@ -4,11 +4,11 @@
 
 [repository]
 remote = "origin"
-# Ignite's own refs live under `refs/ignite/` on the remote, not under `refs/heads/`, so GitHub
-# lists `master` as the repository's only branch. A fetch copies them to `origin/ignite/staging`
-# and so on, and the main checkout keeps a local branch `staging` at `refs/ignite/staging`
-# (`ignite_core::refname`). The integration ref every landing pushes to.
-staging = "refs/ignite/staging"
+# `staging` and `master` are explicit remote branches under `refs/heads/` on the remote, so normal
+# `git fetch` and external tools see `origin/staging` and `origin/master`. Ignite's internal refs
+# (`green`, `release` and released tickets' saved work) live under `refs/ignite/` so GitHub lists
+# only `master` and `staging` as branches (`ignite_core::refname`).
+staging = "staging"
 master = "master"
 # Daemons build Ignite from this ref, not from `master`. A landing that changes Ignite moves it
 # once the `ignite` family passes there, so an Ignite fix deploys without waiting for tip

@@ -111,6 +111,29 @@ pub fn branch(tree: &Path) -> Result<Option<String>> {
     }
 }
 
+/// The `(remote, merge)` upstream configured for `local_branch`, or `None` when either
+/// `branch.<local_branch>.remote` or `branch.<local_branch>.merge` is unset.
+pub fn branch_upstream(repo: &Path, local_branch: &str) -> Result<Option<(String, String)>> {
+    let Some(remote) = config_get(repo, &format!("branch.{local_branch}.remote"))? else {
+        return Ok(None);
+    };
+    let Some(merge) = config_get(repo, &format!("branch.{local_branch}.merge"))? else {
+        return Ok(None);
+    };
+    Ok(Some((remote, merge)))
+}
+
+/// Reads one git config key, returning `Ok(None)` when the key is absent (exit status 1).
+pub(crate) fn config_get(repo: &Path, key: &str) -> Result<Option<String>> {
+    let mut command = cmd::git(repo, ["config", "--get", key]);
+    let out = cmd::output(&mut command)?;
+    match out.status.code() {
+        Some(0) => Ok(Some(String::from_utf8_lossy(&out.stdout).trim().to_owned())),
+        Some(1) => Ok(None),
+        _ => Err(Error::Io(cmd::failure(&command, &out))),
+    }
+}
+
 /// The commits after `from` up to and including `to`, oldest first.
 pub fn commits_between(repo: &Path, from: &Commit, to: &Commit) -> Result<Vec<Commit>> {
     let range = format!("{from}..{to}");
@@ -214,6 +237,13 @@ mod tests {
         assert!(!is_ancestor(&dir, &two, &one).unwrap());
         assert!(!is_ancestor(&dir, &side, &two).unwrap());
         assert!(!is_ancestor(&dir, &unknown, &two).unwrap());
+        assert_eq!(branch_upstream(&dir, "main").unwrap(), None);
+        git(&dir, &["config", "branch.main.remote", "origin"]);
+        git(&dir, &["config", "branch.main.merge", "refs/heads/main"]);
+        assert_eq!(
+            branch_upstream(&dir, "main").unwrap(),
+            Some(("origin".to_owned(), "refs/heads/main".to_owned()))
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 }

@@ -267,17 +267,19 @@ This section names the parts. Each has its own section below.
   then it moves `master` forward once the budgeted checks pass. A landing that
   broke the build is **reverted**; any other failure gets a regression ticket
   and is fixed forward.
-- **Ignite's refs** are `staging`, `green`, the **release ref** that daemons
-  build Ignite from, and the saved work of released tickets. In this repository
-  they live under `refs/ignite/` on the remote (`refs/ignite/staging`,
-  `refs/ignite/green`, `refs/ignite/release` and `refs/ignite/tickets/<ticket>`,
-  set in `ignite.toml`'s `[repository]`). They are not branches, so GitHub lists
-  `master` as the repository's only branch, but git fetches and pushes them as
-  it does branches. A fetch copies each to a remote-tracking ref named
-  `origin/ignite/staging`, `origin/ignite/green` and so on. The main checkout
-  keeps a local branch `staging` at `refs/ignite/staging`, and `green` at
-  `refs/ignite/green` (`ignite_core::refname::local_branch`). A push by hand
-  names the full ref: `git push origin <commit>:refs/ignite/staging`.
+- **Ignite's branches and internal refs**: `staging` and `master` are explicit
+  remote branches (`refs/heads/staging` and `refs/heads/master`, tracked as
+  `origin/staging` and `origin/master`), and the main checkout keeps local
+  `staging` and `master` branches tracking them. Ignite's internal refs —
+  `green`, the **release ref** that daemons build Ignite from, and the saved
+  work of released tickets — live under `refs/ignite/` on the remote
+  (`refs/ignite/green`, `refs/ignite/release` and
+  `refs/ignite/tickets/<ticket>`, set in `ignite.toml`'s `[repository]`).
+  Because those live outside `refs/heads/`, GitHub lists only `master` and
+  `staging` as branches, while git fetches and pushes the internal refs as it
+  does branches (copied to `origin/ignite/green`, `origin/ignite/release` and so
+  on). A push by hand to an internal ref names the full ref:
+  `git push origin <commit>:refs/ignite/release`.
 - A **worker** is a headless CLI session that implements a ticket. The **pool**
   is a machine's set of workers. A **hand-off** is a reservation used to start a
   worker.
@@ -2198,8 +2200,8 @@ hides.
 
 ## Landing
 
-`ignite land` is the only way commits reach `staging` (`refs/ignite/staging`).
-It replaces `enact push`, the ticket's closing comment and `enact close`.
+`ignite land` is the only way commits reach `staging` (`refs/heads/staging`). It
+replaces `enact push`, the ticket's closing comment and `enact close`.
 
 A change is checked once, on the commit it was written on, and lands by that
 result. `ignite check`, or the landing itself when no check has run, runs the
@@ -2408,7 +2410,7 @@ exact tip it pushes. The steps, in order:
    it and go back to step 2. The lease is taken only after the gate passes and
    held only for the push, so landings gate in parallel and never wait for
    another landing's gate.
-6. Push the commit from the landing tree to `staging` (`refs/ignite/staging`) on
+6. Push the commit from the landing tree to `staging` (`refs/heads/staging`) on
    the git remote, and release the lease.
 7. Record the commits and the files they touch on the ticket with the agent's
    note, close the ticket and release the ticket tree.

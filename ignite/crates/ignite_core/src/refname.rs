@@ -24,6 +24,13 @@ pub fn remote_ref(name: &str) -> String {
     }
 }
 
+/// Whether `name` refers to a branch under `refs/heads/`: either a bare branch name such as
+/// `staging` or an explicit `refs/heads/<name>`. A custom ref such as `refs/ignite/green`
+/// returns `false`.
+pub fn is_branch(name: &str) -> bool {
+    remote_ref(name).starts_with("refs/heads/")
+}
+
 /// The remote-tracking ref a fetch of `name` from `remote` updates: `refs/remotes/<remote>/`
 /// followed by the branch name, or by the full ref without its leading `refs/`.
 pub fn tracking_ref(remote: &str, name: &str) -> String {
@@ -61,6 +68,8 @@ mod tests {
 
     #[test]
     fn a_bare_name_is_a_branch_and_keeps_its_tracking_ref() {
+        assert!(is_branch("staging"));
+        assert!(is_branch("refs/heads/master"));
         assert_eq!(remote_ref("staging"), "refs/heads/staging");
         assert_eq!(
             tracking_ref("origin", "staging"),
@@ -78,6 +87,8 @@ mod tests {
 
     #[test]
     fn a_custom_ref_is_itself_and_tracks_under_the_remote() {
+        assert!(!is_branch("refs/ignite/staging"));
+        assert!(!is_branch("refs/ignite/green"));
         assert_eq!(remote_ref("refs/ignite/staging"), "refs/ignite/staging");
         assert_eq!(
             tracking_ref("origin", "refs/ignite/staging"),

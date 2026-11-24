@@ -92,6 +92,7 @@ pub fn main_checkout_with_progress(
             continue;
         };
         let local = cmd::commit(&local)?;
+        sync_upstream(repo, remote, branch, &local_branch)?;
         let outcome = if local == remote_tip {
             Branch::Current
         } else if !is_ancestor(repo, &local, &remote_tip)? {
@@ -120,6 +121,33 @@ pub fn main_checkout_with_progress(
         done.push((branch.clone(), outcome));
     }
     Ok(FastForward::Branches(done))
+}
+
+/// Points `local_branch`'s upstream at `remote` and `refs/heads/<branch>` when `branch` is a
+/// remote branch and the local branch is either untracked or tracks a different ref on the same
+/// remote (such as a stale `refs/ignite/staging` upstream after switching back to a branch).
+/// A branch tracking another remote, or a custom ref outside `refs/heads/`, is left alone.
+fn sync_upstream(repo: &Path, remote: &str, branch: &str, local_branch: &str) -> Result<()> {
+    if !refname::is_branch(branch) {
+        return Ok(());
+    }
+    let expected_merge = refname::remote_ref(branch);
+    let remote_key = format!("branch.{local_branch}.remote");
+    let merge_key = format!("branch.{local_branch}.merge");
+    let current_remote = refs::config_get(repo, &remote_key)?;
+    if let Some(other) = &current_remote
+        && other != remote
+    {
+        return Ok(());
+    }
+    let current_merge = refs::config_get(repo, &merge_key)?;
+    if current_remote.as_deref() != Some(remote) {
+        cmd::run(repo, ["config", &remote_key, remote])?;
+    }
+    if current_merge.as_deref() != Some(expected_merge.as_str()) {
+        cmd::run(repo, ["config", &merge_key, &expected_merge])?;
+    }
+    Ok(())
 }
 
 fn busy(repo: &Path) -> Result<bool> {
