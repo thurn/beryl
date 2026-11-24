@@ -11,7 +11,7 @@ use ignite_core::traits::{Clock, Error, Result};
 
 use ignite_git::changed::CommitPaths;
 
-use super::{ListingPhase, TipCheck, TipLanding, TipRun, TipSet, TipWork};
+use super::{CachedTipSet, ListingPhase, TipCheck, TipLanding, TipRun, TipSet, TipWork};
 use crate::checks::{BUILD_FAILED, CheckRun, Checks, RunOptions, Scoring};
 use crate::land::env::LandTrees;
 use crate::server::Context;
@@ -75,6 +75,18 @@ impl TipWork for CheckTipWork {
         self.at(ctx, commit, |tree| {
             self.checks.regression_checks_for(ctx, tree, phase)
         })?
+    }
+
+    fn cached_checks(&self, ctx: &Context, commit: &Commit) -> Result<Option<CachedTipSet>> {
+        let Some(lease) = self
+            .trees
+            .lease_landing(&format!("tip ancestor {commit}"), commit)?
+        else {
+            return Ok(None);
+        };
+        let listing = self.checks.cached_regression_checks(ctx, &lease.tree);
+        self.trees.release_landing(&lease.tree, Some(commit))?;
+        listing.map(Some)
     }
 
     fn run(

@@ -192,23 +192,18 @@ impl<'a> Scope<'a> {
         if self.only.is_some() {
             return Ok(HashSet::new());
         }
-        let platforms: BTreeSet<_> = checks
-            .iter()
-            .filter(|check| !check.runnable && check.reuse && !check.is_build())
-            .filter(|check| {
-                verdicts
-                    .get(&check.key)
-                    .is_none_or(|run| run.outcome == Outcome::Incomplete)
-            })
-            .filter_map(|check| check.key.platform)
-            .collect();
-        let mut after = HashSet::new();
-        for os in platforms {
-            if let Some(plan) = ctx.hub.tip_budget(tip, os)? {
-                after.extend(plan.after);
-            }
-        }
-        Ok(after)
+        budget_after(
+            ctx,
+            tip,
+            checks
+                .iter()
+                .filter(|check| !check.runnable && check.reuse && !check.is_build())
+                .filter(|check| {
+                    verdicts
+                        .get(&check.key)
+                        .is_none_or(|run| run.outcome == Outcome::Incomplete)
+                }),
+        )
     }
 
     pub fn record_deferrals(
@@ -304,4 +299,20 @@ impl<'a> Scope<'a> {
             expected = ctx.hub.tip_coverage()?.platforms.remove(&platform);
         }
     }
+}
+
+/// Only keys from a plan published for this exact commit can wait until after promotion.
+pub(super) fn budget_after<'a>(
+    ctx: &Context,
+    tip: &Commit,
+    checks: impl Iterator<Item = &'a TipCheck>,
+) -> Result<HashSet<ResultKey>> {
+    let platforms: BTreeSet<_> = checks.filter_map(|check| check.key.platform).collect();
+    let mut after = HashSet::new();
+    for os in platforms {
+        if let Some(plan) = ctx.hub.tip_budget(tip, os)? {
+            after.extend(plan.after);
+        }
+    }
+    Ok(after)
 }

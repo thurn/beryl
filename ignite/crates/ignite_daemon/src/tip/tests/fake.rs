@@ -14,7 +14,8 @@ use ignite_git::changed::CommitPaths;
 use super::{commit, ticket};
 use crate::server::Context;
 use crate::tip::{
-    ListingPhase, TipCheck, TipLanding, TipRun, TipSet, TipWork, Unlisted, ticketed_landings,
+    CachedTipSet, ListingPhase, TipCheck, TipLanding, TipRun, TipSet, TipWork, Unlisted,
+    ticketed_landings,
 };
 
 /// Checks, run outcomes and landings scripted by commit. A run stores its results at the hub
@@ -159,14 +160,8 @@ impl FakeWork {
     }
 }
 
-impl TipWork for FakeWork {
-    fn checks(&self, ctx: &Context, at: &Commit, phase: ListingPhase) -> Result<TipSet> {
-        if let Some(before) = self.before_listing.lock().unwrap().as_ref() {
-            before(phase);
-        }
-        if phase != ListingPhase::PeerBuild {
-            Self::launch(ctx, "list");
-        }
+impl FakeWork {
+    fn listing(&self, at: &Commit, phase: ListingPhase) -> TipSet {
         let matches = |check: &TipCheck| {
             phase.includes(check.is_build())
                 && match phase {
@@ -199,12 +194,32 @@ impl TipWork for FakeWork {
             })
             .cloned()
             .collect();
-        Ok(TipSet {
+        TipSet {
             defer_platforms: self.defer_platforms.lock().unwrap().clone(),
             off: off.iter().filter(|check| matches(check)).cloned().collect(),
             unlisted,
             checks: listed.into_iter().filter(matches).collect(),
-        })
+        }
+    }
+}
+
+impl TipWork for FakeWork {
+    fn checks(&self, ctx: &Context, at: &Commit, phase: ListingPhase) -> Result<TipSet> {
+        if let Some(before) = self.before_listing.lock().unwrap().as_ref() {
+            before(phase);
+        }
+        if phase != ListingPhase::PeerBuild {
+            Self::launch(ctx, "list");
+        }
+        Ok(self.listing(at, phase))
+    }
+
+    fn cached_checks(&self, _ctx: &Context, at: &Commit) -> Result<Option<CachedTipSet>> {
+        let known = self.checks.lock().unwrap().contains_key(at);
+        Ok(known.then(|| CachedTipSet {
+            listing: self.listing(at, ListingPhase::All),
+            covered_by: self.covered_by(),
+        }))
     }
 
     fn parallel(&self) -> usize {

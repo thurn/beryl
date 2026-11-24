@@ -173,10 +173,10 @@ impl TipVerifier {
         check: &TipCheck,
         output: Option<&str>,
         allow_revert: bool,
-    ) -> Result<()> {
+    ) -> Result<Option<Commit>> {
         super::round::require_running()?;
         if !check.runnable || self.reported.contains(&check.key) {
-            return Ok(());
+            return Ok(None);
         }
         // Where git cannot say, the failure is reported, which at worst repeats a report.
         let newest = ctx
@@ -199,24 +199,30 @@ impl TipVerifier {
                  reports it if it still fails",
                 check.check
             );
-            return Ok(());
+            return Ok(None);
         }
         // A failing check at a tip is always reported. With no landing to blame (the hub
         // recorded none between the commits), the report names the whole range since the last
         // verified commit and no ticket.
         let culprit = self.find_culprit(ctx, check, last, tip);
         super::round::require_running()?;
+        // The last suspect in the narrowed range is known to fail by its end. Promotion
+        // must stop before that landing, including when the search ended with one suspect.
+        let cutoff = culprit
+            .as_ref()
+            .ok()
+            .and_then(|culprit| culprit.as_ref()?.suspects.last()?.commits.first().cloned());
         // A build check broken by one landing is reverted instead, when `revert` allows it.
         if allow_revert && let Ok(Some(found)) = &culprit {
             match self.try_revert(ctx, tip, check, found, output) {
                 Handled::Reverted => {
                     self.reported.insert(check.key.clone());
-                    return Ok(());
+                    return Ok(cutoff);
                 }
                 // The revert gave up because the tip moved with a change to what the check
                 // reads; as above, only once per check.
                 Handled::NextRound if self.deferred.insert(check.check.clone()) => {
-                    return Ok(());
+                    return Ok(cutoff);
                 }
                 Handled::NextRound | Handled::Report => {}
             }
@@ -238,6 +244,6 @@ impl TipVerifier {
         };
         ctx.hub.regression(&with_culprit(report, culprit))?;
         self.reported.insert(check.key.clone());
-        Ok(())
+        Ok(cutoff)
     }
 }

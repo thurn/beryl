@@ -200,7 +200,16 @@ pub fn claim(conn: &Connection, claim: &TipClaim, now: Timestamp) -> Result<TipC
 /// made the hub's upkeep blame silent machines for them. A recovered tip keeps its failure
 /// evidence, and a slower round cannot mark the verified commit failed again.
 pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Result<()> {
-    seen(conn, verified.commit.as_str(), now)?;
+    if let Some(descendant) = &verified.failed_descendant {
+        // An ancestor can be recorded for the first time after the hub saw its descendant.
+        conn.execute(
+            "INSERT OR IGNORE INTO tips (commit_sha, seen, verified, state)
+             VALUES (?1, coalesce((SELECT seen FROM tips WHERE commit_sha = ?3), ?2), NULL, 'seen')",
+            params![verified.commit.as_str(), now.to_string(), descendant.as_str()],
+        )?;
+    } else {
+        seen(conn, verified.commit.as_str(), now)?;
+    }
     let finished = matches!(verified.state, TipState::Verified | TipState::Failed);
     let passes = verified
         .regression_passes
@@ -237,7 +246,7 @@ pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Re
             failure,
         ],
     )?;
-    if finished && updated != 0 {
+    if finished && updated != 0 && verified.failed_descendant.is_none() {
         conn.execute(
             "UPDATE tips SET state = 'superseded'
              WHERE state IN ('seen', 'verifying')
@@ -539,6 +548,7 @@ mod tests {
             machine: MachineId::new("m-1").unwrap(),
             state: TipState::Verified,
             regression_passes: None,
+            failed_descendant: None,
             failure: None,
         };
         verified(&conn, &done, at(50.0)).unwrap();
@@ -557,6 +567,45 @@ mod tests {
     }
 
     #[test]
+    fn verifying_an_unseen_ancestor_preserves_newer_tips() {
+        let conn = hub::open_in_memory().unwrap();
+        let failed = TipVerified {
+            commit: Commit::new("bbbb").unwrap(),
+            machine: MachineId::new("m-1").unwrap(),
+            state: TipState::Failed,
+            regression_passes: None,
+            failure: None,
+            failed_descendant: None,
+        };
+        verified(&conn, &failed, at(10.0)).unwrap();
+        seen(&conn, "cccc", at(20.0)).unwrap();
+        verified(
+            &conn,
+            &TipVerified {
+                commit: Commit::new("aaaa").unwrap(),
+                state: TipState::Verified,
+                regression_passes: Some(Vec::new()),
+                failed_descendant: Some(failed.commit.clone()),
+                ..failed
+            },
+            at(30.0),
+        )
+        .unwrap();
+
+        let state = |commit: &str| -> (String, String) {
+            conn.query_row(
+                "SELECT state, seen FROM tips WHERE commit_sha = ?1",
+                [commit],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap()
+        };
+        assert_eq!(state("aaaa"), ("verified".to_owned(), at(10.0).to_string()));
+        assert_eq!(state("bbbb").0, "failed");
+        assert_eq!(state("cccc").0, "seen");
+    }
+
+    #[test]
     fn a_tip_goes_from_seen_to_verifying_to_verified() {
         let conn = hub::open_in_memory().unwrap();
         seen(&conn, "abcd", at(10.0)).unwrap();
@@ -571,6 +620,7 @@ mod tests {
             machine: MachineId::new("m-1").unwrap(),
             state: TipState::Verified,
             regression_passes: None,
+            failed_descendant: None,
             failure: None,
         };
         verified(&conn, &done, at(40.0)).unwrap();

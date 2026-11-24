@@ -23,6 +23,8 @@
 //! - `master` moves to the tip once every check in its set has a pass on each platform it
 //!   needs. A failure or an `incomplete` check holds it. A cached failure is run once here
 //!   before it holds `master`, so a fault of one run, or of Ignite, heals.
+//! - If the tip fails, a bounded search can move `master` to an earlier landing whose
+//!   required checks already passed (see `ancestor`).
 //! - A check that stays `incomplete` through its attempts is reported to the hub once, which
 //!   files a ticket, and is not run again by this machine for an hour, then two, and so on up
 //!   to a day. The hold also leaves its batch unclaimed, so the claim lapses and another
@@ -49,6 +51,7 @@
 //!   platform declared in `ignite.toml` runs a waited check's family at all, the hub is told at
 //!   once, and the round's outcome names the family.
 
+mod ancestor;
 mod cache;
 mod candidate;
 mod coverage;
@@ -239,11 +242,21 @@ impl TipLanding {
     }
 }
 
+/// An ancestor's kept listings and the coverage declared by its manifests.
+pub struct CachedTipSet {
+    pub listing: TipSet,
+    pub covered_by: BTreeMap<String, String>,
+}
+
 /// What tip verification needs beyond [`Context`]: the checks at a commit, a way to run them
 /// there and the landings between two commits. [`CheckTipWork`] is the real one.
 pub trait TipWork: Send + Sync {
     /// The regression checks of `phase` at `commit`, as this machine can list them.
     fn checks(&self, ctx: &Context, commit: &Commit, phase: ListingPhase) -> Result<TipSet>;
+    /// Keys the checks at `commit` using only listings already in the cache.
+    fn cached_checks(&self, _ctx: &Context, _commit: &Commit) -> Result<Option<CachedTipSet>> {
+        Ok(None)
+    }
     /// Runs the named checks at `commit` in a landing tree, in the `tip` class, storing their
     /// results. `rerun` ignores cached results.
     fn run(&self, ctx: &Context, commit: &Commit, checks: &[CheckName], rerun: bool)
@@ -314,8 +327,12 @@ pub enum TipOutcome {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         unrunnable: Vec<String>,
     },
-    /// These checks failed at the tip. `master` stays where it is.
-    Failed { checks: Vec<CheckName> },
+    /// These checks failed at the tip. The round may have promoted an earlier commit.
+    Failed {
+        checks: Vec<CheckName>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        promoted: Option<Commit>,
+    },
     /// All failures of a reporting round now have cached passes. Verify the tip again.
     Recovered,
     /// A newer tip arrived during the round; the next round verifies it.

@@ -154,6 +154,7 @@ fn checks_only_takes_one_tip_repair_with_no_worker_room() {
             machine: "m-win".parse().unwrap(),
             state: TipState::Verified,
             regression_passes: None,
+            failed_descendant: None,
             failure: None,
         },
         at(9.0),

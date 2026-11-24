@@ -2,6 +2,7 @@
 //! verification" in `docs/ignite.md`).
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, InputHash, TreeId};
@@ -14,7 +15,7 @@ use super::listings::{Kept, Listing, Origin};
 use super::prepare::on_threads;
 use super::{CheckRun, Checks, LISTING_BUILD_FAILED, OpenTree, Prepared, RunOptions, UNRESOLVED};
 use crate::server::Context;
-use crate::tip::{ListingPhase, TipCheck, TipCheckKind, TipSet, Unlisted};
+use crate::tip::{CachedTipSet, ListingPhase, TipCheck, TipCheckKind, TipSet, Unlisted};
 
 impl Checks {
     /// The regression checks for this phase, keyed in `tree`. Checks switched off as flaky are
@@ -35,7 +36,20 @@ impl Checks {
         phase: ListingPhase,
     ) -> Result<TipSet> {
         let (checks, tree) = self.open(ctx, tree)?;
-        Ok(checks.regression_in(ctx, &tree, phase))
+        Ok(checks.regression_in(ctx, &tree, phase, false))
+    }
+
+    /// Keys an ancestor's regression checks without building products or running lists.
+    pub(crate) fn cached_regression_checks(
+        &self,
+        ctx: &Context,
+        tree: &TreeId,
+    ) -> Result<CachedTipSet> {
+        let (checks, tree) = self.open(ctx, tree)?;
+        Ok(CachedTipSet {
+            listing: checks.regression_in(ctx, &tree, ListingPhase::All, true),
+            covered_by: checks.covered_by().clone(),
+        })
     }
 
     #[cfg(test)]
@@ -44,7 +58,13 @@ impl Checks {
     }
 
     /// Lists a phase using the candidate's manifests, including families this machine cannot run.
-    fn regression_in(&self, ctx: &Context, tree: &OpenTree, phase: ListingPhase) -> TipSet {
+    fn regression_in(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        phase: ListingPhase,
+        cached_only: bool,
+    ) -> TipSet {
         let among: Vec<(&str, &Family)> = self
             .settings
             .manifest
@@ -83,7 +103,12 @@ impl Checks {
                 session: None,
             };
             let mut run = CheckRun::default();
-            let prepared = self.prepare_among(ctx, tree, &local, &options, &mut run);
+            let prepared = if cached_only {
+                let kept = self.kept_listings(ctx, tree, &local);
+                self.key_kept_checks(ctx, tree, &local, kept)
+            } else {
+                self.prepare_among(ctx, tree, &local, &options, &mut run)
+            };
             self.add_regression_checks(&local, prepared, Some(&run), &mut set);
         }
         if phase == ListingPhase::Build {
@@ -149,19 +174,35 @@ impl Checks {
         let Ok(answers) = ctx.hub.listings(&keys) else {
             return Vec::new();
         };
-        let work = keys
+        let kept = keys
             .into_iter()
             .zip(answers)
             .filter_map(|(key, answer)| {
                 let kept: Kept = serde_json::from_str(&answer?).ok()?;
-                let (name, family) = among
-                    .iter()
-                    .copied()
-                    .find(|(name, _)| *name == key.family)?;
-                (kept.reads.is_some() || !self.observes(name)).then_some((name, family, key, kept))
+                (kept.reads.is_some() || !self.observes(&key.family))
+                    .then(|| (key.family.clone(), (key, Arc::new(kept))))
+            })
+            .collect();
+        self.key_kept_checks(ctx, tree, among, kept)
+    }
+
+    /// A kept listing is usable only while its sources still match the candidate's tree.
+    fn key_kept_checks(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        among: &[(&str, &Family)],
+        mut kept: HashMap<String, (ListingKey, Arc<Kept>)>,
+    ) -> Vec<Prepared> {
+        let work = among
+            .iter()
+            .filter_map(|&(name, family)| {
+                let (key, kept) = kept.remove(name)?;
+                Some((name, family, key, kept))
             })
             .collect();
         on_threads(work, |(name, family, key, kept), _| {
+            let kept = Arc::unwrap_or_clone(kept);
             let listing = Listing {
                 checks: kept.checks,
                 origin: Origin::Kept {

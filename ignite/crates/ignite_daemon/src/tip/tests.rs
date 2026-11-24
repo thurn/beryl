@@ -250,6 +250,7 @@ fn master_stays_behind_a_failing_check_and_moves_at_the_tip_that_fixes_it() {
     assert_eq!(
         verifier.verify(&ctx, &broken).unwrap(),
         TipOutcome::Failed {
+            promoted: None,
             checks: vec![name("unit:a")]
         }
     );
@@ -588,6 +589,7 @@ fn a_failure_only_another_platform_can_run_holds_master_and_is_not_searched_here
     assert_eq!(
         outcome,
         TipOutcome::Failed {
+            promoted: None,
             checks: vec![name("unit:a")]
         }
     );

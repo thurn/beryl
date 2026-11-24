@@ -143,6 +143,7 @@ fn a_failing_covering_check_is_reported_once() {
     assert_eq!(
         outcome,
         TipOutcome::Failed {
+            promoted: None,
             checks: vec![name("fast:a")]
         }
     );
@@ -561,6 +562,7 @@ fn a_settled_failure_retries_the_same_tip_once_all_exact_keys_pass() {
         Some((
             tip.clone(),
             TipOutcome::Failed {
+                promoted: None,
                 checks: vec![first.check.clone(), second.check.clone()],
             }
         ))
@@ -598,6 +600,7 @@ fn a_settled_failure_retries_the_same_tip_once_all_exact_keys_pass() {
             machine: peer.machine.clone(),
             state: TipState::Failed,
             regression_passes: None,
+            failed_descendant: None,
             failure: Some(TipFailure {
                 checks: vec![first.key.clone()],
                 unverified_commits: Vec::new(),
@@ -645,6 +648,7 @@ fn a_superseded_failure_cannot_blame_a_new_candidate_or_replace_a_missing_result
     assert_eq!(
         verifier.verify(&ctx, &tip).unwrap(),
         TipOutcome::Failed {
+            promoted: None,
             checks: vec![failed.check.clone()],
         }
     );
@@ -711,6 +715,7 @@ fn the_successor_reports_a_failure_on_unchanged_inputs() {
         Some((
             newer,
             TipOutcome::Failed {
+                promoted: None,
                 checks: vec![failed.check.clone()],
             },
         ))
@@ -720,4 +725,74 @@ fn the_successor_reports_a_failure_on_unchanged_inputs() {
     assert_eq!(regressions.len(), 1);
     assert_eq!(regressions[0].check, failed.check);
     server.stop();
+}
+
+#[test]
+fn a_failed_tip_promotes_the_newest_fully_cached_landing_before_the_culprit() {
+    let world = World::new();
+    let tip = commit("ffff000");
+    world.land(&tip);
+    world.work.set_checks(&tip, vec![check("a", 'f')]);
+    world.work.set_outcome(&tip, &name("unit:a"), Outcome::Fail);
+    for (sha, hash) in [("bbbb000", 'a'), ("cccc000", 'b'), ("dddd000", 'c')] {
+        world.work.add_commit(sha, &["docs/x"]);
+        let changed = check("a", hash);
+        let extra = check("b", hash);
+        world.store(&changed.key, Outcome::Flaky, "m-2");
+        if sha != "dddd000" {
+            world.store(&extra.key, Outcome::Pass, "m-2");
+        }
+        world.work.set_checks(&commit(sha), vec![changed, extra]);
+    }
+    // Even a cached pass at the blamed landing cannot move master past its start.
+    world.work.add_commit("eeee000", &["src/a"]);
+    world
+        .work
+        .set_checks(&commit("eeee000"), vec![check("a", 'b')]);
+    world.work.add_commit("ffff000", &["docs/x"]);
+
+    let promoted = commit("cccc000");
+    assert_eq!(
+        world.verifier().verify(&world.ctx("m-1"), &tip).unwrap(),
+        TipOutcome::Failed {
+            checks: vec![name("unit:a")],
+            promoted: Some(promoted.clone()),
+        }
+    );
+    assert_eq!(world.master(), promoted);
+    let runs = world.work.runs();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].1, tip);
+    assert_eq!(world.hub.regressions()[0].first_bad, commit("eeee000"));
+    let states = world.hub.tip_states();
+    assert_eq!(states[0].state, TipState::Failed);
+    assert_eq!(states[1].state, TipState::Verified);
+}
+
+#[test]
+fn a_failed_tip_cannot_promote_an_ancestor_missing_a_required_result() {
+    let world = World::new();
+    let ancestor = commit("bbbb000");
+    let tip = commit("cccc000");
+    world.work.add_commit("bbbb000", &["docs/x"]);
+    world.work.add_commit("cccc000", &["src/a"]);
+    world.land(&tip);
+    world.work.set_checks(&tip, vec![check("a", 'c')]);
+    world.work.set_outcome(&tip, &name("unit:a"), Outcome::Fail);
+    let cached = check("a", 'b');
+    world.store(&cached.key, Outcome::Pass, "m-2");
+    world.store(&check("b", 'e').key, Outcome::Pass, "m-2");
+    world
+        .work
+        .set_checks(&ancestor, vec![cached, check("b", 'd')]);
+
+    assert_eq!(
+        world.verifier().verify(&world.ctx("m-1"), &tip).unwrap(),
+        TipOutcome::Failed {
+            checks: vec![name("unit:a")],
+            promoted: None
+        }
+    );
+    assert_eq!(world.master(), commit("aaaa000"));
+    assert_eq!(world.work.runs().len(), 1);
 }

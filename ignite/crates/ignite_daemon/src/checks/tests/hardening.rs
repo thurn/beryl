@@ -203,6 +203,38 @@ fn a_tip_waits_for_a_foreign_build_listing_without_building_it() {
     assert_eq!(world.launcher.commands("lister").len(), commands);
 }
 
+#[test]
+fn an_ancestor_uses_kept_listings_without_building_or_listing() {
+    let manifest = format!(
+        "{}\n[product.binary]\nbuild = \"builder\"\ninputs = [\"src\"]\noutputs = [\"out\"]\n",
+        family("unit", "\"any\"", "lister", "needs = [\"binary\"]"),
+    );
+    let world = world(&manifest, &[], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() = listing(&["unit:a"]);
+
+    let cached = || {
+        world
+            .checks
+            .cached_regression_checks(&world.ctx, &tree())
+            .unwrap()
+            .listing
+    };
+    let cold = cached();
+    assert!(cold.checks.is_empty());
+    assert_eq!(cold.unlisted[0].name, name("unit:listing"));
+    assert!(world.builds.requests().is_empty());
+    assert!(world.launcher.commands("lister").is_empty());
+
+    let listed = world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+    let builds = world.builds.requests().len();
+    let commands = world.launcher.commands("lister").len();
+    let warm = cached();
+    assert!(warm.unlisted.is_empty());
+    assert_eq!(warm.checks, listed.checks);
+    assert_eq!(world.builds.requests().len(), builds);
+    assert_eq!(world.launcher.commands("lister").len(), commands);
+}
+
 fn measurement_world() -> World {
     let manifest = [
         family("meter", "[\"macos\"]", "lister", "machine_relative = true"),

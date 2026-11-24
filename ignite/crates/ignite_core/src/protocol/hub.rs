@@ -398,6 +398,10 @@ pub struct TipVerified {
     /// Present on a failed round from a daemon that records which checks failed at this tip.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure: Option<TipFailure>,
+    /// A round verified this earlier commit while reporting a failure at this descendant.
+    /// The ancestor's report must not supersede any newer candidates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failed_descendant: Option<Commit>,
 }
 
 /// `POST /tips/waiting`: a tip has waited an hour for checks that only a machine running

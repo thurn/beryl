@@ -520,6 +520,7 @@ fn finish_tip(conn: &Connection, clock: &FakeClock, commit: &str, check: &str, c
             machine: MachineId::new("m-1").unwrap(),
             state: TipState::Failed,
             regression_passes: None,
+            failed_descendant: None,
             failure: Some(TipFailure {
                 checks: vec![ResultKey {
                     check: CheckName::new(check).unwrap(),
@@ -711,6 +712,7 @@ fn a_verified_tip_that_did_not_run_the_regression_check_leaves_its_stall_open() 
             machine: MachineId::new("m-1").unwrap(),
             state: TipState::Verified,
             regression_passes: Some(Vec::new()),
+            failed_descendant: None,
             failure: None,
         },
         clock.now(),

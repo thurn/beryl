@@ -124,6 +124,7 @@ fn master_moves_once_the_budgeted_checks_pass_and_a_later_failure_holds_it() {
     assert_eq!(
         outcome,
         TipOutcome::Failed {
+            promoted: None,
             checks: vec![name("unit:c")]
         }
     );
@@ -275,7 +276,10 @@ fn a_failed_or_incomplete_native_check_holds_the_shared_candidate() {
         let mut windows_verifier = world.verifier();
         let checks = vec![windows_check.check.clone()];
         let expected = if outcome == Outcome::Fail {
-            TipOutcome::Failed { checks }
+            TipOutcome::Failed {
+                checks,
+                promoted: None,
+            }
         } else {
             TipOutcome::Waiting {
                 checks,
@@ -364,6 +368,7 @@ fn both_verifiers_switch_to_the_replacement_after_a_required_failure() {
                 Some((
                     tip.clone(),
                     TipOutcome::Failed {
+                        promoted: None,
                         checks: vec![mac_check.check.clone()]
                     }
                 ))
@@ -432,6 +437,7 @@ fn an_open_regression_runs_before_master_whatever_the_budget() {
     assert_eq!(
         outcome,
         TipOutcome::Failed {
+            promoted: None,
             checks: vec![name("unit:c")]
         }
     );

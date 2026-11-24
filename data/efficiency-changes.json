@@ -895,5 +895,10 @@
     "label": "Windows client replay and stress checks run after master advances, shortening tip verification while keeping Windows compile and portability checks in the promotion gate.",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Ignite uses cached passes to promote verified ancestors when newer tips fail.",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

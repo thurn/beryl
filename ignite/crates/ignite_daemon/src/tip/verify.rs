@@ -64,6 +64,7 @@ impl TipVerifier {
                 state: TipState::Verified,
                 regression_passes: Some(Vec::new()),
                 failure: None,
+                failed_descendant: None,
             })?;
             return Ok(TipOutcome::Verified);
         }
@@ -348,6 +349,7 @@ impl TipVerifier {
                         machine: ctx.machine.clone(),
                         state: TipState::Failed,
                         regression_passes: None,
+                        failed_descendant: None,
                         failure: Some(TipFailure {
                             checks: keys.clone(),
                             unverified_commits,
@@ -368,11 +370,13 @@ impl TipVerifier {
                     return Ok(TipOutcome::Recovered);
                 }
             }
+            let mut culprits = HashSet::new();
+            let mut blame_complete = true;
             for check in &failed {
                 let output = verdicts.get(&check.key).and_then(|v| v.output.clone());
                 // If this search is interrupted and the check still fails, the next round reports it.
                 let prior = scope.last_good_for(check);
-                if let Err(error) = self.blame(
+                match self.blame(
                     ctx,
                     prior.unwrap_or(last),
                     tip,
@@ -380,17 +384,31 @@ impl TipVerifier {
                     output.as_deref(),
                     last != tip && prior.is_none(),
                 ) {
-                    eprintln!(
-                        "ignite: regression of {} not reported: {error}",
-                        check.check
-                    );
+                    Ok(culprit) => culprits.extend(culprit),
+                    Err(error) => {
+                        blame_complete = false;
+                        eprintln!(
+                            "ignite: regression of {} not reported: {error}",
+                            check.check
+                        );
+                    }
                 }
                 require_running()?;
                 self.save(ctx);
             }
             recorded?;
+            let promoted = if blame_complete {
+                self.promote_ancestor(ctx, last, tip, &culprits, &regressions)
+                    .inspect_err(|error| {
+                        eprintln!("ignite: tip {tip}: ancestor promotion: {error}");
+                    })
+                    .unwrap_or(None)
+            } else {
+                None
+            };
             return Ok(TipOutcome::Failed {
                 checks: names_of(&failed),
+                promoted,
             });
         }
         if !waiting.is_empty() {
@@ -423,9 +441,9 @@ impl TipVerifier {
             .map(|check| check.key.clone())
             .collect();
         let outcome = if last == tip {
-            self.record_verified(ctx, tip, regression_passes)?
+            self.record_verified(ctx, tip, regression_passes, None)?
         } else {
-            self.move_master(ctx, tip, regression_passes)?
+            self.move_master(ctx, tip, regression_passes, None)?
         };
         if outcome != TipOutcome::Verified {
             return Ok(outcome);
@@ -533,11 +551,12 @@ impl TipVerifier {
     }
 
     /// Moves `master` to a tip whose every check passed and records it as verified.
-    fn move_master(
+    pub(super) fn move_master(
         &mut self,
         ctx: &Context,
         tip: &Commit,
         regression_passes: Vec<ResultKey>,
+        failed_descendant: Option<&Commit>,
     ) -> Result<TipOutcome> {
         let repository = &ctx.config.repository;
         match ctx.git.push(&ctx.repo, tip, &repository.master)? {
@@ -556,7 +575,7 @@ impl TipVerifier {
                 }
             }
         }
-        self.record_verified(ctx, tip, regression_passes)
+        self.record_verified(ctx, tip, regression_passes, failed_descendant)
     }
 
     /// Reports once that `master` refused the tip, and waits on it.
@@ -582,6 +601,7 @@ impl TipVerifier {
         ctx: &Context,
         tip: &Commit,
         regression_passes: Vec<ResultKey>,
+        failed_descendant: Option<&Commit>,
     ) -> Result<TipOutcome> {
         ctx.hub.tip_verified(&TipVerified {
             commit: tip.clone(),
@@ -589,10 +609,13 @@ impl TipVerifier {
             state: TipState::Verified,
             regression_passes: Some(regression_passes),
             failure: None,
+            failed_descendant: failed_descendant.cloned(),
         })?;
-        self.waiting_since.clear();
-        self.flagged.clear();
-        self.deferred.clear();
+        if failed_descendant.is_none() {
+            self.waiting_since.clear();
+            self.flagged.clear();
+            self.deferred.clear();
+        }
         Ok(TipOutcome::Verified)
     }
 }

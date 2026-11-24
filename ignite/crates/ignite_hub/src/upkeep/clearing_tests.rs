@@ -482,6 +482,7 @@ fn a_platform_wait_ticket_can_clear_when_its_tip_verifies_without_a_new_heartbea
             machine: MachineId::new("m-3").unwrap(),
             state: TipState::Verified,
             regression_passes: None,
+            failed_descendant: None,
             failure: None,
         },
         clock.now(),

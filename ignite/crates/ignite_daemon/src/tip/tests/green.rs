@@ -87,6 +87,7 @@ fn green_moves_when_the_build_passes_although_another_check_fails() {
     assert_eq!(
         outcome,
         TipOutcome::Failed {
+            promoted: None,
             checks: vec![name("unit:b")]
         }
     );
@@ -107,6 +108,7 @@ fn a_failing_build_check_moves_neither_branch() {
     assert_eq!(
         outcome,
         TipOutcome::Failed {
+            promoted: None,
             checks: vec![name("vet:a")]
         }
     );
@@ -178,6 +180,7 @@ fn a_newer_tip_does_not_undo_green() {
     assert_eq!(
         outcome,
         TipOutcome::Failed {
+            promoted: None,
             checks: vec![name("vet:a")]
         }
     );

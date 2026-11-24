@@ -154,6 +154,7 @@ fn a_build_check_broken_by_one_landing_is_reverted() {
     assert_eq!(
         outcome,
         TipOutcome::Failed {
+            promoted: None,
             checks: vec![failing.check.clone()]
         }
     );

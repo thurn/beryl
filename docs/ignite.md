@@ -2771,11 +2771,11 @@ How a daemon verifies a tip:
   the tip to `green` and goes on with its other checks; whatever they find,
   `green` stays. A refused push is fine when `green` already holds the tip. A
   failing build check is blamed like any failure and ends the round as failed
-  without running its other checks, and `green` and `master` both stay. With
-  `green` unset a round has no build step. The main checkout fast-forwards its
-  local `green` with `staging` and `master`, and `ignite status` shows beside
-  the tip round which commit `green` is at and how many commits it is behind the
-  tip.
+  without running its other checks. The failed tip leaves `green` where it was.
+  With `green` unset a round has no build step. The main checkout fast-forwards
+  its local `green` with `staging` and `master`, and `ignite status` shows
+  beside the tip round which commit `green` is at and how many commits it is
+  behind the tip.
 
 - It claims those checks from the hub in batches, so two machines do not run the
   same ones, then runs them in the `tip` class. Each family is listed once per
@@ -2819,6 +2819,15 @@ How a daemon verifies a tip:
   checks not yet run are in the newer tip's set instead. An outstanding native
   check also leaves a coverage gap so its platform can finish it when another
   verifier moves `master`.
+
+- When a required check fails, the round still reports the failure. It looks
+  back through up to eight landing boundaries before the earliest landing known
+  to fail, or before the failed tip's landing if the range is unknown. It
+  advances `master` to the newest of those landings whose required checks
+  already have passing results for their exact inputs. It uses stored listings
+  and verdicts, applies coverage and deferrals at that commit, and records any
+  deferred native checks before pushing. If no landing qualifies, `master` stays
+  where it is.
 
 - When nothing can be scored (git or the hub cannot be read), every check runs
   before `master` moves.

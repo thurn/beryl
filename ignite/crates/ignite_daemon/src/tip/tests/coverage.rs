@@ -20,6 +20,54 @@ fn windows_check(hash: char, runnable: bool) -> TipCheck {
 }
 
 #[test]
+fn an_ancestor_uses_its_own_coverage_and_records_a_budget_deferral() {
+    let world = World::new();
+    let ancestor = commit("bbbb000");
+    let tip = commit("cccc000");
+    world.work.add_commit("bbbb000", &["docs/x"]);
+    world.work.add_commit("cccc000", &["src/a"]);
+    world.land(&tip);
+    world.work.set_checks(&tip, vec![check("a", 'c')]);
+    world.work.set_outcome(&tip, &name("unit:a"), Outcome::Fail);
+    let covering = super::rounds::in_family("a", "fast");
+    world.store(&covering.key, Outcome::Pass, "m-2");
+    world
+        .work
+        .covered_by
+        .lock()
+        .unwrap()
+        .insert("slow".to_owned(), "fast".to_owned());
+    let native = windows_check('b', false);
+    world
+        .hub
+        .put_tip_budget(&ignite_core::tipround::TipBudgetPlan {
+            commit: ancestor.clone(),
+            platform: Os::Windows,
+            after: vec![native.key.clone()],
+        })
+        .unwrap();
+    world.work.set_checks(
+        &ancestor,
+        vec![covering, super::rounds::in_family("a", "slow"), native],
+    );
+
+    assert_eq!(
+        world.verifier().verify(&world.ctx("m-1"), &tip).unwrap(),
+        TipOutcome::Failed {
+            checks: vec![name("unit:a")],
+            promoted: Some(ancestor.clone()),
+        }
+    );
+    let coverage = world.hub.tip_coverage().unwrap();
+    let windows = &coverage.platforms[&Os::Windows];
+    assert_eq!(windows.through, ancestor);
+    assert_eq!(
+        windows.deferred.as_ref().unwrap().last_good,
+        commit("aaaa000")
+    );
+}
+
+#[test]
 fn a_tip_can_claim_its_measurement_after_a_same_platform_peer_stops() {
     let world = World::new();
     let ctx = world.ctx("m-1");

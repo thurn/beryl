@@ -200,7 +200,11 @@ impl Parts {
                 let round = ticker.round(|| match tips.turn(&ctx, wait_s) {
                     Ok(Some((
                         _,
-                        TipOutcome::Verified | TipOutcome::VerifiedWithDeferrals { .. },
+                        TipOutcome::Verified
+                        | TipOutcome::VerifiedWithDeferrals { .. }
+                        | TipOutcome::Failed {
+                            promoted: Some(_), ..
+                        },
                     ))) => {
                         if let Err(error) = update.after_master_moved() {
                             eprintln!("ignite: the new release was not built: {error}");
