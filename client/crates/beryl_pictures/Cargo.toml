@@ -40,3 +40,5 @@ serde_json.workspace = true
 app_client.workspace = true
 # The seat a recording is seen from.
 beryl_protocol = { path = "../../../engine/crates/beryl_protocol" }
+# Reads the stories the picture tests draw and records their paths for Ignite.
+beryl_test_files = { path = "../../../engine/crates/beryl_test_files" }

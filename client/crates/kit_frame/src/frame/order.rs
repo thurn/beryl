@@ -102,6 +102,9 @@ fn node_key(index: u32, element: &Resolved) -> u64 {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct Scratch {
     keys: Vec<u64>,
+    /// By push index: the record whose origin orders this one within its band. A record is its
+    /// own anchor unless `FrameBuilder::draw_over` laid it on the record pushed before it.
+    anchors: Vec<u32>,
     draws: Vec<Draw>,
     nodes: Vec<u64>,
     /// The render band of each registered card or ability's face, by node index.
@@ -131,6 +134,7 @@ impl Scratch {
     pub(super) fn with_capacity(draws: usize, nodes: usize) -> Self {
         Self {
             keys: Vec::with_capacity(draws),
+            anchors: Vec::with_capacity(draws),
             draws: Vec::with_capacity(draws),
             nodes: Vec::with_capacity(nodes),
             card_bands: Vec::with_capacity(nodes),
@@ -148,6 +152,7 @@ impl Scratch {
 
     pub(super) fn clear(&mut self) {
         self.keys.clear();
+        self.anchors.clear();
         self.draws.clear();
         self.nodes.clear();
         self.card_bands.clear();
@@ -155,8 +160,21 @@ impl Scratch {
         self.mixed = 0;
     }
 
-    /// Notes that the record at `index` of the draw list, `draw`, belongs to `band`.
-    pub(super) fn push(&mut self, band: Band, index: usize, draw: &Draw) {
+    /// Notes that the record at `index` of the draw list, `draw`, belongs to `band`. With
+    /// `over`, it is ordered at the depth of the record pushed before it, which it lies on, and
+    /// so drawn just after that record (`FrameBuilder::draw_over`).
+    pub(super) fn push(&mut self, band: Band, index: usize, draw: &Draw, over: bool) {
+        let anchor = match self.anchors.last() {
+            Some(&anchor) if over => {
+                debug_assert!(
+                    self.keys.last().map(|&key| band_of(key)) == Some(band),
+                    "a record drawn over another is in that record's band"
+                );
+                anchor
+            }
+            _ => super::index(index),
+        };
+        self.anchors.push(anchor);
         debug_assert!(
             (index as u64) <= INDEX_MASK,
             "a frame holds fewer than 2^24 records"
@@ -177,7 +195,7 @@ pub(super) fn finish(frame: &mut Frame) {
     let (view_projection, card) = (frame.view_projection, frame.card);
     let Frame { draws, scratch, .. } = frame;
     for key in &mut scratch.keys {
-        let draw = &draws[record_index(*key)];
+        let draw = &draws[scratch.anchors[record_index(*key)] as usize];
         *key |= u64::from(depth_key(band_of(*key), draw, view_projection)) << DEPTH_SHIFT;
     }
     scratch.keys.sort_unstable();

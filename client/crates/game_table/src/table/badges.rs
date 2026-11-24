@@ -545,7 +545,7 @@ impl Badges {
             top_left.x + border + lock.padding_left * self.em() + icon / 2.0,
             at.y,
         );
-        builder.draw(
+        builder.draw_over(
             on.band,
             Draw::icon(
                 quad(card, middle, Vec2::splat(icon), 2.0 * raise),
@@ -620,7 +620,8 @@ impl Badges {
     }
 
     /// Writes `glyphs`, shaped in `style`, onto `card` in `ink`, with their text box's top
-    /// left corner at `pen` on the card's face and `k` millimetres to the point.
+    /// left corner at `pen` on the card's face and `k` millimetres to the point. They lie on the
+    /// panel written just before them, so they are drawn over it (`FrameBuilder::draw_over`).
     fn glyphs(
         &self,
         style: TypeStyle,
@@ -646,7 +647,7 @@ impl Badges {
                     top_left.x * k + size.x / 2.0,
                     -top_left.y * k - size.y / 2.0,
                 );
-            builder.draw(
+            builder.draw_over(
                 on.band,
                 Draw::glyph(
                     quad(card, at, size, 2.0 * raise),

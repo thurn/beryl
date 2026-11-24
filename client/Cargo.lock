@@ -607,6 +607,7 @@ dependencies = [
  "beryl_inspect",
  "beryl_protocol",
  "beryl_render",
+ "beryl_test_files",
  "game_probe",
  "game_table",
  "glam",

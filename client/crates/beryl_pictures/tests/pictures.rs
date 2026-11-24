@@ -12,6 +12,7 @@ use beryl_assets::glyphs::glyphs_rasterized_on_this_thread;
 use beryl_assets::icons::icons_rasterized_on_this_thread;
 use beryl_host::{Headless, Scans, match_faces};
 use beryl_inspect::pages;
+use beryl_inspect::scene::Scene;
 use beryl_protocol::protocol::Side;
 use game_probe::driver::Moment;
 use kit_base::data::profiles::SizeClass;
@@ -481,3 +482,67 @@ mod downlevel;
 mod enhanced_boards;
 #[path = "pictures/light.rs"]
 mod light;
+
+/// On a tapped creature, the plaque's power digit was hidden: "1/1" read "/1". Blended records
+/// are drawn farthest first by the depth of their middles, and on a tapped card the plaque runs
+/// away from the camera, so the power digit's middle lay behind the panel's and the panel was
+/// drawn over it. The plaque's digits are the only navy ink on a drawn face, so a tapped 1/1
+/// token shows about as much of it as an untapped one, from either seat.
+#[test]
+fn a_tapped_creature_shows_every_digit_of_its_plaque() {
+    // An empty scan cache, so that every face is drawn with Beryl's card frame on any machine.
+    let scratch = Scratch::new("tapped-stats");
+    let scans = Scans {
+        art: scratch.0.join("art"),
+        faces: scratch.0.join("faces"),
+    };
+    let story = scratch.0.join("tapped-stats.story");
+    let text = beryl_test_files::read("client/crates/game_table/stories/tapped-stats.story")
+        .expect("the story");
+    std::fs::write(&story, text).expect("a copy of the story");
+    let story = story.to_str().expect("a UTF-8 path");
+    let scale = 2.0;
+    let Scene::Recording(page) =
+        Scene::open(story, Side::You, Some(SizeClass::Regular), WINDOW, scale).expect("a story")
+    else {
+        panic!("a table story opens as a page");
+    };
+    let mut head = Headless::new(*page, WINDOW.width, WINDOW.height, &scans).expect("a GPU");
+    head.seek(&"start".parse::<Moment>().expect("a moment"))
+        .expect("a moment of the story");
+    // `badge::PLAQUE_INK` is a dark navy; the drawn faces and the plaque's fill are warm or grey.
+    let ink = |head: &mut Headless, locator: &str| {
+        let card = head.page().find(locator).rect();
+        let pixels = head.pixels();
+        let width = head.size().0;
+        let (left, top) = ((card.x * scale) as u32, (card.y * scale) as u32);
+        let (right, bottom) = (
+            ((card.x + card.width) * scale) as u32,
+            ((card.y + card.height) * scale) as u32,
+        );
+        (top..bottom)
+            .flat_map(|y| (left..right).map(move |x| (x, y)))
+            .filter(|&(x, y)| {
+                let at = ((y * width + x) * 4) as usize;
+                let [red, _, blue] = [pixels[at], pixels[at + 1], pixels[at + 2]];
+                red < 120 && blue >= red.saturating_add(12)
+            })
+            .count()
+    };
+    for (tapped, untapped) in [
+        (r#"card "Spirit Token" #1"#, r#"card "Spirit Token" #2"#),
+        (r#"card "Snapcaster Mage" #3"#, r#"card "Trinket Mage" #4"#),
+    ] {
+        let (tapped_ink, untapped_ink) = (ink(&mut head, tapped), ink(&mut head, untapped));
+        assert!(
+            untapped_ink > 50,
+            "{untapped}'s plaque drew {untapped_ink} ink pixels"
+        );
+        // A hidden digit leaves about two thirds of the ink.
+        assert!(
+            tapped_ink * 10 >= untapped_ink * 8,
+            "the tapped {tapped}'s plaque drew {tapped_ink} ink pixels, the untapped \
+             {untapped}'s {untapped_ink}"
+        );
+    }
+}

@@ -167,6 +167,20 @@ impl<'a> FrameBuilder<'a> {
     /// Adds a record to `band`. Within the flat layer's band, records are drawn in the order
     /// they are pushed, which is the order of its tree.
     pub fn draw(&mut self, band: Band, draw: Draw) {
+        self.push(band, draw, false);
+    }
+
+    /// Adds a record to `band` that lies on the record pushed just before it, in the same band,
+    /// such as a digit on a badge's panel. It is ordered at that record's depth, or at the
+    /// depth of the record that one lies on, and drawn after it. Blended records are drawn
+    /// farthest first by the depth of their middles, so without this a digit near the far end
+    /// of a panel seen lengthwise, as on a tapped card, would be drawn first and covered by
+    /// the panel.
+    pub fn draw_over(&mut self, band: Band, draw: Draw) {
+        self.push(band, draw, true);
+    }
+
+    fn push(&mut self, band: Band, draw: Draw, over: bool) {
         let particle = draw.material == Material::Particle as u8;
         let vfx = draw.is_vfx();
         debug_assert!(
@@ -186,7 +200,9 @@ impl<'a> FrameBuilder<'a> {
         } else {
             band
         };
-        self.frame.scratch.push(band, self.frame.draws.len(), &draw);
+        self.frame
+            .scratch
+            .push(band, self.frame.draws.len(), &draw, over);
         self.frame.draws.push(draw);
         if self.frame.looking {
             self.frame.owners.push(self.owner);
