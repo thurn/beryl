@@ -282,8 +282,9 @@ impl<L: Layout> State<L> {
     }
 
     /// Shuffles a player's opening hand back into their library as one mulligan operation.
-    /// The moves are reported in card definition order. The shuffle takes the returned
-    /// slots in number order to reproduce its historical seeded permutation. see [CR 103.5]:
+    /// The moves are reported in card definition order. After a restart, the shuffle
+    /// keeps that order so renumbering slots gives the same hand. For ordinary openings,
+    /// slot order preserves the seeded permutation used by recorded games. See [CR 103.5]:
     /// "To take a mulligan, a player shuffles the cards in their hand back into their library,
     /// draws a new hand of cards equal to their starting hand size".
     ///
@@ -293,7 +294,9 @@ impl<L: Layout> State<L> {
         for &slot in self.hand_by_definition(player).iter() {
             self.move_object(sink, slot, Zone::Library, Place::Top)?;
         }
-        self.zones.library[player.index()].as_mut_slice()[previous_top..].sort_unstable();
+        if !self.restarted() {
+            self.zones.library[player.index()].as_mut_slice()[previous_top..].sort_unstable();
+        }
         self.shuffle_library(player)
     }
 
