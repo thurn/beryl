@@ -224,7 +224,7 @@ pub(super) fn meta(id: &str, set: BTreeMap<&str, Value>, unset: &[&str]) -> Oper
 
 /// Applies `ops` if the ticket has not changed since it was read; returns whether they applied.
 /// A ticket that changed is looked at again on the next pass.
-fn apply(
+pub(super) fn apply(
     conn: &mut Connection,
     ticket: &Ticket,
     ops: Vec<Operation>,

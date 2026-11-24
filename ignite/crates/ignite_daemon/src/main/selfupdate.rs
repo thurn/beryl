@@ -195,8 +195,6 @@ pub struct SelfUpdate {
     pub clock: Arc<dyn Clock>,
     pub machine: MachineId,
     pub host: String,
-    /// Selftest failures the hub has not accepted yet.
-    pub reports: Mutex<Vec<JusticiarReport>>,
     /// The hub's login service, on the hub's machine; restarted before the daemon.
     pub hub_service: Arc<dyn HubService>,
     /// When the hub was last kickstarted for lagging behind this daemon.
@@ -423,10 +421,7 @@ impl SelfUpdate {
                 eprintln!("ignite: the release {commit} failed its selftest: {reason}");
                 self.store
                     .reject_with_reason(&commit, &reason, self.clock.now());
-                self.reports
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .push(self.selftest_report(&commit, &reason));
+                self.report_selftest(&commit, &reason);
                 self.record_failure(&commit, &reason);
                 self.send_reports();
             }
@@ -456,26 +451,30 @@ impl SelfUpdate {
             evidence: format!("{commit}@{}", self.host),
             machine: self.machine.clone(),
             host: self.host.clone(),
-            on_machine: false,
+            on_machine: true,
         }
     }
 
-    /// Sends the reports the hub has not accepted. A report the hub refuses or cannot be
-    /// reached for stays for the next round.
-    fn send_reports(&self) {
-        let pending =
-            std::mem::take(&mut *self.reports.lock().unwrap_or_else(PoisonError::into_inner));
-        let mut unsent = Vec::new();
-        for report in pending {
-            if let Err(error) = self.hub.justiciar(&report) {
-                eprintln!("ignite: cannot report {}: {error}", report.subject);
-                unsent.push(report);
+    fn report_selftest(&self, commit: &Commit, reason: &str) {
+        use crate::justiciar::release_recovery;
+        let report = self.selftest_report(commit, reason);
+        if let Some(home) = self.store.home_dir() {
+            match release_recovery::queue_selftest(home, commit, self.clock.now(), report.clone()) {
+                Ok(()) => return,
+                Err(error) => {
+                    eprintln!("ignite: cannot save the selftest failure of {commit}: {error}");
+                }
             }
         }
-        self.reports
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .extend(unsent);
+        if let Err(error) = self.hub.justiciar(&report) {
+            eprintln!("ignite: cannot report the selftest failure of {commit}: {error}");
+        }
+    }
+
+    fn send_reports(&self) {
+        if let Some(home) = self.store.home_dir() {
+            crate::justiciar::release_recovery::send_pending(home, self.hub.as_ref());
+        }
     }
 
     /// Called once per round of the sender loop. Every [`POLL_EVERY_ROUNDS`]th call (the first

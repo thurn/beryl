@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use ignite_core::protocol::client::Exit;
+use ignite_core::protocol::hub::JusticiarRecovery;
+use ignite_core::traits::Clock;
 
 use super::tests::{Rig, request, rig};
 use crate::crash::{self, CrashRecord};
@@ -87,6 +89,41 @@ fn a_stuck_loop_is_reported_once_for_this_machine() {
     assert_eq!(reports.len(), 1, "{reports:?}");
     assert_eq!(reports[0].subject, "loop:sender");
     assert!(reports[0].on_machine);
+}
+
+#[test]
+fn a_successful_loop_round_reports_recovery_even_after_a_daemon_restart() {
+    let rig = rig(&[]);
+    let home = home("loop-recovery");
+    let (before, health) = reporter(&rig, &home);
+    let _ticker = health.register("mirror", Duration::from_secs(600));
+    rig.clock.advance(601.0);
+    before.tick(&rig.ctx, true);
+    assert_eq!(rig.hub.justiciar_reports().len(), 1);
+
+    let (after, health) = reporter(&rig, &home);
+    let ticker = health.register("mirror", Duration::from_secs(600));
+    ticker.round(|| Err::<(), _>("mirror failed".to_owned()));
+    after.tick(&rig.ctx, true);
+    assert!(rig.hub.justiciar_recoveries().is_empty());
+
+    rig.clock.advance(10.0);
+    ticker.round(|| Ok(()));
+    rig.hub.set_unreachable(true);
+    after.tick(&rig.ctx, true);
+    assert!(rig.hub.justiciar_recoveries().is_empty());
+    rig.hub.set_unreachable(false);
+    after.tick(&rig.ctx, true);
+    after.tick(&rig.ctx, true);
+    let recoveries = rig.hub.justiciar_recoveries();
+    assert_eq!(recoveries.len(), 1);
+    assert_eq!(recoveries[0].subject, "loop:mirror");
+    assert_eq!(
+        recoveries[0].recovery,
+        JusticiarRecovery::LoopRound {
+            finished_at: rig.clock.now()
+        },
+    );
 }
 
 #[test]

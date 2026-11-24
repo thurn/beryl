@@ -31,10 +31,11 @@ use std::fmt::Write as _;
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::Value;
 
+use ignite_core::ids::MachineId;
 use ignite_core::pins::machine_label;
-use ignite_core::protocol::hub::JusticiarReport;
+use ignite_core::protocol::hub::{JusticiarCleared, JusticiarRecovery, JusticiarReport};
 use ignite_core::protocol::tickets::{
-    BatchRequest, Operation, Precondition, Status, TicketFields, TicketType,
+    BatchRequest, Operation, Precondition, Status, Ticket, TicketFields, TicketType,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
@@ -43,7 +44,9 @@ use ignite_store::hub::releases::Releases;
 use ignite_store::hub::{tickets, tips};
 use ignite_store::{Result, StoreError};
 
-use super::filing::{self, Author, Change, FAULT_KEY, Filed, Filing, UPKEEP};
+use super::clearing;
+use super::clearing_kinds::{Verdict, sighted_at};
+use super::filing::{self, Author, Change, FAULT_KEY, Filed, Filing, SIGHTINGS_KEY, UPKEEP};
 use super::signature::Signature;
 use super::{
     parse_time,
@@ -121,6 +124,93 @@ pub fn report(
         released: true,
     };
     filing::file(conn, author, &filing, now)
+}
+
+/// Which machine-scoped reports have a corresponding daemon recovery observation.
+pub(super) fn watches(subject: &str) -> bool {
+    subject.starts_with("loop:")
+        || subject.starts_with("idle:")
+        || subject.starts_with("release-selftest:")
+        || subject == "crash:startup:"
+}
+
+const RECOVERED_SIGHTING_KEY: &str = "ignite_justiciar_recovered_sighting";
+
+fn latest_sighting(ticket: &Ticket) -> Option<String> {
+    filing::strings(&ticket.metadata, SIGHTINGS_KEY).pop()
+}
+
+/// Records the latest sighting as recovered if the authenticated machine's evidence covers it.
+/// Normal upkeep still decides when to comment and when to close.
+pub fn cleared(
+    conn: &mut Connection,
+    machine: &MachineId,
+    report: &JusticiarCleared,
+    now: Timestamp,
+) -> Result<()> {
+    if !watches(&report.subject) {
+        return Ok(());
+    }
+    let signature = Signature::of_subject(&format!("{}@{machine}", report.subject), LABEL);
+    for _ in 0..ATTEMPTS {
+        let Some(id) = filing::open_ticket(conn, &signature)? else {
+            return Ok(());
+        };
+        let Some(ticket) =
+            tickets::load(conn, &id)?.filter(|ticket| ticket.status != Status::Closed)
+        else {
+            continue;
+        };
+        let Some(latest) = latest_sighting(&ticket) else {
+            return Ok(());
+        };
+        let covered = match &report.recovery {
+            JusticiarRecovery::LoopRound { finished_at } if report.subject.starts_with("loop:") => {
+                // New sightings carry the daemon's observation time, so both times are on
+                // the same clock. Older daemons recorded only their loop registration time.
+                let observed_at = latest
+                    .split_once('|')
+                    .and_then(|(at, _)| Timestamp::parse(at).ok())
+                    .unwrap_or_else(|| sighted_at(&ticket));
+                *finished_at > observed_at
+            }
+            JusticiarRecovery::Sighting { evidence } if !report.subject.starts_with("loop:") => {
+                *evidence == latest
+            }
+            _ => false,
+        };
+        let recovered = Value::from(latest);
+        if !covered || ticket.metadata.get(RECOVERED_SIGHTING_KEY) == Some(&recovered) {
+            return Ok(());
+        }
+        let set = BTreeMap::from([(RECOVERED_SIGHTING_KEY, recovered)]);
+        let operation = clearing::meta(&id, set, &[]);
+        if clearing::apply(conn, &ticket, vec![operation], now)? {
+            return Ok(());
+        }
+    }
+    Err(StoreError::Invalid(format!(
+        "clearing {} on {machine} did not commit after {ATTEMPTS} attempts",
+        report.subject
+    )))
+}
+
+/// The latest sighting is the only one that can clear the ticket. If the fault is reported
+/// again, its new sighting supersedes the stored recovery.
+pub(super) fn daemon_verdict(subject: &str, machine: &str, ticket: &Ticket) -> Verdict {
+    let recovered = ticket
+        .metadata
+        .get(RECOVERED_SIGHTING_KEY)
+        .and_then(Value::as_str);
+    if recovered.is_none() || recovered != latest_sighting(ticket).as_deref() {
+        return Verdict::Present;
+    }
+    let reason = if subject.starts_with("release-selftest:") || subject == "crash:startup:" {
+        format!("daemon {machine} recorded three clean starts on newer releases.")
+    } else {
+        format!("daemon {machine} reported a successful round of `{subject}`.")
+    };
+    Verdict::Cleared(reason)
 }
 
 /// Files a machine resource stall or adds the latest sighting to its open ticket.

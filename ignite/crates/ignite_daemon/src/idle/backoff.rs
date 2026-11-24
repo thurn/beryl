@@ -12,7 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use ignite_core::protocol::hub::JusticiarReport;
+use ignite_core::protocol::hub::{JusticiarCleared, JusticiarRecovery, JusticiarReport};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 
@@ -74,14 +74,44 @@ impl Idle {
         self.state().failing.contains_key(&job.key())
     }
 
-    /// Forgets `job`'s failures after it ran and succeeded.
-    pub(super) fn note_success(&self, job: &IdleJob) -> Result<()> {
-        if !self.has_failed(job) {
-            return Ok(());
+    /// Forgets `job`'s failures and saves any recovery notice together with that change.
+    pub(super) fn note_success(&self, ctx: &Context, job: &IdleJob) -> Result<()> {
+        if self.has_failed(job) {
+            let key = job.key();
+            self.update(|state| {
+                if let Some(failing) = state.failing.remove(&key)
+                    && failing.failures >= REPORT_AFTER
+                {
+                    // A failed request may still have reached the hub.
+                    state.recovered.insert((key, failing.since));
+                }
+            })?;
         }
-        self.update(|state| {
-            state.failing.remove(&job.key());
-        })
+        self.send_recoveries(ctx)
+    }
+
+    /// Retries reports from idle job processes, even while the machine is too busy for idle work.
+    pub(crate) fn retry_recoveries(&self, ctx: &Context) -> Result<()> {
+        self.refresh();
+        self.send_recoveries(ctx)
+    }
+
+    fn send_recoveries(&self, ctx: &Context) -> Result<()> {
+        let pending = self.state().recovered.clone();
+        for (key, since) in pending {
+            let report = JusticiarCleared {
+                subject: subject(&key),
+                recovery: JusticiarRecovery::Sighting {
+                    evidence: evidence(&key, since),
+                },
+            };
+            if let Err(error) = ctx.hub.justiciar_cleared(&report) {
+                eprintln!("ignite: recovery of idle work {key} not reported: {error}");
+                continue;
+            }
+            self.update(|state| state.recovered.remove(&(key, since)))?;
+        }
+        Ok(())
     }
 
     /// Counts a failure of `job`, sets its wait, and reports it to the hub once it has failed
@@ -125,7 +155,7 @@ impl Idle {
     fn failure_report(&self, ctx: &Context, key: &str, failing: &Failing) -> JusticiarReport {
         let host = &self.settings.hostname;
         JusticiarReport {
-            subject: format!("idle:{}", key.replace(' ', ":")),
+            subject: subject(key),
             title: format!("Ignite's idle work `{key}` keeps failing on {host}"),
             details: format!(
                 "The idle job `{key}` has failed {} times in a row on {host} since {}. The last \
@@ -134,11 +164,19 @@ impl Idle {
                  succeeds. The daemon log has each failure.",
                 failing.failures, failing.since, failing.error, self.settings.ignite
             ),
-            evidence: format!("{key}@{}", failing.since),
+            evidence: evidence(key, failing.since),
             machine: ctx.machine.clone(),
             host: host.clone(),
             // The error names files, such as a build's output, on this machine.
             on_machine: true,
         }
     }
+}
+
+fn subject(key: &str) -> String {
+    format!("idle:{}", key.replace(' ', ":"))
+}
+
+fn evidence(key: &str, since: Timestamp) -> String {
+    format!("{key}@{since}")
 }

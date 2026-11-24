@@ -135,7 +135,6 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
         clock: Arc::new(FakeClock::new(ignite_core::time::Timestamp::from_millis(0))),
         machine: MachineId::new("m-1").unwrap(),
         host: "jarvis".to_owned(),
-        reports: Mutex::default(),
         hub_service: Arc::new(FakeHubService::default()),
         hub_kicked: Mutex::default(),
         drain: std::sync::OnceLock::new(),

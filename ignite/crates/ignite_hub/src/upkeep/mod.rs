@@ -63,6 +63,8 @@ mod clearing_tests;
 #[cfg(test)]
 mod guard_tests;
 #[cfg(test)]
+mod justiciar_recovery_tests;
+#[cfg(test)]
 mod justiciar_tests;
 #[cfg(test)]
 mod missed_tests;

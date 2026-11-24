@@ -16,10 +16,10 @@ use crate::protocol::Usage;
 use crate::protocol::cli::TranscriptAppend;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, IncompleteReport,
-    JusticiarReport, Landed, LandedCommit, LandedReply, ListingKey, MachineFree, MetricsImport,
-    NewResult, OpenRegression, Pause, Record, RegressionFiled, RegressionReport, ReportFiled,
-    Reservation, ResultKey, SessionTitle, StoredListing, TicketBrief, TipCheckFailures, TipClaim,
-    TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    JusticiarCleared, JusticiarReport, Landed, LandedCommit, LandedReply, ListingKey, MachineFree,
+    MetricsImport, NewResult, OpenRegression, Pause, Record, RegressionFiled, RegressionReport,
+    ReportFiled, Reservation, ResultKey, SessionTitle, StoredListing, TicketBrief,
+    TipCheckFailures, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::hub::{RevertFiled, Reverted, Verdict, VerdictKey};
 use crate::protocol::tickets::{
@@ -527,6 +527,12 @@ pub trait Hub: Send + Sync {
     fn justiciar(&self, report: &JusticiarReport) -> Result<ReportFiled> {
         let _ = report;
         Err(not_supported("report an emergency"))
+    }
+
+    /// Reports recovery from a machine's emergency (`POST /justiciar/cleared`).
+    fn justiciar_cleared(&self, report: &JusticiarCleared) -> Result<()> {
+        let _ = report;
+        Err(not_supported("report recovery from an emergency"))
     }
 
     /// One ticket with its comments (`GET /tickets/<id>`).

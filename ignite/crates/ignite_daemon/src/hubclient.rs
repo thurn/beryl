@@ -10,9 +10,7 @@
 //! an `ignite install` that registered the machine again while the daemon or a verb process ran
 //! may have saved a token other than the one they read at their start.
 //!
-//! A body larger than the hub reads ([`MAX_BODY_BYTES`]), or one the hub answers with 413, fails
-//! with [`Error::Invalid`] whose message starts with [`TOO_LARGE`] (see [`too_large`]), so that a
-//! caller can send the same content again in smaller pieces.
+//! [`too_large`] identifies a body the caller can split and send again.
 
 use std::sync::{Arc, PoisonError, RwLock};
 use std::time::Duration;
@@ -25,12 +23,12 @@ use ignite_core::ids::{Commit, RecordId, Seq, TicketId};
 use ignite_core::protocol::cli::TranscriptAppend;
 use ignite_core::protocol::hub::{
     AdhocClaim, AuditReport, CachedResult, Claim, Close, ExplorationFind, FlakyReport, Heartbeat,
-    HeartbeatReply, IncompleteReport, JusticiarReport, Landed, LandedCommit, LandedReply,
-    LandingsReply, LandingsRequest, ListingKey, ListingLookup, ListingReply, LookupReply,
-    LookupRequest, MAX_BODY_BYTES, MachineFree, MachineRegister, MachineRegistered, MetricsImport,
-    NewResult, OpenRegression, OpenRegressions, Pause, Record, RecordBatch, RegressionFiled,
-    RegressionReport, Release, ReportFiled, Reservation, ResultKey, RevertFiled, Reverted,
-    SessionTitle, StoreRequest, StoredListing, TicketBrief, TipCheckFailures, TipClaim,
+    HeartbeatReply, IncompleteReport, JusticiarCleared, JusticiarReport, Landed, LandedCommit,
+    LandedReply, LandingsReply, LandingsRequest, ListingKey, ListingLookup, ListingReply,
+    LookupReply, LookupRequest, MAX_BODY_BYTES, MachineFree, MachineRegister, MachineRegistered,
+    MetricsImport, NewResult, OpenRegression, OpenRegressions, Pause, Record, RecordBatch,
+    RegressionFiled, RegressionReport, Release, ReportFiled, Reservation, ResultKey, RevertFiled,
+    Reverted, SessionTitle, StoreRequest, StoredListing, TicketBrief, TipCheckFailures, TipClaim,
     TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict, VerdictKey,
 };
 use ignite_core::protocol::tickets::{
@@ -53,9 +51,7 @@ use ticket_query::ticket_query;
 /// How an error for a body too large for the hub begins; see [`too_large`].
 pub const TOO_LARGE: &str = "413 ";
 
-/// Whether `error` says that a request's body was too large for the hub: the hub answered 413,
-/// or the body was over [`MAX_BODY_BYTES`] and was not sent. Sending the same body again can
-/// never succeed, but sending its content in smaller pieces can.
+/// Whether the body exceeded [`MAX_BODY_BYTES`] locally or the hub answered 413.
 pub fn too_large(error: &Error) -> bool {
     matches!(error, Error::Invalid(message) if message.starts_with(TOO_LARGE))
 }
@@ -618,6 +614,11 @@ impl Hub for HubClient {
 
     fn justiciar(&self, report: &JusticiarReport) -> Result<ReportFiled> {
         self.post("/justiciar", report)
+    }
+
+    fn justiciar_cleared(&self, report: &JusticiarCleared) -> Result<()> {
+        self.post::<_, serde_json::Value>("/justiciar/cleared", report)
+            .map(|_| ())
     }
 
     fn incomplete(&self, report: &IncompleteReport) -> Result<ReportFiled> {

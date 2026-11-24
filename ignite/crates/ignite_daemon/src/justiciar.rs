@@ -4,8 +4,8 @@
 //! [`Reporter::tick`] runs in the sender loop after each heartbeat:
 //!
 //! - Each crash record in the Ignite home's `crash` folder is sent as a justiciar report and
-//!   then marked reported. A crash is a bug in Ignite's code, which any machine's justiciar can
-//!   fix, so the report is not tied to this machine.
+//!   then marked reported. Startup crash loops are tracked on the machine that can observe
+//!   a newer release start cleanly. Reports of other crashes can be worked on any machine.
 //! - Each loop that [`LoopHealth`] calls unhealthy is reported once while it stays unhealthy,
 //!   tied to this machine, whose state is what has to be looked at. A loop whose round is
 //!   waiting in the scheduler's queue for cores is not reported: work of a higher class holds
@@ -21,14 +21,14 @@
 //!
 //! The `justiciar` verb is how a session asks for a justiciar.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
 use ignite_core::protocol::client::{Exit, Reply, Request};
-use ignite_core::protocol::hub::JusticiarReport;
+use ignite_core::protocol::hub::{JusticiarCleared, JusticiarRecovery, JusticiarReport};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Error;
 
@@ -36,6 +36,8 @@ use crate::crash;
 use crate::dispatchd::HeadlessDispatch;
 use crate::loop_health::LoopHealth;
 use crate::server::{Context, Verb};
+
+pub(crate) mod release_recovery;
 
 /// How long the hub may fail to answer before this machine starts a justiciar of its own.
 pub const HUB_DOWN_S: f64 = 15.0 * 60.0;
@@ -57,8 +59,10 @@ struct LocalRequest {
 #[derive(Debug, Default)]
 struct ReporterState {
     hub_down_since: Option<Timestamp>,
-    /// Loops already reported while they stay unhealthy.
-    reported_loops: BTreeSet<String>,
+    /// When an unhealthy loop was first reported, and whether the hub acknowledged it.
+    failed_loops: BTreeMap<String, (Timestamp, bool)>,
+    /// Loops for which we sent a successful round since starting or last seeing a fault.
+    healthy_loops: BTreeSet<String>,
 }
 
 /// Sends the daemon's emergencies to the hub; see the module's documentation.
@@ -171,6 +175,13 @@ impl Reporter {
         self.state().hub_down_since = None;
         self.send_crashes(ctx);
         self.send_loops(ctx, now);
+        release_recovery::send_cleared(
+            &self.home,
+            ctx.git.as_ref(),
+            ctx.hub.as_ref(),
+            now,
+            std::process::id(),
+        );
         self.headless_dispatch.report_shared(ctx, &self.host);
         self.send_local_request(ctx);
     }
@@ -188,11 +199,18 @@ impl Reporter {
 
     fn send_crashes(&self, ctx: &Context) {
         for (path, record) in crash::pending(&self.home) {
-            match ctx
-                .hub
-                .justiciar(&crash_report(ctx, &self.host, &path, &record))
-            {
-                Ok(_) => {
+            let mut report = crash_report(ctx, &self.host, &path, &record);
+            let startup = record.thread == "startup"
+                && record.location.is_empty()
+                && record.message.starts_with("crash loop:");
+            let filed = if startup {
+                report.on_machine = true;
+                release_recovery::report_crash(&self.home, ctx.hub.as_ref(), report, &record)
+            } else {
+                ctx.hub.justiciar(&report).map(|_| ())
+            };
+            match filed {
+                Ok(()) => {
                     if let Err(error) = crash::mark_reported(&path) {
                         eprintln!(
                             "ignite: crash record {} not marked: {error}",
@@ -213,19 +231,34 @@ impl Reporter {
 
     fn send_loops(&self, ctx: &Context, now: Timestamp) {
         for loop_report in self.loops.reports() {
+            let name = &loop_report.name;
+            let subject = format!("loop:{name}");
             let Some(problem) = loop_report.problem(now) else {
-                self.state().reported_loops.remove(&loop_report.name);
+                if let Some(finished_at) = loop_report.last_finished
+                    && loop_report.consecutive_errors == 0
+                {
+                    self.clear_loop(ctx, name, subject, finished_at);
+                }
                 continue;
             };
-            if loop_report.waiting_for_cores()
-                || self.state().reported_loops.contains(&loop_report.name)
-            {
+            if loop_report.waiting_for_cores() {
+                continue;
+            }
+            let (observed_at, sent) = {
+                let mut state = self.state();
+                state.healthy_loops.remove(name);
+                *state
+                    .failed_loops
+                    .entry(name.clone())
+                    .or_insert((now, false))
+            };
+            if sent {
                 continue;
             }
             let mut report = report(
                 ctx,
                 &self.host,
-                format!("loop:{}", loop_report.name),
+                subject,
                 format!(
                     "Ignite's {} loop is stuck on {}",
                     loop_report.name, self.host
@@ -237,13 +270,44 @@ impl Reporter {
                 ),
             );
             report.on_machine = true;
-            report.evidence = format!("{}:{}", self.version, loop_report.registered_at);
+            report.evidence = format!(
+                "{observed_at}|{}:{}",
+                self.version, loop_report.registered_at
+            );
             match ctx.hub.justiciar(&report) {
                 Ok(_) => {
-                    self.state().reported_loops.insert(loop_report.name.clone());
+                    self.state()
+                        .failed_loops
+                        .insert(name.clone(), (observed_at, true));
                 }
                 Err(error) => eprintln!("ignite: stuck loop not reported: {error}"),
             }
+        }
+    }
+
+    fn clear_loop(&self, ctx: &Context, name: &str, subject: String, finished_at: Timestamp) {
+        {
+            let state = self.state();
+            if state.healthy_loops.contains(name)
+                || state
+                    .failed_loops
+                    .get(name)
+                    .is_some_and(|(at, _)| finished_at <= *at)
+            {
+                return;
+            }
+        }
+        let recovery = JusticiarCleared {
+            subject,
+            recovery: JusticiarRecovery::LoopRound { finished_at },
+        };
+        match ctx.hub.justiciar_cleared(&recovery) {
+            Ok(()) => {
+                let mut state = self.state();
+                state.failed_loops.remove(name);
+                state.healthy_loops.insert(name.to_owned());
+            }
+            Err(error) => eprintln!("ignite: recovery of loop {name} not reported: {error}"),
         }
     }
 

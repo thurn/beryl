@@ -729,6 +729,23 @@ pub struct JusticiarReport {
     pub on_machine: bool,
 }
 
+/// `POST /justiciar/cleared`: the authenticated daemon has evidence that its fault ended.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JusticiarCleared {
+    /// The original report's subject, before the hub adds the reporting machine.
+    pub subject: String,
+    pub recovery: JusticiarRecovery,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum JusticiarRecovery {
+    /// A successful loop round. It can clear a sighting from a previous daemon process.
+    LoopRound { finished_at: Timestamp },
+    /// Recovery from a specific idle-job failure streak or rejected release.
+    Sighting { evidence: String },
+}
+
 /// A family's stored listing is found by the family's name and its listing hash, the hash of
 /// everything the family's `list` command can read.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

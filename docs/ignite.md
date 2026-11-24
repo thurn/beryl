@@ -3260,6 +3260,12 @@ cleared:
   holds back has a result stored after the last sighting.
 - Slow tip rounds: the last three rounds came after the ticket and none was
   slow.
+- A daemon loop or idle job: the reporting machine records a successful round
+  after the latest failure report.
+- A startup crash loop or failed release selftest: the reporting machine records
+  three consecutive clean starts on releases newer than the failed one. The
+  first two runs stopped cleanly and the third reached the daemon's startup
+  health threshold.
 
 [Regression tickets](#regression-tickets) close as soon as the newest verified
 tip confirms that their checks pass. The hub marks those regressions fixed when
@@ -3285,8 +3291,8 @@ Some kinds are never closed automatically, because nothing the hub can observe
 shows their fault cleared: flaky checks and test-only regressions that need a
 remedy, flakes blamed on a machine and passes that replaced another machine's
 failure (both intermittent), cache audits (caching is switched off), exploration
-finds, justiciar reports from a daemon or a session, and improvement tickets
-from the rules.
+finds, justiciar requests from sessions, daemon fault reports without recovery
+evidence, and improvement tickets from the rules.
 
 ```sh
 ignite ticket create "Split beryl_session's replay code" -p P2 \

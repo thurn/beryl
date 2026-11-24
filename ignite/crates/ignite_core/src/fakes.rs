@@ -15,10 +15,10 @@ use crate::protocol::cli::TranscriptAppend;
 use crate::protocol::cli::TranscriptLine;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, IncompleteReport,
-    JusticiarReport, Landed, LandedCommit, LandedReply, ListingKey, MachineFree, MetricsImport,
-    NewResult, OpenRegression, Pause, Record, RegressionFiled, RegressionReport, ReportFiled,
-    Reservation, ResultKey, RevertFiled, Reverted, SessionTitle, StoredListing, TicketBrief,
-    TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict,
+    JusticiarCleared, JusticiarReport, Landed, LandedCommit, LandedReply, ListingKey, MachineFree,
+    MetricsImport, NewResult, OpenRegression, Pause, Record, RegressionFiled, RegressionReport,
+    ReportFiled, Reservation, ResultKey, RevertFiled, Reverted, SessionTitle, StoredListing,
+    TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, ImportReply, ImportRequest, Lease,
@@ -30,10 +30,11 @@ use crate::tipround::{
     TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage, TipCoverageUpdate,
     TipRound, TipRoundFiled,
 };
-use crate::traits::{Clock, CommandSpec, Error, Hub, Launcher, Result, RunResult};
+use crate::traits::{CommandSpec, Error, Hub, Launcher, Result, RunResult};
 
 mod builds;
 mod cli;
+mod clock;
 mod fleet;
 mod git;
 mod host;
@@ -42,6 +43,7 @@ mod verdicts;
 mod whole;
 pub use builds::FakeBuilds;
 pub use cli::{FakeCliApp, ScriptedLauncher, ScriptedTurn};
+pub use clock::FakeClock;
 pub use git::FakeGit;
 pub use host::FakeHost;
 
@@ -49,35 +51,6 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
-/// A clock that moves only when the test moves it.
-#[derive(Debug)]
-pub struct FakeClock {
-    now: Mutex<Timestamp>,
-}
-
-impl FakeClock {
-    pub fn new(now: Timestamp) -> Self {
-        Self {
-            now: Mutex::new(now),
-        }
-    }
-
-    pub fn set(&self, now: Timestamp) {
-        *lock(&self.now) = now;
-    }
-
-    pub fn advance(&self, seconds: f64) {
-        let mut now = lock(&self.now);
-        *now = now.plus_seconds(seconds);
-    }
-}
-
-impl Clock for FakeClock {
-    fn now(&self) -> Timestamp {
-        *lock(&self.now)
-    }
 }
 
 /// A launcher that runs nothing. A command whose arguments start with a scripted prefix gets
@@ -174,6 +147,7 @@ pub struct FakeHub {
     audits: Mutex<Vec<AuditReport>>,
     finds: Mutex<Vec<ExplorationFind>>,
     justiciars: Mutex<Vec<JusticiarReport>>,
+    justiciar_recoveries: Mutex<Vec<JusticiarCleared>>,
     incompletes: Mutex<Vec<IncompleteReport>>,
     listings: Mutex<HashMap<ListingKey, String>>,
     tips: tips::FakeTips,
@@ -322,6 +296,10 @@ impl FakeHub {
 
     pub fn justiciar_reports(&self) -> Vec<JusticiarReport> {
         lock(&self.justiciars).clone()
+    }
+
+    pub fn justiciar_recoveries(&self) -> Vec<JusticiarCleared> {
+        lock(&self.justiciar_recoveries).clone()
     }
 
     /// The keys of every listing stored so far.
@@ -762,6 +740,12 @@ impl Hub for FakeHub {
         let mut reports = lock(&self.justiciars);
         reports.push(report.clone());
         Ok(Self::filed(reports.len()))
+    }
+
+    fn justiciar_cleared(&self, report: &JusticiarCleared) -> Result<()> {
+        self.reachable()?;
+        lock(&self.justiciar_recoveries).push(report.clone());
+        Ok(())
     }
 
     /// Answered from the landings recorded with [`Hub::landed`]; a later landing of the same

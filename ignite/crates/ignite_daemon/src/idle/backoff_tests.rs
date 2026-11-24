@@ -4,6 +4,7 @@
 use std::sync::atomic::Ordering;
 
 use ignite_core::protocol::Usage;
+use ignite_core::protocol::hub::JusticiarRecovery;
 
 use super::{Fixture, IdleJob};
 use crate::supervise::ResultFile;
@@ -77,6 +78,45 @@ fn a_failing_rebuild_backs_off_and_is_reported_once() {
     assert!(idle.state().failing.is_empty());
     assert_eq!(idle.state().counts.len(), 1);
     assert_ne!(idle.next_job(&f.ctx), Some(rebuild()));
+    let recovered = f.hub.justiciar_recoveries();
+    assert_eq!(recovered.len(), 1);
+    assert_eq!(recovered[0].subject, reports[0].subject);
+    assert_eq!(
+        recovered[0].recovery,
+        JusticiarRecovery::Sighting {
+            evidence: reports[0].evidence.clone()
+        },
+    );
+}
+
+#[test]
+fn an_idle_recovery_survives_a_hub_outage_and_daemon_restart() {
+    let f = Fixture::new();
+    let idle = f.idle();
+    let error = ignite_core::traits::Error::Io("rebuild failed".to_owned());
+    for _ in 0..super::super::backoff::REPORT_AFTER {
+        idle.note_failure(&f.ctx, &rebuild(), &error).unwrap();
+    }
+    let reports = f.hub.justiciar_reports();
+    assert_eq!(reports.len(), 1);
+
+    f.hub.set_unreachable(true);
+    idle.note_success(&f.ctx, &rebuild()).unwrap();
+    assert!(!idle.has_failed(&rebuild()));
+    assert!(f.hub.justiciar_recoveries().is_empty());
+
+    let restarted = f.idle();
+    f.hub.set_unreachable(false);
+    restarted.retry_recoveries(&f.ctx).unwrap();
+    restarted.retry_recoveries(&f.ctx).unwrap();
+    let recoveries = f.hub.justiciar_recoveries();
+    assert_eq!(recoveries.len(), 1);
+    assert_eq!(
+        recoveries[0].recovery,
+        JusticiarRecovery::Sighting {
+            evidence: reports[0].evidence.clone(),
+        },
+    );
 }
 
 #[test]

@@ -22,10 +22,10 @@ use serde_json::json;
 use ignite_core::fleet::ProviderSample;
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
-    AuditReport, ExplorationFind, FlakyReport, IncompleteReport, JusticiarReport, LandingsReply,
-    LandingsRequest, LookupReply, LookupRequest, MetricsImport, NewResult, OpenRegression,
-    OpenRegressions, RecordBatch, RegressionReport, ReportFiled, RevertFiled, Reverted,
-    StoreRequest, TipClaim, TipVerified, TipWaiting, TipWaitingFiled,
+    AuditReport, ExplorationFind, FlakyReport, IncompleteReport, JusticiarCleared, JusticiarReport,
+    LandingsReply, LandingsRequest, LookupReply, LookupRequest, MetricsImport, NewResult,
+    OpenRegression, OpenRegressions, RecordBatch, RegressionReport, ReportFiled, RevertFiled,
+    Reverted, StoreRequest, TipClaim, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
@@ -64,6 +64,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/audits"
         | "/finds"
         | "/justiciar"
+        | "/justiciar/cleared"
         | "/tips/waiting"
         | "/tips/candidate/update"
         | "/tips/coverage/update"
@@ -164,6 +165,17 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
             Ok(Response::json(200, &json!({ "ids": ids })))
         }
         "/metrics/import" => import_metrics(conn, &body(request)?, now),
+        "/justiciar/cleared" => {
+            let writer = request.writer.as_ref().expect("checked in handle");
+            justiciar::cleared(
+                conn,
+                &writer.machine,
+                &body::<JusticiarCleared>(request)?,
+                now,
+            )
+            .map_err(|error| store_failure(&error))?;
+            Ok(done())
+        }
         "/incomplete" | "/audits" | "/finds" | "/justiciar" => report(conn, request, now),
         other => Err(failure(404, &format!("no route {other}"))),
     }

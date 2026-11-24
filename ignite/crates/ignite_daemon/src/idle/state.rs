@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use ignite_core::ids::{CheckName, Commit, TreeId};
 use ignite_core::protocol::hub::{AuditReport, CachedResult, ExplorationFind};
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 
 use super::RebuildCount;
@@ -43,6 +44,8 @@ pub(super) struct State {
     pub rebuild_tried: BTreeMap<String, Commit>,
     /// Idle jobs whose last run failed, by [`super::IdleJob::key`].
     pub failing: BTreeMap<String, Failing>,
+    /// Recovery reports the hub has not accepted, keyed by job and failure streak.
+    pub recovered: BTreeSet<(String, Timestamp)>,
 }
 
 /// A check an exploration family's `next` command printed.

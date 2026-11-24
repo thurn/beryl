@@ -281,6 +281,9 @@ impl Parts {
                             return Err(format!("idle work: {error}"));
                         }
                     }
+                    if let Err(error) = idle.retry_recoveries(&ctx) {
+                        eprintln!("ignite: idle recovery notices were not saved: {error}");
+                    }
                     let pool = headless_dispatch.pool();
                     if crate::fleet_notice::is_off(pool) {
                         return Ok(());

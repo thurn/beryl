@@ -309,7 +309,7 @@ impl Idle {
             IdleJob::Rebuild { name } => self.rebuild(ctx, name).map(|count| count.is_some()),
         };
         match ran {
-            Ok(true) => self.note_success(job),
+            Ok(true) => self.note_success(ctx, job),
             // No landing tree was free, so the job did not run.
             Ok(false) => Ok(()),
             Err(error) => {
@@ -470,7 +470,7 @@ impl Verb for RebuildVerb {
                 let job = IdleJob::Rebuild {
                     name: name.to_owned(),
                 };
-                if let Err(error) = self.idle.note_success(&job) {
+                if let Err(error) = self.idle.note_success(ctx, &job) {
                     eprintln!("ignite: idle state not saved: {error}");
                 }
                 Reply::text(Exit::Success, count.render())

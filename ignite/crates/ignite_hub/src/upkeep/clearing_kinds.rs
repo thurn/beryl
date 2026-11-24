@@ -9,8 +9,7 @@
 //! - `audit`: caching is switched off for the check, so the disagreement cannot be seen again.
 //! - `found`: a bug that exploration found stays until it is fixed, and exploration may never
 //!   replay that input.
-//! - justiciar reports from a daemon or a session: the fact that would show the fault cleared
-//!   is on the reporting machine, and a session's report needs judgement.
+//! - justiciar reports from a session and daemon faults without a recovery observation.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -209,6 +208,11 @@ pub fn verdict(
                         Verdict::Present
                     },
                 );
+            }
+            if let Some((name, machine)) = subject.rsplit_once('@')
+                && justiciar::watches(name)
+            {
+                return Ok(justiciar::daemon_verdict(name, machine, ticket));
             }
             let Some(regression) = subject.strip_prefix(justiciar::REGRESSION_STALL_SUBJECT) else {
                 return Ok(Verdict::Unwatched);

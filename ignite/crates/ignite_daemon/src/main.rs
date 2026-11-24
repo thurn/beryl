@@ -236,7 +236,6 @@ fn self_update(
         clock: base.clock.clone(),
         machine: base.machine.clone(),
         host: options.hostname.clone(),
-        reports: Mutex::default(),
         hub_service: Arc::new(NativeHubService),
         hub_kicked: Mutex::default(),
         drain: std::sync::OnceLock::new(),

@@ -153,6 +153,11 @@ impl ExecutableStore {
         Self { root: root.into() }
     }
 
+    /// The daemon's home, which contains the executable store.
+    pub(crate) fn home_dir(&self) -> Option<&Path> {
+        self.root.parent()
+    }
+
     /// Where the executable built from `commit` lives.
     pub fn path(&self, commit: &Commit) -> PathBuf {
         self.root
