@@ -1,0 +1,13 @@
+This is the report ticket of the model trial "{title}", whose epic is this ticket's parent.
+Both tickets of every pair the last block filed have closed, or the cap or the end of the list
+ended the trial early. Write the final reading with the `model-trial` skill
+(`.agents/skills/model-trial/SKILL.md`), section "Writing the final reading". Every
+`just model-trial` command takes `--trial <the epic's ID>`.
+
+Files: `tools/src/beryl_tools/model_trial/`, `tools/AGENTS.md`, the root `AGENTS.md` and
+`.agents/skills/ignite/SKILL.md` (read only, for the tier rule's current wording), and the
+`model-trial` skill, which this ticket extends with what the trial taught.
+=== acceptance ===
+Two comments on the epic hold the final table and the written reading of it with a proposed
+wording for the tier rule, every copy is closed, and the `model-trial` skill holds what this
+trial taught about running the next one.

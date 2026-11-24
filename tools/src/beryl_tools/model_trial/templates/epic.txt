@@ -1,0 +1,33 @@
+A model trial: a worker on one model works a copy of real tickets that the pool works on
+another, and the two results are compared blind, so that the choice of model tier for a kind of
+ticket rests on measurements rather than a planner's guess.
+
+- **The source arm** ({source_labels}) is the real ticket. The pool works and lands it as
+  usual. Filing its pair only adds the arm's provider and effort labels (and its tier, for a
+  hub ticket that has none).
+- **The copy arm** ({copy_labels}) works a root ticket with the same text, a reworded title
+  and the starting and ending rules. It starts from the `staging` commit recorded when the pair
+  was filed, never sees later work, and ends by saving its commits on the branch
+  `trial/<copy id>` without landing.
+- `just model-trial grade` measures both arms (cost, time, check verdicts, diffs and the
+  tickets each session filed), `review` has a blind reviewer compare them as A and B, and
+  `report` prints the table. `just model-trial judge` serves the user a blind page to calibrate
+  the reviewer.
+
+The trial spec in this epic's notes, under "## Trial spec", holds everything particular to this
+trial: the arms, the block size, the most pairs, the budget, the reviewer and the ordered list
+of tickets. Every `just model-trial` command takes `--trial <this epic>` and keeps its records
+in `$BERYL_CACHE/model-trial/<this epic>/` on the machine this epic is pinned to.
+
+The child tickets are the blocks, each filing the next {block_size} pairs from the list after
+grading, reviewing and reporting the ones before, and the report ticket, which writes the final
+reading. They run in order, and each block waits for both tickets of every pair the block
+before it filed. The procedure is the `model-trial` skill (`.agents/skills/model-trial/SKILL.md`),
+and the tool is described in `tools/AGENTS.md`.
+
+To stop the trial after any block, set this epic's allocation to zero
+(`ignite ticket update <this epic> --allocation 0`). Every block posts a usable table.
+=== acceptance ===
+`just model-trial report` prints the table for every pair the cap allowed, the same table and
+a proposed wording for the tier rule are posted as comments on this epic, and
+`just model-trial judge` serves the user's blind pairs.

@@ -10,8 +10,10 @@ import argparse
 import sys
 from collections.abc import Callable
 
-from . import candidates, grade, io, judge, pair, report, review
-from .spec import Spec, SpecError, from_notes
+from pathlib import Path
+
+from . import candidates, grade, io, judge, new, pair, report, review
+from .spec import Spec, SpecError, from_file, from_notes
 
 Command = Callable[[argparse.Namespace, Spec], int]
 
@@ -21,10 +23,12 @@ def load_spec(trial: str) -> Spec:
 
 
 def run(command: Command, args: argparse.Namespace) -> int:
+    draft: str | None = getattr(args, "spec", None)
     try:
-        spec = load_spec(args.trial)
+        spec = from_file(Path(draft), draft=True) if draft else load_spec(args.trial)
     except SpecError as error:
-        print(f"model-trial: {args.trial}'s trial spec: {error}", file=sys.stderr)
+        where = draft or f"{args.trial}'s trial spec"
+        print(f"model-trial: {where}: {error}", file=sys.stderr)
         return 2
     try:
         return command(args, spec)
@@ -38,9 +42,19 @@ def _command(
     name: str,
     help: str,
     command: Command,
+    *,
+    draft: bool = False,
 ) -> argparse.ArgumentParser:
     parser = sub.add_parser(name, help=help)
-    parser.add_argument("--trial", required=True, help="the trial's epic")
+    if draft:
+        source = parser.add_mutually_exclusive_group(required=True)
+        source.add_argument("--trial", help="the trial's epic")
+        source.add_argument(
+            "--spec",
+            help="a spec file, for a trial not yet filed; `tickets` may be empty",
+        )
+    else:
+        parser.add_argument("--trial", required=True, help="the trial's epic")
     parser.set_defaults(func=lambda args: run(command, args))
     return parser
 
@@ -51,7 +65,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     verbs = trial.add_subparsers(dest="verb", required=True)
     found = _command(
-        verbs, "candidates", "list tickets that could be the source arm", candidates.run
+        verbs,
+        "candidates",
+        "list tickets that could be the source arm",
+        candidates.run,
+        draft=True,
     )
     found.add_argument("--epic", action="append", help="only tickets under this epic")
     found.add_argument("--label", action="append", help="only tickets with this label")
@@ -73,6 +91,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     shown.set_defaults(func=report.cmd_report)
     listed = verbs.add_parser("list", help="every trial with records on this machine")
     listed.set_defaults(func=report.cmd_list)
+    new.register(verbs)
     page = _command(verbs, "judge", "serve the blind judging page", judge.cmd_judge)
     page.add_argument(
         "--port", type=int, default=judge.PORT, help="0 for any free port"

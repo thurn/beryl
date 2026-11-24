@@ -60,5 +60,10 @@ and its hash is the rubric version that each review row records, so editing the
 prompt starts a new rubric. `report` prints the table (`--comment <ticket>` also
 posts it, and two `--trial`s compare trials), `list` prints every trial in the
 cache, and `judge` serves the user's blind page on 127.0.0.1 and appends the
-user's picks to `verdicts.jsonl`. Tests: `tools/tests/test_model_trial.py` and
-`tools/tests/test_model_trial_report.py`.
+user's picks to `verdicts.jsonl`.
+
+To run another trial, follow the `model-trial` skill: it asks the user for the
+arms, budget and tickets, and `just model-trial new --title <t> --spec <file>`
+then files the trial epic, its block tickets and the report ticket from the
+templates in `model_trial/templates/`. Tests: `tools/tests/test_model_trial.py`,
+`test_model_trial_report.py` and `test_model_trial_new.py`.

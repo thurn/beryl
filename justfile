@@ -120,7 +120,7 @@ efficiency_priority := if env_var_or_default("IGNITE_CORES", "") == "" { low } e
 efficiency *args:
     @{{ if args =~ '^serve( |$)' { "" } else { efficiency_priority } }} uv run --quiet --no-dev --project efficiency beryl-efficiency "$@"
 
-# Model trials: file Sonnet copies of real tickets and grade both arms (candidates, pair, grade; --trial <epic>)
+# Model trials: compare two models on copies of real tickets (new, candidates, pair, grade, review, report; see the model-trial skill)
 [group('bench')]
 model-trial *args:
     {{ by }} model-trial "$@"

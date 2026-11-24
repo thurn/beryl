@@ -149,6 +149,11 @@
       "ignite.toml",
       "ignite/checks"
     ],
+    "tools/src/beryl_tools/model_trial/new.py": [
+      "tools/src/beryl_tools/model_trial/templates/block.txt",
+      "tools/src/beryl_tools/model_trial/templates/epic.txt",
+      "tools/src/beryl_tools/model_trial/templates/report.txt"
+    ],
     "tools/src/beryl_tools/oracle_discovery.py": [
       "data/oracle-candidates.json"
     ],

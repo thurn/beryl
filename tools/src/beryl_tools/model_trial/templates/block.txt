@@ -1,0 +1,14 @@
+This is block {block} of {blocks} of the model trial "{title}", whose epic is this ticket's
+parent. Run it with the `model-trial` skill (`.agents/skills/model-trial/SKILL.md`), section
+"Running a block". The trial spec is in the epic's notes under "## Trial spec", and every
+`just model-trial` command takes `--trial <the epic's ID>`.
+
+This block grades, reviews and reports every pair that has finished, audits any planted pair
+whose source has landed, then marks, titles, plants and files the next pairs of the list with
+`--block {block}`. The ticket to name in `pair file --then` is the one that depends on this one
+(`ignite ticket dep list <this ticket>`). Do not wait for the pairs to finish.
+=== acceptance ===
+A comment on the epic holds the running table, `pairs.jsonl` holds block {block}'s pairs with
+the spec's number of planted premises recorded, and the next ticket depends on both tickets of
+every pair this block filed; or this ticket and each later block ticket are closed because the
+cap was reached or the list was used up.

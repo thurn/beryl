@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 HEADING = "## Trial spec"
 FENCE: re.Pattern[str] = re.compile(r"```json\s*\n(.*?)\n```", re.DOTALL)
@@ -101,14 +102,15 @@ def _arm(data: dict[str, object], name: str) -> Arm:
     )
 
 
-def parse(value: object) -> Spec:
-    """The spec in `value` (the decoded JSON), with defaults for the optional fields."""
+def parse(value: object, *, draft: bool = False) -> Spec:
+    """The spec in `value` (the decoded JSON), with defaults for the optional fields. A `draft`
+    spec, written before the user has picked the tickets, may leave `tickets` out."""
     data = _object(value, "spec")
     arms = _object(data.get("arms"), "arms")
-    tickets = data.get("tickets")
+    tickets = data.get("tickets", [] if draft else None)
     if (
         not isinstance(tickets, list)
-        or not tickets
+        or (not tickets and not draft)
         or not all(isinstance(t, str) and t for t in tickets)
     ):
         raise SpecError("`tickets` must be a non-empty list of ticket IDs")
@@ -152,3 +154,14 @@ def from_notes(notes: str) -> Spec:
     except json.JSONDecodeError as error:
         raise SpecError(f"the spec is not valid JSON: {error}") from error
     return parse(value)
+
+
+def from_file(path: Path, *, draft: bool = False) -> Spec:
+    """The spec in a JSON file, as `new` and `candidates --spec` read it."""
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise SpecError(f"cannot read {path}: {error.strerror}") from error
+    except json.JSONDecodeError as error:
+        raise SpecError(f"{path} is not valid JSON: {error}") from error
+    return parse(value, draft=draft)
