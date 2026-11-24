@@ -1,6 +1,9 @@
 # Rust and Python build output.
 /engine/target/
 /client/target/
+# Build output left by the old Rust workspace layout.
+/rust/target/
+/rust/beryl3d/target/
 # The temporary names warm.py clones and moves the caches through (`clone_into`, `replace`).
 .*.tmp-[0-9]*/
 *.tmp-[0-9]*/
