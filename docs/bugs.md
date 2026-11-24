@@ -14,8 +14,8 @@ fixed in the same session. Newest first.
   remembers its source (four in `Small`). A game past one of those passed the
   check, and the copy that followed panicked on the full queue. `fits` now
   checks all three. Prevention: `fits` destructures every field of `State`, as
-  `Layout::clone_state`, `State::hash_position` and `Relayout for State`
-  already did, so a new field does not compile until it says whether it fits.
+  `Layout::clone_state`, `State::hash_position` and `Relayout for State` already
+  did, so a new field does not compile until it says whether it fits.
   `a_turn_past_small_does_not_narrow` in `beryl_search` covers the turn plan.
 
 - **A restarted game could deal a different mulligan hand after its slots were
