@@ -71,7 +71,7 @@ pub struct Renderer {
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     /// The buffers frames write their uniforms and records into, with their bind groups.
-    slots: Slots,
+    pub(crate) slots: Slots,
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     /// The index range of each mesh, by `Mesh` value.
@@ -95,7 +95,7 @@ pub struct Renderer {
     inset: crate::inset::Compositor,
     panel_blur: Option<PanelBlur>,
     /// Present when the renderer counts the fragments each frame shades.
-    counter: Option<FragmentCounter>,
+    pub(crate) counter: Option<FragmentCounter>,
     /// The GPU adapter's name and backend, for logs.
     pub(crate) adapter: String,
     /// The instance and adapter of a renderer that draws to a surface, for the surfaces a phone
@@ -417,7 +417,7 @@ impl Renderer {
     /// Draws `frame` into `target`, cleared to black first.
     pub fn render(&mut self, frame: &Frame, target: &mut Target) -> Drawn {
         self.fit_card_mesh(frame.card);
-        self.render_view(frame, &target.view, target.width, target.height)
+        self.render_view(frame, &target.view, target.width, target.height, None)
     }
 
     /// The Enhanced tier's lighting `frame` is drawn with, or `None` when it is drawn in
@@ -438,8 +438,9 @@ impl Renderer {
         view: &wgpu::TextureView,
         width: u32,
         height: u32,
+        timing: Option<(&crate::GpuTimer, u64, &mut Option<u32>)>,
     ) -> Drawn {
-        let mut drawn = self.render_scene(frame, view, width, height);
+        let mut drawn = self.render_scene(frame, view, width, height, timing);
         if let Some(inset) = &frame.inset {
             let mut viewport = inset.viewport;
             viewport.x = viewport.x.clamp(0.0, width as f32);
@@ -456,7 +457,7 @@ impl Renderer {
                         .target(&self.device, &self.sampler, self.format, width, height);
                 self.fit_card_mesh(inset.frame.card);
                 std::mem::swap(&mut self.depth, &mut self.inset.depth);
-                let inside = self.render_scene(&inset.frame, &target, width, height);
+                let inside = self.render_scene(&inset.frame, &target, width, height, None);
                 std::mem::swap(&mut self.depth, &mut self.inset.depth);
                 self.inset.paint(&self.device, &self.queue, view, viewport);
                 drawn.draw_calls += inside.draw_calls + 1;
@@ -465,12 +466,17 @@ impl Renderer {
         drawn
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the passes and timestamp sample belong to one submission"
+    )]
     fn render_scene(
         &mut self,
         frame: &Frame,
         view: &wgpu::TextureView,
         width: u32,
         height: u32,
+        timing: Option<(&crate::GpuTimer, u64, &mut Option<u32>)>,
     ) -> Drawn {
         let lit = self.lit_by(frame);
         let enhanced = lit.is_some();
@@ -495,6 +501,9 @@ impl Renderer {
             // The device was lost; the host makes a new renderer when it notices.
             return Drawn::default();
         };
+        let work = timing
+            .as_ref()
+            .and_then(|(timer, tick, _)| timer.begin(*tick));
         let draws = Draws {
             frame,
             kept: kept as u32,
@@ -504,6 +513,7 @@ impl Renderer {
             ranges: &self.ranges,
             width,
             height,
+            timing: work.as_ref(),
         };
         let mut encoder = self
             .device
@@ -575,17 +585,11 @@ impl Renderer {
                 self.counter.as_ref(),
             );
         }
-        self.submit(encoder);
+        let measured = timing
+            .zip(work)
+            .map(|((timer, _, pending), work)| (timer, pending, work));
+        self.submit(encoder, measured);
         Drawn { draw_calls }
-    }
-
-    /// Resolves fragment counts and keeps the upload slot until the submission finishes.
-    fn submit(&mut self, mut encoder: wgpu::CommandEncoder) {
-        if let Some(counter) = &self.counter {
-            counter.resolve(&mut encoder);
-        }
-        let submission = self.queue.submit([encoder.finish()]);
-        self.slots.submitted(submission);
     }
 
     fn depth_view(&mut self, width: u32, height: u32) -> wgpu::TextureView {
@@ -674,7 +678,7 @@ fn baseline_pass(
             }),
             stencil_ops: None,
         }),
-        timestamp_writes: None,
+        timestamp_writes: draws.timing.and_then(crate::gpu_timing::Work::timestamps),
         occlusion_query_set: None,
         multiview_mask: None,
     });

@@ -17,6 +17,7 @@ use kit_ui::input::{Lifecycle, Tier};
 use crate::assets::Assets;
 use crate::performance::Monitor;
 use crate::rate::{Paced, RateRule, Step, Thresholds};
+use crate::timing::{CpuTiming, PacingChange, Timing, elapsed};
 
 /// A source of display ticks: a display link on macOS, winit's redraw requests elsewhere, a
 /// timer in the windowless host, or a test's own calls.
@@ -184,6 +185,10 @@ pub trait Feed {
     #[cfg(feature = "drive")]
     fn script_done(&mut self, _id: u64, _result: Result<(), String>) {}
 
+    /// Starts the live diagnostic clock and receives its events.
+    fn timing_started(&mut self, _epoch: Instant) {}
+    fn timing(&mut self, _event: &Timing) {}
+
     /// Whether the feed has nothing more to show, as when the game it plays is over: the host
     /// then ends the run.
     fn ended(&self) -> bool {
@@ -226,6 +231,8 @@ pub struct FrameLoop<T> {
     /// The rate frames are counted against: the rule's choice, or the fixed rate.
     hz: f32,
     monitor: Monitor,
+    timing_epoch: Option<Instant>,
+    cpu: CpuTiming,
     /// How the tier is chosen, as the settings last said, and whether the renderer has the
     /// Enhanced tier, so that a change of the setting during play can be carried out.
     graphics: Graphics,
@@ -254,6 +261,8 @@ impl<T: Ticks> FrameLoop<T> {
             rate: None,
             hz: 60.0,
             monitor: Monitor::default(),
+            timing_epoch: None,
+            cpu: CpuTiming::default(),
             graphics: Graphics::Automatic,
             enhanced_available: false,
             #[cfg(feature = "drive")]
@@ -353,8 +362,25 @@ impl<T: Ticks> FrameLoop<T> {
         self
     }
 
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    pub(crate) fn start_timing(&mut self, epoch: Instant) {
+        self.timing_epoch = Some(epoch);
+        self.feed.timing_started(epoch);
+    }
+
+    pub(crate) fn note_timing(&mut self, event: &Timing) {
+        self.feed.timing(event);
+    }
+
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    pub(crate) fn cpu_timing(&mut self) -> CpuTiming {
+        std::mem::take(&mut self.cpu)
+    }
+
     /// Hands `input` to the client. Nothing is drawn until the next tick.
     pub fn handle(&mut self, input: Input) {
+        let session = matches!(input, Input::Update(_) | Input::Cards(_) | Input::Reply(_));
+        let started = (self.timing_epoch.is_some() && session).then(Instant::now);
         match input {
             Input::Device(DeviceInput::Lifecycle(Lifecycle::Suspended)) => {
                 self.monitor.suspended = true;
@@ -367,6 +393,7 @@ impl<T: Ticks> FrameLoop<T> {
         }
         self.feed.input(&input);
         self.client.handle(input);
+        self.cpu.session_input_ns += started.map_or(0, elapsed);
         self.input_since = true;
     }
 
@@ -403,6 +430,8 @@ impl<T: Ticks> FrameLoop<T> {
             self.last = None;
             return None;
         }
+        let timed = self.timing_epoch.is_some();
+        let before = timed.then(Instant::now);
         let clock = self.clock(now);
         self.deliver_pictures();
         #[cfg(feature = "drive")]
@@ -428,6 +457,10 @@ impl<T: Ticks> FrameLoop<T> {
         } else if !self.client.fps_monitor_enabled() {
             self.monitor.samples = None;
         }
+        let assets = timed.then(Instant::now);
+        self.cpu.before_frame_ns = before
+            .zip(assets)
+            .map_or(0, |(before, assets)| (assets - before).as_nanos() as u64);
         self.deliver_assets(draw, When::BeforeFrame);
         // A watched edit of `lighting.json` reaches the client as new data; the renderer takes
         // it before the next frame, and does nothing while it is unchanged.
@@ -436,11 +469,18 @@ impl<T: Ticks> FrameLoop<T> {
         }
         // What the frame needs of the scripts to come is compiled before it, outside the frame's
         // own time: the frame allocates nothing, and compiling does.
+        let prepare = timed.then(Instant::now);
         self.client.prepare(clock);
         let started = Instant::now();
+        if let (Some(assets), Some(prepare)) = (assets, prepare) {
+            self.cpu.asset_delivery_ns = (prepare - assets).as_nanos() as u64;
+            self.cpu.prepare_ns = (started - prepare).as_nanos() as u64;
+        }
         let frame = self.client.frame(clock);
         let client = started.elapsed().as_nanos() as u64;
         let shown = draw.draw(frame);
+        let after = timed.then(Instant::now);
+        self.cpu.client_ns = client;
         if shown.is_some()
             && monitoring
             && let Some(monitor) = &mut self.monitor.samples
@@ -470,7 +510,12 @@ impl<T: Ticks> FrameLoop<T> {
         if self.is_paused(now) {
             self.drawn_at_pause = true;
         }
+        let feed = timed.then(Instant::now);
+        self.cpu.after_draw_ns = after
+            .zip(feed)
+            .map_or(0, |(after, feed)| (feed - after).as_nanos() as u64);
         self.feed.after(&mut self.client, &ticked);
+        self.cpu.feed_after_ns = feed.map_or(0, elapsed);
         Some(ticked)
     }
 
@@ -521,6 +566,7 @@ impl<T: Ticks> FrameLoop<T> {
     /// where the renderer has it, and never drops; Automatic keeps the tier, and lets it drop
     /// if it is Enhanced.
     fn set_graphics(&mut self, graphics: Graphics) {
+        let previous = self.client.tier();
         self.graphics = graphics;
         match graphics {
             Graphics::Baseline => self
@@ -535,6 +581,22 @@ impl<T: Ticks> FrameLoop<T> {
         let tier_can_drop = graphics == Graphics::Automatic && self.client.tier() == Tier::Enhanced;
         if let Some(rule) = &mut self.rate {
             rule.set_tier_can_drop(tier_can_drop);
+        }
+        if previous != self.client.tier() {
+            self.note_change(self.hz, previous, None);
+        }
+    }
+
+    fn note_change(&mut self, hz: f32, tier: Tier, adaptive: Option<crate::rate::Decision>) {
+        if let Some(epoch) = self.timing_epoch {
+            self.note_timing(&Timing::Change(PacingChange {
+                at_ns: elapsed(epoch),
+                previous_hz: hz,
+                new_hz: self.hz,
+                previous_tier: tier.into(),
+                new_tier: self.client.tier().into(),
+                adaptive,
+            }));
         }
     }
 
@@ -560,6 +622,8 @@ impl<T: Ticks> FrameLoop<T> {
         let gap = since_last?;
         let work = client + shown.map_or(0, |shown| shown.encoded);
         let step = rule.frame(Paced { gap, work })?;
+        let decision = rule.decision();
+        let previous = (self.hz, self.client.tier());
         match step {
             Step::Baseline => self
                 .client
@@ -569,6 +633,7 @@ impl<T: Ticks> FrameLoop<T> {
                 self.ticks.set_rate(hz);
             }
         }
+        self.note_change(previous.0, previous.1, decision);
         Some(step)
     }
 

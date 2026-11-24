@@ -11,6 +11,7 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
+use crate::frame_log::Attachment;
 use app_client::Client;
 use app_client::Input;
 use app_client::command::Request;
@@ -151,7 +152,12 @@ impl Bugs {
     /// Writes the report a `Request::SaveBug` asks for, with what was kept for it and the frame
     /// log at `frame_log`: on the session thread of `live`, in a live game, and otherwise on a
     /// thread of its own. Either answers with `Input::BugSaved`.
-    pub fn save(&mut self, request: &Request, frame_log: Option<&Path>, live: Option<&Commands>) {
+    pub fn save(
+        &mut self,
+        request: &Request,
+        frame_log: Option<Attachment>,
+        live: Option<&Commands>,
+    ) {
         let Request::SaveBug {
             description,
             ai,
@@ -172,7 +178,7 @@ impl Bugs {
             environment: self.environment.clone(),
             picture: self.picture.take(),
             tree: self.tree.take(),
-            frame_log: frame_log.map(Path::to_owned),
+            frame_log,
             views: self.views.iter().cloned().collect(),
             replayed: self.replayed.take(),
         };
@@ -225,7 +231,7 @@ pub struct Job {
     environment: Environment,
     picture: Option<Picture>,
     tree: Option<String>,
-    frame_log: Option<PathBuf>,
+    frame_log: Option<Attachment>,
     views: Vec<GameUpdate>,
     replayed: Option<Replayed>,
 }
@@ -270,13 +276,13 @@ impl Job {
                     .to_owned(),
             });
         }
-        if let Some(path) = &self.frame_log
-            && let Ok(bytes) = std::fs::read(path)
+        if let Some(log) = self.frame_log
+            && let Ok(bytes) = log.read()
         {
             attached.push(Attached {
                 name: "frames.jsonl".to_owned(),
                 bytes,
-                note: format!("The client's frame log so far, `{}`", path.display()),
+                note: "The client's frame log through the bug report request".to_owned(),
             });
         }
         let report = BugReport {

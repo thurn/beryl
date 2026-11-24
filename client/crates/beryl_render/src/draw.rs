@@ -23,6 +23,7 @@ pub(crate) struct Draws<'a> {
     pub(crate) ranges: &'a [Range<u32>; Mesh::COUNT],
     pub(crate) width: u32,
     pub(crate) height: u32,
+    pub(crate) timing: Option<&'a crate::gpu_timing::Work>,
 }
 
 impl Draws<'_> {

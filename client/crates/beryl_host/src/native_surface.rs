@@ -410,7 +410,7 @@ impl Draw for Screen {
                             encoded: total.saturating_sub(waited),
                         })
                     }
-                    Presented::Skipped => None,
+                    Presented::Skipped { .. } => None,
                 }
             }
             #[cfg(feature = "headless")]

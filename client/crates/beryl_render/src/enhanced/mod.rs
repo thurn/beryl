@@ -254,7 +254,7 @@ impl Enhanced {
                     },
                 })],
                 depth_stencil_attachment: Some(depth_attachment(&targets.depth)),
-                timestamp_writes: None,
+                timestamp_writes: draws.timing.and_then(crate::gpu_timing::Work::timestamps),
                 occlusion_query_set: None,
                 multiview_mask: None,
             });

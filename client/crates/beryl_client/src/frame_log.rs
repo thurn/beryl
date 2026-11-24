@@ -1,9 +1,9 @@
 //! The frame log (docs/beryl-3d.md, "Driving the running app"): every run of the app writes a
 //! file of its own, `$BERYL_CACHE/b3d/frames/<start time>-<process id>.jsonl`, that an agent
-//! reads with `just client frames`. Its first line describes the run, then one line follows for
-//! each late frame and for each pointer, key, text, surface and lifecycle input. The log
-//! records when the first frame was shown, the tier chosen at startup (`tier`), and summarizes
-//! the run at exit or at replay end.
+//! reads with `just client frames`. Its first line describes the run. On macOS, the display
+//! link and renderer supply timing windows with submissions, skips and changes of rate or tier.
+//! Other hosts record individual late frames. The log also records inputs, the first frame and
+//! the tier chosen at startup, and summarizes the run at exit or at replay end.
 //!
 //! A frame is late when more than one and a half intervals of the rate the host asked for
 //! passed since the frame before it while the ticks ran (decision C18). When the host asked
@@ -17,16 +17,19 @@
 
 use kit_ui::input::Input as DeviceInput;
 use std::collections::BTreeMap;
-use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, BufWriter, Write};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Sender, channel};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
+use crate::frame_trace::{Reason, Trace, Window};
+pub use crate::frame_writer::Attachment;
+use crate::frame_writer::{self, Message};
 use app_client::Input;
 use beryl_host::Ticked;
 use beryl_host::rate::Step;
+use beryl_host::timing::{PacingChange, Timing};
 use game_play::sound::NAMES;
 use kit_frame::frame::SoundId;
 use kit_ui::input::{Lifecycle, Modifiers, TextChange};
@@ -201,6 +204,8 @@ pub enum Line {
     Summary(Summary),
     Input(Inputted),
     Tier(Tiered),
+    TimingWindow(Window),
+    PacingChange(PacingChange),
 }
 
 /// An input line as written: the input, and how long before it the last frame was drawn.
@@ -345,12 +350,15 @@ pub struct Log {
     pub summary: Option<Summary>,
     /// The tier chosen at startup, where the host chose one.
     pub tier: Option<Tiered>,
+    pub timing_windows: Vec<Window>,
+    pub pacing_changes: Vec<PacingChange>,
 }
 
 /// The log of a run under way.
 pub struct FrameLog {
     /// Where lines go to be written.
-    lines: Sender<Line>,
+    lines: Sender<Message>,
+    trace: Option<Trace>,
     writer: JoinHandle<io::Result<()>>,
     path: PathBuf,
     /// When the log was made, as the host opened.
@@ -382,22 +390,14 @@ impl FrameLog {
     /// by `finish`.
     pub fn create(dir: &Path, run: &Run) -> io::Result<Self> {
         let path = dir.join(format!("{}-{}.jsonl", run.started_ms, run.pid));
-        let (lines, received) = channel::<Line>();
+        let (lines, received) = channel();
         let (dir, file_path, first) = (dir.to_owned(), path.clone(), Line::Run(run.clone()));
         let writer = std::thread::Builder::new()
             .name("frame log".to_owned())
-            .spawn(move || {
-                beryl_host::utility_thread();
-                fs::create_dir_all(&dir)?;
-                let mut file = BufWriter::new(File::create(&file_path)?);
-                for line in std::iter::once(first).chain(received) {
-                    write(&mut file, &line)?;
-                    file.flush()?;
-                }
-                Ok(())
-            })?;
+            .spawn(move || frame_writer::run(&dir, &file_path, &first, received))?;
         Ok(Self {
             lines,
+            trace: None,
             writer,
             path,
             created: Instant::now(),
@@ -414,6 +414,46 @@ impl FrameLog {
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    fn send(&self, line: Line) {
+        let _ = self.lines.send(Message::Line(line));
+    }
+
+    pub(crate) fn start_trace(&mut self, epoch: Instant) {
+        self.trace = Some(Trace::new(epoch));
+    }
+
+    pub(crate) fn timing(&mut self, event: &Timing) {
+        if let Timing::Change(change) = event {
+            self.send(Line::PacingChange(*change));
+        }
+        if let Some(window) = self.trace.as_mut().and_then(|trace| trace.record(event)) {
+            self.send(Line::TimingWindow(window));
+        }
+    }
+
+    pub(crate) fn freeze_trace(&mut self) {
+        if let Some(trace) = &mut self.trace {
+            trace.frozen = trace.capture(Reason::BugOpened, trace.now());
+        }
+    }
+
+    pub(crate) fn bug_attachment(&mut self) -> Attachment {
+        if let Some(trace) = &mut self.trace {
+            let frozen = trace.frozen.take();
+            let latest = trace.capture(Reason::BugSaved, trace.now());
+            for window in frozen.into_iter().chain(latest) {
+                self.send(Line::TimingWindow(window));
+            }
+        }
+        let (finished, complete) = channel();
+        let _ = self.lines.send(Message::BugPrefix(finished));
+        Attachment::new(&self.path, complete)
+    }
+
+    pub(crate) fn keeps_late_verbs(&self) -> bool {
+        self.trace.is_none()
     }
 
     /// Whether `ticked` came late against the rate the host had asked for.
@@ -464,10 +504,12 @@ impl FrameLog {
         if summary.first_shown_ms.is_none() {
             let at = ms(ticked.tick);
             summary.first_shown_ms = Some(at);
-            let _ = self.lines.send(Line::FirstShownMs(at));
+            let _ = self.lines.send(Message::Line(Line::FirstShownMs(at)));
         }
         if self.presentation_lifecycle.is_some() {
-            let _ = self.lines.send(Line::LifecycleShownMs(ms(ticked.tick)));
+            let _ = self
+                .lines
+                .send(Message::Line(Line::LifecycleShownMs(ms(ticked.tick))));
             if self.presentation_lifecycle == Some(Lifecycle::Resumed) {
                 self.presentation_lifecycle = None;
             }
@@ -494,6 +536,9 @@ impl FrameLog {
         } else {
             summary.missed_60 += 1;
         }
+        if self.trace.is_some() {
+            return;
+        }
         let late = Late {
             at_ms: ms(ticked.tick),
             since_last_ms: ms(gap),
@@ -507,7 +552,7 @@ impl FrameLog {
             hz: ticked.hz,
         };
         // The writer ends only with the log, so a failed send has nowhere to go.
-        let _ = self.lines.send(Line::Late(late));
+        self.send(Line::Late(late));
     }
 
     /// Records an input the host handed the client when it is one the log keeps, with how
@@ -524,7 +569,7 @@ impl FrameLog {
                 .last_frame
                 .map(|drawn| drawn.elapsed().as_secs_f64() * 1e3);
             // The writer ends only with the log, so a failed send has nowhere to go.
-            let _ = self.lines.send(Line::Input(Inputted {
+            self.send(Line::Input(Inputted {
                 input: line,
                 since_frame_ms,
             }));
@@ -534,7 +579,7 @@ impl FrameLog {
     /// Writes the tier chosen at startup.
     pub fn tier(&self, tiered: Tiered) {
         // The writer ends only with the log, so a failed send has nowhere to go.
-        let _ = self.lines.send(Line::Tier(tiered));
+        self.send(Line::Tier(tiered));
     }
 
     /// Notes a sound the client asked for in a frame.
@@ -563,7 +608,7 @@ impl FrameLog {
     /// Writes a summary while keeping the log open for input after the replay ends.
     pub fn summarize(&mut self) {
         let summary = self.summary();
-        let _ = self.lines.send(Line::Summary(summary));
+        self.send(Line::Summary(summary));
     }
 
     fn summary(&mut self) -> Summary {
@@ -583,8 +628,13 @@ impl FrameLog {
     /// # Errors
     /// When a line could not be written.
     pub fn finish(mut self) -> io::Result<Summary> {
+        if let Some(trace) = &self.trace
+            && let Some(window) = trace.capture(Reason::Exit, trace.now())
+        {
+            self.send(Line::TimingWindow(window));
+        }
         let summary = self.summary();
-        let _ = self.lines.send(Line::Summary(summary.clone()));
+        self.send(Line::Summary(summary.clone()));
         drop(self.lines);
         self.writer
             .join()
@@ -611,173 +661,11 @@ fn percentile(waits: &[u32], q: f64) -> f64 {
     ms(waits.len() as u64 * WAIT_BUCKET)
 }
 
-fn write(file: &mut BufWriter<File>, line: &Line) -> io::Result<()> {
-    serde_json::to_writer(&mut *file, line)?;
-    file.write_all(b"\n")
-}
+mod read;
+pub use read::read;
+pub(crate) use read::read_run;
 
-/// Reads the log at `path`.
-///
-/// # Errors
-///
-/// When the file cannot be read, a line is not a log line, or the first line does not
-/// describe a run.
-pub fn read(path: &Path) -> Result<Log, String> {
-    let file = File::open(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    let mut lines = BufReader::new(file)
-        .lines()
-        .enumerate()
-        .map(|(index, line)| {
-            let line = line.map_err(|error| format!("{}: {error}", path.display()))?;
-            serde_json::from_str::<Line>(&line)
-                .map_err(|error| format!("{}:{}: {error}", path.display(), index + 1))
-        });
-    let Some(Line::Run(run)) = lines.next().transpose()? else {
-        return Err(format!(
-            "{}: the first line does not describe a run",
-            path.display()
-        ));
-    };
-    let mut log = Log {
-        run,
-        late: Vec::new(),
-        inputs: Vec::new(),
-        summary: None,
-        tier: None,
-    };
-    for line in lines {
-        match line? {
-            Line::Run(_) => return Err(format!("{}: a second run line", path.display())),
-            Line::FirstShownMs(_) | Line::LifecycleShownMs(_) => {}
-            Line::Late(late) => log.late.push(late),
-            Line::Summary(summary) => log.summary = Some(summary),
-            Line::Input(input) => log.inputs.push(input.input),
-            Line::Tier(tiered) => log.tier = Some(tiered),
-        }
-    }
-    Ok(log)
-}
-
-impl Run {
-    /// The machine's load as the run started and what the run was made to imitate, one line:
-    /// its drive script, its busy threads and its slowed frames. `None` when there is nothing to
-    /// say.
-    #[must_use]
-    pub fn conditions(&self) -> Option<String> {
-        let mut parts = Vec::new();
-        if let Some([one, five, fifteen]) = self.load {
-            parts.push(format!("load average {one:.1} {five:.1} {fifteen:.1}"));
-        }
-        if let Some(drive) = &self.drive {
-            parts.push(format!("drive {drive}"));
-        }
-        if let Some(load) = &self.load_threads {
-            parts.push(format!("load threads {load}"));
-        }
-        if let Some(slow) = self.slow_gpu_ms {
-            parts.push(format!("slow GPU {slow} ms"));
-        }
-        if let Some(game) = &self.game {
-            parts.push(format!("game {game}"));
-        }
-        (!parts.is_empty()).then(|| parts.join(", "))
-    }
-}
-
-impl Summary {
-    /// The rate the host asked for, and its steps, one line.
-    fn print_rate(&self, run: &Run) -> String {
-        if self.steps.is_empty() {
-            return format!("asked for {} Hz throughout", run.display_hz);
-        }
-        let steps: Vec<String> = self
-            .steps
-            .iter()
-            .map(|step| match step.hz {
-                Some(hz) => format!("{hz} Hz at {:.0} ms", step.at_ms),
-                None => format!("Baseline tier at {:.0} ms", step.at_ms),
-            })
-            .collect();
-        format!(
-            "asked for {} Hz, then {}; {} Hz at the end",
-            run.display_hz,
-            steps.join(", "),
-            self.hz
-        )
-    }
-
-    /// The summary as `just client frames` prints it, a few lines.
-    #[must_use]
-    pub fn print(&self, run: &Run) -> String {
-        let mut lines = vec![
-            format!(
-                "{} frames in {:.1} s, each on a tick of the {} Hz display ({} window, {})",
-                self.frames, self.seconds, run.display_hz, run.window, run.adapter
-            ),
-            self.print_rate(run),
-            format!(
-                "late: {} ({} held to 60 Hz, {} missed 60 Hz); worst gap {:.1} ms",
-                self.late, self.held_to_60, self.missed_60, self.worst_gap_ms
-            ),
-            format!(
-                "waited for a drawable: median {:.1} ms, 95th percentile {:.1} ms, worst {:.1} ms; \
-                 {:.1} ms in all; {} frames found none",
-                self.median_wait_ms,
-                self.p95_wait_ms,
-                self.worst_wait_ms,
-                self.total_wait_ms,
-                self.skipped
-            ),
-        ];
-        if let Some(conditions) = run.conditions() {
-            lines.insert(1, conditions);
-        }
-        let searching = &self.searching;
-        if searching.frames > 0 {
-            lines.push(format!(
-                "while the AI searched: {} frames, {} late; worst client {:.2} ms, worst encode \
-                 {:.2} ms",
-                searching.frames,
-                searching.late,
-                searching.worst_client_ms,
-                searching.worst_encoded_ms
-            ));
-        }
-        if let Some(pause) = run.pause_at_ms {
-            lines.push(format!(
-                "paused at {pause} ms: {} frames drawn after the pause",
-                self.after_pause
-            ));
-        }
-        if self.faceless_cards > 0 || self.missing_glyphs > 0 {
-            lines.push(format!(
-                "in the last frame: {} cards drawn blank with no face, {} glyphs missing",
-                self.faceless_cards, self.missing_glyphs
-            ));
-        }
-        if !self.unbuilt.is_empty() {
-            lines.push(format!(
-                "played as instant changes, not built yet: {}",
-                self.unbuilt.join(", ")
-            ));
-        }
-        if !self.sounds.is_empty() {
-            let played: Vec<String> = (self.sounds.iter())
-                .map(|(name, count)| format!("{name} {count}"))
-                .collect();
-            lines.push(format!("sounds played: {}", played.join(", ")));
-        }
-        if self.unplaced > 0 {
-            lines.push(format!(
-                "script steps the table could not take: {}",
-                self.unplaced
-            ));
-        }
-        lines.join("\n")
-    }
-}
-
-/// Nanoseconds as milliseconds.
+/// Converts nanoseconds to milliseconds for the legacy log.
 fn ms(nanoseconds: u64) -> f64 {
     nanoseconds as f64 / 1e6
 }

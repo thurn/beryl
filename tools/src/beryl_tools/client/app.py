@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import audio, bugs, deps, paths as repo_paths, system
-from . import cargo, live, paths
+from . import cargo, frame_trace, live, paths
 from .command import Command
 
 TARGET: Path = paths.WORKSPACE / "target"
@@ -464,12 +464,46 @@ def newest_log(folder: Path, checkout: Path) -> Path | None:
     return max(found)[1] if found else None
 
 
-def report(path: Path) -> str:
-    """A log's summary and its `WORST` worst frames, as `frames` prints them."""
-    lines = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
-    run = lines[0]["run"]
-    late = [line["late"] for line in lines if "late" in line]
-    summary = next((line["summary"] for line in lines if "summary" in line), None)
+def log_lines(path: Path) -> Iterator[dict[str, Any]]:
+    with path.open("rb") as stream:
+        for line in stream:
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError:
+                # A live writer may still be flushing the final line.
+                if line.endswith(b"\n"):
+                    raise
+
+
+def report(path: Path, *, latest: bool = False) -> str:
+    """Show the run, old-style late frames and captured timing windows."""
+    if path.is_dir():
+        path = path / "frames.jsonl"
+    with_rows = log_lines(path)
+    first = next(with_rows, None)
+    if first is None:
+        raise ValueError(f"{path}: the frame log has no complete run line")
+    run = first["run"]
+    late: list[dict[str, Any]] = []
+    summary: dict[str, Any] | None = None
+    tier: dict[str, Any] | None = None
+    changes: list[str] = []
+    windows: list[str] = []
+    latest_window: dict[str, Any] | None = None
+    for line in with_rows:
+        if "late" in line:
+            late.append(line["late"])
+        elif "summary" in line:
+            summary = line["summary"]
+        elif "tier" in line:
+            tier = line["tier"]
+        elif "pacing_change" in line:
+            changes.append(frame_trace.describe_change(line["pacing_change"]))
+        elif "timing_window" in line:
+            if latest:
+                latest_window = line["timing_window"]
+            else:
+                windows.extend(frame_trace.describe(line["timing_window"]))
     out = [
         f"{path}",
         f"run: {run['window']} window, {run['display_hz']} Hz, {run['adapter']},"
@@ -487,11 +521,10 @@ def report(path: Path) -> str:
     ]
     if conditions:
         out.append("made to imitate: " + ", ".join(conditions))
-    tier = next((line["tier"] for line in lines if "tier" in line), None)
     if tier is not None:
         out.append(tier_line(tier))
     if summary is None:
-        out.append("no summary: the run ended before it wrote one")
+        out.append("no exit summary in the log")
     else:
         out += [
             f"{summary['frames']} frames in {summary['seconds']:.1f} s, each on a display tick;"
@@ -527,6 +560,12 @@ def report(path: Path) -> str:
                 f" encoded {frame['encoded_ms']:.2f}, searching {frame['searching']},"
                 f" verbs {','.join(frame['verbs']) or '-'}"
             )
+    if changes:
+        out.append("live pacing changes")
+        out.extend(changes)
+    if latest_window is not None:
+        windows = frame_trace.describe(latest_window)
+    out.extend(windows)
     return "\n".join(out)
 
 
@@ -566,7 +605,13 @@ def rate_line(run: dict[str, Any], summary: dict[str, Any]) -> str:
 
 def frames_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "path", nargs="?", type=Path, help="a frame log; the newest if none"
+        "path",
+        nargs="?",
+        type=Path,
+        help="a frame log or bug report folder; the newest log if none",
+    )
+    parser.add_argument(
+        "--latest", action="store_true", help="show only the most recent timing window"
     )
 
 
@@ -579,5 +624,5 @@ def run_frames(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    print(report(path))
+    print(report(path, latest=args.latest))
     return 0

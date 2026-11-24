@@ -536,6 +536,7 @@ dependencies = [
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
+ "serde",
  "swash",
  "windows-sys 0.61.2",
  "winit",

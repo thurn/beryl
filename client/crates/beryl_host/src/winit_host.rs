@@ -13,8 +13,7 @@ use std::time::{Duration, Instant};
 use app_client::Client;
 use app_client::Input;
 use app_client::command::Request;
-use beryl_render::{Presented, Renderer, Surface};
-use kit_frame::frame::Frame;
+use beryl_render::Renderer;
 use kit_ui::input::Lifecycle;
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize};
@@ -26,8 +25,10 @@ use winit::window::{Window, WindowId};
 use crate::assets::Assets;
 use crate::clipboard::Clipboard;
 use crate::events::Translator;
-use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Opening, Shown, Sleep, Ticks};
+use crate::frames::{Chosen, Feed, FrameLoop, Opened, Opening, Sleep, Ticks};
 use crate::inbox::Inbox;
+use crate::timing::{DisplayTick, FrameTiming, Outcome, Timing, elapsed};
+use crate::winit_screen::Screen;
 
 /// What the window is (decision C15: the faster choice is the default).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,7 +65,7 @@ pub struct Options {
 pub enum UserEvent {
     /// The display link fired: the display is ready for a frame.
     #[cfg(target_os = "macos")]
-    Tick(Option<f64>),
+    Tick(DisplayTick),
     /// Inputs are waiting in the inbox.
     Inbox,
 }
@@ -190,48 +191,7 @@ struct Running {
     screen: Screen,
     translator: Translator,
     clipboard: Clipboard,
-}
-
-/// Where frames are drawn.
-struct Screen {
-    renderer: Renderer,
-    surface: Surface,
-    window: Arc<Window>,
-    /// How long each finished frame is held back before it is shown (`Options::slow_gpu`).
-    slow_gpu: Duration,
-}
-
-impl Draw for Screen {
-    fn draw(&mut self, frame: &Frame) -> Option<Shown> {
-        let window = &self.window;
-        let slow_gpu = self.slow_gpu;
-        let started = Instant::now();
-        let present = || {
-            if !slow_gpu.is_zero() {
-                std::thread::sleep(slow_gpu);
-            }
-            window.pre_present_notify();
-        };
-        match self.renderer.present(frame, &mut self.surface, present) {
-            Presented::Shown { waited, .. } => {
-                let waited = waited.as_nanos() as u64;
-                let total = started.elapsed().as_nanos() as u64;
-                Some(Shown {
-                    waited,
-                    encoded: total.saturating_sub(waited),
-                })
-            }
-            Presented::Skipped => None,
-        }
-    }
-
-    fn capture(&mut self, frame: &Frame) -> Option<beryl_render::Readback> {
-        Some(self.renderer.read_back_frame(frame, &self.surface))
-    }
-
-    fn renderer(&mut self) -> Option<&mut Renderer> {
-        Some(&mut self.renderer)
-    }
+    fullscreen: bool,
 }
 
 /// Where ticks come from.
@@ -340,16 +300,22 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
             mac: cfg!(target_os = "macos"),
         }));
         frames.handle(translator.surface());
+        let timing = (!fixed).then_some(self.started);
+        if let Some(epoch) = timing {
+            frames.start_timing(epoch);
+        }
         Ok(Running {
             frames,
-            screen: Screen {
+            screen: Screen::new(
                 renderer,
                 surface,
-                window: Arc::clone(&window),
-                slow_gpu: self.options.slow_gpu,
-            },
+                Arc::clone(&window),
+                self.options.slow_gpu,
+                timing,
+            ),
             translator,
             clipboard: Clipboard::default(),
+            fullscreen: is_fullscreen(&window),
             window,
         })
     }
@@ -357,7 +323,9 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
     #[cfg_attr(not(target_os = "macos"), expect(clippy::unused_self))]
     fn pacer(&self, window: &Arc<Window>, display_hz: f32) -> Pacer {
         #[cfg(target_os = "macos")]
-        if let Some(link) = crate::macos::DisplayLink::new(window, self.proxy.clone(), display_hz) {
+        if let Some(link) =
+            crate::macos::DisplayLink::new(window, self.proxy.clone(), display_hz, self.started)
+        {
             return Pacer::Link(link);
         }
         #[cfg(not(target_os = "macos"))]
@@ -385,21 +353,52 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
             .is_some_and(|end| self.started.elapsed() >= end)
     }
 
-    fn tick(&mut self, cadence: Option<f64>) {
+    fn tick(&mut self, tick: Option<DisplayTick>) {
         let now = self.now();
         let Some(running) = &mut self.running else {
             return;
         };
-        if running
-            .frames
-            .tick_with_cadence(now, &mut running.screen, cadence)
-            .is_some()
-        {
+        let tier = running.frames.client().tier();
+        running.screen.begin(tick);
+        let drawn = running.frames.tick_with_cadence(
+            now,
+            &mut running.screen,
+            tick.and_then(|tick| tick.reported_hz),
+        );
+        running.screen.drain(&mut running.frames);
+        let requests = tick.map(|_| Instant::now());
+        if drawn.is_some() {
             while let Some(request) = running.frames.next_request() {
                 if let Some(answer) = carry_out(&running.window, &mut running.clipboard, request) {
                     running.frames.handle(answer);
                 }
             }
+        }
+        if let Some(tick) = tick {
+            let mut cpu = running.frames.cpu_timing();
+            let draw = running.screen.timing();
+            cpu.draw_ns = draw.total_ns;
+            cpu.drawable_wait_ns = draw.wait_ns;
+            cpu.encode_submit_ns = draw.encode_ns;
+            cpu.present_call_ns = draw.present_ns;
+            cpu.requests_ns = requests.map_or(0, elapsed);
+            let animating =
+                draw.ambient_motion || running.frames.client().playing_verbs().next().is_some();
+            running.frames.note_timing(&Timing::Frame(FrameTiming {
+                tick,
+                handled_ns: now,
+                finished_ns: elapsed(self.started),
+                outcome: draw.outcome.unwrap_or(Outcome::Idle),
+                submitted_ns: draw.submitted_ns,
+                cpu: drawn.map(|_| cpu),
+                render_size: running.screen.size(),
+                fullscreen: running.fullscreen,
+                tier: tier.into(),
+                animating,
+                searching: false, // The app's feed adds its session status.
+                gpu_in_flight: draw.gpu_in_flight,
+                presented_ns: None,
+            }));
         }
     }
 }
@@ -447,7 +446,7 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             #[cfg(target_os = "macos")]
-            UserEvent::Tick(cadence) => self.tick(cadence),
+            UserEvent::Tick(tick) => self.tick(Some(tick)),
             UserEvent::Inbox => {
                 if let Some(running) = &mut self.running {
                     for input in self.inbox.try_iter() {
@@ -496,7 +495,8 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
                 let modifiers = running.translator.modifiers();
                 if is_fullscreen_key(*physical_key, modifiers.control, modifiers.command) {
                     if *state == ElementState::Pressed && !repeat {
-                        set_fullscreen(&running.window, !is_fullscreen(&running.window));
+                        set_fullscreen(&running.window, !running.fullscreen);
+                        running.fullscreen = is_fullscreen(&running.window);
                     }
                     return;
                 }
@@ -541,10 +541,23 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
             event_loop.exit();
             return;
         }
+        #[cfg(target_os = "macos")]
+        let was_running = match running.frames.ticks_ref() {
+            Pacer::Link(link) => Some(link.state(now).running),
+            Pacer::Redraw(_) => None,
+        };
         let wait = match running.frames.schedule(now) {
             Sleep::UntilEvent => None,
             Sleep::Until(at) => Some(self.started + Duration::from_nanos(at)),
         };
+        #[cfg(target_os = "macos")]
+        if let Pacer::Link(link) = running.frames.ticks_ref() {
+            let state = link.state(elapsed(self.started));
+            if Some(state.running) != was_running {
+                running.frames.note_timing(&Timing::Pacer(state));
+            }
+        }
+        running.screen.drain(&mut running.frames);
         let flow = match (wait, end) {
             (Some(wait), Some(end)) => ControlFlow::WaitUntil(wait.min(end)),
             (Some(at), None) | (None, Some(at)) => ControlFlow::WaitUntil(at),

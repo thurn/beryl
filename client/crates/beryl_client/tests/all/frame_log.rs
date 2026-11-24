@@ -67,6 +67,8 @@ fn what_the_writer_writes_the_reader_reads() {
 
     let read = frame_log::read(&path).expect("the log reads back");
     assert_eq!(read.run, run);
+    assert!(read.timing_windows.is_empty());
+    assert!(read.pacing_changes.is_empty());
     assert_eq!(read.summary.as_ref(), Some(&summary));
     assert_eq!(summary.frames, 7);
     assert_eq!(summary.skipped, 1);

@@ -17,7 +17,6 @@ use beryl_host::{WindowMode, WinitHost};
 #[cfg(feature = "tools")]
 use beryl_session::protocol::Side;
 use beryl_session::protocol::Status;
-use beryl_session::script::Verb;
 use kit_frame::frame::Wake;
 use kit_ui::input::{Lifecycle, Size};
 
@@ -31,6 +30,8 @@ use crate::places::out_dir;
 use crate::places::{checkout, frames_dir, now_ms};
 use crate::session::{self, Commands, Live};
 use crate::settings::{self, Saver};
+
+mod timing;
 
 /// The window the app opens, and the windowless host stands in for, in logical points: the
 /// size `just client` draws a recording at unless told otherwise.
@@ -175,6 +176,14 @@ impl Drop for AppFeed {
 }
 
 impl Feed for AppFeed {
+    fn timing_started(&mut self, epoch: std::time::Instant) {
+        timing::start(self, epoch);
+    }
+
+    fn timing(&mut self, event: &beryl_host::timing::Timing) {
+        timing::record(self, event);
+    }
+
     fn opened(&mut self, opened: &Opened) {
         self.run.display_hz = opened.display_hz;
         self.run.adapter.clone_from(&opened.adapter);
@@ -278,14 +287,7 @@ impl Feed for AppFeed {
             client.last_frame().faceless_cards(),
             client.missing_glyphs(),
         );
-        // Verbs are listed only for a late frame, so a frame on time collects none.
-        let late = FrameLog::is_late(ticked);
-        let verbs: Vec<&str> = if late {
-            client.playing_verbs().map(Verb::name).collect()
-        } else {
-            Vec::new()
-        };
-        log.frame(ticked, &verbs, self.searching);
+        timing::legacy_frame(log, client, ticked, self.searching);
         if summarize {
             log.summarize();
         }
@@ -326,16 +328,9 @@ impl Feed for AppFeed {
                     _ => None,
                 };
                 self.bugs.freeze(replayed);
+                timing::freeze(self);
             }
-            Request::SaveBug { .. } => {
-                let log = self.log.borrow();
-                let frame_log = log.as_ref().and_then(|log| log.as_ref().ok());
-                let live = match &self.source {
-                    Some(Source::Live(commands)) => Some(commands),
-                    _ => None,
-                };
-                self.bugs.save(request, frame_log.map(FrameLog::path), live);
-            }
+            Request::SaveBug { .. } => timing::save(self, request),
             #[cfg(not(any(target_os = "ios", target_os = "android")))]
             Request::ExportBugs => self.bugs.export(),
             _ => {}
@@ -632,7 +627,7 @@ fn finish_run(log: Option<Logged>, hosted: Result<(), String>) -> Result<Finishe
     let summary = log
         .finish()
         .map_err(|error| format!("the frame log could not be written: {error}"))?;
-    let run = crate::frame_log::read(&path)?.run;
+    let run = crate::frame_log::read_run(&path)?;
     Ok(Finished { summary, run, path })
 }
 

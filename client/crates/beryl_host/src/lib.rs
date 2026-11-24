@@ -24,6 +24,7 @@ pub mod native_surface;
 mod performance;
 pub mod rate;
 mod threads;
+pub mod timing;
 mod windowless;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod winit_host;
@@ -47,3 +48,6 @@ pub use threads::{
 pub use windowless::{Windowless, WindowlessOptions};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use winit_host::{Options, WindowMode, WinitHost, is_fullscreen_key};
+
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+mod winit_screen;

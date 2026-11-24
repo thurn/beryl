@@ -9,6 +9,8 @@ mod data;
 pub mod ffi;
 pub mod fixture;
 pub mod frame_log;
+pub mod frame_trace;
+mod frame_writer;
 #[cfg(all(feature = "tools", any(unix, windows)))]
 pub mod live;
 pub mod load;

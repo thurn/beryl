@@ -18,6 +18,8 @@ drive = ["dep:game_probe"]
 
 [dependencies]
 kit_scene.workspace = true
+# Derives the frame trace's JSON fields in place of hand-written record encoding.
+serde.workspace = true
 app_client.workspace = true
 app_screens.workspace = true
 # Supplies the life-orb layer descriptions for the atlas worker.
@@ -67,7 +69,7 @@ arboard = { version = "3.4.1", default-features = false }
 objc2 = "0.6.5"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSResponder", "NSView", "objc2-quartz-core"] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSObject", "NSRunLoop"] }
-objc2-quartz-core = { version = "0.3.2", default-features = false, features = ["std", "CADisplayLink", "CAFrameRateRange"] }
+objc2-quartz-core = { version = "0.3.2", default-features = false, features = ["std", "CABase", "CADisplayLink", "CAFrameRateRange"] }
 
 # Each thread's scheduling class (pthread_set_qos_class_self_np on Apple platforms,
 # SetThreadPriority on Windows; src/threads.rs), in place of hand-written declarations of the C

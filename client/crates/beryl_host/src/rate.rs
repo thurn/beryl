@@ -44,6 +44,20 @@ pub enum Step {
     Rate(f32),
 }
 
+/// The rule's input and counters at a step, before they are reset for the new rate.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct Decision {
+    pub gap_ns: u64,
+    pub work_ns: u64,
+    pub missed: usize,
+    pub window: usize,
+    pub misses_needed: usize,
+    pub late_intervals: f32,
+    pub roomy: usize,
+    pub roomy_needed: usize,
+    pub room_fraction: f32,
+}
+
 /// The rule's state: the rate chosen, and what the last frames did.
 #[derive(Clone, Debug)]
 pub struct RateRule {
@@ -65,6 +79,7 @@ pub struct RateRule {
     up_frames: usize,
     /// Frames since the last step up, while it may still fail.
     since_up: Option<usize>,
+    decision: Option<Decision>,
 }
 
 impl RateRule {
@@ -84,6 +99,7 @@ impl RateRule {
             roomy: 0,
             up_frames: thresholds.up_frames,
             since_up: None,
+            decision: None,
         }
     }
 
@@ -145,7 +161,7 @@ impl RateRule {
             self.missed_count += 1;
         }
         if self.missed_count >= self.thresholds.misses
-            && let Some(step) = self.step_down()
+            && let Some(step) = self.step_down(paced)
         {
             return Some(step);
         }
@@ -155,6 +171,7 @@ impl RateRule {
             0
         };
         if self.divisor > 1 && self.roomy >= self.up_frames {
+            self.decision = Some(self.measurements(paced));
             self.divisor -= 1;
             self.restart();
             self.since_up = Some(0);
@@ -163,9 +180,30 @@ impl RateRule {
         None
     }
 
+    /// The measurements for the most recent step, if there has been one.
+    #[must_use]
+    pub fn decision(&self) -> Option<Decision> {
+        self.decision
+    }
+
+    fn measurements(&self, paced: Paced) -> Decision {
+        Decision {
+            gap_ns: paced.gap,
+            work_ns: paced.work,
+            missed: self.missed_count,
+            window: self.missed.len(),
+            misses_needed: self.thresholds.misses,
+            late_intervals: self.thresholds.late_intervals,
+            roomy: self.roomy,
+            roomy_needed: self.up_frames,
+            room_fraction: self.thresholds.room,
+        }
+    }
+
     /// The tier, or else the rate, one step lower; `None` at the lowest rate.
-    fn step_down(&mut self) -> Option<Step> {
+    fn step_down(&mut self, paced: Paced) -> Option<Step> {
         if self.tier_can_drop {
+            self.decision = Some(self.measurements(paced));
             self.tier_can_drop = false;
             self.restart();
             return Some(Step::Baseline);
@@ -174,6 +212,7 @@ impl RateRule {
         if lower < self.thresholds.lowest_hz as f32 - 0.5 {
             return None;
         }
+        self.decision = Some(self.measurements(paced));
         self.divisor += 1;
         self.restart();
         Some(Step::Rate(self.hz()))

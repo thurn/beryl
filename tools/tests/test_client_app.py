@@ -105,3 +105,98 @@ def test_a_run_that_ends_with_glyphs_missing_fails(tmp_path: Path) -> None:
     assert app.undelivered(log(tmp_path, 1000, "/here", 10)) is None
     failure = app.undelivered(log(tmp_path, 2000, "/here", 10, missing_glyphs=3))
     assert failure is not None and "3 glyphs" in failure
+
+
+def test_live_timing_windows_explain_gaps_and_exclude_pauses(tmp_path: Path) -> None:
+    attached = tmp_path / "report"
+    attached.mkdir()
+    path = log(attached, 2000, "/here", 10)
+    target = path.rename(attached / "frames.jsonl")
+    run = target.read_text(encoding="utf-8").splitlines()[0]
+
+    def frame(
+        sequence: int, epoch: int, callback_ms: int, delay_ms: int, outcome: str
+    ) -> dict[str, object]:
+        callback = callback_ms * 1_000_000
+        handled = callback + delay_ms * 1_000_000
+        present = 42_000_000 if sequence == 2 else 1_000_000
+        return {
+            "frame": {
+                "sequence": sequence,
+                "epoch": epoch,
+                "requested_hz": 60.0,
+                "callback_ns": callback,
+                "display_ns": callback - 4_000_000,
+                "target_ns": callback + 12_000_000,
+                "reported_hz": 60.0,
+                "handled_ns": handled,
+                "finished_ns": handled + present + 1_000_000,
+                "outcome": outcome,
+                "submitted_ns": handled + 1_000_000 if outcome == "submitted" else None,
+                "cpu": {"present_call_ns": present, "prepare_ns": 3_000_000},
+                "render_size": [3200, 1800],
+                "fullscreen": False,
+                "tier": "enhanced",
+                "animating": True,
+                "searching": True,
+                "gpu_in_flight": 1,
+                "presented_ns": None,
+            }
+        }
+
+    change = {
+        "pacing_change": {
+            "at_ns": 90_000_000,
+            "previous_hz": 120.0,
+            "new_hz": 60.0,
+            "previous_tier": "enhanced",
+            "new_tier": "enhanced",
+            "adaptive": {
+                "gap_ns": 40_000_000,
+                "work_ns": 28_000_000,
+                "missed": 3,
+                "window": 60,
+                "misses_needed": 3,
+                "roomy": 0,
+                "roomy_needed": 600,
+            },
+        }
+    }
+    window = {
+        "timing_window": {
+            "reason": "bug_saved",
+            "end_ns": 1_050_000_000,
+            "events": [
+                frame(1, 1, 100, 0, "submitted"),
+                frame(2, 1, 116, 0, "submitted"),
+                frame(3, 1, 170, 18, "timeout"),
+                frame(4, 1, 204, 0, "submitted"),
+                {"pacer": {"running": False, "at_ns": 210_000_000, "epoch": 1}},
+                frame(5, 1, 215, 0, "idle"),
+                {"pacer": {"running": True, "at_ns": 1_000_000_000, "epoch": 2}},
+                frame(6, 2, 1000, 0, "submitted"),
+                frame(7, 2, 1016, 0, "submitted"),
+                {
+                    "gpu": {
+                        "sequence": 2,
+                        "submit_ns": 117_000_000,
+                        "observed_ns": 123_000_000,
+                        "main_pass_gpu_ns": 2_000_000,
+                    }
+                },
+            ],
+        }
+    }
+    target.write_text(
+        run + "\n" + json.dumps(change) + "\n" + json.dumps(window) + "\n{",
+        encoding="utf-8",
+    )
+    summary = app.report(attached)
+    assert "callbacks 33.3 Hz, submissions 25.0 Hz" in summary
+    assert "90.00 ms: 120 → 60 Hz" in summary
+    assert "skipped idle 1, timeout 1, 1 pauses and 1 resumes" in summary
+    assert "#2 → #3: 54.00 ms" in summary
+    assert "queued 18.00 ms, previous handler 43.00 ms" in summary
+    assert "CPU presentation call and hook: 1.00 / 42.00 / 42.00 / 42.00" in summary
+    assert "main render pass GPU time: 2.00 / 2.00 / 2.00 / 2.00" in summary
+    assert "actual presentation timestamps: 0 available" in summary

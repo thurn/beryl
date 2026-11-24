@@ -2,23 +2,30 @@
 //! at the display's highest rate. Each `unsafe` block here is the one platform call that needs
 //! it.
 
+use std::cell::Cell;
 use std::ptr::NonNull;
+use std::time::Instant;
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::NSView;
 use objc2_foundation::{NSObject, NSRunLoop, NSRunLoopCommonModes};
-use objc2_quartz_core::{CADisplayLink, CAFrameRateRange};
+use objc2_quartz_core::{CACurrentMediaTime, CADisplayLink, CAFrameRateRange};
 use winit::event_loop::EventLoopProxy;
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::Window;
 
+use crate::timing::{DisplayTick, PacerState, elapsed};
 use crate::winit_host::UserEvent;
 
 /// What the display link's target holds: where to send each tick.
 struct Ivars {
     proxy: EventLoopProxy<UserEvent>,
+    started: Instant,
+    sequence: Cell<u64>,
+    epoch: Cell<u64>,
+    hz: Cell<f32>,
 }
 
 define_class!(
@@ -35,18 +42,48 @@ define_class!(
         #[unsafe(method(tick:))]
         fn tick(&self, link: &CADisplayLink) {
             // macOS can deliver a different cadence from the one the app asked for.
-            let interval = link.targetTimestamp() - link.timestamp();
-            let cadence = (interval.is_finite() && interval > 0.0).then(|| interval.recip());
+            let ivars = self.ivars();
+            let callback_ns = elapsed(ivars.started);
+            let media_now = CACurrentMediaTime();
+            let display = link.timestamp();
+            let target = link.targetTimestamp();
+            let interval = target - display;
+            let local = |media: f64| {
+                (media.is_finite() && media > 0.0)
+                    .then(|| callback_ns as i64 + ((media - media_now) * 1e9) as i64)
+            };
+            let sequence = ivars.sequence.get() + 1;
+            ivars.sequence.set(sequence);
+            let tick = DisplayTick {
+                sequence,
+                epoch: ivars.epoch.get(),
+                requested_hz: ivars.hz.get(),
+                callback_ns,
+                display_ns: local(display),
+                target_ns: local(target),
+                reported_hz: (interval.is_finite() && interval > 0.0).then(|| interval.recip()),
+            };
             // The event loop has ended if this fails, and then no frame is wanted.
-            let _ = self.ivars().proxy.send_event(UserEvent::Tick(cadence));
+            let _ = ivars.proxy.send_event(UserEvent::Tick(tick));
         }
     }
 );
 
 impl Ticker {
     #[expect(unsafe_code, reason = "NSObject's `init` through Objective-C")]
-    fn new(proxy: EventLoopProxy<UserEvent>, mtm: MainThreadMarker) -> Retained<Ticker> {
-        let this = Self::alloc(mtm).set_ivars(Ivars { proxy });
+    fn new(
+        proxy: EventLoopProxy<UserEvent>,
+        started: Instant,
+        hz: f32,
+        mtm: MainThreadMarker,
+    ) -> Retained<Ticker> {
+        let this = Self::alloc(mtm).set_ivars(Ivars {
+            proxy,
+            started,
+            sequence: Cell::new(0),
+            epoch: Cell::new(0),
+            hz: Cell::new(hz),
+        });
         // SAFETY: `NSObject`'s `init` on a freshly allocated object.
         unsafe { msg_send![super(this), init] }
     }
@@ -58,7 +95,7 @@ impl Ticker {
 /// 60 Hz on a 120 Hz display. Each tick sends `UserEvent::Tick` to the event loop.
 pub struct DisplayLink {
     link: Retained<CADisplayLink>,
-    _ticker: Retained<Ticker>,
+    ticker: Retained<Ticker>,
     running: bool,
 }
 
@@ -69,7 +106,12 @@ impl DisplayLink {
         unsafe_code,
         reason = "NSView's displayLinkWithTarget:selector: and CADisplayLink's addToRunLoop:forMode:"
     )]
-    pub fn new(window: &Window, proxy: EventLoopProxy<UserEvent>, hz: f32) -> Option<Self> {
+    pub fn new(
+        window: &Window,
+        proxy: EventLoopProxy<UserEvent>,
+        hz: f32,
+        started: Instant,
+    ) -> Option<Self> {
         let mtm = MainThreadMarker::new()?;
         let RawWindowHandle::AppKit(handle) = window.window_handle().ok()?.as_raw() else {
             return None;
@@ -78,7 +120,7 @@ impl DisplayLink {
         // SAFETY: winit's AppKit handle points at the window's live content view, which
         // outlives this call, and it is used only on the main thread.
         let view: &NSView = unsafe { view.as_ref() };
-        let ticker = Ticker::new(proxy, mtm);
+        let ticker = Ticker::new(proxy, started, hz, mtm);
         let target: &AnyObject = &ticker;
         // SAFETY: NSView's `displayLinkWithTarget:selector:` (macOS 14); `tick:` is a method of
         // `Ticker` that takes the display link, and the link retains its target.
@@ -90,7 +132,7 @@ impl DisplayLink {
         link.setPaused(true);
         Some(Self {
             link,
-            _ticker: ticker,
+            ticker,
             running: false,
         })
     }
@@ -98,6 +140,7 @@ impl DisplayLink {
     /// Asks for `hz` frames a second from now on: a rate that divides the display's
     /// (`crate::rate`).
     pub fn set_rate(&mut self, hz: f32) {
+        self.ticker.ivars().hz.set(hz);
         self.link.setPreferredFrameRateRange(range(hz));
     }
 
@@ -105,7 +148,19 @@ impl DisplayLink {
     pub fn set_running(&mut self, running: bool) {
         if self.running != running {
             self.running = running;
+            if running {
+                let epoch = &self.ticker.ivars().epoch;
+                epoch.set(epoch.get() + 1);
+            }
             self.link.setPaused(!running);
+        }
+    }
+    pub fn state(&self, at_ns: u64) -> PacerState {
+        PacerState {
+            at_ns,
+            epoch: self.ticker.ivars().epoch.get(),
+            running: self.running,
+            requested_hz: self.ticker.ivars().hz.get(),
         }
     }
 }

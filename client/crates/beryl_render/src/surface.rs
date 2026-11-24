@@ -24,10 +24,26 @@ pub struct Surface {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Presented {
     /// The frame was drawn and handed to the display, after waiting `waited` for a drawable.
-    Shown { drawn: Drawn, waited: Duration },
-    /// No drawable was available (the window is hidden, or the surface was out of date and has
-    /// been configured again), so nothing was drawn. The next frame tries again.
-    Skipped,
+    Shown {
+        drawn: Drawn,
+        waited: Duration,
+        render_cpu: Duration,
+        present_cpu: Duration,
+        gpu_in_flight: Option<u32>,
+    },
+    Skipped {
+        reason: DrawFailure,
+        waited: Duration,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DrawFailure {
+    Timeout,
+    Occluded,
+    Outdated,
+    Lost,
+    Validation,
 }
 
 /// A phone's native drawing surface, as its host passes it: a raw pointer the host owns.
@@ -39,7 +55,23 @@ pub enum Native {
     AndroidWindow(NonNull<c_void>),
 }
 
+impl Surface {
+    #[must_use]
+    pub fn size(&self) -> [u32; 2] {
+        [self.config.width, self.config.height]
+    }
+}
+
 impl Renderer {
+    pub fn gpu_timer(&self, epoch: Instant, worker_setup: fn()) -> Option<crate::GpuTimer> {
+        crate::GpuTimer::new(
+            self.device.clone(),
+            self.queue.get_timestamp_period(),
+            epoch,
+            worker_setup,
+        )
+    }
+
     /// A renderer on the GPU adapter that can present to `window`, and the window's surface,
     /// `width` by `height` physical pixels. The device asks for wgpu's limits for OpenGL ES 3.0,
     /// as a phone's does, with the adapter's own texture size: the floor's 2013 integrated GPUs
@@ -147,7 +179,12 @@ impl Renderer {
             // Card faces are compressed in the first format of these the GPU has.
             // Frames write their buffers directly where that saves the driver's blit pool.
             required_features: (adapter.features() & crate::faces::COMPRESSION)
-                | crate::slots::mapped_features(&adapter),
+                | crate::slots::mapped_features(&adapter)
+                | if cfg!(target_os = "macos") {
+                    adapter.features() & wgpu::Features::TIMESTAMP_QUERY
+                } else {
+                    wgpu::Features::empty()
+                },
             required_limits: limits.using_resolution(adapter.limits()),
             ..Default::default()
         }))
@@ -168,25 +205,61 @@ impl Renderer {
         surface: &mut Surface,
         before: impl FnOnce(),
     ) -> Presented {
+        self.present_timed(frame, surface, before, None)
+    }
+
+    pub fn present_timed(
+        &mut self,
+        frame: &Frame,
+        surface: &mut Surface,
+        before: impl FnOnce(),
+        timing: Option<(&crate::GpuTimer, u64)>,
+    ) -> Presented {
+        use wgpu::CurrentSurfaceTexture as Texture;
         let asked = Instant::now();
-        let drawable = match surface.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(drawable)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(drawable) => drawable,
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                surface.surface.configure(&self.device, &surface.config);
-                return Presented::Skipped;
-            }
-            _ => return Presented::Skipped,
-        };
+        let acquire = surface.surface.get_current_texture();
         let waited = asked.elapsed();
+        let drawable = match acquire {
+            Texture::Success(drawable) | Texture::Suboptimal(drawable) => Ok(drawable),
+            Texture::Timeout => Err(DrawFailure::Timeout),
+            Texture::Occluded => Err(DrawFailure::Occluded),
+            Texture::Validation => Err(DrawFailure::Validation),
+            Texture::Outdated => Err(DrawFailure::Outdated),
+            Texture::Lost => Err(DrawFailure::Lost),
+        };
+        let drawable = match drawable {
+            Ok(drawable) => drawable,
+            Err(reason) => {
+                if matches!(reason, DrawFailure::Outdated | DrawFailure::Lost) {
+                    surface.surface.configure(&self.device, &surface.config);
+                }
+                return Presented::Skipped { reason, waited };
+            }
+        };
+        let render = Instant::now();
         let view = drawable
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         self.fit_card_mesh(frame.card);
-        let drawn = self.render_view(frame, &view, surface.config.width, surface.config.height);
+        let mut gpu_in_flight = None;
+        let drawn = self.render_view(
+            frame,
+            &view,
+            surface.config.width,
+            surface.config.height,
+            timing.map(|(timer, tick)| (timer, tick, &mut gpu_in_flight)),
+        );
+        let render_cpu = render.elapsed();
+        let present = Instant::now();
         before();
         self.queue.present(drawable);
-        Presented::Shown { drawn, waited }
+        Presented::Shown {
+            drawn,
+            waited,
+            render_cpu,
+            present_cpu: present.elapsed(),
+            gpu_in_flight,
+        }
     }
 
     /// Draws `frame` again, as `present` just did, into a texture the size of `surface` and
