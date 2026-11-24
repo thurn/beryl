@@ -72,13 +72,7 @@ impl GameTable {
         face: FaceIx,
         kind: EventKind,
     ) -> impl Iterator<Item = &Listener> {
-        let from = usize::try_from(self.listeners_from[card.index()])
-            .expect("a listener offset fits in usize");
-        let to = usize::try_from(self.listeners_from[card.index() + 1])
-            .expect("a listener offset fits in usize");
-        self.listeners[from..to]
-            .iter()
-            .filter(move |l| l.kind == kind && l.face == face)
+        of_face(&self.listeners, &self.listeners_from, card, face, kind)
     }
 
     /// The triggered abilities of the face `face` of the card at `card` that listen to events of
@@ -92,13 +86,7 @@ impl GameTable {
         face: FaceIx,
         kind: EventKind,
     ) -> impl Iterator<Item = &Listener> {
-        let from =
-            usize::try_from(self.away_from[card.index()]).expect("a listener offset fits in usize");
-        let to = usize::try_from(self.away_from[card.index() + 1])
-            .expect("a listener offset fits in usize");
-        self.away_listeners[from..to]
-            .iter()
-            .filter(move |l| l.kind == kind && l.face == face)
+        of_face(&self.away_listeners, &self.away_from, card, face, kind)
     }
 
     /// The zones of [`listener::AWAY`] in which some triggered ability of the card at `card`
@@ -127,6 +115,22 @@ impl GameTable {
     pub fn listens_anywhere(&self) -> Listens {
         self.listens_anywhere
     }
+}
+
+/// The listeners of `face` of the card at `card` that listen to `kind`, from one list of a
+/// [`GameTable`] and the index of where each card's start in it ([`Indexed`]).
+#[inline]
+fn of_face<'a>(
+    listeners: &'a [Listener],
+    from: &[u32],
+    card: impl CardId,
+    face: FaceIx,
+    kind: EventKind,
+) -> impl Iterator<Item = &'a Listener> {
+    let offset = |i: usize| usize::try_from(from[i]).expect("a listener offset fits in usize");
+    listeners[offset(card.index())..offset(card.index() + 1)]
+        .iter()
+        .filter(move |l| l.kind == kind && l.face == face)
 }
 
 /// Whether the engine finds each ability of `def`, and each it grants, wherever it says it

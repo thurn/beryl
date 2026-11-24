@@ -212,25 +212,21 @@ impl Capability {
                     replaces: Replaced::Draw(_, Draws::ExceptFirstInDrawStep),
                     ..
                 }) => found |= Capability::DrewInDrawStep.bit(),
+                Some(&Replacement {
+                    rewrite: Rewrite::Choose(_) | Rewrite::EnterAsCopy { .. },
+                    ..
+                }) => found |= Capability::ChoosesAsEnters.bit(),
                 _ => {}
             }
-            if let Some(&Replacement {
-                rewrite: Rewrite::Choose(_) | Rewrite::EnterAsCopy { .. },
-                ..
-            }) = a.replacement()
-            {
-                found |= Capability::ChoosesAsEnters.bit();
-            }
-            if let Some(spec) = a.layer()
-                && matches!(spec.affected, beryl_card::Objects::Everywhere(_))
-            {
-                found |= Capability::ReachesElsewhere.bit();
-            }
-            if let Some(spec) = a.layer()
-                && (spec.modifications.iter())
+            if let Some(spec) = a.layer() {
+                if matches!(spec.affected, beryl_card::Objects::Everywhere(_)) {
+                    found |= Capability::ReachesElsewhere.bit();
+                }
+                if (spec.modifications.iter())
                     .any(|m| matches!(m, Modification::SetPower(_) | Modification::SetPt(..)))
-            {
-                found |= Capability::DefinesPt.bit();
+                {
+                    found |= Capability::DefinesPt.bit();
+                }
             }
             if a.spend().is_some() {
                 found |= Capability::RemembersMana.bit();

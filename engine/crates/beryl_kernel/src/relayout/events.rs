@@ -5,7 +5,7 @@
 use crate::cause::{Cause, Tag};
 use crate::event::{Event, LossCause, Recipient, Tagged};
 use crate::layout::{Layout, Queue};
-use crate::state::{StackEntry, Target};
+use crate::state::Target;
 
 use super::{Relayout, bits, card, queue, slot};
 
@@ -17,144 +17,6 @@ impl<L: Layout> Relayout for Recipient<L> {
             &Recipient::Player(p) => Recipient::Player(p),
             Recipient::Permanent(r) => Recipient::Permanent(r.relayout()),
         }
-    }
-}
-
-/// An [`Event::Mana`] in another layout.
-fn mana<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
-    let &Event::Mana {
-        player,
-        source,
-        color,
-        amount,
-        restricted,
-    } = e
-    else {
-        unreachable!("a mana event")
-    };
-    Event::Mana {
-        player,
-        source: source.map(|o| o.relayout()),
-        color,
-        amount,
-        restricted,
-    }
-}
-
-/// A library's event in another layout: a draw, a scry's or a top-or-bottom choice's result,
-/// a shuffle. None names an object.
-fn library<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
-    match *e {
-        Event::Draw { player, cards } => Event::Draw { player, cards },
-        Event::Scry {
-            player,
-            top,
-            bottom,
-        } => Event::Scry {
-            player,
-            top,
-            bottom,
-        },
-        Event::TopOrBottom { player, top } => Event::TopOrBottom { player, top },
-        Event::LibraryShuffled { player } => Event::LibraryShuffled { player },
-        Event::ZoneChange { .. }
-        | Event::Damage { .. }
-        | Event::DrawCard { .. }
-        | Event::Reveal { .. }
-        | Event::LifeGain { .. }
-        | Event::LifeLoss { .. }
-        | Event::CountersAdded { .. }
-        | Event::CountersRemoved { .. }
-        | Event::Tap { .. }
-        | Event::Untap { .. }
-        | Event::Mana { .. }
-        | Event::ResolutionPayment { .. }
-        | Event::AbilityFinished
-        | Event::GameRestarted
-        | Event::StackArrival { .. }
-        | Event::StackDeparture { .. }
-        | Event::TokensCreated { .. }
-        | Event::Cast { .. }
-        | Event::Ability { .. }
-        | Event::Attack { .. }
-        | Event::Block { .. }
-        | Event::StepBegins { .. }
-        | Event::TurnPlanChanged(_)
-        | Event::GainControl { .. }
-        | Event::CoinFlip { .. }
-        | Event::Lose { .. }
-        | Event::Targeted { .. }
-        | Event::Win { .. }
-        | Event::ClassLevel { .. }
-        | Event::TurnedFaceUp { .. }
-        | Event::Mutated { .. } => unreachable!("a library event"),
-    }
-}
-
-/// An [`Event::Cast`] in another layout.
-fn cast<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
-    let Event::Cast {
-        spell,
-        controller,
-        targets,
-        x,
-        costs,
-        flashback,
-        from,
-    } = e
-    else {
-        unreachable!("a cast's event");
-    };
-    Event::Cast {
-        spell: spell.relayout(),
-        controller: *controller,
-        targets: queue(targets.as_slice(), Target::relayout),
-        x: *x,
-        costs: *costs,
-        flashback: *flashback,
-        from: *from,
-    }
-}
-
-/// A block's declaration in another layout.
-fn block<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
-    let &Event::Block {
-        player,
-        blocker,
-        attacker,
-    } = e
-    else {
-        unreachable!("a block");
-    };
-    Event::Block {
-        player,
-        blocker: blocker.relayout(),
-        attacker: attacker.relayout(),
-    }
-}
-
-/// An ability's announcement in another layout.
-fn ability<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
-    let Event::Ability {
-        source,
-        controller,
-        card,
-        face,
-        ability,
-        targets,
-        x,
-    } = e
-    else {
-        unreachable!("an ability event");
-    };
-    Event::Ability {
-        source: source.map(|r| r.relayout()),
-        controller: *controller,
-        card: self::card(*card),
-        face: *face,
-        ability: *ability,
-        targets: queue(targets.as_slice(), Target::relayout),
-        x: *x,
     }
 }
 
@@ -178,24 +40,6 @@ impl<L: Layout> Relayout for LossCause<L> {
             },
             LossCause::Concede => LossCause::Concede,
         }
-    }
-}
-
-/// A resolution payment's public stack item in another layout.
-fn resolution_payment<L: Layout, M: Layout>(event: &Event<L>) -> Event<M> {
-    let Event::ResolutionPayment { player, item } = event else {
-        unreachable!("a resolution payment");
-    };
-    Event::ResolutionPayment {
-        player: *player,
-        item: item.relayout(),
-    }
-}
-
-/// A stack entry's arrival in another layout.
-fn arrival<L: Layout, M: Layout>(entry: &StackEntry<L>) -> Event<M> {
-    Event::StackArrival {
-        entry: entry.relayout(),
     }
 }
 
@@ -259,10 +103,18 @@ impl<L: Layout> Relayout for Event<L> {
                 amount: *amount,
                 combat: *combat,
             },
-            Event::Draw { .. }
-            | Event::Scry { .. }
-            | Event::TopOrBottom { .. }
-            | Event::LibraryShuffled { .. } => library(self),
+            &Event::Draw { player, cards } => Event::Draw { player, cards },
+            &Event::Scry {
+                player,
+                top,
+                bottom,
+            } => Event::Scry {
+                player,
+                top,
+                bottom,
+            },
+            &Event::TopOrBottom { player, top } => Event::TopOrBottom { player, top },
+            &Event::LibraryShuffled { player } => Event::LibraryShuffled { player },
             &Event::DrawCard { slot: drawn } => Event::DrawCard { slot: slot(drawn) },
             &Event::Reveal {
                 player,
@@ -297,23 +149,80 @@ impl<L: Layout> Relayout for Event<L> {
             Event::Untap { object } => Event::Untap {
                 object: object.relayout(),
             },
-            Event::Mana { .. } => mana(self),
-            Event::ResolutionPayment { .. } => resolution_payment(self),
+            &Event::Mana {
+                player,
+                source,
+                color,
+                amount,
+                restricted,
+            } => Event::Mana {
+                player,
+                source: source.map(|o| o.relayout()),
+                color,
+                amount,
+                restricted,
+            },
+            Event::ResolutionPayment { player, item } => Event::ResolutionPayment {
+                player: *player,
+                item: item.relayout(),
+            },
             Event::AbilityFinished => Event::AbilityFinished,
             Event::GameRestarted => Event::GameRestarted,
-            Event::StackArrival { entry } => arrival(entry),
+            Event::StackArrival { entry } => Event::StackArrival {
+                entry: entry.relayout(),
+            },
             &Event::StackDeparture { entry } => Event::StackDeparture { entry },
             &Event::TokensCreated { controller, tokens } => Event::TokensCreated {
                 controller,
                 tokens: bits(tokens),
             },
-            Event::Cast { .. } => cast(self),
-            Event::Ability { .. } => ability(self),
+            Event::Cast {
+                spell,
+                controller,
+                targets,
+                x,
+                costs,
+                flashback,
+                from,
+            } => Event::Cast {
+                spell: spell.relayout(),
+                controller: *controller,
+                targets: queue(targets.as_slice(), Target::relayout),
+                x: *x,
+                costs: *costs,
+                flashback: *flashback,
+                from: *from,
+            },
+            Event::Ability {
+                source,
+                controller,
+                card: c,
+                face,
+                ability,
+                targets,
+                x,
+            } => Event::Ability {
+                source: source.map(|r| r.relayout()),
+                controller: *controller,
+                card: card(*c),
+                face: *face,
+                ability: *ability,
+                targets: queue(targets.as_slice(), Target::relayout),
+                x: *x,
+            },
             &Event::Attack { player, attackers } => Event::Attack {
                 player,
                 attackers: bits(attackers),
             },
-            Event::Block { .. } => block(self),
+            &Event::Block {
+                player,
+                blocker,
+                attacker,
+            } => Event::Block {
+                player,
+                blocker: blocker.relayout(),
+                attacker: attacker.relayout(),
+            },
             &Event::TurnPlanChanged(change) => Event::TurnPlanChanged(change),
             &Event::StepBegins { turn, step, active } => Event::StepBegins { turn, step, active },
             &Event::GainControl { object, player } => Event::GainControl {

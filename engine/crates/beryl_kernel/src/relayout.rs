@@ -11,13 +11,14 @@ use crate::ids::{CardId, SlotId};
 use crate::layout::{Item, Layout, Queue, Table, index};
 use crate::mana_memory::RememberedMana;
 use crate::pending::{LethalAssignment, hidden_pick_answer, hidden_pick_of};
-mod events;
-
 use crate::state::{
     AbilityRef, CastStep, Casting, DepartedSpell, Derived, GrantRef, LastKnown, Object, ObjectRef,
     PayingObjects, Pending, PendingTrigger, Player, Resolving, SLOTS, StackEntry, StackItem, State,
     Target, TriggerInfo, Zones,
 };
+use crate::subgame::{CompletedTurns, OuterGame};
+
+mod events;
 
 /// A value of one layout's types, as another layout's.
 pub trait Relayout {
@@ -578,8 +579,6 @@ impl<L: Layout> Relayout for Zones<L> {
         }
     }
 }
-
-use crate::subgame::{CompletedTurns, OuterGame};
 
 impl<L: Layout> Relayout for State<L> {
     type In<M: Layout> = State<M>;
