@@ -280,7 +280,7 @@ families = [
   "native-app", "native-android",
   "counts", "allocations", "card-text", "script", "scale", "iroh", "fuzz", "exhaust",
   "oracle", "oracle-generated",
-  "client-clippy", "client-validation", "client-test", "client-interface", "client-every-tick", "client-corpus",
+  "client-clippy", "client-validation", "client-test", "client-interface", "client-corpus",
   "client-interface-frame-limits",
   "client-gate", "client-frame-counts", "client-frame-trend",
 ]

@@ -910,5 +910,10 @@
     "label": "Ignite reverts a confirmed single landing when a required check keeps master stalled for at least two hours.",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Ignite runs each native interface replay in a single CI family, retaining its failure history and avoiding a second pass on every tick.",
+    "metric": "slow-ci.cpu-seconds-per-run",
+    "expect": "down"
   }
 ]

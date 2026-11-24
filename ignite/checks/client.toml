@@ -334,9 +334,8 @@ inputs = [
 # (docs/beryl-3d.md, "Test speed"), held to data/client/test-faults.json. Each check reads the
 # card files its recording plays.
 #
-# Tip verification scores the two families independently. Substituting `client-every-tick`
-# discarded the failure history of `client-interface` before scoring, so the tip budget deferred
-# the replacement checks for regressions the landing gate was already finding.
+# This is the only CI family for individual interface replays and retains their failure
+# history for tip scoring. Use `just client test --every-tick` to diagnose a replay locally.
 [family.client-interface]
 kind = "regression"
 adapter = "jsonl"
@@ -581,93 +580,6 @@ inputs = [
   "tools/src/beryl_tools/__init__.py",
   "tools/src/beryl_tools/client/__init__.py",
   "tools/src/beryl_tools/client/corpus.py",
-  "tools/src/beryl_tools/client/gate.py",
-  "tools/src/beryl_tools/client/pack.py",
-  "tools/src/beryl_tools/client/paths.py",
-  "tools/src/beryl_tools/client/purity.py",
-  "tools/src/beryl_tools/card.py",
-  "tools/src/beryl_tools/card_crates.py",
-  "tools/src/beryl_tools/card_files.py",
-  "tools/src/beryl_tools/card_header.py",
-  "tools/src/beryl_tools/card_names.py",
-  "tools/src/beryl_tools/card_store.py",
-  "tools/src/beryl_tools/card_text.py",
-  "tools/src/beryl_tools/cards.py",
-  "tools/src/beryl_tools/catalogs.py",
-  "tools/src/beryl_tools/nearest.py",
-  "tools/src/beryl_tools/paths.py",
-  "tools/src/beryl_tools/render_diff.py",
-  "tools/src/beryl_tools/rulings.py",
-  "tools/src/beryl_tools/scryfall.py",
-  "tools/src/beryl_tools/set_groups.py",
-  "tools/src/beryl_tools/store_cards.py",
-  "tools/src/beryl_tools/system.py",
-  "tools/src/beryl_tools/vocabulary.py",
-  "tools/src/beryl_tools/xmage_classes.py",
-]
-
-# The interface tests with the checks applied on every tick (`just client test --every-tick`): the
-# second way to sample the same recordings, held to the same list of allowed faults.
-[family.client-every-tick]
-kind = "regression"
-adapter = "jsonl"
-platforms = ["macos", "windows"]
-defer_platforms = ["windows"]
-needs = ["python-env", "client"]
-grows = true
-list = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-every-tick list"
-# The listing comes from what a built program does, which comments cannot change, so a change
-# that edits only comments keeps the listing and builds nothing to list.
-listing_ignores_comments = true
-run = "uv run --quiet --project tools python -m beryl_tools.ignite.client client-every-tick run {checks}"
-inputs = [
-  "crate:beryl_inspect",
-  "crate:beryl_record",
-  "engine/crates/beryl_card/**",
-  "engine/crates/beryl_card_build/**",
-  "engine/crates/beryl_card_names/**",
-  "engine/crates/beryl_card_records/**",
-  "engine/crates/beryl_card_shared/**",
-  "engine/crates/beryl_card_store/**",
-  "engine/crates/beryl_cards/**",
-  "engine/crates/beryl_cli/**",
-  "engine/crates/beryl_engine/**",
-  "engine/crates/beryl_kernel/**",
-  "engine/crates/beryl_link/**",
-  "engine/crates/beryl_link_iroh/**",
-  "engine/crates/beryl_protocol/**",
-  "engine/crates/beryl_rules/**",
-  "engine/crates/beryl_scenario/**",
-  "engine/crates/beryl_scenario_types/**",
-  "engine/crates/beryl_search/**",
-  "engine/crates/beryl_session/**",
-  "engine/crates/beryl_table/**",
-  "engine/crates/beryl_table_session/**",
-  "engine/cards/*/Cargo.toml",
-  "engine/cards/*/build.rs",
-  "engine/cards/*/lib.rs",
-  "engine/Cargo.toml",
-  "data/client/*.json",
-  "data/client/conventions/**",
-  "data/client/corpus.txt",
-  "data/client/effects/**",
-  "data/client/profiles/**",
-  "data/design-tokens.json",
-  "data/card-store.tsv",
-  "data/catalogs.json",
-  "data/set-groups.json",
-  "data/table-commands.json",
-  "data/save-breaks.json",
-  "data/ui-conventions.json",
-  "data/audio/manifest.json",
-  "data/audio/loops.json",
-  "docs/sample-decks/**",
-  "tools/src/beryl_tools/ignite/__init__.py",
-  "tools/src/beryl_tools/ignite/rust.py",
-  "tools/src/beryl_tools/ignite/client.py",
-  "tools/src/beryl_tools/ignite/client_validation.py",
-  "tools/src/beryl_tools/__init__.py",
-  "tools/src/beryl_tools/client/__init__.py",
   "tools/src/beryl_tools/client/gate.py",
   "tools/src/beryl_tools/client/pack.py",
   "tools/src/beryl_tools/client/paths.py",

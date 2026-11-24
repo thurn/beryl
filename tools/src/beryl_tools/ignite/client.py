@@ -58,6 +58,7 @@ ROOTS: tuple[str, ...] = ("beryl_inspect", "beryl_record")
 CARDS: Path = paths.REPO / "engine" / "cards"
 DECKS: Path = paths.REPO / "docs" / "sample-decks"
 
+INTERFACE_FAMILY = "client-interface"
 FRAME_LIMITS_FAMILY = "client-interface-frame-limits"
 FRAME_LIMITS = f"{FRAME_LIMITS_FAMILY}:corpus"
 BUDGET_SUITES: dict[str, str] = {
@@ -276,10 +277,10 @@ def client_text(arguments: list[str]) -> str:
 # The interface tests.
 
 
-def test_names(*switches: str) -> list[str]:
+def test_names() -> list[str]:
     """Every interface test's name, `<recording>/<seat>/<window>` (`client test --list` prints each
     with a `client:` prefix)."""
-    done = run_out([str(exe(DEBUG / "client")), "test", "--list", *switches])
+    done = run_out([str(exe(DEBUG / "client")), "test", "--list"])
     if done.returncode != 0:
         raise SystemExit(
             done.stderr.strip() or f"client test --list: exit {done.returncode}"
@@ -292,11 +293,12 @@ def recording_of(test: str) -> str:
     return test.rsplit("/", 2)[0]
 
 
-def interface_list(family: str) -> list[Listed]:
+def interface_list() -> list[Listed]:
     """One check per interface test, hashed over the card files its recording plays."""
     cards = cards_by_recording()
     return [
-        Listed(f"{family}:{t}", cards.get(recording_of(t), [])) for t in test_names()
+        Listed(f"{INTERFACE_FAMILY}:{t}", cards.get(recording_of(t), []))
+        for t in test_names()
     ]
 
 
@@ -318,9 +320,7 @@ def common_prefix(names: list[str]) -> str:
     return first[:size]
 
 
-def interface_results(
-    output: dict[str, object], family: str, wanted: list[str]
-) -> list[Result]:
+def interface_results(output: dict[str, object], wanted: list[str]) -> list[Result]:
     """Each wanted check's result from `b3d test --json`'s output: a test passes or fails by its
     entry in `results`, which counts a fault over the list of allowed faults and an entry of the
     list that is now too high. A test the run did not play is left out, so incomplete.
@@ -346,7 +346,7 @@ def interface_results(
             messages.setdefault(test, []).append(json.dumps(fault))
     results: list[Result] = []
     for name in wanted:
-        check = f"{family}:{name}"
+        check = f"{INTERFACE_FAMILY}:{name}"
         if name in outcomes:
             text = "\n".join(messages.get(name, []))
             if outcomes[name] == "fail" and not text:
@@ -367,13 +367,13 @@ def prefix_groups(tests: list[str]) -> list[str]:
     return [common_prefix(group) for _, group in sorted(by_recording.items())]
 
 
-def interface_run(family: str, checks: list[str], switches: list[str]) -> list[Result]:
-    wanted = asked(family, checks)
+def interface_run(checks: list[str]) -> list[Result]:
+    wanted = asked(INTERFACE_FAMILY, checks)
     results: list[Result] = []
     for prefix in prefix_groups(wanted):
-        output = replay_output([prefix, *switches])
+        output = replay_output([prefix])
         if output is not None:
-            results += interface_results(output, family, wanted)
+            results += interface_results(output, wanted)
     return results
 
 
@@ -583,9 +583,8 @@ def source_run(checks: list[str]) -> list[Result]:
 # A manual listing or an older daemon may list before building its product.
 LIST_NEEDS_BUILD: frozenset[str] = frozenset(
     {
-        "client-interface",
+        INTERFACE_FAMILY,
         FRAME_LIMITS_FAMILY,
-        "client-every-tick",
         "client-gate",
         "client-frame-counts",
     }
@@ -636,9 +635,8 @@ LISTS: dict[str, Callable[[], list[Listed]]] = {
         for n in purity.SOURCE_RULES
     ],
     "client-validation": client_validation.checks,
-    "client-interface": lambda: interface_list("client-interface"),
+    INTERFACE_FAMILY: interface_list,
     FRAME_LIMITS_FAMILY: frame_limits_list,
-    "client-every-tick": lambda: interface_list("client-every-tick"),
     "client-gate": gate_list,
     "client-frame-counts": frame_counts_list,
     # An exploration family's checks come from `next`.
@@ -650,11 +648,8 @@ RUNS: dict[str, Callable[[list[str]], list[Result]]] = {
     "client-clippy": clippy_run,
     "client-source": source_run,
     "client-validation": lambda c: client_validation.run(DEBUG, c),
-    "client-interface": lambda c: interface_run("client-interface", c, []),
+    INTERFACE_FAMILY: interface_run,
     FRAME_LIMITS_FAMILY: frame_limits_run,
-    "client-every-tick": lambda c: interface_run(
-        "client-every-tick", c, ["--every-tick"]
-    ),
     "client-gate": gate_run,
     "client-frame-counts": frame_counts_run,
     "client-frame-trend": frame_trend_run,

@@ -66,7 +66,6 @@ def test_the_programs_that_reread_their_grant_ask_for_one_that_grows() -> None:
     assert growing == {
         "client-interface",
         adapter.FRAME_LIMITS_FAMILY,
-        "client-every-tick",
         "client-test",
     }
 
@@ -90,7 +89,6 @@ def test_windows_replay_and_stress_checks_defer_until_after_promotion() -> None:
     families = manifest()["family"]
     for name in (
         "client-interface",
-        "client-every-tick",
         "client-test",
         "client-corpus",
         "client-gate",
@@ -128,7 +126,6 @@ def test_the_families_that_read_recordings_name_every_crate_the_recorder_is_buil
     for name in (
         "client-interface",
         adapter.FRAME_LIMITS_FAMILY,
-        "client-every-tick",
         "client-gate",
         "client-frame-counts",
     ):
@@ -201,7 +198,7 @@ def test_interface_results_follow_each_tests_outcome() -> None:
         "over_limits": ["a/you/1440x900 drew 900 frames, over `most_frames` 800"],
     }
     wanted = ["a/you/1440x900", "b/you/1440x900", "c/you/1440x900"]
-    results = adapter.interface_results(output, "client-interface", wanted)
+    results = adapter.interface_results(output, wanted)
     outcomes = {r.check: r.outcome for r in results}
     assert outcomes == {
         "client-interface:a/you/1440x900": "pass",
