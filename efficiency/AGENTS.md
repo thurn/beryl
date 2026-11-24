@@ -50,11 +50,13 @@ module's header comment says what it reads and writes.
   name, and the SQLite schema.
 - `ingest.py`: the ingest framework. A `LineSource` reads files of lines from
   their recorded offsets, a `FileSource` reads small files whole when they
-  change, and a `SnapshotSource` stores a command's output when its digest
-  changes.
+  change, a `SnapshotSource` stores a command's output when its digest
+  changes, and a `CursorSource` or `TokenSource` reads pages after a stored
+  position.
 - Sources: `ignite.py` reads fleet records from the hub database, or tickets
-  from the daemon's mirror and measurements from its local database. Tickets
-  come first in `cli.sources()` because windows read them. `claude.py`,
+  from the daemon's mirror. `fleet.py` reads the same fleet data from the hub's
+  private listener on other machines, and measurements from the local daemon's
+  database. Tickets come first in `cli.sources()` because windows read them. `claude.py`,
   `codex.py` and `agy.py` read the providers' transcripts. `commits.py` reads
   `git log` of `staging` and `master`. `beads.py` and `ticket_ids.py` build
   ticket rows and resolve ticket IDs.

@@ -16,8 +16,11 @@ anything at the time; ingest reads these sources afterwards:
 - Ignite's hub, on the machine that holds its database: tickets, one record per
   command Ignite ran on any machine (checks, builds, cores and CPU), tips,
   hand-offs, workers, and the efficiency rows other machines' daemons posted.
-- On machines without the hub database, Ignite's local ticket mirror and the
-  daemon's check pass times, completed tip rounds and plan usage samples.
+- On machines without the hub database, the same fleet data from the hub's
+  private listener (with the machine's Ignite token), Ignite's local ticket
+  mirror, and the daemon's check pass times, completed tip rounds and plan usage
+  samples. When the hub is unreachable, queries answer from the local sources
+  and what earlier ingests stored.
 - `git log` and `master`'s reflog from the main checkout.
 
 Rows from before the switch, from the old run log, CPU sampler, token pool,
@@ -25,9 +28,9 @@ lock log and `tk`, stay in the store as history.
 
 The store is `$BERYL_CACHE/efficiency/store.sqlite`
 (by default `~/Library/Caches/beryl/efficiency/` on macOS and
-`%LOCALAPPDATA%\beryl\efficiency\` on Windows). The hub's store includes
-fleet records and posted measurements. Other machines collect local
-measurements and read fleet ticket metadata from their mirrors.
+`%LOCALAPPDATA%\beryl\efficiency\` on Windows). Every store includes fleet
+records and posted measurements: the hub's machine reads them from its
+database and other machines over the network.
 The design, with every definition, is `docs/efficiency-dashboard.md`; the code
 is `efficiency/` (`efficiency/AGENTS.md`).
 

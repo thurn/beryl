@@ -14,15 +14,18 @@ the hub, ingest reads the hub's SQLite database read-only, by its schema
   They are imported as `just efficiency import` imports a file.
 - `metrics` rows of the source `plan_usage`, the Claude plan's usage samples a dispatcher
   took, one row per window of the plan (`PlanSamples`), which `plan.py` fits to dollars.
-- `tickets`, `tips`, `handoffs`, `regressions` and `workers`, copied whole into the
+- `tickets`, `tips`, `handoffs` and `workers`, copied whole into the
   `ignite_*` tables when they change, for the series in `ignite_metrics.py`. The tickets,
   with their labels and aliases, are also written as `beads`, `labels` and `ticket_aliases`
   rows, which every per-ticket query reads, so that the hub replaces `tk export`.
 
+- `regressions`, each failing check's repair ticket, the commits between which it broke and
+  the ticket whose landing caused it, as `ignite_regressions`, which `failures.py` reads.
+
 A machine is named by the first host name seen for its ID (`ignite_machines`), from the hub's
 `machines` table or an export's header, so renaming a machine does not split its history.
-Away from the hub, the daemon's ticket mirror supplies tickets and regressions. Its local
-database supplies check pass timings, tip rounds and plan usage samples.
+Away from the hub, the daemon's ticket mirror supplies tickets, and `fleet.py` reads the same
+fleet data from the hub's private listener, with the local daemon's measurements.
 """
 
 from __future__ import annotations
@@ -268,24 +271,30 @@ class Records(CursorSource):
         return data, int(str(found[-1]["id"])), [("_record", r) for r in found], 0
 
     def save(self, db: sqlite3.Connection, rows: list[Row]) -> int:
-        """Names each record's machine, writes its rows and joins its waits for cores to the
-        tool calls that ran them, as the token pool's leases were."""
-        written: list[Row] = []
-        hosts: set[str] = set()
-        for _, r in rows:
-            machine = str(r["machine"])
-            host = machine_host(db, machine, str(r["machine_name"] or machine))
-            hosts.add(host)
-            if r["ticket"] is not None:
-                r["ticket"] = ticket_ids.stored(db, str(r["ticket"]))
-            written += record_rows(r, host, int(str(r["machine_cores"] or 0)))
-        count = write(db, written, MERGES)
-        if self.local in hosts:
-            table, _ = kinds.load()
-            heavy = frozenset(k.kind for k in table if k.heavy)
-            for provider, transcript in sorted(join_leases(db, self.local)):
-                count += timing.account(db, self.local, provider, transcript, heavy)
-        return count
+        return save_records(db, rows, self.local)
+
+
+def save_records(db: sqlite3.Connection, rows: list[Row], local: str) -> int:
+    """Names each record's machine, writes its rows and joins its waits for cores to the tool
+    calls that ran them, as the token pool's leases were. A record carries its machine's
+    `machine_name` and `machine_cores`, both null for a machine the hub no longer lists.
+    """
+    written: list[Row] = []
+    hosts: set[str] = set()
+    for _, r in rows:
+        machine = str(r["machine"])
+        host = machine_host(db, machine, str(r["machine_name"] or machine))
+        hosts.add(host)
+        if r["ticket"] is not None:
+            r["ticket"] = ticket_ids.stored(db, str(r["ticket"]))
+        written += record_rows(r, host, int(str(r["machine_cores"] or 0)))
+    count = write(db, written, MERGES)
+    if local in hosts:
+        table, _ = kinds.load()
+        heavy = frozenset(k.kind for k in table if k.heavy)
+        for provider, transcript in sorted(join_leases(db, local)):
+            count += timing.account(db, local, provider, transcript, heavy)
+    return count
 
 
 class Imports(CursorSource):
@@ -330,34 +339,37 @@ class Imports(CursorSource):
         return data, cursor, rows, 0
 
     def save(self, db: sqlite3.Connection, rows: list[Row]) -> int:
-        """Imports each machine's rows under its name, as `import` imports a file, with the
-        newest-schema header the machine sent first. The hub's own machine posts its rows
-        too; those are skipped, since ingest here read them already. Rows of another
-        source, such as `findings` or `plan_usage`, carry no export header and are skipped
-        before the machine is named, since their source is not a host name."""
-        count = 0
-        for _, r in rows:
-            lines = r["lines"]
-            assert isinstance(lines, list)
-            parsed = [json.loads(str(line)) for line in lines]
-            headers = [p for p in parsed if isinstance(p, dict) and "export" in p]
-            if not headers:
-                continue
-            host = machine_host(db, str(r["machine"]), str(r["source"]))
-            if host == self.local:
-                continue
-            header = max(headers, key=lambda h: int(h.get("schema") or 0))
-            body = [
-                json.dumps(p) for p in parsed if isinstance(p, dict) and "table" in p
-            ]
-            try:
-                found = exchange.import_lines(
-                    db, [json.dumps(header), *body], self.local, lambda _: host
-                )
-            except exchange.ExchangeError:
-                continue
-            count += sum(found.added.values())
-        return count
+        return save_imports(db, rows, self.local)
+
+
+def save_imports(db: sqlite3.Connection, rows: list[Row], local: str) -> int:
+    """Imports each machine's rows under its name, as `import` imports a file, with the
+    newest-schema header the machine sent first. A row holds one machine's `lines` from one
+    `source`. The local machine posts its rows too; those are skipped, since ingest here read
+    them already. Rows of another source, such as `findings` or `plan_usage`, carry no export
+    header and are skipped before the machine is named, since their source is not a host
+    name."""
+    count = 0
+    for _, r in rows:
+        lines = r["lines"]
+        assert isinstance(lines, list)
+        parsed = [json.loads(str(line)) for line in lines]
+        headers = [p for p in parsed if isinstance(p, dict) and "export" in p]
+        if not headers:
+            continue
+        host = machine_host(db, str(r["machine"]), str(r["source"]))
+        if host == local:
+            continue
+        header = max(headers, key=lambda h: int(h.get("schema") or 0))
+        body = [json.dumps(p) for p in parsed if isinstance(p, dict) and "table" in p]
+        try:
+            found = exchange.import_lines(
+                db, [json.dumps(header), *body], local, lambda _: host
+            )
+        except exchange.ExchangeError:
+            continue
+        count += sum(found.added.values())
+    return count
 
 
 def resets_text(value: object) -> str | None:
@@ -409,47 +421,104 @@ class PlanSamples(CursorSource):
         skipped = 0
         for r in found:
             try:
-                data = json.loads(str(r["data"]))
-                percent, window = data.get("percent_used"), data.get("window")
-                if data.get("status") != "ok" or percent is None or not window:
-                    continue
-                provider = data.get("provider")
-                rows.append(
-                    (
-                        "_sample",
-                        {
-                            "machine": str(r["machine"]),
-                            "name": str(r["name"]),
-                            "provider": (
-                                str(provider)
-                                if isinstance(provider, str) and provider
-                                else "claude"
-                            ),
-                            "at": iso(utc(data["at"])),
-                            "window": str(window),
-                            "percent_used": float(percent),
-                            "resets_at": resets_text(data.get("resets_at")),
-                        },
-                    )
-                )
-            except (ValueError, TypeError, KeyError, AttributeError):
+                rows += sample_rows(str(r["machine"]), str(r["name"]), str(r["data"]))
+            except MALFORMED_SAMPLE:
                 skipped += 1
         data_bytes = "".join(str(r["data"]) for r in found).encode()
         return data_bytes, cursor, rows, skipped
 
     def save(self, db: sqlite3.Connection, rows: list[Row]) -> int:
-        written: list[Row] = []
-        for _, r in rows:
-            host = machine_host(db, str(r["machine"]), str(r.pop("name")))
-            written.append(("plan_usage", {"host": host, **r}))
-        return write(db, written)
+        return save_samples(db, rows)
+
+
+# A plan usage sample that raises one of these is malformed: skipped and counted.
+MALFORMED_SAMPLE = (ValueError, TypeError, KeyError, AttributeError)
+
+
+def sample_rows(machine: str, name: str, text: str) -> list[Row]:
+    """A `plan_usage` metric line as a sample of the machine named `name`, or nothing for a
+    sample whose status is not `ok`. Raises one of `MALFORMED_SAMPLE` for a broken line.
+    """
+    data = json.loads(text)
+    percent, window = data.get("percent_used"), data.get("window")
+    if data.get("status") != "ok" or percent is None or not window:
+        return []
+    provider = data.get("provider")
+    return [
+        (
+            "_sample",
+            {
+                "machine": machine,
+                "name": name,
+                "provider": (
+                    str(provider)
+                    if isinstance(provider, str) and provider
+                    else "claude"
+                ),
+                "at": iso(utc(data["at"])),
+                "window": str(window),
+                "percent_used": float(percent),
+                "resets_at": resets_text(data.get("resets_at")),
+            },
+        )
+    ]
+
+
+def save_samples(db: sqlite3.Connection, rows: list[Row]) -> int:
+    written: list[Row] = []
+    for _, r in rows:
+        host = machine_host(db, str(r["machine"]), str(r.pop("name")))
+        written.append(("plan_usage", {"host": host, **r}))
+    return write(db, written)
+
+
+# The tables the hub's state fills alone (`Hub` and `fleet.State`).
+STATE_TABLES: tuple[str, ...] = (
+    "ignite_tickets",
+    "ignite_tips",
+    "ignite_handoffs",
+    "ignite_workers",
+    "ignite_regressions",
+)
+# The columns of each list in the hub's state, in the order the hub sends them.
+STATE_COLUMNS = {
+    "tickets": ("id", "created_at", "claimed_at", "landed_at", "repair"),
+    "tips": ("commit", "seen", "verified", "state"),
+    "handoffs": ("seq", "machine", "ticket", "kind", "at"),
+    "workers": ("machine", "session", "role"),
+}
+REGRESSION_COLUMNS = (
+    "check_name",
+    "ticket",
+    "first_bad",
+    "last_good",
+    "state",
+    "culprit_ticket",
+)
+
+
+def state_rows(found: dict[str, list[object]]) -> list[Row]:
+    """The `ignite_*` rows of the hub's state: lists of values for tickets, tips, hand-offs
+    and workers, and an object per regression."""
+    rows: list[Row] = []
+    for table, names in STATE_COLUMNS.items():
+        for values in found[table]:
+            assert isinstance(values, list)
+            rows.append((f"ignite_{table}", dict(zip(names, values))))
+    for regression in found.get("regressions", []):
+        assert isinstance(regression, dict)
+        rows.append(
+            ("ignite_regressions", {c: regression.get(c) for c in REGRESSION_COLUMNS})
+        )
+    return rows
 
 
 class Hub(SnapshotSource):
-    """The hub's tickets, tips, hand-offs and workers, copied whole when they change."""
+    """The hub's tickets, tips, hand-offs, workers and regressions, copied whole when they
+    change."""
 
     name = "ignite-hub"
-    owns = ("ignite_tickets", "ignite_tips", "ignite_handoffs", "ignite_workers")
+    owns: tuple[str, ...] = STATE_TABLES
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -478,6 +547,12 @@ class Hub(SnapshotSource):
                     list(r)
                     for r in hub.execute("SELECT machine, session, role FROM workers")
                 ],
+                "regressions": [
+                    dict(r)
+                    for r in hub.execute(
+                        f"SELECT {', '.join(REGRESSION_COLUMNS)} FROM regressions"
+                    )
+                ],
             }
         except sqlite3.Error as e:
             raise SourceError(f"reading the hub: {e}") from e
@@ -486,19 +561,7 @@ class Hub(SnapshotSource):
         return json.dumps(found, sort_keys=True).encode()
 
     def parse(self, data: bytes) -> tuple[list[Row], int]:
-        found = json.loads(data)
-        columns = {
-            "tickets": ("id", "created_at", "claimed_at", "landed_at", "repair"),
-            "tips": ("commit", "seen", "verified", "state"),
-            "handoffs": ("seq", "machine", "ticket", "kind", "at"),
-            "workers": ("machine", "session", "role"),
-        }
-        rows: list[Row] = [
-            (f"ignite_{table}", dict(zip(names, values)))
-            for table, names in columns.items()
-            for values in found[table]
-        ]
-        return rows, 0
+        return state_rows(json.loads(data)), 0
 
 
 def legacy_id(ticket: str, aliases: list[str]) -> str:
@@ -652,123 +715,6 @@ class MirrorTickets(HubTickets):
         return rows, skipped
 
 
-class DaemonPasses(CursorSource):
-    """Recorded wall times for successful commands in local/schema_5.sql."""
-
-    name = "ignite-local-passes"
-
-    def __init__(self, path: Path, host: str) -> None:
-        self.path = path
-        self.host = host
-
-    def page(self, after: int) -> tuple[bytes, int, list[Row], int]:
-        try:
-            with closing(open_ignite_db(self.path)) as daemon:
-                found = daemon.execute(
-                    "SELECT rowid, family, wall_s, at FROM passes "
-                    "WHERE rowid > ? AND command = 'run' ORDER BY rowid LIMIT ?",
-                    (after, PAGE),
-                ).fetchall()
-        except sqlite3.Error as e:
-            raise SourceError(f"reading Ignite's check pass timings: {e}") from e
-        if not found:
-            return b"", after, [], 0
-        rows: list[Row] = [
-            (
-                "checks",
-                {
-                    "day": local_day(utc(at)),
-                    "host": self.host,
-                    "script": LOCAL_CHECKS,
-                    "lane": family,
-                    "check": family,
-                    "first": iso(utc(at)),
-                    "runs": 1,
-                    "passes": 1,
-                    "fails": 0,
-                    "skips": 0,
-                    "seconds": wall,
-                    "cpu_seconds": 0.0,
-                    "measured_seconds": 0.0,
-                },
-            )
-            for _, family, wall, at in found
-        ]
-        return json.dumps([list(r) for r in found]).encode(), int(found[-1][0]), rows, 0
-
-    def save(self, db: sqlite3.Connection, rows: list[Row]) -> int:
-        return write(db, rows, {"checks": CHECK_SUMS})
-
-
-class DaemonMetrics(SnapshotSource):
-    """The finished tip rounds and plan samples retained in the local daemon database."""
-
-    name = "ignite-local-metrics"
-
-    def __init__(self, path: Path, host: str) -> None:
-        self.path = path
-        self.host = host
-
-    def read(self) -> bytes:
-        try:
-            with closing(open_ignite_db(self.path)) as daemon:
-                tips = [
-                    list(r)
-                    for r in daemon.execute(
-                        """SELECT json_extract(reply, '$.json.tip'), started_at, finished_at,
-                            json_extract(reply, '$.json.outcome.state')
-                        FROM handles WHERE verb = 'tip-round' AND state = 'done'
-                        AND exit = 0 AND finished_at IS NOT NULL
-                        AND json_extract(reply, '$.json.outcome.state')
-                            IN ('verified', 'verified_with_deferrals', 'failed')
-                        ORDER BY finished_at, id"""
-                    )
-                ]
-                samples = [
-                    list(r)
-                    for r in daemon.execute(
-                        """SELECT machine, provider, at, label, percent_used, resets_at
-                        FROM plan_usage WHERE status = 'ok' AND label IS NOT NULL
-                        AND percent_used IS NOT NULL ORDER BY id"""
-                    )
-                ]
-        except sqlite3.Error as e:
-            raise SourceError(f"reading Ignite's local metrics: {e}") from e
-        return json.dumps({"tips": tips, "samples": samples}).encode()
-
-    def parse(self, data: bytes) -> tuple[list[Row], int]:
-        found = json.loads(data)
-        rows: list[Row] = [
-            (
-                "ignite_tip_rounds",
-                {
-                    "host": self.host,
-                    "commit": commit,
-                    "started_at": iso(utc(start)),
-                    "finished_at": iso(utc(end)),
-                    "state": state,
-                },
-            )
-            for commit, start, end, state in found["tips"]
-        ]
-        rows.extend(
-            (
-                "plan_usage",
-                {
-                    "host": self.host,
-                    "machine": machine,
-                    "provider": provider,
-                    "at": iso(utc(at)),
-                    "window": window,
-                    "percent_used": percent,
-                    "resets_at": resets_text(resets),
-                },
-            )
-            for machine, provider, at, window, percent, resets in found["samples"]
-        )
-        return rows, 0
-
-
 def ticket_sources(cache: Path) -> Sequence[HubTickets]:
     """Ingest reads tickets before transcripts, whose windows refer to them."""
     path = hub_path(cache)
@@ -786,18 +732,9 @@ def reads_fleet(cache: Path) -> bool:
 
 
 def sources(cache: Path, local: str) -> Sequence[CursorSource | SnapshotSource]:
-    """Read fleet records at the hub and the local daemon's measurements elsewhere."""
+    """Fleet records from the hub's database, on the machine that holds it. Other machines
+    read them over the network (`fleet.sources`)."""
     path = hub_path(cache)
-    if path.is_file():
-        return [
-            Hub(path),
-            Records(path, local),
-            Imports(path, local),
-            PlanSamples(path),
-        ]
-    daemon = ignite_home() / "daemon.db"
-    return (
-        [DaemonPasses(daemon, local), DaemonMetrics(daemon, local)]
-        if daemon.is_file()
-        else []
-    )
+    if not path.is_file():
+        return []
+    return [Hub(path), Records(path, local), Imports(path, local), PlanSamples(path)]

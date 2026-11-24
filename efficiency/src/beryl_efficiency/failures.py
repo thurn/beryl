@@ -2,9 +2,12 @@
 run (docs/efficiency-dashboard.md, "What a slow-CI failure costs").
 
 Ignite labels tickets for failing staging checks `regression`. Enact's historical Steward
-tickets name the commit range that broke slow CI (`enact_ci_range`, `A..B`). A regression
-with only ticket data is dated by its creation and can report the work done on that ticket.
-A failure's costs are:
+tickets name the commit range that broke slow CI (`enact_ci_range`, `A..B`). Ignite's hub
+records each regression's failing check and the last good and first bad commits
+(`ignite_regressions`), which stand in for that range when the ticket has none, so that the
+failing tip verification run, bisection and the time behind are found as for Enact's. A
+regression with only ticket data is dated by its creation and can report the work done on
+that ticket. A failure's costs are:
 
 - The Steward ticket: the agent minutes, core minutes and dollars of the sessions that worked
   it, from all its windows.
@@ -266,11 +269,34 @@ def failed_checks(db: sqlite3.Connection) -> dict[str, list[FailedCheck]]:
     return found
 
 
+@dataclass(frozen=True)
+class Attribution:
+    """One regression as Ignite's hub recorded it."""
+
+    check: str
+    last_good: str
+    first_bad: str
+
+
+def attributions(db: sqlite3.Connection) -> dict[str, list[Attribution]]:
+    """Each repair ticket's regressions from Ignite's hub, by stored ticket ID."""
+    found: dict[str, list[Attribution]] = defaultdict(list)
+    for check, ticket, first_bad, last_good in db.execute(
+        """SELECT check_name, ticket, first_bad, last_good FROM ignite_regressions
+        ORDER BY check_name"""
+    ):
+        found[ticket_ids.stored(db, str(ticket))].append(
+            Attribution(str(check), str(last_good), str(first_bad))
+        )
+    return found
+
+
 def all_failures(db: sqlite3.Connection, facts: Facts) -> list[Failure]:
     """Every regression or Steward ticket's failure, oldest first."""
     runs = ci_runs(db)
     bisect = bisect_runs(db)
     checks = failed_checks(db)
+    attributed = attributions(db)
     history = facts.history()
     hosts = {w.host for w in facts.windows}
     found: list[Failure] = []
@@ -281,12 +307,20 @@ def all_failures(db: sqlite3.Connection, facts: Facts) -> list[Failure]:
         (
             b
             for b in facts.beads.values()
-            if b.created and (b.enact.get("enact_ci_range") or "regression" in b.labels)
+            if b.created
+            and (
+                b.enact.get("enact_ci_range")
+                or "regression" in b.labels
+                or b.id in attributed
+            )
         ),
         key=lambda b: str(b.created),
     )
     for b in stewards:
+        hub = attributed.get(b.id, [])
         spec = str(b.enact.get("enact_ci_range") or "")
+        if not spec and hub:
+            spec = f"{hub[0].last_good}..{hub[0].first_bad}"
         if not b.created:
             continue
         mine = [w for w in facts.windows if w.kind == "bead" and w.bead == b.id]
@@ -306,6 +340,10 @@ def all_failures(db: sqlite3.Connection, facts: Facts) -> list[Failure]:
             if any(same_commit(x.commit, c) for c in in_range)
         }
         named = checks.get(b.id, [])
+        if not named:
+            named = [
+                FailedCheck(a.check, a.check.partition(":")[0], "fail") for a in hub
+            ]
         culprit_check = b.enact.get("enact_regression_check")
         if isinstance(culprit_check, str) and not named:
             named = [

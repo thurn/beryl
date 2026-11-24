@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from beryl_efficiency import changes, claude, cli, facts, ignite, ingest, store
+from beryl_efficiency import changes, claude, cli, facts, fleet, ignite, ingest, store
+from tests.hub_server import FleetHub
 from tests.legacy_sources import Beads
 from beryl_efficiency.scope import Scope, parse_since
 from tests.synthetic import CHECKOUT, PROJECT, Transcript, listing
@@ -30,7 +31,9 @@ def test_ci_shows_local_pass_timings_when_slow_ci_is_unavailable(
     capsys: pytest.CaptureFixture[str],
     utc_days: None,
 ) -> None:
-    monkeypatch.setattr(cli, "sources", lambda: ignite.sources(cache, "cygnus"))
+    monkeypatch.setattr(
+        cli, "sources", lambda: fleet.sources(ignite_daemon, cache, "cygnus")
+    )
     assert cli.main(["ci", "--since", "all", "--json"]) == 0
     local = json.loads(capsys.readouterr().out)
     assert local["script"] == "local"
@@ -57,6 +60,67 @@ def test_failures_shows_the_mirrored_regression(
     assert row["checks"][0]["check"] == "rust:engine::start"
     assert row["dollars"] is None
     assert row["behind_minutes"] is None
+
+
+def fleet_query(capsys: pytest.CaptureFixture[str], *argv: str) -> dict[str, object]:
+    """A query's JSON, after the query's own ingest."""
+    capsys.readouterr()
+    assert cli.main([*argv, "--since", "all", "--json"]) == 0
+    found = json.loads(capsys.readouterr().out)
+    assert isinstance(found, dict)
+    return found
+
+
+@pytest.fixture
+def fleet_sources(
+    fleet_hub: FleetHub, cache: Path, monkeypatch: pytest.MonkeyPatch
+) -> FleetHub:
+    monkeypatch.setattr(
+        cli,
+        "sources",
+        lambda: [
+            *ignite.ticket_sources(cache),
+            *fleet.sources(fleet_hub.checkout, cache, "cygnus"),
+        ],
+    )
+    # Ingest on every query, as a store over a minute old does.
+    monkeypatch.setattr(cli, "MAX_AGE", -1.0)
+    return fleet_hub
+
+
+def test_ci_totals_cover_every_fleet_machine_once(
+    fleet_sources: FleetHub, capsys: pytest.CaptureFixture[str], utc_days: None
+) -> None:
+    for _ in range(2):
+        tips = fleet_query(capsys, "ci")
+        assert tips["script"] == "ci"
+        total = tips["total"]
+        assert isinstance(total, dict)
+        # Four tip runs on two machines: 480 + 240 + 120 + 480 CPU seconds.
+        assert (total["runs"], total["core_hours"]) == (4, round(1320 / 3600, 2))
+        gate = fleet_query(capsys, "ci", "--script", "check")
+        assert gate["total"]["runs"] == 1  # type: ignore[index]
+        local = fleet_query(capsys, "ci", "--script", "local")
+        assert local["total"]["runs"] == 2  # type: ignore[index]
+    jarvis = fleet_query(capsys, "ci", "--host", "jarvis")
+    assert jarvis["total"]["runs"] == 2  # type: ignore[index]
+
+
+def test_failures_uses_the_hubs_regression_attribution(
+    fleet_sources: FleetHub, capsys: pytest.CaptureFixture[str]
+) -> None:
+    found = fleet_query(capsys, "failures")
+    assert found["failures"] == 1
+    (row,) = found["rows"]  # type: ignore[misc]
+    assert row["steward"] == "by-older.1"
+    assert row["range"] == "k1..k2"
+    # Cygnus's failing tip run on k2 ended at 11:40, and Jarvis's next one passed at 12:40.
+    assert (row["failed_at"], row["host"]) == ("2026-11-15T11:40:00.000Z", "cygnus")
+    assert row["behind_minutes"] == 60.0
+    assert [c["check"] for c in row["checks"]] == ["engine:smoke"]
+    fleet_sources.stop()
+    # With the hub unreachable the stored attribution still answers.
+    assert fleet_query(capsys, "failures")["rows"] == found["rows"]
 
 
 def at(day: int, hour: int, minute: int) -> str:

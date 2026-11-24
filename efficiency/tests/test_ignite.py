@@ -12,7 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from beryl_efficiency import claude, cli, exchange, ignite, ingest, paths, store
+from beryl_efficiency import claude, cli, exchange, fleet, ignite, ingest, paths, store
+from tests.hub_server import TOKEN, FleetHub
+from tests.hub_server import record as fleet_record
 from tests.legacy_sources import Beads
 from tests.synthetic import CHECKOUT, PROJECT, Transcript, listing
 from tests.synthetic import bead as bead_record
@@ -36,7 +38,8 @@ CREATE TABLE tickets (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, claimed_at 
 CREATE TABLE handoffs (seq INTEGER PRIMARY KEY, machine TEXT NOT NULL, ticket TEXT NOT NULL,
   kind TEXT NOT NULL, at TEXT NOT NULL);
 CREATE TABLE regressions (check_name TEXT PRIMARY KEY, ticket TEXT NOT NULL,
-  first_bad TEXT NOT NULL, last_good TEXT NOT NULL, state TEXT NOT NULL);
+  first_bad TEXT NOT NULL, last_good TEXT NOT NULL, state TEXT NOT NULL,
+  culprit_ticket TEXT);
 CREATE TABLE tips (commit_sha TEXT PRIMARY KEY, seen TEXT NOT NULL, verified TEXT,
   state TEXT NOT NULL);
 CREATE TABLE records (id INTEGER PRIMARY KEY, machine TEXT NOT NULL, ticket TEXT,
@@ -96,7 +99,7 @@ def make_hub(path: Path) -> sqlite3.Connection:
         ],
     )
     hub.execute(
-        "INSERT INTO regressions VALUES ('rust:x', 'p.2', 'k1', 'k0', 'open')",
+        "INSERT INTO regressions VALUES ('rust:x', 'p.2', 'k1', 'k0', 'open', 'p.1')",
     )
     hub.execute(
         "INSERT INTO handoffs VALUES (1, 'm-1', 'p.2', 'regression', ?)", (at(10, 50),)
@@ -197,6 +200,10 @@ def test_records_are_read_once(hub: sqlite3.Connection) -> None:
         assert db.execute("SELECT count(*) FROM ignite_records").fetchone()[0] == 5
         runs = db.execute("SELECT sum(runs) FROM checks").fetchone()[0]
         assert runs == 4
+        assert db.execute(
+            "SELECT check_name, ticket, last_good, first_bad, culprit_ticket "
+            "FROM ignite_regressions"
+        ).fetchall() == [("rust:x", "p.2", "k0", "k1", "p.1")]
     finally:
         db.close()
 
@@ -348,7 +355,15 @@ def test_the_hub_defaults_to_the_ignite_home(
 def test_daemon_ingest_resumes_without_recounting_passes(
     ignite_daemon: Path, cache: Path
 ) -> None:
-    sources = [*ignite.ticket_sources(cache), *ignite.sources(cache, "cygnus")]
+    sources = [
+        *ignite.ticket_sources(cache),
+        *fleet.sources(ignite_daemon, cache, "cygnus"),
+    ]
+    assert [s.name for s in sources] == [
+        "ignite-mirror",
+        "ignite-local-passes",
+        "ignite-local-metrics",
+    ]
     with closing(store.open_store(paths.store())) as db:
         ingest.ingest(db, sources, "cygnus")
         assert db.execute(
@@ -385,3 +400,159 @@ def test_local_hub_takes_precedence(ignite_daemon: Path, cache: Path) -> None:
             "ignite-imports",
             "ignite-plan-usage",
         ]
+        assert fleet.sources(ignite_daemon, cache, HOST) == []
+
+
+def fleet_ingest(
+    hub: FleetHub, cache: Path
+) -> tuple[sqlite3.Connection, list[ingest.Source]]:
+    """This machine's store and its Ignite sources, with the fleet read from `hub`."""
+    sources = [
+        *ignite.ticket_sources(cache),
+        *fleet.sources(hub.checkout, cache, "cygnus"),
+    ]
+    return store.open_store(paths.store()), sources
+
+
+def counts(db: sqlite3.Connection) -> dict[str, object]:
+    """What the store holds from the fleet, by what each figure is."""
+    return {
+        "records": db.execute(
+            "SELECT host, count(*) FROM ignite_records GROUP BY host ORDER BY host"
+        ).fetchall(),
+        "checks": db.execute(
+            "SELECT script, host, sum(runs), sum(cpu_seconds) FROM checks "
+            "GROUP BY script, host ORDER BY script, host"
+        ).fetchall(),
+        "requests": db.execute(
+            "SELECT host, count(*) FROM requests GROUP BY host"
+        ).fetchall(),
+        "samples": db.execute(
+            "SELECT host, percent_used FROM plan_usage ORDER BY host"
+        ).fetchall(),
+    }
+
+
+def test_fleet_ingest_reads_two_machines_and_resumes_without_recounting(
+    fleet_hub: FleetHub, cache: Path
+) -> None:
+    db, sources = fleet_ingest(fleet_hub, cache)
+    with closing(db):
+        assert [s.name for s in sources] == [
+            "ignite-mirror",
+            "ignite-fleet-state",
+            "ignite-fleet-records",
+            "ignite-fleet-metrics",
+            "ignite-local-passes",
+            "ignite-local-metrics",
+        ]
+        summary = ingest.ingest(db, sources, "cygnus")
+        assert {n: t.error for n, t in summary.sources.items() if t.error} == {}
+        # This machine's own posted export is skipped: ingest here reads its sources.
+        assert counts(db) == {
+            "records": [("cygnus", 3), ("jarvis", 3)],
+            "checks": [
+                ("check", "jarvis", 1, 100.0),
+                ("ci", "cygnus", 2, 360.0),
+                ("ci", "jarvis", 2, 960.0),
+                ("local", "cygnus", 2, 0.0),
+            ],
+            "requests": [("jarvis", 1)],
+            "samples": [("cygnus", 12.0), ("jarvis", 40.0)],
+        }
+        assert db.execute(
+            "SELECT ticket, first_bad, culprit_ticket FROM ignite_regressions"
+        ).fetchall() == [("t.1", "k2", "t.2")]
+        assert db.execute(
+            "SELECT id, repair FROM ignite_tickets ORDER BY id"
+        ).fetchall() == [("t", 0), ("t.1", 1)]
+        before = counts(db)
+        assert ingest.ingest(db, sources, "cygnus").total().rows == 0
+        assert counts(db) == before
+        fleet_hub.records.append(
+            fleet_record(7, "m-1", "tip", "rust", 60, 60, "2026-11-15T13:00:00.000Z")
+        )
+        fleet_hub.requests.clear()
+        ingest.ingest(db, sources, "cygnus")
+        assert counts(db)["checks"] == [
+            ("check", "jarvis", 1, 100.0),
+            ("ci", "cygnus", 2, 360.0),
+            ("ci", "jarvis", 3, 1020.0),
+            ("local", "cygnus", 2, 0.0),
+        ]
+    # The hub is asked only for what arrived after the stored positions.
+    assert "records?limit=5000&after=6" in fleet_hub.requests
+    assert f"metrics?limit=5000&cursor=v1-{len(fleet_hub.metrics):x}" in (
+        fleet_hub.requests
+    )
+
+
+def test_an_interrupted_fleet_ingest_resumes_where_it_stopped(
+    fleet_hub: FleetHub, cache: Path
+) -> None:
+    # The state and the first page of records arrive; then the hub fails.
+    fleet_hub.budget = 2
+    db, sources = fleet_ingest(fleet_hub, cache)
+    with closing(db):
+        summary = ingest.ingest(db, sources, "cygnus")
+        assert summary.sources["ignite-fleet-records"].error == (
+            "the hub answered records with HTTP 503"
+        )
+        assert summary.sources["ignite-fleet-metrics"].error != ""
+        assert counts(db)["records"] == [("cygnus", 1), ("jarvis", 1)]
+        fleet_hub.budget = None
+        summary = ingest.ingest(db, sources, "cygnus")
+        assert {n: t.error for n, t in summary.sources.items() if t.error} == {}
+        assert counts(db)["records"] == [("cygnus", 3), ("jarvis", 3)]
+        assert counts(db)["checks"] == [
+            ("check", "jarvis", 1, 100.0),
+            ("ci", "cygnus", 2, 360.0),
+            ("ci", "jarvis", 2, 960.0),
+            ("local", "cygnus", 2, 0.0),
+        ]
+
+
+def test_an_unreachable_hub_leaves_the_local_measurements(
+    fleet_hub: FleetHub, cache: Path
+) -> None:
+    fleet_hub.stop()
+    db, sources = fleet_ingest(fleet_hub, cache)
+    with closing(db):
+        summary = ingest.ingest(db, sources, "cygnus")
+        errors = {n: t.error for n, t in summary.sources.items() if t.error}
+        assert list(errors) == [
+            "ignite-fleet-state",
+            "ignite-fleet-records",
+            "ignite-fleet-metrics",
+        ]
+        # The first failure is remembered, so the hub's timeout is waited for once.
+        assert len(set(errors.values())) == 1
+        assert "cannot reach the hub" in errors["ignite-fleet-state"]
+        assert counts(db)["checks"] == [("local", "cygnus", 2, 0.0)]
+        assert counts(db)["samples"] == [("cygnus", 12.0)]
+        assert db.execute("SELECT count(*) FROM beads").fetchone()[0] == 2
+
+
+def test_fleet_reads_use_the_machine_token_the_ignite_command_uses(
+    fleet_hub: FleetHub, ignite_daemon: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    expected = fleet.Hub(f"{fleet_hub.url}/test/api", TOKEN)
+    hub = fleet.load(fleet_hub.checkout / "nested")
+    assert hub == expected
+    assert hub is not None
+    _, found = hub.get("state", {})
+    assert found["tips"] == [["k1", at(10, 30), at(10, 45), "verified"]]
+    monkeypatch.setenv("IGNITE_TOKEN", "another")
+    other = fleet.load(fleet_hub.checkout)
+    assert other is not None
+    with pytest.raises(ingest.SourceError, match="HTTP 401"):
+        other.get("state", {})
+    monkeypatch.delenv("IGNITE_TOKEN")
+    (ignite_daemon / "machine.json").unlink()
+    (ignite_daemon / "token").write_text(f" {TOKEN}\n", encoding="utf-8")
+    assert fleet.load(fleet_hub.checkout) == expected
+    (ignite_daemon / "token").unlink()
+    missing = fleet.load(fleet_hub.checkout)
+    assert missing is not None
+    with pytest.raises(ingest.SourceError, match="no registered machine token"):
+        missing.get("state", {})

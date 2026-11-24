@@ -1,7 +1,7 @@
 """Ingest: reads what was added to each source since the last ingest into the store
 (docs/efficiency-dashboard.md, "The store").
 
-A source is one of four kinds:
+A source is one of five kinds:
 
 - A `LineSource` is a set of files of lines, such as transcripts or the run log. Each file is
   read from the byte offset recorded in the `sources` table. A file whose first bytes no longer
@@ -14,6 +14,8 @@ A source is one of four kinds:
 
 - A `CursorSource` reads command output in pages after the sequence number already
   in the store. It commits the rows and cursor together, keeping events past retention.
+- A `TokenSource` reads pages as a `CursorSource` does, but its position is a text token
+  that the producer returns and the store keeps unchanged, such as the hub's metrics cursor.
 
 Each kind turns its input into rows, `(table, {column: value})`, written with
 `INSERT OR REPLACE` so that reading the same bytes twice changes nothing. A `LineSource` may
@@ -157,7 +159,22 @@ class CursorSource(ABC):
         return write(db, rows)
 
 
-Source = LineSource | FileSource | SnapshotSource | CursorSource
+class TokenSource(ABC):
+    """A paginated stream whose position is an opaque text token the producer returns. The
+    store keeps the token as given; the first page is asked for with an empty one."""
+
+    name: str = ""
+
+    @abstractmethod
+    def page(self, token: str) -> tuple[bytes, str, list[Row], int]:
+        """Bytes read, the next token, rows and skipped records. A page with no rows or an
+        unchanged token ends the stream."""
+
+    def save(self, db: sqlite3.Connection, rows: list[Row]) -> int:
+        return write(db, rows)
+
+
+Source = LineSource | FileSource | SnapshotSource | CursorSource | TokenSource
 
 
 def now() -> str:
@@ -422,6 +439,29 @@ def read_cursor(db: sqlite3.Connection, source: CursorSource, tally: Tally) -> N
         after = cursor
 
 
+def read_tokens(db: sqlite3.Connection, source: TokenSource, tally: Tally) -> None:
+    """Reads pages from the stored token. The token is kept in the position's fingerprint
+    and the offset counts the bytes read, each recorded with the page's rows."""
+    offset, token = position(db, source.name, "")
+    while True:
+        try:
+            data, following, rows, skipped = source.page(token)
+        except SourceError as e:
+            tally.error = str(e)
+            return
+        if following == token:
+            return
+        offset += len(data)
+        with db:
+            tally.rows += source.save(db, rows)
+            record_position(db, source.name, "", offset, following, skipped)
+        tally.bytes_read += len(data)
+        tally.skipped += skipped
+        if not rows:
+            return
+        token = following
+
+
 def ingest(db: sqlite3.Connection, sources: Sequence[Source], host: str) -> Summary:
     """Reads every source into `db` and records the ingest's own cost."""
     summary = Summary(now())
@@ -435,6 +475,8 @@ def ingest(db: sqlite3.Connection, sources: Sequence[Source], host: str) -> Summ
             read_files(db, source, tally)
         elif isinstance(source, CursorSource):
             read_cursor(db, source, tally)
+        elif isinstance(source, TokenSource):
+            read_tokens(db, source, tally)
         else:
             read_snapshot(db, source, tally)
     summary.wall_seconds = time.monotonic() - wall

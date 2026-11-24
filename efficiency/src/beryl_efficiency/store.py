@@ -657,6 +657,20 @@ MIGRATIONS: tuple[str, ...] = (
             AND other.resets_at IS plan_usage.resets_at
     );
     """,
+    """
+    -- Ignite's regressions, one per failing check: its repair ticket, the last good and
+    -- first bad commits, and the ticket whose landing caused it when the hub knows. The
+    -- hub's state is read again so that the copy fills at once.
+    CREATE TABLE ignite_regressions (
+        check_name TEXT PRIMARY KEY,
+        ticket TEXT NOT NULL,
+        first_bad TEXT NOT NULL,
+        last_good TEXT NOT NULL,
+        state TEXT NOT NULL,
+        culprit_ticket TEXT
+    );
+    DELETE FROM sources WHERE source = 'ignite-hub';
+    """,
 )
 
 

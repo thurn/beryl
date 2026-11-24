@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterator
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from beryl_efficiency import changes, scope
+from tests import hub_server
 
 
 @pytest.fixture
@@ -115,3 +117,17 @@ def ignite_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             (landed, created),
         )
     return home
+
+
+@pytest.fixture
+def fleet_hub(
+    ignite_daemon: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[hub_server.FleetHub]:
+    """The daemon above, with a checkout whose `ignite.toml` names a hub on this machine that
+    serves two machines' fleet data (`hub_server.two_machines`) to its registered token.
+    """
+    monkeypatch.delenv("IGNITE_TOKEN", raising=False)
+    hub = hub_server.two_machines(tmp_path / "exports").start()
+    hub.configure(tmp_path / "checkout", ignite_daemon)
+    yield hub
+    hub.stop()

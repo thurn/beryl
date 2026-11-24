@@ -276,11 +276,24 @@ The sources use data that other tools already record.
   They replaced the run log, the CPU token pool's lease log and the CPU sampler
   below, which are no longer written; the rows they produced stay in the store.
   Each record becomes an `ignite_records` row, a `leases` row, `cpu` and
-  `cpu_minutes` rows, and for a check family `checks` and `lane_runs` rows.
+  `cpu_minutes` rows, and for a check family `checks` and `lane_runs` rows. The
+  hub's regressions (each failing check's repair ticket and the commits between
+  which it broke) become `ignite_regressions` rows, which `failures` uses to
+  find the failing tip run and the time behind.
+- **The hub over the network**, on a machine without the hub database
+  (`fleet.py`). The hub's private listener serves the same records, the rows
+  other machines posted, and its tickets, tips, hand-offs, workers and
+  regressions to a registered machine. Ingest finds the hub from `[hub]` in
+  `ignite.toml` and the machine's token where the `ignite` command finds it,
+  and resumes each feed from the position it stored with the last page read.
+  When the hub cannot be reached, those sources report an error and the local
+  sources below still answer.
 - **Local Ignite measurements**, read from `daemon.db` when the hub database is
   absent. They include check pass wall times, completed tip rounds and plan
-  usage samples. `just efficiency ci` shows local check passes when its date
-  range has no slow CI rows. Use `--script local` to select them explicitly.
+  usage samples. Check passes are the script `local`, so they never add to the
+  fleet's `ci` totals. `just efficiency ci` shows local check passes when its
+  date range has no slow CI rows. Use `--script local` to select them
+  explicitly.
 - **The run log** (history: the hour files in `ci/runs/` in the cache, and the
   old single file `ci/runs.jsonl`). Each line has `time`, `host`, `commit`,
   `script`, `lane`, `check`, `outcome` (`pass`, `fail` or `skip`), `seconds`,
@@ -1323,9 +1336,10 @@ without opening this page.
 
 ## Other machines
 
-Tickets are also worked on a second Mac and on a Windows PC. The hub's store can
-read fleet command records and posted metrics. The other machines read fleet
-tickets and collect measurements from their local daemons and transcripts.
+Tickets are also worked on a second Mac and on a Windows PC. The hub's store
+reads fleet command records and posted metrics from the hub database. The other
+machines read the same fleet data from the hub's private listener, tickets from
+their local mirror, and measurements from their local daemons and transcripts.
 
 - Every row carries its host. A query over tickets that ran elsewhere reports
   them as "no data" and says how many, so no total is silently short.

@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from beryl_efficiency import cli, ignite, ingest, paths, store
+from beryl_efficiency import cli, fleet, ignite, ingest, paths, store
+from tests.hub_server import FleetHub
 from tests.legacy_sources import Beads
 from tests.synthetic import bead, listing
 
@@ -51,6 +52,7 @@ TABLES = {
     "ignite_tip_rounds",
     "ignite_handoffs",
     "ignite_workers",
+    "ignite_regressions",
     "plan_usage",
     "codex_plan_usage",
 }
@@ -155,3 +157,29 @@ def test_query_auto_ingests_the_mirrors_aliases(
         )
     )
     assert found["rows"] == [["by-older.1"]]
+
+
+def test_ingest_reads_the_hub_and_reports_when_it_is_unreachable(
+    fleet_hub: FleetHub,
+    cache: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "sources",
+        lambda: [
+            *ignite.ticket_sources(cache),
+            *fleet.sources(fleet_hub.checkout, cache, "cygnus"),
+        ],
+    )
+    found = json.loads(run(capsys, "ingest", "--json"))
+    assert found["sources"]["ignite-fleet-records"]["rows"] > 0
+    assert all(not s["error"] for s in found["sources"].values())
+    fleet_hub.stop()
+    found = json.loads(run(capsys, "ingest", "--json"))
+    assert "cannot reach the hub" in found["sources"]["ignite-fleet-state"]["error"]
+    assert found["rows"] == 0
+    # Queries answer from what the store already holds.
+    ci = json.loads(run(capsys, "ci", "--since", "all", "--no-ingest", "--json"))
+    assert ci["total"]["runs"] == 4

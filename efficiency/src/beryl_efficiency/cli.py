@@ -27,6 +27,7 @@ from . import (
     facts,
     failures,
     findings,
+    fleet,
     ignite,
     ignite_metrics,  # registers its series
     ingest,
@@ -50,8 +51,9 @@ MAX_AGE = 60.0
 
 
 def sources() -> list[ingest.Source]:
-    """Read Ignite's tickets before deriving transcript windows. Read command records
-    after the transcripts so their leases can be joined to the transcripts' tool calls.
+    """Read Ignite's tickets before deriving transcript windows. Read command records, from
+    the hub's database or over the network, after the transcripts so their leases can be
+    joined to the transcripts' tool calls. The ticket mirror needs no network.
     """
     checkout = main_checkout(Path.cwd())
     host = paths.host()
@@ -64,6 +66,7 @@ def sources() -> list[ingest.Source]:
         agy.Transcripts(paths.agy_home(), checkout, host),
         commits.Commits.here(checkout),
         *ignite.sources(cache, host),
+        *fleet.sources(checkout, cache, host),
     ]
 
 
