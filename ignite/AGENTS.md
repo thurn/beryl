@@ -1,14 +1,13 @@
 # Working on Ignite
 
 Ignite is the build, check and delivery system. `docs/ignite.md` says what it
-does; the code contract in the design field of the epic `THRH4`
-(`ignite ticket show THRH4 --json`) says where each part lives and which ticket
-owns which file. These are the contract's rules.
+does. These are the rules for its code.
 
 ## The workspace
 
 - `ignite/` is a Cargo workspace of its own. It shares no crate, lock file or
-  target directory with `rust/`, and nothing in the game depends on it.
+  target directory with `engine/` or `client/`, and nothing in the game depends
+  on it.
 - Crates: `ignite_core` (pure logic: IDs, time, `ignite.toml`, check manifests,
   the protocol, the traits and their fakes), `ignite_os` (the operating system),
   `ignite_git` (every `git` call), `ignite_store` (SQLite), `ignite_hub` (the
@@ -28,11 +27,6 @@ owns which file. These are the contract's rules.
 - Ignite's code names no path, crate, tool, branch or check of this repository.
   Those come from `ignite.toml` and `ignite/checks/*.toml`. A test fails if a
   file under `ignite/crates/` contains this repository's name.
-- A ticket owns whole files. A shared file (a `mod.rs`, a schema, the protocol)
-  belongs to the ticket that created it; later tickets only append to it.
-- A stub module says in its header which ticket owns it, and its bodies are
-  `todo!()`. The owning ticket replaces the bodies, removes the
-  `#![allow(unused_variables)]` and rewrites the header.
 - Test against the fakes in `ignite_core::fakes`. It supplies `FakeClock`,
   `FakeBuilds`, `FakeGit`, `FakeHub` and `FakeLauncher` for the core traits,
   plus `FakeHost` for machine measurements. The fleet fake implements the fleet
@@ -44,9 +38,6 @@ owns which file. These are the contract's rules.
   `cargo nextest run -p ignite_daemon -E 'test(/cli_e2e/)'` from `ignite/`.
   `clid_e2e_tests.rs` and `clid_e2e_cases.rs` drive real supervisors with a
   scripted provider. Add a case there for a new restart or concurrency path.
-- A verb nobody has built is listed in `NOT_BUILT` in
-  `crates/ignite_cli/src/client.rs`; the ticket that builds it deletes its row
-  and registers a `Verb` (`ignite_daemon::server`) with the daemon.
 - A schema change appends a migration to `MIGRATIONS` in `ignite_store`'s `hub`
   or `local` module and updates the row structs, which a test compares with the
   tables. It never edits an applied migration.
