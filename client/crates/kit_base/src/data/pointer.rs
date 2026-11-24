@@ -18,6 +18,13 @@ pub struct PointerTuning {
     pub raise_mm: f32,
     #[serde(deserialize_with = "positive")]
     pub raise_scale: f32,
+    /// How far up a hovered card of a prompt's tray rises, in its own millimetres, and how
+    /// much it grows. Arena's "Order Cards" screen turns a hovered card upright and lifts it a
+    /// little in its row, without the hand's inspection size.
+    #[serde(deserialize_with = "nonnegative")]
+    pub tray_raise_mm: f32,
+    #[serde(deserialize_with = "positive")]
+    pub tray_raise_scale: f32,
     #[serde(deserialize_with = "positive_fraction")]
     pub nearer: f32,
     #[serde(deserialize_with = "positive")]

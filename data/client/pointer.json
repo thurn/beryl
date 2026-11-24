@@ -4,6 +4,8 @@
   "fall_ms": 160,
   "raise_mm": 34.45,
   "raise_scale": 1.5,
+  "tray_raise_mm": 3,
+  "tray_raise_scale": 1.06,
   "nearer": 0.6,
   "held_height_mm": 39.38,
   "held_hand_height_mm": 80,

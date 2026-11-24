@@ -170,8 +170,10 @@ fn a_look_that_takes_cards_out_of_the_library_holds_them_in_one_fan_with_no_boxe
             "the fan lies in one row: {left:?} and {right:?}"
         );
     }
-    // Clicked, a card is picked where it lies: the fan keeps its order.
+    // Clicked, a card is picked where it lies: the fan keeps its order. The pointer then leaves
+    // the fan, since a hovered card in a tray lifts a little in its place.
     page.press("card #10");
+    page.move_to(Vec2::new(4.0, 4.0));
     page.step(Duration::from_millis(600));
     for (before, locator) in &cards {
         let after = page.find(locator).rect();

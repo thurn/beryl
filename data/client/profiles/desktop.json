@@ -252,7 +252,7 @@
       "align_y": "end"
     },
     "log.toggle": {
-      "region": "window",
+      "region": "safe_area",
       "inset": [
         18,
         0,
@@ -278,13 +278,13 @@
       "align_y": "end"
     },
     "log": {
-      "region": "window",
+      "region": "safe_area",
       "inset": [262, 0, 0, 18],
       "max_width": 300,
       "max_height": 228
     },
     "gear": {
-      "region": "window",
+      "region": "safe_area",
       "inset": [14, 14, 0, 0],
       "max_width": 44,
       "max_height": 44,

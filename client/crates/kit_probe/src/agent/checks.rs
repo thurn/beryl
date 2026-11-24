@@ -109,7 +109,9 @@ pub fn anchors_hold(frame: &Frame, context: &Context) -> Vec<Fault> {
 /// as Arena's and the web interface's are. A card the pointer holds is not at rest, and goes
 /// where the pointer takes it. An element a scrolling list cuts is judged by the part of it the
 /// list shows, since only that part can be seen or pressed: a row half scrolled past a list
-/// that ends inside the safe area is on screen.
+/// that ends inside the safe area is on screen. A hovered card is raised to be read, so its top
+/// and sides must lie inside the safe area, though its foot may pass the bottom edge as the
+/// hand's does: a card raised behind a laptop's camera notch cannot be read.
 #[must_use]
 pub fn on_screen(frame: &Frame, context: &Context) -> Vec<Fault> {
     let side = context.checks.target_points;
@@ -126,6 +128,11 @@ pub fn on_screen(frame: &Frame, context: &Context) -> Vec<Fault> {
             let rect = visible_bounds(element).unwrap_or_else(|| bounds(element));
             if element.state.has(StateBits::HELD) {
                 false
+            } else if element.role == Role::Card && element.state.has(StateBits::HOVERED) {
+                // Half a point of slack for rounding where a card meets the edge exactly.
+                rect.y < safe.y - 0.5
+                    || rect.x < safe.x - 0.5
+                    || rect.x + rect.width > safe.x + safe.width + 0.5
             } else if element.role == Role::Card {
                 !intersection(safe, rect).is_some_and(|in_safe| {
                     in_safe.width >= side.min(rect.width) && in_safe.height >= side.min(rect.height)

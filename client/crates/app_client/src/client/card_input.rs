@@ -53,7 +53,8 @@ impl Client {
                         Hold::Horizontal => drag.direction == Direction::Horizontal,
                     }))
         {
-            self.show.carry_card(slot, pointer.position);
+            let table_now = self.features.bug().table_time(self.now);
+            self.show.carry_card(slot, pointer.position, table_now);
             self.routes.scrolling.cancel();
             self.layer.point_at(None, None);
             if pointer.phase == PointerPhase::Move {

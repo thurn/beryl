@@ -24,6 +24,14 @@ impl Story {
         }
     }
 
+    /// The safe area the story sets for its windows, if it sets one.
+    pub fn safe_area(&self) -> Option<kit_base::geometry::Insets> {
+        match self {
+            Self::Toolkit(_) => None,
+            Self::Game(story) => story.safe_area,
+        }
+    }
+
     pub fn header(&self) -> Header {
         match self {
             Self::Toolkit(story) => story.header,

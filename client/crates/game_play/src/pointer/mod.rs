@@ -59,13 +59,24 @@ pub struct Pointer {
     shake: Option<(usize, Shake)>,
 }
 
-/// One hand card easing from `from` to `to` (0 in the fan, 1 raised) since the time `since`.
+/// One card easing from `from` to `to` (0 at rest, 1 raised) since the time `since`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Lift {
     slot: usize,
     from: f32,
     to: f32,
     since: u64,
+    rise: Rise,
+}
+
+/// How a hovered card rises out of where it rests.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Rise {
+    /// To the hand's inspection size (UI Conventions, "Hover inspection").
+    Hand,
+    /// A card in a prompt's tray, already large, turns upright and lifts a little in its place,
+    /// as one hovered in Arena's "Order Cards" screen does.
+    Tray,
 }
 
 impl Lift {
@@ -320,16 +331,21 @@ impl Pointer {
             || self.shake.is_some_and(|(_, shake)| !shake.done(now))
     }
 
-    /// Starts the hand card in `slot` easing toward `to` at `now`, from where it is then.
-    fn ease(&mut self, slot: usize, to: f32, now: u64, tuning: &PointerTuning) {
+    /// Starts the card in `slot` easing toward `to` at `now`, from where it is then. A card
+    /// already out of its place keeps the way it rises; `rise` is for one that is not.
+    fn ease(&mut self, slot: usize, to: f32, rise: Rise, now: u64, tuning: &PointerTuning) {
         let from = self.lift(slot, now, tuning);
-        let lift = Lift {
+        let mut lift = Lift {
             slot,
             from,
             to,
             since: now,
+            rise,
         };
         if let Some(held) = self.lifts.iter_mut().find(|lift| lift.slot == slot) {
+            if from > 0.0 {
+                lift.rise = held.rise;
+            }
             *held = lift;
             return;
         }
@@ -339,20 +355,20 @@ impl Pointer {
         self.lifts.push(lift);
     }
 
-    /// Makes the card in `slot` the hovered one at `now`. The hand card hovered before falls
-    /// back into the fan; the new one rises out of it if it is a hand card (`rises`).
-    fn hover(&mut self, slot: Option<usize>, rises: bool, now: u64, tuning: &PointerTuning) {
+    /// Makes the card in `slot` the hovered one at `now`. The card hovered before falls back to
+    /// where it rests; the new one rises as `rise` says, if it rises at all.
+    fn hover(&mut self, slot: Option<usize>, rise: Option<Rise>, now: u64, tuning: &PointerTuning) {
         if slot == self.hovered {
             return;
         }
         if let Some(left) = self.hovered.take() {
-            self.ease(left, 0.0, now, tuning);
+            self.ease(left, 0.0, Rise::Hand, now, tuning);
         }
         self.hovered = slot;
         if let Some(slot) = slot
-            && rises
+            && let Some(rise) = rise
         {
-            self.ease(slot, 1.0, now, tuning);
+            self.ease(slot, 1.0, rise, now, tuning);
         }
     }
 }
@@ -383,7 +399,12 @@ pub fn look(
     }
     let lift = pointer.lift(slot, now, tuning);
     if lift > 0.0 {
-        let raised = raised(&look.pose, camera, tuning);
+        let rise = pointer.lifts.iter().find(|lift| lift.slot == slot);
+        let (scale, mm) = match rise.map(|lift| lift.rise) {
+            Some(Rise::Tray) => (tuning.tray_raise_scale, tuning.tray_raise_mm),
+            _ => (tuning.raise_scale, tuning.raise_mm),
+        };
+        let raised = raised(&look.pose, camera, (scale, mm), tuning);
         // The raised pose is closer to the camera. Weight the interpolation by the two
         // projection divisors so the ease describes progress on screen, as on the web.
         let divisor = |pose: &Pose| (camera.view_projection * pose.position.extend(1.0)).w;
@@ -403,19 +424,18 @@ pub fn look(
     }
 }
 
-/// Where a hand card resting at `rest` is drawn when it is all the way up: turned upright,
-/// `RAISE_SCALE` times as large about its foot, and `RAISE_MM` of its own millimetres higher up
-/// the screen. It is then moved toward the eye, to `NEARER` of its distance and smaller by as
-/// much, which leaves it where it was on the screen but in front of every other card of the
-/// hand.
-fn raised(rest: &Pose, camera: &Camera, tuning: &PointerTuning) -> Pose {
+/// Where a card resting at `rest` is drawn when it is all the way up: turned upright, `scale`
+/// times as large about its foot, and `mm` of its own millimetres higher up the screen. It is
+/// then moved toward the eye, to `NEARER` of its distance and smaller by as much, which leaves
+/// it where it was on the screen but in front of every other card beside it.
+fn raised(rest: &Pose, camera: &Camera, (scale, mm): (f32, f32), tuning: &PointerTuning) -> Pose {
     let [right, up, back] = camera.axes();
-    let grown = (tuning.raise_scale - 1.0) * camera.data.card.height / 2.0;
-    let position = rest.position + up * (tuning.raise_mm + grown) * rest.scale;
+    let grown = (scale - 1.0) * camera.data.card.height / 2.0;
+    let position = rest.position + up * (mm + grown) * rest.scale;
     kit_space::arrange::spot(
         camera.eye + (position - camera.eye) * tuning.nearer,
         Quat::from_mat3(&Mat3::from_cols(right, up, back)),
-        rest.scale * tuning.raise_scale * tuning.nearer,
+        rest.scale * scale * tuning.nearer,
         *rest,
     )
 }
@@ -425,18 +445,19 @@ fn raised(rest: &Pose, camera: &Camera, tuning: &PointerTuning) -> Pose {
 /// places in the fan, which `rest` gives as each card's pose by its slot, so that a
 /// pointer over the part of the fan a raised card has left still finds that card. An element of
 /// the flat layer under the pointer is marked `HOVERED` instead. A card a script is moving is
-/// not hovered until it arrives, and nothing is hovered while a card is held.
+/// not hovered until it arrives, and nothing is hovered while a card is held. `in_tray` says
+/// whether the card in a slot is one a prompt holds up in its tray, which rises less.
 pub(crate) fn update(
     pointer: &mut Pointer,
     frame: &mut Frame,
-    rest: impl Fn(usize) -> Option<Pose>,
+    (rest, in_tray): (impl Fn(usize) -> Option<Pose>, impl Fn(usize) -> bool),
     (now, camera): (u64, &Camera),
     tuning: &PointerTuning,
 ) {
     pointer
         .lifts
         .retain(|lift| lift.to > 0.0 || !lift.done(now, tuning));
-    hover_under(pointer, frame, rest, (now, camera), tuning);
+    hover_under(pointer, frame, (rest, in_tray), (now, camera), tuning);
 }
 
 /// Hands the card the pointer holds or let go over to `compiled`, a script that starts at
@@ -508,7 +529,7 @@ pub(crate) fn hand_over(
 fn hover_under(
     pointer: &mut Pointer,
     frame: &mut Frame,
-    rest: impl Fn(usize) -> Option<Pose>,
+    (rest, in_tray): (impl Fn(usize) -> Option<Pose>, impl Fn(usize) -> bool),
     (now, camera): (u64, &Camera),
     tuning: &PointerTuning,
 ) {
@@ -527,14 +548,14 @@ fn hover_under(
     }
     pointer.pile = None;
     let Some(point) = pointer.at.filter(|_| pointer.held().is_none()) else {
-        pointer.hover(None, false, now, tuning);
+        pointer.hover(None, None, now, tuning);
         return;
     };
     frame.swap_lifted();
     let reached = hit(frame, point).map(|index| index as usize);
     frame.swap_lifted();
     let Some(index) = reached else {
-        pointer.hover(None, false, now, tuning);
+        pointer.hover(None, None, now, tuning);
         return;
     };
     let element = &mut frame.resolved[index];
@@ -547,26 +568,32 @@ fn hover_under(
                 .checked_sub(PILE_IDS)
                 .map(|index| index as usize);
         }
-        pointer.hover(None, false, now, tuning);
+        pointer.hover(None, None, now, tuning);
         return;
     }
     if element.state.has(StateBits::MOVING) {
         // The script takes the card from where it lay in the fan, so it is no longer up.
         let slot = element.id.0 as usize;
         pointer.lifts.retain(|lift| lift.slot != slot);
-        pointer.hover(None, false, now, tuning);
+        pointer.hover(None, None, now, tuning);
         return;
     }
     element.state.0 |= StateBits::HOVERED;
-    let rises = matches!(
-        Place::in_frame(element.place),
-        Some(Place::Card {
-            zone: ZoneName::Hand,
-            side: Side::You,
-            ..
-        })
-    );
-    pointer.hover(Some(element.id.0 as usize), rises, now, tuning);
+    let slot = element.id.0 as usize;
+    let rise = if in_tray(slot) {
+        Some(Rise::Tray)
+    } else {
+        matches!(
+            Place::in_frame(element.place),
+            Some(Place::Card {
+                zone: ZoneName::Hand,
+                side: Side::You,
+                ..
+            })
+        )
+        .then_some(Rise::Hand)
+    };
+    pointer.hover(Some(slot), rise, now, tuning);
 }
 
 /// The index in `frame` of the card element of the object in `slot`.

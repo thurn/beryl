@@ -15,8 +15,20 @@ impl Show {
         &self.pointer
     }
 
-    /// Carries a card under the pointer. The hand gives the held face its size at pickup.
-    pub fn carry_card(&mut self, slot: usize, at: Vec2) {
+    /// Carries a card under the pointer at `now`. A card of the hand, or of a prompt's tray,
+    /// keeps the size it had there when picked up, facing the camera, as a card dragged in the
+    /// hand or in Arena's "Order Cards" screen does.
+    pub fn carry_card(&mut self, slot: usize, at: Vec2, now: u64) {
+        if self.pointer.held() != Some(slot)
+            && self.table.in_tray(slot)
+            && let Some(drawn) = self.drawn_pose(slot, now)
+        {
+            let camera = self.table.camera();
+            let points = camera.data.card.height * camera.points_per_millimetre(drawn.position);
+            let share = points * drawn.scale / camera.window.size.height;
+            self.pointer.carry(slot, at, Some(share));
+            return;
+        }
         let table = &self.table;
         let hand = self.pointer.held() != Some(slot)
             && !table.in_tray(slot)
@@ -54,7 +66,10 @@ impl Show {
             frame,
             // An opening card rests in its screen box while the table's hand is below
             // the window. Pick the pose before the hover lift, with that box applied.
-            |slot| self.drawn_pose(slot, now),
+            (
+                |slot| self.drawn_pose(slot, now),
+                |slot| self.table.in_tray(slot),
+            ),
             (now, self.table.camera()),
             &self.table.data().pointer,
         );

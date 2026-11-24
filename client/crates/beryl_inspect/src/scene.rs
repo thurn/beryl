@@ -88,7 +88,10 @@ impl Scene {
             .profile()
             .map(pages::inspection_profile)
             .transpose()?;
-        let (data, window) = pages::scene_window(size, scale, size_class, profile)?;
+        let (data, mut window) = pages::scene_window(size, scale, size_class, profile)?;
+        if let Some(safe_area) = source.safe_area() {
+            window.safe_area = safe_area;
+        }
         let selected = data.profiles.for_size(size);
         let checks = selected.checks;
         let size_class = selected.size_class;

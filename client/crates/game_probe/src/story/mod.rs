@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
+use kit_base::geometry::Insets;
 use kit_probe::story::{Header, parse_header};
 
 pub use source::Source;
@@ -66,6 +67,10 @@ pub enum Body {
 pub struct Story {
     pub header: Header,
     pub profile: Option<String>,
+    /// The safe area each window the story is shown in leaves at its edges, from a line
+    /// `safe <top> <right> <bottom> <left>` in logical points, such as a notched laptop's top
+    /// inset. Without one, the window takes its profile's test inset.
+    pub safe_area: Option<Insets>,
     pub body: Body,
 }
 
@@ -89,6 +94,15 @@ impl Story {
             .and_then(|(_, line)| line.strip_prefix("profile "))
             .map(str::to_owned);
         let lines = &lines[usize::from(profile.is_some())..];
+        let safe_area = match lines.first() {
+            Some(&(index, line)) if line.starts_with("safe ") => {
+                Some(parse_safe(&line["safe ".len()..]).ok_or_else(|| {
+                    format!("line {index}: write safe <top> <right> <bottom> <left>")
+                })?)
+            }
+            _ => None,
+        };
+        let lines = &lines[usize::from(safe_area.is_some())..];
         let (feature, inputs) = match kind {
             "table" => (None, lines),
             "feature" => {
@@ -131,9 +145,31 @@ impl Story {
         Ok(Self {
             header,
             profile,
+            safe_area,
             body,
         })
     }
+}
+
+/// Four insets in logical points, top, right, bottom and left, none negative.
+fn parse_safe(words: &str) -> Option<Insets> {
+    let values: Vec<f32> = words
+        .split_whitespace()
+        .map(str::parse)
+        .collect::<Result<_, _>>()
+        .ok()?;
+    let &[top, right, bottom, left] = values.as_slice() else {
+        return None;
+    };
+    values
+        .iter()
+        .all(|value| value.is_finite() && *value >= 0.0)
+        .then_some(Insets {
+            top,
+            right,
+            bottom,
+            left,
+        })
 }
 
 fn header_text(header: Header, kind: &str, profile: Option<&str>) -> String {

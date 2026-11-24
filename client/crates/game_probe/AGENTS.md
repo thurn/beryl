@@ -2,8 +2,7 @@
 
 This crate reads protocol recordings for replay, game-specific interface checks,
 corpus grouping and standalone stories. Start in `driver` for replay data and
-`agent` for script-aware checks. The app client runs the replay. `kit_probe`
-owns generic frame checks and toolkit stories.
+`agent` for script-aware checks. `kit_probe` owns generic frame checks.
 
 `tests/all/` covers signatures, stories, playback and effects with fixtures in
 `tests/fixtures/`. A signature change can change which recordings the interface
@@ -50,9 +49,10 @@ card "Island" #8 battlefield.yours.lands tapped
 card "Forest {n}" battlefield.theirs.lands x40
 ```
 
-Paste card lines from `tree` with optional IDs and coordinates. `x40` repeats a
-card, `{n}` counts copies and `{id:03}` pads the slot. Zones keep line order.
-See [the parser](src/story/table.rs) for repeat blocks and protocol JSON.
+A `safe <top> <right> <bottom> <left>` line after the header insets every test
+window, as a camera notch does. Paste card lines from `tree` with optional IDs
+and coordinates. `x40` repeats a card, `{n}` counts copies and `{id:03}` pads
+the slot. Zones keep line order. See [the parser](src/story/table.rs).
 
 `just client story from <recording> --at <moment>` writes a portable example
 with the selected window, seat, time and protocol messages. Use
