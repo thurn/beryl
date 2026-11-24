@@ -265,12 +265,11 @@ The sources use data that other tools already record.
   of the last request and the running total. These events also carry snapshots
   of the Codex account's weekly quota when available. Tool calls and their
   outputs are timestamped.
-- **Tickets**, read from Ignite's hub database (`ignite.py`), which replaced
-  `tk export` and `tk events`. The hub's ticket rows supply IDs, parents,
-  labels, creation, claim and close times, aliases and landed commits. Session
-  boundaries come from the `ignite start <ticket>` commands in transcripts. The
-  store keeps the tickets, events and verdicts that `tk` supplied before the
-  switch.
+- **Tickets**, read from Ignite's hub database or the latest versions in the
+  local `mirror.db` (`ignite.py`). These supply IDs, parents, labels, creation,
+  claim and close times, aliases and landed commits. Session boundaries come
+  from the `ignite start <ticket>` commands in transcripts. The store keeps the
+  tickets, events and verdicts that `tk` supplied before the switch.
 - **Git history** of `staging` and `master`: each commit's time, subject and
   changed paths.
 - **Ignite's records**, one per command on any machine, from the hub database.
@@ -278,6 +277,10 @@ The sources use data that other tools already record.
   below, which are no longer written; the rows they produced stay in the store.
   Each record becomes an `ignite_records` row, a `leases` row, `cpu` and
   `cpu_minutes` rows, and for a check family `checks` and `lane_runs` rows.
+- **Local Ignite measurements**, read from `daemon.db` when the hub database is
+  absent. They include check pass wall times, completed tip rounds and plan
+  usage samples. `just efficiency ci` shows local check passes when its date
+  range has no slow CI rows. Use `--script local` to select them explicitly.
 - **The run log** (history: the hour files in `ci/runs/` in the cache, and the
   old single file `ci/runs.jsonl`). Each line has `time`, `host`, `commit`,
   `script`, `lane`, `check`, `outcome` (`pass`, `fail` or `skip`), `seconds`,
@@ -1320,8 +1323,9 @@ without opening this page.
 
 ## Other machines
 
-Tickets are also worked on a second Mac and on a Windows PC. The store on each
-machine holds only what ran there.
+Tickets are also worked on a second Mac and on a Windows PC. The hub's store can
+read fleet command records and posted metrics. The other machines read fleet
+tickets and collect measurements from their local daemons and transcripts.
 
 - Every row carries its host. A query over tickets that ran elsewhere reports
   them as "no data" and says how many, so no total is silently short.
@@ -1366,8 +1370,12 @@ What the lane's tests cover, all against small synthetic sources:
   are valid.
 
 For looking at the page while developing it, `just efficiency shot <address>`
-renders one address to a PNG with a headless browser. It is a development aid
-and is not part of any check.
+renders one address to a PNG with headless Playwright. The command uses an
+installed Playwright package, including one installed under
+`$BERYL_CACHE/efficiency/node_modules`. Set `PLAYWRIGHT_NODE_MODULES` to use a
+specific installation. Install Chromium or WebKit for that package and set
+`PLAYWRIGHT_BROWSERS_PATH` if its browsers live outside the Beryl or default
+Playwright cache.
 
 ## Alternatives considered
 

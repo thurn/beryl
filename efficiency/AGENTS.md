@@ -52,9 +52,9 @@ module's header comment says what it reads and writes.
   their recorded offsets, a `FileSource` reads small files whole when they
   change, and a `SnapshotSource` stores a command's output when its digest
   changes.
-- Sources: `ignite.py` reads the hub's records of commands, leases, CPU, checks,
-  tickets and workers, only on the machine that holds the hub's database. It
-  comes first in `cli.sources()` because windows read the tickets. `claude.py`,
+- Sources: `ignite.py` reads fleet records from the hub database, or tickets
+  from the daemon's mirror and measurements from its local database. Tickets
+  come first in `cli.sources()` because windows read them. `claude.py`,
   `codex.py` and `agy.py` read the providers' transcripts. `commits.py` reads
   `git log` of `staging` and `master`. `beads.py` and `ticket_ids.py` build
   ticket rows and resolve ticket IDs.

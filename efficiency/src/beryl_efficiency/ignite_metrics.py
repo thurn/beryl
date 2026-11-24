@@ -12,6 +12,8 @@ applies to dispatch cost, the one series made of model requests.
   ticket of a regression, or one handed off as a regression).
 - `ignite.master-lag-minutes`: minutes from the hub first seeing each tip to its being
   verified, which is how long the release branch stays behind it.
+- `ignite.local-tip-round-minutes`: the wall time of each finished verification round
+  recorded by the local daemon.
 - `ignite.dispatch-dollars`: each day, the dollars of the dispatcher sessions' requests.
 - `ignite.escapes-per-100-landings`: each day, regressions handed off per 100 landings.
 - `ignite.cache-hit-percent`: each day, of the gate's and tip verification's check families,
@@ -95,6 +97,16 @@ def master_lag(db: sqlite3.Connection, _: Facts, scope: Scope) -> Points:
             "ORDER BY seen"
         )
         if scope.range.holds(str(seen))
+    ]
+
+
+def local_tip_round_minutes(db: sqlite3.Connection, _: Facts, scope: Scope) -> Points:
+    return [
+        (str(start), minutes_between(str(start), str(end)))
+        for start, end, host in db.execute(
+            "SELECT started_at, finished_at, host FROM ignite_tip_rounds ORDER BY started_at"
+        )
+        if (scope.host is None or scope.host == host) and scope.range.holds(str(start))
     ]
 
 
@@ -221,6 +233,13 @@ for metric in (
         "minutes",
         0,
         master_lag,
+    ),
+    Metric(
+        "ignite.local-tip-round-minutes",
+        "minutes a finished tip verification round took on the local daemon",
+        "minutes",
+        0,
+        local_tip_round_minutes,
     ),
     Metric(
         "ignite.dispatch-dollars",

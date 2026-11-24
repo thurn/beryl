@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_efficiency import changes, claude, cli, facts, ingest, store
+from beryl_efficiency import changes, claude, cli, facts, ignite, ingest, store
 from tests.legacy_sources import Beads
 from beryl_efficiency.scope import Scope, parse_since
 from tests.synthetic import CHECKOUT, PROJECT, Transcript, listing
@@ -21,6 +21,42 @@ HOST = "jarvis"
 OPUS = "claude-opus-5-5"
 ENACT = "python3 ~/enact/scripts/enact.py"
 RECENT = "2026-11-10"
+
+
+def test_ci_shows_local_pass_timings_when_slow_ci_is_unavailable(
+    ignite_daemon: Path,
+    cache: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    utc_days: None,
+) -> None:
+    monkeypatch.setattr(cli, "sources", lambda: ignite.sources(cache, "cygnus"))
+    assert cli.main(["ci", "--since", "all", "--json"]) == 0
+    local = json.loads(capsys.readouterr().out)
+    assert local["script"] == "local"
+    assert local["script_runs"] == 2
+    assert local["total"]["runs"] == 2
+    assert cli.main(["ci", "--script", "ci", "--since", "all", "--json"]) == 0
+    slow = json.loads(capsys.readouterr().out)
+    assert slow["script"] == "ci"
+    assert slow["total"]["runs"] == 0
+
+
+def test_failures_shows_the_mirrored_regression(
+    ignite_daemon: Path,
+    cache: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(cli, "sources", lambda: ignite.ticket_sources(cache))
+    assert cli.main(["failures", "--since", "all", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["failures"] == 1
+    row = data["rows"][0]
+    assert row["steward"] == "by-older.1"
+    assert row["checks"][0]["check"] == "rust:engine::start"
+    assert row["dollars"] is None
+    assert row["behind_minutes"] is None
 
 
 def at(day: int, hour: int, minute: int) -> str:

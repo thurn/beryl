@@ -38,6 +38,7 @@ from dataclasses import asdict, dataclass, field
 
 from .cilog import VERDICTS, family, utc
 from .facts import Facts
+from .ignite import LOCAL_CHECKS
 from .metrics import Metric, Points, register
 from .render import Result, describe, table
 from .rollups import day_of, number
@@ -50,6 +51,7 @@ SCRIPTS: dict[str, str] = {
     "sweep": "the browser sweep",
     "nightly": "the nightly",
     "bisect": "bisection",
+    LOCAL_CHECKS: "local check passes",
 }
 # The CPU sampler's context for a script's processes (tools/src/beryl_tools/cpu.py).
 CONTEXTS: dict[str, str] = {"ci": "slow_ci", "check": "fast_check"}
@@ -65,7 +67,7 @@ NO_LANE = "(no lane)"
 # What each field of the `ci` result means, which the page shows on hover.
 FIELDS: dict[str, str] = {
     "script": "the script whose checks these are: ci (slow CI), check (the fast check), "
-    "sweep, nightly or bisect",
+    "sweep, nightly, bisect or local check passes",
     "level": "what the rows are: check lanes, families or checks",
     "script_runs": "the script's runs that started in the range: one per host and commit, "
     "and for the fast check one per worktree and tree",
@@ -561,7 +563,11 @@ def report(
         family_name,
         level,
         day_of(scope.range.since) if scope.range.since else None,
-        script_runs(db, scope, script),
+        (
+            sum(raw.runs for raw in found.values())
+            if script == LOCAL_CHECKS
+            else script_runs(db, scope, script)
+        ),
         node(total_name, added(list(chosen.values()))),
         rows,
         kind_lines(dict(by_kind), engine_cpu, sum(engine_cpu.values())),

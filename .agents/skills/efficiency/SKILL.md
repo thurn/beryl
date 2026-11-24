@@ -16,6 +16,8 @@ anything at the time; ingest reads these sources afterwards:
 - Ignite's hub, on the machine that holds its database: tickets, one record per
   command Ignite ran on any machine (checks, builds, cores and CPU), tips,
   hand-offs, workers, and the efficiency rows other machines' daemons posted.
+- On machines without the hub database, Ignite's local ticket mirror and the
+  daemon's check pass times, completed tip rounds and plan usage samples.
 - `git log` and `master`'s reflog from the main checkout.
 
 Rows from before the switch, from the old run log, CPU sampler, token pool,
@@ -23,8 +25,9 @@ lock log and `tk`, stay in the store as history.
 
 The store is `$BERYL_CACHE/efficiency/store.sqlite`
 (by default `~/Library/Caches/beryl/efficiency/` on macOS and
-`%LOCALAPPDATA%\beryl\efficiency\` on Windows). It holds only what ran on
-this machine.
+`%LOCALAPPDATA%\beryl\efficiency\` on Windows). The hub's store includes
+fleet records and posted measurements. Other machines collect local
+measurements and read fleet ticket metadata from their mirrors.
 The design, with every definition, is `docs/efficiency-dashboard.md`; the code
 is `efficiency/` (`efficiency/AGENTS.md`).
 
@@ -112,8 +115,8 @@ A page address is a query: `/bead/<id>?since=7d` is
 `efficiency ticket <id> --since 7d`, `/` is `summary`, and `.json` appended
 returns the JSON. Agents don't open windows, so look at the page with `shot`
 (`--dark`, `--width N`; append `#open` to the address to open every line one
-level deep). `shot` takes one of the machine's shared browser slots, so render
-only the addresses you need. `serve` runs until it is stopped, so start it in
+level deep). `shot` uses an installed Playwright package and a headless
+Chromium or WebKit browser. `serve` runs until it is stopped, so start it in
 the background if you need it at all; the text queries answer the same
 questions.
 

@@ -1,9 +1,10 @@
 """`just efficiency failures`: what each slow-CI failure costs beyond the failing check's own
 run (docs/efficiency-dashboard.md, "What a slow-CI failure costs").
 
-When slow CI fails on `staging`, Enact files a Steward ticket naming the commit range that
-broke it (`enact_ci_range`, `A..B`), and `master` stops moving forward until a later run
-passes. A failure's costs are:
+Ignite labels tickets for failing staging checks `regression`. Enact's historical Steward
+tickets name the commit range that broke slow CI (`enact_ci_range`, `A..B`). A regression
+with only ticket data is dated by its creation and can report the work done on that ticket.
+A failure's costs are:
 
 - The Steward ticket: the agent minutes, core minutes and dollars of the sessions that worked
   it, from all its windows.
@@ -266,7 +267,7 @@ def failed_checks(db: sqlite3.Connection) -> dict[str, list[FailedCheck]]:
 
 
 def all_failures(db: sqlite3.Connection, facts: Facts) -> list[Failure]:
-    """Every Steward ticket's failure, oldest first."""
+    """Every regression or Steward ticket's failure, oldest first."""
     runs = ci_runs(db)
     bisect = bisect_runs(db)
     checks = failed_checks(db)
@@ -280,41 +281,47 @@ def all_failures(db: sqlite3.Connection, facts: Facts) -> list[Failure]:
         (
             b
             for b in facts.beads.values()
-            if b.created and b.enact.get("enact_ci_range")
+            if b.created and (b.enact.get("enact_ci_range") or "regression" in b.labels)
         ),
         key=lambda b: str(b.created),
     )
     for b in stewards:
-        spec = b.enact.get("enact_ci_range")
-        if not spec or not b.created:
+        spec = str(b.enact.get("enact_ci_range") or "")
+        if not b.created:
             continue
         mine = [w for w in facts.windows if w.kind == "bead" and w.bead == b.id]
         sums = total(mine)
         ran = b.ran_on()
-        unseen = not mine and ran is not None and ran not in hosts
+        unseen = not mine and (not spec or (ran is not None and ran not in hosts))
         paid = StewardCost(
             None if unseen else sums.dollars,
             None if unseen else minutes(sums.agent_seconds),
             facts.core_minutes(b.id),
         )
-        in_range = {c.sha for c in history.range(str(spec))}
-        unclaimed = [x for x in bisect if x.commit not in claimed]
+        in_range = {c.sha for c in history.range(spec)} if spec else set()
+        unclaimed = [x for x in bisect if x.commit not in claimed] if spec else []
         claimed |= {
             x.commit
             for x in unclaimed
             if any(same_commit(x.commit, c) for c in in_range)
         }
+        named = checks.get(b.id, [])
+        culprit_check = b.enact.get("enact_regression_check")
+        if isinstance(culprit_check, str) and not named:
+            named = [
+                FailedCheck(culprit_check, culprit_check.partition(":")[0], "fail")
+            ]
         found.append(
             failure(
                 b.id,
                 b.title,
                 b.status,
-                str(spec),
+                spec,
                 iso(utc(b.created)),
                 runs,
                 unclaimed,
                 in_range,
-                checks.get(b.id, []),
+                named,
                 paid,
             )
         )
@@ -399,7 +406,7 @@ def checks_text(checks: list[FailedCheck]) -> str:
 
 def lines(f: Failures) -> list[str]:
     found = [
-        f"what slow-CI failures cost  since {f.since or 'the start'} ({f.range})",
+        f"what staging failures cost  since {f.since or 'the start'} ({f.range})",
         f"failures {f.failures}"
         + (f" ({f.no_data} with stewards on hosts with no data)" if f.no_data else "")
         + f"   steward dollars {f.dollars:.2f}   agent min "
@@ -453,9 +460,9 @@ def lines(f: Failures) -> list[str]:
 
 
 FIELDS: dict[str, str] = {
-    "failures": "slow-CI failures in the range: one per Steward ticket, by when the failing "
+    "failures": "staging failures in the range: one per repair ticket, by when the failing "
     "run ended, or when the ticket was made if the run log has no failing run",
-    "steward": "the Steward ticket filed to fix the failure",
+    "steward": "the ticket filed to fix the failure",
     "failed_at": "the end of the first failing slow-CI run on the range's last commit, or "
     "the Steward ticket's creation",
     "no_data": "failures whose Steward ticket ran on a host the store has no sessions "

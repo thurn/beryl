@@ -50,10 +50,8 @@ MAX_AGE = 60.0
 
 
 def sources() -> list[ingest.Source]:
-    """Every source, in the order ingest reads them: the hub's tickets and the session records
-    first, since deriving windows from transcripts reads both, and the hub's records after the
-    transcripts, since their leases are joined to the transcripts' tool calls. On a machine
-    with no hub database the hub's sources are absent, and the store keeps what it has.
+    """Read Ignite's tickets before deriving transcript windows. Read command records
+    after the transcripts so their leases can be joined to the transcripts' tool calls.
     """
     checkout = main_checkout(Path.cwd())
     host = paths.host()
@@ -536,10 +534,20 @@ def run_machine(args: argparse.Namespace) -> Result:
 
 
 def run_ci(args: argparse.Namespace) -> Result:
-    return answer(
-        args,
-        lambda db, f, s: ci.report(db, f, s, str(args.script), args.lane, args.family),
-    )
+    def query(db: sqlite3.Connection, f: facts.Facts, s: Scope) -> Result:
+        script = args.script or "ci"
+        if args.script is None:
+            clause, params = ci.days(s)
+            found = db.execute(
+                f"SELECT script FROM checks WHERE script IN (?, ?){clause} "
+                "ORDER BY script LIMIT 1",
+                ("ci", ignite.LOCAL_CHECKS, *params),
+            ).fetchone()
+            if found:
+                script = str(found[0])
+        return ci.report(db, f, s, script, args.lane, args.family)
+
+    return answer(args, query)
 
 
 def run_pushes(args: argparse.Namespace) -> Result:
@@ -720,8 +728,7 @@ def parser() -> argparse.ArgumentParser:
         if name == "ci":
             p.add_argument(
                 "--script",
-                default="ci",
-                help="ci (slow CI, the default), check, sweep, nightly or bisect",
+                help="ci (default when present), check, sweep, nightly, bisect or local",
             )
             p.add_argument("--lane", help="only this check lane, by family")
             p.add_argument("--family", help="only this family, by check")

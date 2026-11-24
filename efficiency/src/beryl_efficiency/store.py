@@ -632,6 +632,16 @@ MIGRATIONS: tuple[str, ...] = (
     ALTER TABLE plan_usage_new RENAME TO plan_usage;
     DELETE FROM sources WHERE source = 'ignite-plan-usage';
     """,
+    """
+    CREATE TABLE ignite_tip_rounds (
+        host TEXT NOT NULL,
+        "commit" TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        finished_at TEXT NOT NULL,
+        state TEXT NOT NULL,
+        PRIMARY KEY (host, "commit", started_at)
+    );
+    """,
 )
 
 

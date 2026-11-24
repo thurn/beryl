@@ -21,6 +21,8 @@ the hub, ingest reads the hub's SQLite database read-only, by its schema
 
 A machine is named by the first host name seen for its ID (`ignite_machines`), from the hub's
 `machines` table or an export's header, so renaming a machine does not split its history.
+Away from the hub, the daemon's ticket mirror supplies tickets and regressions. Its local
+database supplies check pass timings, tip rounds and plan usage samples.
 """
 
 from __future__ import annotations
@@ -28,10 +30,12 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from collections.abc import Sequence
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import beads, exchange, kinds, ticket_ids, timing
+from . import beads, exchange, kinds, store, ticket_ids, timing
 from .cilog import CHECK_SUMS, LANE_RUN_SUMS, host_name, iso, local_day, utc
 from .cpu import join as join_leases
 from .ingest import CursorSource, Merge, Row, SnapshotSource, SourceError, write
@@ -43,6 +47,7 @@ SCRIPTS = {"land": "check", "tip": "ci"}
 # A record with this verb is a check family the result cache answered without running it.
 CACHED = "cached"
 RAN = {"pass", "fail", "flaky"}
+LOCAL_CHECKS = "local"
 MERGES: dict[str, Merge] = {
     "checks": CHECK_SUMS,
     "lane_runs": LANE_RUN_SUMS,
@@ -56,6 +61,11 @@ MERGES: dict[str, Merge] = {
 }
 
 
+def ignite_home() -> Path:
+    home = os.environ.get("IGNITE_HOME")
+    return Path(home) if home else Path.home() / ".config" / "ignite"
+
+
 def hub_path(cache: Path) -> Path:
     """The hub's database: `$IGNITE_HUB_DB`, else where the hub's daemon keeps it,
     `hub/hub.db` in the Ignite home (`$IGNITE_HOME`, else `~/.config/ignite`). `cache` is
@@ -65,15 +75,13 @@ def hub_path(cache: Path) -> Path:
     found = os.environ.get("IGNITE_HUB_DB")
     if found:
         return Path(found)
-    home = os.environ.get("IGNITE_HOME")
-    root = Path(home) if home else Path.home() / ".config" / "ignite"
-    return root / "hub" / "hub.db"
+    return ignite_home() / "hub" / "hub.db"
 
 
-def open_hub(path: Path) -> sqlite3.Connection:
+def open_ignite_db(path: Path) -> sqlite3.Connection:
     if not path.exists():
-        raise SourceError(f"no hub database at {path}")
-    db = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+        raise SourceError(f"no Ignite database at {path}")
+    db = store.open_read_only(path)
     db.row_factory = sqlite3.Row
     return db
 
@@ -241,7 +249,7 @@ class Records(CursorSource):
         self.local = local
 
     def page(self, after: int) -> tuple[bytes, int, list[Row], int]:
-        hub = open_hub(self.path)
+        hub = open_ignite_db(self.path)
         try:
             found = [
                 dict(r)
@@ -294,7 +302,7 @@ class Imports(CursorSource):
 
     def page(self, after: int) -> tuple[bytes, int, list[Row], int]:
         since = iso(datetime.fromtimestamp(after / 1000, timezone.utc))
-        hub = open_hub(self.path)
+        hub = open_ignite_db(self.path)
         try:
             found = hub.execute(
                 "SELECT machine, source, data, at FROM metrics WHERE at >= ? ORDER BY at",
@@ -384,7 +392,7 @@ class PlanSamples(CursorSource):
 
     def page(self, after: int) -> tuple[bytes, int, list[Row], int]:
         since = iso(datetime.fromtimestamp(after / 1000, timezone.utc))
-        hub = open_hub(self.path)
+        hub = open_ignite_db(self.path)
         try:
             found = hub.execute(
                 """SELECT x.machine, coalesce(m.name, x.machine) AS name, x.data, x.at
@@ -447,7 +455,7 @@ class Hub(SnapshotSource):
         self.path = path
 
     def read(self) -> bytes:
-        hub = open_hub(self.path)
+        hub = open_ignite_db(self.path)
         try:
             repairs = {
                 str(r[0])
@@ -513,7 +521,7 @@ class HubTickets(SnapshotSource):
         self.path = path
 
     def read(self) -> bytes:
-        hub = open_hub(self.path)
+        hub = open_ignite_db(self.path)
         try:
             aliases: dict[str, list[str]] = {}
             for alias, ticket in hub.execute("SELECT alias, id FROM aliases"):
@@ -577,16 +585,212 @@ class HubTickets(SnapshotSource):
         return rows, skipped
 
 
-def ticket_sources(cache: Path) -> list[HubTickets]:
-    """The hub's ticket source, or none on a machine that holds no hub database. Ingest reads
-    it before the transcripts, since deriving their windows reads the tickets."""
-    path = hub_path(cache)
-    return [HubTickets(path)] if path.exists() else []
+class MirrorTickets(HubTickets):
+    """The newest version of each ticket in the daemon's append-only ticket mirror."""
+
+    name = "ignite-mirror"
+
+    def read(self) -> bytes:
+        try:
+            with closing(open_ignite_db(self.path)) as mirror:
+                found = []
+                for (data,) in mirror.execute(
+                    "SELECT whole_json FROM versions WHERE id IN "
+                    "(SELECT max(id) FROM versions GROUP BY ticket) ORDER BY ticket"
+                ):
+                    whole = json.loads(data)
+                    ticket = {
+                        field: whole.get(field)
+                        for field in (
+                            "id",
+                            "parent",
+                            "title",
+                            "type",
+                            "status",
+                            "priority",
+                            "created_at",
+                            "claimed_at",
+                            "closed_at",
+                            "landed_at",
+                            "tree",
+                            "session",
+                        )
+                    }
+                    ticket["aliases"] = sorted(whole.get("aliases", []))
+                    metadata = whole.get("metadata") or {}
+                    ticket["metadata"] = json.dumps(
+                        {
+                            **metadata,
+                            "enact_regression_check": metadata.get("culprit_check"),
+                        }
+                    )
+                    for field in ("labels", "landed"):
+                        value = whole.get(field)
+                        ticket[field] = json.dumps(value) if value is not None else None
+                    found.append(ticket)
+        except (sqlite3.Error, ValueError, TypeError) as e:
+            raise SourceError(f"reading Ignite's ticket mirror: {e}") from e
+        return json.dumps(found, sort_keys=True).encode()
+
+    def parse(self, data: bytes) -> tuple[list[Row], int]:
+        rows, skipped = super().parse(data)
+        for ticket in json.loads(data):
+            rows.append(
+                (
+                    "ignite_tickets",
+                    {
+                        "id": ticket["id"],
+                        "created_at": ticket["created_at"],
+                        "claimed_at": ticket["claimed_at"],
+                        "landed_at": ticket["landed_at"],
+                        "repair": int(
+                            "regression" in json.loads(ticket["labels"] or "[]")
+                        ),
+                    },
+                )
+            )
+        return rows, skipped
 
 
-def sources(cache: Path, local: str) -> list[Hub | Records | Imports | PlanSamples]:
-    """The hub's other sources, or none on a machine that holds no hub database."""
+class DaemonPasses(CursorSource):
+    """Recorded wall times for successful commands in local/schema_5.sql."""
+
+    name = "ignite-local-passes"
+
+    def __init__(self, path: Path, host: str) -> None:
+        self.path = path
+        self.host = host
+
+    def page(self, after: int) -> tuple[bytes, int, list[Row], int]:
+        try:
+            with closing(open_ignite_db(self.path)) as daemon:
+                found = daemon.execute(
+                    "SELECT rowid, family, wall_s, at FROM passes "
+                    "WHERE rowid > ? AND command = 'run' ORDER BY rowid LIMIT ?",
+                    (after, PAGE),
+                ).fetchall()
+        except sqlite3.Error as e:
+            raise SourceError(f"reading Ignite's check pass timings: {e}") from e
+        if not found:
+            return b"", after, [], 0
+        rows: list[Row] = [
+            (
+                "checks",
+                {
+                    "day": local_day(utc(at)),
+                    "host": self.host,
+                    "script": LOCAL_CHECKS,
+                    "lane": family,
+                    "check": family,
+                    "first": iso(utc(at)),
+                    "runs": 1,
+                    "passes": 1,
+                    "fails": 0,
+                    "skips": 0,
+                    "seconds": wall,
+                    "cpu_seconds": 0.0,
+                    "measured_seconds": 0.0,
+                },
+            )
+            for _, family, wall, at in found
+        ]
+        return json.dumps([list(r) for r in found]).encode(), int(found[-1][0]), rows, 0
+
+    def save(self, db: sqlite3.Connection, rows: list[Row]) -> int:
+        return write(db, rows, {"checks": CHECK_SUMS})
+
+
+class DaemonMetrics(SnapshotSource):
+    """The finished tip rounds and plan samples retained in the local daemon database."""
+
+    name = "ignite-local-metrics"
+
+    def __init__(self, path: Path, host: str) -> None:
+        self.path = path
+        self.host = host
+
+    def read(self) -> bytes:
+        try:
+            with closing(open_ignite_db(self.path)) as daemon:
+                tips = [
+                    list(r)
+                    for r in daemon.execute(
+                        """SELECT json_extract(reply, '$.json.tip'), started_at, finished_at,
+                            json_extract(reply, '$.json.outcome.state')
+                        FROM handles WHERE verb = 'tip-round' AND state = 'done'
+                        AND exit = 0 AND finished_at IS NOT NULL
+                        AND json_extract(reply, '$.json.outcome.state')
+                            IN ('verified', 'verified_with_deferrals', 'failed')
+                        ORDER BY finished_at, id"""
+                    )
+                ]
+                samples = [
+                    list(r)
+                    for r in daemon.execute(
+                        """SELECT machine, provider, at, label, percent_used, resets_at
+                        FROM plan_usage WHERE status = 'ok' AND label IS NOT NULL
+                        AND percent_used IS NOT NULL ORDER BY id"""
+                    )
+                ]
+        except sqlite3.Error as e:
+            raise SourceError(f"reading Ignite's local metrics: {e}") from e
+        return json.dumps({"tips": tips, "samples": samples}).encode()
+
+    def parse(self, data: bytes) -> tuple[list[Row], int]:
+        found = json.loads(data)
+        rows: list[Row] = [
+            (
+                "ignite_tip_rounds",
+                {
+                    "host": self.host,
+                    "commit": commit,
+                    "started_at": iso(utc(start)),
+                    "finished_at": iso(utc(end)),
+                    "state": state,
+                },
+            )
+            for commit, start, end, state in found["tips"]
+        ]
+        rows.extend(
+            (
+                "plan_usage",
+                {
+                    "host": self.host,
+                    "machine": machine,
+                    "provider": provider,
+                    "at": iso(utc(at)),
+                    "window": window,
+                    "percent_used": percent,
+                    "resets_at": resets_text(resets),
+                },
+            )
+            for machine, provider, at, window, percent, resets in found["samples"]
+        )
+        return rows, 0
+
+
+def ticket_sources(cache: Path) -> Sequence[HubTickets]:
+    """Ingest reads tickets before transcripts, whose windows refer to them."""
     path = hub_path(cache)
-    if not path.exists():
-        return []
-    return [Hub(path), Records(path, local), Imports(path, local), PlanSamples(path)]
+    if path.is_file():
+        return [HubTickets(path)]
+    mirror = ignite_home() / "mirror.db"
+    return [MirrorTickets(mirror)] if mirror.is_file() else []
+
+
+def sources(cache: Path, local: str) -> Sequence[CursorSource | SnapshotSource]:
+    """Read fleet records at the hub and the local daemon's measurements elsewhere."""
+    path = hub_path(cache)
+    if path.is_file():
+        return [
+            Hub(path),
+            Records(path, local),
+            Imports(path, local),
+            PlanSamples(path),
+        ]
+    daemon = ignite_home() / "daemon.db"
+    return (
+        [DaemonPasses(daemon, local), DaemonMetrics(daemon, local)]
+        if daemon.is_file()
+        else []
+    )

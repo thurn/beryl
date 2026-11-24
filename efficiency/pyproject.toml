@@ -16,6 +16,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+beryl_efficiency = ["shot.mjs"]
+
 # The same dev tools tools/pyproject.toml pins. The `efficiency` check lane runs them from the
 # tools' environment, so a worktree needs no second one; `uv run --project efficiency` works
 # too.

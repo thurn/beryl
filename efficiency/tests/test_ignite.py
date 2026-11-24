@@ -7,6 +7,7 @@ from __future__ import annotations
 import gzip
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -342,3 +343,45 @@ def test_the_hub_defaults_to_the_ignite_home(
     assert ignite.hub_path(tmp_path / "cache") == tmp_path / "home" / "hub" / "hub.db"
     monkeypatch.setenv("IGNITE_HUB_DB", str(tmp_path / "x.db"))
     assert ignite.hub_path(tmp_path / "cache") == tmp_path / "x.db"
+
+
+def test_daemon_ingest_resumes_without_recounting_passes(
+    ignite_daemon: Path, cache: Path
+) -> None:
+    sources = [*ignite.ticket_sources(cache), *ignite.sources(cache, "cygnus")]
+    with closing(store.open_store(paths.store())) as db:
+        ingest.ingest(db, sources, "cygnus")
+        assert db.execute(
+            "SELECT id, title, parent, status FROM beads WHERE id = 'by-older.1'"
+        ).fetchone() == ("by-older.1", "A check regression", "by-t", "closed")
+        assert db.execute(
+            "SELECT id FROM ignite_tickets WHERE repair = 1"
+        ).fetchall() == [("t.1",)]
+        assert db.execute(
+            'SELECT "commit", state FROM ignite_tip_rounds'
+        ).fetchall() == [("abc", "verified")]
+        assert db.execute(
+            "SELECT host, provider, percent_used FROM plan_usage"
+        ).fetchall() == [("cygnus", "claude", 12.0)]
+        with closing(sqlite3.connect(ignite_daemon / "daemon.db")) as daemon, daemon:
+            daemon.execute(
+                "INSERT INTO passes VALUES ('rust', 'run', 2.0, ?)", (at(11, 1),)
+            )
+        ingest.ingest(db, sources, "cygnus")
+        assert ingest.ingest(db, sources, "cygnus").total().rows == 0
+        assert db.execute(
+            "SELECT host, script, runs, seconds FROM checks"
+        ).fetchall() == [("cygnus", "local", 3, 17.0)]
+
+
+def test_local_hub_takes_precedence(ignite_daemon: Path, cache: Path) -> None:
+    hub = ignite_daemon / "hub" / "hub.db"
+    hub.parent.mkdir()
+    with closing(make_hub(hub)):
+        assert [s.name for s in ignite.ticket_sources(cache)] == ["ignite-beads"]
+        assert [s.name for s in ignite.sources(cache, HOST)] == [
+            "ignite-hub",
+            "ignite-records",
+            "ignite-imports",
+            "ignite-plan-usage",
+        ]

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_efficiency import cli, ingest, paths, store
+from beryl_efficiency import cli, ignite, ingest, paths, store
 from tests.legacy_sources import Beads
 from tests.synthetic import bead, listing
 
@@ -48,6 +48,7 @@ TABLES = {
     "ignite_records",
     "ignite_tickets",
     "ignite_tips",
+    "ignite_tip_rounds",
     "ignite_handoffs",
     "ignite_workers",
     "plan_usage",
@@ -136,3 +137,21 @@ def test_the_listing_names_every_query(capsys: pytest.CaptureFixture[str]) -> No
     for name in cli.QUERIES:
         public_name = "ticket" if name == "bead" else name
         assert f"  {public_name} " in listed
+
+
+def test_query_auto_ingests_the_mirrors_aliases(
+    ignite_daemon: Path,
+    cache: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(cli, "sources", lambda: ignite.ticket_sources(cache))
+    found = json.loads(
+        run(
+            capsys,
+            "sql",
+            "--json",
+            "select bead from ticket_aliases where alias = 't.1'",
+        )
+    )
+    assert found["rows"] == [["by-older.1"]]

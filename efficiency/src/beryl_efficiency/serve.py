@@ -10,9 +10,7 @@ answer until the next ingest, and refreshes the store beside the requests by run
 five minutes old while the page is open. `/status.json` says when the store was last
 updated and whether an ingest is running, which the page shows in its header.
 
-`shot` renders one address to a PNG in the cache with the headless browser the UI's capture
-scripts use, taking one of the machine's shared browser slots. It is a development aid and is
-part of no check."""
+`shot` renders one address to a PNG in the cache with headless Playwright."""
 
 from __future__ import annotations
 
@@ -34,7 +32,6 @@ from urllib.parse import parse_qsl, urlsplit
 
 from . import cli, ingest, page, paths, store
 from . import ci_views, views  # noqa: F401, it adds pages to page
-from .beads import main_checkout
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -395,17 +392,8 @@ def serve(argv: Sequence[str]) -> int:
     return 0
 
 
-# The capture script, run by Node with the UI's Playwright.
+# The capture script, run by Node with an installed Playwright.
 SHOT_SCRIPT: Path = Path(__file__).with_name("shot.mjs")
-
-
-def ui_folder() -> Path:
-    """The UI folder whose `node_modules` holds Playwright: the main checkout's, which the
-    worktrees' copies come from."""
-    found = main_checkout(Path.cwd()) / "ui"
-    if not (found / "node_modules" / "playwright").exists():
-        raise SystemExit(f"efficiency: no Playwright in {found}/node_modules")
-    return found
 
 
 def shot(argv: Sequence[str]) -> int:
@@ -413,7 +401,9 @@ def shot(argv: Sequence[str]) -> int:
         prog="just efficiency shot",
         description="render one address of the page to a PNG in the cache",
     )
-    parser.add_argument("address", help="for example / or /bead/by-x.1?since=7d")
+    parser.add_argument(
+        "address", nargs="?", default="/", help="for example / or /bead/by-x.1?since=7d"
+    )
     parser.add_argument("--dark", action="store_true")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument(
@@ -422,37 +412,33 @@ def shot(argv: Sequence[str]) -> int:
     args = parser.parse_args(argv)
     if not args.no_ingest:
         cli.update()  # Once, so that the page's requests answer at once.
-    running = server(0, True)
-    thread = threading.Thread(target=running.serve_forever, daemon=True)
-    thread.start()
     address = str(args.address)
     if not address.startswith("/"):
         address = "/" + address
     slug = re.sub(r"[^\w.-]+", "-", address).strip("-") or "summary"
-    out = paths.cache_root() / "efficiency" / "shots"
+    cache = paths.cache_root().resolve()
+    out = cache / "efficiency" / "shots"
     out.mkdir(parents=True, exist_ok=True)
     target = out / f"{slug}-{args.width}-{'dark' if args.dark else 'light'}.png"
-    cache = paths.cache_root()
-    env = {
-        **os.environ,
-        # The same places ui/scripts' capture runs use (tools' shots.browser_env).
-        "PLAYWRIGHT_BROWSERS_PATH": str(cache / "playwright"),
-        "BERYL_BROWSER_SLOTS_DIR": str(cache / "browser-slots"),
-    }
+    running = server(0, True)
+    thread = threading.Thread(target=running.serve_forever, daemon=True)
+    thread.start()
     try:
         ran = subprocess.run(
             [
                 "node",
                 str(SHOT_SCRIPT),
-                str(ui_folder()),
+                str(cache),
                 f"http://{HOST}:{running.server_address[1]}{address}",
                 str(target),
                 str(args.width),
                 "dark" if args.dark else "light",
             ],
-            env=env,
             check=False,
         )
+    except FileNotFoundError:
+        print("efficiency: Node.js is required for a screenshot", file=sys.stderr)
+        return 1
     finally:
         running.shutdown()
         running.server_close()
