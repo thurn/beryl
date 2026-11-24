@@ -1639,6 +1639,10 @@ The fields:
   package with every workspace package it depends on, and `crate-closure` for
   the same computed per test from the package that holds it. The lock file, the
   toolchain version and the family's own commands are always included.
+- `dispatch_paths` can specify the paths that make this family a requirement for
+  ordinary tickets. It defaults to the path patterns in `inputs`,
+  `package_inputs`, and `digest_inputs`. The family's checks still hash their
+  declared inputs.
 - A `nextest` family's checks also hash what their builds were observed to read,
   so `inputs` names only what its tests read at run time. See
   [Observed inputs](#observed-inputs).
@@ -3718,9 +3722,9 @@ A machine can take a ticket when all of these hold:
   [Light and heavy tickets](#light-and-heavy-tickets).
 - The machine runs the ticket's required operating system, if it has one.
 - The machine can run every check family that Ignite requires for the ticket's
-  named files. For example, the macOS Simulator build reads both workspaces, so
-  shared paths can route work to a Mac even when Cygnus runs the relevant native
-  client and engine checks.
+  named files. The Simulator family requires a Mac worker for iOS host paths.
+  Shared engine and client changes still invalidate the Simulator result for
+  macOS tip verification.
 
 Not every ticket is offered:
 
@@ -4324,10 +4328,11 @@ needs. The `test_ignite_inputs.py` pytest checks enrollment against all current
 declarations. To qualify a revision, use a clean Windows lease and record its
 commit and verifier ID. List the applicable finite checks with their native
 adapters. Run them with `ignite test --rerun --json` and explicit `family:*`
-selectors. Generate and run a fixed sample from each exploration family's `next`
-command. Keep the native listings and results with the ticket evidence. A shared
-cache hit, partial result, skip or nonpassing verdict leaves that check
-unqualified.
+selectors. Compare the listed check names with the switch-offs in
+`ignite flaky list`. Generate and run a fixed sample from each exploration
+family's `next` command. Keep the native listings and results with the ticket
+evidence. A shared cache hit, switch-off, partial result, skip or nonpassing
+verdict leaves that check unqualified.
 
 `uv run --project tools python -m beryl_tools.ignite.windows_parity` compares
 the evidence with the current manifest. Supply the JSON file, `--revision`, and
