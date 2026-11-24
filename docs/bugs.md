@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A restarted game could deal a different mulligan hand after its slots were
+  renumbered.** The shuffle took the returned cards in slot order. Restart
+  mulligans now shuffle from the same card definition order used to return the
+  hand. The generated Karn Liberated scenarios compare the hands and bottom
+  picks across slot permutations.
+  [Fix](https://github.com/thurn/beryl/commit/b4c6bea09a92b8b7504525a9ae06b82d67f72303).
+
 - **Pithing Needle omitted the back name of a double-faced card.** The name
   catalog added a second name only for split cards. It now also records the back
   names of modal and transforming double-faced cards. A Pithing Needle scenario
