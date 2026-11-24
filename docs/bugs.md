@@ -11,7 +11,7 @@ fixed in the same session. Newest first.
   mulligans now shuffle from the same card definition order used to return the
   hand. The generated Karn Liberated scenarios compare the hands and bottom
   picks across slot permutations.
-  [Fix](https://github.com/thurn/beryl/commit/b4c6bea09a92b8b7504525a9ae06b82d67f72303).
+  [Fix](https://github.com/thurn/beryl/commit/0687a4112dbabc7edbc587bf46307499a4777f95).
 
 - **Pithing Needle omitted the back name of a double-faced card.** The name
   catalog added a second name only for split cards. It now also records the back
