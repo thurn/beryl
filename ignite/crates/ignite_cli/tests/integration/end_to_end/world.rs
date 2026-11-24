@@ -3,7 +3,7 @@
 //! of the remote and its own home folder.
 //!
 //! The repository holds a two-crate Cargo workspace and a manifest of one `jsonl` family,
-//! `core`, whose shell adapter fails a check when its crate's source contains the word
+//! `core`, whose adapter fails a check when its crate's source contains the word
 //! `BROKEN`. `core` checks `alpha`. It is marked `always`, so every landing that touches `alpha`
 //! runs it.
 
@@ -21,33 +21,13 @@ use ignite_daemon::update::Home;
 use ignite_hub::server::{HubServer, RunningHub};
 use ignite_os::ipc::Ipc;
 
-/// The checks' adapter: `list <family>` prints the family's checks, `run <checks>…` writes one
-/// result line per check to `$IGNITE_RESULTS`.
-const ADAPTER: &str = r#"#!/bin/sh
-case "$1" in
-list)
-  case "$2" in
-  core) echo '{"check": "core:alpha_adds"}' ;;
-  esac ;;
-run)
-  shift
-  for check in "$@"; do
-    case "$check" in
-    core:alpha_adds) source=crates/alpha/src/lib.rs ;;
-    esac
-    if grep -q BROKEN "$source"; then outcome=fail; else outcome=pass; fi
-    echo "{\"check\": \"$check\", \"outcome\": \"$outcome\", \"message\": \"$source\"}" >> "$IGNITE_RESULTS"
-  done ;;
-esac
-"#;
-
 const MANIFEST: &str = r#"[family.core]
 kind = "regression"
 adapter = "jsonl"
 platforms = "any"
 always = true
-list = "sh checks/adapter.sh list core"
-run = "sh checks/adapter.sh run {checks}"
+list = '{adapter} list'
+run = '{adapter} run {checks}'
 inputs = ["crate:alpha"]
 "#;
 
@@ -299,6 +279,7 @@ fn identify(repo: &Path) {
 }
 
 fn write_repository(dir: &Path, url: &str) {
+    let (path, command, script) = crate::fixture::adapter("core-checks");
     let files: &[(&str, String)] = &[
         ("ignite.toml", config(url)),
         (".gitignore", ".trees/\ntarget/\n".to_owned()),
@@ -325,8 +306,11 @@ fn write_repository(dir: &Path, url: &str) {
             "crates/beta/src/lib.rs",
             "pub fn twice(a: u32) -> u32 {\n    alpha::add(a, a)\n}\n".to_owned(),
         ),
-        ("checks/families.toml", MANIFEST.to_owned()),
-        ("checks/adapter.sh", ADAPTER.to_owned()),
+        (
+            "checks/families.toml",
+            MANIFEST.replace("{adapter}", command),
+        ),
+        (path, script),
     ];
     for (relative, text) in files {
         let path = dir.join(relative);

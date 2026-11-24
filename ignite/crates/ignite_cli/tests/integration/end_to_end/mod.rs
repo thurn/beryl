@@ -1,7 +1,3 @@
-// The daemon and its socket are Unix-only until `ignite_daemon` builds on Windows, and the
-// checks' adapter is a shell script.
-#![cfg(unix)]
-
 //! One ticket through the whole system: real `git`, a real hub on a random port and daemons
 //! assembled in the test's process, on a temporary repository (see `world`).
 

@@ -1,13 +1,11 @@
 //! What a supervised command leaves behind, and what a restarted daemon does with a command that
-//! is still running. macOS only: the scripts need a POSIX shell and process groups.
-#![cfg(unix)]
+//! is still running.
 
 use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::Arc;
 use std::thread;
 
@@ -16,10 +14,13 @@ use ignite_core::fakes::FakeClock;
 use ignite_core::ids::TicketId;
 use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
-use ignite_core::traits::{CommandSpec, Launcher};
+use ignite_core::traits::Launcher;
 use ignite_daemon::sched::{Limits, Scheduler};
 use ignite_daemon::supervise::{GrantFile, SpecFile, SupervisedLauncher};
 use ignite_os::hostcpu::HostCpu;
+use ignite_os::proc::Processes;
+
+use super::fixture;
 
 fn scratch(name: &str) -> PathBuf {
     let dir = ignite_core::test_files::temp_dir()
@@ -33,58 +34,13 @@ fn launcher(root: &Path) -> SupervisedLauncher {
     SupervisedLauncher::new(Path::new(env!("CARGO_BIN_EXE_ignite")), root.join("runs"))
 }
 
-fn alive(pid: i32) -> bool {
-    Command::new("/bin/kill")
-        .args(["-0", &pid.to_string()])
-        .stderr(Stdio::null())
-        .status()
-        .unwrap()
-        .success()
-}
-
-/// A process that has been killed stays a zombie until its parent reaps it, so "alive" also
-/// asks `ps` for its state.
-fn running(pid: i32) -> bool {
-    let out = Command::new("/bin/ps")
-        .args(["-o", "stat=", "-p", &pid.to_string()])
-        .output()
-        .unwrap();
-    let state = String::from_utf8_lossy(&out.stdout);
-    alive(pid) && !state.trim().is_empty() && !state.trim().starts_with('Z')
-}
-
 #[test]
 fn a_process_a_command_leaves_in_the_background_ends_with_the_command() {
     let root = scratch("leftover");
-    let pid_file = root.join("pid");
-    let spec = CommandSpec {
-        args: vec![
-            "/bin/sh".to_owned(),
-            "-c".to_owned(),
-            format!(
-                "sleep 1000 >/dev/null 2>&1 & echo $! > '{}'",
-                pid_file.display()
-            ),
-        ],
-        cwd: root.clone(),
-        env: Vec::new(),
-        class: Class::Agent,
-        cores: 1,
-        resources: Vec::new(),
-        grows: false,
-        tree: None,
-        ticket: None,
-        hang_limit_s: None,
-        reserve: None,
-    };
+    let (spec, listener) = fixture::with_descendant(&root, false);
     let result = launcher(&root).run(&spec);
     assert_eq!(result.exit, Some(0));
-    let pid: i32 = fs::read_to_string(&pid_file)
-        .unwrap()
-        .trim()
-        .parse()
-        .unwrap();
-    assert!(!running(pid), "the background process outlived its command");
+    fixture::assert_disconnected(&listener);
     fs::remove_dir_all(&root).unwrap();
 }
 
@@ -95,15 +51,17 @@ fn the_command_of_a_supervisor_that_died_is_killed_when_its_run_is_collected() {
     let run_dir = runs.join("00000000000000000001-1-0");
     fs::create_dir_all(&run_dir).unwrap();
     // A command in a group of its own whose supervisor is gone: no lock is held, no result exists.
-    let orphan = Command::new("/bin/sleep")
-        .arg("1000")
-        .stdout(Stdio::null())
-        .process_group(0)
-        .spawn()
+    let mut orphan = ignite_os::Native
+        .spawn_group(
+            fixture::command("wait")
+                .current_dir(&root)
+                .env("FIXTURE_GATE", root.join("never"))
+                .env("FIXTURE_EXIT", "0")
+                .stdout(Stdio::null()),
+        )
         .unwrap();
-    let pid = i32::try_from(orphan.id()).unwrap();
-    fs::write(run_dir.join("group"), pid.to_string()).unwrap();
-    let spec = spec_file(None);
+    fs::write(run_dir.join("group"), orphan.id.to_string()).unwrap();
+    let spec = spec_file(&root, None);
     fs::write(
         run_dir.join("spec.json"),
         serde_json::to_vec(&spec).unwrap(),
@@ -114,16 +72,24 @@ fn the_command_of_a_supervisor_that_died_is_killed_when_its_run_is_collected() {
     assert_eq!(runs.len(), 1);
     let result = runs[0].wait();
     assert_eq!(result.exit, None);
-    let mut orphan = orphan;
-    // Killed, so reaping it returns at once with a signal.
-    assert!(orphan.wait().unwrap().code().is_none());
+    let mut exit = None;
+    fixture::until(|| {
+        exit = orphan.child.try_wait().unwrap();
+        exit.is_some()
+    });
+    let status = exit.unwrap();
+    #[cfg(unix)]
+    assert_eq!(status.code(), None);
+    #[cfg(windows)]
+    assert_eq!(status.code(), Some(ignite_os::proc::ENDED_EXIT_CODE as i32));
+    ignite_os::Native.end_group(&mut orphan).unwrap();
     fs::remove_dir_all(&root).unwrap();
 }
 
-fn spec_file(grant: Option<GrantFile>) -> SpecFile {
+fn spec_file(cwd: &Path, grant: Option<GrantFile>) -> SpecFile {
     SpecFile {
-        args: vec!["/bin/true".to_owned()],
-        cwd: PathBuf::from("/"),
+        args: Vec::new(),
+        cwd: cwd.to_path_buf(),
         tree_path: None,
         env: Vec::new(),
         queued_s: 0.0,
@@ -168,7 +134,7 @@ fn a_restarted_daemon_registers_the_grants_of_commands_still_running() {
     };
     fs::write(
         run_dir.join("spec.json"),
-        serde_json::to_vec(&spec_file(Some(grant))).unwrap(),
+        serde_json::to_vec(&spec_file(&root, Some(grant))).unwrap(),
     )
     .unwrap();
     // The old supervisor's lock, held until the test lets the command "finish".
@@ -227,7 +193,7 @@ fn an_adopted_grant_keeps_growing_through_its_cores_file() {
     };
     fs::write(
         run_dir.join("spec.json"),
-        serde_json::to_vec(&spec_file(Some(grant))).unwrap(),
+        serde_json::to_vec(&spec_file(&root, Some(grant))).unwrap(),
     )
     .unwrap();
     fs::write(run_dir.join("cores"), "1").unwrap();

@@ -44,7 +44,7 @@ not (
     test(/^wrap::/)
     | test(/^end_to_end::/)
     | test(=adopt::a_command_in_a_tree_reset_at_start_is_ended_and_not_taken_over)
-    | test(=supervise::a_command_past_its_hang_limit_is_ended_with_its_children_and_reads_as_hung)
+    | test(=supervise::a_command_past_its_hang_limit_is_ended_and_reads_as_hung)
     | test(=restart::a_restart_under_load_ends_no_command_and_runs_nothing_twice)
     | test(=supervise::grants::a_cargo_build_takes_job_slots_as_its_grant_grows_and_shrinks_for_a_landing)
     | test(=supervise::grants::cargo_inside_a_script_takes_job_slots_as_the_grant_grows)

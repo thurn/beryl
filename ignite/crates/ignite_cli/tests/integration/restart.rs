@@ -4,12 +4,11 @@
 //! check command ran once, each check has one result, and the landing pushed once.
 //!
 //! The world is a temporary Ignite home, a bare repository standing in for the remote, a hub
-//! served by the test's process on a random port, and one check family, `slow`, whose shell
+//! served by the test's process on a random port, and one check family, `slow`, whose
 //! adapter logs each run and then waits until the file `gate` exists. Every wait in the test is
 //! for a condition (a file, a line, a process), never for a length of time.
 
 use std::fs;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -20,32 +19,13 @@ use ignite_hub::server::{HubServer, RunningHub};
 /// How long any one wait may last before the test fails as hung.
 const HUNG: Duration = Duration::from_mins(5);
 
-/// The family's adapter. `run` logs the class, check and contents of `src/b.txt` for each check to
-/// `@MARKS@/runs.log`, waits until `@GATE@` exists (at most ten minutes, so a failed test leaves no shell
-/// behind), then passes them.
-const ADAPTER: &str = r#"#!/bin/sh
-case "$1" in
-list)
-  echo '{"check": "slow:one"}'
-  echo '{"check": "slow:two"}' ;;
-run)
-  shift
-  IFS= read -r source < src/b.txt
-  for check in "$@"; do echo "$IGNITE_CLASS $check $source" >> '@MARKS@/runs.log'; done
-  i=0; while [ ! -e '@GATE@' ] && [ $i -lt 6000 ]; do sleep 0.1; i=$((i+1)); done
-  for check in "$@"; do
-    echo "{\"check\": \"$check\", \"outcome\": \"pass\", \"message\": \"ok\"}" >> "$IGNITE_RESULTS"
-  done ;;
-esac
-"#;
-
 const MANIFEST: &str = r#"[family.slow]
 kind = "regression"
 adapter = "jsonl"
 platforms = "any"
 always = true
-list = "git restart-drill-adapter list"
-run = "git restart-drill-adapter run {checks}"
+list = '{adapter} list'
+run = '{adapter} run {checks}'
 inputs = ["src/**"]
 "#;
 
@@ -67,11 +47,6 @@ project = "restart"
 threshold = 1000000000.0
 "#
     )
-}
-
-/// A path as the adapter's shell reads it: forward slashes, also on Windows.
-fn shell_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
 }
 
 struct Drill {
@@ -164,17 +139,18 @@ impl Drill {
         .unwrap();
         let url = format!("http://{}", hub.address());
         let gate = root.join("gate");
-        let adapter = ADAPTER
-            .replace("@MARKS@", &shell_path(&root.join("marks")))
-            .replace("@GATE@", &shell_path(&gate));
+        let (path, command, script) = super::fixture::adapter("slow-checks");
         let seed = root.join("seed");
         for (relative, text) in [
             ("ignite.toml", config(&url)),
             (".gitignore", ".trees/\n".to_owned()),
             ("src/a.txt", "a\n".to_owned()),
             ("src/b.txt", "b\n".to_owned()),
-            ("checks/families.toml", MANIFEST.to_owned()),
-            ("checks/adapter.sh", adapter),
+            (
+                "checks/families.toml",
+                MANIFEST.replace("{adapter}", command),
+            ),
+            (path, script),
         ] {
             let path = seed.join(relative);
             fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -234,6 +210,8 @@ impl Drill {
             .args(args)
             .current_dir(cwd)
             .env("IGNITE_HOME", &self.home)
+            .env("FIXTURE_GATE", &self.gate)
+            .env("FIXTURE_RUNS", &self.runs)
             .env_remove("IGNITE_SESSION")
             .env_remove("CLAUDE_CODE_HOST_SESSION_ID")
             .env_remove("CODEX_THREAD_ID")
@@ -352,20 +330,11 @@ fn git(dir: &Path, args: &[&str]) -> Output {
     out
 }
 
-/// Write the drill's local settings together. The alias uses Git's shell, which can be absent
-/// from PATH on Windows. Linked worktrees share these settings with the main checkout.
+/// Linked worktrees share these settings with the main checkout.
 fn configure_git(repo: &Path) {
-    let mut config = fs::OpenOptions::new()
-        .append(true)
-        .open(repo.join(".git/config"))
-        .unwrap();
-    config
-        .write_all(
-            b"\n[user]\n\tname = Ignite Test\n\temail = test@example.invalid\n\
-              [commit]\n\tgpgsign = false\n\
-              [alias]\n\trestart-drill-adapter = !sh checks/adapter.sh\n",
-        )
-        .unwrap();
+    git(repo, &["config", "user.name", "Ignite Test"]);
+    git(repo, &["config", "user.email", "test@example.invalid"]);
+    git(repo, &["config", "commit.gpgsign", "false"]);
 }
 
 #[test]

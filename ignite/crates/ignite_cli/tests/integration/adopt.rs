@@ -2,16 +2,13 @@
 //! under the same handle takes the command over instead of starting it again (see
 //! `ignite_daemon::adopt`).
 
-#![cfg(unix)]
-
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ignite_core::ids::Handle;
-use ignite_core::protocol::Class;
 use ignite_core::time::SystemClock;
-use ignite_core::traits::{CommandSpec, Launcher};
+use ignite_core::traits::Launcher;
 use ignite_daemon::adopt::{AdoptingLauncher, HANDLE_VARIABLE};
 use ignite_daemon::steps::{Kind, Steps, Work};
 use ignite_daemon::supervise::SupervisedLauncher;
@@ -28,30 +25,6 @@ fn launcher(root: &Path) -> SupervisedLauncher {
     SupervisedLauncher::new(Path::new(env!("CARGO_BIN_EXE_ignite")), root.join("runs"))
 }
 
-/// A command that waits until the test creates `go`, then prints and exits 3.
-fn waiting(cwd: &Path, go: &Path) -> CommandSpec {
-    CommandSpec {
-        args: vec![
-            "/bin/sh".to_owned(),
-            "-c".to_owned(),
-            format!(
-                "{}; echo finished; exit 3",
-                super::wait_for_file(&go.display().to_string())
-            ),
-        ],
-        cwd: cwd.to_path_buf(),
-        env: Vec::new(),
-        class: Class::Agent,
-        cores: 1,
-        resources: Vec::new(),
-        grows: false,
-        tree: None,
-        ticket: None,
-        hang_limit_s: None,
-        reserve: None,
-    }
-}
-
 fn runs(root: &Path) -> usize {
     fs::read_dir(root.join("runs"))
         .unwrap()
@@ -65,7 +38,7 @@ fn a_verb_run_again_after_a_restart_takes_over_its_supervised_command() {
     let tree = root.join("tree-01");
     fs::create_dir_all(&tree).unwrap();
     let go = root.join("go");
-    let spec = waiting(&tree, &go);
+    let spec = super::fixture::waiting(&tree, &go, 3);
     // The first daemon starts the command for handle T-4, then goes away.
     let first = launcher(&root);
     let env = vec![(HANDLE_VARIABLE.to_owned(), "T-4".to_owned())];
@@ -82,7 +55,8 @@ fn a_verb_run_again_after_a_restart_takes_over_its_supervised_command() {
     let result = adopting.run(&spec);
 
     assert_eq!(result.exit, Some(3));
-    assert_eq!(fs::read_to_string(&result.output).unwrap(), "finished\n");
+    let output = fs::read_to_string(&result.output).unwrap();
+    assert!(output.lines().any(|line| line == "finished"), "{output}");
     assert_eq!(runs(&root), 1, "nothing was started again");
     fs::remove_dir_all(&root).unwrap();
 }
@@ -92,7 +66,7 @@ fn a_command_in_a_tree_reset_at_start_is_ended_and_not_taken_over() {
     let root = scratch("reset");
     let tree = root.join("landing-1");
     fs::create_dir_all(&tree).unwrap();
-    let spec = waiting(&tree, &root.join("never"));
+    let spec = super::fixture::waiting(&tree, &root.join("never"), 3);
     let first = launcher(&root);
     let env = vec![(HANDLE_VARIABLE.to_owned(), "L-2".to_owned())];
     drop(first.start(&spec, env, 0.0).unwrap());

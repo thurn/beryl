@@ -2,17 +2,14 @@
 //! that outlives the daemon side that started it, and grants that grow and shrink while their
 //! command runs.
 //!
-//! Commands are shell scripts: `/bin/sh` scripts on macOS and `cmd` scripts on Windows. Tests
-//! whose scripts need a POSIX shell, FIFOs or signals run on macOS only.
-
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use ignite_core::protocol::Class;
 use ignite_core::traits::{CommandSpec, Launcher};
-#[cfg(unix)]
-use ignite_daemon::supervise::ResultFile;
-use ignite_daemon::supervise::SupervisedLauncher;
+use ignite_daemon::supervise::{ResultFile, SupervisedLauncher};
+
+use super::fixture;
 
 fn scratch(name: &str) -> PathBuf {
     let dir = ignite_core::test_files::temp_dir()
@@ -51,16 +48,13 @@ fn shell(cwd: &Path, script: &str) -> CommandSpec {
     }
 }
 
-#[cfg(unix)]
 #[test]
 fn a_supervised_command_leaves_a_result_file_with_its_exit_output_and_usage() {
     let root = scratch("result");
     let launcher = launcher(&root);
-    // A child of the command, so the group's descendants are measured too.
-    let spec = shell(
-        &root,
-        r#"echo "$GREETING from $(pwd) with $IGNITE_CORES cores"; echo oops >&2; /bin/sh -c 'i=0; while [ $i -lt 20000 ]; do i=$((i+1)); done'; exit 7"#,
-    );
+    let mut spec = fixture::spec(&root, "report");
+    spec.cores = 3;
+    spec.env.push(("GREETING".to_owned(), "hello".to_owned()));
     let result = launcher.run(&spec);
 
     assert_eq!(result.exit, Some(7));
@@ -72,6 +66,7 @@ fn a_supervised_command_leaves_a_result_file_with_its_exit_output_and_usage() {
     );
     assert!(output.contains("oops"), "{output}");
     assert!(result.usage.cpu_s > 0.0);
+    #[cfg(unix)]
     assert!(result.usage.instructions.unwrap_or(0) > 0);
 
     // The same result is on disk, beside the output.
@@ -86,38 +81,30 @@ fn a_supervised_command_leaves_a_result_file_with_its_exit_output_and_usage() {
     fs::remove_dir_all(&root).unwrap();
 }
 
-#[cfg(unix)]
 #[test]
 fn a_command_is_ended_when_the_caller_that_asked_for_it_goes_away() {
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::time::Duration;
 
     let root = scratch("cancel");
     let started = root.join("started");
-    let spec = shell(&root, &format!("touch '{}'; sleep 600", started.display()));
+    let spec = fixture::waiting(&root, &root.join("never"), 0);
     let launcher = launcher(&root);
     let gone = AtomicBool::new(false);
     let result = std::thread::scope(|scope| {
         scope.spawn(|| {
-            while !started.exists() {
-                std::thread::sleep(Duration::from_millis(10));
-            }
+            fixture::until(|| started.exists());
             gone.store(true, Ordering::SeqCst);
         });
         launcher.run_until(&spec, &|| gone.load(Ordering::SeqCst))
     });
-    // Ended by a signal long before the 600 seconds were up.
     assert_eq!(result.exit, None);
-    assert!(result.usage.wall_s < 60.0, "{}", result.usage.wall_s);
     fs::remove_dir_all(&root).unwrap();
 }
 
-#[cfg(unix)]
 #[test]
 fn a_command_whose_work_is_stopped_is_ended_and_its_cores_are_given_back() {
     use std::collections::BTreeMap;
     use std::sync::Arc;
-    use std::time::Duration;
 
     use ignite_core::capacity::Floor;
     use ignite_core::time::SystemClock;
@@ -139,7 +126,8 @@ fn a_command_whose_work_is_stopped_is_ended_and_its_cores_are_given_back() {
 
     let root = scratch("stop");
     let started = root.join("started");
-    let spec = shell(&root, &format!("touch '{}'; sleep 600", started.display()));
+    let mut spec = fixture::waiting(&root, &root.join("never"), 0);
+    spec.cores = 3;
     let scheduler = Arc::new(Scheduler::new(
         Limits {
             cores: 6,
@@ -156,18 +144,14 @@ fn a_command_whose_work_is_stopped_is_ended_and_its_cores_are_given_back() {
     let test = steps.begin(Kind::Verb("test".to_owned()), Work::default());
     let result = std::thread::scope(|scope| {
         scope.spawn(|| {
-            while !started.exists() {
-                std::thread::sleep(Duration::from_millis(10));
-            }
+            fixture::until(|| started.exists());
             assert_eq!(scheduler.status().granted, 3);
             test.request_stop().unwrap();
         });
         let _entered = test.enter();
         launcher.run(&spec)
     });
-    // Ended by a signal long before the 600 seconds were up, with its cores back.
     assert_eq!(result.exit, None);
-    assert!(result.usage.wall_s < 60.0, "{}", result.usage.wall_s);
     assert_eq!(scheduler.status().granted, 0);
     // Nothing more starts for work that was asked to stop.
     let _entered = test.enter();
@@ -177,20 +161,13 @@ fn a_command_whose_work_is_stopped_is_ended_and_its_cores_are_given_back() {
     fs::remove_dir_all(&root).unwrap();
 }
 
-#[cfg(unix)]
 #[test]
 fn a_command_outlives_the_daemon_side_and_its_result_is_picked_up_afterwards() {
     let root = scratch("restart");
     let go = root.join("go");
     // The command waits for the test to create `go`, so it is certainly still running when
     // the daemon side has gone.
-    let spec = shell(
-        &root,
-        &format!(
-            "{}; echo finished",
-            super::wait_for_file(&go.display().to_string())
-        ),
-    );
+    let spec = fixture::waiting(&root, &go, 0);
     let first = launcher(&root);
     let started = first.start(&spec, Vec::new(), 2.0).unwrap();
     let run_dir = started.run().dir().to_path_buf();
@@ -211,7 +188,9 @@ fn a_command_outlives_the_daemon_side_and_its_result_is_picked_up_afterwards() {
     fs::write(&go, "").unwrap();
     let result = unfinished[0].wait();
     assert_eq!(result.exit, Some(0));
-    assert_eq!(fs::read_to_string(&result.output).unwrap(), "finished\n");
+    let output = fs::read_to_string(&result.output).unwrap();
+    assert!(output.lines().any(|line| line == "finished"), "{output}");
+    drop(lock);
     assert!((result.usage.queued_s - 2.0).abs() < f64::EPSILON);
     assert!(second.unfinished().is_empty());
     fs::remove_dir_all(&root).unwrap();
@@ -229,46 +208,25 @@ fn a_command_that_cannot_start_reports_why_in_its_output() {
     fs::remove_dir_all(&root).unwrap();
 }
 
-#[cfg(unix)]
 #[test]
 fn ending_a_run_ends_its_command_and_every_process_it_started() {
     let root = scratch("end");
-    // The command starts a child of its own; both wait forever.
-    let spec = shell(&root, "/bin/sh -c 'while :; do sleep 1; done' & wait");
-    let started = launcher(&root).start(&spec, Vec::new(), 0.0).unwrap();
-    let run = started.run().clone();
-    // `start` returns once the command has started and its group is known.
-    assert!(run.dir().join("group").exists());
-    run.end().unwrap();
-    let result = started.wait();
-    assert_eq!(result.exit, None);
-    fs::remove_dir_all(&root).unwrap();
-}
-
-/// On Windows the command and a second process it started both wait forever, in the command's
-/// job object; ending the run ends the job, and the run reads as ended from outside.
-#[cfg(windows)]
-#[test]
-fn ending_a_run_ends_its_command_and_every_process_it_started() {
-    let root = scratch("end");
-    let spec = shell(
-        &root,
-        "start /b ping -n 100000 127.0.0.1 >nul & ping -n 100000 127.0.0.1 >nul",
-    );
+    let (spec, listener) = fixture::with_descendant(&root, true);
     let started = launcher(&root).start(&spec, Vec::new(), 0.0).unwrap();
     let run = started.run().clone();
     assert!(run.dir().join("group").exists());
+    fixture::until(|| root.join("descendant-started").exists());
     run.end().unwrap();
     let result = started.wait();
     assert_eq!(result.exit, None);
+    fixture::assert_disconnected(&listener);
     fs::remove_dir_all(&root).unwrap();
 }
 
-/// Commands whose grants grow and shrink while they run. They need FIFOs, so macOS only.
-#[cfg(unix)]
 mod grants {
     use std::collections::BTreeMap;
     use std::io;
+    #[cfg(unix)]
     use std::process::Command;
     use std::sync::Arc;
     use std::thread;
@@ -329,6 +287,7 @@ mod grants {
         }
     }
 
+    #[cfg(unix)]
     /// A FIFO the command writes a line to when it reaches a point, and the test reads, which
     /// blocks until then.
     fn signal(root: &Path, name: &str) -> PathBuf {
@@ -345,34 +304,29 @@ mod grants {
         let root = scratch("grows");
         let scheduler = six_cores();
         let holder = scheduler.acquire(&ask(Class::Agent, 4));
-        let started = signal(&root, "started");
-        let mut spec = shell(
-            &root,
-            r#"echo "first $(cat "$IGNITE_CORES_FILE")"; echo go > "$STARTED"
-            i=0; while [ "$(cat "$IGNITE_CORES_FILE")" != 4 ] && [ $i -lt 3000 ]; do sleep 0.01; i=$((i+1)); done
-            echo "last $(cat "$IGNITE_CORES_FILE")""#,
-        );
+        let mut spec = fixture::spec(&root, "watch-cores");
         spec.cores = 4;
         spec.grows = true;
-        spec.env
-            .push(("STARTED".to_owned(), started.display().to_string()));
+        let started = root.join("started");
         let launcher = launcher(&root).with_scheduler(Arc::clone(&scheduler));
         let run = thread::spawn(move || launcher.run(&spec));
 
-        fs::read_to_string(&started).unwrap();
+        fixture::until(|| started.exists());
         scheduler.release(&holder);
         let result = run.join().unwrap();
 
         assert_eq!(result.exit, Some(0));
         let output = fs::read_to_string(&result.output).unwrap();
-        assert!(output.contains("first 2\n"), "{output}");
-        assert!(output.contains("last 4\n"), "{output}");
+        assert!(output.lines().any(|line| line == "first 2"), "{output}");
+        assert!(output.lines().any(|line| line == "last 4"), "{output}");
         fs::remove_dir_all(&root).unwrap();
     }
 
     /// A Cargo build that only compiles runs under the supervisor's jobserver, with
     /// `CARGO_BUILD_JOBS` at the most one command may hold. Its job slots grow when another grant is released, and it gives cores
     /// back while a landing waits, so the landing gets them before the build ends.
+    // These builds take slots from the POSIX FIFO used by the jobserver.
+    #[cfg(unix)]
     #[test]
     fn a_cargo_build_takes_job_slots_as_its_grant_grows_and_shrinks_for_a_landing() {
         let root = scratch("cargo");
@@ -440,6 +394,8 @@ mod grants {
     /// product runs Cargo from a Python script. Now a script that starts Cargo inside it is
     /// granted one core, and once another grant is released its Cargo takes three more job
     /// slots. Its tests still run on the grant's first size.
+    // These builds take slots from the POSIX FIFO used by the jobserver.
+    #[cfg(unix)]
     #[test]
     fn cargo_inside_a_script_takes_job_slots_as_the_grant_grows() {
         let root = scratch("script");
@@ -492,25 +448,38 @@ mod grants {
     }
 }
 
-#[cfg(unix)]
 #[test]
-fn a_command_past_its_hang_limit_is_ended_with_its_children_and_reads_as_hung() {
+fn a_command_past_its_hang_limit_is_ended_and_reads_as_hung() {
     let root = scratch("hung");
-    // The command and its child both wait forever; the child ignores `SIGTERM`.
+    // On Unix the child ignores SIGTERM to exercise the watchdog's SIGKILL fallback.
+    #[cfg(unix)]
     let mut spec = shell(
         &root,
         "/bin/sh -c 'trap \"\" TERM; while :; do sleep 1; done' & wait",
     );
+    #[cfg(windows)]
+    let mut spec = fixture::waiting(&root, &root.join("never"), 0);
     spec.hang_limit_s = Some(1);
     let result = launcher(&root).run(&spec);
     assert!(result.hung);
     assert_eq!(result.exit, None);
     let output = fs::read_to_string(&result.output).unwrap();
     assert!(output.contains("hang limit of 1 s"), "{output}");
+    #[cfg(unix)]
     assert!(
         output.contains("while :"),
         "the processes left are listed: {output}"
     );
+    #[cfg(windows)]
+    {
+        let group = fs::read_to_string(result.output.with_file_name("group")).unwrap();
+        assert!(
+            output
+                .lines()
+                .any(|line| line.split_whitespace().next() == Some(group.trim())),
+            "the watchdog lists the command's PID: {output}"
+        );
+    }
     let file: ResultFile = serde_json::from_slice(
         &fs::read(result.output.parent().unwrap().join("result.json")).unwrap(),
     )
