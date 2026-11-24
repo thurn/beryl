@@ -589,93 +589,6 @@ fn a_failed_release_build_is_not_started_again_for_the_same_commit() {
     assert_eq!(started.load(Ordering::SeqCst), 2);
 }
 
-/// A daemon, as [`daemon`] makes it, with the fake hub and selftest it was given.
-fn daemon_with_selftest() -> (
-    SelfUpdate,
-    Arc<FakeGit>,
-    FakeRestart,
-    Arc<FakeHub>,
-    Arc<FakeSelftest>,
-) {
-    let (mut update, git, restart) = daemon(NEW);
-    let hub = Arc::new(FakeHub::default());
-    let selftest = Arc::new(FakeSelftest::default());
-    update.hub = hub.clone();
-    update.selftest = selftest.clone();
-    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/crates/x.rs"]);
-    (update, git, restart, hub, selftest)
-}
-
-#[test]
-fn a_release_that_passes_its_selftest_restarts_and_is_checked_once() {
-    let (update, _git, restart, hub, selftest) = daemon_with_selftest();
-
-    // The hub's version is asked for on every heartbeat, and the tip loop asks too; one selftest
-    // runs however often.
-    update.after_heartbeat(Some(NEW), IDLE);
-    update.after_master_moved().unwrap();
-    settle(&update);
-    update.after_heartbeat(Some(NEW), IDLE);
-    assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
-    assert_eq!(selftest.runs.load(Ordering::SeqCst), 1);
-    assert!(hub.justiciar_reports().is_empty());
-    assert_eq!(update.store.current_commit(), Some(commit(NEW)));
-}
-
-#[test]
-fn a_release_that_fails_its_selftest_is_never_restarted_into_and_is_reported_once() {
-    let (update, git, restart, hub, selftest) = daemon_with_selftest();
-    selftest.fails.lock().unwrap().push(NEW.to_owned());
-
-    // From the tip loop, the poll and the hub's version alike.
-    update.after_master_moved().unwrap();
-    settle(&update);
-    for _ in 0..3 {
-        poll(&update);
-        update.after_heartbeat(Some(NEW), IDLE);
-        update.after_heartbeat(Some(OLD), IDLE);
-        settle(&update);
-    }
-
-    assert!(restart.started().is_empty());
-    assert_eq!(selftest.runs.load(Ordering::SeqCst), 1);
-    assert!(update.store.is_rejected(&commit(NEW)));
-    // `bin/current` was never pointed at it.
-    assert_eq!(update.store.current_commit(), None);
-    let reports = hub.justiciar_reports();
-    assert_eq!(reports.len(), 1, "{reports:?}");
-    assert!(reports[0].details.contains("cannot parse the manifest"));
-    assert_eq!(reports[0].subject, format!("release-selftest:{NEW}"));
-
-    // A newer release that passes is restarted into.
-    let newer = "f00dfee";
-    git.set_tip("master", commit(newer));
-    git.set_changed(&commit(OLD), &commit(newer), &["ignite/crates/x.rs"]);
-    poll(&update);
-    update.after_heartbeat(Some(OLD), IDLE);
-    assert_eq!(restart.started(), [update.store.path(&commit(newer))]);
-    assert_eq!(hub.justiciar_reports().len(), 1);
-}
-
-#[test]
-fn a_selftest_report_the_hub_did_not_take_is_sent_when_it_answers() {
-    let (update, _git, restart, hub, selftest) = daemon_with_selftest();
-    selftest.fails.lock().unwrap().push(NEW.to_owned());
-    hub.set_unreachable(true);
-
-    update.after_master_moved().unwrap();
-    settle(&update);
-    update.after_heartbeat(Some(OLD), IDLE);
-    assert!(hub.justiciar_reports().is_empty());
-    assert!(update.store.is_rejected(&commit(NEW)));
-
-    hub.set_unreachable(false);
-    update.after_heartbeat(Some(OLD), IDLE);
-    update.after_heartbeat(Some(OLD), IDLE);
-    assert_eq!(hub.justiciar_reports().len(), 1);
-    assert!(restart.started().is_empty());
-}
-
 /// Records each drain with how many restarts had happened before it, and each undrain.
 #[derive(Default)]
 struct FakeDrain {
@@ -822,3 +735,6 @@ mod prebuild;
 
 #[path = "selfupdate_checkout_tests.rs"]
 mod checkout;
+
+#[path = "selfupdate_build_tests.rs"]
+mod build;

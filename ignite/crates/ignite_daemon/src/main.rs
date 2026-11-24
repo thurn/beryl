@@ -218,6 +218,7 @@ fn self_update(
                 work: options.home.update_dir(),
             },
             launcher: express("build.log"),
+            retry_launcher: cfg!(windows).then(|| express("build.retry.log")),
         }),
         store: options.home.store(),
         master: base.config.repository.release_branch().to_owned(),
