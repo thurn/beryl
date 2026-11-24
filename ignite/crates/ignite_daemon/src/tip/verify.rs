@@ -59,15 +59,9 @@ impl TipVerifier {
         if last == *tip && !scope.catch_up_only() {
             // `master` already holds the tip: another machine verified it, or someone pushed it
             // by hand. The hub records it, so that it and older tips stop showing as waiting.
-            ctx.hub.tip_verified(&TipVerified {
-                commit: tip.clone(),
-                machine: ctx.machine.clone(),
-                state: TipState::Verified,
-                regression_passes: Some(Vec::new()),
-                failure: None,
-                failed_descendant: None,
-            })?;
-            return Ok(TipOutcome::Verified);
+            let outcome = self.record_verified(ctx, tip, Vec::new(), None)?;
+            self.save(ctx);
+            return Ok(outcome);
         }
         let (meter, metered) = meter::Meter::start(ctx);
         let mut tally = meter::Tally::default();

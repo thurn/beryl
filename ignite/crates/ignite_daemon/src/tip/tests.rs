@@ -565,6 +565,50 @@ fn an_hour_waiting_on_another_platform_reports_it_once_and_master_waits() {
 }
 
 #[test]
+fn a_peer_promotion_restarts_the_platform_wait_even_after_reload() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let path = ignite_core::test_files::temp_dir().join("peer-promoted-tip.db");
+    let verify = |tip: &Commit| {
+        world
+            .verifier()
+            .with_memory(ignite_store::local::open(&path).unwrap())
+            .verify(&ctx, tip)
+            .unwrap()
+    };
+    let mut elsewhere = check("w", 'e');
+    elsewhere.runnable = false;
+    elsewhere.key.platform = Some(Os::Windows);
+    let first = commit("bbbb000");
+    world.land(&first);
+    world.work.set_checks(&first, vec![elsewhere.clone()]);
+
+    assert!(matches!(verify(&first), TipOutcome::Waiting { .. }));
+    world.clock.advance(MACHINE_WAIT_S);
+    verify(&first);
+    assert_eq!(world.hub.tips_waiting().len(), 1);
+
+    world.git.set_tip("master", first.clone());
+    assert_eq!(verify(&first), TipOutcome::Verified);
+
+    let next = commit("cccc000");
+    world.land(&next);
+    world.work.set_checks(&next, vec![elsewhere]);
+    assert!(matches!(verify(&next), TipOutcome::Waiting { .. }));
+    world.clock.advance(MACHINE_WAIT_S - 1.0);
+    verify(&next);
+    assert_eq!(world.hub.tips_waiting().len(), 1);
+
+    world.clock.advance(1.0);
+    verify(&next);
+    let reports = world.hub.tips_waiting();
+    assert_eq!(reports.len(), 2);
+    assert_eq!(reports[1].commit, next);
+    assert_eq!(reports[1].platform, Os::Windows);
+    assert!((reports[1].waited_s - MACHINE_WAIT_S).abs() < f64::EPSILON);
+}
+
+#[test]
 fn a_failure_only_another_platform_can_run_holds_master_and_is_not_searched_here() {
     let world = World::new();
     let ctx = world.ctx("m-1");
