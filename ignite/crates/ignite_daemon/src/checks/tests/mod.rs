@@ -187,6 +187,7 @@ struct FakeTrees {
     dir: PathBuf,
     head: Commit,
     changed: Vec<String>,
+    deleted: Vec<String>,
     /// The tracked files; the default three when empty.
     tracked: Vec<String>,
     graph: CrateGraph,
@@ -198,6 +199,7 @@ impl FakeTrees {
             dir: dir.to_path_buf(),
             head: Commit::new("abc1234").unwrap(),
             changed: changed.iter().map(|s| (*s).to_owned()).collect(),
+            deleted: Vec::new(),
             tracked: Vec::new(),
             graph: CrateGraph::default(),
         }
@@ -233,12 +235,15 @@ impl TreeSource for FakeTrees {
         Ok(self.head.clone())
     }
 
-    fn changed(&self, _path: &Path, _base: &str) -> Result<Vec<String>> {
+    fn changes(&self, _path: &Path, _base: &str) -> Result<ignite_git::changed::WorktreeChanges> {
         // A first path of `<error>` stands for a tree git cannot compare with the base.
         if self.changed.first().is_some_and(|p| p == "<error>") {
             return Err(ignite_core::traits::Error::Io("git failed".to_owned()));
         }
-        Ok(self.changed.clone())
+        Ok(ignite_git::changed::WorktreeChanges {
+            paths: self.changed.clone(),
+            deleted: self.deleted.clone(),
+        })
     }
 }
 

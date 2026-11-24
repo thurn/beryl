@@ -68,6 +68,7 @@ fn plan_landing(
         checks,
         unbuilt,
         landing,
+        deleted_inputs: &BTreeSet::new(),
         recent_product_catches: &BTreeSet::new(),
         paid: &paid,
         billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
@@ -84,6 +85,34 @@ fn names(planned: &[Planned]) -> Vec<&str> {
 
 fn left_names(left: &[Left]) -> Vec<&str> {
     left.iter().map(|left| left.check.as_str()).collect()
+}
+
+#[test]
+fn a_deleted_input_forces_a_fresh_run_even_with_a_cold_product() {
+    let mut deleted = check("unit:deleted", 0, 50, 0.0, 100.0);
+    deleted.cached = true;
+    deleted.needs.push("deps".to_owned());
+    let ordinary = likely("unit:ordinary", 100.0);
+
+    let deleted_inputs = BTreeSet::from([deleted.check.clone()]);
+    let plan = plan(
+        &GateInput {
+            areas: &[AREA.to_owned()],
+            checks: &[deleted, ordinary],
+            unbuilt: &unbuilt("deps"),
+            landing: None,
+            deleted_inputs: &deleted_inputs,
+            recent_product_catches: &BTreeSet::new(),
+            paid: &BTreeSet::new(),
+            billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
+        },
+        &gate(0.001, 0.01),
+    );
+
+    assert_eq!(names(&plan.run), ["unit:deleted"]);
+    assert_eq!(plan.run[0].why, Why::DeletedInput);
+    assert!(plan.cached.is_empty());
+    assert_eq!(left_names(&plan.past_budget), ["unit:ordinary"]);
 }
 
 /// The two checks of the worked example under "Scores" in `docs/ignite.md`.
@@ -421,6 +450,7 @@ fn checks_an_earlier_gate_of_the_change_chose_still_count_when_cached() {
         checks: &checks,
         unbuilt: &unbuilt,
         landing: None,
+        deleted_inputs: &BTreeSet::new(),
         recent_product_catches: &BTreeSet::new(),
         paid: &paid,
         billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
@@ -464,6 +494,7 @@ fn a_cached_check_is_answered_when_earlier_charges_passed_the_budget() {
         checks: &checks,
         unbuilt: &unbuilt,
         landing: None,
+        deleted_inputs: &BTreeSet::new(),
         recent_product_catches: &BTreeSet::new(),
         paid: &paid,
         billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,

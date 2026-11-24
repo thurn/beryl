@@ -8,23 +8,24 @@
 //! gates of the last hour achieved (see [`super::spent`]). It builds no product its tree has never built for a check chosen by score: a
 //! family whose listing needs such a product, and that has no kept listing, is not listed at
 //! all unless it is in the always set or holds a check required for a regression fix or recent
-//! product catch. Otherwise its checks are left to tip verification. The output prints the seconds spent building and
-//! the seconds spent running checks on lines of their own.
+//! product catch, or whose inputs the change deletes. Otherwise its checks are left to tip
+//! verification. The output lists building and running checks on separate lines.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::AtomicBool;
 
 use ignite_core::budget::billions_text;
-use ignite_core::gate::cost_of;
+use ignite_core::gate::{GatePlan, cost_of};
 use ignite_core::ids::{CheckName, TicketId, TreeId};
 use ignite_core::manifest::{Family, Kind};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::CachedResult;
 
 use super::plan;
+use super::scope::GateChanges;
 use super::time_lines::{Stopwatch, listed_line, slow_line, took_line};
-use super::verbs::{changed_paths, counts, failure_lines, gate_view_of, unbuilt};
-use super::{CheckRun, Checks, Keyed, OpenTree, RunOptions};
+use super::verbs::{counts, failure_lines, gate_view_of, unbuilt, worktree_changes};
+use super::{CheckRun, Checks, Keyed, OpenTree, Prepared, RunOptions};
 use crate::server::Context;
 
 /// A check the gate chose, with its cached result when the plan takes it from the cache.
@@ -98,8 +99,7 @@ pub struct GateBudget {
     pub rate: f64,
     /// Chosen by score and run, with the start-ups of the families they start.
     pub scored: (usize, f64),
-    /// Run whatever the budget: the always set, edited checks and the regression being fixed,
-    /// with the start-ups of their families.
+    /// Run whatever the budget, with the start-ups of their families.
     pub forced: (usize, f64),
     /// Answered from the cache, with what running them would have cost.
     pub cached: (usize, f64),
@@ -142,8 +142,8 @@ impl Checks {
     ) -> GateRun {
         let opening = Stopwatch::start(ctx);
         match self.open(ctx, tree) {
-            Ok((checks, tree)) => {
-                let mut gated = checks.gate_in(ctx, &tree, options, carried, excused);
+            Ok((checks, mut tree)) => {
+                let mut gated = checks.gate_in(ctx, &mut tree, options, carried, excused);
                 gated.opened(ctx, opening);
                 gated
             }
@@ -161,7 +161,7 @@ impl Checks {
     pub(super) fn gate_in(
         &self,
         ctx: &Context,
-        tree: &OpenTree,
+        tree: &mut OpenTree,
         options: &RunOptions,
         carried: Option<&Carried>,
         excused: &Excused,
@@ -176,7 +176,7 @@ impl Checks {
     fn gate_stages(
         &self,
         ctx: &Context,
-        tree: &OpenTree,
+        tree: &mut OpenTree,
         options: &RunOptions,
         carried: Option<&Carried>,
         excused: &Excused,
@@ -185,7 +185,7 @@ impl Checks {
         let scoping = Stopwatch::start(ctx);
         // Without the changed paths the gate cannot tell which checks the change edited, and
         // would drop them silently, so it fails instead.
-        let changed = match changed_paths(self, ctx, tree) {
+        let changes = match worktree_changes(self, ctx, tree) {
             Ok(changed) => changed,
             Err(error) => {
                 run.incomplete_families.push((
@@ -204,8 +204,11 @@ impl Checks {
             .families()
             .filter(|(_, f)| f.kind == Kind::Regression)
             .collect();
-        let catches = plan::GateCatches::read(self, ctx, tree, &changed);
-        let (among, left_out) = self.scope(ctx, tree, &regression, &changed, &catches.recent);
+        let mut changes = GateChanges::from(&changes);
+        changes.remove_deleted_paths(tree);
+        let catches = plan::GateCatches::read(self, ctx, tree, changes.paths);
+        let (among, left_out) =
+            self.scope_with_deletions(ctx, tree, &regression, &catches.recent, &mut changes);
         run.out_of_scope = left_out;
         let scoped: Vec<String> = among.iter().map(|(name, _)| (*name).to_owned()).collect();
         let (among, carried) = match carried {
@@ -224,14 +227,16 @@ impl Checks {
             };
         }
         // A family listed even if that builds a product the tree has never built: one in the
-        // always set for this change, or one holding a required regression check.
+        // always set for this change, or one holding a required regression or deleted-input check.
         let listing = Stopwatch::start(ctx);
         let required = required_families(&catches, options);
         let unbuilt = unbuilt(ctx, tree, among.iter().map(|(_, family)| *family));
         let mut prepared =
             self.prepare_gate(ctx, tree, &among, options, &mut run, &|name, family| {
                 let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
-                let required = family.always_for(&changed) || required.contains(name);
+                let required = family.always_for(changes.paths)
+                    || required.contains(name)
+                    || changes.deleted_input_families.contains(name);
                 !required && needs.iter().any(|need| unbuilt.contains(need))
             });
         for family in &mut prepared {
@@ -248,33 +253,13 @@ impl Checks {
         }
         let planning = Stopwatch::start(ctx);
         let hits = self.lookup(&prepared, options);
-        let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changed, catches);
+        let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changes, catches);
         landing_view(&mut view, options, excused);
-        let gate_plan = self.remember_choice(ctx, &changed, view.plan(&ctx.config.gate));
+        let gate_plan = self.remember_choice(ctx, changes.paths, view.plan(&ctx.config.gate));
         // The products never built before the gate started, so the `build` line can name a
         // cold build even when listing a family made the product.
         let budget = gate_budget(&view.budget(&ctx.config.gate), &gate_plan, unbuilt.clone());
-        let to_run: Vec<&CheckName> = gate_plan.run.iter().map(|p| &p.check).collect();
-        let cached: Vec<&CheckName> = gate_plan.cached.iter().map(|p| &p.check).collect();
-        let mut hits = hits.into_iter();
-        let mut families: Vec<(String, Vec<Item>)> = prepared
-            .into_iter()
-            .map(|family| {
-                let items = family
-                    .keyed
-                    .into_iter()
-                    .map(|k| (k, hits.next().flatten()))
-                    .filter(|(k, _)| {
-                        to_run.contains(&&k.listed.check) || cached.contains(&&k.listed.check)
-                    })
-                    .map(|(k, hit)| {
-                        let hit = hit.filter(|_| cached.contains(&&k.listed.check));
-                        (k, hit)
-                    })
-                    .collect();
-                (family.family, items)
-            })
-            .collect();
+        let mut families = planned_families(prepared, hits, &gate_plan);
         let order = plan::run_order(&view, &gate_plan);
         let key = |family: &str| order.get(family).copied().unwrap_or(0.0);
         families.sort_by(|a, b| key(&a.0).total_cmp(&key(&b.0)));
@@ -429,6 +414,35 @@ fn required_families<'a>(
         .map(|(check, _)| check)
         .chain(&catches.recent)
         .map(CheckName::family)
+        .collect()
+}
+
+/// Keeps the checks the gate selected and passes cache hits only where it chose to use them.
+fn planned_families(
+    prepared: Vec<Prepared>,
+    hits: Vec<Option<CachedResult>>,
+    gate_plan: &GatePlan,
+) -> Vec<(String, Vec<Item>)> {
+    let to_run: Vec<&CheckName> = gate_plan.run.iter().map(|p| &p.check).collect();
+    let cached: Vec<&CheckName> = gate_plan.cached.iter().map(|p| &p.check).collect();
+    let mut hits = hits.into_iter();
+    prepared
+        .into_iter()
+        .map(|family| {
+            let items = family
+                .keyed
+                .into_iter()
+                .map(|k| (k, hits.next().flatten()))
+                .filter(|(k, _)| {
+                    to_run.contains(&&k.listed.check) || cached.contains(&&k.listed.check)
+                })
+                .map(|(k, hit)| {
+                    let hit = hit.filter(|_| cached.contains(&&k.listed.check));
+                    (k, hit)
+                })
+                .collect();
+            (family.family, items)
+        })
         .collect()
 }
 

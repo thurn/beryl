@@ -227,6 +227,7 @@ fn plan_for(areas: &[String], checks: &[GateCheck], gate: &Budget) -> GatePlan {
         checks,
         unbuilt: &no_builds,
         landing: None,
+        deleted_inputs: &BTreeSet::new(),
         recent_product_catches: &BTreeSet::new(),
         paid: &paid,
         billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,

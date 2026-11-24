@@ -531,3 +531,29 @@ fn a_family_with_declared_digest_inputs_is_left_out_when_none_changed() {
         .collect();
     assert_eq!(listed, ["oracle"]);
 }
+
+#[test]
+fn deleting_a_declared_input_brings_a_cold_family_into_the_gate() {
+    let mut world = repository();
+    world.ctx.config.gate.seconds = 0.01;
+    let tree = TreeId::new("tree-01").unwrap();
+    listed_at_the_tip(&world);
+    world
+        .git
+        .set_object("data/client", Oid::new("b".repeat(40)).unwrap());
+    world.builds.never_built(&tree, "client");
+    let builds_before = world.builds.requests().len();
+    let mut trees = tree_with(&world, &["data/client/old-layout.json"]);
+    trees.deleted = trees.changed.clone();
+    assert!(!trees.tracked.contains(&trees.deleted[0]));
+    let checks = daemon(&world, memory(), trees);
+
+    let gated = checks.gate(&world.ctx, &tree, &landing());
+
+    assert!(gated.run.passed(), "{gated:?}");
+    assert_eq!(gated.scoped, ["client-interface"]);
+    assert_eq!(gated.budget.unwrap().forced.0, 1);
+    assert_eq!(outcome(&gated.run, "client-interface:hover"), Outcome::Pass);
+    assert!(gated.run.cold_families.is_empty());
+    assert!(world.builds.requests().len() > builds_before);
+}

@@ -442,6 +442,95 @@ runs     depends on the change: run ignite why in a build tree to see the gate's
 }
 
 #[test]
+fn deleting_a_file_matched_by_a_check_glob_forces_only_that_check() {
+    let mut world = jsonl_world();
+    world.ctx.config.gate.seconds = 0.01;
+    *world.launcher.listing.lock().unwrap() = concat!(
+        r#"{"check": "unit:uses-fixture", "inputs": ["data/*.json"]}"#,
+        "\n",
+        r#"{"check": "unit:unrelated"}"#,
+        "\n",
+    )
+    .to_owned();
+    world
+        .git
+        .set_object("data/core.json", Oid::new("a".repeat(40)).unwrap());
+    let mut trees = FakeTrees::new(&world.dir, &["data/old fixture.json"]);
+    trees.deleted = trees.changed.clone();
+    let checks = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        trees,
+    );
+    let verb = CheckVerb {
+        checks,
+        express: None,
+    };
+    let request = |args| Request {
+        verb: "check".to_owned(),
+        args,
+        cwd: world.dir.clone(),
+        session: None,
+        wait_s: 1,
+        pid: None,
+    };
+    let plan = verb.run(&world.ctx, &request(vec!["--plan".to_owned()]));
+    assert_eq!(plan.exit, Exit::Success, "{}", plan.text);
+    assert!(
+        plan.text.contains("an input was deleted by this change"),
+        "{}",
+        plan.text
+    );
+    assert_eq!(
+        plan.json.unwrap()["run"],
+        serde_json::json!(["unit:uses-fixture"])
+    );
+
+    let run = verb.run(&world.ctx, &request(Vec::new()));
+    assert_eq!(run.exit, Exit::Success, "{}", run.text);
+    assert_eq!(
+        world.launcher.commands("runner"),
+        [vec!["runner".to_owned(), "unit:uses-fixture".to_owned()]]
+    );
+}
+
+#[test]
+fn a_required_deleted_file_is_reported_by_name() {
+    let world = jsonl_world();
+    *world.launcher.listing.lock().unwrap() =
+        r#"{"check": "unit:needs-fixture", "inputs": ["data/fixture.json"]}"#.to_owned();
+    let mut trees = FakeTrees::new(&world.dir, &["data/fixture.json"]);
+    trees.deleted = trees.changed.clone();
+    // An unstaged deletion still appears in the Git index.
+    trees.tracked = ["src/a.py", "data/fixture.json"]
+        .map(str::to_owned)
+        .to_vec();
+    let checks = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        trees,
+    );
+    let gated = checks.gate(
+        &world.ctx,
+        &TreeId::new("tree-01").unwrap(),
+        &options(false),
+    );
+
+    assert!(!gated.run.passed());
+    assert_eq!(
+        outcome(&gated.run, "unit:needs-fixture"),
+        Outcome::Incomplete
+    );
+    assert!(
+        gated.run.failures[0]
+            .message
+            .as_deref()
+            .unwrap()
+            .contains("data/fixture.json")
+    );
+}
+
+#[test]
 fn a_check_whose_inputs_cannot_be_resolved_only_affects_runs_that_name_it() {
     let world = jsonl_world();
     *world.launcher.listing.lock().unwrap() =

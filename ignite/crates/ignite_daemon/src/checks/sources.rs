@@ -3,7 +3,6 @@
 //! real implementations.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use std::time::Duration;
 
@@ -11,6 +10,7 @@ use ignite_core::ids::{Commit, TreeId};
 use ignite_core::inputs::CrateGraph;
 use ignite_core::protocol::hub::{CheckFix, CheckStatsReply};
 use ignite_core::traits::{Error, Result};
+use ignite_git::changed::{self, WorktreeChanges};
 
 use crate::build::{DirectoryTrees, TreeFacts};
 
@@ -32,7 +32,7 @@ pub trait TreeSource: Send + Sync {
     fn head(&self, path: &Path) -> Result<Commit>;
     /// The paths the tree changes since its branch left `base` (such as `origin/staging`),
     /// uncommitted edits and new files included.
-    fn changed(&self, path: &Path, base: &str) -> Result<Vec<String>>;
+    fn changes(&self, path: &Path, base: &str) -> Result<WorktreeChanges>;
 }
 
 impl TreeSource for DirectoryTrees {
@@ -62,36 +62,9 @@ impl TreeSource for DirectoryTrees {
         ignite_git::refs::head(path)
     }
 
-    fn changed(&self, path: &Path, base: &str) -> Result<Vec<String>> {
-        let fork = git(path, &["merge-base", "HEAD", base])?;
-        let mut paths = lines(&git(path, &["diff", "--name-only", fork.trim()])?);
-        paths.extend(lines(&git(
-            path,
-            &["ls-files", "--others", "--exclude-standard"],
-        )?));
-        paths.sort();
-        paths.dedup();
-        Ok(paths)
+    fn changes(&self, path: &Path, base: &str) -> Result<WorktreeChanges> {
+        changed::worktree(path, base)
     }
-}
-
-fn git(dir: &Path, args: &[&str]) -> Result<String> {
-    let output = Command::new("git").arg("-C").arg(dir).args(args).output()?;
-    if !output.status.success() {
-        return Err(Error::Io(format!(
-            "git {} failed: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-}
-
-fn lines(text: &str) -> Vec<String> {
-    text.lines()
-        .filter(|l| !l.is_empty())
-        .map(str::to_owned)
-        .collect()
 }
 
 /// Each check's runs, failures and costs, as the hub keeps them.

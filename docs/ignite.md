@@ -2352,6 +2352,13 @@ looks up the result cache, builds what the remaining checks need, and runs the
 always set and the gate. The output's `scope` line says how many families were
 left out.
 
+A path deleted since the merge base still matches the input patterns that
+covered it. The gate brings in families whose declared inputs, kept listings or
+recorded reads match a deletion. An enabled check with a matching input runs
+outside the score threshold and time budget, even if it needs a product the tree
+has never built. The gate reports an unresolved required input by name and marks
+the check incomplete.
+
 The gate stops at the first fault it knows of:
 
 - After scoping, it lists first the families that need no build to be listed

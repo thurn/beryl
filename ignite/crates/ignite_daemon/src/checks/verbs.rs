@@ -12,12 +12,14 @@ use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::CachedResult;
 use ignite_core::protocol::tickets::{Status, TicketQuery};
 use ignite_core::protocol::{Class, Outcome};
+use ignite_git::changed::WorktreeChanges;
 
 use super::express::{Asked, express_reply};
 pub(crate) use super::gate::gate_lines;
 use super::gate::scope_line;
 use super::named::test_families;
 use super::plan::{self, GateView};
+use super::scope::GateChanges;
 use super::time_lines::{Stopwatch, slow_line, took_line};
 pub(crate) use super::time_lines::{built_lines, listed_line};
 use super::why_record;
@@ -130,12 +132,13 @@ impl Verb for CheckVerb {
         let (_, flags) = split_args(&req.args);
         let options = options("check", req, flags.contains(&"--rerun"));
         let opening = Stopwatch::start(ctx);
-        let (checks, tree) = match self.tree(ctx, req) {
+        let (checks, mut tree) = match self.tree(ctx, req) {
             Ok(opened) => opened,
             Err(reply) => return reply,
         };
-        let changed = || changed_paths(&checks, ctx, &tree);
-        if let Some(refused) = crate::land::by_verdict::refuse_mixed(ctx, &tree.path, changed) {
+        let changed_files = || changed_paths(&checks, ctx, &tree);
+        if let Some(refused) = crate::land::by_verdict::refuse_mixed(ctx, &tree.path, changed_files)
+        {
             return refused;
         }
         if !flags.contains(&"--plan") {
@@ -143,7 +146,7 @@ impl Verb for CheckVerb {
             if let Some(reply) = express_reply(lane, &checks, ctx, &tree, Asked::Gate) {
                 return reply;
             }
-            let mut gated = checks.gate_in(ctx, &tree, &options, None, &super::Excused::new());
+            let mut gated = checks.gate_in(ctx, &mut tree, &options, None, &super::Excused::new());
             gated.opened(ctx, opening);
             let mut lines = built_lines(&gated.run);
             lines.extend(gate_lines(&gated));
@@ -156,11 +159,13 @@ impl Verb for CheckVerb {
             .collect();
         let mut run = CheckRun::default();
         // Without the changed paths nothing can be left out of scope.
-        let changed = changed_paths(&checks, ctx, &tree);
-        let catches =
-            plan::GateCatches::read(&checks, ctx, &tree, changed.as_deref().unwrap_or_default());
-        let among = if let Ok(changed) = &changed {
-            let (among, left_out) = checks.scope(ctx, &tree, &regression, changed, &catches.recent);
+        let read = worktree_changes(&checks, ctx, &tree);
+        let mut changes = read.as_ref().map(GateChanges::from).unwrap_or_default();
+        changes.remove_deleted_paths(&mut tree);
+        let catches = plan::GateCatches::read(&checks, ctx, &tree, changes.paths);
+        let among = if read.is_ok() {
+            let (among, left_out) =
+                checks.scope_with_deletions(ctx, &tree, &regression, &catches.recent, &mut changes);
             run.out_of_scope = left_out;
             among
         } else {
@@ -171,15 +176,7 @@ impl Verb for CheckVerb {
             family.keep(|_| true, &mut run);
         }
         let hits = checks.lookup(&prepared, &options);
-        let view = gate_view_of(
-            &checks,
-            ctx,
-            &tree,
-            &prepared,
-            &hits,
-            &changed.unwrap_or_default(),
-            catches,
-        );
+        let view = gate_view_of(&checks, ctx, &tree, &prepared, &hits, &changes, catches);
         let gate_plan = view.plan(&ctx.config.gate);
         let mut lines = plan::plan_lines(&view, &gate_plan, &ctx.config.gate);
         lines.extend(failure_lines(&run));
@@ -328,9 +325,17 @@ fn gate_view(
     prepared: &[Prepared],
     hits: &[Option<CachedResult>],
 ) -> GateView {
-    let changed = changed_paths(checks, ctx, tree).unwrap_or_default();
-    let catches = plan::GateCatches::read(checks, ctx, tree, &changed);
-    gate_view_of(checks, ctx, tree, prepared, hits, &changed, catches)
+    let read = worktree_changes(checks, ctx, tree).unwrap_or_default();
+    let mut changes = GateChanges::from(&read);
+    let catches = plan::GateCatches::read(checks, ctx, tree, changes.paths);
+    if !changes.deleted.is_empty() {
+        let families: Vec<_> = checks
+            .families()
+            .filter(|(name, _)| prepared.iter().any(|p| p.family == *name))
+            .collect();
+        checks.scope_with_deletions(ctx, tree, &families, &catches.recent, &mut changes);
+    }
+    gate_view_of(checks, ctx, tree, prepared, hits, &changes, catches)
 }
 
 /// The paths the tree changes since its branch left the integration branch.
@@ -339,37 +344,59 @@ pub(super) fn changed_paths(
     ctx: &Context,
     tree: &OpenTree,
 ) -> ignite_core::traits::Result<Vec<String>> {
+    Ok(worktree_changes(checks, ctx, tree)?.paths)
+}
+
+/// The changed paths, including which of them were deleted relative to the merge base.
+pub(super) fn worktree_changes(
+    checks: &Checks,
+    ctx: &Context,
+    tree: &OpenTree,
+) -> ignite_core::traits::Result<WorktreeChanges> {
     let base = ignite_core::refname::tracking_ref(
         &ctx.config.repository.remote,
         &ctx.config.repository.staging,
     );
-    checks.trees.changed(&tree.path, &base)
+    checks.trees.changes(&tree.path, &base)
 }
 
-/// [`gate_view`] over `changed`, which the caller read.
+/// [`gate_view`] using changed paths and deletion evidence collected by the caller.
 pub(super) fn gate_view_of(
     checks: &Checks,
     ctx: &Context,
     tree: &OpenTree,
     prepared: &[Prepared],
     hits: &[Option<CachedResult>],
-    changed: &[String],
+    changes: &GateChanges<'_>,
     catches: plan::GateCatches,
 ) -> GateView {
     let families = prepared.iter().map(|p| p.family.as_str());
     let stats = plan::scoring_stats(checks, families, &catches.areas, &catches.records);
     let manifest = &checks.settings.manifest;
     let family = |name: &str| manifest.families.get(name).map(|d| &d.family);
+    let mut deleted = changes.deleted_input_checks.clone();
+    if !changes.deleted.is_empty() {
+        for prepared in prepared {
+            if let Some(family) = family(&prepared.family) {
+                let listed = prepared.keyed.iter().map(|keyed| &keyed.listed);
+                deleted.extend(checks.checks_with_deleted_inputs(
+                    tree,
+                    family,
+                    listed,
+                    changes.deleted,
+                ));
+            }
+        }
+    }
     let mut view = GateView::new(
         prepared,
         hits,
         family,
         &stats,
-        &catches.regressions,
-        changed,
-        catches.areas,
+        changes.paths,
+        deleted,
+        catches,
     );
-    view.recent_product_catches = catches.recent;
     view.unbuilt = unbuilt(ctx, tree, prepared.iter().filter_map(|p| family(&p.family)));
     // The rate of the gates of the last hour on this daemon, or the hub's for the day, and the
     // checks the change's last gate chose (see `spent`).
@@ -377,7 +404,7 @@ pub(super) fn gate_view_of(
     let conn = checks.cache.conn();
     let memory = super::spent::GateMemory(&conn);
     view.rate = memory.rate(ctx.clock.now(), daily);
-    view.paid = memory.paid(changed);
+    view.paid = memory.paid(changes.paths);
     view
 }
 

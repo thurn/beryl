@@ -55,11 +55,7 @@ impl Checks {
     /// The areas of the change in `tree`: what its branch changed since it left `staging`.
     /// Empty at the tip, and when the change cannot be read, so nothing is counted wrongly.
     pub(super) fn change_areas(&self, ctx: &Context, tree: &OpenTree) -> Vec<String> {
-        let base = ignite_core::refname::tracking_ref(
-            &ctx.config.repository.remote,
-            &ctx.config.repository.staging,
-        );
-        let changed = self.trees.changed(&tree.path, &base).unwrap_or_default();
+        let changed = super::verbs::changed_paths(self, ctx, tree).unwrap_or_default();
         super::plan::areas(&changed, &tree.graph)
     }
 

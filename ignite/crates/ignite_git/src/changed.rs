@@ -1,4 +1,4 @@
-//! The paths that differ between two commits, in total and per landing.
+//! Changed paths in worktrees, between commits, and per landing.
 //!
 //! A landing is one ticket's commits, pushed to the integration branch together. Git does not
 //! record where one landing ends and the next begins, so [`landings`] takes the last commit of
@@ -146,6 +146,50 @@ fn same_commit(a: &Commit, b: &Commit) -> bool {
     a.as_str().starts_with(b.as_str()) || b.as_str().starts_with(a.as_str())
 }
 
+/// A worktree's changed paths since it diverged from the integration branch.
+#[derive(Default)]
+pub struct WorktreeChanges {
+    pub paths: Vec<String>,
+    /// Paths removed from the merge base. A rename also removes its old path.
+    pub deleted: Vec<String>,
+}
+
+/// Compares the worktree, including uncommitted changes, with its merge base with e.g.
+/// `origin/staging`.
+pub fn worktree(root: &Path, integration: &str) -> Result<WorktreeChanges> {
+    let base = cmd::run(root, ["merge-base", "HEAD", integration])?;
+    let diff = cmd::run(
+        root,
+        [
+            "diff",
+            "--name-status",
+            "-z",
+            "--no-renames",
+            base.trim(),
+            "--",
+        ],
+    )?;
+    let untracked = cmd::run(root, ["ls-files", "-z", "--others", "--exclude-standard"])?;
+    let mut paths: BTreeSet<_> = untracked
+        .split_terminator('\0')
+        .map(str::to_owned)
+        .collect();
+    let mut deleted = Vec::new();
+    let mut entries = diff.split_terminator('\0');
+    while let (Some(status), Some(path)) = (entries.next(), entries.next()) {
+        // A staged deletion followed by recreating the file leaves the path present.
+        if status == "D" && !paths.contains(path) {
+            deleted.push(path.to_owned());
+        }
+        paths.insert(path.to_owned());
+    }
+    deleted.sort();
+    Ok(WorktreeChanges {
+        paths: paths.into_iter().collect(),
+        deleted,
+    })
+}
+
 /// The paths in the checkout at `root` whose files differ from its `HEAD`: tracked files with
 /// changes staged or not, deleted files, and untracked files git does not ignore. Sorted.
 pub fn uncommitted(root: &Path) -> Result<Vec<String>> {
@@ -158,4 +202,47 @@ pub fn uncommitted(root: &Path) -> Result<Vec<String>> {
         .map(str::to_owned)
         .collect();
     Ok(paths.into_iter().collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn worktree_deletions_are_relative_to_the_merge_base() {
+        let root = ignite_core::test_files::temp_dir().join("worktree-changes");
+        std::fs::create_dir(&root).unwrap();
+        let git = |args: &[&str]| cmd::run(&root, args).unwrap();
+        git(&["init", "--quiet", "-b", "integration"]);
+        git(&["config", "user.name", "Test"]);
+        git(&["config", "user.email", "test@example.com"]);
+        for path in ["old fixture.txt", "removed.txt", "restored.txt"] {
+            std::fs::write(root.join(path), path).unwrap();
+        }
+        git(&["add", "."]);
+        git(&["commit", "--quiet", "-m", "base"]);
+        git(&["branch", "topic"]);
+        std::fs::write(root.join("upstream.txt"), "upstream").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "--quiet", "-m", "advance integration"]);
+
+        git(&["checkout", "--quiet", "topic"]);
+        git(&["mv", "old fixture.txt", "new fixture.txt"]);
+        git(&["commit", "--quiet", "-m", "rename fixture"]);
+        std::fs::remove_file(root.join("removed.txt")).unwrap();
+        git(&["rm", "restored.txt"]);
+        std::fs::write(root.join("restored.txt"), "different").unwrap();
+
+        let changed = worktree(&root, "integration").unwrap();
+        assert_eq!(changed.deleted, ["old fixture.txt", "removed.txt"]);
+        assert_eq!(
+            changed.paths,
+            [
+                "new fixture.txt",
+                "old fixture.txt",
+                "removed.txt",
+                "restored.txt"
+            ]
+        );
+    }
 }

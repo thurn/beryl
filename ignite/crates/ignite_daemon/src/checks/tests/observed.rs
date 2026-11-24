@@ -288,3 +288,53 @@ fn a_change_to_an_opened_file_keeps_the_family_in_scope() {
         assert_eq!(!affected.is_empty(), in_scope, "{changed}");
     }
 }
+
+#[test]
+fn a_recorded_runtime_deletion_forces_the_check_and_an_unread_deletion_is_out_of_scope() {
+    let mut world = opening();
+    world.ctx.config.gate.seconds = 0.01;
+    let first = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        tree_with(&world, &[]),
+    );
+    assert!(run_on(&world, &first).passed());
+    let tree = TreeId::new("tree-01").unwrap();
+
+    let gate_deletion = |path: &str| {
+        let mut trees = tree_with(&world, &[path]);
+        trees.deleted = trees.changed.clone();
+        trees.tracked.retain(|tracked| tracked != path);
+        let checks = daemon(
+            &world,
+            ignite_store::local::open_in_memory().unwrap(),
+            trees,
+        );
+        checks.gate(&world.ctx, &tree, &options(false))
+    };
+
+    let unread = gate_deletion("data/unread.json");
+    assert!(unread.run.passed(), "{unread:?}");
+    assert_eq!(unread.run.out_of_scope, ["rust"]);
+    assert_eq!(unread.run.ran, 0);
+
+    // A product input changed the listing hash, but the package's recorded test reads
+    // are still available under its unchanged coarse hash.
+    world.git.set_object("data/built-from.json", oid('b'));
+    world.builds.never_built(&tree, "rust-tests");
+    *world.launcher.nextest_run.lock().unwrap() =
+        "{\"type\":\"test\",\"event\":\"failed\",\"name\":\"core::core$a\",\
+         \"stdout\":\"data/opened.json: file not found\"}\n"
+            .to_owned();
+    let opened = gate_deletion("data/opened.json");
+    assert_eq!(opened.scoped, ["rust"]);
+    assert_eq!(opened.budget.unwrap().forced.0, 1);
+    assert!(opened.run.cold_families.is_empty());
+    assert_eq!(outcome(&opened.run, "rust:core::a"), Outcome::Fail);
+    let output = opened.run.failures[0].output.as_ref().unwrap();
+    assert!(
+        fs::read_to_string(output)
+            .unwrap()
+            .contains("data/opened.json")
+    );
+}

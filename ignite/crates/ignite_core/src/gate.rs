@@ -5,13 +5,13 @@
 //!
 //! - The always set (checks in a family marked `always = true`) is looked up or run on every
 //!   landing, outside the threshold and the budget.
-//! - A check whose own file the change edits, or that recently caught a product bug in one of
-//!   the change's areas, runs outside the budget.
+//! - A check whose own file the change edits, whose input was deleted, or that recently caught
+//!   a product bug in one of the change's areas, runs outside the budget.
 //! - A check with an open regression ticket is left out and reported as known to fail, unless
 //!   the ticket being landed is that regression's, in which case it must run, outside the
-//!   budget. This holds in the always set too, unless the change edits the check's own file.
-//!   The landing passes a check it found failing at the tip it was rebased onto here as one
-//!   with an open regression ticket.
+//!   budget. This holds in the always set too, unless the change edits the check's own file or
+//!   deletes an input. The landing passes a check it found failing at the tip it was rebased
+//!   onto here as one with an open regression ticket.
 //! - A check that needs a build product the tree has never built is left to tip verification
 //!   unless it must run anyway: the gate runs checks on what the tree has already compiled, and
 //!   a cold build belongs to the tip. An incremental rebuild of a product the tree has built
@@ -29,6 +29,8 @@
 //!   counts against this gate's budget as well, with its family's start-up, and a second gate
 //!   of an unchanged change (`ignite check` and then `ignite land`) chooses the same checks
 //!   instead of spending a second budget on checks with lower scores.
+//!   A check with a deleted input runs again because the missing path may be absent from its
+//!   input hash.
 //! - A check's cost leaves out the start-up of the command it runs in, which its family pays
 //!   once ([`GateCheck::family_startup`]): with the first check of the family that must run, or
 //!   else with the first one chosen by score, when it counts against the budget. A score
@@ -92,6 +94,8 @@ pub struct GateInput<'a> {
     pub unbuilt: &'a BTreeSet<String>,
     /// The ticket being landed.
     pub landing: Option<&'a TicketId>,
+    /// Checks with a declared or recorded input deleted by this change.
+    pub deleted_inputs: &'a BTreeSet<CheckName>,
     /// Checks with a recent product catch in an area this change touches.
     pub recent_product_catches: &'a BTreeSet<CheckName>,
     /// The checks an earlier gate of the same change chose by score. The budget belongs
@@ -109,6 +113,8 @@ pub enum Why {
     Always,
     /// The change edits it.
     Edited,
+    /// The change deletes an input it reads.
+    DeletedInput,
     /// The ticket being landed is this check's regression ticket.
     Fixes,
     /// The check recently caught a product bug in an area this change touches.
@@ -217,7 +223,9 @@ pub fn plan(input: &GateInput<'_>, budget: &Budget) -> GatePlan {
             .regression
             .as_ref()
             .is_some_and(|ticket| input.landing != Some(ticket));
-        if check.always && !known {
+        if input.deleted_inputs.contains(&check.check) {
+            must_run.push((check, Why::DeletedInput));
+        } else if check.always && !known {
             always.push(check);
         } else if check.edited {
             must_run.push((check, Why::Edited));
@@ -243,7 +251,10 @@ pub fn plan(input: &GateInput<'_>, budget: &Budget) -> GatePlan {
     // A product that a check which must run needs is built for it, so it is no longer cold for
     // the checks chosen by score.
     let mut unbuilt = input.unbuilt.clone();
-    for (check, _) in forced.iter().filter(|(check, _)| !check.cached) {
+    for (check, _) in forced
+        .iter()
+        .filter(|(check, why)| !check.cached || *why == Why::DeletedInput)
+    {
         for need in &check.needs {
             unbuilt.remove(need);
         }
@@ -252,13 +263,14 @@ pub fn plan(input: &GateInput<'_>, budget: &Budget) -> GatePlan {
     let mut started: BTreeSet<&str> = BTreeSet::new();
     for (check, why) in forced {
         let score = (why != Why::Always).then(|| unit(input, vec![check]).score());
+        let use_cached = check.cached && why != Why::DeletedInput;
         let planned = Planned {
             check: check.check.clone(),
             why,
             score,
             cost: cost(input, check),
         };
-        if check.cached {
+        if use_cached {
             plan.cached.push(planned);
             continue;
         }

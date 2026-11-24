@@ -113,6 +113,7 @@ pub(crate) struct GateView {
     /// The ticket being landed, whose own regression's check must run in this gate.
     pub landing: Option<TicketId>,
     pub recent_product_catches: BTreeSet<CheckName>,
+    deleted_inputs: BTreeSet<CheckName>,
     /// Build products the tree has never built.
     pub unbuilt: BTreeSet<String>,
     /// Billions of instructions per second of wall time that the gate's check commands
@@ -162,18 +163,18 @@ impl GateView {
     /// The gate checks of the regression families in `prepared`, with `hits` in the same order
     /// as their checks. A check the hub has switched off is left out, and a cached result of an
     /// uncached check is ignored. A check in `regressions` has an open regression ticket, so the
-    /// gate leaves it out unless the ticket being landed is that ticket.
-    pub(crate) fn new<'a>(
+    /// planner can judge whether the change needs it to run anyway.
+    pub(super) fn new<'a>(
         prepared: &[Prepared],
         hits: &[Option<CachedResult>],
         family: impl Fn(&str) -> Option<&'a Family>,
         stats: &BTreeMap<String, CheckStatsReply>,
-        regressions: &BTreeMap<CheckName, TicketId>,
         changed: &[String],
-        areas: Vec<String>,
+        deleted_inputs: BTreeSet<CheckName>,
+        catches: GateCatches,
     ) -> GateView {
         let mut view = GateView {
-            areas,
+            areas: catches.areas,
             checks: Vec::new(),
             stats: BTreeMap::new(),
             product_scored: stats
@@ -182,7 +183,8 @@ impl GateView {
                 .map(|reply| reply.family.clone())
                 .collect(),
             landing: None,
-            recent_product_catches: BTreeSet::new(),
+            recent_product_catches: catches.recent,
+            deleted_inputs,
             unbuilt: BTreeSet::new(),
             rate: ClassRates::default().land(),
             paid: BTreeSet::new(),
@@ -197,7 +199,7 @@ impl GateView {
                     continue;
                 };
                 let check = &keyed.listed.check;
-                let regression = regressions.get(check).cloned();
+                let regression = catches.regressions.get(check).cloned();
                 let Some(mut scored) = scored_check(check, declared, reply, regression) else {
                     continue;
                 };
@@ -231,6 +233,7 @@ impl GateView {
                 checks: &self.checks,
                 unbuilt: &self.unbuilt,
                 landing: self.landing.as_ref(),
+                deleted_inputs: &self.deleted_inputs,
                 recent_product_catches: &self.recent_product_catches,
                 paid: &self.paid,
                 billions_per_cpu_second: score::BILLIONS_PER_CPU_SECOND,
@@ -244,6 +247,7 @@ impl GateView {
         match planned.why {
             Why::Always => "in the always set".to_owned(),
             Why::Edited => "edited by this change".to_owned(),
+            Why::DeletedInput => "an input was deleted by this change".to_owned(),
             Why::Fixes => "fixes its regression".to_owned(),
             Why::RecentProductCatch => {
                 "product bug in this area, fixed in the last 14 days".to_owned()
@@ -451,7 +455,8 @@ pub(crate) fn plan_lines(view: &GateView, plan: &GatePlan, gate: &Gate) -> Vec<(
         ));
     }
     lines.push(budget_line(&view.budget(gate)));
-    let selected = if recent.is_empty() {
+    let deleted = gated.iter().filter(|p| p.why == Why::DeletedInput).count();
+    let selected = if recent.is_empty() && deleted == 0 {
         format!("above {}", gate.threshold)
     } else {
         "selected".to_owned()
@@ -465,6 +470,37 @@ pub(crate) fn plan_lines(view: &GateView, plan: &GatePlan, gate: &Gate) -> Vec<(
             billions_text(plan.scored_cost + plan.forced_cost)
         ),
     ));
+    if deleted > 0 {
+        lines.push((
+            "deleted".to_owned(),
+            format!("{} forced by a deleted input", thousands(deleted)),
+        ));
+    }
+    lines.extend(deferred_lines(view, plan));
+    if !plan.known_failing.is_empty() {
+        lines.push((
+            "known".to_owned(),
+            format!("{} checks have open regressions", plan.known_failing.len()),
+        ));
+    }
+    recent.sort_by_key(|p| &p.check);
+    lines.extend(recent.into_iter().map(|p| {
+        (
+            "recent".to_owned(),
+            format!("{}  {}", p.check, view.reason(p)),
+        )
+    }));
+    let top: Vec<_> = gated
+        .into_iter()
+        .filter(|p| p.why != Why::RecentProductCatch)
+        .collect();
+    lines.extend(top_lines(view, &top));
+    lines
+}
+
+/// Checks the gate left to tip verification and the reason they were deferred.
+fn deferred_lines(view: &GateView, plan: &GatePlan) -> Vec<(String, String)> {
+    let mut lines = Vec::new();
     if !plan.past_budget.is_empty() {
         lines.push((
             "past budget".to_owned(),
@@ -504,24 +540,6 @@ pub(crate) fn plan_lines(view: &GateView, plan: &GatePlan, gate: &Gate) -> Vec<(
             thousands(affected)
         ),
     ));
-    if !plan.known_failing.is_empty() {
-        lines.push((
-            "known".to_owned(),
-            format!("{} checks have open regressions", plan.known_failing.len()),
-        ));
-    }
-    recent.sort_by_key(|p| &p.check);
-    lines.extend(recent.into_iter().map(|p| {
-        (
-            "recent".to_owned(),
-            format!("{}  {}", p.check, view.reason(p)),
-        )
-    }));
-    let top: Vec<_> = gated
-        .into_iter()
-        .filter(|p| p.why != Why::RecentProductCatch)
-        .collect();
-    lines.extend(top_lines(view, &top));
     lines
 }
 

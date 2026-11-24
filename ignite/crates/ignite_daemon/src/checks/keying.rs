@@ -156,7 +156,7 @@ impl Checks {
     /// needs. With observed reads, a product's path patterns are left out and its crate
     /// patterns kept: a product lists the files its build reads so that it is rebuilt when they
     /// change, and the observed reads already name every repository file a Cargo build read.
-    fn check_patterns(&self, family: &Family, observed: bool) -> Vec<InputPattern> {
+    pub(super) fn check_patterns(&self, family: &Family, observed: bool) -> Vec<InputPattern> {
         let manifest = &self.settings.manifest;
         if !observed {
             return hash::input_patterns(family, manifest);

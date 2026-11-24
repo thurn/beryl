@@ -237,6 +237,7 @@ fn split_by<'a>(
             checks: &candidates,
             unbuilt: &unbuilt,
             landing: None,
+            deleted_inputs: &std::collections::BTreeSet::new(),
             recent_product_catches: &std::collections::BTreeSet::new(),
             paid: &paid,
             billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
