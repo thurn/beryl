@@ -4,7 +4,9 @@
 use app_client::Input;
 use app_client::{Client, Config};
 use beryl_card_records::{CardRecords, TokenMakers, card_records_among};
-use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::protocol::{Side, StackItem, ZoneName};
+use beryl_protocol::script::Reset;
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, script};
 use game_probe::agent::blank_cards;
 use game_table::faces::{CARD_BACK, FaceList};
 use kit_frame::frame::{Frame, Material, Role, TextureArray};
@@ -236,6 +238,8 @@ fn hand_and_stack_cards_draw_their_full_frame_and_permanents_their_battlefield_f
     let wanted: Vec<FaceId> = client.wanted_faces().collect();
     let find = |client: &Client, name| client.faces().find(name).unwrap();
     assert_eq!(wanted.first(), Some(&CARD_BACK), "{wanted:?}");
+    // The host's asset workers keep these faces' full-size layers while they are shown.
+    assert_eq!(client.shown_full_faces(), wanted.as_slice());
     for name in ["Lightning Bolt", "Counterspell", "Memory Lapse", "Plains"] {
         assert!(wanted.contains(&find(&client, name)), "{name}: {wanted:?}");
     }
@@ -272,5 +276,76 @@ fn hand_and_stack_cards_draw_their_full_frame_and_permanents_their_battlefield_f
     assert!(
         draws.contains(&(false, angel.0)),
         "Serra Angel is drawn from its board-size layer: {draws:?}"
+    );
+}
+
+/// A trigger on the stack whose words are not a paragraph of its source's printed text of their
+/// own, such as the delayed trigger that Teferi, Hero of Dominaria's +1 creates, has no plate
+/// face, so the table draws it with its source's face. The client asked only for plate faces at
+/// full size, so on the desktop that trigger stayed drawn from its source's board-size face,
+/// enlarged to the stack's size, and looked blurry. The face it is drawn with must be the one
+/// asked for at full size, and it must then be drawn from the full-size array.
+#[test]
+fn a_trigger_with_no_plate_face_is_drawn_from_its_source_s_full_size_face() {
+    let name = "Teferi, Hero of Dominaria";
+    let mut builder = ViewBuilder::new();
+    let teferi = builder.card(ZoneName::Battlefield, Side::You, name).slot;
+    let mut update = builder.update();
+    update.view.stack.push(StackItem::Ability {
+        source: Some(teferi),
+        ability: 0,
+        granted: false,
+        name: name.to_owned(),
+        triggered: true,
+        taps_to_pay: None,
+        nth: 0,
+        text: None,
+        controller: Side::You,
+        manual: None,
+        targets: Vec::new(),
+        x: 0,
+    });
+    // A view's stack names no ability, so its number comes from the script.
+    update.view.script = Some(script(
+        Some(Reset { abilities: vec![1] }),
+        Vec::new(),
+        Vec::new(),
+    ));
+    let records = card_records_among([name], TokenMakers::NONE);
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
+    client.handle(Input::Device(DeviceInput::Surface {
+        size: SIZE,
+        scale: 2.0,
+        safe_area: Insets::default(),
+    }));
+    client.handle(Input::Cards(Box::new(records)));
+    let ready: Vec<AssetReady> = client.faces().all_ready().collect();
+    for ready in ready {
+        client.handle(Input::Device(DeviceInput::Assets(ready)));
+    }
+    client.handle(Input::Update(Box::new(update)));
+    let face = client.faces().find(name).unwrap();
+    assert!(
+        client.faces().plate(name, true, 0).is_none(),
+        "the trigger has no plate face"
+    );
+    client.frame(0);
+    let wanted: Vec<FaceId> = client.wanted_faces().collect();
+    assert_eq!(
+        wanted,
+        [CARD_BACK, face],
+        "the faces asked for at full size"
+    );
+    for (face, layer) in wanted.into_iter().zip(100..) {
+        client.handle(Input::Device(DeviceInput::Assets(AssetReady::Face {
+            face,
+            size: FaceSize::Full,
+            layer,
+        })));
+    }
+    let draws = card_draws(client.frame(1));
+    assert!(
+        draws.contains(&(true, 101)),
+        "the trigger is drawn from its source's full-size layer: {draws:?}"
     );
 }

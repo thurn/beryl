@@ -26,6 +26,9 @@ from .command import Command
 # How many lines of `tree.txt` are printed.
 TREE_LINES = 60
 CLIENT = "Beryl"
+# The names the client's reports have given it: reports saved before the client was renamed
+# from Beryl 3D name it so.
+CLIENT_NAMES: tuple[str, ...] = (CLIENT, "Beryl 3D")
 
 
 @dataclass(frozen=True)
@@ -49,7 +52,7 @@ def open_report(key: str, root: Path) -> Opened | None:
 
 
 def is_client(log: object) -> bool:
-    return isinstance(log, dict) and log.get("client") in (CLIENT, "Beryl")
+    return isinstance(log, dict) and log.get("client") in CLIENT_NAMES
 
 
 def reproduce(opened: Opened) -> list[str]:

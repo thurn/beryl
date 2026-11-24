@@ -31,10 +31,20 @@ const NEAR: f32 = 32.0;
 /// board-size layer `face`, with the camera looking straight down on the square of the table
 /// from -`half` to `half` millimetres.
 fn draw_card(renderer: &mut Renderer, face: u16, half: f32) -> Picture {
+    draw_turned_card(renderer, face, half, false)
+}
+
+/// As `draw_card`, with the card turned a quarter turn, as a tapped card lies, when `tapped`.
+fn draw_turned_card(renderer: &mut Renderer, face: u16, half: f32, tapped: bool) -> Picture {
     let camera = directx::orthographic(-half, half, -half, half, 0.0, 2000.0)
         * look_at_mat4(Vec3::new(0.0, 0.0, 1000.0), Vec3::ZERO, Vec3::Y);
+    let turn = if tapped {
+        std::f32::consts::FRAC_PI_2
+    } else {
+        0.0
+    };
     let card = Draw::card(
-        Affine3A::from_translation(Vec3::new(0.0, 0.0, 1.0)),
+        Affine3A::from_translation(Vec3::new(0.0, 0.0, 1.0)) * Affine3A::from_rotation_z(turn),
         [255; 4],
         FaceSize::Board,
         face,
@@ -204,6 +214,50 @@ fn plain_layer(size: FaceSize, value: u8) -> Layer {
         width,
         height,
         levels,
+    }
+}
+
+/// The table's half width at which a board-size face, 360 texels tall on a card 88 millimetres
+/// tall, is drawn at two thirds of its size: 240 pixels tall in the 200 pixel target. The
+/// opponent's untapped permanents are drawn about this small on a 1728 by 1117 point window at
+/// scale 2, the player's own about 290 pixels tall.
+const TWO_THIRDS: f32 = 88.0 * 200.0 / (2.0 * 240.0);
+
+/// An uncompressed board-size layer whose largest level is all `largest` and whose smaller
+/// levels are all `smaller`, so that a pixel's value says which levels it was sampled from.
+fn levels_layer(largest: u8, smaller: u8) -> Layer {
+    let mut layer = plain_layer(FaceSize::Board, smaller);
+    layer.levels[0].fill(largest);
+    layer
+}
+
+/// The opponent's cards looked blurrier than the player's: the camera draws them a little
+/// smaller, under two thirds of their face's size, and a sampler that snaps to the nearest
+/// mipmap level drew them from the half-size level, enlarged. A card drawn at two thirds of its
+/// face's size, untapped or tapped, must take most of its color from the largest level.
+#[test]
+fn a_card_at_two_thirds_of_its_face_size_samples_the_largest_level() {
+    let (largest, smaller) = (220, 20);
+    for limits in BOTH {
+        let mut renderer =
+            Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
+        renderer.set_faces(&["", "a"], Format::Rgba8);
+        let layer = levels_layer(largest, smaller);
+        assert!(renderer.upload_layer(&prepared(1, FaceSize::Board, 1, layer)));
+        for tapped in [false, true] {
+            let [value, ..] = at(
+                &draw_turned_card(&mut renderer, 1, TWO_THIRDS, tapped),
+                0.0,
+                0.0,
+            );
+            // Three quarters of the way from the smaller levels' value to the largest's.
+            let floor = (u16::from(smaller) + u16::from(largest - smaller) * 3 / 4) as u8;
+            assert!(
+                value >= floor,
+                "{limits:?}, tapped {tapped}: drawn {value}, so mostly from a smaller level \
+                 (largest level {largest}, smaller {smaller}, at least {floor} expected)"
+            );
+        }
     }
 }
 

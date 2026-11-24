@@ -116,10 +116,19 @@ impl Renderer {
     ) -> Self {
         let layout = bind_group_layout(&device);
         let pipelines = pipelines(&device, &layout, target_format);
+        // Card faces are drawn smaller than their largest mipmap level almost everywhere, so
+        // the sampler blends the two nearest levels (trilinear) rather than snapping to one: a
+        // card a little under two thirds of its face's size would otherwise be drawn from the
+        // half-size level, enlarged. Anisotropic filtering keeps a card that the camera's tilt
+        // foreshortens sharp along its other axis. wgpu ignores the clamp on a device without
+        // anisotropic filtering. The shader biases the level toward the larger one
+        // (`PICTURE_LOD_BIAS` in `shader.wgsl`).
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("pictures"),
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
+            anisotropy_clamp: 4,
             ..Default::default()
         });
         // A frame's card size until the first frame says otherwise (`Frame::card`).

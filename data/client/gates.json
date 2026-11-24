@@ -14,35 +14,35 @@
     },
     "box_shadow": {
       "samples": 1,
-      "expressions": 196
+      "expressions": 197
     },
     "gradient": {
       "samples": 1,
-      "expressions": 177
+      "expressions": 178
     },
     "card": {
       "samples": 1,
-      "expressions": 137
+      "expressions": 138
     },
     "contact_shadow": {
       "samples": 1,
-      "expressions": 119
+      "expressions": 120
     },
     "glow": {
       "samples": 1,
-      "expressions": 105
+      "expressions": 106
     },
     "glyph": {
       "samples": 1,
-      "expressions": 99
+      "expressions": 100
     },
     "icon": {
       "samples": 1,
-      "expressions": 99
+      "expressions": 100
     },
     "panel": {
       "samples": 1,
-      "expressions": 276
+      "expressions": 277
     },
     "table": {
       "samples": 1,
@@ -50,11 +50,11 @@
     },
     "streak": {
       "samples": 1,
-      "expressions": 122
+      "expressions": 123
     },
     "card_lit": {
       "samples": 5,
-      "expressions": 304
+      "expressions": 305
     },
     "table_lit": {
       "samples": 5,
@@ -62,7 +62,7 @@
     },
     "particle": {
       "samples": 5,
-      "expressions": 212
+      "expressions": 213
     },
     "vfx_chevron": {
       "samples": 0,

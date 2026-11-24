@@ -62,6 +62,13 @@ const CARD_RADIUS: f32 = 3.0;
 @group(0) @binding(2) var picture_sampler: sampler;
 @group(0) @binding(3) var<uniform> paints: Paints;
 
+// The mipmap level a picture is sampled at, moved half a level toward the larger one. A card
+// drawn at two thirds of its face's size then reads mostly from the face's largest level
+// rather than mostly from the half-size one, so the opponent's cards, which the camera shows a
+// little smaller than the player's, stay as sharp as the player's. An atlas page has one level,
+// so a glyph or icon is unaffected.
+const PICTURE_LOD_BIAS: f32 = -0.5;
+
 struct VertexIn {
     // The mesh.
     @location(0) position: vec2<f32>,
@@ -556,7 +563,7 @@ fn fs(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f3
     let uv = select(in.uv, vec2<f32>(in.uv.x, 1.0 - in.uv.y), back);
     // Sampled before branching on the material, which varies per instance: WGSL allows
     // `textureSample` only in uniform control flow.
-    let picture = textureSample(pictures, picture_sampler, uv, i32(layer));
+    let picture = textureSampleBias(pictures, picture_sampler, uv, i32(layer), PICTURE_LOD_BIAS);
     // Derivatives too are allowed only in uniform control flow.
     let mesh_pixel = fwidth(in.mesh_uv);
     var color = vec4<f32>(0.0);

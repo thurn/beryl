@@ -134,20 +134,21 @@ impl Table {
         else {
             return;
         };
-        // The plate face says the ability over its source's picture. An ability whose words are
-        // not a paragraph of its source's printed text (`text` is given) has no plate face, and
-        // shows its source's face alone.
-        let plate = text
-            .is_none()
-            .then(|| faces.plate_layer(name, *triggered, *nth))
-            .flatten();
-        let face = source.and_then(|_| plate.or_else(|| faces.board_layer(name)));
+        // The plate face says the ability over its source's picture (`FaceList::ability_face`).
+        // An ability with no source shows the blank layer 0.
+        let shown = source.and_then(|_| {
+            faces
+                .list()
+                .ability_face(name, *triggered, *nth, text.as_deref())
+        });
+        // Until the plate face's board-size layer lands, the source's face stands in.
+        let face = shown
+            .and_then(|face| faces.board_layer_of(face))
+            .or_else(|| source.and_then(|_| faces.board_layer(name)));
         // The phone layout draws the battlefield frame here too, as the web interface's does.
-        let full =
-            (source.filter(|_| self.layout.style.full_card_faces)).and_then(|_| match plate {
-                Some(_) => faces.plate_full_layers(name, *triggered, *nth),
-                None => faces.full_layers_named(name),
-            });
+        let full = shown
+            .filter(|_| self.layout.style.full_card_faces)
+            .and_then(|face| faces.full_layers(Some(face)));
         let state = if under_way { StateBits::MOVING } else { 0 };
         let mut look = Look::new(object.pose, face, full, state, false);
         let on = Subject::Ability { id };

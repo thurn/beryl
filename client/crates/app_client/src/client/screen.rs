@@ -133,9 +133,9 @@ impl Client {
         let read_whole = read_whole
             .iter()
             .flat_map(|faces| faces.faces().iter().copied());
-        for face in full.into_iter().chain(read_whole) {
-            self.show.faces_mut().want_full(face);
-        }
+        self.show
+            .faces_mut()
+            .show_full(full.into_iter().chain(read_whole));
         self.show_gear();
         if music != self.features.music {
             self.features.music = music;

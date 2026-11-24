@@ -102,13 +102,17 @@ fn twenty_cards_draw_in_enhanced_as_in_baseline_away_from_edges() {
         (crate::lighting().enhanced.light.sheen * 255.0).ceil() as i16 + i16::from(TOLERANCE);
     for point in [0, 3, 7, 12, 19].map(|i| cards[i]) {
         let ((x, y), found, expected) = pixels(point);
-        let added: [i16; 3] = std::array::from_fn(|i| i16::from(found[i]) - i16::from(expected[i]));
+        // A channel already at 255 in Baseline has no room for the sheen, so it is left out.
+        let added: Vec<i16> = (0..3)
+            .filter(|&i| expected[i] < u8::MAX)
+            .map(|i| i16::from(found[i]) - i16::from(expected[i]))
+            .collect();
         let even = added.iter().max().zip(added.iter().min());
         assert!(
             added
                 .iter()
                 .all(|&channel| (-i16::from(TOLERANCE)..=most_sheen).contains(&channel))
-                && even.is_some_and(|(most, least)| most - least <= i16::from(TOLERANCE)),
+                && even.is_none_or(|(most, least)| most - least <= i16::from(TOLERANCE)),
             "at {point} (pixel {x}, {y}) Enhanced drew {found:?} and Baseline {expected:?}"
         );
     }

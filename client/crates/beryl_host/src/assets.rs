@@ -213,6 +213,7 @@ impl Assets {
         self.request_text(client);
         self.prepare_faces(client, renderer);
         if self.active == Some(client.face_generation()) {
+            self.faces.keep(client.shown_full_faces());
             let wanted = client.wanted_faces().collect::<Vec<_>>();
             for face in wanted {
                 self.request_full(client, face);
@@ -275,6 +276,7 @@ impl Assets {
                 })));
             }
         }
+        self.faces.keep(client.shown_full_faces());
         // A picture can wait for only as many full-size faces as fit at once.
         let faces = client.wanted_faces().take(FULL_LAYERS).collect::<Vec<_>>();
         let wanted = faces

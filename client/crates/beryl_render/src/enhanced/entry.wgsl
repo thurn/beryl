@@ -85,7 +85,7 @@ fn fs_lit(in: LitOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f
     let uv = select(in.uv, vec2<f32>(in.uv.x, 1.0 - in.uv.y), back);
     // Sampled before branching on the material, in uniform control flow, as `fs` samples it;
     // the shadow map too.
-    let face = textureSample(pictures, picture_sampler, uv, i32(layer));
+    let face = textureSampleBias(pictures, picture_sampler, uv, i32(layer), PICTURE_LOD_BIAS);
     let mesh_pixel = fwidth(in.mesh_uv);
     let shadow = lit_by_key(in.light_position);
     // The side of the record seen faces the other way when it is seen from behind.

@@ -658,6 +658,17 @@ impl Client {
             .flatten()
             .chain(preview.into_iter().flatten())
     }
+
+    /// The faces the table shows at full size now (`Faces::shown_full`), whose full-size layers
+    /// the host's asset workers reuse last. None while a story's board is shown.
+    #[must_use]
+    pub fn shown_full_faces(&self) -> &[FaceId] {
+        if self.active_story_faces() {
+            &[]
+        } else {
+            self.show.faces().shown_full()
+        }
+    }
 }
 
 /// Updates the HUD features (totals, piles, notices, rows and banner) for the current frame.

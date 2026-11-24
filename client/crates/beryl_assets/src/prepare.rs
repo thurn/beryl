@@ -3,8 +3,9 @@
 //!
 //! [`Preparer::prepare_match`] queues every face of a match at board size. [`Preparer::full`]
 //! queues one face at full size, into one of [`FULL_LAYERS`] layers that are reused least
-//! recently used first. Each finished face arrives on the match's channel as a [`Prepared`],
-//! after which the worker calls the host's `wake`.
+//! recently used first, those whose faces are not on screen before those whose faces are. Each
+//! finished face arrives on the match's channel as a [`Prepared`], after which the worker calls
+//! the host's `wake`.
 //!
 //! A face whose scan has not been downloaded is drawn as Beryl's own card frame, and its scan
 //! is queued for download. One more thread waits for those downloads in the order they were
@@ -143,6 +144,8 @@ struct Slots {
     /// When each layer was last asked for, on the `tick` clock.
     used: [u64; FULL_LAYERS],
     tick: u64,
+    /// The faces the host says are on screen at full size (`Preparer::keep`).
+    kept: Vec<FaceId>,
 }
 
 /// The asset workers and the full-size layers they fill.
@@ -248,7 +251,8 @@ impl Preparer {
     }
 
     /// Asks for `face` at full size. A face that already has a full-size layer keeps it;
-    /// otherwise the least recently asked-for layer is reused and the face is queued for it.
+    /// otherwise the least recently asked-for layer whose face is not on screen (`keep`) is
+    /// reused, and the face is queued for it.
     /// `None` when no match is being prepared or it has no such face.
     pub fn full(&mut self, face: FaceId) -> Option<Full> {
         let game = Arc::clone(self.game.as_ref()?);
@@ -259,8 +263,16 @@ impl Preparer {
             slots.used[at] = slots.tick;
             return Some(Full::Kept { layer: at as u16 });
         }
+        // An empty layer first, then the least recently asked-for layer whose face is not on
+        // screen. A hand or stack card is asked for once, when it appears, so by age alone a
+        // card the player hovered later would push it, or the card back every full-size card
+        // needs, out of its layer while it is still shown.
         let at = (0..FULL_LAYERS)
-            .min_by_key(|&at| (slots.faces[at].is_some(), slots.used[at]))
+            .min_by_key(|&at| {
+                let face = slots.faces[at];
+                let kept = face.is_some_and(|face| slots.kept.contains(&face));
+                (face.is_some(), kept, slots.used[at])
+            })
             .unwrap_or(0);
         let evicted = slots.faces[at].replace(face);
         slots.used[at] = slots.tick;
@@ -274,6 +286,13 @@ impl Preparer {
             slot: Some((layer, self.counter)),
         });
         Some(Full::Queued { layer, evicted })
+    }
+
+    /// Records `faces` as the ones on screen at full size, in place of those recorded before.
+    /// `full` reuses the layer of one of them only when every layer holds one.
+    pub fn keep(&mut self, faces: &[FaceId]) {
+        self.slots.kept.clear();
+        self.slots.kept.extend_from_slice(faces);
     }
 
     /// Drops full-size assignments when the renderer frees their array. On return no

@@ -229,6 +229,42 @@ fn a_drawn_face_is_sent_again_from_its_scan_once_the_scan_downloads() {
     assert_eq!(frames_drawn_on_this_thread(), 0);
 }
 
+/// A hand or stack card is asked for at full size once, when it appears. When the player then
+/// hovered more cards than the full-size layers hold, the least recently asked-for layer was
+/// reused, which was the card back's or a hand card's, so the cards still in the hand and on
+/// the stack were drawn from their board-size faces until theirs came back. A face the host
+/// says is on screen keeps its layer while another face's can be reused.
+#[test]
+fn a_full_size_face_on_screen_keeps_its_layer() {
+    let scratch = Scratch::new("kept");
+    let mut assets = preparer(&scratch.0);
+    let _results = assets.prepare_match(test_faces(17), &[Format::Etc2Rgba8]);
+    // The card back and five hand cards, then ten cards the player hovered.
+    for face in 0..16 {
+        assets.full(FaceId(face));
+    }
+    let shown: Vec<FaceId> = (0..6).map(FaceId).collect();
+    assets.keep(&shown);
+    assert_eq!(
+        assets.full(FaceId(16)),
+        Some(Full::Queued {
+            layer: 6,
+            evicted: Some(FaceId(6))
+        }),
+        "the oldest face not on screen gives up its layer"
+    );
+    // With every layer's face on screen, the least recently asked-for one gives way.
+    let all: Vec<FaceId> = (0..17).map(FaceId).collect();
+    assets.keep(&all);
+    assert_eq!(
+        assets.full(FaceId(6)),
+        Some(Full::Queued {
+            layer: 0,
+            evicted: Some(FaceId(0))
+        })
+    );
+}
+
 #[test]
 fn the_seventeenth_full_size_face_drops_the_least_recently_used() {
     let scratch = Scratch::new("full");

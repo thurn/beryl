@@ -192,6 +192,27 @@ impl FaceList {
         self.plates.get(&(source, triggered, nth)).copied()
     }
 
+    /// The face an ability on the stack is drawn with, as `StackItem::Ability` names it: its
+    /// plate face, when its words are a paragraph of its source's printed text (it has no
+    /// `text` of its own) and the source has a plate for it, and otherwise the face of its
+    /// source, named `name`. A delayed trigger that a loyalty ability's paragraph creates has
+    /// no `text` and no plate. The table draws the ability with this face and the
+    /// client asks for the same face at full size (`read_whole`), so the two cannot disagree.
+    /// Allocates nothing.
+    #[must_use]
+    pub fn ability_face(
+        &self,
+        name: &str,
+        triggered: bool,
+        nth: u8,
+        text: Option<&str>,
+    ) -> Option<FaceId> {
+        text.is_none()
+            .then(|| self.plate(name, triggered, nth))
+            .flatten()
+            .or_else(|| self.find(name))
+    }
+
     /// The centered plate of an activated ability read in the mode chooser.
     #[must_use]
     pub fn choice_plate(&self, name: &str, nth: u8) -> Option<FaceId> {
@@ -232,11 +253,7 @@ impl FaceList {
                     nth,
                     text,
                     ..
-                } => add(if text.is_none() {
-                    self.plate(name, *triggered, *nth)
-                } else {
-                    self.find(name)
-                }),
+                } => add(self.ability_face(name, *triggered, *nth, text.as_deref())),
             }
         }
         for object in view.objects.iter().filter(|o| o.zone == ZoneName::Hand) {
@@ -526,6 +543,9 @@ pub struct Faces {
     /// By [`FaceId`]: whether the face has been asked for at full size since it last lost its
     /// full-size layer, so that it is asked for once.
     asked: Vec<bool>,
+    /// The faces the screen last showed at full size (`show_full`): the hands', the stack's and
+    /// a prompt's. The host's asset workers reuse another full-size layer before one of these.
+    shown_full: Vec<FaceId>,
     /// How many lists came before this one (`replace`), so that a host can tell a new list from
     /// an equal one given again, whose faces have no layers again either.
     number: u64,
@@ -544,6 +564,7 @@ impl Faces {
             // and a few more, so that asking for them while a match plays allocates nothing.
             wanted: Vec::with_capacity(2 * (READ_WHOLE + 1)),
             asked: vec![false; count],
+            shown_full: Vec::with_capacity(2 * (READ_WHOLE + 1)),
             number: 0,
         }
     }
@@ -600,6 +621,25 @@ impl Faces {
         self.asked.fill(false);
     }
 
+    /// Records `faces` as the ones the screen shows at full size now, in place of those it
+    /// showed before, and asks for each (`want_full`). The client calls it whenever it
+    /// rebuilds its screen.
+    pub fn show_full(&mut self, faces: impl IntoIterator<Item = FaceId>) {
+        self.shown_full.clear();
+        for face in faces {
+            if !self.shown_full.contains(&face) {
+                self.shown_full.push(face);
+            }
+            self.want_full(face);
+        }
+    }
+
+    /// The faces the screen last showed at full size (`show_full`).
+    #[must_use]
+    pub fn shown_full(&self) -> &[FaceId] {
+        &self.shown_full
+    }
+
     /// Asks for `face` at full size, because a card is being read (docs/beryl-3d.md, "Sizes
     /// and memory"). A face that has a full-size layer, or has been asked for already, is not
     /// asked for again. Until its full-size layer arrives it is drawn from its board-size one.
@@ -644,13 +684,6 @@ impl Faces {
         self.board.get(usize::from(face.0)).copied().flatten()
     }
 
-    /// The board-size layer of the plate face of an ability on the stack (`FaceList::plate`),
-    /// once it has one. Allocates nothing.
-    #[must_use]
-    pub fn plate_layer(&self, name: &str, triggered: bool, nth: u8) -> Option<u16> {
-        self.board_layer_of(self.list.plate(name, triggered, nth)?)
-    }
-
     /// The full-size layer of `face`, once it has one.
     #[must_use]
     pub fn full_layer_of(&self, face: FaceId) -> Option<u16> {
@@ -669,19 +702,5 @@ impl Faces {
     #[must_use]
     pub fn full_layers_of_object(&self, object: &ObjectView) -> Option<[u16; 2]> {
         self.full_layers(self.list.find_object(object))
-    }
-
-    /// The full-size layers of the plate face of an ability on the stack (`FaceList::plate`) and
-    /// of the card back, once both have them.
-    #[must_use]
-    pub fn plate_full_layers(&self, name: &str, triggered: bool, nth: u8) -> Option<[u16; 2]> {
-        self.full_layers(self.list.plate(name, triggered, nth))
-    }
-
-    /// The full-size layers of the face that shows the card or face named `name` and of the
-    /// card back, once both have them.
-    #[must_use]
-    pub fn full_layers_named(&self, name: &str) -> Option<[u16; 2]> {
-        self.full_layers(self.list.find(name))
     }
 }

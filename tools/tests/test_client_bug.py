@@ -59,6 +59,13 @@ def test_a_live_report_prints_the_resume_command(tmp_path: Path) -> None:
     assert "just client live tree" in out
 
 
+def test_a_report_from_before_the_rename_is_the_clients(tmp_path: Path) -> None:
+    folder = report_folder(tmp_path, {"client": "Beryl 3D"}, replay=True)
+    out = printed(folder)
+    assert "a web report" not in out
+    assert "just client app --replay" in out
+
+
 def test_a_web_report_says_so(tmp_path: Path) -> None:
     folder = report_folder(tmp_path, [{"kind": "route"}], replay=True)
     out = printed(folder)

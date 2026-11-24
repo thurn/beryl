@@ -51,7 +51,7 @@ const VFX_MATERIALS: [(&str, &str); 4] = [
 /// tier, which reuses its functions and repeats its entry points; a deliberate change to it
 /// updates this constant in the same commit, after checking that the Enhanced shader still
 /// matches it.
-const BASELINE_SHADER_HASH: u64 = 0xdce0_33fc_d74d_121a;
+const BASELINE_SHADER_HASH: u64 = 0xb8bc_1310_c664_b894;
 
 /// A material's counts.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
