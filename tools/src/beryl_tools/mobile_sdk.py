@@ -22,22 +22,48 @@ IOS_TARGETS = ("aarch64-apple-ios", "aarch64-apple-ios-sim")
 # The Android SDK, where Android Studio would put it; recipes set its variables themselves.
 ANDROID_HOME: Path = android_sdk.sdk_root()
 ANDROID_API = "36"
-ANDROID_SYSTEM_IMAGE: str = f"system-images;android-{ANDROID_API};google_apis;arm64-v8a"
-ANDROID_BUILD_PACKAGES: tuple[str, ...] = (
-    f"platforms;android-{ANDROID_API}",
-    "build-tools;36.0.0",
-    f"ndk;{NDK_VERSION}",
-)
-ANDROID_PACKAGES: tuple[str, ...] = (
-    "cmdline-tools;latest",
-    "platform-tools",
-    "emulator",
-    *ANDROID_BUILD_PACKAGES,
-    ANDROID_SYSTEM_IMAGE,
-)
-ANDROID_TARGETS: tuple[str] = (android_sdk.TARGET,)
 # The Android Gradle Plugin runs on a JDK it supports, not the newest.
 JDK_FORMULA = "openjdk@21"
+
+
+def android_system_image() -> str:
+    return (
+        f"system-images;android-{ANDROID_API};google_apis;{android_sdk.emulator_abi()}"
+    )
+
+
+def android_packages() -> tuple[str, ...]:
+    return (
+        "cmdline-tools;latest",
+        "platform-tools",
+        "emulator",
+        f"platforms;android-{ANDROID_API}",
+        "build-tools;36.0.0",
+        f"ndk;{NDK_VERSION}",
+        android_system_image(),
+    )
+
+
+def android_command_tools() -> Path:
+    base = ANDROID_HOME / "cmdline-tools"
+    latest = base / "latest"
+    if (latest / "package.xml").is_file():
+        return latest
+    # SDK Manager adds a numeric suffix when the manually unpacked bootstrap occupies latest.
+    return next(
+        (
+            manifest.parent
+            for manifest in sorted(base.glob("latest-*/package.xml"))
+            if manifest.parent.name.removeprefix("latest-").isdigit()
+        ),
+        latest,
+    )
+
+
+def android_manager(name: str) -> Path:
+    """The SDK's command-line manager, shipped as a batch script on Windows."""
+    filename = f"{name}.bat" if system.WINDOWS else name
+    return android_command_tools() / "bin" / filename
 
 
 def run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -108,7 +134,7 @@ def android_env(base: Mapping[str, str] | None = None) -> dict[str, str]:
     tools = [
         ANDROID_HOME / "platform-tools",
         ANDROID_HOME / "emulator",
-        ANDROID_HOME / "cmdline-tools" / "latest" / "bin",
+        android_command_tools() / "bin",
     ]
     env = os.environ if base is None else base
     return {
@@ -123,12 +149,13 @@ def android_env(base: Mapping[str, str] | None = None) -> dict[str, str]:
 def android_setup() -> int:
     """Installs what an Android build needs, skipping what is there, the SDK's licenses
     accepted."""
-    code = rust_targets(ANDROID_TARGETS)
+    targets = tuple(android_sdk.RUST_TARGETS[abi] for abi in android_sdk.build_abis())
+    code = rust_targets(targets)
     if code != 0:
         return code
     if system.WINDOWS:
         java = os.environ.get("JAVA_HOME", "")
-        if not java or not (Path(java) / "bin" / "java.exe").is_file():
+        if not java or not system.exe(Path(java) / "bin" / "java").is_file():
             print("mobile-setup: set JAVA_HOME to your JDK 21", file=sys.stderr)
             return 2
     elif not (java_home() / "bin" / "java").exists():
@@ -137,15 +164,17 @@ def android_setup() -> int:
         if code != 0:
             return code
     # A package `a;b;c` installs into the SDK's a/b/c.
-    packages = ANDROID_BUILD_PACKAGES if system.WINDOWS else ANDROID_PACKAGES
-    missing = [
-        p
-        for p in packages
-        if not (ANDROID_HOME.joinpath(*p.split(";")) / "package.xml").exists()
-    ]
+    missing = []
+    for package in android_packages():
+        folder = (
+            android_command_tools()
+            if package == "cmdline-tools;latest"
+            else ANDROID_HOME.joinpath(*package.split(";"))
+        )
+        if not (folder / "package.xml").is_file():
+            missing.append(package)
     if missing:
-        manager = "sdkmanager.bat" if system.WINDOWS else "sdkmanager"
-        sdkmanager = ANDROID_HOME / "cmdline-tools" / "latest" / "bin" / manager
+        sdkmanager = android_manager("sdkmanager")
         if not sdkmanager.exists():
             if system.WINDOWS:
                 print(

@@ -1,12 +1,12 @@
 """`just client phone-search`: whether the AI's search starves a phone's frame thread
-(docs/beryl-3d.md, "Threads"). It plays one live game against `mcts-hidden` in the headless iOS
-Simulator and then in the Android emulator (on Vulkan, and on OpenGL ES 3.0 too with `--gles`),
+(docs/beryl-3d.md, "Threads"). It plays a live game against `mcts-hidden` in the headless iOS
+Simulator on macOS and in the Android emulator (on Vulkan, and on OpenGL ES 3.0 too with `--gles`),
 with the stand-in agent `greedy` answering the person's decisions so nobody has to play. After
 5 minutes, or when the game ends, it suspends the app, which makes the app write its frame
 log's summary, pulls the log and prints the frames drawn while the AI searched and while it did
-not, how many of each were late, and the Mac's load.
+not, how many of each were late, and the host's load.
 
-A simulator or emulator draws in software on a loaded Mac, so its numbers say nothing about a
+A simulator or emulator runs on the host, so its numbers say nothing about a
 phone's speed. What they do show is the difference between frames drawn while the search runs
 on every core and frames drawn while it does not. This is a measurement, gated on nothing and not part of any automatic check.
 """
@@ -17,6 +17,7 @@ import argparse
 import os
 import shutil
 import subprocess
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -51,7 +52,7 @@ class Numbers:
     idle_late: int
     worst_gap_searching_ms: float | None
     worst_gap_ms: float
-    # The Mac's load average over one minute when the app started, from the log's first line.
+    # The host's load average over one minute when the app started, from the log's first line.
     load: float | None
 
     @property
@@ -282,10 +283,10 @@ def run_phone_search(args: argparse.Namespace) -> int:
     print(
         f"phone-search: host load average {one:.1f} {five:.1f} {fifteen:.1f} at the start"
     )
-    platforms: list[tuple[str, Callable[[], tuple[str | None, str | None]]]] = [
-        ("ios", lambda: run_ios(run)),
-        ("android", lambda: run_android(False)),
-    ]
+    platforms: list[tuple[str, Callable[[], tuple[str | None, str | None]]]] = []
+    if sys.platform == "darwin":
+        platforms.append(("ios", lambda: run_ios(run)))
+    platforms.append(("android", lambda: run_android(False)))
     if args.gles:
         platforms.append(("android-gles", lambda: run_android(True)))
     failed = False

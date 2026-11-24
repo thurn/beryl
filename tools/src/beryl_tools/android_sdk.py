@@ -1,15 +1,37 @@
-"""The pinned Android SDK and the C tools for the arm64 Android target."""
+"""The pinned Android SDK and the C tools for Android devices and emulators."""
 
 from __future__ import annotations
 
 import os
+import platform
 import sys
 from pathlib import Path
 
-TARGET = "aarch64-linux-android"
+DEVICE_ABI = "arm64-v8a"
+RUST_TARGETS: dict[str, str] = {
+    DEVICE_ABI: "aarch64-linux-android",
+    "x86_64": "x86_64-linux-android",
+}
+TARGET: str = RUST_TARGETS[DEVICE_ABI]
 NDK_VERSION = "28.2.13676358"
 # Both Android hosts declare this minSdk.
 MIN_SDK = 24
+
+
+def emulator_abi() -> str:
+    """The Android ABI that the emulator can run with host CPU acceleration."""
+    machine = platform.machine().lower()
+    if machine in ("aarch64", "arm64"):
+        return DEVICE_ABI
+    if machine in ("amd64", "x86_64"):
+        return "x86_64"
+    raise SystemExit(f"android: no emulator ABI for host architecture {machine}")
+
+
+def build_abis() -> tuple[str, ...]:
+    """The ABIs in the APK, including the one used by physical devices."""
+    emulator = emulator_abi()
+    return (DEVICE_ABI,) if emulator == DEVICE_ABI else (DEVICE_ABI, emulator)
 
 
 def sdk_root() -> Path:
@@ -38,39 +60,38 @@ def ndk_tools() -> Path:
     )
 
 
-def ndk_env() -> dict[str, str]:
+def ndk_env(target: str = TARGET) -> dict[str, str]:
     """The environment for Cargo build scripts that compile C for Android."""
     tools = ndk_tools()
+    suffix = target.replace("-", "_")
     if sys.platform == "win32":
         # Invoke clang.exe directly with the API level. The target-prefixed entry
         # point on Windows is a batch file.
         return {
             **os.environ,
-            "CC_aarch64_linux_android": str(tools / "clang.exe"),
-            "CFLAGS_aarch64_linux_android": f"--target={TARGET}{MIN_SDK}",
-            "AR_aarch64_linux_android": str(tools / "llvm-ar.exe"),
+            f"CC_{suffix}": str(tools / "clang.exe"),
+            f"CFLAGS_{suffix}": f"--target={target}{MIN_SDK}",
+            f"AR_{suffix}": str(tools / "llvm-ar.exe"),
         }
     return {
         **os.environ,
-        "CC_aarch64_linux_android": str(tools / f"{TARGET}{MIN_SDK}-clang"),
-        "AR_aarch64_linux_android": str(tools / "llvm-ar"),
+        f"CC_{suffix}": str(tools / f"{target}{MIN_SDK}-clang"),
+        f"AR_{suffix}": str(tools / "llvm-ar"),
     }
 
 
-def native_env() -> dict[str, str]:
+def native_env(target: str = TARGET) -> dict[str, str]:
     """Adds the C++ compiler and Rust linker for the native host's shared library."""
-    env = ndk_env()
+    env = ndk_env(target)
     tools = ndk_tools()
-    clang = env["CC_aarch64_linux_android"]
-    env["CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"] = clang
+    suffix = target.replace("-", "_")
+    cargo = f"CARGO_TARGET_{suffix.upper()}"
+    clang = env[f"CC_{suffix}"]
+    env[f"{cargo}_LINKER"] = clang
     if sys.platform == "win32":
-        env.update(
-            CXX_aarch64_linux_android=str(tools / "clang++.exe"),
-            CXXFLAGS_aarch64_linux_android=env["CFLAGS_aarch64_linux_android"],
-            CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS=(
-                f"-C link-arg=--target={TARGET}{MIN_SDK}"
-            ),
-        )
+        env[f"CXX_{suffix}"] = str(tools / "clang++.exe")
+        env[f"CXXFLAGS_{suffix}"] = env[f"CFLAGS_{suffix}"]
+        env[f"{cargo}_RUSTFLAGS"] = f"-C link-arg=--target={target}{MIN_SDK}"
     else:
-        env["CXX_aarch64_linux_android"] = f"{clang}++"
+        env[f"CXX_{suffix}"] = f"{clang}++"
     return env

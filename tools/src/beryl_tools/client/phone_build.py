@@ -161,14 +161,15 @@ def android_apk() -> Path:
     root = build_dir("android")
     with system.file_lock(root / "build.lock"):
         prebuilt = android_sdk.ndk_tools().parent
-        built = library(android_sdk.TARGET, "cdylib", False, android_sdk.native_env())
-        jni = root / "jniLibs" / "arm64-v8a"
-        jni.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(built, jni / "libberyl_client.so")
-        # The texture encoders (ctt) are C++ and link the NDK's shared C++ runtime, which an app
-        # must bundle beside its library (docs/beryl-3d.md, "Preparation").
-        runtime = prebuilt / "sysroot" / "usr" / "lib" / "aarch64-linux-android"
-        shutil.copyfile(runtime / "libc++_shared.so", jni / "libc++_shared.so")
+        for abi in android_sdk.build_abis():
+            target = android_sdk.RUST_TARGETS[abi]
+            built = library(target, "cdylib", False, android_sdk.native_env(target))
+            jni = root / "jniLibs" / abi
+            jni.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(built, jni / "libberyl_client.so")
+            # The C++ texture encoders (ctt) need the NDK's shared runtime beside the library.
+            runtime = prebuilt / "sysroot" / "usr" / "lib" / target
+            shutil.copyfile(runtime / "libc++_shared.so", jni / "libc++_shared.so")
         started = time.monotonic()
         wrapper = "gradlew.bat" if system.WINDOWS else "gradlew"
         code = subprocess.run(

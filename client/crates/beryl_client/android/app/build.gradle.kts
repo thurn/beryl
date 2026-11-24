@@ -13,12 +13,9 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1"
-        ndk {
-            abiFilters += "arm64-v8a"
-        }
     }
     sourceSets {
-        // The folder holding arm64-v8a/libberyl_client.so, which `just client android-smoke` builds.
+        // Each ABI has its own libberyl_client.so, built by `just client android-smoke`.
         getByName("main").jniLibs.srcDirs(findProperty("beryl.jniLibs") ?: "jniLibs")
     }
     buildFeatures {
@@ -29,7 +26,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     packaging {
-        jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
+        jniLibs.keepDebugSymbols.add("*/*/*.so")
     }
 }
 

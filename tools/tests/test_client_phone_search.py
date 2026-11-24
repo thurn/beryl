@@ -1,8 +1,13 @@
 """`just client phone-search`: the numbers it reads from a phone's frame log, the rule that calls
 the frame thread starved, and how it waits for the summary a suspended app writes."""
 
+import argparse
 import json
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+
+import pytest
 
 from beryl_tools.client import phone_search
 from beryl_tools.client.phone_log import lines
@@ -32,6 +37,29 @@ def summary(
 
 def log(*parsed: dict[str, Any]) -> str:
     return "".join(json.dumps(line) + "\n" for line in parsed)
+
+
+@pytest.mark.parametrize("gles", [False, True])
+def test_windows_phone_search_runs_only_android(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, gles: bool
+) -> None:
+    monkeypatch.setattr(phone_search, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(phone_search.system, "loadavg", lambda: (0.0, 0.0, 0.0))
+    monkeypatch.setattr(phone_search.phone, "out_dir", lambda _kind: tmp_path)
+    calls: list[bool] = []
+
+    def run_android(use_gles: bool) -> tuple[str, None]:
+        calls.append(use_gles)
+        return log(RUN, summary(100, 1, 50, 0)), None
+
+    def run_ios(_run: Path) -> None:
+        pytest.fail("phone-search attempted to start the iOS Simulator on Windows")
+
+    monkeypatch.setattr(phone_search, "run_android", run_android)
+    monkeypatch.setattr(phone_search, "run_ios", run_ios)
+
+    assert phone_search.run_phone_search(argparse.Namespace(gles=gles)) == 0
+    assert calls == ([False, True] if gles else [False])
 
 
 def test_the_numbers_split_frames_and_late_frames_by_search() -> None:

@@ -287,6 +287,10 @@ def adb_binary() -> Path:
     return system.exe(mobile.ANDROID_HOME / "platform-tools" / "adb")
 
 
+def emulator_binary() -> Path:
+    return system.exe(mobile.ANDROID_HOME / "emulator" / "emulator")
+
+
 def adb(*args: str, stdin: Path | None = None) -> subprocess.CompletedProcess[str]:
     with stdin.open("rb") if stdin else open(os.devnull, "rb") as source:
         done = subprocess.run(
@@ -304,18 +308,25 @@ def adb(*args: str, stdin: Path | None = None) -> subprocess.CompletedProcess[st
 
 
 def ensure_avd() -> None:
-    emulator = str(mobile.ANDROID_HOME / "emulator" / "emulator")
     listed = subprocess.run(
-        [emulator, "-list-avds"], capture_output=True, text=True, check=True
+        [str(emulator_binary()), "-list-avds"],
+        capture_output=True,
+        text=True,
+        check=True,
     )
     if AVD in listed.stdout.split():
         return
     subprocess.run(
         [
-            str(
-                mobile.ANDROID_HOME / "cmdline-tools" / "latest" / "bin" / "avdmanager"
-            ),
-            *["create", "avd", "--name", AVD, "--package", mobile.ANDROID_SYSTEM_IMAGE],
+            str(mobile.android_manager("avdmanager")),
+            *[
+                "create",
+                "avd",
+                "--name",
+                AVD,
+                "--package",
+                mobile.android_system_image(),
+            ],
             *["--device", "pixel_8"],
         ],
         input="no\n",  # No custom hardware profile.
@@ -332,7 +343,7 @@ def start_emulator(gles: bool, window: bool = False) -> subprocess.Popen[bytes]:
     started = time.monotonic()
     proc = subprocess.Popen(
         [
-            *[str(mobile.ANDROID_HOME / "emulator" / "emulator"), "-avd", AVD],
+            *[str(emulator_binary()), "-avd", AVD],
             *["-port", str(PORT), "-no-boot-anim"],
             *([] if window else ["-no-window", "-no-audio"]),
             "-no-snapshot",
@@ -676,13 +687,13 @@ COMMANDS: tuple[Command, ...] = (
     ),
     Command(
         "phone-search",
-        "plays a live game against mcts-hidden on the iOS Simulator and the Android emulator, and"
-        " compares late frames while the AI searched and while it did not",
+        "plays a live game against mcts-hidden on Android and, on macOS, iOS, and compares late"
+        " frames while the AI searched and while it did not",
         (
-            ("just client phone-search", "iOS, then Android on Vulkan"),
+            ("just client phone-search", "iOS on macOS, then Android on Vulkan"),
             (
                 "just client phone-search --gles",
-                "iOS, then Android on Vulkan and on OpenGL ES 3.0",
+                "also run Android on OpenGL ES 3.0",
             ),
         ),
         checked(_later("phone_search", "run_phone_search")),
