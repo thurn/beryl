@@ -269,18 +269,18 @@ fn a_configured_provider_can_start_a_justiciar_without_slots() {
     assert_eq!(picked.name, "claude");
 }
 
-#[cfg(unix)]
 #[test]
 fn a_turn_holds_its_lock_and_a_held_lock_refuses_a_second() {
     let dir = home().root;
     let lock = dir.join("justiciar.lock");
     let log = dir.join("justiciar-1.log");
     assert!(!lock_held(&lock));
-    let command = [
-        "sh".to_owned(),
-        "-c".to_owned(),
-        "echo out; echo err >&2".to_owned(),
-    ];
+    let command = if cfg!(windows) {
+        ["cmd", "/C", "echo out& echo err 1>&2"]
+    } else {
+        ["sh", "-c", "echo out; echo err >&2"]
+    }
+    .map(str::to_owned);
     assert_eq!(run_turn(&lock, &log, &command), 0);
     let written = fs::read_to_string(&log).unwrap();
     assert!(

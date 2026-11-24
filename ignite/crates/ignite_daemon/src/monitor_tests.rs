@@ -315,7 +315,6 @@ fn a_daemon_that_stays_down_writes_the_repair_request_and_notifies_and_recovery_
     assert!(!home.root.join("justiciar-needed.json").exists());
 }
 
-#[cfg(unix)]
 #[test]
 fn a_run_rolls_back_a_crash_looping_current_build_and_kickstarts() {
     let home = home();
@@ -404,7 +403,6 @@ fn the_hub_probe_takes_any_http_answer_and_not_a_closed_port() {
 }
 
 /// A home whose store holds `GOOD` and `BAD`, with `current` current and `last_good` marked good.
-#[cfg(unix)]
 fn home_running(current: &str, last_good: &str) -> Home {
     let home = home();
     let store = home.store();
@@ -418,7 +416,6 @@ fn home_running(current: &str, last_good: &str) -> Home {
     home
 }
 
-#[cfg(unix)]
 #[test]
 fn a_service_an_older_build_wrote_is_rewritten_once_while_the_daemon_answers() {
     let home = home_running(GOOD, GOOD);
@@ -432,7 +429,6 @@ fn a_service_an_older_build_wrote_is_rewritten_once_while_the_daemon_answers() {
     assert_eq!(machine.log(), ["refresh daemon"]);
 }
 
-#[cfg(unix)]
 #[test]
 fn the_service_is_not_rewritten_by_a_monitor_older_than_the_current_build() {
     // The monitor runs the last-good build, GOOD, while the daemon runs BAD, which is newer and
@@ -443,7 +439,6 @@ fn the_service_is_not_rewritten_by_a_monitor_older_than_the_current_build() {
     assert!(machine.log().is_empty());
 }
 
-#[cfg(unix)]
 #[test]
 fn the_service_is_not_rewritten_while_the_daemon_does_not_answer() {
     let home = home_running(GOOD, GOOD);

@@ -206,6 +206,7 @@ mod tests {
 
     /// Whether the FIFO holds no byte, read through the jobserver's own descriptor, which does
     /// not block.
+    // Only the Unix jobserver reads its tokens from a POSIX FIFO.
     #[cfg(unix)]
     fn empty(jobserver: &mut Jobserver) -> bool {
         let mut byte = [0];
@@ -214,6 +215,7 @@ mod tests {
 
     /// A smaller grant takes back only the slots in the pipe. The one a job holds comes back on
     /// a later resize, once the job has ended and returned it.
+    // This reads and returns POSIX FIFO tokens.
     #[cfg(unix)]
     #[test]
     fn shrinking_takes_back_only_the_slots_no_job_holds() {
@@ -242,6 +244,7 @@ mod tests {
 
     /// The FIFO gains a byte for each core the cores file adds, and gives the bytes back when the
     /// file falls.
+    // This counts tokens in the Unix jobserver's POSIX FIFO.
     #[cfg(unix)]
     #[test]
     fn the_fifo_follows_the_cores_file() {

@@ -2,19 +2,12 @@
 //! `SupervisedLauncher` through [`SupervisedTurns`], read by the registered CLI adapters and decided
 //! by the real `decide`, with the clock faked.
 //!
-//! The supervisor and `ignite internal cli-turn` are this test binary run again with one of the
-//! ignored role tests below. The CLI program is a shell script written into each test's home
-//! (see [`SCRIPT`]): each run takes the next invocation number `n`, records its arguments and
-//! environment as `args.<n>` and `env.<n>`, and then runs `turn.<n>` if the test wrote one, or
-//! prints a clean turn. The helpers it offers a turn are `init` (the first line, naming the
-//! transcript and the model it was asked for), `say <text>`, `result`, `started` (writes to the
-//! FIFO `fifo.<n>`, which the test reads to know the turn runs) and `hang` (waits until the
-//! test writes `gate.<n>`).
+//! The supervisor, CLI turn wrapper and scripted CLI all run in child processes of this test
+//! binary. The script for each invocation provides the CLI's events and exit status. It can
+//! pause at a gate so the test can restart the daemon or interrupt the turn while it is running.
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -28,7 +21,8 @@ use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::protocol::hub::Reservation;
 use ignite_core::time::Timestamp;
-use ignite_core::traits::{Clock, CommandSpec, Result};
+use ignite_core::traits::{Clock, CommandSpec, Launcher, Result, RunResult};
+use ignite_os::occupants::Occupants as _;
 use ignite_store::local::cli_slots as store;
 use ignite_store::local::rows::CheckSighting;
 
@@ -39,6 +33,11 @@ use crate::dispatchd::{RunningVerb, SessionCommand};
 use crate::handles::{Handles, finish_in_row};
 use crate::server::Context;
 use crate::supervise::{Started, SupervisedLauncher};
+use crate::test_process::ChildGate;
+
+#[path = "clid_e2e_program.rs"]
+mod program;
+use program::Step;
 
 const ROLES: &str = "clid::e2e::";
 const START: i64 = 1_800_000_000_000;
@@ -76,30 +75,23 @@ fn role_cli_turn() {
         return;
     };
     let home = PathBuf::from(&args[at + 1]);
-    std::process::exit(start::cli_turn(&home, &args[at + 2..]));
+    let command = program::command(&home.join("cli"), &args[at + 2..]);
+    std::process::exit(start::cli_turn(&home, &command));
 }
 
-/// The scripted CLI program; `@DIR@` is replaced by the folder it keeps its files in.
-const SCRIPT: &str = r#"#!/bin/sh
-dir='@DIR@'
-while ! mkdir "$dir/count.lock" 2>/dev/null; do sleep 0.01; done
-n=$(( $(cat "$dir/count" 2>/dev/null || echo 0) + 1 ))
-echo $n > "$dir/count"
-rmdir "$dir/count.lock"
-printf '%s\0' "$@" > "$dir/args.$n"
-env > "$dir/env.$n"
-model=''; sid='probe'; prev=''
-for a in "$@"; do
-  case "$prev" in --model) model=$a ;; --resume|--session-id) sid=$a ;; esac
-  prev=$a
-done
-init() { echo "{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"$sid\",\"model\":\"$model\",\"claude_code_version\":\"9.9.9\"}"; }
-say() { echo "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"$1\"}]}}"; }
-result() { echo '{"type":"result","subtype":"success","is_error":false,"result":"done","total_cost_usd":0.01,"usage":{"input_tokens":1,"output_tokens":1}}'; }
-started() { echo started > "$dir/fifo.$n"; }
-hang() { while [ ! -e "$dir/gate.$n" ]; do sleep 0.05; done; }
-if [ -f "$dir/turn.$n" ]; then . "$dir/turn.$n"; else init; say done; result; fi
-"#;
+/// Prefixes the adapter's real probe arguments with the test binary's role selection.
+struct ProbeLauncher {
+    cli: PathBuf,
+    supervised: SupervisedLauncher,
+}
+
+impl Launcher for ProbeLauncher {
+    fn run(&self, spec: &CommandSpec) -> RunResult {
+        let mut spec = spec.clone();
+        spec.args = program::command(&self.cli, &spec.args);
+        self.supervised.run(&spec)
+    }
+}
 
 /// The ticket holders and releases that the CLI pool sees through its host.
 #[derive(Default)]
@@ -279,6 +271,7 @@ struct Rig {
     home: PathBuf,
     /// The scripted program's files.
     cli: PathBuf,
+    gates: Mutex<BTreeMap<u32, ChildGate>>,
     clock: Arc<FakeClock>,
     host: Arc<E2eHost>,
     hub: Arc<FakeHub>,
@@ -291,7 +284,7 @@ struct Rig {
 
 impl Drop for Rig {
     fn drop(&mut self) {
-        // A turn can still be waiting on a gate or FIFO. End it and reap its supervisor
+        // A turn can still be waiting on a gate. End it and reap its supervisor
         // before removing the run files, even if the test failed before opening the gate.
         let supervisors = std::mem::take(&mut *lock(&self.supervisors));
         let errors: Vec<_> = supervisors
@@ -325,16 +318,16 @@ fn config(program: &Path) -> Config {
         ticket_trees = 1
         landing_trees = 1
         [pool.cli.claude]
-        program = "{program}"
+        program = {program}
         [pool.models.claude]
         light = "{MODEL}"
         [pool.cli.fake]
         dialect = "codex"
-        program = "{program}"
+        program = {program}
         [pool.models.fake]
         custom = "fake-model"
         "#,
-        program = program.display()
+        program = serde_json::to_string(&program.display().to_string()).unwrap()
     );
     Config::parse("ignite.toml", &text).unwrap()
 }
@@ -346,13 +339,7 @@ impl Rig {
         let _ = fs::remove_dir_all(&home);
         let cli = home.join("cli");
         fs::create_dir_all(&cli).unwrap();
-        let program = home.join("fake-claude");
-        fs::write(
-            &program,
-            SCRIPT.replace("@DIR@", &cli.display().to_string()),
-        )
-        .unwrap();
-        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
+        let program = std::env::current_exe().unwrap();
         let clock = Arc::new(FakeClock::new(Timestamp::from_millis(START)));
         let pool = Arc::new(Pool::new(Self::open(&home)));
         let health = Arc::new(
@@ -366,7 +353,10 @@ impl Rig {
             clock: clock.clone(),
             hub: hub.clone(),
             git: Arc::new(FakeGit::default()),
-            launcher: Arc::new(Self::supervised(&home)),
+            launcher: Arc::new(ProbeLauncher {
+                cli: cli.clone(),
+                supervised: Self::supervised(&home),
+            }),
             builds: Arc::new(FakeBuilds::default()),
             session: None,
             tree: None,
@@ -392,6 +382,7 @@ impl Rig {
             )),
             home,
             cli,
+            gates: Mutex::default(),
             clock,
             host,
             hub,
@@ -467,36 +458,34 @@ impl Rig {
         self.restart_with(turns);
     }
 
-    /// Writes the script of invocation `n` of the program.
-    fn script(&self, n: u32, body: &str) {
-        fs::write(self.cli.join(format!("turn.{n}")), body).unwrap();
+    /// Configures invocation `n` of the scripted program, including its gate if needed.
+    fn script(&self, n: u32, steps: &[Step]) {
+        if steps.iter().any(|step| matches!(step, Step::Wait)) {
+            let gate = ChildGate::new();
+            fs::write(
+                self.cli.join(format!("gate.{n}")),
+                gate.address().to_string(),
+            )
+            .unwrap();
+            lock(&self.gates).insert(n, gate);
+        }
+        fs::write(
+            self.cli.join(format!("turn.{n}")),
+            serde_json::to_vec(steps).unwrap(),
+        )
+        .unwrap();
     }
 
-    /// Makes the FIFO that invocation `n` writes to when its script calls `started`.
-    fn fifo(&self, n: u32) {
-        let fifo = self.cli.join(format!("fifo.{n}"));
-        assert!(
-            Command::new("mkfifo")
-                .arg(&fifo)
-                .status()
-                .unwrap()
-                .success()
-        );
-    }
-
-    /// Waits until invocation `n` has called `started`.
     fn wait_started(&self, n: u32) {
-        let text = fs::read_to_string(self.cli.join(format!("fifo.{n}"))).unwrap();
-        assert_eq!(text, "started\n");
+        lock(&self.gates)[&n].wait_started();
     }
 
     fn open_gate(&self, n: u32) {
-        fs::write(self.cli.join(format!("gate.{n}")), "").unwrap();
+        lock(&self.gates)[&n].release();
     }
 
-    /// How many times the program has run.
     fn invocations(&self) -> u32 {
-        fs::read_to_string(self.cli.join("count")).map_or(0, |text| text.trim().parse().unwrap())
+        program::invocations(&self.cli)
     }
 
     /// The arguments of invocation `n`.
@@ -587,8 +576,7 @@ impl Rig {
 #[test]
 fn cli_e2e_teardown_reaps_a_supervisor_whose_turn_is_still_waiting() {
     let rig = Rig::new("teardown");
-    rig.script(1, "init; started; hang; result\n");
-    rig.fifo(1);
+    rig.script(1, &[Step::Init, Step::Wait, Step::Result]);
     let session = rig.begin();
     rig.wait_started(1);
     assert_eq!(start::recover(&rig.home, &session, 1), Recovery::Running);
@@ -597,18 +585,14 @@ fn cli_e2e_teardown_reaps_a_supervisor_whose_turn_is_still_waiting() {
     let [started] = supervisors.as_slice() else {
         panic!("expected one supervisor, found {}", supervisors.len());
     };
-    let pid = started.supervisor_pid().to_string();
+    let pid = started.supervisor_pid();
     drop(supervisors);
     drop(rig);
 
-    let output = Command::new("/bin/ps")
-        .args(["-p", &pid, "-o", "pid="])
-        .output()
-        .unwrap();
     assert_eq!(
-        output.status.code(),
-        Some(1),
-        "supervisor {pid} still exists after teardown: {output:?}"
+        ignite_os::Native.parent(pid),
+        None,
+        "supervisor {pid} still exists after teardown"
     );
 }
 

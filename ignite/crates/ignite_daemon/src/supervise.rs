@@ -413,13 +413,20 @@ impl Started {
         self.run.wait()
     }
 
-    #[cfg(all(test, unix))]
+    #[cfg(test)]
     pub(crate) fn supervisor_pid(&self) -> u32 {
         self.child.id()
     }
 
+    /// Simulates the supervisor dying before it can save a result.
+    #[cfg(test)]
+    pub(crate) fn kill_supervisor_for_test(&mut self) {
+        self.child.kill().unwrap();
+        self.child.wait().unwrap();
+    }
+
     /// Ends a test command that might still be waiting and reaps its supervisor.
-    #[cfg(all(test, unix))]
+    #[cfg(test)]
     pub(crate) fn stop_for_test(mut self) -> io::Result<()> {
         if self.child.try_wait()?.is_none() && !self.run.dir.join(RESULT).exists() {
             self.run.kill()?;

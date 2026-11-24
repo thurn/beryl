@@ -51,7 +51,7 @@ use crate::pool::Pool;
 
 #[path = "clid_claim.rs"]
 mod claim;
-#[cfg(all(test, unix))]
+#[cfg(test)]
 #[path = "clid_e2e_tests.rs"]
 mod e2e;
 #[path = "clid_end.rs"]

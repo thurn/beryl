@@ -1,6 +1,4 @@
-#[cfg(unix)]
 use std::cell::RefCell;
-#[cfg(unix)]
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -8,7 +6,6 @@ use ignite_core::ids::Commit;
 use ignite_core::time::Timestamp;
 
 use super::*;
-#[cfg(unix)]
 use crate::update::Startup;
 use crate::update::lastgood::{CRASH_STARTS, CrashLoop, detect_crash_loop, roll_back};
 
@@ -60,13 +57,11 @@ fn records(commit_hex: &str, seconds: &[f64]) -> Vec<StartRecord> {
         .collect()
 }
 
-#[cfg(unix)]
 #[derive(Default)]
 struct FakeRestart {
     started: RefCell<Vec<PathBuf>>,
 }
 
-#[cfg(unix)]
 impl Restart for FakeRestart {
     fn restart(&self, executable: &Path, _args: &[String]) -> std::io::Result<()> {
         self.started.borrow_mut().push(executable.to_owned());
@@ -132,7 +127,6 @@ fn three_starts_in_five_minutes_are_a_crash_loop_when_a_last_good_build_exists()
     assert!(detect_crash_loop(&starts, &commit(BAD), Some(commit(BAD)), at(130.0)).is_none());
 }
 
-#[cfg(unix)]
 #[test]
 fn the_third_start_rolls_back_and_the_bad_build_is_never_installed_again() {
     let home = home();
@@ -163,9 +157,7 @@ fn the_third_start_rolls_back_and_the_bad_build_is_never_installed_again() {
     assert!(record["at"].as_str().is_some());
 }
 
-/// Two `launchctl kickstart -k` restarts in quick succession: each run stops cleanly on
-/// `SIGTERM`, so the third start is no crash loop and the build stays.
-#[cfg(unix)]
+/// Clean stops in quick succession do not count towards a crash loop.
 #[test]
 fn starts_after_clean_stops_are_not_a_crash_loop() {
     let home = home();
@@ -193,7 +185,6 @@ fn starts_after_clean_stops_are_not_a_crash_loop() {
 
 /// A build that exits on its own, with no clean stop recorded, is still rolled back, also when
 /// clean restarts came before.
-#[cfg(unix)]
 #[test]
 fn starts_after_crashes_still_roll_back_among_clean_stops() {
     let home = home();
@@ -274,7 +265,6 @@ fn the_last_good_build_survives_pruning_and_a_missing_one_is_not_marked() {
     assert!(store.has(&commit(BAD)), "the current build is kept");
     assert!(store.mark_last_good(&commit("ddddddd")).is_err());
     assert!(store.point_current_at(&commit("ddddddd")).is_err());
-    #[cfg(unix)]
     assert_eq!(store.current_commit(), Some(commit(BAD)));
 }
 
@@ -312,6 +302,5 @@ fn rolling_back_without_a_stored_target_fails_and_changes_nothing() {
     };
     assert!(roll_back(&home, &looped, at(0.0)).is_err());
     assert!(!home.store().is_rejected(&commit(BAD)));
-    #[cfg(unix)]
     assert_eq!(home.store().current_commit(), Some(commit(BAD)));
 }

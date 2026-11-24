@@ -1,22 +1,37 @@
 //! The end-to-end cases of CLI mode (see the parent module for the rig and the scripted
 //! program).
 
-use super::*;
+use serde_json::json;
 
-/// A turn's first line and then a wait for the gate, with the FIFO told the turn runs.
-const HELD: &str = "init; started; hang; say done; result\n";
+use super::*;
+use Step::{Emit, Exit as ExitWith, Init, Result as Done, Say, Wait};
+
+fn held() -> [Step; 4] {
+    [Init, Wait, Say("done".to_owned()), Done]
+}
+
+fn codex_init(thread: &str) -> Step {
+    Emit(json!({"type": "thread.started", "thread_id": thread}))
+}
+
+fn codex_message(text: &str) -> Step {
+    Emit(json!({"type": "item.completed", "item": {"type": "agent_message", "text": text}}))
+}
+
+fn codex_done() -> Step {
+    Emit(json!({"type": "turn.completed", "usage": {"input_tokens": 1, "output_tokens": 1}}))
+}
 
 #[test]
 fn cli_e2e_a_configured_provider_runs_a_ticket_with_an_existing_dialect() {
     let rig = Rig::new("provider");
-    let turn = r#"cat <<'JSON'
-{"type":"thread.started","thread_id":"fake-transcript"}
-{"type":"item.completed","item":{"type":"agent_message","text":"done"}}
-{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}
-JSON
-"#;
-    rig.script(1, turn);
-    rig.script(2, turn);
+    let turn = [
+        codex_init("fake-transcript"),
+        codex_message("done"),
+        codex_done(),
+    ];
+    rig.script(1, &turn);
+    rig.script(2, &turn);
 
     assert!(!rig.daemon.offers("fake"));
     let adapter = &rig.daemon.app("fake").unwrap().app;
@@ -59,10 +74,8 @@ fn turns_of(rig: &Rig, session: &SessionId) -> Vec<(i64, String, Option<String>)
 #[test]
 fn cli_e2e_a_daemon_restart_during_a_turn_neither_starts_it_again_nor_ends_it_twice() {
     let mut rig = Rig::new("restart");
-    rig.script(1, HELD);
-    rig.script(2, HELD);
-    rig.fifo(1);
-    rig.fifo(2);
+    rig.script(1, &held());
+    rig.script(2, &held());
     let session = rig.begin();
     rig.wait_started(1);
 
@@ -170,9 +183,10 @@ fn cli_e2e_a_gate_that_stays_stuck_can_still_lose_its_claim() {
 #[test]
 fn cli_e2e_a_program_killed_mid_turn_resumes_its_transcript_as_interrupted() {
     let rig = Rig::new("killed");
-    // The program ends itself with SIGKILL after its first line; its supervisor survives.
-    rig.script(1, "init; kill -9 $$\n");
+    rig.script(1, &[Init, Wait]);
     let session = rig.begin();
+    rig.wait_started(1);
+    find_run(&rig.home, &session, 1).unwrap().kill().unwrap();
     rig.wait_turn(&session, 1);
     rig.daemon.step().unwrap();
     rig.wait_turn(&session, 2);
@@ -190,9 +204,11 @@ fn cli_e2e_a_program_killed_mid_turn_resumes_its_transcript_as_interrupted() {
 #[test]
 fn cli_e2e_a_reboot_that_left_no_supervisor_and_no_result_resumes_as_interrupted() {
     let mut rig = Rig::new("reboot");
-    // The program kills its supervisor, as a reboot ends it, and goes on running.
-    rig.script(1, "init; kill -9 $PPID; hang\n");
+    rig.script(1, &[Init, Wait]);
     let session = rig.begin();
+    rig.wait_started(1);
+    // A reboot can stop the supervisor before it records the turn's outcome.
+    lock(&rig.supervisors)[0].kill_supervisor_for_test();
     rig.wait_turn(&session, 1);
     let run = find_run(&rig.home, &session, 1).unwrap();
     assert!(
@@ -239,7 +255,7 @@ fn cli_e2e_a_crash_between_recording_a_turn_and_starting_it_runs_it_once() {
 fn cli_e2e_recover_and_the_loop_starting_one_turn_at_once_run_it_once() {
     let mut rig = Rig::new("race");
     // The turn waits for its gate, so the loop cannot see it end and start the next one.
-    rig.script(1, "init; hang; say done; result\n");
+    rig.script(1, &held());
     rig.restart_with(Arc::new(FailFirst {
         inner: rig.turns(),
         failed: AtomicBool::new(false),
@@ -295,12 +311,19 @@ fn cli_e2e_a_plan_limit_releases_the_ticket_and_starts_the_usage_hold() {
     let resets = START / 1000 + 3600;
     rig.script(
         1,
-        &format!(
-            "init\necho '{{\"type\":\"rate_limit_event\",\"rate_limit_info\":{{\"unifiedWindows\":\
-             {{\"five_hour\":{{\"utilization\":1.0,\"resetsAt\":{resets},\"status\":\"rejected\"\
-             }}}}}}}}'\necho '{{\"type\":\"result\",\"subtype\":\"error_during_execution\",\
-             \"is_error\":true,\"result\":\"You have hit your limit\"}}'\nexit 1\n"
-        ),
+        &[
+            Init,
+            Emit(
+                json!({"type": "rate_limit_event", "rate_limit_info": {"unifiedWindows": {
+                    "five_hour": {"utilization": 1.0, "resetsAt": resets, "status": "rejected"}
+                }}}),
+            ),
+            Emit(json!({
+                "type": "result", "subtype": "error_during_execution",
+                "is_error": true, "result": "You have hit your limit"
+            })),
+            ExitWith(1),
+        ],
     );
     let session = rig.begin();
     rig.wait_turn(&session, 1);
@@ -332,9 +355,15 @@ fn cli_e2e_a_refusal_holds_the_app_and_a_passing_probe_resumes_the_slot() {
     let rig = Rig::new("refusal");
     rig.script(
         1,
-        "init\necho '{\"type\":\"result\",\"subtype\":\"error_during_execution\",\
-         \"is_error\":true,\"api_error_status\":404,\"result\":\"There is an issue with the \
-         selected model\"}'\nexit 1\n",
+        &[
+            Init,
+            Emit(json!({
+                "type": "result", "subtype": "error_during_execution",
+                "is_error": true, "api_error_status": 404,
+                "result": "There is an issue with the selected model"
+            })),
+            ExitWith(1),
+        ],
     );
     let session = rig.begin();
     rig.wait_turn(&session, 1);
@@ -382,7 +411,7 @@ fn cli_e2e_a_refusal_holds_the_app_and_a_passing_probe_resumes_the_slot() {
 #[test]
 fn cli_e2e_a_passing_probe_retires_a_slot_reassigned_at_the_hub() {
     let rig = Rig::new("reassigned");
-    rig.script(1, "exit 1\n");
+    rig.script(1, &[ExitWith(1)]);
     let session = rig.begin();
     rig.wait_turn(&session, 1);
     rig.daemon.step().unwrap();
@@ -411,7 +440,7 @@ fn cli_e2e_a_passing_probe_retires_a_slot_reassigned_at_the_hub() {
 #[test]
 fn cli_e2e_a_restarted_daemon_rechecks_the_claim_before_launching_a_recorded_resume() {
     let mut rig = Rig::new("reassigned-after-recording");
-    rig.script(1, "exit 1\n");
+    rig.script(1, &[ExitWith(1)]);
     let session = rig.begin();
     rig.wait_turn(&session, 1);
     rig.daemon.step().unwrap();
@@ -440,8 +469,7 @@ fn cli_e2e_a_restarted_daemon_rechecks_the_claim_before_launching_a_recorded_res
 #[test]
 fn cli_e2e_tell_now_ends_the_running_turn_and_the_next_prompt_holds_the_text() {
     let rig = Rig::new("tell");
-    rig.script(1, HELD);
-    rig.fifo(1);
+    rig.script(1, &held());
     let session = rig.begin();
     rig.wait_started(1);
     let text = "Message about T.1: stop and land what you have.";
@@ -466,7 +494,7 @@ fn cli_e2e_tell_now_ends_the_running_turn_and_the_next_prompt_holds_the_text() {
 #[test]
 fn cli_e2e_a_clean_end_holding_the_ticket_gets_the_block_text_once_then_releases() {
     let rig = Rig::new("block");
-    rig.script(2, "init; say 'I stopped for the night'; result\n");
+    rig.script(2, &[Init, Say("I stopped for the night".to_owned()), Done]);
     let session = rig.begin();
     rig.wait_turn(&session, 1);
     rig.daemon.step().unwrap();
@@ -488,8 +516,7 @@ fn cli_e2e_a_clean_end_holding_the_ticket_gets_the_block_text_once_then_releases
 #[test]
 fn cli_e2e_a_hand_off_begun_again_after_a_restart_starts_no_second_turn() {
     let mut rig = Rig::new("rebegin");
-    rig.script(1, HELD);
-    rig.fifo(1);
+    rig.script(1, &held());
     let session = rig.begin();
     rig.wait_started(1);
 
@@ -524,15 +551,7 @@ fn cli_e2e_four_workers_on_two_providers_start_with_room_and_leave_at_landing() 
     use crate::dispatchd::{HeadlessDispatch, Setup};
 
     let rig = Rig::new("worker-room");
-    let fake_turn = r#"case "$1" in
-exec)
-    started; hang
-    echo '{"type":"thread.started","thread_id":"fake-room"}'
-    echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
-    ;;
-*) init; started; hang; result ;;
-esac
-"#;
+    let fake_turn = [Init, Wait, Done, codex_init("fake-room"), codex_done()];
     probe_dispatch_providers(&rig);
 
     let headless_dispatch = HeadlessDispatch::new(
@@ -546,8 +565,7 @@ esac
     headless_dispatch.set_cli(rig.daemon.clone(), &rig.ctx.config);
     for n in 1..=4 {
         queue_room_ticket(&rig, n);
-        rig.script(n + 2, fake_turn);
-        rig.fifo(n + 2);
+        rig.script(n + 2, &fake_turn);
     }
 
     assert!(headless_dispatch.view().unwrap().is_empty());
@@ -620,13 +638,14 @@ esac
 }
 
 fn probe_dispatch_providers(rig: &Rig) {
-    rig.script(1, "init; say ready; result");
+    rig.script(1, &[Init, Say("ready".to_owned()), Done]);
     rig.script(
         2,
-        r#"echo '{"type":"thread.started","thread_id":"fake-probe"}'
-echo '{"type":"item.completed","item":{"type":"agent_message","text":"ready"}}'
-echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
-"#,
+        &[
+            codex_init("fake-probe"),
+            codex_message("ready"),
+            codex_done(),
+        ],
     );
     let fake = &rig.daemon.app("fake").unwrap().app;
     rig.health
@@ -693,8 +712,7 @@ fn cli_e2e_two_repairs_resume_the_same_transcript_with_a_restart_between_them() 
             .begin(&reservation, MODEL, Some("high"), Some(&resume), false)
     };
 
-    rig.script(2, HELD);
-    rig.fifo(2);
+    rig.script(2, &held());
     let repair = start(&rig, "R.1").unwrap();
     rig.wait_started(2);
     rig.restart();

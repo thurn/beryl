@@ -662,6 +662,6 @@ pub use memory::PassMemory;
 mod rerun;
 pub use rerun::rerun_command;
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 #[path = "express_tests.rs"]
 mod tests;

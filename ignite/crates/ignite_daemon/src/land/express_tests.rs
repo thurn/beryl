@@ -44,7 +44,7 @@ fn lane(name: &str, commands: &[&str]) -> (PathBuf, MachineExpress, Commit) {
 
 #[test]
 fn the_commands_run_in_the_tree_at_the_commit_and_its_target_directory_is_kept() {
-    let (root, lane, first) = lane("pass", &["true", "true"]);
+    let (root, lane, first) = lane("pass", &["git --version", "git --version"]);
     let run = lane.run(&first);
     assert!(run.passed(), "{run:?}");
     assert_eq!(run.ran.len(), 2);
@@ -69,10 +69,10 @@ fn the_commands_run_in_the_tree_at_the_commit_and_its_target_directory_is_kept()
 
 #[test]
 fn a_failing_command_stops_the_run_and_reports_its_output() {
-    let (root, lane, commit) = lane("fail", &["ls no-such-file", "true"]);
+    let (root, lane, commit) = lane("fail", &["git show no-such-file", "git --version"]);
     let run = lane.run(&commit);
     let (command, output) = run.failure.clone().unwrap();
-    assert_eq!(command, "ls no-such-file");
+    assert_eq!(command, "git show no-such-file");
     assert!(output.contains("no-such-file"), "{output}");
     assert_eq!(
         run.ran.len(),
@@ -84,7 +84,10 @@ fn a_failing_command_stops_the_run_and_reports_its_output() {
 
 #[test]
 fn a_run_in_an_agents_tree_uses_that_tree_as_it_is() {
-    let (root, lane, _) = lane("in-tree", &["test -f lib.txt", "touch ran-here"]);
+    let (root, lane, _) = lane(
+        "in-tree",
+        &["git hash-object lib.txt", "git diff --output=ran-here"],
+    );
     let agent = lane.repo.clone();
     fs::write(agent.join("tool/uncommitted.txt"), "edit").unwrap();
     let run = lane.run_in(&agent, &section(&lane), &[]);
@@ -120,7 +123,7 @@ fn section(lane: &MachineExpress) -> ignite_core::config::Express {
 
 #[test]
 fn a_second_run_of_an_unchanged_clean_tree_skips_the_commands() {
-    let (root, mut lane, _) = lane("reuse", &["true"]);
+    let (root, mut lane, _) = lane("reuse", &["git --version"]);
     let clock = Arc::new(ignite_core::fakes::FakeClock::new(
         ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
     ));
@@ -143,7 +146,7 @@ fn a_second_run_of_an_unchanged_clean_tree_skips_the_commands() {
     // An edited `[express]` section does not match the earlier pass.
     let again = lane.run_in(&lane.repo, &section(&lane), &[]);
     assert!(again.reused_after_s.is_some());
-    lane.commands.push("true".to_owned());
+    lane.commands.push("git --version".to_owned());
     remembering(&mut lane, &clock);
     assert_eq!(lane.run_in(&lane.repo, &section(&lane), &[]).ran.len(), 2);
     let _ = fs::remove_dir_all(root);
@@ -153,7 +156,7 @@ fn a_second_run_of_an_unchanged_clean_tree_skips_the_commands() {
 /// edit to its own file `tool/lib.txt`, as `ignite test` before a commit, and its clock four
 /// minutes later. The pass left the tree's own index as it was.
 fn tested_dirty(name: &str) -> (PathBuf, MachineExpress, ignite_git::GitCli) {
-    let (root, mut lane, _) = lane(name, &["true"]);
+    let (root, mut lane, _) = lane(name, &["git --version"]);
     let clock = Arc::new(ignite_core::fakes::FakeClock::new(
         ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
     ));
@@ -220,7 +223,7 @@ fn a_landing_reuses_a_dirty_trees_pass_after_the_commit_and_an_unrelated_landing
 
 #[test]
 fn a_pass_older_than_an_hour_is_not_reused() {
-    let (root, mut lane, _) = lane("expiry", &["true"]);
+    let (root, mut lane, _) = lane("expiry", &["git --version"]);
     let clock = Arc::new(ignite_core::fakes::FakeClock::new(
         ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
     ));
@@ -244,7 +247,7 @@ fn commit_files(repo: &Path, files: &[&str], text: &str) -> Commit {
 /// A lane over `name`'s repository whose clean tree passed the commands at 10:00 with the
 /// change's own file `tool/lib.txt`, its clock four minutes later, and the commit it passed on.
 fn checked(name: &str) -> (PathBuf, MachineExpress, ignite_git::GitCli, Commit) {
-    let (root, mut lane, _) = lane(name, &["true"]);
+    let (root, mut lane, _) = lane(name, &["git --version"]);
     let clock = Arc::new(ignite_core::fakes::FakeClock::new(
         ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
     ));
@@ -298,7 +301,7 @@ fn a_landing_reuses_a_checks_pass_when_the_commits_landed_since_touch_none_of_it
     assert_eq!(landing_reuses(&lane, &git, &checked, &own()), None);
     // A pass of another section is not reused.
     let mut other = section(&lane);
-    other.commands.push("true".to_owned());
+    other.commands.push("git --version".to_owned());
     assert_eq!(
         reused(&lane, &git, &other, &lane.repo, &head, &own()).unwrap(),
         None
@@ -328,7 +331,7 @@ fn a_landing_reruns_when_a_landed_commit_touches_the_workspaces_lock_file() {
 
 #[test]
 fn a_landing_reuses_a_pass_when_the_only_file_a_landed_commit_shares_with_it_is_inert() {
-    let (root, mut lane, _) = lane("reuse-inert", &["true"]);
+    let (root, mut lane, _) = lane("reuse-inert", &["git --version"]);
     let clock = Arc::new(ignite_core::fakes::FakeClock::new(
         ignite_core::time::Timestamp::parse("2026-11-19T21:40:00Z").unwrap(),
     ));
@@ -389,7 +392,12 @@ impl CoreLender for FakeLender {
 
 #[test]
 fn free_cores_are_borrowed_for_the_run_and_returned_after_it() {
-    let (root, mut lane, commit) = lane("borrow", &["env"]);
+    let command = if cfg!(windows) {
+        "cmd /D /C set IGNITE_CORES & set CARGO_BUILD_JOBS"
+    } else {
+        "env"
+    };
+    let (root, mut lane, commit) = lane("borrow", &[command]);
     let lender = Arc::new(FakeLender {
         free: 20,
         log: std::sync::Mutex::new(Vec::new()),
@@ -400,14 +408,13 @@ fn free_cores_are_borrowed_for_the_run_and_returned_after_it() {
     // 2 reserved cores, and the lender is asked for up to `MOST_CORES` in all.
     assert_eq!(run.cores, MOST_CORES);
     let log = fs::read_to_string(lane.tree.join("tool/target/express.log")).unwrap();
-    assert!(
-        log.contains(&format!("IGNITE_CORES={MOST_CORES}\n")),
-        "{log}"
-    );
-    assert!(
-        log.contains(&format!("CARGO_BUILD_JOBS={MOST_CORES}\n")),
-        "{log}"
-    );
+    for name in ["IGNITE_CORES", "CARGO_BUILD_JOBS"] {
+        let expected = format!("{name}={MOST_CORES}");
+        assert!(
+            log.lines().any(|line| line == expected),
+            "missing {expected}"
+        );
+    }
     assert_eq!(
         *lender.log.lock().unwrap(),
         [format!("borrow {}", MOST_CORES - 2), "return 7".to_owned()]
@@ -417,7 +424,7 @@ fn free_cores_are_borrowed_for_the_run_and_returned_after_it() {
 
 #[test]
 fn a_run_releases_its_reserve_even_when_it_borrows_no_extra_cores() {
-    let (root, mut lane, commit) = lane("no-borrow", &["true"]);
+    let (root, mut lane, commit) = lane("no-borrow", &["git --version"]);
     let lender = Arc::new(FakeLender {
         free: 0,
         log: std::sync::Mutex::new(Vec::new()),
@@ -435,19 +442,19 @@ fn a_run_releases_its_reserve_even_when_it_borrows_no_extra_cores() {
 
 #[test]
 fn a_run_in_uses_the_commands_of_the_section_it_is_given() {
-    let (root, mut lane, _) = lane("own-section", &["false"]);
+    let (root, mut lane, _) = lane("own-section", &["git show no-such-file"]);
     let clock = Arc::new(ignite_core::fakes::FakeClock::new(
         ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
     ));
     remembering(&mut lane, &clock);
     // The lane's own commands fail, but the tree's section names others.
     let mut own = section(&lane);
-    own.commands = vec!["touch own-ran".to_owned()];
+    own.commands = vec!["git diff --output=own-ran".to_owned()];
     let run = lane.run_in(&lane.repo, &own, &[]);
     assert!(run.passed(), "{run:?}");
     assert!(lane.repo.join("tool/own-ran").exists());
     // A pass of one section is not reused for another.
-    own.commands = vec!["true".to_owned(), "true".to_owned()];
+    own.commands = vec!["git --version".to_owned(), "git --version".to_owned()];
     assert_eq!(lane.run_in(&lane.repo, &own, &[]).ran.len(), 2);
     let _ = fs::remove_dir_all(root);
 }
@@ -481,7 +488,12 @@ fn the_tree_s_ignite_toml_is_read_for_its_express_section_with_the_daemons_as_fa
 fn a_run_waits_until_the_trees_seed_has_ended() {
     let (root, mut lane, _) = lane("seed", &[]);
     let seed = root.join(".repo.seeding");
-    lane.commands = vec![format!("test ! -e {}", seed.display())];
+    let command = if cfg!(windows) {
+        "cmd /D /C if exist ..\\..\\.repo.seeding exit /b 1"
+    } else {
+        "test ! -e ../../.repo.seeding"
+    };
+    lane.commands = vec![command.to_owned()];
     fs::create_dir_all(&seed).unwrap();
     let steps = crate::steps::Steps::new(Arc::new(ignite_core::time::SystemClock));
     let landing = steps.begin(
@@ -512,7 +524,7 @@ fn a_run_waits_until_the_trees_seed_has_ended() {
 /// A run stopped while it waits for the tree's seed ends at once and runs no command.
 #[test]
 fn a_run_stopped_while_the_seed_runs_runs_no_command() {
-    let (root, lane, _) = lane("seed-stop", &["touch ran"]);
+    let (root, lane, _) = lane("seed-stop", &["git diff --output=ran"]);
     fs::create_dir_all(root.join(".repo.seeding")).unwrap();
     let steps = crate::steps::Steps::new(Arc::new(ignite_core::time::SystemClock));
     let landing = steps.begin(
@@ -535,7 +547,21 @@ fn a_run_stopped_while_the_seed_runs_runs_no_command() {
 /// file the command wrote.
 #[test]
 fn a_failure_shows_what_the_command_wrote_after_its_log_was_moved_away() {
-    let (root, lane, _) = lane("moved-log", &["sh swap.sh"]);
+    // Windows can rename the open log, but it cannot move its containing directory.
+    let command = if cfg!(windows) {
+        "cmd /D /C swap.cmd"
+    } else {
+        "sh swap.sh"
+    };
+    let (root, lane, _) = lane("moved-log", &[command]);
+    #[cfg(windows)]
+    fs::write(
+        lane.repo.join("tool/swap.cmd"),
+        "@echo off\r\nmove target\\express.log target\\express.old >nul || exit /b 2\r\n>target\\express.log echo 1747 tests run: 1747 passed\r\necho the real failure\r\nexit /b 1\r\n",
+    )
+    .unwrap();
+    // POSIX lets a directory move while a file inside it is open.
+    #[cfg(unix)]
     fs::write(
         lane.repo.join("tool/swap.sh"),
         "mv target target.gone\nmkdir target\necho '1747 tests run: 1747 passed' > \
@@ -569,7 +595,7 @@ fn express_prepares_and_measures_each_command() {
         }
     }
 
-    let (root, mut lane, _) = lane("build-space", &["true", "true"]);
+    let (root, mut lane, _) = lane("build-space", &["git --version", "git --version"]);
     let space = Arc::new(BuildSpace::default());
     lane.builds = Some(space.clone());
     let run = lane.run_in(&lane.repo, &section(&lane), &[]);

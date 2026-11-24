@@ -42,11 +42,9 @@ fn store_with(old: &str, new: &str) -> ExecutableStore {
 fn an_update_keeps_the_previous_release() {
     let store = store_with("aaaaaaa", "bbbbbbb");
     assert_eq!(store.previous(), Some(commit("aaaaaaa")));
-    #[cfg(unix)]
     assert_eq!(store.current_commit(), Some(commit("bbbbbbb")));
 }
 
-#[cfg(unix)]
 #[test]
 fn a_release_that_starts_twice_without_running_a_minute_is_rolled_back_and_rejected() {
     let (old, new) = (commit("aaaaaaa"), commit("bbbbbbb"));
@@ -83,7 +81,6 @@ fn a_release_that_ran_long_enough_or_restarts_much_later_stays() {
     assert!(!slow.is_rejected(&new));
 }
 
-#[cfg(unix)]
 #[test]
 fn a_release_restarted_on_purpose_stays_and_one_that_then_crashes_is_rolled_back() {
     let new = commit("bbbbbbb");

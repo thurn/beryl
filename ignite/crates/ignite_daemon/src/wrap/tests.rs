@@ -92,7 +92,7 @@ fn a_test_binary_is_named_by_its_crate() {
     assert_eq!(test_binary_crate(Path::new("/t/deps/plain")), "plain");
 }
 
-/// A shim directory holds the two scripts and no `cargo`, and writing it deletes the `cargo`
+/// A shim directory holds the test runner and compiler wrapper and no `cargo`, and writing it deletes the `cargo`
 /// shim an earlier release left there, so nothing in it can divert a plain `cargo` call.
 #[test]
 fn a_shim_directory_holds_no_cargo() {
@@ -113,8 +113,11 @@ fn a_shim_directory_holds_no_cargo() {
     expected.sort();
     assert_eq!(names, expected);
     let wrapper = fs::read_to_string(dir.join(RUSTC_WRAP_SCRIPT)).unwrap();
+    // The POSIX shim names the executable and subcommand in its shell script.
     #[cfg(unix)]
     assert!(wrapper.contains("ignite-exe") && wrapper.contains("rustc-wrap"));
+    #[cfg(windows)]
+    assert_eq!(wrapper, "program");
     // Writing again over unchanged scripts succeeds and changes nothing.
     write_shims(&dir, &ignite).unwrap();
     assert_eq!(

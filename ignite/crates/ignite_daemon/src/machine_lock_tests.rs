@@ -24,6 +24,7 @@ fn hold_until_killed() {
     }
 }
 
+// Unix identifies a file by its device and inode numbers.
 #[cfg(unix)]
 fn identity(path: &std::path::Path) -> (u64, u64) {
     use std::os::unix::fs::MetadataExt;
@@ -151,6 +152,7 @@ fn a_missing_socket_means_starting_only_after_a_recent_start() {
 
 /// The home folder holds the daemon's socket and the machine's write token, so only its user
 /// may enter it, whether it is new or was made with wider permissions before.
+// This checks the POSIX directory mode bits.
 #[cfg(unix)]
 #[test]
 fn the_home_folder_is_private_to_its_user() {

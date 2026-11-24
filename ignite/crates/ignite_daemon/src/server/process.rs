@@ -713,6 +713,7 @@ fn died(shared: &Shared, handle: &Handle, rerun: Option<Arc<dyn Verb>>) {
     );
 }
 
+// These tests inspect Unix zombie processes, which remain until a parent waits.
 #[cfg(all(test, unix))]
 mod reap_tests {
     use super::*;

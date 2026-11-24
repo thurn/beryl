@@ -111,10 +111,8 @@ fn a_target_directory_made_during_the_swap_is_moved_aside() {
 /// A seed failed with "Permission denied" (os error 13) on a file it could not read. Cargo's
 /// `tmp` directory and nextest's hold what tests write after the build has released Cargo's
 /// lock, so only the profile directories and the root's files are copied.
-#[cfg(unix)]
 #[test]
 fn only_the_profile_directories_and_root_files_of_a_target_are_copied() {
-    use std::os::unix::fs::PermissionsExt as _;
     let dir = scratch("target");
     let from = dir.join("from");
     write(&from.join("CACHEDIR.TAG"), "tag");
@@ -126,8 +124,23 @@ fn only_the_profile_directories_and_root_files_of_a_target_are_copied() {
     );
     write(&from.join("nextest/archive"), "archive");
     let unreadable = from.join("tmp/test-scratch/secret");
-    write(&unreadable, "a test made this unreadable");
-    fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o000)).unwrap();
+    write(&unreadable, "test output");
+    // Windows can deny read sharing without changing the file's permissions.
+    #[cfg(windows)]
+    let blocked = {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&unreadable)
+            .unwrap()
+    };
+    // Unix uses the file's mode bits to deny reads.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o000)).unwrap();
+    }
 
     copy::clone_target(&from, &dir.join("to")).unwrap();
 
@@ -140,7 +153,8 @@ fn only_the_profile_directories_and_root_files_of_a_target_are_copied() {
     );
     assert!(!to.join("tmp").exists());
     assert!(!to.join("nextest").exists());
-    fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o644)).unwrap();
+    #[cfg(windows)]
+    drop(blocked);
     let _ = fs::remove_dir_all(&dir);
 }
 

@@ -1,6 +1,4 @@
 use std::cell::RefCell;
-#[cfg(unix)]
-use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use ignite_core::fakes::FakeGit;
@@ -23,11 +21,12 @@ pub(super) fn commit(hex: &str) -> Commit {
     Commit::new(hex).unwrap()
 }
 
-/// Writes a shell script, as stand-in for a built `ignite`. It is executable only on macOS,
-/// where one test runs it.
+/// Writes a file, as stand-in for a built `ignite`. The install handoff and PATH tests
+/// run it as a shell script on macOS.
 pub(super) fn script(path: &Path, body: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
+    // On POSIX, running a script directly requires executable mode bits.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -48,13 +47,11 @@ impl Builder for FakeBuilder {
     }
 }
 
-#[cfg(unix)]
 #[derive(Default)]
 struct FakeRestart {
     started: RefCell<Vec<(PathBuf, Vec<String>)>>,
 }
 
-#[cfg(unix)]
 impl Restart for FakeRestart {
     fn restart(&self, executable: &Path, args: &[String]) -> io::Result<()> {
         self.started
@@ -64,7 +61,6 @@ impl Restart for FakeRestart {
     }
 }
 
-#[cfg(unix)]
 #[test]
 fn an_update_leaves_running_supervisors_on_the_old_executable() {
     let home = tempdir("update");
@@ -74,14 +70,11 @@ fn an_update_leaves_running_supervisors_on_the_old_executable() {
 
     // A supervisor started from the old executable is still running a command.
     let old_exe = store.path(&old);
-    script(&old_exe, "sleep 30");
+    std::fs::create_dir_all(old_exe.parent().unwrap()).unwrap();
+    std::fs::copy(std::env::current_exe().unwrap(), &old_exe).unwrap();
     store.point_current_at(&old).unwrap();
     let before = std::fs::read(&old_exe).unwrap();
-    let mut supervisor = Command::new(&old_exe)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
+    let mut supervisor = crate::test_process::hold_stdin(&old_exe).spawn().unwrap();
 
     let git = FakeGit::default();
     git.set_tip("master", new.clone());
@@ -131,8 +124,9 @@ fn an_update_leaves_running_supervisors_on_the_old_executable() {
         supervisor.try_wait().unwrap().is_none(),
         "the supervisor was stopped"
     );
-    supervisor.kill().unwrap();
-    supervisor.wait().unwrap();
+    drop(supervisor.stdin.take());
+    assert!(supervisor.wait().unwrap().success());
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]

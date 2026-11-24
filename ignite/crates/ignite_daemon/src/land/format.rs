@@ -225,7 +225,7 @@ impl Landing {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use std::fs;
     use std::process::Command;
@@ -253,8 +253,7 @@ mod tests {
 
     /// A repository with a misformatted Rust file under `tool/` and a misformatted Markdown
     /// file, both committed, and formatters that stand in for rustfmt and mdformat by
-    /// rewriting each file they are given. `sed -i` takes its suffix in a separate word on
-    /// macOS, so the stand-ins copy through a temporary file instead.
+    /// rewriting each file they are given.
     fn repository(name: &str) -> std::path::PathBuf {
         let repo = ignite_core::test_files::temp_dir()
             .join(format!("ignite-format-{name}-{}", std::process::id()));
@@ -265,9 +264,17 @@ mod tests {
         git(&repo, &["config", "user.email", "t@example.com"]);
         fs::write(repo.join("tool/src/lib.rs"), "fn  a() {}\n").unwrap();
         fs::write(repo.join("notes.md"), "*  item\n").unwrap();
+        // The Unix fixture uses POSIX shell redirection and utilities.
+        #[cfg(unix)]
         fs::write(
             repo.join("fmt.sh"),
             "for f in \"$@\"; do tr -s ' ' < \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\"; done\n",
+        )
+        .unwrap();
+        #[cfg(windows)]
+        fs::write(
+            repo.join("fmt.cmd"),
+            "@echo off\r\nfor %%F in (%*) do (\r\n  if %%~xF==.rs (\r\n    >\"%%~F\" echo fn a^(^) {}\r\n  ) else (\r\n    >\"%%~F\" echo * item\r\n  )\r\n)\r\n",
         )
         .unwrap();
         git(&repo, &["add", "-A"]);
@@ -275,13 +282,24 @@ mod tests {
         repo
     }
 
+    const NOTES: &str = if cfg!(windows) {
+        "cmd /D /C fmt.cmd {files}"
+    } else {
+        "sh fmt.sh {files}"
+    };
+
     #[test]
     fn misformatted_rust_and_markdown_files_are_formatted_and_committed() {
         let repo = repository("dirty");
+        let rust = if cfg!(windows) {
+            "cmd /D /C ..\\fmt.cmd {files}"
+        } else {
+            "sh ../fmt.sh {files}"
+        };
         let format = MachineFormat {
             rules: vec![
-                rule("tool/**/*.rs", "tool", "sh ../fmt.sh {files}"),
-                rule("**/*.md", "", "sh fmt.sh {files}"),
+                rule("tool/**/*.rs", "tool", rust),
+                rule("**/*.md", "", NOTES),
                 rule("ui/**", "ui", "no-such-formatter {files}"),
             ],
         };
@@ -295,12 +313,16 @@ mod tests {
         assert_eq!(git(&repo, &["rev-parse", "HEAD"]), commit.as_str());
         assert_eq!(git(&repo, &["log", "-1", "--format=%s"]), SUBJECT);
         assert_eq!(
-            fs::read_to_string(repo.join("tool/src/lib.rs")).unwrap(),
-            "fn a() {}\n"
+            fs::read_to_string(repo.join("tool/src/lib.rs"))
+                .unwrap()
+                .trim_end(),
+            "fn a() {}"
         );
         assert_eq!(
-            fs::read_to_string(repo.join("notes.md")).unwrap(),
-            "* item\n"
+            fs::read_to_string(repo.join("notes.md"))
+                .unwrap()
+                .trim_end(),
+            "* item"
         );
         assert_eq!(git(&repo, &["status", "--porcelain"]), "");
         let (label, text) = formatted.line().unwrap();
@@ -320,7 +342,7 @@ mod tests {
         let repo = repository("in-place");
         let head = git(&repo, &["rev-parse", "HEAD"]);
         let format = MachineFormat {
-            rules: vec![rule("**/*.md", "", "sh fmt.sh {files}")],
+            rules: vec![rule("**/*.md", "", NOTES)],
         };
         let changed = ["notes.md".to_owned(), "tool/src/lib.rs".to_owned()];
 
@@ -341,12 +363,12 @@ mod tests {
         let repo = repository("fail");
         let format = MachineFormat {
             rules: vec![
-                rule("**/*.md", "", "ls no-such-file {files}"),
-                rule("other/**", "", "sh fmt.sh {files}"),
+                rule("**/*.md", "", "git show no-such-file {files}"),
+                rule("other/**", "", NOTES),
             ],
         };
         let formatted = format.format(&repo, &["notes.md".to_owned()]);
-        assert_eq!(formatted.ran, ["ls no-such-file {files}"]);
+        assert_eq!(formatted.ran, ["git show no-such-file {files}"]);
         assert_eq!(formatted.failed.len(), 1);
         assert!(
             formatted.failed[0].1.contains("no-such-file"),

@@ -189,10 +189,8 @@ fn every_build_of_a_dependency_rebuilt_in_place_is_kept() {
     assert_eq!(t.sweep(), Vec::<String>::new());
 }
 
-#[cfg(unix)]
 #[test]
 fn a_fingerprint_folder_that_cannot_be_deleted_keeps_its_outputs() {
-    use std::os::unix::fs::PermissionsExt;
     let t = Target::new();
     t.unit_at("app-aaaa", "bin-app", 21, DEV, &[], 600);
     t.unit_at("app-bbbb", "bin-app", 22, DEV, &[], 1600);
@@ -201,9 +199,9 @@ fn a_fingerprint_folder_that_cannot_be_deleted_keeps_its_outputs() {
     let stuck = t.profile().join(".fingerprint/app-aaaa/stuck");
     fs::create_dir(&stuck).unwrap();
     fs::write(stuck.join("file"), "").unwrap();
-    fs::set_permissions(&stuck, fs::Permissions::from_mode(0o555)).unwrap();
+    let blocked = crate::test_process::block_deletion(&stuck.join("file"));
     let swept = t.sweep();
-    fs::set_permissions(&stuck, fs::Permissions::from_mode(0o755)).unwrap();
+    drop(blocked);
     // Cargo reads a surviving fingerprint, so the files it names must survive with it.
     assert_eq!(swept, Vec::<String>::new());
     assert!(t.profile().join("deps/libapp-aaaa.rlib").exists());

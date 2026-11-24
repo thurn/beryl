@@ -215,16 +215,17 @@ fn clearing_a_crate_deletes_its_fingerprints_with_its_files() {
     let _ = fs::remove_dir_all(&dir);
 }
 
-#[cfg(unix)]
 #[test]
 fn a_unit_whose_fingerprint_cannot_be_deleted_keeps_its_files() {
-    use std::os::unix::fs::PermissionsExt;
     let dir = scratch("stuck");
     let profile = two_units(&dir);
     let fingerprints = profile.join(".fingerprint");
-    fs::set_permissions(&fingerprints, fs::Permissions::from_mode(0o555)).unwrap();
+    let blocked: Vec<_> = fs::read_dir(&fingerprints)
+        .unwrap()
+        .map(|entry| crate::test_process::block_deletion(&entry.unwrap().path().join("lib-proto")))
+        .collect();
     clear_crates(&dir, &["proto".to_owned()]);
-    fs::set_permissions(&fingerprints, fs::Permissions::from_mode(0o755)).unwrap();
+    drop(blocked);
     assert_eq!(names(&fingerprints).len(), 2);
     assert_eq!(names(&profile.join("deps")).len(), 6);
     let _ = fs::remove_dir_all(&dir);

@@ -47,7 +47,7 @@ pub(crate) use workers::capacity_report;
 
 pub use cli_view::digest_text;
 pub use stall::RunningVerb;
-#[cfg(all(test, unix))]
+#[cfg(test)]
 pub(crate) use stall::STUCK_COMMAND_S;
 pub use tell::TellVerb;
 pub use turn::TurnEndedVerb;

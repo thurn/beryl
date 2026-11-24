@@ -20,7 +20,7 @@
 use std::collections::VecDeque;
 use std::fs;
 use std::path::PathBuf;
-#[cfg(all(test, unix))]
+#[cfg(test)]
 use std::sync::Arc;
 use std::sync::{Mutex, PoisonError};
 use std::thread;
@@ -31,7 +31,7 @@ use ignite_core::ids::SessionId;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{CommandSpec, Error, Result};
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 use crate::supervise::Started;
 use crate::supervise::{ResultFile, Run, peaks::WorkerPeaks};
 
@@ -101,7 +101,7 @@ pub struct SupervisedTurns {
     starting: Mutex<()>,
     runs: RunPaths,
     worker_peaks: WorkerPeaks,
-    #[cfg(all(test, unix))]
+    #[cfg(test)]
     test_supervisors: Option<Arc<Mutex<Vec<Started>>>>,
 }
 
@@ -113,13 +113,13 @@ impl SupervisedTurns {
             home,
             starting: Mutex::new(()),
             runs: RunPaths::default(),
-            #[cfg(all(test, unix))]
+            #[cfg(test)]
             test_supervisors: None,
         }
     }
 
     /// Lets an end-to-end test reap its supervisors, including those started before a restart.
-    #[cfg(all(test, unix))]
+    #[cfg(test)]
     pub(super) fn with_test_supervisors(mut self, supervisors: Arc<Mutex<Vec<Started>>>) -> Self {
         self.test_supervisors = Some(supervisors);
         self
@@ -161,7 +161,7 @@ impl Turns for SupervisedTurns {
                 self.runs
                     .remember((session.clone(), turn), started.run().clone());
             }
-            #[cfg(all(test, unix))]
+            #[cfg(test)]
             if let Some(supervisors) = &self.test_supervisors {
                 super::lock(supervisors).push(started);
                 return Ok(());

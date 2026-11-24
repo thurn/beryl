@@ -1,20 +1,10 @@
-//! Starting a turn once, against a scripted program in place of the CLI. The supervisor and
-//! `ignite internal cli-turn` are this test binary run again with one of the ignored role tests
-//! below, so the real supervisor, turn lock and image replacement are what runs.
-//!
-//! The scripted program adds a line to a count file each time it runs, so a test can see how
-//! many times a turn ran. It then waits until its gate file exists: `/dev/null` lets it finish at
-//! once, and a path in the test's home holds it running until the test creates the file. Before
-//! it waits, it writes a line to its third argument: `/dev/null`, or a FIFO that the test reads to
-//! know the program, and so the turn lock it inherited, is running.
+//! Starting a turn once against a scripted program. The supervisor, CLI turn wrapper and
+//! program run as child processes of this test binary. A local connection tells the test when
+//! the program is running and holds it there until the test releases it.
 
-#![cfg(unix)]
-
-use std::fs;
-use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
+use std::fs::{self, OpenOptions};
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Arc;
 
 use ignite_core::ids::SessionId;
@@ -25,6 +15,7 @@ use ignite_store::local::rows::{CliSlot, CliTurn};
 
 use super::*;
 use crate::supervise::SupervisedLauncher;
+use crate::test_process::{ChildGate, hold_stdin};
 
 const ROLES: &str = "clid::start::clid_start_tests::";
 
@@ -45,7 +36,7 @@ fn supervisor_role() {
     std::process::exit(crate::supervise::supervise(Path::new(&spec)));
 }
 
-/// Run by the tests as `ignite internal cli-turn`: its arguments after `--nocapture` are the
+/// Run by the tests as `ignite internal cli-turn`: its arguments after `--` are the
 /// Ignite home and then the program to run.
 #[test]
 #[ignore = "run by the other tests in this module as ignite internal cli-turn"]
@@ -54,18 +45,48 @@ fn cli_turn_role() {
         return;
     }
     let args: Vec<String> = std::env::args().collect();
-    let Some(at) = args.iter().position(|arg| arg == "--nocapture") else {
+    let Some(at) = args.iter().position(|arg| arg == "--") else {
         return;
     };
     let home = PathBuf::from(&args[at + 1]);
     std::process::exit(cli_turn(&home, &args[at + 2..]));
 }
 
+/// Run as the turn's program, with a count file and an optional gate address.
+#[test]
+#[ignore = "run by the other tests in this module as the CLI program"]
+fn program_role() {
+    let mut args = std::env::args().skip_while(|arg| arg != "--").skip(1);
+    let Some(count) = args.next() else {
+        return;
+    };
+    let mut count = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(count)
+        .unwrap();
+    writeln!(count, "ran").unwrap();
+    if let Some(address) = args.next() {
+        ChildGate::wait(&address);
+    }
+    println!("\n{{\"type\":\"result\"}}");
+    std::process::exit(0);
+}
+
+fn role(name: &str) -> Vec<String> {
+    vec![
+        std::env::current_exe().unwrap().display().to_string(),
+        "--exact".to_owned(),
+        format!("{ROLES}{name}"),
+        "--ignored".to_owned(),
+        "--nocapture".to_owned(),
+    ]
+}
+
 struct Fixture {
     home: PathBuf,
     session: SessionId,
     count: PathBuf,
-    script: PathBuf,
 }
 
 impl Fixture {
@@ -74,17 +95,8 @@ impl Fixture {
             .join(format!("ignite-clid-start-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(&home).unwrap();
-        let script = home.join("fake-cli");
-        fs::write(
-            &script,
-            "#!/bin/sh\necho ran >> \"$1\"\necho started > \"$3\"\nwhile [ ! -e \"$2\" ]; do sleep 0.05; done\n\
-             echo '{\"type\":\"result\"}'\n",
-        )
-        .unwrap();
-        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
         Fixture {
             count: home.join("count"),
-            script,
             session: SessionId::new("cli-fake-0a1b2c3d").unwrap(),
             home,
         }
@@ -92,20 +104,10 @@ impl Fixture {
 
     /// A turn launcher as a newly started daemon builds it.
     fn launcher(&self) -> TurnLauncher {
-        let exe = std::env::current_exe().unwrap().display().to_string();
-        let role = |name: &str| {
-            vec![
-                exe.clone(),
-                "--exact".to_owned(),
-                format!("{ROLES}{name}"),
-                "--ignored".to_owned(),
-                "--nocapture".to_owned(),
-            ]
-        };
         let supervised =
             SupervisedLauncher::with_command(role("supervisor_role"), self.home.join("runs"));
         let mut cli_turn = role("cli_turn_role");
-        cli_turn.push(self.home.display().to_string());
+        cli_turn.extend(["--".to_owned(), self.home.display().to_string()]);
         TurnLauncher::with_command(
             Arc::new(supervised),
             cli_turn,
@@ -114,37 +116,14 @@ impl Fixture {
         )
     }
 
-    /// The scripted program's command line, held by `gate` until it is opened.
-    fn command(&self, gate: &Path) -> Vec<String> {
-        self.command_telling(gate, Path::new("/dev/null"))
-    }
-
-    /// [`Fixture::command`], with the program saying it started on the FIFO `started`.
-    fn command_telling(&self, gate: &Path, started: &Path) -> Vec<String> {
-        vec![
-            self.script.display().to_string(),
-            self.count.display().to_string(),
-            gate.display().to_string(),
-            started.display().to_string(),
-        ]
-    }
-
-    /// A FIFO for [`Fixture::command_telling`] and [`wait_started`].
-    fn started_fifo(&self) -> PathBuf {
-        let fifo = self.home.join("started");
-        assert!(
-            Command::new("mkfifo")
-                .arg(&fifo)
-                .status()
-                .unwrap()
-                .success()
-        );
-        fifo
-    }
-
-    /// A gate that holds the scripted program until [`open_gate`] is called on it.
-    fn gate(&self) -> PathBuf {
-        self.home.join("gate")
+    /// The scripted program's command line, optionally held by a gate.
+    fn command(&self, gate: Option<&ChildGate>) -> Vec<String> {
+        let mut command = role("program_role");
+        command.extend(["--".to_owned(), self.count.display().to_string()]);
+        if let Some(gate) = gate {
+            command.push(gate.address().to_string());
+        }
+        command
     }
 
     /// How many times the scripted program ran.
@@ -218,16 +197,6 @@ impl Drop for Fixture {
     }
 }
 
-/// Waits until the scripted program writes to the FIFO `started`.
-fn wait_started(started: &Path) {
-    assert_eq!(fs::read_to_string(started).unwrap(), "started\n");
-}
-
-/// Lets the scripted program held by `gate` finish.
-fn open_gate(gate: &Path) {
-    fs::write(gate, "").unwrap();
-}
-
 #[test]
 fn a_crash_after_recording_a_turn_starts_it_once() {
     let f = Fixture::new("recorded");
@@ -237,7 +206,7 @@ fn a_crash_after_recording_a_turn_starts_it_once() {
     assert_eq!(recover(&f.home, &f.session, 1), Recovery::NotStarted);
 
     let restarted = f.launcher();
-    let command = f.command(Path::new("/dev/null"));
+    let command = f.command(None);
     let (found, started) = restarted.ensure(&f.session, 1, &command).unwrap();
     assert_eq!(found, Recovery::NotStarted);
     let result = started.expect("the turn was started").wait();
@@ -261,12 +230,11 @@ fn a_crash_after_recording_a_turn_starts_it_once() {
 #[test]
 fn a_crash_after_starting_a_turn_takes_its_run_over() {
     let f = Fixture::new("started");
-    let gate = f.gate();
+    let gate = ChildGate::new();
     let mut conn = f.database();
     let first = f.launcher();
-    let fifo = f.started_fifo();
     let started = first
-        .start(&mut conn, &f.turn(1), &[], &f.command_telling(&gate, &fifo))
+        .start(&mut conn, &f.turn(1), &[], &f.command(Some(&gate)))
         .unwrap();
     assert_eq!(
         find_run(&f.home, &f.session, 1).as_ref(),
@@ -275,10 +243,12 @@ fn a_crash_after_starting_a_turn_takes_its_run_over() {
     // The daemon dies: nothing waits for its supervisor any more.
     drop(started);
     drop(first);
-    wait_started(&fifo);
+    gate.wait_started();
 
     let restarted = f.launcher();
-    let (found, again) = restarted.ensure(&f.session, 1, &f.command(&gate)).unwrap();
+    let (found, again) = restarted
+        .ensure(&f.session, 1, &f.command(Some(&gate)))
+        .unwrap();
     assert_eq!(found, Recovery::Running);
     assert!(again.is_none());
     assert!(
@@ -286,7 +256,7 @@ fn a_crash_after_starting_a_turn_takes_its_run_over() {
         "the CLI program holds the session's turn lock"
     );
 
-    open_gate(&gate);
+    gate.release();
     let result = find_run(&f.home, &f.session, 1).unwrap().wait();
     assert_eq!(result.exit, Some(0));
     assert!(
@@ -305,15 +275,14 @@ fn a_crash_after_starting_a_turn_takes_its_run_over() {
 #[test]
 fn a_second_start_of_a_turn_does_not_run_the_program_twice() {
     let f = Fixture::new("twice");
-    let gate = f.gate();
+    let gate = ChildGate::new();
     let mut conn = f.database();
     let launcher = f.launcher();
-    let fifo = f.started_fifo();
-    let command = f.command_telling(&gate, &fifo);
+    let command = f.command(Some(&gate));
     let started = launcher
         .start(&mut conn, &f.turn(1), &[], &command)
         .unwrap();
-    wait_started(&fifo);
+    gate.wait_started();
 
     // The record refuses a second start, which starts no supervisor.
     let refused = launcher.start(&mut conn, &f.turn(1), &[], &command);
@@ -323,7 +292,7 @@ fn a_second_start_of_a_turn_does_not_run_the_program_twice() {
     // A second supervisor started for the same turn runs nothing, whether it tries to take the lock
     // before or after the original turn exits.
     let duplicate = launcher.launch(&f.session, 1, &command).unwrap();
-    open_gate(&gate);
+    gate.release();
     assert_eq!(started.wait().exit, Some(0));
     let duplicate = duplicate.wait();
     assert_eq!(duplicate.exit, Some(3));
@@ -337,12 +306,7 @@ fn a_second_start_of_a_turn_does_not_run_the_program_twice() {
 
     // The next turn runs.
     let next = launcher
-        .start(
-            &mut conn,
-            &f.turn(2),
-            &[],
-            &f.command(Path::new("/dev/null")),
-        )
+        .start(&mut conn, &f.turn(2), &[], &f.command(None))
         .unwrap();
     assert_eq!(next.wait().exit, Some(0));
     assert_eq!(f.runs(), 2);
@@ -364,7 +328,7 @@ fn a_free_lock_with_no_result_is_reported_interrupted() {
     fs::write(dir.join("spec.json"), spec.to_string()).unwrap();
     fs::write(dir.join("lock"), "").unwrap();
     let mut orphan = Native
-        .spawn_group(Command::new("sleep").arg("600"))
+        .spawn_group(&mut hold_stdin(&std::env::current_exe().unwrap()))
         .unwrap();
     fs::write(dir.join("group"), orphan.id.to_string()).unwrap();
 

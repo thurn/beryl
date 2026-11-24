@@ -1,5 +1,3 @@
-#[cfg(unix)]
-use std::io::{BufRead, BufReader};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 
@@ -9,11 +7,8 @@ use ignite_core::ids::TicketId;
 use ignite_core::protocol::hub::Claim;
 
 use super::wire::read_reply;
-#[cfg(unix)]
-use super::wire::write_line;
 use crate::hubclient::tests::stopped_hub;
 use ignite_os::ipc::Ipc;
-#[cfg(unix)]
 use ignite_os::ipc::{Listener, Stream};
 
 struct Echo;
@@ -654,13 +649,11 @@ fn a_verb_can_tell_that_its_caller_left_until_it_was_given_a_handle() {
 }
 
 /// Accepts fail twice, then one connection arrives.
-#[cfg(unix)]
 struct Flaky {
     failures: Mutex<u32>,
-    stream: Mutex<Option<Box<dyn Stream>>>,
+    listener: Box<dyn Listener>,
 }
 
-#[cfg(unix)]
 impl Listener for Flaky {
     fn accept(&self) -> std::io::Result<Box<dyn Stream>> {
         let mut failures = self.failures.lock().unwrap();
@@ -668,35 +661,27 @@ impl Listener for Flaky {
             *failures -= 1;
             return Err(std::io::Error::other("too many open files"));
         }
-        match self.stream.lock().unwrap().take() {
-            Some(stream) => Ok(stream),
-            None => {
-                // Nothing else will connect; wait here as a real listener would.
-                loop {
-                    std::thread::park();
-                }
-            }
-        }
+        drop(failures);
+        self.listener.accept()
     }
 }
 
-#[cfg(unix)]
 #[test]
 fn a_failed_accept_does_not_end_the_server() {
-    let (accepted, mut client) = std::os::unix::net::UnixStream::pair().unwrap();
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-server-flaky-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let socket = dir.join("d.sock").to_string_lossy().into_owned();
     let listener = Flaky {
         failures: Mutex::new(2),
-        stream: Mutex::new(Some(Box::new(accepted))),
+        listener: ignite_os::Native.listen(&socket).unwrap(),
     };
     let mut registry = Registry::default();
     registry.register(Box::new(Echo));
     let server = Arc::new(Server::new(context(), registry, None).unwrap());
     std::thread::spawn(move || serve_listener(&server, &listener));
 
-    write_line(&mut client, &request("echo", &["still", "here"])).unwrap();
-    let mut line = String::new();
-    BufReader::new(&mut client).read_line(&mut line).unwrap();
-    let reply: Reply = serde_json::from_str(&line).unwrap();
+    let reply = send(&socket, &request("echo", &["still", "here"])).unwrap();
     assert_eq!(reply.text, "still here");
 }
 

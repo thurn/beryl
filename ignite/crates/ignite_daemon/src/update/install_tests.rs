@@ -401,15 +401,26 @@ fn finishing_an_install_needs_the_stored_build() {
     assert!(fx.service.installed.borrow().is_empty());
 }
 
-#[cfg(unix)]
 #[test]
 fn the_process_handoff_runs_install_in_the_stored_build() {
     let dir = tempdir("process-handoff");
-    let executable = dir.join("bin").join("ignite");
+    // A POSIX script needs a shebang and executable mode bits.
+    #[cfg(unix)]
+    let executable = dir.join("bin/ignite");
+    // This fixture writes a POSIX script for the executable above.
+    #[cfg(unix)]
     script(
         &executable,
         "echo \"$1 $IGNITE_INSTALL_BUILT $(basename \"$PWD\")\"\necho warned >&2\nexit 4",
     );
+    #[cfg(windows)]
+    let executable = dir.join("install.cmd");
+    #[cfg(windows)]
+    std::fs::write(
+        &executable,
+        "@echo off\r\nfor %%D in (\"%CD%\") do echo %1 %IGNITE_INSTALL_BUILT% %%~nxD\r\n>&2 echo warned\r\nexit /b 4\r\n",
+    )
+    .unwrap();
     let repo = dir.join("checkout");
     std::fs::create_dir_all(&repo).unwrap();
     let reply = ProcessHandoff { repo }.finish(&executable, &commit("1234abc"));

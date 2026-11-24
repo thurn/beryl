@@ -4,8 +4,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-#[cfg(unix)]
-use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -389,26 +387,26 @@ fn a_waiter_that_gives_up_leaves_the_queue() {
     assert_eq!(f.state("tree-01"), "free");
 }
 
-/// macOS only: Windows finds a process inside a tree by its executable alone, which a test
-/// would have to copy into the tree; `ignite_os`'s Windows test covers that.
-#[cfg(unix)]
+/// The server and caller both run an executable inside the leased tree.
 #[test]
 fn a_release_ends_a_server_left_in_the_tree_but_not_the_caller() {
     let f = Fixture::new(1, 1);
     let lease = f.lease("T.1", false);
-    let mut server = Command::new("/bin/sleep")
-        .arg("1000")
-        .current_dir(&lease.path)
-        .stdin(Stdio::null())
-        .spawn()
-        .unwrap();
-    // The caller stands for the `ignite release` client, which runs from inside the tree.
-    let mut caller = Command::new("/bin/sh")
-        .args(["-c", "read line"])
-        .current_dir(&lease.path)
-        .stdin(Stdio::piped())
-        .spawn()
-        .unwrap();
+    // A Windows process holds its executable open. Keep it under the build directory
+    // that release preserves.
+    let exe = lease
+        .path
+        .join(format!("out/worker{}", std::env::consts::EXE_SUFFIX));
+    fs::create_dir_all(exe.parent().unwrap()).unwrap();
+    fs::copy(std::env::current_exe().unwrap(), &exe).unwrap();
+    let command = || {
+        crate::test_process::hold_stdin(&exe)
+            .current_dir(&lease.path)
+            .spawn()
+            .unwrap()
+    };
+    let mut server = command();
+    let mut caller = command();
 
     let released = f
         .trees
@@ -420,16 +418,18 @@ fn a_release_ends_a_server_left_in_the_tree_but_not_the_caller() {
     assert!(!server.wait().unwrap().success());
     assert!(caller.try_wait().unwrap().is_none(), "the caller was ended");
     drop(caller.stdin.take());
-    caller.wait().unwrap();
+    assert!(caller.wait().unwrap().success());
 }
 
 /// The client usually runs in a pipeline from a shell inside the tree, as in
 /// `ignite close -m ... | tail -4`. The other side of the pipe is in the client's process group
 /// but is not its ancestor; ending it would end the whole command line.
+// This checks membership in the caller's POSIX process group.
 #[cfg(unix)]
 #[test]
 fn a_release_spares_the_rest_of_the_callers_command_line() {
     use std::os::unix::process::CommandExt as _;
+    use std::process::Stdio;
 
     let f = Fixture::new(1, 1);
     let lease = f.lease("T.1", false);

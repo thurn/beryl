@@ -45,6 +45,8 @@ pub mod stop;
 pub mod stop_overdue;
 pub mod supervise;
 #[cfg(test)]
+mod test_process;
+#[cfg(test)]
 mod testhub;
 pub mod tip;
 pub mod trees;
