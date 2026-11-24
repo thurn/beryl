@@ -9,11 +9,10 @@
 //! it. A kind with nothing live costs its reader one AND.
 //!
 //! Built so far: what a permanent remembers of the spell it was, the costs paid for it and
-//! the value of X (by-w8gv.7.6); and what exiled a card, a memo of the exiled card naming
-//! the slot of what exiled it (by-w8gv.7.7). Such a memo ends with the card as every memo
-//! does, and one of the two also as a new object arrives in the slot it names
-//! ([`Memo::ExiledWith`]); and the value a permanent chose as it entered
-//! ([`Memo::Chosen`]).
+//! the value of X; what exiled a card, a memo of the exiled card naming what exiled it,
+//! which ends with the card as every memo does ([`Memo::ExiledWith`] names one object and
+//! outlives it, [`Memo::ExiledUntil`] names a slot); and the value a permanent chose as it
+//! entered ([`Memo::Chosen`]).
 //!
 //! Implements: none. Stores facts about objects for their abilities to read later.
 
@@ -26,6 +25,7 @@ use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::invariants::{At, Violation, check};
 use crate::layout::{Layout, Queue, Small};
+use crate::object::ObjectRef;
 use crate::observation::Observation;
 use crate::player_set::PlayerSet;
 use crate::relayout::{Relayout, queue, slot};
@@ -35,8 +35,11 @@ use crate::table::GameTable;
 
 mod combat;
 mod designation;
+mod link;
 mod preparation;
 mod value;
+
+pub use link::Link;
 
 /// The memos a [`Small`] game holds at once. One past it stalls the game into
 /// [`crate::Large`], whose store grows.
@@ -65,11 +68,10 @@ pub enum Memo<L: Layout = Small> {
     /// or more cards and an ability printed on it that refers either to 'the exiled cards'
     /// or to cards 'exiled with [this object],' these abilities are linked."
     ///
-    /// It names the slot and not one incarnation of it: the card stays exiled with that
-    /// object after the object has left its zone, for an ability of it still on the stack,
-    /// until a new object arrives in the slot on the battlefield or the slot of a token is
-    /// freed ([`State::forget_links_to`]).
-    ExiledWith(L::Slot),
+    /// It names one object, by its slot and incarnation ([`Link`]): the card stays exiled with
+    /// that object after the object has left its zone or ceased to exist, for an ability of
+    /// it still on the stack, and is never exiled with a new object in the same slot.
+    ExiledWith(Link<L>),
     /// The card in exile was exiled until the permanent in this slot leaves the
     /// battlefield, which returns it
     /// (see [CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "Some one-shot
@@ -95,9 +97,9 @@ pub enum Memo<L: Layout = Small> {
     Really(L::Card),
     /// The permanent was put onto the battlefield by an ability of the Aura in this slot,
     /// which says so of it: Animate Dead's "enchant creature put onto the battlefield with
-    /// this Aura", and its "that creature" once the Aura has left. It names the slot as
-    /// [`Memo::ExiledWith`] does, for an ability of the Aura still on the stack after the
-    /// Aura left, until a new object arrives in that slot ([`State::forget_links_to`]).
+    /// this Aura", and its "that creature" once the Aura has left. It names the slot, for an
+    /// ability of the Aura still on the stack after the Aura left, until a new object
+    /// arrives in that slot ([`State::forget_links_to`]).
     PutOntoBattlefieldWith(L::Slot),
     /// The phased-out permanent phased out under this player's control, who is not the player
     /// who put it onto the battlefield: it phases in during that player's untap step
@@ -179,7 +181,7 @@ impl Kinds {
         | Kinds::PUT_WITH
         | Kinds::PART_OF
         | Kinds::PREPARED;
-    /// The kinds whose memo ends as a new object arrives in the slot it names
+    /// The kinds whose memo may end as a new object arrives in the slot it names
     /// ([`State::forget_links_to`]).
     const LINKS: u32 = Kinds::EXILED_WITH | Kinds::PUT_WITH;
 
@@ -197,8 +199,9 @@ struct Remembered<L: Layout = Small> {
     memo: Memo<L>,
 }
 
-/// An entry is 3 bytes in [`Small`] and the store 100: the state's room (the crate's
-/// contract, "Stores") counts on at most 4 and 136.
+/// An entry is 4 bytes in [`Small`] and the store 136, the most the state's room (the
+/// crate's contract, "Stores") allows for each, since [`Memo::ExiledWith`] holds an
+/// incarnation byte beside a slot.
 const _: () = assert!(size_of::<Remembered<Small>>() <= 4 && size_of::<Memos<Small>>() <= 136);
 
 impl<L: Layout> Default for Remembered<L> {
@@ -375,6 +378,8 @@ pub struct MemosOf<'a, L: Layout = Small> {
     /// The store's entries, or none where no store has an entry about the object.
     entries: &'a [Remembered<L>],
     slot: L::Slot,
+    /// The state, for which object is now in a slot a memo names.
+    state: &'a State<L>,
 }
 
 impl<L: Layout> MemosOf<'_, L> {
@@ -396,11 +401,15 @@ impl<L: Layout> MemosOf<'_, L> {
     }
 
     /// The slot of the object whose ability exiled this card, among the cards "exiled
-    /// with" it (see CR 607.2a).
+    /// with" it (see CR 607.2a), if that object is the one in the slot now: a card exiled
+    /// with an object that has since left its zone is exiled with nothing on the board.
     #[inline]
     pub fn exiled_with(&self) -> Option<L::Slot> {
         self.iter().find_map(|memo| match memo {
-            Memo::ExiledWith(by) => Some(by),
+            Memo::ExiledWith(link) => {
+                let now = self.state.object_ref(link.slot);
+                link.is(now).then_some(link.slot)
+            }
             Memo::Paid(_)
             | Memo::X(_)
             | Memo::ExiledUntil(_)
@@ -605,16 +614,16 @@ impl<L: Layout> State<L> {
             .map(|e| e.slot)
     }
 
-    /// The cards exiled with the object in `source` by an ability linked to another of its
+    /// The cards exiled with the object `source` by an ability linked to another of its
     /// abilities (see [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
     /// ability refers only to cards in the exile zone that were put there as a result of an
-    /// instruction to exile them in the first ability." Kept while that object has left its
-    /// zone, until a new object arrives in the slot (see CR 400.7). With no card in the game
-    /// exiled this way, one AND.
+    /// instruction to exile them in the first ability." Kept after that object has left its
+    /// zone, and never those of a new object in its slot (see CR 400.7). With no card in the
+    /// game exiled this way, one AND.
     #[inline]
-    pub fn exiled_with(&self, source: L::Slot) -> Bitboard<L::Slot> {
+    pub fn exiled_with(&self, source: ObjectRef<L>) -> Bitboard<L::Slot> {
         self.memos
-            .remembering(Kinds::EXILED_WITH, Memo::ExiledWith(source))
+            .remembering(Kinds::EXILED_WITH, Memo::exiled_with(source))
     }
 
     /// The cards exiled until the permanent in `source` leaves the battlefield
@@ -649,16 +658,18 @@ impl<L: Layout> State<L> {
         self.settle_ended(done);
     }
 
-    /// Unlinks the cards exiled with an earlier object in `slot`, and the permanents put
-    /// onto the battlefield with it, as a new object arrives there or a token's slot is
-    /// freed: the zone move calls it. The cards stay "exiled with" the object that exiled
-    /// them
+    /// Unlinks the permanents put onto the battlefield with an earlier object in `slot`, as
+    /// a new object arrives there or a token's slot is freed: the zone move calls it. The new
+    /// object is not that object
+    /// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
+    ///
+    /// The cards exiled with an earlier object stay "exiled with" it
     /// (see [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
     /// ability refers only to cards in the exile zone that were put there as a result of an
     /// instruction to exile them in the first ability." An ability of that object still on
-    /// the stack after it left finds them; the new object is not that object
-    /// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) and does not. With
-    /// no card in the game exiled this way, one AND.
+    /// the stack finds them, and the link names that object alone ([`Link`]). Only a link
+    /// whose incarnation byte is the new object's ends, so that it cannot read as a link to
+    /// the new object. With no card in the game linked either way, one AND.
     #[inline]
     pub(crate) fn forget_links_to(&mut self, slot: L::Slot) {
         if self.memos.kinds.0 & Kinds::LINKS != 0 {
@@ -670,8 +681,23 @@ impl<L: Layout> State<L> {
     #[cold]
     #[inline(never)]
     fn forget_links_to_slot(&mut self, slot: L::Slot) {
-        let done = self.memos.end(|e| {
-            !matches!(e.memo, Memo::ExiledWith(link) | Memo::PutOntoBattlefieldWith(link) if link == slot)
+        let incarnation = self.object(slot).incarnation;
+        let done = self.memos.end(|e| match e.memo {
+            Memo::ExiledWith(link) => !(link.slot == slot && link.shares_generation(incarnation)),
+            Memo::PutOntoBattlefieldWith(link) => link != slot,
+            Memo::Paid(_)
+            | Memo::X(_)
+            | Memo::ExiledUntil(_)
+            | Memo::Chosen(_)
+            | Memo::Really(_)
+            | Memo::PhasedOutUnder(_)
+            | Memo::PartOf(_)
+            | Memo::FaceDownUnder(_)
+            | Memo::Morphed
+            | Memo::ClassLevel(_)
+            | Memo::Solved
+            | Memo::CombatBand(_)
+            | Memo::Prepared(_) => true,
         });
         self.settle_ended(done);
     }
@@ -711,6 +737,7 @@ impl<L: Layout> State<L> {
                 &[]
             },
             slot,
+            state: self,
         }
     }
 }

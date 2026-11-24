@@ -191,7 +191,7 @@
 //! | the keyed slots, shared by every store | one set of slots | | | 32 | 128 |
 //! | Effects' locked-in sets | a table of sets of slots, which an entry names by index; an empty set is a free place, and the table ends at its last set in use | 32 | 4 ([`effects::SETS`]) | 136 | a `Vec` |
 //! | the rules changed for each player | two sets of rules for each: those of the permanents' static abilities, stored with the layer results, and those of the Effects store's entries, its index | 8, a bit for each rule change the game numbered | 2 players, twice | 32 | the same |
-//! | Memos | a queue of (slot, memo) and a mask of the kinds live in it | 3, of the 4 allowed | 32 ([`memos::MEMOS`]) | 100, of the 136 allowed | a `Vec` of 4-byte entries |
+//! | Memos | a queue of (slot, memo) and a mask of the kinds live in it | 4, of the 4 allowed | 32 ([`memos::MEMOS`]) | 136, of the 136 allowed | a `Vec` of 4-byte entries |
 //! | Trackers | a set of slots for each kind keyed by permanent | 32 | 3 kinds | 96 | 128 each |
 //! | Trackers' counts | a byte for each player and kind of count, padded to the sets' alignment | 1 | 3 kinds, 2 players | 8 | the same |
 //! | Counters | a queue of (slot, kind, count), in the order each kind was first put on its object | 3 | 32 ([`counters::COUNTERS`]) | 97, of the 104 allowed | a `Vec` |
@@ -243,9 +243,9 @@
 //! `u64`, 16 with padding. It is 20,184 since a [`query::Copiable`] holds three copy exceptions,
 //! 40 bytes more in all. It was 20,216 when phasing began (32 bytes that no change reported
 //! came between), and is 20,248 since the set of phased-out permanents ([`phasing`]), 32 bytes.
-//! It is 20,456 with the turn plan; the limit is 20,480. Each bead may change the size at its own
-//! push by at most its allotment, whatever landed before it, and reports the size as it reports
-//! the count:
+//! It is 20,456 with the turn plan, and 20,464 since a card exiled with an object names its
+//! incarnation ([`memos::Link`]). The limit is 20,480. Each bead may change the size at its own
+//! push by at most its allotment, whatever landed before it, and reports it as the count:
 //!
 //! | Bead | Allotment | Why |
 //! | --- | --- | --- |
@@ -342,14 +342,14 @@
 //!   cast a card "for as long as it remains exiled" is an entry of no stated duration on
 //!   the card: it ends as the card leaves.
 //!
-//! Memos clear the same way, as their object ends. A memo that names another object (the
-//! cards "exiled with" a permanent) names its slot, not its incarnation: the cards stay
-//! exiled with that object after it has left its zone, for an ability of it still on the
-//! stack, until a new object arrives in the slot (see CR 607.2a). So the move also ends the
-//! memos naming the slot an object arrives in, on the battlefield or back in the pool
-//! (`State::forget_links_to`), behind one AND of the Memos store's kinds. A card exiled
-//! "until" a permanent leaves needs no such end: the rules return it as the permanent
-//! leaves (see CR 610.3), and the store's invariant holds that permanent to the battlefield.
+//! Memos clear the same way, as their object ends. A card "exiled with" a permanent names that
+//! object by its slot and incarnation byte ([`memos::Link`]): an ability of it still on the stack
+//! finds the card after it has left (see CR 607.2a), and a new object in the slot does not (see
+//! CR 400.7). A memo of a permanent put onto the battlefield with an Aura names the slot alone. As
+//! an object arrives in a slot, the move ends those memos naming it and the links with its byte
+//! (`State::forget_links_to`), behind one AND. A card exiled "until" a permanent leaves needs no
+//! such end: the rules return it as it leaves (see CR 610.3), and the store's invariant holds
+//! that permanent to the battlefield.
 //!
 //! Counters end the same way (see [CR 122.2]: "Counters on an object are not retained if that object
 //! moves from one zone to another."): the move resets the object's fields and ends its rows of the

@@ -456,7 +456,7 @@ impl Checkpoint {
                 let slot = from_library(t, s, p, &x.card)?;
                 s.board().place(slot, Zone::Exile).map_err(full)?;
                 if let Some(i) = x.with {
-                    let with = Memo::ExiledWith(permanent(i)?);
+                    let with = Memo::exiled_with(s.object_ref(permanent(i)?));
                     s.board().remember(slot, with).map_err(full)?;
                 }
                 if let Some(i) = x.until {

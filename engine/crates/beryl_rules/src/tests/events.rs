@@ -756,7 +756,7 @@ fn a_dies_trigger_looks_back_and_its_intervening_if_skips_tokens() {
 }
 
 #[test]
-fn a_token_that_ceases_to_exist_unlinks_the_cards_exiled_with_it() {
+fn an_ability_of_a_token_that_ceased_to_exist_finds_the_cards_exiled_with_it() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
@@ -784,15 +784,19 @@ fn a_token_that_ceases_to_exist_unlinks_the_cards_exiled_with_it() {
     with_game(&t, &mut s, &mut x, token, |game, _| {
         destroy(game, game.state().permanent(token_ref).unwrap()).unwrap();
     });
-    // The token ceases to exist (CR 704.5d), and nothing links to its freed slot.
+    // The token ceases to exist (CR 704.5d). An ability of it still on the stack exists
+    // independently of it (CR 113.7a) and finds the card it exiled; the board shows the card
+    // exiled with nothing, and a later object in the freed slot is another object.
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(token).zone(), Zone::Nowhere);
     assert_eq!(s.object(land).zone(), Zone::Exile);
+    assert_eq!(linked::exiled_with(&s, token_ref), Bitboard::single(land));
+    assert!(s.exiled_with(s.object_ref(token)).is_empty());
     assert_eq!(s.memos(land).exiled_with(), None);
 }
 
 #[test]
-fn an_ability_finds_the_cards_exiled_with_its_source_until_a_new_object_is_there() {
+fn an_ability_finds_the_cards_exiled_with_its_source_and_not_those_of_a_new_object() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
@@ -823,8 +827,8 @@ fn an_ability_finds_the_cards_exiled_with_its_source_until_a_new_object_is_there
     assert_eq!(s.object(bear).zone(), Zone::Graveyard);
     assert_eq!(found(&s), Bitboard::single(land));
 
-    // The card returns as a new object (CR 400.7), which exiled nothing: the card in exile
-    // stays there, exiled with nothing any more.
+    // The card returns as a new object (CR 400.7), which exiled nothing. The old object's
+    // ability still finds the card; the board shows it exiled with nothing.
     event::move_one(
         &mut s,
         &t,
@@ -834,10 +838,22 @@ fn an_ability_finds_the_cards_exiled_with_its_source_until_a_new_object_is_there
         Reason::Effect,
     )
     .unwrap();
-    assert!(found(&s).is_empty());
-    assert!(s.exiled_with(bear).is_empty());
+    let new_bear = s.object_ref(bear);
+    assert_eq!(found(&s), Bitboard::single(land));
+    assert!(s.exiled_with(new_bear).is_empty());
     assert_eq!(s.object(land).zone(), Zone::Exile);
     assert_eq!(s.memos(land).exiled_with(), None);
+
+    // The new object exiles a card of its own: an ability of it finds that card alone, and
+    // the old object's ability never finds it.
+    let coast = find(&s, &t, p, "Test Coast");
+    let coast_ref = s.object_ref(coast);
+    with_game(&t, &mut s, &mut x, bear, |game, resolution| {
+        linked::exile_linked(game, coast_ref, resolution.source()).unwrap();
+    });
+    assert_eq!(found(&s), Bitboard::single(land));
+    assert_eq!(s.exiled_with(new_bear), Bitboard::single(coast));
+    assert_eq!(s.memos(coast).exiled_with(), Some(bear));
 }
 
 #[test]
@@ -1580,7 +1596,7 @@ fn a_permanent_with_a_card_exiled_with_it_is_not_interchangeable_with_its_twin()
     with_game(&t, &mut s, &mut x, first, |game, resolution| {
         linked::exile_linked(game, land, resolution.source()).unwrap();
     });
-    assert_eq!(s.exiled_with(first).count(), 1);
+    assert_eq!(s.exiled_with(s.object_ref(first)).count(), 1);
     assert_eq!(s.signature(first), s.signature(second));
     assert!(!crate::engine::interchangeable(&s, first, second));
     with_game(&t, &mut s, &mut x, second, |game, resolution| {

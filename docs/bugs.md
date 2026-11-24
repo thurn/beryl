@@ -6,6 +6,19 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **An ability lost the cards its source exiled once a new object entered the
+  source's slot.** If Knowledge Pool left the battlefield and returned while one
+  of its abilities was on the stack, that ability found none of the cards the
+  old Pool had exiled. The same happened to a waiting ability of a token that
+  had ceased to exist. `Memo::ExiledWith` named only the slot of the exiling
+  object, so the zone move dropped every link to the slot when a new object
+  arrived there, or else the new object would have read the old object's cards
+  as its own. The memo now holds a `Link`: the slot and the low byte of the
+  exiling object's incarnation. `State::exiled_with` takes an `ObjectRef`, so
+  the type stops any caller from asking by slot alone. Kernel and rules tests
+  cover an ability whose source left and returned, a token that ceased to exist,
+  and the 256th object in a slot.
+
 - **The next-stop prediction could skip an extra combat.** The prediction
   excluded a creature with vigilance while it was still attacking in the current
   combat. It now checks whether the creature can attack after its current combat

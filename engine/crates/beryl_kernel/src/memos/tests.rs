@@ -222,17 +222,17 @@ fn exiled(s: &mut State, n: usize) -> Slot {
 }
 
 #[test]
-fn a_card_stays_exiled_with_an_object_until_a_new_one_takes_its_slot() {
+fn a_card_stays_exiled_with_the_object_that_exiled_it_and_not_a_new_one_in_its_slot() {
     let (t, mut s, slots) = bears(2);
-    let (source, other) = (slots[0], slots[1]);
+    let (old, other) = (s.object_ref(slots[0]), s.object_ref(slots[1]));
     let (first, second, third) = (exiled(&mut s, 0), exiled(&mut s, 1), exiled(&mut s, 2));
-    s.remember(first, Memo::ExiledWith(source)).unwrap();
-    s.remember(second, Memo::ExiledWith(source)).unwrap();
-    s.remember(third, Memo::ExiledWith(other)).unwrap();
+    s.remember(first, Memo::exiled_with(old)).unwrap();
+    s.remember(second, Memo::exiled_with(old)).unwrap();
+    s.remember(third, Memo::exiled_with(other)).unwrap();
     derive(&t, &mut s);
-    assert_eq!(s.exiled_with(source), [first, second].into_iter().collect());
+    assert_eq!(s.exiled_with(old), [first, second].into_iter().collect());
     assert_eq!(s.exiled_with(other), Bitboard::single(third));
-    assert_eq!(s.memos(first).exiled_with(), Some(source));
+    assert_eq!(s.memos(first).exiled_with(), Some(old.slot));
     assert_eq!(s.memos(first).exiled_until(), None);
     assert_eq!(s.check_stores(&t), Ok(()));
     // Cards exiled with one object are alike; with another, not.
@@ -242,22 +242,59 @@ fn a_card_stays_exiled_with_an_object_until_a_new_one_takes_its_slot() {
     // A card that leaves exile forgets what exiled it: it is a new object (CR 400.7).
     s.move_object(&mut Sink::off(), second, Zone::Hand, Place::Top)
         .unwrap();
-    assert_eq!(s.exiled_with(source), Bitboard::single(first));
+    assert_eq!(s.exiled_with(old), Bitboard::single(first));
 
     // The source leaves: an ability of it still on the stack finds the card (CR 607.2a).
-    s.move_object(&mut Sink::off(), source, Zone::Graveyard, Place::Top)
+    s.move_object(&mut Sink::off(), old.slot, Zone::Graveyard, Place::Top)
         .unwrap();
-    assert_eq!(s.exiled_with(source), Bitboard::single(first));
+    assert_eq!(s.exiled_with(old), Bitboard::single(first));
     derive(&t, &mut s);
     assert_eq!(s.check_stores(&t), Ok(()));
 
-    // The card returns to the battlefield as a new object, which exiled nothing.
-    s.move_object(&mut Sink::off(), source, Zone::Battlefield, Place::Top)
+    // The card returns to the battlefield as a new object, which exiled nothing. The old
+    // object's ability still finds its card; the board shows the card exiled with nothing.
+    s.move_object(&mut Sink::off(), old.slot, Zone::Battlefield, Place::Top)
         .unwrap();
-    assert!(s.exiled_with(source).is_empty());
+    let new = s.object_ref(old.slot);
+    assert_eq!(s.exiled_with(old), Bitboard::single(first));
+    assert!(s.exiled_with(new).is_empty());
     assert_eq!(s.memos(first).exiled_with(), None);
-    assert!(!s.keyed.contains(first) && s.keyed.contains(third));
     assert_eq!(s.exiled_with(other), Bitboard::single(third));
+    derive(&t, &mut s);
+    assert_eq!(s.check_stores(&t), Ok(()));
+
+    // The new object exiles a card of its own, which the old one's ability never finds.
+    let fourth = exiled(&mut s, 3);
+    s.remember(fourth, Memo::exiled_with(new)).unwrap();
+    assert_eq!(s.exiled_with(old), Bitboard::single(first));
+    assert_eq!(s.exiled_with(new), Bitboard::single(fourth));
+    assert_eq!(s.memos(fourth).exiled_with(), Some(new.slot));
+    derive(&t, &mut s);
+    assert_eq!(s.check_stores(&t), Ok(()));
+}
+
+/// A link holds the low byte of its object's incarnation. The 256th object after it in the
+/// same slot would share that byte, so the link ends as that object arrives rather than
+/// read as a link to it.
+#[test]
+fn a_link_ends_before_a_later_object_in_its_slot_could_read_as_its_object() {
+    let (t, mut s, slots) = bears(1);
+    let old = s.object_ref(slots[0]);
+    let card = exiled(&mut s, 0);
+    s.remember(card, Memo::exiled_with(old)).unwrap();
+    // Each round trip is two new objects; the last arrival is 256 objects after `old`.
+    for _ in 0..128 {
+        assert_eq!(s.exiled_with(old), Bitboard::single(card));
+        s.move_object(&mut Sink::off(), old.slot, Zone::Graveyard, Place::Top)
+            .unwrap();
+        s.move_object(&mut Sink::off(), old.slot, Zone::Battlefield, Place::Top)
+            .unwrap();
+    }
+    let now = s.object_ref(old.slot);
+    assert_eq!(now.incarnation, old.incarnation + 256);
+    assert!(s.exiled_with(now).is_empty());
+    assert!(s.exiled_with(old).is_empty());
+    assert!(s.memos(card).iter().next().is_none());
     derive(&t, &mut s);
     assert_eq!(s.check_stores(&t), Ok(()));
 }
@@ -278,7 +315,11 @@ fn what_exiled_a_card_survives_small_to_large_and_back() {
         Bitboard::single(wide(card))
     );
     assert_eq!(large.memos(wide(card)).exiled_until(), Some(wide(slots[0])));
-    assert!(large.exiled_with(wide(slots[0])).is_empty());
+    assert!(
+        large
+            .exiled_with(large.object_ref(wide(slots[0])))
+            .is_empty()
+    );
     assert_eq!(large.check_stores(&t), Ok(()));
     let back: State<Small> = large.relayout();
     assert_eq!(back, small);

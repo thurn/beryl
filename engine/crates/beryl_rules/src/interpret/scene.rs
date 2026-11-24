@@ -274,9 +274,11 @@ impl<L: Layout> Scene<'_, L> {
             // See CR 607.2a: "The second ability refers only to cards in the exile zone that
             // were put there as a result of an instruction to exile them in the first
             // ability." An ability of an object that has left still refers to the cards
-            // that object exiled, so its slot is asked whether or not it is current.
-            Objects::ExiledWithThis => (self.subject.of.source)
-                .map_or(Bitboard::EMPTY, |source| s.exiled_with(source.slot)),
+            // that object exiled, whether or not it is current, and never to those of a new
+            // object in its slot (see CR 400.7).
+            Objects::ExiledWithThis => {
+                (self.subject.of.source).map_or(Bitboard::EMPTY, |source| s.exiled_with(source))
+            }
             // "That creature": the permanents an ability of the source put onto the
             // battlefield and that are still there, whether or not the source is.
             Objects::PutOntoBattlefieldWithThis => (self.subject.of.source)

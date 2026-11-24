@@ -40,7 +40,7 @@ fn exile_and_link<L: Layout>(
     if game.state.is_current(source) {
         let exiled = objects & game.state.in_zone(Zone::Exile);
         for &slot in game.state.in_game_order(game.table, exiled)?.iter() {
-            game.state.remember(slot, Memo::ExiledWith(source.slot))?;
+            game.state.remember(slot, Memo::exiled_with(source))?;
         }
     }
     Ok(())
@@ -48,9 +48,10 @@ fn exile_and_link<L: Layout>(
 
 /// The cards exiled with `source` by [`exile_linked`] (CR 607.2a), whether or not the source
 /// is still there: an ability of an object that has left the battlefield still refers to the
-/// cards that object exiled.
+/// cards that object exiled, and never to those a new object in its slot exiled
+/// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 pub fn exiled_with<L: Layout>(s: &State<L>, source: ObjectRef<L>) -> Bitboard<L::Slot> {
-    s.exiled_with(source.slot)
+    s.exiled_with(source)
 }
 
 /// [`Effect::ExileLinked`](beryl_card::Effect::ExileLinked): "Exile [cards]", linked to the

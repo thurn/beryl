@@ -201,9 +201,8 @@ fn arrange<L: Layout>(
             for &name in b.exiled_with {
                 let card = library_slot(&s, t, p, name);
                 s.board().place(card, Zone::Exile).map_err(full)?;
-                s.board()
-                    .remember(card, Memo::ExiledWith(slot))
-                    .map_err(full)?;
+                let with = Memo::exiled_with(s.object_ref(slot));
+                s.board().remember(card, with).map_err(full)?;
             }
         }
         // Top first: the last placed is on top.

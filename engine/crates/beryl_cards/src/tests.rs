@@ -686,7 +686,7 @@ fn currency_converters_return_is_pointless_until_it_exiles_a_card() {
             let converter = permanent_named(t, s, names::CURRENCY_CONVERTER);
             seen.push((
                 beryl_engine::pointless(s, t, converter, ObjectAbility::own(2)),
-                s.exiled_with(converter).count(),
+                s.exiled_with(s.object_ref(converter)).count(),
             ));
         }
     })

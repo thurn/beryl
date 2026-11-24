@@ -258,7 +258,7 @@ pub struct State<L: Layout = Small> {
 
 // Subgame storage occupies no space in Small.
 const _: () = {
-    assert!(size_of::<State<Small>>() == 20_432);
+    assert!(size_of::<State<Small>>() == 20_464);
     assert!(size_of::<<Small as Layout>::Outer>() == 0);
     assert!(size_of::<<Small as Layout>::SubgameTurns>() == 0);
 };

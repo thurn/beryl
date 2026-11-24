@@ -202,7 +202,7 @@ fn a_permanent_starts_with_cards_exiled_with_it() {
     run(&CARDS, &S).unwrap();
     let (_, s) = crate::position(&CARDS, &S).unwrap();
     let host = s.battlefield()[0];
-    assert_eq!(s.exiled_with(host).count(), 2);
+    assert_eq!(s.exiled_with(s.object_ref(host)).count(), 2);
 }
 
 #[test]

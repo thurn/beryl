@@ -73,10 +73,8 @@ impl<L: Layout> Memo<L> {
             | Memo::CombatBand(_)
             | Memo::Solved => None,
             Memo::Prepared(copy) => copy,
-            Memo::ExiledWith(by)
-            | Memo::ExiledUntil(by)
-            | Memo::PutOntoBattlefieldWith(by)
-            | Memo::PartOf(by) => Some(by),
+            Memo::ExiledWith(link) => Some(link.slot),
+            Memo::ExiledUntil(by) | Memo::PutOntoBattlefieldWith(by) | Memo::PartOf(by) => Some(by),
         }
     }
 
@@ -89,15 +87,19 @@ impl<L: Layout> Memo<L> {
             Memo::ClassLevel(level) => level > 1,
             Memo::Paid(paid) => !paid.is_empty(),
             Memo::Chosen(value) => value.holds(),
-            Memo::Really(_)
+            // A card exiled with an object stays exiled with it after the object has left its
+            // zone or, as a token, ceased to exist: an ability of it may still be on the stack
+            // (see CR 113.7a).
+            Memo::ExiledWith(_)
+            | Memo::Really(_)
             | Memo::PhasedOutUnder(_)
             | Memo::Morphed
             | Memo::Solved
             | Memo::CombatBand(_) => true,
             // Somebody knew the face-down card: at least its controller (see CR 708.5).
             Memo::FaceDownUnder(knew) => !knew.is_empty(),
-            // What exiled it left a card or a token in its slot.
-            Memo::ExiledWith(by) | Memo::PutOntoBattlefieldWith(by) => zone(by) != Zone::Nowhere,
+            // What put it onto the battlefield left a card or a token in its slot.
+            Memo::PutOntoBattlefieldWith(by) => zone(by) != Zone::Nowhere,
             // An object exiled "until" its exiler leaves returns as it leaves (see CR 610.3).
             Memo::ExiledUntil(by) => zone(by) == Zone::Battlefield,
             // A card is part of a permanent only while it is on the battlefield.
@@ -113,7 +115,7 @@ impl<L: Layout> Memo<L> {
         match self {
             Memo::Paid(paid) => Memo::Paid(paid),
             Memo::X(x) => Memo::X(x),
-            Memo::ExiledWith(by) => Memo::ExiledWith(slot(by)),
+            Memo::ExiledWith(link) => Memo::ExiledWith(link.relayout()),
             Memo::ExiledUntil(by) => Memo::ExiledUntil(slot(by)),
             Memo::Chosen(value) => Memo::Chosen(value.relayout()),
             Memo::Really(card) => Memo::Really(crate::relayout::card(card)),
