@@ -26,10 +26,17 @@ procedure. If the CLI is down, read
   Check that `ignite ticket show <incident ID>` shows the `incident` label
   and your session as assignee. Comment with the evidence, the operator's
   declaration and your session ID.
-- Run `ignite emergency declare <incident ID>` to pause hand-offs and new
-  heavy commands across the fleet. Renew the pause before it expires in two
-  hours. If Ignite is down, keep the timeline locally, proceed with recovery
-  and record it on the ticket when the hub answers.
+- When `master` stalls while `green` advances, run
+  `ignite emergency declare <incident ID> --landings-only` to pause new
+  landings to `staging`. Workers can still claim tickets, build and run checks.
+  Use `ignite emergency allow <repair-ticket> land` to let a repair land during
+  the pause.
+- For a broken build, a hub or daemon fault, or resource exhaustion, run
+  `ignite emergency declare <incident ID>` to pause hand-offs and all new
+  heavy commands.
+- Renew the pause with the same scope before it expires in two hours. If
+  Ignite is down, keep the timeline locally, proceed with recovery and record
+  it on the ticket when the hub answers.
 - You can direct any session until the incident ends. Send orders only when
   the pause cannot enforce the action. Use `ignite tell <ticket> "<order>"`
   for a ticket holder or `ignite tell --all "<order>"` for every ticket holder.
@@ -52,13 +59,19 @@ procedure. If the CLI is down, read
   step, take a backup you can restore. Record fleet changes, ref updates
   with old and new commit IDs, skipped checks and any rules you relaxed.
   Report changes to the operator as you make them.
+- Aim to advance `master` within 30 minutes of declaring the incident. If slow
+  checks on a secondary platform still block promotion at 30 minutes, defer
+  that platform and record which checks to rerun. Revert any known culprit
+  that still blocks promotion.
 - Record each mitigation on the incident ticket with exactly one outcome.
   Link a filed root-cause ticket with evidence of why the normal handler
   failed, or write one sentence explaining why nothing needs fixing.
 - Follow the guide to confirm recovery, restore fleet settings and end the
   pause with `ignite pool resume --all`. Withdraw outstanding orders and
-  run the skipped checks. Verify every mitigation has its recorded outcome
-  before landing or closing the incident. Title a resolved desktop session
+  verify every mitigation has its recorded outcome. Once recovery is confirmed,
+  record it and file follow-ups for skipped checks and remaining fixes. If
+  `master` stalled, close the incident ticket once it advances. Title a
+  resolved desktop session
   `✅ [<incident ID>] <short emergency> resolved`.
 - If you must stop before recovery, record what still fails and the next
   action. Keep the pause only if resuming would cause harm. The operator
