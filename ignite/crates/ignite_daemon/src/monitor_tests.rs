@@ -128,6 +128,18 @@ fn seen(running: bool, answered: bool) -> Observation {
 
 #[cfg(windows)]
 #[test]
+fn the_windows_monitor_treats_a_held_daemon_lock_as_running() {
+    let home = home();
+    let _lock = crate::machine_lock::hold(&home).unwrap();
+    let monitor = NativeMachine {
+        socket: home.root.join("unused-socket"),
+        home: home.root.clone(),
+    };
+    assert!(monitor.daemon_running());
+}
+
+#[cfg(windows)]
+#[test]
 fn the_windows_monitor_reads_a_failed_round_after_the_loop_recovers() {
     use std::sync::Arc;
 

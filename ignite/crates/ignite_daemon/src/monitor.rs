@@ -352,6 +352,14 @@ pub struct NativeMachine {
 
 impl Machine for NativeMachine {
     fn daemon_running(&self) -> bool {
+        let home = Home {
+            root: self.home.clone(),
+        };
+        // On Windows a self-update starts the new daemon detached and exits the scheduled task,
+        // so Task Scheduler reports the task as Ready while the daemon holds `daemon.lock`.
+        if cfg!(windows) && crate::machine_lock::held(&home) {
+            return true;
+        }
         // When the login service cannot say, the probe decides.
         Native.daemon_running().unwrap_or(true)
     }
@@ -376,6 +384,20 @@ impl Machine for NativeMachine {
     }
 
     fn kickstart(&self) -> std::io::Result<()> {
+        #[cfg(windows)]
+        {
+            let home = Home {
+                root: self.home.clone(),
+            };
+            // A daemon restarted by a Windows self-update runs detached from the scheduled task,
+            // so `schtasks /End` cannot stop it if it hangs. Stop the detached daemon before
+            // starting the task again so the new daemon does not hit `daemon.lock`.
+            if crate::machine_lock::held(&home)
+                && let Some(last) = start_log(&home).read().last()
+            {
+                let _ = Native.terminate_under(last.pid, home.store().root());
+            }
+        }
         Native.kickstart_daemon()
     }
 

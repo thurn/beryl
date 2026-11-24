@@ -223,6 +223,7 @@ fn task_xml(user: &str, executable: &str, args: &[String], schedule: Schedule) -
     <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <StartWhenAvailable>true</StartWhenAvailable>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
     {restart}
     <Enabled>true</Enabled>
@@ -311,6 +312,7 @@ mod tests {
         assert!(xml.contains(r"<Command>C:\ignite\bin\ignite.exe</Command>"));
         assert!(xml.contains("<Arguments>daemon &quot;a &amp; b&quot;</Arguments>"));
         assert!(xml.contains("<RunLevel>LeastPrivilege</RunLevel>"));
+        assert!(xml.contains("<StartWhenAvailable>true</StartWhenAvailable>"));
     }
 
     #[test]

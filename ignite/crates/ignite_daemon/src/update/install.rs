@@ -532,7 +532,7 @@ fn installed_text(done: &Installed, main: &Path, link: &PathLink) -> String {
         if done.monitor {
             "checks the daemon every 2 minutes"
         } else {
-            "not supported on Windows yet; the daemon is not watched"
+            "not supported on this platform yet; the daemon is not watched"
         }
     );
     if let Some(listen) = &done.hub {

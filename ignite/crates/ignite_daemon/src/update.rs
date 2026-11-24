@@ -154,6 +154,11 @@ impl ExecutableStore {
         Self { root: root.into() }
     }
 
+    /// The directory that holds stored builds (`<home>/bin`).
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     /// The daemon's home, which contains the executable store.
     pub(crate) fn home_dir(&self) -> Option<&Path> {
         self.root.parent()
@@ -381,7 +386,9 @@ impl TreeBuilder {
             ignite_git::worktree::add(&self.repo, &tree, Self::BRANCH, commit)?;
         }
         std::fs::write(self.marker(), commit.as_str())?;
-        Ok(tree)
+        // Resolve symlinks and Windows junctions so Cargo sees one consistent path for `cwd`,
+        // `--manifest-path` and `--target-dir` across incremental release builds.
+        Ok(ignite_os::paths::canonicalize(&tree).unwrap_or(tree))
     }
 
     /// Notes that the build ended, whatever its result.

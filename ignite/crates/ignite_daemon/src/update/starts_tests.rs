@@ -283,6 +283,21 @@ fn the_monitor_runs_the_last_good_build_when_there_is_one() {
     let home = home();
     let store = home.store();
     assert_eq!(store.monitor_program(), store.last_good_link());
+    #[cfg(windows)]
+    {
+        assert_eq!(
+            store.monitor_program().extension().and_then(|e| e.to_str()),
+            Some("cmd")
+        );
+        // A home whose `bin/last-good` predates the `.cmd` launcher gets one on demand.
+        std::fs::remove_file(store.last_good_link()).unwrap();
+        let program = store.monitor_program();
+        assert_eq!(program, store.last_good_link());
+        assert_eq!(
+            std::fs::read_to_string(&program).unwrap(),
+            crate::update::lastgood::LAST_GOOD_CMD
+        );
+    }
     let bare = ExecutableStore::new(home.root.join("elsewhere"));
     assert_eq!(bare.monitor_program(), bare.current_link());
 }

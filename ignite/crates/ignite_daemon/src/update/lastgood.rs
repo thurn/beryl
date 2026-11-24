@@ -28,19 +28,40 @@ pub const CRASH_STARTS: usize = 3;
 
 const LAST_GOOD: &str = "last-good";
 
+/// The Windows launcher at `bin/last-good.cmd`: it runs the executable whose path is the text of
+/// `bin/last-good`, beside it, with the launcher's arguments. It never changes once written, which
+/// matters because `cmd` rereads a batch file line by line while running it.
+#[cfg(windows)]
+pub const LAST_GOOD_CMD: &str = "@for /f \"usebackq delims=\" %%E in (\"%~dp0last-good\") do @\"%%E\" %*\r\n\
+                                 @exit /b %ERRORLEVEL%\r\n";
+
 impl ExecutableStore {
-    /// `bin/last-good`, which points at the last build that stayed up.
+    /// What runs the last-good build: `bin/last-good` (a symbolic link on Unix), or on Windows
+    /// the launcher [`LAST_GOOD_CMD`].
     pub fn last_good_link(&self) -> PathBuf {
-        self.root.join(LAST_GOOD)
+        #[cfg(unix)]
+        return self.root.join(LAST_GOOD);
+        #[cfg(windows)]
+        return self.root.join("last-good.cmd");
     }
 
     /// The last-good build, if one is marked and still stored.
     pub fn last_good(&self) -> Option<Commit> {
         #[cfg(unix)]
-        let path = self.last_good_link();
+        let path = self.root.join(LAST_GOOD);
         #[cfg(windows)]
-        let path = PathBuf::from(fs::read_to_string(self.last_good_link()).ok()?.trim());
+        let path = PathBuf::from(fs::read_to_string(self.root.join(LAST_GOOD)).ok()?.trim());
         Self::version_of(&path).filter(|commit| self.has(commit))
+    }
+
+    /// Ensures the Windows launcher `bin/last-good.cmd` exists beside `bin/last-good`.
+    #[cfg(windows)]
+    fn ensure_last_good_launcher(&self) -> io::Result<()> {
+        let launcher = self.last_good_link();
+        if fs::read_to_string(&launcher).ok().as_deref() != Some(LAST_GOOD_CMD) {
+            fs::write(&launcher, LAST_GOOD_CMD)?;
+        }
+        Ok(())
     }
 
     /// Marks `commit`, which must be stored, as the last good build.
@@ -51,6 +72,8 @@ impl ExecutableStore {
                 format!("the build of {commit} is not stored"),
             ));
         }
+        #[cfg(windows)]
+        self.ensure_last_good_launcher()?;
         self.link(LAST_GOOD, commit)
     }
 
@@ -58,6 +81,12 @@ impl ExecutableStore {
     /// the current one, so the monitor itself runs a build known to work.
     pub fn monitor_program(&self) -> PathBuf {
         if self.last_good().is_some() {
+            // A machine whose `bin/last-good` was written by an older build may lack
+            // `bin/last-good.cmd`; write it before registering the scheduled task.
+            #[cfg(windows)]
+            if self.ensure_last_good_launcher().is_err() {
+                return self.current_link();
+            }
             self.last_good_link()
         } else {
             self.current_link()

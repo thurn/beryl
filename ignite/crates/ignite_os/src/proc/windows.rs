@@ -10,9 +10,12 @@
 //! handle closes, so a supervisor that exits or crashes leaves none of them running.
 
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::io;
+use std::os::windows::ffi::OsStringExt;
 use std::os::windows::io::AsRawHandle;
 use std::os::windows::process::CommandExt;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::ptr;
 use std::sync::{Mutex, PoisonError};
@@ -35,7 +38,9 @@ use windows_sys::Win32::System::JobObjects::{
 };
 use windows_sys::Win32::System::Threading::{
     CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, CREATE_SUSPENDED, OpenProcess, OpenThread,
-    PROCESS_SYNCHRONIZE, ResumeThread, THREAD_SUSPEND_RESUME, WaitForSingleObject,
+    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
+    QueryFullProcessImageNameW, ResumeThread, THREAD_SUSPEND_RESUME, TerminateProcess,
+    WaitForSingleObject,
 };
 
 use super::{ENDED_EXIT_CODE, Group, Processes};
@@ -267,6 +272,49 @@ impl Native {
             None => Ok(()),
         }
     }
+
+    /// Ends process `pid` if its executable lies inside `under` (after resolving links and
+    /// junctions), and waits up to [`KILLED`] for it to exit. Returns `true` when a matching
+    /// process was ended, or `false` when `pid` is gone or belongs to another program.
+    pub fn terminate_under(&self, pid: u32, under: &Path) -> io::Result<bool> {
+        let Ok(root) = crate::paths::canonicalize(under) else {
+            return Ok(false);
+        };
+        let access = PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | PROCESS_SYNCHRONIZE;
+        // SAFETY: plain call; the handle is owned by `Exiting` and closed on drop.
+        let handle = unsafe { OpenProcess(access, 0, pid) };
+        if handle.is_null() {
+            return Ok(false);
+        }
+        let process = Exiting(handle);
+        let Some(image) = process_image(process.0) else {
+            return Ok(false);
+        };
+        let Ok(real) = crate::paths::canonicalize(&image) else {
+            return Ok(false);
+        };
+        if !real.starts_with(&root) {
+            return Ok(false);
+        }
+        // SAFETY: `process.0` was opened with `PROCESS_TERMINATE`.
+        if unsafe { TerminateProcess(process.0, ENDED_EXIT_CODE) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        process.wait_until(Instant::now() + KILLED);
+        Ok(true)
+    }
+}
+
+/// The executable path of an open process handle, or `None` if Windows could not report it.
+fn process_image(handle: HANDLE) -> Option<PathBuf> {
+    let mut buffer = vec![0u16; 1024];
+    let mut len = buffer.len() as u32;
+    // SAFETY: `handle` has `PROCESS_QUERY_LIMITED_INFORMATION` and `buffer` has `len` elements.
+    let ok = unsafe { QueryFullProcessImageNameW(handle, 0, buffer.as_mut_ptr(), &raw mut len) };
+    if ok == 0 {
+        return None;
+    }
+    Some(PathBuf::from(OsString::from_wide(&buffer[..len as usize])))
 }
 
 /// Starts the command once its PID can name a new job. The test can supply a job creator that
@@ -579,5 +627,24 @@ mod tests {
         group.child.wait().unwrap();
         Native.end_group(&mut group).unwrap();
         Native.end_group_id(group.id).unwrap();
+    }
+
+    #[test]
+    fn terminate_under_ends_only_a_process_inside_the_directory() {
+        let mut child = helper_command("sleep").spawn().unwrap();
+        let pid = child.id();
+        let other = ignite_core::test_files::temp_dir().join("unrelated-dir");
+        std::fs::create_dir_all(&other).unwrap();
+        assert!(!Native.terminate_under(pid, &other).unwrap());
+        assert!(alive(pid));
+
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        assert!(Native.terminate_under(pid, &exe_dir).unwrap());
+        let _ = child.wait();
+        assert!(!alive(pid));
     }
 }
