@@ -565,6 +565,12 @@ class Cards:
         target list."""
         return self.instruction(card, "Scry") is not None
 
+    def puts_any_on_bottom(self, card: str) -> bool:
+        """Whether resolving `card` puts any number of hand cards on the library bottom. Beryl
+        asks for the cards one at a time, ending with a pick of none unless the hand runs
+        out; XMage asks once for a list of them as a target."""
+        return self.instruction(card, "PutAnyOnBottom") is not None
+
     def takes(self, card: str, face: int | None = None) -> int | None:
         """How many cards resolving `card` puts into a hand from a look at the top of a
         library, the rest going to the bottom in any order. Beryl chooses those one at a time,

@@ -292,5 +292,19 @@
     "scenario": "An animated Saga with no abilities enters without lore",
     "cr": "CR 614.12 (https://yawgatog.com/resources/magic-rules/#R61412): \"Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c-d.) Such effects may come from the permanent itself if they affect only that permanent (as opposed to a general subset of permanents that includes it). They may also come from other sources. To determine which replacement effects apply and how they apply, check the characteristics of the permanent as it would exist on the battlefield, taking into account replacement effects that have already modified how it enters the battlefield (see rule 616.1), continuous effects from the permanent's own static abilities that would apply to it once it's on the battlefield, and continuous effects that already exist and would apply to the permanent.\"",
     "reason": "XMage adds an entry lore counter even though Opalescence would make the Saga a creature and Humility would remove its intrinsic entry replacement on the battlefield."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Sylvan Scrying",
+    "scenario": "generated 1: cast from hand",
+    "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
+    "reason": "XMage requires one land card whenever one qualifies, so the controller cannot fail to find."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Sylvan Scrying",
+    "scenario": "generated 4: cast from hand with filter partners",
+    "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
+    "reason": "XMage requires one land card whenever one qualifies, so the controller cannot fail to find."
   }
 ]

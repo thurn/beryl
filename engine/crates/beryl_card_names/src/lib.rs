@@ -141,6 +141,8 @@ pub mod decks {
                 names::ADVENTUROUS_EATER_HAVE_A_BITE,
                 names::LIGHTNING_BOLT,
                 names::COUNTERSPELL,
+                names::VALAKUT_AWAKENING,
+                names::SYLVAN_SCRYING,
             ],
         ),
         ("outside-the-game", &[names::BURNING_WISH]),

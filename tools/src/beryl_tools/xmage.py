@@ -565,6 +565,15 @@ class Exporter:
                 self.emit(f"addTarget({who}, {java_string(p.object_name(card))});")
             return
         resolving = source or ""
+        if kind == "ChooseUpTo" and self.cards.puts_any_on_bottom(resolving):
+            # XMage's `TargetCardInHand` of any number takes the whole list at once from the
+            # choice queue, so only the pick of none is queued, as a skip.
+            if card is not None:
+                raise Unsupported(
+                    "choosing hand cards for the library bottom one at a time"
+                )
+            self.emit(f"setChoice({who}, TestPlayer.CHOICE_SKIP);")
+            return
         may_choose = self.cards.may_choose(resolving)
         if self.cards.takes(resolving) and kind == "ChooseObject" and card is not None:
             self.take(who, resolving, card)

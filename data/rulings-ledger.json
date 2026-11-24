@@ -2144,6 +2144,7 @@
       "covered": "Effect::EndTurn"
     }
   ],
+  "Sylvan Scrying": [],
   "Tarmogoyf": [
     {
       "published_at": "2024-06-07",
@@ -2684,6 +2685,75 @@
       "scenario": [
         "Urborg on the battlefield does not affect land cards in the library"
       ]
+    }
+  ],
+  "Valakut Awakening // Valakut Stoneforge": [
+    {
+      "published_at": "2020-09-25",
+      "hash": "84cb1be70a3c",
+      "scenario": [
+        "Valakut Awakening puts chosen cards on the bottom and draws that many plus one"
+      ]
+    },
+    {
+      "published_at": "2020-09-25",
+      "hash": "b5a971a756aa",
+      "scenario": [
+        "Valakut Awakening puts nothing on the bottom and draws one card"
+      ]
+    },
+    {
+      "published_at": "2020-09-25",
+      "hash": "b88231c797ab",
+      "untestable": "The engine does not yet grant permission to play lands from other zones, as with Crucible of Worlds."
+    },
+    {
+      "published_at": "2020-09-25",
+      "hash": "e052b280c3c1",
+      "scenario": [
+        "Valakut Stoneforge enters tapped and uses the land play"
+      ]
+    },
+    {
+      "published_at": "2020-09-25",
+      "hash": "0b47e5666330",
+      "untestable": "The pinned rules supersede this 2020 ruling. CR 712.3 allows modal double-faced cards to have transform or convert abilities, and CR 712.11a applies to either kind of double-faced card."
+    },
+    {
+      "published_at": "2020-09-25",
+      "hash": "61a39d44bef2",
+      "scenario": [
+        "Pithing Needle can name Valakut Stoneforge, the back face"
+      ]
+    },
+    {
+      "published_at": "2020-09-25",
+      "hash": "0680c28c1745",
+      "untestable": "Commander deck validation and color identity are outside the supported formats."
+    },
+    {
+      "published_at": "2020-09-25",
+      "hash": "3ca798bf3d5b",
+      "scenario": [
+        "Valakut Stoneforge enters tapped and uses the land play"
+      ]
+    },
+    {
+      "published_at": "2020-09-25",
+      "hash": "a2b2e5000cb6",
+      "scenario": [
+        "Flickerwisp cannot return Valakut Awakening to the battlefield"
+      ]
+    },
+    {
+      "published_at": "2020-09-25",
+      "hash": "beeb8d6bd7d6",
+      "untestable": "The engine has casting permissions but no permission to play a particular card as either a land or a spell, as with Valakut Exploration."
+    },
+    {
+      "published_at": "2020-09-25",
+      "hash": "dfd0e69739be",
+      "untestable": "The triangles are printed face symbols and have no game behavior to assert."
     }
   ],
   "Wear // Tear": [
