@@ -2752,12 +2752,13 @@ How a daemon verifies a tip:
   machine can run.
 
 - It scores those checks as the gate scores them, over the areas the landings
-  since `master` touched, with no threshold, and splits them by the tip's
-  budget, `[tip] seconds` of running checks at the `tip` class's rate:
+  since `master` touched, with no threshold. Portable checks and checks that
+  must pass on this platform share the tip budget, `[tip] seconds` of running
+  checks at the `tip` class's rate:
 
   - **Before `master` moves:** the best-scored checks within the budget, plus,
-    whatever the budget, cached failures being run again and checks with an open
-    regression ticket.
+    whatever the budget, cached failures being run again, checks with an open
+    regression ticket, always checks and checks with no hub record.
   - **After `master` moves:** the rest.
 
   Builds are outside the budget, and a tip round builds what it needs, cold
@@ -2790,8 +2791,9 @@ How a daemon verifies a tip:
   waiting on that build, not as unreported.
 
 - A tip left waiting (for incomplete checks, or checks another machine holds) is
-  verified again after ten minutes, or at once when a newer tip arrives or fleet
-  settings change.
+  verified again after ten minutes, or when a newer tip arrives, fleet settings
+  change, or its platform has deferred checks at the tip that just reached
+  `master`.
 
 - A round that has started runs to its end. When a newer tip arrives meanwhile,
   the round is not restarted: its results are cached by input, and the next
@@ -2800,11 +2802,11 @@ How a daemon verifies a tip:
 
 - When every check before the move has a pass, and every check answered from the
   cache passed, the daemon moves `master` to the tip. A check switched off as
-  flaky is not part of the set. An `incomplete` check, or one with a cached
-  failure, holds `master`. So do checks only another platform's machines can
-  run, and families that cannot be listed. When all registered machines on a
-  required platform are off, the round defers that platform's outstanding checks
-  and can move `master`. See
+  flaky is excluded. An incomplete required check or a cached failure holds
+  `master`. When a peer platform finishes its pre-promotion checks, it shares
+  the exact native result keys that fell outside its own budget. Other verifiers
+  still wait for its required results and listings. Fleet settings and a
+  family's `defer_platforms` can defer native checks as described in
   [Tip verification and machines that are off](#tip-verification-and-machines-that-are-off).
 
 - The same round then runs the checks past the budget, in the `tip` class, on
@@ -2814,9 +2816,9 @@ How a daemon verifies a tip:
   is open and its cached failure is run again, so it holds `master` as any
   cached failure does, until the fix lands. A newer tip ends this part of the
   round before its next family or batch, even with batches under way, and the
-  checks not yet run are in the newer tip's set instead. Otherwise the tip loop,
-  which waits for the round, would verify no newer tip until every check past
-  the budget had run, which can take hours.
+  checks not yet run are in the newer tip's set instead. An outstanding native
+  check also leaves a coverage gap so its platform can finish it when another
+  verifier moves `master`.
 
 - When nothing can be scored (git or the hub cannot be read), every check runs
   before `master` moves.
@@ -4485,16 +4487,27 @@ continuations to the same session skip the comparison.
 ### Tip verification and machines that are off
 
 A tip round defers outstanding checks that must pass separately on a platform
-when all its registered machines are off. After the other required checks pass,
-the hub records the deferral and `master` can move. `ignite status` and the
-dashboard's first line name the first tip with deferred checks, even if more
-tips advance while the platform is off.
+when all its registered machines are off, or when it has an online checks-only
+machine and no online active machine. A machine counts as online for this policy
+if the hub heard from it in the last 30 minutes. An online active machine on the
+same platform keeps its native checks in the promotion gate. Checks-only
+machines can still run portable checks before promotion.
 
-When a machine returns to active or checks only, its next round verifies the
-current tip, even if `master` already points to it. A failure files a regression
-whose culprit search starts at the last commit before the first deferral. Once
-the platform verifies the tip, the warning clears. The hub skips filing wait
-tickets for off machines and closes existing tickets about waiting for them.
+A check family can defer just its results on named platforms, even while those
+platforms have active verifiers. For example, with
+`platforms = ["macos", "windows"]` and `defer_platforms = ["windows"]`, the
+family participates in the macOS gate and verifies Windows after promotion.
+Every entry in `defer_platforms` must appear in the family's `platforms` list.
+
+After the other required checks pass, the hub records the gap before `master`
+moves. `ignite status` and the dashboard's first line name the first tip with
+deferred checks, even if more tips advance before the platform catches up.
+
+An available verifier catches up at the promoted tip, including when `master`
+already points to it. A failure files a regression whose culprit search starts
+at the last commit before the first deferral. Once the platform verifies the
+tip, the warning clears. The hub skips filing wait tickets for off machines and
+closes existing tickets about waiting for them.
 
 ## Records and metrics
 

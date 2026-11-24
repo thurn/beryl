@@ -63,6 +63,45 @@ fn a_covered_check_is_stood_for_by_its_covering_check() {
 }
 
 #[test]
+fn a_deferred_family_cannot_cover_a_required_check() {
+    let (world, tip) = covered_world();
+    let mut ctx = world.ctx("m-1");
+    ctx.config.machine.get_mut("local").unwrap().os = Some(Os::Macos);
+    let mut covering = in_family("a", "fast");
+    let mut covered = in_family("a", "slow");
+    covering.key.platform = Some(Os::Macos);
+    covered.key.platform = Some(Os::Macos);
+    world
+        .work
+        .defer_platforms
+        .lock()
+        .unwrap()
+        .insert("fast".to_owned(), vec![Os::Macos]);
+    world
+        .work
+        .set_checks(&tip, vec![covering.clone(), covered.clone()]);
+
+    let mut verifier = world.verifier().with_host("local");
+    assert_eq!(
+        verifier.round_at(&ctx, &tip, Seq(0)).unwrap(),
+        TipOutcome::VerifiedWithDeferrals {
+            checks: [(Os::Macos, vec![covering.check.clone()])].into(),
+        }
+    );
+    assert_eq!(ran_checks(&world), BTreeSet::from([covered.check.clone()]));
+    assert_eq!(world.master(), tip);
+    assert!(verifier.due(&ctx, &tip));
+    assert_eq!(
+        verifier.round_at(&ctx, &tip, Seq(0)).unwrap(),
+        TipOutcome::Verified
+    );
+    assert_eq!(
+        ran_checks(&world),
+        BTreeSet::from([covered.check, covering.check])
+    );
+}
+
+#[test]
 fn a_covered_check_with_an_open_regression_reports_its_own_pass() {
     let (world, tip) = covered_world();
     let covering = in_family("a", "fast");

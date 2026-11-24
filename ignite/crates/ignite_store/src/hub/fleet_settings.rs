@@ -1,6 +1,6 @@
 //! Versioned fleet settings and their change log.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
@@ -49,6 +49,43 @@ pub fn off_machines(
             .all(|name| settings.machine(name).state == MachineState::Off)
     });
     Ok(platforms)
+}
+
+/// A machine with no heartbeat for half an hour is also unavailable for dispatch fallback.
+const ONLINE_SECONDS: f64 = 30.0 * 60.0;
+
+/// Platforms that can run checks but have no online active verifier.
+pub fn checks_only_platforms(
+    conn: &Connection,
+    settings: &FleetSettings,
+    now: Timestamp,
+) -> Result<BTreeSet<Os>> {
+    let mut active = BTreeSet::new();
+    let mut checks_only = BTreeSet::new();
+    for machine in fleet::machines(conn)? {
+        let os = match machine.os.as_str() {
+            "macos" => Os::Macos,
+            "windows" => Os::Windows,
+            _ => continue,
+        };
+        if machine
+            .last_seen
+            .parse::<Timestamp>()
+            .is_ok_and(|seen| now.seconds_since(seen) < ONLINE_SECONDS)
+        {
+            match settings.machine(&machine.name).state {
+                MachineState::Active => {
+                    active.insert(os);
+                }
+                MachineState::ChecksOnly => {
+                    checks_only.insert(os);
+                }
+                MachineState::Off => {}
+            }
+        }
+    }
+    checks_only.retain(|os| !active.contains(os));
+    Ok(checks_only)
 }
 
 /// Applies a change and records it together, or returns the settings that replaced the

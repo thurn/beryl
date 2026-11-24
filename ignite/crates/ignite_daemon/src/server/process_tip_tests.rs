@@ -422,6 +422,7 @@ fn a_round_blocked_in_listing_yields_to_master_and_the_latest_tip_runs() {
             .hub
             .update_tip_coverage(&TipCoverageUpdate {
                 platform,
+                checks_deferred: false,
                 expected: None,
                 replacement: coverage,
             })

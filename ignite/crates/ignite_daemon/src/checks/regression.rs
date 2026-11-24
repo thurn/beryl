@@ -66,7 +66,14 @@ impl Checks {
                     && (!family.machine_relative || self.families().any(|(own, _)| own == *name))
             })
             .collect();
-        let mut set = TipSet::default();
+        let mut set = TipSet {
+            defer_platforms: among
+                .iter()
+                .filter(|(_, family)| !family.defer_platforms.is_empty())
+                .map(|(name, family)| ((*name).to_owned(), family.defer_platforms.clone()))
+                .collect(),
+            ..TipSet::default()
+        };
         if phase != ListingPhase::PeerBuild && !local.is_empty() {
             let options = RunOptions {
                 verb: "tip".to_owned(),
@@ -175,6 +182,20 @@ impl Checks {
         .collect()
     }
 
+    /// Checks without a record stay on. Index the hub's states once for the whole listing.
+    fn check_states(&self, family: &str) -> HashMap<CheckName, CheckState> {
+        self.history
+            .stats(family)
+            .map(|stats| {
+                stats
+                    .checks
+                    .into_iter()
+                    .map(|entry| (entry.check, entry.state))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Adds one platform's prepared checks, or the missing listing, to the round.
     fn add_regression_checks(
         &self,
@@ -225,19 +246,17 @@ impl Checks {
                     platforms: platforms.clone(),
                 });
             }
-            // Without the hub's record every check counts as on, which can only hold `master`
-            // longer, never move it past a check.
-            let family_stats = self.history.stats(name).ok();
+            let states = self.check_states(name);
             let keys_for: Vec<Option<Os>> = if family.platforms.is_any() {
                 vec![None]
             } else {
                 platforms.into_iter().map(Some).collect()
             };
             for keyed in prepared.keyed {
-                let state = family_stats
-                    .as_ref()
-                    .and_then(|s| s.checks.iter().find(|c| c.check == keyed.listed.check))
-                    .map_or(CheckState::On, |c| c.state);
+                let state = states
+                    .get(&keyed.listed.check)
+                    .copied()
+                    .unwrap_or(CheckState::On);
                 // A check switched off is not needed, but the one this machine would run is
                 // kept apart: tip verification cuts its batches over it too.
                 let off = state == CheckState::Off;

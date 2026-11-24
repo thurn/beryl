@@ -5,8 +5,8 @@ use std::sync::Mutex;
 
 use crate::ids::Commit;
 use crate::tipround::{
-    TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage, TipCoverageUpdate,
-    TipRound, TipRoundFiled,
+    TipBudgetPlan, TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage,
+    TipCoverageUpdate, TipRound, TipRoundFiled,
 };
 use crate::traits::Result;
 
@@ -21,6 +21,7 @@ pub(super) struct FakeTips {
     frozen: Mutex<HashMap<(Commit, String), TipCosts>>,
     rounds: Mutex<Vec<TipRound>>,
     coverage: Mutex<TipCoverage>,
+    budgets: Mutex<BTreeMap<crate::config::Os, TipBudgetPlan>>,
     candidate: Mutex<Option<TipCandidate>>,
     /// The open improvement ticket a slow round filed, if any.
     open_ticket: Mutex<Option<String>>,
@@ -40,6 +41,31 @@ impl FakeHub {
             return Ok(false);
         }
         *candidate = Some(update.replacement.clone());
+        Ok(true)
+    }
+
+    pub(super) fn fake_tip_budget(
+        &self,
+        commit: &Commit,
+        platform: crate::config::Os,
+    ) -> Result<Option<TipBudgetPlan>> {
+        self.reachable()?;
+        Ok(lock(&self.tips.budgets)
+            .get(&platform)
+            .filter(|plan| plan.commit == *commit)
+            .cloned())
+    }
+
+    pub(super) fn fake_put_tip_budget(&self, plan: &TipBudgetPlan) -> Result<bool> {
+        self.reachable()?;
+        let candidate = lock(&self.tips.candidate);
+        if candidate
+            .as_ref()
+            .is_some_and(|tip| tip.commit != plan.commit)
+        {
+            return Ok(false);
+        }
+        lock(&self.tips.budgets).insert(plan.platform, plan.clone());
         Ok(true)
     }
 

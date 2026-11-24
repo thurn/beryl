@@ -530,3 +530,47 @@ fn fleet_put_turns_off_dispatch_and_the_next_heartbeat_carries_the_policy() {
     assert_eq!(reply["fleet"]["state"], "active");
     assert_eq!(reply["fleet"]["off_platforms"], json!([]));
 }
+
+#[test]
+fn only_platforms_without_an_online_active_machine_are_deferred() {
+    use ignite_core::fleet::MachineState;
+    use ignite_store::hub::fleet_settings;
+
+    let mut conn = hub::open_in_memory().unwrap();
+    crate::routes::dispatch::tests::register(&mut conn);
+    for (machine, name) in [("m-2", "cygnus"), ("m-3", "spare")] {
+        let register = json!({"machine": machine, "name": name, "os": "windows", "cores": 4,
+                              "memory_mb": 4096, "families": [], "version": "d97ed0e"});
+        assert_eq!(
+            post(&mut conn, "/machines/register", &register, start()).0,
+            200
+        );
+    }
+    fleet_settings::set_machine_state(
+        &mut conn,
+        "m-2",
+        MachineState::ChecksOnly,
+        "operator",
+        at(1.0),
+    )
+    .unwrap();
+    let windows = json!({"machine": "m-2", "version": "d97ed0e", "workers": []});
+    let mac = json!({"machine": "m-1", "version": "d97ed0e", "workers": []});
+    let (_, reply) = post(&mut conn, "/machines/heartbeat", &mac, at(2.0));
+    assert!(reply["fleet"].get("checks_only_platforms").is_none());
+    assert_eq!(
+        post(&mut conn, "/machines/heartbeat", &windows, at(1_800.0)).0,
+        200
+    );
+    let (_, reply) = post(&mut conn, "/machines/heartbeat", &mac, at(1_801.0));
+    assert_eq!(reply["fleet"]["checks_only_platforms"], json!(["windows"]));
+    assert_eq!(reply["fleet"]["off_platforms"], json!([]));
+
+    let active = json!({"machine": "m-3", "version": "d97ed0e", "workers": []});
+    assert_eq!(
+        post(&mut conn, "/machines/heartbeat", &active, at(1_802.0)).0,
+        200
+    );
+    let (_, reply) = post(&mut conn, "/machines/heartbeat", &mac, at(1_803.0));
+    assert!(reply["fleet"].get("checks_only_platforms").is_none());
+}

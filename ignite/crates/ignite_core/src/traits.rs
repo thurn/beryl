@@ -28,8 +28,8 @@ use crate::protocol::tickets::{
 };
 use crate::time::Timestamp;
 use crate::tipround::{
-    TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage, TipCoverageUpdate,
-    TipRound, TipRoundFiled,
+    TipBudgetPlan, TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage,
+    TipCoverageUpdate, TipRound, TipRoundFiled,
 };
 
 /// Why an operation behind one of these traits failed.
@@ -423,6 +423,20 @@ pub trait Hub: Send + Sync {
     fn tip_candidate(&self) -> Result<Option<TipCandidate>>;
     /// Replaces the candidate if it still matches (`POST /tips/candidate/update`).
     fn update_tip_candidate(&self, update: &TipCandidateUpdate) -> Result<bool>;
+    /// The native result keys the platform's verifier put after the budget at this candidate.
+    fn tip_budget(
+        &self,
+        _commit: &Commit,
+        _platform: crate::config::Os,
+    ) -> Result<Option<TipBudgetPlan>> {
+        Ok(None)
+    }
+
+    /// Shares the budget decision while the hub still has the same candidate.
+    fn put_tip_budget(&self, _plan: &TipBudgetPlan) -> Result<bool> {
+        Err(not_supported("share the native tip budget"))
+    }
+
     /// The platforms' verification coverage (`GET /tips/coverage`).
     fn tip_coverage(&self) -> Result<TipCoverage> {
         Ok(TipCoverage::default())

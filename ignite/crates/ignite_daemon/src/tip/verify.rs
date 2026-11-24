@@ -52,9 +52,10 @@ impl TipVerifier {
         self.failed = None;
         crate::steps::step(format!("verifying tip {tip}"));
         let last = ctx.git.tip(&ctx.config.repository.master)?;
+        self.master_at_start = Some(last.clone());
         let coverage = ctx.hub.tip_coverage()?;
         let scope = Scope::new(ctx, self, &last, tip, &coverage)?;
-        if last == *tip && scope.catching_up.is_none() {
+        if last == *tip && !scope.catch_up_only() {
             // `master` already holds the tip: another machine verified it, or someone pushed it
             // by hand. The hub records it, so that it and older tips stop showing as waiting.
             ctx.hub.tip_verified(&TipVerified {
@@ -101,7 +102,8 @@ impl TipVerifier {
                 .filter(|check| check.runnable)
                 .cloned()
                 .collect();
-            let Required { checks, cached, .. } = scope.required(ctx, local, Vec::new())?;
+            let Required { checks, cached, .. } =
+                scope.required(ctx, local, Vec::new(), &builds.defer_platforms)?;
             let build = self.plan_runs(ctx, tip, checks.iter().zip(cached), &mut verdicts);
             tally.cached = count(verdicts.len());
             if let Some(by) = self.run_build(ctx, tip, &checks, &build, &mut verdicts, tally)? {
@@ -114,7 +116,12 @@ impl TipVerifier {
             builds.append(self.work.checks(ctx, tip, ListingPhase::PeerBuild)?);
             let Required {
                 checks, unlisted, ..
-            } = scope.required(ctx, builds.checks.clone(), builds.unlisted.clone())?;
+            } = scope.required(
+                ctx,
+                builds.checks.clone(),
+                builds.unlisted.clone(),
+                &builds.defer_platforms,
+            )?;
             let before = verdicts.len();
             Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
             tally.cached = tally.cached.saturating_add(count(verdicts.len() - before));
@@ -122,7 +129,7 @@ impl TipVerifier {
             if let Some(by) = candidate::replacement(ctx, tip) {
                 return Ok(TipOutcome::Superseded { by });
             }
-            if !green::advance_if_ready(ctx, tip, &checks, &unlisted, &verdicts) {
+            if last != tip && !green::advance_if_ready(ctx, tip, &checks, &unlisted, &verdicts) {
                 pending_green = Some((checks, unlisted));
             }
             builds
@@ -149,11 +156,17 @@ impl TipVerifier {
             checks,
             cached,
             unlisted,
-            deferred,
+            mut deferred,
         } = scope.required(
             ctx,
-            covered::drop_covered(listing.checks, &self.work.covered_by(), &regressions),
+            covered::drop_covered(
+                listing.checks,
+                &self.work.covered_by(),
+                &regressions,
+                (!scope.catch_up_only()).then_some(&listing.defer_platforms),
+            ),
             listing.unlisted,
+            &listing.defer_platforms,
         )?;
         let is_build = |check: &TipCheck| ctx.config.repository.green.is_some() && check.is_build();
         let before = verdicts.len();
@@ -195,7 +208,7 @@ impl TipVerifier {
             tip,
             &plan.queued,
             &plan.recheck,
-            scope.catching_up.is_some(),
+            scope.catch_up_only(),
         );
         tally.budget.clone_from(&split.budget);
         if !broken {
@@ -208,8 +221,12 @@ impl TipVerifier {
             if last != tip {
                 observe_failed_verdicts(ctx, tip, confirm.into_iter(), &verdicts);
             }
-            let (newer, runs) =
-                self.run_families(ctx, tip, &split.within, RunPhase::BeforeMaster)?;
+            let phase = if scope.catch_up_only() {
+                RunPhase::AfterMaster
+            } else {
+                RunPhase::BeforeMaster
+            };
+            let (newer, runs) = self.run_families(ctx, tip, &split.within, phase)?;
             if let Some(by) = newer {
                 tally.ran = tally.ran.saturating_add(count(runs.len()));
                 let left = split::unrun(
@@ -228,6 +245,29 @@ impl TipVerifier {
         }
         Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
         require_running()?;
+        if checks
+            .iter()
+            .filter(|check| check.runnable && !split.is_after(check))
+            .all(|check| {
+                verdicts
+                    .get(&check.key)
+                    .is_some_and(|run| matches!(run.outcome, Outcome::Pass | Outcome::Flaky))
+            })
+        {
+            scope.publish_budget(ctx, tip, &split.after)?;
+        }
+        let peer_after = scope.peer_after(ctx, tip, &checks, &verdicts)?;
+        if !peer_after.is_empty() {
+            // The peer stored its pre-promotion results before sharing its plan.
+            Self::fill_from_cache(
+                ctx,
+                checks
+                    .iter()
+                    .filter(|check| !peer_after.contains(&check.key)),
+                &mut verdicts,
+            )?;
+        }
+        require_running()?;
         if let Some(by) = candidate::replacement(ctx, tip) {
             return Ok(TipOutcome::Superseded { by });
         }
@@ -240,7 +280,7 @@ impl TipVerifier {
         self.report_unlisted(ctx, tip, &unlisted);
         self.save(ctx);
         self.require_machine_on()?;
-        scope.record_pass(ctx, tip, &checks, &verdicts, &unlisted)?;
+        let explicitly_deferred_here = scope.local.is_some_and(|os| deferred.contains_key(&os));
 
         let mut failed: Vec<&TipCheck> = Vec::new();
         let mut waiting: Vec<CheckName> = Vec::new();
@@ -248,8 +288,21 @@ impl TipVerifier {
         let now = ctx.clock.now();
         // The checks only another platform's machines can run, with their families.
         let mut elsewhere: BTreeMap<Os, Vec<(CheckName, String)>> = BTreeMap::new();
-        for check in checks.iter().filter(|c| !split.is_after(c)) {
-            match verdicts.get(&check.key).map(|v| v.outcome) {
+        for check in &checks {
+            let verdict = verdicts.get(&check.key).map(|v| v.outcome);
+            let after = split.is_after(check)
+                || (!check.runnable
+                    && check.reuse
+                    && !check.is_build()
+                    && !regressions.contains(&check.check)
+                    && peer_after.contains(&check.key));
+            if after && matches!(verdict, None | Some(Outcome::Incomplete)) {
+                if let Some(os) = check.key.platform {
+                    deferred.entry(os).or_default().push(check.check.clone());
+                }
+                continue;
+            }
+            match verdict {
                 Some(Outcome::Pass | Outcome::Flaky) => {}
                 Some(Outcome::Fail) => failed.push(check),
                 Some(Outcome::Incomplete) | None => {
@@ -325,7 +378,7 @@ impl TipVerifier {
                     tip,
                     check,
                     output.as_deref(),
-                    prior.is_none(),
+                    last != tip && prior.is_none(),
                 ) {
                     eprintln!(
                         "ignite: regression of {} not reported: {error}",
@@ -354,6 +407,10 @@ impl TipVerifier {
                 unrunnable,
             });
         }
+        for names in deferred.values_mut() {
+            names.sort();
+            names.dedup();
+        }
         scope.record_deferrals(ctx, last, tip, &deferred)?;
         let regression_passes = checks
             .iter()
@@ -373,7 +430,15 @@ impl TipVerifier {
         if outcome != TipOutcome::Verified {
             return Ok(outcome);
         }
-        self.run_after(ctx, last, tip, &checks, &split, &mut verdicts, tally)?;
+        self.run_after(ctx, last, tip, scope, &checks, &split, &mut verdicts, tally)?;
+        if !explicitly_deferred_here {
+            let deferred_here = scope.local.is_some_and(|os| deferred.contains_key(&os));
+            if scope.record_pass(ctx, tip, &checks, &verdicts, &unlisted, deferred_here)?
+                && let Some(os) = scope.local
+            {
+                deferred.remove(&os);
+            }
+        }
         Ok(if deferred.is_empty() {
             outcome
         } else {

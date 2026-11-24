@@ -38,14 +38,16 @@ use ignite_core::protocol::tickets::{
     LeaseReply, Ticket, TicketDetail, TicketQuery, WholeTicket,
 };
 use ignite_core::tipround::{
-    LastTipRound, TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage,
-    TipCoverageUpdate, TipRound, TipRoundFiled,
+    LastTipRound, TipBudgetPlan, TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest,
+    TipCoverage, TipCoverageUpdate, TipRound, TipRoundFiled,
 };
 use ignite_core::traits::{Error, Hub, Result};
 
 use crate::update::IdentityFile;
 
+mod failure_log;
 mod ticket_query;
+pub use failure_log::{FailureLog, HUB_WRITES};
 use ticket_query::ticket_query;
 
 /// How an error for a body too large for the hub begins; see [`too_large`].
@@ -71,43 +73,6 @@ pub const READ_ONLY: &str = "hub URL reaches the read-only listener: ";
 pub fn read_only(error: &Error) -> bool {
     matches!(error, Error::Unreachable(message) if message.starts_with(READ_ONLY))
 }
-
-/// Reports failed writes to the hub on standard error. A read-only listener is said once and
-/// then not again until a write succeeds, so a wrong hub URL fills the log with one line and
-/// not one per round.
-#[derive(Debug, Default)]
-pub struct FailureLog {
-    said_read_only: std::sync::atomic::AtomicBool,
-}
-
-impl FailureLog {
-    /// Prints `ignite: <what>: <error>`, except that a read-only listener's error is printed
-    /// once, until [`FailureLog::succeeded`].
-    pub fn failed(&self, what: &str, error: &Error) {
-        if self.worth_saying(error) {
-            eprintln!("ignite: {what}: {error}");
-        }
-    }
-
-    /// Whether `error` is to be printed: always, except for a read-only listener already said.
-    fn worth_saying(&self, error: &Error) -> bool {
-        !(read_only(error)
-            && self
-                .said_read_only
-                .swap(true, std::sync::atomic::Ordering::Relaxed))
-    }
-
-    /// Notes that a write reached the hub, so a later read-only answer is reported again.
-    pub fn succeeded(&self) {
-        self.said_read_only
-            .store(false, std::sync::atomic::Ordering::Relaxed);
-    }
-}
-
-/// The failures of the daemon's loops writing to the hub, which share one line.
-pub static HUB_WRITES: FailureLog = FailureLog {
-    said_read_only: std::sync::atomic::AtomicBool::new(false),
-};
 
 /// How long an ordinary request may take before it counts as unreachable.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -243,8 +208,17 @@ impl HubClient {
 
     /// `GET <path>` with the query's pairs.
     fn get<R: DeserializeOwned>(&self, path: &str, query: &[(&str, String)]) -> Result<R> {
+        self.get_with_limit(path, query, None)
+    }
+
+    fn get_with_limit<R: DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, String)],
+        limit: Option<u64>,
+    ) -> Result<R> {
         let url = format!("{}{path}", self.base);
-        let answer = self.with_retries(path, None, || {
+        let answer = self.with_retries(path, limit, || {
             let mut request = self.authorized(self.agent.get(&url));
             for (key, value) in query {
                 request = request.query(*key, value);
@@ -571,6 +545,31 @@ impl Hub for HubClient {
         match self.post("/tips/candidate/update", update) {
             // An older hub has no candidate slot. Keep verifying during a rolling upgrade.
             Err(Error::NotFound(_)) => Ok(true),
+            reply => reply,
+        }
+    }
+
+    fn tip_budget(
+        &self,
+        commit: &Commit,
+        platform: ignite_core::config::Os,
+    ) -> Result<Option<TipBudgetPlan>> {
+        match self.get_with_limit(
+            "/tips/budget",
+            &[
+                ("commit", commit.to_string()),
+                ("platform", platform.to_string()),
+            ],
+            Some(MAX_BODY_BYTES),
+        ) {
+            Err(Error::NotFound(_)) => Ok(None),
+            reply => reply,
+        }
+    }
+
+    fn put_tip_budget(&self, plan: &TipBudgetPlan) -> Result<bool> {
+        match self.post("/tips/budget", plan) {
+            Err(Error::NotFound(_)) => Ok(false),
             reply => reply,
         }
     }

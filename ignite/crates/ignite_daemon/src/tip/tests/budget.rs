@@ -1,5 +1,5 @@
-//! `master` moves once the best-scored checks within `[tip] seconds` and the required
-//! platform checks pass. The remaining portable checks run afterwards.
+//! `master` moves once the checks selected by each active platform pass. Checks outside
+//! each verifier's budget run afterward.
 
 use std::collections::BTreeMap;
 
@@ -148,13 +148,15 @@ fn both_platforms_verify_one_candidate_across_a_landing() {
     mac_check.key.platform = Some(Os::Macos);
     let mut windows_check = named_check("platform", "required", 'e');
     windows_check.key.platform = Some(Os::Windows);
+    let mut required = scored("platform:required", 0);
+    required.always = true;
     *world.work.scoring.lock().unwrap() = Some(Scoring {
         areas: vec!["src".to_owned()],
         checks: vec![
             scored("unit:first", 9),
             scored("other:second", 6),
             scored("other:last", 1),
-            scored("platform:required", 0),
+            required,
         ],
     });
     let tip = commit("bbbb000");
@@ -481,4 +483,109 @@ fn a_newer_tip_ends_the_checks_past_the_budget_at_the_next_batch() {
     let budget = world.hub.tip_rounds().pop().unwrap().budget.unwrap();
     assert_eq!(budget.unrun, BTreeMap::from([("unit".to_owned(), 1)]));
     assert_eq!(budget.ended_by, Some(commit("cccc000")));
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn an_active_peer_finishes_its_budget_before_master_and_catches_up_afterward() {
+    let world = World::new();
+    let previous = world.master();
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    world.git.set_tip("green", previous.clone());
+
+    let (server, _, mut mac) = super::rounds::running_hub(&world, "native-budget");
+    mac.config.machine.get_mut("local").unwrap().os = Some(Os::Macos);
+    mac.config.repository.green = Some("green".to_owned());
+    mac.config.tip.seconds = 150.0 / DEFAULT_TIP_RATE;
+    let mut windows =
+        super::rounds::connect_machine(world.ctx("m-2"), &server, "windows", Os::Windows);
+    windows.config.clone_from(&mac.config);
+    super::rounds::select(&mac, &tip);
+    let mut mac_verifier = world.verifier().with_host("local");
+    let mut windows_verifier = world.verifier().with_host("windows");
+
+    let native = |family, check, hash, platform| {
+        let mut native = named_check(family, check, hash);
+        native.key.platform = Some(platform);
+        native
+    };
+    let mac_before = native("mac-before", "a", 'a', Os::Macos);
+    let mac_after = native("mac-after", "a", 'b', Os::Macos);
+    let win_before = native("win-before", "a", 'c', Os::Windows);
+    let win_after = native("win-after", "a", 'd', Os::Windows);
+    let win_always = native("win-always", "a", 'e', Os::Windows);
+    let mut win_build = native("win-build", "a", 'f', Os::Windows);
+    win_build.kind = TipCheckKind::Build;
+    let set_listing = |platform| {
+        let mut checks = vec![
+            mac_before.clone(),
+            mac_after.clone(),
+            win_before.clone(),
+            win_after.clone(),
+            win_always.clone(),
+            win_build.clone(),
+        ];
+        for check in &mut checks {
+            check.runnable = check.key.platform == Some(platform);
+        }
+        world.work.set_checks(&tip, checks);
+    };
+    let mut always = scored(win_always.check.as_str(), 0);
+    always.always = true;
+    *world.work.scoring.lock().unwrap() = Some(Scoring {
+        areas: vec!["src".to_owned()],
+        checks: vec![
+            scored(mac_before.check.as_str(), 9),
+            scored(mac_after.check.as_str(), 1),
+            scored(win_before.check.as_str(), 9),
+            scored(win_after.check.as_str(), 1),
+            always,
+        ],
+    });
+
+    set_listing(Os::Macos);
+    assert_eq!(
+        mac_verifier.round_at(&mac, &tip, Seq(0)).unwrap(),
+        TipOutcome::Waiting {
+            checks: vec![
+                win_after.check.clone(),
+                win_always.check.clone(),
+                win_before.check.clone(),
+                win_build.check.clone(),
+            ],
+            unrunnable: Vec::new(),
+        }
+    );
+    assert_eq!(world.master(), previous);
+
+    set_listing(Os::Windows);
+    assert_eq!(
+        windows_verifier.round_at(&windows, &tip, Seq(0)).unwrap(),
+        TipOutcome::VerifiedWithDeferrals {
+            checks: [(Os::Macos, vec![mac_after.check.clone()])].into(),
+        }
+    );
+    assert_eq!(world.master(), tip);
+    assert_eq!(world.git.tip("green").unwrap(), tip);
+    assert!(mac_verifier.due(&mac, &tip));
+
+    set_listing(Os::Macos);
+    assert_eq!(
+        mac_verifier.round_at(&mac, &tip, Seq(0)).unwrap(),
+        TipOutcome::Verified
+    );
+    assert!(mac.hub.tip_coverage().unwrap().warnings().next().is_none());
+    assert_eq!(
+        ran_with_master(&world),
+        [
+            (vec![mac_before.check.to_string()], previous.clone()),
+            (vec![win_build.check.to_string()], previous.clone()),
+            (vec![win_always.check.to_string()], previous.clone()),
+            (vec![win_before.check.to_string()], previous),
+            (vec![win_after.check.to_string()], tip.clone()),
+            (vec![mac_after.check.to_string()], tip),
+        ]
+    );
+    server.stop();
 }

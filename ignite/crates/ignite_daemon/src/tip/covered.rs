@@ -19,6 +19,7 @@ pub(super) fn drop_covered(
     checks: Vec<TipCheck>,
     covered_by: &BTreeMap<String, String>,
     regressions: &HashSet<CheckName>,
+    defer_platforms: Option<&BTreeMap<String, Vec<Os>>>,
 ) -> Vec<TipCheck> {
     if covered_by.is_empty() {
         return checks;
@@ -33,12 +34,25 @@ pub(super) fn drop_covered(
             );
         }
     }
+    let deferred = |family: &str, os| {
+        defer_platforms
+            .and_then(|families| families.get(family))
+            .is_some_and(|platforms| platforms.contains(&os))
+    };
     let stood_for: Vec<bool> = checks
         .iter()
         .map(|check| {
             // A regression needs a pass for the check that filed it.
             !regressions.contains(&check.check)
                 && covered_by.get(&check.family).is_some_and(|family| {
+                    // A check that runs after promotion cannot cover a required check.
+                    if check
+                        .key
+                        .platform
+                        .is_some_and(|os| deferred(family, os) && !deferred(&check.family, os))
+                    {
+                        return false;
+                    }
                     covering
                         .get(&(family.as_str(), short(check), check.key.platform))
                         .is_some_and(|inputs| {

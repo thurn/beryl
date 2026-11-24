@@ -49,7 +49,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/regressions/open"
         | "/tips/candidate"
         | "/tips/coverage" => ("GET", false),
-        "/tips/failures" if request.method == "GET" => ("GET", false),
+        "/tips/failures" | "/tips/budget" if request.method == "GET" => ("GET", false),
         "/tips/failures"
         | "/results/store"
         | "/flaky"
@@ -66,7 +66,8 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/justiciar"
         | "/tips/waiting"
         | "/tips/candidate/update"
-        | "/tips/coverage/update" => ("POST", true),
+        | "/tips/coverage/update"
+        | "/tips/budget" => ("POST", true),
         _ => return None,
     };
     if request.method != method {
@@ -110,11 +111,30 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
         }
         "/tips/coverage/update" => {
             let updated =
-                tip_coverage::update(conn, &body(request)?).map_err(|error| match error {
+                tip_coverage::update(conn, &body(request)?, now).map_err(|error| match error {
                     StoreError::Rejected(reason) => failure(409, &reason),
                     other => store_failure(&other),
                 })?;
             Ok(Response::json(200, &json!(updated)))
+        }
+        "/tips/budget" if request.method == "GET" => {
+            let commit = request
+                .param("commit")
+                .and_then(|commit| ignite_core::ids::Commit::new(commit).ok())
+                .ok_or_else(|| failure(400, "a commit is required"))?;
+            let platform = match request.param("platform") {
+                Some("macos") => ignite_core::config::Os::Macos,
+                Some("windows") => ignite_core::config::Os::Windows,
+                _ => return Err(failure(400, "a platform is required")),
+            };
+            let plan =
+                tip_coverage::budget(conn, &commit, platform).map_err(|e| store_failure(&e))?;
+            Ok(Response::json(200, &json!(plan)))
+        }
+        "/tips/budget" => {
+            let stored =
+                tip_coverage::put_budget(conn, &body(request)?).map_err(|e| store_failure(&e))?;
+            Ok(Response::json(200, &json!(stored)))
         }
         "/tips/claim" => {
             let claim: TipClaim = body(request)?;

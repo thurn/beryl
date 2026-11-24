@@ -173,6 +173,8 @@ pub struct Unlisted {
 /// What a tip needs: the keyed checks, and what could not be listed or keyed.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TipSet {
+    /// Explicit deferrals from the candidate's check manifests, including unlisted families.
+    pub defer_platforms: BTreeMap<String, Vec<Os>>,
     pub checks: Vec<TipCheck>,
     pub unlisted: Vec<Unlisted>,
     /// The checks this machine could run that the hub has switched off as flaky. The tip
@@ -184,6 +186,7 @@ pub struct TipSet {
 
 impl TipSet {
     fn append(&mut self, other: Self) {
+        self.defer_platforms.extend(other.defer_platforms);
         self.checks.extend(other.checks);
         self.unlisted.extend(other.unlisted);
         self.off.extend(other.off);
@@ -352,6 +355,8 @@ pub struct TipVerifier {
     failed: Option<state::FailedTip>,
     /// Policy under which the last round started. An operator may make the same tip runnable.
     fleet_version: Option<u64>,
+    /// Where master was at the start of the most recent round.
+    master_at_start: Option<Commit>,
     /// Failures already reported, so a cached failure that stands for later tips is reported
     /// once.
     reported: HashSet<ResultKey>,
@@ -407,6 +412,7 @@ impl TipVerifier {
             settled: None,
             failed: None,
             fleet_version: None,
+            master_at_start: None,
             reported: HashSet::new(),
             deferred: HashSet::new(),
             waiting_since: BTreeMap::new(),
@@ -476,10 +482,37 @@ impl TipVerifier {
         if self.fleet_version != notice.map(|notice| notice.version) {
             return true;
         }
-        if self.settled.as_ref() == Some(tip) {
+        let settled = self.settled.as_ref() == Some(tip);
+        let resting = matches!(&self.resting, Some((resting, until)) if resting == tip && ctx.clock.now() < *until);
+        if (settled || resting) && self.needs_catch_up(ctx, tip) {
+            return true;
+        }
+        if settled {
             return self.failure_recovered(ctx, tip, None);
         }
-        !matches!(&self.resting, Some((resting, until)) if resting == tip && ctx.clock.now() < *until)
+        !resting
+    }
+
+    fn local_platform(&self, ctx: &Context) -> Option<Os> {
+        ctx.config
+            .machine(&self.host)
+            .and_then(|machine| machine.os)
+            .or_else(Os::current)
+    }
+
+    fn needs_catch_up(&self, ctx: &Context, tip: &Commit) -> bool {
+        self.master_at_start.as_ref() != Some(tip)
+            && self.local_platform(ctx).is_some_and(|platform| {
+                ctx.hub.tip_coverage().is_ok_and(|coverage| {
+                    coverage
+                        .platforms
+                        .get(&platform)
+                        .is_some_and(|state| state.deferred.is_some())
+                }) && ctx
+                    .git
+                    .tip(&ctx.config.repository.master)
+                    .is_ok_and(|master| master == *tip)
+            })
     }
 
     /// One round: verifies `tip`, remembers whether it settled or rests, and saves the memory

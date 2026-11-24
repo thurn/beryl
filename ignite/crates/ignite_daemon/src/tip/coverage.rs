@@ -1,13 +1,13 @@
-//! Deferring checks for platforms that are off and verifying those checks when they return.
+//! Native checks deferred until after promotion, and the coverage each platform still owes.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{CachedResult, ResultKey};
 use ignite_core::tipround::{
-    DeferredPlatform, PlatformVerification, TipCoverage, TipCoverageUpdate,
+    DeferredPlatform, PlatformVerification, TipBudgetPlan, TipCoverage, TipCoverageUpdate,
 };
 use ignite_core::traits::Result;
 
@@ -25,7 +25,8 @@ pub(super) struct Required {
 
 pub(super) struct Scope<'a> {
     coverage: &'a TipCoverage,
-    off: BTreeSet<Os>,
+    fleet_deferred: BTreeSet<Os>,
+    pub local: Option<Os>,
     pub catching_up: Option<(Os, &'a DeferredPlatform)>,
     only: Option<Os>,
 }
@@ -38,14 +39,14 @@ impl<'a> Scope<'a> {
         tip: &Commit,
         coverage: &'a TipCoverage,
     ) -> Result<Self> {
-        let off = verifier
+        let fleet_deferred = verifier
             .fleet_notice()
-            .map_or_else(BTreeSet::new, |notice| notice.off_platforms);
-        let local = ctx
-            .config
-            .machine(&verifier.host)
-            .and_then(|machine| machine.os)
-            .or_else(Os::current);
+            .map_or_else(BTreeSet::new, |notice| {
+                let mut deferred = notice.off_platforms;
+                deferred.extend(notice.checks_only_platforms);
+                deferred
+            });
+        let local = verifier.local_platform(ctx);
         let mut catching_up = None;
         if let Some(os) = local
             && let Some(verified) = coverage.platforms.get(&os)
@@ -58,10 +59,15 @@ impl<'a> Scope<'a> {
         let only = catching_up.filter(|_| last == tip).map(|(os, _)| os);
         Ok(Self {
             coverage,
-            off,
+            fleet_deferred,
+            local,
             catching_up,
             only,
         })
+    }
+
+    pub fn catch_up_only(&self) -> bool {
+        self.only.is_some()
     }
 
     pub fn required(
@@ -69,6 +75,7 @@ impl<'a> Scope<'a> {
         ctx: &Context,
         checks: Vec<TipCheck>,
         unlisted: Vec<Unlisted>,
+        defer_platforms: &BTreeMap<String, Vec<Os>>,
     ) -> Result<Required> {
         let (checks, unlisted) = self.select(checks, unlisted);
         let keys: Vec<ResultKey> = checks.iter().map(|check| check.key.clone()).collect();
@@ -77,7 +84,7 @@ impl<'a> Scope<'a> {
         } else {
             ctx.hub.lookup(&keys)?
         };
-        Ok(self.defer(checks, cached, unlisted))
+        Ok(self.defer(checks, cached, unlisted, defer_platforms))
     }
 
     fn select(
@@ -87,7 +94,10 @@ impl<'a> Scope<'a> {
     ) -> (Vec<TipCheck>, Vec<Unlisted>) {
         if let Some(os) = self.only {
             checks.retain(|check| check.key.platform == Some(os));
-            unlisted.retain(|missing| missing.platforms.contains(&os));
+            unlisted.retain_mut(|missing| {
+                missing.platforms.retain(|platform| *platform == os);
+                !missing.platforms.is_empty()
+            });
         }
         (checks, unlisted)
     }
@@ -103,7 +113,13 @@ impl<'a> Scope<'a> {
         checks: Vec<TipCheck>,
         cached: Vec<Option<CachedResult>>,
         mut unlisted: Vec<Unlisted>,
+        defer_platforms: &BTreeMap<String, Vec<Os>>,
     ) -> Required {
+        let defers_family = |os, family: &str| {
+            defer_platforms
+                .get(family)
+                .is_some_and(|platforms| platforms.contains(&os))
+        };
         let mut deferred = Deferrals::new();
         let (checks, cached) = checks
             .into_iter()
@@ -114,9 +130,9 @@ impl<'a> Scope<'a> {
                         .as_ref()
                         .is_some_and(|hit| matches!(hit.outcome, Outcome::Pass | Outcome::Flaky));
                 if let Some(os) = check.key.platform
-                    && self.off.contains(&os)
-                    && !check.runnable
+                    && self.only.is_none()
                     && !passed
+                    && (defers_family(os, &check.family) || self.fleet_deferred.contains(&os))
                 {
                     deferred.entry(os).or_default().push(check.check.clone());
                     return false;
@@ -125,28 +141,74 @@ impl<'a> Scope<'a> {
             })
             .unzip();
         unlisted.retain_mut(|missing| {
-            if missing.reportable || missing.platforms.is_empty() {
+            if self.only.is_some() || missing.platforms.is_empty() {
                 return true;
             }
             missing.platforms.retain(|os| {
-                if self.off.contains(os) {
+                if defers_family(*os, &missing.family) || self.fleet_deferred.contains(os) {
                     deferred.entry(*os).or_default().push(missing.name.clone());
                     return false;
                 }
                 true
             });
+            missing.reportable &= self.local.is_none_or(|os| missing.platforms.contains(&os));
             !missing.platforms.is_empty()
         });
-        for checks in deferred.values_mut() {
-            checks.sort();
-            checks.dedup();
-        }
         Required {
             checks,
             cached,
             unlisted,
             deferred,
         }
+    }
+
+    /// After the local gate passes, shares the native results it left until after promotion.
+    pub fn publish_budget(&self, ctx: &Context, tip: &Commit, after: &[&TipCheck]) -> Result<()> {
+        if let Some(os) = self.local {
+            let after: Vec<_> = after
+                .iter()
+                .filter(|check| check.key.platform == Some(os))
+                .map(|check| check.key.clone())
+                .collect();
+            if !after.is_empty() {
+                ctx.hub.put_tip_budget(&TipBudgetPlan {
+                    commit: tip.clone(),
+                    platform: os,
+                    after,
+                })?;
+            }
+        }
+        Ok(())
+    }
+
+    /// A peer's split excuses only the keys it selected for after promotion.
+    pub fn peer_after(
+        &self,
+        ctx: &Context,
+        tip: &Commit,
+        checks: &[TipCheck],
+        verdicts: &HashMap<ResultKey, TipRun>,
+    ) -> Result<HashSet<ResultKey>> {
+        if self.only.is_some() {
+            return Ok(HashSet::new());
+        }
+        let platforms: BTreeSet<_> = checks
+            .iter()
+            .filter(|check| !check.runnable && check.reuse && !check.is_build())
+            .filter(|check| {
+                verdicts
+                    .get(&check.key)
+                    .is_none_or(|run| run.outcome == Outcome::Incomplete)
+            })
+            .filter_map(|check| check.key.platform)
+            .collect();
+        let mut after = HashSet::new();
+        for os in platforms {
+            if let Some(plan) = ctx.hub.tip_budget(tip, os)? {
+                after.extend(plan.after);
+            }
+        }
+        Ok(after)
     }
 
     pub fn record_deferrals(
@@ -171,9 +233,13 @@ impl<'a> Scope<'a> {
         checks: &[TipCheck],
         verdicts: &HashMap<ResultKey, TipRun>,
         unlisted: &[Unlisted],
-    ) -> Result<()> {
-        let Some((os, _)) = self.catching_up else {
-            return Ok(());
+        deferred_here: bool,
+    ) -> Result<bool> {
+        let Some(os) = self
+            .local
+            .filter(|_| deferred_here || self.catching_up.is_some())
+        else {
+            return Ok(false);
         };
         let passed = checks
             .iter()
@@ -189,8 +255,9 @@ impl<'a> Scope<'a> {
                 .any(|missing| missing.platforms.contains(&os))
         {
             self.advance(ctx, os, tip, None)?;
+            return Ok(true);
         }
-        Ok(())
+        Ok(false)
     }
 
     /// Compare commits by ancestry and retry if another round updated the platform meanwhile.
@@ -223,6 +290,8 @@ impl<'a> Scope<'a> {
             });
             let update = TipCoverageUpdate {
                 platform,
+                checks_deferred: deferring_from.is_some()
+                    && !self.fleet_deferred.contains(&platform),
                 expected,
                 replacement: PlatformVerification {
                     through: tip.clone(),

@@ -49,6 +49,7 @@ pub(super) struct FakeWork {
     pub(super) wake: Condvar,
     /// Each family's `covered_by`.
     pub(super) covered_by: Mutex<BTreeMap<String, String>>,
+    pub(super) defer_platforms: Mutex<BTreeMap<String, Vec<ignite_core::config::Os>>>,
     /// The class each run saw from the thread's current activity.
     pub(super) classes: Mutex<Vec<Option<ignite_core::protocol::Class>>>,
     /// What the round scores its checks by, for the tip budget; `None` runs every check before
@@ -199,6 +200,7 @@ impl TipWork for FakeWork {
             .cloned()
             .collect();
         Ok(TipSet {
+            defer_platforms: self.defer_platforms.lock().unwrap().clone(),
             off: off.iter().filter(|check| matches(check)).cloned().collect(),
             unlisted,
             checks: listed.into_iter().filter(matches).collect(),

@@ -214,3 +214,135 @@ fn a_returning_platform_blames_from_before_the_first_deferral() {
             .is_some()
     );
 }
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn family_and_checks_only_deferrals_promote_before_windows_catches_up() {
+    use ignite_core::fleet::MachineState;
+    use ignite_store::hub::{self, fleet_settings};
+
+    use super::rounds::{connect_machine, running_hub, select};
+
+    for checks_only in [false, true] {
+        let world = World::new();
+        let tip = commit("bbbb000");
+        world.land(&tip);
+        let scenario = if checks_only {
+            "checks-only-deferral"
+        } else {
+            "family-deferral"
+        };
+        let (server, database, mut mac) = running_hub(&world, scenario);
+        mac.config.machine.get_mut("local").unwrap().os = Some(Os::Macos);
+        let windows = connect_machine(world.ctx("m-2"), &server, "windows", Os::Windows);
+        select(&mac, &tip);
+        let mut mac_verifier = world.verifier().with_host("local");
+        let mut win_verifier = world.verifier().with_host("windows");
+        let win = windows_check('b', true);
+        let portable = check("portable", 'c');
+        let mut native_mac = check("macos", 'd');
+        native_mac.key.platform = Some(Os::Macos);
+        if checks_only {
+            let windows_path = database.with_file_name("windows.db");
+            let conn = local::open(&windows_path).unwrap();
+            let mut hub = hub::open(&database).unwrap();
+            fleet_settings::set_machine_state(
+                &mut hub,
+                windows.machine.as_str(),
+                MachineState::ChecksOnly,
+                "operator",
+                Timestamp::EPOCH,
+            )
+            .unwrap();
+            let notice = FleetNotice {
+                version: fleet_settings::settings(&hub).unwrap().version,
+                checks_only_platforms: [Os::Windows].into(),
+                ..FleetNotice::default()
+            };
+            crate::fleet_notice::write(
+                &conn,
+                &FleetNotice {
+                    state: MachineState::ChecksOnly,
+                    ..notice.clone()
+                },
+            )
+            .unwrap();
+            win_verifier = win_verifier.with_memory(conn);
+            native_mac.runnable = false;
+            world.work.set_checks(
+                &tip,
+                vec![win.clone(), portable.clone(), native_mac.clone()],
+            );
+            assert!(matches!(
+                win_verifier.round_at(&windows, &tip, Seq(0)).unwrap(),
+                TipOutcome::Waiting { .. }
+            ));
+            assert_eq!(
+                world.work.runs(),
+                [(
+                    windows.machine.clone(),
+                    tip.clone(),
+                    vec![portable.check.clone()],
+                    false
+                )]
+            );
+            assert_ne!(world.master(), tip);
+            let conn = local::open(&database.with_file_name("macos.db")).unwrap();
+            crate::fleet_notice::write(&conn, &notice).unwrap();
+            mac_verifier = mac_verifier.with_memory(conn);
+        } else {
+            world
+                .work
+                .defer_platforms
+                .lock()
+                .unwrap()
+                .insert("unit".to_owned(), vec![Os::Windows]);
+        }
+
+        // macOS cannot list this Windows-only family at the candidate.
+        native_mac.runnable = true;
+        world.work.set_checks(&tip, vec![portable, native_mac]);
+        let listing = name("unit:listing");
+        world.work.unlisted.lock().unwrap().insert(
+            tip.clone(),
+            vec![Unlisted {
+                name: listing.clone(),
+                family: "unit".to_owned(),
+                message: "waiting for the windows listing of unit".to_owned(),
+                reportable: false,
+                platforms: vec![Os::Windows],
+            }],
+        );
+        assert_eq!(
+            mac_verifier.verify(&mac, &tip).unwrap(),
+            TipOutcome::VerifiedWithDeferrals {
+                checks: [(Os::Windows, vec![listing])].into(),
+            }
+        );
+        assert_eq!(world.master(), tip);
+        assert!(
+            mac.hub.tip_coverage().unwrap().platforms[&Os::Windows]
+                .deferred
+                .is_some()
+        );
+
+        world.work.unlisted.lock().unwrap().clear();
+        world.work.set_checks(&tip, vec![win.clone()]);
+        assert!(win_verifier.due(&windows, &tip));
+        assert_eq!(
+            win_verifier.round_at(&windows, &tip, Seq(0)).unwrap(),
+            TipOutcome::Verified
+        );
+        let windows_coverage = &mac.hub.tip_coverage().unwrap().platforms[&Os::Windows];
+        assert_eq!(windows_coverage.through, tip);
+        assert!(windows_coverage.deferred.is_none());
+        assert_eq!(
+            mac.hub.lookup(&[win.key]).unwrap()[0]
+                .as_ref()
+                .unwrap()
+                .outcome,
+            Outcome::Pass
+        );
+        server.stop();
+    }
+}

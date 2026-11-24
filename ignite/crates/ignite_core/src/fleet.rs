@@ -342,6 +342,9 @@ pub struct FleetNotice {
     #[serde(default, flatten)]
     pub trees: TreeSettings,
     pub off_platforms: BTreeSet<Os>,
+    /// Platforms with a live checks-only machine and no live active machine.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub checks_only_platforms: BTreeSet<Os>,
     pub holds: BTreeMap<String, Vec<Hold>>,
 }
 

@@ -885,5 +885,10 @@
     "label": "Native interface replays run one interior full check on a straight spline or a spline with a single waypoint, cutting redundant full checks on ordinary card flights.",
     "metric": "ignite.gate-instructions",
     "expect": "down"
+  },
+  {
+    "label": "Ignite budgets platform-keyed tip checks and lets deferred platforms verify after master advances.",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

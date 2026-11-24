@@ -26,6 +26,7 @@ pub(super) fn notice(conn: &Connection, machine: &str, now: Timestamp) -> Result
         state_actor: fleet_settings::state_actor(conn, &name)?,
         trees: machine.trees,
         holds: provider_usage::held(conn, &settings, now)?,
+        checks_only_platforms: fleet_settings::checks_only_platforms(conn, &settings, now)?,
         off_platforms: fleet_settings::off_machines(conn, &settings)?
             .into_keys()
             .collect(),

@@ -4,11 +4,13 @@
 use std::collections::BTreeMap;
 
 use ignite_core::config::Os;
+use ignite_core::ids::Commit;
 use ignite_core::protocol::tickets::FeedChange;
-use ignite_core::tipround::{PlatformVerification, TipCoverage, TipCoverageUpdate};
+use ignite_core::time::Timestamp;
+use ignite_core::tipround::{PlatformVerification, TipBudgetPlan, TipCoverage, TipCoverageUpdate};
 use rusqlite::{Connection, TransactionBehavior};
 
-use super::{feed, fleet_settings, meta};
+use super::{feed, fleet_settings, meta, tips};
 use crate::{Result, StoreError};
 
 const KEY: &str = "tip_coverage";
@@ -25,16 +27,19 @@ pub fn get(conn: &Connection) -> Result<TipCoverage> {
     })
 }
 
-pub fn update(conn: &mut Connection, update: &TipCoverageUpdate) -> Result<bool> {
+pub fn update(conn: &mut Connection, update: &TipCoverageUpdate, now: Timestamp) -> Result<bool> {
     let transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let mut platforms = platforms(&transaction)?;
     if platforms.get(&update.platform) != update.expected.as_ref() {
         return Ok(false);
     }
-    if update.replacement.deferred.is_some() {
+    if update.replacement.deferred.is_some() && !update.checks_deferred {
         let settings = fleet_settings::settings(&transaction)?;
         let off = fleet_settings::off_machines(&transaction, &settings)?;
-        if !off.contains_key(&update.platform) {
+        if !off.contains_key(&update.platform)
+            && !fleet_settings::checks_only_platforms(&transaction, &settings, now)?
+                .contains(&update.platform)
+        {
             return Err(StoreError::Rejected(format!(
                 "{} can verify tips again",
                 update.platform
@@ -53,5 +58,32 @@ pub fn update(conn: &mut Connection, update: &TipCoverageUpdate) -> Result<bool>
         },
     )?;
     transaction.commit()?;
+    Ok(true)
+}
+
+/// The budget plan for one platform at this candidate. An older candidate's plan cannot
+/// exempt a check even if its key did not change.
+pub fn budget(conn: &Connection, commit: &Commit, platform: Os) -> Result<Option<TipBudgetPlan>> {
+    let plan: Option<TipBudgetPlan> = meta::get(conn, &format!("tip_budget.{platform}"))?;
+    Ok(plan.filter(|plan| plan.commit == *commit))
+}
+
+/// One slot per platform, so publishing a plan costs no storage once its candidate moves on.
+pub fn put_budget(conn: &mut Connection, plan: &TipBudgetPlan) -> Result<bool> {
+    if plan
+        .after
+        .iter()
+        .any(|key| key.platform != Some(plan.platform))
+    {
+        return Err(StoreError::Invalid(
+            "tip budget contains a key for another platform".to_owned(),
+        ));
+    }
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    if tips::candidate(&tx)?.is_some_and(|candidate| candidate.commit != plan.commit) {
+        return Ok(false);
+    }
+    meta::put(&tx, &format!("tip_budget.{}", plan.platform), plan)?;
+    tx.commit()?;
     Ok(true)
 }

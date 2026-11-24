@@ -6,18 +6,18 @@
 //!   `[tip] seconds` of running checks at the `tip` class's rate are spent. There is no
 //!   threshold, and builds are outside the budget.
 //! - Some checks run before `master` moves whatever the budget: a cached failure being run
-//!   again, a check with an open regression ticket, and a check keyed for this platform. So a
-//!   failure among the checks past the budget, once reported, holds `master` on every later
-//!   round until its fix lands, as a cached failure does.
+//!   again, an always check, a check with an open regression ticket, and a check with no hub
+//!   record. Portable and platform-keyed checks share the budget. A reported failure among
+//!   checks past the budget holds `master` on later rounds until its fix lands.
 //! - When the checks within the budget, the forced ones and every check already answered pass,
 //!   `master` moves. The checks past the budget then run in the same round, in the `tip` class
 //!   on whatever cores are free. A failure among them is reported as a regression, which files
 //!   its ticket; `master` has already moved and stays. A newer `staging` tip ends them at the
 //!   next family or batch, even with batches under way, since the tip loop starts no round
 //!   until this one ends.
-//! - Checks only another platform's machines can run, and families that cannot be listed,
-//!   still hold `master` as before: this machine cannot run them after the move, and the next
-//!   round would find `master` at the tip and run nothing.
+//! - Active peer platforms share which exact result keys fell past their own budgets. Their
+//!   other checks and missing listings still hold `master`. Unrun native checks past the budget
+//!   leave a coverage gap so their platform can catch up after promotion.
 //! - When nothing can be scored (the hub or git cannot be read), every check runs before
 //!   `master` moves, as before the budget.
 //! - With `repository.green` set, the checks of families declared `builds = true` (the build
@@ -106,6 +106,7 @@ impl TipVerifier {
         ctx: &Context,
         last: &Commit,
         tip: &Commit,
+        scope: &super::coverage::Scope<'_>,
         checks: &[TipCheck],
         split: &Split<'_>,
         verdicts: &mut HashMap<ResultKey, TipRun>,
@@ -148,7 +149,15 @@ impl TipVerifier {
                 continue;
             }
             let output = run.output.clone();
-            if let Err(error) = self.blame(ctx, last, tip, check, output.as_deref(), true) {
+            let prior = scope.last_good_for(check);
+            if let Err(error) = self.blame(
+                ctx,
+                prior.unwrap_or(last),
+                tip,
+                check,
+                output.as_deref(),
+                false,
+            ) {
                 eprintln!(
                     "ignite: regression of {} not reported: {error}",
                     check.check
@@ -183,7 +192,7 @@ pub(super) fn note_unrun(tally: &mut Tally, left: BTreeMap<String, u32>, ended_b
 
 /// The split of `to_run` by `budget`, with `scored` the hub's record of the checks over `areas`.
 /// A check with no record (switched off since it was listed, say) runs before `master` moves.
-/// So does a platform-specific check, whose keyed result other platforms need to promote.
+/// Build, always and open regression checks also run whatever the budget.
 fn split_by<'a>(
     to_run: &[&'a TipCheck],
     recheck: &[&'a TipCheck],
@@ -212,10 +221,8 @@ fn split_by<'a>(
     }
     for check in to_run {
         match record.get(&check.check) {
-            Some(scored) if check.key.platform.is_none() && scored.regression.is_none() => {
-                // Builds are outside the budget, and the always set has no special place here.
+            Some(scored) if !check.is_build() && !scored.always && scored.regression.is_none() => {
                 candidates.push(GateCheck {
-                    always: false,
                     edited: false,
                     cached: false,
                     needs: Vec::new(),
@@ -353,6 +360,60 @@ mod tests {
         assert!((figures.within_billions - 200.0).abs() < 1e-9);
         assert!((figures.forced_billions - 50.0).abs() < 1e-9);
         assert!((figures.after_billions - 100.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn twenty_thousand_platform_checks_share_the_budget_with_portable_checks() {
+        let mut checks: Vec<_> = (0..20_000)
+            .map(|index| {
+                let mut check = tip_check(&format!("native:{index:05}"));
+                check.key.platform = Some(ignite_core::config::Os::Windows);
+                check
+            })
+            .collect();
+        checks.push(tip_check("portable:a"));
+        let mut records: Vec<_> = checks
+            .iter()
+            .map(|check| scored(check.check.as_str(), 1, 1.0))
+            .collect();
+        records[0].regression = Some(TicketId::new("Tabc1").unwrap());
+        records
+            .last_mut()
+            .unwrap()
+            .history
+            .as_mut()
+            .unwrap()
+            .areas
+            .get_mut("kernel")
+            .unwrap()
+            .failures = 9;
+        let recheck = &checks[1..2];
+        let to_run: Vec<_> = checks
+            .iter()
+            .filter(|check| check.key != recheck[0].key)
+            .collect();
+        let budget = Budget {
+            threshold: 0.0,
+            seconds: 300.0,
+            rate: 1.0,
+        };
+
+        let split = split_by(
+            &to_run,
+            &[&recheck[0]],
+            &["kernel".to_owned()],
+            &records,
+            &budget,
+        );
+        let figures = split.budget.as_ref().unwrap();
+
+        assert_eq!(figures.forced, 2);
+        assert_eq!(figures.within, 300);
+        assert!((figures.within_billions - 300.0).abs() < 1e-9);
+        assert_eq!(figures.after, 19_699);
+        assert_eq!(split.recheck, [&checks[1]]);
+        assert!(split.within.contains(&&checks[0]));
+        assert!(split.within.contains(&checks.last().unwrap()));
     }
 
     #[test]

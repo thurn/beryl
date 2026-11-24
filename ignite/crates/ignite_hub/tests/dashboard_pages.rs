@@ -730,10 +730,11 @@ fn attention_names_the_first_tip_with_deferred_platform_checks() {
     };
     let defer = TipCoverageUpdate {
         platform: Os::Windows,
+        checks_deferred: false,
         expected: None,
         replacement: missing.clone(),
     };
-    assert!(tip_coverage::update(&mut dashboard.conn, &defer).unwrap());
+    assert!(tip_coverage::update(&mut dashboard.conn, &defer, now).unwrap());
     let warning = "windows checks have not run since bbb1234";
     assert!(
         dashboard
@@ -757,12 +758,14 @@ fn attention_names_the_first_tip_with_deferred_platform_checks() {
             &mut dashboard.conn,
             &TipCoverageUpdate {
                 platform: Os::Windows,
+                checks_deferred: false,
                 expected: Some(missing.clone()),
                 replacement: PlatformVerification {
                     through: missing.through,
                     deferred: None
                 },
-            }
+            },
+            now,
         )
         .unwrap()
     );
@@ -775,6 +778,6 @@ fn attention_names_the_first_tip_with_deferred_platform_checks() {
     assert_eq!(changes[0].kind, "attention");
 
     // A deferred round that finished late must leave the successful verification in place.
-    assert!(!tip_coverage::update(&mut dashboard.conn, &defer).unwrap());
+    assert!(!tip_coverage::update(&mut dashboard.conn, &defer, now).unwrap());
     assert!(!dashboard.text("/?fragment=all").contains(unverified));
 }

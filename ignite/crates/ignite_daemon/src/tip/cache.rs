@@ -15,13 +15,13 @@ impl TipVerifier {
     /// Looks up the checks still without a verdict, which other machines may have passed by
     /// now. A failure from another machine that this one can run is left for the next round to
     /// run here.
-    pub(super) fn fill_from_cache(
+    pub(super) fn fill_from_cache<'a>(
         ctx: &Context,
-        checks: &[TipCheck],
+        checks: impl IntoIterator<Item = &'a TipCheck>,
         verdicts: &mut HashMap<ResultKey, TipRun>,
     ) -> Result<()> {
         let missing: Vec<&TipCheck> = checks
-            .iter()
+            .into_iter()
             .filter(|c| c.reuse && !verdicts.contains_key(&c.key))
             .collect();
         if missing.is_empty() {

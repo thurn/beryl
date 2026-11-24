@@ -2,7 +2,7 @@
 //! [`GatePlan`] to the text of `ignite check --plan` (see "Where regression checks run" in
 //! `docs/ignite.md`).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use ignite_core::budget::{Budget, ClassRates, billions_text};
 use ignite_core::config::Gate;
@@ -141,6 +141,18 @@ pub(crate) fn scored_check(
     regression: Option<TicketId>,
 ) -> Option<GateCheck> {
     let record = reply.and_then(|r| r.checks.iter().find(|s| s.check == *check));
+    let median = reply.map_or(UNKNOWN_COST, family_median_cost);
+    scored_record(check, declared, reply, record, median, regression)
+}
+
+fn scored_record(
+    check: &CheckName,
+    declared: &Family,
+    reply: Option<&CheckStatsReply>,
+    record: Option<&CheckStats>,
+    median: Cost,
+    regression: Option<TicketId>,
+) -> Option<GateCheck> {
     if record.is_some_and(|s| s.state == CheckState::Off) {
         return None;
     }
@@ -151,7 +163,7 @@ pub(crate) fn scored_check(
         cached: false,
         history: record.and_then(history),
         family_rate: reply.map_or(0.0, |r| r.family_rate),
-        family_median_cost: reply.map_or(UNKNOWN_COST, family_median_cost),
+        family_median_cost: median,
         family_startup: reply.map_or(NO_STARTUP, family_startup),
         needs: declared.needs.clone(),
         group: None,
@@ -314,13 +326,29 @@ impl super::Checks {
         let catches = product_catches(self, ctx, &tree);
         let stats = scoring_stats(self, families, &areas, &catches);
         let regressions = super::verbs::open_regressions(ctx);
+        let records: HashMap<_, _> = stats
+            .values()
+            .flat_map(|reply| {
+                let median = family_median_cost(reply);
+                reply
+                    .checks
+                    .iter()
+                    .map(move |record| (&record.check, (reply, record, median)))
+            })
+            .collect();
         let scored = checks
             .iter()
             .filter_map(|(check, family)| {
                 let declared = &view.settings.manifest.families.get(family)?.family;
-                let reply = stats.get(family.as_str());
-                let mut scored =
-                    scored_check(check, declared, reply, regressions.get(check).cloned())?;
+                let &(reply, record, median) = records.get(check)?;
+                let mut scored = scored_record(
+                    check,
+                    declared,
+                    Some(reply),
+                    Some(record),
+                    median,
+                    regressions.get(check).cloned(),
+                )?;
                 scored.always = declared.always_for(changed);
                 Some(scored)
             })

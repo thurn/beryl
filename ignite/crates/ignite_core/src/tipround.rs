@@ -31,6 +31,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::Os;
 use crate::ids::{CheckName, Commit, MachineId};
+use crate::protocol::hub::ResultKey;
 use crate::time::Timestamp;
 
 /// The commit that automatic verification rounds share across machines.
@@ -46,6 +47,14 @@ pub struct TipCandidate {
 pub struct TipCandidateUpdate {
     pub expected: Option<TipCandidate>,
     pub replacement: TipCandidate,
+}
+
+/// The exact native result keys one platform's verifier put after the budget at a tip.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TipBudgetPlan {
+    pub commit: Commit,
+    pub platform: Os,
+    pub after: Vec<ResultKey>,
 }
 
 /// The commits that bound a platform's unverified changes.
@@ -96,6 +105,10 @@ impl TipCoverage {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TipCoverageUpdate {
     pub platform: Os,
+    /// The candidate's manifests or its verifier's budget defer individual checks.
+    /// Without this flag the hub verifies that the fleet is still deferring the whole platform.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub checks_deferred: bool,
     pub expected: Option<PlatformVerification>,
     pub replacement: PlatformVerification,
 }

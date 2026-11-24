@@ -32,6 +32,7 @@ pub(super) struct Memory {
     settled: Option<Commit>,
     failed: Option<FailedTip>,
     fleet_version: Option<u64>,
+    master_at_start: Option<Commit>,
     reported: Vec<ResultKey>,
     deferred: Vec<CheckName>,
     waiting_since: Vec<(Os, Timestamp)>,
@@ -125,6 +126,7 @@ impl TipVerifier {
         self.settled = memory.settled;
         self.failed = memory.failed;
         self.fleet_version = memory.fleet_version;
+        self.master_at_start = memory.master_at_start;
         self.reported = set(memory.reported);
         self.deferred = set(memory.deferred);
         self.waiting_since = memory.waiting_since.into_iter().collect::<BTreeMap<_, _>>();
@@ -147,6 +149,7 @@ impl TipVerifier {
             settled: self.settled.clone(),
             failed: self.failed.clone(),
             fleet_version: self.fleet_version,
+            master_at_start: self.master_at_start.clone(),
             reported: listed(self.reported.iter().cloned()),
             deferred: listed(self.deferred.iter().cloned()),
             waiting_since: self.waiting_since.iter().map(|(o, t)| (*o, *t)).collect(),
