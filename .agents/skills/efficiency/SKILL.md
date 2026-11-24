@@ -22,7 +22,9 @@ Rows from before the switch, from the old run log, CPU sampler, token pool,
 lock log and `tk`, stay in the store as history.
 
 The store is `$BERYL_CACHE/efficiency/store.sqlite`
-(`~/Library/Caches/beryl/efficiency/`). It holds only what ran on this machine.
+(by default `~/Library/Caches/beryl/efficiency/` on macOS and
+`%LOCALAPPDATA%\beryl\efficiency\` on Windows). It holds only what ran on
+this machine.
 The design, with every definition, is `docs/efficiency-dashboard.md`; the code
 is `efficiency/` (`efficiency/AGENTS.md`).
 

@@ -34,6 +34,10 @@ proprietary asset or code from the MTG Arena installation:
 
 ## Where MTGA lives on macOS and how it is structured
 
+This skill and its helper scripts read the macOS build only. The Windows build
+is laid out differently (`GameAssembly.dll`, Direct3D shaders), and a Windows
+machine without the Mac client can still film Arena with `arena-video`.
+
 Default Steam installation on macOS:
 
 - App bundle: `~/Library/Application Support/Steam/steamapps/common/MTGA/MTGA.app`

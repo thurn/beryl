@@ -23,7 +23,8 @@ candidate fixes to the reported build and to current staging.
 Read the player's full words, the screenshot and surrounding window, and the
 steps or recorded moment for each report. The ticket points to `report.md` and
 its evidence under `$BERYL_BUGS` (default
-`~/Library/Application Support/ca.thurn.beryl/bugs`). If the local folder is
+`~/Library/Application Support/ca.thurn.beryl/bugs` on macOS,
+`%APPDATA%\ca.thurn.beryl\bugs` on Windows). If the local folder is
 unavailable, `ignite ticket attachment get <id> screenshot.png` downloads the
 attached crop. Use `window.png` for context. A spec report names its card,
 moment, and seat instead. `just client bug <id>` reads a local the client capture and

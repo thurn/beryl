@@ -11,6 +11,11 @@ play, indexed into `~/arena` (`$BERYL_ARENA`), and `just video` makes them
 answer questions like "how does Arena let you attack a planeswalker?" for the
 price of a few images.
 
+On Windows, `~` is `%USERPROFILE%`: the recordings are in
+`%USERPROFILE%\Movies\arena` and the indexes in `%USERPROFILE%\arena`. The
+`~/arena/...` paths below work as written in Git Bash, and `just video` finds
+both folders on either system.
+
 You cannot watch video. You read a text index to find the second something
 happens, then look at stills tiled into one image. Never step through a
 recording frame by frame: find first, then film a few seconds.
@@ -34,7 +39,9 @@ To index one, run `just video index <id>`; `just video index --new` indexes each
 recording not yet indexed, in turn. It takes about four minutes an hour of video
 and all the machine's cores, so index one recording at a time, and never as part
 of a check. It costs no tokens. Indexing again only derives the events again
-unless `--force` is given.
+unless `--force` is given. Indexing reads text with Apple's Vision framework,
+so it runs only on macOS. On Windows, `list`, `find`, `film` and `card` work on
+the indexes already copied into `%USERPROFILE%\arena`.
 
 ## Starting from a card
 
@@ -83,6 +90,10 @@ The kinds of event:
    grep -n -i "planeswalker\|choose attackers" ~/arena/<id>/timeline.txt
    just video find <id> "search your library"
    ```
+
+   In PowerShell, use
+   `Select-String -Pattern "planeswalker","choose attackers" $HOME\arena\<id>\timeline.txt`
+   instead of `grep`.
 
    `find` prints the timeline's matches, then every span during which the text
    was anywhere on screen, which catches what never became an event (a hovered
