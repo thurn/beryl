@@ -479,10 +479,18 @@ def windows(
 
 
 def for_hub(
-    db: sqlite3.Connection, host: str, since: str | None
+    db: sqlite3.Connection, host: str, since: str | None, *, fleet: bool = True
 ) -> list[dict[str, object]]:
-    """Repost windows whose factor can still change as quota samples arrive."""
+    """Repost windows whose factor can still change as quota samples arrive.
+
+    An account's plan percent rises with every machine's usage. Fitted to only this host's
+    dollars, its factor comes out as many times too high as the fleet spends more than this
+    host, so a store without the fleet's requests (`fleet` false) posts no estimate against
+    those plans. The Codex estimate is fitted to this host's requests by design and stays.
+    """
     plans = plan_usage.load_providers(db, host)
+    if not fleet:
+        plans = {name: p for name, p in plans.items() if name == "codex"}
     for subscription in plans.values():
         unsettled = subscription.unsettled_since()
         if since is not None and unsettled is not None:
@@ -490,8 +498,10 @@ def for_hub(
     return windows(db, host, since, plans=plans)
 
 
-# Raised whenever a change here changes the segments of windows already sent.
-FORMAT = 4
+# Raised whenever a change here changes the segments of windows already sent. It was last
+# raised because plan estimates changed: ghost Codex samples were deleted from the Claude
+# plan, and stores without the fleet's requests stopped posting estimates.
+FORMAT = 5
 
 
 def derivation() -> str:

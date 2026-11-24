@@ -13,17 +13,22 @@ the two together.
   its spans: the rise in percent between consecutive samples against the Claude dollars of
   requests in the same span. An all-models window counts every Claude request; a window named
   for a model family (`Weekly · Fable`) counts only requests whose model names that family.
+- A period whose samples are all whole percents, as the Claude app reports them, is fitted
+  only over spans that rise by at least `MINIMUM_ROUNDED_RISE` points. Otherwise the span in
+  which the percent happens to tick up by one is credited with a whole point for the few
+  dollars spent in it, and early in a period that one span sets the factor.
 - The fit is noisy wherever Claude usage happens that the store has no transcript for, such as
-  on a phone or on another machine. `Period.spread` is the factor's standard error, which the
-  summary prints beside it rather than hiding it.
+  on a phone. `Period.spread` is the factor's standard error, which the summary prints beside
+  it rather than hiding it. The percent counts the whole account, so the fit is only right in
+  a store that holds every machine's requests; `spend.for_hub` posts no estimate from any
+  other store.
 - Requests are priced by the factor of the period they fall in. While that period has no
   fitted factor yet (fewer than two samples), the latest earlier period's factor is used and
   the estimate is marked `borrowed`. A request before any period is not priced, and an
   estimate that would include one is unknown rather than too low.
 
-Codex supplies its general weekly quota counter in retained rollouts. Fit those
-samples to one host's requests, spanning at least two percentage points to reduce
-the effect of rounding. Activity outside the host's Beryl logs can add noise.
+Codex supplies its general weekly quota counter, in whole percents, in retained rollouts.
+Fit those samples to one host's requests. Activity outside the host's Beryl logs can add noise.
 """
 
 from __future__ import annotations
@@ -54,7 +59,8 @@ RESET_DROP = 0.5
 # are priced by its factor.
 LOOKBACK_SECONDS = 8 * 86400.0
 CODEX_WEEKLY = "Weekly"
-CODEX_MINIMUM_RISE = 2.0
+# The smallest rise of a span that a window of whole-percent samples is fitted over.
+MINIMUM_ROUNDED_RISE = 2.0
 
 # A request as the estimates read it: its time in epoch seconds, model and dollars.
 Spent = tuple[float, str, float]
@@ -166,6 +172,11 @@ class Spending:
         )
 
 
+def whole(samples: list[Sample]) -> bool:
+    """Whether every sample's percent is a whole number, as when the app rounds it."""
+    return all(float(s.percent).is_integer() for s in samples)
+
+
 def split(samples: list[Sample], *, rounded: bool = False) -> list[list[Sample]]:
     """One window's samples, in time order, as periods."""
     found: list[list[Sample]] = []
@@ -177,8 +188,8 @@ def split(samples: list[Sample], *, rounded: bool = False) -> list[list[Sample]]
                 or sample.resets is None
                 or abs(previous.resets - sample.resets) < SAME_RESET_SECONDS
             )
-            # Concurrent Codex requests can report the previous integer quota tick
-            # after a newer one has arrived.
+            # Concurrent requests can report the previous whole-percent tick after a
+            # newer one has arrived.
             if rounded and same_reset and 0 < previous.percent - sample.percent <= 1:
                 continue
             if same_reset and sample.percent >= previous.percent - RESET_DROP:
@@ -211,15 +222,15 @@ class Plan:
         unpriced: list[float] | None = None,
     ) -> None:
         missing = sorted(unpriced or [])
-        minimum_rise = CODEX_MINIMUM_RISE if rounded_percent else 0.0
         self.spending = Spending(requests, [family_of(w) for w in samples] + [None])
         self.periods: dict[str, list[Period]] = {}
         for window, found in samples.items():
             family = family_of(window)
+            rounded = rounded_percent or whole(found)
             periods: list[Period] = []
-            for group in split(
-                sorted(found, key=lambda s: s.at), rounded=rounded_percent
-            ):
+            for group in split(sorted(found, key=lambda s: s.at), rounded=rounded):
+                whole_group = rounded_percent or whole(group)
+                minimum_rise = MINIMUM_ROUNDED_RISE if whole_group else 0.0
                 rises = [
                     (self.spending.between(a.at, b.at, family), b.percent - a.percent)
                     for a, b in sample_pairs(group, minimum_rise)

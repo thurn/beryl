@@ -233,3 +233,63 @@ def test_plan_usage_keeps_providers_separate(tmp_path: Path) -> None:
     claude_plan = plan.load(db, "claude")
     assert len(claude_plan.periods[WEEKLY]) == 1
     assert claude_plan.periods[WEEKLY][0].samples == 1
+
+
+def test_one_whole_percent_tick_fits_nothing(tmp_path: Path) -> None:
+    """The app reports whole percents. A new period's first tick, from 0% to 1%, lands in
+    whichever span it lands in, so fitting it would credit a whole point to that span's
+    dollars. The period fits nothing until it has risen two points, and its tickets borrow
+    the previous period's factor."""
+    db = fixture(tmp_path)
+    request(db, at(17, 3), 1.0, OPUS, "by-c")
+    sample(db, at(17, 4), WEEKLY, 2.0, NEXT_RESETS)
+    db.execute("DELETE FROM plan_usage WHERE window = ? AND at < ?", (FABLE, at(17, 0)))
+    found = plan.load(db)
+    [_, second] = found.periods[WEEKLY]
+    assert second.samples == 2 and second.factor is None
+    c = found.estimate(WEEKLY, plan.ticket_requests(db, ["by-c"])["by-c"])
+    assert c is not None and c.borrowed
+    assert c.percent == pytest.approx(FACTOR * 1)
+    # Two points over the period's whole spending fit.
+    request(db, at(17, 5), 39.0, OPUS, "by-c")
+    sample(db, at(17, 6), WEEKLY, 3.0, NEXT_RESETS)
+    [_, second] = plan.load(db).periods[WEEKLY]
+    assert second.factor == pytest.approx(2.0 / 40)
+
+
+def test_codex_samples_once_labelled_claude_are_deleted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The migration that added `provider` labelled the Codex quota's samples `claude`, and
+    the hub's replay stored them again under `codex`. Their Codex reset time put a second
+    Claude period beside the real one, and tickets were priced by it."""
+    path = tmp_path / "store.sqlite"
+    with monkeypatch.context() as legacy:
+        legacy.setattr(store, "MIGRATIONS", store.MIGRATIONS[:-1])
+        db = store.open_store(path)
+    ghost = at(16, 12)
+    for provider in ("claude", "codex"):
+        sample(db, ghost, WEEKLY, 60.0, NEXT_RESETS, provider)
+    sample(db, at(16, 13), WEEKLY, 80.0, RESETS)
+    db.commit()
+    db.close()
+    db = store.open_store(path)
+    assert db.execute(
+        "SELECT provider, at FROM plan_usage ORDER BY provider, at"
+    ).fetchall() == [("claude", at(16, 13)), ("codex", ghost)]
+
+
+def test_a_store_without_the_fleets_requests_posts_no_estimate(
+    tmp_path: Path,
+) -> None:
+    """The plan percent counts every machine, so a factor fitted to one machine's dollars
+    is too high by as much as the others spent."""
+    one_ticket(tmp_path)
+    db = ingested(tmp_path)
+    [(dollars,)] = db.execute("SELECT sum(dollars) FROM requests").fetchall()
+    sample(db, "2026-11-15T09:00:00.000Z", WEEKLY, 10.0, RESETS)
+    sample(db, "2026-11-15T11:00:00.000Z", WEEKLY, 10.0 + FACTOR * dollars, RESETS)
+    [fleet] = spend.for_hub(db, HOST, None)
+    assert fleet["plan_percent"] == pytest.approx(FACTOR * dollars, abs=1e-4)
+    [alone] = spend.for_hub(db, HOST, None, fleet=False)
+    assert "plan_percent" not in alone

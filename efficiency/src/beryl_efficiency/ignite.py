@@ -778,6 +778,13 @@ def ticket_sources(cache: Path) -> Sequence[HubTickets]:
     return [MirrorTickets(mirror)] if mirror.is_file() else []
 
 
+def reads_fleet(cache: Path) -> bool:
+    """Whether ingest here reads every machine's requests, as it does at the hub through
+    `Imports`. A plan sample's percent counts the whole account, so `plan.py` can only fit
+    it to dollars in a store that holds them all."""
+    return hub_path(cache).is_file()
+
+
 def sources(cache: Path, local: str) -> Sequence[CursorSource | SnapshotSource]:
     """Read fleet records at the hub and the local daemon's measurements elsewhere."""
     path = hub_path(cache)

@@ -169,7 +169,9 @@ def run_spend(args: argparse.Namespace) -> Result:
     out = Path(args.out) if args.out else paths.folder() / f"spend-{host}.jsonl"
     db = reader()
     try:
-        found = spend.for_hub(db, host, since)
+        found = spend.for_hub(
+            db, host, since, fleet=ignite.reads_fleet(paths.cache_root())
+        )
     finally:
         db.close()
     spend.write(found, out)

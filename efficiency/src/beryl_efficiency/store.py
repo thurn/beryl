@@ -642,6 +642,21 @@ MIGRATIONS: tuple[str, ...] = (
         PRIMARY KEY (host, "commit", started_at)
     );
     """,
+    """
+    -- The migration that added `provider` labelled every earlier sample `claude`, including
+    -- the Codex quota samples the hub had already delivered. Replaying the hub then stored
+    -- those samples again under `codex`, so each one was kept twice. The `claude` copies
+    -- carry Codex's reset time, so the plan fit saw a second Claude weekly period that
+    -- overlapped the real one, and priced Claude tickets by the Codex quota's rate. Delete
+    -- a `claude` sample when another provider has the identical sample.
+    DELETE FROM plan_usage WHERE provider = 'claude' AND EXISTS (
+        SELECT 1 FROM plan_usage AS other
+        WHERE other.provider != 'claude' AND other.machine = plan_usage.machine
+            AND other.at = plan_usage.at AND other.window = plan_usage.window
+            AND other.percent_used = plan_usage.percent_used
+            AND other.resets_at IS plan_usage.resets_at
+    );
+    """,
 )
 
 
