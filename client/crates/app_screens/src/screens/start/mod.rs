@@ -18,8 +18,9 @@ use super::Screen;
 
 pub const SEED: &str = "seed";
 
-/// The default opponent, when the host offers it.
-const DEFAULT_AGENT: &str = "mcts-hidden";
+/// The default opponent, Deep Searcher, when the host offers it. The start screen keeps no
+/// remembered choice, so this applies every time the host sends its agents.
+const DEFAULT_AGENT: &str = "pimc72-hidden-30m-anchor";
 
 pub struct StartScreen;
 
@@ -216,4 +217,30 @@ pub fn in_progress(view: Option<&beryl_protocol::PlayerView>) -> bool {
             Status::Deciding { .. } | Status::Thinking | Status::Playing
         )
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn agent(name: &str) -> AgentView {
+        AgentView {
+            name: name.to_owned(),
+            title: name.to_owned(),
+            description: String::new(),
+        }
+    }
+
+    #[test]
+    fn deep_searcher_is_the_default_opponent() {
+        let agents = [agent("expert"), agent("pimc72-hidden-30m-anchor"), agent("mcts-hidden")];
+        assert_eq!(first_agent(&agents), Some(1));
+    }
+
+    #[test]
+    fn falls_back_to_the_first_agent_without_deep_searcher() {
+        let agents = [agent("expert"), agent("mcts-hidden")];
+        assert_eq!(first_agent(&agents), Some(0));
+        assert_eq!(first_agent(&[]), None);
+    }
 }

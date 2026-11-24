@@ -3,7 +3,7 @@ feature start
 replay
 placeholder-faces
 
-message {"kind":"response","command":"list_agents","value":[{"description":"Cheats as the Seer does, answering in a moment","name":"mcts-omniscient-quick","title":"Quick Seer"},{"description":"Searches many guesses at the cards it cannot see, playing each out greedily","name":"mcts-hidden","title":"Searcher"},{"description":"Plays by a strong player's rules for this deck, and works out combat","name":"expert","title":"Expert"}]}
+message {"kind":"response","command":"list_agents","value":[{"description":"Cheats as the Seer does, answering in a moment","name":"mcts-omniscient-quick","title":"Quick Seer"},{"description":"Searches many guesses at the cards it cannot see, playing each out greedily","name":"mcts-hidden","title":"Searcher"},{"description":"Guesses at the cards it cannot see, thinking seconds a move","name":"pimc72-hidden-30m-anchor","title":"Deep Searcher"},{"description":"Plays by a strong player's rules for this deck, and works out combat","name":"expert","title":"Expert"}]}
 message {"kind":"event","event":"beryl-client-open","payload":"start"}
 message {"kind":"response","command":"table_saved","value":[{"guest":"Alex","host":"Sam","id":"joined"},{"guest":null,"host":"Alex","id":"5f3a9c"}]}
 message {"kind":"response","command":"table_join","value":{"reason":"Both players need the same version of Beryl."}}
