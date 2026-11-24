@@ -708,6 +708,17 @@ adapter = "jsonl"
 platforms = ["macos", "windows"]
 defer_platforms = ["windows"]
 machine_relative = true
+# Only a machine with a calibrated guest runs these checks, and tip verification runs them for
+# every change to the inputs. A worker therefore needs this family only when its ticket edits the
+# frame calibration or the counting tools. Without this list, nearly every engine and client ticket
+# is kept off machines with no count guest.
+dispatch_paths = [
+  "data/client/frame-calibration.json",
+  "tools/src/beryl_tools/calibration.py",
+  "tools/src/beryl_tools/client/counts.py",
+  "tools/src/beryl_tools/client/vm.py",
+  "tools/src/beryl_tools/vm_host.py",
+]
 needs = ["python-env", "client"]
 resources = ["bench-vm"]
 # Listing reads board metadata from the host and probes the guest's tool versions.

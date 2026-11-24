@@ -31,6 +31,18 @@ kind = "regression"
 adapter = "jsonl"
 machine_relative = true
 platforms = ["macos", "windows"]
+# Only a machine with a calibrated count guest runs these checks, and tip verification runs them
+# for every change to the inputs. A worker therefore needs this family only when its ticket edits
+# the benchmarks, the gate's limits or the counting tools. Without this list, every ticket that
+# touches the card store or the engine's manifest is kept off machines with no count guest.
+dispatch_paths = [
+  "engine/crates/beryl_bench/**",
+  "tools/src/beryl_tools/bench.py",
+  "tools/src/beryl_tools/calibration.py",
+  "tools/src/beryl_tools/count_gate.py",
+  "tools/src/beryl_tools/count_trend.py",
+  "tools/src/beryl_tools/vm_host.py",
+]
 needs = ["python-env"]
 # The list reads the gate file and observes the local count guest without building a product.
 list_needs = []
