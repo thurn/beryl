@@ -21,7 +21,6 @@ use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use ignite_core::ids::{Commit, MachineId};
 use ignite_core::protocol::hub::{MachineRegister, MachineRegistered};
@@ -458,6 +457,8 @@ impl Restart for ExecRestart {
 
     #[cfg(windows)]
     fn restart(&self, executable: &Path, args: &[String]) -> io::Result<()> {
+        use std::process::Command;
+
         use ignite_os::proc::Processes;
         let mut command = Command::new(executable);
         Native.detach(&mut command);

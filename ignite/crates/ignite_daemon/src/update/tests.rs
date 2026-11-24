@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 #[cfg(unix)]
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use ignite_core::fakes::FakeGit;
