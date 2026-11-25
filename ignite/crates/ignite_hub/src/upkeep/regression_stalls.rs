@@ -243,9 +243,18 @@ impl Regression {
             .filter(|_| self.status == "in_progress")
         {
             let claimed = self.claimed.unwrap_or(self.ready);
+            // Activity is anything the holder did after the claim. Daemons record `test` and
+            // most `build` runs without a ticket, and `run` leaves no record at all, so a
+            // record of the holder's with no ticket counts, and so does the newest command
+            // its daemon reports on its worker row (when the command started, or ended once
+            // it has ended). Without these a worker that only tests and measures looked idle.
             let last: Option<String> = conn.query_row(
                 "SELECT max(at) FROM (
-                     SELECT at FROM records WHERE ticket = ?1 AND session = ?2 AND at <= ?3
+                     SELECT at FROM records
+                     WHERE (ticket = ?1 OR ticket IS NULL) AND session = ?2 AND at <= ?3
+                     UNION ALL
+                     SELECT command_since FROM workers
+                     WHERE ticket = ?1 AND session = ?2 AND command_since <= ?3
                      UNION ALL
                      SELECT at FROM comments WHERE ticket = ?1 AND author = ?2 AND at <= ?3
                      UNION ALL

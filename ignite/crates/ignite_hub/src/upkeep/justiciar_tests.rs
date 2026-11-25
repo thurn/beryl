@@ -512,6 +512,51 @@ fn a_regression_whose_holder_stops_recording_activity_escalates() {
     );
 }
 
+/// A CLI worker's `ignite test` runs reach the hub without a ticket, and its `ignite run`
+/// commands show only on its worker row. Either keeps its regression from looking stalled.
+#[test]
+fn a_holder_that_only_tests_and_runs_commands_is_active() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    let regression = regression(&mut conn, &clock);
+    let holder = claim(&mut conn, &regression, clock.now());
+    clock.advance(MASTER_LAG_SECONDS + 1.0);
+    conn.execute(
+        "INSERT INTO records (ticket, session, at, verb, machine, class, queued_s, wall_s, cpu_s,
+                              peak_mb, outcome, ignite)
+         VALUES (NULL, ?1, ?2, 'test', 'machine', 'agent', 0, 0, 0, 0, 'fail', 'test')",
+        params![holder, clock.now().to_string()],
+    )
+    .unwrap();
+    clock.advance(INACTIVE_SECONDS - 1.0);
+    // The claim is older than the threshold, so only the record without a ticket holds it off.
+    assert_eq!(
+        justiciar::master_lag(&mut conn, clock.now()).unwrap()[0].ticket,
+        regression
+    );
+    conn.execute(
+        "INSERT INTO workers (machine, session, app, role, state, ticket, command, command_since,
+                              command_running)
+         VALUES ('m-1', ?1, 'claude', 'worker', 'working', ?2, 'run --', ?3, 1)",
+        params![holder, regression, clock.now().to_string()],
+    )
+    .unwrap();
+
+    clock.advance(INACTIVE_SECONDS - 1.0);
+    assert_eq!(
+        justiciar::master_lag(&mut conn, clock.now()).unwrap()[0].ticket,
+        regression
+    );
+    clock.advance(1.0);
+    escalate(
+        &mut conn,
+        &clock,
+        &regression,
+        "holder last recorded activity",
+    );
+}
+
 fn finish_tip(conn: &Connection, clock: &FakeClock, commit: &str, check: &str, contains: &[&str]) {
     tips::verified(
         conn,
