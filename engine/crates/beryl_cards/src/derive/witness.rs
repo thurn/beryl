@@ -14,7 +14,7 @@
 //! card with that field changed survives every scenario.
 
 use beryl_card::words::Words;
-use beryl_card::{CostAction, CostPart, Filter, Node, Subtype};
+use beryl_card::{Amount, CostAction, CostPart, CounterKind, Filter, Node, Subtype};
 use beryl_engine::Zone;
 use beryl_engine::card::{
     Ability, AbilityKind, Behavior, CardDef, Castings, Effect, FaceIx, Objects, Players, Rewrite,
@@ -228,6 +228,37 @@ fn copies_as_it_enters(ability: &Ability) -> bool {
         .is_some_and(|replacement| matches!(replacement.rewrite, Rewrite::EnterAsCopy { .. }))
 }
 
+/// An `Amount::Counters` over objects other than the card itself: a creature player 0 controls
+/// with one counter of `kind`, so that a condition on the counters among permanents, such as
+/// "if you control a creature with a +1/+1 counter on it", is true in some starting position.
+/// The starting positions put no counters on any permanent but the card, so without this the
+/// true branch of such a condition is never played.
+fn counter_on_creature(kind: CounterKind) -> &'static Witness {
+    let words = format!("with a {} counter on a creature", kind.name());
+    Box::leak(Box::new(Witness {
+        words: Box::leak(words.into_boxed_str()),
+        mine: Vec::leak(vec![Permanent::new(props::THIEF.card).counters(kind, 1)]),
+        theirs: &[],
+        hand: &[],
+        theirs_graveyard: &[],
+        prelude: &[],
+    }))
+}
+
+/// The kinds of counter `def` counts on permanents other than itself.
+fn counted_kinds(def: &CardDef) -> Vec<CounterKind> {
+    let mut kinds = Vec::new();
+    def.walk(&mut |node| {
+        if let Node::Amount(Amount::Counters(objects, kind)) = node
+            && !matches!(objects, Objects::This)
+            && !kinds.contains(kind)
+        {
+            kinds.push(*kind);
+        }
+    });
+    kinds
+}
+
 /// The witnesses of one instruction's own fields, its children aside.
 fn of(effect: &Effect) -> Vec<&'static Witness> {
     let mut out = Vec::new();
@@ -283,6 +314,9 @@ pub(super) fn witnesses(def: &'static CardDef) -> Vec<&'static Witness> {
     }
     if abilities.clone().any(targets_a_creature_card) {
         found.borrow_mut().push(&CREATURE_CARD_IN_GRAVEYARD);
+    }
+    for kind in counted_kinds(def) {
+        found.borrow_mut().push(counter_on_creature(kind));
     }
     for ability in abilities.filter(|a| resolves(a)) {
         let Behavior::Data(effect) = ability.body() else {
