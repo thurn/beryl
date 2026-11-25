@@ -64,7 +64,6 @@ arrow-player
 arrow-spell
 arrow-stacked
 arrow-target-leaves
-ashen-rider/another-permanent-entering-does-not-trigger-ashen-rider
 asphodel-wanderer/ability-0
 asphodel-wanderer/bounced
 asphodel-wanderer/generated-1-cast-from-hand
@@ -949,7 +948,6 @@ sparas-headquarters/cannot-pay-for-a-black-creature
 sparas-headquarters/cycling-sparas-headquarters
 sparas-headquarters/cycling-sparas-headquarters-ways-0
 sparas-headquarters/enters-tapped
-spellseeker/another-permanent-entering-leaves-the-stack-empty
 sphinx-of-false-conclusions/sphinx-dies-as-a-card-then-as-a-token
 stack-bounce
 stack-copy
