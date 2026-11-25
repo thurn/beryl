@@ -186,7 +186,7 @@ fn hand_over(segment: &mut kit_base::pose::Segment, resting: &Pose, from: Pose) 
     if !near(&segment.from) {
         return false;
     }
-    segment.from = from;
+    segment.start_at(from);
     if !near(&segment.to) {
         return false;
     }

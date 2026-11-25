@@ -496,7 +496,7 @@ pub(crate) fn hand_over(
         if segment.from != resting {
             return false;
         }
-        segment.from = from;
+        segment.start_at(from);
         let holds = segment.to == resting;
         if holds {
             segment.to = from;

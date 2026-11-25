@@ -540,3 +540,61 @@ fn a_drag_that_picks_nothing_up_clicks_nothing_and_a_press_clicks() {
         "{clicked:?}"
     );
 }
+
+/// A hand card dragged out and let go over the battlefield flies to the stack from where it was
+/// let go and never heads back toward its slot in the hand, whether the cast resolves at once
+/// (Trinket Mage in `shape-zone`) or stops on the stack for its payment (Staff of the Storyteller
+/// in `pay-default`). The cast's flight is a spline with a waypoint placed between the hand slot
+/// and the stack, which once stayed there when the flight was moved to start at the release, so
+/// the card dipped toward the hand before rising to the stack. The generic motion check cannot
+/// see this: recordings replay no drag, and the bent path was smooth, with no jump in it, so
+/// this test samples the card's flight frame by frame.
+#[test]
+fn a_card_dragged_out_to_cast_never_heads_back_toward_its_hand_slot() {
+    for (name, card, slot) in [
+        ("shape-zone", CARD, ObjectId(SLOT)),
+        ("pay-default", "Staff of the Storyteller", ObjectId(1)),
+    ] {
+        let mut table = Table::recording(name);
+        // A recording may start by setting the stops, which this test does not answer.
+        table.commands();
+        let rest = crossing(table.card_slot(slot).corners);
+        let start = table.press_point(slot);
+        table.pointer(PointerPhase::Down, start);
+        let mut at = start;
+        for frame in 1..=15 {
+            at = start + DRAG * (frame as f32 / 15.0);
+            table.now += 16 * MILLISECOND;
+            table.pointer(PointerPhase::Move, at);
+        }
+        assert!(table.card_slot(slot).state.has(StateBits::HELD), "{name}");
+        table.pointer(PointerPhase::Up, at);
+        table.frame();
+        let commands = table.commands();
+        let [command] = &commands[..] else {
+            panic!("{name}: the drop sends one click, not {commands:?}");
+        };
+        // `pay-default` recorded no reply to the click. Its next view closes the decision
+        // alone, as a view the session sends ahead of the reply does.
+        if let Ok(answer) = Responses::new(&table.recording).answer(command) {
+            table.client.handle(Input::Reply(answer.reply));
+        }
+        table.play_on();
+        let let_go = at.distance(rest);
+        let mut last = at;
+        for frame in 0..60 {
+            let (_, centre) = table.card(card);
+            assert!(
+                centre.distance(rest) >= let_go - 1.0,
+                "{name}: at frame {frame} {card} is at {centre}, nearer its hand slot at {rest} \
+                 than where it was let go at {at}"
+            );
+            last = centre;
+            table.wait(0.016, 60);
+        }
+        assert!(
+            last.distance(at) > 100.0,
+            "{name}: {card} flew on to the stack"
+        );
+    }
+}

@@ -770,6 +770,8 @@ impl Spline {
     }
 }
 
+mod start;
+
 #[cfg(test)]
 #[path = "spline_tests.rs"]
 mod tests;

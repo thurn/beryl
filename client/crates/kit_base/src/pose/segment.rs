@@ -309,6 +309,17 @@ fn turned_over(from: &Pose, to: &Pose, elapsed: f32, tuning: Flip) -> Pose {
 }
 
 impl Segment {
+    /// Starts it at `from` instead of the pose it was made with, keeping its time, curve and
+    /// end. A spline's interior nodes move with the start (`Spline::moved_start`), so the path
+    /// does not bend back through where the object was meant to start. This is for a card the
+    /// pointer let go somewhere else before the script that moves it began (`hand_over`).
+    pub fn start_at(&mut self, from: Pose) {
+        if let Shape::Spline(spline) = &mut self.shape {
+            spline.moved_start(&self.from, &from, &self.to);
+        }
+        self.from = from;
+    }
+
     /// Changes the start pose so that the pose at `t` is `pose`, keeping the start, duration,
     /// curve, end pose and path. When the window changes shape during a flight, the segment under
     /// way takes the new end pose and this keeps the card where it is at that instant, so it
