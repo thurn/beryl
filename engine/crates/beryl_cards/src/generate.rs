@@ -9,6 +9,7 @@
 //! action, so each script replays as written, and the dump adds the final snapshot (§17.2)
 //! for the oracles to compare. A seed whose script the runner refuses is skipped.
 
+use beryl_card::definition::Shape;
 use beryl_engine::card::{
     AbilityKind, CostAction, Face, ObjectAbility, Subtype, Supertypes, TriggerEvent, Types,
 };
@@ -106,6 +107,11 @@ impl Pools {
         let mut pools = Pools::default();
         for def in CARDS.cards() {
             if OUTSIDE_CUBE.contains(&def.name) {
+                continue;
+            }
+            // The combined back face of a meld pair is never a card that starts on the
+            // battlefield or in a hand (CR 713.1b: it is used only for the melded permanent).
+            if def.shape == Shape::Melded {
                 continue;
             }
             let front = def.front();
