@@ -1,5 +1,5 @@
 //! The result cache, check and record routes: `/results/lookup`, `/results/store`, `/flaky`, `/flaky/batch`,
-//! `/checks/stats`, `/checks/fix-outcomes`, `/tips/claim`, `/tips/verified`, `/landings/lookup`, `/regressions`, `/reverted`,
+//! `/checks/stats`, `/checks/fix-outcomes`, `/tips/claim`, `/tips/verified`, `/landings/lookup`, `/regressions`, `/regressions/move`, `/reverted`,
 //! `/records`, `/metrics/import`, and the reports that file tickets: `/incomplete`, `/audits`,
 //! `/finds` and `/tips/waiting`. `/tips/failures` records and reads failures observed at
 //! the selected candidate while its required checks are still running. The landing regression
@@ -25,8 +25,9 @@ use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     AuditReport, ExplorationFind, FlakyReport, IncompleteReport, JusticiarCleared, JusticiarReport,
     LandingsReply, LandingsRequest, LookupReply, LookupRequest, MetricsImport, NewResult,
-    OpenRegression, OpenRegressions, RecordBatch, ReportFiled, RevertFiled, Reverted, StoreRequest,
-    TipCheckFailures, TipClaim, TipVerified, TipWaiting, TipWaitingFiled,
+    OpenRegression, OpenRegressions, RecordBatch, RegressionMove, RegressionMoved, ReportFiled,
+    RevertFiled, Reverted, StoreRequest, TipCheckFailures, TipClaim, TipVerified, TipWaiting,
+    TipWaitingFiled,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
@@ -63,6 +64,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/regressions"
         | "/regressions/landing"
         | "/regressions/attribution"
+        | "/regressions/move"
         | "/reverted"
         | "/records"
         | "/metrics/import"
@@ -171,9 +173,8 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
             Ok(Response::json(200, &json!(LandingsReply { commits })))
         }
         "/tips/waiting" => tip_waiting(conn, request, &body(request)?, now),
-        "/regressions" | "/regressions/landing" | "/regressions/attribution" => {
-            regression(conn, request, now)
-        }
+        // `/regressions/open` is answered above; `handle` admits only the other known paths.
+        path if path.starts_with("/regressions") => regression(conn, request, now),
         "/reverted" => reverted(conn, request, &body(request)?, now),
         "/records" => {
             let batch: RecordBatch = body(request)?;
@@ -492,7 +493,8 @@ fn open_regressions(conn: &Connection) -> Result<Response, Response> {
     Ok(Response::json(200, &json!(OpenRegressions { regressions })))
 }
 
-/// Records regressions and attaches later attribution to the original open ticket.
+/// Records regressions, attaches later attribution to the original open ticket, and moves a
+/// check's regression onto another ticket (see `upkeep::regressions::moving`).
 fn regression(
     conn: &mut Connection,
     request: &Request,
@@ -516,6 +518,17 @@ fn regression(
             let (ticket, _) =
                 regressions::file(conn, author, &body(request)?, now).map_err(report_error)?;
             filed_reply(&ticket)
+        }
+        (_, "/regressions/move") => {
+            let asked: RegressionMove = body(request)?;
+            let moved = regressions::move_check(conn, author, &asked.check, &asked.ticket, now)
+                .map_err(report_error)?;
+            let reply = RegressionMoved {
+                check: asked.check,
+                from: moved.from,
+                to: moved.to,
+            };
+            Ok(Response::json(200, &json!(reply)))
         }
         (_, "/regressions/landing") => {
             let ticket = regressions::landing::file(conn, author, &body(request)?, now)

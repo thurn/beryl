@@ -9,6 +9,7 @@ pub mod attach;
 mod build;
 pub mod http;
 pub(crate) mod ids;
+mod regression;
 mod related;
 mod render;
 mod wait;
@@ -18,7 +19,7 @@ use std::io::Write;
 use ignite_core::protocol::client::{Exit, Reply};
 use serde_json::{Value, json};
 
-use crate::args::{DepCommand, TicketCommand};
+use crate::args::{DepCommand, RegressionCommand, TicketCommand};
 use crate::client::session_from_env;
 pub(crate) use http::{Failure, Hub};
 use http::{Result, usage};
@@ -160,11 +161,17 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
             "claimed",
             build::single(json!({"op": "claim", "id": id})),
         ),
-        TicketCommand::Close { id, reason } => write(
-            hub,
-            "closed",
-            build::single(json!({"op": "close", "id": id, "reason": reason})),
-        ),
+        TicketCommand::Close { id, reason } => {
+            // Read before the close: the hub lists only the checks of tickets still open.
+            let unfixed = regression::unfixed(hub);
+            let mut closed = write(
+                hub,
+                "closed",
+                build::single(json!({"op": "close", "id": id, "reason": reason})),
+            )?;
+            regression::note_on_close(&mut closed, &unfixed);
+            Ok(closed)
+        }
         TicketCommand::Reopen { id } => write(
             hub,
             "reopened",
@@ -176,6 +183,9 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
             build::single(json!({"op": "defer", "id": id, "until": until})),
         ),
         TicketCommand::Dep { command } => dependency(hub, command),
+        TicketCommand::Regression {
+            command: RegressionCommand::Move { check, ticket },
+        } => regression::move_check(hub, check, ticket),
         TicketCommand::Batch { file } => write(hub, "batch applied to", build::batch_file(file)?),
         TicketCommand::Wait {
             id,

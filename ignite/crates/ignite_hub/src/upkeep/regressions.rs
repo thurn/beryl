@@ -14,6 +14,9 @@
 //!   regression ticket is already being worked, and never when [`OPEN_TICKETS`] are open; then
 //!   it is added to the open ticket that needs the same operating system, else the one with the
 //!   fewest checks.
+//! - A worker can move one grouped check onto another ticket with
+//!   `ignite ticket regression move` ([`moving`]), so that its later failures reopen that
+//!   ticket and not this one.
 //! - A check whose regression ticket is still open keeps it. A later report can set its
 //!   confirmed culprit and tell the current worker.
 //! - When the fix has landed and closed the ticket but the check still fails, the ticket is
@@ -47,8 +50,10 @@ use super::filing::{self, Author};
 use crate::routes::dispatch::set_columns;
 
 pub(crate) mod landing;
+mod moving;
 mod resolution;
 mod streaks;
+pub use moving::{Moved, move_check};
 pub use resolution::{passing, settle};
 pub use streaks::file_streaks;
 

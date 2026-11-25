@@ -474,3 +474,52 @@ fn a_rejected_command_reaches_the_hub_only_with_a_token() {
         .unwrap();
     assert_eq!(rows, [("ticket dep frob".to_owned(), "m-1".to_owned())]);
 }
+
+/// Regression ticket ANSGS kept being reopened because the hub had grouped a second check onto
+/// it and no command could move that check to the ticket a worker filed for it.
+#[test]
+fn a_grouped_check_moves_to_another_ticket_and_a_close_names_the_checks_left() {
+    let hub = Fixture::new("regression-move");
+    let id = |reply: Value| reply["results"][0]["id"].as_str().unwrap().to_owned();
+    let source = id(hub.json("create Regression"));
+    let split = id(hub.json("create Rollouts"));
+    let conn = hub::open(&hub.dir.join("hub.sqlite")).unwrap();
+    for check in ["ui:boards", "counts:rollouts"] {
+        conn.execute(
+            "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state, platform,
+                                      culprit_ticket, failure_output)
+             VALUES (?1, ?2, 'bbbb', 'aaaa', 'open', '', NULL, '')",
+            [check, source.as_str()],
+        )
+        .unwrap();
+    }
+
+    let moved = hub.run(&format!("regression move counts:rollouts {split}"));
+    assert_eq!(moved.exit, Exit::Success, "{}", moved.text);
+    assert_eq!(
+        moved.text,
+        format!(
+            "moved counts:rollouts from {source} to {split}; its later failures reopen {split}"
+        )
+    );
+    let unknown = hub.run(&format!("regression move rust:none {split}"));
+    assert_eq!(unknown.exit, Exit::Conflict, "{}", unknown.text);
+
+    let closed = hub.run(&format!("close {source} --reason fixed"));
+    assert_eq!(closed.exit, Exit::Success, "{}", closed.text);
+    assert!(
+        closed.text.contains(&format!(
+            "{source} still holds checks that have not passed since they failed: ui:boards."
+        )),
+        "{}",
+        closed.text
+    );
+    let moved_on = hub.run(&format!("close {split} --reason fixed"));
+    assert!(
+        moved_on.text.contains(&format!(
+            "{split} still holds checks that have not passed since they failed: counts:rollouts."
+        )),
+        "{}",
+        moved_on.text
+    );
+}

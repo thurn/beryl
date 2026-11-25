@@ -283,3 +283,20 @@ pub struct FlakyCheck {
 pub struct FlakyChecksReply {
     pub checks: Vec<FlakyCheck>,
 }
+
+/// `POST /regressions/move`: moves one check's regression onto another ticket. `ticket` is an
+/// ID or alias, which the hub resolves.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegressionMove {
+    pub check: CheckName,
+    pub ticket: String,
+}
+
+/// The reply to [`RegressionMove`]: the ticket the check was on and the one it is on now, which
+/// are equal when it was already there.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegressionMoved {
+    pub check: CheckName,
+    pub from: TicketId,
+    pub to: TicketId,
+}

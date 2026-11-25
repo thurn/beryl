@@ -597,6 +597,11 @@ pub enum TicketCommand {
         #[command(subcommand)]
         command: DepCommand,
     },
+    /// Change which ticket holds a failing check's regression.
+    Regression {
+        #[command(subcommand)]
+        command: RegressionCommand,
+    },
     /// Block until a ticket reaches a status. Exits 5 when the wait runs out.
     Wait {
         id: String,
@@ -659,6 +664,13 @@ pub enum DepCommand {
     List {
         id: String,
     },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum RegressionCommand {
+    /// Move `check` off the regression ticket the hub grouped it on and onto `ticket`, so that
+    /// its later failures reopen `ticket` and not the old one.
+    Move { check: String, ticket: String },
 }
 
 #[derive(Debug, Subcommand)]

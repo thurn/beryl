@@ -3143,6 +3143,16 @@ output (last 40 lines; whole output on jarvis at ...)
   open (`OPEN_TICKETS` in the hub's `upkeep::regressions`); past that, it joins
   the open ticket for the same operating system, else the one with the fewest
   checks.
+- A worker who finds that a grouped check belongs to another ticket moves it
+  with `ignite ticket regression move <check> <ticket>`
+  (`POST /regressions/move`). The target must be open. It gets the `regression`
+  and `check:<family>` labels and counts as given another check, and both
+  tickets get a comment. From then on the check's failures reopen the target,
+  the landing gate lists it as known-failing under the target, and the old
+  ticket settles once its remaining checks pass. Filing a new ticket alone does
+  not move the check: the hub keeps reopening the old ticket.
+  `ignite ticket close` on a regression ticket prints the checks still on it
+  that have not passed.
 - When every check on a regression ticket passes at the newest verified tip, the
   hub closes the ticket immediately if nobody holds it. That tip must have been
   first seen after the ticket was filed, reopened, or last given another check.
