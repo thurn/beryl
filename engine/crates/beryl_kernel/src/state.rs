@@ -131,6 +131,7 @@ pub struct Budgets {
 }
 
 /// Engine bookkeeping that is not game state.
+#[allow(clippy::struct_excessive_bools)] // Each is one independent fact the layers store.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Flags {
     /// A change since `derived` was last computed may have changed a layer result. Set by
@@ -146,6 +147,11 @@ pub struct Flags {
     ///
     /// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
     pub(crate) mana_changed: bool,
+    /// Some permanent was face down (see [CR 708.2]) as the layers last applied: without one,
+    /// [`State::any_face_down`] answers no with no walk of the battlefield.
+    ///
+    /// [CR 708.2]: https://yawgatog.com/resources/magic-rules/#R7082
+    pub(crate) face_down: bool,
 }
 
 /// The whole game, stored as its [`Layout`] says: as [`Small`], copied with one `memcpy`
@@ -259,7 +265,7 @@ pub struct State<L: Layout = Small> {
 
 // Subgame storage occupies no space in Small.
 const _: () = {
-    assert!(size_of::<State<Small>>() == 20_464);
+    assert!(size_of::<State<Small>>() == 20_472);
     assert!(size_of::<<Small as Layout>::Outer>() == 0);
     assert!(size_of::<<Small as Layout>::SubgameTurns>() == 0);
 };

@@ -100,6 +100,7 @@ impl<L: Layout> Rederive<'_, L> {
     /// abilities read that no layer writes ([`Inputs`]), `removed`, whether an effect that
     /// removes abilities applied, for [`State::has_ability`], and `land_types`, whether an
     /// effect that changes a land's land types applied, for [`State::makes_card_mana`].
+    /// It notes whether any permanent is face down, for [`State::any_face_down`].
     /// Control is settled now, so each face-down
     /// permanent's controller sees it from here on (see [CR 708.5]): "At any time, you may look at ...
     /// a face-down permanent you control".
@@ -120,9 +121,11 @@ impl<L: Layout> Rederive<'_, L> {
         s.replacing = replacing;
         s.static_rules = Table::from_fn(|player| rules[player]);
         s.layer_inputs = inputs;
+        let mut face_down = false;
         for i in 0..s.battlefield.len() {
             let slot = s.battlefield.as_slice()[i];
             if s.object(slot).face == FaceIx::DOWN {
+                face_down = true;
                 let controller = s.derived[i].controller;
                 s.knowledge[controller.index()].insert(slot);
                 if let Some(sharer) = s.sharer(controller) {
@@ -132,6 +135,7 @@ impl<L: Layout> Rederive<'_, L> {
         }
         s.flags.abilities_lost = removed;
         s.flags.mana_changed = removed || land_types;
+        s.flags.face_down = face_down;
         s.flags.derived_dirty = false;
     }
 }

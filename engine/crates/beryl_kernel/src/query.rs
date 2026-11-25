@@ -210,6 +210,22 @@ impl<L: Layout> State<L> {
         self.flags.abilities_lost
     }
 
+    /// Whether some permanent is face down (see [CR 708.2]): the flag the layers store as they
+    /// look at each permanent's face. A reader that looks for face-down permanents, such as
+    /// the special action that turns one face up, need not walk the battlefield when it is
+    /// false, as in most games, including those whose cards could manifest one.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, while the layer results are stale.
+    ///
+    /// [CR 708.2]: https://yawgatog.com/resources/magic-rules/#R7082
+    #[inline]
+    pub fn any_face_down(&self) -> bool {
+        debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
+        self.flags.face_down
+    }
+
     /// Whether the object in `slot` has every ability of its face up: [`State::has_ability`]
     /// asked of all of them at once, for a reader whose card table's facts stand for the
     /// whole face, as the mana solver's do.

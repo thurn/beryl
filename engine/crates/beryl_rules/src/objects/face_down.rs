@@ -88,6 +88,9 @@ pub(crate) fn face_up_options<L: Layout>(
     player: Seat,
     out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
+    if !s.any_face_down() {
+        return Ok(());
+    }
     for &slot in s.battlefield() {
         if s.object(slot).face() != FaceIx::DOWN || s.controller(slot) != player {
             continue;

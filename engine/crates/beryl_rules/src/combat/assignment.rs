@@ -241,6 +241,11 @@ pub(crate) fn begin_damage<L: Layout>(
 /// adds up to lethal or changes what other creatures can trample over. Those cases need amounts
 /// when the split changes the outcome. Combats with banding use exact amounts
 /// (see [`exact_damage`]).
+///
+/// Out of line: only a creature blocked by several creatures, or blocking several, asks this,
+/// and inlined it adds to `questions::decision`, which builds every other decision too.
+#[cold]
+#[inline(never)]
 pub(crate) fn division_decision<L: Layout>(
     s: &State<L>,
     t: &GameTable,
