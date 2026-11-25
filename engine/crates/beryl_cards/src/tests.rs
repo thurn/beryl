@@ -4,6 +4,7 @@ use beryl_engine::card::{
     AbilityKind, CostAction, FaceIx, ManaColor, Purpose, Subtype, Supertypes, Types,
 };
 use beryl_engine::rng::SplitMix64;
+use beryl_engine::state::LinkKind;
 
 use beryl_engine::{
     Choice, Decision, DecisionKind, Format, GameTable, Observation, Opt, Outcome, Profile, Replay,
@@ -692,7 +693,8 @@ fn currency_converters_return_is_pointless_until_it_exiles_a_card() {
             let converter = permanent_named(t, s, names::CURRENCY_CONVERTER);
             seen.push((
                 beryl_engine::pointless(s, t, converter, ObjectAbility::own(2)),
-                s.exiled_with(s.object_ref(converter)).count(),
+                s.linked(LinkKind::ExiledWith, s.object_ref(converter))
+                    .count(),
             ));
         }
     })

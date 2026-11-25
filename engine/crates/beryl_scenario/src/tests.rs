@@ -4,6 +4,7 @@ use beryl_engine::card::{
     Ability, CardDef, Castings, Face, FaceIx, ManaColor, ManaCost, ManaSet, ObjectAbility, Subtype,
     Subtypes, Types,
 };
+use beryl_engine::state::LinkKind;
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 
 use crate::prelude::ME;
@@ -202,7 +203,10 @@ fn a_permanent_starts_with_cards_exiled_with_it() {
     run(&CARDS, &S).unwrap();
     let (_, s) = crate::position(&CARDS, &S).unwrap();
     let host = s.battlefield()[0];
-    assert_eq!(s.exiled_with(s.object_ref(host)).count(), 2);
+    assert_eq!(
+        s.linked(LinkKind::ExiledWith, s.object_ref(host)).count(),
+        2
+    );
 }
 
 #[test]

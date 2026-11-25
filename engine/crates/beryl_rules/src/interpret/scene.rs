@@ -9,6 +9,7 @@
 //! Implements: CR 107.1a, CR 107.1b, CR 109.5, CR 608.2h
 
 use beryl_card::{Amount, CastingKind, Condition, Objects, Players, SpecIx, Types, Words};
+use beryl_kernel::memos::LinkKind;
 use beryl_kernel::reference::Current;
 
 use crate::PlayerSet;
@@ -288,14 +289,15 @@ impl<L: Layout> Scene<'_, L> {
             // that object exiled, whether or not it is current, and never to those of a new
             // object in its slot (see CR 400.7).
             Objects::ExiledWithThis => {
-                (self.subject.of.source).map_or(Bitboard::EMPTY, |source| s.exiled_with(source))
+                let link = LinkKind::ExiledWith;
+                (self.subject.of.source).map_or(Bitboard::EMPTY, |source| s.linked(link, source))
             }
             // "That creature": the permanents an ability of the source put onto the
             // battlefield and that are still there, whether or not the source is.
-            Objects::PutOntoBattlefieldWithThis => (self.subject.of.source)
-                .map_or(Bitboard::EMPTY, |source| {
-                    s.put_onto_battlefield_with(source)
-                }),
+            Objects::PutOntoBattlefieldWithThis => {
+                let link = LinkKind::PutOntoBattlefieldWith;
+                (self.subject.of.source).map_or(Bitboard::EMPTY, |source| s.linked(link, source))
+            }
             Objects::Paid(_) => {
                 unreachable!("the card table refuses an effect that names what a cost took")
             }

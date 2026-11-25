@@ -74,21 +74,16 @@ impl Inputs {
     pub fn of(face: &Face) -> Inputs {
         let mut inputs = Inputs::NONE;
         for spec in face.abilities.iter().filter_map(beryl_card::Ability::layer) {
-            if spec
-                .condition
-                .as_ref()
-                .is_some_and(|condition| counts(condition, &|_| true))
-            {
+            let compared = |read: &dyn Fn(&Counted) -> bool| {
+                (spec.condition.as_ref()).is_some_and(|condition| compares(condition, read))
+            };
+            if compared(&|n| matches!(n, Counted::Counters(_))) {
                 inputs = inputs.union(Inputs::COUNTERS);
             }
-            if spec.condition.as_ref().is_some_and(condition_reads_life) {
+            if compared(&|n| matches!(n, Counted::Life(_))) {
                 inputs = inputs.union(Inputs::LIFE);
             }
-            if spec.condition.as_ref().is_some_and(|condition| {
-                compares(condition, &|amount| {
-                    matches!(counted(amount), Some(Counted::Hand))
-                })
-            }) {
+            if compared(&|n| matches!(n, Counted::Hand)) {
                 inputs = inputs.union(Inputs::HAND);
             }
             let graveyards = spec.modifications.iter().any(|m| {
@@ -145,10 +140,12 @@ fn mentions_tapped(filter: Filter) -> bool {
 /// Whether `condition` asks if a permanent is tapped, of the permanent with the ability or
 /// of the permanents it counts.
 fn condition_reads_tapped(condition: &Condition) -> bool {
-    let counts_tapped = |amount: &Amount| matches!(counted(amount), Some(Counted::Permanents(f)) if mentions_tapped(f));
     match condition {
         Condition::Is(_, filter) => mentions_tapped(*filter),
-        Condition::Compare(left, _, right) => counts_tapped(left) || counts_tapped(right),
+        Condition::Compare(..) => compares(
+            condition,
+            &|n| matches!(n, Counted::Permanents(f) if mentions_tapped(*f)),
+        ),
         Condition::Not(condition) => condition_reads_tapped(condition),
         Condition::All(conditions) | Condition::Any(conditions) => {
             conditions.iter().any(condition_reads_tapped)
@@ -165,35 +162,16 @@ fn condition_reads_tapped(condition: &Condition) -> bool {
     }
 }
 
-/// Whether `condition` compares a player's life total.
-fn condition_reads_life(condition: &Condition) -> bool {
-    let life = |amount: &Amount| matches!(counted(amount), Some(Counted::Life(_)));
-    match condition {
-        Condition::Compare(left, _, right) => life(left) || life(right),
-        Condition::Not(condition) => condition_reads_life(condition),
-        Condition::All(conditions) | Condition::Any(conditions) => {
-            conditions.iter().any(condition_reads_life)
-        }
-        Condition::Paid(_)
-        | Condition::Did
-        | Condition::WonFlip
-        | Condition::Is(..)
-        | Condition::EnteredThisTurn(_)
-        | Condition::OnBattlefield(_)
-        | Condition::Cast(_)
-        | Condition::DrewInDrawStep(_)
-        | Condition::MeldPair(_)
-        | Condition::Token(_) => false,
-    }
-}
-
-fn compares(condition: &Condition, mentions: &impl Fn(&Amount) -> bool) -> bool {
+/// Whether `condition` compares an amount, as a static ability's condition reads it
+/// ([`counted`]), that `read` accepts.
+fn compares(condition: &Condition, read: &dyn Fn(&Counted) -> bool) -> bool {
+    let mentions = |amount: &Amount| counted(amount).is_some_and(|n| read(&n));
     match condition {
         Condition::Compare(left, _, right) => mentions(left) || mentions(right),
-        Condition::Not(condition) => compares(condition, mentions),
-        Condition::All(conditions) | Condition::Any(conditions) => conditions
-            .iter()
-            .any(|condition| compares(condition, mentions)),
+        Condition::Not(condition) => compares(condition, read),
+        Condition::All(conditions) | Condition::Any(conditions) => {
+            conditions.iter().any(|condition| compares(condition, read))
+        }
         Condition::Did
         | Condition::Paid(_)
         | Condition::Is(..)
@@ -745,30 +723,10 @@ pub fn holds<L: Layout>(
 /// permanent with the ability, so that a change in it may change whether the ability
 /// applies.
 pub fn reads_counters(condition: &Condition, kind: CounterKind) -> bool {
-    counts(condition, &|k| k == kind)
-}
-
-/// Whether `condition` compares the number of counters of a kind `of` accepts on the
-/// permanent with the ability.
-fn counts(condition: &Condition, of: &dyn Fn(CounterKind) -> bool) -> bool {
-    let compares = |amount: &Amount| matches!(counted(amount), Some(Counted::Counters(k)) if of(k));
-    match condition {
-        Condition::Compare(left, _, right) => compares(left) || compares(right),
-        Condition::Not(condition) => counts(condition, of),
-        Condition::All(conditions) | Condition::Any(conditions) => {
-            conditions.iter().any(|c| counts(c, of))
-        }
-        Condition::Paid(_)
-        | Condition::Did
-        | Condition::WonFlip
-        | Condition::Is(..)
-        | Condition::EnteredThisTurn(_)
-        | Condition::OnBattlefield(_)
-        | Condition::Cast(_)
-        | Condition::DrewInDrawStep(_)
-        | Condition::MeldPair(_)
-        | Condition::Token(_) => false,
-    }
+    compares(
+        condition,
+        &|n| matches!(n, Counted::Counters(k) if *k == kind),
+    )
 }
 
 #[cfg(test)]

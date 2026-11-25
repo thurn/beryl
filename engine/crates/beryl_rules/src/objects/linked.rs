@@ -12,6 +12,7 @@ use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::state::{Memo, ObjectRef, Zone};
+use beryl_kernel::memos::LinkKind;
 
 /// Exiles a card, linked to `source`, the object whose ability exiles it, so that the
 /// source's other abilities can find it among the cards "exiled with" it
@@ -38,17 +39,7 @@ fn exile_and_link<L: Layout>(
 ) -> Result<(), Full> {
     exile::exile(game, objects)?;
     let exiled = objects & game.state.in_zone(Zone::Exile);
-    link(game, exiled, source, Link::ExiledWith)
-}
-
-/// What an object moved by an ability remembers of the ability's source.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Link {
-    /// A card in exile is "exiled with" the source (CR 607.2a).
-    ExiledWith,
-    /// A permanent was put onto the battlefield with the source, as Animate Dead's "enchant
-    /// creature put onto the battlefield with this Aura" reads.
-    PutOntoBattlefieldWith,
+    link(game, exiled, source, LinkKind::ExiledWith)
 }
 
 /// Has each of `moved`, in game order, remember `source` as `link` says, if `source` is still
@@ -59,17 +50,12 @@ pub(crate) fn link<L: Layout>(
     game: &mut Game<'_, L>,
     moved: Bitboard<L::Slot>,
     source: ObjectRef<L>,
-    link: Link,
+    link: LinkKind,
 ) -> Result<(), Full> {
     if game.state.current(source).is_none() {
         return Ok(());
     }
-    let memo = match link {
-        Link::ExiledWith => Memo::exiled_with(source),
-        Link::PutOntoBattlefieldWith => {
-            Memo::PutOntoBattlefieldWith(beryl_kernel::memos::Link::to(source))
-        }
-    };
+    let memo = Memo::linked(link, source);
     for &slot in game.state.in_game_order(game.table, moved)?.iter() {
         game.state.remember(slot, memo)?;
     }

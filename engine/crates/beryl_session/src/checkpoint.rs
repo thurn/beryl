@@ -18,7 +18,7 @@ use beryl_engine::card::{CastingKind, CastingKinds, ExceptIx, FaceIx, Types};
 use beryl_engine::layout::Queue;
 use beryl_engine::query::Copiable;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{CounterKind, Flag, Memo};
+use beryl_engine::state::{CounterKind, Flag, LinkKind, Memo};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{CardIx, GameTable, Layout, Seat, Small, State, Zone, ZoneKey};
 use serde::de::Error as _;
@@ -464,7 +464,7 @@ impl Checkpoint {
                 let slot = from_library(t, s, p, &x.card)?;
                 s.board().place(slot, Zone::Exile).map_err(full)?;
                 if let Some(i) = x.with {
-                    let with = Memo::exiled_with(s.object_ref(permanent(i)?));
+                    let with = Memo::linked(LinkKind::ExiledWith, s.object_ref(permanent(i)?));
                     s.board().remember(slot, with).map_err(full)?;
                 }
                 if let Some(i) = x.until {

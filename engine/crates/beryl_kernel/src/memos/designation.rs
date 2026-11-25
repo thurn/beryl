@@ -9,18 +9,15 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 717.2d]: https://yawgatog.com/resources/magic-rules/#R7172d
     pub fn class_level(&self, slot: L::Slot) -> u8 {
+        let level = |memo| {
+            if let Memo::ClassLevel(n) = memo {
+                Some(n)
+            } else {
+                None
+            }
+        };
         self.memos
-            .of(Kinds::CLASS_LEVEL)
-            .iter()
-            .find_map(|e| {
-                if let Memo::ClassLevel(level) = e.memo
-                    && e.slot == slot
-                {
-                    Some(level)
-                } else {
-                    None
-                }
-            })
+            .find(Kinds::CLASS_LEVEL, slot, level)
             .unwrap_or(1)
     }
 
@@ -49,9 +46,6 @@ impl<L: Layout> State<L> {
 
     /// Whether the object in this slot has the solved designation (see CR 720.3b).
     pub fn is_solved(&self, slot: L::Slot) -> bool {
-        self.memos
-            .of(Kinds::SOLVED)
-            .iter()
-            .any(|e| e.slot == slot && e.memo == Memo::Solved)
+        self.memos.has(Kinds::SOLVED, slot, Memo::Solved)
     }
 }

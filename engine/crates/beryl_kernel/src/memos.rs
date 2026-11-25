@@ -25,7 +25,6 @@ use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::invariants::{At, Violation, check};
 use crate::layout::{Layout, Queue, Small};
-use crate::object::ObjectRef;
 use crate::observation::Observation;
 use crate::player_set::PlayerSet;
 use crate::reference::{CardIn, Exile};
@@ -43,7 +42,7 @@ mod piles;
 mod preparation;
 mod value;
 
-pub use link::Link;
+pub use link::{Link, LinkKind};
 
 /// The memos a [`Small`] game holds at once. One past it stalls the game into
 /// [`crate::Large`], whose store grows.
@@ -99,9 +98,9 @@ pub enum Memo<L: Layout = Small> {
     ///
     /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
     Really(L::Card),
-    /// The permanent was put onto the battlefield by an ability of this Aura, which says so
-    /// of it: Animate Dead's "enchant creature put onto the battlefield with this Aura", and
-    /// its "that creature" once the Aura has left. It names one object, by its slot and
+    /// The permanent was put onto the battlefield by an ability of this object, whose other
+    /// abilities refer to it: an Aura's "enchant creature put onto the battlefield with this
+    /// Aura", and its "that creature" once the Aura has left. It names one object, by its slot and
     /// incarnation ([`Link`]), as [`Memo::ExiledWith`] does: an ability of the Aura still on
     /// the stack after the Aura left finds the permanent, and a new object in the Aura's slot
     /// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) never does.
@@ -300,6 +299,22 @@ impl<L: Layout> Memos<L> {
         done
     }
 
+    /// What `read` makes of the first memo of the object in `slot` it accepts, if a memo of a
+    /// kind in `kinds` is live.
+    #[inline]
+    fn find<T>(&self, kinds: u32, slot: L::Slot, read: impl Fn(Memo<L>) -> Option<T>) -> Option<T> {
+        self.of(kinds)
+            .iter()
+            .filter(|e| e.slot == slot)
+            .find_map(|e| read(e.memo))
+    }
+
+    /// Whether the object in `slot` remembers exactly `memo`, a memo of a kind in `kinds`.
+    #[inline]
+    fn has(&self, kinds: u32, slot: L::Slot, memo: Memo<L>) -> bool {
+        (self.of(kinds).iter()).any(|e| e.slot == slot && e.memo == memo)
+    }
+
     /// The objects that remember exactly `memo`, if a memo of a kind in `kinds` is live.
     #[inline]
     fn remembering(&self, kinds: u32, memo: Memo<L>) -> Bitboard<L::Slot> {
@@ -446,81 +461,34 @@ impl<L: Layout> MemosOf<'_, L> {
     /// with an object that has since left its zone is exiled with nothing on the board.
     #[inline]
     pub fn exiled_with(&self) -> Option<L::Slot> {
-        self.iter().find_map(|memo| match memo {
-            Memo::ExiledWith(link) => {
-                let now = self.state.object_ref(link.slot);
-                link.is(now).then_some(link.slot)
-            }
-            Memo::Paid(_)
-            | Memo::X(_)
-            | Memo::ExiledUntil(_)
-            | Memo::Chosen(_)
-            | Memo::Really(_)
-            | Memo::PutOntoBattlefieldWith(_)
-            | Memo::PhasedOutUnder(_)
-            | Memo::PartOf(_)
-            | Memo::ExiledFromPileOf(_)
-            | Memo::FaceDownUnder(_)
-            | Memo::Morphed
-            | Memo::TurnsUpWhenUsed
-            | Memo::CastFromGraveyard
-            | Memo::Cast
-            | Memo::ClassLevel(_)
-            | Memo::CombatBand(_)
-            | Memo::Solved
-            | Memo::Prepared(_) => None,
+        self.iter().find_map(|memo| {
+            let Memo::ExiledWith(link) = memo else {
+                return None;
+            };
+            link.is(self.state.object_ref(link.slot))
+                .then_some(link.slot)
         })
     }
 
     /// The permanent this card is exiled until the leaving of (see CR 610.3).
     #[inline]
     pub fn exiled_until(&self) -> Option<L::Slot> {
-        self.iter().find_map(|memo| match memo {
-            Memo::ExiledUntil(by) => Some(by),
-            Memo::Paid(_)
-            | Memo::X(_)
-            | Memo::ExiledWith(_)
-            | Memo::Chosen(_)
-            | Memo::Really(_)
-            | Memo::PutOntoBattlefieldWith(_)
-            | Memo::PhasedOutUnder(_)
-            | Memo::PartOf(_)
-            | Memo::ExiledFromPileOf(_)
-            | Memo::FaceDownUnder(_)
-            | Memo::Morphed
-            | Memo::TurnsUpWhenUsed
-            | Memo::CastFromGraveyard
-            | Memo::Cast
-            | Memo::ClassLevel(_)
-            | Memo::CombatBand(_)
-            | Memo::Solved
-            | Memo::Prepared(_) => None,
+        self.iter().find_map(|memo| {
+            let Memo::ExiledUntil(by) = memo else {
+                return None;
+            };
+            Some(by)
         })
     }
 
     /// The value the permanent chose as it entered (see CR 614.12a).
     #[inline]
     pub fn chosen(&self) -> Option<ChosenValue<L>> {
-        self.iter().find_map(|memo| match memo {
-            Memo::Chosen(value) => Some(value),
-            Memo::Paid(_)
-            | Memo::X(_)
-            | Memo::ExiledWith(_)
-            | Memo::ExiledUntil(_)
-            | Memo::Really(_)
-            | Memo::PutOntoBattlefieldWith(_)
-            | Memo::PhasedOutUnder(_)
-            | Memo::PartOf(_)
-            | Memo::ExiledFromPileOf(_)
-            | Memo::FaceDownUnder(_)
-            | Memo::Morphed
-            | Memo::TurnsUpWhenUsed
-            | Memo::CastFromGraveyard
-            | Memo::Cast
-            | Memo::ClassLevel(_)
-            | Memo::CombatBand(_)
-            | Memo::Solved
-            | Memo::Prepared(_) => None,
+        self.iter().find_map(|memo| {
+            let Memo::Chosen(value) = memo else {
+                return None;
+            };
+            Some(value)
         })
     }
 }
@@ -586,10 +554,7 @@ impl<L: Layout> State<L> {
     /// ([`Memo::Cast`]). With no permanent in the game that remembers one, one AND.
     #[inline]
     pub fn was_cast(&self, slot: L::Slot) -> bool {
-        self.memos
-            .of(Kinds::CAST)
-            .iter()
-            .any(|e| e.slot == slot && e.memo == Memo::Cast)
+        self.memos.has(Kinds::CAST, slot, Memo::Cast)
     }
 
     /// The value of X the permanent in `slot` was cast with
@@ -597,14 +562,8 @@ impl<L: Layout> State<L> {
     /// no permanent in the game that remembers one, one AND.
     #[inline]
     pub fn x_of(&self, slot: L::Slot) -> u8 {
-        self.memos
-            .of(Kinds::X)
-            .iter()
-            .find_map(|e| {
-                let Memo::X(x) = e.memo else { return None };
-                (e.slot == slot).then_some(x)
-            })
-            .unwrap_or(0)
+        let x = |memo| if let Memo::X(x) = memo { Some(x) } else { None };
+        self.memos.find(Kinds::X, slot, x).unwrap_or(0)
     }
 
     /// The value the permanent in `slot` chose as it entered
@@ -612,24 +571,28 @@ impl<L: Layout> State<L> {
     /// With no permanent in the game that chose one, one AND.
     #[inline]
     pub fn chosen(&self, slot: L::Slot) -> Option<ChosenValue<L>> {
-        self.memos.of(Kinds::CHOSEN).iter().find_map(|e| {
-            let Memo::Chosen(value) = e.memo else {
-                return None;
-            };
-            (e.slot == slot).then_some(value)
-        })
+        let chosen = |memo| {
+            if let Memo::Chosen(value) = memo {
+                Some(value)
+            } else {
+                None
+            }
+        };
+        self.memos.find(Kinds::CHOSEN, slot, chosen)
     }
 
     /// The card the permanent in `slot` really is while a copy effect gives it the values of
     /// another ([`Memo::Really`]), if one does. With no such permanent in the game, one AND.
     #[inline]
     pub fn really(&self, slot: L::Slot) -> Option<L::Card> {
-        self.memos.of(Kinds::REALLY).iter().find_map(|e| {
-            let Memo::Really(card) = e.memo else {
-                return None;
-            };
-            (e.slot == slot).then_some(card)
-        })
+        let really = |memo| {
+            if let Memo::Really(card) = memo {
+                Some(card)
+            } else {
+                None
+            }
+        };
+        self.memos.find(Kinds::REALLY, slot, really)
     }
 
     /// Whether `player` knows the card the object in `slot` really is
@@ -638,13 +601,15 @@ impl<L: Layout> State<L> {
     /// knows the object ([`State::knows`]). With no such permanent in the game, one AND.
     #[inline]
     pub fn knows_card_really_is(&self, player: Seat, slot: L::Slot) -> bool {
-        let knew = self.memos.of(Kinds::FACE_DOWN_UNDER).iter().find_map(|e| {
-            let Memo::FaceDownUnder(knew) = e.memo else {
-                return None;
-            };
-            (e.slot == slot).then_some(knew)
-        });
-        knew.map_or_else(|| self.knows(player, slot), |knew| knew.contains(player))
+        let knew = |memo| {
+            if let Memo::FaceDownUnder(knew) = memo {
+                Some(knew)
+            } else {
+                None
+            }
+        };
+        (self.memos.find(Kinds::FACE_DOWN_UNDER, slot, knew))
+            .map_or_else(|| self.knows(player, slot), |knew| knew.contains(player))
     }
 
     /// Makes the card the permanent in `slot` really is `card` ([`Memo::Really`]), in a
@@ -657,18 +622,6 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// The cards exiled with the object `source` by an ability linked to another of its
-    /// abilities (see [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
-    /// ability refers only to cards in the exile zone that were put there as a result of an
-    /// instruction to exile them in the first ability." Kept after that object has left its
-    /// zone, and never those of a new object in its slot (see CR 400.7). With no card in the
-    /// game exiled this way, one AND.
-    #[inline]
-    pub fn exiled_with(&self, source: ObjectRef<L>) -> Bitboard<L::Slot> {
-        self.memos
-            .remembering(Kinds::EXILED_WITH, Memo::exiled_with(source))
-    }
-
     /// The cards exiled until the permanent in `source` leaves the battlefield
     /// (see [CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)). With no card in
     /// the game exiled this way, one AND.
@@ -676,18 +629,6 @@ impl<L: Layout> State<L> {
     pub fn exiled_until(&self, source: L::Slot) -> Bitboard<L::Slot> {
         self.memos
             .remembering(Kinds::EXILED_UNTIL, Memo::ExiledUntil(source))
-    }
-
-    /// The permanents put onto the battlefield by an ability of the Aura `source`
-    /// ([`Memo::PutOntoBattlefieldWith`]), whether or not the Aura is still there, and never
-    /// those of a new object in its slot (see CR 400.7). With no permanent in the game that
-    /// remembers one, one AND.
-    #[inline]
-    pub fn put_onto_battlefield_with(&self, source: ObjectRef<L>) -> Bitboard<L::Slot> {
-        self.memos.remembering(
-            Kinds::PUT_WITH,
-            Memo::PutOntoBattlefieldWith(Link::to(source)),
-        )
     }
 
     /// Ends `card`'s memo of what it was exiled until, if it has one: the card
@@ -710,12 +651,14 @@ impl<L: Layout> State<L> {
     /// remembers one, one AND.
     #[inline]
     pub(crate) fn phased_out_under(&self, slot: L::Slot) -> Option<Seat> {
-        self.memos.of(Kinds::PHASED_OUT_UNDER).iter().find_map(|e| {
-            let Memo::PhasedOutUnder(player) = e.memo else {
-                return None;
-            };
-            (e.slot == slot).then_some(player)
-        })
+        let under = |memo| {
+            if let Memo::PhasedOutUnder(p) = memo {
+                Some(p)
+            } else {
+                None
+            }
+        };
+        self.memos.find(Kinds::PHASED_OUT_UNDER, slot, under)
     }
 
     /// Ends the [`Memo::PhasedOutUnder`] of the permanents in `slots` as they phase in.

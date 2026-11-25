@@ -3,6 +3,7 @@
 
 use beryl_engine::card::{CardShape, FaceIx};
 use beryl_engine::rng::SplitMix64;
+use beryl_engine::state::LinkKind;
 use beryl_engine::state::{CounterKind, Memo, Tracker};
 use beryl_engine::table::Capability;
 use beryl_engine::{
@@ -206,7 +207,7 @@ fn arrange<L: Layout>(
             for &name in b.exiled_with {
                 let card = library_slot(&s, t, p, name);
                 s.board().place(card, Zone::Exile).map_err(full)?;
-                let with = Memo::exiled_with(s.object_ref(slot));
+                let with = Memo::linked(LinkKind::ExiledWith, s.object_ref(slot));
                 s.board().remember(card, with).map_err(full)?;
             }
         }

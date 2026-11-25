@@ -14,7 +14,7 @@ pub use crate::effects::{
     Permitted, SETS, Shield, ShieldAt, Subject, read_layer,
 };
 pub use crate::last_known::{DEPARTED_SPELLS, DepartedSpell, LAST_KNOWN, LastKnown};
-pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
+pub use crate::memos::{LinkKind, MEMOS, Memo, Memos, MemosOf};
 pub use crate::object::{
     AbilityMask, Attachment, AttackTarget, CombatRole, Derived, Flag, GrantRef, Object,
     ObjectFlags, ObjectRef, SlotSet,

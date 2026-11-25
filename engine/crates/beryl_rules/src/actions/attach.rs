@@ -3,6 +3,7 @@
 //! Implements: CR 301.5c, CR 303.4d, CR 701.3, CR 702.5a, CR 702.5c, CR 702.16c, CR 702.16d
 
 use beryl_card::{AbilityKind, Objects, TargetKind, TargetSpec};
+use beryl_kernel::memos::LinkKind;
 
 use crate::card::{Subtype, Types};
 use crate::filter::Evaluate;
@@ -113,7 +114,7 @@ fn enchantable<L: Layout>(
     };
     in_zone
         && (!spec.put_with_this
-            || s.put_onto_battlefield_with(s.object_ref(aura))
+            || s.linked(LinkKind::PutOntoBattlefieldWith, s.object_ref(aura))
                 .contains(host))
         && spec
             .filter

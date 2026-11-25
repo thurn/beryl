@@ -6,6 +6,7 @@
 //!
 //! Implements: none. Names the object for the rules' linked abilities to read.
 
+use crate::bitboard::Bitboard;
 use crate::ids::SlotId;
 use crate::layout::Layout;
 use crate::object::ObjectRef;
@@ -86,16 +87,53 @@ impl<L: Layout> std::hash::Hash for Link<L> {
     }
 }
 
-impl<L: Layout> Memo<L> {
-    /// "Exiled with" `source` (see CR 607.2a): the memo of a card that an ability of
-    /// `source` exiled.
+/// How an object an ability moved is linked to the ability's source, for the source's other
+/// abilities to find it by (see CR 607.2a).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LinkKind {
+    /// A card in exile is "exiled with" the source ([`Memo::ExiledWith`]).
+    ExiledWith,
+    /// A permanent was put onto the battlefield with the source
+    /// ([`Memo::PutOntoBattlefieldWith`]).
+    PutOntoBattlefieldWith,
+}
+
+impl LinkKind {
+    /// The bit of the memo's kind.
     #[inline]
-    pub fn exiled_with(source: ObjectRef<L>) -> Self {
-        Memo::ExiledWith(Link::to(source))
+    fn kinds(self) -> u32 {
+        match self {
+            LinkKind::ExiledWith => Kinds::EXILED_WITH,
+            LinkKind::PutOntoBattlefieldWith => Kinds::PUT_WITH,
+        }
+    }
+}
+
+impl<L: Layout> Memo<L> {
+    /// The memo of an object linked to `source` as `kind` says.
+    #[inline]
+    pub fn linked(kind: LinkKind, source: ObjectRef<L>) -> Self {
+        let link = Link::to(source);
+        match kind {
+            LinkKind::ExiledWith => Memo::ExiledWith(link),
+            LinkKind::PutOntoBattlefieldWith => Memo::PutOntoBattlefieldWith(link),
+        }
     }
 }
 
 impl<L: Layout> crate::state::State<L> {
+    /// The objects linked to `source` as `kind` says: the cards exiled with it, or the
+    /// permanents put onto the battlefield with it (see
+    /// [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
+    /// refers only to cards in the exile zone that were put there as a result of an
+    /// instruction to exile them in the first ability." Kept after that object has left its
+    /// zone, and never those of a new object in its slot ([`Link`]). With no object in the
+    /// game linked this way, one AND.
+    #[inline]
+    pub fn linked(&self, kind: LinkKind, source: ObjectRef<L>) -> Bitboard<L::Slot> {
+        (self.memos).remembering(kind.kinds(), Memo::linked(kind, source))
+    }
+
     /// Ends the links to an earlier object in `slot` that would read as links to the new
     /// object arriving there, or to a freed token slot: the zone move calls it. The new object
     /// is not that object (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).

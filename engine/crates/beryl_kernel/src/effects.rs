@@ -530,21 +530,6 @@ impl<L: Layout> Effects<L> {
         self.rules = rules;
         done
     }
-
-    /// The rule changes the entries make for exactly `affected`.
-    #[inline]
-    fn rules_on(&self, affected: Affects<L>) -> Rules {
-        self.of(Kinds::RULE)
-            .iter()
-            .filter(|e| e.affected == affected)
-            .fold(Rules::NONE, |rules, e| {
-                if let Payload::Rule(rule) = e.payload {
-                    rules.with(rule)
-                } else {
-                    rules
-                }
-            })
-    }
 }
 
 impl<L: Layout> ContinuousEffect<L> {
@@ -750,7 +735,16 @@ impl<L: Layout> State<L> {
     /// (see [CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)).
     #[inline]
     pub fn effect_rules_on(&self, object: ObjectRef<L>) -> Rules {
-        self.effects.rules_on(Affects::object(object))
+        let affected = Affects::object(object);
+        (self.effects.of(Kinds::RULE).iter())
+            .filter(|e| e.affected == affected)
+            .fold(Rules::NONE, |rules, e| {
+                if let Payload::Rule(rule) = e.payload {
+                    rules.with(rule)
+                } else {
+                    rules
+                }
+            })
     }
 
     /// Whether the rule change the game numbered `rule` applies to `to` now, a player or a

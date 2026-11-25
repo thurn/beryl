@@ -8,6 +8,7 @@ use beryl_card::effect::build::{
     sequence, that_player, this, you,
 };
 use beryl_card::{Amount, Comparison, CopyException, Effect, ExceptIx};
+use beryl_kernel::memos::LinkKind;
 
 use crate::actions::destroy::destroy;
 use crate::additions::Addition;
@@ -790,8 +791,14 @@ fn an_ability_of_a_token_that_ceased_to_exist_finds_the_cards_exiled_with_it() {
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(token).zone(), Zone::Nowhere);
     assert_eq!(s.object(land).zone(), Zone::Exile);
-    assert_eq!(s.exiled_with(token_ref), Bitboard::single(land));
-    assert!(s.exiled_with(s.object_ref(token)).is_empty());
+    assert_eq!(
+        s.linked(LinkKind::ExiledWith, token_ref),
+        Bitboard::single(land)
+    );
+    assert!(
+        s.linked(LinkKind::ExiledWith, s.object_ref(token))
+            .is_empty()
+    );
     assert_eq!(s.memos(land).exiled_with(), None);
 }
 
@@ -805,11 +812,14 @@ fn a_permanent_put_onto_the_battlefield_with_an_object_is_not_linked_to_a_new_ob
     let source = put(&t, &mut s, &mut x, p, "Test Land");
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
     with_game(&t, &mut s, &mut x, source, |game, resolution| {
-        let link = linked::Link::PutOntoBattlefieldWith;
+        let link = LinkKind::PutOntoBattlefieldWith;
         linked::link(game, Bitboard::single(bear), resolution.source(), link).unwrap();
     });
     let old = s.object_ref(source);
-    assert_eq!(s.put_onto_battlefield_with(old), Bitboard::single(bear));
+    assert_eq!(
+        s.linked(LinkKind::PutOntoBattlefieldWith, old),
+        Bitboard::single(bear)
+    );
 
     // The source leaves and returns as a new object (CR 400.7). An ability of the old object
     // still on the stack finds the bear; the new object did not put it onto the battlefield.
@@ -817,8 +827,14 @@ fn a_permanent_put_onto_the_battlefield_with_an_object_is_not_linked_to_a_new_ob
         event::move_one(&mut s, &t, &mut x.events, source, to, Reason::Effect).unwrap();
     }
     assert_eq!(s.object(source).zone(), Zone::Battlefield);
-    assert_eq!(s.put_onto_battlefield_with(old), Bitboard::single(bear));
-    assert!(s.put_onto_battlefield_with(s.object_ref(source)).is_empty());
+    assert_eq!(
+        s.linked(LinkKind::PutOntoBattlefieldWith, old),
+        Bitboard::single(bear)
+    );
+    assert!(
+        s.linked(LinkKind::PutOntoBattlefieldWith, s.object_ref(source))
+            .is_empty()
+    );
 }
 
 #[test]
@@ -838,7 +854,7 @@ fn an_ability_finds_the_cards_exiled_with_its_source_and_not_those_of_a_new_obje
         },
         ..PendingTrigger::default()
     };
-    let found = |s: &State| s.exiled_with(ability.of.source.expect("the bear"));
+    let found = |s: &State| s.linked(LinkKind::ExiledWith, ability.of.source.expect("the bear"));
     with_game(&t, &mut s, &mut x, bear, |game, resolution| {
         linked::exile_linked(game, land_ref, resolution.source()).unwrap();
     });
@@ -866,7 +882,7 @@ fn an_ability_finds_the_cards_exiled_with_its_source_and_not_those_of_a_new_obje
     .unwrap();
     let new_bear = s.object_ref(bear);
     assert_eq!(found(&s), Bitboard::single(land));
-    assert!(s.exiled_with(new_bear).is_empty());
+    assert!(s.linked(LinkKind::ExiledWith, new_bear).is_empty());
     assert_eq!(s.object(land).zone(), Zone::Exile);
     assert_eq!(s.memos(land).exiled_with(), None);
 
@@ -878,7 +894,10 @@ fn an_ability_finds_the_cards_exiled_with_its_source_and_not_those_of_a_new_obje
         linked::exile_linked(game, coast_ref, resolution.source()).unwrap();
     });
     assert_eq!(found(&s), Bitboard::single(land));
-    assert_eq!(s.exiled_with(new_bear), Bitboard::single(coast));
+    assert_eq!(
+        s.linked(LinkKind::ExiledWith, new_bear),
+        Bitboard::single(coast)
+    );
     assert_eq!(s.memos(coast).exiled_with(), Some(bear));
 }
 
@@ -1649,7 +1668,10 @@ fn a_permanent_with_a_card_exiled_with_it_is_not_interchangeable_with_its_twin()
     with_game(&t, &mut s, &mut x, first, |game, resolution| {
         linked::exile_linked(game, land, resolution.source()).unwrap();
     });
-    assert_eq!(s.exiled_with(s.object_ref(first)).count(), 1);
+    assert_eq!(
+        s.linked(LinkKind::ExiledWith, s.object_ref(first)).count(),
+        1
+    );
     assert_eq!(s.signature(first), s.signature(second));
     assert!(!crate::engine::interchangeable(&s, first, second));
     with_game(&t, &mut s, &mut x, second, |game, resolution| {

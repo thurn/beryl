@@ -13,6 +13,7 @@ mod run;
 mod scene;
 
 use beryl_card::{Amount, Condition, Effect, Objects, Players, Zone};
+use beryl_kernel::memos::LinkKind;
 
 use crate::bodies::Bodies;
 use crate::card::{Ability, Behavior, FaceIx, Flow, ManaColor, ObjectAbility, Stop};
@@ -251,7 +252,9 @@ pub(crate) fn names_nothing<L: Layout>(
 ) -> bool {
     // See CR 607.2a: a linked ability finds only the cards exiled with its own source.
     if objects == Objects::ExiledWithThis {
-        return s.exiled_with(s.object_ref(slot)).is_empty();
+        return s
+            .linked(LinkKind::ExiledWith, s.object_ref(slot))
+            .is_empty();
     }
     let (card, face) = s.definition(slot).record(t);
     let subject = ability_of(s, slot, card, face, TriggeredAbility::default());

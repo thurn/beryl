@@ -86,9 +86,9 @@ fixed in the same session. Newest first.
   creature"; before the move, the Aura's card in the graveyard read as the same
   object. No implemented card reaches either case: Animate Dead's own leave
   trigger carries the creature. The memo now holds a `Link`, the slot and
-  incarnation byte that `Memo::ExiledWith` already used, and
-  `State::put_onto_battlefield_with` takes an `ObjectRef`, so the type stops a
-  caller from asking by slot alone. Guard: the type, and the test
+  incarnation byte that `Memo::ExiledWith` already used, and `State::linked`
+  takes an `ObjectRef`, so the type stops a caller from asking by slot alone.
+  Guard: the type, and the test
   `a_permanent_put_onto_the_battlefield_with_an_object_is_not_linked_to_a_new_object`.
 
 - **An ability lost the cards its source exiled once a new object entered the
@@ -99,10 +99,10 @@ fixed in the same session. Newest first.
   object, so the zone move dropped every link to the slot when a new object
   arrived there, or else the new object would have read the old object's cards
   as its own. The memo now holds a `Link`: the slot and the low byte of the
-  exiling object's incarnation. `State::exiled_with` takes an `ObjectRef`, so
-  the type stops any caller from asking by slot alone. Kernel and rules tests
-  cover an ability whose source left and returned, a token that ceased to exist,
-  and the 256th object in a slot.
+  exiling object's incarnation. `State::linked` takes an `ObjectRef`, so the
+  type stops any caller from asking by slot alone. Kernel and rules tests cover
+  an ability whose source left and returned, a token that ceased to exist, and
+  the 256th object in a slot.
 
 - **The next-stop prediction could skip an extra combat.** The prediction
   excluded a creature with vigilance while it was still attacking in the current

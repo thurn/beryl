@@ -9,17 +9,11 @@ impl<L: Layout> State<L> {
     /// ([`Memo::TurnsUpWhenUsed`]). With nothing in the game that remembers it, one AND.
     #[inline]
     pub fn turns_up_when_used(&self, slot: L::Slot) -> bool {
-        self.memos
-            .of(Kinds::TURNS_UP)
-            .iter()
-            .any(|e| e.slot == slot && e.memo == Memo::TurnsUpWhenUsed)
+        (self.memos).has(Kinds::TURNS_UP, slot, Memo::TurnsUpWhenUsed)
     }
 
     /// Whether the permanent in `slot` entered by resolving a face-down morph spell.
     pub fn morphed(&self, slot: L::Slot) -> bool {
-        self.memos
-            .of(Kinds::MORPHED)
-            .iter()
-            .any(|e| e.slot == slot && e.memo == Memo::Morphed)
+        self.memos.has(Kinds::MORPHED, slot, Memo::Morphed)
     }
 }

@@ -21,11 +21,12 @@ use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
-use crate::objects::linked::{self, Link};
+use crate::objects::linked;
 use crate::replacement::event::{self, Entry, Reason};
 use crate::stack;
 use crate::state::{CounterKind, ObjectRef, Zone};
 use crate::zone::Place;
+use beryl_kernel::memos::LinkKind;
 
 /// Moves an object to a zone, to the top of an ordered one. One that has changed zones since
 /// does not move (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)): "An object
@@ -143,7 +144,7 @@ pub(crate) fn return_instruction<L: Layout>(
 /// or sorcery card stays where it is (CR 400.4a). The outcome is the permanents they are.
 ///
 /// A linked instruction has each permanent remember the ability's source
-/// ([`Link::PutOntoBattlefieldWith`]), while that source is still the object whose ability
+/// ([`LinkKind::PutOntoBattlefieldWith`]), while that source is still the object whose ability
 /// this is: Animate Dead's "enchant creature put onto the battlefield with this Aura" and
 /// "that creature" read it.
 pub(crate) fn put_onto_instruction<L: Layout>(
@@ -167,7 +168,7 @@ pub(crate) fn put_onto_instruction<L: Layout>(
     };
     let outcome = onto_battlefield(run, onto.objects, entry)?;
     if onto.linked {
-        let link = Link::PutOntoBattlefieldWith;
+        let link = LinkKind::PutOntoBattlefieldWith;
         linked::link(run.game(), outcome.objects, source, link)?;
     }
     Ok(outcome)
