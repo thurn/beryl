@@ -85,6 +85,10 @@ TEST_RESULT: re.Pattern[str] = re.compile(r"^test result: (ok|FAILED)\.")
 RUSTFMT_DIFF: re.Pattern[str] = re.compile(
     r"^Diff in (.+?\.rs)(?::(\d+))?(?::| at line (\d+))"
 )
+# rustc E0786 note naming a corrupt metadata file in Cargo's target directory.
+CORRUPT_RMETA: re.Pattern[str] = re.compile(
+    r"corrupt metadata encountered in (.+?\.rmeta)"
+)
 
 
 @dataclass(frozen=True)
@@ -227,6 +231,38 @@ def clippy_build() -> int:
     return subprocess.run(CLIPPY, cwd=paths.ENGINE, check=False).returncode
 
 
+def corrupt_rmeta_files(output: str, clippy_target: Path) -> list[Path]:
+    """`.rmeta` files inside `clippy_target` named by `rustc` E0786 diagnostics."""
+    target_root = clippy_target.resolve()
+    found: list[Path] = []
+    seen: set[Path] = set()
+    for line in output.splitlines():
+        try:
+            message = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(message, dict) or message.get("reason") != "compiler-message":
+            continue
+        body = cast(dict[str, object], message.get("message") or {})
+        code = cast(dict[str, object], body.get("code") or {})
+        if code.get("code") != "E0786":
+            continue
+        for child in cast(list[dict[str, object]], body.get("children") or []):
+            match = CORRUPT_RMETA.search(str(child.get("message") or ""))
+            if not match:
+                continue
+            raw = match.group(1).strip().removeprefix("\\\\?\\")
+            candidate = Path(raw)
+            if not candidate.is_file():
+                continue
+            resolved = candidate.resolve()
+            if resolved in seen or not resolved.is_relative_to(target_root):
+                continue
+            seen.add(resolved)
+            found.append(candidate)
+    return found
+
+
 def clippy_run(
     checks: list[str],
     *,
@@ -245,6 +281,23 @@ def clippy_run(
         errors="replace",
         check=False,
     )
+    if run.returncode != 0:
+        corrupt = corrupt_rmeta_files(run.stdout, workspace / CLIPPY_TARGET)
+        if corrupt:
+            for path in corrupt:
+                path.unlink(missing_ok=True)
+            print(
+                f"{family}: removed {len(corrupt)} corrupt .rmeta file(s); retrying",
+                file=sys.stderr,
+            )
+            run = subprocess.run(
+                [*command, "--message-format=json"],
+                cwd=workspace,
+                stdout=subprocess.PIPE,
+                text=True,
+                errors="replace",
+                check=False,
+            )
     results = clippy_results(
         run.stdout,
         wanted,

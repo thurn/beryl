@@ -199,3 +199,54 @@ def test_clippy_uses_target_rustflags_on_windows() -> None:
         else 'build.rustflags=["--cap-lints=warn"]'
     )
     assert expected in rust.CLIPPY
+
+
+def test_clippy_run_removes_corrupt_rmeta_and_retries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rmeta = tmp_path / "target" / "clippy" / "debug" / "deps" / "libfoo.rmeta"
+    rmeta.parent.mkdir(parents=True)
+    rmeta.write_bytes(b"corrupt")
+    outside = tmp_path / "outside.rmeta"
+    outside.write_bytes(b"keep")
+
+    e0786 = {
+        "level": "error",
+        "code": {"code": "E0786"},
+        "message": "found invalid metadata files for crate `foo`",
+        "children": [
+            {
+                "level": "note",
+                "message": f"corrupt metadata encountered in \\\\?\\{rmeta}",
+            },
+            {"level": "note", "message": f"corrupt metadata encountered in {outside}"},
+        ],
+        "spans": [],
+    }
+    first_output: str = "\n".join(
+        [
+            message("compiler-message", KERNEL, message=e0786),
+            json.dumps({"reason": "build-finished", "success": False}),
+        ]
+    )
+    second_output: str = "\n".join(
+        [message("compiler-artifact", KERNEL), BUILD_FINISHED]
+    )
+    calls = 0
+
+    def fake_run(
+        command: list[str], **_options: object
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return subprocess.CompletedProcess(command, 101, first_output)
+        return subprocess.CompletedProcess(command, 0, second_output)
+
+    monkeypatch.setattr(rust.paths, "REPO", tmp_path)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    results = rust.clippy_run(["clippy:beryl_kernel"], workspace=tmp_path)
+    assert calls == 2
+    assert not rmeta.exists()
+    assert outside.exists()
+    assert results == [ignite.Result("clippy:beryl_kernel", "pass")]
