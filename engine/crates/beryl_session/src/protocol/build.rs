@@ -117,7 +117,7 @@ pub fn player_view<L: Layout>(
     {
         stack.push(stack_item(t, obs, entry));
     }
-    finish_objects(t, obs, &mut objects);
+    objects.sort_by_key(|o| o.slot);
     let status = match moment {
         Moment::Deciding(id, d, resolving) => {
             debug_assert_eq!(d.decider, viewer, "a view shows only its viewer's decision");
@@ -164,18 +164,6 @@ pub fn player_view<L: Layout>(
         undone: false,
         script: None,
         table: None,
-    }
-}
-
-/// Puts `objects` in slot order and marks the viewer's own graveyard cards among them that
-/// they may cast from there, which the table shows in their hand. Whether a card may be cast
-/// that way is public: the graveyard is, and so is the effect that allowed it.
-fn finish_objects<L: Layout>(t: &GameTable, obs: Observation<'_, L>, objects: &mut [ObjectView]) {
-    objects.sort_by_key(|o| o.slot);
-    let castable = beryl_engine::castable_from_graveyard(obs.shown(), t, obs.viewer());
-    for object in objects.iter_mut() {
-        object.castable_from_graveyard = object.zone == super::ZoneName::Graveyard
-            && L::Slot::from_num(object.slot.0).is_some_and(|slot| castable.contains(slot));
     }
 }
 
@@ -483,7 +471,6 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         named_counters: Vec::new(),
         doesnt_untap: false,
         hidden_pick: obs.hidden_picks().contains(slot),
-        castable_from_graveyard: false,
         designations: if on_battlefield {
             designations(t, obs, slot)
         } else {

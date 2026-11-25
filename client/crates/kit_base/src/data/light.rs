@@ -222,7 +222,6 @@ pub struct Own {
     pub moon: OwnIcon,
     pub moon_badge: MoonBadge,
     pub coin: OwnIcon,
-    pub away: AwayHalo,
     pub wedge: Wedge,
     pub crescent: Crescent,
     pub combat_fx: CombatFx,
@@ -310,27 +309,6 @@ pub struct OwnIcon {
     pub size: f32,
     #[serde(deserialize_with = "vector")]
     pub at: Vec2,
-}
-
-/// The halo round a card shown away from the zone it is in, such as a card a hand shows that
-/// its player may cast from another zone (`own.json`'s `away`): two soft halos, an outer violet
-/// one and an inner pale one, each breathing in and out of step with the other so that the
-/// light seems to drift round the card like smoke.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct AwayHalo {
-    /// The outer halo's size over the size of the halo that fits the card exactly.
-    #[serde(deserialize_with = "positive")]
-    pub reach: f32,
-    /// The inner halo's size, as `reach` is.
-    #[serde(deserialize_with = "positive")]
-    pub inner: f32,
-    /// How much each halo grows and shrinks, as a share of its size.
-    #[serde(deserialize_with = "interior")]
-    pub breath: f32,
-    /// How long one breath takes.
-    #[serde(deserialize_with = "positive")]
-    pub period_ms: f32,
 }
 
 /// The dark round badge behind the summoning-sickness moon, as shares of its diameter.

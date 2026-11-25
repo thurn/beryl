@@ -9,15 +9,14 @@ use super::Show;
 
 impl Show {
     /// Remembers a released pose while a play from the player's hand is with the session.
-    /// Returns whether the card was in that hand when the player clicked or dropped it, which
-    /// a card the hand shows from the graveyard counts as.
+    /// Returns whether the card was in that hand when the player clicked or dropped it.
     pub fn begin_hand_play(&mut self, slot: ObjectId) -> bool {
         let in_hand = self.settled()
             && self.shown().is_some_and(|update| {
                 update.view.objects.iter().any(|object| {
                     object.slot == slot
-                        && (object.zone == ZoneName::Hand && object.owner == Side::You
-                            || game_table::table::in_hand_fan(object))
+                        && object.zone == ZoneName::Hand
+                        && object.owner == Side::You
                 })
             });
         if in_hand {

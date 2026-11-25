@@ -116,7 +116,6 @@ impl ObjectView {
             named_counters: Vec::new(),
             doesnt_untap: false,
             hidden_pick: false,
-            castable_from_graveyard: false,
             designations: Vec::new(),
         }
     }

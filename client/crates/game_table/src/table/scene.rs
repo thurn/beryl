@@ -655,9 +655,6 @@ impl Table {
             );
         } else {
             self.fights.forget(slot);
-            if super::place::in_hand_fan(shown) {
-                own::from_graveyard((&look, &self.data.own), (dress.now, band), builder);
-            }
         }
         if let Some(really) = shown.really.as_deref() {
             builder.annotate(at, COPY_NOTE, really);

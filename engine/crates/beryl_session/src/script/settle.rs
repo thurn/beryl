@@ -209,24 +209,6 @@ impl Builder<'_> {
         if now == *next {
             return;
         }
-        // A card of the viewer's graveyard that they may now cast from there, or no longer may,
-        // moves between the graveyard pile and the hand, which shows it: it flies there in a
-        // step of its own, after what changed it, as MTG Arena's cards with flashback rise from
-        // the graveyard into the hand.
-        if now.castable_from_graveyard != next.castable_from_graveyard {
-            self.emit(
-                Act::Fly {
-                    from: ZoneName::Graveyard,
-                    why: Why::Effect,
-                    object: next.clone(),
-                    at: None,
-                    item: None,
-                    origin: None,
-                },
-                None,
-            );
-            return;
-        }
         // What is left shows no motion: the latest step with the object's record carries it,
         // or a step of its own does.
         let step = self

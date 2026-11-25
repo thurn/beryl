@@ -15,7 +15,6 @@ use crate::table::{Capability, GameTable};
 use super::super::costs::{From, option_sets, x_range_start};
 use super::super::graveyard;
 use super::super::start;
-use super::copies;
 
 /// How `player` may cast one card now, apart from its face's own options: for free during a
 /// resolution, under a flashback permission, under another permission or from their hand,
@@ -190,45 +189,4 @@ pub(super) fn cast_sources<L: Layout>(
 fn escaping<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
     s.zone(ZoneKey::Of(player, Zone::Graveyard))
         .filter(|slot| has_escape(s, t, slot))
-}
-
-/// The cards in `player`'s graveyard that they may cast from there, whatever the step and
-/// whether they could pay: each card a permission names, such as flashback an effect granted;
-/// each card with escape; and each card a permanent's unused permission accepts a face of.
-/// The table shows these cards in their player's hand while they may be cast. Only the
-/// player's own permissions count: a card in a graveyard is cast only where a rule or an
-/// effect allows it (see [CR 601.3]): "A player can begin to cast a spell only if a rule or
-/// effect allows that player to cast it". Flashback lets its owner cast the card "from your
-/// graveyard" (see [CR 702.34a]), and escape "functions while the card with escape is in a
-/// player's graveyard" (see [CR 702.138a]).
-///
-/// [CR 601.3]: https://yawgatog.com/resources/magic-rules/#R6013
-/// [CR 702.34a]: https://yawgatog.com/resources/magic-rules/#R70234a
-/// [CR 702.138a]: https://yawgatog.com/resources/magic-rules/#R702138a
-pub fn castable_from_graveyard<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-) -> Bitboard<L::Slot> {
-    let graveyard = s.zone(ZoneKey::Of(player, Zone::Graveyard));
-    let mut cards = Bitboard::EMPTY;
-    for p in s.cast_permissions() {
-        if p.terms.player == player && graveyard.contains(p.card.slot) {
-            cards.insert(p.card.slot);
-        }
-    }
-    if s.reaches_elsewhere() {
-        cards |= escaping(s, t, player);
-    }
-    if t.can(Capability::CastsFromGraveyard) {
-        cards |= graveyard::sources(s, t, player).filter(|slot| {
-            copies::castable_def(s, t, slot, From::Priority).is_some_and(|def| {
-                def.face_ixs().any(|f| {
-                    let face = def.face(f);
-                    face.playable() && graveyard::permitter(s, t, player, face, 0).is_some()
-                })
-            })
-        });
-    }
-    cards
 }

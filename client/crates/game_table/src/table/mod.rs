@@ -49,7 +49,7 @@ pub use place::{
 pub use place::{
     Group, NO_GROUP, PileRules, Zones, Zooms, arrival, blocked, blocking_rows, host_slot,
 };
-pub use place::{in_hand_fan, names_host, prepare_row, row_of, stack_slots, zone_members};
+pub use place::{names_host, prepare_row, row_of, stack_slots, zone_members};
 pub use region_fit::{
     FittedPiles, FittedRegions, FittedRow, FittedRows, RegionFit, RegionPolicy, RowProjection,
     RowZoom, ScreenProjection, TabletopShade,

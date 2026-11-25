@@ -794,24 +794,6 @@
     },
     {
       "kind": "settled",
-      "name": "A card you may cast from your graveyard",
-      "rule": "While you may cast a card from your graveyard (flashback, such as Snapcaster Mage gives, escape, or a permanent that lets you), it lies at the right end of your hand's fan, after the cards really in your hand, ringed in a soft violet halo that breathes slowly, apart from the cyan outline of a card you may play. It flies from the graveyard into the fan in about half a second as it becomes castable, and back onto the graveyard when it no longer is. Cast, it flies from its place in the fan to the stack. The opponent's castable cards stay on their graveyard.",
-      "arena": {
-        "does": "When Past in Flames resolves, the cards in the graveyard that gained flashback leave the graveyard together and fan into the hand within about a quarter of a second, to the right of the cards already there, each wrapped in drifting white and violet smoke over the cyan outline of a card that may be played. One cast leaves the fan for the stack.",
-        "evidence": [
-          {
-            "recording": "tovCPHl-gOM",
-            "time": "9:07.75"
-          },
-          {
-            "recording": "tovCPHl-gOM",
-            "time": "15:02.5"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
       "name": "The hand's fan",
       "rule": "Your hand's cards lie along one circle over the near edge, about 14 card widths across, on the desktop and the phone. A card's turn and how far it sinks follow its distance from the fan's middle, so a crowded hand lies nearly flat and a spread one curves, and no card turns or drops further than its neighbors. the client shows the printed cost on the card face. Inspecting a card reveals its printed cost when a neighbor covers it.",
       "arena": {

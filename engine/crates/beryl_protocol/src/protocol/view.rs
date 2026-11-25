@@ -367,12 +367,6 @@ pub struct ObjectView {
     /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hidden_pick: bool,
-    /// In the viewer's own graveyard: the viewer may cast it from there, under flashback, escape
-    /// or another permission, whatever the step and whether they could pay. The table shows it
-    /// at the end of the viewer's hand, ringed apart from the cards really in it, as MTG Arena
-    /// does. Never set for the opponent's cards.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub castable_from_graveyard: bool,
     /// On the battlefield: the designations it has that no counter or status shows, a
     /// Class's level, a solved Case and a prepared creature, in that order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

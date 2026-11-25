@@ -30,7 +30,7 @@ mod timing;
 
 pub(crate) use adventure::finish_adventure;
 pub use costs::cost_being_cast;
-pub use legal::{castable_from_graveyard, payable_responses, pointless};
+pub use legal::{payable_responses, pointless};
 pub(crate) use legal::{priority_options, refusal};
 pub(crate) use spent::pays as pays_from_spent;
 pub(crate) use stack::{leave_stack, unstack};

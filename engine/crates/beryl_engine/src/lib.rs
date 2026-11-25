@@ -29,10 +29,9 @@ pub use beryl_kernel::invariants::{At, Violation};
 pub use beryl_kernel::{CombatPosition, Placement, StepPosition, StepTarget, TurnPhase};
 pub use beryl_rules::{
     AdvanceUntil, Counts, CustomBody, Game, Resolution, Scratch, apply, apply_decided,
-    castable_from_graveyard, check_references, concede, cost_being_cast, custom_body,
-    flashback_paid, interchangeable, mana_contribution, next, next_in_step, next_within, observe,
-    paused_events, payable_responses, pointless, preferred_damage, rederive, refusal, target_takes,
-    view, wins_instead_of_drawing,
+    check_references, concede, cost_being_cast, custom_body, flashback_paid, interchangeable,
+    mana_contribution, next, next_in_step, next_within, observe, paused_events, payable_responses,
+    pointless, preferred_damage, rederive, refusal, target_takes, view, wins_instead_of_drawing,
 };
 pub use bitboard::Bitboard;
 pub use decision::{

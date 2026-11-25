@@ -20,10 +20,6 @@ mod row;
 use row::battlefield_row;
 pub use row::{RowDecision, Zooms, blocked, blocking_rows, prepared as prepare_row, row_of};
 pub(crate) use row::{RowFits, rezoom, zooms};
-mod castable;
-use castable::graveyard_pile;
-pub use castable::in_hand_fan;
-
 mod under;
 pub use under::{host_slot, names_host};
 
@@ -424,9 +420,6 @@ impl Group {
     /// row, which only `Zones::group_of` can find.
     pub fn of(object: &ObjectView) -> Option<Group> {
         let side = side_of(object);
-        if in_hand_fan(object) {
-            return Some(Group::Hand(side));
-        }
         Some(match object.zone {
             ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile => Group::Pile {
                 side,
@@ -651,13 +644,9 @@ pub(crate) fn members<'a>(zones: &Zones<'a>, group: Group) -> Vec<&'a ObjectView
         Group::Pile {
             side,
             zone: ZoneName::Graveyard,
-        } => graveyard_pile(zones, side).0,
+        } => zones.listed(zones.piles[side_index(side)][1]),
         Group::Pile { side, zone } => zones.in_zone(side, zone),
-        Group::Hand(side) => {
-            let mut hand = zones.in_zone(side, ZoneName::Hand);
-            hand.extend(graveyard_pile(zones, side).1);
-            hand
-        }
+        Group::Hand(side) => zones.in_zone(side, ZoneName::Hand),
         Group::Row { side, row } => {
             let mut cards = zones.in_row(side, row);
             let under = zones.under(&cards);
@@ -672,16 +661,14 @@ pub(crate) fn members<'a>(zones: &Zones<'a>, group: Group) -> Vec<&'a ObjectView
 /// list of `zones` once rather than once for each group.
 pub fn zone_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
     let mut all: Vec<Vec<&'a ObjectView>> = Group::ALL.iter().map(|_| Vec::new()).collect();
-    // The viewer's graveyard cards they may cast from there, which the hand lists after its
-    // own cards once those are in order.
-    let mut castable = Vec::new();
     for side in [Side::You, Side::Opponent] {
-        let [library, graveyard] =
-            [ZoneName::Library, ZoneName::Graveyard].map(|zone| Group::Pile { side, zone }.index());
-        all[library] = zones.listed(zones.piles[side_index(side)][0]);
-        let fan;
-        (all[graveyard], fan) = graveyard_pile(zones, side);
-        castable.extend(fan);
+        let piles = zones.piles[side_index(side)];
+        for (zone, slots) in [ZoneName::Library, ZoneName::Graveyard]
+            .into_iter()
+            .zip(piles)
+        {
+            all[Group::Pile { side, zone }.index()] = zones.listed(slots);
+        }
     }
     // The cards that lie under permanents, each put after the permanents of its row.
     let mut under = Vec::new();
@@ -724,7 +711,6 @@ pub fn zone_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
     {
         zones.in_arrival_order(&mut all[group.index()]);
     }
-    all[Group::Hand(Side::You).index()].extend(castable);
     all[Group::Stack.index()] = zones.listed(&spells(&zones.stack));
     all
 }

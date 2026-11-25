@@ -292,9 +292,7 @@ pub mod profile {
 }
 
 pub use bodies::{CustomBody, custom_body};
-pub use casting::{
-    castable_from_graveyard, cost_being_cast, payable_responses, pointless, target_takes,
-};
+pub use casting::{cost_being_cast, payable_responses, pointless, target_takes};
 pub use combat::preferred_damage;
 pub use continuous::layers::rederive;
 pub use engine::{

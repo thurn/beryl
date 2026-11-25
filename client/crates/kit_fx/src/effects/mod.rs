@@ -2,7 +2,6 @@
 //! The host supplies the definitions. Script playback supplies the anchor and clock.
 
 pub mod card;
-pub mod edge;
 pub mod light;
 pub mod line_vfx;
 pub mod particles;
