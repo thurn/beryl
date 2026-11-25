@@ -337,7 +337,11 @@ fn a_restart_ends_the_command_of_a_dead_verb_and_keeps_the_live_ones() {
     assert_eq!(launcher.end_orphans(&running), 1);
     assert!(dead_ended.load(Ordering::SeqCst));
     assert!(!live_ended.load(Ordering::SeqCst));
-    assert_eq!(scheduler.status().granted, 3, "the dead verb's cores are free");
+    assert_eq!(
+        scheduler.status().granted,
+        3,
+        "the dead verb's cores are free"
+    );
     assert_eq!(launcher.waiting(), 1);
 
     // Sweeping again ends nothing more, and the live verb still takes its command over.
