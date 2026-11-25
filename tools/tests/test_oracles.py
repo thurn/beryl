@@ -218,3 +218,14 @@ def test_a_run_waiting_past_the_lock_wait_cannot_run(
         code = oracles.oracle(oracle_args("Ponder", lock_wait=0.2))
     assert code == deps.CANNOT_RUN
     assert played == []
+
+
+def test_compiled_exports_of_earlier_runs_are_deleted_before_xmage_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
+    stale = oracles.compiled_tests() / "GoneCardBerylTest.class"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"")
+    oracles.clear_compiled_tests()
+    assert not stale.exists()

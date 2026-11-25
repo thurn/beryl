@@ -566,6 +566,21 @@ def xmage_tests() -> Path:
     return checkout(XMAGE) / "Mage.Tests/src/test/java/org/mage/test/beryl"
 
 
+def compiled_tests() -> Path:
+    """Where Maven puts the compiled exported test classes."""
+    return checkout(XMAGE) / "Mage.Tests/target/test-classes/org/mage/test/beryl"
+
+
+def clear_compiled_tests() -> None:
+    """Deletes the compiled exported tests left by earlier runs. `xmage_java.write` replaces the
+    sources, but Maven's incremental compile can keep an older `.class` for a source that was
+    rewritten within its timestamp resolution, and it never removes the class of a source that no
+    longer exists. Surefire runs every `*BerylTest` class it finds, so a stale one is played as
+    if it were the scenario just exported: the oracle check then failed on one machine and
+    passed on another for the same input."""
+    shutil.rmtree(compiled_tests(), ignore_errors=True)
+
+
 def reports() -> Path:
     return checkout(XMAGE) / "Mage.Tests" / "target" / "surefire-reports"
 
@@ -596,6 +611,7 @@ def check_xmage(prepared: oracle_exports.Exports, log: Path) -> dict[str, object
     """
     exports = prepared.xmage
     classes = xmage_java.write(exports, xmage_tests())
+    clear_compiled_tests()
     for old in reports().glob(f"TEST-{xmage_java.PACKAGE}.*.xml"):
         old.unlink()
     if classes:
