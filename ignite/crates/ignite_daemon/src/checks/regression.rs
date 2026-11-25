@@ -58,6 +58,12 @@ impl Checks {
     }
 
     /// Lists a phase using the candidate's manifests, including families this machine cannot run.
+    ///
+    /// A family left out of this machine's `tip_families` is never listed here, so nothing is
+    /// built for it. Outside the build phase its checks are keyed from the listing another
+    /// machine kept at the hub, as for another platform's listing, and none of them is runnable
+    /// here. A slow machine that listed every family built products for families whose checks
+    /// faster machines had already claimed.
     fn regression_in(
         &self,
         ctx: &Context,
@@ -84,6 +90,7 @@ impl Checks {
             .filter(|(name, family)| {
                 listing_platforms(family).is_none_or(|os| os.contains(&self.settings.os))
                     && (!family.machine_relative || self.families().any(|(own, _)| own == *name))
+                    && self.verifies_in_tip_rounds(name)
             })
             .collect();
         let mut set = TipSet {
@@ -119,10 +126,10 @@ impl Checks {
                 .iter()
                 .copied()
                 .filter(|(name, family)| {
+                    // On this machine's own platform, a family not listed here is one it does not
+                    // run (machine-relative) or does not verify in tip rounds.
                     listing_platforms(family).is_some_and(|list| list.contains(&os))
-                        && (os != self.settings.os
-                            || (family.machine_relative
-                                && !local.iter().any(|(own, _)| own == name)))
+                        && (os != self.settings.os || !local.iter().any(|(own, _)| own == name))
                 })
                 .collect();
             if !remote.is_empty() {
@@ -133,7 +140,26 @@ impl Checks {
                 reader.add_regression_checks(&remote, prepared, None, &mut set);
             }
         }
+        let kept_only: Vec<_> = among
+            .iter()
+            .copied()
+            .filter(|(name, family)| {
+                listing_platforms(family).is_none() && !self.verifies_in_tip_rounds(name)
+            })
+            .collect();
+        if !kept_only.is_empty() {
+            let prepared = self.foreign_checks(ctx, tree, &kept_only);
+            self.add_regression_checks(&kept_only, prepared, None, &mut set);
+        }
         set
+    }
+
+    /// Whether this machine's `tip_families`, when it has the list, names `family`.
+    fn verifies_in_tip_rounds(&self, family: &str) -> bool {
+        self.settings
+            .tip_families
+            .as_ref()
+            .is_none_or(|list| list.iter().any(|f| f == family))
     }
 
     /// Restores listings that other platforms need if the hub missed them or evicted them.

@@ -274,6 +274,7 @@ pub fn checking_with(
             manifest: base.manifest.clone(),
             os: base.os,
             families: base.families(),
+            tip_families: base.declared.tip_families.clone(),
             hostname: base.options.hostname.clone(),
             toolchain: toolchain(&base.options.repo),
             outputs: base.home("outputs"),

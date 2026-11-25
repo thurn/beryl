@@ -4363,6 +4363,13 @@ full list is in `ignite.toml`). A machine with no such list can run every family
 supported on its operating system. A machine with no configuration table uses
 its native operating system and the same default family selection.
 
+`tip_families`, when a machine has it, narrows what the machine does in tip
+rounds to the families it names; the landing gate still runs every family in
+`families`. A family left out is never listed or built there in a tip round: its
+checks are keyed from the listing another machine kept at the hub, and other
+machines' results pass it. Cygnus names only the families that must pass on
+Windows, so that its rounds leave the portable families to the faster Macs.
+
 What is shared, and what is not:
 
 - **Tickets, the result cache and records are shared** through the hub.

@@ -445,6 +445,15 @@ pub struct Machine {
     pub os: Option<Os>,
     /// The check families the machine can run; `None` means every family.
     pub families: Option<Vec<String>>,
+    /// The families among `families` that the machine lists, builds and runs in tip rounds;
+    /// `None` means every family in `families`. The landing gate ignores this list and runs
+    /// every family in `families`.
+    ///
+    /// A slow machine whose results are needed only for the families that must pass on its
+    /// platform names those here. A family left out is one this machine never lists or builds
+    /// in a tip round: the round keys its checks from the listing another machine kept at the
+    /// hub and waits for another machine's results, as for a family the machine does not run.
+    pub tip_families: Option<Vec<String>>,
     /// Scarce resources by name, with each one's capacity.
     pub resources: BTreeMap<String, u32>,
 }
@@ -518,17 +527,20 @@ impl Config {
         })
     }
 
-    /// Whether some declared machine can run `family`'s checks: one whose `families` list, when
-    /// it has one, names the family, and which runs `os` when `os` is given. A machine whose
-    /// operating system is not declared counts only when `os` is `None`.
+    /// Whether some declared machine can verify `family`'s checks in tip rounds: one whose
+    /// `families` list and `tip_families` list, where it has them, both name the family, and
+    /// which runs `os` when `os` is given. A machine whose operating system is not declared
+    /// counts only when `os` is `None`.
     pub fn runs_family(&self, os: Option<Os>, family: &str) -> bool {
+        let names = |list: &Option<Vec<String>>| {
+            list.as_ref()
+                .is_none_or(|list| list.iter().any(|f| f == family))
+        };
         self.machine.is_empty()
             || self.machine.values().any(|machine| {
                 os.is_none_or(|os| machine.os == Some(os))
-                    && machine
-                        .families
-                        .as_ref()
-                        .is_none_or(|list| list.iter().any(|f| f == family))
+                    && names(&machine.families)
+                    && names(&machine.tip_families)
             })
     }
 

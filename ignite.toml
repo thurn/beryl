@@ -294,9 +294,17 @@ oracle = 1
 # Rollout counts use the `beryl-bench` WSL distribution from `just bench-count`.
 # Frame instruction counts use the `beryl3d-bench` WSL distribution from `just client vm`.
 #
-# `families` lists the checks Cygnus can run. Pytest runs natively and Pyre uses WSL.
-# `ignite-platform` must pass on Windows. Cygnus is the only Windows machine, so it must be
-# listed here: without it every tip waits on its Windows checks and `master` never moves.
+# `families` lists the checks Cygnus can run, and the landing gate runs all of them for a
+# ticket landed from Cygnus. Pytest runs natively and Pyre uses WSL. `ignite-platform` must
+# pass on Windows. Cygnus is the only Windows machine, so it must be listed here: without it
+# every tip waits on its Windows checks and `master` never moves.
+#
+# `tip_families` lists the families Cygnus lists, builds and runs in tip rounds: those whose
+# `platforms` in ignite/checks/*.toml name `windows` (each `needs` names a product, never
+# another family, so nothing is added through it). A portable family needs one pass on any
+# machine, and the Macs run those several times faster. When Cygnus verified every family, it
+# spent most of each round building portable families while `master` waited for its Windows
+# checks. A family that must pass on Windows has to be named in both lists.
 [machine.cygnus]
 os = "windows"
 families = [
@@ -308,6 +316,11 @@ families = [
   "client-clippy", "client-validation", "client-test", "client-interface", "client-corpus",
   "client-interface-frame-limits",
   "client-gate", "client-frame-counts", "client-frame-trend",
+]
+tip_families = [
+  "counts", "ignite-platform", "native-app", "native-android", "pyre",
+  "client-clippy", "client-validation", "client-test", "client-interface", "client-corpus",
+  "client-interface-frame-limits", "client-gate", "client-frame-counts", "client-frame-trend",
 ]
 
 [machine.cygnus.resources]

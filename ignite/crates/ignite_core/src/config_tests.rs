@@ -413,3 +413,27 @@ fn every_family_of_the_repository_has_a_machine_on_each_of_its_platforms() {
          to the `families` of a `[machine.*]` with that `os`: {missing:?}"
     );
 }
+
+#[test]
+fn a_family_left_out_of_every_machines_tip_families_is_unrunnable() {
+    // Cygnus, the only Windows machine, runs `platform` but leaves it out of the families it
+    // verifies in tip rounds, so no tip round ever passes it on Windows.
+    let listed = DOCUMENT_EXAMPLES.replace(
+        "\"python\"]",
+        "\"python\", \"platform\"]\ntip_families = [\"rust\"]",
+    );
+    let config = Config::parse("ignite.toml", &listed).unwrap();
+    let cygnus = config.machine("cygnus").unwrap();
+    assert_eq!(cygnus.tip_families, Some(vec!["rust".to_owned()]));
+    assert_eq!(config.machine("jarvis").unwrap().tip_families, None);
+    assert!(config.runs_family(Some(Os::Windows), "rust"));
+    assert!(!config.runs_family(Some(Os::Windows), "platform"));
+    assert_eq!(
+        config.unrunnable_families(&platform_manifest()),
+        vec![("platform".to_owned(), Some(Os::Windows))]
+    );
+
+    let verified = listed.replace("[\"rust\"]", "[\"rust\", \"platform\"]");
+    let config = Config::parse("ignite.toml", &verified).unwrap();
+    assert!(config.unrunnable_families(&platform_manifest()).is_empty());
+}

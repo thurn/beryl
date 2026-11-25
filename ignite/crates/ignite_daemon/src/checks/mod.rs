@@ -124,6 +124,10 @@ pub struct CheckSettings {
     /// The families this machine runs; `None` means every family. A tree whose own
     /// `ignite.toml` declares this machine replaces it (see [`Checks::open`]).
     pub families: Option<Vec<String>>,
+    /// The families among `families` that this machine lists, builds and runs in tip rounds;
+    /// `None` means every one. A tree whose own `ignite.toml` declares this machine replaces it
+    /// too. The landing gate does not read it.
+    pub tip_families: Option<Vec<String>>,
     /// This machine's name in `ignite.toml`, whose `[machine.<name>]` table lists its families.
     pub hostname: String,
     /// The toolchain version every input hash includes.
@@ -548,8 +552,11 @@ impl Checks {
         }
         // An `ignite.toml` the tree has but that does not parse leaves the runner's own list,
         // as it leaves the daemon's express commands (see `crate::land::express`).
-        match crate::manifests::machine_families(&path, &settings.hostname) {
-            Ok(Some(families)) => settings.families = families,
+        match crate::manifests::machine_table(&path, &settings.hostname) {
+            Ok(Some(machine)) => {
+                settings.families = machine.as_ref().and_then(|m| m.families.clone());
+                settings.tip_families = machine.and_then(|m| m.tip_families);
+            }
             Ok(None) => {}
             Err(error) => eprintln!(
                 "ignite: the ignite.toml of tree {tree} does not parse, so this machine runs \

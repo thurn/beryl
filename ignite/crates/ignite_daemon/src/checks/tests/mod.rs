@@ -13,6 +13,7 @@ mod observed;
 mod package_listings;
 mod plan;
 mod scope;
+mod tip_families;
 mod tree_manifest;
 mod verdict_store;
 mod verdicts;
@@ -363,6 +364,7 @@ fn world(manifest: &str, changed: &[&str], history: FakeHistory) -> World {
         manifest,
         os: Os::Macos,
         families: None,
+        tip_families: None,
         hostname: "local".to_owned(),
         toolchain: "1.0".to_owned(),
         outputs: dir.join("results"),

@@ -24,7 +24,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, PoisonError, RwLock};
 
-use ignite_core::config::{Config, Repository};
+use ignite_core::config::{Config, Machine, Repository};
 use ignite_core::ids::Commit;
 use ignite_core::manifest::Manifest;
 
@@ -136,6 +136,13 @@ pub fn machine_families(
     root: &Path,
     hostname: &str,
 ) -> Result<Option<Option<Vec<String>>>, String> {
+    Ok(machine_table(root, hostname)?.map(|machine| machine.and_then(|m| m.families)))
+}
+
+/// The `[machine.<hostname>]` table of the `ignite.toml` at `root`: `None` when there is no
+/// such file, and `Some(None)` when the file does not declare this machine. A file that cannot
+/// be read or parsed is an error.
+pub fn machine_table(root: &Path, hostname: &str) -> Result<Option<Option<Machine>>, String> {
     let path = root.join("ignite.toml");
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -144,11 +151,7 @@ pub fn machine_families(
     };
     let (config, _unknown) =
         Config::parse_with_unknown(&path.to_string_lossy(), &text).map_err(|e| e.to_string())?;
-    Ok(Some(
-        config
-            .machine(hostname)
-            .and_then(|machine| machine.families.clone()),
-    ))
+    Ok(Some(config.machine(hostname).cloned()))
 }
 
 /// Reads the main checkout's manifests again and hands any change to the daemon's components.
