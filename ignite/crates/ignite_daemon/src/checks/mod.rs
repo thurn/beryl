@@ -86,7 +86,7 @@ use ignite_core::manifest::{Adapter, Family, Manifest};
 use ignite_core::protocol::hub::IncompleteReason;
 use ignite_core::protocol::hub::{CachedResult, ListingKey, ResultKey};
 use ignite_core::protocol::{Class, Outcome};
-use ignite_core::traits::{Error, Result};
+use ignite_core::traits::{Error, Reserve, Result};
 
 use crate::cache::ResultCache;
 use crate::server::Context;
@@ -155,6 +155,10 @@ pub struct RunOptions {
     pub rerun: bool,
     pub ticket: Option<TicketId>,
     pub session: Option<SessionId>,
+    /// The reserve the run's commands and builds may draw on: `Reserve::TipRound` for a tip
+    /// round's work before `master` moves. A build check of a tip round takes
+    /// `Reserve::TipBuild` whatever this says.
+    pub reserve: Option<Reserve>,
 }
 
 /// A check that did not pass, with what its run said.

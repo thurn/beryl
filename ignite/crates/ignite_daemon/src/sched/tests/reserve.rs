@@ -76,6 +76,48 @@ fn a_tip_build_takes_the_rest_of_what_it_wants_from_the_shared_cores() {
     assert_eq!((status.granted, status.tip_build_used), (22, 4));
 }
 
+fn tip_round(cores: u32) -> GrantRequest {
+    GrantRequest {
+        reserve: Some(Reserve::TipRound),
+        ..ask(Class::Tip, cores)
+    }
+}
+
+/// Agents hold every shared core. A tip round's check before `master` moves starts at once on
+/// the reserve, while a `tip` command after the move waits for shared cores.
+#[test]
+fn a_check_before_the_move_starts_on_the_reserve_and_one_after_it_waits() {
+    let mut ledger = Ledger::new(with_reserve());
+    ledger.enqueue(ask(Class::Agent, 16), T0);
+    ledger.enqueue(ask(Class::Agent, 8), T0);
+    ledger.step(T0);
+    assert_eq!(ledger.status().granted, 24);
+    let after = ledger.enqueue(ask(Class::Tip, 2), at(1.0));
+    let before = ledger.enqueue(tip_round(6), at(2.0));
+    let step = ledger.step(at(2.0));
+    let granted: Vec<(u64, u32)> = step.granted.iter().map(|g| (g.id, g.cores)).collect();
+    assert_eq!(granted, [(before, 4)]);
+    assert_eq!(ledger.status().tip_build_used, 4);
+    assert!(ledger.step(at(30.0)).granted.iter().all(|g| g.id != after));
+}
+
+/// Build checks come first on the reserve: a waiting tip build takes it before a check of the
+/// same round that asked earlier, and the check gets what is left.
+#[test]
+fn tip_builds_take_the_reserve_before_the_rounds_other_checks() {
+    let mut ledger = Ledger::new(with_reserve());
+    ledger.enqueue(ask(Class::Agent, 16), T0);
+    ledger.enqueue(ask(Class::Agent, 8), T0);
+    ledger.step(T0);
+    assert_eq!(ledger.status().granted, 24);
+    let check = ledger.enqueue(tip_round(4), at(1.0));
+    let build = ledger.enqueue(tip_build(3), at(2.0));
+    let step = ledger.step(at(2.0));
+    let mut granted: Vec<(u64, u32)> = step.granted.iter().map(|g| (g.id, g.cores)).collect();
+    granted.sort_unstable();
+    assert_eq!(granted, [(check, 1), (build, 3)]);
+}
+
 #[test]
 fn ordinary_land_and_tip_requests_cannot_borrow_the_reserve() {
     let mut ledger = Ledger::new(Limits {

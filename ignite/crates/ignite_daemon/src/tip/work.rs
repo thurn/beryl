@@ -7,7 +7,7 @@ use std::time::Duration;
 use ignite_core::ids::{CheckName, Commit, TicketId, TreeId};
 use ignite_core::protocol::hub::IncompleteReason;
 use ignite_core::protocol::{Class, Outcome};
-use ignite_core::traits::{Clock, Error, Result};
+use ignite_core::traits::{Clock, Error, Reserve, Result};
 
 use ignite_git::changed::CommitPaths;
 
@@ -105,8 +105,9 @@ impl TipWork for CheckTipWork {
         commit: &Commit,
         checks: &[CheckName],
         rerun: bool,
+        pre_move: bool,
     ) -> Vec<TipRun> {
-        let options = options(rerun);
+        let options = options(rerun, pre_move);
         match self.at(ctx, commit, |tree| {
             self.checks.run(ctx, tree, checks, &options)
         }) {
@@ -122,8 +123,9 @@ impl TipWork for CheckTipWork {
         family: &str,
         batches: &[(u32, Vec<CheckName>)],
         callbacks: &crate::checks::BatchCallbacks<'_>,
+        pre_move: bool,
     ) -> (Vec<TipRun>, usize) {
-        let options = options(false);
+        let options = options(false, pre_move);
         // Families run at once, each in a tree of its own, preferably one that built the
         // products the family needs.
         let needs = self.family_needs();
@@ -222,13 +224,18 @@ pub fn ticketed_landings(ctx: &Context, commits: Vec<CommitPaths>) -> Result<Vec
         .collect())
 }
 
-fn options(rerun: bool) -> RunOptions {
+/// How a tip round runs checks. Before `master` moves, the round's builds and commands may draw
+/// on the cores the machine keeps for tip work (`Reserve::TipRound`), so that agents holding
+/// every other core cannot hold `master` back. Afterwards they take free cores like any other
+/// `tip` work.
+fn options(rerun: bool, pre_move: bool) -> RunOptions {
     RunOptions {
         verb: "tip".to_owned(),
         class: Class::Tip,
         rerun,
         ticket: None,
         session: None,
+        reserve: pre_move.then_some(Reserve::TipRound),
     }
 }
 

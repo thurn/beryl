@@ -460,6 +460,7 @@ impl Landing {
                 rerun: false,
                 ticket: Some(ticket.clone()),
                 session: Some(session.clone()),
+                reserve: None,
             };
             let (gated, expressed) = if let Some((lane, section)) = &express {
                 // A pass after one whose commands passed, or after `ignite check` passed them in

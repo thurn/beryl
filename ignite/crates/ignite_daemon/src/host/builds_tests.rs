@@ -61,6 +61,7 @@ fn a_finished_verb_releases_its_build_reservation_without_starting_a_command() {
             ticket: None,
             session: None,
             retry_failure: false,
+            reserve: None,
         },
     };
     let wait_for = |handle: &Handle, call: &Build, prefix: &str| {

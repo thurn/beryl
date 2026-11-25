@@ -21,9 +21,16 @@ impl TipWork for Slow {
         self.work.checks(ctx, commit, phase)
     }
 
-    fn run(&self, ctx: &Context, at: &Commit, checks: &[CheckName], rerun: bool) -> Vec<TipRun> {
+    fn run(
+        &self,
+        ctx: &Context,
+        at: &Commit,
+        checks: &[CheckName],
+        rerun: bool,
+        pre_move: bool,
+    ) -> Vec<TipRun> {
         std::thread::sleep(self.pause);
-        self.work.run(ctx, at, checks, rerun)
+        self.work.run(ctx, at, checks, rerun, pre_move)
     }
 
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>> {

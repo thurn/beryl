@@ -86,7 +86,7 @@ impl TipVerifier {
         if names.is_empty() {
             return Built::Yes;
         }
-        let runs = self.work.run(ctx, revert, &names, false);
+        let runs = self.work.run(ctx, revert, &names, false, false);
         let outcome = |name: &CheckName| runs.iter().find(|r| r.check == *name).map(|r| r.outcome);
         let mut fails = Vec::new();
         let mut unknown = Vec::new();

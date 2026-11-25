@@ -41,10 +41,11 @@
 //! - A request that would start short of what it wants, while lower classes hold cores that
 //!   shrink, waits up to [`RECLAIM_SECONDS`] for them before it takes what is free. A short
 //!   growing grant of `land` counts as a waiter, so freed cores go to it first.
-//! - A machine's `tip_build_cores` are kept for requests with `Reserve::TipBuild`, the build
-//!   checks of a tip round. Agents borrow idle tip and express cores until an owner asks.
-//!   Owners still start on their reserve immediately. Tip builds take shared cores before
-//!   every class, including `land`, and never shrink for another request.
+//! - A machine's `tip_build_cores` are kept for a tip round's work before `master` moves:
+//!   requests with `Reserve::TipBuild`, its build checks, first, then requests with
+//!   `Reserve::TipRound`, its other builds and checks. Agents borrow idle tip and express cores
+//!   until an owner asks. Owners still start on their reserve immediately. Tip builds take
+//!   shared cores before every class, including `land`, and never shrink for another request.
 //! - Classes are enforced by grants only. Nothing here changes a process's priority: work run
 //!   at low priority on a loaded machine once got almost no CPU for hours.
 
@@ -132,8 +133,8 @@ pub struct Adoption {
     pub resources: Vec<String>,
     pub memory_mb: Option<u64>,
     pub follow: Option<Follow>,
-    /// The reserve the grant was made from, if any. An adopted `Reserve::TipBuild` grant holds
-    /// the tip reserve's cores again until it is released.
+    /// The reserve the grant was made from, if any. An adopted grant on the tip reserve holds
+    /// its cores again until it is released.
     pub reserve: Option<ignite_core::traits::Reserve>,
     /// The ticket whose agent priority the original grant used.
     pub priority_ticket: Option<TicketId>,
@@ -621,8 +622,8 @@ impl Scheduler {
                 grows_to,
                 shrinks,
             );
-            if adoption.reserve == Some(ignite_core::traits::Reserve::TipBuild) {
-                state.ledger.adopt_reserved(id);
+            if let Some(reserve) = adoption.reserve {
+                state.ledger.adopt_reserved(id, reserve);
             }
             state
                 .ledger

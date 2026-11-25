@@ -150,7 +150,7 @@ impl TipVerifier {
         let landings = self.work.landings(ctx, good, bad)?;
         Ok(bisect(&landings, &check.inputs, good, |at| {
             self.work
-                .run(ctx, at, std::slice::from_ref(&check.check), false)
+                .run(ctx, at, std::slice::from_ref(&check.check), false, false)
                 .into_iter()
                 .find(|run| run.check == check.check)
                 .map(|run| run.outcome)

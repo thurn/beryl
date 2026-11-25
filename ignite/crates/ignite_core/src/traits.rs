@@ -106,8 +106,13 @@ pub struct CommandSpec {
 #[serde(rename_all = "kebab-case")]
 pub enum Reserve {
     /// The build checks of a tip round, which decide whether the green branch moves:
-    /// `tip_build_cores` on the machine.
+    /// `tip_build_cores` on the machine. Served from the reserve first, and ahead of every
+    /// class for the rest of what they ask for.
     TipBuild,
+    /// The other builds and checks a tip round runs before `master` moves. They take whatever
+    /// of `tip_build_cores` no build check holds, and the rest of what they ask for in their
+    /// own class.
+    TipRound,
 }
 
 /// How a supervised command ended.
@@ -230,6 +235,8 @@ pub struct BuildFor {
     /// Build again even when the last build of the same inputs failed and that failure is
     /// remembered, as `ignite check --rerun` and `ignite test --rerun` ask.
     pub retry_failure: bool,
+    /// The reserve the build's command may draw on, as the command it is made for may.
+    pub reserve: Option<Reserve>,
 }
 
 /// How a rebase ended.

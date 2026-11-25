@@ -1,5 +1,6 @@
-//! The tip reserve: cores kept for the build checks of a tip round, which decide when the green
-//! branch moves and which every new ticket waits for.
+//! The tip reserve: cores kept for the work of a tip round before `master` moves, first of all
+//! its build checks, which decide when the green branch moves and which every new ticket waits
+//! for.
 //!
 //! On 2026-11-19 on one machine, 8,053 of 9,692 commands started on one core, and every command
 //! of the slowest landing ran on one core, because a higher class does not take cores from the
@@ -11,6 +12,12 @@
 //!   the rest of what it wants from the shared cores ahead of every class, at once or, with a
 //!   cores file, by growing (see `rank` in `ledger/order.rs`). Several such requests share the
 //!   reserve in the order they were first asked for.
+//! - A request with `Reserve::TipRound`, one of the round's other builds and checks before
+//!   `master` moves, takes up to all of the reserve that no `Reserve::TipBuild` request takes or
+//!   holds, and starts at once on it. It takes the rest of what it wants from the shared cores
+//!   in its own class, `tip`, below agents. On 2026-11-25 one machine kept 2 cores for build
+//!   checks only, and its other tip commands waited up to 1,500 s for cores behind agent work,
+//!   so its tip rounds took 12 to 150 minutes and `master` stood still for hours.
 //! - Express runs and release builds can borrow idle tip cores. Agents can borrow from either
 //!   reserve while its owner has no work. Neither kind of loan delays the reserve owner.
 //! - The reserve's cores come back when the grant is released, also for a grant a restarted
@@ -27,34 +34,36 @@ use super::super::{Grant, GrantRequest};
 use super::{Held, Ledger, Origin, Waiter, gives_back};
 
 impl Ledger {
-    /// The cores of the tip reserve each waiting `Reserve::TipBuild` request would take if it
-    /// started now: what it wants, from what no grant holds, in the order the requests were
-    /// first asked for. A request that cannot start for its resources or memory keeps its part
-    /// until the next step. None while the machine is `pressed` for memory, when nothing new
-    /// starts.
+    /// The cores of the tip reserve each waiting request on it would take if it started now:
+    /// what it wants, from what no grant holds, `Reserve::TipBuild` requests before
+    /// `Reserve::TipRound` ones, each kind in the order the requests were first asked for. A
+    /// request that cannot start for its resources or memory keeps its part until the next
+    /// step. None while the machine is `pressed` for memory, when nothing new starts.
     pub(super) fn reserve_parts(&self, pressed: bool) -> BTreeMap<u64, u32> {
         let mut free = if pressed { 0 } else { self.tip_reserve_free() };
         let mut parts = BTreeMap::new();
-        for waiter in &self.waiting {
-            if free == 0 {
-                break;
+        for reserve in [Reserve::TipBuild, Reserve::TipRound] {
+            for waiter in &self.waiting {
+                if free == 0 {
+                    return parts;
+                }
+                if waiter.request.reserve != Some(reserve) {
+                    continue;
+                }
+                let part = self.want_of(waiter).min(free);
+                free -= part;
+                parts.insert(waiter.id, part);
             }
-            if waiter.request.reserve != Some(Reserve::TipBuild) {
-                continue;
-            }
-            let part = self.want_of(waiter).min(free);
-            free -= part;
-            parts.insert(waiter.id, part);
         }
         parts
     }
 
-    /// The cores of the tip reserve that `Reserve::TipBuild` grants hold.
+    /// The cores of the tip reserve that grants on it hold.
     pub(super) fn tip_reserve_used(&self) -> u32 {
         self.held.values().map(|h| h.reserved).sum()
     }
 
-    /// The cores of the tip reserve no `Reserve::TipBuild` grant holds. Cores lent to a loan
+    /// The cores of the tip reserve no grant on it holds. Cores lent to a loan
     /// count as free: the loan only borrows them while they are idle.
     fn tip_reserve_free(&self) -> u32 {
         self.limits
@@ -62,13 +71,14 @@ impl Ledger {
             .saturating_sub(self.tip_reserve_used())
     }
 
-    /// Records that adopted grant `id` was made from the tip reserve, so it holds the reserve's
-    /// cores again, as many as it holds and the reserve has free, until it is released.
-    pub fn adopt_reserved(&mut self, id: u64) {
+    /// Records that adopted grant `id` was made from the tip reserve for `reserve`, so it holds
+    /// the reserve's cores again, as many as it holds and the reserve has free, until it is
+    /// released.
+    pub fn adopt_reserved(&mut self, id: u64, reserve: Reserve) {
         let free = self.tip_reserve_free();
         if let Some(held) = self.held.get_mut(&id) {
             held.reserved = held.cores.min(free);
-            held.reserve = Some(Reserve::TipBuild);
+            held.reserve = Some(reserve);
         }
     }
 
@@ -140,17 +150,11 @@ impl Ledger {
         !self.express_runs.is_empty()
     }
 
-    /// Treat both idle reserves as one source of loans. A waiting tip build counts even if
-    /// its memory or resources keep it from starting this step.
+    /// Treat both idle reserves as one source of loans. A waiting request on the tip reserve
+    /// counts even if its memory or resources keep it from starting this step.
     fn agent_reserve(&self) -> u32 {
-        let tip_active = self
-            .held
-            .values()
-            .any(|h| h.reserve == Some(Reserve::TipBuild))
-            || self
-                .waiting
-                .iter()
-                .any(|w| w.request.reserve == Some(Reserve::TipBuild));
+        let tip_active = self.held.values().any(|h| h.reserve.is_some())
+            || self.waiting.iter().any(|w| w.request.reserve.is_some());
         let tip = if tip_active {
             0
         } else {

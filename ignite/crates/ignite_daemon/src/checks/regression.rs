@@ -9,7 +9,7 @@ use ignite_core::ids::{CheckName, InputHash, TreeId};
 use ignite_core::manifest::{Adapter, Family, Kind, Platforms};
 use ignite_core::protocol::Class;
 use ignite_core::protocol::hub::{CheckState, IncompleteReason, ListingKey, ResultKey};
-use ignite_core::traits::Result;
+use ignite_core::traits::{Reserve, Result};
 
 use super::listings::{Kept, Listing, Origin};
 use super::prepare::on_threads;
@@ -102,12 +102,15 @@ impl Checks {
             ..TipSet::default()
         };
         if phase != ListingPhase::PeerBuild && !local.is_empty() {
+            // A round lists its checks before it knows which must pass for `master` to move,
+            // so listing, and the builds it needs, may draw on the tip reserve.
             let options = RunOptions {
                 verb: "tip".to_owned(),
                 class: Class::Tip,
                 rerun: false,
                 ticket: None,
                 session: None,
+                reserve: Some(Reserve::TipRound),
             };
             let mut run = CheckRun::default();
             let prepared = if cached_only {

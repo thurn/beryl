@@ -580,7 +580,8 @@ impl TipVerifier {
     ) {
         if !recheck.is_empty() {
             let names: Vec<CheckName> = recheck.iter().map(|check| check.check.clone()).collect();
-            let runs = self.work.run(ctx, tip, &names, true);
+            // Cached failures are run again before `master` moves.
+            let runs = self.work.run(ctx, tip, &names, true, true);
             self.record_runs(checks, runs, verdicts, tally);
         }
     }

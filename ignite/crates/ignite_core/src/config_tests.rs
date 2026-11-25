@@ -30,6 +30,7 @@ bench-vm = 1
 [machine.cygnus]
 os = "windows"
 families = ["rust", "clippy", "format", "source-rules", "python"]
+tip_build_cores = 6
 
 [[rebuild]]
 name = "kernel-body"
@@ -59,8 +60,10 @@ fn parses_the_document_examples() {
     assert_eq!(jarvis.resources["oracle"], 1);
     assert_eq!(jarvis.resources["bench-vm"], 1);
     assert_eq!(jarvis.families, None);
+    assert_eq!(jarvis.tip_build_cores, None);
     let cygnus = config.machine("cygnus").unwrap();
     assert_eq!(cygnus.os, Some(Os::Windows));
+    assert_eq!(cygnus.tip_build_cores, Some(6));
     assert_eq!(config.rebuild[1].name, "one-card");
 }
 
@@ -263,7 +266,6 @@ landing_trees = 3
 trees_disk_gb = 400
 floor = { batch = 8, tip = 2 }
 express_cores = 3
-tip_build_cores = 4
 [machine.jarvis.pool.codex]
 mode = "desktop"
 slots = 2
@@ -285,7 +287,6 @@ usage_hold_percent = 85
             "machine.jarvis.landing_trees",
             "machine.jarvis.pool",
             "machine.jarvis.ticket_trees",
-            "machine.jarvis.tip_build_cores",
             "machine.jarvis.trees_disk_gb",
             "pool.default_owner",
             "pool.usage_hold_percent",

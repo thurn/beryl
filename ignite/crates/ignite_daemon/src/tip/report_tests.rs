@@ -40,7 +40,7 @@ impl TipWork for NoWork {
     fn checks(&self, _ctx: &Context, _commit: &Commit, _phase: ListingPhase) -> Result<TipSet> {
         unreachable!("not listed in these tests")
     }
-    fn run(&self, _: &Context, _: &Commit, _: &[CheckName], _: bool) -> Vec<TipRun> {
+    fn run(&self, _: &Context, _: &Commit, _: &[CheckName], _: bool, _: bool) -> Vec<TipRun> {
         unreachable!("not run in these tests")
     }
     fn landings(&self, _: &Context, _: &Commit, _: &Commit) -> Result<Vec<TipLanding>> {

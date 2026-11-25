@@ -187,6 +187,7 @@ impl Builds for RemoteBuilds {
             ticket: steps::ticket(),
             session: steps::session(),
             retry_failure: false,
+            reserve: None,
         };
         self.ensure_for(tree, product, packages, &who)
     }

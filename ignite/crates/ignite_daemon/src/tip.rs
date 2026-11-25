@@ -259,11 +259,20 @@ pub trait TipWork: Send + Sync {
         Ok(None)
     }
     /// Runs the named checks at `commit` in a landing tree, in the `tip` class, storing their
-    /// results. `rerun` ignores cached results.
-    fn run(&self, ctx: &Context, commit: &Commit, checks: &[CheckName], rerun: bool)
-    -> Vec<TipRun>;
+    /// results. `rerun` ignores cached results. `pre_move` says the round runs them before
+    /// `master` moves, so their builds and commands may draw on the tip reserve
+    /// (`Reserve::TipRound`).
+    fn run(
+        &self,
+        ctx: &Context,
+        commit: &Commit,
+        checks: &[CheckName],
+        rerun: bool,
+        pre_move: bool,
+    ) -> Vec<TipRun>;
     /// Runs one family's batches at `commit`, listing the family once. Claims each batch
-    /// before it runs and reports its failures as soon as it finishes.
+    /// before it runs and reports its failures as soon as it finishes. `pre_move` is as for
+    /// [`TipWork::run`].
     fn run_batches(
         &self,
         ctx: &Context,
@@ -271,6 +280,7 @@ pub trait TipWork: Send + Sync {
         family: &str,
         batches: &[(u32, Vec<CheckName>)],
         callbacks: &crate::checks::BatchCallbacks<'_>,
+        pre_move: bool,
     ) -> (Vec<TipRun>, usize) {
         let _ = family;
         let mut runs = Vec::new();
@@ -278,7 +288,7 @@ pub trait TipWork: Send + Sync {
         for (batch, names) in batches {
             if (callbacks.claim)(*batch) {
                 ran += 1;
-                runs.extend(self.run(ctx, commit, names, false));
+                runs.extend(self.run(ctx, commit, names, false, pre_move));
             }
         }
         (runs, ran)

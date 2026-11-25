@@ -280,6 +280,7 @@ impl Landing {
                 rerun: false,
                 ticket: Some(ticket.clone()),
                 session: Some(session.clone()),
+                reserve: None,
             };
             steps::step(format!("running the gate in {}", held.tree));
             let pass = super::base::Pass {

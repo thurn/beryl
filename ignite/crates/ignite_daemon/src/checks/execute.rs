@@ -33,14 +33,15 @@ pub(super) fn interrupted(output: &RunResult) -> bool {
         || (output.exit != Some(0) && supervise::ResultFile::ended_from_outside(&output.output))
 }
 
-/// Whom a command's builds are for: its class, ticket and session. A run that ignores cached
-/// results (`--rerun`) also builds again where a failure is remembered.
+/// Whom a command's builds are for: its class, ticket, session and reserve. A run that ignores
+/// cached results (`--rerun`) also builds again where a failure is remembered.
 pub(super) fn build_for(options: &RunOptions) -> BuildFor {
     BuildFor {
         class: options.class,
         ticket: options.ticket.clone(),
         session: options.session.clone(),
         retry_failure: options.rerun,
+        reserve: options.reserve,
     }
 }
 
@@ -717,10 +718,14 @@ impl Checks {
             tree: Some(tree.id.clone()),
             ticket: options.ticket.clone(),
             hang_limit_s: Some(hang_limit_s(slowest)),
-            reserve: (options.class == Class::Tip
+            reserve: if options.class == Class::Tip
                 && ctx.config.repository.green.is_some()
-                && family.builds)
-                .then_some(Reserve::TipBuild),
+                && family.builds
+            {
+                Some(Reserve::TipBuild)
+            } else {
+                options.reserve
+            },
         });
         // The units the command's test processes and compiles recorded, if it was set up to.
         let (units, span) = units::env_units_file(&spec_env)

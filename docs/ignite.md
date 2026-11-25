@@ -2841,6 +2841,18 @@ How a daemon verifies a tip:
   Builds are outside the budget, and a tip round builds what it needs, cold
   builds included.
 
+- The machine keeps `tip_build_cores` cores for the round's work before
+  `master` moves: physical cores / 5, clamped to 2 to 6, unless the machine's
+  table in `ignite.toml` sets `tip_build_cores`. That work is the round's
+  listing, its build checks, the checks within the budget, the forced checks,
+  and the builds all of them need. The build checks take the kept cores first,
+  and the rest of what they ask for ahead of every class. The other work takes
+  whatever kept cores no build check holds and starts on them at once, then
+  takes the rest of what it asks for in the `tip` class, below agents. Agents
+  borrow the kept cores only while no tip work wants them. On 2026-11-25 cygnus
+  kept 2 cores for build checks only, and its other tip commands waited up to
+  1,500 s for cores behind agent work, so its rounds took 12 to 150 minutes.
+
 - With `repository.green` set, the build checks (the checks of families declared
   `builds = true`) are outside the budget and run first, before any other check
   of the round, on the cores the machine sets aside for them. When every build
@@ -2895,7 +2907,7 @@ How a daemon verifies a tip:
   [Tip verification and machines that are off](#tip-verification-and-machines-that-are-off).
 
 - The same round then runs the checks past the budget, in the `tip` class, on
-  whatever cores are free. A failure among them is reported as a regression,
+  whatever shared cores are free, without the kept tip cores. A failure among them is reported as a regression,
   which files its ticket; `master` has already moved and stays. From then on the
   check runs before `master` moves on every round, because its regression ticket
   is open and its cached failure is run again, so it holds `master` as any
@@ -4421,11 +4433,14 @@ do. The hub is the one shared point.
 [machine.cygnus]
 os = "windows"
 families = ["rust", "doctests", "clippy", "rust-format", "ignite", "source"]
+tip_build_cores = 6
 ```
 
 `families` lists the check families the machine can run, here the Rust tests and
 doctests, clippy, Rust formatting, Ignite's own tests and the source rules (the
-full list is in `ignite.toml`). A machine with no such list can run every family
+full list is in `ignite.toml`). `tip_build_cores` sets how many cores the
+machine keeps for tip rounds (see [Tip verification](#tip-verification)) in
+place of the count derived from its physical cores. A machine with no such list can run every family
 supported on its operating system. A machine with no configuration table uses
 its native operating system and the same default family selection.
 

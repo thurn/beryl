@@ -440,7 +440,7 @@ pub fn diagnose(input: &DoctorInput) -> Vec<Finding> {
         .or_else(Os::current)
         .expect("Ignite runs on macOS or Windows");
     let facts = machine_facts(input.host, os);
-    let derived = ignite_core::capacity::derive(&facts);
+    let derived = ignite_core::capacity::derive_for(&facts, machine);
     findings.push(Finding::ok(
         "machine",
         format!(

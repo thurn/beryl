@@ -97,6 +97,18 @@ fn master_moves_once_the_budgeted_checks_pass_and_a_later_failure_holds_it() {
             (vec!["unit:c".to_owned(), "unit:d".to_owned()], tip.clone()),
         ]
     );
+    // The checks before the move may draw on the tip reserve; those after it may not.
+    let mut pre_move = world.work.pre_move.lock().unwrap().clone();
+    pre_move.sort();
+    assert_eq!(
+        pre_move,
+        [
+            (name("unit:a"), true),
+            (name("unit:b"), true),
+            (name("unit:c"), false),
+            (name("unit:d"), false),
+        ]
+    );
     // The failure past the budget filed one regression.
     let reports = world.hub.regressions();
     assert_eq!(reports.len(), 1);
@@ -123,6 +135,7 @@ fn master_moves_once_the_budgeted_checks_pass_and_a_later_failure_holds_it() {
     world
         .work
         .set_outcome(&next, &name("unit:c"), Outcome::Fail);
+    let first_round = world.work.pre_move.lock().unwrap().len();
     let outcome = verifier.verify(&ctx, &next).unwrap();
     assert_eq!(
         outcome,
@@ -133,6 +146,10 @@ fn master_moves_once_the_budgeted_checks_pass_and_a_later_failure_holds_it() {
     );
     assert_eq!(world.master(), tip);
     assert_eq!(world.hub.regressions().len(), 1, "reported once");
+    // Running a cached failure again is work before the move too. The round's search for a
+    // landing to revert runs it afterwards, outside the round's checks, without the reserve.
+    let second_round = world.work.pre_move.lock().unwrap()[first_round..].to_vec();
+    assert_eq!(second_round.first(), Some(&(name("unit:c"), true)));
 }
 
 #[test]

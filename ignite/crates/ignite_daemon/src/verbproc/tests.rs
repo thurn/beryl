@@ -249,6 +249,7 @@ fn a_verb_runs_to_the_end_across_dropped_calls_and_its_reply_lands_in_the_row() 
                     ticket: None,
                     session: None,
                     retry_failure: false,
+                    reserve: None,
                 };
                 let tree = TreeId::new("tree-01").unwrap();
                 let built = ctx.builds.ensure_for(&tree, "rust-tests", &[], &who);

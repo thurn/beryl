@@ -53,6 +53,8 @@ pub(super) struct FakeWork {
     pub(super) defer_platforms: Mutex<BTreeMap<String, Vec<ignite_core::config::Os>>>,
     /// The class each run saw from the thread's current activity.
     pub(super) classes: Mutex<Vec<Option<ignite_core::protocol::Class>>>,
+    /// Each check run, with whether the round ran it before `master` moves.
+    pub(super) pre_move: Mutex<Vec<(CheckName, bool)>>,
     /// What the round scores its checks by, for the tip budget; `None` runs every check before
     /// `master` moves.
     pub(super) scoring: Mutex<Option<crate::checks::Scoring>>,
@@ -247,6 +249,7 @@ impl TipWork for FakeWork {
         family: &str,
         batches: &[(u32, Vec<CheckName>)],
         callbacks: &crate::checks::BatchCallbacks<'_>,
+        pre_move: bool,
     ) -> (Vec<TipRun>, usize) {
         let before = self.before_batches.lock().unwrap().get(family).cloned();
         if let Some(before) = before {
@@ -257,7 +260,7 @@ impl TipWork for FakeWork {
         for (batch, names) in batches {
             if (callbacks.claim)(*batch) {
                 ran += 1;
-                let batch_runs = self.run(ctx, at, names, false);
+                let batch_runs = self.run(ctx, at, names, false, pre_move);
                 let listed = self.listed(at);
                 let failed: Vec<_> = batch_runs
                     .iter()
@@ -272,8 +275,16 @@ impl TipWork for FakeWork {
         (runs, ran)
     }
 
-    fn run(&self, ctx: &Context, at: &Commit, checks: &[CheckName], rerun: bool) -> Vec<TipRun> {
+    fn run(
+        &self,
+        ctx: &Context,
+        at: &Commit,
+        checks: &[CheckName],
+        rerun: bool,
+        pre_move: bool,
+    ) -> Vec<TipRun> {
         self.classes.lock().unwrap().push(crate::steps::class());
+        self.pre_move.lock().unwrap().extend(checks.iter().map(|c| (c.clone(), pre_move)));
         let hook = self.on_run.lock().unwrap().remove(at);
         if let Some(hook) = hook {
             hook();

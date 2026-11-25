@@ -76,7 +76,7 @@ use ignite_core::manifest::{InputPattern, Manifest, Product};
 use ignite_core::protocol::hub::CompileUnit;
 use ignite_core::protocol::{Class, Usage};
 use ignite_core::traits::{
-    BuildFor, BuildResult, Builds, CommandSpec, Error, Git, Launcher, Result, RunResult,
+    BuildFor, BuildResult, Builds, CommandSpec, Error, Git, Launcher, Reserve, Result, RunResult,
 };
 
 /// The environment variable that names the file the compiler wrapper appends compile units to,
@@ -244,6 +244,8 @@ struct Plan {
     cargo_state: InputHash,
     /// Whether the product reads crates, which makes the feature comparison apply.
     reads_crates: bool,
+    /// The reserve the build's command may draw on ([`BuildFor::reserve`]).
+    reserve: Option<Reserve>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -358,6 +360,7 @@ impl BuildManager {
             args,
             cargo_state,
             reads_crates,
+            reserve: None,
         })
     }
 
@@ -400,7 +403,7 @@ impl BuildManager {
             tree: Some(plan.request.tree.clone()),
             ticket: crate::steps::ticket(),
             hang_limit_s: Some(BUILD_HANG_LIMIT_S),
-            reserve: None,
+            reserve: plan.reserve,
         }
     }
 
@@ -592,10 +595,12 @@ impl Builds for BuildManager {
     }
 
     fn ensure(&self, tree: &TreeId, product: &str, packages: &[String]) -> BuildResult {
-        self.ensure_retrying(tree, product, packages, false)
+        self.ensure_retrying(tree, product, packages, false, None)
     }
 
-    /// The class, ticket and session come from the calling thread's activity (see `spec`).
+    /// The class, ticket and session come from the calling thread's activity (see `spec`); the
+    /// reserve comes from `who`. A request that joins a build already running for another
+    /// gets that build's grant, whatever its own reserve.
     fn ensure_for(
         &self,
         tree: &TreeId,
@@ -603,7 +608,7 @@ impl Builds for BuildManager {
         packages: &[String],
         who: &BuildFor,
     ) -> BuildResult {
-        self.ensure_retrying(tree, product, packages, who.retry_failure)
+        self.ensure_retrying(tree, product, packages, who.retry_failure, who.reserve)
     }
 
     /// The tree has built the product when the manager holds it there, for any packages and
@@ -642,13 +647,15 @@ impl Builds for BuildManager {
 }
 
 impl BuildManager {
-    /// [`Builds::ensure`], building again whatever failure is remembered when `retry_failure`.
+    /// [`Builds::ensure`], building again whatever failure is remembered when `retry_failure`,
+    /// with its command drawing on `reserve`.
     fn ensure_retrying(
         &self,
         tree: &TreeId,
         product: &str,
         packages: &[String],
         retry_failure: bool,
+        reserve: Option<Reserve>,
     ) -> BuildResult {
         // A tree whose lease is copying another tree's build has its target directories replaced.
         let path = self.trees.path(tree);
@@ -656,7 +663,7 @@ impl BuildManager {
             return self.failure(product, &stopped);
         }
         let plan = match self.plan(tree, product, packages) {
-            Ok(plan) => plan,
+            Ok(plan) => Plan { reserve, ..plan },
             Err(error) => {
                 // An operating-system failure says nothing about the change.
                 let marker = if matches!(error, Error::Io(_)) {
@@ -674,7 +681,7 @@ impl BuildManager {
             // rebuild them back. The whole workspace is built instead: it holds the subset's
             // binaries, built with the workspace's own features.
             Ok(_) => match self.plan(tree, product, &[]) {
-                Ok(whole) => self.build(&whole, retry_failure),
+                Ok(whole) => self.build(&Plan { reserve, ..whole }, retry_failure),
                 Err(error) => self.failure(product, &format!("cannot build {product}: {error}")),
             },
             Err(failed) => failed,

@@ -90,6 +90,7 @@ fn the_landing_gate_uses_the_trees_manifests() {
         rerun: false,
         ticket: None,
         session: None,
+        reserve: None,
     };
 
     let gated = world.checks.gate(&world.ctx, &tree(), &landing);
@@ -272,7 +273,7 @@ fn a_tip_uses_the_candidates_build_families_and_reserves_their_cores() {
         [
             ("--tree", Some(Reserve::TipBuild)),
             ("unit:a", Some(Reserve::TipBuild)),
-            ("--other", None)
+            ("--other", Some(Reserve::TipRound))
         ]
     );
 }

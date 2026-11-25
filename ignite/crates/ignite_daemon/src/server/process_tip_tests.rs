@@ -93,7 +93,14 @@ impl TipWork for OneCheck {
         })
     }
 
-    fn run(&self, ctx: &Context, at: &Commit, checks: &[CheckName], _rerun: bool) -> Vec<TipRun> {
+    fn run(
+        &self,
+        ctx: &Context,
+        at: &Commit,
+        checks: &[CheckName],
+        _rerun: bool,
+        _pre_move: bool,
+    ) -> Vec<TipRun> {
         self.runs.fetch_add(1, Ordering::SeqCst);
         let outcome = match self.command(ctx, at, &["cargo", "test"]) {
             Some(0) if self.fail_at.as_ref() == Some(at) => Outcome::Fail,

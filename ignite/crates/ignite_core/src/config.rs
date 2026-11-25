@@ -463,6 +463,10 @@ pub struct Machine {
     /// with administrator rights. The monitor runs it when the machine is still up 10 minutes
     /// after its ordinary restart, which a stuck drive can hang.
     pub stuck_storage_force_command: Option<Vec<String>>,
+    /// Cores kept for a tip round's work before `master` moves, in place of the count derived
+    /// from the machine's physical cores ([`crate::capacity::derive_for`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tip_build_cores: Option<u32>,
 }
 
 /// A configuration file that cannot be used, naming the file and, where known, the key.

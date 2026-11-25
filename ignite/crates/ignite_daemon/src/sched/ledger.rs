@@ -62,8 +62,8 @@ struct Held {
     origin: Origin,
     /// The CPU its command has used, when the caller reads it ([`Ledger::observe_use`]).
     usage: GrantUse,
-    /// Of `cores`, those taken from the tip reserve for a `Reserve::TipBuild` request, which
-    /// the shared cores do not count (see `ledger/reserve.rs`).
+    /// Of `cores`, those taken from the tip reserve for a request on it (`Reserve::TipBuild` or
+    /// `Reserve::TipRound`), which the shared cores do not count (see `ledger/reserve.rs`).
     reserved: u32,
     /// Of `cores`, idle cores of the tip reserve lent to an express run or release build
     /// ([`Ledger::finish_express`]), which the shared cores do not count either.
@@ -285,7 +285,7 @@ impl Ledger {
         // unless Ignite holds nothing, so that a reading that never recovers cannot stop all
         // work.
         let pressed = self.pressure.pressed(self.free_memory_mb) && !self.held.is_empty();
-        // Cores each `Reserve::TipBuild` waiter takes from the tip reserve if it starts now,
+        // Cores each waiter on the tip reserve takes from it if it starts now,
         // beyond what its class gives it of the shared cores.
         let from_reserve = self.reserve_parts(pressed);
         let mut blocked = false;

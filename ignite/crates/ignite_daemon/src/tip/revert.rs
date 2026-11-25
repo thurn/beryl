@@ -285,7 +285,7 @@ impl TipVerifier {
         rerun: bool,
     ) -> Option<Outcome> {
         self.work
-            .run(ctx, at, std::slice::from_ref(&check.check), rerun)
+            .run(ctx, at, std::slice::from_ref(&check.check), rerun, false)
             .into_iter()
             .find(|r| r.check == check.check)
             .map(|r| r.outcome)

@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use rusqlite::Connection;
 
-use ignite_core::capacity::{Derived, MachineFacts, derive};
+use ignite_core::capacity::{Derived, MachineFacts, derive_for};
 use ignite_core::config::{Config, Machine, Os};
 use ignite_core::ids::MachineId;
 use ignite_core::manifest::Manifest;
@@ -96,7 +96,7 @@ impl Base {
             repo: repo.clone(),
             remote: config.repository.remote.clone(),
         });
-        let derived = derive(&facts);
+        let derived = derive_for(&facts, &declared);
         let limits = Limits::for_machine(&config, &declared, &manifest, &facts, &derived);
         Ok(Base {
             options,

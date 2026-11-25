@@ -323,7 +323,7 @@ impl TipVerifier {
                             };
                             let (runs, _) = self
                                 .work
-                                .run_batches(ctx, tip, &family, &batches, &callbacks);
+                                .run_batches(ctx, tip, &family, &batches, &callbacks, !after_master);
                             lock(&round.held).remove(&family);
                             lock(&round.runs).extend(runs);
                         }

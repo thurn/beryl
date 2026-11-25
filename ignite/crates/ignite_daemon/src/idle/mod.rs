@@ -120,6 +120,7 @@ impl Rerun for Checks {
             rerun: true,
             ticket: None,
             session: None,
+            reserve: None,
         };
         let run = self.run(ctx, tree, std::slice::from_ref(check), &options);
         let outcome = run

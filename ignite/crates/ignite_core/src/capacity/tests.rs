@@ -56,3 +56,22 @@ fn capacity_rounding_and_bounds() {
     assert_eq!(resource_slots(1, 0.5), 1);
     assert_eq!(resource_slots(11, 0.5), 5);
 }
+
+/// A machine that declares `tip_build_cores` keeps that many, whatever its cores would give;
+/// one that declares nothing keeps the derived count.
+#[test]
+fn a_declared_tip_reserve_replaces_the_derived_one() {
+    let facts = MachineFacts {
+        os: Os::Windows,
+        logical_cores: 20,
+        physical_cores: 12,
+        memory_mb: 0,
+        disk_total_gb: 0,
+    };
+    let declared = Machine {
+        tip_build_cores: Some(6),
+        ..Machine::default()
+    };
+    assert_eq!(derive_for(&facts, &declared).tip_build_cores, 6);
+    assert_eq!(derive_for(&facts, &Machine::default()), derive(&facts));
+}

@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::Os;
+use crate::config::{Machine, Os};
 use crate::ids::TicketId;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -148,6 +148,16 @@ pub fn derive(facts: &MachineFacts) -> Derived {
         landing_trees: express_cores,
         worker_ceiling: facts.logical_cores.saturating_mul(2),
     }
+}
+
+/// [`derive`], with the machine's declared overrides in `ignite.toml` applied: its
+/// `tip_build_cores`, when set, replaces the derived count.
+pub fn derive_for(facts: &MachineFacts, machine: &Machine) -> Derived {
+    let mut derived = derive(facts);
+    if let Some(cores) = machine.tip_build_cores {
+        derived.tip_build_cores = cores;
+    }
+    derived
 }
 
 /// Round to the nearest integer, with halves rounding up.

@@ -630,6 +630,7 @@ fn a_request_that_retries_failures_builds_again_over_a_remembered_failure() {
         ticket: None,
         session: None,
         retry_failure,
+        reserve: None,
     };
     f.manager
         .ensure_for(&tree(), "tests", &names(&["b"]), &who(false));

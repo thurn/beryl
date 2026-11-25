@@ -305,8 +305,13 @@ oracle = 1
 # machine, and the Macs run those several times faster. When Cygnus verified every family, it
 # spent most of each round building portable families while `master` waited for its Windows
 # checks. A family that must pass on Windows has to be named in both lists.
+#
+# `tip_build_cores` keeps 6 cores for a tip round's work before `master` moves, against the
+# 2 that 12 physical cores would give. With 2, a tip `client` build ran on 1.4 cores on
+# average and tip commands waited up to 1,500 s for cores behind agent work.
 [machine.cygnus]
 os = "windows"
+tip_build_cores = 6
 families = [
   "rust", "doctests", "clippy", "rust-format", "ignite", "ignite-lint", "source", "markdown",
   "repository", "commit", "black", "pytest", "pyre", "client-format", "client-source", "ignite-platform",
