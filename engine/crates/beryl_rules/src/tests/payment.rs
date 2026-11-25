@@ -2,15 +2,16 @@
 //! decisions.
 
 use super::LAND;
-use super::cast::{Game, TREASURE, cast};
+use super::cast::{BEAR, Game, ISLAND, LIES, TREASURE, cast};
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, CardDef, CostPart, Face, ManaColor, ManaCost, Types};
+use crate::card::{Ability, CardDef, Cost, CostPart, Face, ManaColor, ManaCost, Types};
 use crate::ids::Slot;
 use crate::mana::{self, Units};
 use crate::replacement::event::Sink;
 use crate::rng::SplitMix64;
 use crate::state::{ManaPool, TurnStep, Zone};
 use crate::{CardTable, DecisionKind, Opt, Payment, Profile};
+use beryl_card::effect::build::{draw, you};
 
 fn tapped(g: &Game, slot: Slot) -> bool {
     g.s.object(slot).is_tapped()
@@ -163,6 +164,57 @@ fn a_human_payment_counts_the_land_still_to_be_played() {
     assert!(main_phase_keeps_the_plains(0));
     // With the land played, an Island left keeps the sorcery and the Plains nothing.
     assert!(!main_phase_keeps_the_plains(1));
+}
+
+/// Casts a {1}{W} creature with three Plains and an Island, holding a {U} instant, with a
+/// creature on the battlefield whose ability costs {W}{W} and {T}, and says whether the
+/// Island stayed untapped. Two Plains left would pay that ability, and the Plains and the
+/// Island left would pay the instant.
+fn a_tap_ability_keeps_the_plains(sick: bool) -> bool {
+    static PRIEST: CardDef = beryl_card::definition::card(
+        "Test Priest",
+        &[Face {
+            cost: ManaCost::new(0, [1, 0, 0, 0, 0, 0]),
+            types: Types::CREATURE,
+            power: Some(1),
+            toughness: Some(1),
+            abilities: &[Ability::activated(Cost::of(
+                ManaCost::new(0, [2, 0, 0, 0, 0, 0]),
+                &[CostPart::TAP],
+            ))
+            .effect(&draw(you(), 1))],
+            ..Face::EMPTY
+        }],
+    );
+    static CARDS: CardTable = CardTable::new(&[&PRIEST, &LAND, &ISLAND, &BEAR, &LIES]);
+    let deck = &[
+        (8, LAND.name),
+        (2, ISLAND.name),
+        (1, BEAR.name),
+        (1, LIES.name),
+        (1, PRIEST.name),
+    ];
+    let mut g = Game::with(&CARDS, deck, Profile::EXACT);
+    let bear = g.give(g.me, BEAR.name, Zone::Hand);
+    g.give(g.me, LIES.name, Zone::Hand);
+    let priest = g.give(g.me, PRIEST.name, Zone::Battlefield);
+    g.s.board().set_sick(priest, sick);
+    for _ in 0..3 {
+        g.give(g.me, LAND.name, Zone::Battlefield);
+    }
+    let island = g.give(g.me, ISLAND.name, Zone::Battlefield);
+    g.pick(cast(bear));
+    assert_eq!(g.s.object(bear).zone(), Zone::Stack);
+    !tapped(&g, island)
+}
+
+#[test]
+fn a_payment_keeps_mana_only_for_a_tap_ability_that_can_be_activated() {
+    // The two Plains left pay the creature's {W}{W}, which is more than the instant's {U}.
+    assert!(!a_tap_ability_keeps_the_plains(false));
+    // CR 302.6: a creature that hasn't been under its controller's control since their turn
+    // began can't pay {T}, so the payment keeps the instant payable instead.
+    assert!(a_tap_ability_keeps_the_plains(true));
 }
 
 #[test]

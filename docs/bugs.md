@@ -19,6 +19,14 @@ fixed in the same session. Newest first.
   `a_hasty_creature_taps_for_restricted_mana_the_turn_it_arrives` in
   `beryl_rules/src/tests/remembered_mana.rs` and
   `a_summoning_sick_creature_offers_no_instant_mana_ability` in
+  `beryl_rules/src/tests/payment.rs`. A review found a fourth reader: the
+  automatic payment's estimate of the costs a player may still pay this turn
+  (`mana::lookahead`) counted a summoning-sick creature's {T} ability, so a
+  payment kept mana open for an ability that could not be activated, and it
+  skipped every ability of a tapped permanent, including those without {T}. Both
+  estimates now read the same list, `lookahead::activations`, which asks
+  `can_tap`. Guard:
+  `a_payment_keeps_mana_only_for_a_tap_ability_that_can_be_activated` in
   `beryl_rules/src/tests/payment.rs`.
 
 - **A search for any card let the player find nothing.** Searching a library

@@ -15,7 +15,7 @@ use crate::state::{State, TurnStep};
 use crate::table::{GameTable, ManaFace};
 
 use super::solver::{Plan, each_plan};
-use super::sources::Sources;
+use super::sources::{Sources, can_tap, controlled};
 use super::{Taps, units::Units};
 
 /// A cost the player might want to pay later: a card's mana cost, or an ability's
@@ -59,21 +59,32 @@ pub(super) fn later_costs<L: Layout>(
             }
         }
     }
-    for &slot in s.battlefield() {
-        let o = s.object(slot);
-        if s.controller(slot) != player || o.is_tapped() {
-            continue;
-        }
-        for (_, a) in s.abilities(t, slot) {
-            if a.kind() == AbilityKind::Activated && !a.is_loyalty() {
-                add(Later {
-                    cost: a.cost().mana.with_x(0),
-                    taps: a.cost().does(CostAction::Tap).then_some(slot),
-                });
-            }
-        }
+    for (a, taps) in activations(s, t, player) {
+        add(Later {
+            cost: a.cost().mana.with_x(0),
+            taps,
+        });
     }
     later
+}
+
+/// The activated abilities other than loyalty abilities of the permanents `player`
+/// controls, each with the permanent its {T} cost taps, if it has one. An ability with {T}
+/// in its cost is listed only where [`can_tap`] says the player may tap its permanent now,
+/// and one without it is listed whether its permanent is tapped or not.
+fn activations<'s, L: Layout>(
+    s: &'s State<L>,
+    t: &'s GameTable,
+    player: Seat,
+) -> impl Iterator<Item = (&'static Ability, Option<L::Slot>)> + 's {
+    controlled(s, player).flat_map(move |(slot, d)| {
+        let tappable = can_tap(s, player, slot, d);
+        s.abilities(t, slot).filter_map(move |(_, a)| {
+            let taps = a.cost().does(CostAction::Tap);
+            (a.kind() == AbilityKind::Activated && !a.is_loyalty() && (tappable || !taps))
+                .then_some((a, taps.then_some(slot)))
+        })
+    })
 }
 
 /// What `plan` keeps payable of `later`, best first: the most colored and colorless symbols
@@ -267,19 +278,8 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
             }
         }
     }
-    for &slot in s.battlefield() {
-        let o = s.object(slot);
-        if s.controller(slot) != player || o.is_tapped() {
-            continue;
-        }
-        for (_, a) in s.abilities(t, slot) {
-            if a.kind() == AbilityKind::Activated && !a.is_loyalty() && activatable(a) {
-                ahead.add(
-                    a.cost().mana,
-                    a.cost().does(CostAction::Tap).then_some(slot),
-                );
-            }
-        }
+    for (a, taps) in activations(s, t, player).filter(|&(a, _)| activatable(a)) {
+        ahead.add(a.cost().mana, taps);
     }
     ahead
 }
