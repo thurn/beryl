@@ -251,7 +251,7 @@ def run_android(gles: bool) -> tuple[str | None, str | None]:
             def errors() -> str:
                 errors_file = f"files/{phone.ERRORS}"
                 text = phone.adb(*shell, f"'cat {errors_file} 2>/dev/null'").stdout
-                crash = phone.adb("logcat", "-d", "-b", "crash").stdout
+                crash = phone.app_crashes()
                 return "\n".join(part for part in (text, crash[:4000]) if part)
 
             def suspend() -> None:

@@ -299,11 +299,13 @@ def adb(*args: str, stdin: Path | None = None) -> subprocess.CompletedProcess[st
             capture_output=True,
             check=False,
         )
+    # adb on Windows ends each line from the device with "\r\n", which breaks every parse of
+    # its output that splits or partitions on "\n".
     return subprocess.CompletedProcess(
         done.args,
         done.returncode,
-        done.stdout.decode(errors="replace"),
-        done.stderr.decode(errors="replace"),
+        done.stdout.decode(errors="replace").replace("\r\n", "\n"),
+        done.stderr.decode(errors="replace").replace("\r\n", "\n"),
     )
 
 
@@ -370,8 +372,36 @@ def start_emulator(gles: bool, window: bool = False) -> subprocess.Popen[bytes]:
 def adb_checked(*args: str) -> str:
     result = adb(*args)
     if result.returncode:
-        raise SystemExit(f"adb {' '.join(args)}: {result.stderr or result.stdout}")
+        # `adb install` prints its push progress on stderr and the reason it failed on stdout.
+        output = "\n".join(
+            s.strip() for s in (result.stderr, result.stdout) if s.strip()
+        )
+        raise SystemExit(f"adb {' '.join(args)}: {output}")
     return result.stdout.strip()
+
+
+def app_crashes() -> str:
+    """The app's crash reports in the device's crash log, without other apps' crashes, such
+    as the Google app that crashes while the x86_64 emulator image boots. Each report is a run
+    of lines from one process (the app's own, or the crash dumper's) that names the bundle.
+    """
+    text = adb("logcat", "-d", "-b", "crash", "-v", "threadtime").stdout
+    return "\n".join(app_crash_reports(text))
+
+
+def app_crash_reports(text: str) -> list[str]:
+    runs: list[tuple[str, list[str]]] = []
+    for line in text.splitlines():
+        # threadtime lines read `MM-DD HH:MM:SS.mmm  PID  TID LEVEL TAG: message`.
+        fields = line.split(maxsplit=3)
+        pid = fields[2] if len(fields) > 2 else ""
+        if runs and runs[-1][0] == pid:
+            runs[-1][1].append(line)
+        else:
+            runs.append((pid, [line]))
+    return [
+        "\n".join(lines) for _, lines in runs if any(BUNDLE in line for line in lines)
+    ]
 
 
 def install_android(apk: Path) -> None:
@@ -571,7 +601,7 @@ def run_android_smoke(args: argparse.Namespace) -> int:
                     text = adb(
                         *shell, f"'grep ^ERROR files/{LIBRARY_LOG} 2>/dev/null'"
                     ).stdout
-                crash = adb("logcat", "-d", "-b", "crash").stdout
+                crash = app_crashes()
                 events = adb("logcat", "-d", "-b", "events", "-s", "am_anr:I").stdout
                 anr = "\n".join(line for line in events.splitlines() if BUNDLE in line)
                 # The head of a crash holds the signal, the abort message and the top frames.
