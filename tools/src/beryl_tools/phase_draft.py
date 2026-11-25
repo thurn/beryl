@@ -6,6 +6,8 @@ leave that ability for the card writer, including nested fields and sub-abilitie
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass
 from typing import cast
 
@@ -534,7 +536,7 @@ def ability(value: object, trigger: str = "", parent: bool = False) -> Ability:
         raise Unsupported(
             f"ability.player_scope: unsupported value {player_scope!r} for this ability"
         )
-    node.take("description")
+    description = node.take("description")
     node.expect("condition", None)
     node.expect("target_prompt", None)
     node.expect("optional_targeting", False)
@@ -584,11 +586,24 @@ def ability(value: object, trigger: str = "", parent: bool = False) -> Ability:
         body, duration, up_to, keyword, all_players=player_scope is not None
     )
     if child is None:
-        return Ability(builder, (expression,), spec)
-    following = ability(child, parent=True)
-    if spec and following.target:
-        raise Unsupported("sub_ability adds a second target")
-    return Ability(builder, (expression, *following.effects), spec or following.target)
+        drafted = Ability(builder, (expression,), spec)
+    else:
+        following = ability(child, parent=True)
+        if spec and following.target:
+            raise Unsupported("sub_ability adds a second target")
+        drafted = Ability(
+            builder, (expression, *following.effects), spec or following.target
+        )
+    # Phase sometimes parses "Target player draws two cards" as a Draw with no target, which
+    # would draft as "draw two cards". Its sentence still says "target", so stop instead.
+    if not parent and not drafted.target and TARGET_WORD.search(str(description or "")):
+        raise Unsupported(
+            "ability.effect: the sentence names a target the parse dropped"
+        )
+    return drafted
+
+
+TARGET_WORD: re.Pattern[str] = re.compile(r"\btarget\b", re.IGNORECASE)
 
 
 TRIGGERS: dict[tuple[str, str | None, str | None], str] = {

@@ -240,3 +240,27 @@ def test_cached_data_must_match_the_pinned_release(tmp_path: Path) -> None:
         phase_data.load(pin, cached)
     cached.write_bytes(FIXTURE.read_bytes())
     assert "mind_rot" in phase_data.load(pin, cached)
+
+
+def test_a_target_the_parse_dropped_stops_the_draft() -> None:
+    # Phase's parse of Inspiration: its Draw has no target, though the sentence names one.
+    inspiration = {
+        "kind": "Spell",
+        "effect": {"type": "Draw", "count": {"type": "Fixed", "value": 2}},
+        "cost": None,
+        "sub_ability": None,
+        "duration": None,
+        "description": "Target player draws two cards.",
+        "target_prompt": None,
+        "sorcery_speed": False,
+        "condition": None,
+        "optional_targeting": False,
+        "optional": False,
+        "forward_result": False,
+    }
+    with pytest.raises(phase_draft.Unsupported, match="target the parse dropped"):
+        phase_draft.ability(inspiration)
+    divination = {**inspiration, "description": "Draw two cards."}
+    assert phase_draft.ability(divination).expression() == (
+        "Ability::spell().effect(&draw(you(), 2))"
+    )
