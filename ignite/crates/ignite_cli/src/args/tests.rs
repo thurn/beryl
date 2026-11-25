@@ -25,6 +25,16 @@ fn help_lists_every_agent_verb() {
 }
 
 #[test]
+fn show_is_a_top_level_shorthand_for_ticket_show() {
+    let cli = Cli::try_parse_from(["ignite", "show", "C-1", "--comments"]).unwrap();
+    let Command::Show { ids, comments, .. } = cli.command else {
+        panic!("not show");
+    };
+    assert_eq!(ids, ["C-1"]);
+    assert!(comments);
+}
+
+#[test]
 fn hub_serves_without_a_subcommand_and_restores_with_one() {
     let parse = |line: &str| {
         Cli::try_parse_from(line.split_whitespace())

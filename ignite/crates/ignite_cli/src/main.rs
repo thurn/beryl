@@ -78,6 +78,15 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
     }
     match &cli.command {
         Command::Ticket { command } => ticket::run(command),
+        Command::Show {
+            ids,
+            comments,
+            history,
+        } => ticket::run(&args::TicketCommand::Show {
+            ids: ids.clone(),
+            comments: *comments,
+            history: *history,
+        }),
         Command::Fleet { command } => fleet::run(command.as_ref(), &current_dir()),
         Command::Trees { command } => trees::run(command, &current_dir()),
         Command::Plan { command } => plan::run(command),

@@ -105,6 +105,15 @@ pub enum Command {
         #[command(subcommand)]
         command: Box<TicketCommand>,
     },
+    /// Show one or more tickets, like `ticket show`. For a check's record use `why`.
+    Show {
+        #[arg(required = true)]
+        ids: Vec<String>,
+        #[arg(long)]
+        comments: bool,
+        #[arg(long)]
+        history: bool,
+    },
     /// Print a check's record: its cost, its failures, where it runs and why.
     Why {
         check: String,
@@ -680,7 +689,8 @@ impl Command {
             Command::Run { .. } => "run",
             Command::Wait { .. } => "wait",
             Command::Stop { .. } => "stop",
-            Command::Ticket { .. } => "ticket",
+            // Answered by the same code as `ticket show`.
+            Command::Ticket { .. } | Command::Show { .. } => "ticket",
             Command::Why { .. } => "why",
             Command::Status { .. } => "status",
             Command::Doctor => "doctor",
