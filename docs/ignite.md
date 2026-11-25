@@ -3047,9 +3047,9 @@ not compile. Once a commit that added a function was reverted for a failing
 pytest check while a later commit already called the function, and `staging`
 stopped compiling until someone reverted the caller by hand. So when a build
 check fails at the revert, or the revert conflicts, the round looks for the
-later landings up to the tip that depend on the culprit, undoes them in the
-same commit and builds again, once. A later landing depends on the culprit when
-a line it added uses a word the culprit introduced (a word of three or more
+later landings up to the tip that depend on the culprit, undoes them in the same
+commit and builds again, once. A later landing depends on the culprit when a
+line it added uses a word the culprit introduced (a word of three or more
 letters, digits and underscores in the culprit's added lines that no text file
 held before the culprit, which `Git::words_before` finds with `git grep`), or
 when it removed a line of 12 or more characters that the culprit added
@@ -3057,38 +3057,37 @@ when it removed a line of 12 or more characters that the culprit added
 source, or is a round's own revert, is never undone. If the revert still does
 not build, nothing is pushed, and the round reports the failing check as a
 regression, even one reported before, with a note before its output that names
-the culprit, the later landings undone with it and the build checks that
-failed.
+the culprit, the later landings undone with it and the build checks that failed.
 
 The revert commit's subject is `revert: <the landing's first subject>`, cut to
 60 characters, and its body names the check and the commits it undoes, with the
-later landings undone with the culprit listed apart. The round
-takes the hub's lease on `staging` as a landing does, waiting while a landing
-holds it, checks that the tip has not moved, and pushes. When the tip moved, it
-builds the revert again on the new tip, three times at most, then reports a
-regression instead. A new tip that changed what the check reads, such as a fix
-or another machine's revert, is left to the next round, which runs the check
-there first. A check is left to the next round this way only once until `master`
-moves: on a busy day every round's tip is overtaken before it ends, so a check
-that fails again is reported as a regression whatever the newer tip changed. The
-round then tells the hub (`Hub::reverted`, `POST /reverted`), once for each
-landing the commit undid; a later landing's report says it was undone with the
-culprit because it uses what the culprit added. In one batch the
-hub reopens the landing's ticket, sets its priority to 0 and its metadata
-`reverted` (the revert commit, the landed commits and the failing checks), and
-comments with the check, its output and the line
-`apply your work again with: git revert --no-edit <revert commit>`. For commits
-no landing recorded it files a new P0 ticket with the same text. A second report
-of the same revert commit changes nothing, and a landing of the ticket clears
-`reverted`. A session already holding a ticket that depends on the reopened one
-is told, as `ignite tell` tells it, to release that ticket, which is handed out
-again when the reopened one lands. A reopened CLI landing is offered on the
-machine and provider that ran the landing, as for a regression. The worker
-resumes that transcript with the revert details. The brief of `ignite start`
-prints a `reverted` line with the revert commit, the checks and the command to
-apply the work again. If the hub misses the report, the verifier sends it again
-at the start of the next round. Another eligible check that failed with the same
-landing is covered by the same revert once it passes at that revert commit.
+later landings undone with the culprit listed apart. The round takes the hub's
+lease on `staging` as a landing does, waiting while a landing holds it, checks
+that the tip has not moved, and pushes. When the tip moved, it builds the revert
+again on the new tip, three times at most, then reports a regression instead. A
+new tip that changed what the check reads, such as a fix or another machine's
+revert, is left to the next round, which runs the check there first. A check is
+left to the next round this way only once until `master` moves: on a busy day
+every round's tip is overtaken before it ends, so a check that fails again is
+reported as a regression whatever the newer tip changed. The round then tells
+the hub (`Hub::reverted`, `POST /reverted`), once for each landing the commit
+undid; a later landing's report says it was undone with the culprit because it
+uses what the culprit added. In one batch the hub reopens the landing's ticket,
+sets its priority to 0 and its metadata `reverted` (the revert commit, the
+landed commits and the failing checks), and comments with the check, its output
+and the line `apply your work again with: git revert --no-edit <revert commit>`.
+For commits no landing recorded it files a new P0 ticket with the same text. A
+second report of the same revert commit changes nothing, and a landing of the
+ticket clears `reverted`. A session already holding a ticket that depends on the
+reopened one is told, as `ignite tell` tells it, to release that ticket, which
+is handed out again when the reopened one lands. A reopened CLI landing is
+offered on the machine and provider that ran the landing, as for a regression.
+The worker resumes that transcript with the revert details. The brief of
+`ignite start` prints a `reverted` line with the revert commit, the checks and
+the command to apply the work again. If the hub misses the report, the verifier
+sends it again at the start of the next round. Another eligible check that
+failed with the same landing is covered by the same revert once it passes at
+that revert commit.
 
 A round that sees a required check fail tells the hub at once
 (`POST /tips/failures`), and the hub then lets a newer `staging` tip replace the
