@@ -37,11 +37,39 @@ fn exile_and_link<L: Layout>(
     source: ObjectRef<L>,
 ) -> Result<(), Full> {
     exile::exile(game, objects)?;
-    if game.state.is_current(source) {
-        let exiled = objects & game.state.in_zone(Zone::Exile);
-        for &slot in game.state.in_game_order(game.table, exiled)?.iter() {
-            game.state.remember(slot, Memo::exiled_with(source))?;
-        }
+    let exiled = objects & game.state.in_zone(Zone::Exile);
+    link(game, exiled, source, Link::ExiledWith)
+}
+
+/// What an object moved by an ability remembers of the ability's source.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Link {
+    /// A card in exile is "exiled with" the source (CR 607.2a).
+    ExiledWith,
+    /// A permanent was put onto the battlefield with the source, as Animate Dead's "enchant
+    /// creature put onto the battlefield with this Aura" reads.
+    PutOntoBattlefieldWith,
+}
+
+/// Has each of `moved`, in game order, remember `source` as `link` says, if `source` is still
+/// the object whose ability moved them. A source that has left its zone since is a new object
+/// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), so nothing is linked
+/// to it.
+pub(crate) fn link<L: Layout>(
+    game: &mut Game<'_, L>,
+    moved: Bitboard<L::Slot>,
+    source: ObjectRef<L>,
+    link: Link,
+) -> Result<(), Full> {
+    if !game.state.is_current(source) {
+        return Ok(());
+    }
+    let memo = match link {
+        Link::ExiledWith => Memo::exiled_with(source),
+        Link::PutOntoBattlefieldWith => Memo::PutOntoBattlefieldWith(source.slot),
+    };
+    for &slot in game.state.in_game_order(game.table, moved)?.iter() {
+        game.state.remember(slot, memo)?;
     }
     Ok(())
 }

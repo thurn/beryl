@@ -21,9 +21,10 @@ use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
+use crate::objects::linked::{self, Link};
 use crate::replacement::event::{self, Entry, Reason};
 use crate::stack;
-use crate::state::{CounterKind, Memo, ObjectRef, Zone};
+use crate::state::{CounterKind, ObjectRef, Zone};
 use crate::zone::Place;
 
 /// Moves an object to a zone, to the top of an ordered one. One that has changed zones since
@@ -178,7 +179,7 @@ pub(crate) fn return_instruction<L: Layout>(
 /// or sorcery card stays where it is (CR 400.4a). The outcome is the permanents they are.
 ///
 /// A linked instruction has each permanent remember the ability's source
-/// ([`Memo::PutOntoBattlefieldWith`]), while that source is still the object whose ability
+/// ([`Link::PutOntoBattlefieldWith`]), while that source is still the object whose ability
 /// this is: Animate Dead's "enchant creature put onto the battlefield with this Aura" and
 /// "that creature" read it.
 pub(crate) fn put_onto_instruction<L: Layout>(
@@ -212,10 +213,9 @@ pub(crate) fn put_onto_instruction<L: Layout>(
         game.state, game.table, game.sink, objects, to, reason, entry,
     )?;
     let outcome = run.now_in(objects, Zone::Battlefield);
-    if onto.linked && run.state().is_current(source) {
-        for &slot in run.in_game_order(outcome.objects)?.iter() {
-            (run.game().state).remember(slot, Memo::PutOntoBattlefieldWith(source.slot))?;
-        }
+    if onto.linked {
+        let link = Link::PutOntoBattlefieldWith;
+        linked::link(run.game(), outcome.objects, source, link)?;
     }
     Ok(outcome)
 }

@@ -65,11 +65,10 @@ pub fn remove<L: Layout>(
     kind: CounterKind,
     amount: u8,
 ) -> Result<(), Full> {
-    let object = ObjectRef::from(object);
-    if !game.state.object(object.slot).on_battlefield() {
+    let Some(object) = game.state.permanent(object.into()) else {
         return Ok(());
-    }
-    remove_from_object(game, object, kind, amount)
+    };
+    remove_from_object(game, object.into(), kind, amount)
 }
 
 /// Removes counters from an object whose own ability can use them outside the battlefield
