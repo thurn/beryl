@@ -246,7 +246,12 @@ impl<L: Layout> State<L> {
         let list = match zone {
             Zone::Graveyard => &mut self.zones.graveyard[owner.index()],
             Zone::Library => &mut self.zones.library[owner.index()],
-            _ => panic!("a card arranged outside a graveyard or library"),
+            Zone::Hand
+            | Zone::Battlefield
+            | Zone::Exile
+            | Zone::Stack
+            | Zone::Nowhere
+            | Zone::Merged => panic!("a card arranged outside a graveyard or library"),
         };
         let lowest = (list.as_slice().iter())
             .position(|&slot| among.contains(slot))

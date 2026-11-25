@@ -27,7 +27,7 @@ use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
 use crate::replacement;
 use crate::stack::trigger;
-use crate::state::{CounterKind, Memo, State, Tracker, Zone};
+use crate::state::{CounterKind, Memo, ObjectRef, State, Tracker, Zone};
 use crate::table::{Capability, GameTable};
 use crate::zone::Place;
 use crate::zones::piles;
@@ -365,30 +365,8 @@ fn move_ordered<L: Layout, const N: usize>(
     // The cards of merged or melded permanents going to a graveyard or library, which their
     // owners arrange once the batch has moved ([`piles`]): one AND while no permanent is made
     // of several cards, read before the moves end what the stores hold of them.
-    let piles = if s.has_piles() {
-        piles::leaving(
-            s,
-            moves
-                .iter()
-                .map(|&(slot, from, dest, _)| (slot, from, dest)),
-        )
-    } else {
-        Bitboard::EMPTY
-    };
-    let changed = |slot, object, from, to| Event::ZoneChange {
-        object,
-        from,
-        to,
-        reason: reasons.for_slot(slot),
-        // see [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Public zones
-        // are zones in which all players can see the cards' faces" including the stack.
-        // Keep the end chosen for a spell, even when the library was empty.
-        library_top: match (from, to, place) {
-            (Zone::Stack, Zone::Library, Place::Top) => Some(true),
-            (Zone::Stack, Zone::Library, Place::Bottom) => Some(false),
-            _ => None,
-        },
-    };
+    let piles = leaving_piles(s, moves.as_slice());
+    let changed = |slot, object, from, to| zone_change(reasons, place, slot, object, from, to);
     let first = moves.as_slice().as_ptr();
     // The permanents the batch puts onto the battlefield, in the order they move.
     let mut arrived: L::Queue<L::Slot, N> = Default::default();
@@ -451,6 +429,49 @@ fn move_ordered<L: Layout, const N: usize>(
         return_exiled(s, t, sink, returning)?;
     }
     Ok(())
+}
+
+/// The zone-change event of `object`, in `slot`, moving from `from` to `to` in a batch moved
+/// for `reasons` to `place`.
+#[inline]
+fn zone_change<L: Layout>(
+    reasons: MoveReasons<'_, L::Slot>,
+    place: Place,
+    slot: L::Slot,
+    object: ObjectRef<L>,
+    from: Zone,
+    to: Zone,
+) -> Event<L> {
+    Event::ZoneChange {
+        object,
+        from,
+        to,
+        reason: reasons.for_slot(slot),
+        // see [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Public zones
+        // are zones in which all players can see the cards' faces" including the stack.
+        // Keep the end chosen for a spell, even when the library was empty.
+        library_top: match (from, to, place) {
+            (Zone::Stack, Zone::Library, Place::Top) => Some(true),
+            (Zone::Stack, Zone::Library, Place::Bottom) => Some(false),
+            _ => None,
+        },
+    }
+}
+
+/// The cards of merged or melded permanents among `moves` going to a graveyard or library,
+/// which their owners arrange once the batch has moved ([`piles`]): one AND while no permanent
+/// is made of several cards.
+#[inline]
+fn leaving_piles<L: Layout>(s: &State<L>, moves: &[PreparedMove<L>]) -> Bitboard<L::Slot> {
+    if !s.has_piles() {
+        return Bitboard::EMPTY;
+    }
+    piles::leaving(
+        s,
+        moves
+            .iter()
+            .map(|&(slot, from, dest, _)| (slot, from, dest)),
+    )
 }
 
 /// Returns objects exiled until a permanent leaves. See [CR 610.3c]: "An object returned

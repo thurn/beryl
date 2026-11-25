@@ -285,6 +285,7 @@ pub(super) fn perform_machine<L: Layout>(
     d: &Decision<L>,
     c: Choice,
 ) -> Option<Result<(), Full>> {
+    let object = || d.candidates.object(c).expect("an object choice");
     Some(match *s.pending() {
         Pending::Resolving(ref r) => {
             let answer = resolve::recorded(d, index::<L>(usize::from(c.0)), r.asks_hidden());
@@ -360,16 +361,14 @@ pub(super) fn perform_machine<L: Layout>(
         }
         // The other question of a mulligan, keep or mulligan, has a kind of its own.
         Pending::Mulligans if d.kind == DecisionKind::ChooseObject => {
-            let card = d.candidates.object(c).expect("an object choice");
-            let card = s.card_in(s.object_ref(card), Hand).expect("a card in hand");
+            let card = s
+                .card_in(s.object_ref(object()), Hand)
+                .expect("a card in hand");
             start::put_on_bottom(s, t, x, a, d.player, card)
         }
-        Pending::Discard => {
-            let card = d.candidates.object(c).expect("an object choice");
-            turn::cleanup_discard(s, t, &mut x.events, card)
-        }
+        Pending::Discard => turn::cleanup_discard(s, t, &mut x.events, object()),
         Pending::LegendRule { mut kept } => {
-            kept.insert(d.candidates.object(c).expect("an object choice"));
+            kept.insert(object());
             if sba::unresolved_legends(s, t, kept).is_some() {
                 s.ask(Pending::LegendRule { kept });
                 Ok(())
@@ -377,12 +376,8 @@ pub(super) fn perform_machine<L: Layout>(
                 sba::apply_legend_rule(s, t, &mut x.events, kept)
             }
         }
-        Pending::OrderEntered { group } => {
-            arrival_timestamps::pick(s, group, d.candidates.object(c).expect("an object choice"))
-        }
-        Pending::ArrangePiles { group } => {
-            piles::pick(s, group, d.candidates.object(c).expect("an object choice"))
-        }
+        Pending::OrderEntered { group } => arrival_timestamps::pick(s, group, object()),
+        Pending::ArrangePiles { group } => piles::pick(s, group, object()),
         Pending::None
         | Pending::PlayOrDraw { .. }
         | Pending::Mulligans
