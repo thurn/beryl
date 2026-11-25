@@ -195,7 +195,10 @@ fn a_ticket_deferred_before_its_release_is_not_held_back() {
         let (status, reply) = post(&mut conn, "/claims", &claim(id, session), at(start));
         assert_eq!(status, 200, "{reply}");
         let defer = json!({"ops": [{"op": "defer", "id": id, "until": at(start + 5.0)}]});
-        assert_eq!(tickets_route(&mut conn, "POST", "/batch", &defer).status, 200);
+        assert_eq!(
+            tickets_route(&mut conn, "POST", "/batch", &defer).status,
+            200
+        );
         let mut body = release(id, session);
         body["reason"] = json!("The earlier work is still running.");
         assert_eq!(post(&mut conn, "/release", &body, at(start + 1.0)).0, 200);
