@@ -228,10 +228,10 @@ impl Track {
     }
 
     /// Drops every segment after the first that ended by `now` and only changed how high the
-    /// object lies above the table (`Segment::shifts`). A card that lies in a pile takes one such
-    /// segment each time a card joins or leaves the pile, so a card that flew to an exile pile
+    /// object lies above the table (`Segment::shifts`). An object that lies in a stack takes one
+    /// such segment each time an object joins or leaves the stack, so one that flew to a stack
     /// early in a long script would otherwise fill its track with them. `drop_ended` would then
-    /// drop the segments that fly it there, and the card would stand at the end of its flight
+    /// drop the segments that fly it there, and the object would stand at the end of its flight
     /// from the start of the script. The first segment holds the object where it rested before
     /// the script and stays.
     fn drop_layers(&mut self, now: u64) {
