@@ -446,3 +446,35 @@ fn the_service_is_not_rewritten_while_the_daemon_does_not_answer() {
     run_once(&home, &machine, at(0.0));
     assert_eq!(machine.log(), ["kickstart"]);
 }
+
+#[test]
+fn a_run_that_blocks_gives_up_at_its_deadline() {
+    let (_keep, blocked) = mpsc::channel::<()>();
+    assert_eq!(
+        with_deadline(Duration::ZERO, move || blocked.recv().is_ok()),
+        None
+    );
+    assert_eq!(with_deadline(RUN_DEADLINE, || 7), Some(7));
+}
+
+#[test]
+fn a_kickstart_ends_every_daemon_that_did_not_stop_newest_first() {
+    let start = |seconds: f64, pid: u32, stopped: bool| StartRecord {
+        at: at(seconds),
+        commit: GOOD.to_owned(),
+        pid,
+        stopped: stopped.then(|| at(seconds + 1.0)),
+        hung: !stopped,
+        reason: None,
+        adopted: Vec::new(),
+    };
+    // 24900 hung, then each kickstarted daemon hung too; 20580 stopped for a release.
+    let starts = [
+        start(0.0, 20580, true),
+        start(10.0, 24900, false),
+        start(20.0, 31892, false),
+        start(30.0, 1828, false),
+        start(40.0, 31892, false),
+    ];
+    assert_eq!(daemons_to_end(&starts), [31892, 1828, 24900]);
+}

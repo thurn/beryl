@@ -25,6 +25,11 @@
 //!   and then resumes a headless justiciar turn, a repair session with no person watching
 //!   ([`justiciar`]).
 //!
+//! A run gives up after [`RUN_DEADLINE`] ([`with_deadline`]). The login service starts no new run
+//! while one is still running, so a run blocked on a helper process would otherwise stop every
+//! later one: on 2026-11-25 a Windows run blocked from 06:13Z, and the machine got no restart and
+//! no repair session for nearly eight hours.
+//!
 //! The justiciar turn is the monitor's only agent logic, and it calls the hub only to see that
 //! it answers. Each decision ([`decide`], [`decide_hub`], [`justiciar::decide`]) is a function
 //! of what was observed; the observations and actions are the [`Machine`] trait, so the tests
@@ -42,7 +47,7 @@ use ignite_os::Native;
 use ignite_os::service::Service;
 use serde::{Deserialize, Serialize};
 
-use crate::update::{CrashLoop, Home, detect_crash_loop, roll_back, start_log};
+use crate::update::{CrashLoop, Home, StartRecord, detect_crash_loop, roll_back, start_log};
 
 #[path = "monitor_justiciar.rs"]
 pub mod justiciar;
@@ -57,6 +62,9 @@ pub const ESCALATE_AFTER_S: f64 = 900.0;
 pub const RENOTIFY_AFTER_S: f64 = 3600.0;
 /// How long the daemon, or the hub, has to answer the probe.
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+/// A run that has not finished after this long gives up, so the next run can start. It is
+/// shorter than the two minutes between runs.
+pub const RUN_DEADLINE: Duration = Duration::from_secs(100);
 /// This many runs in a row without an answer from the hub get it kickstarted.
 pub const HUB_FAILURES_BEFORE_KICKSTART: u32 = 2;
 
@@ -342,6 +350,35 @@ fn evidence(state: &MonitorState, seen: &Observation, home: &Home, now: Timestam
     )
 }
 
+/// The processes a kickstart ends: every daemon in `starts` that did not stop on purpose, newest
+/// first. Ending only the newest is not enough. When a kickstarted daemon hangs as well, the
+/// daemon it replaced may still be alive and hold `daemon.lock`, and every later start is then
+/// refused. On 2026-11-25 daemon 24900 hung and outlived three kickstarts, which each ended only
+/// the daemon started just before. A process that has already exited, or whose ID now belongs
+/// to a program outside Ignite's builds, is left alone by `terminate_under`.
+pub fn daemons_to_end(starts: &[StartRecord]) -> Vec<u32> {
+    let mut pids = Vec::new();
+    for start in starts.iter().rev().filter(|start| start.stopped.is_none()) {
+        if !pids.contains(&start.pid) {
+            pids.push(start.pid);
+        }
+    }
+    pids
+}
+
+/// Runs `work` on a thread of its own and returns its result, or `None` when it has not finished
+/// within `deadline`. A thread that is still blocked is left behind and ends with the process.
+pub fn with_deadline<T: Send + 'static>(
+    deadline: Duration,
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Option<T> {
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = sender.send(work());
+    });
+    receiver.recv_timeout(deadline).ok()
+}
+
 /// The real machine: the login service for the process and the kickstart, the daemon's socket
 /// for the probe and the desktop for notifications.
 pub struct NativeMachine {
@@ -390,12 +427,12 @@ impl Machine for NativeMachine {
                 root: self.home.clone(),
             };
             // A daemon restarted by a Windows self-update runs detached from the scheduled task,
-            // so `schtasks /End` cannot stop it if it hangs. Stop the detached daemon before
+            // so `schtasks /End` cannot stop it if it hangs. Stop every detached daemon before
             // starting the task again so the new daemon does not hit `daemon.lock`.
-            if crate::machine_lock::held(&home)
-                && let Some(last) = start_log(&home).read().last()
-            {
-                let _ = Native.terminate_under(last.pid, home.store().root());
+            if crate::machine_lock::held(&home) {
+                for pid in daemons_to_end(&start_log(&home).read()) {
+                    let _ = Native.terminate_under(pid, home.store().root());
+                }
             }
         }
         Native.kickstart_daemon()
@@ -487,18 +524,24 @@ pub fn hub_answers(listen: &str) -> bool {
 /// `ignite monitor`: one run against this machine. Never fails: a problem it handled is
 /// reported in the text, and so is a panic.
 pub fn run() -> Reply {
-    let outcome = std::panic::catch_unwind(|| {
-        let home = Home::from_env();
-        let machine = NativeMachine {
-            socket: crate::server::default_socket(),
-            home: home.root.clone(),
-        };
-        run_once(&home, &machine, SystemClock.now())
+    let outcome = with_deadline(RUN_DEADLINE, || {
+        std::panic::catch_unwind(|| {
+            let home = Home::from_env();
+            let machine = NativeMachine {
+                socket: crate::server::default_socket(),
+                home: home.root.clone(),
+            };
+            run_once(&home, &machine, SystemClock.now())
+        })
     });
     let text = match outcome {
-        Ok(done) if done.is_empty() => "monitor: nothing to do".to_owned(),
-        Ok(done) => done.join("\n"),
-        Err(_) => "monitor: stopped by an internal error; will run again".to_owned(),
+        Some(Ok(done)) if done.is_empty() => "monitor: nothing to do".to_owned(),
+        Some(Ok(done)) => done.join("\n"),
+        Some(Err(_)) => "monitor: stopped by an internal error; will run again".to_owned(),
+        None => format!(
+            "monitor: a step did not finish within {} s; gave up so that the next run can start",
+            RUN_DEADLINE.as_secs()
+        ),
     };
     Reply::text(Exit::Success, text)
 }

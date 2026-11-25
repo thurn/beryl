@@ -976,7 +976,12 @@ How a broken build or a crash is survived:
   neither helps for 15 minutes, writes `justiciar-needed.json` in the Ignite
   home and posts a notification. On the hub's machine it also kickstarts a hub
   that has not answered an HTTP request in two runs in a row. The monitor has no
-  agent logic and makes no hub calls.
+  agent logic and makes no hub calls. A run gives up after 100 seconds, because
+  the login service starts no new run while one is still running, and the
+  notification's helper process runs without the monitor waiting for it. A
+  restart ends every daemon in `starts.jsonl` that did not stop on purpose, not
+  only the newest, so a hung daemon cannot keep `daemon.lock` through later
+  restarts.
 - The daemon reports each crash record, and a loop that keeps failing, to the
   hub as a justiciar report. See [The justiciar](#the-justiciar).
 
@@ -3338,6 +3343,8 @@ cleared:
   idle session: it is no longer held that long, or its session is working.
 - A machine that has not reported: it has reported since, and no tip has waited
   an hour for verification since.
+- A machine that has stopped reporting (the P0 ticket for a person): it has
+  reported since, or it was set off.
 - `master` has not moved: no landing has waited two hours for it.
 - Checks left incomplete (a failed build, a hung command, an invalid manifest
   entry, a command that cannot run or did not report): each check the ticket
@@ -4681,9 +4688,16 @@ continuations to the same session skip the comparison.
 ### Tip verification and machines that are off
 
 A tip round defers outstanding checks that must pass separately on a platform
-when all its registered machines are off, or when it has an online checks-only
-machine and no online active machine. A machine counts as online for this policy
-if the hub heard from it in the last 30 minutes. An online active machine on the
+when each of its registered machines is off or has not been heard from for 30
+minutes, or when it has an online checks-only machine and no online active
+machine. A machine counts as online for this policy if the hub heard from it in
+the last 30 minutes. A machine whose daemon or storage hangs stops sending
+heartbeats without anyone turning it off, so after 30 minutes `master` stops
+waiting for it, and its platform returns with its next heartbeat. Upkeep also
+files a P0 ticket labelled `needs:person`, which the dashboard shows as an
+attention card, for each machine that is not off and has been silent for 30
+minutes. A machine silent for more than a day is taken to be retired and gets no
+ticket. An online active machine on the
 same platform keeps its native checks in the promotion gate. Checks-only
 machines can still run portable checks before promotion.
 
