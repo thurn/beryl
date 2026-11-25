@@ -1,14 +1,15 @@
 //! Whether regression tickets that hold the verified branch back still have a fix in progress.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{Connection, params};
 use serde_json::Value;
 
+use ignite_core::config::Os;
 use ignite_core::protocol::tickets::CULPRIT_HANDOFF_KEY;
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
-use ignite_store::hub::{tickets, tips};
+use ignite_store::hub::{fleet, fleet_settings, rows, tickets, tips};
 
 use super::{parse_time, regressions};
 
@@ -16,31 +17,36 @@ use super::{parse_time, regressions};
 pub(super) const UNCLAIMED_SECONDS: f64 = 10.0 * 60.0;
 pub(super) const INACTIVE_SECONDS: f64 = 50.0 * 60.0;
 pub(super) const FAILED_FIXES: u32 = 2;
-pub(super) const FALLBACK_AGE_SECONDS: f64 = 20.0 * 3600.0;
+pub(super) const FALLBACK_AGE_SECONDS: f64 = 4.0 * 3600.0;
+pub(super) const MAX_AGE_SECONDS: f64 = 4.0 * 3600.0;
 
 /// Use the 90th percentile of recent regression lifetimes from the culprit-resume workflow
 /// once there is a sample big enough for two observations in its upper tenth.
 const MIN_AGE_SAMPLE: usize = 20;
 const MAX_AGE_SAMPLE: usize = 50;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Stall {
     Unclaimed(Timestamp),
     Inactive(Timestamp),
+    HolderUnavailable(String),
     FailedFixes(u32),
     Old(Timestamp),
 }
 
 impl Stall {
-    pub(super) fn reason(self) -> String {
+    pub(super) fn reason(&self) -> String {
         match self {
             Self::Unclaimed(since) => format!("It has been open without a claim since {since}."),
             Self::Inactive(since) => {
                 format!("Its holder last recorded activity on the ticket at {since}.")
             }
+            Self::HolderUnavailable(machine) => format!(
+                "Its holder is on machine {machine}, which is off, silent or has stuck storage."
+            ),
             Self::FailedFixes(count) => format!(
-                "{count} separate fixes landed, and tip verification still failed the same check \
-                 after each one."
+                "{count} separate fixes landed or closed it without a landing, and tip \
+                 verification still failed the same check after each one."
             ),
             Self::Old(since) => format!(
                 "It has been open since {since}, longer than the historical 90th-percentile \
@@ -50,17 +56,21 @@ impl Stall {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct Progress {
     filed: Timestamp,
     unclaimed_since: Option<Timestamp>,
     last_activity: Option<Timestamp>,
+    holder_unavailable: Option<String>,
     culprit_resumed: bool,
     failed_fixes: u32,
 }
 
 impl Progress {
     fn stall(self, now: Timestamp, age_seconds: f64) -> Option<Stall> {
+        if let Some(machine) = self.holder_unavailable {
+            return Some(Stall::HolderUnavailable(machine));
+        }
         if self.culprit_resumed {
             return None;
         }
@@ -87,6 +97,7 @@ struct Regression {
     ready: Timestamp,
     claimed: Option<Timestamp>,
     session: Option<String>,
+    holder_unavailable: Option<String>,
     culprit_resumed: bool,
     status: String,
 }
@@ -131,6 +142,13 @@ fn observe(
     ticket: Option<&str>,
     passed: impl Fn(&Connection, &str) -> Result<bool>,
 ) -> Result<BTreeMap<String, Option<Stall>>> {
+    let settings = fleet_settings::settings(conn)?;
+    let stuck = fleet_settings::storage_stuck_map(conn)?;
+    let machines: BTreeMap<String, rows::Machine> = fleet::machines(conn)?
+        .into_iter()
+        .map(|machine| (machine.id.clone(), machine))
+        .collect();
+    let unavailable = fleet_settings::unavailable_platforms(conn, &settings, now)?;
     let mut select = conn.prepare(
         "WITH open_tickets AS (
              SELECT DISTINCT r.ticket
@@ -144,7 +162,8 @@ fn observe(
                  AND json_extract(h.change, '$.status[0]') = 'closed'
                  AND json_extract(h.change, '$.status[1]') = 'open') AS reopened,
                 json_extract(t.metadata, ?2) AS added,
-                json_extract(t.metadata, ?3) AS handoff
+                json_extract(t.metadata, ?3) AS handoff,
+                t.machine
          FROM open_tickets o JOIN tickets t ON t.id = o.ticket",
     )?;
     let added_key = format!("$.{}", regressions::ADDED_KEY);
@@ -171,6 +190,11 @@ fn observe(
         if last_pass_seen.is_some_and(|seen| seen > latest_check) && passed(conn, &id)? {
             continue;
         }
+        // A regression whose failing checks all belong to currently deferred/unavailable platforms
+        // does not hold `master` back, so it must not silence `master_lag`.
+        if !unavailable.is_empty() && on_unavailable_platforms_only(conn, &id, &unavailable)? {
+            continue;
+        }
         // A regression can reuse its old ticket after a passing tip. The new failure gets
         // its own lifetime, while a reopen after an unsuccessful fix keeps the original one.
         let episode = if last_pass_seen.is_some_and(|seen| seen >= filed) {
@@ -181,11 +205,21 @@ fn observe(
         let session: Option<String> = row.get(3)?;
         let handoff: Option<String> = row.get(8)?;
         let status: String = row.get(2)?;
+        let machine_id: Option<String> = row.get(9)?;
+        let holder_unavailable = (status == "in_progress")
+            .then_some(machine_id)
+            .flatten()
+            .and_then(|id| machines.get(&id))
+            .filter(|machine| {
+                !fleet_settings::machine_online_and_active(machine, &settings, &stuck, now)
+            })
+            .map(|machine| machine.name.clone());
         regressions.push(Regression {
             id,
             filed: episode,
             ready: optional_time(row.get::<_, Option<String>>(5)?.as_deref())?.unwrap_or(filed),
             claimed: optional_time(row.get::<_, Option<String>>(4)?.as_deref())?,
+            holder_unavailable,
             culprit_resumed: status == "in_progress"
                 && resumed(handoff.as_deref(), session.as_deref()),
             session,
@@ -231,10 +265,11 @@ impl Regression {
             filed: self.filed,
             unclaimed_since: (self.status == "open").then_some(self.ready),
             last_activity: None,
+            holder_unavailable: self.holder_unavailable.clone(),
             culprit_resumed: self.culprit_resumed,
             failed_fixes: 0,
         };
-        if progress.culprit_resumed {
+        if progress.holder_unavailable.is_some() || progress.culprit_resumed {
             return Ok(progress);
         }
         if let Some(session) = self
@@ -274,10 +309,31 @@ impl Regression {
     }
 }
 
+/// Whether every unfixed regression row for `ticket` belongs to a platform in `unavailable`.
+fn on_unavailable_platforms_only(
+    conn: &Connection,
+    ticket: &str,
+    unavailable: &BTreeSet<Os>,
+) -> Result<bool> {
+    let mut stmt =
+        conn.prepare_cached("SELECT platform FROM regressions WHERE ticket = ?1 AND state != ?2")?;
+    let platforms: Vec<Option<String>> = stmt
+        .query_map(params![ticket, tips::FIXED], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    if platforms.is_empty() {
+        return Ok(false);
+    }
+    Ok(platforms.iter().all(|platform| match platform.as_deref() {
+        Some("macos") => unavailable.contains(&Os::Macos),
+        Some("windows") => unavailable.contains(&Os::Windows),
+        _ => false,
+    }))
+}
+
 /// Count fixes separately for each check. A failed round proves only the newest attempt it
-/// contains failed. If that attempt reopens the regression, keep counting it until a tip passes.
+/// contains failed. Also count closes with no landed commit that tip verification reopened.
 fn failed_fixes(conn: &Connection, ticket: &str, since: Timestamp, now: Timestamp) -> Result<u32> {
-    Ok(conn.query_row(
+    let landed: u32 = conn.query_row(
         "WITH fixes AS (
              SELECT json_extract(change, '$.landed[1].commits[#-1]') AS commit_sha,
                     min(at) AS first_landed_at
@@ -303,7 +359,27 @@ fn failed_fixes(conn: &Connection, ticket: &str, since: Timestamp, now: Timestam
          FROM (SELECT count(DISTINCT attempt) AS attempts FROM failed_attempts GROUP BY check_name)",
         params![ticket, since.to_string(), now.to_string(), tips::FIXED],
         |row| row.get(0),
-    )?)
+    )?;
+    let reopened_without_landing: u32 = conn.query_row(
+        "SELECT count(*) FROM history r
+         WHERE r.ticket = ?1 AND r.at >= ?2 AND r.at <= ?3
+           AND json_extract(r.change, '$.status[0]') = 'closed'
+           AND json_extract(r.change, '$.status[1]') = 'open'
+           AND NOT EXISTS (
+               SELECT 1 FROM history l
+               WHERE l.ticket = ?1 AND l.at >= ?2 AND l.at <= r.at
+                 AND json_type(l.change, '$.landed[1].commits') = 'array'
+                 AND l.at >= coalesce((
+                     SELECT max(prev.at) FROM history prev
+                     WHERE prev.ticket = ?1 AND prev.at >= ?2 AND prev.at < r.at
+                       AND json_extract(prev.change, '$.status[0]') = 'closed'
+                       AND json_extract(prev.change, '$.status[1]') = 'open'
+                 ), ?2)
+           )",
+        params![ticket, since.to_string(), now.to_string()],
+        |row| row.get(0),
+    )?;
+    Ok(landed.saturating_add(reopened_without_landing))
 }
 
 fn age_threshold(conn: &Connection) -> Result<f64> {
@@ -333,5 +409,162 @@ fn age_threshold(conn: &Connection) -> Result<f64> {
         return Ok(FALLBACK_AGE_SECONDS);
     }
     ages.sort_by(f64::total_cmp);
-    Ok(ages[(9 * ages.len()).div_ceil(10) - 1])
+    Ok(ages[(9 * ages.len()).div_ceil(10) - 1].min(MAX_AGE_SECONDS))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ignite_core::config::Os;
+    use ignite_core::fleet::MachineState;
+    use ignite_core::ids::MachineId;
+    use ignite_core::protocol::hub::MachineRegister;
+    use ignite_core::protocol::tickets::{Operation, Status, TicketFields, TicketType};
+    use ignite_store::hub;
+    use serde_json::json;
+
+    use crate::upkeep::tests::{apply, create};
+
+    fn at(seconds: f64) -> Timestamp {
+        Timestamp::parse("2026-11-25T14:00:00Z")
+            .unwrap()
+            .plus_seconds(seconds)
+    }
+
+    fn register(conn: &Connection, id: &str, name: &str, os: Os, now: Timestamp) {
+        fleet::register(
+            conn,
+            &MachineRegister {
+                machine: MachineId::new(id).unwrap(),
+                name: name.to_owned(),
+                os,
+                cores: 12,
+                memory_mb: 32_768,
+                families: Vec::new(),
+                version: "v".to_owned(),
+            },
+            now,
+        )
+        .unwrap();
+    }
+
+    fn insert_regression(
+        conn: &mut Connection,
+        check: &str,
+        platform: Option<&str>,
+        now: Timestamp,
+    ) -> String {
+        let ids = apply(
+            conn,
+            vec![create(
+                &format!("Regression: {check}"),
+                TicketType::Bug,
+                None,
+                &[],
+            )],
+            now,
+        );
+        let id = ids[0].clone();
+        conn.execute(
+            "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state, platform)
+             VALUES (?1, ?2, 'bad1', 'good1', 'open', ?3)",
+            params![check, id, platform],
+        )
+        .unwrap();
+        id
+    }
+
+    #[test]
+    fn age_threshold_is_capped_at_max_age_even_with_multiday_outliers() {
+        let mut conn = hub::open_in_memory().unwrap();
+        let start = at(0.0);
+        for i in 0..25 {
+            let ids = apply(
+                &mut conn,
+                vec![create("old reg", TicketType::Bug, None, &[])],
+                start,
+            );
+            let id = &ids[0];
+            let hours = if i < 20 { 1.0 } else { 90.0 };
+            conn.execute(
+                "UPDATE tickets SET status = 'closed', labels = '[\"regression\"]', closed_at = ?1,
+                 session = 'w', metadata = ?2 WHERE id = ?3",
+                params![
+                    start.plus_seconds(hours * 3600.0).to_string(),
+                    json!({CULPRIT_HANDOFF_KEY: {"session": "w", "resumed": true}}).to_string(),
+                    id
+                ],
+            )
+            .unwrap();
+        }
+        assert!((age_threshold(&conn).unwrap() - MAX_AGE_SECONDS).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn repeated_reopens_without_a_landed_fix_escalate_as_failed_fixes() {
+        let mut conn = hub::open_in_memory().unwrap();
+        let id = insert_regression(&mut conn, "clippy:kit", None, at(0.0));
+        let close_and_reopen = |conn: &mut Connection, close_s: f64, reopen_s: f64| {
+            apply(
+                conn,
+                vec![Operation::Close {
+                    id: id.clone(),
+                    reason: "passed on rerun".to_owned(),
+                    include_ready: false,
+                }],
+                at(close_s),
+            );
+            apply(
+                conn,
+                vec![Operation::Update {
+                    id: id.clone(),
+                    set: Some(TicketFields {
+                        status: Some(Status::Open),
+                        ..TicketFields::default()
+                    }),
+                    add_labels: Vec::new(),
+                    remove_labels: Vec::new(),
+                    set_meta: BTreeMap::new(),
+                    unset_meta: Vec::new(),
+                }],
+                at(reopen_s),
+            );
+        };
+        close_and_reopen(&mut conn, 60.0, 120.0);
+        assert_eq!(failed_fixes(&conn, &id, at(0.0), at(180.0)).unwrap(), 1);
+        close_and_reopen(&mut conn, 240.0, 300.0);
+        assert_eq!(failed_fixes(&conn, &id, at(0.0), at(360.0)).unwrap(), 2);
+
+        let open = open(&conn, at(360.0)).unwrap();
+        assert_eq!(open.get(&id), Some(&Some(Stall::FailedFixes(2))));
+    }
+
+    #[test]
+    fn a_regression_on_a_deferred_platform_is_ignored_and_an_offline_holder_stalls_at_once() {
+        let mut conn = hub::open_in_memory().unwrap();
+        register(&conn, "m-mac", "mac", Os::Macos, at(0.0));
+        register(&conn, "m-win", "win", Os::Windows, at(0.0));
+
+        // A Windows-only regression stops holding master when Windows is deferred.
+        let win_reg = insert_regression(&mut conn, "clippy:kit_win", Some("windows"), at(0.0));
+        assert!(open(&conn, at(10.0)).unwrap().contains_key(&win_reg));
+        fleet_settings::record_storage_stuck(&conn, "m-win", at(20.0)).unwrap();
+        assert!(!open(&conn, at(30.0)).unwrap().contains_key(&win_reg));
+
+        // A portable regression held by a machine that goes off stalls immediately.
+        let portable = insert_regression(&mut conn, "rust:unit", None, at(30.0));
+        conn.execute(
+            "UPDATE tickets SET status = 'in_progress', assignee = 'w', session = 'w',
+             machine = 'm-mac', claimed_at = ?1 WHERE id = ?2",
+            params![at(35.0).to_string(), portable],
+        )
+        .unwrap();
+        assert_eq!(open(&conn, at(40.0)).unwrap().get(&portable), Some(&None));
+        fleet_settings::set_machine_state(&mut conn, "m-mac", MachineState::Off, "ic", at(45.0))
+            .unwrap();
+        assert_eq!(
+            open(&conn, at(50.0)).unwrap().get(&portable),
+            Some(&Some(Stall::HolderUnavailable("mac".to_owned())))
+        );
+    }
 }

@@ -7,6 +7,7 @@
 //! that listing.
 
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use ignite_core::ids::{CheckName, TreeId};
 use ignite_core::protocol::Outcome;
@@ -21,6 +22,9 @@ pub struct BatchCallbacks<'a> {
     pub claim: &'a dyn Fn(u32) -> bool,
     /// Receives the exact result keys of failures after each batch.
     pub failed: &'a dyn Fn(&[ResultKey]),
+    /// When raised (for example because a sibling family failed a required check), skips new
+    /// builds and check runs in this family as well.
+    pub stop: Option<&'a AtomicBool>,
 }
 
 impl Checks {
@@ -53,10 +57,22 @@ impl Checks {
                 return (run, 0);
             }
         };
+        if callbacks
+            .stop
+            .is_some_and(|stop| stop.load(Ordering::SeqCst))
+        {
+            return (run, 0);
+        }
         let prepared = checks.prepare(ctx, &tree, &[family], options, &mut run);
         let family_failed = run.incomplete_families.iter().any(|(f, _)| f == family);
         let mut ran = 0;
         for (batch, names) in batches {
+            if callbacks
+                .stop
+                .is_some_and(|stop| stop.load(Ordering::SeqCst))
+            {
+                break;
+            }
             if !(callbacks.claim)(*batch) {
                 continue;
             }
@@ -80,7 +96,7 @@ impl Checks {
                 part.keep(|check| names.contains(check), &mut run);
             }
             let previous_failures = run.failed_keys.len();
-            checks.run_prepared(ctx, &tree, wanted, options, &mut run);
+            checks.run_prepared_with_stop(ctx, &tree, wanted, options, &mut run, callbacks.stop);
             (callbacks.failed)(&run.failed_keys[previous_failures..]);
         }
         (run, ran)

@@ -527,6 +527,7 @@ fn batches_of_one_family_run_from_one_listing() {
         &super::BatchCallbacks {
             claim: &claim,
             failed: &|_| {},
+            stop: None,
         },
     );
     assert_eq!(ran, 2);

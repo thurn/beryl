@@ -430,6 +430,20 @@ impl Checks {
         options: &RunOptions,
         run: &mut CheckRun,
     ) {
+        self.run_prepared_with_stop(ctx, tree, prepared, options, run, None);
+    }
+
+    /// [`Checks::run_prepared`], stopping before new builds or attempts once `stop` is raised.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn run_prepared_with_stop(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        prepared: Vec<Prepared>,
+        options: &RunOptions,
+        run: &mut CheckRun,
+        stop: Option<&std::sync::atomic::AtomicBool>,
+    ) {
         let head = options
             .session
             .as_ref()
@@ -451,7 +465,7 @@ impl Checks {
             .map(|(keyed, _)| (keyed.listed.check.clone(), keyed.key.hash.to_string()))
             .collect();
         let ran = on_threads(families, |(name, items), own| {
-            self.execute(ctx, tree, &name, items, options, own, None);
+            self.execute(ctx, tree, &name, items, options, own, stop);
         });
         for ((), own) in ran {
             // The daemon compares session outcomes to detect shared failures.

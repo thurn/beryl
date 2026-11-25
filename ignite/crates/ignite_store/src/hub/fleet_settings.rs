@@ -16,6 +16,7 @@ use super::{feed, fleet, meta};
 use crate::{Result, StoreError};
 
 const KEY: &str = "fleet";
+const STORAGE_STUCK_KEY: &str = "storage_stuck";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PutOutcome {
@@ -62,17 +63,69 @@ pub fn online(machine: &rows::Machine, now: Timestamp) -> bool {
         .is_ok_and(|seen| now.seconds_since(seen) < ONLINE_SECONDS)
 }
 
-/// Each platform with registered machines, every one of which is off or has sent no heartbeat
-/// for [`ONLINE_SECONDS`]. Tip verification defers such a platform, as it does one whose
-/// machines are all off, so that `master` does not wait on a machine that cannot answer. A
-/// machine whose storage or daemon hangs stops sending heartbeats without anyone setting it
-/// off: on 2026-11-25 `master` waited on a hung Windows machine until a person turned it off.
-/// The platform comes back by itself with the machine's next heartbeat.
+/// Records that `machine`'s monitor found a stuck trees drive at `at`. While the machine has sent
+/// no newer heartbeat, [`unavailable_platforms`] treats it as unavailable at once rather than
+/// waiting [`ONLINE_SECONDS`] for heartbeat silence.
+pub fn record_storage_stuck(conn: &Connection, machine: &str, at: Timestamp) -> Result<()> {
+    let mut stuck: BTreeMap<String, Timestamp> =
+        meta::get(conn, STORAGE_STUCK_KEY)?.unwrap_or_default();
+    let keep = stuck.get(machine).is_none_or(|prev| *prev < at);
+    if keep {
+        stuck.insert(machine.to_owned(), at);
+        meta::put(conn, STORAGE_STUCK_KEY, &stuck)?;
+        feed::record(
+            conn,
+            &FeedChange {
+                seq: feed::next_seq(conn)?,
+                kind: "attention".to_owned(),
+                ticket: None,
+                name: Some(machine.to_owned()),
+            },
+        )?;
+    }
+    Ok(())
+}
+
+/// Whether `machine` has a stuck-storage report that no later heartbeat has superseded.
+pub fn storage_stuck_active(stuck: &BTreeMap<String, Timestamp>, machine: &rows::Machine) -> bool {
+    stuck.get(&machine.id).is_some_and(|at| {
+        machine
+            .last_seen
+            .parse::<Timestamp>()
+            .is_ok_and(|seen| seen <= *at)
+    })
+}
+
+/// All recorded stuck-storage reports, keyed by machine ID.
+pub fn storage_stuck_map(conn: &Connection) -> Result<BTreeMap<String, Timestamp>> {
+    Ok(meta::get(conn, STORAGE_STUCK_KEY)?.unwrap_or_default())
+}
+
+/// Whether `machine` is available to verify tips and make progress at `now`.
+pub fn machine_online_and_active(
+    machine: &rows::Machine,
+    settings: &FleetSettings,
+    stuck: &BTreeMap<String, Timestamp>,
+    now: Timestamp,
+) -> bool {
+    settings.machine(&machine.name).state != MachineState::Off
+        && online(machine, now)
+        && !storage_stuck_active(stuck, machine)
+}
+
+/// Each platform with registered machines, every one of which is off, has reported a stuck trees
+/// drive without a newer heartbeat, or has sent no heartbeat for [`ONLINE_SECONDS`]. Tip
+/// verification defers such a platform, as it does one whose machines are all off, so that
+/// `master` does not wait on a machine that cannot answer. A machine whose storage or daemon
+/// hangs stops sending heartbeats without anyone setting it off: on 2026-11-25 `master` waited
+/// on a hung Windows machine until a person turned it off. The platform comes back by itself
+/// with the machine's next heartbeat.
 pub fn unavailable_platforms(
     conn: &Connection,
     settings: &FleetSettings,
     now: Timestamp,
 ) -> Result<BTreeSet<Os>> {
+    let stuck = storage_stuck_map(conn)?;
     let mut available = BTreeSet::new();
     let mut registered = BTreeSet::new();
     for machine in fleet::machines(conn)? {
@@ -82,7 +135,7 @@ pub fn unavailable_platforms(
             _ => continue,
         };
         registered.insert(os);
-        if settings.machine(&machine.name).state != MachineState::Off && online(&machine, now) {
+        if machine_online_and_active(&machine, settings, &stuck, now) {
             available.insert(os);
         }
     }
@@ -491,6 +544,24 @@ mod tests {
         .unwrap();
         assert_eq!(
             unavailable_platforms(&conn, &settings, silent).unwrap(),
+            BTreeSet::from([Os::Macos])
+        );
+
+        // Reporting stuck storage defers the platform immediately without waiting 30 minutes,
+        // and a newer heartbeat brings it back.
+        record_storage_stuck(&conn, "m-w", silent).unwrap();
+        assert_eq!(
+            unavailable_platforms(&conn, &settings, silent).unwrap(),
+            BTreeSet::from([Os::Macos, Os::Windows])
+        );
+        let recovered = silent.plus_seconds(10.0);
+        conn.execute(
+            "UPDATE machines SET last_seen = ?1 WHERE id = 'm-w'",
+            [recovered.to_string()],
+        )
+        .unwrap();
+        assert_eq!(
+            unavailable_platforms(&conn, &settings, recovered).unwrap(),
             BTreeSet::from([Os::Macos])
         );
     }

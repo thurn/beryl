@@ -493,6 +493,16 @@ impl Checks {
         if family.adapter != Adapter::Nextest {
             let (reported, output, record) =
                 self.run_family(ctx, tree, name, family, checks, options);
+            let targets = self.target_dirs(tree, family);
+            if !*repaired
+                && repair::retry_damaged_run(&tree.path, tree.id.as_str(), name, &targets, &output)
+            {
+                *repaired = true;
+                run.wall_s += output.usage.wall_s;
+                let (reported, output, record) =
+                    self.run_family(ctx, tree, name, family, checks, options);
+                return (reported, output, record, false);
+            }
             return (reported, output, record, false);
         }
         let targets = self.target_dirs(tree, family);

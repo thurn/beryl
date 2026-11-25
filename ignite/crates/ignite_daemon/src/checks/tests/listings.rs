@@ -234,6 +234,7 @@ fn tip_batches_run_from_a_kept_listing() {
             &super::super::BatchCallbacks {
                 claim: &claim,
                 failed: &|_| {},
+                stop: None,
             },
         );
         assert_eq!(ran, 2);
@@ -616,6 +617,7 @@ fn a_batch_reports_only_the_exact_keys_of_its_failed_checks() {
             true
         },
         failed: &|reported| keys.lock().unwrap().extend_from_slice(reported),
+        stop: None,
     };
 
     let (run, ran) = world.checks.run_batches(
@@ -635,4 +637,36 @@ fn a_batch_reports_only_the_exact_keys_of_its_failed_checks() {
     assert_eq!(keys[0].check, name("unit:a"));
     let cached = world.hub.lookup(&keys).unwrap();
     assert_eq!(cached[0].as_ref().unwrap().outcome, Outcome::Fail);
+}
+
+#[test]
+fn run_batches_skips_remaining_batches_once_stop_is_raised() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let world = jsonl_world();
+    let tree = TreeId::new("tree-01").unwrap();
+    let batches = [(0, vec![name("unit:a")]), (1, vec![name("unit:b")])];
+    let stop = AtomicBool::new(false);
+    let callbacks = BatchCallbacks {
+        claim: &|batch| {
+            if batch == 0 {
+                stop.store(true, Ordering::SeqCst);
+            }
+            true
+        },
+        failed: &|_| {},
+        stop: Some(&stop),
+    };
+    let (run, ran) = world.checks.run_batches(
+        &world.ctx,
+        &tree,
+        "unit",
+        &batches,
+        &options(false),
+        &callbacks,
+    );
+    assert_eq!(ran, 1);
+    assert!(run.outcomes.is_empty());
+    assert_eq!(run.skipped, 1);
+    assert!(world.launcher.commands("runner").is_empty());
 }

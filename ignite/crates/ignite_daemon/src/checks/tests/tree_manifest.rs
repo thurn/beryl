@@ -187,6 +187,7 @@ fn a_tip_whose_ignite_toml_adds_a_family_to_this_machine_runs_it() {
         &super::super::BatchCallbacks {
             claim: &|_| true,
             failed: &|_| {},
+            stop: None,
         },
     );
     assert_eq!(ran, 1, "{:?}", run.failures);
@@ -252,6 +253,7 @@ fn a_tip_uses_the_candidates_build_families_and_reserves_their_cores() {
         &super::super::BatchCallbacks {
             claim: &|_| true,
             failed: &|_| {},
+            stop: None,
         },
     );
     assert_eq!(ran, 1);

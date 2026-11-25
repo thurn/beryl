@@ -147,6 +147,7 @@ pub fn storage_stuck(
         deps: Vec::new(),
         released: true,
     };
+    fleet_settings::record_storage_stuck(conn, author.machine, now)?;
     filing::file(conn, author, &filing, now)
 }
 
@@ -304,6 +305,15 @@ mod tests {
         };
         let filed = storage_stuck(&mut conn, author, &report, at(120.0)).unwrap();
         assert_eq!(filed.change, Change::Created);
+        assert!(
+            fleet_settings::unavailable_platforms(
+                &conn,
+                &fleet_settings::settings(&conn).unwrap(),
+                at(120.0),
+            )
+            .unwrap()
+            .contains(&Os::Windows)
+        );
         let ticket = tickets::load(&conn, &filed.ticket).unwrap().unwrap();
         assert_eq!(ticket.priority, 0);
         assert!(ticket.title.contains("trees drive"), "{}", ticket.title);

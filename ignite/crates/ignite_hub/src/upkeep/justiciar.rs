@@ -443,7 +443,7 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
         let mut progressing = Vec::new();
         for (regression, stall) in regressions {
             if let Some(stall) = stall {
-                filed.push(file_regression_stall(conn, &regression, stall, now)?);
+                filed.push(file_regression_stall(conn, &regression, &stall, now)?);
             } else {
                 progressing.push(regression);
             }
@@ -489,7 +489,7 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
 fn file_regression_stall(
     conn: &mut Connection,
     regression: &str,
-    stall: Stall,
+    stall: &Stall,
     now: Timestamp,
 ) -> Result<Filed> {
     let reason = stall.reason();

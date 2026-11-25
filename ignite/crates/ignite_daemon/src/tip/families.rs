@@ -142,6 +142,7 @@ impl Round<'_> {
         let callbacks = BatchCallbacks {
             claim: &claim,
             failed,
+            stop: Some(&self.failed_required),
         };
         let pre_move = !self.after_master;
         let work = &self.verifier.work;

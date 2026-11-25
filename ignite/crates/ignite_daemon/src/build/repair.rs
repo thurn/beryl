@@ -84,18 +84,183 @@ pub fn compile_failure(output: &str) -> Option<CompileFailure> {
             crates.push(name);
         }
     }
-    if crates.is_empty() {
-        return None;
-    }
     let damaged = DAMAGE.iter().any(|text| output.contains(text));
     if damaged {
-        for name in linked_crates(output) {
+        for name in linked_crates(output)
+            .into_iter()
+            .chain(metadata_crates(output))
+        {
             if !crates.contains(&name) {
                 crates.push(name);
             }
         }
     }
+    if crates.is_empty() {
+        return None;
+    }
     Some(CompileFailure { crates, damaged })
+}
+
+/// The crates whose metadata rustc reported as invalid or corrupt, in the order they appear.
+///
+/// ``error[E0786]: found invalid metadata files for crate `foo` `` names the dependency whose
+/// `.rmeta` or `.rlib` is damaged, and `corrupt metadata encountered in …/libfoo-<hash>.rmeta`
+/// names its file. Clearing only the crate that failed to compile leaves the corrupt dependency
+/// intact, so later runs fail the same way until it is cleared too.
+fn metadata_crates(output: &str) -> Vec<String> {
+    let mut crates: Vec<String> = Vec::new();
+    let mut push = |name: &str| {
+        let normalized = name.replace('-', "_");
+        if !normalized.is_empty()
+            && normalized
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+            && !crates.iter().any(|c| c == &normalized)
+        {
+            crates.push(normalized);
+        }
+    };
+    let marker = "found invalid metadata files for crate `";
+    let mut rest = output;
+    while let Some(at) = rest.find(marker) {
+        rest = &rest[at + marker.len()..];
+        if let Some((name, after)) = rest.split_once('`') {
+            push(name);
+            rest = after;
+        }
+    }
+    for path in corrupt_metadata_paths(output) {
+        if let Some(name) = hashed_artifact_crate(&path) {
+            push(&name);
+        }
+    }
+    crates
+}
+
+/// Every path named after `corrupt metadata encountered in ` in `output`, unescaping JSON string
+/// separators and stripping Windows verbatim (`\\?\`) prefixes.
+fn corrupt_metadata_paths(output: &str) -> Vec<String> {
+    const MARKER: &str = "corrupt metadata encountered in ";
+    let mut paths = Vec::new();
+    let mut rest = output;
+    while let Some(at) = rest.find(MARKER) {
+        rest = &rest[at + MARKER.len()..];
+        let end = rest.find(['\n', '\r', '"']).unwrap_or(rest.len());
+        let raw = rest[..end].trim();
+        rest = &rest[end..];
+        // A JSON-rendered diagnostic escapes backslashes and ends with `\n`.
+        let mut cleaned = raw.replace("\\\\", "\\");
+        while let Some(prefix) = cleaned
+            .strip_suffix("\\n")
+            .or_else(|| cleaned.strip_suffix("\\r"))
+        {
+            cleaned = prefix.to_owned();
+        }
+        let cleaned = cleaned.strip_prefix(r"\\?\").unwrap_or(&cleaned);
+        if !cleaned.is_empty() {
+            paths.push(cleaned.to_owned());
+        }
+    }
+    paths
+}
+
+/// The crate name of a `deps` artifact such as `…/libserde_json-d7247ce5a83b8dab.rmeta`.
+fn hashed_artifact_crate(path: &str) -> Option<String> {
+    let file = path.rsplit(['/', '\\']).next()?;
+    let stem = file
+        .strip_suffix(".rmeta")
+        .or_else(|| file.strip_suffix(".rlib"))?;
+    let (krate, hash) = stem.strip_prefix("lib").unwrap_or(stem).rsplit_once('-')?;
+    (hash.len() == 16 && hashed(hash)).then(|| krate.replace('-', "_"))
+}
+
+/// Target directories inside `tree` inferred from `corrupt metadata encountered in <path>` notes.
+///
+/// Families that compile into their own target directory (such as a separate clippy target
+/// directory) have no `[product]` entry naming that directory, so their damaged metadata path
+/// supplies the target directory to clear.
+pub fn damaged_target_dirs(output: &str, tree: &Path) -> Vec<PathBuf> {
+    let tree_norm = normalize_sep(&tree.to_string_lossy());
+    let mut dirs = Vec::new();
+    for path in corrupt_metadata_paths(output) {
+        let norm = normalize_sep(&path);
+        let Some((profile, _)) = norm.rsplit_once("/deps/") else {
+            continue;
+        };
+        let Some((target, _)) = profile.rsplit_once('/') else {
+            continue;
+        };
+        let rel = if let Some(rest) = target.strip_prefix(&tree_norm) {
+            rest
+        } else if target
+            .to_ascii_lowercase()
+            .starts_with(&tree_norm.to_ascii_lowercase())
+        {
+            &target[tree_norm.len()..]
+        } else {
+            continue;
+        };
+        let Some(rel) = rel.strip_prefix('/') else {
+            continue;
+        };
+        let candidate = tree.join(rel);
+        if !dirs.contains(&candidate) {
+            dirs.push(candidate);
+        }
+    }
+    dirs
+}
+
+fn normalize_sep(path: &str) -> String {
+    let stripped = path.strip_prefix(r"\\?\").unwrap_or(path);
+    stripped.replace('\\', "/").trim_end_matches('/').to_owned()
+}
+
+/// Clears damaged build artifacts named in `output` from `targets` and any target directory inside
+/// `tree` that the output's corrupt-metadata notes name. Returns whether at least one artifact
+/// file or folder was deleted, so an unrelated test failure that happens to print a compiler
+/// message never triggers a retry.
+pub fn retry_damaged_run(
+    tree: &Path,
+    tree_id: &str,
+    family: &str,
+    targets: &[PathBuf],
+    output: &RunResult,
+) -> bool {
+    if ended_partway(output) || output.exit.is_none_or(|code| code == 0) {
+        return false;
+    }
+    let Some(crates) = clear_damaged_for_run(tree, targets, &output.output) else {
+        return false;
+    };
+    eprintln!(
+        "ignite: {family} hit damaged build metadata in {tree_id}; retrying after clearing {}",
+        crates.join(", ")
+    );
+    true
+}
+
+/// Clears damaged build artifacts named in `output` from `targets` and any target directory inside
+/// `tree` that the output's corrupt-metadata notes name. Returns the cleared crate names only when
+/// at least one artifact file or folder was deleted.
+pub fn clear_damaged_for_run(
+    tree: &Path,
+    targets: &[PathBuf],
+    output: &Path,
+) -> Option<Vec<String>> {
+    let text = fs::read_to_string(output).ok()?;
+    let failure = compile_failure(&text).filter(|failure| failure.damaged)?;
+    let mut all_targets = targets.to_vec();
+    for dir in damaged_target_dirs(&text, tree) {
+        if !all_targets.contains(&dir) {
+            all_targets.push(dir);
+        }
+    }
+    let mut deleted = 0usize;
+    for target in &all_targets {
+        deleted += clear_crates(target, &failure.crates).len();
+    }
+    (deleted > 0).then_some(failure.crates)
 }
 
 /// The crates whose libraries a linker's error names an object of, in the order they first

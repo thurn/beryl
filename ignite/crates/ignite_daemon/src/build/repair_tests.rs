@@ -284,3 +284,48 @@ fn an_ended_command_marks_the_target_directories_it_may_have_compiled_in() {
     assert!(!dir.join("out").join(SUSPECT_FILE).exists());
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn corrupt_metadata_names_the_dependency_crates_and_clears_their_target_dir() {
+    let dir = scratch("corrupt-rmeta");
+    let clippy_deps = dir.join("app").join("target").join("clippy").join("debug");
+    let unit = "serde_json-d7247ce5a83b8dab";
+    touch(&clippy_deps.join(".fingerprint").join(unit).join("lib"));
+    touch(&clippy_deps.join("deps").join(format!("lib{unit}.rmeta")));
+    let win_unit = "windows_link-d493b5fef3f96ff7";
+    touch(&clippy_deps.join(".fingerprint").join(win_unit).join("lib"));
+    touch(
+        &clippy_deps
+            .join("deps")
+            .join(format!("lib{win_unit}.rmeta")),
+    );
+    let rmeta_path = clippy_deps.join("deps").join(format!("lib{unit}.rmeta"));
+    let win_rmeta_path = clippy_deps
+        .join("deps")
+        .join(format!("lib{win_unit}.rmeta"));
+    let output = format!(
+        "error[E0786]: found invalid metadata files for crate `serde_json`\n\
+         = note: corrupt metadata encountered in {}\n\
+         {{\"rendered\":\"error[E0786]: found invalid metadata files for crate `windows_link`\\n  = note: corrupt metadata encountered in {}\\n\"}}\n\
+         error: could not compile `kit_base` (lib) due to 1 previous error\n",
+        rmeta_path.display(),
+        win_rmeta_path.display().to_string().replace('\\', "\\\\"),
+    );
+
+    let failure = compile_failure(&output).expect("corrupt metadata is a compile failure");
+    assert!(failure.damaged);
+    assert!(failure.crates.contains(&"kit_base".to_owned()));
+    assert!(failure.crates.contains(&"serde_json".to_owned()));
+    assert!(failure.crates.contains(&"windows_link".to_owned()));
+
+    let log = dir.join("output.log");
+    fs::write(&log, &output).unwrap();
+    let cleared = clear_damaged_for_run(&dir, &[], &log).expect("corrupt rmeta cleared");
+    assert!(cleared.contains(&"serde_json".to_owned()));
+    assert!(cleared.contains(&"windows_link".to_owned()));
+    assert!(!rmeta_path.exists());
+    assert!(!win_rmeta_path.exists());
+    // A second call deletes nothing, so unrelated text cannot trigger a retry.
+    assert!(clear_damaged_for_run(&dir, &[], &log).is_none());
+    let _ = fs::remove_dir_all(&dir);
+}
