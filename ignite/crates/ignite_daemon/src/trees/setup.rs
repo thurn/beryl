@@ -58,7 +58,7 @@ impl Trees {
         let config = &self.inner.config;
         let locked = self.lock();
         let root = self.root_in(&locked.db);
-        fs::create_dir_all(&root)?;
+        fs::create_dir_all(&root).map_err(|e| io_path(&root, &e))?;
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
         let mut pending: BTreeMap<_, _> = config
             .configured_landings()
@@ -118,7 +118,8 @@ impl Trees {
         let park = park_branch(tree);
         // A tree created by an earlier try that failed later is reset like any other.
         if unfinished.fresh && !path.join(".git").exists() {
-            fs::create_dir_all(path.parent().expect("a tree has a parent"))?;
+            let parent = path.parent().expect("a tree has a parent");
+            fs::create_dir_all(parent).map_err(|e| io_path(parent, &e))?;
             worktree::add(&config.repo, &path, &park, tip)?;
         } else {
             if !registered(&config.repo, &path, None)? {
@@ -230,8 +231,12 @@ fn check_landing_destination(repo: &Path, path: &Path, id: &TreeId) -> Result<()
     )))
 }
 
+fn io_path(path: &Path, error: &std::io::Error) -> Error {
+    Error::Io(format!("{}: {error}", path.display()))
+}
+
 fn registered(repo: &Path, path: &Path, branch: Option<&str>) -> Result<bool> {
-    let path = ignite_os::paths::canonicalize(path)?;
+    let path = ignite_os::paths::canonicalize(path).map_err(|e| io_path(path, &e))?;
     Ok(worktree::list(repo)?.iter().any(|tree| {
         tree.path == path && branch.is_none_or(|name| tree.branch.as_deref() == Some(name))
     }))
@@ -266,14 +271,17 @@ pub(super) fn resetting_tree(path: &Path, id: &TreeId, kind: Kind) -> rows::Tree
 
 fn unrecorded_tickets(repo: &Path, root: &Path, rows: &[rows::Tree]) -> Result<Vec<TreeId>> {
     let mut candidates = Vec::new();
-    for entry in fs::read_dir(root)? {
-        let entry = entry?;
+    for entry in fs::read_dir(root).map_err(|e| io_path(root, &e))? {
+        let entry = entry.map_err(|e| io_path(root, &e))?;
         let Ok(name) = entry.file_name().into_string() else {
             continue;
         };
         if ticket_tree_number(&name).is_some()
             && !rows.iter().any(|row| row.id == name)
-            && entry.file_type()?.is_dir()
+            && entry
+                .file_type()
+                .map_err(|e| io_path(&entry.path(), &e))?
+                .is_dir()
             && entry.path().join(".git").is_file()
         {
             candidates.push(TreeId::new(name).map_err(|e| Error::Invalid(e.to_string()))?);
@@ -285,7 +293,7 @@ fn unrecorded_tickets(repo: &Path, root: &Path, rows: &[rows::Tree]) -> Result<V
 
     // An interrupted allocation or a checkout left by an older daemon may have no row.
     // Check Git's registration and the parking branch before ever resetting its files.
-    let dir = ignite_os::paths::canonicalize(root)?;
+    let dir = ignite_os::paths::canonicalize(root).map_err(|e| io_path(root, &e))?;
     let registered = worktree::list(repo)?;
     candidates.retain(|id| {
         let path = dir.join(id.as_str());

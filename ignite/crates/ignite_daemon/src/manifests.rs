@@ -96,7 +96,7 @@ pub fn read_directory(dir: &Path) -> Result<Manifest, String> {
     let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let mut files = Vec::new();
     for entry in entries {
-        let path = entry.map_err(|e| e.to_string())?.path();
+        let path = entry.map_err(|e| format!("{}: {e}", dir.display()))?.path();
         if path.extension().is_some_and(|e| e == "toml") {
             let text =
                 std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;

@@ -38,8 +38,9 @@ pub const RESTART_FROM: &str = "IGNITE_RESTART_FROM";
 /// How long a daemon started by a restart waits for its predecessor to free the lock.
 pub const RESTART_WAIT: Duration = Duration::from_secs(30);
 
-/// How long any other start waits for the lock.
-pub const START_GRACE: Duration = Duration::from_secs(2);
+/// How long any other start waits for the lock: long enough for a client probing the lock
+/// ([`daemon_starting`]) or a failing daemon that is about to exit to free it.
+pub const START_GRACE: Duration = Duration::from_secs(5);
 
 /// How recent a start in `starts.jsonl` must be for a client to treat a missing socket as a
 /// daemon that is starting.
@@ -84,14 +85,20 @@ pub fn hold_waiting(home: &Home, wait: Duration, mut busy: impl FnMut()) -> io::
         .create(true)
         .truncate(false)
         .write(true)
-        .open(&path)?;
+        .open(&path)
+        .map_err(|error| io::Error::new(error.kind(), format!("{}: {error}", path.display())))?;
     let started = Instant::now();
     let mut told = false;
     loop {
         match file.try_lock() {
             Ok(()) => return Ok(DaemonLock { _file: file, path }),
             Err(TryLockError::WouldBlock) => {}
-            Err(TryLockError::Error(error)) => return Err(error),
+            Err(TryLockError::Error(error)) => {
+                return Err(io::Error::new(
+                    error.kind(),
+                    format!("{}: {error}", path.display()),
+                ));
+            }
         }
         if !told {
             told = true;

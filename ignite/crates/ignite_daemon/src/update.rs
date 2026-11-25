@@ -127,19 +127,26 @@ pub fn create_private_dir(dir: &Path) -> io::Result<()> {
     {
         use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
         if let Some(parent) = dir.parent() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).map_err(|e| with_path(parent, &e))?;
         }
         match std::fs::DirBuilder::new().mode(0o700).create(dir) {
-            Err(error) if error.kind() != io::ErrorKind::AlreadyExists => return Err(error),
+            Err(error) if error.kind() != io::ErrorKind::AlreadyExists => {
+                return Err(with_path(dir, &error));
+            }
             _ => {}
         }
         std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+            .map_err(|e| with_path(dir, &e))
     }
     #[cfg(windows)]
     {
         // The folder inherits the user profile's permissions, which allow only this user.
-        std::fs::create_dir_all(dir)
+        std::fs::create_dir_all(dir).map_err(|e| with_path(dir, &e))
     }
+}
+
+fn with_path(path: &Path, error: &io::Error) -> io::Error {
+    io::Error::new(error.kind(), format!("{}: {error}", path.display()))
 }
 
 /// Built executables, one directory per commit.
@@ -350,14 +357,15 @@ impl IdentityFile {
                 ))
             }),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.into()),
+            Err(e) => Err(Error::Io(format!("{}: {e}", self.path.display()))),
         }
     }
 
     pub fn save(&self, identity: &Identity) -> Result<()> {
         use std::io::Write;
         if let Some(dir) = self.path.parent() {
-            std::fs::create_dir_all(dir)?;
+            std::fs::create_dir_all(dir)
+                .map_err(|e| Error::Io(format!("{}: {e}", dir.display())))?;
         }
         let text =
             serde_json::to_string_pretty(identity).map_err(|e| Error::Invalid(e.to_string()))?;
@@ -367,8 +375,11 @@ impl IdentityFile {
         // profile folder's permissions, which already allow only this user.
         #[cfg(unix)]
         std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-        let mut file = options.open(&self.path)?;
-        file.write_all(text.as_bytes())?;
+        let mut file = options
+            .open(&self.path)
+            .map_err(|e| Error::Io(format!("{}: {e}", self.path.display())))?;
+        file.write_all(text.as_bytes())
+            .map_err(|e| Error::Io(format!("{}: {e}", self.path.display())))?;
         Ok(())
     }
 

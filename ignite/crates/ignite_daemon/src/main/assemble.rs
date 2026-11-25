@@ -71,6 +71,8 @@ pub struct Base {
 impl Base {
     /// Reads the configuration, measures the machine and registers it with the hub if needed.
     pub fn read(options: DaemonOptions) -> Result<Base> {
+        let home_root = options.home.root.clone();
+        super::startup_step(&home_root, "reading ignite.toml and check manifests");
         let repo = options.repo.clone();
         let config = super::read_config(&repo)?;
         let manifest = super::read_manifest(&repo, &config).map_err(Error::Invalid)?;
@@ -82,8 +84,10 @@ impl Base {
             .os
             .or_else(Os::current)
             .ok_or_else(|| Error::Invalid("this operating system is not supported".into()))?;
+        super::startup_step(&home_root, "measuring machine facts");
         let facts = doctor::machine_facts(&NativeHost, os);
         options.home.create()?;
+        super::startup_step(&home_root, "loading or registering machine identity");
         let (machine, token) = identity(&options, &config, &facts, declared.families.as_deref())?;
         // The daemon and every verb process read the token again after a 401, since an
         // `ignite install` meanwhile may have saved another one.
@@ -120,7 +124,7 @@ impl Base {
     /// A new connection to the machine's local database.
     pub fn open(&self) -> Result<Connection> {
         let path = self.options.home.root.join("daemon.db");
-        ignite_store::local::open(&path).map_err(|e| Error::Io(e.to_string()))
+        ignite_store::local::open(&path).map_err(|e| Error::Io(format!("{}: {e}", path.display())))
     }
 
     fn home(&self, name: &str) -> PathBuf {
@@ -176,6 +180,10 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
                 base.hub.clone(),
             ),
     );
+    super::startup_step(
+        &base.options.home.root,
+        "adopting unfinished supervised runs",
+    );
     loops::collect_unfinished(&supervised);
     // Commands that a verb cut off by the restart had running are handed back to the verb when
     // it runs again (see `crate::adopt`), except those in trees `Trees::setup` resets below: trees
@@ -220,8 +228,10 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
     supervised.attach_trees(&trees);
     trees.remember_legacy_commands(&unfinished);
     builds.rejoin(unfinished, &reset);
+    super::startup_step(&base.options.home.root, "marking unfinished trees");
     let unfinished = trees.mark_unfinished()?;
     // Before the socket is served, so a build asked for after a restart waits for the copy.
+    super::startup_step(&base.options.home.root, "resuming interrupted tree seeds");
     if let Err(error) = trees.resume_seeds() {
         eprintln!("ignite: seeds a restart cut short were not started again: {error}");
     }

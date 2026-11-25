@@ -24,6 +24,23 @@ fn hold_until_killed() {
     }
 }
 
+/// Run by `a_concurrent_start_takes_the_lock_when_a_failing_daemon_releases_it`: takes the lock,
+/// drops it once a line arrives on standard input (as a failing daemon does before its 500 ms
+/// exit wait), and stays alive until standard input closes.
+#[test]
+#[ignore = "run by a_concurrent_start_takes_the_lock_when_a_failing_daemon_releases_it"]
+fn hold_until_line_then_stay_alive() {
+    if let Some(root) = std::env::var_os(HOME_VARIABLE) {
+        let lock = hold(&Home { root: root.into() }).unwrap();
+        println!("{HELD}");
+        let mut stdin = BufReader::new(std::io::stdin());
+        let mut line = String::new();
+        let _ = stdin.read_line(&mut line);
+        drop(lock);
+        let _ = stdin.read_to_end(&mut Vec::new());
+    }
+}
+
 // Unix identifies a file by its device and inode numbers.
 #[cfg(unix)]
 fn identity(path: &std::path::Path) -> (u64, u64) {
@@ -38,16 +55,10 @@ fn identity(path: &std::path::Path) -> (u64, u64) {
     (fs::metadata(path).unwrap().creation_time(), 0)
 }
 
-/// Starts the first daemon in a process of its own, holding the lock in `root`, and returns once
-/// it holds it. Closing its standard input ends it.
-fn first_daemon(root: &std::path::Path) -> std::process::Child {
+/// Starts a helper test process that holds the lock in `root`, and returns once it prints `HELD`.
+fn spawn_holder(root: &std::path::Path, test_name: &str) -> std::process::Child {
     let mut first = Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "machine_lock::tests::hold_until_killed",
-            "--ignored",
-            "--nocapture",
-        ])
+        .args(["--exact", test_name, "--ignored", "--nocapture"])
         .env(HOME_VARIABLE, root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -66,6 +77,12 @@ fn first_daemon(root: &std::path::Path) -> std::process::Child {
     // Read to the end, so the first daemon can print its test's result when it exits.
     std::thread::spawn(move || std::io::copy(&mut out, &mut std::io::sink()));
     first
+}
+
+/// Starts the first daemon in a process of its own, holding the lock in `root`, and returns once
+/// it holds it. Closing its standard input ends it.
+fn first_daemon(root: &std::path::Path) -> std::process::Child {
+    spawn_holder(root, "machine_lock::tests::hold_until_killed")
 }
 
 fn scratch_home(name: &str) -> Home {
@@ -120,6 +137,41 @@ fn a_restarted_daemon_waits_for_its_predecessor_to_free_the_lock() {
 
     assert!(found_held, "the lock was free from the start");
     assert_eq!(lock.path, home.root.join(LOCK_FILE));
+    first.wait().unwrap();
+    drop(lock);
+    fs::remove_dir_all(&home.root).unwrap();
+}
+
+/// A concurrent start (with no `IGNITE_RESTART_FROM`) waits `START_GRACE` for a failing daemon
+/// to drop `daemon.lock` before its exit sleep, and takes over while the failing process is
+/// still draining its socket.
+#[test]
+fn a_concurrent_start_takes_the_lock_when_a_failing_daemon_releases_it() {
+    use std::io::Write;
+
+    let home = scratch_home("failing-lock");
+    let mut first = spawn_holder(
+        &home.root,
+        "machine_lock::tests::hold_until_line_then_stay_alive",
+    );
+    let mut stdin = first.stdin.take().unwrap();
+
+    let mut found_held = false;
+    let lock = hold_waiting(&home, START_GRACE, || {
+        found_held = true;
+        // The failing daemon drops its lock before its exit wait, while staying alive.
+        writeln!(stdin, "release").unwrap();
+        stdin.flush().unwrap();
+    })
+    .unwrap();
+
+    assert!(found_held, "the lock was free from the start");
+    assert!(
+        first.try_wait().unwrap().is_none(),
+        "the second daemon took the lock before the failing process exited"
+    );
+    assert_eq!(lock.path, home.root.join(LOCK_FILE));
+    drop(stdin);
     first.wait().unwrap();
     drop(lock);
     fs::remove_dir_all(&home.root).unwrap();

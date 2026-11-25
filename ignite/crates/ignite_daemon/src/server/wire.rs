@@ -55,6 +55,7 @@ pub struct Starting {
     state: Mutex<State>,
     changed: Condvar,
     since: Instant,
+    activity: Arc<crate::steps::Activity>,
 }
 
 struct State {
@@ -72,6 +73,11 @@ enum Phase {
 impl Starting {
     /// A daemon that has begun to start.
     pub fn new() -> Arc<Starting> {
+        let steps = crate::steps::Steps::new(Arc::new(ignite_core::time::SystemClock));
+        let activity = steps.begin(
+            crate::steps::Kind::Loop(crate::main::STARTUP_ACTIVITY.to_owned()),
+            crate::steps::Work::default(),
+        );
         Arc::new(Starting {
             state: Mutex::new(State {
                 phase: Phase::Starting,
@@ -79,7 +85,14 @@ impl Starting {
             }),
             changed: Condvar::new(),
             since: Instant::now(),
+            activity,
         })
+    }
+
+    /// Enters the startup activity on the calling thread so `crate::steps::step` and
+    /// `crate::main::startup_step` update what `ignite status` reports while starting.
+    pub fn enter(&self) -> crate::steps::Entered {
+        self.activity.enter()
     }
 
     /// A daemon that is ready already, answering from `server`.
@@ -102,6 +115,7 @@ impl Starting {
     }
 
     fn settle(&self, phase: Phase) {
+        self.activity.finish();
         self.lock().phase = phase;
         self.changed.notify_all();
     }
@@ -155,13 +169,21 @@ impl Starting {
     /// The reply to a verb in [`ANSWERED_WHILE_STARTING`] while the daemon is starting.
     fn starting_reply(&self) -> Reply {
         let seconds = self.since.elapsed().as_secs_f64();
+        let view = self.activity.view();
+        let doing = view.doing();
         Reply {
-            json: Some(serde_json::json!({"starting": true, "seconds": seconds})),
+            json: Some(serde_json::json!({
+                "starting": true,
+                "seconds": seconds,
+                "step": view.step,
+                "step_age_s": view.step_age_s,
+                "waiting_for": view.waiting_for,
+            })),
             ..Reply::text(
                 Exit::Success,
                 format!(
-                    "starting the daemon has been starting for {seconds:.1} s; other commands \
-                     wait until it is ready"
+                    "starting the daemon has been starting for {seconds:.1} s: {doing}; other \
+                     commands wait until it is ready"
                 ),
             )
         }
@@ -419,5 +441,35 @@ pub(super) fn read_reply(
             Some(Before::Handle(named)) => *handle = Some(named),
             None => return serde_json::from_str(&line).map_err(std::io::Error::other),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn starting_reply_reports_no_step_until_one_is_recorded() {
+        let starting = Starting::new();
+        let before = starting.starting_reply();
+        assert!(
+            before.text.contains("no step recorded"),
+            "before step: {}",
+            before.text
+        );
+        assert!(before.json.as_ref().unwrap()["step"].is_null());
+
+        let _entered = starting.enter();
+        crate::steps::step("marking unfinished trees");
+        let during = starting.starting_reply();
+        assert!(
+            during.text.contains("marking unfinished trees"),
+            "during step: {}",
+            during.text
+        );
+        assert_eq!(
+            during.json.as_ref().unwrap()["step"],
+            "marking unfinished trees"
+        );
     }
 }

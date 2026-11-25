@@ -32,7 +32,31 @@ use std::sync::{Arc, Mutex};
 use ignite_core::config::Config;
 use ignite_core::ids::Commit;
 use ignite_core::manifest::Manifest;
-use ignite_core::traits::{Error, Result};
+use ignite_core::time::SystemClock;
+use ignite_core::traits::{Clock, Error, Result};
+
+/// The activity name used while the daemon is starting up.
+pub(crate) const STARTUP_ACTIVITY: &str = "ignite-startup";
+
+/// Records the current startup step on the active startup activity (shown by `ignite status`
+/// while the daemon starts) and writes it to the Windows daemon log so a stall before `started`
+/// leaves the last step on disk. Does nothing outside daemon startup (such as in a verb process
+/// that reuses [`assemble::Base::read`]).
+pub(crate) fn startup_step(home: &Path, text: &str) {
+    let Some(activity) = crate::steps::current() else {
+        return;
+    };
+    if *activity.kind() != crate::steps::Kind::Loop(STARTUP_ACTIVITY.to_owned()) {
+        return;
+    }
+    activity.set_step(text);
+    crate::daemon_log::record(
+        home,
+        SystemClock.now(),
+        "daemon",
+        format_args!("starting: {text}"),
+    );
+}
 
 use crate::doctor::NativeHost;
 use crate::loop_health::LoopHealth;
@@ -86,7 +110,9 @@ impl Daemon {
     /// [`Daemon::start`], with the trees set up as `setup` says.
     pub fn start_with(options: DaemonOptions, setup: TreeSetup) -> Result<Daemon> {
         let base = assemble::Base::read(options)?;
+        let home_root = &base.options.home.root;
         let machinery = assemble::machinery(&base, setup)?;
+        startup_step(home_root, "setting up check runner, landing and idle work");
         let (checks, landing, idle) = assemble::checking(
             &base,
             &machinery.trees,
@@ -106,7 +132,9 @@ impl Daemon {
             session: None,
             tree: None,
         };
+        startup_step(home_root, "loading claims and headless dispatch");
         let desks = assemble::desks(&base, &ctx, &machinery)?;
+        startup_step(home_root, "recovering CLI worker turns");
         let cli = cli::cli_mode(&base, &ctx, &machinery, &desks)?;
         let health =
             LoopHealth::new(base.clock.clone()).with_daemon_log(base.options.home.root.clone());
@@ -150,6 +178,7 @@ impl Daemon {
                 crate::session_title::app_data(&|name: &str| std::env::var(name).ok()),
             )),
         };
+        startup_step(home_root, "opening handles and resuming orphan verbs");
         let server = assemble::server(&base, &ctx, &parts, &desks)?;
         let _ = parts.update.drain.set(server.clone());
         server.register_late(Box::new(drill::RestartVerb {
@@ -367,7 +396,7 @@ pub fn run_daemon(cwd: &Path) -> i32 {
     }
     let repo = checkout(cwd, &home);
     // Held for the life of the process: one daemon per machine.
-    let _lock = match crate::machine_lock::hold(&home) {
+    let lock = match crate::machine_lock::hold(&home) {
         Ok(lock) => lock,
         Err(error) => {
             crate::update::forget_start(&home);
@@ -413,6 +442,8 @@ pub fn run_daemon(cwd: &Path) -> i32 {
         feed_wait_s: 60,
     };
     let starting = crate::server::Starting::new();
+    let startup = starting.enter();
+    startup_step(&home.root, "listening on the daemon socket");
     let accept = match accept_during_start(starting.clone()) {
         Ok(accept) => accept,
         Err(error) => {
@@ -420,15 +451,18 @@ pub fn run_daemon(cwd: &Path) -> i32 {
             return 1;
         }
     };
-    let hub_service = {
-        use ignite_os::service::Service;
-        ignite_os::Native.hub_installed().unwrap_or(false)
-    };
-    // A hub the daemon cannot serve, such as one whose address the hub's own service already
-    // holds, does not stop the daemon: the daemon is every verb on this machine, and the hub
-    // has its own service.
-    if let Err(error) = loops::serve_hub_if_asked(&options, hub_service) {
-        eprintln!("ignite: the daemon does not serve the hub: {error}");
+    if loops::HubAddresses::from_env().is_some() {
+        startup_step(&home.root, "checking whether to serve the hub");
+        let hub_service = {
+            use ignite_os::service::Service;
+            ignite_os::Native.hub_installed().unwrap_or(false)
+        };
+        // A hub the daemon cannot serve, such as one whose address the hub's own service already
+        // holds, does not stop the daemon: the daemon is every verb on this machine, and the hub
+        // has its own service.
+        if let Err(error) = loops::serve_hub_if_asked(&options, hub_service) {
+            eprintln!("ignite: the daemon does not serve the hub: {error}");
+        }
     }
     let started = Daemon::start_with(options, TreeSetup::Background)
         .map_err(|error| format!("the daemon did not start: {error}"));
@@ -437,6 +471,9 @@ pub fn run_daemon(cwd: &Path) -> i32 {
         Err(reason) => {
             crate::daemon_log::report(&home.root, format_args!("{reason}"));
             starting.failed(reason);
+            // Release the machine lock before waiting for clients to read the failure, so a
+            // concurrent start waiting on the lock can take over instead of exiting too.
+            drop(lock);
             // Gives the requests that waited for the start a moment to read why it failed.
             std::thread::sleep(std::time::Duration::from_millis(500));
             return 1;
@@ -448,7 +485,9 @@ pub fn run_daemon(cwd: &Path) -> i32 {
         "daemon",
         format_args!("started {}", daemon.options.version),
     );
+    drop(startup);
     starting.ready(daemon.server.clone());
+    let _lock = lock;
     daemon.run_loops();
     match accept.join() {
         Ok(Ok(())) => 0,
@@ -465,7 +504,8 @@ fn accept_during_start(
     starting: Arc<crate::server::Starting>,
 ) -> std::result::Result<std::thread::JoinHandle<std::io::Result<()>>, String> {
     let socket = crate::server::default_socket();
-    let listener = listen(&socket).map_err(|error| format!("cannot serve the socket: {error}"))?;
+    let listener = listen(&socket)
+        .map_err(|error| format!("cannot serve the socket {}: {error}", socket.display()))?;
     std::thread::Builder::new()
         .name("ignite-accept".to_owned())
         .spawn(move || crate::server::serve_starting(&starting, listener.as_ref()))
@@ -521,4 +561,87 @@ pub(crate) fn read_config(repo: &Path) -> Result<Config> {
 /// Every `*.toml` in the repository's manifest directory, parsed together.
 pub(crate) fn read_manifest(repo: &Path, config: &Config) -> std::result::Result<Manifest, String> {
     crate::manifests::read_directory(&repo.join(&config.repository.checks))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn daemon_start_io_error_names_the_unusable_trees_path() {
+        let base = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-start-io-path-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let repo = base.join("repo");
+        let checks = repo.join("checks");
+        let home = base.join("home");
+        std::fs::create_dir_all(&checks).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        // A regular file where the trees root parent should be makes `create_dir_all` fail
+        // with an I/O error on every platform.
+        let blocker = base.join("not-a-dir");
+        std::fs::write(&blocker, "x").unwrap();
+        let bad_trees = blocker.join("trees");
+        let config = format!(
+            "[repository]\n\
+             remote = \"origin\"\n\
+             master = \"master\"\n\
+             staging = \"staging\"\n\
+             trees = \"{}\"\n\
+             checks = \"checks\"\n\
+             [hub]\n\
+             url = \"http://127.0.0.1:1\"\n\
+             project = \"test\"\n\
+             [gate]\n\
+             threshold = 0.01\n",
+            bad_trees.display().to_string().replace('\\', "/")
+        );
+        std::fs::write(repo.join("ignite.toml"), config).unwrap();
+        std::fs::write(
+            home.join("machine.json"),
+            r#"{"machine":"m-12345678","token":"tok"}"#,
+        )
+        .unwrap();
+
+        let error = Daemon::start_with(
+            DaemonOptions {
+                repo,
+                home: Home { root: home },
+                hostname: "alpha".to_owned(),
+                ignite: PathBuf::from("ignite"),
+                version: "unknown".to_owned(),
+                feed_wait_s: 1,
+            },
+            TreeSetup::Background,
+        )
+        .err()
+        .expect("start_with should fail on an unusable trees path");
+        let message = error.to_string();
+        assert!(
+            message.contains("not-a-dir") && message.contains("trees"),
+            "error should name the failing trees path: {message}"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn startup_step_records_on_the_startup_activity_only() {
+        let home = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-startup-step-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+
+        // Outside daemon startup, `startup_step` is a no-op and writes no log.
+        startup_step(&home, "ignored outside startup");
+        assert!(!home.join("ignite.daemon.log").exists());
+
+        let starting = crate::server::Starting::new();
+        let _entered = starting.enter();
+        startup_step(&home, "marking unfinished trees");
+        if cfg!(windows) {
+            let log = std::fs::read_to_string(home.join("ignite.daemon.log")).unwrap();
+            assert!(log.contains("starting: marking unfinished trees"), "{log}");
+        }
+        let _ = std::fs::remove_dir_all(&home);
+    }
 }
