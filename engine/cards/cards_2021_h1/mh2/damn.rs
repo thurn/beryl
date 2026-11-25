@@ -14,10 +14,7 @@ pub static CARD: CardDef = Printed::Damn
         Ability::spell()
             .target(&TargetSpec::creature())
             .effect(&destroy_without_regeneration(target())),
-        Ability::spell().effect(&destroy_without_regeneration(Objects::All {
-            zone: Zone::Battlefield,
-            filter: Filter::Types(Types::CREATURE),
-        })),
+        Ability::spell().effect(&destroy_without_regeneration(permanents(creature()))),
     ])
     .casting(&[CastingOption::overload(mana("{2}{W}{W}"), 1)])
     .card();

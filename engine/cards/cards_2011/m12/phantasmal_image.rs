@@ -16,7 +16,7 @@ use crate::prelude::*;
 /// [CR 707.9a]: https://yawgatog.com/resources/magic-rules/#R7079a
 pub static CARD: CardDef = Printed::PhantasmalImage
     .abilities(&[Ability::replacing(&Replacement::enter_as_copy(
-        &Filter::Types(Types::CREATURE),
+        &creature(),
         Some(ExceptIx::new(0)),
     ))])
     .grants(

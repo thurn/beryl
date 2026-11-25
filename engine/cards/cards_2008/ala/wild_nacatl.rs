@@ -18,24 +18,18 @@ pub static CARD: CardDef = Printed::WildNacatl
     .abilities(&[
         Ability::static_ability(&LayerSpec {
             affected: Objects::This,
-            condition: Some(exists(&Objects::All {
-                zone: Zone::Battlefield,
-                filter: Filter::All(&[
-                    Filter::Subtype(Subtype::Mountain),
-                    Filter::Whose(&Players::You),
-                ]),
-            })),
+            condition: Some(exists(&permanents(Filter::All(&[
+                Filter::Subtype(Subtype::Mountain),
+                yours(),
+            ])))),
             modifications: &[Modification::ModifyPt(1, 1)],
         }),
         Ability::static_ability(&LayerSpec {
             affected: Objects::This,
-            condition: Some(exists(&Objects::All {
-                zone: Zone::Battlefield,
-                filter: Filter::All(&[
-                    Filter::Subtype(Subtype::Plains),
-                    Filter::Whose(&Players::You),
-                ]),
-            })),
+            condition: Some(exists(&permanents(Filter::All(&[
+                Filter::Subtype(Subtype::Plains),
+                yours(),
+            ])))),
             modifications: &[Modification::ModifyPt(1, 1)],
         }),
     ])

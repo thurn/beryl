@@ -16,7 +16,7 @@ use crate::prelude::*;
 const SPELL_CARD: TargetSpec = TargetSpec::graveyard_card(Filter::All(&[
     instant_or_sorcery(),
     Filter::ManaValueAtMostPower,
-    Filter::Whose(&Players::You),
+    yours(),
 ]));
 
 const PROXY: Face = Printed::ArcaneProxy.abilities(&[when_enters(&sequence(&[

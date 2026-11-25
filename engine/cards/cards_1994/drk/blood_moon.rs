@@ -15,13 +15,10 @@ use crate::prelude::*;
 /// [CR 613.8a]: https://yawgatog.com/resources/magic-rules/#R6138a
 pub static CARD: CardDef = Printed::BloodMoon
     .abilities(&[Ability::static_ability(&LayerSpec {
-        affected: Objects::All {
-            zone: Zone::Battlefield,
-            filter: Filter::All(&[
-                Filter::Types(Types::LAND),
-                Filter::Not(&Filter::Supertypes(Supertypes::BASIC)),
-            ]),
-        },
+        affected: permanents(Filter::All(&[
+            land(),
+            Filter::Not(&Filter::Supertypes(Supertypes::BASIC)),
+        ])),
         condition: None,
         modifications: &[Modification::SetLandTypes(BasicLandTypes::MOUNTAIN)],
     })])

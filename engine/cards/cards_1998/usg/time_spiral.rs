@@ -25,13 +25,6 @@ pub static CARD: CardDef = Printed::TimeSpiral
             },
         ),
         draw(each_player(), 7),
-        untap_up_to(
-            you(),
-            6,
-            Objects::All {
-                zone: Zone::Battlefield,
-                filter: Filter::Types(Types::LAND),
-            },
-        ),
+        untap_up_to(you(), 6, permanents(land())),
     ]))])
     .card();

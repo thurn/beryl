@@ -23,7 +23,7 @@ pub static CARD: CardDef = Printed::SwiftReconfiguration
     .keywords(Keywords::FLASH)
     .abilities(&[
         Ability::spell().target(&TargetSpec::permanent(Filter::AnyOf(&[
-            Filter::Types(Types::CREATURE),
+            creature(),
             Filter::Subtype(Subtype::Vehicle),
         ]))),
         Ability::static_ability(&enchanted(&[Modification::SetTypes(Types::ARTIFACT)])),

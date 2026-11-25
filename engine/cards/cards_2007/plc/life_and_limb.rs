@@ -15,13 +15,10 @@ use crate::prelude::*;
 /// [CR 613.8a]: https://yawgatog.com/resources/magic-rules/#R6138a
 pub static CARD: CardDef = Printed::LifeAndLimb
     .abilities(&[Ability::static_ability(&LayerSpec {
-        affected: Objects::All {
-            zone: Zone::Battlefield,
-            filter: Filter::AnyOf(&[
-                Filter::Subtype(Subtype::Forest),
-                Filter::Subtype(Subtype::Saproling),
-            ]),
-        },
+        affected: permanents(Filter::AnyOf(&[
+            Filter::Subtype(Subtype::Forest),
+            Filter::Subtype(Subtype::Saproling),
+        ])),
         condition: None,
         modifications: &[
             Modification::AddTypes(Types::CREATURE.union(Types::LAND)),

@@ -27,7 +27,7 @@ pub static CARD: CardDef = Printed::Gemrazer
             .effect(&destroy(target())),
         Ability::spell()
             .target(&TargetSpec::permanent(Filter::All(&[
-                Filter::Types(Types::CREATURE),
+                creature(),
                 Filter::Not(&Filter::Subtype(Subtype::Human)),
                 Filter::Owned(&Players::You),
             ])))

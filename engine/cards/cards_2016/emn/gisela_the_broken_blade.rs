@@ -19,8 +19,8 @@ pub static CARD: CardDef = card_with_shape(
                 .union(Keywords::LIFELINK),
         )
         .abilities(&[Ability::triggered(&Trigger::step(TurnStep::End, you()))
-            .only_if(&own_and_control_meld_pair(Filter::Types(Types::CREATURE)))
-            .effect(&meld(Filter::Types(Types::CREATURE)))])],
+            .only_if(&own_and_control_meld_pair(creature()))
+            .effect(&meld(creature()))])],
 );
 
 #[cfg(feature = "scenarios")]

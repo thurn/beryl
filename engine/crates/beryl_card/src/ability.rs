@@ -1,50 +1,25 @@
 //! An ability of a face: its interface as data, and what it does.
 
-use crate::characteristics::Types;
-use crate::continuous::{Duration, LayerSpec, Modification, Replacement, RuleChange};
-use crate::cost::{CastingKind, Cost, CostPart};
-use crate::counter::CounterKind;
-use crate::effect::build::create_copy_except;
-use crate::effect::{
-    Amount, Comparison, Condition, Effect, ExileMatch, LibraryPosition, Objects, Players,
-};
-use crate::filter::Filter;
-use crate::ids::{TurnStep, Zone, ZoneSet};
-use crate::index::{ExceptIx, SpecIx};
-use crate::mana::{ManaCost, ManaSet};
+use crate::continuous::{LayerSpec, Replacement, RuleChange};
+use crate::cost::Cost;
+use crate::effect::{Condition, Effect, Objects, Players};
+use crate::ids::ZoneSet;
+use crate::index::SpecIx;
+use crate::mana::ManaSet;
 use crate::target::{Takes, TargetKind, TargetSpec};
 use crate::trigger::Trigger;
-
-pub(crate) static CASCADE: Effect = Effect::Sequence(&[
-    Effect::ExileUntil {
-        player: Players::You,
-        matching: ExileMatch::ManaValueBelow {
-            filter: Filter::Not(&Filter::Types(Types::LAND)),
-            below: Amount::ManaValue(Objects::This),
-        },
-        when_found: &Effect::MayCast {
-            player: Players::You,
-            card: Objects::Those,
-            free: true,
-            free_below: Some(Amount::ManaValue(Objects::This)),
-            copy: false,
-        },
-    },
-    Effect::PutIntoLibrary {
-        objects: Objects::Those,
-        position: LibraryPosition::BottomRandom,
-    },
-]);
 
 mod behavior;
 mod chapter;
 mod designation;
+mod keywords;
 mod leveler;
 mod of_kind;
 mod zones;
 
 pub use behavior::{Behavior, Custom, Says};
 pub use designation::Designation;
+pub(crate) use keywords::CASCADE;
 use of_kind::OfKind;
 
 /// What kind of ability this is ([CR 113.3](https://yawgatog.com/resources/magic-rules/#R1133)):
@@ -85,40 +60,6 @@ pub enum Timing {
     /// "Activate only during your turn": while its controller is the active player.
     YourTurn,
 }
-
-/// Equip's target: "target creature you control" (CR 702.6a).
-const EQUIP_TARGET: [TargetSpec; 1] = [TargetSpec::one(
-    TargetKind::Permanent,
-    Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
-)];
-
-/// Equip's effect: "Attach this permanent to target creature you control" (CR 702.6a).
-const ATTACH_TO_TARGET: Effect = Effect::Attach {
-    objects: Objects::This,
-    to: Objects::Target(SpecIx::new(0)),
-};
-
-/// Crew's effect (CR 702.122a): "This permanent becomes an artifact creature until end of turn."
-const BECOME_ARTIFACT_CREATURE: Effect = Effect::Modify {
-    objects: Objects::This,
-    modifications: &[Modification::AddTypes(ARTIFACT_CREATURE)],
-    duration: Duration::EndOfTurn,
-};
-const ARTIFACT_CREATURE: Types = Types::ARTIFACT.union(Types::CREATURE);
-
-/// "At the beginning of your end step", for [`Ability::impending_countdown`].
-const YOUR_END_STEP: Trigger = Trigger::step(TurnStep::End, Players::You);
-
-/// Impending's "if this permanent's impending cost was paid and it has a time counter on
-/// it" (CR 702.176a), which its static ability and its triggered one both say.
-const IMPENDING: Condition = Condition::All(&[
-    Condition::Paid(CastingKind::Impending),
-    Condition::Compare(
-        Amount::Counters(Objects::This, CounterKind::Time),
-        Comparison::AtLeast,
-        Amount::Fixed(1),
-    ),
-]);
 
 /// The most mana of one kind [`Ability::tap_for_mana`] makes.
 const MOST_MANA: u8 = 3;
@@ -333,115 +274,6 @@ impl Ability {
             of_kind: OfKind::Replacement(replacement),
             ..Ability::of(AbilityKind::Replacement)
         }
-    }
-
-    /// Cycling ([CR 702.29a](https://yawgatog.com/resources/magic-rules/#R70229a)): "Cycling
-    /// is an activated ability that functions only while the card with cycling is in a
-    /// player's hand. 'Cycling [cost]' means '[Cost], Discard this card: Draw a card.'"
-    pub const fn cycling(mana: ManaCost) -> Ability {
-        Ability::activated(Cost::of(mana, &[CostPart::DISCARD]))
-            .in_zones(ZoneSet::of(Zone::Hand))
-            .effect(&Effect::Draw {
-                player: Players::You,
-                count: Amount::Fixed(1),
-            })
-    }
-
-    /// Crew N (CR 702.122a), an activated ability any time its controller has priority:
-    /// "This permanent becomes an artifact creature until end of turn." It keeps its other
-    /// types and subtypes
-    /// ([CR 205.1b](https://yawgatog.com/resources/magic-rules/#R2051b)): "Some effects state
-    /// that an object becomes an 'artifact creature'; these effects also allow the object to
-    /// retain all of its prior card types and subtypes."
-    pub const fn crew(n: u8) -> Ability {
-        Ability::activated(Cost::crew(n)).effect(&BECOME_ARTIFACT_CREATURE)
-    }
-
-    /// Equip ([CR 702.6a](https://yawgatog.com/resources/magic-rules/#R7026a)): "Equip is an
-    /// activated ability of Equipment cards. 'Equip [cost]' means '[Cost]: Attach this
-    /// permanent to target creature you control. Activate only as a sorcery.'"
-    pub const fn equip(mana: ManaCost) -> Ability {
-        Ability::activated(Cost::mana(mana))
-            .targeting(&EQUIP_TARGET)
-            .effect(&ATTACH_TO_TARGET)
-            .as_a_sorcery()
-    }
-
-    /// Offspring's triggered ability
-    /// ([CR 702.175a](https://yawgatog.com/resources/magic-rules/#R702175a)): "When this
-    /// permanent enters, if its offspring cost was paid, create a token that's a copy of it,
-    /// except it's 1/1." The face lists [`CastingOption::Offspring`] too, and first among its
-    /// copy exceptions ([`crate::Face::excepts`]) the 1/1 one the copy is made with.
-    pub const fn offspring() -> Ability {
-        const COPY: Effect = create_copy_except(Players::You, Objects::This, ExceptIx::new(0));
-        Ability::triggered(&Trigger::ENTERS)
-            .only_if(&Condition::Paid(CastingKind::Offspring))
-            .effect(&COPY)
-    }
-
-    /// Storm ([CR 702.40a]): "Storm is a triggered ability that functions on the stack. 'Storm'
-    /// means 'When you cast this spell, copy it for each other spell that was cast before it
-    /// this turn. If the spell has any targets, you may choose new targets for any of the
-    /// copies.'" The count is read as the ability triggers ([`Amount::SpellsCastBefore`]).
-    ///
-    /// [CR 702.40a]: https://yawgatog.com/resources/magic-rules/#R70240a
-    pub const fn storm() -> Ability {
-        const COPY: Effect = Effect::CopySpell {
-            spells: Objects::This,
-            count: Amount::SpellsCastBefore,
-            except: None,
-            new_targets: true,
-        };
-        Ability::triggered(&Trigger::CAST)
-            .on_the_stack()
-            .effect(&COPY)
-    }
-
-    /// Cascade ([CR 702.85a]): "When you cast this spell, exile cards from the top of your
-    /// library until you exile a nonland card whose mana value is less than this spell’s
-    /// mana value." The eligible spell can be cast for free, then the remaining cards
-    /// go on the bottom at random.
-    ///
-    /// [CR 702.85a]: https://yawgatog.com/resources/magic-rules/#R70285a
-    pub const fn cascade() -> Ability {
-        Ability::triggered(&Trigger::CAST)
-            .on_the_stack()
-            .effect(&CASCADE)
-    }
-
-    /// Impending's static ability (CR 702.176a): "As long as this permanent's impending cost
-    /// was paid and it has a time counter on it, it's not a creature". The face lists
-    /// [`CastingOption::Impending`], whose counters the permanent enters with, and
-    /// [`Ability::impending_countdown`].
-    pub const fn impending() -> Ability {
-        Ability::static_ability(&LayerSpec {
-            affected: Objects::This,
-            condition: Some(IMPENDING),
-            modifications: &[Modification::RemoveTypes(Types::CREATURE)],
-        })
-    }
-
-    /// Impending's triggered ability (CR 702.176a): "At the beginning of your end step, if
-    /// this permanent's impending cost was paid and it has a time counter on it, remove a
-    /// time counter from it."
-    pub const fn impending_countdown() -> Ability {
-        Ability::triggered(&YOUR_END_STEP)
-            .only_if(&IMPENDING)
-            .effect(&Effect::RemoveCounters {
-                objects: Objects::This,
-                kind: CounterKind::Time,
-                count: Amount::Fixed(1),
-            })
-    }
-
-    /// Evoke's triggered ability
-    /// ([CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a)): "When this
-    /// permanent enters, if its evoke cost was paid, its controller sacrifices it." The face
-    /// lists [`CastingOption::Evoke`] too.
-    pub const fn evoke() -> Ability {
-        Ability::triggered(&Trigger::ENTERS)
-            .only_if(&Condition::Paid(CastingKind::Evoke))
-            .effect(&Effect::Sacrifice(Objects::This))
     }
 }
 
@@ -741,51 +573,4 @@ impl Ability {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::characteristics::Keywords;
-
-    /// "As long as you do" is no static ability: nothing was done before it. In a card's
-    /// `static` the same assertion stops the build.
-    #[test]
-    #[should_panic(expected = "a static ability has no targets")]
-    fn a_static_ability_that_needs_a_resolution_is_refused() {
-        let _ = Ability::static_ability(&LayerSpec {
-            affected: Objects::This,
-            condition: Some(Condition::Did),
-            modifications: &[Modification::AddKeywords(Keywords::FLYING)],
-        });
-    }
-
-    /// A kind holds only what it has: each of these is a build failure in a card's `static`.
-    #[test]
-    #[should_panic(expected = "only a spell, activated or triggered ability has targets")]
-    fn a_replacement_with_targets_is_refused() {
-        let _ = Ability::replacing(&Replacement::ENTERS_TAPPED).targeting(&[]);
-    }
-
-    #[test]
-    #[should_panic(expected = "a mana ability's is what it")]
-    fn a_mana_ability_with_another_effect_is_refused() {
-        let _ =
-            Ability::tap_for_mana(ManaSet::one(crate::ManaColor::Blue)).effect(&Effect::NOTHING);
-    }
-
-    #[test]
-    fn a_mana_ability_adds_what_it_produces() {
-        let produces = ManaSet::one(crate::ManaColor::Green);
-        let ability = Ability::tap_for_mana(produces);
-        assert!(matches!(
-            ability.body(),
-            Behavior::Data(Effect::AddMana { mana, .. }) if *mana == produces
-        ));
-    }
-
-    #[test]
-    fn custom_gives_back_only_the_type_it_was_made_of() {
-        static BODY: fn() -> u8 = || 7;
-        let custom = Custom::new(&BODY, &Says::NOTHING);
-        assert_eq!(custom.get::<fn() -> u8>().map(|body| body()), Some(7));
-        assert!(custom.get::<u8>().is_none());
-    }
-}
+mod tests;

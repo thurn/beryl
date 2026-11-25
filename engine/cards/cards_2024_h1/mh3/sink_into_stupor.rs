@@ -20,10 +20,7 @@ pub static CARD: CardDef = card_with_shape(
         Printed::SinkIntoStupor.abilities(&[Ability::spell()
             .target(&TargetSpec::one(
                 TargetKind::SpellOrPermanent,
-                Filter::All(&[
-                    Filter::Whose(&Players::EachOpponent),
-                    Filter::Not(&Filter::Types(Types::LAND)),
-                ]),
+                Filter::All(&[Filter::Whose(&Players::EachOpponent), nonland()]),
             ))
             .effect(&return_to_hand(target()))]),
         Printed::SoporificSprings.abilities(&[

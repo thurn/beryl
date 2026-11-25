@@ -18,12 +18,12 @@ pub static CARD: CardDef = card_with_shape(
         .abilities(&[Ability::triggered(&Trigger::CAST)
             .on_the_stack()
             .target(&TargetSpec::graveyard_card(Filter::All(&[
-                Filter::Types(Types::CREATURE),
+                creature(),
                 Filter::AnyOf(&[
                     Filter::Subtype(Subtype::Angel),
                     Filter::Subtype(Subtype::Human),
                 ]),
-                Filter::Whose(&Players::You),
+                yours(),
             ])))
             .effect(&may(you(), &return_to_battlefield(target())))])],
 );

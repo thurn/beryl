@@ -218,3 +218,15 @@ pub enum Prevention {
     /// specific amount of damage". Each event uses up what it prevents.
     Next(u8),
 }
+
+/// Whether a destroyed permanent may be regenerated
+/// ([CR 701.19c](https://yawgatog.com/resources/magic-rules/#R70119c)): "Effects that say that a
+/// permanent can't be regenerated don't preclude such abilities from being activated or such
+/// spells from being cast; rather, they cause regeneration shields to not be applied."
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Regeneration {
+    /// A regeneration shield applies, as it does to most destruction.
+    Allowed,
+    /// "[It] can't be regenerated": no regeneration shield applies.
+    Forbidden,
+}

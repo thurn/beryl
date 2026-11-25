@@ -1,11 +1,16 @@
 //! Prelude functions that compose the card vocabulary.
 
 use crate::effect::build::{its_controller, unless_pays};
-use crate::{Ability, Cost, CostPart, Effect, Filter, ManaCost, Trigger, Types};
+use crate::{Ability, Cost, CostPart, Effect, Filter, ManaCost, Players, Trigger, Types};
 
 /// Matches an instant or sorcery spell or card.
 pub const fn instant_or_sorcery() -> Filter {
     Filter::Types(Types::INSTANT.union(Types::SORCERY))
+}
+
+/// Matches a creature you control.
+pub const fn creature_you_control() -> Filter {
+    Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)])
 }
 
 /// Tap and sacrifice this permanent to pay the activation cost.

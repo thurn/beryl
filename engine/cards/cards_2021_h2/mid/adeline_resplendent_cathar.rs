@@ -20,13 +20,9 @@ pub static CARD: CardDef = Printed::AdelineResplendentCathar
         Ability::static_ability(&LayerSpec {
             affected: Objects::This,
             condition: None,
-            modifications: &[Modification::SetPower(&Amount::Count(&Objects::All {
-                zone: Zone::Battlefield,
-                filter: Filter::All(&[
-                    Filter::Types(Types::CREATURE),
-                    Filter::Whose(&Players::You),
-                ]),
-            }))],
+            modifications: &[Modification::SetPower(&Amount::Count(&permanents(
+                creature_you_control(),
+            )))],
         }),
         Ability::triggered(&Trigger::attack(Players::You)).effect(&for_each_player(
             each_opponent(),

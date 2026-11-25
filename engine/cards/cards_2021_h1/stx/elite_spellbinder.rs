@@ -18,11 +18,7 @@ pub static CARD: CardDef = Printed::EliteSpellbinder
             look_at(you(), hand_of(&target_player())),
             may_choose(
                 you(),
-                cards_in(
-                    Zone::Hand,
-                    &target_player(),
-                    Filter::Not(&Filter::Types(Types::LAND)),
-                ),
+                cards_in(Zone::Hand, &target_player(), nonland()),
                 Prompt::new(Purpose::Look)
                     .most(1)
                     .places(Place::Exile, Place::None),

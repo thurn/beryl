@@ -14,11 +14,8 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::AangsIceberg
     .keywords(Keywords::FLASH)
     .abilities(&[
-        when_enters(&exile_until_this_leaves(target())).target(
-            &TargetSpec::permanent(Filter::Not(&Filter::Types(Types::LAND)))
-                .optional()
-                .other(),
-        ),
+        when_enters(&exile_until_this_leaves(target()))
+            .target(&TargetSpec::permanent(nonland()).optional().other()),
         Ability::activated(Cost::of(ManaCost::generic(3), &[CostPart::waterbend(3)])).effect(
             &sequence(&[sacrifice(this()), if_then(if_you_do(), &scry(you(), 2))]),
         ),

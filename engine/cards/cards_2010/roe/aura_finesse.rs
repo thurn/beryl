@@ -14,10 +14,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::AuraFinesse
     .abilities(&[Ability::spell()
         .targeting(&[
-            TargetSpec::permanent(Filter::All(&[
-                Filter::Subtype(Subtype::Aura),
-                Filter::Whose(&Players::You),
-            ])),
+            TargetSpec::permanent(Filter::All(&[Filter::Subtype(Subtype::Aura), yours()])),
             TargetSpec::creature(),
         ])
         .effect(&sequence(&[
