@@ -256,9 +256,13 @@ def linked(name: str) -> Path:
     macOS checks each new executable before its first run. Reusing the linker's own file
     pays that check once per link. Its name uses `_` for each `-` in the crate name."""
     debug = paths.WORKSPACE / "target" / "debug"
+    if system.WINDOWS:
+        # Only macOS checks a new executable before its first run, so Windows gains nothing
+        # from the linker's file. `target/debug/<name>.exe` is always the program, whereas a
+        # file in `deps` may be a newer test harness of the crate (`cargo test`).
+        return system.exe(debug / name)
     stem = name.replace("-", "_")
-    suffix = r"\.exe" if system.WINDOWS else ""
-    pattern = re.compile(rf"{re.escape(stem)}-[0-9a-f]{{16}}{suffix}")
+    pattern = re.compile(rf"{re.escape(stem)}-[0-9a-f]{{16}}")
     found = [p for p in (debug / "deps").glob(f"{stem}-*") if pattern.fullmatch(p.name)]
     if not found:
         return system.exe(debug / name)

@@ -294,6 +294,7 @@ def test_the_linkers_newest_binary_is_run(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(cli.paths, "WORKSPACE", tmp_path)
+    monkeypatch.setattr(cli.system, "WINDOWS", False)
     debug = tmp_path / "target" / "debug"
     deps = debug / "deps"
     deps.mkdir(parents=True)
@@ -314,6 +315,7 @@ def test_a_newer_test_harness_of_the_crate_is_not_run_as_the_program(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(cli.paths, "WORKSPACE", tmp_path)
+    monkeypatch.setattr(cli.system, "WINDOWS", False)
     debug = tmp_path / "target" / "debug"
     deps = debug / "deps"
     deps.mkdir(parents=True)
@@ -329,6 +331,18 @@ def test_a_newer_test_harness_of_the_crate_is_not_run_as_the_program(
             debug / ".fingerprint" / f"beryl_inspect-{hash_}" / f"{kind}-client"
         ).write_text("")
     assert cli.linked("client") == program
+
+
+def test_windows_runs_the_programs_own_file_not_a_file_in_deps(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(cli.paths, "WORKSPACE", tmp_path)
+    monkeypatch.setattr(cli.system, "WINDOWS", True)
+    debug = tmp_path / "target" / "debug"
+    deps = debug / "deps"
+    deps.mkdir(parents=True)
+    (deps / "client-1111111111111111.exe").write_text("")
+    assert cli.linked("client") == debug / "client.exe"
 
 
 def test_the_listing_names_every_text_command() -> None:
