@@ -11,6 +11,7 @@ fn costs_read_as_printed() {
         generic,
         symbols,
         x,
+        ..ManaCost::NONE
     };
     // Jace, the Mind Sculptor's -1, Map's cost, Staff of the Storyteller's, kicker {X}.
     let loyalty = Cost::loyalty(-1);
@@ -21,6 +22,9 @@ fn costs_read_as_printed() {
     assert_eq!(cost_text(&staff), "{W}, {T}, Remove a story counter");
     assert_eq!(mana_text(mana(0, [0; 6], 1)), "{X}");
     assert_eq!(mana_text(mana(2, [0, 2, 0, 0, 0, 0], 0)), "{2}{U}{U}");
+    let hybrid = beryl_engine::card::mana("{2}{W/B}{W/B}{U}");
+    assert_eq!(mana_text(hybrid), "{2}{W/B}{W/B}{U}");
+    assert_eq!(mana_text(beryl_engine::card::mana("{B/W}")), "{W/B}");
 }
 
 #[test]

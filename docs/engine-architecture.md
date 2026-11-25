@@ -830,6 +830,14 @@ timing restriction stops it paying for a spell being cast). A color-count
 prefilter answers "payable at all" for every card in hand on each priority, and
 an exact matching runs only for candidates that pass.
 
+A cost holds its two-color hybrid symbols in `ManaCost::hybrid`, a count of
+three bits for each of the ten pairs. The prefilter and the matching treat a
+hybrid symbol as one that mana of either of its two colors pays, and each hybrid
+path sits behind one check that the cost has no hybrid symbol, so a game with no
+hybrid cost pays nothing for them. Monocolored hybrid symbols ({2/W}) and
+Phyrexian symbols are not held yet: a card with one stays incomplete until a
+card that needs them adds them.
+
 What becomes a decision:
 
 - Among plans that differ only in which lands or rocks are tapped, the solver

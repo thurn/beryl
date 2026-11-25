@@ -82,6 +82,10 @@ pub(super) fn record_one<L: Layout>(
 /// in the cost is 0, as it is for a card cast without paying its mana cost (see CR 107.3b).
 pub(crate) fn pays(cost: ManaCost, spent: ManaAmounts) -> bool {
     let cost = cost.with_x(0);
+    if !cost.hybrid.is_empty() {
+        // A hybrid symbol by mana of either of its colors (see CR 107.4e).
+        return crate::mana::amounts_pay(spent, cost);
+    }
     let mut left: u32 = 0;
     for (&need, &have) in cost.symbols.iter().zip(spent.iter()) {
         if have < need {

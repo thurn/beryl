@@ -256,6 +256,7 @@ pub mod decks {
                 names::PITHING_NEEDLE,
                 names::MISTER_IMMORTAL,
                 names::CAVERN_OF_SOULS,
+                names::UNMAKE,
             ],
         ),
         (

@@ -4,8 +4,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, ChosenKind, CostAction, FaceIx, INTRINSIC_MANA, ManaColor, ManaCost,
-    ObjectAbility, Types,
+    Ability, AbilityIx, ChosenKind, CostAction, FaceIx, Hybrid, INTRINSIC_MANA, ManaColor,
+    ManaCost, ObjectAbility, Types,
 };
 use crate::decision::{Candidates, OPTIONS, Opt};
 use crate::fixed::Full;
@@ -257,17 +257,18 @@ fn human_taps<L: Layout>(s: &State<L>, c: &Class<L>, n: u8) -> Result<L::Queue<L
     Ok(v)
 }
 
-/// One augmenting-path step of [`assign`]: finds a unit slot for symbol `sym`.
+/// One augmenting-path step of [`assign`]: finds a unit slot for symbol `sym`, each symbol
+/// the kinds that may pay it.
 fn augment<S: SlotId>(
     sym: usize,
-    symbols: &[usize],
+    symbols: &[u8],
     slots: &[usize],
     units: &[(u8, Option<S>, u8)],
     owner: &mut [Option<usize>],
     seen: &mut [bool],
 ) -> bool {
     for (j, &u) in slots.iter().enumerate() {
-        if units[u].0 & (1 << symbols[sym]) == 0 || seen[j] {
+        if units[u].0 & symbols[sym] == 0 || seen[j] {
             continue;
         }
         seen[j] = true;
@@ -283,21 +284,26 @@ fn augment<S: SlotId>(
     false
 }
 
-/// Assigns the colored and colorless symbols of `cost` to units, each unit `(kinds, _, n)`
-/// paying `n` symbols of one kind. `kinds` gets the kind each unit is spent as, or `None` where
-/// it pays only generic mana. Kuhn's augmenting paths over the few symbols a cost has.
-/// `MEMORY` names [`pay_with_memory`]'s copy apart from [`pay_whole`]'s, so that each is
-/// inlined into its one caller.
+/// Assigns the colored, colorless and hybrid symbols of `cost` to units, each unit
+/// `(kinds, _, n)` paying `n` symbols of one kind. `kinds` gets the kind each unit is spent
+/// as, or `None` where it pays only generic mana. A unit that pays a hybrid symbol is spent as
+/// one of the symbol's colors that it makes (see CR 107.4e). Kuhn's augmenting paths over the
+/// few symbols a cost has. `MEMORY` names [`pay_with_memory`]'s copy apart from
+/// [`pay_whole`]'s, so that each is inlined into its one caller.
 fn assign<L: Layout, const MEMORY: bool>(
     cost: ManaCost,
     units: &[(u8, Option<L::Slot>, u8)],
     kinds: &mut L::Queue<Option<usize>, 64>,
 ) -> Result<(), Full> {
-    let mut symbols: L::Queue<usize, 64> = Default::default();
+    // Each symbol as the kinds that may pay it.
+    let mut symbols: L::Queue<u8, 64> = Default::default();
     for (k, &n) in cost.symbols.iter().enumerate() {
         for _ in 0..n {
-            symbols.push(k)?;
+            symbols.push(1 << k)?;
         }
+    }
+    if !cost.hybrid.is_empty() {
+        push_hybrid::<L>(cost.hybrid, &mut symbols)?;
     }
     // A unit of several mana pays as many symbols, all of one kind: split it into slots.
     let mut slots: L::Queue<usize, 64> = Default::default();
@@ -324,13 +330,26 @@ fn assign<L: Layout, const MEMORY: bool>(
         );
         debug_assert!(matched, "a plan the solver accepted pays every symbol");
     }
-    for u in 0..units.len() {
+    for (u, &(unit_kinds, _, _)) in units.iter().enumerate() {
         let kind = slots
             .iter()
             .zip(owner.iter())
             .find(|&(&slot_unit, o)| slot_unit == u && o.is_some())
-            .map(|(_, o)| symbols.as_slice()[o.unwrap()]);
+            .map(|(_, o)| lowest_kind(unit_kinds & symbols.as_slice()[o.unwrap()]));
         kinds.push(kind)?;
+    }
+    Ok(())
+}
+
+/// Pushes each hybrid symbol of a cost onto [`assign`]'s symbols, as the kinds of both its
+/// halves. Out of line: a cost with none reads only that it has none.
+#[cold]
+#[inline(never)]
+fn push_hybrid<L: Layout>(hybrid: Hybrid, symbols: &mut L::Queue<u8, 64>) -> Result<(), Full> {
+    for (pair, n) in hybrid.pairs() {
+        for _ in 0..n {
+            symbols.push(pair)?;
+        }
     }
     Ok(())
 }

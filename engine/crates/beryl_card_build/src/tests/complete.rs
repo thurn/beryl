@@ -75,6 +75,9 @@ fn a_creature_with_no_text_or_only_keywords_is_complete() {
         complete_from_store(&reminded, &k),
         Some(vec!["FLYING", "VIGILANCE"])
     );
+    // A two-color hybrid cost is one the engine holds.
+    let hybrid = card("Hybrid", "Creature — Elf", "{1}{G/W}", "");
+    assert_eq!(complete_from_store(&hybrid, &k), Some(vec![]));
 }
 
 #[test]
@@ -91,7 +94,7 @@ fn anything_more_needs_a_file() {
             "Flying\\nWhen this enters, draw a card.",
         ),
         // A cost the engine cannot hold.
-        card("Hybrid", "Creature — Elf", "{1}{G/W}", ""),
+        card("Phyrexian", "Creature — Elf", "{1}{G/P}", ""),
         // No creature.
         card("Wall Art", "Artifact", "{1}", ""),
     ];

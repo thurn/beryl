@@ -160,7 +160,7 @@ const fn no_mana(cost: &Cost) -> bool {
         symbols += mana.symbols[i] as u16;
         i += 1;
     }
-    mana.generic == 0 && mana.x == 0 && symbols == 0
+    mana.generic == 0 && mana.x == 0 && symbols == 0 && mana.hybrid.is_empty()
 }
 
 /// What the check asks of an ability's effect as a whole.

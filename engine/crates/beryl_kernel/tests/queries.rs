@@ -76,6 +76,7 @@ static BLAST: CardDef = CardDef {
             generic: 0,
             symbols: [0, 0, 0, 1, 0, 0],
             x: 1,
+            hybrid: beryl_card::Hybrid::NONE,
         },
         types: Types::SORCERY,
         ..Face::EMPTY

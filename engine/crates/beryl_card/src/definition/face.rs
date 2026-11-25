@@ -141,9 +141,10 @@ impl Face {
             } = self.casting[i]
             {
                 let mut colors = Colors::NONE;
+                let bits = cost.color_bits();
                 let mut c = 0;
                 while c < Colors::EACH.len() {
-                    if cost.symbols[c] > 0 {
+                    if bits & (1 << c) != 0 {
                         colors = colors.union(Colors::EACH[c]);
                     }
                     c += 1;

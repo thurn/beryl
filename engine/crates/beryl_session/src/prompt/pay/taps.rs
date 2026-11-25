@@ -85,7 +85,7 @@ fn left<L: Layout>(s: &State<L>, d: &Decision<L>) -> u16 {
         return u16::from(d.prompt.most);
     }
     let rest = owed(s, d);
-    u16::from(rest.generic) + rest.symbols.iter().map(|&n| u16::from(n)).sum::<u16>()
+    u16::try_from(rest.total(0)).unwrap_or(u16::MAX)
 }
 
 /// The mana cost `d`, a pick of the payment in `s`, still asks for, less the mana floating
@@ -93,7 +93,7 @@ fn left<L: Layout>(s: &State<L>, d: &Decision<L>) -> u16 {
 /// symbols it pays is the engine's to say.
 fn owed<L: Layout>(s: &State<L>, d: &Decision<L>) -> ManaCost {
     let mut rest = d.prompt.cost;
-    if rest.symbols.iter().all(|&n| n == 0) {
+    if rest.symbols.iter().all(|&n| n == 0) && rest.hybrid.is_empty() {
         let pool: u16 = (s.player(d.player).mana().amounts().into_iter())
             .map(u16::from)
             .sum();
@@ -110,7 +110,7 @@ impl Due {
         let cost = first.prompt.cost;
         let units = left(before, first);
         // A permanent tapped in place of mana pays generic mana alone.
-        let colored: u16 = cost.symbols.iter().map(|&n| u16::from(n)).sum();
+        let colored = u16::try_from(cost.symbol_count()).unwrap_or(u16::MAX);
         let need = if taps && of_mana(cost) {
             units.saturating_sub(colored)
         } else {
@@ -401,8 +401,14 @@ fn unpaid<L: Layout>(
     for role in roles {
         let kind = role.mana.map(|activation| activation.color.index());
         for _ in 0..role.amount {
-            match kind {
-                Some(kind) if rest.symbols[kind] > 0 => rest.symbols[kind] -= 1,
+            let hybrid = kind.and_then(|kind| {
+                (rest.hybrid.pairs())
+                    .map(|(pair, _)| pair)
+                    .find(|&pair| pair & (1 << kind) != 0)
+            });
+            match (kind, hybrid) {
+                (Some(kind), _) if rest.symbols[kind] > 0 => rest.symbols[kind] -= 1,
+                (_, Some(pair)) => rest.hybrid = rest.hybrid.without_one(pair),
                 _ => rest.generic = rest.generic.saturating_sub(1),
             }
         }

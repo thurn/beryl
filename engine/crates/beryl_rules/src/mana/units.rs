@@ -1,7 +1,7 @@
 //! Mana counted by what it can pay for: the units a payment draws on, and whether they pay a
 //! cost (architecture §10).
 //!
-//! Implements: CR 107.4a
+//! Implements: CR 107.4a, CR 107.4e
 
 use super::KINDS;
 use crate::card::ManaCost;
@@ -75,6 +75,14 @@ impl Units {
     /// it chooses counts as several independent units, which colorless rocks are.
     pub(crate) fn pays(&self, cost: ManaCost) -> bool {
         debug_assert_eq!(cost.x, 0, "X is announced before payment");
+        if !cost.hybrid.is_empty() {
+            return pays_hybrid(cost, self.total(), |mask| {
+                self.nonempty()
+                    .filter(|&(kinds, _)| kinds & mask != 0)
+                    .map(|(_, n)| u32::from(n))
+                    .sum()
+            });
+        }
         if self.total() < cost.total(0) {
             return false;
         }
@@ -132,6 +140,14 @@ impl Groups {
     /// [`Units::pays`].
     pub(super) fn pays(&self, cost: ManaCost) -> bool {
         debug_assert_eq!(cost.x, 0, "X is announced before payment");
+        if !cost.hybrid.is_empty() {
+            return pays_hybrid(cost, self.total, |mask| {
+                (self.kinds[..self.len].iter().zip(&self.units[..self.len]))
+                    .filter(|&(&kinds, _)| kinds & mask != 0)
+                    .map(|(_, &n)| u32::from(n))
+                    .sum()
+            });
+        }
         if self.total < cost.total(0) {
             return false;
         }
@@ -157,5 +173,87 @@ impl Groups {
             mask = (mask - 1) & present;
         }
         true
+    }
+}
+
+/// [`Units::pays`] for a cost with hybrid symbols, given the units' total and `cover`, how many
+/// units can be one of a set of kinds. A hybrid symbol is paid by a unit of either of its
+/// colors ([CR 107.4e]): "A hybrid symbol such as {W/U} can be paid with either white or blue
+/// mana". The matching of symbols to units exists exactly when, for every set of kinds, the
+/// units that can be one of them are at least as many as the symbols whose kinds all lie in
+/// it: the symbols a set of units is the only payer of. Kept apart so that a cost with no
+/// hybrid symbol reads none of it.
+///
+/// [CR 107.4e]: https://yawgatog.com/resources/magic-rules/#R1074e
+#[cold]
+#[inline(never)]
+fn pays_hybrid(cost: ManaCost, total: u32, cover: impl Fn(u8) -> u32) -> bool {
+    if total < cost.total(0) {
+        return false;
+    }
+    let single = (0..KINDS)
+        .filter(|&k| cost.symbols[k] > 0)
+        .fold(0u8, |m, k| m | (1 << k));
+    let present = single | cost.hybrid.colors();
+    let mut mask = present;
+    while mask != 0 {
+        let need: u32 = (0..KINDS)
+            .filter(|&k| mask & (1 << k) != 0)
+            .map(|k| u32::from(cost.symbols[k]))
+            .sum::<u32>()
+            + (cost.hybrid.pairs())
+                .filter(|&(pair, _)| pair & !mask == 0)
+                .map(|(_, n)| u32::from(n))
+                .sum::<u32>();
+        if cover(mask) < need {
+            return false;
+        }
+        mask = (mask - 1) & present;
+    }
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Units;
+    use crate::card::mana;
+
+    const W: u8 = 1;
+    const U: u8 = 1 << 1;
+    const B: u8 = 1 << 2;
+    const G: u8 = 1 << 4;
+
+    fn units(of: &[(u8, u16)]) -> Units {
+        let mut u = Units::NONE;
+        for &(kinds, n) in of {
+            u.add(kinds, n);
+        }
+        u
+    }
+
+    #[test]
+    fn a_hybrid_symbol_is_paid_by_either_color() {
+        let cost = mana("{1}{W/B}{W/B}");
+        assert!(units(&[(W, 2), (G, 1)]).pays(cost));
+        assert!(units(&[(B, 2), (G, 1)]).pays(cost));
+        assert!(units(&[(W, 1), (B, 1), (G, 1)]).pays(cost));
+        assert!(!units(&[(W, 1), (G, 2)]).pays(cost));
+        assert!(!units(&[(W, 1), (B, 1)]).pays(cost));
+        assert!(units(&[(W, 1), (B, 1)]).groups().pays(mana("{W/B}{W/B}")));
+        assert!(!units(&[(W, 1), (U, 2)]).groups().pays(mana("{W/B}{W/B}")));
+    }
+
+    #[test]
+    fn hybrid_and_colored_symbols_share_units() {
+        // {W}{W/U}: two units of W pay it; a W and a U do; two U do not.
+        let cost = mana("{W}{W/U}");
+        assert!(units(&[(W, 2)]).pays(cost));
+        assert!(units(&[(W, 1), (U, 1)]).pays(cost));
+        assert!(!units(&[(U, 2)]).pays(cost));
+        // Leyline of the Guildpact's four pairs, each sharing green.
+        let leyline = mana("{G/W}{G/U}{B/G}{R/G}");
+        assert!(units(&[(G, 4)]).pays(leyline));
+        assert!(!units(&[(W, 2), (U, 2)]).pays(leyline));
+        assert!(units(&[(W, 1), (U, 1), (B, 1), (G, 1)]).pays(leyline));
     }
 }

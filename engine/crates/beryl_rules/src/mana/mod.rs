@@ -44,6 +44,17 @@ pub use sources::mana_contribution;
 #[cfg(test)]
 pub(crate) use units::Units;
 
+/// Whether mana of the kinds and amounts of `amounts`, by [`ManaColor`] index, pays `cost`
+/// (X already announced): each of its symbols by mana of a kind it accepts, and the generic
+/// part by what is left.
+pub(crate) fn amounts_pay(amounts: [u8; KINDS], cost: crate::card::ManaCost) -> bool {
+    let mut units = units::Units::NONE;
+    for (k, &n) in amounts.iter().enumerate() {
+        units.add(1 << k, u16::from(n));
+    }
+    units.pays(cost)
+}
+
 /// The kinds of mana, W U B R G and C, as [`ManaColor`] indices.
 const KINDS: usize = 6;
 /// Classes of interchangeable sources one solve considers in [`Small`]; [`crate::Large`] holds

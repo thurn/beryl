@@ -77,7 +77,7 @@ pub use effect::{
 pub use filter::Filter;
 pub use ids::{Seat, TurnPhase, TurnStep, Zone, ZoneSet};
 pub use index::{AbilityIx, CastingIx, ExceptIx, GrantIx, ModeIx, SpecIx};
-pub use mana::{INTRINSIC_MANA, ManaColor, ManaCost, ManaRestriction, ManaSet, mana};
+pub use mana::{Hybrid, INTRINSIC_MANA, ManaColor, ManaCost, ManaRestriction, ManaSet, mana};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{Abilities, Takes, TargetKind, TargetSpec};
 pub use trigger::{CastNumber, Subject, Trigger, TriggerEvent};

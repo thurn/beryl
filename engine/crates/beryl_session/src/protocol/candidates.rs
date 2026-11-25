@@ -542,19 +542,10 @@ pub(super) fn cost_text(cost: &Cost) -> String {
     }
 }
 
-/// A mana cost in braces, X first, as Oracle text writes it: "{X}{2}{W}{W}"
-/// ([CR 107.4](https://yawgatog.com/resources/magic-rules/#R1074)).
+/// A mana cost in braces, X first, as Oracle text writes it: "{X}{2}{W}{W}", the card
+/// renderer's form of it.
 pub(crate) fn mana_text(cost: ManaCost) -> String {
-    let mut text = "{X}".repeat(usize::from(cost.x));
-    if cost.generic > 0 || (cost.x == 0 && cost.symbols == [0; 6]) {
-        text.push('{');
-        text.push_str(&cost.generic.to_string());
-        text.push('}');
-    }
-    for (symbol, &count) in MANA_SYMBOLS.iter().zip(&cost.symbols) {
-        text.push_str(&symbol.repeat(usize::from(count)));
-    }
-    text
+    beryl_card::render::mana_text(cost)
 }
 
 /// Activating ability `ability` of the object in `slot`.

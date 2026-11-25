@@ -4,7 +4,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, CostAction, Face, Keywords, ManaCost, Rewrite, Timing, Types,
+    Ability, AbilityKind, CostAction, Face, Hybrid, Keywords, ManaCost, Rewrite, Timing, Types,
 };
 use crate::continuous::rule_change;
 use crate::fixed::Full;
@@ -103,7 +103,7 @@ pub(super) fn still_payable<L: Layout>(
         }
     });
     payable.fold((0, 0, 0), |(most, n, all), l| {
-        let symbols: u32 = l.cost.symbols.iter().map(|&k| u32::from(k)).sum();
+        let symbols = l.cost.symbol_count();
         (most.max(symbols), n + 1, all + symbols)
     })
 }
@@ -409,6 +409,9 @@ impl<L: Layout> Lookahead<'_, L> {
             for (n, &k) in next.symbols.iter_mut().zip(&l.cost.symbols) {
                 *n = n.saturating_add(k);
             }
+            if !l.cost.hybrid.is_empty() {
+                next.hybrid = plus_hybrid(next.hybrid, l.cost.hybrid);
+            }
             if next.total(0) > u.total() {
                 continue;
             }
@@ -430,9 +433,16 @@ impl<L: Layout> Lookahead<'_, L> {
     }
 }
 
-/// A cost's colored and colorless symbols.
+/// Both sets of hybrid symbols, out of line: a game with no hybrid cost never adds any.
+#[cold]
+#[inline(never)]
+fn plus_hybrid(a: Hybrid, b: Hybrid) -> Hybrid {
+    a.plus(b)
+}
+
+/// A cost's colored and colorless symbols, hybrid ones included.
 fn symbols(cost: ManaCost) -> u32 {
-    cost.symbols.iter().map(|&k| u32::from(k)).sum()
+    cost.symbol_count()
 }
 
 /// What `plan` leaves the rest of the turn ([`Outlook`]): with its leftover mana, and with

@@ -502,7 +502,8 @@ fn substitute_options<L: Layout>(
     let manual_mana = action == CostAction::Tap
         && s.profile().taps_mana == Some(c.player)
         && c.substituted == 0
-        && cost.symbols.iter().all(|&n| n == 0);
+        && cost.symbols.iter().all(|&n| n == 0)
+        && cost.hybrid.is_empty();
     if objects.is_empty() && !manual_mana {
         return Ok(out);
     }

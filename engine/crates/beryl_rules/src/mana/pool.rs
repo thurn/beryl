@@ -3,7 +3,7 @@
 //! Implements: none. Checks whether the pool and available sources can cover a cost.
 
 use crate::bitboard::Bitboard;
-use crate::card::ManaCost;
+use crate::card::{Hybrid, ManaCost};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
@@ -192,10 +192,15 @@ pub(crate) fn payable<L: Layout>(
 }
 
 /// Pays one unit toward `remaining`: a colored or colorless symbol of its kind if one is
-/// left, generic mana otherwise. Paying a symbol of the unit's own kind first is never worse.
+/// left, then a hybrid symbol with a half of its kind, generic mana otherwise. Paying a symbol
+/// of the unit's own kind first is never worse, and a hybrid symbol before generic mana
+/// neither: generic mana takes any unit. Between two hybrid pairs that share the kind, it pays
+/// the first in [`crate::card::Hybrid::PAIRS`] order.
 pub(super) fn pay_unit(remaining: &mut ManaCost, kind: usize) {
     if remaining.symbols[kind] > 0 {
         remaining.symbols[kind] -= 1;
+    } else if let Some(pair) = hybrid_pair(*remaining, kind) {
+        remaining.hybrid = remaining.hybrid.without_one(pair);
     } else {
         debug_assert!(remaining.generic > 0);
         remaining.generic -= 1;
@@ -204,5 +209,25 @@ pub(super) fn pay_unit(remaining: &mut ManaCost, kind: usize) {
 
 /// Whether a unit of `kind` can pay part of `remaining`.
 pub(super) fn helps(remaining: ManaCost, kind: usize) -> bool {
-    remaining.symbols[kind] > 0 || remaining.generic > 0
+    remaining.symbols[kind] > 0 || remaining.generic > 0 || hybrid_pair(remaining, kind).is_some()
+}
+
+/// The first hybrid pair of `remaining` with a half of `kind` (see CR 107.4e).
+#[inline]
+fn hybrid_pair(remaining: ManaCost, kind: usize) -> Option<u8> {
+    if remaining.hybrid.is_empty() {
+        None
+    } else {
+        first_pair_with(remaining.hybrid, kind)
+    }
+}
+
+/// [`hybrid_pair`] of a cost with hybrid symbols, out of line.
+#[cold]
+#[inline(never)]
+fn first_pair_with(hybrid: Hybrid, kind: usize) -> Option<u8> {
+    hybrid
+        .pairs()
+        .map(|(pair, _)| pair)
+        .find(|&pair| pair & (1 << kind) != 0)
 }

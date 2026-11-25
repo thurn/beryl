@@ -111,21 +111,40 @@ pub(super) fn sentence(text: &str) -> String {
     }
 }
 
-/// A mana cost in braces, X first, as Oracle text writes it: "{X}{2}{W}{W}"
+/// A mana cost in braces, X first, as Oracle text writes it: "{X}{2}{W}{W}", "{1}{W/B}{W/B}"
 /// ([CR 107.4](https://yawgatog.com/resources/magic-rules/#R1074)): "The mana symbols are
 /// {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, {4}, and so
-/// on; the variable symbol {X}; ...". A cost of nothing is "{0}".
+/// on; the variable symbol {X}; the hybrid symbols {W/U}, {W/B}, {U/B}, {U/R}, {B/R}, {B/G},
+/// {R/G}, {R/W}, {G/W}, and {G/U}; ...". A cost of nothing is "{0}". Hybrid symbols come
+/// before the other colored symbols, as most printed costs that have both write them
+/// ("{2}{W/B}{U}").
 pub fn mana_text(cost: ManaCost) -> String {
     let mut text = "{X}".repeat(usize::from(cost.x));
-    if cost.generic > 0 || (cost.x == 0 && cost.symbols == [0; 6]) {
+    if cost.generic > 0 || (cost.x == 0 && cost.symbols == [0; 6] && cost.hybrid.is_empty()) {
         text.push('{');
         text.push_str(&cost.generic.to_string());
         text.push('}');
+    }
+    for (colors, count) in cost.hybrid.pairs() {
+        text.push_str(&hybrid_symbol(colors).repeat(usize::from(count)));
     }
     for (color, &count) in ManaColor::ALL.iter().zip(&cost.symbols) {
         text.push_str(&symbol(*color).repeat(usize::from(count)));
     }
     text
+}
+
+/// The symbol of a two-color hybrid pair of [`crate::Hybrid::PAIRS`], such as "{W/B}", its
+/// halves in the order CR 107.4 lists the symbol.
+///
+/// # Panics
+///
+/// On a set of colors that is no pair.
+fn hybrid_symbol(colors: u8) -> &'static str {
+    const SYMBOLS: [&str; 10] = [
+        "{W/U}", "{U/B}", "{B/R}", "{R/G}", "{G/W}", "{W/B}", "{U/R}", "{B/G}", "{R/W}", "{G/U}",
+    ];
+    SYMBOLS[crate::Hybrid::pair(colors).expect("a hybrid pair")]
 }
 
 /// The symbol of one mana of a color, or of colorless mana: "{U}", "{C}" (CR 107.4).

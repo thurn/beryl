@@ -573,8 +573,11 @@ pub(crate) fn spell_cost<L: Layout>(
 /// It can't be reduced to less than {0}." Then the greatest floor, an effect that directly
 /// affects the total cost: "Once the total cost is determined, any effects that directly
 /// affect the total cost are applied." A reduction and a floor's difference are generic
-/// mana, and X counts at its value, as `cost` already has it. Out of line, so that the
-/// casting code is the same while no such change is among the game's cards.
+/// mana, and X counts at its value, as `cost` already has it. A reduction leaves the colored
+/// and hybrid symbols as they are (see [CR 118.7a]): "Effects that reduce a cost by an amount
+/// of generic mana affect only the generic mana component of that cost. They can't affect the
+/// colored or colorless mana components of that cost." Out of line, so that the casting code
+/// is the same while no such change is among the game's cards.
 ///
 /// Each permanent's own abilities are searched for the maker ([`maker_of`]), rather than
 /// its face's numbered rules ([`own_rule_holds`] reads those): a read of them here changed
@@ -582,6 +585,7 @@ pub(crate) fn spell_cost<L: Layout>(
 /// more instructions with it.
 ///
 /// [CR 109.5]: https://yawgatog.com/resources/magic-rules/#R1095
+/// [CR 118.7a]: https://yawgatog.com/resources/magic-rules/#R1187a
 /// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
 #[cold]
 #[inline(never)]

@@ -3,8 +3,8 @@
 use crate::continuous::RuleChange;
 use crate::filter::Filter;
 
-/// A mana cost: generic mana plus colored and colorless symbols, and any {X}.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+/// A mana cost: generic mana plus colored and colorless symbols, hybrid symbols, and any {X}.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub struct ManaCost {
     pub generic: u8,
     /// Symbols by [`ManaColor`] index: W, U, B, R, G, C.
@@ -13,6 +13,8 @@ pub struct ManaCost {
     /// ([CR 107.3a](https://yawgatog.com/resources/magic-rules/#R1073a)): their value is
     /// announced as the spell is cast or the ability activated.
     pub x: u8,
+    /// Its two-color hybrid symbols, such as {W/B}.
+    pub hybrid: Hybrid,
 }
 
 impl ManaCost {
@@ -20,6 +22,7 @@ impl ManaCost {
         generic: 0,
         symbols: [0; 6],
         x: 0,
+        hybrid: Hybrid::NONE,
     };
 
     /// A cost of generic mana and colored or colorless symbols, by [`ManaColor`] index.
@@ -28,6 +31,7 @@ impl ManaCost {
             generic,
             symbols,
             x: 0,
+            hybrid: Hybrid::NONE,
         }
     }
 
@@ -41,13 +45,26 @@ impl ManaCost {
         generic: 0,
         symbols: [0; 6],
         x: 1,
+        hybrid: Hybrid::NONE,
     };
 
     /// The amount of mana paying it takes once X is `x`.
     pub fn total(self, x: u8) -> u32 {
-        u32::from(self.generic)
-            + self.symbols.iter().map(|&n| u32::from(n)).sum::<u32>()
-            + u32::from(self.x) * u32::from(x)
+        u32::from(self.generic) + self.symbol_count() + u32::from(self.x) * u32::from(x)
+    }
+
+    /// How many colored and colorless symbols it has, each hybrid symbol one of them
+    /// ([CR 107.4e]): "A hybrid mana symbol is also a colored mana symbol".
+    ///
+    /// [CR 107.4e]: https://yawgatog.com/resources/magic-rules/#R1074e
+    #[inline]
+    pub fn symbol_count(self) -> u32 {
+        let single = self.symbols.iter().map(|&n| u32::from(n)).sum::<u32>();
+        if self.hybrid.is_empty() {
+            single
+        } else {
+            single + self.hybrid.total_cold()
+        }
     }
 
     /// Both costs together, X included: what
@@ -63,6 +80,7 @@ impl ManaCost {
             index += 1;
         }
         sum.x = sum.x.saturating_add(other.x);
+        sum.hybrid = sum.hybrid.plus(other.hybrid);
         sum
     }
 
@@ -85,8 +103,217 @@ impl ManaCost {
     /// The mana value ([CR 202.3](https://yawgatog.com/resources/magic-rules/#R2023)): "The
     /// mana value of an object is a number equal to the total amount of mana in its mana cost,
     /// regardless of color."
+    ///
+    /// A hybrid symbol counts one ([CR 202.3f]): "When calculating the mana value of an object
+    /// with a hybrid mana symbol in its mana cost, use the largest component of each hybrid
+    /// symbol." Both halves of a two-color hybrid symbol are one mana.
+    ///
+    /// [CR 202.3f]: https://yawgatog.com/resources/magic-rules/#R2023f
     pub fn mana_value(self) -> u8 {
-        self.generic + self.symbols.iter().sum::<u8>()
+        let value = self.generic + self.symbols.iter().sum::<u8>();
+        if self.hybrid.is_empty() {
+            value
+        } else {
+            // At most seven of each of ten pairs.
+            value + u8::try_from(self.hybrid.total_cold()).unwrap_or(u8::MAX)
+        }
+    }
+
+    /// The colors of its colored symbols, a bit per [`ManaColor`] index, colorless {C}
+    /// excluded: both halves of each hybrid symbol ([CR 202.2d]): "An object with one or more
+    /// hybrid mana symbols ... in its mana cost is all of the colors of those mana symbols".
+    ///
+    /// [CR 202.2d]: https://yawgatog.com/resources/magic-rules/#R2022d
+    pub const fn color_bits(self) -> u8 {
+        let mut bits = self.hybrid.colors();
+        let mut c = 0;
+        while c < 5 {
+            if self.symbols[c] > 0 {
+                bits |= 1 << c;
+            }
+            c += 1;
+        }
+        bits
+    }
+}
+
+/// Every field, but `hybrid` only where the cost has a hybrid symbol: a cost of none hashes as
+/// it did before costs held them, so the states the benchmark corpora pin by their hashes
+/// still hash the same, and the many hashes of decisions that carry a cost hash no more.
+impl std::hash::Hash for ManaCost {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.generic.hash(h);
+        self.symbols.hash(h);
+        self.x.hash(h);
+        if !self.hybrid.is_empty() {
+            self.hybrid.hash(h);
+        }
+    }
+}
+
+/// Every field, but `hybrid` only where the cost has a hybrid symbol: a cost of none prints as
+/// it did before costs held them, which names of mutants and test expectations quote.
+impl std::fmt::Debug for ManaCost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut d = f.debug_struct("ManaCost");
+        d.field("generic", &self.generic)
+            .field("symbols", &self.symbols)
+            .field("x", &self.x);
+        if !self.hybrid.is_empty() {
+            d.field("hybrid", &self.hybrid);
+        }
+        d.finish()
+    }
+}
+
+/// The two-color hybrid symbols of a cost, counted by pair ([CR 107.4e]): "Each one represents
+/// a cost that can be paid in one of two ways, as represented by the two halves of the symbol.
+/// A hybrid symbol such as {W/U} can be paid with either white or blue mana".
+///
+/// Three bits count each of the ten pairs of [`Hybrid::PAIRS`], up to seven symbols of a pair:
+/// Figure of Destiny's six {R/W} are the most a printed cost has. The counts take four bytes,
+/// which keeps [`ManaCost`] small enough for a decision's prompt (`Prompt`) and an ability
+/// to keep their sizes. A cost of no hybrid symbol is the zero word, so a payment checks
+/// [`Hybrid::is_empty`] once and goes on as before.
+///
+/// Monocolored hybrid symbols ({2/W}, {C/W}) and Phyrexian symbols are not held yet: a card
+/// with one is not complete ([`crate::mana_notation::read`] refuses it) until a card that
+/// needs it adds it here.
+///
+/// [CR 107.4e]: https://yawgatog.com/resources/magic-rules/#R1074e
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct Hybrid([u8; 4]);
+
+/// Each pair with its count, such as `Hybrid { W/B: 2 }`.
+impl std::fmt::Debug for Hybrid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const LETTERS: [char; 5] = ['W', 'U', 'B', 'R', 'G'];
+        f.write_str("Hybrid {")?;
+        for (i, (pair, n)) in self.pairs().enumerate() {
+            let mut halves = (0..5).filter(|&c| pair & (1 << c) != 0).map(|c| LETTERS[c]);
+            let (a, b) = (halves.next().unwrap_or('?'), halves.next().unwrap_or('?'));
+            let sep = if i == 0 { " " } else { ", " };
+            write!(f, "{sep}{a}/{b}: {n}")?;
+        }
+        f.write_str(" }")
+    }
+}
+
+impl Hybrid {
+    pub const NONE: Hybrid = Hybrid([0; 4]);
+
+    /// The ten pairs, each as a bit per [`ManaColor`] index, in the order Oracle text writes
+    /// them: the allied pairs {W/U}, {U/B}, {B/R}, {R/G}, {G/W}, then the enemy pairs {W/B},
+    /// {U/R}, {B/G}, {R/W}, {G/U}.
+    pub const PAIRS: [u8; 10] = crate::mana_notation::HYBRID_PAIRS;
+
+    /// The most symbols of one pair it counts.
+    pub const MOST: u8 = 7;
+
+    const fn word(self) -> u32 {
+        u32::from_le_bytes(self.0)
+    }
+
+    const fn of_word(word: u32) -> Hybrid {
+        Hybrid(word.to_le_bytes())
+    }
+
+    /// The index in [`Hybrid::PAIRS`] of the pair of `colors`, two bits of
+    /// [`ManaColor`] indices.
+    pub const fn pair(colors: u8) -> Option<usize> {
+        let mut i = 0;
+        while i < Hybrid::PAIRS.len() {
+            if Hybrid::PAIRS[i] == colors {
+                return Some(i);
+            }
+            i += 1;
+        }
+        None
+    }
+
+    /// Whether it has no symbol.
+    #[inline]
+    pub const fn is_empty(self) -> bool {
+        self.word() == 0
+    }
+
+    /// How many symbols of the pair at `pair` in [`Hybrid::PAIRS`] it has.
+    pub const fn count(self, pair: usize) -> u8 {
+        ((self.word() >> (3 * pair)) & 0b111) as u8
+    }
+
+    /// The same with `n` symbols of the pair at `pair`, at most [`Hybrid::MOST`].
+    #[must_use]
+    pub const fn with_count(self, pair: usize, n: u8) -> Hybrid {
+        let n = if n > Hybrid::MOST { Hybrid::MOST } else { n };
+        let shift = 3 * pair;
+        Hybrid::of_word((self.word() & !(0b111 << shift)) | ((n as u32) << shift))
+    }
+
+    /// How many symbols it has in all: the counts' low, middle and high bits, each set of
+    /// bits counted at once.
+    pub const fn total(self) -> u32 {
+        const LOW: u32 = 0b001_001_001_001_001_001_001_001_001_001;
+        let word = self.word();
+        (word & LOW).count_ones()
+            + 2 * (word & (LOW << 1)).count_ones()
+            + 4 * (word & (LOW << 2)).count_ones()
+    }
+
+    /// The colors of its symbols, a bit per [`ManaColor`] index.
+    pub const fn colors(self) -> u8 {
+        let mut bits = 0;
+        let mut i = 0;
+        while i < Hybrid::PAIRS.len() {
+            if self.count(i) > 0 {
+                bits |= Hybrid::PAIRS[i];
+            }
+            i += 1;
+        }
+        bits
+    }
+
+    /// [`Hybrid::total`], out of line: the costs a game with no hybrid symbol pays read only
+    /// [`Hybrid::is_empty`].
+    #[cold]
+    #[inline(never)]
+    fn total_cold(self) -> u32 {
+        self.total()
+    }
+
+    /// Both costs' symbols, each pair's count at most [`Hybrid::MOST`].
+    #[must_use]
+    pub const fn plus(self, other: Hybrid) -> Hybrid {
+        if other.is_empty() {
+            return self;
+        }
+        let mut sum = self;
+        let mut i = 0;
+        while i < Hybrid::PAIRS.len() {
+            sum = sum.with_count(i, self.count(i) + other.count(i));
+            i += 1;
+        }
+        sum
+    }
+
+    /// Each pair it has symbols of, as a bit per [`ManaColor`] index, with how many.
+    pub fn pairs(self) -> impl Iterator<Item = (u8, u8)> {
+        (0..Hybrid::PAIRS.len())
+            .map(move |i| (Hybrid::PAIRS[i], self.count(i)))
+            .filter(|&(_, n)| n > 0)
+    }
+
+    /// The same with one symbol of `colors`' pair fewer.
+    ///
+    /// # Panics
+    ///
+    /// If it has no symbol of that pair.
+    #[must_use]
+    pub fn without_one(self, colors: u8) -> Hybrid {
+        let pair = Hybrid::pair(colors).expect("a hybrid pair");
+        let n = self.count(pair);
+        assert!(n > 0, "a hybrid symbol of the pair");
+        self.with_count(pair, n - 1)
     }
 }
 
@@ -194,8 +421,8 @@ pub struct ManaRestriction {
 ///
 /// # Panics
 ///
-/// On anything else, hybrid, Phyrexian and snow symbols included: in a `const` or `static`,
-/// at compile time.
+/// On anything else, monocolored hybrid, Phyrexian and snow symbols included: in a `const` or
+/// `static`, at compile time.
 pub const fn mana(notation: &str) -> ManaCost {
     match crate::mana_notation::read(notation) {
         // The notation's symbols are in the order W, U, B, R, G, C, as `ManaColor` indexes
@@ -204,6 +431,7 @@ pub const fn mana(notation: &str) -> ManaCost {
             generic: read.generic,
             symbols: read.symbols,
             x: read.x,
+            hybrid: Hybrid(read.hybrid.to_le_bytes()),
         },
         Err(why) => panic!("{}", why),
     }
@@ -228,7 +456,7 @@ pub static INTRINSIC_MANA: [crate::Ability; 5] = [
 
 #[cfg(test)]
 mod tests {
-    use super::{ManaCost, mana};
+    use super::{Hybrid, ManaCost, mana};
 
     #[test]
     fn mana_reads_scryfall_notation() {
@@ -244,14 +472,45 @@ mod tests {
                 generic: 2,
                 symbols: [1, 0, 1, 1, 1, 1],
                 x: 2,
+                hybrid: Hybrid::NONE,
             }
         );
     }
 
     #[test]
+    fn mana_reads_hybrid_symbols() {
+        let lurrus = mana("{1}{W/B}{W/B}");
+        let wb = Hybrid::pair(0b00101).expect("W/B");
+        assert_eq!(lurrus.hybrid.count(wb), 2);
+        assert_eq!(lurrus.hybrid.total(), 2);
+        assert_eq!(lurrus.mana_value(), 3);
+        assert_eq!(lurrus.total(0), 3);
+        assert_eq!(lurrus.color_bits(), 0b00101);
+        assert_eq!(mana("{B/W}"), mana("{W/B}"));
+        let leyline = mana("{G/W}{G/U}{B/G}{R/G}");
+        assert_eq!(leyline.hybrid.pairs().count(), 4);
+        assert_eq!(leyline.color_bits(), 0b11111);
+        assert_eq!(lurrus.plus(lurrus).hybrid.count(wb), 4);
+        assert_eq!(
+            format!("{lurrus:?}"),
+            "ManaCost { generic: 1, symbols: [0, 0, 0, 0, 0, 0], x: 0, hybrid: Hybrid { W/B: 2 } }"
+        );
+        assert_eq!(
+            format!("{:?}", mana("{U}")),
+            "ManaCost { generic: 0, symbols: [0, 1, 0, 0, 0, 0], x: 0 }"
+        );
+    }
+
+    #[test]
     #[should_panic(expected = "a mana symbol a cost cannot hold")]
-    fn mana_refuses_symbols_a_cost_cannot_hold() {
-        mana("{W/U}");
+    fn mana_refuses_monocolored_hybrid() {
+        mana("{2/W}");
+    }
+
+    #[test]
+    #[should_panic(expected = "a mana symbol a cost cannot hold")]
+    fn mana_refuses_phyrexian() {
+        mana("{W/P}");
     }
 
     #[test]

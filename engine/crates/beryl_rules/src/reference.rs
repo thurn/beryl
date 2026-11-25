@@ -33,8 +33,12 @@ fn check(ok: bool, what: &'static str, at: Option<At>) -> Result<(), Violation> 
 }
 
 /// Costs every check tries besides those of the cards in play: generic amounts, each kind of
-/// symbol alone, and the pairs a two-color deck's spells ask for.
+/// symbol alone, the pairs a two-color deck's spells ask for, and hybrid symbols alone, beside
+/// a colored symbol, and in four pairs that share a color.
 const PROBES: &[ManaCost] = &[
+    crate::card::mana("{W/U}{W/U}"),
+    crate::card::mana("{1}{W/B}{U}"),
+    crate::card::mana("{G/W}{G/U}{B/G}{R/G}"),
     ManaCost::new(1, [0; 6]),
     ManaCost::new(2, [0; 6]),
     ManaCost::new(4, [0; 6]),
@@ -391,15 +395,21 @@ fn controls<L: Layout>(
 /// See [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the total
 /// cost. ... Partial payments are not allowed."
 fn reference_pays(units: &[u8], cost: ManaCost) -> bool {
-    let count: usize = cost.symbols.iter().map(|&n| usize::from(n)).sum();
+    let count = usize::try_from(cost.symbol_count()).expect("a cost's symbols fit a usize");
     if units.len() < count + usize::from(cost.generic) {
         return false;
     }
-    // At most `units.len()` symbols, so they fit.
+    // At most `units.len()` symbols, so they fit. A hybrid symbol is the kinds of both its
+    // halves (see CR 107.4e).
     let mut symbols = Units::new();
     for (k, &n) in cost.symbols.iter().enumerate() {
         for _ in 0..n {
             symbols.push_bounded(1u8 << k);
+        }
+    }
+    for (pair, n) in cost.hybrid.pairs() {
+        for _ in 0..n {
+            symbols.push_bounded(pair);
         }
     }
     let mut paying = [None; UNITS];
@@ -442,10 +452,11 @@ fn augment(
 #[cfg(test)]
 mod tests {
     use super::reference_pays;
-    use crate::card::ManaCost;
+    use crate::card::{ManaCost, mana};
 
     const W: u8 = 1;
     const U: u8 = 2;
+    const B: u8 = 4;
     const C: u8 = 1 << 5;
 
     #[test]
@@ -473,5 +484,17 @@ mod tests {
             &[U, U],
             ManaCost::new(1, [0, 2, 0, 0, 0, 0])
         ));
+    }
+
+    #[test]
+    fn the_reference_pays_a_hybrid_symbol_with_either_half() {
+        let wb = mana("{W/B}{U}");
+        assert!(reference_pays(&[W, U], wb));
+        assert!(reference_pays(&[B, U], wb));
+        assert!(!reference_pays(&[U, U], wb));
+        // A Tundra pays {U} beside a Plains, or {W/B} beside an Island.
+        assert!(reference_pays(&[W | U, W], wb));
+        assert!(reference_pays(&[W | U, U], wb));
+        assert!(!reference_pays(&[W | U, B | U], mana("{W/B}{W/B}{U}")));
     }
 }

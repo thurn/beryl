@@ -18,7 +18,8 @@ use std::path::Path;
 use beryl_card_store::Record;
 
 /// The engine's reader of mana cost notation, which `beryl_card::mana` builds a cost with: a
-/// printed cost it refuses, such as a hybrid one, keeps a card from being complete.
+/// printed cost it refuses, such as a Phyrexian or monocolored hybrid one, keeps a card from
+/// being complete.
 #[path = "../../beryl_card/src/mana_notation.rs"]
 mod mana_notation;
 

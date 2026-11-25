@@ -452,9 +452,10 @@ pub struct Prompt {
     pub cost: ManaCost,
 }
 
-// A decision is copied with the state, and this must fit beside its player and kind without
-// growing it: 16 bytes, less those two.
-const _: () = assert!(size_of::<Prompt>() <= 14 && align_of::<Prompt>() == 1);
+// A decision is copied with the state, and this must fit beside its player, decider and kind
+// without growing it: with a 12-byte `ManaCost` it is 18 bytes, and `Decision<Small>` keeps
+// the size its own assertion checks.
+const _: () = assert!(size_of::<Prompt>() <= 18 && align_of::<Prompt>() == 1);
 
 impl Prompt {
     /// A prompt for `purpose` whose pick is the shape's ordinary one, with no parameters.

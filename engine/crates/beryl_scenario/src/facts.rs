@@ -5,7 +5,7 @@
 //! keep no table keyed by card name. Nothing here names a card or adds to the vocabulary.
 
 use std::collections::{BTreeMap, HashMap};
-use std::fmt::{Debug, Write};
+use std::fmt::Debug;
 
 use beryl_card::definition::Shape as CardShape;
 use beryl_card::{
@@ -620,19 +620,10 @@ fn mana_facts(mana: ManaSet) -> ManaFacts {
     }
 }
 
-/// A mana cost in Scryfall's notation, as "{X}{2}{W}{U}"; `None` for no mana at all.
+/// A mana cost in Scryfall's notation, as "{X}{2}{W}{U}" or "{1}{W/B}{W/B}", as the card
+/// renderer writes it; `None` for no mana at all.
 fn mana_text(cost: ManaCost) -> Option<String> {
-    if cost.is_zero() {
-        return None;
-    }
-    let mut text = "{X}".repeat(usize::from(cost.x));
-    if cost.generic > 0 {
-        write!(text, "{{{}}}", cost.generic).expect("a String takes any text");
-    }
-    for (color, symbol) in COLORS {
-        text += &format!("{{{symbol}}}").repeat(usize::from(cost.symbols[color.index()]));
-    }
-    Some(text)
+    (!cost.is_zero()).then(|| beryl_card::render::mana_text(cost))
 }
 
 /// The name of a value's enum variant, from its `Debug` form.
