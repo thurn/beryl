@@ -635,6 +635,12 @@ pub const fn copy_spell_except_keeping_targets(spells: Objects, except: ExceptIx
     }
 }
 
+/// [`Effect::CopyCard`]: "copy [cards]", creating copies of the cards in the zone they are in
+/// ([CR 707.12](https://yawgatog.com/resources/magic-rules/#R70712)).
+pub const fn copy_card(cards: Objects) -> Effect {
+    Effect::CopyCard(cards)
+}
+
 /// [`Effect::AddCounters`]: "put [count] [kind] counters on [objects]".
 pub const fn add_counters(objects: Objects, kind: CounterKind, count: u8) -> Effect {
     Effect::AddCounters {

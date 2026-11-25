@@ -47,6 +47,21 @@ pub trait Evaluate {
         you: Seat,
         words: &Words,
         x: u8,
+    ) -> bool {
+        self.matches_source(s, t, slot, you, words, x, None)
+    }
+
+    /// Whether the object in `slot` passes, evaluated with `x` and optional source power.
+    #[allow(clippy::too_many_arguments)]
+    fn matches_source<L: Layout>(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        slot: L::Slot,
+        you: Seat,
+        words: &Words,
+        x: u8,
+        source_power: Option<i8>,
     ) -> bool;
 
     /// The members of `within` that pass, where X is 0.
@@ -71,15 +86,30 @@ pub trait Evaluate {
         words: &Words,
         x: u8,
     ) -> Bitboard<L::Slot> {
+        self.select_source(s, t, within, you, words, x, None)
+    }
+
+    /// The members of `within` that pass, for `x` and optional source power.
+    #[allow(clippy::too_many_arguments)]
+    fn select_source<L: Layout>(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        within: Bitboard<L::Slot>,
+        you: Seat,
+        words: &Words,
+        x: u8,
+        source_power: Option<i8>,
+    ) -> Bitboard<L::Slot> {
         within
             .iter()
-            .filter(|&slot| self.matches_x(s, t, slot, you, words, x))
+            .filter(|&slot| self.matches_source(s, t, slot, you, words, x, source_power))
             .collect()
     }
 }
 
 impl Evaluate for Filter {
-    fn matches_x<L: Layout>(
+    fn matches_source<L: Layout>(
         &self,
         s: &State<L>,
         t: &GameTable,
@@ -87,6 +117,7 @@ impl Evaluate for Filter {
         you: Seat,
         words: &Words,
         x: u8,
+        source_power: Option<i8>,
     ) -> bool {
         let o = s.object(slot);
         let face = || s.definition(slot).face(t);
@@ -122,7 +153,7 @@ impl Evaluate for Filter {
             }
             Filter::ColorWords(colors) => match derived() {
                 Some(d) => d.colors,
-                None => elsewhere().map_or_else(|| face().colors, |c| c.colors),
+                None => elsewhere().map_or_else(|| s.copiable_colors(t, slot), |c| c.colors),
             }
             .intersects(colors.read(words)),
             // See CR 108.4a: a card that is no permanent or spell has no controller, and "its
@@ -133,19 +164,23 @@ impl Evaluate for Filter {
             Filter::Token => o.is_token(),
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
             Filter::ManaValueAtMostX => s.mana_value(t, slot) <= x,
+            Filter::ManaValueAtMostSourcePower => {
+                source_power.is_some_and(|p| i16::from(s.mana_value(t, slot)) <= i16::from(p))
+            }
             Filter::PowerAtMost(n) => s.power(t, slot) <= n,
             Filter::InZone(zone) => o.zone == zone,
             Filter::Not(_) | Filter::All(_) | Filter::AnyOf(_) => {
-                combined(self, s, t, slot, you, words, x)
+                combined(self, s, t, slot, you, words, x, source_power)
             }
         }
     }
 }
 
-/// [`Evaluate::matches_x`] for a filter made of other filters. Out of line: a loop that calls
-/// back into `matches_x` keeps its operands in saved registers, and inlined there it made
-/// every call save them, even for the single test most filters are.
+/// [`Evaluate::matches_source`] for a filter made of other filters. Out of line: a loop that
+/// calls back into `matches_source` keeps its operands in saved registers, and inlined there it
+/// made every call save them, even for the single test most filters are.
 #[inline(never)]
+#[allow(clippy::too_many_arguments)]
 fn combined<L: Layout>(
     filter: &Filter,
     s: &State<L>,
@@ -154,11 +189,16 @@ fn combined<L: Layout>(
     you: Seat,
     words: &Words,
     x: u8,
+    source_power: Option<i8>,
 ) -> bool {
     match *filter {
-        Filter::Not(f) => !f.matches_x(s, t, slot, you, words, x),
-        Filter::All(fs) => fs.iter().all(|f| f.matches_x(s, t, slot, you, words, x)),
-        Filter::AnyOf(fs) => fs.iter().any(|f| f.matches_x(s, t, slot, you, words, x)),
+        Filter::Not(f) => !f.matches_source(s, t, slot, you, words, x, source_power),
+        Filter::All(fs) => fs
+            .iter()
+            .all(|f| f.matches_source(s, t, slot, you, words, x, source_power)),
+        Filter::AnyOf(fs) => fs
+            .iter()
+            .any(|f| f.matches_source(s, t, slot, you, words, x, source_power)),
         Filter::Any
         | Filter::Types(_)
         | Filter::Supertypes(_)
@@ -171,7 +211,8 @@ fn combined<L: Layout>(
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
-        | Filter::InZone(_) => filter.matches_x(s, t, slot, you, words, x),
+        | Filter::ManaValueAtMostSourcePower
+        | Filter::InZone(_) => filter.matches_source(s, t, slot, you, words, x, source_power),
     }
 }
 
@@ -209,6 +250,7 @@ pub(crate) fn passes_so_far<L: Layout>(
         | Filter::Token
         | Filter::ManaValueAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostSourcePower
         | Filter::PowerAtMost(_)
         | Filter::InZone(_) => filter.matches(s, t, slot, you, words),
     }
@@ -256,7 +298,9 @@ pub fn matches_outside(filter: &Filter, card: &CardDef, owner: Seat, words: &Wor
         Filter::Not(f) => !passes(f),
         Filter::All(fs) => fs.iter().all(passes),
         Filter::AnyOf(fs) => fs.iter().any(passes),
-        Filter::Tapped | Filter::Token | Filter::InZone(_) => false,
+        Filter::Tapped | Filter::Token | Filter::ManaValueAtMostSourcePower | Filter::InZone(_) => {
+            false
+        }
     }
 }
 

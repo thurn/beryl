@@ -33,6 +33,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::Choose { .. }
         | Effect::LookAt { .. }
         | Effect::CopySpell { .. }
+        | Effect::CopyCard(_)
         | Effect::Regenerate(_)
         | Effect::Tap(_)
         | Effect::PhaseOut(_)

@@ -90,6 +90,7 @@ fn cast_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) ->
             card,
             face,
             costs,
+            copied: false,
         },
         targets,
         x,

@@ -184,6 +184,14 @@ pub enum Effect {
         except: Option<ExceptIx>,
         new_targets: bool,
     },
+    /// "Copy [card]" in the zone it is in, creating a copy of that card object in the same
+    /// zone so a subsequent effect can cast it
+    /// ([CR 707.12](https://yawgatog.com/resources/magic-rules/#R70712)): "An effect that
+    /// instructs a player to cast a copy of an object (and not just copy a spell) follows the
+    /// rules for casting spells, except that the copy is created in the same zone the object
+    /// is in and then cast while another spell or ability is resolving." The outcome is the
+    /// created copies.
+    CopyCard(Objects),
     /// "Destroy [permanents]"
     /// ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)): "To destroy a
     /// permanent, move it from the battlefield to its owner's graveyard."
@@ -736,6 +744,7 @@ impl Effect {
             Effect::Attach { .. }
             | Effect::Mutate(_)
             | Effect::CopySpell { .. }
+            | Effect::CopyCard(_)
             | Effect::ExchangeControl(..)
             | Effect::Regenerate(_)
             | Effect::Tap(_)

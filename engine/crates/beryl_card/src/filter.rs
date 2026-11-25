@@ -55,6 +55,9 @@ pub enum Filter {
     /// Mana value X or less, X being the value of the spell or ability whose target this is
     /// (Thieving Skydiver's "target artifact with mana value X or less").
     ManaValueAtMostX,
+    /// Mana value less than or equal to the power of the spell or ability's source
+    /// (Arcane Proxy's "with mana value less than or equal to this creature's power").
+    ManaValueAtMostSourcePower,
     Not(&'static Filter),
     All(&'static [Filter]),
     AnyOf(&'static [Filter]),
@@ -81,6 +84,7 @@ impl Filter {
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
+            | Filter::ManaValueAtMostSourcePower
             | Filter::Not(_)
             | Filter::AnyOf(_)
             | Filter::InZone(_) => None,
@@ -114,6 +118,7 @@ impl Filter {
             | Filter::Token
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
+            | Filter::ManaValueAtMostSourcePower
             | Filter::InZone(_) => false,
             Filter::ManaValueAtMostX => true,
             Filter::Whose(players) | Filter::Owned(players) => players.needs_a_resolution(),

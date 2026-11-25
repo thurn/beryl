@@ -399,6 +399,9 @@ pub(crate) fn match_look_back<L: Layout>(
     t: &GameTable,
     leaving: impl Iterator<Item = (L::Slot, Zone)> + Clone,
 ) -> Result<(), Full> {
+    if t.can(Capability::ReadsDepartedSource) {
+        record_departed_sources(s, leaving.clone())?;
+    }
     if !s.delayed().is_empty() {
         crate::stack::delayed_triggers::fire_on_leaving(s, t, leaving.clone())?;
     }
@@ -478,6 +481,24 @@ pub(crate) fn match_look_back<L: Layout>(
             other_zones::look_back_merged(s, t, left, to)?;
         }
         if s.triggers().len() > waiting
+            && let Some(permanent) = s.permanent(object)
+        {
+            s.record_last_known(permanent)?;
+        }
+    }
+    Ok(())
+}
+
+#[cold]
+#[inline(never)]
+fn record_departed_sources<L: Layout>(
+    s: &mut State<L>,
+    leaving: impl Iterator<Item = (L::Slot, Zone)>,
+) -> Result<(), Full> {
+    for (left, _) in leaving {
+        let object = s.object_ref(left);
+        if (s.triggers().iter().any(|tr| tr.of.source == Some(object))
+            || s.stack().iter().any(|e| e.source() == Some(object)))
             && let Some(permanent) = s.permanent(object)
         {
             s.record_last_known(permanent)?;

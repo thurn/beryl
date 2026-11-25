@@ -235,7 +235,8 @@ fn walk<L: Layout>(
         if let Step::Decide(d) = &step
             && !matches!(action, Action::Assert { .. })
         {
-            visit(&runner.t, &runner.s, d);
+            let shown = view(&runner.s, &runner.t, &mut runner.x);
+            visit(&runner.t, shown, d);
         }
         watch(&runner.s, runner.x.events.events(), runner.x.events.tags());
         positions.push(runner.describe_position(&step));
@@ -351,7 +352,9 @@ impl<L: Layout> Runner<L> {
             if let Some(comparison) = &mut self.comparison {
                 comparison.check_next(&self.t, &self.s, &step)?;
             }
-            self.enter_as_copy = self.x.events.asking.take_enter_as_copy();
+            let enter_as_copy = self.x.events.asking.take_enter_as_copy();
+            self.enter_as_copy = matches!(&step, Step::Decide(d) if d.kind == DecisionKind::ChooseUpTo)
+                && enter_as_copy;
             beryl_engine::check_references(&self.s, &self.t)
                 .map_err(|v| format!("the engine disagrees with a reference: {v:?}"))?;
             match step {
@@ -564,8 +567,6 @@ impl<L: Layout> Runner<L> {
             .iter()
             .map(|&slot| (self.s.object_ref(slot), self.name(slot)))
             .collect();
-        let turn = self.s.turn();
-        let stack = self.stack_items().collect();
         let (decider, decides_for, kind, purpose) = match step {
             Step::Decide(d) => (
                 Some(d.decider),
@@ -590,6 +591,8 @@ impl<L: Layout> Runner<L> {
             }
             _ => None,
         };
+        let stack = self.stack_items().collect();
+        let turn = self.s.turn();
         let flashback = self
             .s
             .cast_permissions()
@@ -671,13 +674,15 @@ impl<L: Layout> Runner<L> {
 
     /// The candidate `c` of `d` as a pick, where the scenario vocabulary can name it. The pick
     /// may name an earlier candidate too, of the same name.
-    fn pick_for(&self, d: &Decision<L>, c: Choice) -> Option<Pick> {
-        crate::script::pick(&self.t, &self.s, d, c)
+    fn pick_for(&mut self, d: &Decision<L>, c: Choice) -> Option<Pick> {
+        let shown = view(&self.s, &self.t, &mut self.x);
+        crate::script::pick(&self.t, shown, d, c)
     }
 
     /// The candidate of `d` that `pick` names.
-    fn pick(&self, d: &Decision<L>, pick: Pick) -> Option<Choice> {
-        pick_in(&self.t, &self.s, d, pick)
+    fn pick(&mut self, d: &Decision<L>, pick: Pick) -> Option<Choice> {
+        let shown = view(&self.s, &self.t, &mut self.x);
+        pick_in(&self.t, shown, d, pick)
     }
 
     /// The permanents named `card` that `player` controls, in the order they entered.
@@ -713,7 +718,8 @@ impl<L: Layout> Runner<L> {
         found.ok_or_else(|| format!("player {player} has no {card} in {zone:?}"))
     }
 
-    fn describe(&self, d: &Decision<L>) -> String {
-        describe(&self.t, &self.s, d)
+    fn describe(&mut self, d: &Decision<L>) -> String {
+        let shown = view(&self.s, &self.t, &mut self.x);
+        describe(&self.t, shown, d)
     }
 }

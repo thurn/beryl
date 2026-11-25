@@ -62,7 +62,13 @@ impl<L: Layout> Copiable<L> {
 
     /// The mana cost of the copiable characteristics before any value of X is applied.
     pub fn mana_cost(self, t: &GameTable) -> ManaCost {
-        let cost = self.face(t).cost;
+        let face = self.face(t);
+        if self.is_prototype()
+            && let Some((cost, _, _)) = face.prototype()
+        {
+            return cost;
+        }
+        let cost = face.cost;
         self.other_half(t).map_or(cost, |half| cost.plus(half.cost))
     }
 
@@ -97,7 +103,13 @@ impl<L: Layout> Copiable<L> {
     }
 
     pub(super) fn printed_colors(self, t: &GameTable) -> Colors {
-        let colors = self.face(t).colors;
+        let face = self.face(t);
+        if self.is_prototype()
+            && let Some((cost, _, _)) = face.prototype()
+        {
+            return cost.colors();
+        }
+        let colors = face.colors;
         self.other_half(t)
             .map_or(colors, |half| colors.union(half.colors))
     }

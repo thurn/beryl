@@ -77,6 +77,8 @@ impl Ctx {
                 except,
                 new_targets,
             } => self.copy_spell(spells, count, except, new_targets),
+            Effect::CopyCard(Objects::Those) => vec!["copy that card".to_owned()],
+            Effect::CopyCard(cards) => vec![self.acts(("copy", "copies"), cards, "")],
             Effect::CounterInto { spells, zone } => {
                 let counter = self.acts(("counter", "counters"), spells, "");
                 let instead = match zone {

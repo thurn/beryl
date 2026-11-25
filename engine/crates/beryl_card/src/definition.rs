@@ -588,6 +588,27 @@ impl Face {
             FaceAbility::Grant(i) => &self.grants[i.index()],
         }
     }
+
+    /// The prototype cost and alternative power and toughness of this face, if it has
+    /// prototype ([CR 702.160a]).
+    ///
+    /// [CR 702.160a]: https://yawgatog.com/resources/magic-rules/#R702160a
+    #[inline]
+    pub const fn prototype(&self) -> Option<(ManaCost, i8, i8)> {
+        let mut i = 0;
+        while i < self.casting.len() {
+            if let CastingOption::Prototype {
+                cost,
+                power,
+                toughness,
+            } = self.casting[i]
+            {
+                return Some((cost, power, toughness));
+            }
+            i += 1;
+        }
+        None
+    }
 }
 
 /// An ability printed on a face, as a stack entry names it: one the face has itself, by its

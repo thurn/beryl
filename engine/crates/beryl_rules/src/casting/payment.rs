@@ -222,6 +222,7 @@ fn unless_discards<L: Layout>(
         | Effect::Counter(_)
         | Effect::CounterInto { .. }
         | Effect::CopySpell { .. }
+        | Effect::CopyCard(_)
         | Effect::Destroy { .. }
         | Effect::Regenerate(_)
         | Effect::Tap(_)

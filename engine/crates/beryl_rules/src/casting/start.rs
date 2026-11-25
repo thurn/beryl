@@ -69,10 +69,21 @@ fn offer_spell<L: Layout>(
         // value." Each option names the face that would be on the stack. See CR 107.3b: "the
         // only legal choice for X is 0" when casting without paying its mana cost.
         options.retain(|option| {
-            if let Opt::Cast { slot, face, .. } = *option {
-                game.state
-                    .card_def(game.table, slot)
-                    .is_some_and(|def| def.face(face).cost.mana_value() < below)
+            if let Opt::Cast { slot, face, costs } = *option {
+                let def = game
+                    .table
+                    .def(game.state.definition(slot).record(game.table).0);
+                let face = def.face(face);
+                let mana_value = if !costs.is_empty()
+                    && let Some(proto) = costs.paid(face).find_map(|o| match o {
+                        beryl_card::CastingOption::Prototype { cost, .. } => Some(cost),
+                        _ => None,
+                    }) {
+                    proto.mana_value()
+                } else {
+                    face.cost.mana_value()
+                };
+                mana_value < below
             } else {
                 matches!(option, Opt::Pass)
             }

@@ -564,6 +564,7 @@ fn casting_facts(bit: usize, option: CastingOption) -> CastingFacts {
         keyword: match option {
             CastingOption::Fuse => "Fuse".to_owned(),
             CastingOption::Morph(_) => "Morph".to_owned(),
+            CastingOption::Prototype { .. } => "Prototype".to_owned(),
             _ => variant(&option.kind().expect("a casting cost kind")),
         },
         alternative: option.is_alternative(),

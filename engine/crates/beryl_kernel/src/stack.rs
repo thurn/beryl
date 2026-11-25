@@ -326,16 +326,18 @@ impl TriggeredAbility {
 }
 
 /// What a [`StackEntry`] is: a spell, an activated ability or a triggered ability.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StackItem<L: Layout = Small> {
     /// A spell: its card, in the stack zone, who controls it, the characteristics cast and their
-    /// casting options paid.
+    /// casting options paid. `copied` is true only for a copy of a spell put onto the stack, which
+    /// was not cast ([CR 707.10](https://yawgatog.com/resources/magic-rules/#R70710)).
     Spell {
         object: ObjectRef<L>,
         controller: Seat,
         card: L::Card,
         face: FaceIx,
         costs: Castings,
+        copied: bool,
     },
     /// An activated ability (see CR 602.2a).
     Activated { of: AbilityRef<L> },
@@ -344,6 +346,37 @@ pub enum StackItem<L: Layout = Small> {
         of: AbilityRef<L, TriggeredAbility>,
         info: TriggerInfo<L>,
     },
+}
+
+// Hashes `copied` only when `true` so cast spells hash identically for `beryl_bench`.
+impl<L: Layout> std::hash::Hash for StackItem<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        std::mem::discriminant(self).hash(h);
+        match *self {
+            StackItem::Spell {
+                object,
+                controller,
+                card,
+                face,
+                costs,
+                copied,
+            } => {
+                object.hash(h);
+                controller.hash(h);
+                card.hash(h);
+                face.hash(h);
+                costs.hash(h);
+                if copied {
+                    copied.hash(h);
+                }
+            }
+            StackItem::Activated { of } => of.hash(h),
+            StackItem::Triggered { of, info } => {
+                of.hash(h);
+                info.hash(h);
+            }
+        }
+    }
 }
 
 /// The value a fixed queue's unused places hold. No rule reads it.
@@ -516,6 +549,12 @@ impl<L: Layout> StackEntry<L> {
             StackItem::Spell { costs, .. } => costs,
             StackItem::Activated { .. } | StackItem::Triggered { .. } => Castings::NONE,
         }
+    }
+
+    /// Whether this entry is a spell that was cast rather than copied onto the stack.
+    #[inline]
+    pub fn was_cast(&self) -> bool {
+        matches!(self.item, StackItem::Spell { copied: false, .. })
     }
 
     /// Its spell's card or ability's source, its object targets, and the object it triggered on.

@@ -17,7 +17,7 @@ use crate::fit::{Misfit, room};
 use crate::fixed::Full;
 use crate::ids::{CardId, CardIx};
 use crate::layout::{Layout, Small};
-use crate::object::Object;
+use crate::object::{Flag, Object};
 use crate::rule_changes::Rules;
 use crate::static_ability::Inputs;
 use crate::subtypes::GameSubtypes;
@@ -68,14 +68,15 @@ pub struct Copiable<L: Layout = Small> {
 /// creatures on the battlefield), the answer is determined only once, when the effect is
 /// applied." Kept only where the text changes changed the colors: every other exception's
 /// color words read as printed. Only the last exception that sets colors counts (CR 707.9b),
-/// so one place is enough.
+/// so one place is enough. Bit 7 packs whether the values are prototyped (CR 719.3) so
+/// [`Copiable`] keeps its layout size.
 ///
 /// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
 /// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 struct ReadColors {
-    /// One past the place among the additions of the exception they were read for; 0 for
-    /// none.
+    /// Low 7 bits: one past the place among the additions they were read for; 0 for none.
+    /// High bit ([`Self::PROTOTYPE`]): whether these values are prototyped.
     after: u8,
     colors: Colors,
 }
@@ -87,10 +88,37 @@ impl ReadColors {
         colors: Colors::NONE,
     };
 
+    const PROTOTYPE: u8 = 1 << 7;
+    const PLACE_MASK: u8 = !Self::PROTOTYPE;
+
+    #[inline]
+    const fn is_prototype(self) -> bool {
+        self.after & Self::PROTOTYPE != 0
+    }
+
+    #[inline]
+    const fn with_prototype(mut self, prototype: bool) -> Self {
+        if prototype {
+            self.after |= Self::PROTOTYPE;
+        } else {
+            self.after &= Self::PLACE_MASK;
+        }
+        self
+    }
+
+    #[inline]
+    const fn with_after(self, after: u8) -> Self {
+        debug_assert!(after < Self::PROTOTYPE);
+        ReadColors {
+            after: (self.after & Self::PROTOTYPE) | after,
+            colors: self.colors,
+        }
+    }
+
     /// The colors read for the exception at `place` among the additions, if any were.
     #[inline]
     fn at(self, place: usize) -> Option<Colors> {
-        (usize::from(self.after) == place + 1).then_some(self.colors)
+        (usize::from(self.after & Self::PLACE_MASK) == place + 1).then_some(self.colors)
     }
 }
 
@@ -214,7 +242,7 @@ impl<L: Layout> Copiable<L> {
             card: o.card,
             face: o.face,
             additions: L::Additions::NONE,
-            read: ReadColors::NONE,
+            read: ReadColors::NONE.with_prototype(o.flags.has(Flag::Prototype)),
             component_face: false,
             off_stack: false,
         }
@@ -264,9 +292,10 @@ impl<L: Layout> Copiable<L> {
         let place = self.additions.len();
         let mut values = self.with_addition(addition)?;
         if let Some(colors) = read {
-            // A layout holds far fewer than 255 additions.
-            let after = u8::try_from(place + 1).unwrap_or(u8::MAX);
-            values.read = ReadColors { after, colors };
+            // A layout holds far fewer than 127 additions.
+            let after = u8::try_from(place + 1).unwrap_or(ReadColors::PLACE_MASK - 1);
+            values.read = values.read.with_after(after);
+            values.read.colors = colors;
         }
         Ok(values)
     }
@@ -328,6 +357,20 @@ impl<L: Layout> Copiable<L> {
             read: copied.read,
             ..self
         }
+    }
+
+    /// Whether these values are prototyped (see CR 719.3).
+    #[inline]
+    pub const fn is_prototype(self) -> bool {
+        self.read.is_prototype()
+    }
+
+    /// These values marked as prototyped or normal (see CR 719.3).
+    #[inline]
+    #[must_use]
+    pub const fn with_prototype(mut self, prototype: bool) -> Self {
+        self.read = self.read.with_prototype(prototype);
+        self
     }
 
     /// Marks values stored for a merged permanent whose top component supplies its own face
@@ -650,7 +693,15 @@ impl<L: Layout> Copiable<L> {
     pub fn power(self, t: &GameTable) -> i8 {
         match self.excepted_pt(t) {
             Some((power, _)) => power,
-            None => self.face(t).power.unwrap_or(0),
+            None => {
+                let face = self.face(t);
+                if self.is_prototype()
+                    && let Some((_, power, _)) = face.prototype()
+                {
+                    return power;
+                }
+                face.power.unwrap_or(0)
+            }
         }
     }
 
@@ -695,7 +746,15 @@ impl<L: Layout> Copiable<L> {
     pub fn toughness(self, t: &GameTable) -> i8 {
         match self.excepted_pt(t) {
             Some((_, toughness)) => toughness,
-            None => self.face(t).toughness.unwrap_or(0),
+            None => {
+                let face = self.face(t);
+                if self.is_prototype()
+                    && let Some((_, _, toughness)) = face.prototype()
+                {
+                    return toughness;
+                }
+                face.toughness.unwrap_or(0)
+            }
         }
     }
 

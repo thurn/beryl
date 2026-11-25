@@ -163,7 +163,7 @@ pub struct GameTable {
     /// ([`beryl_card::Ability::needs`]), so that no other game pays to check.
     needy: bool,
     /// A bit per [`Capability`] a card of the game has.
-    capabilities: u32,
+    capabilities: u64,
     /// The rule changes the cards of the game name, numbered.
     rule_changes: RuleChanges,
     /// The mana restrictions the cards of the game name, numbered ([`crate::mana_memory`]).

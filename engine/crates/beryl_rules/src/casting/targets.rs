@@ -94,6 +94,7 @@ pub(crate) fn player_matches(spec: &TargetSpec, player: Seat, you: Seat) -> bool
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
+            | Filter::ManaValueAtMostSourcePower
             | Filter::Not(_)
             | Filter::All(_)
             | Filter::AnyOf(_)
@@ -162,6 +163,7 @@ pub(super) fn candidates<L: Layout>(
     x: u8,
     source: Option<L::Slot>,
 ) -> TargetSet<L> {
+    let source_power = source_power_slot(s, t, spec.filter, source);
     candidates_through(
         s,
         t,
@@ -170,8 +172,22 @@ pub(super) fn candidates<L: Layout>(
         itself,
         x,
         source,
+        source_power,
         printed_on(s, itself, source),
     )
+}
+
+fn source_power_slot<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    filter: Filter,
+    source: Option<L::Slot>,
+) -> Option<i8> {
+    if !t.can(crate::table::Capability::ReadsDepartedSource) {
+        return None;
+    }
+    let _ = filter;
+    source.map(|slot| s.power(t, slot))
 }
 
 /// [`candidates`] with the spec's words read through `words`: for a spell or ability on the
@@ -185,6 +201,7 @@ fn candidates_through<L: Layout>(
     itself: Itself<L>,
     x: u8,
     source: Option<L::Slot>,
+    source_power: Option<i8>,
     words: Words,
 ) -> TargetSet<L> {
     let TargetSet {
@@ -196,7 +213,8 @@ fn candidates_through<L: Layout>(
         objects: if objects.is_empty() {
             objects
         } else {
-            spec.filter.select_x(s, t, objects, you, &words, x)
+            spec.filter
+                .select_source(s, t, objects, you, &words, x, source_power)
         },
         players,
         abilities,
@@ -283,8 +301,10 @@ fn enough_candidates<L: Layout>(
         return true;
     };
     let words = printed_on(s, itself, source);
+    let source_power = source_power_slot(s, t, spec.filter, source);
     objects.at_least(need, |slot| {
-        spec.filter.matches_x(s, t, slot, you, &words, x)
+        spec.filter
+            .matches_source(s, t, slot, you, &words, x, source_power)
     })
 }
 
@@ -357,7 +377,29 @@ pub(crate) fn still_legal<L: Layout>(
         return false;
     }
     let words = s.entry_words(entry);
-    (candidates_through(s, t, spec, you, itself, entry.x, source_of(entry), words).objects)
+    let source_power = if t.can(crate::table::Capability::ReadsDepartedSource) {
+        entry.source().and_then(|src| {
+            if s.is_current(src) {
+                Some(s.power(t, src.slot))
+            } else {
+                s.last_known(src).map(|row| row.derived.power)
+            }
+        })
+    } else {
+        None
+    };
+    (candidates_through(
+        s,
+        t,
+        spec,
+        you,
+        itself,
+        entry.x,
+        source_of(entry),
+        source_power,
+        words,
+    )
+    .objects)
         .contains(r.slot)
 }
 

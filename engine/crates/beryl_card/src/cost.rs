@@ -494,6 +494,16 @@ pub enum CastingOption {
     Morph(Cost),
     /// Choose both halves of a split card when casting it from hand.
     Fuse,
+    /// Prototype ([CR 702.160a]): "A player who casts a spell with prototype can choose to cast
+    /// that card 'prototyped.' If they do, the alternative set of its power, toughness, and mana
+    /// cost characteristics are used."
+    ///
+    /// [CR 702.160a]: https://yawgatog.com/resources/magic-rules/#R702160a
+    Prototype {
+        cost: ManaCost,
+        power: i8,
+        toughness: i8,
+    },
 }
 
 /// The part of a granted escape cost that is not mana ([`CastingOption::Escape`]): "exile
@@ -591,6 +601,15 @@ impl CastingOption {
         }
     }
 
+    /// "Prototype [cost] — [power]/[toughness]": [`CastingOption::Prototype`].
+    pub const fn prototype(cost: ManaCost, power: i8, toughness: i8) -> CastingOption {
+        CastingOption::Prototype {
+            cost,
+            power,
+            toughness,
+        }
+    }
+
     /// The face's ability that only a spell cast with this option paid has: an overloaded
     /// spell's changed text, or a mutating creature spell's target and merge.
     pub const fn ability(self) -> Option<AbilityIx> {
@@ -605,12 +624,13 @@ impl CastingOption {
             | CastingOption::Alternative { .. }
             | CastingOption::Escape { .. }
             | CastingOption::Morph(_)
-            | CastingOption::Fuse => None,
+            | CastingOption::Fuse
+            | CastingOption::Prototype { .. } => None,
         }
     }
 
-    /// The kind of cost paid by choosing this option. Morph and fuse select a different
-    /// set of spell characteristics, which supply the base cost.
+    /// The kind of cost paid by choosing this option. Morph, fuse and prototype select a
+    /// different set of spell characteristics, which supply the base cost.
     pub const fn kind(self) -> Option<CastingKind> {
         Some(match self {
             CastingOption::Kicker { .. } => CastingKind::Kicker,
@@ -621,13 +641,15 @@ impl CastingOption {
             CastingOption::Alternative { .. } => CastingKind::Alternative,
             CastingOption::Escape { .. } => CastingKind::Escape,
             CastingOption::Mutate { .. } => CastingKind::Mutate,
-            CastingOption::Morph(_) | CastingOption::Fuse => return None,
+            CastingOption::Morph(_) | CastingOption::Fuse | CastingOption::Prototype { .. } => {
+                return None;
+            }
         })
     }
 
     /// Whether it is paid rather than the mana cost
     /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)) instead of on top of
-    /// it.
+    /// it. Prototype is not an alternative cost (see CR 702.160a).
     pub fn is_alternative(self) -> bool {
         matches!(
             self,
@@ -651,7 +673,8 @@ impl CastingOption {
             | CastingOption::Evoke { cost, .. }
             | CastingOption::Alternative { cost, .. }
             | CastingOption::Escape { cost, .. }
-            | CastingOption::Mutate { cost, .. } => cost,
+            | CastingOption::Mutate { cost, .. }
+            | CastingOption::Prototype { cost, .. } => cost,
             CastingOption::Morph(_) => ManaCost::generic(3),
             CastingOption::Fuse => ManaCost::NONE,
         }
@@ -669,7 +692,8 @@ impl CastingOption {
             | CastingOption::Overload { .. }
             | CastingOption::Mutate { .. }
             | CastingOption::Morph(_)
-            | CastingOption::Fuse => &[],
+            | CastingOption::Fuse
+            | CastingOption::Prototype { .. } => &[],
         }
     }
 }

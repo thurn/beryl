@@ -359,6 +359,7 @@ fn prevention_filter(effect: &'static Effect) -> Option<&'static Filter> {
         | Effect::Counter(_)
         | Effect::CounterInto { .. }
         | Effect::CopySpell { .. }
+        | Effect::CopyCard(_)
         | Effect::Destroy { .. }
         | Effect::Regenerate(_)
         | Effect::Tap(_)

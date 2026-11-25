@@ -53,6 +53,7 @@ impl<L: Layout> Asking<L> {
         self.open = open;
         self.question = None;
         self.hidden = false;
+        self.enter_as_copy = false;
         Ok(())
     }
 

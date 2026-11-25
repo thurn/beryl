@@ -47,6 +47,18 @@ pub(super) fn option_sets(face: &Face, alternative: bool) -> impl Iterator<Item 
     })
 }
 
+/// Whether the face's casting options choose Prototype
+/// ([`CastingOption::Prototype`](crate::card::CastingOption::Prototype)).
+fn prototype_cost(face: &Face, costs: Castings) -> Option<ManaCost> {
+    if costs.is_empty() {
+        return None;
+    }
+    costs.paid(face).find_map(|o| match o {
+        CastingOption::Prototype { cost, .. } => Some(cost),
+        _ => None,
+    })
+}
+
 /// Whether X is announced for this cast, and the least value it may take.
 ///
 /// [CR 107.3b](https://yawgatog.com/resources/magic-rules/#R1073b): an effect that lets a
@@ -57,7 +69,8 @@ pub(super) fn x_range_start(face: &Face, costs: Castings, free: bool) -> Option<
         return (face.cost.x > 0 && !free).then_some(0);
     }
     let alternative = costs.paid(face).any(CastingOption::is_alternative);
-    let in_mana_cost = face.cost.x > 0 && !free && !alternative;
+    let base = prototype_cost(face, costs).unwrap_or(face.cost);
+    let in_mana_cost = base.x > 0 && !free && !alternative;
     let mut min = None;
     for o in costs.paid(face) {
         if o.cost().x > 0 {
@@ -71,7 +84,8 @@ pub(super) fn x_range_start(face: &Face, costs: Castings, free: bool) -> Option<
                 | CastingOption::Escape { .. }
                 | CastingOption::Mutate { .. }
                 | CastingOption::Morph(_)
-                | CastingOption::Fuse => 0,
+                | CastingOption::Fuse
+                | CastingOption::Prototype { .. } => 0,
             };
             min = Some(min.map_or(least, |m: u8| m.max(least)));
         }
@@ -139,13 +153,22 @@ fn mana_cost(face: &Face, free: bool) -> ManaCost {
 #[cold]
 #[inline(never)]
 fn with_options(face: &Face, costs: Castings, free: bool) -> ManaCost {
-    let mut cost = mana_cost(face, free);
+    let mut cost = if free {
+        ManaCost::NONE
+    } else if std::ptr::eq(face, &raw const FACE_DOWN) {
+        ManaCost::generic(3)
+    } else {
+        prototype_cost(face, costs).unwrap_or(face.cost)
+    };
     for o in costs.paid(face) {
         if o.is_alternative() {
             cost = o.cost();
         }
     }
-    for o in costs.paid(face).filter(|o| !o.is_alternative()) {
+    for o in costs
+        .paid(face)
+        .filter(|o| !o.is_alternative() && !matches!(o, CastingOption::Prototype { .. }))
+    {
         cost = cost.plus(o.cost());
     }
     cost

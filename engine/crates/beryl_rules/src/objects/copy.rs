@@ -169,6 +169,7 @@ fn choose_new_targets<L: Layout>(
         card: copy.card(),
         face: copy.face(),
         costs: copy.costs(),
+        copied: true,
     };
     let Some(ability) = entry_ability(game.table, copy) else {
         return Ok(());
@@ -257,6 +258,7 @@ fn put_copy<L: Layout>(
         card,
         face,
         costs: copy.costs(),
+        copied: true,
     };
     s.put_on_stack(game.sink, copy)?;
     // See CR 707.10c: "the copy is put onto the stack with those targets."
@@ -264,4 +266,40 @@ fn put_copy<L: Layout>(
         casting::targeted(s, t)?;
     }
     Ok(slot)
+}
+
+/// [`Effect::CopyCard`](beryl_card::Effect::CopyCard): creates a copy of each card object
+/// in `cards` in the same zone ([CR 707.12]) so an immediate cast instruction can cast it.
+/// The outcome is the created copies.
+///
+/// [CR 707.12]: https://yawgatog.com/resources/magic-rules/#R70712
+pub(crate) fn copy_card_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    cards: Objects,
+) -> Result<Outcome<L>, Full> {
+    let cards = run.scene().objects(cards);
+    if cards.is_empty() {
+        return Ok(Outcome::NOTHING);
+    }
+    let controller = run.resolution().entry.controller();
+    let mut made = Bitboard::EMPTY;
+    for &card_slot in run.in_game_order(cards)?.iter() {
+        let game = run.game();
+        let (s, t) = (&mut *game.state, game.table);
+        let zone = s.object(card_slot).zone();
+        if !matches!(
+            zone,
+            Zone::Exile | Zone::Graveyard | Zone::Hand | Zone::Library
+        ) {
+            continue;
+        }
+        let copy = L::Slot::pool()
+            .find(|&slot| s.object(slot).zone() == Zone::Nowhere)
+            .ok_or(Full)?;
+        let what = s.copiable(card_slot).recorded(t);
+        s.make_token(t, copy, controller, what)?;
+        s.move_object(game.sink, copy, zone, crate::zone::Place::Top)?;
+        made.insert(copy);
+    }
+    Ok(Outcome::acted_on(made))
 }

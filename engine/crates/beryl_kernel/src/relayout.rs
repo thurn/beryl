@@ -232,12 +232,14 @@ impl<L: Layout> Relayout for StackItem<L> {
                 card: c,
                 face,
                 costs,
+                copied,
             } => StackItem::Spell {
                 object: object.relayout(),
                 controller,
                 card: card(c),
                 face,
                 costs,
+                copied,
             },
             StackItem::Activated { of } => StackItem::Activated { of: of.relayout() },
             StackItem::Triggered { of, info } => StackItem::Triggered {

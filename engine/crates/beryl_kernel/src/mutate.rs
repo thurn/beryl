@@ -51,6 +51,10 @@ pub struct Arrival<L: Layout> {
     ///
     /// [CR 608.3c]: https://yawgatog.com/resources/magic-rules/#R6083c
     pub attach: Option<Attachment<L::Slot>>,
+    /// The permanent entered by resolving a prototyped spell (see [CR 719.3b]).
+    ///
+    /// [CR 719.3b]: https://yawgatog.com/resources/magic-rules/#R7193b
+    pub prototype: bool,
 }
 
 impl<L: Layout> State<L> {
@@ -252,6 +256,16 @@ impl<L: Layout> State<L> {
         o.base_controller = controller;
     }
 
+    /// Marks the spell on the stack as prototyped (see [CR 719.3b]).
+    ///
+    /// [CR 719.3b]: https://yawgatog.com/resources/magic-rules/#R7193b
+    #[inline]
+    pub fn mark_prototype(&mut self, spell: Spell<L>) {
+        self.object_mut(spell.slot())
+            .flags
+            .set(Flag::Prototype, true);
+    }
+
     /// Readies a free slot of the token pool to be a token with the copiable values `what`: a
     /// predefined token's ([`Copiable::of_card`]) or a copy's (see [CR 707.2]: "the copy acquires the
     /// copiable values of the original object's characteristics"), so never a hidden card's
@@ -301,6 +315,7 @@ impl<L: Layout> State<L> {
         o.base_controller = owner;
         o.flags = ObjectFlags::NONE;
         o.flags.set(Flag::Token, true);
+        o.flags.set(Flag::Prototype, values.is_prototype());
         if values.is_excepted() {
             self.start_token_copy(slot, values)?;
         }
@@ -352,6 +367,7 @@ impl<L: Layout> State<L> {
         debug_assert!(self.flags.derived_dirty);
         let o = self.object_mut(slot);
         o.flags.set(Flag::Tapped, how.tapped);
+        o.flags.set(Flag::Prototype, how.prototype);
         if let Some(player) = how.attacking {
             o.combat = CombatRole::attacking(AttackTarget::Player(player));
         }

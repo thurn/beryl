@@ -356,6 +356,7 @@ fn apply_layers<L: Layout>(
     let mut listed = Ok(());
     let mut merged = false;
     let mut omitted = false;
+    let prototype = t.can(crate::table::Capability::Prototype);
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         // Layer 1: the copiable values (CR 613.2a). A copy's are those of what it copies,
@@ -363,13 +364,22 @@ fn apply_layers<L: Layout>(
         let what = s.definition(slot);
         let f = what.face(t);
         // One test of the flag, read before the write; a copy's values are found out of line.
-        let copy = s.object(slot).flags().has(Flag::Copy);
+        let flags = s.object(slot).flags();
+        let copy = flags.has(Flag::Copy);
+        let (power, toughness, colors) = if prototype
+            && flags.has(Flag::Prototype)
+            && let Some((cost, p, t)) = f.prototype()
+        {
+            (p, t, cost.colors())
+        } else {
+            (f.power.unwrap_or(0), f.toughness.unwrap_or(0), f.colors)
+        };
         s.results()[i] = Derived {
-            power: f.power.unwrap_or(0),
-            toughness: f.toughness.unwrap_or(0),
+            power,
+            toughness,
             types: f.types,
             supertypes: f.supertypes,
-            colors: f.colors,
+            colors,
             controller: s.base_controller(slot),
             protection: Colors::NONE,
             keywords: f.keywords,

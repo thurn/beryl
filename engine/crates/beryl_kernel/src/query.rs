@@ -148,6 +148,11 @@ impl<L: Layout> State<L> {
                 .saturating_add(definition.face(FaceIx::BACK).cost.mana_value());
         }
         let up = definition.face(o.face);
+        if o.flags.has(Flag::Prototype)
+            && let Some((cost, _, _)) = up.prototype()
+        {
+            return cost.mana_value();
+        }
         if !up.uses_front_mana_value() {
             up.cost.mana_value()
         } else if o.is_token() || self.has_copied_face(slot) {
@@ -381,7 +386,10 @@ impl<L: Layout> State<L> {
             self.derived(slot).colors
         } else if !self.reaches_elsewhere() && t.can(Capability::Split) {
             self.copiable(slot).colors(t)
-        } else if !self.reaches_elsewhere() && !o.flags.has(Flag::Copy) {
+        } else if !self.reaches_elsewhere()
+            && !o.flags.has(Flag::Copy)
+            && !(t.can(Capability::Prototype) && o.flags.has(Flag::Prototype))
+        {
             self.definition(slot).face(t).colors
         } else if !self.reaches_elsewhere() {
             self.copiable_colors(t, slot)
@@ -582,7 +590,16 @@ impl<L: Layout> State<L> {
 #[must_use]
 #[inline]
 pub fn spell_mana_value<L: Layout>(table: &GameTable, entry: &StackEntry<L>) -> u8 {
-    let cost = table.def(entry.card()).face(entry.face()).cost;
+    let face = table.def(entry.card()).face(entry.face());
+    let cost = if !entry.costs().is_empty()
+        && let Some(proto) = entry.costs().paid(face).find_map(|o| match o {
+            beryl_card::CastingOption::Prototype { cost, .. } => Some(cost),
+            _ => None,
+        }) {
+        proto
+    } else {
+        face.cost
+    };
     cost.mana_value()
         .saturating_add(cost.x.saturating_mul(entry.x))
 }

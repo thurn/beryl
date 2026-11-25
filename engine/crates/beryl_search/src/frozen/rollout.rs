@@ -381,7 +381,9 @@ impl Policy<'_> {
                 | CastingOption::Offspring(_)
                 | CastingOption::Escape { .. }
                 | CastingOption::Mutate { .. } => 10,
-                CastingOption::Morph(_) | CastingOption::Fuse => 0,
+                CastingOption::Morph(_) | CastingOption::Fuse | CastingOption::Prototype { .. } => {
+                    0
+                }
                 CastingOption::Impending { .. } | CastingOption::Overload { .. } => -10,
                 // A card from hand and the permanent itself, for its enters ability alone.
                 CastingOption::Evoke { .. } => -30,

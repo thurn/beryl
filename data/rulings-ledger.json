@@ -135,6 +135,87 @@
       "untestable": "The White Knight scenario checks that protection doesn't apply in the graveyard. Shroud is absent from the permanent keyword vocabulary."
     }
   ],
+  "Arcane Proxy": [
+    {
+      "published_at": "2022-10-14",
+      "hash": "eec4cee2f7d5",
+      "scenario": [
+        "Arcane Proxy cast normally copies a mana value 4 card",
+        "declining to cast the copy lets it cease to exist"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "4cf6d32b6f3e",
+      "scenario": [
+        "declining to cast the copy lets it cease to exist"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "79c1beff7054",
+      "scenario": [
+        "Arcane Proxy cast prototyped copies a mana value 2 or less card",
+        "prototyped Proxy is blue for protection while hand copy is colorless",
+        "blinked Arcane Proxy returns unprototyped and does not trigger"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "6f94c91c9dd1",
+      "covered": "CastingOption::Prototype"
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "515ae1e55096",
+      "covered": "Effect::MayCast"
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "7c156730bc8f",
+      "scenario": [
+        "Arcane Proxy cast normally copies a mana value 4 card",
+        "prototyped Proxy is blue for protection while hand copy is colorless"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "34bd9cb97870",
+      "covered": "CastingOption::Prototype"
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "a17264fee816",
+      "scenario": [
+        "Arcane Proxy cast normally copies a mana value 4 card",
+        "Arcane Proxy cast prototyped copies a mana value 2 or less card"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "9a870cce59bd",
+      "covered": "Effect::MayCast"
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "9849632f5219",
+      "untestable": "No implemented card grants a color-restricted casting permission such as Chandra, Dressed to Kill's emblem."
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "ce1eaf8eb77e",
+      "scenario": [
+        "Phantasmal Image of a prototyped Proxy is 2/1 blue and triggers"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "ba50ada7ceb7",
+      "scenario": [
+        "power reduction before resolution makes the target illegal"
+      ]
+    }
+  ],
   "Benalish Hero": [
     {
       "published_at": "2008-10-01",
@@ -601,7 +682,9 @@
     {
       "published_at": "2017-11-17",
       "hash": "62fb15ae0daf",
-      "scenario": ["a counter added in response lets the Chronicler draw"]
+      "scenario": [
+        "a counter added in response lets the Chronicler draw"
+      ]
     }
   ],
   "Circle of Protection: Red": [
@@ -976,7 +1059,9 @@
     {
       "published_at": "2004-10-04",
       "hash": "bed98cd27789",
-      "scenario": ["Fork targets itself with a copy of Counterspell"]
+      "scenario": [
+        "Fork targets itself with a copy of Counterspell"
+      ]
     },
     {
       "published_at": "2004-10-04",
@@ -2432,7 +2517,9 @@
     {
       "published_at": "2018-04-27",
       "hash": "e97181d9df12",
-      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+      "scenario": [
+        "Three chapters resolve before the Saga is sacrificed"
+      ]
     },
     {
       "published_at": "2018-04-27",
@@ -2442,12 +2529,16 @@
     {
       "published_at": "2018-04-27",
       "hash": "86a5400d3823",
-      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+      "scenario": [
+        "Three chapters resolve before the Saga is sacrificed"
+      ]
     },
     {
       "published_at": "2018-04-27",
       "hash": "2af0aadae8f2",
-      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+      "scenario": [
+        "Three chapters resolve before the Saga is sacrificed"
+      ]
     },
     {
       "published_at": "2018-04-27",
@@ -2457,17 +2548,23 @@
     {
       "published_at": "2018-04-27",
       "hash": "a4170507af89",
-      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+      "scenario": [
+        "Three chapters resolve before the Saga is sacrificed"
+      ]
     },
     {
       "published_at": "2018-04-27",
       "hash": "a2cbd1fb4133",
-      "scenario": ["The third chapter resolves after the Saga leaves"]
+      "scenario": [
+        "The third chapter resolves after the Saga leaves"
+      ]
     },
     {
       "published_at": "2018-04-27",
       "hash": "38666afa51c4",
-      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+      "scenario": [
+        "Three chapters resolve before the Saga is sacrificed"
+      ]
     },
     {
       "published_at": "2018-04-27",
@@ -2477,7 +2574,9 @@
     {
       "published_at": "2018-04-27",
       "hash": "559b26ebc012",
-      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+      "scenario": [
+        "Three chapters resolve before the Saga is sacrificed"
+      ]
     }
   ],
   "Thespian's Stage": [

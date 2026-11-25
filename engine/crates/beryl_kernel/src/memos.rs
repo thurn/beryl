@@ -149,6 +149,8 @@ pub enum Memo<L: Layout = Small> {
     /// The prepared designation and the copy it created, while that copy remains in exile
     /// or is being cast (see CR 723.3a–c). Phasing out removes the copy but preserves the memo.
     Prepared(Option<L::Slot>),
+    /// This permanent entered by resolving a spell cast by this player ("if you cast it").
+    Cast(Seat),
 }
 
 /// The kinds of memo among a store's entries: its index by kind, so that a reader of a kind
@@ -173,6 +175,7 @@ impl Kinds {
     const SOLVED: u32 = 1 << 19;
     const COMBAT_BAND: u32 = 1 << 20;
     const PREPARED: u32 = 1 << 21;
+    const CAST: u32 = 1 << 22;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u32 = Kinds::EXILED_WITH
         | Kinds::EXILED_UNTIL
@@ -414,7 +417,8 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
             | Memo::Solved
-            | Memo::Prepared(_) => None,
+            | Memo::Prepared(_)
+            | Memo::Cast(_) => None,
         })
     }
 
@@ -436,7 +440,8 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
             | Memo::Solved
-            | Memo::Prepared(_) => None,
+            | Memo::Prepared(_)
+            | Memo::Cast(_) => None,
         })
     }
 
@@ -458,7 +463,8 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
             | Memo::Solved
-            | Memo::Prepared(_) => None,
+            | Memo::Prepared(_)
+            | Memo::Cast(_) => None,
         })
     }
 }
@@ -526,6 +532,16 @@ impl<L: Layout> State<L> {
             .of(Kinds::MORPHED)
             .iter()
             .any(|e| e.slot == slot && e.memo == Memo::Morphed)
+    }
+
+    /// Whether the permanent in `slot` entered by resolving a spell cast by `player`
+    /// ("if you cast it"). With no permanent in the game that remembers one, one AND.
+    #[inline]
+    pub fn was_cast_by(&self, slot: L::Slot, player: Seat) -> bool {
+        self.memos
+            .of(Kinds::CAST)
+            .iter()
+            .any(|e| e.slot == slot && e.memo == Memo::Cast(player))
     }
 
     /// The value of X the permanent in `slot` was cast with

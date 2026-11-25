@@ -284,6 +284,7 @@ pub(crate) fn without_a_scene<L: Layout>(
         | Condition::Token(_)
         | Condition::WonFlip
         | Condition::DrewInDrawStep(_)
+        | Condition::Cast
         | Condition::Not(_)
         | Condition::All(_)
         | Condition::Any(_) => None,

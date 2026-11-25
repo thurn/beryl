@@ -175,6 +175,7 @@ pub(in crate::derive) fn printed(
         Filter::PowerAtMost(power) => face.power.is_some_and(|p| p <= power),
         Filter::InZone(expected) => zone == expected,
         Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostSourcePower
         | Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::Not(_)

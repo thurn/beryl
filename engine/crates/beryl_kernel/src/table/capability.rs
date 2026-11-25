@@ -132,15 +132,25 @@ pub enum Capability {
     Banding,
     /// A permanent can enter prepared and make a spell copy in exile.
     Preparation,
+    /// A card has prototype ([`beryl_card::CastingOption::Prototype`]), so layers, copiable
+    /// values and mana value check whether a spell or permanent is prototyped.
+    Prototype,
+    /// An ability checks whether a permanent entered by resolving a cast spell
+    /// ([`beryl_card::Condition::Cast`]), so arriving from the stack remembers it.
+    ChecksCastEntry,
+    /// An ability's target filter reads its source's power
+    /// ([`beryl_card::Filter::ManaValueAtMostSourcePower`]), so a permanent leaving while
+    /// its ability waits or is on the stack keeps its last-known power.
+    ReadsDepartedSource,
 }
 
-// The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::Preparation as u32) < u32::BITS);
+// The game keeps its capabilities in a `u64`.
+const _: () = assert!((Capability::ReadsDepartedSource as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
     #[inline]
-    pub(super) fn of_game(defs: &[&CardDef], subtypes: &SubtypeNumbers) -> u32 {
+    pub(super) fn of_game(defs: &[&CardDef], subtypes: &SubtypeNumbers) -> u64 {
         let mut capabilities = defs
             .iter()
             .flat_map(|d| d.faces)
@@ -166,7 +176,7 @@ impl Capability {
     }
 
     /// The capabilities a face gives a game that can contain it.
-    fn of(face: &Face) -> u32 {
+    fn of(face: &Face) -> u64 {
         let mut found = casting_capabilities(face) | keyword_capabilities(face.keywords);
         if Inputs::of(face) != Inputs::NONE {
             found |= Capability::LayerInputs.bit();
@@ -267,13 +277,13 @@ impl Capability {
     }
 
     #[inline]
-    pub(super) const fn bit(self) -> u32 {
-        1 << (self as u32)
+    pub(super) const fn bit(self) -> u64 {
+        1u64 << (self as u32)
     }
 }
 
 /// The capabilities that come from a face's keyword abilities.
-fn keyword_capabilities(keywords: Keywords) -> u32 {
+fn keyword_capabilities(keywords: Keywords) -> u64 {
     let mut found = 0;
     if keywords.contains(Keywords::DELVE) {
         found |= Capability::Delve.bit();
@@ -285,7 +295,7 @@ fn keyword_capabilities(keywords: Keywords) -> u32 {
 }
 
 /// The capabilities that come from a face's casting options, costs and permissions.
-fn casting_capabilities(face: &Face) -> u32 {
+fn casting_capabilities(face: &Face) -> u64 {
     use beryl_card::CastingOption;
 
     let mut found = if face.permits_cast_while_searching() {
@@ -306,6 +316,7 @@ fn casting_capabilities(face: &Face) -> u32 {
             | match option {
                 CastingOption::Mutate { .. } => Capability::Merges.bit(),
                 CastingOption::Morph(_) => Capability::Morph.bit(),
+                CastingOption::Prototype { .. } => Capability::Prototype.bit(),
                 CastingOption::Kicker { .. }
                 | CastingOption::Offspring(_)
                 | CastingOption::Impending { .. }
@@ -319,7 +330,7 @@ fn casting_capabilities(face: &Face) -> u32 {
 }
 
 /// The capabilities needed by the instructions a spell or ability can carry out.
-fn body_capabilities(body: Behavior) -> u32 {
+fn body_capabilities(body: Behavior) -> u64 {
     match body {
         Behavior::Data(effect) => {
             let mut found = 0;
@@ -354,13 +365,17 @@ fn body_capabilities(body: Behavior) -> u32 {
 }
 
 /// The facts an ability reads, whether they appear in its body or in its conditions.
-fn facts_read_by(ability: &Ability) -> u32 {
+fn facts_read_by(ability: &Ability) -> u64 {
     let mut found = 0;
     let works_on_stack =
         ability.kind() == AbilityKind::Triggered && ability.zones().contains(Zone::Stack);
     ability.walk(&mut |node| {
         found |= match node {
             Node::Condition(Condition::EnteredThisTurn(_)) => Capability::EnteredThisTurn.bit(),
+            Node::Condition(Condition::Cast) => Capability::ChecksCastEntry.bit(),
+            Node::Filter(beryl_card::Filter::ManaValueAtMostSourcePower) => {
+                Capability::ReadsDepartedSource.bit()
+            }
             Node::Amount(Amount::SpellsCast(_) | Amount::SpellsCastBefore) => {
                 Capability::SpellsCast.bit()
             }
@@ -393,7 +408,7 @@ fn copies_itself(effect: &Effect) -> bool {
 /// [`Capability::Merges`]) every kind a permanent's ability listens to, `here`. A card of any
 /// face may be under a merged permanent, where the table's listeners of the permanent's
 /// definition do not find its triggered abilities, so trigger matching looks for them apart.
-pub(super) fn merged_listen_away(capabilities: u32, away: Listens, here: Listens) -> Listens {
+pub(super) fn merged_listen_away(capabilities: u64, away: Listens, here: Listens) -> Listens {
     if capabilities & Capability::Merges.bit() == 0 {
         away
     } else {

@@ -297,6 +297,36 @@ pub fn face_source(face: &Face, index: usize, subtypes: &Subtypes) -> Result<Str
     Ok(out)
 }
 
+/// Reads a `"Prototype <cost> — <power>/<toughness>"` line from `face`'s Oracle text, if
+/// present, so prototype characteristics come from the card store without hand typing.
+fn prototype_option(face: &Face) -> Result<Option<(String, i8, i8)>, String> {
+    let text = crate::complete::without_reminders(face.oracle_text.as_deref().unwrap_or_default());
+    for line in text.lines() {
+        let Some(rest) = line.trim().strip_prefix("Prototype ") else {
+            continue;
+        };
+        let Some((cost, pt)) = rest.split_once('\u{2014}') else {
+            return Err(format!("{}: malformed Prototype line {line:?}", face.name));
+        };
+        let Some((power, toughness)) = pt.trim().split_once('/') else {
+            return Err(format!(
+                "{}: malformed Prototype stats in {line:?}",
+                face.name
+            ));
+        };
+        let p: i8 = power
+            .trim()
+            .parse()
+            .map_err(|_| format!("{}: invalid Prototype power in {line:?}", face.name))?;
+        let t: i8 = toughness
+            .trim()
+            .parse()
+            .map_err(|_| format!("{}: invalid Prototype toughness in {line:?}", face.name))?;
+        return Ok(Some((cost.trim().to_owned(), p, t)));
+    }
+    Ok(None)
+}
+
 /// Each face of `record` as a `(name, source)` pair, front first.
 ///
 /// # Errors
@@ -324,6 +354,16 @@ pub fn faces(record: &Record, subtypes: &Subtypes) -> Result<Vec<(String, String
                 face
             };
             let mut source = face_source(face, i, subtypes)?;
+            if i == 0
+                && record.layout == "prototype"
+                && let Some((cost, power, toughness)) = prototype_option(face)?
+            {
+                write!(
+                    source,
+                    "\n    .casting(&[beryl_card::CastingOption::prototype(beryl_card::mana({cost:?}), {power}, {toughness})])"
+                )
+                .unwrap();
+            }
             if i == 1
                 && let Some(shape) = shape_source(record)
             {

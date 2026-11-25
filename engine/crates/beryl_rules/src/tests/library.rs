@@ -42,6 +42,7 @@ fn resolving<T>(
         card: s.copiable(source.slot).record(t).0,
         face: FaceIx::default(),
         costs: Castings::NONE,
+        copied: false,
     });
     let mut resolution = Resolution::new(entry, &ASKS, TargetPlaces::NONE, None);
     x.events.asking.begin(answers, false).unwrap();
@@ -107,6 +108,7 @@ fn top_cards_and_draws_skip_objects_waiting_to_cease_to_exist() {
         card: what.record(&t).0,
         face,
         costs: Castings::NONE,
+        copied: false,
     });
     s.put_on_stack(&mut scratch.events, entry).unwrap();
     library::put_into(

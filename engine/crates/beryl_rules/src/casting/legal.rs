@@ -386,8 +386,14 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool, const SEARCH: bool>(
     // comparing them: whether one may depends only on its card, which interchangeable cards
     // share, so the cards kept are the same.
     let special = !SEARCH && t.can_either(Capability::Morph, Capability::Split);
+    let resolution = matches!(from, From::Resolution { .. });
     let cards = cards.filter(|slot| {
-        s.card_def(t, slot).is_some_and(|def| {
+        let def = if resolution && !SEARCH && s.object(slot).is_token() {
+            Some(t.def(s.definition(slot).record(t).0))
+        } else {
+            s.card_def(t, slot)
+        };
+        def.is_some_and(|def| {
             def.face_ixs().any(|f| {
                 let face = def.face(f);
                 face.playable()
@@ -399,7 +405,12 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool, const SEARCH: bool>(
     // Each card cast during a search leaves its own place in the library.
     let cards = if SEARCH { cards } else { collapse(s, cards) };
     Candidates::<L>::extend_options(out, cards, |out, slot| {
-        let Some(def) = s.card_def(t, slot) else {
+        let def = if resolution && !SEARCH && s.object(slot).is_token() {
+            Some(t.def(s.definition(slot).record(t).0))
+        } else {
+            s.card_def(t, slot)
+        };
+        let Some(def) = def else {
             return Ok(());
         };
         let ways = Ways::of(s, t, player, slot, from);

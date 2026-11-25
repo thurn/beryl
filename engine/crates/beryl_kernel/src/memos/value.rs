@@ -23,6 +23,7 @@ impl<L: Layout> Memo<L> {
             Memo::Solved => Kinds::SOLVED,
             Memo::CombatBand(_) => Kinds::COMBAT_BAND,
             Memo::Prepared(_) => Kinds::PREPARED,
+            Memo::Cast(_) => Kinds::CAST,
         }
     }
 
@@ -42,7 +43,8 @@ impl<L: Layout> Memo<L> {
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
             | Memo::Solved
-            | Memo::Prepared(_) => Zone::Battlefield,
+            | Memo::Prepared(_)
+            | Memo::Cast(_) => Zone::Battlefield,
             Memo::ExiledWith(_) | Memo::ExiledUntil(_) => Zone::Exile,
             Memo::PartOf(_) => Zone::Merged,
         }
@@ -71,7 +73,8 @@ impl<L: Layout> Memo<L> {
             | Memo::Morphed
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
-            | Memo::Solved => None,
+            | Memo::Solved
+            | Memo::Cast(_) => None,
             Memo::Prepared(copy) => copy,
             Memo::ExiledWith(by)
             | Memo::ExiledUntil(by)
@@ -93,6 +96,7 @@ impl<L: Layout> Memo<L> {
             | Memo::PhasedOutUnder(_)
             | Memo::Morphed
             | Memo::Solved
+            | Memo::Cast(_)
             | Memo::CombatBand(_) => true,
             // Somebody knew the face-down card: at least its controller (see CR 708.5).
             Memo::FaceDownUnder(knew) => !knew.is_empty(),
@@ -126,6 +130,7 @@ impl<L: Layout> Memo<L> {
             Memo::Solved => Memo::Solved,
             Memo::CombatBand(band) => Memo::CombatBand(slot(band)),
             Memo::Prepared(copy) => Memo::Prepared(copy.map(slot)),
+            Memo::Cast(player) => Memo::Cast(player),
         }
     }
 

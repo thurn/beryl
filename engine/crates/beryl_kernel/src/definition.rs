@@ -137,8 +137,8 @@ impl<L: Layout> State<L> {
         if o.flags.has(Flag::Copy) {
             return self.excepted_pt(t, slot);
         }
-        let face = Copiable::of_object(o).face(t);
-        (face.power.unwrap_or(0), face.toughness.unwrap_or(0))
+        let values = Copiable::of_object(o);
+        (values.power(t), values.toughness(t))
     }
 
     /// What layer 1 gives the permanent in `slot`, which has a copy effect on it
@@ -196,7 +196,7 @@ impl<L: Layout> State<L> {
         if o.flags.has(Flag::Copy) {
             return self.excepted_colors(t, slot);
         }
-        Copiable::of_object(o).face(t).colors
+        Copiable::of_object(o).colors(t)
     }
 
     /// [`State::copiable_colors`] of an object with a copy effect on it.

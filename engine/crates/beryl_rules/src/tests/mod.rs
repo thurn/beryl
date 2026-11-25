@@ -35,6 +35,7 @@ mod mulligan;
 mod payment;
 mod phasing;
 mod preparation;
+mod prototype;
 mod regeneration;
 mod remembered_mana;
 mod replace;

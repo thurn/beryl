@@ -602,7 +602,7 @@ impl Scope<'_> {
 
     const fn condition(self, condition: &Condition) -> Checked {
         match condition {
-            Condition::Did | Condition::WonFlip => Ok(()),
+            Condition::Did | Condition::WonFlip | Condition::Cast => Ok(()),
             Condition::DrewInDrawStep(players) => self.players(players),
             Condition::Paid(kind) => {
                 let casting = self.face.casting;
@@ -658,6 +658,7 @@ impl Scope<'_> {
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
+            | Filter::ManaValueAtMostSourcePower
             | Filter::InZone(_) => Ok(()),
         }
     }

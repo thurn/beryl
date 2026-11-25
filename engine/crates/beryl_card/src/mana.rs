@@ -1,5 +1,6 @@
 //! Mana: costs, the kinds of mana, and what a mana ability produces.
 
+use crate::characteristics::Colors;
 use crate::continuous::RuleChange;
 use crate::filter::Filter;
 
@@ -87,6 +88,29 @@ impl ManaCost {
     /// regardless of color."
     pub fn mana_value(self) -> u8 {
         self.generic + self.symbols.iter().sum::<u8>()
+    }
+
+    /// The colors of the colored mana symbols in this cost
+    /// ([CR 105.2](https://yawgatog.com/resources/magic-rules/#R1052)): "An object can be one or
+    /// more of the five colors, or it can be no color at all."
+    pub const fn colors(self) -> Colors {
+        let mut colors = Colors::NONE;
+        if self.symbols[0] > 0 {
+            colors = colors.union(Colors::WHITE);
+        }
+        if self.symbols[1] > 0 {
+            colors = colors.union(Colors::BLUE);
+        }
+        if self.symbols[2] > 0 {
+            colors = colors.union(Colors::BLACK);
+        }
+        if self.symbols[3] > 0 {
+            colors = colors.union(Colors::RED);
+        }
+        if self.symbols[4] > 0 {
+            colors = colors.union(Colors::GREEN);
+        }
+        colors
     }
 }
 

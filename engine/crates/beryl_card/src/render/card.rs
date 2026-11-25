@@ -239,6 +239,14 @@ fn casting_line(ctx: &mut Ctx, option: CastingOption, first: bool) -> Option<Str
                 format!("You may {actions} rather than pay this spell's mana cost."),
             )
         }
+        CastingOption::Prototype {
+            cost,
+            power,
+            toughness,
+        } => (
+            true,
+            format!("Prototype {} \u{2014} {power}/{toughness}", mana_text(cost)),
+        ),
         // CR 702.138a: "Escape [cost]". No face lists it, but a line for one reads so.
         CastingOption::Escape { cost, parts } => {
             let mut actions = ctx.cost_actions(Cost::of_parts(parts));

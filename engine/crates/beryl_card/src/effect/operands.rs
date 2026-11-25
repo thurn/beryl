@@ -137,6 +137,7 @@ impl Effect {
             | Effect::ControlPlayer(player)
             | Effect::ExtraTurn(player, _) => Operands::of_players(player),
             Effect::CopySpell { spells, count, .. } => Operands::of_objects(spells).amount(count),
+            Effect::CopyCard(objects) => Operands::of_objects(objects),
             Effect::Unless { player, cost, .. } => {
                 Operands::of_players(player).filter(chosen_for(cost))
             }

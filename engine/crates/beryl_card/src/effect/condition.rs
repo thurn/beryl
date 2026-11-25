@@ -58,6 +58,8 @@ pub enum Condition {
     ///
     /// [CR 504.1]: https://yawgatog.com/resources/magic-rules/#R5041
     DrewInDrawStep(Players),
+    /// Whether the spell that became this permanent was cast by its controller ("if you cast it").
+    Cast,
     Not(&'static Condition),
     /// Every one of them: "if ... and ...".
     All(&'static [Condition]),
@@ -73,7 +75,7 @@ impl Condition {
     pub const fn needs_a_resolution(&self) -> bool {
         match self {
             Condition::Did | Condition::WonFlip => true,
-            Condition::Paid(_) => false,
+            Condition::Paid(_) | Condition::Cast => false,
             Condition::DrewInDrawStep(players) => players.needs_a_resolution(),
             Condition::Compare(left, _, right) => {
                 left.needs_a_resolution() || right.needs_a_resolution()
@@ -103,7 +105,7 @@ impl Condition {
     /// Whether it reads what a cost took ([`Objects::Paid`]).
     pub const fn names_paid(&self) -> bool {
         match self {
-            Condition::Did | Condition::WonFlip | Condition::Paid(_) => false,
+            Condition::Did | Condition::WonFlip | Condition::Paid(_) | Condition::Cast => false,
             Condition::DrewInDrawStep(players) => players.names_paid(),
             Condition::Compare(left, _, right) => left.names_paid() || right.names_paid(),
             Condition::Is(objects, _)
@@ -142,6 +144,7 @@ impl Condition {
                 | Condition::OnBattlefield(_)
                 | Condition::Token(_)
                 | Condition::WonFlip
+                | Condition::Cast
                 | Condition::DrewInDrawStep(_) => false,
             }
     }

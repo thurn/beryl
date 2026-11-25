@@ -93,6 +93,14 @@ pub(crate) fn begin_cast<L: Layout>(
         .spell(s.object_ref(slot))
         .expect("a card just put on the stack");
     s.become_spell(spell, face, player);
+    let def_face = t.def(card).face(face);
+    if !costs.is_empty()
+        && costs
+            .paid(def_face)
+            .any(|o| matches!(o, CastingOption::Prototype { .. }))
+    {
+        s.mark_prototype(spell);
+    }
     if face == FaceIx::BACK && s.object(slot).is_token() {
         s.set_prepare_spell_owner(spell, player);
     }
@@ -104,13 +112,13 @@ pub(crate) fn begin_cast<L: Layout>(
             card,
             face,
             costs,
+            copied: false,
         }),
     )?;
     if let Some(permission) = permission {
         start::begin_on_spell(s, slot, permission)?;
     }
     let free = resolving.unwrap_or(false);
-    let def_face = t.def(card).face(face);
     let kind = CastKind::Spell {
         free,
         resolving: resolving.is_some(),
@@ -345,6 +353,7 @@ pub(super) fn finish<L: Layout>(
         card,
         face,
         costs,
+        ..
     } = entry.item
     {
         if face == FaceIx::DOWN

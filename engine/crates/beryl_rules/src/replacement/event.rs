@@ -57,6 +57,10 @@ pub(crate) struct Entry<L: Layout = Small> {
     pub x: u8,
     /// The object or player an Aura spell attaches to as it resolves (see CR 608.3c).
     pub attach: Option<Attachment<L::Slot>>,
+    /// The spell entered from resolving a cast spell by this player ("if you cast it").
+    pub cast: Option<Seat>,
+    /// The permanent entered by resolving a prototyped spell (see CR 719.3b).
+    pub prototype: bool,
 }
 
 /// The preparation designation an entry replacement can give an arriving permanent.
@@ -89,10 +93,16 @@ pub(crate) fn arrive<L: Layout>(
             face: entry.face,
             counters: entry.counters,
             attach: entry.attach,
+            prototype: entry.prototype,
         },
     )?;
     if entry.saga_lore {
         crate::saga::place_entry_lore(s, permanent)?;
+    }
+    if let Some(caster) = entry.cast
+        && t.can(crate::table::Capability::ChecksCastEntry)
+    {
+        s.remember(slot, Memo::Cast(caster))?;
     }
     if !entry.paid.is_empty() {
         s.remember(slot, Memo::Paid(entry.paid))?;
@@ -332,7 +342,7 @@ fn move_ordered<L: Layout, const N: usize>(
             from: s.object(slot).zone(),
             to,
             entry,
-            cast: reasons.ordinary == Reason::Resolve,
+            cast: reasons.ordinary == Reason::Cast,
         };
         let prepared = prepare_move(s, t, sink, proposal, auras)?;
         if prepared.is_some() && proposal.from == Zone::Battlefield {
@@ -495,6 +505,7 @@ fn prepare_move<L: Layout>(
     if s.object(slot).is_token()
         && !matches!(from, Zone::Battlefield | Zone::Nowhere | Zone::Stack)
         && !(from == Zone::Exile && s.prepare_source(slot).is_some())
+        && !(proposal.to == Zone::Stack && proposal.cast)
     {
         return Ok(None);
     }

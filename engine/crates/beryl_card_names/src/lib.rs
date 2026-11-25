@@ -133,6 +133,7 @@ pub mod decks {
             "casting",
             &[
                 names::BLOODBRAID_ELF,
+                names::ARCANE_PROXY,
                 names::KNOWLEDGE_POOL,
                 names::POSSIBILITY_STORM,
                 names::BONECRUSHER_GIANT,

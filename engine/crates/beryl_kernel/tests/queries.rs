@@ -151,6 +151,7 @@ fn token(t: &GameTable, s: &mut State, owner: Seat, what: Copiable) -> Slot {
             face,
             counters: None,
             attach: None,
+            prototype: false,
         },
     )
     .unwrap();
@@ -363,6 +364,7 @@ fn mana_value_counts_x_on_the_stack_and_a_copied_back_face_as_nothing() {
             card,
             face,
             costs: Castings::NONE,
+            copied: false,
         })
     };
     s.put_on_stack(&mut beryl_kernel::event::Sink::off(), entry)
@@ -421,6 +423,7 @@ fn a_split_card_combines_its_halves_only_off_the_stack() {
         card: def,
         face,
         costs: Castings::NONE,
+        copied: false,
     });
     s.put_on_stack(&mut Sink::off(), entry).unwrap();
     assert_eq!(s.colors(&t, card), Colors::RED);
@@ -495,4 +498,79 @@ fn power_and_toughness_are_the_layers_on_the_battlefield_and_copiable_elsewhere(
     assert_eq!((s.power(&t, bear), s.toughness(&t, bear)), (2, 3));
     assert_eq!((s.power(&t, prodigy), s.toughness(&t, prodigy)), (0, 2));
     assert_eq!((s.power(&t, small), s.toughness(&t, small)), (1, 1));
+}
+
+#[test]
+fn prototyped_object_uses_prototype_values_on_stack_and_battlefield() {
+    static PROTO: CardDef = CardDef {
+        name: "Test Prototype",
+        shape: beryl_card::definition::Shape::Single,
+        tokens: &[],
+        faces: &[Face {
+            cost: ManaCost::generic(7),
+            types: Types::ARTIFACT.union(Types::CREATURE),
+            power: Some(4),
+            toughness: Some(3),
+            casting: &[beryl_card::CastingOption::prototype(
+                ManaCost::new(1, [0, 2, 0, 0, 0, 0]),
+                2,
+                1,
+            )],
+            ..Face::EMPTY
+        }],
+    };
+    static PROTO_CARDS: CardTable = CardTable::new(&[&PROTO, &BEAR, &BLAST]);
+    let t = GameTable::new(
+        Format::CONSTRUCTED,
+        &PROTO_CARDS,
+        [
+            &[(20, "Test Prototype"), (20, "Test Bear")],
+            &[(20, "Test Prototype"), (20, "Test Bear")],
+        ],
+    )
+    .unwrap();
+    let mut s = State::new(&t, 0, Profile::EXACT).unwrap();
+    let card = s
+        .library(Seat::P0)
+        .iter()
+        .copied()
+        .find(|&slot| s.definition_name(&t, slot) == "Test Prototype")
+        .unwrap();
+
+    // In hand/library: normal characteristics (7 MV, colorless, 4/3).
+    assert_eq!(s.mana_value(&t, card), 7);
+    assert_eq!(s.colors(&t, card), Colors::NONE);
+    assert_eq!((s.power(&t, card), s.toughness(&t, card)), (4, 3));
+
+    // On stack with Flag::Prototype: prototype characteristics (3 MV, blue, 2/1).
+    s.board().place(card, Stack).unwrap();
+    let spell = s.spell(s.object_ref(card)).unwrap();
+    s.become_spell(spell, FaceIx::FRONT, Seat::P0);
+    s.mark_prototype(spell);
+    assert_eq!(s.mana_value(&t, card), 3);
+    assert_eq!(s.colors(&t, card), Colors::BLUE);
+
+    // On battlefield with prototype Arrival: 2/1 blue, MV 3.
+    s.move_object(&mut Sink::off(), card, Battlefield, Place::Top)
+        .unwrap();
+    let perm = s.permanent_at(card).unwrap();
+    s.arrive(
+        perm,
+        beryl_kernel::Arrival {
+            prototype: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    derive(&t, &mut s, 0);
+    assert_eq!(s.mana_value(&t, card), 3);
+    assert_eq!(s.colors(&t, card), Colors::BLUE);
+    assert_eq!((s.power(&t, card), s.toughness(&t, card)), (2, 1));
+
+    // After leaving battlefield to graveyard: resumes normal 4/3 colorless 7 MV (CR 719.4).
+    s.move_object(&mut Sink::off(), card, Graveyard, Place::Top)
+        .unwrap();
+    assert_eq!(s.mana_value(&t, card), 7);
+    assert_eq!(s.colors(&t, card), Colors::NONE);
+    assert_eq!((s.power(&t, card), s.toughness(&t, card)), (4, 3));
 }

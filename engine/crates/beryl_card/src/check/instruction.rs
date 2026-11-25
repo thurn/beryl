@@ -193,6 +193,7 @@ impl Scope<'_> {
             | Effect::LookAt { .. }
             | Effect::Counter(_)
             | Effect::CopySpell { .. }
+            | Effect::CopyCard(_)
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
             | Effect::Tap(_)

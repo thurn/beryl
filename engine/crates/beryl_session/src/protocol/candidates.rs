@@ -445,6 +445,7 @@ fn casting_options<L: Layout>(
             CastingOption::Mutate { cost, .. } => format!(" with mutate {}", mana_text(cost)),
             CastingOption::Morph(_) => " face down".to_owned(),
             CastingOption::Fuse => String::new(),
+            CastingOption::Prototype { cost, .. } => format!(" as prototype {}", mana_text(cost)),
         })
         .collect()
 }

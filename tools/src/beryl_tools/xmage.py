@@ -250,6 +250,11 @@ class Exporter:
             step = STEPS[cast(str, answer["step"])]
             card = java_string(cast(str, pick["card"]))
             self.emit(f"setOptionalChoice({who}, {turn}, PhaseStep.{step}, {card});")
+        elif kind == "CastOffer" and pick.get("pick") == "Pass":
+            who = self.player(answer["player"])
+            turn = self.turn(cast(int, answer["turn"]))
+            step = STEPS[cast(str, answer["step"])]
+            self.emit(f'setOptionalChoice({who}, {turn}, PhaseStep.{step}, "No");')
 
     def end_scry(self) -> None:
         """Ends a scry. XMage asks the order of two or more cards left on top bottom up, first

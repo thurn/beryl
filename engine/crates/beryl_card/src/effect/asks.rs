@@ -66,6 +66,7 @@ impl Effect {
             Effect::PreventDamage { from, .. } => from.is_some(),
             Effect::Modify { modifications, .. } => Modification::any_asks(modifications),
             Effect::LookAt { .. }
+            | Effect::CopyCard(_)
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::Destroy { .. }
@@ -155,6 +156,7 @@ impl Effect {
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::CopySpell { .. }
+            | Effect::CopyCard(_)
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
             | Effect::Tap(_)

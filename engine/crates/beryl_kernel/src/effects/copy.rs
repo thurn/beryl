@@ -126,6 +126,7 @@ impl<L: Layout> State<L> {
         let o = self.object_mut(slot);
         o.card = card;
         o.flags.set(Flag::Copy, false);
+        o.flags.set(Flag::Prototype, false);
         None
     }
 
@@ -155,6 +156,7 @@ impl<L: Layout> State<L> {
         let o = self.object_mut(object.slot);
         o.card = values.card();
         o.flags.set(Flag::Copy, true);
+        o.flags.set(Flag::Prototype, values.is_prototype());
         self.flags.derived_dirty = true;
         Ok(())
     }

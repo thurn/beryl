@@ -554,6 +554,11 @@ fn enter_battlefield<L: Layout>(
         controller: Some(entry.controller()),
         face: entry.face(),
         x: entry.x,
+        cast: entry.was_cast().then_some(entry.controller()),
+        prototype: s
+            .object(spell.slot)
+            .flags()
+            .has(crate::state::Flag::Prototype),
         // An Aura spell's target; a mutating creature spell entering as a creature attaches
         // to nothing.
         attach: if mutating(face, entry) {

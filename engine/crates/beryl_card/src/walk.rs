@@ -271,6 +271,7 @@ impl Filter {
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
+            | Filter::ManaValueAtMostSourcePower
             | Filter::InZone(_) => {}
             Filter::Whose(players) | Filter::Owned(players) => players.walk(visit),
             Filter::Not(filter) => filter.walk(visit),
@@ -363,7 +364,7 @@ impl Condition {
     pub fn walk(&self, visit: Visit) {
         visit(Node::Condition(self));
         match self {
-            Condition::Did | Condition::WonFlip | Condition::Paid(_) => {}
+            Condition::Did | Condition::WonFlip | Condition::Paid(_) | Condition::Cast => {}
             Condition::DrewInDrawStep(players) => players.walk(visit),
             Condition::Compare(left, _, right) => {
                 left.walk(visit);
@@ -416,6 +417,7 @@ impl Effect {
                 | Effect::Counter(_)
                 | Effect::CounterInto { .. }
                 | Effect::CopySpell { .. }
+                | Effect::CopyCard(_)
                 | Effect::Destroy { .. }
                 | Effect::Regenerate(_)
                 | Effect::Tap(_)

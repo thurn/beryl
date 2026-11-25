@@ -111,7 +111,12 @@ impl Ctx {
         {
             "that player exiles it".to_owned()
         } else {
-            self.acts(("exile", "exiles"), objects, "")
+            let clause = self.acts(("exile", "exiles"), objects, "");
+            if self.own_graveyard_target(objects) {
+                clause.replacen(" in your graveyard", " from your graveyard", 1)
+            } else {
+                clause
+            }
         };
         vec![clause]
     }

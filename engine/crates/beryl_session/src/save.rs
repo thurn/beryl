@@ -662,6 +662,7 @@ pub enum CastingName {
     Mutate,
     Morph,
     Fuse,
+    Prototype,
 }
 
 impl From<CastingOption> for CastingName {
@@ -677,6 +678,7 @@ impl From<CastingOption> for CastingName {
             CastingOption::Mutate { .. } => CastingName::Mutate,
             CastingOption::Morph(_) => CastingName::Morph,
             CastingOption::Fuse => CastingName::Fuse,
+            CastingOption::Prototype { .. } => CastingName::Prototype,
         }
     }
 }

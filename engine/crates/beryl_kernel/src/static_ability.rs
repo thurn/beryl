@@ -135,6 +135,7 @@ fn mentions_tapped(filter: Filter) -> bool {
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostSourcePower
         | Filter::InZone(_) => false,
     }
 }
@@ -151,6 +152,7 @@ fn condition_reads_tapped(condition: &Condition) -> bool {
             conditions.iter().any(condition_reads_tapped)
         }
         Condition::Paid(_)
+        | Condition::Cast
         | Condition::Did
         | Condition::WonFlip
         | Condition::EnteredThisTurn(_)
@@ -170,6 +172,7 @@ fn condition_reads_life(condition: &Condition) -> bool {
             conditions.iter().any(condition_reads_life)
         }
         Condition::Paid(_)
+        | Condition::Cast
         | Condition::Did
         | Condition::WonFlip
         | Condition::Is(..)
@@ -189,6 +192,7 @@ fn compares(condition: &Condition, mentions: &impl Fn(&Amount) -> bool) -> bool 
             .any(|condition| compares(condition, mentions)),
         Condition::Did
         | Condition::Paid(_)
+        | Condition::Cast
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
@@ -471,7 +475,9 @@ pub fn read_by_the_layers(filter: Filter) -> bool {
         | Filter::InZone(_) => true,
         // A power is a result of layer 7, which no filter of an earlier layer may read until
         // the layers order effects by dependency.
-        Filter::ManaValueAtMostX | Filter::PowerAtMost(_) => false,
+        Filter::ManaValueAtMostX | Filter::ManaValueAtMostSourcePower | Filter::PowerAtMost(_) => {
+            false
+        }
         Filter::Not(filter) => read_by_the_layers(*filter),
         Filter::All(filters) | Filter::AnyOf(filters) => {
             filters.iter().all(|&filter| read_by_the_layers(filter))
@@ -536,6 +542,7 @@ fn reads(condition: &Condition) -> bool {
         Condition::Not(condition) => reads(condition),
         Condition::All(conditions) | Condition::Any(conditions) => conditions.iter().all(reads),
         Condition::Did
+        | Condition::Cast
         | Condition::WonFlip
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
@@ -563,6 +570,7 @@ pub fn reads_results(condition: &Condition) -> bool {
             conditions.iter().any(reads_results)
         }
         Condition::Paid(_)
+        | Condition::Cast
         | Condition::Did
         | Condition::WonFlip
         | Condition::EnteredThisTurn(_)
@@ -711,6 +719,7 @@ pub fn holds<L: Layout>(
         Condition::All(conditions) => conditions.iter().all(|c| holds(s, slot, c, results)),
         Condition::Any(conditions) => conditions.iter().any(|c| holds(s, slot, c, results)),
         Condition::Did
+        | Condition::Cast
         | Condition::WonFlip
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
@@ -740,6 +749,7 @@ fn counts(condition: &Condition, of: &dyn Fn(CounterKind) -> bool) -> bool {
             conditions.iter().any(|c| counts(c, of))
         }
         Condition::Paid(_)
+        | Condition::Cast
         | Condition::Did
         | Condition::WonFlip
         | Condition::Is(..)

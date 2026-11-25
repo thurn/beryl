@@ -694,6 +694,13 @@ impl<L: Layout> Scene<'_, L> {
                 each.peek().is_some()
                     && each.all(|player| self.s.counted(Count::DrewInDrawStep, player) > 0)
             }
+            // Whether the spell that became this permanent was cast by its controller ("if you
+            // cast it"). Once it leaves after triggering, only a cast spell triggered (CR 603.4).
+            Condition::Cast => self.subject.of.source.is_some_and(|source| {
+                !self.s.is_current(source)
+                    || (self.s.object(source.slot).on_battlefield()
+                        && self.s.was_cast_by(source.slot, self.you()))
+            }),
             Condition::Not(condition) => !self.holds(condition),
             Condition::All(conditions) => conditions.iter().all(|c| self.holds(c)),
             Condition::Any(conditions) => conditions.iter().any(|c| self.holds(c)),

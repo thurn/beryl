@@ -397,6 +397,7 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
                     CastingOption::Mutate { .. } => " for mutate",
                     CastingOption::Morph(_) => " face down",
                     CastingOption::Fuse => " fused",
+                    CastingOption::Prototype { .. } => " prototyped",
                 });
             }
             text

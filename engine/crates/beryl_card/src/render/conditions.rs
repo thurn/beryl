@@ -78,6 +78,7 @@ impl Ctx {
                 "{} drew a card in their draw step this turn",
                 self.player(players)
             ),
+            Condition::Cast => "you cast it".to_owned(),
             Condition::Not(inner) => self.negated(*inner),
             Condition::All(conditions) => {
                 let each: Vec<String> = conditions.iter().map(|&c| self.condition(c)).collect();
@@ -146,6 +147,7 @@ impl Ctx {
                 "{} didn't draw a card in their draw step this turn",
                 self.player(players)
             ),
+            Condition::Cast => "you didn't cast it".to_owned(),
             Condition::Not(inner) => self.condition(*inner),
             Condition::Compare(..) | Condition::All(_) | Condition::Any(_) => {
                 format!("it's not true that {}", self.condition(condition))
@@ -401,6 +403,7 @@ fn without_you(filter: Filter) -> Option<Filter> {
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostSourcePower
         | Filter::Not(_)
         | Filter::All(_)
         | Filter::AnyOf(_)

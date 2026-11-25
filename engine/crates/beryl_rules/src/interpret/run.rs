@@ -180,6 +180,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::CopySpell { .. }
+            | Effect::CopyCard(_)
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
             | Effect::Tap(_)
@@ -286,6 +287,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 except,
                 new_targets,
             } => copy::instruction(self, spells, count, except, new_targets)?,
+            Effect::CopyCard(cards) => copy::copy_card_instruction(self, cards)?,
             Effect::Destroy {
                 objects,
                 regeneration,

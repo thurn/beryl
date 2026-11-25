@@ -206,6 +206,7 @@ impl Ctx {
             if let Some(clause) = effects.peek().and_then(|&next| {
                 self.hidden_put(effect, next)
                     .or_else(|| self.chosen_exile(effect, next))
+                    .or_else(|| self.copy_cast(effect, next))
             }) {
                 effects.next();
                 clauses.push(clause);
@@ -234,6 +235,32 @@ impl Ctx {
             previous = Some(effect);
         }
         clauses
+    }
+
+    /// "Copy that card. You may cast the copy ...": joining an exiled-card copy with an
+    /// immediate cast offer of that copy.
+    fn copy_cast(&mut self, copy: &Effect, cast: &Effect) -> Option<String> {
+        let Effect::CopyCard(cards) = *copy else {
+            return None;
+        };
+        let Effect::MayCast {
+            player,
+            card: Objects::Those,
+            free,
+            free_below,
+        } = *cast
+        else {
+            return None;
+        };
+        let copy_clause = self.effect(&Effect::CopyCard(cards)).join(". ");
+        let mut cast_clauses = self.cast_offer(player, Objects::Those, free, free_below);
+        if let Some(first) = cast_clauses.first_mut() {
+            *first = first.replacen("cast it", "cast the copy", 1);
+            if let Some(rest) = first.get_mut(..1) {
+                rest.make_ascii_uppercase();
+            }
+        }
+        Some(format!("{copy_clause}. {}", cast_clauses.join(". ")))
     }
 
     /// A player chooses a card from their own hand to exile.
@@ -488,6 +515,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         Effect::ForEachPlayer { .. }
         | Effect::Counter(_)
         | Effect::CopySpell { .. }
+        | Effect::CopyCard(_)
         | Effect::CounterInto { .. }
         | Effect::Destroy { .. }
         | Effect::Regenerate(_)

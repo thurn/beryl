@@ -57,6 +57,14 @@ pub enum Flag {
     ///
     /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
     Copy = 1 << 4,
+    /// Cast as a prototyped spell, or a copy of one (see [CR 719.3b]). On the stack and on
+    /// the battlefield, the object has its alternative mana cost, color, power and toughness.
+    /// Off the stack and off the battlefield, a non-token card reverts to its normal
+    /// characteristics (see [CR 719.4]).
+    ///
+    /// [CR 719.3b]: https://yawgatog.com/resources/magic-rules/#R7193b
+    /// [CR 719.4]: https://yawgatog.com/resources/magic-rules/#R7194
+    Prototype = 1 << 7,
 }
 
 impl Flag {
@@ -120,7 +128,12 @@ impl ObjectFlags {
     /// [`State::move_object`]: crate::State::move_object
     #[inline]
     pub(crate) fn kept_across_zones(self) -> ObjectFlags {
-        ObjectFlags(self.0 & (Flag::Token.bit() | Flag::Copy.bit()))
+        let kept = self.0 & (Flag::Token.bit() | Flag::Copy.bit());
+        if self.has(Flag::Token) {
+            ObjectFlags(kept | (self.0 & Flag::Prototype.bit()))
+        } else {
+            ObjectFlags(kept)
+        }
     }
 }
 
