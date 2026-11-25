@@ -10,10 +10,12 @@ use beryl_card::{
 use beryl_kernel::chosen::ChosenValue;
 
 use crate::card::{
-    Ability, CardDef, Face, FaceIx, ManaColor, ManaCost, ManaSet, Replacement, Types,
+    Ability, CardDef, Face, FaceIx, Keywords, ManaColor, ManaCost, ManaSet, Replacement, Types,
 };
+use crate::continuous::layers;
 use crate::mana::{self, Paying};
 use crate::replacement::event::Sink;
+use crate::state::Zone;
 use crate::{Bitboard, CardTable, GameTable, Opt, Profile, Replay, State};
 use beryl_kernel::format::Format;
 
@@ -53,12 +55,38 @@ static CAVERN: CardDef = CardDef {
     tokens: &[],
 };
 
-static CARDS: CardTable = CardTable::new(&[&CAVERN, &GOBLIN, &LAND]);
+static CREATURE_SPELLS: ManaRestriction = ManaRestriction {
+    cast: beryl_card::Filter::Types(Types::CREATURE),
+    of_chosen_type: false,
+    rider: None,
+};
+
+/// "Haste. {T}: Add {G}. Spend this mana only to cast a creature spell."
+static HASTY_ELF: CardDef = CardDef {
+    name: "Test Hasty Restricted Elf",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::CREATURE,
+        keywords: Keywords::HASTE,
+        power: Some(1),
+        toughness: Some(1),
+        abilities: &[Ability::tap_for_mana(ManaSet {
+            colors: 1 << 4,
+            amount: 1,
+        })
+        .spent_only(&CREATURE_SPELLS)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static CARDS: CardTable = CardTable::new(&[&CAVERN, &GOBLIN, &HASTY_ELF, &LAND]);
 
 const DECK: &[(u8, &str)] = &[
     (4, "Test Restricted Cavern"),
     (4, "Test Goblin"),
-    (32, "Test Plain Land"),
+    (4, "Test Hasty Restricted Elf"),
+    (28, "Test Plain Land"),
 ];
 
 /// Mana a restricted ability makes floats as mana that remembers, apart from the pool's six
@@ -142,4 +170,25 @@ fn mana_that_remembers_pays_only_what_its_restriction_accepts() {
 
     s.empty_mana_pools();
     assert!(s.player(p).remembered_mana().is_empty());
+}
+
+/// A creature that came under its controller's control this turn taps for its restricted mana
+/// if it has haste (see CR 302.6, CR 702.10c), as it would for unrestricted mana.
+#[test]
+fn a_hasty_creature_taps_for_restricted_mana_the_turn_it_arrives() {
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [DECK, DECK]).unwrap();
+    let mut s = State::new(&t, 5, Profile::EXACT).unwrap();
+    begin(&t, &mut s);
+    let p = s.turn().starting_player();
+    let elf = to_hand(&t, &mut s, p, "Test Hasty Restricted Elf");
+    let goblin = to_hand(&t, &mut s, p, "Test Goblin");
+    s.board().place(elf, Zone::Battlefield).unwrap();
+    s.board().set_sick(elf, true);
+    layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+
+    let funds = mana::Funds::of(&s, &t, p).unwrap();
+    let for_goblin = Paying::casting(&s, &t, goblin, FaceIx::FRONT);
+    assert!(funds.sources_for(&s, &t, for_goblin).unwrap().contains(elf));
+    let green = ManaCost::new(0, [0, 0, 0, 0, 1, 0]);
+    assert!(mana::payable(&s, &t, p, green, Bitboard::EMPTY, for_goblin).unwrap());
 }

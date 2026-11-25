@@ -117,13 +117,17 @@ const _: () = assert!(2 * KINDS + 2 == 14);
 const RESTRICTED_RANK: u8 = CONSUMED_RANK + 1;
 
 /// Whether `player` may tap the permanent in `slot`, whose derived characteristics are `d`,
-/// for mana now: they control it, it is untapped, and a creature has been theirs since their
-/// most recent turn began (see [CR 302.6]): "A creature's activated ability with the tap symbol
-/// ... in its activation cost can't be activated unless the creature has been under its
-/// controller's control continuously since their most recent turn began."
+/// for an ability's {T} cost now: they control it, it is untapped, and a creature has been
+/// theirs since their most recent turn began (see [CR 302.6]): "A creature's activated ability
+/// with the tap symbol ... in its activation cost can't be activated unless the creature has
+/// been under its controller's control continuously since their most recent turn began."
+/// Haste lifts that (see [CR 702.10c]).
 ///
 /// [CR 302.6]: https://yawgatog.com/resources/magic-rules/#R3026
-#[inline]
+/// [CR 702.10c]: https://yawgatog.com/resources/magic-rules/#R70210c
+// Inline everywhere: every payability check asks it of each permanent its player controls.
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(super) fn can_tap<L: Layout>(
     s: &State<L>,
     player: Seat,
@@ -133,7 +137,9 @@ pub(super) fn can_tap<L: Layout>(
     let o = s.object(slot);
     d.controller == player
         && !o.is_tapped()
-        && !(d.types.intersects(Types::CREATURE) && o.is_summoning_sick())
+        && !(d.types.intersects(Types::CREATURE)
+            && o.is_summoning_sick()
+            && !d.keywords.contains(Keywords::HASTE))
 }
 
 /// The permanents `player` controls, in battlefield order: read from their derived
@@ -169,17 +175,7 @@ pub(super) fn source<L: Layout>(
         mana != ManaFace::Not || !card_mana() || read_source(s, t, player, slot, face()).is_none(),
         "a face the table calls no source makes mana"
     );
-    let o = s.object(slot);
-    if (mana == ManaFace::Not && card_mana()) || d.controller != player || o.is_tapped() {
-        return None;
-    }
-    // See CR 302.6: a creature's {T} abilities need it under its controller's control since their
-    // most recent turn began.
-    // see CR 702.10c: haste lifts that.
-    if d.types.intersects(Types::CREATURE)
-        && o.is_summoning_sick()
-        && !d.keywords.contains(Keywords::HASTE)
-    {
+    if (mana == ManaFace::Not && card_mana()) || !can_tap(s, player, slot, d) {
         return None;
     }
     if let ManaFace::Plain {
@@ -345,7 +341,7 @@ impl<L: Layout> Sources<L> {
         }
         if paying.reads_restrictions(t) {
             out.restricted = restricted_classes(s, t, player, exclude, paying, &mut out.classes)?;
-            out.remembered = accepted(s, t, player, paying);
+            out.remembered = remembered::accepted_entries(s, t, player, paying);
             out.memory = out.restricted || !out.remembered.is_empty();
         }
         // Classes of one rank by card, never by slot, which the game's randomness chose as it
@@ -516,25 +512,6 @@ fn restricted_classes<L: Layout>(
         added = true;
     }
     Ok(added)
-}
-
-/// The mana that remembers in `player`'s pool that `paying` accepts, with whether each has a
-/// rider.
-#[cold]
-#[inline(never)]
-fn accepted<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    paying: Paying<L>,
-) -> L::Queue<(u8, u8, bool), 4> {
-    let mut out: L::Queue<(u8, u8, bool), 4> = Default::default();
-    let pool = s.player(player).remembered_mana();
-    for &(i, kind) in remembered::accepted_entries(s, t, player, paying).iter() {
-        let restriction = t.restriction(pool[usize::from(i)].restriction);
-        out.push_bounded((i, kind, restriction.rider.is_some()));
-    }
-    out
 }
 
 /// Links each restricted class with the class of its member's unrestricted mana, if it has one

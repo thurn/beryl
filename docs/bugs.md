@@ -6,6 +6,21 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Haste and summoning sickness were read differently by the mana paths.** A
+  creature with haste that came under its controller's control this turn could
+  tap for an unrestricted mana ability, but not for a restricted one such as
+  "Spend this mana only to cast a creature spell", and a summoning-sick creature
+  without haste was offered its "Activate only as an instant" {T} mana ability
+  at priority (CR 302.6, CR 702.10c). `mana::sources::source` made the
+  summoning-sickness test with the haste exception, `can_tap` (read for
+  restricted mana) made it without, and `instant_options` tested only whether
+  the permanent was tapped. Fixed: all three ask `can_tap`, which now has the
+  haste exception. Guard: the one query,
+  `a_hasty_creature_taps_for_restricted_mana_the_turn_it_arrives` in
+  `beryl_rules/src/tests/remembered_mana.rs` and
+  `a_summoning_sick_creature_offers_no_instant_mana_ability` in
+  `beryl_rules/src/tests/payment.rs`.
+
 - **A search for any card let the player find nothing.** Searching a library
   with `Filter::Any` (no stated quality) offered `Opt::Done` on every pick, even
   while cards remained in the library, although CR 701.23b allows finding fewer

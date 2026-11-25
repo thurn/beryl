@@ -64,48 +64,14 @@ impl Units {
         self.nonempty().map(|(_, n)| u32::from(n)).sum()
     }
 
-    /// Whether these units can pay `cost` (X already announced).
-    ///
-    /// Colored and colorless symbols need units of their kind
-    /// ([CR 107.4a](https://yawgatog.com/resources/magic-rules/#R1074a)): "Colored mana in
-    /// costs can be paid only with the appropriate color of mana."; generic symbols take
-    /// any. That is a bipartite matching, and by Hall's theorem it exists exactly when every
-    /// set of symbol kinds has at least as many units able to pay one of them as it has
-    /// symbols, and the units cover the total. A source that makes several mana of one kind
-    /// it chooses counts as several independent units, which colorless rocks are.
+    /// Whether these units can pay `cost` (X already announced): [`pays`].
     pub(crate) fn pays(&self, cost: ManaCost) -> bool {
-        debug_assert_eq!(cost.x, 0, "X is announced before payment");
-        if !cost.hybrid.is_empty() {
-            return pays_hybrid(cost, self.total(), |mask| {
-                self.nonempty()
-                    .filter(|&(kinds, _)| kinds & mask != 0)
-                    .map(|(_, n)| u32::from(n))
-                    .sum()
-            });
-        }
-        if self.total() < cost.total(0) {
-            return false;
-        }
-        let present = (0..KINDS)
-            .filter(|&k| cost.symbols[k] > 0)
-            .fold(0u8, |m, k| m | (1 << k));
-        let mut mask = present;
-        while mask != 0 {
-            let need: u32 = (0..KINDS)
-                .filter(|&k| mask & (1 << k) != 0)
-                .map(|k| u32::from(cost.symbols[k]))
-                .sum();
-            let cover: u32 = self
-                .nonempty()
+        pays(cost, self.total(), |mask| {
+            self.nonempty()
                 .filter(|&(kinds, _)| kinds & mask != 0)
                 .map(|(_, n)| u32::from(n))
-                .sum();
-            if cover < need {
-                return false;
-            }
-            mask = (mask - 1) & present;
-        }
-        true
+                .sum()
+        })
     }
 
     /// The units grouped by their set of kinds, the form [`Units::pays`] checks.
@@ -139,45 +105,65 @@ pub(super) struct Groups {
 impl Groups {
     /// [`Units::pays`].
     pub(super) fn pays(&self, cost: ManaCost) -> bool {
-        debug_assert_eq!(cost.x, 0, "X is announced before payment");
-        if !cost.hybrid.is_empty() {
-            return pays_hybrid(cost, self.total, |mask| {
-                (self.kinds[..self.len].iter().zip(&self.units[..self.len]))
-                    .filter(|&(&kinds, _)| kinds & mask != 0)
-                    .map(|(_, &n)| u32::from(n))
-                    .sum()
-            });
-        }
-        if self.total < cost.total(0) {
-            return false;
-        }
-        // Only sets of kinds the cost has symbols of can fail the condition: adding a kind
-        // with no symbols adds no need.
-        let present = (0..KINDS)
-            .filter(|&k| cost.symbols[k] > 0)
-            .fold(0u8, |m, k| m | (1 << k));
-        let groups = || self.kinds[..self.len].iter().zip(&self.units[..self.len]);
-        let mut mask = present;
-        while mask != 0 {
-            let need: u32 = (0..KINDS)
-                .filter(|&k| mask & (1 << k) != 0)
-                .map(|k| u32::from(cost.symbols[k]))
-                .sum();
-            let cover: u32 = groups()
+        pays(cost, self.total, |mask| {
+            (self.kinds[..self.len].iter().zip(&self.units[..self.len]))
                 .filter(|&(&kinds, _)| kinds & mask != 0)
                 .map(|(_, &n)| u32::from(n))
-                .sum();
-            if cover < need {
-                return false;
-            }
-            mask = (mask - 1) & present;
-        }
-        true
+                .sum()
+        })
     }
 }
 
-/// [`Units::pays`] for a cost with hybrid symbols, given the units' total and `cover`, how many
-/// units can be one of a set of kinds. A hybrid symbol is paid by a unit of either of its
+/// Whether units, `total` of them, of which `cover` gives how many can be one of a set of kinds,
+/// pay `cost` (X already announced).
+///
+/// Colored and colorless symbols need units of their kind
+/// ([CR 107.4a](https://yawgatog.com/resources/magic-rules/#R1074a)): "Colored mana in
+/// costs can be paid only with the appropriate color of mana."; generic symbols take
+/// any. That is a bipartite matching, and by Hall's theorem it exists exactly when every
+/// set of symbol kinds has at least as many units able to pay one of them as it has
+/// symbols, and the units cover the total. Only sets of kinds the cost has symbols of can
+/// fail the condition: adding a kind with no symbols adds no need. A source that makes
+/// several mana of one kind it chooses counts as several independent units, which colorless
+/// rocks are.
+#[inline]
+fn pays(cost: ManaCost, total: u32, cover: impl Fn(u8) -> u32) -> bool {
+    debug_assert_eq!(cost.x, 0, "X is announced before payment");
+    if !cost.hybrid.is_empty() {
+        return pays_hybrid(cost, total, cover);
+    }
+    if total < cost.total(0) {
+        return false;
+    }
+    let present = symbol_kinds(cost);
+    let mut mask = present;
+    while mask != 0 {
+        if cover(mask) < symbols_in(cost, mask) {
+            return false;
+        }
+        mask = (mask - 1) & present;
+    }
+    true
+}
+
+/// The kinds `cost` has colored or colorless symbols of, a bit per kind.
+#[inline]
+fn symbol_kinds(cost: ManaCost) -> u8 {
+    (0..KINDS)
+        .filter(|&k| cost.symbols[k] > 0)
+        .fold(0u8, |m, k| m | (1 << k))
+}
+
+/// How many colored and colorless symbols of `cost` are of the kinds in `mask`.
+#[inline]
+fn symbols_in(cost: ManaCost, mask: u8) -> u32 {
+    (0..KINDS)
+        .filter(|&k| mask & (1 << k) != 0)
+        .map(|k| u32::from(cost.symbols[k]))
+        .sum()
+}
+
+/// [`pays`] for a cost with hybrid symbols. A hybrid symbol is paid by a unit of either of its
 /// colors ([CR 107.4e]): "A hybrid symbol such as {W/U} can be paid with either white or blue
 /// mana". The matching of symbols to units exists exactly when, for every set of kinds, the
 /// units that can be one of them are at least as many as the symbols whose kinds all lie in
@@ -191,16 +177,10 @@ fn pays_hybrid(cost: ManaCost, total: u32, cover: impl Fn(u8) -> u32) -> bool {
     if total < cost.total(0) {
         return false;
     }
-    let single = (0..KINDS)
-        .filter(|&k| cost.symbols[k] > 0)
-        .fold(0u8, |m, k| m | (1 << k));
-    let present = single | cost.hybrid.colors();
+    let present = symbol_kinds(cost) | cost.hybrid.colors();
     let mut mask = present;
     while mask != 0 {
-        let need: u32 = (0..KINDS)
-            .filter(|&k| mask & (1 << k) != 0)
-            .map(|k| u32::from(cost.symbols[k]))
-            .sum::<u32>()
+        let need = symbols_in(cost, mask)
             + (cost.hybrid.pairs())
                 .filter(|&(pair, _)| pair & !mask == 0)
                 .map(|(_, n)| u32::from(n))

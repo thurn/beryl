@@ -191,14 +191,14 @@ pub(crate) fn restricted_sources<L: Layout>(
 }
 
 /// The mana that remembers in `player`'s pool that `paying` accepts: each entry's place in
-/// the pool and its kind, as a [`ManaColor`] index.
+/// the pool, its kind as a [`ManaColor`] index, and whether its restriction has a rider.
 pub(crate) fn accepted_entries<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
     paying: Paying<L>,
-) -> L::Queue<(u8, u8), 4> {
-    let mut out: L::Queue<(u8, u8), 4> = Default::default();
+) -> L::Queue<(u8, u8, bool), 4> {
+    let mut out: L::Queue<(u8, u8, bool), 4> = Default::default();
     if !paying.reads_restrictions(t) {
         return out;
     }
@@ -208,6 +208,7 @@ pub(crate) fn accepted_entries<L: Layout>(
             && !out.push_if_room((
                 i,
                 u8::try_from(mana.color.index()).expect("one of six mana kinds"),
+                t.restriction(mana.restriction).rider.is_some(),
             ))
         {
             break;

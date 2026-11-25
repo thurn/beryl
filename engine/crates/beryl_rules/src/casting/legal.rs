@@ -144,7 +144,7 @@ fn pays_otherwise<L: Layout>(
     face: FaceIx,
     costs: Castings,
 ) -> bool {
-    (funds.may_restrict() && restricted_pays(s, t, funds, cost, slot, face))
+    (t.can(Capability::RemembersMana) && restricted_pays(s, t, funds, cost, slot, face))
         || (t.can(Capability::Delve)
             && delve::delves(s.copiable(slot).turned(t, face).face(t))
             && delve::delve_pays(s, t, funds, player, slot, face, costs, cost))

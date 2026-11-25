@@ -22,7 +22,7 @@ use beryl_kernel::reference::Permanent;
 use super::pool::{helps, pay_unit};
 use super::remembered::{self, Paying};
 use super::solver::{Plan, lowest_kind, spent_by_class};
-use super::sources::{Class, Sources, allowed, controlled, source};
+use super::sources::{Class, Sources, allowed, can_tap, controlled, source};
 use super::{KINDS, Taps};
 
 /// Pays `cost` by `plan`: taps its sources for the mana it needs, sacrificing those whose
@@ -54,18 +54,26 @@ pub(crate) fn pay<L: Layout>(
     paid
 }
 
+/// One unit of a payment: `n` mana, all of one kind among `kinds`, from `from`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+struct Unit<S> {
+    kinds: u8,
+    n: u8,
+    from: From<S>,
+}
+
 /// Where a unit of a payment comes from.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-enum From {
+enum From<S> {
     /// Floating mana.
     #[default]
     Pool,
     /// The mana that remembers at this place in the pool.
     Remembered(u8),
-    /// A source's unrestricted mana ability.
-    Tap,
-    /// A source's restricted mana ability.
-    Restricted,
+    /// This source's unrestricted mana ability.
+    Tap(S),
+    /// This source's restricted mana ability.
+    Restricted(S),
 }
 
 /// [`pay`], inside the group it opens.
@@ -84,64 +92,11 @@ fn pay_whole<L: Layout>(
     if sources.has_memory() {
         return pay_with_memory(s, t, sink, player, cost, plan, paying, &sources);
     }
-    let total = cost.total(0);
-    let must: u32 = plan.spend.iter().map(|&n| u32::from(n)).sum::<u32>()
-        + sources
-            .classes()
-            .iter()
-            .zip(plan.taps.iter())
-            .filter(|(c, _)| c.amount == 1)
-            .map(|(_, &n)| u32::from(n))
-            .sum::<u32>();
-    let spent = spent_by_class(&sources, plan, total - must);
-    // The units spent: (kinds, source slot or none for floating mana, how many).
-    let mut units: L::Queue<(u8, Option<L::Slot>, u8), 64> = Default::default();
-    for (k, &n) in plan.spend.iter().enumerate() {
-        for _ in 0..n {
-            units.push((1 << k, None, 1))?;
-        }
-    }
-    let human = s.profile().taps_mana == Some(player);
-    for (i, c) in sources.classes().iter().enumerate() {
-        let tapped: L::Queue<L::Slot, 64> = if human {
-            human_taps(s, c, plan.taps[i])?
-        } else {
-            s.mana_payment_sources(c.members, plan.taps[i])?
-        };
-        if c.amount == 1 {
-            for &slot in tapped.iter() {
-                units.push((c.kinds, Some(slot), 1))?;
-            }
-        } else {
-            // Spread the spent units as `spent_by_class` counted them.
-            let mut rest = spent[i];
-            for (j, &slot) in tapped.iter().enumerate() {
-                let later =
-                    u32::try_from(tapped.len() - j - 1).expect("at most a class of sources");
-                let here = (rest - later).min(u32::from(c.amount));
-                units.push((c.kinds, Some(slot), u8::try_from(here).unwrap_or(c.amount)))?;
-                rest -= here;
-            }
-        }
-    }
-    let mut kinds = Default::default();
-    assign::<L, false>(cost, units.as_slice(), &mut kinds)?;
-    let mut spent = [0; KINDS];
-    for (&(unit_kinds, source, n), &kind) in units.iter().zip(kinds.iter()) {
-        let kind = kind.unwrap_or_else(|| lowest_kind(unit_kinds));
-        if let Some(slot) = source {
-            activate(s, t, sink, tapped_source(s, slot), ManaColor::ALL[kind])?;
-        }
-        s.spend_mana(player, ManaColor::ALL[kind], n);
-        spent[kind] += n;
-    }
-    debug_assert_eq!(s.player(player).mana().amounts(), plan.left);
-    Ok(spent)
+    pay_units::<L, false>(s, t, sink, player, cost, plan, paying, &sources)
 }
 
 /// [`pay_whole`] where the plan may spend mana that remembers or tap a source for restricted
-/// mana ([`Sources::has_memory`]): each unit says where it comes from, so that restricted mana
-/// is spent as such and gives the spell its rider.
+/// mana ([`Sources::has_memory`]). Out of line: only a game whose cards make such mana has one.
 #[cold]
 #[inline(never)]
 #[allow(clippy::too_many_arguments)]
@@ -155,9 +110,32 @@ fn pay_with_memory<L: Layout>(
     paying: Paying<L>,
     sources: &Sources<L>,
 ) -> Result<ManaAmounts, Full> {
+    pay_units::<L, true>(s, t, sink, player, cost, plan, paying, sources)
+}
+
+/// Taps and spends what `plan` pays `cost` with. With `MEMORY`, each unit says where it comes
+/// from, so that restricted mana is spent as such and gives the spell its rider; without it,
+/// the plan spends no such mana and none is looked for.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+fn pay_units<L: Layout, const MEMORY: bool>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    player: Seat,
+    cost: ManaCost,
+    plan: &Plan<L>,
+    paying: Paying<L>,
+    sources: &Sources<L>,
+) -> Result<ManaAmounts, Full> {
     let total = cost.total(0);
+    let remembered = if MEMORY {
+        plan.remembered.count_ones()
+    } else {
+        0
+    };
     let must: u32 = plan.spend.iter().map(|&n| u32::from(n)).sum::<u32>()
-        + plan.remembered.count_ones()
+        + remembered
         + sources
             .classes()
             .iter()
@@ -166,20 +144,25 @@ fn pay_with_memory<L: Layout>(
             .map(|(_, &n)| u32::from(n))
             .sum::<u32>();
     let spent = spent_by_class(sources, plan, total - must);
-    // The units spent: (kinds, source slot or none for floating mana, how many), and where
-    // each comes from.
-    let mut units: L::Queue<(u8, Option<L::Slot>, u8), 64> = Default::default();
-    let mut from: L::Queue<From, 64> = Default::default();
+    let mut units: L::Queue<Unit<L::Slot>, 64> = Default::default();
     for (k, &n) in plan.spend.iter().enumerate() {
         for _ in 0..n {
-            units.push((1 << k, None, 1))?;
-            from.push(From::Pool)?;
+            units.push(Unit {
+                kinds: 1 << k,
+                n: 1,
+                from: From::Pool,
+            })?;
         }
     }
-    for (i, &(at, kind, _)) in sources.remembered().iter().enumerate() {
-        if plan.remembered & (1 << i) != 0 {
-            units.push((1 << kind, None, 1))?;
-            from.push(From::Remembered(at))?;
+    if MEMORY {
+        for (i, &(at, kind, _)) in sources.remembered().iter().enumerate() {
+            if plan.remembered & (1 << i) != 0 {
+                units.push(Unit {
+                    kinds: 1 << kind,
+                    n: 1,
+                    from: From::Remembered(at),
+                })?;
+            }
         }
     }
     let human = s.profile().taps_mana == Some(player);
@@ -189,15 +172,17 @@ fn pay_with_memory<L: Layout>(
         } else {
             s.mana_payment_sources(c.members, plan.taps[i])?
         };
-        let how = if c.restricted {
-            From::Restricted
-        } else {
-            From::Tap
+        let from = |slot| {
+            if MEMORY && c.restricted {
+                From::Restricted(slot)
+            } else {
+                From::Tap(slot)
+            }
         };
         if c.amount == 1 {
             for &slot in tapped.iter() {
-                units.push((c.kinds, Some(slot), 1))?;
-                from.push(how)?;
+                let (kinds, from) = (c.kinds, from(slot));
+                units.push(Unit { kinds, n: 1, from })?;
             }
         } else {
             // Spread the spent units as `spent_by_class` counted them.
@@ -206,38 +191,41 @@ fn pay_with_memory<L: Layout>(
                 let later =
                     u32::try_from(tapped.len() - j - 1).expect("at most a class of sources");
                 let here = (rest - later).min(u32::from(c.amount));
-                units.push((c.kinds, Some(slot), u8::try_from(here).unwrap_or(c.amount)))?;
-                from.push(how)?;
+                let n = u8::try_from(here).unwrap_or(c.amount);
+                let (kinds, from) = (c.kinds, from(slot));
+                units.push(Unit { kinds, n, from })?;
                 rest -= here;
             }
         }
     }
     let mut kinds = Default::default();
-    assign::<L, true>(cost, units.as_slice(), &mut kinds)?;
-    // The mana that remembers first, from the last in the pool, so that the places of the
-    // rest hold; a restricted source's mana is the last in the pool as it is spent.
-    for &how in from.iter().rev() {
-        if let From::Remembered(at) = how {
-            remembered::spend(s, t, player, usize::from(at), paying)?;
+    assign::<L, MEMORY>(cost, units.as_slice(), &mut kinds)?;
+    if MEMORY {
+        // The mana that remembers first, from the last in the pool, so that the places of the
+        // rest hold; a restricted source's mana is the last in the pool as it is spent.
+        for unit in units.iter().rev() {
+            if let From::Remembered(at) = unit.from {
+                remembered::spend(s, t, player, usize::from(at), paying)?;
+            }
         }
     }
     let mut spent = [0; KINDS];
-    for ((&(unit_kinds, source, n), &kind), &how) in units.iter().zip(kinds.iter()).zip(from.iter())
-    {
-        let color = ManaColor::ALL[kind.unwrap_or_else(|| lowest_kind(unit_kinds))];
-        spent[color.index()] += n;
-        match (how, source) {
-            (From::Remembered(_), _) => {}
-            (From::Restricted, Some(slot)) => {
+    for (unit, &kind) in units.iter().zip(kinds.iter()) {
+        let kind = kind.unwrap_or_else(|| lowest_kind(unit.kinds));
+        let color = ManaColor::ALL[kind];
+        spent[kind] += unit.n;
+        match unit.from {
+            From::Remembered(_) => {}
+            From::Restricted(slot) => {
                 activate_as::<L, true>(s, t, sink, tapped_source(s, slot), color)?;
                 let last = s.player(player).remembered_mana().len() - 1;
                 remembered::spend(s, t, player, last, paying)?;
             }
-            (_, Some(slot)) => {
-                activate_as::<L, false>(s, t, sink, tapped_source(s, slot), color)?;
-                s.spend_mana(player, color, n);
+            From::Tap(slot) => {
+                activate(s, t, sink, tapped_source(s, slot), color)?;
+                s.spend_mana(player, color, unit.n);
             }
-            (_, None) => s.spend_mana(player, color, n),
+            From::Pool => s.spend_mana(player, color, unit.n),
         }
     }
     debug_assert_eq!(s.player(player).mana().amounts(), plan.left);
@@ -270,12 +258,12 @@ fn augment<S: SlotId>(
     sym: usize,
     symbols: &[u8],
     slots: &[usize],
-    units: &[(u8, Option<S>, u8)],
+    units: &[Unit<S>],
     owner: &mut [Option<usize>],
     seen: &mut [bool],
 ) -> bool {
     for (j, &u) in slots.iter().enumerate() {
-        if units[u].0 & symbols[sym] == 0 || seen[j] {
+        if units[u].kinds & symbols[sym] == 0 || seen[j] {
             continue;
         }
         seen[j] = true;
@@ -291,15 +279,15 @@ fn augment<S: SlotId>(
     false
 }
 
-/// Assigns the colored, colorless and hybrid symbols of `cost` to units, each unit
-/// `(kinds, _, n)` paying `n` symbols of one kind. `kinds` gets the kind each unit is spent
+/// Assigns the colored, colorless and hybrid symbols of `cost` to units, each unit paying
+/// its `n` symbols of one kind. `kinds` gets the kind each unit is spent
 /// as, or `None` where it pays only generic mana. A unit that pays a hybrid symbol is spent as
 /// one of the symbol's colors that it makes (see CR 107.4e). Kuhn's augmenting paths over the
 /// few symbols a cost has. `MEMORY` names [`pay_with_memory`]'s copy apart from
 /// [`pay_whole`]'s, so that each is inlined into its one caller.
 fn assign<L: Layout, const MEMORY: bool>(
     cost: ManaCost,
-    units: &[(u8, Option<L::Slot>, u8)],
+    units: &[Unit<L::Slot>],
     kinds: &mut L::Queue<Option<usize>, 64>,
 ) -> Result<(), Full> {
     // Each symbol as the kinds that may pay it.
@@ -314,8 +302,8 @@ fn assign<L: Layout, const MEMORY: bool>(
     }
     // A unit of several mana pays as many symbols, all of one kind: split it into slots.
     let mut slots: L::Queue<usize, 64> = Default::default();
-    for (u, &(_, _, n)) in units.iter().enumerate() {
-        for _ in 0..n {
+    for (u, unit) in units.iter().enumerate() {
+        for _ in 0..unit.n {
             slots.push(u)?;
         }
     }
@@ -337,12 +325,12 @@ fn assign<L: Layout, const MEMORY: bool>(
         );
         debug_assert!(matched, "a plan the solver accepted pays every symbol");
     }
-    for (u, &(unit_kinds, _, _)) in units.iter().enumerate() {
+    for (u, unit) in units.iter().enumerate() {
         let kind = slots
             .iter()
             .zip(owner.iter())
             .find(|&(&slot_unit, o)| slot_unit == u && o.is_some())
-            .map(|(_, o)| lowest_kind(unit_kinds & symbols.as_slice()[o.unwrap()]));
+            .map(|(_, o)| lowest_kind(unit.kinds & symbols.as_slice()[o.unwrap()]));
         kinds.push(kind)?;
     }
     Ok(())
@@ -394,12 +382,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     // the one found is the permanent's own, or, of a merged permanent, that of a card under
     // it (see CR 702.140e), printed on that card's face.
     let printed = s.abilities(t, slot).find_map(|(ability, a)| match ability {
-        ObjectAbility::Own(i)
-            if !restricted
-                && (is_simple(a) || is_sacrificed(a) || is_instant_mana(a))
-                && a.produces().includes(color)
-                && allowed(s, t, a, s.controller(slot), &s.words_of(slot)) =>
-        {
+        ObjectAbility::Own(i) if !restricted && makes_now(s, t, slot, a, color) => {
             Some((card, face, i, a))
         }
         ObjectAbility::Merged(..) if !restricted => merged_mana(s, t, slot, ability, color),
@@ -472,10 +455,21 @@ fn merged_mana<L: Layout>(
     color: ManaColor,
 ) -> Option<(L::Card, FaceIx, AbilityIx, &'static Ability)> {
     let (card, face, i, a) = s.merged_ability(t, slot, ability)?;
-    let usable = (is_simple(a) || is_sacrificed(a) || is_instant_mana(a))
+    makes_now(s, t, slot, a, color).then_some((card, face, i, a))
+}
+
+/// Whether `a`, an unrestricted mana ability of the permanent in `slot`, makes `color` and its
+/// controller may activate it now ([`allowed`]).
+fn makes_now<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    a: &Ability,
+    color: ManaColor,
+) -> bool {
+    (is_simple(a) || is_sacrificed(a) || is_instant_mana(a))
         && a.produces().includes(color)
-        && allowed(s, t, a, s.controller(slot), &s.words_of(slot));
-    usable.then_some((card, face, i, a))
+        && allowed(s, t, a, s.controller(slot), &s.words_of(slot))
 }
 
 /// Manual payment (the `manual_mana` flag): the floating mana and the sources, one per
@@ -601,8 +595,8 @@ pub(crate) fn manual_pay<L: Layout>(
         s.spend_mana(player, color, 1);
     } else {
         let accepted = remembered::accepted_entries(s, t, player, paying);
-        let &(at, _) = (accepted.iter())
-            .find(|&&(_, kind)| usize::from(kind) == color.index())
+        let &(at, ..) = (accepted.iter())
+            .find(|&&(_, kind, _)| usize::from(kind) == color.index())
             .expect("mana of the kind an option names");
         remembered::spend(s, t, player, usize::from(at), paying)?;
     }
@@ -674,7 +668,7 @@ fn list_instant_options<L: Layout>(
         s.abilities(t, slot).filter(move |&(ability, a)| {
             matches!(ability, ObjectAbility::Own(_) | ObjectAbility::Merged(..))
                 && is_instant_mana(a)
-                && !(a.cost().does(CostAction::Tap) && s.object(slot).is_tapped())
+                && (!a.cost().does(CostAction::Tap) || can_tap(s, player, slot, s.derived(slot)))
                 && allowed(s, t, a, player, &words)
         })
     };

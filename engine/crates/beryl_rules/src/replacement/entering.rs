@@ -132,16 +132,7 @@ pub(super) fn entering<L: Layout>(
             // spell to become prepared or state that a permanent enters prepared."
             Rewrite::EntersPrepared => entry.preparation = Preparation::Prepared,
             Rewrite::EntersTappedUnlessFewLands(n) => {
-                // Not yet on the battlefield, so every land counted is another land.
-                let lands = s
-                    .battlefield()
-                    .iter()
-                    .filter(|&&p| {
-                        let d = s.derived(p);
-                        d.controller == controller && d.types.contains(Types::LAND)
-                    })
-                    .count();
-                if lands > usize::from(n) {
+                if !few_other_lands(s, controller, n) {
                     entry.tapped = true;
                 }
             }
@@ -441,4 +432,15 @@ pub(crate) fn chosen_to_enter<L: Layout>(
     entry: Entry<L>,
 ) -> Result<Option<ChosenKind>, Full> {
     kept_entering(s, t, slot, entry, chooses)
+}
+
+/// Whether a land `controller` puts onto the battlefield finds them controlling `n` or fewer
+/// other lands, for "enters tapped unless you control [n] or fewer other lands". It is not yet
+/// on the battlefield, so every land counted is another land.
+pub(crate) fn few_other_lands<L: Layout>(s: &State<L>, controller: Seat, n: u8) -> bool {
+    let lands = s.battlefield().iter().filter(|&&p| {
+        let d = s.derived(p);
+        d.controller == controller && d.types.contains(Types::LAND)
+    });
+    lands.count() <= usize::from(n)
 }

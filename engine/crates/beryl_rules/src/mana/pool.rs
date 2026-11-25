@@ -8,7 +8,7 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::State;
-use crate::table::{Capability, GameTable};
+use crate::table::GameTable;
 
 use super::remembered::{self, Paying};
 use super::sources::{available, controlled, source};
@@ -30,8 +30,6 @@ pub(crate) struct Funds<L: Layout = Small> {
     units: Units,
     /// The same, grouped, for the checks that exclude none.
     all: Groups,
-    /// Whether a card of the game makes restricted mana ([`Funds::pays_restricted`]).
-    restricted: bool,
 }
 
 impl<L: Layout> Funds<L> {
@@ -61,7 +59,6 @@ impl<L: Layout> Funds<L> {
             slots,
             units,
             all: units.groups(),
-            restricted: t.can(Capability::RemembersMana),
         })
     }
 
@@ -141,17 +138,10 @@ impl<L: Layout> Funds<L> {
                 _ => u.add(r.kinds, 1),
             }
         }
-        for &(_, kind) in remembered::accepted_entries(s, t, self.player, paying).iter() {
+        for &(_, kind, _) in remembered::accepted_entries(s, t, self.player, paying).iter() {
             u.add(1 << kind, 1);
         }
         u.pays(cost)
-    }
-
-    /// Whether a card of the game makes restricted mana, so that [`Funds::pays_restricted`]
-    /// may pay what [`Funds::pays`] does not.
-    #[inline]
-    pub(crate) fn may_restrict(&self) -> bool {
-        self.restricted
     }
 
     /// The untapped sources that can pay for `paying`, including sources without an

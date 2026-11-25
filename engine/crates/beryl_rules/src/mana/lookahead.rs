@@ -10,6 +10,7 @@ use crate::continuous::rule_change;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
+use crate::replacement::few_other_lands;
 use crate::state::{State, TurnStep};
 use crate::table::{GameTable, ManaFace};
 
@@ -178,17 +179,7 @@ fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
         .filter_map(Ability::replacement)
         .all(|r| match r.rewrite {
             Rewrite::EntersTapped => false,
-            Rewrite::EntersTappedUnlessFewLands(n) => {
-                // As [`crate::replacement::entering`] counts them: every land is another land.
-                s.battlefield()
-                    .iter()
-                    .filter(|&&p| {
-                        let d = s.derived(p);
-                        d.controller == player && d.types.contains(Types::LAND)
-                    })
-                    .count()
-                    <= usize::from(n)
-            }
+            Rewrite::EntersTappedUnlessFewLands(n) => few_other_lands(s, player, n),
             Rewrite::None
             | Rewrite::ToZone(_)
             | Rewrite::EntersPrepared
@@ -353,7 +344,7 @@ impl<L: Layout> Lookahead<'_, L> {
         let mut out = Outlook::default();
         for l in self.later {
             if self.without(units, l).is_some_and(|u| u.pays(l.cost)) {
-                let symbols = symbols(l.cost);
+                let symbols = l.cost.symbol_count();
                 out.most = out.most.max(symbols);
                 out.payable += 1;
                 out.all += symbols;
@@ -392,7 +383,7 @@ impl<L: Layout> Lookahead<'_, L> {
         best: &mut (u32, u32),
         checks: &mut u32,
     ) {
-        *best = (*best).max((sum.total(0), symbols(sum)));
+        *best = (*best).max((sum.total(0), sum.symbol_count()));
         for (i, l) in self.later.iter().enumerate().skip(start) {
             // A cost of no mana spends none, and a permanent taps once.
             if l.cost.total(0) == 0
@@ -438,11 +429,6 @@ impl<L: Layout> Lookahead<'_, L> {
 #[inline(never)]
 fn plus_hybrid(a: Hybrid, b: Hybrid) -> Hybrid {
     a.plus(b)
-}
-
-/// A cost's colored and colorless symbols, hybrid ones included.
-fn symbols(cost: ManaCost) -> u32 {
-    cost.symbol_count()
 }
 
 /// What `plan` leaves the rest of the turn ([`Outlook`]): with its leftover mana, and with

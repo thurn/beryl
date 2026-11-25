@@ -697,3 +697,55 @@ fn a_priority_with_only_mana_to_make_passes_silently() {
     assert!(!(d.player == g.me && offers_mana), "{d:?}");
     assert!(!tapped(&g, land));
 }
+
+/// "{T}: Add {G}. Activate only as an instant."
+static INSTANT_ELF: CardDef = CardDef {
+    name: "Test Instant Mana Elf",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(1),
+        toughness: Some(1),
+        abilities: &[Ability::tap_for_mana(crate::card::ManaSet {
+            colors: 1 << 4,
+            amount: 1,
+        })
+        .as_an_instant()],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// A creature's {T} mana ability activated only as an instant is offered at priority only once
+/// the creature has been under its controller's control since their turn began (see CR 302.6).
+#[test]
+fn a_summoning_sick_creature_offers_no_instant_mana_ability() {
+    static CARDS: CardTable = CardTable::new(&[&INSTANT_ELF, &LAND]);
+    let deck: &[(u8, &str)] = &[(4, "Test Instant Mana Elf"), (36, "Test Land")];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    let mut s = crate::State::new(&t, 5, Profile::EXACT).unwrap();
+    super::begin(&t, &mut s);
+    let p = s.turn().starting_player();
+    let elf = super::chosen::to_hand(&t, &mut s, p, "Test Instant Mana Elf");
+    s.board().place(elf, Zone::Battlefield).unwrap();
+    s.board().set_sick(elf, true);
+    let refresh = |s: &mut crate::State| {
+        crate::continuous::layers::refresh(s, &t, &mut Sink::off()).unwrap();
+    };
+    refresh(&mut s);
+    let offered = |s: &crate::State| {
+        let mut out = crate::fixed::Fixed::default();
+        mana::instant_options(s, &t, p, &mut out).unwrap();
+        out.iter()
+            .any(|o| matches!(o, Opt::Activate { slot, .. } if *slot == elf))
+    };
+    assert!(!offered(&s), "summoning sick");
+    s.board().set_sick(elf, false);
+    refresh(&mut s);
+    assert!(offered(&s));
+}
