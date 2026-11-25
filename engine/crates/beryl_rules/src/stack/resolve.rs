@@ -319,6 +319,10 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
     };
     let paused = run(spare, t, sink, None, open, &entry, ability);
     unwind(sink);
+    // Discard per-question flags set during the preview replay so they do not leak into the
+    // next `next` call sharing this scratch.
+    let _ = sink.asking.take_hidden();
+    let _ = sink.asking.take_enter_as_copy();
     if let Err(full) = paused {
         sink.truncate(mark);
         return Err(full);

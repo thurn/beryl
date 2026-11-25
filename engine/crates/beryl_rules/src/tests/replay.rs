@@ -569,6 +569,71 @@ fn payment_and_cast_triggers_commit_when_the_enclosing_resolution_finishes() {
     );
 }
 
+/// Cast triggers from a spell cast mid-resolution wait until the enclosing resolution finishes,
+/// then go on the stack in APNAP order, and the spell is counted once in `Count::SpellsCast`
+/// even when the resolution replays across a later pause.
+#[test]
+fn mid_resolution_cast_triggers_stack_in_apnap_order_and_spell_is_counted_once() {
+    static CAST_WATCHER: CardDef = CardDef {
+        name: "Test Cast Watcher",
+        shape: beryl_card::definition::Shape::Single,
+        tokens: &[],
+        faces: &[Face {
+            types: Types::ARTIFACT,
+            abilities: &[Ability::triggered(&Trigger::casts(
+                Players::EachPlayer,
+                Filter::Types(Types::SORCERY),
+            ))
+            .effect(&Effect::GainLife {
+                player: you(),
+                amount: Amount::SpellsCast(Players::EachPlayer),
+            })],
+            ..Face::EMPTY
+        }],
+    };
+    static CARDS: CardTable = CardTable::new(&[&LAND, &CAST_THEN_SCRY, &TARGETED_X, &CAST_WATCHER]);
+    const DECK: &Decklist = &[
+        (20, "Test Land"),
+        (1, "Test Cast and Scry"),
+        (1, "Test Targeted X"),
+        (1, "Test Cast Watcher"),
+    ];
+    let mut g = super::cast::Game::with(&CARDS, DECK, Profile::EXACT);
+    let outer = g.give(g.me, CAST_THEN_SCRY.name, Zone::Hand);
+    let child = g.give(g.me, TARGETED_X.name, Zone::Hand);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    g.give(g.them, CAST_WATCHER.name, Zone::Battlefield);
+    g.pick(cast(outer));
+    g.pass_both();
+
+    g.pick(cast(child));
+    g.pick(Opt::Player(g.them));
+    // Paused at Scry after the cast: committed state has not yet counted the child cast or
+    // placed any trigger on the stack.
+    assert_eq!(g.current().prompt.purpose, Purpose::Scry);
+    assert_eq!(g.s.counted(crate::state::Count::SpellsCast, g.me), 1);
+    assert!(g.s.triggers().is_empty());
+
+    g.pick(Opt::Done);
+    // Resolution finished: both spells counted once (outer + child = 2), and triggers went on
+    // the stack in APNAP order (active player's TARGETED_X cast trigger below non-active
+    // player's CAST_WATCHER trigger, so CAST_WATCHER resolves first).
+    assert_eq!(g.s.counted(crate::state::Count::SpellsCast, g.me), 2);
+    assert_eq!(g.s.stack().len(), 3);
+    assert_eq!(g.s.stack()[0].controller(), g.me);
+    assert_eq!(g.t.def(g.s.stack()[0].card()).name, TARGETED_X.name);
+    assert_eq!(g.s.stack()[1].controller(), g.me);
+    assert_eq!(g.t.def(g.s.stack()[1].card()).name, TARGETED_X.name);
+    assert_eq!(g.s.stack()[2].controller(), g.them);
+    assert_eq!(g.t.def(g.s.stack()[2].card()).name, CAST_WATCHER.name);
+    // Non-active player's trigger resolves first (+2 life), then active player's (+1 life).
+    g.pass_both();
+    assert_eq!(g.s.player(g.them).life(), 22);
+    assert_eq!(g.s.player(g.me).life(), 20);
+    g.pass_both();
+    assert_eq!(g.s.player(g.me).life(), 21);
+}
+
 /// The cast stays speculative when the answer record fills. The same position widens
 /// and finishes with the cast and its payment made once.
 #[test]

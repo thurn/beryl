@@ -113,7 +113,10 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
     let starting_turn = matches!(s.pending(), Pending::TurnStart(_));
     let (spare, sink) = x.copy_to_spare(s);
     let mark = sink.len();
-    run(spare, t, sink, paused.record.as_slice(), starting_turn)?;
+    let ran = run(spare, t, sink, paused.record.as_slice(), starting_turn);
+    let _ = sink.asking.take_hidden();
+    let _ = sink.asking.take_enter_as_copy();
+    ran?;
     match seen {
         Some(seen) => seen.extend(sink.take_from(mark)),
         None => sink.truncate(mark),

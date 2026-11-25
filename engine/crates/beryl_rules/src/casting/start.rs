@@ -99,9 +99,6 @@ fn offer_spell<L: Layout>(
                 matches!(option, Opt::Pass)
             }
         });
-        if options.len() == 1 {
-            return Ok(None);
-        }
     }
     let question = Decision::options(
         player,

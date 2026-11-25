@@ -211,9 +211,8 @@ impl Objects {
         // counter at their own spell, is asked about first. The engine says whether the
         // effect whose target is being chosen would take the object.
         let taken = |on: &Subject| match *on {
-            Subject::Object { slot } => {
-                L::Slot::from_num(slot.0).is_some_and(|slot| target_takes(table.s, table.t, slot))
-            }
+            Subject::Object { slot } => L::Slot::from_num(slot.0)
+                .is_some_and(|slot| target_takes(table.shown, table.t, slot)),
             _ => false,
         };
         let warned = (friendly.iter().copied())

@@ -151,6 +151,12 @@ fn payments<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<
     let Candidates::Options(opts) = &d.candidates else {
         return vec![Vec::new(); d.len()];
     };
+    let mut before_scratch = Scratch::new();
+    let before = if matches!(s.pending(), Pending::Resolving(_)) {
+        beryl_engine::view(s, t, &mut before_scratch)
+    } else {
+        s
+    };
     opts.iter()
         .enumerate()
         .map(|(i, &o)| {
@@ -172,12 +178,12 @@ fn payments<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<
                 _ => return Vec::new(),
             };
             // The walk sees where the cast ends.
-            let at = priced(at, s, t);
+            let at = priced(at, before, t);
             let mut copy = forced(s);
             let mut scratch = Scratch::new();
             apply(&mut copy, t, &mut scratch, &mut Replay, choice(i));
             let mut out = Vec::new();
-            walk(s, copy, t, &mut scratch, &at, &mut out);
+            walk(before, copy, t, &mut scratch, &at, &mut out);
             out
         })
         .collect()
@@ -204,6 +210,21 @@ fn unless_paid<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>, i: usize
     }
 }
 
+/// Whether a cast or face-up payment is still in progress in `s`, including a cast
+/// inside a paused resolution whose state is visible only in the replayed view.
+fn casting_in_progress<L: Layout>(s: &State<L>, t: &GameTable, scratch: &mut Scratch<L>) -> bool {
+    match s.pending() {
+        Pending::Casting(_) | Pending::TurningFaceUp { .. } => true,
+        Pending::Resolving(_) => {
+            matches!(
+                beryl_engine::view(s, t, scratch).pending(),
+                Pending::Casting(_)
+            )
+        }
+        _ => false,
+    }
+}
+
 /// Answers the rest of the cast in `s`: every value of X and every payment plan, each on a
 /// copy, and the first answer to anything else (targets cost the same whichever is chosen).
 /// Pushes what each finished cast tapped, from `before` on.
@@ -215,10 +236,7 @@ fn walk<L: Layout>(
     at: &Payment,
     out: &mut Vec<Payment>,
 ) {
-    while matches!(
-        s.pending(),
-        Pending::Casting(_) | Pending::TurningFaceUp { .. }
-    ) {
+    while casting_in_progress(&s, t, scratch) {
         let Step::Decide(d) = next(&mut s, t, scratch, &mut Replay) else {
             return;
         };
@@ -243,7 +261,8 @@ fn walk<L: Layout>(
             .is_some_and(|&o| branch(o).is_some())
         {
             for (i, &o) in opts.iter().enumerate() {
-                let at = priced(branch(o).expect("one kind"), &s, t);
+                let shown = beryl_engine::view(&s, t, scratch);
+                let at = priced(branch(o).expect("one kind"), shown, t);
                 let mut copy = s.clone();
                 apply(&mut copy, t, scratch, &mut Replay, choice(i));
                 walk(before, copy, t, scratch, &at, out);
@@ -252,8 +271,9 @@ fn walk<L: Layout>(
         }
         apply(&mut s, t, scratch, &mut Replay, Choice(0));
     }
+    let after = beryl_engine::view(&s, t, scratch);
     out.push(Payment {
-        taps: tapped(before, &s, t),
+        taps: tapped(before, after, t),
         ..at.clone()
     });
 }
