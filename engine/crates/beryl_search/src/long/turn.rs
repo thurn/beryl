@@ -6,7 +6,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{Count, Tracker};
-use beryl_engine::{AdvanceUntil, SlotId, apply_decided, next_within, payable_responses};
+use beryl_engine::{AdvanceUntil, SlotId, apply, apply_decided, next_within, payable_responses};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -17,6 +17,12 @@ use super::{
     smart, value,
 };
 use crate::rollout::{RolloutEnd, soft_rollout_within};
+use crate::wide::{can_widen, ran_out};
+
+mod beam;
+mod wide;
+use beam::{Beam, Line};
+use wide::{Choices, Propose};
 
 const PROPOSAL_WORLDS: u64 = 24;
 const MIN_SCORING_WORLDS: u16 = 48;
@@ -86,7 +92,7 @@ fn search<L: Layout>(
     let proposal_limit = agent.settings.work / 8;
     let mut roots: Vec<_> = (0..d.len()).map(|i| Choice(i as u16)).collect();
     roots.sort_by_key(|&c| (c != default, d.candidates.option(c) != Some(Opt::Pass)));
-    let learned = search.learn(
+    let (learned, wide_roots) = search.learn(
         obs,
         d,
         &roots,
@@ -106,6 +112,7 @@ fn search<L: Layout>(
                 d,
                 &roots,
                 &learned,
+                &wide_roots,
                 &mut rewards,
                 &mut scoring_rng,
             );
@@ -267,100 +274,6 @@ struct TurnSearch<'a, L: Layout> {
     report: TurnReport,
 }
 
-#[derive(Clone)]
-struct Line<L: Layout> {
-    state: Box<State<L>>,
-    combat: [combat::Plan<L>; 2],
-    path: Vec<(u64, u64)>,
-    /// Sum of differences from the highest rollout policy score at each pick.
-    regret: i64,
-    /// The end position's value in this proposal world, or zero for a partial line.
-    estimate: i32,
-    responses: Vec<Opt<L>>,
-}
-
-impl<L: Layout> Line<L> {
-    fn new(state: State<L>) -> Self {
-        Self {
-            state: Box::new(state),
-            combat: Default::default(),
-            path: Vec::new(),
-            regret: 0,
-            estimate: 0,
-            responses: Vec::new(),
-        }
-    }
-
-    fn state_hash(&self) -> u64 {
-        let mut h = DefaultHasher::new();
-        self.state.hash(&mut h);
-        h.finish()
-    }
-
-    fn can_merge(&self) -> bool {
-        self.combat
-            .iter()
-            .all(|plan| !plan.is_pending(self.state.turn().number()))
-    }
-
-    fn reserves_response(&self) -> bool {
-        !self.responses.is_empty()
-    }
-}
-
-/// Keeps a beam's best lines in policy order. Leaf beams prefer a payable
-/// response as a tie-breaker and reserve a slot for one even when it ranks low.
-struct Beam<L: Layout> {
-    lines: Vec<(u64, Line<L>)>,
-}
-
-impl<L: Layout> Default for Beam<L> {
-    fn default() -> Self {
-        Self { lines: Vec::new() }
-    }
-}
-
-impl<L: Layout> Beam<L> {
-    fn push(&mut self, line: Line<L>, report: &mut TurnReport) {
-        let key = line.state_hash();
-        let rank = |line: &Line<L>| {
-            (
-                std::cmp::Reverse(line.estimate),
-                line.regret,
-                std::cmp::Reverse(line.responses.len()),
-            )
-        };
-        if line.can_merge()
-            && let Some(i) = self
-                .lines
-                .iter()
-                .position(|(hash, old)| *hash == key && old.can_merge() && old.state == line.state)
-        {
-            report.merged += 1;
-            if rank(&self.lines[i].1) <= rank(&line) {
-                return;
-            }
-            self.lines.remove(i);
-        }
-        let i = self
-            .lines
-            .partition_point(|(_, old)| rank(old) <= rank(&line));
-        self.lines.insert(i, (key, line));
-        if self.lines.len() > WIDTH {
-            let last = self.lines.len() - 1;
-            if self.lines[last].1.reserves_response()
-                && !self.lines[..last]
-                    .iter()
-                    .any(|(_, line)| line.reserves_response())
-            {
-                self.lines.remove(last - 1);
-            } else {
-                self.lines.pop();
-            }
-        }
-    }
-}
-
 impl<L: Layout> TurnSearch<'_, L> {
     fn learn(
         &mut self,
@@ -370,8 +283,9 @@ impl<L: Layout> TurnSearch<'_, L> {
         sight: crate::Sight,
         rng: &mut SplitMix64,
         limit: u64,
-    ) -> Vec<Option<Continuation>> {
+    ) -> (Vec<Option<Continuation>>, Vec<bool>) {
         let mut votes: Vec<Votes> = (0..d.len()).map(|_| Votes::default()).collect();
+        let mut wide_roots = vec![false; d.len()];
         let allowance = (limit / PROPOSAL_WORLDS) / roots.len() as u64;
         for _ in 0..PROPOSAL_WORLDS {
             if !self.room(limit, WORLD_STEPS + 1) {
@@ -379,21 +293,46 @@ impl<L: Layout> TurnSearch<'_, L> {
             }
             let world = self.deal(obs, sight, rng);
             for &first in roots {
+                let i = usize::from(first.0);
                 let cap = limit.min(self.spent() + allowance);
-                let leaves = self.propose(&world, d, first, cap);
-                let reserve = leaves.iter().find(|line| line.reserves_response());
-                self.report.reserved += u64::from(reserve.is_some());
-                let best = if d.candidates.option(first) == Some(Opt::Pass) {
-                    reserve.or_else(|| leaves.first())
-                } else {
-                    leaves.first()
-                };
-                if let Some(best) = best {
-                    votes[usize::from(first.0)].add(&best.path);
+                let prefer_reserve = d.candidates.option(first) == Some(Opt::Pass);
+                if wide_roots[i] {
+                    if let Some(proposed) = self.propose_wide(&world, first, prefer_reserve, cap) {
+                        self.report.reserved += u64::from(proposed.reserved);
+                        if let Some(path) = proposed.path {
+                            votes[i].add(&path);
+                        }
+                    }
+                    continue;
+                }
+                match self.propose(&world, Some(d), first, cap) {
+                    Propose::Leaves(leaves) => {
+                        let reserve = leaves.iter().find(|line| line.reserves_response());
+                        self.report.reserved += u64::from(reserve.is_some());
+                        let best = if prefer_reserve {
+                            reserve.or_else(|| leaves.first())
+                        } else {
+                            leaves.first()
+                        };
+                        if let Some(best) = best {
+                            votes[i].add(&best.path);
+                        }
+                    }
+                    Propose::RanOut => {
+                        wide_roots[i] = true;
+                        if let Some(proposed) =
+                            self.propose_wide(&world, first, prefer_reserve, cap)
+                        {
+                            self.report.reserved += u64::from(proposed.reserved);
+                            if let Some(path) = proposed.path {
+                                votes[i].add(&path);
+                            }
+                        }
+                    }
                 }
             }
         }
-        votes.into_iter().map(Votes::policy).collect()
+        (votes.into_iter().map(Votes::policy).collect(), wide_roots)
     }
 
     fn deal(
@@ -457,7 +396,7 @@ impl<L: Layout> TurnSearch<'_, L> {
     fn start(
         &mut self,
         world: &State<L>,
-        d: &Decision<L>,
+        d: Option<&Decision<L>>,
         first: Choice,
         limit: u64,
     ) -> Option<Line<L>> {
@@ -467,7 +406,16 @@ impl<L: Layout> TurnSearch<'_, L> {
         self.scratch.counts.copied();
         self.extra += ITERATION_STEPS;
         let mut line = Line::new(world.clone());
-        self.apply(&mut line, d, first);
+        match d {
+            Some(d) => self.apply(&mut line, d, first),
+            None => apply(
+                &mut line.state,
+                self.table,
+                &mut self.scratch,
+                &mut Replay,
+                first,
+            ),
+        }
         smart(&mut line.state);
         Some(line)
     }
@@ -515,33 +463,50 @@ impl<L: Layout> TurnSearch<'_, L> {
     fn propose(
         &mut self,
         world: &State<L>,
-        d: &Decision<L>,
+        d: Option<&Decision<L>>,
         first: Choice,
         limit: u64,
-    ) -> Vec<Line<L>> {
+    ) -> Propose<L> {
         let initial = self.spent();
         let allowance = limit - initial;
         let mut leaves = Beam::default();
         // Keep one pass line and one greedy line ahead of beam pruning.
         for (pass, divisor) in [(true, 4), (false, 2)] {
             let reserved = initial + allowance / divisor;
-            if let Some(mut line) = self.start(world, d, first, reserved)
-                && self.finish(&mut line, None, pass, reserved)
-            {
-                self.complete(line, &mut leaves, reserved);
+            if let Some(mut line) = self.start(world, d, first, reserved) {
+                if can_widen::<L>() && ran_out(&line.state) {
+                    return Propose::RanOut;
+                }
+                let finished = self.finish(&mut line, None, pass, reserved, None);
+                if can_widen::<L>() && ran_out(&line.state) {
+                    return Propose::RanOut;
+                }
+                if finished {
+                    self.complete(line, &mut leaves, reserved);
+                }
             }
         }
         let Some(line) = self.start(world, d, first, limit) else {
-            return leaves.lines.into_iter().map(|(_, line)| line).collect();
+            return Propose::Leaves(leaves.lines.into_iter().map(|(_, line)| line).collect());
         };
+        if can_widen::<L>() && ran_out(&line.state) {
+            return Propose::RanOut;
+        }
         let mut beam = Beam::default();
         beam.push(line, &mut self.report);
         while !beam.lines.is_empty() && self.room(limit, 3) {
             let mut next = Beam::default();
             for (_, mut line) in beam.lines {
                 let step = self.advance(&mut line, limit);
+                if can_widen::<L>() && ran_out(&line.state) {
+                    return Propose::RanOut;
+                }
                 match step {
-                    Some(Step::Decide(d)) => self.expand(line, &d, &mut next, limit),
+                    Some(Step::Decide(d)) => {
+                        if !self.expand(line, &d, &mut next, limit) {
+                            return Propose::RanOut;
+                        }
+                    }
                     Some(Step::Over(_)) => self.complete(line, &mut leaves, limit),
                     None if self.finished(&line) => self.complete(line, &mut leaves, limit),
                     None => break,
@@ -549,21 +514,31 @@ impl<L: Layout> TurnSearch<'_, L> {
             }
             beam = next;
         }
-        leaves.lines.into_iter().map(|(_, line)| line).collect()
+        Propose::Leaves(leaves.lines.into_iter().map(|(_, line)| line).collect())
     }
 
-    fn expand(&mut self, mut line: Line<L>, d: &Decision<L>, next: &mut Beam<L>, limit: u64) {
+    /// Expands `line` into `next`. Returns `false` if a step ran out of `Small`'s room.
+    fn expand(
+        &mut self,
+        mut line: Line<L>,
+        d: &Decision<L>,
+        next: &mut Beam<L>,
+        limit: u64,
+    ) -> bool {
         if !self.room(limit, 4) {
-            return;
+            return true;
         }
         if d.decider != self.viewer || combat::handles(d.kind) || self.passes(&line, d) {
             if let Some(c) = self.forced(&mut line, d, limit)
                 && self.room(limit, 2)
             {
                 self.apply(&mut line, d, c);
+                if can_widen::<L>() && ran_out(&line.state) {
+                    return false;
+                }
                 next.push(line, &mut self.report);
             }
-            return;
+            return true;
         }
         let shown = observe(&line.state, self.table, &mut self.scratch, d.decider);
         let actions = Self::actions(self.known, shown, d);
@@ -580,8 +555,12 @@ impl<L: Layout> TurnSearch<'_, L> {
             child.regret += scores[i].map_or(10_000, |s| i64::from(best) - i64::from(s));
             child.path.push((obs, actions[i]));
             self.apply(&mut child, d, Choice(i as u16));
+            if can_widen::<L>() && ran_out(&child.state) {
+                return false;
+            }
             next.push(child, &mut self.report);
         }
+        true
     }
 
     fn complete(&mut self, mut line: Line<L>, leaves: &mut Beam<L>, limit: u64) {
@@ -640,6 +619,7 @@ impl<L: Layout> TurnSearch<'_, L> {
         policy: Option<&Continuation>,
         pass: bool,
         limit: u64,
+        mut trace: Option<&mut Choices>,
     ) -> bool {
         let mut policy = policy;
         let proposing = policy.is_none();
@@ -683,7 +663,13 @@ impl<L: Layout> TurnSearch<'_, L> {
             if !self.room(limit, 2) {
                 return false;
             }
+            if let Some(trace) = trace.as_deref_mut() {
+                trace.push(choice);
+            }
             self.apply(line, &d, choice);
+            if can_widen::<L>() && ran_out(&line.state) {
+                return false;
+            }
         }
         self.finished(line)
     }
@@ -696,10 +682,12 @@ impl<L: Layout> TurnSearch<'_, L> {
         d: &Decision<L>,
         roots: &[Choice],
         learned: &[Option<Continuation>],
+        wide_roots: &[bool],
         rewards: &mut [Vec<f64>],
         rng: &mut SplitMix64,
     ) {
         let limit = agent.settings.work;
+        let leaf = agent.settings.family.leaf;
         let worlds = if agent.settings.family.method == Method::TurnBudget {
             MAX_SCORING_WORLDS
         } else {
@@ -714,14 +702,12 @@ impl<L: Layout> TurnSearch<'_, L> {
             let mut round = Vec::with_capacity(roots.len());
             for &first in roots {
                 let i = usize::from(first.0);
-                let Some(mut line) = self.start(&world, d, first, limit) else {
-                    return;
+                let reward = if wide_roots[i] {
+                    self.score_wide(&world, first, learned[i].as_ref(), None, leaf, seed, limit)
+                } else {
+                    self.score_line(&world, d, first, learned[i].as_ref(), leaf, seed, limit)
                 };
-                if !self.finish(&mut line, learned[i].as_ref(), false, limit) {
-                    return;
-                }
-                let Some(reward) = self.reward(&mut line, agent.settings.family.leaf, seed, limit)
-                else {
+                let Some(reward) = reward else {
                     return;
                 };
                 crate::mcts::count_rollout();

@@ -23,6 +23,20 @@ impl PerLayout for Widener {
     type Of<L: Layout> = Option<fn(&State<L>) -> State<Large>>;
 }
 
+/// Whether a layout can widen into [`Large`]: `true` for [`Small`], `false` for [`Large`].
+struct CanWiden;
+
+impl PerLayout for CanWiden {
+    type Of<L: Layout> = bool;
+}
+
+/// Whether a state in layout `L` can widen into [`Large`] (`true` for [`Small`], `false` for
+/// [`Large`]).
+#[inline]
+pub(crate) fn can_widen<L: Layout>() -> bool {
+    L::of::<CanWiden>(true, false)
+}
+
 /// Whether the engine stalled `s` because a capacity of its layout ran out.
 #[inline]
 pub(crate) fn ran_out<L: Layout>(s: &State<L>) -> bool {
