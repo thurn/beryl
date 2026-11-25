@@ -187,6 +187,28 @@ fn a_release_at_the_plan_limit_or_with_needs_is_not_counted() {
 }
 
 #[test]
+fn a_ticket_deferred_before_its_release_is_not_held_back() {
+    let mut conn = open();
+    let id = file(&mut conn, &[("waits on a clock", &[], &[])]).remove(0);
+    let id = id.as_str();
+    for (session, start) in [("local_a", 0.0), ("local_b", 10.0)] {
+        let (status, reply) = post(&mut conn, "/claims", &claim(id, session), at(start));
+        assert_eq!(status, 200, "{reply}");
+        let defer = json!({"ops": [{"op": "defer", "id": id, "until": at(start + 5.0)}]});
+        assert_eq!(tickets_route(&mut conn, "POST", "/batch", &defer).status, 200);
+        let mut body = release(id, session);
+        body["reason"] = json!("The earlier work is still running.");
+        assert_eq!(post(&mut conn, "/release", &body, at(start + 1.0)).0, 200);
+    }
+    assert!(justiciar_tickets(&conn).is_empty());
+    assert!(shown(&mut conn, id)["releases"].is_null());
+    assert_eq!(
+        offered(&mut conn, "local_idle", at(20.0)).as_deref(),
+        Some(id)
+    );
+}
+
+#[test]
 fn editing_the_acceptance_offers_the_ticket_again() {
     let mut conn = open();
     let id = file(&mut conn, &[("vague", &[], &[])]).remove(0);

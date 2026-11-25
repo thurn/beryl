@@ -5,7 +5,10 @@
 //! back (`ReleaseCause::counts`) and names nothing the ticket needs. A release with `needs`
 //! sends the ticket to a person, an operating system or a machine, so the next worker who is
 //! offered it does not meet the same obstacle. A justiciar ticket is never counted, because
-//! holding back an emergency would stop the work that ends it.
+//! holding back an emergency would stop the work that ends it. Nor is a ticket that is
+//! deferred to a later time when it is released: its worker found it was waiting on a clock
+//! (a block ticket of a model trial whose pairs are still running, say), deferred it and gave
+//! it back, and the next worker meets no obstacle once the deferral ends.
 
 use rusqlite::{Connection, TransactionBehavior, params};
 use serde_json::Value;
@@ -143,8 +146,10 @@ fn count(
     release: &Release,
     now: Timestamp,
 ) -> Result<Option<Releases>, StoreError> {
+    let waiting = ticket.defer_until.is_some_and(|until| until > now);
     let counted = release.cause.counts()
         && release.needs.is_none()
+        && !waiting
         && !ticket.labels.iter().any(|label| label == JUSTICIAR);
     if !counted {
         return Ok(None);
