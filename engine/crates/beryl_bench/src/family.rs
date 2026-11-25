@@ -154,6 +154,56 @@ pub const FAMILIES: &[Family] = &[
             (2, names::FOREST, names::ISLAND),
         ],
     },
+    // The card-shape family: cards with more than one face or a copiable shape the engine
+    // reads for every card. Fire // Ice (a split card with combined characteristics off the
+    // stack), Wear // Tear (a fuse card), Bonecrusher Giant (an Adventure), Valakut Awakening
+    // (a modal double-faced card) and Delver of Secrets (a transforming card). Mountains
+    // stand in for Plains so the red halves can be cast.
+    Family {
+        name: "two-faced",
+        swaps: &[
+            (1, names::FIRE_ICE, names::REPRIEVE),
+            (1, names::WEAR_TEAR, names::OUST),
+            (1, names::BONECRUSHER_GIANT, names::PORTABLE_HOLE),
+            (1, names::VALAKUT_AWAKENING, names::TRINKET_MAGE),
+            (1, names::DELVER_OF_SECRETS, names::NO_MORE_LIES),
+            (2, names::MOUNTAIN, names::PLAINS),
+        ],
+    },
+    // The level family: The Eldest Reborn (a Saga, with chapters), Wizard Class and Case of the
+    // Crimson Pulse (permanents whose abilities appear as a level or solve condition is
+    // reached) and Student of Warfare (a creature with level up). Mountains stand in for
+    // Plains so the red cards can be cast.
+    Family {
+        name: "levels",
+        swaps: &[
+            (1, names::THE_ELDEST_REBORN, names::REPRIEVE),
+            (1, names::WIZARD_CLASS, names::OUST),
+            (1, names::CASE_OF_THE_CRIMSON_PULSE, names::PORTABLE_HOLE),
+            (1, names::STUDENT_OF_WARFARE, names::NO_MORE_LIES),
+            (2, names::MOUNTAIN, names::PLAINS),
+        ],
+    },
+    // The face-down family: Exalted Angel (morph), Gathan Raiders (morph with a hellbent
+    // bonus) and Illusionary Mask (a creature put onto the battlefield face down).
+    Family {
+        name: "face-down",
+        swaps: &[
+            (1, names::EXALTED_ANGEL, names::REPRIEVE),
+            (1, names::GATHAN_RAIDERS, names::OUST),
+            (1, names::ILLUSIONARY_MASK, names::STAFF_OF_THE_STORYTELLER),
+        ],
+    },
+    // The outside-the-game family: Burning Wish (a sideboard card to hand) and Lurrus of the
+    // Dream-Den (a companion with a graveyard permission).
+    Family {
+        name: "outside",
+        swaps: &[
+            (1, names::BURNING_WISH, names::STAFF_OF_THE_STORYTELLER),
+            (1, names::LURRUS_OF_THE_DREAM_DEN, names::THIRST_FOR_DISCOVERY),
+            (2, names::MOUNTAIN, names::PLAINS),
+        ],
+    },
 ];
 
 /// The family called `name`.

@@ -34,6 +34,10 @@ use {
 #[bench::zones_and_text(FamilyWorkload::new("zones-and-text"))]
 #[bench::copies(FamilyWorkload::new("copies"))]
 #[bench::identity(FamilyWorkload::new("identity"))]
+#[bench::two_faced(FamilyWorkload::new("two-faced"))]
+#[bench::levels(FamilyWorkload::new("levels"))]
+#[bench::face_down(FamilyWorkload::new("face-down"))]
+#[bench::outside(FamilyWorkload::new("outside"))]
 fn present(w: FamilyWorkload) -> u64 {
     black_box(family::roll_paired(black_box(&w)).paired)
 }
@@ -54,6 +58,10 @@ fn present(w: FamilyWorkload) -> u64 {
 #[bench::zones_and_text(FamilyWorkload::new("zones-and-text"))]
 #[bench::copies(FamilyWorkload::new("copies"))]
 #[bench::identity(FamilyWorkload::new("identity"))]
+#[bench::two_faced(FamilyWorkload::new("two-faced"))]
+#[bench::levels(FamilyWorkload::new("levels"))]
+#[bench::face_down(FamilyWorkload::new("face-down"))]
+#[bench::outside(FamilyWorkload::new("outside"))]
 fn control(w: FamilyWorkload) -> u64 {
     black_box(family::roll_paired(black_box(&w)).paired)
 }

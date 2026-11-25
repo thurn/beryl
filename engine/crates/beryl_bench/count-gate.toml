@@ -63,6 +63,18 @@ ratio = 1.25
 [family.identity]
 ratio = 1.25
 
+[family.two-faced]
+ratio = 1.25
+
+[family.levels]
+ratio = 1.25
+
+[family.face-down]
+ratio = 1.25
+
+[family.outside]
+ratio = 1.25
+
 # Cygnus. The rollout bar was measured twice on the recorded revision in WSL.
 [profile.m-1d943bdd]
 revision = "fdeca921562c632c35fba72703aafeb8baf8084e"
@@ -90,6 +102,10 @@ costs = 1.25
 zones-and-text = 1.25
 copies = 1.25
 identity = 1.25
+two-faced = 1.25
+levels = 1.25
+face-down = 1.25
+outside = 1.25
 
 # Jarvis. Two runs at this revision measured 379,282,830 instructions against the existing bar.
 [profile.m-cf83bfb6]
@@ -118,3 +134,7 @@ costs = 1.25
 zones-and-text = 1.25
 copies = 1.25
 identity = 1.25
+two-faced = 1.25
+levels = 1.25
+face-down = 1.25
+outside = 1.25
