@@ -1,8 +1,8 @@
 //! The Trackers store's tests: which games keep a tracker or a count, what ends one, what it
 //! tells apart and what it keeps across layouts.
 
-use beryl_card::effect::build::{gain_life, if_then, sequence, you};
-use beryl_card::{Ability, Amount, CardDef, Condition, Effect, Face, Objects, Types};
+use beryl_card::effect::build::{gain_life, if_then, permanents, sequence, you};
+use beryl_card::{Ability, Amount, CardDef, Condition, Effect, Face, Filter, Objects, Types};
 
 use super::*;
 use crate::event::Sink;
@@ -27,8 +27,8 @@ static BEAR: CardDef = CardDef {
     tokens: &[],
 };
 
-/// A planeswalker with a loyalty ability, and a static ability that reads whether it entered
-/// this turn.
+/// A planeswalker with a loyalty ability that untaps the permanents that attacked this turn,
+/// and a static ability that reads whether it entered this turn.
 static WALKER: CardDef = CardDef {
     name: "Test Walker",
     shape: beryl_card::definition::Shape::Single,
@@ -37,7 +37,7 @@ static WALKER: CardDef = CardDef {
         loyalty: Some(3),
         abilities: &[
             Ability::rule_change(&LOYALTY).only_if(&Condition::EnteredThisTurn(Objects::This)),
-            Ability::loyalty(1),
+            Ability::loyalty(1).effect(&Effect::Untap(permanents(Filter::AttackedThisTurn))),
         ],
         ..Face::EMPTY
     }],
@@ -148,6 +148,7 @@ fn a_tracker_ends_with_the_turn_and_as_its_permanent_leaves() {
     for slot in [a, b] {
         s.track(&t, Tracker::EnteredThisTurn, slot);
         s.track(&t, Tracker::LoyaltyActivated, slot);
+        s.track(&t, Tracker::AttackedThisTurn, slot);
     }
     // A checkpoint of the board would lose what the turn has noted.
     assert_eq!(
@@ -167,6 +168,7 @@ fn a_tracker_ends_with_the_turn_and_as_its_permanent_leaves() {
     s.track(&t, Tracker::EnteredThisTurn, a);
     assert!(s.trackers(a).has(Tracker::EnteredThisTurn));
     assert!(!s.trackers(a).has(Tracker::LoyaltyActivated));
+    assert!(!s.trackers(a).has(Tracker::AttackedThisTurn));
     assert!(Tracker::ALL.into_iter().all(|k| s.trackers(b).has(k)));
 
     // The next turn begins with nothing noted of it.
