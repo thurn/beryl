@@ -6,6 +6,19 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Lurrus's graveyard permission worked on the opponent's turn.** "During each
+  of your turns, you may cast one permanent spell with mana value 2 or less from
+  your graveyard" let its controller cast a flash creature from their graveyard
+  on the opponent's turn, which also used up that turn's permission.
+  `casting/graveyard.rs` checked who controlled the permanent with the
+  permission and whether it was used this turn, but never whose turn it was. The
+  checks only showed up for a permanent spell with flash, and no scenario had
+  one. `permitter` and `sources` now require the player to be the active player.
+  Guard: the test
+  `the_graveyard_permission_works_only_during_its_controllers_turn`. No check
+  can tell that a permission's Oracle words name a turn its code ignores; a test
+  with a flash card covers the timing words of a casting permission.
+
 - **Two different game histories hashed alike.** The hash of a `State` added the
   turns played before a restart and the turns played in ended subgames only when
   each was nonzero, with nothing to say which was which. So a game five turns

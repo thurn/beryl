@@ -18,7 +18,8 @@ use crate::state::{Memo, State, Zone};
 use crate::table::{Capability, GameTable};
 
 /// The permanent whose unused permission lets `player` cast `face` from their graveyard with
-/// `x` as the value of X, if one does: the first such permanent in battlefield order.
+/// `x` as the value of X, if one does: the first such permanent in battlefield order. None
+/// outside `player`'s own turn, since each permission is for "each of your turns".
 pub(super) fn permitter<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -26,6 +27,9 @@ pub(super) fn permitter<L: Layout>(
     face: &Face,
     x: u8,
 ) -> Option<L::Slot> {
+    if s.turn().active() != player {
+        return None;
+    }
     s.battlefield().iter().copied().find(|&slot| {
         s.controller(slot) == player
             && !s.cast_from_graveyard_this_turn(slot)
@@ -54,9 +58,9 @@ pub(super) fn relies_on_permission<L: Layout>(
     }
 }
 
-/// The cards in `player`'s graveyard while they control a permanent whose permission is
-/// unused: the cards a priority decision looks at for casts under such a permission. Which
-/// faces of them a permission accepts is checked as each is offered.
+/// The cards in `player`'s graveyard while it is their turn and they control a permanent
+/// whose permission is unused: the cards a priority decision looks at for casts under such a
+/// permission. Which faces of them a permission accepts is checked as each is offered.
 #[cold]
 #[inline(never)]
 pub(super) fn sources<L: Layout>(
@@ -64,12 +68,13 @@ pub(super) fn sources<L: Layout>(
     t: &GameTable,
     player: Seat,
 ) -> crate::bitboard::Bitboard<L::Slot> {
-    let any_unused = s.battlefield().iter().any(|&slot| {
-        s.controller(slot) == player
-            && !s.cast_from_graveyard_this_turn(slot)
-            && s.abilities(t, slot)
-                .any(|(_, ability)| ability.graveyard_cast().is_some())
-    });
+    let any_unused = s.turn().active() == player
+        && s.battlefield().iter().any(|&slot| {
+            s.controller(slot) == player
+                && !s.cast_from_graveyard_this_turn(slot)
+                && s.abilities(t, slot)
+                    .any(|(_, ability)| ability.graveyard_cast().is_some())
+        });
     if any_unused {
         s.zone(crate::state::ZoneKey::Of(player, Zone::Graveyard))
     } else {

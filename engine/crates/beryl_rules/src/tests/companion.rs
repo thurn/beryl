@@ -76,7 +76,25 @@ static FLASH: CardDef = CardDef {
     tokens: &[],
 };
 
-static CARDS: CardTable = CardTable::new(&[&LAND, &COMPANION, &BEAR, &GIANT, &HYDRA, &FLASH]);
+/// A two-mana creature with flash: a permanent spell the permission accepts that its
+/// controller could also cast during an opponent's turn.
+static FLASH_BEAR: CardDef = creature(
+    "Test Flash Bear",
+    &[Face {
+        keywords: Keywords::FLASH,
+        ..vanilla(mana("{1}{W}"))
+    }],
+);
+
+static CARDS: CardTable = CardTable::new(&[
+    &LAND,
+    &COMPANION,
+    &BEAR,
+    &GIANT,
+    &HYDRA,
+    &FLASH,
+    &FLASH_BEAR,
+]);
 
 const SMALL_DECK: &Decklist = &[(20, "Test Land"), (16, "Test Bear"), (4, "Test Flash")];
 const BIG_DECK: &Decklist = &[(20, "Test Land"), (19, "Test Bear"), (1, "Test Giant")];
@@ -402,6 +420,39 @@ fn a_permanent_lets_its_controller_cast_one_small_permanent_spell_from_their_gra
     assert_eq!(s.turn().number(), 5);
     assert_eq!(graveyard_casts(&t, &s, &d, Seat::P0), [BEAR.name]);
     assert_eq!(s.check_invariants(&t), Ok(()));
+}
+
+#[test]
+fn the_graveyard_permission_works_only_during_its_controllers_turn() {
+    let deck: &Decklist = &[
+        (20, "Test Land"),
+        (2, "Test Flash Bear"),
+        (1, "Test Companion"),
+    ];
+    let t = table([deck, LANDS], [&[], &[]]);
+    for active in Seat::BOTH {
+        let mut s = main_phase(&t, active);
+        put(&t, &mut s, Seat::P0, COMPANION.name, Zone::Battlefield);
+        for _ in 0..4 {
+            put(&t, &mut s, Seat::P0, LAND.name, Zone::Battlefield);
+        }
+        put(&t, &mut s, Seat::P0, FLASH_BEAR.name, Zone::Graveyard);
+        // A flash creature in hand, so that P0 has something to do on either turn.
+        put(&t, &mut s, Seat::P0, FLASH_BEAR.name, Zone::Hand);
+        s.board().set_priority(Seat::P0);
+        let d = decide(&t, &mut s);
+        assert_eq!(d.player, Seat::P0);
+        let expected: &[&str] = if active == Seat::P0 {
+            &[FLASH_BEAR.name]
+        } else {
+            &[]
+        };
+        assert_eq!(
+            graveyard_casts(&t, &s, &d, Seat::P0),
+            expected,
+            "\"During each of your turns\": offered only while P0 is the active player"
+        );
+    }
 }
 
 #[test]
