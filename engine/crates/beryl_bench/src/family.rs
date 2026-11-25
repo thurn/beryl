@@ -184,14 +184,15 @@ pub const FAMILIES: &[Family] = &[
             (2, names::MOUNTAIN, names::PLAINS),
         ],
     },
-    // The face-down family: Exalted Angel (morph), Gathan Raiders (morph with a hellbent
-    // bonus) and Illusionary Mask (a creature put onto the battlefield face down).
+    // The face-down family: Exalted Angel (morph) and Gathan Raiders (morph with a hellbent
+    // bonus). Illusionary Mask is left out: an activation that spends mana on its X records
+    // that mana, which only `Large` can hold, so its rollouts stall on capacity in `Small`
+    // and their steps are not what the game costs.
     Family {
         name: "face-down",
         swaps: &[
             (1, names::EXALTED_ANGEL, names::REPRIEVE),
             (1, names::GATHAN_RAIDERS, names::OUST),
-            (1, names::ILLUSIONARY_MASK, names::STAFF_OF_THE_STORYTELLER),
         ],
     },
     // The outside-the-game family: Burning Wish (a sideboard card to hand) and Lurrus of the
