@@ -441,20 +441,11 @@ fn both_platforms_start_the_successor_while_the_failed_round_is_running() {
     let (ready, held) = mpsc::channel();
     let release = resume.clone();
     let finished = ready.clone();
-    let work_ref = Arc::downgrade(&world.work);
-    let at_tip = tip.clone();
-    world.work.before_batches.lock().unwrap().insert(
-        "second".to_owned(),
+    world.work.on_family_run.lock().unwrap().insert(
+        (tip.clone(), "second".to_owned()),
         Arc::new(move || {
-            let ready = ready.clone();
-            let release = release.clone();
-            work_ref.upgrade().unwrap().on_run.lock().unwrap().insert(
-                at_tip.clone(),
-                Arc::new(move || {
-                    ready.send(true).unwrap();
-                    release.wait();
-                }),
-            );
+            ready.send(true).unwrap();
+            release.wait();
         }),
     );
     let conn = hub::open(&database).unwrap();

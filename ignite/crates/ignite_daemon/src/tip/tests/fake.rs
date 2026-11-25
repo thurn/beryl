@@ -70,6 +70,8 @@ pub(super) struct FakeWork {
     /// Called once, when a run at the commit starts, as when a landing moves the tip while the
     /// check runs.
     pub(super) on_run: Mutex<HashMap<Commit, BeforeBatches>>,
+    /// Called once, when a run for the named family at the commit starts.
+    pub(super) on_family_run: Mutex<HashMap<(Commit, String), BeforeBatches>>,
 }
 
 /// What [`FakeWork::before_batches`] calls for one family.
@@ -260,7 +262,7 @@ impl TipWork for FakeWork {
         for (batch, names) in batches {
             if (callbacks.claim)(*batch) {
                 ran += 1;
-                let batch_runs = self.run(ctx, at, names, false, pre_move);
+                let batch_runs = self.run_for_family(ctx, at, Some(family), names, false, pre_move);
                 let listed = self.listed(at);
                 let failed: Vec<_> = batch_runs
                     .iter()
@@ -279,6 +281,34 @@ impl TipWork for FakeWork {
         &self,
         ctx: &Context,
         at: &Commit,
+        checks: &[CheckName],
+        rerun: bool,
+        pre_move: bool,
+    ) -> Vec<TipRun> {
+        self.run_for_family(ctx, at, None, checks, rerun, pre_move)
+    }
+
+    fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>> {
+        // The scripted landings and commits all lie between the commits a test passes.
+        assert_ne!(from, to);
+        if *self.landings_fail.lock().unwrap() {
+            return Err(ignite_core::traits::Error::Io("git failed".to_owned()));
+        }
+        let commits = self.commits.lock().unwrap().clone();
+        if commits.is_empty() {
+            Ok(self.landings.lock().unwrap().clone())
+        } else {
+            ticketed_landings(ctx, commits)
+        }
+    }
+}
+
+impl FakeWork {
+    fn run_for_family(
+        &self,
+        ctx: &Context,
+        at: &Commit,
+        family: Option<&str>,
         checks: &[CheckName],
         rerun: bool,
         pre_move: bool,
@@ -303,6 +333,15 @@ impl TipWork for FakeWork {
                 .wait_timeout_while(active, Duration::from_secs(2), |a| a.1 < wanted)
                 .unwrap();
             active.0 -= 1;
+        }
+        let hook = family.and_then(|family| {
+            self.on_family_run
+                .lock()
+                .unwrap()
+                .remove(&(at.clone(), family.to_owned()))
+        });
+        if let Some(hook) = hook {
+            hook();
         }
         Self::launch(ctx, "run");
         if let Ok(master) = ctx.git.tip(&ctx.config.repository.master) {
@@ -358,19 +397,5 @@ impl TipWork for FakeWork {
             });
         }
         runs
-    }
-
-    fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>> {
-        // The scripted landings and commits all lie between the commits a test passes.
-        assert_ne!(from, to);
-        if *self.landings_fail.lock().unwrap() {
-            return Err(ignite_core::traits::Error::Io("git failed".to_owned()));
-        }
-        let commits = self.commits.lock().unwrap().clone();
-        if commits.is_empty() {
-            Ok(self.landings.lock().unwrap().clone())
-        } else {
-            ticketed_landings(ctx, commits)
-        }
     }
 }
