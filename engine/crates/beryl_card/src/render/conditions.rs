@@ -3,6 +3,7 @@
 use super::Ctx;
 use super::filters::{Kind, zone_name};
 use super::words::{list, number};
+use crate::CounterKind;
 use crate::effect::{Amount, Comparison, Condition, Objects, Players};
 use crate::filter::Filter;
 use crate::ids::Zone;
@@ -171,6 +172,40 @@ impl Ctx {
         }
     }
 
+    /// "There are four or more chorus counters on this creature": a counter total compared with
+    /// `n`. A set of objects is said "among" them.
+    fn counter_condition(
+        &mut self,
+        objects: Objects,
+        kind: CounterKind,
+        comparison: Comparison,
+        n: u8,
+    ) -> String {
+        let many = how_many(comparison, n);
+        // A set of objects is a total across all of them, so "on all creatures you
+        // control" would read as a counter on each one. Say "among" instead.
+        let on = if matches!(objects, Objects::All { .. } | Objects::InZoneOf { .. }) {
+            format!("among {}", self.counted_objects(objects))
+        } else {
+            format!("on {}", self.objects(objects))
+        };
+        if n == 0 && matches!(comparison, Comparison::Equal | Comparison::AtMost) {
+            format!("there are no {} counters {on}", kind.name())
+        } else {
+            let counters = if n == 1 && comparison == Comparison::AtLeast {
+                format!("a {} counter", kind.name())
+            } else {
+                format!("{many} {} counters", kind.name())
+            };
+            let be = if n == 1 && comparison == Comparison::AtLeast {
+                "is"
+            } else {
+                "are"
+            };
+            format!("there {be} {counters} {on}")
+        }
+    }
+
     /// One amount held against another, in the words a card uses for the common shapes.
     fn compare(&mut self, left: Amount, comparison: Comparison, right: Amount) -> String {
         // "An opponent controls more lands than you": the most any of them has against
@@ -208,29 +243,7 @@ impl Ctx {
             let many = how_many(comparison, n);
             match left {
                 Amount::Counters(objects, kind) => {
-                    // A set of objects is a total across all of them, so "on all creatures you
-                    // control" would read as a counter on each one. Say "among" instead.
-                    let on = if matches!(objects, Objects::All { .. } | Objects::InZoneOf { .. }) {
-                        format!("among {}", self.counted_objects(objects))
-                    } else {
-                        format!("on {}", self.objects(objects))
-                    };
-                    return if n == 0 && matches!(comparison, Comparison::Equal | Comparison::AtMost)
-                    {
-                        format!("there are no {} counters {on}", kind.name())
-                    } else {
-                        let counters = if n == 1 && comparison == Comparison::AtLeast {
-                            format!("a {} counter", kind.name())
-                        } else {
-                            format!("{many} {} counters", kind.name())
-                        };
-                        let be = if n == 1 && comparison == Comparison::AtLeast {
-                            "is"
-                        } else {
-                            "are"
-                        };
-                        format!("there {be} {counters} {on}")
-                    };
+                    return self.counter_condition(objects, kind, comparison, n);
                 }
                 Amount::Count(objects) => {
                     if let Some((players, zone)) = whole_zone(*objects)
