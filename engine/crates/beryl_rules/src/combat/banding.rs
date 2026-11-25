@@ -4,7 +4,7 @@
 
 use super::{declare_attacker, has};
 use crate::bitboard::Bitboard;
-use crate::card::Keywords;
+use crate::card::{Ability, Keywords};
 use crate::decision::{OPTIONS, Opt};
 use crate::filter::{Evaluate, Filter};
 use crate::fixed::Full;
@@ -87,8 +87,14 @@ fn is_band<L: Layout>(s: &State<L>, t: &GameTable, group: Bitboard<L::Slot>) -> 
     let without_banding = group.filter(|slot| !has(s, slot, Keywords::BANDING));
     (without_banding.count() < group.count() && without_banding.count() <= 1)
         || group.any(|member| {
-            bands_with(s, t, member)
-                .any(|quality| group.all(|other| has_quality(s, t, quality, member, other)))
+            bands_with(s, t, member).any(|(ability, quality)| {
+                let all = group.all(|other| has_quality(s, t, quality, member, other));
+                if all {
+                    // The ability formed a band, as it says.
+                    crate::coverage::hit(ability);
+                }
+                all
+            })
         })
 }
 
@@ -103,9 +109,9 @@ fn bands_with<'s, L: Layout>(
     s: &'s State<L>,
     t: &'s GameTable,
     slot: L::Slot,
-) -> impl Iterator<Item = &'static Filter> + 's {
+) -> impl Iterator<Item = (&'static Ability, &'static Filter)> + 's {
     s.abilities(t, slot)
-        .filter_map(|(_, ability)| ability.bands_with())
+        .filter_map(|(_, ability)| ability.bands_with().map(|quality| (ability, quality)))
 }
 
 /// Whether `other` has the quality of a "bands with other" ability of `holder`, read for its
@@ -222,10 +228,15 @@ pub(super) fn assigner<L: Layout>(
     let recipients = super::assignment::recipients(s, source);
     let banders = recipients.filter(|slot| {
         has(s, slot, Keywords::BANDING)
-            || bands_with(s, t, slot).any(|quality| {
-                has_quality(s, t, quality, slot, slot)
+            || bands_with(s, t, slot).any(|(ability, quality)| {
+                let shared = has_quality(s, t, quality, slot, slot)
                     && recipients
-                        .any(|other| other != slot && has_quality(s, t, quality, slot, other))
+                        .any(|other| other != slot && has_quality(s, t, quality, slot, other));
+                if shared {
+                    // The ability moved the assignment of damage to the other player.
+                    crate::coverage::hit(ability);
+                }
+                shared
             })
     });
     s.players_in_turn_order(s.defending_players())
