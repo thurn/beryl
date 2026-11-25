@@ -154,35 +154,24 @@ fn enhanced_blends_the_edge_of_a_turned_card() {
 }
 
 /// A renderer on the floor's limits has no Enhanced tier, and draws a frame in it exactly as
-/// it draws the frame in Baseline.
+/// it draws the frame in Baseline. The frame is solid-color records, as in
+/// `enhanced_blends_the_edge_of_a_turned_card`, not card faces: a face is sampled through
+/// trilinear and anisotropic filtering, whose rounding differs by one in a channel on the
+/// first frame a GPU draws, so a comparison that is exact could fail on the filter and not on
+/// the tier.
 #[test]
 fn a_renderer_without_enhanced_draws_an_enhanced_frame_in_baseline() {
-    let TwentyCards {
-        camera,
-        width,
-        height,
-        records,
-        ..
-    } = twenty_cards();
+    let turned = turned(Vec2::new(63.0, 88.0), 1.0, [200, 40, 40]);
+    let table = rectangle(Vec2::ZERO, Vec2::splat(400.0), 0.0, [0, 0, 0]);
+    let records = [(Band::Opaque, turned), (Band::Opaque, table)];
     let mut renderer = renderer(Limits::Downlevel);
     assert!(!renderer.enhanced_available());
-    let [baseline, enhanced] = [Tier::Baseline, Tier::Enhanced].map(|tier| {
-        draw_in(
-            tier,
-            &mut renderer,
-            camera.view_projection,
-            (width, height),
-            &records,
-        )
-        .0
-    });
-    let different = baseline
-        .pixels
-        .iter()
-        .zip(&enhanced.pixels)
-        .filter(|(a, b)| a != b)
-        .count();
-    assert_eq!(different, 0, "bytes differ between the tiers");
+    let [baseline, enhanced] = [Tier::Baseline, Tier::Enhanced]
+        .map(|tier| draw_in(tier, &mut renderer, overhead(), (200, 200), &records).0);
+    assert!(
+        baseline.pixels == enhanced.pixels,
+        "bytes differ between the tiers"
+    );
 }
 
 /// A flat-layer panel turned 30 degrees over a card-sized rectangle is drawn after the resolve,
