@@ -9,10 +9,7 @@ use crate::prelude::*;
 
 pub static CARD: CardDef = Printed::GloriousAnthem
     .abilities(&[Ability::static_ability(&LayerSpec {
-        affected: Objects::All {
-            zone: Zone::Battlefield,
-            filter: Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
-        },
+        affected: permanents(creature_you_control()),
         condition: None,
         modifications: &[Modification::ModifyPt(1, 1)],
     })])

@@ -16,7 +16,7 @@ pub static CARD: CardDef = Printed::ThaliaGuardianOfThraben
     .keywords(Keywords::FIRST_STRIKE)
     .abilities(&[Ability::rule_change(&RuleChange::spell_costs(
         Players::EachPlayer,
-        Filter::Not(&Filter::Types(Types::CREATURE)),
+        noncreature(),
         SpellCost::More(1),
     ))])
     .card();

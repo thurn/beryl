@@ -15,7 +15,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::PortableHole
     .abilities(&[Ability::triggered(&Trigger::ENTERS)
         .target(&TargetSpec::permanent(Filter::All(&[
-            Filter::Not(&Filter::Types(Types::LAND)),
+            nonland(),
             Filter::Whose(&Players::EachOpponent),
             Filter::ManaValueAtMost(2),
         ])))

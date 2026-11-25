@@ -9,6 +9,6 @@
 use crate::prelude::*;
 
 pub static CARD: CardDef = Printed::VillageRites
-    .additional_cost(&[CostPart::sacrifice(Filter::Types(Types::CREATURE))])
+    .additional_cost(&[CostPart::sacrifice(creature())])
     .abilities(&[Ability::spell().effect(&draw(you(), 2))])
     .card();

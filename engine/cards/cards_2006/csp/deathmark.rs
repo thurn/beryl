@@ -11,7 +11,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::Deathmark
     .abilities(&[Ability::spell()
         .target(&TargetSpec::permanent(Filter::All(&[
-            Filter::Types(Types::CREATURE),
+            creature(),
             Filter::Colors(Colors::GREEN.union(Colors::WHITE)),
         ])))
         .effect(&destroy(target()))])

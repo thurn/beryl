@@ -14,7 +14,7 @@ pub static CARD: CardDef = Printed::ThirstForDiscovery
             &discard(you(), 2),
             you(),
             Cost::part(&CostPart::discard(Filter::All(&[
-                Filter::Types(Types::LAND),
+                land(),
                 Filter::Supertypes(Supertypes::BASIC),
             ]))),
         ),

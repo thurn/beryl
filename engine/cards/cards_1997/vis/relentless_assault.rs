@@ -10,10 +10,10 @@ use crate::prelude::*;
 
 pub static CARD: CardDef = Printed::RelentlessAssault
     .abilities(&[Ability::spell().effect(&sequence(&[
-        Effect::Untap(Objects::All {
-            zone: Zone::Battlefield,
-            filter: Filter::All(&[Filter::Types(Types::CREATURE), Filter::AttackedThisTurn]),
-        }),
+        Effect::Untap(permanents(Filter::All(&[
+            creature(),
+            Filter::AttackedThisTurn,
+        ]))),
         Effect::AdditionalPhases {
             after: TurnPhase::Main,
             phases: &[TurnPhase::Combat, TurnPhase::Main],

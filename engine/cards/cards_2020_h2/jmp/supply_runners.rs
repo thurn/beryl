@@ -9,10 +9,7 @@ use crate::prelude::*;
 
 pub static CARD: CardDef = Printed::SupplyRunners
     .abilities(&[when_enters(&add_counters(
-        Objects::Other(&Objects::All {
-            zone: Zone::Battlefield,
-            filter: Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
-        }),
+        Objects::Other(&permanents(creature_you_control())),
         CounterKind::PlusOne,
         1,
     ))])

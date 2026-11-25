@@ -10,10 +10,7 @@ use crate::prelude::*;
 
 pub static CARD: CardDef = Printed::MotherOfRunes
     .abilities(&[Ability::activated(Cost::TAP)
-        .target(&TargetSpec::permanent(Filter::All(&[
-            Filter::Types(Types::CREATURE),
-            Filter::Whose(&Players::You),
-        ])))
+        .target(&TargetSpec::permanent(creature_you_control()))
         .effect(&modify(
             target(),
             &[Modification::AddProtection(Protection::ChosenColor)],

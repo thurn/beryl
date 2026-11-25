@@ -20,13 +20,10 @@ use crate::prelude::*;
 /// [CR 613.7]: https://yawgatog.com/resources/magic-rules/#R6137
 pub static CARD: CardDef = Printed::Opalescence
     .abilities(&[Ability::static_ability(&LayerSpec {
-        affected: Objects::Other(&Objects::All {
-            zone: Zone::Battlefield,
-            filter: Filter::All(&[
-                Filter::Types(Types::ENCHANTMENT),
-                Filter::Not(&Filter::Subtype(Subtype::Aura)),
-            ]),
-        }),
+        affected: Objects::Other(&permanents(Filter::All(&[
+            Filter::Types(Types::ENCHANTMENT),
+            Filter::Not(&Filter::Subtype(Subtype::Aura)),
+        ]))),
         condition: None,
         modifications: &[
             Modification::AddTypes(Types::CREATURE),

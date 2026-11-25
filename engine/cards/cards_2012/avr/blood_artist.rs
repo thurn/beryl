@@ -15,7 +15,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::BloodArtist
     .abilities(&[Ability::triggered(&Trigger::of(
         TriggerEvent::Dies,
-        beryl_card::Subject::A(Filter::Types(Types::CREATURE)),
+        beryl_card::Subject::A(creature()),
     ))
     .target(&TargetSpec::player())
     .effect(&sequence(&[

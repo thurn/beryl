@@ -13,10 +13,7 @@ use crate::prelude::*;
 /// [CR 613.8b]: https://yawgatog.com/resources/magic-rules/#R6138b
 pub static CARD: CardDef = Printed::UrborgTombOfYawgmoth
     .abilities(&[Ability::static_ability(&LayerSpec {
-        affected: Objects::All {
-            zone: Zone::Battlefield,
-            filter: Filter::Types(Types::LAND),
-        },
+        affected: permanents(land()),
         condition: None,
         modifications: &[Modification::AddSubtype(Subtype::Swamp)],
     })])

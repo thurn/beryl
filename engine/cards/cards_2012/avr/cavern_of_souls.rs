@@ -17,7 +17,7 @@ static CANT_BE_COUNTERED: RuleChange = RuleChange {
 };
 
 static CREATURE_OF_THE_CHOSEN_TYPE: ManaRestriction = ManaRestriction {
-    cast: Filter::Types(Types::CREATURE),
+    cast: creature(),
     of_chosen_type: true,
     rider: Some(&CANT_BE_COUNTERED),
 };

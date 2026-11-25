@@ -14,8 +14,8 @@ pub static CARD: CardDef = Printed::UnderworldBreach
     .abilities(&[
         Ability::static_ability(&LayerSpec {
             affected: Objects::Everywhere(Filter::All(&[
-                Filter::Not(&Filter::Types(Types::LAND)),
-                Filter::Whose(&Players::You),
+                nonland(),
+                yours(),
                 Filter::InZone(Zone::Graveyard),
             ])),
             condition: None,
