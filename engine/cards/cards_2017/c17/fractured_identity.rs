@@ -15,7 +15,9 @@ use crate::prelude::*;
 /// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
 pub static CARD: CardDef = Printed::FracturedIdentity
     .abilities(&[Ability::spell()
-        .target(&TargetSpec::permanent(nonland()))
+        .target(&TargetSpec::permanent(Filter::Not(&Filter::Types(
+            Types::LAND,
+        ))))
         .effect(&sequence(&[
             exile(target()),
             create_copy(each_player_other_than(&its_controller()), target()),
