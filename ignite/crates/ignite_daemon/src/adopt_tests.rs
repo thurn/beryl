@@ -257,3 +257,108 @@ fn ending_a_compiling_run_in_a_reset_tree_marks_its_target_directory() {
     assert!(target.join(crate::build::repair::SUSPECT_FILE).is_file());
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+struct IdleHost;
+
+impl ignite_os::hostcpu::HostCpu for IdleHost {
+    fn cores(&self) -> u32 {
+        8
+    }
+
+    fn busy(&self) -> std::io::Result<f64> {
+        Ok(0.0)
+    }
+
+    fn free_memory_mb(&self) -> std::io::Result<u64> {
+        Err(std::io::Error::other("not read"))
+    }
+}
+
+/// On cygnus a `cargo nextest run` left by a landing whose verb process had died kept its
+/// `land` grant through two daemon restarts, so every core read as granted while the machine
+/// idled. After a restart, a previous command whose handle has ended is ended, and its grant is
+/// released when its supervisor exits, while the command of a handle that still runs keeps its
+/// grant and is handed to that handle's verb.
+#[test]
+fn a_restart_ends_the_command_of_a_dead_verb_and_keeps_the_live_ones() {
+    let scheduler = Arc::new(crate::sched::Scheduler::new(
+        crate::sched::Limits {
+            cores: 8,
+            reserved: 0,
+            tip_build: 0,
+            floor: ignite_core::capacity::Floor::default(),
+            resources: std::collections::BTreeMap::new(),
+        },
+        Arc::new(ignite_core::fakes::FakeClock::new(
+            ignite_core::time::Timestamp::from_millis(1_800_000_000_000),
+        )),
+        Arc::new(IdleHost),
+    ));
+    // As `SupervisedLauncher::adopt_unfinished` does at start: each command's grant is adopted
+    // and released when its supervisor exits, which the fakes do when the command is ended.
+    let held = |owner: &str, args: &[&str], ended: &Arc<AtomicBool>| {
+        let grant = scheduler.adopt(Class::Land, 3, Vec::new(), None, None);
+        let (scheduler, flag) = (scheduler.clone(), ended.clone());
+        let waits = Arc::new(AtomicUsize::new(0));
+        let mut run = previous(owner, args, 0, &waits);
+        run.end = Box::new(move || {
+            flag.store(true, Ordering::SeqCst);
+            scheduler.release(&grant);
+        });
+        run
+    };
+    let (dead_ended, live_ended) = (
+        Arc::new(AtomicBool::new(false)),
+        Arc::new(AtomicBool::new(false)),
+    );
+    let handles = crate::handles::Handles::new(Arc::new(SystemClock));
+    let dead = handles.create("land", None, None);
+    let live = handles.create("land", None, None);
+    let launcher = AdoptingLauncher::new(
+        Arc::new(FakeLauncher::default()),
+        vec![
+            held(
+                dead.as_str(),
+                &["cargo", "nextest", "run", "--no-run"],
+                &dead_ended,
+            ),
+            held(live.as_str(), &["cargo", "nextest", "run"], &live_ended),
+        ],
+    );
+    assert_eq!(scheduler.status().granted, 6);
+
+    // The restarted daemon runs `live` again; `dead`'s verb could not be run again and ended
+    // `incomplete`.
+    handles.finish_incomplete(
+        &dead,
+        crate::handles::incomplete("land", &dead, "its verb process died"),
+    );
+    let running = |owner: &Handle| handles.is_running(owner);
+    assert_eq!(launcher.end_orphans(&running), 1);
+    assert!(dead_ended.load(Ordering::SeqCst));
+    assert!(!live_ended.load(Ordering::SeqCst));
+    assert_eq!(scheduler.status().granted, 3, "the dead verb's cores are free");
+    assert_eq!(launcher.waiting(), 1);
+
+    // Sweeping again ends nothing more, and the live verb still takes its command over.
+    assert_eq!(launcher.end_orphans(&running), 0);
+    let taken = as_handle(Some(live.as_str()), || {
+        launcher.run(&spec(&["cargo", "nextest", "run"]))
+    });
+    assert_eq!(taken.exit, Some(0));
+    assert!(!live_ended.load(Ordering::SeqCst));
+    assert_eq!(launcher.waiting(), 0);
+}
+
+#[test]
+fn a_handle_runs_until_it_finishes_and_an_unknown_one_never_runs() {
+    let handles = crate::handles::Handles::new(Arc::new(SystemClock));
+    let land = handles.create("land", None, None);
+    assert!(handles.is_running(&land));
+    handles.finish(
+        &land,
+        crate::handles::incomplete("land", &land, "finished for the test"),
+    );
+    assert!(!handles.is_running(&land));
+    assert!(!handles.is_running(&handle("L-99999")));
+}

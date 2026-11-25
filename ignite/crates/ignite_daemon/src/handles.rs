@@ -288,6 +288,21 @@ impl Handles {
                 .is_some_and(|entry| entry.reply.is_some())
     }
 
+    /// Whether `handle` is known and has not finished: a verb running on a thread of the daemon
+    /// or in a verb process, or one a restarted daemon found running and runs again. A handle
+    /// neither memory nor the database knows does not run.
+    pub(crate) fn is_running(&self, handle: &Handle) -> bool {
+        let in_memory = lock(&self.state)
+            .replies
+            .get(handle)
+            .map(|entry| entry.reply.is_none());
+        let stored = self.stored(handle).map(|row| row.state == "running");
+        !matches!(
+            (in_memory, stored),
+            (Some(false), _) | (_, Some(false)) | (None, None)
+        )
+    }
+
     /// Records the reply of a finished operation and wakes everyone waiting on it.
     pub fn finish(&self, handle: &Handle, reply: Reply) {
         self.finish_as(handle, reply, "done");

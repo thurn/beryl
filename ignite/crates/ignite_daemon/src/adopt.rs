@@ -23,6 +23,16 @@
 //! prebuilt or reset, or a landing tree whose owner will not run again) has had its files changed
 //! under it, so its result says nothing about the commit it was started for. Such a run is ended
 //! at start ([`end_runs_in`]) and never adopted.
+//!
+//! A previous command whose handle no longer runs has nobody left to collect its result: the
+//! verb's process died and the verb was not run again, or the run again finished without asking
+//! for that command. Such a command is ended ([`AdoptingLauncher::end_orphans`], run at start
+//! and then every [`ORPHAN_SWEEP`] by [`sweep_orphans`]), which also releases the cores its
+//! adopted grant holds once its supervisor exits (see `supervise/grants.rs`). On cygnus on
+//! 2026-11-25 a `cargo nextest run --no-run` left by a landing whose verb process died with a
+//! hung daemon kept compiling, and kept its 10-core `land` grant, through two restarts:
+//! `ignite status` showed every core granted at 19% CPU, and the machine took no tickets until an
+//! incident commander ended the process.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -78,6 +88,7 @@ impl Previous {
             .find(|(name, _)| name == HANDLE_VARIABLE)
             .and_then(|(_, value)| Handle::new(value.as_str()).ok())?;
         let (waited, ended) = (run.clone(), run.clone());
+        let marked = spec.clone();
         Some(Previous {
             handle,
             args: spec.args,
@@ -85,7 +96,15 @@ impl Previous {
             env: spec.env,
             wait: Box::new(move || waited.wait()),
             end: Box::new(move || {
+                // A supervisor that has exited holds no process group any more, and its ID may
+                // belong to another process by now.
+                if !ended.is_running() {
+                    return;
+                }
                 let _ = ended.end();
+                // An ended compile leaves its target directory half written (see `end_runs_in`).
+                let tree = marked.tree_path.as_deref().unwrap_or(&marked.cwd);
+                crate::build::repair::mark_ended(&marked, tree);
             }),
         })
     }
@@ -165,6 +184,36 @@ impl AdoptingLauncher {
         self.previous.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    /// Ends every previous command whose handle `running` says no longer runs, and returns how
+    /// many it ended. Nobody can collect such a command's result: its verb's process died and
+    /// the verb was not run again (its handle ended `incomplete`), or the verb's run again
+    /// finished without asking for it. A command whose handle runs is kept, whether a live verb
+    /// process waits for it or a verb run again under the same handle may still ask for it.
+    pub fn end_orphans(&self, running: &dyn Fn(&Handle) -> bool) -> usize {
+        let orphans: Vec<Previous> = {
+            let mut previous = self.lock();
+            let gone: Vec<Handle> = previous
+                .keys()
+                .filter(|handle| !running(handle))
+                .cloned()
+                .collect();
+            gone.iter()
+                .filter_map(|handle| previous.remove(handle))
+                .flatten()
+                .collect()
+        };
+        for orphan in &orphans {
+            eprintln!(
+                "ignite: ending `{}` in {}: {} no longer runs, so nobody collects its result",
+                orphan.args.join(" "),
+                orphan.cwd.display(),
+                orphan.handle,
+            );
+            (orphan.end)();
+        }
+        orphans.len()
+    }
+
     /// The previous command of `handle` with `spec`'s arguments and directory, taken out so no
     /// other run takes it as well. One that started at another commit than `at`, the checkout's
     /// `HEAD` now, is taken out too but ended, and `None` is returned so the command starts again.
@@ -232,6 +281,31 @@ impl AdoptingLauncher {
             Some(cancelled) => self.inner.run_until(&tagged, cancelled),
             None => self.inner.run(&tagged),
         }
+    }
+}
+
+/// How often [`sweep_orphans`] looks again for previous commands whose handle has ended.
+pub const ORPHAN_SWEEP: Duration = Duration::from_secs(30);
+
+/// Ends the previous commands of handles that no longer run now, after the server has run again
+/// or ended every handle the previous daemon left running, and then every [`ORPHAN_SWEEP`] on a
+/// thread of its own, which stops once no previous command is left.
+pub fn sweep_orphans(launcher: Arc<AdoptingLauncher>, handles: Arc<crate::handles::Handles>) {
+    let running = move |handle: &Handle| handles.is_running(handle);
+    launcher.end_orphans(&running);
+    if launcher.waiting() == 0 {
+        return;
+    }
+    let spawned = std::thread::Builder::new()
+        .name("ignite-orphan-sweep".to_owned())
+        .spawn(move || {
+            while launcher.waiting() > 0 {
+                std::thread::sleep(ORPHAN_SWEEP);
+                launcher.end_orphans(&running);
+            }
+        });
+    if let Err(error) = spawned {
+        eprintln!("ignite: cannot start the thread that ends orphaned runs: {error}");
     }
 }
 

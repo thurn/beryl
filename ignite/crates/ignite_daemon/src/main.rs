@@ -180,6 +180,9 @@ impl Daemon {
         };
         startup_step(home_root, "opening handles and resuming orphan verbs");
         let server = assemble::server(&base, &ctx, &parts, &desks)?;
+        // The server has run again, or ended, every handle the previous daemon left running, so
+        // a command left for a handle that no longer runs has nobody to collect it.
+        crate::adopt::sweep_orphans(machinery.adopting.clone(), server.handles().clone());
         let _ = parts.update.drain.set(server.clone());
         server.register_late(Box::new(drill::RestartVerb {
             update: parts.update.clone(),

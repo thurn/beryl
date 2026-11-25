@@ -146,6 +146,9 @@ impl Base {
 pub struct Machinery {
     pub scheduler: Arc<Scheduler>,
     pub launcher: Arc<dyn Launcher>,
+    /// `launcher` itself, which holds the commands a previous daemon left until a verb run
+    /// again takes them over or their handle ends (see [`crate::adopt::sweep_orphans`]).
+    pub adopting: Arc<AdoptingLauncher>,
     /// The launcher under `launcher`, which starts the commands of verb processes (see
     /// `crate::host`) without the adoption a verb run again needs.
     pub supervised: Arc<SupervisedLauncher>,
@@ -193,10 +196,11 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
     // Read before the adopting launcher ends the runs in trees that are reset; the build
     // manager skips those runs itself.
     let unfinished = supervised.unfinished();
-    let launcher: Arc<dyn Launcher> = Arc::new(AdoptingLauncher::over_supervised(
+    let adopting = Arc::new(AdoptingLauncher::over_supervised(
         supervised.clone(),
         &reset,
     ));
+    let launcher: Arc<dyn Launcher> = adopting.clone();
     let builds = Arc::new(
         BuildManager::new(
             BuildSettings {
@@ -250,6 +254,7 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
     Ok(Machinery {
         scheduler,
         launcher,
+        adopting,
         supervised,
         builds,
         trees,
