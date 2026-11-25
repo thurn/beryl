@@ -1,4 +1,4 @@
-"""A model trial's spec: the two arms, the block size, the budget, the reviewer and the ordered
+"""A model trial's spec: the source arm and one or more copy arms, the block size, the budget, the reviewer and the ordered
 list of source tickets. It is a fenced JSON block under the heading "## Trial spec" in the
 trial epic's notes, so that it travels with the trial's tickets. Every number the trial uses
 comes from here, never from the code.
@@ -12,6 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 HEADING = "## Trial spec"
+# The arm name of the real ticket. Every other key of `arms` names a copy arm.
+SOURCE = "source"
+ARM_NAME: re.Pattern[str] = re.compile(r"[a-z][a-z0-9-]*")
 FENCE: re.Pattern[str] = re.compile(r"```json\s*\n(.*?)\n```", re.DOTALL)
 
 
@@ -48,7 +51,11 @@ class Reviewer:
 @dataclass(frozen=True)
 class Spec:
     source: Arm
-    copy: Arm
+    # Each copy arm by name, in the spec's order. Every source gets one copy per arm, all
+    # starting from the same commit, and each copy is graded and reviewed against the source
+    # as a pair of its own. The first arm is the one `pair next` and `pair title` work on by
+    # default; a spec written before several arms existed has one, named `copy`.
+    copies: tuple[tuple[str, Arm], ...]
     cap_usd: float
     tickets: tuple[str, ...]
     block_size: int = 6
@@ -62,6 +69,27 @@ class Spec:
     @property
     def pair_limit(self) -> int:
         return self.max_pairs or len(self.tickets)
+
+    @property
+    def first_copy(self) -> str:
+        return self.copies[0][0]
+
+    @property
+    def copy(self) -> Arm:
+        """The first copy arm."""
+        return self.copies[0][1]
+
+    def copy_names(self) -> list[str]:
+        return [name for name, _ in self.copies]
+
+    def arm(self, name: str) -> Arm:
+        """The arm named `name`: `source` or a copy arm."""
+        if name == SOURCE:
+            return self.source
+        for key, arm in self.copies:
+            if key == name:
+                return arm
+        raise SpecError(f"the spec has no arm named {name!r}")
 
 
 def _object(value: object, field: str) -> dict[str, object]:
@@ -121,9 +149,19 @@ def parse(value: object, *, draft: bool = False) -> Spec:
     block_size = int(_number(data, "block_size", Spec.block_size, whole=True))
     if block_size < 1:
         raise SpecError("`block_size` must be at least 1")
+    names = [k for k in arms if k != SOURCE]
+    if not names:
+        raise SpecError(
+            "`arms` must name a copy arm beside `source`, such as `arms.copy`"
+        )
+    for key in names:
+        if not ARM_NAME.fullmatch(key):
+            raise SpecError(
+                f"`arms.{key}`: an arm's name is lowercase letters, digits and hyphens"
+            )
     return Spec(
-        source=_arm(arms, "source"),
-        copy=_arm(arms, "copy"),
+        source=_arm(arms, SOURCE),
+        copies=tuple((key, _arm(arms, key)) for key in names),
         cap_usd=_number(data, "cap_usd", None),
         tickets=tuple(str(t) for t in tickets),
         block_size=block_size,

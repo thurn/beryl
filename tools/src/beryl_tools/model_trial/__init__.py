@@ -32,7 +32,7 @@ def run(command: Command, args: argparse.Namespace) -> int:
         return 2
     try:
         return command(args, spec)
-    except (pair.PairError, KeyError, io.IgniteError) as error:
+    except (pair.PairError, KeyError, SpecError, io.IgniteError) as error:
         print(f"model-trial: {error}", file=sys.stderr)
         return 1
 
@@ -118,6 +118,9 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     title = _command(steps, "title", "set the copy's reworded title", pair.cmd_title)
     title.add_argument("pair")
     title.add_argument("title")
+    title.add_argument(
+        "--arm", help="the copy arm this title is for (the spec's first copy arm)"
+    )
     audit = _command(
         steps, "audit", "record what a planted source landed", pair.cmd_audit
     )

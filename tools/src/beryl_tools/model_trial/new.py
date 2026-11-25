@@ -54,7 +54,10 @@ def build(title: str, spec: Spec, raw: object, machine: str) -> dict[str, Any]:
     body, acceptance = template(
         "epic",
         source_labels=", ".join(f"`{label}`" for label in spec.source.labels()),
-        copy_labels=", ".join(f"`{label}`" for label in spec.copy.labels()),
+        copy_labels="; ".join(
+            f"{arm}: " + ", ".join(f"`{label}`" for label in spec.arm(arm).labels())
+            for arm in spec.copy_names()
+        ),
         block_size=spec.block_size,
     )
     ops: list[dict[str, Any]] = [

@@ -487,3 +487,52 @@ def test_judged_pairs_are_spread_across_the_kinds_and_kept() -> None:
     kinds = sorted(found[c["pair"]][0].kind for c in chosen)
     assert kinds == ["engine", "engine", "interface", "tooling"]
     assert judge.choose(found, 4, seed=3) == chosen
+
+
+def test_each_copy_arm_gets_its_own_tables_and_a_source_is_paid_for_once() -> None:
+    two = parse(
+        {
+            "arms": {
+                "source": {"tier": "opus", "provider": "claude", "effort": "medium"},
+                "copy": {"tier": "sonnet", "provider": "claude", "effort": "high"},
+                "hydrogen": {
+                    "tier": "opus",
+                    "provider": "agy-gemini",
+                    "effort": "high",
+                },
+            },
+            "cap_usd": 400,
+            "tickets": ["E1.1", "E1.2", "E1.3"],
+        }
+    )
+    base = trial(spec=two)
+    extra = pair(
+        "h1",
+        "E1.1",
+        0,
+        arm="hydrogen",
+        main="p1",
+        models={"source": OPUS, "copy": "gemini-4-hydrogen"},
+    )
+    rows = grades("h1", {"dollars": 4.0, "ticket": "source-p1"}, {"dollars": 3.0})
+    for g in base.grades:
+        if g.pair == "p1" and g.arm == "source":
+            g.ticket = "source-p1"
+    text = report.table(
+        report.Trial(
+            id="T1",
+            spec=two,
+            pairs=[*base.pairs, extra],
+            grades=[*base.grades, *rows],
+            reviews=base.reviews,
+        )
+    )
+    assert "## sonnet (copy) against the source: all pairs (2 counted)" in text
+    assert "## agy-gemini (hydrogen) against the source: all pairs (1 counted)" in text
+    assert "3 filed (and 1 copies on the other arms)" in text
+    # E1.1's source is graded twice but paid for once: 4 + 6 + 100.
+    assert "The source arm's sessions cost $110.00 (n=3)" in text
+    assert "measure the model and that harness together" in text
+    assert (
+        "hydrogen `tier:opus` on agy-gemini at high effort (gemini-4-hydrogen)" in text
+    )

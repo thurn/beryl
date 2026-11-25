@@ -1,6 +1,7 @@
 """`model-trial report` and `model-trial list`.
 
-`report` prints a trial's table in Markdown, for all pairs and again by kind. Every number
+`report` prints a trial's table in Markdown, for all pairs and again by kind, once for each copy
+arm: every copy arm is compared with the same source arm, pair by pair. Every number
 carries the count of pairs behind it. A void pair is listed but counted nowhere else. A rubric
 line goes to an arm only when every run of the pair's review picked that arm; a split is a tie.
 The cap counts the copies' sessions and the reviewer runs; the source arm's sessions are work
@@ -115,7 +116,11 @@ def results(trial: Trial) -> list[Result]:
 
 
 def name(spec: Spec, arm: str) -> str:
-    return f"{(spec.source if arm == 'source' else spec.copy).tier} ({arm})"
+    """How a column names an arm: `source`, or a copy arm's name from the spec."""
+    if arm == "source":
+        return f"{spec.source.tier} (source)"
+    a = spec.arm(arm)
+    return f"{a.tier} ({arm})" if a.provider == "claude" else f"{a.provider} ({arm})"
 
 
 def median_cell(values: Sequence[float | None], unit: str = "") -> tuple[str, float]:
@@ -180,11 +185,11 @@ def group_rows(spec: Spec, group: list[Result]) -> list[tuple[str, str, str]]:
     return rows
 
 
-def rubric_rows(spec: Spec, group: list[Result]) -> list[str]:
+def rubric_rows(spec: Spec, group: list[Result], arm: str) -> list[str]:
     reviewed = [r for r in group if r.picks is not None]
     lines = [
         f"| Rubric line (n={len(reviewed)} reviewed) | {name(spec, 'source')} "
-        f"| {name(spec, 'copy')} | tie |",
+        f"| {name(spec, arm)} | tie |",
         "|---|---|---|---|",
     ]
     for key, title in RUBRIC.items():
@@ -196,15 +201,15 @@ def rubric_rows(spec: Spec, group: list[Result]) -> list[str]:
     return lines
 
 
-def group_section(spec: Spec, title: str, group: list[Result]) -> list[str]:
+def group_section(spec: Spec, title: str, group: list[Result], arm: str) -> list[str]:
     lines = [
         f"## {title} ({len(group)} counted)",
         "",
-        f"| | {name(spec, 'source')} | {name(spec, 'copy')} |",
+        f"| | {name(spec, 'source')} | {name(spec, arm)} |",
         "|---|---|---|",
     ]
     lines += [f"| {label} | {s} | {c} |" for label, s, c in group_rows(spec, group)]
-    return [*lines, "", *rubric_rows(spec, group), ""]
+    return [*lines, "", *rubric_rows(spec, group, arm), ""]
 
 
 def money(value: float) -> str:
@@ -212,15 +217,17 @@ def money(value: float) -> str:
 
 
 def models_line(trial: Trial) -> str:
-    seen: dict[str, set[str]] = {a: set() for a in ARMS}
-    for p in trial.pairs:
-        for arm in ARMS:
-            if p.models.get(arm):
-                seen[arm].add(p.models[arm])
     spec = trial.spec
+    names = ["source", *spec.copy_names()]
+    seen: dict[str, set[str]] = {a: set() for a in names}
+    for p in trial.pairs:
+        if p.models.get("source"):
+            seen["source"].add(p.models["source"])
+        if p.models.get("copy") and p.arm in seen:
+            seen[p.arm].add(p.models["copy"])
     parts = []
-    for arm in ARMS:
-        a = spec.source if arm == "source" else spec.copy
+    for arm in names:
+        a = spec.arm(arm)
         ids = ", ".join(sorted(seen[arm])) or "no pair filed yet"
         parts.append(
             f"{arm} `tier:{a.tier}` on {a.provider} at {a.effort} effort ({ids})"
@@ -238,14 +245,20 @@ def reviewer_of(trial: Trial) -> tuple[set[str], set[str]]:
 
 def header(trial: Trial, found: list[Result]) -> list[str]:
     spec = trial.spec
-    filed = sum(p.state == FILED for p in trial.pairs)
+    filed = sum(p.state == FILED and p.main is None for p in trial.pairs)
+    extra = sum(p.state == FILED and p.main is not None for p in trial.pairs)
     reviewed = sum(r.picks is not None for r in found)
     models, versions = reviewer_of(trial)
     latest = manifest.latest_grades(trial.grades)
     copies = [float(a["copy"].dollars or 0) for a in latest.values()]
-    sources = [
-        a["source"].dollars for a in latest.values() if a["source"].dollars is not None
-    ]
+    # A source is graded once per copy arm; count each source ticket once.
+    sources = list(
+        {
+            a["source"].ticket: a["source"].dollars
+            for a in latest.values()
+            if a["source"].dollars is not None
+        }.values()
+    )
     reviewer_cost = sum((r.cost_usd for r in trial.reviews), 0.0)
     total = sum(copies, 0.0) + reviewer_cost
     lines = [
@@ -255,8 +268,9 @@ def header(trial: Trial, found: list[Result]) -> list[str]:
         f"Reviewer: {', '.join(sorted(models)) or 'no review yet'} at {spec.reviewer.effort} "
         f"effort, rubric version {', '.join(sorted(versions)) or 'none yet'}, "
         f"{spec.reviewer.runs_per_pair} runs per pair.",
-        f"Pairs: {len(trial.pairs)} listed, {filed} filed, {len(found)} graded, "
-        f"{reviewed} reviewed.",
+        f"Pairs: {len(trial.pairs) - extra} listed, {filed} filed"
+        + (f" (and {extra} copies on the other arms)" if extra else "")
+        + f", {len(found)} graded, {reviewed} reviewed.",
         f"Spend: {money(total)} of the {money(spec.cap_usd)} cap: the copies "
         f"{money(sum(copies, 0.0))} (n={len(copies)}) and the reviewer {money(reviewer_cost)} "
         f"(n={len(trial.reviews)} runs). The source arm's sessions cost "
@@ -264,6 +278,13 @@ def header(trial: Trial, found: list[Result]) -> list[str]:
     ]
     lines.append("Plan usage: " + usage_text(trial.usage) + ".")
     lines.append(FAIRNESS)
+    harnessed = [a for a in spec.copy_names() if spec.arm(a).provider != "claude"]
+    if harnessed:
+        lines.append(
+            f"The {', '.join(harnessed)} arm worked through its provider's own CLI, with "
+            "instructions and skills written for Claude, so its results measure the model "
+            "and that harness together."
+        )
     return [*lines, ""]
 
 
@@ -287,12 +308,14 @@ def usage_text(usage: dict[str, list[dict[str, Any]]]) -> str:
     return "; ".join(parts) or "no reading in the store"
 
 
-def planted_section(spec: Spec, found: list[Result]) -> list[str]:
+def planted_section(spec: Spec, found: list[Result], pairs: list[Pair]) -> list[str]:
     planted = [r for r in found if r.pair.plant is not None]
+    mains = {p.pair: p for p in pairs}
     lines = [f"## Planted premises ({len(planted)})", ""]
     for r in planted:
         noticed = r.noticed or {}
-        audit = r.pair.audit
+        # The audit is of the landed source, so it is recorded on the main pair.
+        audit = mains.get(r.pair.main or r.pair.pair, r.pair).audit
         audited = (
             f"the audit found {audit['harm']}: {audit['note']}"
             if audit
@@ -300,7 +323,7 @@ def planted_section(spec: Spec, found: list[Result]) -> list[str]:
         )
         lines.append(
             f"- {r.pair.source}: {name(spec, 'source')} noticed: "
-            f"{noticed.get('source', 'not reviewed')}; {name(spec, 'copy')} noticed: "
+            f"{noticed.get('source', 'not reviewed')}; {name(spec, r.pair.arm)} noticed: "
             f"{noticed.get('copy', 'not reviewed')}; {audited}."
         )
     return [*lines, ""] if planted else []
@@ -364,7 +387,7 @@ def pair_lines(spec: Spec, found: list[Result]) -> list[str]:
         overall = r.picks["overall"] if r.picks else "not reviewed"
         lines.append(
             f"- {r.pair.source} / {r.pair.copy} ({r.pair.kind}, {state}): "
-            f"source {s.ended}, {money(float(s.dollars or 0))}; copy {c.ended}, "
+            f"source {s.ended}, {money(float(s.dollars or 0))}; {r.pair.arm} {c.ended}, "
             f"{money(float(c.dollars or 0))}; overall: {overall}"
         )
     return lines
@@ -374,12 +397,22 @@ def table(trial: Trial) -> str:
     found = results(trial)
     counted = [r for r in found if not r.void]
     lines = header(trial, found)
-    lines += group_section(trial.spec, "All pairs", counted)
-    for kind in KINDS:
-        group = [r for r in counted if r.pair.kind == kind]
-        if group:
-            lines += group_section(trial.spec, f"{kind.capitalize()} pairs", group)
-    lines += planted_section(trial.spec, found)
+    arms = trial.spec.copy_names()
+    for arm in arms:
+        mine = [r for r in counted if r.pair.arm == arm]
+        prefix: str = (
+            f"{name(trial.spec, arm)} against the source: " if len(arms) > 1 else ""
+        )
+
+        def title(what: str) -> str:
+            return f"{prefix}{what}" if prefix else what.capitalize()
+
+        lines += group_section(trial.spec, title("all pairs"), mine, arm)
+        for kind in KINDS:
+            group = [r for r in mine if r.pair.kind == kind]
+            if group:
+                lines += group_section(trial.spec, title(f"{kind} pairs"), group, arm)
+    lines += planted_section(trial.spec, found, trial.pairs)
     lines += contamination_section(found)
     lines += void_section(found)
     if trial.verdicts:
@@ -421,18 +454,25 @@ def compare(trials: list[Trial]) -> str:
     ]
     columns: list[dict[str, str]] = []
     for t in trials:
-        counted = [r for r in results(t) if not r.void]
-        cells = {"Pairs counted": str(len(counted))}
-        for label, s, c in group_rows(t.spec, counted):
-            cells[label] = f"source {s}; copy {c}"
-        reviewed = [r for r in counted if r.picks is not None]
-        for key, title in RUBRIC.items():
-            cells[title] = " / ".join(
-                f"{sum(bool(r.picks and r.picks[key] == v) for r in reviewed)} {v}"
-                for v in (*ARMS, "tie")
-            )
+        cells: dict[str, str] = {}
+        names = t.spec.copy_names()
+        for arm in names:
+            # A trial with one copy arm keeps the plain labels, so that it lines up with
+            # another such trial whatever its arm is called.
+            prefix = "" if len(names) == 1 else f"{arm}: "
+            counted = [r for r in results(t) if not r.void and r.pair.arm == arm]
+            cells[f"{prefix}Pairs counted"] = str(len(counted))
+            for label, s, c in group_rows(t.spec, counted):
+                cells[f"{prefix}{label}"] = f"source {s}; copy {c}"
+            reviewed = [r for r in counted if r.picks is not None]
+            for key, title in RUBRIC.items():
+                cells[f"{prefix}{title}"] = " / ".join(
+                    f"{sum(bool(r.picks and r.picks[key] == v) for r in reviewed)} {v}"
+                    for v in (*ARMS, "tie")
+                )
         columns.append(cells)
-    for label in columns[0]:
+    labels = list(dict.fromkeys(label for c in columns for label in c))
+    for label in labels:
         lines.append(
             f"| {label} | " + " | ".join(c.get(label, "") for c in columns) + " |"
         )
@@ -491,12 +531,14 @@ def cmd_list(args: argparse.Namespace) -> int:
         reviewed = {r.pair for r in reviews if r.ok}
         try:
             spec = load_spec(trial)
-            arms = f"{spec.source.tier} against {spec.copy.tier}"
+            arms = f"{spec.source.tier} against " + ", ".join(
+                name(spec, a) for a in spec.copy_names()
+            )
             cap = money(spec.cap_usd)
         except (SpecError, io.IgniteError) as error:
             arms, cap = f"spec unreadable ({error})", "?"
         print(
-            f"{trial}  {arms}  {sum(p.state == FILED for p in pairs)} filed, "
+            f"{trial}  {arms}  {sum(p.state == FILED and p.main is None for p in pairs)} filed, "
             f"{len(latest)} graded, {len(reviewed & set(latest))} reviewed, "
             f"{money(review.spent(grades, reviews))} of {cap}"
         )

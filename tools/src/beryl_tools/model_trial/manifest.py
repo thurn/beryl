@@ -96,6 +96,15 @@ class Pair:
     block: int | None = None
     copy: str | None = None
     copy_title: str | None = None
+    # The spec's copy arm this pair's copy runs on. A pair of the first arm is the main pair:
+    # it is listed, marked and filed with its source. A pair of any other arm is filed after
+    # its main pair, from the main copy's text and the same start commit, and names it in
+    # `main`. Rows written before several arms existed belong to the arm named `copy`.
+    arm: str = "copy"
+    main: str | None = None
+    # Titles for the other arms' copies, by arm, set with `pair title --arm` before they are
+    # filed. Each must differ from the source's title and from every other copy's.
+    arm_titles: dict[str, str] = field(default_factory=dict)
     start_commit: str | None = None
     # The model ID each arm resolved to when the pair was filed, from `ignite.toml`.
     models: dict[str, str] = field(default_factory=dict)
@@ -132,11 +141,16 @@ def save_pair(pair: Pair) -> None:
 
 
 def find_pair(pairs: list[Pair], key: str) -> Pair:
-    """The pair whose token, source or copy is `key`."""
+    """The pair whose token or copy is `key`, or the main pair of the source `key`."""
     for pair in pairs:
-        if key in (pair.pair, pair.source, pair.copy):
+        if key in (pair.pair, pair.copy) or (key == pair.source and pair.main is None):
             return pair
     raise KeyError(f"no pair {key!r} in this trial")
+
+
+def extra_copies(pairs: list[Pair], main: Pair) -> dict[str, Pair]:
+    """The pairs of `main`'s other copy arms that have been filed, by arm."""
+    return {p.arm: p for p in pairs if p.main == main.pair}
 
 
 @dataclass

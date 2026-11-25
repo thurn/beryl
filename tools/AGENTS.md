@@ -36,18 +36,20 @@ so when new code reads a data file, add it there or run
 In a trial, the pool works real tickets on one model (the source arm, which
 lands as usual), and a worker on another model works a copy of each from a
 frozen commit (the copy arm, which ends on a branch `trial/<copy id>` and never
-lands). The tool then grades and compares the two arms. A trial is its epic. The
-epic's notes hold the trial spec (the arms, the block size, the budget and the
-ordered ticket list), and every command takes `--trial <epic>`. The records are
-JSON lines in `$BERYL_CACHE/model-trial/<epic>/` (`pairs.jsonl`, `grades.jsonl`,
-and each pair's downloaded images), and are never committed. `io.py` holds every
-call to `ignite`, git and the efficiency store, so the rest of the package is
-pure and its tests pass made-up ticket JSON. `grade` reads each arm's commands
-from the efficiency store's `tool_calls` table, which keeps only each command's
-first 300 characters and no output. It reads output and the model's messages
-from the session's Claude transcript, whose path the store's `sources` table
-records, when the transcript is on the grading machine. It reads check verdicts
-from the store's `lane_runs` table, by commit.
+lands). A spec may name several copy arms, each compared with the source as a
+pair of its own. The tool then grades and compares the arms. A trial is its
+epic. The epic's notes hold the trial spec (the arms, the block size, the budget
+and the ordered ticket list), and every command takes `--trial <epic>`. The
+records are JSON lines in `$BERYL_CACHE/model-trial/<epic>/` (`pairs.jsonl`,
+`grades.jsonl`, and each pair's downloaded images), and are never committed.
+`io.py` holds every call to `ignite`, git and the efficiency store, so the rest
+of the package is pure and its tests pass made-up ticket JSON. `grade` reads
+each arm's commands from the efficiency store's `tool_calls` table, which keeps
+only each command's first 300 characters and no output. It reads output and the
+model's messages from the session's Claude or Antigravity (`agy`) transcript,
+whose path the store's `sources` table records, when the transcript is on the
+grading machine. It reads check verdicts from the store's `lane_runs` table, by
+commit.
 
 `review` runs a headless `claude -p` reviewer on each graded pair that is not
 void, twice with A and B swapped, and appends its answers to `reviews.jsonl`.

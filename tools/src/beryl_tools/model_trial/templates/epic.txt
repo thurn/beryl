@@ -5,8 +5,8 @@ ticket rests on measurements rather than a planner's guess.
 - **The source arm** ({source_labels}) is the real ticket. The pool works and lands it as
   usual. Filing its pair only adds the arm's provider and effort labels (and its tier, for a
   hub ticket that has none).
-- **The copy arm** ({copy_labels}) works a root ticket with the same text, a reworded title
-  and the starting and ending rules. It starts from the `staging` commit recorded when the pair
+- **Each copy arm** ({copy_labels}) works a root ticket with the same text, a reworded title
+  and the starting and ending rules, and is compared with the source as a pair of its own. It starts from the `staging` commit recorded when the pair
   was filed, never sees later work, and ends by saving its commits on the branch
   `trial/<copy id>` without landing.
 - `just model-trial grade` measures both arms (cost, time, check verdicts, diffs and the

@@ -25,6 +25,7 @@ import argparse
 import json
 import re
 from dataclasses import dataclass
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -32,7 +33,7 @@ from typing import Any
 from . import candidates, io, manifest, scan
 from .manifest import FILED, Grade, Pair
 from .scan import Trace
-from .spec import Spec
+from .spec import Arm, Spec
 
 BEAD: re.Pattern[str] = re.compile(r"[A-Za-z0-9.\-]+")
 SHA: re.Pattern[str] = re.compile(r"[0-9a-f]{7,64}")
@@ -146,15 +147,24 @@ def traces(cost_row: dict[str, Any]) -> list[Trace]:
     ]
     for window in cost_row.get("sessions") or []:
         transcript = str(window.get("transcript") or "")
-        if window.get("provider") != "claude" or not BEAD.fullmatch(transcript):
+        provider = str(window.get("provider") or "")
+        if not BEAD.fullmatch(transcript):
+            continue
+        # An Antigravity (`agy`) conversation keeps its transcript at
+        # `<conversation>/.system_generated/logs/transcript.jsonl`.
+        if provider == "claude":
+            source, pattern, read = "claude", f"%{transcript}.jsonl", transcript_traces
+        elif provider.startswith("agy-"):
+            source, pattern, read = "agy", f"%/{transcript}/%", agy_traces
+        else:
             continue
         rows = io.sql(
-            f"SELECT path FROM sources WHERE source = 'claude' AND path LIKE '%{transcript}.jsonl'"
+            f"SELECT path FROM sources WHERE source = '{source}' AND path LIKE '{pattern}'"
         )
         for row in rows:
             path = Path(str(row["path"]))
             if path.is_file():
-                found += transcript_traces(
+                found += read(
                     path, str(window.get("start") or ""), str(window.get("end") or "~")
                 )
     return found
@@ -192,14 +202,49 @@ def transcript_traces(path: Path, start: str, end: str) -> list[Trace]:
     return found
 
 
-def attachments(pair: Pair, ticket_id: str, arm: str) -> list[str]:
-    """Downloads the images the arm's session attached into the pair's directory."""
+def agy_traces(path: Path, start: str, end: str) -> list[Trace]:
+    """Commands, tool output and the model's own words from an Antigravity transcript, between
+    `start` and `end`. A `PLANNER_RESPONSE` step holds the model's words and its tool calls,
+    and a `GENERIC` step holds a tool's output."""
+    found: list[Trace] = []
+    for number, line in enumerate(
+        path.read_text(encoding="utf-8", errors="replace").splitlines()
+    ):
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(record, dict):
+            continue
+        at = str(record.get("created_at") or "")
+        if not (start <= at <= end):
+            continue
+        where = f"{path.parent.parent.parent.name}:{number + 1}"
+        content = record.get("content")
+        text = content if isinstance(content, str) else ""
+        if record.get("type") == "PLANNER_RESPONSE":
+            if text:
+                found.append(Trace("message", text, where))
+            for call in record.get("tool_calls") or []:
+                if isinstance(call, dict):
+                    found.append(
+                        Trace("command", json.dumps(call.get("args") or {}), where)
+                    )
+        elif record.get("type") == "GENERIC" and text:
+            found.append(Trace("output", text, where))
+    return found
+
+
+def attachments(pair: Pair, ticket_id: str, arm: str, since: str | None) -> list[str]:
+    """Downloads the images the arm's session attached into the pair's directory: those
+    attached after `since`, when the arm's ticket was filed, and not copied from the source.
+    """
     folder = manifest.trial_dir(pair.trial) / pair.pair / arm
     names: list[str] = []
     for item in io.attachments(ticket_id):
         name = str(item["name"])
         if name in pair.copied_attachments or str(item.get("created_at", "")) < str(
-            pair.filed_at or ""
+            since or ""
         ):
             continue
         io.get_attachment(ticket_id, name, folder / name)
@@ -220,8 +265,17 @@ def block_sessions(trial: str, everything: list[dict[str, Any]]) -> set[str]:
 
 
 def grade_pair(
-    pair: Pair, spec: Spec, everything: list[dict[str, Any]], writers: set[str]
+    pair: Pair,
+    spec: Spec,
+    everything: list[dict[str, Any]],
+    writers: set[str],
+    main: Pair | None = None,
+    siblings: Sequence[tuple[str, str]] = (),
 ) -> list[Grade] | None:
+    """Grades both arms of `pair` once both have ended. `main` is the pair that filed the source
+    (`pair` itself unless it is another arm's copy), and `siblings` are the (ID, title) of the
+    source's other copies, which neither arm should have seen."""
+    main = main or pair
     source, copy = io.show([pair.source, str(pair.copy)], history=True, comments=True)
     s_claim, c_claim = first_claim(source), first_claim(copy)
     if not (s_claim and s_claim.ended and c_claim and c_claim.ended):
@@ -275,10 +329,10 @@ def grade_pair(
     if c_end is None:
         void.append(f"the copy left no branch trial/{pair.copy}")
     void += arm_routing(
-        spec, s_claim, costs["source"], pair.models.get("source", ""), "source"
+        spec.source, s_claim, costs["source"], pair.models.get("source", ""), "source"
     )
     void += arm_routing(
-        spec, c_claim, costs["copy"], pair.models.get("copy", ""), "copy"
+        spec.arm(pair.arm), c_claim, costs["copy"], pair.models.get("copy", ""), "copy"
     )
     if pair.contamination and pair.contamination.get("decision") == "void":
         void.append(f"voided for contamination: {pair.contamination.get('note')}")
@@ -297,6 +351,7 @@ def grade_pair(
         s_claim.landed or [],
         text,
         in_start,
+        siblings,
     )
     grades: list[Grade] = []
     for name, ticket, claim, d, start, end, verb in (
@@ -345,7 +400,12 @@ def grade_pair(
                     if str(t.get("created_by")) == claim.session
                 ),
                 comments=[{"ticket": t, "author": a} for t, a in arms[name].elsewhere],
-                attachments=attachments(pair, str(ticket["id"]), name),
+                attachments=attachments(
+                    pair,
+                    str(ticket["id"]),
+                    name,
+                    main.filed_at if name == "source" else pair.filed_at,
+                ),
                 models=models_of(row),
                 void=void,
                 suspect=[f.row() for f in suspect],
@@ -354,21 +414,50 @@ def grade_pair(
     return grades
 
 
-def models_of(cost_row: dict[str, Any]) -> list[str]:
+def model_requests(cost_row: dict[str, Any]) -> dict[str, int]:
+    """How many requests the ticket's sessions made on each model."""
     bead = str(cost_row.get("bead") or "")
     if not BEAD.fullmatch(bead):
-        return []
-    rows = io.sql(f"SELECT DISTINCT model FROM requests WHERE bead = '{bead}'")
+        return {}
+    rows = io.sql(
+        f"SELECT model, count(*) AS n FROM requests WHERE bead = '{bead}' GROUP BY model"
+    )
+    return {
+        str(r["model"]): int(r["n"] or 0)
+        for r in rows
+        if r.get("model") and r["model"] != "<synthetic>"
+    }
+
+
+def models_of(cost_row: dict[str, Any]) -> list[str]:
+    return sorted(model_requests(cost_row))
+
+
+# A model that carries less than this share of an arm's requests does not void the pair. Agy
+# runs short helper steps on a lighter model (a few `gemini-3.8-flash` requests in a session of
+# hundreds on the arm's model), which says nothing about which model did the work.
+HELPER_SHARE = 0.1
+
+
+def other_models(requests: dict[str, int], model: str) -> list[str]:
+    """The models other than `model` that did a real part of the work. Agy records a model with
+    its effort (`gemini-4-neon-high` for `gemini-4-neon`), so a name that extends `model` with a
+    hyphen is the same model."""
+    total = sum(requests.values())
     return sorted(
-        str(r["model"]) for r in rows if r.get("model") and r["model"] != "<synthetic>"
+        m
+        for m, n in requests.items()
+        if m != model
+        and not m.startswith(f"{model}-")
+        and total
+        and n / total >= HELPER_SHARE
     )
 
 
 def arm_routing(
-    spec: Spec, claim: Claim, cost_row: dict[str, Any], model: str, name: str
+    arm: Arm, claim: Claim, cost_row: dict[str, Any], model: str, name: str
 ) -> list[str]:
     """Why an arm was not worked as its spec says: by another provider or model."""
-    arm = spec.source if name == "source" else spec.copy
     found: list[str] = []
     provider = (
         claim.session.removeprefix("cli-").rsplit("-", 1)[0]
@@ -377,8 +466,7 @@ def arm_routing(
     )
     if provider is not None and provider != arm.provider:
         found.append(f"the {name} was worked by {provider}, not {arm.provider}")
-    seen = models_of(cost_row)
-    other = [m for m in seen if m != model]
+    other = other_models(model_requests(cost_row), model)
     if model and other:
         found.append(f"the {name} was worked by {', '.join(other)}, not {model}")
     return found
@@ -397,8 +485,16 @@ def cmd_grade(args: argparse.Namespace, spec: Spec) -> int:
         return 0
     everything = io.export()
     writers = block_sessions(trial, everything)
+    pairs = manifest.read_pairs(trial)
+    by_token = {p.pair: p for p in pairs}
     for pair in todo:
-        grades = grade_pair(pair, spec, everything, writers)
+        siblings = [
+            (str(p.copy), p.copy_title or "")
+            for p in pairs
+            if p.source == pair.source and p.pair != pair.pair and p.copy
+        ]
+        main = by_token.get(pair.main or pair.pair, pair)
+        grades = grade_pair(pair, spec, everything, writers, main, siblings)
         if grades is None:
             print(f"{pair.source} / {pair.copy}: not both ended yet")
             continue

@@ -6,20 +6,27 @@ Filing a pair updates the real ticket (the source arm, which the pool works and 
 usual) and creates its copy (a root ticket that a worker on the copy arm works from a frozen
 commit and never lands). The two arms read the same words, so any planted premise is written
 into the source before the copy is made from it.
+
+A spec with several copy arms gets one more copy per source for each arm after the first.
+`pair file` files those after the main pair, as pairs of their own, by cloning the main copy's
+text, labels and images: the copy text never names a ticket, so every copy reads the same
+words and starts from the same commit, even when it is filed long after its main pair (an arm
+added to a running trial). It files them for every filed main pair that lacks one, so that
+adding an arm to the spec fills in the blocks already run.
 """
 
 from __future__ import annotations
 
 import argparse
 import secrets
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import candidates, copytext, grade, io, manifest
 from .manifest import FILED, LISTED, MARKED, SKIPPED, Pair
-from .spec import Spec
+from .spec import Arm, Spec
 
 # Words that would tell either session its ticket is one arm of a trial.
 MARKING_WORDS = ("trial", "copy", "sonnet", "opus", "duplicate", "pilot")
@@ -38,12 +45,13 @@ class PairError(ValueError):
     pass
 
 
-def new_pair(trial: str, ticket: dict[str, Any], order: int) -> Pair:
+def new_pair(trial: str, ticket: dict[str, Any], order: int, arm: str) -> Pair:
     return Pair(
         pair=secrets.token_hex(4),
         trial=trial,
         source=str(ticket["id"]),
         order=order,
+        arm=arm,
         kind=candidates.kind_of(candidates.ticket_text(ticket)),
         previous_allocation=ticket.get("allocation"),
     )
@@ -60,7 +68,7 @@ def mark_block(
     trial past `limit` marked or filed pairs. A listed pair whose source can no longer be an
     arm (`excluded` gives the reason) is skipped and the next one taken in its place. Returns
     the pairs it marked and the pairs it skipped."""
-    taken = sum(p.state in (MARKED, FILED) for p in pairs)
+    taken = sum(p.state in (MARKED, FILED) and p.main is None for p in pairs)
     room = max(0, min(count, limit - taken))
     chosen: list[Pair] = []
     skipped: list[Pair] = []
@@ -105,11 +113,15 @@ def plant(
     pair.plant = {"find": find, "replace": replace, "expect": expect}
 
 
-def check_title(title: str, source: dict[str, Any]) -> None:
-    """A copy's title says the same request in other words and gives nothing away."""
+def check_title(title: str, source: dict[str, Any], others: Sequence[str] = ()) -> None:
+    """A copy's title says the same request in other words and gives nothing away. `others`
+    are the titles of the source's other copies, which a title search would also find.
+    """
     words = title.lower()
     if words.strip() == str(source.get("title", "")).lower().strip():
         raise PairError("the copy's title must not be the source's title")
+    if words.strip() in (o.lower().strip() for o in others):
+        raise PairError("the copy's title must differ from the source's other copies'")
     marked = [w for w in MARKING_WORDS if w in words]
     if marked:
         raise PairError(f"the copy's title must not say {', '.join(marked)}")
@@ -233,6 +245,98 @@ def build_filing(
     return Filing(body=body, copy_index=copy_index, opened=opened)
 
 
+def build_extra(
+    token: str, arm: Arm, title: str, main_copy: dict[str, Any]
+) -> dict[str, Any]:
+    """The batch that files another arm's copy of a source: the main copy's text and machine
+    pin, with this arm's routing labels and its own title."""
+    labels = [
+        candidates.COPY_LABEL,
+        f"trial:pair-{token}",
+        *arm.labels(),
+        *(l for l in candidates.labels(main_copy) if l.startswith("machine:")),
+    ]
+    fields: dict[str, Any] = {
+        "title": title,
+        "body": main_copy.get("body") or "",
+        "acceptance": main_copy.get("acceptance") or "",
+        "type": main_copy.get("type") or "task",
+        "priority": FILED_PRIORITY,
+        "labels": labels,
+        "status": "open",
+    }
+    for key in ("needs_os", "estimate_minutes"):
+        if main_copy.get(key):
+            fields[key] = main_copy[key]
+    return {"ops": [{"op": "create", "fields": fields}]}
+
+
+def extra_pair(
+    token: str, main: Pair, name: str, copy: str, models: dict[str, str]
+) -> Pair:
+    """The record of `main`'s copy on arm `name`, which shares its source and start commit."""
+    return Pair(
+        pair=token,
+        trial=main.trial,
+        source=main.source,
+        order=main.order,
+        state=FILED,
+        kind=main.kind,
+        block=main.block,
+        copy=copy,
+        copy_title=main.arm_titles[name],
+        arm=name,
+        main=main.pair,
+        start_commit=main.start_commit,
+        models=models,
+        plant=main.plant,
+        filed_at=manifest.now(),
+    )
+
+
+def missing_extras(spec: Spec, pairs: list[Pair]) -> list[tuple[Pair, str]]:
+    """Each filed main pair and copy arm that has no copy yet."""
+    return [
+        (main, name)
+        for main in pairs
+        if main.state == FILED and main.main is None and main.copy
+        for name in spec.copy_names()[1:]
+        if name not in manifest.extra_copies(pairs, main)
+    ]
+
+
+def file_extras(trial: str, spec: Spec) -> int:
+    """Files every missing copy of the other arms. Returns how many it could not file for want
+    of a title."""
+    pairs = manifest.read_pairs(trial)
+    untitled: list[str] = []
+    for main, name in missing_extras(spec, pairs):
+        if not main.arm_titles.get(name):
+            untitled.append(f"{main.source} ({name})")
+            continue
+        arm = spec.arm(name)
+        main_copy = io.ticket(str(main.copy))
+        models = {
+            "source": main.models.get("source", ""),
+            "copy": io.model_ids(arm.provider).get(arm.tier, ""),
+        }
+        token = secrets.token_hex(4)
+        reply = io.batch(build_extra(token, arm, main.arm_titles[name], main_copy))
+        results = reply.get("results", []) if isinstance(reply, dict) else []
+        extra = extra_pair(token, main, name, str(results[0]["id"]), models)
+        extra.copied_attachments = clone_attachments(trial, main, extra)
+        manifest.save_pair(extra)
+        print(
+            f"{main.source} -> {name} copy {extra.copy}, from {str(main.start_commit)[:12]}"
+        )
+    if untitled:
+        print(
+            f"No copy title for {', '.join(untitled)}: run "
+            "`pair title <source> --arm <arm> <title>`, then `pair file` again."
+        )
+    return len(untitled)
+
+
 def audit(pair: Pair, harm: str, note: str) -> None:
     if pair.plant is None:
         raise PairError(f"pair {pair.pair} has no planted premise to audit")
@@ -263,7 +367,7 @@ def cmd_add(args: argparse.Namespace, spec: Spec) -> int:
     park: list[dict[str, Any]] = []
     refused = 0
     for ticket in tickets:
-        pair = new_pair(trial, ticket, order)
+        pair = new_pair(trial, ticket, order, spec.first_copy)
         order += 1
         reason = candidates.exclusion(ticket, ctx)
         if reason is not None:
@@ -324,10 +428,26 @@ def cmd_plant(args: argparse.Namespace, spec: Spec) -> int:
 
 def cmd_title(args: argparse.Namespace, spec: Spec) -> int:
     pair = _one(args)
-    if pair.state == FILED:
-        raise PairError(f"pair {pair.pair} is already filed")
-    check_title(args.title, io.ticket(pair.source))
-    pair.copy_title = args.title
+    if pair.main is not None:
+        raise PairError(f"pair {pair.pair} is another arm's copy: title its main pair")
+    arm = args.arm or spec.first_copy
+    spec.arm(arm)
+    pairs = manifest.read_pairs(args.trial)
+    if arm == spec.first_copy:
+        if pair.state == FILED:
+            raise PairError(f"pair {pair.pair} is already filed")
+        others = list(pair.arm_titles.values())
+    else:
+        if arm in manifest.extra_copies(pairs, pair):
+            raise PairError(f"the {arm} copy of {pair.source} is already filed")
+        others = [pair.copy_title or ""] + [
+            t for k, t in pair.arm_titles.items() if k != arm
+        ]
+    check_title(args.title, io.ticket(pair.source), others)
+    if arm == spec.first_copy:
+        pair.copy_title = args.title
+    else:
+        pair.arm_titles = {**pair.arm_titles, arm: args.title}
     manifest.save_pair(pair)
     return 0
 
@@ -356,7 +476,7 @@ def cmd_file(args: argparse.Namespace, spec: Spec) -> int:
     marked = [p for p in pairs if p.state == MARKED]
     if not marked:
         print("No marked pair to file.")
-        return 0
+        return 1 if file_extras(trial, spec) else 0
     # Skip a source that can no longer be an arm before asking for titles, so that a skipped
     # pair needs none.
     excluded = exclusions(spec, marked)
@@ -368,7 +488,12 @@ def cmd_file(args: argparse.Namespace, spec: Spec) -> int:
     if skipped:
         io.batch({"ops": [unpark(p) for p in skipped]})
     marked = [p for p in marked if p.state == MARKED]
-    untitled = [p.source for p in marked if not p.copy_title]
+    untitled = [p.source for p in marked if not p.copy_title] + [
+        f"{p.source} ({name})"
+        for p in marked
+        for name in spec.copy_names()[1:]
+        if not p.arm_titles.get(name)
+    ]
     if untitled:
         raise PairError(
             f"no copy title for {', '.join(untitled)}: run `pair title` first"
@@ -414,6 +539,7 @@ def cmd_file(args: argparse.Namespace, spec: Spec) -> int:
         pair.copied_attachments = copy_attachments(trial, pair)
         manifest.save_pair(pair)
         print(f"{pair.source} -> copy {pair.copy}, from {start[:12]}")
+    failed += file_extras(trial, spec)
     if args.then:
         defer(args.then)
     return 1 if failed else 0
@@ -458,6 +584,23 @@ def cmd_wait(args: argparse.Namespace, spec: Spec) -> int:
     if args.defer:
         defer(args.defer)
     return 3
+
+
+def clone_attachments(trial: str, main: Pair, extra: Pair) -> list[str]:
+    """Puts the images `pair file` copied onto the main copy on another arm's copy too. They
+    come from the main copy, not the source, because by now the source may carry the images
+    its own session attached."""
+    names: list[str] = []
+    folder = manifest.trial_dir(trial) / extra.pair / "source-attachments"
+    by_name = {str(i["name"]): i for i in io.attachments(str(main.copy))}
+    for name in main.copied_attachments:
+        item = by_name.get(name)
+        if item is None:
+            continue
+        path = io.get_attachment(str(main.copy), name, folder / name)
+        io.attach(str(extra.copy), path, name, item.get("caption"))
+        names.append(name)
+    return names
 
 
 def copy_attachments(trial: str, pair: Pair) -> list[str]:

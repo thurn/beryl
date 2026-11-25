@@ -10,7 +10,11 @@ an effort each) compare on the same real tickets. The **source arm** is the real
 pool works and lands it as usual. The **copy arm** works a root ticket with the same text from
 a frozen `staging` commit and ends on the branch `trial/<copy id>` without landing. A source and
 its copy are a **pair**. `just model-trial grade` measures both arms, `review` has a blind
-reviewer compare them, and `report` prints the table.
+reviewer compare them, and `report` prints the table. A spec may name several copy arms: each
+source then gets one copy per arm, all from the same commit, and each copy forms a pair of its
+own with the source. `pair file` files the other arms' copies after the first arm's, by cloning
+its text, and fills in any filed source that lacks one, so an arm added to a running trial
+covers the blocks already run.
 
 A trial is its epic. The epic's notes hold the **trial spec** under "## Trial spec", every
 command takes `--trial <epic>`, and the records are JSON lines in
@@ -50,7 +54,8 @@ list. He picks the tickets and their order; the tool never picks. Leave out, eve
 - a ticket that waits on another ticket's results, or that needs a machine with no worker.
 
 Order the list so that each block mixes kinds. Then finish the spec. Its fields are
-`arms.source` and `arms.copy` (each `tier`, `provider`, `effort`), `block_size`, `max_pairs`
+`arms.source` and one or more copy arms, each under its own name such as `arms.copy` (each
+`tier`, `provider`, `effort`; the first copy arm is the default one), `block_size`, `max_pairs`
 (zero for the whole list), `cap_usd`, `block_reserve_usd`, `planted_per_block`, `reviewer`
 (`model`, `effort`, `runs_per_pair`), `judge_pairs` and `tickets`. Missing optional fields get
 defaults, which `tools/src/beryl_tools/model_trial/spec.py` holds.
@@ -125,7 +130,11 @@ report ticket start with `pair wait`, which defers them again while any arm is u
    `just model-trial pair title <pair> --trial <epic> "<title>"`: the same request as the
    source's title in other words, with no word that marks it as a copy or a trial. A copy with
    its source's title would be found by any title search, and either session could then read
-   the other's work. `pair file` refuses a pair without one.
+   the other's work. `pair file` refuses a pair without one. With several copy arms, give each
+   other arm's copy its own title with `pair title <pair> --arm <arm> "<title>"`, different
+   from the source's and every other copy's. `pair file` files no copy that has no title and
+   says which titles it is missing, so a source filed before an arm was added gets that arm's
+   copy at the next `pair file` once you title it.
 9. **Plant.** In `planted_per_block` pairs of your choice, change one sentence of the source's
    text so that it states something untrue about the code (a helper that does not exist, a
    behaviour the code does not have), with

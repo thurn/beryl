@@ -716,3 +716,151 @@ def test_the_next_block_waits_until_both_arms_of_every_pair_have_ended() -> None
     tickets["C1"] = ticket("C1", history=history(claimed, closed))
     tickets["C2"] = ticket("C2", history=history(claimed, closed))
     assert pair.unfinished(pairs, tickets) == []
+
+
+# Several copy arms.
+
+HYDROGEN = {"tier": "opus", "provider": "agy-gemini", "effort": "high"}
+
+
+def two_arms() -> Spec:
+    return spec(arms={**SPEC_JSON["arms"], "hydrogen": HYDROGEN})
+
+
+def test_every_arm_beside_the_source_is_a_copy_arm_in_order() -> None:
+    found = two_arms()
+    assert found.copy_names() == ["copy", "hydrogen"]
+    assert found.first_copy == "copy"
+    assert found.arm("hydrogen").labels() == [
+        "tier:opus",
+        "provider:agy-gemini",
+        "effort:high",
+    ]
+    with pytest.raises(SpecError, match="no arm named"):
+        found.arm("neon")
+
+
+def test_an_arm_name_must_be_lowercase_words() -> None:
+    with pytest.raises(SpecError, match=r"arms\.Gemini"):
+        spec(arms={**SPEC_JSON["arms"], "Gemini": HYDROGEN})
+
+
+def test_a_row_from_before_several_arms_belongs_to_the_copy_arm() -> None:
+    row = {"pair": "p1", "trial": "T1", "source": "E1.1", "order": 0}
+    assert manifest._build(Pair, row).arm == "copy"
+
+
+def main_and_extra() -> tuple[Pair, Pair]:
+    main = filed_pair(
+        state=FILED, copy="TMAIN", start_commit=START, block=1, models={"source": "o"}
+    )
+    main.arm_titles = {"hydrogen": "Linked exiles survive the source coming back"}
+    extra = pair.extra_pair("beef0001", main, "hydrogen", "THYDR", {"copy": "g"})
+    return main, extra
+
+
+def test_another_arms_copy_shares_the_source_and_start_commit() -> None:
+    main, extra = main_and_extra()
+    assert (extra.source, extra.start_commit, extra.block) == ("E1.1", START, 1)
+    assert (extra.arm, extra.main, extra.state) == ("hydrogen", main.pair, FILED)
+    assert extra.copy_title == "Linked exiles survive the source coming back"
+    pairs = [main, extra]
+    assert manifest.extra_copies(pairs, main) == {"hydrogen": extra}
+    assert manifest.find_pair(pairs, "E1.1") is main
+    assert manifest.find_pair(pairs, "THYDR") is extra
+
+
+def test_pair_file_finds_the_filed_sources_an_arm_has_no_copy_of() -> None:
+    main, extra = main_and_extra()
+    listed = filed_pair(pair="p2", source="E1.2", state=LISTED)
+    assert pair.missing_extras(two_arms(), [main, listed]) == [(main, "hydrogen")]
+    assert pair.missing_extras(two_arms(), [main, extra, listed]) == []
+    assert pair.missing_extras(spec(), [main, listed]) == []
+
+
+def test_another_arms_copy_does_not_count_toward_the_trials_limit() -> None:
+    main, extra = main_and_extra()
+    listed = filed_pair(pair="p2", source="E1.2", state=LISTED, order=1)
+    marked, _ = pair.mark_block([main, extra, listed], 2, 6, 2)
+    assert marked == [listed]
+
+
+def test_another_arms_copy_clones_the_main_copys_text_with_its_own_routing() -> None:
+    main_copy = ticket(
+        "TMAIN",
+        title="Keep exiled-card links when a source leaves and comes back",
+        body="The copy text.",
+        acceptance="It works.",
+        labels=[
+            "trial:copy",
+            "trial:pair-c0ffee00",
+            "tier:sonnet",
+            "provider:claude",
+            "effort:high",
+            "machine:jarvis",
+        ],
+        needs_os="macos",
+    )
+    arm = two_arms().arm("hydrogen")
+    body = pair.build_extra("beef0001", arm, "Another wording", main_copy)
+    (op,) = body["ops"]
+    fields = op["fields"]
+    assert (fields["title"], fields["body"], fields["acceptance"]) == (
+        "Another wording",
+        "The copy text.",
+        "It works.",
+    )
+    assert fields["labels"] == [
+        "trial:copy",
+        "trial:pair-beef0001",
+        "tier:opus",
+        "provider:agy-gemini",
+        "effort:high",
+        "machine:jarvis",
+    ]
+    assert (fields["needs_os"], fields["priority"]) == ("macos", 1)
+
+
+def test_a_copy_title_must_differ_from_the_other_copies() -> None:
+    with pytest.raises(pair.PairError, match="other copies"):
+        pair.check_title("Some other words", ticket(), ["some other words"])
+
+
+def test_a_lighter_helper_model_or_the_effort_suffix_does_not_void_an_arm() -> None:
+    requests = {"gemini-4-hydrogen-high": 400, "gemini-3.8-flash-low": 3}
+    assert grade.other_models(requests, "gemini-4-hydrogen") == []
+    requests["gemini-4-neon-high"] = 100
+    assert grade.other_models(requests, "gemini-4-hydrogen") == ["gemini-4-neon-high"]
+
+
+def test_an_agy_transcript_gives_messages_commands_and_output(tmp_path: Any) -> None:
+    logs = tmp_path / "conv-1" / ".system_generated" / "logs"
+    logs.mkdir(parents=True)
+    path = logs / "transcript.jsonl"
+    records = [
+        {
+            "type": "PLANNER_RESPONSE",
+            "created_at": "2026-11-24T10:00:00Z",
+            "content": "This is a trial copy.",
+            "tool_calls": [
+                {"name": "run_command", "args": {"CommandLine": "git fetch"}}
+            ],
+        },
+        {"type": "GENERIC", "created_at": "2026-11-24T10:00:01Z", "content": "done"},
+        {"type": "GENERIC", "created_at": "2026-11-25T00:00:00Z", "content": "late"},
+    ]
+    path.write_text("\n".join(json.dumps(r) for r in records), encoding="utf-8")
+    found = grade.agy_traces(path, "2026-11-24T00:00:00Z", "2026-11-24T23:59:59Z")
+    assert [(t.kind, t.where) for t in found] == [
+        ("message", "conv-1:1"),
+        ("command", "conv-1:1"),
+        ("output", "conv-1:2"),
+    ]
+    assert "git fetch" in found[1].text
+
+
+def test_seeing_another_arms_copy_marks_a_pair_suspect() -> None:
+    source = arm("E1.1")
+    copy = arm("TC1", cmd("ignite ticket show THYDR"))
+    found = scan.suspect(source, copy, "", [], "", set(), [("THYDR", "Other words")])
+    assert any("another arm's copy THYDR" in f.what for f in found)

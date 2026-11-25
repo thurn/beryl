@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from collections.abc import Sequence
 from typing import Any
 
 from .copytext import mention
@@ -165,9 +166,19 @@ def suspect(
     landed_after_start: list[str],
     ticket_text: str,
     in_start: set[str],
+    siblings: Sequence[tuple[str, str]] = (),
 ) -> list[Found]:
-    """Every sign that one arm saw the other's work or knew it was in a trial."""
+    """Every sign that one arm saw the other's work or knew it was in a trial. `siblings` are
+    the (ID, title) of the source's copies on other arms, which neither arm should see.
+    """
     found: list[Found] = []
+    for this, name in ((source, "source"), (copy, "copy")):
+        for trace in this.traces:
+            for sid, title in siblings:
+                if mention(sid).search(trace.text) or (title and title in trace.text):
+                    found.append(
+                        Found(f"the {name} saw another arm's copy {sid}", trace.where)
+                    )
     for this, other, name in ((source, copy, "source"), (copy, source, "copy")):
         oid = str(other.ticket["id"])
         own_title = str(this.ticket.get("title") or "")
