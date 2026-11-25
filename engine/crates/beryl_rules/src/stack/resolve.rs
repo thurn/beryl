@@ -17,7 +17,7 @@ use crate::bitboard::Bitboard;
 use beryl_card::definition::Shape;
 
 use crate::card::{Ability, AbilityKind, CastingOption, Face, FaceIx, Stop};
-use crate::casting::{self, entry_ability};
+use crate::casting;
 use crate::chance;
 use crate::decision::{Answers, Choice, Decision, Outcome, StallReason};
 use crate::fixed::Full;
@@ -77,7 +77,7 @@ fn resolve_top<L: Layout>(
     a: &mut dyn Answers<L>,
 ) -> Result<(), Full> {
     let entry = s.stack().last().expect("a stack entry to resolve").clone();
-    let ability = entry_ability(t, &entry);
+    let ability = entry.ability_in(t);
     let record = match s.pending() {
         Pending::Resolving(r) => r.record.clone(),
         Pending::None
@@ -306,7 +306,7 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
         unreachable!("a paused resolution");
     };
     let entry = s.stack().last().expect("a stack entry to resolve").clone();
-    let ability = entry_ability(t, &entry);
+    let ability = entry.ability_in(t);
     let (spare, sink) = x.copy_to_spare(s);
     rewind(spare, sink);
     let mark = sink.len();

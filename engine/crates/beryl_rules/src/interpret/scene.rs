@@ -435,8 +435,7 @@ impl<L: Layout> Scene<'_, L> {
                     && objects == Objects::TriggeredOn
                     && self.subject.info.object.is_some()
                 {
-                    let of = self.subject.of;
-                    let ability = of.ability.of_face(self.t.def(of.card).face(of.face));
+                    let ability = crate::stack::trigger::ability(self.t, &self.subject.of);
                     if ability.trigger().is_some_and(|trigger| {
                         matches!(
                             trigger.event,

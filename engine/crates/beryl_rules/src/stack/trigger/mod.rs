@@ -3,40 +3,54 @@
 //!
 //! Implements: CR 603.2, CR 603.3, CR 603.4, CR 603.6a, CR 603.8, CR 603.10
 
-use std::cell::OnceCell;
-
 use crate::bitboard::Bitboard;
-use crate::card::{
-    Ability, AbilityIx, CastingKind, FaceAbility, FaceIx, Subject, Trigger, TriggerEvent, Words,
-};
+use crate::card::{Ability, AbilityIx, CastingKind, FaceIx, Subject, Trigger, TriggerEvent, Words};
 use crate::continuous::layers;
 use crate::filter::{Evaluate, Filter, is_for};
 use crate::fixed::Full;
-use crate::ids::{CardId, Seat};
-use crate::layout::{Layout, Queue, index};
+use crate::ids::Seat;
+use crate::layout::{Layout, Queue};
 use crate::query::Copiable;
-use crate::replacement::event::{Event, EventKind, Listens, Recipient, Sink};
+use crate::replacement::event::{Event, EventKind, Listens, Recipient};
 use crate::state::TriggeredAbility;
-use crate::state::{
-    AbilityRef, ObjectRef, PendingTrigger, StackEntry, StackItem, State, TriggerInfo, Zone, ZoneKey,
-};
+use crate::state::{AbilityRef, ObjectRef, PendingTrigger, State, TriggerInfo, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
 
 mod cast_number;
 mod other_zones;
 mod step;
+mod waiting;
 
 pub(super) use step::begins;
+pub(crate) use waiting::{next_to_stack, put_on_stack, waiting_or_on_stack};
 
-/// The ability a pending trigger or stack entry names: one of the face's own, or one of its
-/// grants that a copy exception gives ([`Copiable::given_abilities`]).
-pub(crate) fn ability(
+/// The triggered ability a waiting trigger or stack entry names: one of its face's own, or one
+/// of its grants that a copy exception gives ([`Copiable::given_abilities`]).
+#[inline]
+pub(crate) fn ability<L: Layout>(
     t: &GameTable,
-    card: impl CardId,
-    face: FaceIx,
-    ability: FaceAbility,
+    of: &AbilityRef<L, TriggeredAbility>,
 ) -> &'static Ability {
-    t.def(card).face(face).ability(ability)
+    of.ability.of_face(t.def(of.card).face(of.face))
+}
+
+/// The triggered ability `ability` of the face `face` of `card`, as the object in `slot` has it
+/// now: that object is its source, and the object's controller controls it.
+#[inline]
+pub(crate) fn of_object<L: Layout>(
+    s: &State<L>,
+    slot: L::Slot,
+    card: L::Card,
+    face: FaceIx,
+    ability: TriggeredAbility,
+) -> AbilityRef<L, TriggeredAbility> {
+    AbilityRef {
+        source: Some(s.object_ref(slot)),
+        card,
+        face,
+        ability,
+        controller: s.controller(slot).into(),
+    }
 }
 
 /// The objects outside the battlefield with a triggered ability that works where they are: the
@@ -113,19 +127,13 @@ pub(crate) fn match_event<L: Layout>(
                 if !what.may_listen(t).intersects(mask) {
                     continue;
                 }
-                let source = s.object_ref(slot);
-                let controller = s.controller(slot);
                 let (card, face) = what.record(t);
+                let of = of_object(s, slot, card, face, TriggeredAbility::default());
                 for l in t.listeners(card, face, k) {
                     // see CR 613.1f: a permanent that lost the ability has no trigger to match.
-                    if !s.has_ability(slot, l.ability) {
-                        continue;
-                    }
-                    if let Some(info) = fires(s, t, l.trigger, Some(slot), controller, e) {
+                    if s.has_ability(slot, l.ability) {
                         let ability = TriggeredAbility::own(l.ability);
-                        for _ in 0..times(e) {
-                            enqueue(s, t, Some(source), card, face, ability, controller, info)?;
-                        }
+                        fire(s, t, l.trigger, AbilityRef { ability, ..of }, e)?;
                     }
                 }
             }
@@ -146,18 +154,38 @@ pub(crate) fn match_event<L: Layout>(
                     continue;
                 }
                 for l in t.listeners(card, FaceIx::FRONT, k) {
-                    if let Some(info) = fires(s, t, l.trigger, None, player, e) {
-                        let ability = TriggeredAbility::own(l.ability);
-                        for _ in 0..times(e) {
-                            enqueue(s, t, None, card, FaceIx::FRONT, ability, player, info)?;
-                        }
-                    }
+                    let of = AbilityRef {
+                        source: None,
+                        card,
+                        face: FaceIx::FRONT,
+                        ability: TriggeredAbility::own(l.ability),
+                        controller: player.into(),
+                    };
+                    fire(s, t, l.trigger, of, e)?;
                 }
             }
         }
     }
     if let Event::StepBegins { step, active, .. } = *e {
         super::delayed_triggers::fire_step(s, t, step, active)?;
+    }
+    Ok(())
+}
+
+/// Records the ability `of`, whose trigger is `trigger`, each time it triggers on `e`
+/// ([`fires`], [`times`]). Its source, if it has one, is the object the trigger reads as "this".
+fn fire<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    trigger: &Trigger,
+    of: AbilityRef<L, TriggeredAbility>,
+    e: &Event<L>,
+) -> Result<(), Full> {
+    let this = of.source.map(|source| source.slot);
+    if let Some(info) = fires(s, t, trigger, this, of.controller.seat(), e) {
+        for _ in 0..times(e) {
+            enqueue(s, t, PendingTrigger { of, info })?;
+        }
     }
     Ok(())
 }
@@ -425,61 +453,80 @@ pub(crate) fn match_look_back<L: Layout>(
             if !listens.intersects(mask) {
                 continue;
             }
-            let source = s.object_ref(slot);
-            let controller = s.controller(slot);
             let words = s.words_of(slot);
             let (card, face) = what.record(t);
-            // see CR 700.4: dying is going to a graveyard.
-            let kinds = [
-                (EventKind::Dies, to == Zone::Graveyard),
-                (EventKind::Leaves, true),
-            ];
-            for (kind, happened) in kinds {
-                if !happened || !listens.hears(kind) {
-                    continue;
-                }
+            let of = of_object(s, slot, card, face, TriggeredAbility::default());
+            for kind in look_back_kinds(to).filter(|&kind| listens.hears(kind)) {
                 for l in t.listeners(card, face, kind) {
                     // CR 603.10: the game looks back to whether the ability existed just
                     // before the event, as the permanent is now.
-                    if !s.has_ability(slot, l.ability)
-                        || !about(
+                    if s.has_ability(slot, l.ability) {
+                        let ability = TriggeredAbility::own(l.ability);
+                        look_back(
                             s,
                             t,
                             l.trigger.subject,
-                            Some(slot),
-                            controller,
+                            AbilityRef { ability, ..of },
                             &words,
                             object,
-                        )
-                    {
-                        continue;
+                        )?;
                     }
-                    let info = TriggerInfo {
-                        object: Some(object),
-                        player: s.controller(left),
-                        amount: 0,
-                    };
-                    enqueue(
-                        s,
-                        t,
-                        Some(source),
-                        card,
-                        face,
-                        TriggeredAbility::own(l.ability),
-                        controller,
-                        info,
-                    )?;
                 }
             }
         }
         if merges {
             other_zones::look_back_merged(s, t, left, to)?;
         }
-        if s.triggers().len() > waiting
-            && let Some(permanent) = s.permanent(object)
-        {
-            s.record_last_known(permanent)?;
-        }
+        keep_last_known(s, object, waiting)?;
+    }
+    Ok(())
+}
+
+/// The kinds of event a permanent leaving the battlefield for `to` is part of, in the order
+/// they are matched: it dies if it goes to a graveyard (see CR 700.4), and it leaves.
+fn look_back_kinds(to: Zone) -> impl Iterator<Item = EventKind> {
+    [
+        (EventKind::Dies, to == Zone::Graveyard),
+        (EventKind::Leaves, true),
+    ]
+    .into_iter()
+    .filter_map(|(kind, happened)| happened.then_some(kind))
+}
+
+/// Records the ability `of`, which looks back in time, if `left`, a permanent about to leave
+/// the battlefield, is its trigger's subject as it is now ([`about`]; see CR 603.10a). `words`
+/// are those of its source. The trigger carries the permanent and the player who controls it.
+fn look_back<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    subject: Subject,
+    of: AbilityRef<L, TriggeredAbility>,
+    words: &Words,
+    left: ObjectRef<L>,
+) -> Result<(), Full> {
+    let this = of.source.map(|source| source.slot);
+    if !about(s, t, subject, this, of.controller.seat(), words, left) {
+        return Ok(());
+    }
+    let info = TriggerInfo {
+        object: Some(left),
+        player: s.controller(left.slot),
+        amount: 0,
+    };
+    enqueue(s, t, PendingTrigger { of, info })
+}
+
+/// Keeps the last-known information of `left`, a permanent about to leave the battlefield, if
+/// some ability triggered on it: if more than the `waiting` triggers from before it now wait.
+fn keep_last_known<L: Layout>(
+    s: &mut State<L>,
+    left: ObjectRef<L>,
+    waiting: usize,
+) -> Result<(), Full> {
+    if s.triggers().len() > waiting
+        && let Some(permanent) = s.permanent(left)
+    {
+        s.record_last_known(permanent)?;
     }
     Ok(())
 }
@@ -552,38 +599,24 @@ fn state_trigger<L: Layout>(
     let TriggerEvent::State(condition) = trigger.event else {
         unreachable!("a listener of state triggers is a state trigger");
     };
-    let source = Some(s.object_ref(slot));
-    let ability = TriggeredAbility::own(ability);
-    let same = |of: &AbilityRef<L, TriggeredAbility>| {
-        of.source == source && of.card == card && of.face == face && of.ability == ability
+    let of = of_object(s, slot, card, face, TriggeredAbility::own(ability));
+    let same = |other: &AbilityRef<L, TriggeredAbility>| {
+        (other.source, other.card, other.face, other.ability)
+            == (of.source, of.card, of.face, of.ability)
     };
-    let triggered = s.triggers().iter().any(|tr| same(&tr.of))
-        || s.stack().iter().any(|entry| match &entry.item {
-            StackItem::Triggered { of, .. } => same(of),
-            StackItem::Spell { .. } | StackItem::Activated { .. } => false,
-        });
-    if triggered {
+    if waiting_or_on_stack(s, same) {
         return Ok(());
     }
-    let controller = s.controller(slot);
-    let pending = PendingTrigger {
-        of: AbilityRef {
-            source,
-            card,
-            face,
-            ability,
-            controller: controller.into(),
-        },
-        info: TriggerInfo {
-            object: None,
-            player: controller,
-            amount: 0,
-        },
+    let info = TriggerInfo {
+        object: None,
+        player: of.controller.seat(),
+        amount: 0,
     };
+    let pending = PendingTrigger { of, info };
     if !crate::interpret::holds(s, t, &pending, condition) {
         return Ok(());
     }
-    enqueue(s, t, source, card, face, ability, controller, pending.info)
+    enqueue(s, t, pending)
 }
 
 /// Records a triggered ability, if its intervening "if" holds now ([CR 603.4]): "When the trigger
@@ -591,179 +624,15 @@ fn state_trigger<L: Layout>(
 /// if it is; otherwise it does nothing."
 ///
 /// [CR 603.4]: https://yawgatog.com/resources/magic-rules/#R6034
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn enqueue<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    source: Option<ObjectRef<L>>,
-    card: L::Card,
-    face: FaceIx,
-    ability: TriggeredAbility,
-    controller: Seat,
-    info: TriggerInfo<L>,
+    pending: PendingTrigger<L>,
 ) -> Result<(), Full> {
-    let pending = PendingTrigger {
-        of: AbilityRef {
-            source,
-            card,
-            face,
-            ability,
-            controller: controller.into(),
-        },
-        info,
-    };
-    let a = ability.of_face(t.def(card).face(face));
-    if !crate::interpret::intervening_if(s, t, &pending, a) {
+    if !crate::interpret::intervening_if(s, t, &pending, ability(t, &pending.of)) {
         return Ok(());
     }
     s.queue_trigger(pending)
-}
-
-/// The player who puts the next waiting trigger on the stack, and the triggers they choose
-/// from: one of each set of equivalent ones (§7.2), as indices into the waiting triggers.
-///
-/// [CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP order,
-/// puts each triggered ability they control ... on the stack in any order they choose."
-pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, L::Queue<L::Index, 64>)> {
-    let player = s
-        .players_in_turn_order(s.players())
-        .find(|&p| s.triggers().iter().any(|tr| tr.of.controller.seat() == p))?;
-    let mut kept: L::Queue<L::Index, 64> = Default::default();
-    let mut firsts: L::Queue<PendingTrigger<L>, 64> = Default::default();
-    // Found only once two triggers of one ability have different sources or objects.
-    let named = OnceCell::new();
-    for (i, tr) in s.triggers().iter().enumerate() {
-        if tr.of.controller.seat() != player || firsts.iter().any(|k| equivalent(s, &named, k, tr))
-        {
-            continue;
-        }
-        // The waiting triggers never exceed the capacity of these lists, and the layout's
-        // index names every one.
-        firsts.push_bounded(*tr);
-        kept.push_bounded(index::<L>(i));
-    }
-    Some((player, kept))
-}
-
-/// Triggers of the same ability from interchangeable sources, on the same event with
-/// interchangeable objects, lead to the same game whatever their order (§7.2).
-///
-/// Two objects are interchangeable here as two candidates are (`engine::collapse`): alike
-/// in themselves ([`State::signature`]) and named by no other record of the state
-/// ([`State::named`]). A waiting trigger names its own source, so the waiting triggers are
-/// held to that rule another way: with one trigger's source and object renamed to the
-/// other's and back, they must be the same triggers. Two abilities that each watch one of
-/// two twins leave the twins alike; one ability waiting to act on one twin alone tells
-/// them apart, as it will once it is on the stack.
-fn equivalent<L: Layout>(
-    s: &State<L>,
-    named: &OnceCell<Bitboard<L::Slot>>,
-    a: &PendingTrigger<L>,
-    b: &PendingTrigger<L>,
-) -> bool {
-    if (a.of.card, a.of.face, a.of.ability, a.of.controller)
-        != (b.of.card, b.of.face, b.of.ability, b.of.controller)
-        || (a.info.player, a.info.amount) != (b.info.player, b.info.amount)
-        || !same_last_known(s, a.info.object, b.info.object)
-    {
-        return false;
-    }
-    let pairs = [(a.of.source, b.of.source), (a.info.object, b.info.object)];
-    if pairs.iter().all(|(x, y)| x == y) {
-        return true;
-    }
-    let named = *named.get_or_init(|| s.named_apart_from_waiting_triggers());
-    let alike = |x: L::Slot, y: L::Slot| {
-        !named.contains(x) && !named.contains(y) && s.signature(x) == s.signature(y)
-    };
-    let interchangeable = |&(x, y): &(Option<ObjectRef<L>>, Option<ObjectRef<L>>)| match (x, y) {
-        (Some(x), Some(y)) => x == y || alike(x.slot, y.slot),
-        _ => x == y,
-    };
-    if !pairs.iter().all(interchangeable) {
-        return false;
-    }
-    // The renaming that makes each trigger the other: an object of a pair for its partner.
-    let renamed = |r: Option<ObjectRef<L>>| {
-        let partner = |&(x, y): &(Option<ObjectRef<L>>, Option<ObjectRef<L>>)| match r {
-            _ if x == y => None,
-            r if r == x => Some(y),
-            r if r == y => Some(x),
-            _ => None,
-        };
-        pairs.iter().find_map(partner).unwrap_or(r)
-    };
-    let rename = |tr: &PendingTrigger<L>| PendingTrigger {
-        of: AbilityRef {
-            source: renamed(tr.of.source),
-            ..tr.of
-        },
-        info: TriggerInfo {
-            object: renamed(tr.info.object),
-            ..tr.info
-        },
-    };
-    // It is one renaming only if it makes each of the other: a creature that saw itself
-    // enter is no twin of one that saw another.
-    if rename(a) != *b || rename(b) != *a {
-        return false;
-    }
-    let waiting = s.triggers();
-    let count = |tr: &PendingTrigger<L>| waiting.iter().filter(|w| *w == tr).count();
-    waiting.iter().all(|tr| {
-        let other = rename(tr);
-        other == *tr || count(tr) == count(&other)
-    })
-}
-
-/// Whether two objects that triggers name were alike as they last existed on the
-/// battlefield, where either has left it and has last-known information.
-fn same_last_known<L: Layout>(
-    s: &State<L>,
-    a: Option<ObjectRef<L>>,
-    b: Option<ObjectRef<L>>,
-) -> bool {
-    let known = |r: Option<ObjectRef<L>>| r.and_then(|r| s.last_known(r));
-    match (known(a), known(b)) {
-        (None, None) => true,
-        (Some(x), Some(y)) => x.alike(y),
-        _ => false,
-    }
-}
-
-/// Puts the waiting trigger at `index` on the stack ([CR 603.3]): "The ability becomes the topmost
-/// object on the stack." Then its targets are chosen, through the casting machine (CR 603.3d).
-///
-/// [CR 603.3]: https://yawgatog.com/resources/magic-rules/#R6033
-pub(crate) fn put_on_stack<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    index: L::Index,
-) -> Result<(), Full> {
-    let tr = s.take_trigger(index.into());
-    // An enters ability's X is its spell's (see CR 107.3m), captured as it triggered.
-    let entering = ability(t, tr.of.card, tr.of.face, tr.of.ability.get())
-        .trigger()
-        .is_some_and(|trigger| trigger.is_this(TriggerEvent::Enters));
-    s.put_on_stack(
-        sink,
-        StackEntry {
-            x: if entering { tr.info.amount } else { 0 },
-            ..StackEntry::new(StackItem::Triggered {
-                of: tr.of,
-                info: tr.info,
-            })
-        },
-    )?;
-    crate::casting::target_trigger(s, t, sink)
-}
-
-/// Creates a delayed triggered ability (see [CR 603.7]).
-///
-/// [CR 603.7]: https://yawgatog.com/resources/magic-rules/#R6037
-pub(crate) fn delay<L: Layout>(s: &mut State<L>, trigger: PendingTrigger<L>) -> Result<(), Full> {
-    s.delay_trigger(trigger)
 }
 
 /// Whether a cost of `kind` was paid for a permanent's spell, for an intervening "if" of its

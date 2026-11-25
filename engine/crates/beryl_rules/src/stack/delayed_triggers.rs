@@ -38,7 +38,7 @@ pub fn create<L: Layout>(
             ..TriggerInfo::default()
         },
     };
-    trigger::delay(game.state, delayed)
+    game.state.delay_trigger(delayed)
 }
 
 /// The delayed ability and its source as the spell or ability that creates it resolves
@@ -64,7 +64,7 @@ pub(crate) fn source<L: Layout>(
 /// [CR 603.7b]: https://yawgatog.com/resources/magic-rules/#R6037b
 pub(crate) fn end_turn<L: Layout>(s: &mut State<L>, t: &GameTable) {
     s.retain_delayed(|d| {
-        !trigger::ability(t, d.of.card, d.of.face, d.of.ability.get())
+        !trigger::ability(t, &d.of)
             .trigger()
             .is_some_and(|trigger| trigger.exact_turn)
     });
@@ -119,7 +119,7 @@ pub(crate) fn fire_on_leaving<L: Layout>(
         let object = s.object_ref(left);
         s.fire_delayed(|d| {
             d.of.source == Some(object)
-                && trigger::ability(t, d.of.card, d.of.face, d.of.ability.get())
+                && trigger::ability(t, &d.of)
                     .trigger()
                     .is_some_and(|trigger| trigger.is_this(TriggerEvent::Leaves))
         })?;
@@ -138,13 +138,11 @@ pub(crate) fn fire_step<L: Layout>(
     step: TurnStep,
     active: Seat,
 ) -> Result<(), Full> {
-    s.fire_delayed(|d| {
-        match trigger::ability(t, d.of.card, d.of.face, d.of.ability.get()).trigger() {
-            Some(trigger) if trigger.delayed => {
-                trigger::begins(trigger.event, step, || false)
-                    && is_for(&trigger.whose, active, d.of.controller.seat())
-            }
-            _ => unreachable!("a delayed trigger's ability is a delayed one"),
+    s.fire_delayed(|d| match trigger::ability(t, &d.of).trigger() {
+        Some(trigger) if trigger.delayed => {
+            trigger::begins(trigger.event, step, || false)
+                && is_for(&trigger.whose, active, d.of.controller.seat())
         }
+        _ => unreachable!("a delayed trigger's ability is a delayed one"),
     })
 }

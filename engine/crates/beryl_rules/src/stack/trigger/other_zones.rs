@@ -5,12 +5,12 @@
 //!
 //! Implements: none. Matches triggers under the rules declared by its parent module.
 
-use super::{ability, about, away, enqueue, fires, times};
+use super::{ability, away, fire, keep_last_known, look_back, look_back_kinds, of_object};
 use crate::card::FaceAbility;
 use crate::fixed::Full;
 use crate::layout::{Layout, Queue};
 use crate::replacement::event::{Event, EventKind};
-use crate::state::{Flag, State, TriggerInfo, TriggeredAbility, Zone};
+use crate::state::{AbilityRef, Flag, State, TriggeredAbility, Zone};
 use crate::table::GameTable;
 use beryl_kernel::listener;
 
@@ -47,34 +47,25 @@ pub(super) fn match_given<L: Layout>(
             continue;
         }
         let values = s.copiable(slot);
-        let source = s.object_ref(slot);
-        let controller = s.controller(slot);
         for (card, face, grant) in values.given_abilities(t) {
-            let a = ability(t, card, face, FaceAbility::Grant(grant));
+            let given = TriggeredAbility::of(FaceAbility::Grant(grant));
+            let of = of_object(s, slot, card, face, given);
+            let a = ability(t, &of);
             let Some(trigger) = a.trigger() else {
                 continue;
             };
             let listens = listener::listens_to(trigger, a.zones());
-            if !matches!(listens, Ok(Some(kind)) if kind == k) {
-                continue;
-            }
-            if let Some(info) = fires(s, t, trigger, Some(slot), controller, e) {
-                let given = TriggeredAbility::of(FaceAbility::Grant(grant));
-                for _ in 0..times(e) {
-                    enqueue(s, t, Some(source), card, face, given, controller, info)?;
-                }
+            if matches!(listens, Ok(Some(kind)) if kind == k) {
+                fire(s, t, trigger, of, e)?;
             }
         }
         for (card, face) in values.merged_faces(t) {
+            let of = of_object(s, slot, card, face, TriggeredAbility::default());
             for l in t.listeners(card, face, k) {
                 let ability_def = &t.def(card).face(face).abilities[l.ability.index()];
-                if crate::objects::designation::available(s, slot, ability_def)
-                    && let Some(info) = fires(s, t, l.trigger, Some(slot), controller, e)
-                {
+                if crate::objects::designation::available(s, slot, ability_def) {
                     let ability = TriggeredAbility::own(l.ability);
-                    for _ in 0..times(e) {
-                        enqueue(s, t, Some(source), card, face, ability, controller, info)?;
-                    }
+                    fire(s, t, l.trigger, AbilityRef { ability, ..of }, e)?;
                 }
             }
         }
@@ -105,38 +96,20 @@ pub(super) fn look_back_merged<L: Layout>(
             continue;
         }
         let values = s.copiable(slot);
-        let source = s.object_ref(slot);
-        let controller = s.controller(slot);
         let words = s.words_of(slot);
-        // see CR 700.4: dying is going to a graveyard.
-        let kinds = [
-            (EventKind::Dies, to == Zone::Graveyard),
-            (EventKind::Leaves, true),
-        ];
         for (card, face) in values.merged_faces(t) {
-            for (kind, happened) in kinds {
-                if !happened {
-                    continue;
-                }
+            let of = of_object(s, slot, card, face, TriggeredAbility::default());
+            for kind in look_back_kinds(to) {
                 for l in t.listeners(card, face, kind) {
-                    if !about(
+                    let ability = TriggeredAbility::own(l.ability);
+                    look_back(
                         s,
                         t,
                         l.trigger.subject,
-                        Some(slot),
-                        controller,
+                        AbilityRef { ability, ..of },
                         &words,
                         object,
-                    ) {
-                        continue;
-                    }
-                    let info = TriggerInfo {
-                        object: Some(object),
-                        player: s.controller(left),
-                        amount: 0,
-                    };
-                    let ability = TriggeredAbility::own(l.ability);
-                    enqueue(s, t, Some(source), card, face, ability, controller, info)?;
+                    )?;
                 }
             }
         }
@@ -156,18 +129,12 @@ pub(super) fn match_away<L: Layout>(
 ) -> Result<(), Full> {
     for &slot in s.in_game_order(t, away(s, t))?.iter() {
         let zone = s.object(slot).zone();
-        let source = s.object_ref(slot);
-        let controller = s.controller(slot);
         let (card, face) = s.definition(slot).record(t);
+        let of = of_object(s, slot, card, face, TriggeredAbility::default());
         for l in t.away_listeners(card, face, k) {
-            if !l.zones.contains(zone) || !s.has_ability(slot, l.ability) {
-                continue;
-            }
-            if let Some(info) = fires(s, t, l.trigger, Some(slot), controller, e) {
+            if l.zones.contains(zone) && s.has_ability(slot, l.ability) {
                 let ability = TriggeredAbility::own(l.ability);
-                for _ in 0..times(e) {
-                    enqueue(s, t, Some(source), card, face, ability, controller, info)?;
-                }
+                fire(s, t, l.trigger, AbilityRef { ability, ..of }, e)?;
             }
         }
     }
@@ -190,56 +157,26 @@ pub(super) fn look_back_away<L: Layout>(
         let waiting = s.triggers().len();
         for &slot in away.iter() {
             let zone = s.object(slot).zone();
-            let source = s.object_ref(slot);
-            let controller = s.controller(slot);
             let words = s.words_of(slot);
             let (card, face) = s.definition(slot).record(t);
-            let info = TriggerInfo {
-                object: Some(object),
-                player: s.controller(left),
-                amount: 0,
-            };
-            // see CR 700.4: dying is going to a graveyard.
-            let kinds = [
-                (EventKind::Dies, to == Zone::Graveyard),
-                (EventKind::Leaves, true),
-            ];
-            for (kind, happened) in kinds {
-                if !happened {
-                    continue;
-                }
+            let of = of_object(s, slot, card, face, TriggeredAbility::default());
+            for kind in look_back_kinds(to) {
                 for l in t.away_listeners(card, face, kind) {
-                    if l.zones.contains(zone)
-                        && s.has_ability(slot, l.ability)
-                        && about(
+                    if l.zones.contains(zone) && s.has_ability(slot, l.ability) {
+                        let ability = TriggeredAbility::own(l.ability);
+                        look_back(
                             s,
                             t,
                             l.trigger.subject,
-                            Some(slot),
-                            controller,
+                            AbilityRef { ability, ..of },
                             &words,
                             object,
-                        )
-                    {
-                        enqueue(
-                            s,
-                            t,
-                            Some(source),
-                            card,
-                            face,
-                            TriggeredAbility::own(l.ability),
-                            controller,
-                            info,
                         )?;
                     }
                 }
             }
         }
-        if s.triggers().len() > waiting
-            && let Some(permanent) = s.permanent(object)
-        {
-            s.record_last_known(permanent)?;
-        }
+        keep_last_known(s, object, waiting)?;
     }
     Ok(())
 }

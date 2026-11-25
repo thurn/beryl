@@ -12,7 +12,7 @@ use crate::query::Copiable;
 use crate::replacement::event::{Entry, Sink};
 use crate::stack::trigger;
 use crate::state::{
-    AbilityMask, AbilityRef, CounterKind, ObjectRef, StackItem, State, TriggerInfo,
+    AbilityMask, AbilityRef, CounterKind, ObjectRef, PendingTrigger, State, TriggerInfo,
     TriggeredAbility,
 };
 use crate::table::{Capability, GameTable};
@@ -48,7 +48,7 @@ fn chapters<'a, L: Layout>(
         .flat_map(|values| values.given_abilities(t))
         .filter_map(move |(card, face, index)| {
             let index = FaceAbility::Grant(index);
-            let numbers = trigger::ability(t, card, face, index).chapter_numbers()?;
+            let numbers = t.def(card).face(face).ability(index).chapter_numbers()?;
             Some((card, face, TriggeredAbility::of(index), numbers))
         });
     ordinary.chain(exceptions)
@@ -92,7 +92,8 @@ pub(crate) fn match_lore<L: Layout>(
                 player: controller,
                 amount: 0,
             };
-            trigger::enqueue(s, t, source, card, face, ability, controller, info)?;
+            let of = trigger::of_object(s, slot, card, face, ability);
+            trigger::enqueue(s, t, PendingTrigger { of, info })?;
         }
     }
     Ok(())
@@ -206,18 +207,9 @@ pub(crate) fn completed<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::S
             }
             let source = Some(s.object_ref(slot));
             let chapter = |of: &AbilityRef<L, TriggeredAbility>| {
-                of.source == source
-                    && of
-                        .ability
-                        .of_face(t.def(of.card).face(of.face))
-                        .chapter_numbers()
-                        .is_some()
+                of.source == source && trigger::ability(t, of).chapter_numbers().is_some()
             };
-            let waiting = s.triggers().iter().any(|pending| chapter(&pending.of))
-                || s.stack().iter().any(
-                    |entry| matches!(&entry.item, StackItem::Triggered { of, .. } if chapter(of)),
-                );
-            (!waiting).then_some(slot)
+            (!trigger::waiting_or_on_stack(s, chapter)).then_some(slot)
         })
         .collect()
 }
