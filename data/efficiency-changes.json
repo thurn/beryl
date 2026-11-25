@@ -935,5 +935,10 @@
     "label": "The arrow and combat-mark rendering check releases each decoded replay and reuses one offscreen renderer for every light.",
     "metric": "ignite.gate-wait-seconds",
     "expect": "down"
+  },
+  {
+    "label": "`ignite test` of a test the branch just added lists the families that are cheap to list first, and lists those whose listing needs a product build (the 3D client, the scenario dump) only when a name still matches nothing: two new engine tests took 1241 s, 888 s of it waiting for the client to build",
+    "metric": "ignite.cycle-minutes",
+    "expect": "down"
   }
 ]

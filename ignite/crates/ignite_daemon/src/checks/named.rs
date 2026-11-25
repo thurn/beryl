@@ -19,12 +19,27 @@ pub(crate) struct TestFamilies<'a> {
     pub families: Vec<&'a str>,
     /// The packages to list some `nextest` families for (see [`Checks::test_scope`]).
     pub scopes: BTreeMap<String, Vec<String>>,
+    /// Families whose listing needs a product build, listed only when some name still matches
+    /// no check once `families` are listed. Each is moved to `skipped` otherwise.
+    pub deferred: Vec<&'a str>,
+    /// The first word no listing held, which made `deferred` necessary.
+    pub new_word: Option<String>,
     /// Each family left out because its listing needs a build and every name it matched was
     /// also matched by a family that is cheap to list, with the first such name.
     pub skipped: Vec<(&'a str, String)>,
 }
 
 impl TestFamilies<'_> {
+    /// Moves every deferred family to `skipped`, once the families listed first matched every
+    /// name.
+    pub(crate) fn skip_deferred(&mut self) {
+        let deferred = std::mem::take(&mut self.deferred);
+        let word = self.new_word.clone().unwrap_or_default();
+        self.skipped
+            .extend(deferred.into_iter().map(|name| (name, word.clone())));
+        self.skipped.sort_unstable();
+    }
+
     /// The `skipped` line, which names the families left out and how to run their checks.
     pub(crate) fn skipped_line(&self) -> Option<(String, String)> {
         let (first, word) = self.skipped.first()?;
@@ -55,9 +70,17 @@ fn cheap(family: &Family, kept: bool) -> bool {
 /// without a kept listing for the new inputs, and listing them all again builds every product;
 /// a check is seldom added between two listings, so the newest one answers. The newest listing
 /// may be one that is never kept for its inputs, such as one whose checks carry digests
-/// ([`Checks::keep_names`]). A family never listed on this machine is listed, and when a word
-/// matches no listing, so is every family without a kept listing for the tree's inputs. When
-/// no family could hold a bare word, the reply says how checks are named.
+/// ([`Checks::keep_names`]). A family never listed on this machine is listed. When no family
+/// could hold a bare word, the reply says how checks are named.
+///
+/// A word that matches no listing may name a check added since, most often a test the branch
+/// has just written, so every family without a kept listing for the tree's inputs is listed
+/// too. Those of them whose listing needs a product build are `deferred`: the caller lists
+/// them only when some word still matches nothing after the cheap families are listed. A new
+/// test in one engine crate, `ignite test a_turn_past_small_does_not_narrow`, used to list all
+/// 23 families: 1241 s, of which 888 s waited for the 3D client to build and 637 s for the
+/// scenario dump, to run two tests that the Rust family's listing of the changed packages
+/// found.
 ///
 /// A family whose listing needs a product build (see [`cheap`]) is left out when every bare
 /// word it matches also matches a check of a family that is cheap to list, and so is a family
@@ -105,6 +128,7 @@ pub(crate) fn test_families<'a>(
     run.slow(ctx, "reading kept listings", reading);
     let mut found = vec![false; bare.len()];
     let mut found_cheap = vec![false; bare.len()];
+    // Families without a kept listing for the tree's inputs, each with whether it is cheap.
     let mut not_current = Vec::new();
     // Families never listed here whose listing needs a build.
     let mut unknown_costly = Vec::new();
@@ -118,7 +142,7 @@ pub(crate) fn test_families<'a>(
         let listing = if let Some((_, listing)) = kept.get(name) {
             Arc::clone(listing)
         } else {
-            not_current.push(name);
+            not_current.push((name, is_cheap));
             let reading = Stopwatch::start(ctx);
             let latest = checks.latest_listing(name);
             run.slow(
@@ -169,11 +193,30 @@ pub(crate) fn test_families<'a>(
         }
     }
     let mut skipped = Vec::new();
-    if found.contains(&false) {
-        // A word no listing holds may name a check added since to any family.
-        families.extend(not_current);
-        families.extend(unknown_costly);
-        families.extend(costly.iter().map(|(name, _)| *name));
+    let mut deferred = Vec::new();
+    let new_word = found
+        .iter()
+        .position(|&was| !was)
+        .map(|index| bare[index].to_owned());
+    if new_word.is_some() {
+        // A word no listing holds may name a check added since to any family. The families
+        // that are cheap to list are listed first; one whose listing needs a build waits for
+        // them, unless a word only it matched needs it anyway.
+        for (name, is_cheap) in not_current {
+            if is_cheap {
+                families.push(name);
+            } else {
+                deferred.push(name);
+            }
+        }
+        deferred.extend(unknown_costly);
+        for (name, hits) in costly {
+            if hits.iter().all(|&index| found_cheap[index]) {
+                deferred.push(name);
+            } else {
+                families.push(name);
+            }
+        }
         matched.clear();
     } else {
         if found_cheap.contains(&false) {
@@ -204,7 +247,7 @@ pub(crate) fn test_families<'a>(
         .iter()
         .map(|(name, packages)| (name.clone(), Checks::test_scope(tree, packages, &changed)))
         .collect();
-    if families.is_empty() {
+    if families.is_empty() && deferred.is_empty() {
         let names: Vec<&str> = all.iter().map(|(n, _)| *n).collect();
         return Err(Reply::text(
             Exit::Usage,
@@ -218,10 +261,16 @@ pub(crate) fn test_families<'a>(
     }
     families.sort_unstable();
     families.dedup();
+    // A family a word names by its prefix, or one a word needs anyway, is listed first.
+    deferred.sort_unstable();
+    deferred.dedup();
+    deferred.retain(|name| !families.contains(name));
     skipped.sort_unstable();
     Ok(TestFamilies {
         families,
         scopes,
+        deferred,
+        new_word,
         skipped,
     })
 }

@@ -343,9 +343,16 @@ The verbs an agent uses while working:
   Rust families, and listing them all again built every product:
   `ignite test oust` after a one-line comment change in Oust took 39 minutes on
   2026-11-19. A name that no listing holds may name a check added since, so then
-  every family without a kept listing for the tree's inputs is listed too. A
-  name that no family could hold is refused at once with a hint on how checks
-  are named, so a Rust test function name never builds every family.
+  every family without a kept listing for the tree's inputs is listed too, in
+  two rounds: first the families that are cheap to list, then, only when some
+  name still matches no check, those whose listing needs a product build. The
+  families left out are named on the `skipped` line described below. On
+  2026-11-24 `ignite test a_turn_past_small_does_not_narrow`, a test the branch
+  had just added to an engine crate, listed all 23 families in 1241 s, most of
+  it waiting for the 3D client and the scenario dump to build, to run two tests
+  that the Rust family's listing found. A name that no family could hold is
+  refused at once with a hint on how checks are named, so a Rust test function
+  name never builds every family.
 
   When every name matched, a `nextest` family found only through its newest
   listing, whose `list` says `{packages}`, is built and listed for the packages

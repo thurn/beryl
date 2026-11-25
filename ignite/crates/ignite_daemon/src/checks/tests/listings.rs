@@ -409,6 +409,99 @@ fn a_name_a_cheap_family_matches_skips_families_whose_listing_needs_a_build() {
     assert!(!reply.contains("skipped"), "{reply}");
 }
 
+/// A test the branch had just written, `ignite test a_turn_past_small_does_not_narrow`, matched
+/// no listing, so every family without a kept listing was listed: 1241 s, most of it waiting
+/// for the 3D client and the scenario dump to build, to run two tests the Rust family listed.
+/// A family whose listing needs a build now waits until the cheap families are listed, and is
+/// listed only when a word still matches nothing.
+#[test]
+fn a_new_test_a_cheap_family_lists_skips_families_whose_listing_needs_a_build() {
+    let manifest = MANIFEST.replace(
+        "[family.rs]\n",
+        "[family.rs]\nlist = \"cargo nextest list {packages} --message-format json\"\n\
+         run = \"cargo nextest run {packages} --message-format libtest-json-plus\"\n",
+    );
+    let world = world(&manifest, &[], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() =
+        format!("{{\"check\": \"unit:core::a/you\"}}\n{NEXTEST_LISTING}\n");
+    *world.launcher.nextest_run.lock().unwrap() =
+        "{\"type\":\"test\",\"event\":\"ok\",\"name\":\"core::core$a\"}\n\
+         {\"type\":\"test\",\"event\":\"ok\",\"name\":\"core::core$fresh\"}\n"
+            .to_owned();
+    let trees = FakeTrees {
+        graph: CrateGraph {
+            packages: vec![ignite_core::inputs::Package {
+                name: "core".to_owned(),
+                dir: "game/core".to_owned(),
+                deps: Vec::new(),
+                workspace: "game".to_owned(),
+            }],
+        },
+        ..FakeTrees::new(&world.dir, &[])
+    };
+    let checks = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        trees,
+    );
+    assert!(run_on(&checks, &world, &["unit:core::a/you", "rs:core::a"]).passed());
+    let verb = TestVerb {
+        checks,
+        express: None,
+    };
+    let test = |words: &[&str]| {
+        let request = Request {
+            verb: "test".to_owned(),
+            args: words.iter().map(|w| (*w).to_owned()).collect(),
+            cwd: world.dir.join("sub"),
+            session: None,
+            wait_s: 1,
+            pid: None,
+        };
+        let reply = verb.run(&world.ctx, &request);
+        assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+        reply
+    };
+    // The branch adds a Rust test, and its change leaves neither family with a kept listing.
+    let fresh = r#""fresh": {"ignored": false, "filter-match": {"status": "matches"}}"#;
+    let with_fresh =
+        NEXTEST_LISTING.replace(r#""testcases": {"#, &format!(r#""testcases": {{{fresh}, "#));
+    *world.launcher.listing.lock().unwrap() =
+        format!("{{\"check\": \"unit:core::a/you\"}}\n{with_fresh}\n");
+    world
+        .git
+        .set_object("src", Oid::new("e".repeat(40)).unwrap());
+    let listers = world.launcher.commands("lister").len();
+
+    let reply = test(&["fresh"]);
+    assert_eq!(
+        world.launcher.commands("lister").len(),
+        listers,
+        "the family whose listing needs a build is not listed"
+    );
+    let ran = reply.json.as_ref().unwrap()["outcomes"].clone();
+    assert_eq!(ran[0]["check"], "rs:core::fresh", "{}", reply.text);
+    assert!(
+        reply.text.contains(
+            "skipped  unit also hold matching checks, but listing them needs a build; \
+             `ignite test unit:fresh` runs them"
+        ),
+        "{}",
+        reply.text
+    );
+
+    // A new check that only the family whose listing needs a build holds still lists it.
+    *world.launcher.listing.lock().unwrap() = format!(
+        "{{\"check\": \"unit:core::a/you\"}}\n{{\"check\": \"unit:brand_new\"}}\n{with_fresh}\n"
+    );
+    world
+        .git
+        .set_object("src", Oid::new("f".repeat(40)).unwrap());
+    let reply = test(&["brand_new"]);
+    assert_eq!(world.launcher.commands("lister").len(), listers + 1);
+    assert!(!reply.text.contains("skipped"), "{}", reply.text);
+}
+
 /// A listing made on Windows held a test that only exists there (`cfg(windows)`), and a Mac that
 /// reused it from the hub asked cargo-nextest for the test and got "no tests to run", so the
 /// check stayed incomplete. A `nextest` listing is therefore made once per operating system,

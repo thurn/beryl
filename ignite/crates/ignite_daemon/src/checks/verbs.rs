@@ -63,25 +63,29 @@ impl Verb for TestVerb {
             return reply;
         }
         let finding = Stopwatch::start(ctx);
-        let found = match test_families(&checks, ctx, &tree, &words, &mut run) {
+        let mut found = match test_families(&checks, ctx, &tree, &words, &mut run) {
             Ok(found) => found,
             Err(reply) => return reply,
         };
-        let (families, scopes) = (&found.families, &found.scopes);
         run.stage(ctx, "finding families", finding);
         let listing = Stopwatch::start(ctx);
+        let (families, scopes) = (&found.families, &found.scopes);
         let mut prepared = checks.prepare_scoped(ctx, &tree, families, scopes, &options, &mut run);
+        let mut unmatched = unmatched_words(&words, &prepared);
+        if !found.deferred.is_empty() {
+            if unmatched.is_empty() {
+                // Every word the listings did not hold matched a family that was cheap to list.
+                found.skip_deferred();
+            } else {
+                let deferred = std::mem::take(&mut found.deferred);
+                let none = BTreeMap::new();
+                prepared.extend(
+                    checks.prepare_scoped(ctx, &tree, &deferred, &none, &options, &mut run),
+                );
+                unmatched = unmatched_words(&words, &prepared);
+            }
+        }
         run.stage(ctx, "listing", listing);
-        let unmatched: Vec<&str> = words
-            .iter()
-            .copied()
-            .filter(|w| {
-                !prepared.iter().any(|p| {
-                    p.keyed.iter().any(|k| matches(w, k.listed.check.as_str()))
-                        || p.broken.iter().any(|f| matches(w, f.check.as_str()))
-                })
-            })
-            .collect();
         if !unmatched.is_empty() && run.incomplete_families.is_empty() {
             return Reply::text(
                 Exit::Usage,
@@ -112,6 +116,20 @@ impl Verb for TestVerb {
         }
         reply(&run, render(&lines))
     }
+}
+
+/// The words that match no listed check of `prepared`, in their order.
+fn unmatched_words<'w>(words: &[&'w str], prepared: &[Prepared]) -> Vec<&'w str> {
+    words
+        .iter()
+        .copied()
+        .filter(|w| {
+            !prepared.iter().any(|p| {
+                p.keyed.iter().any(|k| matches(w, k.listed.check.as_str()))
+                    || p.broken.iter().any(|f| matches(w, f.check.as_str()))
+            })
+        })
+        .collect()
 }
 
 /// `ignite check [--plan] [--rerun]`: runs what the landing gate would run on the tree as it is,
