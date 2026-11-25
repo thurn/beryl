@@ -206,7 +206,8 @@ class Cards:
         ability = self.ability(card, how, index)
         text = tap_text(ability) if ability and ability["kind"] == "Mana" else None
         written = self.paragraphs(self.written_on(card, how))
-        if text is None or any(text[-3:] + " or" in p for p in written):
+        offers = [p for p in written if p.startswith("{T}: Add ") and " or " in p]
+        if text is None or any(text[-3:] in p for p in offers):
             return None
         return text
 
