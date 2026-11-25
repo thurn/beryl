@@ -167,13 +167,13 @@ def problems(
 
 
 def one_sentence(label: str) -> bool:
-    """Whether `label` is one sentence: it starts with a capital letter, and no sentence ends
-    inside it."""
+    """Whether `label` is one sentence: it starts with a capital letter or with a code span
+    such as `ignite test`, whose identifier is lower case, and no sentence ends inside it."""
     text = label.strip()
     return (
         bool(text)
         and text == label
-        and text[0].isupper()
+        and (text[0].isupper() or text[0] == "`")
         and not SENTENCE_BREAK.search(text)
     )
 
