@@ -297,9 +297,7 @@ impl HubClient {
                 }
             };
             attempt += 1;
-            let again =
-                attempt <= self.retries || (restarting && began.elapsed() < self.restart_window);
-            if !again {
+            if !self.tries_again(attempt, restarting, began.elapsed()) {
                 break;
             }
         }
@@ -307,6 +305,14 @@ impl HubClient {
             "the hub at {}{path}: {last}",
             self.base
         )))
+    }
+}
+
+impl HubClient {
+    /// Whether a request that has failed `attempt` times, the last time with a failure that
+    /// looks like a restart if `restarting`, is sent again `elapsed` after its first try.
+    fn tries_again(&self, attempt: u32, restarting: bool, elapsed: Duration) -> bool {
+        attempt <= self.retries || (restarting && elapsed < self.restart_window)
     }
 }
 

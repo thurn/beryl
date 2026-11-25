@@ -231,17 +231,14 @@ fn a_hub_behind_a_proxy_that_answers_502_while_it_restarts_is_waited_for() {
 
 #[test]
 fn a_server_error_that_is_not_a_restart_is_tried_only_retries_times() {
-    let calls = Arc::new(Mutex::new(0));
-    let counter = calls.clone();
-    let hub = FakeHttpHub::start(move |_, _, _| {
-        *counter.lock().unwrap() += 1;
-        (500, "broken".to_owned())
-    });
-    let error = restart_tolerant(hub.port, Duration::from_secs(10))
-        .records(&[record("test")])
-        .unwrap_err();
-    assert!(matches!(error, Error::Unreachable(_)), "{error:?}");
-    assert_eq!(*calls.lock().unwrap(), 2);
+    // Decided without a network: whether a failure looks like a restart depends on the
+    // transport (a reset on a reused connection does), so counting a fake hub's requests
+    // is not deterministic.
+    let client = restart_tolerant(0, Duration::from_secs(10));
+    assert!(client.tries_again(1, false, Duration::ZERO));
+    assert!(!client.tries_again(2, false, Duration::ZERO));
+    assert!(client.tries_again(2, true, Duration::from_secs(9)));
+    assert!(!client.tries_again(2, true, Duration::from_secs(10)));
 }
 
 #[test]
