@@ -19,7 +19,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_cards::CARDS;
-use beryl_cards::decks::{fuzz_deck, fuzz_deck_from, keystone_family};
+use beryl_cards::decks::{fuzz_deck, fuzz_deck_from, keystone_family, pool_deck};
 use beryl_engine::{
     Choice, Decision, Format, GameTable, Layout, Observation, Profile, Seat, State,
 };
@@ -333,6 +333,17 @@ fn turn_and_game_keystone_games_keep_the_script_checks() {
 #[ignore = "a handful of session games: `just fuzz` plays them"]
 fn casting_and_combat_keystone_games_keep_the_script_checks() {
     if let Some((game, why)) = shrink(games(3), MOST_CHOICES, rng(), casting_and_combat_deck) {
+        panic!("{}", report(&game, &why));
+    }
+}
+
+/// The same, with decks dealt from every keystone and partner of every family together
+/// ([`pool_deck`]), so that the views and scripts meet cards of different families on the
+/// battlefield at once, which decks of one family never hold.
+#[test]
+#[ignore = "a handful of session games: `just fuzz` plays them"]
+fn keystone_pool_games_keep_the_script_checks() {
+    if let Some((game, why)) = shrink(games(3), MOST_CHOICES, rng(), pool_deck) {
         panic!("{}", report(&game, &why));
     }
 }

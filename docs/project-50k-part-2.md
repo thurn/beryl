@@ -218,6 +218,19 @@ checks on idle cores and files a ticket for a failure ([ignite.md](ignite.md),
 failure shrinks to a scenario (`beryl_search/tests/all/shrink.rs`). Each
 keystone of this plan joins the pool with its card.
 
+As built: `decks::keystone_pool` and `decks::pool_deck` deal the decks, with the
+basic lands split by the colored symbols of the deck's spells so that most of
+them can be cast. `families::every_family_together` plays the pool in the
+`fuzz:families` check, `shrink::pool_games_keep_the_invariants` in `fuzz:shrink`
+and the session fuzzer's `keystone_pool_games_keep_the_script_checks` in
+`fuzz:session`. The exhaustive search from pool positions is the `exhaust` test
+`pool_positions_keep_the_invariants_to_a_depth`, which Ignite runs as
+`exhaust:pool/<first seed>+<games>` and `just exhaust --pool` runs by hand. It
+plays a game in `Small` to a quiet priority of turns three to eight and searches
+from there in `Large`. A failure prints the seed and every choice, and
+`BERYL_POOL_GAME=<seed>:<choices>` makes the pool shrinker print that game as a
+scenario.
+
 ### B. Guards
 
 **B1. Exhaustive matches.** `clippy::wildcard_enum_match_arm` is denied in

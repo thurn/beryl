@@ -16,7 +16,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use crate::common::{first_seed, games};
 use beryl_cards::CARDS;
-use beryl_cards::decks::fuzz_deck;
+use beryl_cards::decks::{fuzz_deck, pool_deck};
 use beryl_engine::{
     Choice, Decision, DecisionKind, Format, GameTable, Profile, Replay, Scratch, Seat, State, Step,
     Stops, Zone, ZoneKey, apply, next,
@@ -37,18 +37,24 @@ const TRACED: Profile = Profile {
 /// The most choices a game is generated with: past most random games' ends.
 const MOST_CHOICES: usize = 600;
 
-/// A fuzz game: its seed and the choice at each decision, by index modulo the candidates.
+/// A fuzz game: its seed, the cards its decks are dealt from, and the choice at each decision,
+/// by index modulo the candidates.
 #[derive(Clone, Debug)]
 struct Game {
     seed: u64,
+    deck: Deck,
     choices: Vec<u16>,
 }
+
+/// The fuzz deck a seed deals: from every implemented card ([`fuzz_deck`]) or from every
+/// keystone family together ([`pool_deck`]).
+type Deck = fn(u64) -> Vec<(u8, &'static str)>;
 
 impl Game {
     fn table(&self) -> GameTable {
         let decks = [
-            fuzz_deck(self.seed),
-            fuzz_deck(self.seed.wrapping_add(1 << 32)),
+            (self.deck)(self.seed),
+            (self.deck)(self.seed.wrapping_add(1 << 32)),
         ];
         GameTable::new(
             Format::CONSTRUCTED,
@@ -112,6 +118,7 @@ impl Game {
         let _ = self.play(check, |_, _, _, c| choices.push(c.0));
         Game {
             seed: self.seed,
+            deck: self.deck,
             choices,
         }
     }
@@ -231,9 +238,9 @@ fn rng() -> TestRng {
     }
 }
 
-/// Runs `cases` fuzz games under `check`, deterministically, and returns the game proptest
-/// shrank a failure to, with why it fails.
-fn shrink(cases: u32, check: Check) -> Option<(Game, String)> {
+/// Runs `cases` fuzz games of `deck` under `check`, deterministically, and returns the game
+/// proptest shrank a failure to, with why it fails.
+fn shrink(cases: u32, deck: Deck, check: Check) -> Option<(Game, String)> {
     let config = Config {
         cases,
         failure_persistence: None,
@@ -241,8 +248,13 @@ fn shrink(cases: u32, check: Check) -> Option<(Game, String)> {
         ..Config::default()
     };
     let mut runner = TestRunner::new_with_rng(config, rng());
-    let games = (0..u64::from(u32::MAX), vec(any::<u16>(), 0..MOST_CHOICES))
-        .prop_map(|(seed, choices)| Game { seed, choices });
+    let games = (0..u64::from(u32::MAX), vec(any::<u16>(), 0..MOST_CHOICES)).prop_map(
+        move |(seed, choices)| Game {
+            seed,
+            deck,
+            choices,
+        },
+    );
     match runner.run(&games, |game| {
         game.play(check, |_, _, _, _| {})
             .map_err(TestCaseError::fail)
@@ -259,12 +271,62 @@ fn shrink(cases: u32, check: Check) -> Option<(Game, String)> {
 #[ignore = "12 shrinking fuzz games, about 11 CPU seconds in a debug build: `just fuzz` plays it"]
 fn fuzz_games_keep_the_invariants() {
     let cases = u32::try_from(games(12)).expect("a game count");
-    if let Some((game, why)) = shrink(cases, invariants) {
+    if let Some((game, why)) = shrink(cases, fuzz_deck, invariants) {
         let (text, _) = game.scenario(invariants, &why);
         panic!(
             "seed {}, choices {:?}: {why}\n{text}",
             game.seed, game.choices
         );
+    }
+}
+
+/// The same with decks dealt from every keystone family together ([`pool_deck`]): a game of
+/// the pool that breaks an invariant shrinks to the fewest choices that still break it and
+/// prints as a scenario, as `families::every_family_together` cannot, since its agents choose
+/// rather than replaying a list of choices.
+///
+/// With `BERYL_POOL_GAME=<seed>:<choice>,<choice>,...` set, as the pool's exhaustive search
+/// (`beryl_cards`' `exhaust` test) prints a failure, it replays that game instead and prints
+/// it as a scenario.
+#[test]
+#[ignore = "shrinking fuzz games of the keystone pool: `just fuzz` plays it"]
+fn pool_games_keep_the_invariants() {
+    if let Some(spec) = std::env::var("BERYL_POOL_GAME")
+        .ok()
+        .filter(|v| !v.is_empty())
+    {
+        let game = pool_game(&spec);
+        let why = game.play(invariants, |_, _, _, _| {}).err();
+        let why = why.unwrap_or_else(|| "the game keeps the invariants".to_owned());
+        let (text, _) = game.scenario(invariants, &why);
+        println!("pool seed {}: {why}\n{text}", game.seed);
+        return;
+    }
+    let cases = u32::try_from(games(12)).expect("a game count");
+    if let Some((game, why)) = shrink(cases, pool_deck, invariants) {
+        let (text, _) = game.scenario(invariants, &why);
+        panic!(
+            "pool seed {}, choices {:?}: {why}\n{text}",
+            game.seed, game.choices
+        );
+    }
+}
+
+/// The pool game `spec` names, `<seed>:<choice>,<choice>,...`, the brackets and spaces of a
+/// printed list allowed.
+fn pool_game(spec: &str) -> Game {
+    let (seed, choices) = spec
+        .split_once(':')
+        .unwrap_or_else(|| panic!("BERYL_POOL_GAME is not <seed>:<choices>: {spec}"));
+    let choices = choices
+        .split(|c: char| c == ',' || c.is_whitespace() || c == '[' || c == ']')
+        .filter(|c| !c.is_empty())
+        .map(|c| c.parse().unwrap_or_else(|_| panic!("not a choice: {c}")))
+        .collect();
+    Game {
+        seed: seed.trim().parse().expect("a seed"),
+        deck: pool_deck,
+        choices,
     }
 }
 
@@ -284,7 +346,8 @@ fn a_broken_invariant_shrinks_to_a_scenario() {
         }
         Ok(())
     }
-    let (game, why) = shrink(4, graveyards_stay_empty).expect("a card reaches a graveyard");
+    let (game, why) =
+        shrink(4, fuzz_deck, graveyards_stay_empty).expect("a card reaches a graveyard");
     let (text, scenario) = game.scenario(graveyards_stay_empty, &why);
     println!("seed {}, choices {:?}\n{text}", game.seed, game.choices);
     // A handful, not a game's hundreds: how few depends on the fuzz decks' opening hands.

@@ -152,6 +152,7 @@ fn exhaust_from<L: Layout>(
         bounds,
         seen: HashMap::new(),
         path: Vec::new(),
+        full: Vec::new(),
         searched: Searched::default(),
     };
     let result = catch_unwind(AssertUnwindSafe(|| {
@@ -172,6 +173,66 @@ fn exhaust_from<L: Layout>(
     }
 }
 
+/// A sequence that breaks the check, from a game's position ([`exhaust_position`]).
+#[derive(Clone, Debug)]
+pub struct PositionFound {
+    pub why: String,
+    /// Every choice from the position to the one that fails, that one included, with the
+    /// answers to questions of one answer among them: a game that took these after reaching
+    /// the position, under the scenario runner's profile, fails the same way.
+    pub choices: Vec<u16>,
+    /// The decisions of the sequence, as scenario actions where the vocabulary names them.
+    pub text: String,
+}
+
+impl fmt::Display for PositionFound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "{}: choices {:?}", self.why, self.choices)?;
+        f.write_str(&self.text)
+    }
+}
+
+/// Searches every sequence of decisions within `bounds` from `s`, a position of a game where
+/// `first` is open, as [`exhaust`] searches from a scenario's end, with `check` at every
+/// position. The search plays under the scenario runner's profile, so a question with one
+/// answer is answered and is not a decision.
+pub fn exhaust_position<L: Layout>(
+    t: &GameTable,
+    s: &State<L>,
+    first: &Decision<L>,
+    bounds: Bounds,
+    check: Check<L>,
+) -> Result<Searched, Box<PositionFound>> {
+    let mut root = s.clone();
+    root.set_profile(TRACED);
+    let mut search = Search {
+        t,
+        check,
+        x: Scratch::unchecked(),
+        bounds,
+        seen: HashMap::new(),
+        path: Vec::new(),
+        full: Vec::new(),
+        searched: Searched::default(),
+    };
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        check(t, &root)?;
+        search.at(&root, first, bounds.depth)
+    }))
+    .unwrap_or_else(|panic| Err(panic_message(&*panic)));
+    match result {
+        Ok(()) => Ok(search.searched),
+        Err(why) => {
+            let lines = path_lines(t, root, first, &search.path).0;
+            Err(Box::new(PositionFound {
+                why,
+                choices: search.full.iter().map(|c| c.0).collect(),
+                text: lines.join("\n"),
+            }))
+        }
+    }
+}
+
 struct Search<'a, L: Layout> {
     t: &'a GameTable,
     check: Check<L>,
@@ -181,13 +242,16 @@ struct Search<'a, L: Layout> {
     seen: HashMap<u64, u8>,
     /// The choices from the root to the position being searched; on a failure, to it.
     path: Vec<Choice>,
+    /// The same with the answers to questions of one answer, which [`settle`] takes, between
+    /// them: every choice a game takes from the root, as a list of choices replays it.
+    full: Vec<Choice>,
     searched: Searched,
 }
 
 impl<L: Layout> Search<'_, L> {
     /// Searches from `s`, before `next`, with `depth` decisions left.
     fn from(&mut self, mut s: State<L>, depth: u8) -> Result<(), String> {
-        match settle(self.t, &mut s, &mut self.x, self.check)? {
+        match settle(self.t, &mut s, &mut self.x, self.check, &mut self.full)? {
             Some(d) => self.at(&s, &d, depth),
             None => Ok(()),
         }
@@ -213,11 +277,14 @@ impl<L: Layout> Search<'_, L> {
                 return Ok(());
             }
             self.searched.nodes += 1;
+            let full = self.full.len();
             self.path.push(c);
+            self.full.push(c);
             let mut child = s.clone();
             apply(&mut child, self.t, &mut self.x, &mut Replay, c);
             self.from(child, depth - 1)?;
             self.path.pop();
+            self.full.truncate(full);
         }
         Ok(())
     }
@@ -225,12 +292,13 @@ impl<L: Layout> Search<'_, L> {
 
 /// Advances `s` to its next decision as the scenario runner does, answering each question
 /// with one answer and checking `check` at every position: the decision, or `None` once the
-/// game is over.
+/// game is over. Each answer it takes is pushed onto `taken`.
 fn settle<L: Layout>(
     t: &GameTable,
     s: &mut State<L>,
     x: &mut Scratch<L>,
     check: Check<L>,
+    taken: &mut Vec<Choice>,
 ) -> Result<Option<Decision<L>>, String> {
     loop {
         let step = next(s, t, x, &mut Replay);
@@ -238,6 +306,7 @@ fn settle<L: Layout>(
         match step {
             Step::Decide(d) if d.is_empty() => return Err(format!("no candidates for {d:?}")),
             Step::Decide(d) if d.len() == 1 && d.kind != DecisionKind::Priority => {
+                taken.push(Choice(0));
                 apply(s, t, x, &mut Replay, Choice(0));
             }
             Step::Decide(d) => return Ok(Some(d)),
@@ -263,13 +332,11 @@ fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
 fn found<L: Layout>(
     t: &GameTable,
     scenario: &Scenario,
-    mut s: State<L>,
+    s: State<L>,
     first: &Decision<L>,
     path: &[Choice],
     why: String,
 ) -> Found {
-    // Replays to the failure, which debug checks would panic at before it is described.
-    let mut x = Scratch::unchecked();
     let mut actions: Option<Vec<Action>> = Some(
         scenario
             .actions
@@ -284,11 +351,42 @@ fn found<L: Layout>(
         .map(|a| format!("        {},", source(a)))
         .collect();
     lines.push("        // The search from here:".to_owned());
+    let (searched, scripted) = path_lines(t, s, first, path);
+    lines.extend(searched);
+    match (&mut actions, scripted) {
+        (Some(actions), Some(scripted)) => actions.extend(scripted),
+        _ => actions = None,
+    }
+    let mut text = format!("// {}: {why}\n", scenario.name);
+    text.push_str(&setup_source(scenario));
+    let _ = writeln!(text, "    .actions(&[\n{}\n    ])", lines.join("\n"));
+    Found {
+        why,
+        scenario: actions.map(|a| scenario.actions(a.leak())),
+        searched: path.len(),
+        text,
+    }
+}
+
+/// The decisions of the failing sequence `path` from `s`, where `first` is open, each as a line
+/// of a scenario's actions, and the actions themselves if every one is scriptable. Each decision
+/// is replayed to name its choice, and the last choice, the one that fails, is named but not
+/// taken.
+fn path_lines<L: Layout>(
+    t: &GameTable,
+    mut s: State<L>,
+    first: &Decision<L>,
+    path: &[Choice],
+) -> (Vec<String>, Option<Vec<Action>>) {
+    // Replays to the failure, which debug checks would panic at before it is described.
+    let mut x = Scratch::unchecked();
+    let mut lines = Vec::new();
+    let mut actions = Some(Vec::new());
     for (i, &c) in path.iter().enumerate() {
         let d = if i == 0 {
             first.clone()
         } else {
-            let Ok(Some(d)) = settle(t, &mut s, &mut x, |_, _| Ok(())) else {
+            let Ok(Some(d)) = settle(t, &mut s, &mut x, |_, _| Ok(()), &mut Vec::new()) else {
                 unreachable!("the path replays to a decision");
             };
             d
@@ -313,13 +411,5 @@ fn found<L: Layout>(
             apply(&mut s, t, &mut x, &mut Replay, c);
         }
     }
-    let mut text = format!("// {}: {why}\n", scenario.name);
-    text.push_str(&setup_source(scenario));
-    let _ = writeln!(text, "    .actions(&[\n{}\n    ])", lines.join("\n"));
-    Found {
-        why,
-        scenario: actions.map(|a| scenario.actions(a.leak())),
-        searched: path.len(),
-        text,
-    }
+    (lines, actions)
 }

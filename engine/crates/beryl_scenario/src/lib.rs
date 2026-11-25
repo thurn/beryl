@@ -26,7 +26,9 @@ pub use beryl_scenario_types::{
     Action, Assertion, Counters, Ending, P0, P1, Permanent, Pick, PlayerSetup, Scenario, Setup,
     prelude,
 };
-pub use exhaust::{Bounds, Check, Found, Searched, exhaust, invariants};
+pub use exhaust::{
+    Bounds, Check, Found, PositionFound, Searched, exhaust, exhaust_position, invariants,
+};
 pub use json::{Json, to_json};
 pub use run::{
     DecisionVisitor, LayoutComparison, Live, answer, describe, mana_activation, outcome,

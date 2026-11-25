@@ -54,13 +54,31 @@ pub fn compares_layouts(seed: u64) -> bool {
 /// When an engine call runs `Small` out of a capacity, the game goes on in `Large` from the
 /// state before that call, which makes the call again; running out in `Large` ends the game
 /// `Stalled(Capacity)`.
+#[allow(clippy::large_types_passed_by_value)] // Moved into the game `play_watched` plays.
 pub fn play_widening(
+    t: &GameTable,
+    s: State<Small>,
+    seed: u64,
+    kinds: &mut HashMap<String, u64>,
+    compare: bool,
+    agents: &mut [impl GameAgent; 2],
+) -> Widened {
+    play_watched(t, s, seed, kinds, compare, agents, None)
+}
+
+/// What a watched game reports at each decision: the names of the cards on the battlefield,
+/// by their definitions, so that a face-down permanent counts as its card.
+pub type Watch<'a> = &'a mut dyn FnMut(&[&'static str]);
+
+/// [`play_widening`], calling `watch`, if there is one, at every decision.
+pub fn play_watched(
     t: &GameTable,
     mut s: State<Small>,
     seed: u64,
     kinds: &mut HashMap<String, u64>,
     compare: bool,
     agents: &mut [impl GameAgent; 2],
+    mut watch: Option<Watch<'_>>,
 ) -> Widened {
     /// Names the game when the engine panics during it.
     struct Game(u64);
@@ -109,6 +127,7 @@ pub fn play_widening(
             }
             Some(Step::Decide(d)) => {
                 seen(&s, t, &d, seed, kinds);
+                watched(&s, t, &mut watch);
                 decisions += 1;
                 let i = d.decider.index();
                 let choice =
@@ -129,6 +148,7 @@ pub fn play_widening(
             Step::Over(outcome) => break outcome,
             Step::Decide(d) => {
                 seen(&large, t, &d, seed, kinds);
+                watched(&large, t, &mut watch);
                 decisions += 1;
                 let i = d.decider.index();
                 let c =
@@ -159,6 +179,18 @@ fn seen<L: Layout>(
     assert!(!d.is_empty(), "seed {seed}: {d:?}");
     if let Err(v) = beryl_engine::check_references(s, t) {
         panic!("seed {seed}: a reference: {v:?}");
+    }
+}
+
+/// Calls `watch`, if there is one, with the names of the cards on `s`'s battlefield.
+fn watched<L: Layout>(s: &State<L>, t: &GameTable, watch: &mut Option<Watch<'_>>) {
+    if let Some(watch) = watch {
+        let names: Vec<&'static str> = s
+            .battlefield()
+            .iter()
+            .map(|&slot| s.definition_name(t, slot))
+            .collect();
+        watch(&names);
     }
 }
 

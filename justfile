@@ -207,16 +207,18 @@ fuzz games="10000":
     cargo test --release -p beryl_search --test all -- games:: shrink:: families:: --nocapture --include-ignored && \
     cargo test --release -p beryl_session --test session fuzz:: -- --nocapture --include-ignored
 
-# Every decision sequence from the scenarios' end positions, deeper than the fast check: one card's or all (--depth N, --nodes N per scenario)
+# Every decision sequence from the scenarios' end positions, deeper than the fast check: one card's or all (--depth N, --nodes N per scenario), or from positions of keystone pool games (--pool [FIRST+GAMES], 16 games from seed 0 by default)
 [group('test')]
 exhaust *args:
-    card=""; depth=6; nodes=20000; \
+    card=""; depth=6; nodes=20000; pool=""; \
     while [ $# -gt 0 ]; do case "$1" in \
         --depth) depth="$2"; shift 2 ;; \
         --nodes) nodes="$2"; shift 2 ;; \
+        --pool) case "${2:-}" in *+*) pool="$2"; shift 2 ;; *) pool="0+16"; shift ;; esac ;; \
         *) card="$1"; shift ;; \
     esac; done; \
-    cd engine && BERYL_EXHAUST_CARD="$card" BERYL_EXHAUST_DEPTH="$depth" BERYL_EXHAUST_NODES="$nodes" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release -p beryl_cards --test exhaust every_scenario -- --nocapture
+    if [ -n "$pool" ]; then test="pool_positions -- --include-ignored"; else test="every_scenario --"; fi; \
+    cd engine && BERYL_EXHAUST_CARD="$card" BERYL_EXHAUST_POOL="$pool" BERYL_EXHAUST_DEPTH="$depth" BERYL_EXHAUST_NODES="$nodes" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release -p beryl_cards --test exhaust $test --nocapture
 
 # Adds saves to the frozen corpus, weekly or so: seeded games covering every card and decision, or one replay (--replay FILE, --games N, --seed N)
 [group('test')]

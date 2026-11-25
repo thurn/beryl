@@ -27,7 +27,9 @@ The families:
 - `fuzz`: batches of random games, `fuzz:<target>/<first seed>+<games>`, played by the tests of
   `beryl_search` and `beryl_session` that `just fuzz` runs.
 - `exhaust`: `exhaust:<card>/depth<d>-nodes<n>`, every decision sequence from the end positions of
-  one card's scenarios (`beryl_cards`' `exhaust` test).
+  one card's scenarios (`beryl_cards`' `exhaust` test), and `exhaust:pool/<first seed>+<games>`,
+  the same search from positions of random games between decks of every keystone family
+  together, over seeds reserved as `fuzz` reserves them.
 - `scale`: the Python tests that read every card file, with the card files among their inputs.
 - `ignite-lint`: `ignite-lint:fmt` and `ignite-lint:clippy` over the `ignite/` workspace. Its
   tests are the `ignite` family, which runs them under cargo-nextest with no adapter of ours.
@@ -101,6 +103,11 @@ RELEASE_CHECKS = {
 # The bounds `just exhaust` uses by default.
 EXHAUST_DEPTH = 6
 EXHAUST_NODES = 20000
+
+
+# Pool games a batch searches from. One game's search takes well under a second, so a batch is
+# a few minutes of one core.
+POOL_GAMES = 256
 
 
 def exhaust_suffix() -> str:
@@ -248,20 +255,22 @@ def next_fuzz(state: Path) -> list[dict[str, Any]]:
     ]
 
 
-def next_exhaust(root: Path) -> list[dict[str, Any]]:
-    """A check for each card, with the card's file as its own input."""
+def next_exhaust(root: Path, state: Path) -> list[dict[str, Any]]:
+    """A check for each card, with the card's file as its own input, and one batch of pool
+    games over seeds no earlier batch used."""
     files = card_files(root)
+    first = take_seeds(state, POOL_GAMES)
     return [
         {"check": f"exhaust:{card}/{exhaust_suffix()}", "inputs": [path]}
         for card, path in files.items()
-    ]
+    ] + [{"check": f"exhaust:pool/{first}+{POOL_GAMES}", "inputs": []}]
 
 
 def next_checks(family: str, root: Path) -> list[dict[str, Any]]:
     if family == "fuzz":
         return next_fuzz(fuzz_state())
     if family == "exhaust":
-        return next_exhaust(root)
+        return next_exhaust(root, fuzz_state())
     raise ValueError(f"{family} is a regression family: its checks come from `list`")
 
 
@@ -584,33 +593,61 @@ def parse_exhaust(name: str) -> tuple[str, int, int]:
     return unquote(match[1]), int(match[2]), int(match[3])
 
 
+def parse_pool(name: str) -> tuple[int, int] | None:
+    """(first seed, games) of `exhaust:pool/<first>+<games>`, or None for a card's check."""
+    match = re.fullmatch(r"exhaust:pool/(\d+)\+(\d+)", name)
+    return (int(match[1]), int(match[2])) if match else None
+
+
+def exhaust_test(test: str, env: dict[str, str], root: Path) -> tuple[int, str]:
+    """Runs the `exhaust` test binary's tests named `test`, ignored ones included, at the
+    default bounds and with the environment `env` adds."""
+    return cargo(
+        [
+            "test",
+            "--release",
+            "--locked",
+            "-p",
+            "beryl_cards",
+            "--test",
+            "exhaust",
+            test,
+            "--",
+            "--nocapture",
+            "--include-ignored",
+        ],
+        root,
+        {
+            **RELEASE_CHECKS,
+            "BERYL_EXHAUST_DEPTH": str(EXHAUST_DEPTH),
+            "BERYL_EXHAUST_NODES": str(EXHAUST_NODES),
+            **env,
+        },
+    )
+
+
 def run_exhaust(names: Sequence[str], root: Path, results: Path) -> None:
     cards = card_names(root)
     for name in names:
-        card, depth, nodes = parse_exhaust(name)
-        if card not in cards:
-            continue
-        code, output = cargo(
-            [
-                "test",
-                "--release",
-                "--locked",
-                "-p",
-                "beryl_cards",
-                "--test",
-                "exhaust",
+        pool = parse_pool(name)
+        if pool:
+            first, games = pool
+            code, output = exhaust_test(
+                "pool_positions", {"BERYL_EXHAUST_POOL": f"{first}+{games}"}, root
+            )
+        else:
+            card, depth, nodes = parse_exhaust(name)
+            if card not in cards:
+                continue
+            code, output = exhaust_test(
                 "every_scenario",
-                "--",
-                "--nocapture",
-            ],
-            root,
-            {
-                **RELEASE_CHECKS,
-                "BERYL_EXHAUST_CARD": cards[card],
-                "BERYL_EXHAUST_DEPTH": str(depth),
-                "BERYL_EXHAUST_NODES": str(nodes),
-            },
-        )
+                {
+                    "BERYL_EXHAUST_CARD": cards[card],
+                    "BERYL_EXHAUST_DEPTH": str(depth),
+                    "BERYL_EXHAUST_NODES": str(nodes),
+                },
+                root,
+            )
         result = judged(code, output, "the search failed")
         if result:
             append(results, [{"check": name, **result}])

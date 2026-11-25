@@ -210,8 +210,8 @@ def test_exhaust_yields_a_check_per_card_with_the_card_file_as_input(
     tmp_path: Path,
 ) -> None:
     repository(tmp_path)
-    found = adapter.next_exhaust(tmp_path)
-    assert found == [
+    found = adapter.next_exhaust(tmp_path, tmp_path / "fuzz.json")
+    assert found[:2] == [
         {
             "check": "exhaust:alpha/depth6-nodes20000",
             "inputs": ["engine/cards/cards_1/set/alpha.rs"],
@@ -223,6 +223,22 @@ def test_exhaust_yields_a_check_per_card_with_the_card_file_as_input(
     ]
     assert adapter.card_names(tmp_path)["beta-gamma"] == "Beta Gamma"
     assert adapter.parse_exhaust(found[1]["check"]) == ("beta-gamma", 6, 20000)
+    assert adapter.parse_pool(found[1]["check"]) is None
+
+
+def test_exhaust_yields_a_pool_batch_over_fresh_seeds(tmp_path: Path) -> None:
+    repository(tmp_path)
+    state = tmp_path / "fuzz.json"
+    pools = [
+        adapter.parse_pool(adapter.next_exhaust(tmp_path, state)[-1]["check"])
+        for _ in range(3)
+    ]
+    assert all(pool and pool[1] == adapter.POOL_GAMES for pool in pools)
+    starts = [pool[0] for pool in pools if pool]
+    # Each batch starts after the last one's games, and fuzz batches share the reservation.
+    assert all(b - a >= adapter.POOL_GAMES for a, b in zip(starts, starts[1:]))
+    fuzz = adapter.parse_fuzz(adapter.next_fuzz(state)[0]["check"])
+    assert fuzz[1] >= starts[-1] + adapter.POOL_GAMES
 
 
 def test_a_regression_family_has_no_next(tmp_path: Path) -> None:

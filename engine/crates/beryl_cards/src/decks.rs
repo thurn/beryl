@@ -30,6 +30,104 @@ pub fn keystone_family(name: &str) -> Option<Vec<&'static CardDef>> {
     Some(basics.chain(family).collect())
 }
 
+/// Every card of every keystone family ([`KEYSTONE_FAMILIES`]), each once, with every basic
+/// land: the pool [`pool_deck`] deals from. A family added to the list joins the pool with it.
+/// The family fuzzers deal from one family at a time, so cards of different families rarely
+/// meet there, as Humility and Gemrazer or Rest in Peace and Underworld Breach would here.
+#[must_use]
+pub fn keystone_pool() -> Vec<&'static CardDef> {
+    let mut pool: Vec<&'static CardDef> = Vec::new();
+    for &(name, _) in KEYSTONE_FAMILIES {
+        for card in keystone_family(name).expect("a family of the list") {
+            if !pool.iter().any(|c| c.name == card.name) {
+                pool.push(card);
+            }
+        }
+    }
+    pool
+}
+
+/// Nonbasic cards in a pool deck, the same as a fuzz deck's.
+const POOL_NONBASICS: usize = FUZZ_NONBASICS;
+
+/// A 40-card deck from [`keystone_pool`] for `seed`: its nonbasic cards chosen as
+/// [`fuzz_deck_from`] chooses them, and its basic lands split by the colored mana symbols of
+/// those cards' costs rather than evenly. A deck of five colors split evenly casts few of its
+/// spells, and the pool exists to put keystones of different families on the battlefield
+/// together, two or three by the middle of a game.
+#[must_use]
+pub fn pool_deck(seed: u64) -> Vec<(u8, &'static str)> {
+    pool_deck_from(seed, &keystone_pool())
+}
+
+/// [`pool_deck`] dealt from `cards`, a pool as [`keystone_pool`] gives it.
+fn pool_deck_from(seed: u64, cards: &[&'static CardDef]) -> Vec<(u8, &'static str)> {
+    let (basics, mut nonbasics): (Vec<&CardDef>, Vec<&CardDef>) = cards
+        .iter()
+        .copied()
+        .filter(|c| c.shape != Shape::Melded)
+        .partition(|c| c.front().supertypes.contains(Supertypes::BASIC));
+    nonbasics.sort_unstable_by_key(|c| (rank(seed, c.name), c.name));
+    nonbasics.truncate(POOL_NONBASICS);
+    nonbasics.sort_unstable_by_key(|c| c.name);
+    // The colored symbols the spells ask for, W, U, B, R, G.
+    let mut pips = [0u32; 5];
+    for card in &nonbasics {
+        for face in card.faces {
+            for (pip, &n) in pips.iter_mut().zip(&face.cost.symbols) {
+                *pip += u32::from(n);
+            }
+        }
+    }
+    if pips == [0; 5] {
+        pips = [1; 5];
+    }
+    // One basic land a color, the first by name of those whose mana ability makes it, so that a
+    // deck plays Island and not also Snow-Covered Island.
+    let mut by_color: [Option<&CardDef>; 5] = [None; 5];
+    let mut basics = basics;
+    basics.sort_unstable_by_key(|c| c.name);
+    for card in basics {
+        let makes = card
+            .front()
+            .abilities
+            .iter()
+            .fold(0, |colors, a| colors | a.produces().colors);
+        for (color, slot) in by_color.iter_mut().enumerate() {
+            if makes & (1 << color) != 0 && slot.is_none() {
+                *slot = Some(card);
+            }
+        }
+    }
+    for (pip, land) in pips.iter_mut().zip(&by_color) {
+        if land.is_none() {
+            *pip = 0;
+        }
+    }
+    let lands = u32::try_from(FUZZ_DECK - nonbasics.len()).expect("a deck size");
+    let total: u32 = pips.iter().sum();
+    let mut counts = pips.map(|p| p * lands / total.max(1));
+    // The lands rounding left over, to the colors that lost the most to it (largest remainder).
+    let mut order: Vec<usize> = (0..5).collect();
+    order.sort_by_key(|&c| (std::cmp::Reverse(pips[c] * lands % total.max(1)), c));
+    let short = lands - counts.iter().sum::<u32>();
+    for &c in order
+        .iter()
+        .filter(|&&c| pips[c] > 0)
+        .cycle()
+        .take(short as usize)
+    {
+        counts[c] += 1;
+    }
+    let mut deck: Vec<(u8, &'static str)> = nonbasics.iter().map(|c| (1, c.name)).collect();
+    for (count, land) in counts.iter().zip(by_color) {
+        if let (Some(land), 1..) = (land, *count) {
+            deck.push((u8::try_from(*count).expect("a land count"), land.name));
+        }
+    }
+    deck
+}
+
 /// The size of a fuzz deck: the minimum for limited play
 /// ([CR 100.2b](https://yawgatog.com/resources/magic-rules/#R1002b)): "each deck has a
 /// minimum deck size of 40 cards."
@@ -126,6 +224,43 @@ mod tests {
             }
         }
         assert!(keystone_family("no such family").is_none());
+    }
+
+    /// The pool holds every card of every family once, and its decks are legal, hold only pool
+    /// cards and play lands of the colors their spells need.
+    #[test]
+    fn pool_decks_are_legal_and_follow_their_spells_colors() {
+        let pool = keystone_pool();
+        for &(name, cards) in KEYSTONE_FAMILIES {
+            for card in cards {
+                assert!(pool.iter().any(|c| c.name == *card), "{name}: {card}");
+            }
+        }
+        for (i, a) in pool.iter().enumerate() {
+            assert!(pool[i + 1..].iter().all(|b| b.name != a.name), "{}", a.name);
+        }
+        for seed in 0..50 {
+            let deck = pool_deck(seed);
+            let size: usize = deck.iter().map(|&(n, _)| usize::from(n)).sum();
+            assert_eq!(size, FUZZ_DECK, "seed {seed}: {deck:?}");
+            for (_, name) in &deck {
+                assert!(pool.iter().any(|c| c.name == *name), "seed {seed}: {name}");
+            }
+            let lands: usize = deck
+                .iter()
+                .filter(|(_, n)| {
+                    CARDS
+                        .get(n)
+                        .unwrap()
+                        .front()
+                        .supertypes
+                        .contains(Supertypes::BASIC)
+                })
+                .map(|&(n, _)| usize::from(n))
+                .sum();
+            assert_eq!(lands, FUZZ_DECK - POOL_NONBASICS, "seed {seed}: {deck:?}");
+        }
+        assert_ne!(pool_deck(0), pool_deck(1));
     }
 
     #[test]

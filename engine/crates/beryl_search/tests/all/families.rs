@@ -5,12 +5,14 @@
 //! call that ran out of a capacity, as the app's games do; the test reports those games with
 //! the list that filled. `just fuzz` plays these at length; no check runs them.
 
-use std::collections::{BTreeMap, HashMap};
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use crate::common::widening::{compares_layouts, play_widening};
+use crate::common::widening::{Watch, Widened, compares_layouts, play_watched, play_widening};
 use crate::common::{agents, games, seeds};
 use beryl_cards::CARDS;
-use beryl_cards::decks::{fuzz_deck_from, keystone_family};
+use beryl_cards::decks::{fuzz_deck_from, keystone_family, keystone_pool, pool_deck};
+use beryl_engine::card::Supertypes;
 use beryl_engine::{Decklist, Format, GameTable, Outcome, Profile, StallReason, State};
 
 /// Plays a family's games: two fuzz decks per game from its cards, a quarter as many games as
@@ -23,16 +25,71 @@ fn family(name: &str) {
 fn family_with_sideboard(name: &str, sideboard: &Decklist) {
     let cards = keystone_family(name).expect("a keystone family");
     let n = games(8).div_ceil(4).max(2);
-    let mut stalls: BTreeMap<String, u64> = BTreeMap::new();
-    let mut widened: BTreeMap<&str, u64> = BTreeMap::new();
+    let played = play(
+        name,
+        n,
+        |seed| fuzz_deck_from(seed, &cards),
+        sideboard,
+        compares_layouts,
+        None,
+        |_| {},
+    );
+    println!("{name}: {played}");
+}
+
+/// What a run of [`play`] saw.
+#[derive(Default)]
+struct Played {
+    games: u64,
+    decisions: u64,
+    entered_subgame: u32,
+    stalls: BTreeMap<String, u64>,
+    widened: BTreeMap<&'static str, u64>,
+}
+
+impl Played {
+    fn stalled(&self) -> u64 {
+        self.stalls.values().sum()
+    }
+}
+
+impl std::fmt::Display for Played {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} games, {} decisions; {} entered a subgame; stalls by reason {:?}; \
+             {} left Small, by the list that filled: {:?}",
+            self.games,
+            self.decisions,
+            self.entered_subgame,
+            self.stalls,
+            self.widened.values().sum::<u64>(),
+            self.widened,
+        )
+    }
+}
+
+/// Plays `n` games from the run's first seed, both decks dealt by `deal` (the second from the
+/// seed plus 2^32), under the exact profile on even seeds and smart stops on odd ones, with
+/// the layouts compared where `compare` says, every decision shown to `watch` and each game
+/// to `finished` once it ends. No game may panic, break an invariant or run out of a capacity
+/// in `Large`.
+fn play(
+    name: &str,
+    n: u64,
+    deal: impl Fn(u64) -> Vec<(u8, &'static str)>,
+    sideboard: &Decklist,
+    compare: impl Fn(u64) -> bool,
+    mut watch: Option<Watch<'_>>,
+    mut finished: impl FnMut(&Widened),
+) -> Played {
+    let mut played = Played {
+        games: n,
+        ..Played::default()
+    };
     let mut kinds: HashMap<String, u64> = HashMap::new();
-    let mut decisions = 0u64;
-    let mut entered_subgame = 0;
     for seed in seeds(n) {
-        let decks = [
-            fuzz_deck_from(seed, &cards),
-            fuzz_deck_from(seed.wrapping_add(1 << 32), &cards),
-        ];
+        let decks = [deal(seed), deal(seed.wrapping_add(1 << 32))];
         let t = GameTable::with_sideboards(
             Format::CONSTRUCTED,
             &CARDS,
@@ -45,32 +102,113 @@ fn family_with_sideboard(name: &str, sideboard: &Decklist) {
         } else {
             Profile::SMART
         };
-        let played = play_widening(
+        let game = play_watched(
             &t,
             State::new(&t, seed, profile).unwrap(),
             seed,
             &mut kinds,
-            compares_layouts(seed),
+            compare(seed),
             &mut agents(seed),
+            watch.as_deref_mut().map(|w| w as Watch<'_>),
         );
-        decisions += u64::from(played.decisions);
-        entered_subgame += u32::from(played.entered_subgame);
-        if let Some(list) = played.filled {
-            *widened.entry(list).or_default() += 1;
+        finished(&game);
+        played.decisions += u64::from(game.decisions);
+        played.entered_subgame += u32::from(game.entered_subgame);
+        if let Some(list) = game.filled {
+            *played.widened.entry(list).or_default() += 1;
         }
-        match played.outcome {
+        match game.outcome {
             Outcome::Stalled(StallReason::Capacity) => {
                 panic!("{name}, seed {seed}: a capacity ran out in Large");
             }
-            Outcome::Stalled(reason) => *stalls.entry(format!("{reason:?}")).or_default() += 1,
+            Outcome::Stalled(reason) => {
+                *played.stalls.entry(format!("{reason:?}")).or_default() += 1;
+            }
             Outcome::Win(_) | Outcome::Draw => {}
         }
     }
-    println!(
-        "{name}: {n} games, {decisions} decisions; {entered_subgame} entered a subgame; stalls by reason {stalls:?}; \
-         {} left Small, by the list that filled: {widened:?}",
-        widened.values().sum::<u64>()
+    played
+}
+
+/// The pairs of pool cards seen together in a game, and the count in play at each decision.
+type Seen = (BTreeSet<(&'static str, &'static str)>, Vec<usize>);
+
+/// Random games with both decks dealt from every keystone and partner of every family
+/// ([`pool_deck`]), so that cards of different families meet: Humility with Gemrazer, Rest in
+/// Peace with Underworld Breach, Painter's Servant with Mother of Runes. Every game compares
+/// both layouts at every decision, since the pool exists to find what the families alone do
+/// not. It prints each pair of pool cards that were on the battlefield together with the
+/// games they were in, how many pool cards were in play at each game's middle decision, and
+/// the share of games that stalled. Burning Wish, a pool card, has itself in the sideboard to
+/// fetch, as the outside-the-game family plays it.
+#[test]
+#[ignore = "random games of every family together: `just fuzz` plays them"]
+fn every_family_together() {
+    let pool: BTreeSet<&'static str> = keystone_pool()
+        .iter()
+        .filter(|c| !c.front().supertypes.contains(Supertypes::BASIC))
+        .map(|c| c.name)
+        .collect();
+    let n = games(8).div_ceil(4).max(2);
+    let current: RefCell<Seen> = RefCell::default();
+    // Each pair with the games it was seen in, and each game's count at its middle decision.
+    let mut pairs: BTreeMap<(&str, &str), u64> = BTreeMap::new();
+    let mut middles: Vec<usize> = Vec::new();
+    let mut watch = |names: &[&'static str]| {
+        let mut here: Vec<&'static str> =
+            names.iter().copied().filter(|n| pool.contains(n)).collect();
+        here.sort_unstable();
+        here.dedup();
+        let (seen, counts) = &mut *current.borrow_mut();
+        counts.push(here.len());
+        for (i, &a) in here.iter().enumerate() {
+            for &b in &here[i + 1..] {
+                seen.insert((a, b));
+            }
+        }
+    };
+    let played = play(
+        "every family",
+        n,
+        pool_deck,
+        &[(1, beryl_cards::names::BURNING_WISH)],
+        |_| true,
+        Some(&mut watch),
+        |_| {
+            let (seen, counts) = current.take();
+            for pair in seen {
+                *pairs.entry(pair).or_default() += 1;
+            }
+            middles.push(counts.get(counts.len() / 2).copied().unwrap_or(0));
+        },
     );
+    println!("every family together: {played}");
+    #[allow(clippy::cast_precision_loss)] // A few thousand games at most.
+    let share = |k: u64| 100.0 * k as f64 / played.games.max(1) as f64;
+    println!(
+        "stall rate {:.1}% ({} of {} games)",
+        share(played.stalled()),
+        played.stalled(),
+        played.games
+    );
+    middles.sort_unstable();
+    let at_least =
+        |k: usize| u64::try_from(middles.iter().filter(|&&m| m >= k).count()).unwrap_or(u64::MAX);
+    println!(
+        "pool cards in play at a game's middle decision: median {}, two or more in {:.0}% of games, three or more in {:.0}%",
+        middles.get(middles.len() / 2).copied().unwrap_or(0),
+        share(at_least(2)),
+        share(at_least(3)),
+    );
+    let mut by_games: Vec<_> = pairs.iter().collect();
+    by_games.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+    println!(
+        "{} pairs of pool cards on the battlefield together, by the games they were in:",
+        pairs.len()
+    );
+    for ((a, b), games) in by_games {
+        println!("  {games:>5}  {a} + {b}");
+    }
 }
 
 #[test]
