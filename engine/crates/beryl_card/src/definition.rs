@@ -30,18 +30,29 @@ pub enum Shape {
     Adventure,
     Prepared,
     Flip,
-    /// One front face. The partner and the meld result are separate card definitions.
+    /// One card of a meld pair ([CR 713.1]), with one front face: `with` names the other
+    /// card of the pair and `into` the combined back face they meld into, each a separate
+    /// card definition.
+    ///
+    /// [CR 713.1]: https://yawgatog.com/resources/magic-rules/#R7131
     Meld {
         with: &'static str,
         into: &'static str,
     },
+    /// The combined back face of a meld pair, with one face: only the characteristics of the
+    /// permanent two melded cards become ([CR 713.1b]): "The back faces of a meld pair are used
+    /// only to determine the characteristics of the melded permanent that pair becomes on the
+    /// battlefield." It is never a card in a deck, and its face can't be cast or played.
+    ///
+    /// [CR 713.1b]: https://yawgatog.com/resources/magic-rules/#R7131b
+    Melded,
 }
 
 impl Shape {
     /// The number of printed faces or sets of alternative characteristics in the definition.
     pub const fn face_count(self) -> usize {
         match self {
-            Self::Single | Self::Meld { .. } => 1,
+            Self::Single | Self::Meld { .. } | Self::Melded => 1,
             Self::Transforming
             | Self::Modal
             | Self::Split { .. }
@@ -233,11 +244,15 @@ pub enum FaceUse {
     Fused,
     /// The prototyped characteristics of a single-faced card ([`Face::prototyped`]).
     Prototype,
+    /// The combined back face of a meld pair ([`Shape::Melded`]).
+    Melded,
 }
 
 impl FaceUse {
     pub(crate) const fn of(shape: Shape, front: bool) -> Self {
-        if front || shape.can_cast_back() {
+        if matches!(shape, Shape::Melded) {
+            Self::Melded
+        } else if front || shape.can_cast_back() {
             Self::Playable
         } else if matches!(shape, Shape::Transforming) {
             Self::TransformingBack
@@ -364,6 +379,12 @@ impl Face {
         }
     }
 
+    /// Whether this is the combined back face of a meld pair ([`Shape::Melded`]).
+    #[inline]
+    pub const fn is_melded(&self) -> bool {
+        matches!(self.use_of_face, FaceUse::Melded)
+    }
+
     /// Whether casting or playing the card can normally choose this face. Timing, cost and
     /// whether it is a spell or a land are checked separately.
     #[inline]
@@ -371,12 +392,18 @@ impl Face {
         matches!(self.use_of_face, FaceUse::Playable | FaceUse::Prototype)
     }
 
-    /// Whether the mana value of this face comes from the front face ([CR 712.6d]).
+    /// Whether the mana value of a permanent with this face up comes from the front faces of
+    /// the cards that represent it, not from this face's mana cost: the back face of a
+    /// transforming card ([CR 712.6d]) or a meld pair's combined back face ([CR 713.5c]).
     ///
     /// [CR 712.6d]: https://yawgatog.com/resources/magic-rules/#R7126d
+    /// [CR 713.5c]: https://yawgatog.com/resources/magic-rules/#R7135c
     #[inline]
     pub const fn uses_front_mana_value(&self) -> bool {
-        matches!(self.use_of_face, FaceUse::TransformingBack)
+        matches!(
+            self.use_of_face,
+            FaceUse::TransformingBack | FaceUse::Melded
+        )
     }
 
     /// Whether this face allows its owner to cast it while searching their own library.

@@ -877,6 +877,21 @@ Built by by-bajq.3.10:
   permanent (`State::abilities` and the layers read only the top face's), and an
   effect removing those abilities. A checkpoint keeps the permanent's values and
   not the cards under it.
+- **Melded permanents** (CR 701.42 and 713, built). `Effect::Meld` exiles a meld
+  card and its partner (`Shape::Meld` names both cards and the result), then, if
+  they are the two cards of one pair, puts the card with the meld ability onto
+  the battlefield as a copy of the combined back face (`Copiable::melded`,
+  started through `Sink::copies` so it enters as that face) and moves the other
+  card under it (`State::meld_under`, `Memo::PartOf`). The result is its own
+  card definition with `Shape::Melded`, which the game table adds for each meld
+  card. Its mana value is the sum of the two front faces, and a copy of it has
+  mana value 0 (`State::mana_value`). It leaves as merged permanents do, and an
+  instruction that moves a merged or melded permanent finds every card it
+  becomes (`Run::with_piles`). Cards exiled together remember it
+  (`Memo::ExiledFromPileOf`), so a delayed ability that carries one card returns
+  all of them. Not yet built: the owner's choice of the cards' order in a
+  graveyard or library (CR 713.8a, CR 731.3a), which still follows the order
+  they joined, and the choice of timestamps when they are exiled (CR 713.8b).
 - **Phased-out permanents** (CR 702.26; built by by-bajq.8.4). A phased-out
   permanent is in no battlefield list and no battlefield bitboard, and in a
   bitboard of its own that the untap step reads. Its zone, incarnation and

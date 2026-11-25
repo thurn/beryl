@@ -166,7 +166,7 @@ impl<L: Layout> State<L> {
             forget_hand(self, Seat::BOTH[owner], slot);
         }
         if let Some(pile) = pile {
-            self.move_pile(sink, &pile, to, place)?;
+            self.move_pile(sink, slot, &pile, to, place)?;
         }
         Ok(())
     }
@@ -192,7 +192,8 @@ impl<L: Layout> State<L> {
     /// zone." Each becomes an object of its own there. Its owner may choose the order of those
     /// that go to a graveyard or library (see [CR 731.3a]); they go in the order they merged, above
     /// the permanent's own card. A token that ceases to exist leaves its
-    /// cards in its owner's graveyard.
+    /// cards in its owner's graveyard. Exiled with the permanent's own card, `leader`, each
+    /// remembers it ([`crate::memos::Memo::ExiledFromPileOf`]), so that what finds one finds all.
     ///
     /// [CR 731.3]: https://yawgatog.com/resources/magic-rules/#R7313
     /// [CR 731.3a]: https://yawgatog.com/resources/magic-rules/#R7313a
@@ -201,6 +202,7 @@ impl<L: Layout> State<L> {
     fn move_pile(
         &mut self,
         sink: &mut Sink<L>,
+        leader: L::Slot,
         pile: &Pile<L>,
         to: Zone,
         place: Place,
@@ -210,8 +212,12 @@ impl<L: Layout> State<L> {
         } else {
             to
         };
+        let together = to == Zone::Exile && !self.object(leader).is_token();
         for &card in pile.as_slice() {
             self.move_object(sink, card, to, place)?;
+            if together {
+                self.remember(card, crate::memos::Memo::ExiledFromPileOf(leader))?;
+            }
         }
         Ok(())
     }

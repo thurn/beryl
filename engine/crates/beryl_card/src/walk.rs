@@ -381,6 +381,7 @@ impl Condition {
             | Condition::Cast(objects) => {
                 objects.walk(visit);
             }
+            Condition::MeldPair(partner) => partner.walk(visit),
             Condition::Not(condition) => condition.walk(visit),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 for condition in *conditions {
@@ -435,6 +436,7 @@ impl Effect {
                 | Effect::PutOntoBattlefield(_)
                 | Effect::ReturnTransformed(_)
                 | Effect::Transform(_)
+                | Effect::Meld(_)
                 | Effect::Flip(_)
                 | Effect::Reveal(_)
                 | Effect::PutIntoLibrary { .. }

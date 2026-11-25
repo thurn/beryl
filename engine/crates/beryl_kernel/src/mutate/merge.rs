@@ -14,6 +14,10 @@
 //! listeners and a copy of it read them as they read any copy's. When the permanent leaves the
 //! battlefield, its cards go with it ([`State::move_object`]).
 //!
+//! A melded permanent is kept the same way (see CR 713.6): one of its two cards is the
+//! permanent, with a copy effect giving it the combined back face ([`Copiable::melded`]), and
+//! the other waits in [`Zone::Merged`] ([`State::meld_under`]).
+//!
 //! Implements: none. The mutator stores a resolved merge and its component links.
 //!
 //! [CR 731.2]: https://yawgatog.com/resources/magic-rules/#R7312
@@ -77,5 +81,24 @@ impl<L: Layout> State<L> {
             }
         }
         Ok(())
+    }
+
+    /// Makes the card in `card`, in exile, the other card of the melded permanent `onto`,
+    /// which its partner became as it entered with the pair's combined back face up
+    /// (see [CR 713.6]): "If a meld card is being melded with its counterpart, those cards
+    /// enter the battlefield as a single permanent with their back faces up." The card leaves
+    /// exile for [`Zone::Merged`] and names the permanent ([`Memo::PartOf`]), so it leaves the
+    /// battlefield with it ([`State::move_object`]). [`Full`] if the store had no room.
+    ///
+    /// [CR 713.6]: https://yawgatog.com/resources/magic-rules/#R7136
+    pub fn meld_under(
+        &mut self,
+        sink: &mut Sink<L>,
+        onto: Permanent<L>,
+        card: L::Slot,
+    ) -> Result<(), Full> {
+        debug_assert_eq!(self.object(card).zone, Zone::Exile);
+        self.move_object(sink, card, Zone::Merged, Place::Top)?;
+        self.remember(card, Memo::PartOf(onto.slot()))
     }
 }

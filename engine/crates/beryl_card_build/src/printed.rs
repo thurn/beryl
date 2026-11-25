@@ -245,10 +245,11 @@ pub fn shape_source(record: &Record) -> Option<String> {
         "adventure" => "Adventure".into(),
         "prepare" => "Prepared".into(),
         "flip" => "Flip".into(),
-        "meld" => {
-            let meld = record.meld.as_ref()?;
-            format!("Meld {{ with: {:?}, into: {:?} }}", meld.with, meld.into)
-        }
+        // A meld result's record names no partner.
+        "meld" => match record.meld.as_ref() {
+            Some(meld) => format!("Meld {{ with: {:?}, into: {:?} }}", meld.with, meld.into),
+            None => "Melded".into(),
+        },
         _ => return None,
     };
     Some(format!("beryl_card::definition::Shape::{variant}"))
@@ -363,12 +364,13 @@ pub fn faces(record: &Record, subtypes: &Subtypes) -> Result<Vec<(String, String
                 face
             };
             let mut source = face_source(face, i, subtypes)?;
-            if i == 1
+            if (i == 1 || (record.layout == "meld" && record.meld.is_none()))
                 && let Some(shape) = shape_source(record)
             {
                 write!(
                     source,
-                    "\n    .for_shape({shape}, beryl_card::FaceIx::BACK)"
+                    "\n    .for_shape({shape}, beryl_card::FaceIx::{})",
+                    if i == 0 { "FRONT" } else { "BACK" }
                 )
                 .unwrap();
             }

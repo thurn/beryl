@@ -25,6 +25,8 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::ReturnTransformed(objects)
         | Effect::PutIntoLibrary { objects, .. }
         | Effect::ShuffleInto { cards: objects, .. } => Some(objects),
+        // It exiles this object, and the permanent it melds into is another object.
+        Effect::Meld(_) => Some(&Objects::This),
         Effect::Sequence(_)
         | Effect::If { .. }
         | Effect::May { .. }

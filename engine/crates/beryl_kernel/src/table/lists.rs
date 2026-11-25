@@ -2,6 +2,7 @@
 //!
 //! Implements: none. Indexes main decks, sideboards and the cards they can create.
 
+use beryl_card::definition::Shape;
 use beryl_card::{CardDef, FACE_DOWN_COPY};
 
 use crate::ids::Seat;
@@ -31,13 +32,30 @@ pub(super) fn gather_role(
     Ok(indices)
 }
 
-/// Index the tokens and emblems the cards can create, then the extra definitions.
-pub(super) fn gather_extra(defs: &mut Vec<&'static CardDef>, extra: &[&'static CardDef]) {
+/// Index the tokens and emblems the cards can create and the combined back faces their meld
+/// cards meld into, then the extra definitions. A meld card whose result `cards` does not
+/// have can't meld in this game (see CR 701.42c), so the game is played without it.
+pub(super) fn gather_extra(
+    defs: &mut Vec<&'static CardDef>,
+    cards: &'static CardTable,
+    extra: &[&'static CardDef],
+) {
     let mut i = 0;
     while i < defs.len() {
-        for &token in defs[i].tokens {
-            if !defs.iter().any(|d| std::ptr::eq(*d, token)) {
-                defs.push(token);
+        let melded = match defs[i].shape {
+            Shape::Meld { into, .. } => cards.get(into),
+            Shape::Single
+            | Shape::Transforming
+            | Shape::Modal
+            | Shape::Split { .. }
+            | Shape::Adventure
+            | Shape::Prepared
+            | Shape::Flip
+            | Shape::Melded => None,
+        };
+        for &made in defs[i].tokens.iter().chain(melded.as_ref()) {
+            if !defs.iter().any(|d| std::ptr::eq(*d, made)) {
+                defs.push(made);
             }
         }
         i += 1;

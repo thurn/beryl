@@ -148,7 +148,7 @@ pub(crate) struct Scene<'s, L: Layout> {
 }
 
 impl<L: Layout> Scene<'_, L> {
-    fn you(&self) -> Seat {
+    pub(crate) fn you(&self) -> Seat {
         self.subject.of.controller.seat()
     }
 
@@ -265,9 +265,11 @@ impl<L: Layout> Scene<'_, L> {
             // the time the delayed triggered ability resolves, the ability won't affect it."
             // A delayed ability carries its object in the place a trigger keeps what its
             // event was about, and one that has changed zones is no longer current.
+            // The cards a merged or melded permanent became in exile are found together
+            // (see CR 713.8c).
             Objects::Carried => (self.subject.info.object)
                 .filter(|&object| s.is_current(object))
-                .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
+                .map_or(Bitboard::EMPTY, |object| s.exiled_together(object.slot)),
             Objects::TriggeredOnIn(zone) => (self.subject.info.object)
                 .filter(|&object| s.is_current(object) && s.object(object.slot).zone() == zone)
                 .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
@@ -702,6 +704,8 @@ impl<L: Layout> Scene<'_, L> {
                 each.peek().is_some()
                     && each.all(|player| self.s.counted(Count::DrewInDrawStep, player) > 0)
             }
+            // See CR 701.42a (`actions::meld`).
+            Condition::MeldPair(partner) => self.meld_pair(partner).is_some(),
             Condition::Not(condition) => !self.holds(condition),
             Condition::All(conditions) => conditions.iter().all(|c| self.holds(c)),
             Condition::Any(conditions) => conditions.iter().any(|c| self.holds(c)),
@@ -724,7 +728,7 @@ impl<L: Layout> Scene<'_, L> {
         !objects.is_empty() && objects.all(|slot| self.s.object(slot).is_token())
     }
 
-    fn passing(&self, objects: Bitboard<L::Slot>, filter: Filter) -> Bitboard<L::Slot> {
+    pub(crate) fn passing(&self, objects: Bitboard<L::Slot>, filter: Filter) -> Bitboard<L::Slot> {
         filter.select_x(self.s, self.t, objects, self.you(), &self.words(), self.x)
     }
 

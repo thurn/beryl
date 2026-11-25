@@ -1,6 +1,7 @@
 //! Decklists: the fixed ones, which `beryl_card_names` holds because they are only names, and
 //! the fuzz decks dealt from the implemented cards.
 
+use beryl_card::definition::Shape;
 use beryl_engine::card::{CardDef, Supertypes};
 use beryl_engine::rng::SplitMix64;
 
@@ -52,9 +53,11 @@ pub fn fuzz_deck(seed: u64) -> Vec<(u8, &'static str)> {
 /// exist, so adding or removing a card file changes a seed's deck only when that card ranks
 /// into it, which keeps tests that play fuzz decks stable as cards are written.
 pub fn fuzz_deck_from(seed: u64, cards: &[&CardDef]) -> Vec<(u8, &'static str)> {
+    // The combined back face of a meld pair is never a card in a deck (CR 713.1b).
     let (mut basics, mut nonbasics): (Vec<&CardDef>, Vec<&CardDef>) = cards
         .iter()
         .copied()
+        .filter(|c| c.shape != Shape::Melded)
         .partition(|c| c.front().supertypes.contains(Supertypes::BASIC));
     basics.sort_unstable_by_key(|c| c.name);
     nonbasics.sort_unstable_by_key(|c| (rank(seed, c.name), c.name));

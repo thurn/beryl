@@ -25,6 +25,16 @@ fixed in the same session. Newest first.
   role expires. `a_vigilant_attacker_makes_each_combat_a_distinct_smart_stop`
   checks both combat occurrences.
 
+- **An effect that moved a merged permanent lost track of the cards under it.**
+  When Flickerwisp exiled a mutated creature, its "return that card" ability
+  found only the permanent's own card, so the cards that had been under it
+  stayed in exile. The rules say such an effect finds every card the permanent
+  became (CR 731.3c, and CR 713.8c for melded permanents). The instructions that
+  move permanents now add the cards under them to what they moved
+  (`Run::with_piles`), and cards exiled together remember it, so a delayed
+  ability that carries one returns all. Guard: Gisela, the Broken Blade's
+  Flickerwisp scenario, which Forge plays the same way.
+
 - **Flipping a permanent could make it appear attached to a player.** The flip
   flag overlapped the bits that record which player an Aura enchants. The flag
   now uses a separate bit, and a compile-time assertion checks that the two

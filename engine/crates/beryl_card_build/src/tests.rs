@@ -47,6 +47,18 @@ fn printed_defense_and_meld_links_are_read_from_the_store() {
             r#"beryl_card::definition::Shape::Meld { with: "Test Partner", into: "Test Result" }"#
         ),
     );
+    // The combined back face is a record of its own that names no partner.
+    let result: beryl_card_store::Record = serde_json::from_str(
+        r#"{
+            "name":"Test Result", "oracle_id":"o", "scryfall_id":"r", "set":"s",
+            "collector_number":"1b", "layout":"meld", "faces":[]
+        }"#,
+    )
+    .unwrap();
+    assert_eq!(
+        shape_source(&result).as_deref(),
+        Some("beryl_card::definition::Shape::Melded"),
+    );
 }
 
 #[test]

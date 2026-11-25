@@ -175,6 +175,11 @@ impl Ctx {
             }
             Effect::PutOntoBattlefield(onto) => vec![self.put_onto(onto)],
             Effect::Transform(objects) => vec![self.acts(("transform", "transforms"), objects, "")],
+            // "Them" are this object and its partner, which the ability's condition named.
+            Effect::Meld(_) => vec![format!(
+                "exile them, then meld them into {}",
+                self.meld.map_or("[its meld result]", |(_, into)| into)
+            )],
             Effect::Flip(objects) => vec![self.acts(("flip", "flips"), objects, "")],
             Effect::Reveal(objects) => vec![self.acts(("reveal", "reveals"), objects, "")],
             Effect::ReturnTransformed(objects) => {

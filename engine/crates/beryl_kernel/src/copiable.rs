@@ -11,6 +11,7 @@ use beryl_card::{
 
 pub mod additions;
 mod flip;
+mod meld;
 mod split;
 
 use crate::event::{Listens, Replaces};

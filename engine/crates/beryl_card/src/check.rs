@@ -633,6 +633,7 @@ impl Scope<'_> {
             | Condition::Token(objects)
             | Condition::OnBattlefield(objects)
             | Condition::Cast(objects) => both(self.unmoved(objects), self.objects(objects)),
+            Condition::MeldPair(partner) => self.filter(partner),
             Condition::Not(condition) => self.condition(condition),
             Condition::All(conditions) | Condition::Any(conditions) => self.conditions(conditions),
         }

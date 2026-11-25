@@ -87,6 +87,7 @@ pub(crate) fn instruction<L: Layout>(
         return Ok(Outcome::NOTHING);
     }
     run.remember(permanents.slots())?;
+    let found = run.with_piles(permanents.slots());
     destroy_all(run.game(), permanents, regeneration)?;
-    Ok(run.left_the_battlefield(permanents.slots()))
+    Ok(run.left_the_battlefield(found))
 }

@@ -113,6 +113,7 @@ impl Effect {
             | Effect::PutOntoBattlefield(_)
             | Effect::ReturnTransformed(_)
             | Effect::Transform(_)
+            | Effect::Meld(_)
             | Effect::Flip(_)
             | Effect::Reveal(_)
             | Effect::PutIntoLibrary { .. }

@@ -17,6 +17,7 @@ impl<L: Layout> Memo<L> {
             Memo::PutOntoBattlefieldWith(_) => Kinds::PUT_WITH,
             Memo::PhasedOutUnder(_) => Kinds::PHASED_OUT_UNDER,
             Memo::PartOf(_) => Kinds::PART_OF,
+            Memo::ExiledFromPileOf(_) => Kinds::EXILED_FROM_PILE,
             Memo::FaceDownUnder(_) => Kinds::FACE_DOWN_UNDER,
             Memo::Morphed => Kinds::MORPHED,
             Memo::Cast => Kinds::CAST,
@@ -45,7 +46,7 @@ impl<L: Layout> Memo<L> {
             | Memo::CombatBand(_)
             | Memo::Solved
             | Memo::Prepared(_) => Zone::Battlefield,
-            Memo::ExiledWith(_) | Memo::ExiledUntil(_) => Zone::Exile,
+            Memo::ExiledWith(_) | Memo::ExiledUntil(_) | Memo::ExiledFromPileOf(_) => Zone::Exile,
             Memo::PartOf(_) => Zone::Merged,
         }
     }
@@ -77,7 +78,10 @@ impl<L: Layout> Memo<L> {
             | Memo::Solved => None,
             Memo::Prepared(copy) => copy,
             Memo::ExiledWith(link) => Some(link.slot),
-            Memo::ExiledUntil(by) | Memo::PutOntoBattlefieldWith(by) | Memo::PartOf(by) => Some(by),
+            Memo::ExiledUntil(by)
+            | Memo::PutOntoBattlefieldWith(by)
+            | Memo::PartOf(by)
+            | Memo::ExiledFromPileOf(by) => Some(by),
         }
     }
 
@@ -102,8 +106,11 @@ impl<L: Layout> Memo<L> {
             | Memo::CombatBand(_) => true,
             // Somebody knew the face-down card: at least its controller (see CR 708.5).
             Memo::FaceDownUnder(knew) => !knew.is_empty(),
-            // What put it onto the battlefield left a card or a token in its slot.
-            Memo::PutOntoBattlefieldWith(by) => zone(by) != Zone::Nowhere,
+            // What put it onto the battlefield, or the card of the permanent it was under, left
+            // a card or a token in its slot.
+            Memo::PutOntoBattlefieldWith(by) | Memo::ExiledFromPileOf(by) => {
+                zone(by) != Zone::Nowhere
+            }
             // An object exiled "until" its exiler leaves returns as it leaves (see CR 610.3).
             Memo::ExiledUntil(by) => zone(by) == Zone::Battlefield,
             // A card is part of a permanent only while it is on the battlefield.
@@ -126,6 +133,7 @@ impl<L: Layout> Memo<L> {
             Memo::PutOntoBattlefieldWith(by) => Memo::PutOntoBattlefieldWith(slot(by)),
             Memo::PhasedOutUnder(player) => Memo::PhasedOutUnder(player),
             Memo::PartOf(of) => Memo::PartOf(slot(of)),
+            Memo::ExiledFromPileOf(by) => Memo::ExiledFromPileOf(slot(by)),
             Memo::FaceDownUnder(knew) => Memo::FaceDownUnder(knew),
             Memo::Morphed => Memo::Morphed,
             Memo::Cast => Memo::Cast,

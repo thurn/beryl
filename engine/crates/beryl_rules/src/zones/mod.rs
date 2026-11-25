@@ -285,9 +285,10 @@ pub(crate) fn put_into_graveyard_instruction<L: Layout>(
     let mut moved = objects & !rest;
     for &slot in run.in_game_order(rest)?.iter() {
         let object = run.state().object_ref(slot);
+        let pile = run.with_piles(Bitboard::single(slot));
         move_to(run.game(), object, Zone::Graveyard, Reason::Effect)?;
         if !run.state().is_current(object) {
-            moved.insert(slot);
+            moved |= pile;
         }
     }
     Ok(Outcome::acted_on(moved))
@@ -308,11 +309,12 @@ pub(crate) fn put_instruction<L: Layout>(
         return Ok(Outcome::NOTHING);
     }
     run.remember(objects)?;
+    let found = run.with_piles(objects);
     let game = run.game();
     let rest = stack::unstack(game, objects, to)?;
     let (reason, entry) = (Reason::Effect, Entry::default());
     event::move_batch_to(
         game.state, game.table, game.sink, rest, to, place, reason, entry,
     )?;
-    Ok(run.now_in(objects, to))
+    Ok(run.now_in(found, to))
 }

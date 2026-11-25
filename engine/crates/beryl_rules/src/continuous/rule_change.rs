@@ -53,6 +53,16 @@ pub(crate) fn cast_as_instant<L: Layout>(
     governs_cast(s, t, RuleKind::CastAsInstant, player, face)
 }
 
+/// Whether a rule change in force prohibits `player` from casting the spell `face` would be,
+/// as "Your opponents can't cast spells with mana value 3 or less." does each opponent
+/// (see [CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013)): "A player can begin to
+/// cast a spell only if a rule or effect allows that player to cast it and no rule or effect
+/// prohibits that player from casting it." One AND while none is in force for them.
+#[inline]
+pub(crate) fn cant_cast<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, face: &Face) -> bool {
+    governs_cast(s, t, RuleKind::CantCast, player, face)
+}
+
 /// Whether `player`'s life total can change: no rule change in force says it can't, as "Until
 /// your next turn, your life total can't change" does (see [CR 119.7], see [CR 119.8]). One AND while
 /// no card in the game makes a change to players. Every gain and loss of life and every
@@ -220,12 +230,13 @@ fn accepts_composed(filter: Filter, face: &Face) -> bool {
         Filter::Not(filter) => !accepts_composed(*filter, face),
         Filter::All(filters) => filters.iter().all(|&filter| accepts_composed(filter, face)),
         Filter::AnyOf(filters) => filters.iter().any(|&filter| accepts_composed(filter, face)),
+        // A card yet to be cast is not on the stack, so its X is 0 (see CR 202.3e).
+        Filter::ManaValueAtMost(n) => face.cost.mana_value() <= n,
         Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
-        | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
         | Filter::ManaValueAtMostPower

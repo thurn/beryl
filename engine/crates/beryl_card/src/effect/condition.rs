@@ -68,6 +68,15 @@ pub enum Condition {
     /// [CR 707.10]: https://yawgatog.com/resources/magic-rules/#R70710
     /// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
     Cast(Objects),
+    /// "If you both own and control this and a [filter] named [its partner]": the ability's
+    /// controller owns and controls this permanent and a permanent the filter accepts that has
+    /// the name of the other card of this card's meld pair
+    /// ([`crate::definition::Shape::Meld`]). It is the condition of the ability that melds them
+    /// ([CR 701.42a]): "Meld is a keyword action that appears in an ability on one card in a meld
+    /// pair."
+    ///
+    /// [CR 701.42a]: https://yawgatog.com/resources/magic-rules/#R70142a
+    MeldPair(Filter),
     Not(&'static Condition),
     /// Every one of them: "if ... and ...".
     All(&'static [Condition]),
@@ -84,6 +93,7 @@ impl Condition {
         match self {
             Condition::Did | Condition::WonFlip => true,
             Condition::Paid(_) => false,
+            Condition::MeldPair(partner) => partner.needs_a_resolution(),
             Condition::DrewInDrawStep(players) => players.needs_a_resolution(),
             Condition::Compare(left, _, right) => {
                 left.needs_a_resolution() || right.needs_a_resolution()
@@ -114,7 +124,9 @@ impl Condition {
     /// Whether it reads what a cost took ([`Objects::Paid`]).
     pub const fn names_paid(&self) -> bool {
         match self {
-            Condition::Did | Condition::WonFlip | Condition::Paid(_) => false,
+            Condition::Did | Condition::WonFlip | Condition::Paid(_) | Condition::MeldPair(_) => {
+                false
+            }
             Condition::DrewInDrawStep(players) => players.names_paid(),
             Condition::Compare(left, _, right) => left.names_paid() || right.names_paid(),
             Condition::Is(objects, _)
@@ -155,6 +167,7 @@ impl Condition {
                 | Condition::Token(_)
                 | Condition::Cast(_)
                 | Condition::WonFlip
+                | Condition::MeldPair(_)
                 | Condition::DrewInDrawStep(_) => false,
             }
     }

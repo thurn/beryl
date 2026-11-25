@@ -30,7 +30,8 @@ use crate::table::GameTable;
 
 pub(crate) use run::{Run, no_primitive};
 pub(crate) use scene::Outcome;
-use scene::{Registers, Scene};
+use scene::Registers;
+pub(crate) use scene::Scene;
 
 /// Resolves the ability `resolution` is of
 /// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "The controller of the
@@ -285,6 +286,7 @@ pub(crate) fn without_a_scene<L: Layout>(
         | Condition::Cast(_)
         | Condition::WonFlip
         | Condition::DrewInDrawStep(_)
+        | Condition::MeldPair(_)
         | Condition::Not(_)
         | Condition::All(_)
         | Condition::Any(_) => None,

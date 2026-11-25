@@ -313,5 +313,12 @@
     "scenario": "a power lowered in response makes the target illegal",
     "cr": "CR 608.2b (https://yawgatog.com/resources/magic-rules/#R6082b): \"If the spell or ability specifies targets, it checks whether the targets are still legal. A target that's no longer in the zone it was in when it was targeted is illegal. Other changes to the game state may cause a target to no longer be legal; for example, its characteristics may have changed or an effect may have changed the text of the spell. If the source of an ability has left the zone it was in, its last known information is used during this process. If all its targets, for every instance of the word 'target,' are now illegal, the spell or ability doesn't resolve. It's removed from the stack and, if it's a spell, put into its owner's graveyard. Otherwise, the spell or ability will resolve normally. Illegal targets, if any, won't be affected by parts of a resolving spell's effect for which they're illegal. Other parts of the effect for which those targets are not illegal may still affect them. If the spell or ability creates any continuous effects that affect game rules (see rule 613.11), those effects don't apply to illegal targets. If part of the effect requires information about an illegal target, it fails to determine any such information. Any part of the effect that requires that information won't happen.\"",
     "reason": "XMage checks the mana value against Arcane Proxy's power only when the target is chosen. The card's ruling says a target whose mana value is above the creature's power as the ability resolves is illegal, so the card stays in the graveyard and no copy is offered; XMage offers to cast the copy."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Gisela, the Broken Blade",
+    "scenario": "Brisela exiled by Flickerwisp returns as Gisela and Bruna",
+    "cr": "CR 713.8c (https://yawgatog.com/resources/magic-rules/#R7138c): \"If an effect can find the new object that a melded permanent becomes as it leaves the battlefield, it finds both cards. (See rule 400.7.) If that effect causes actions to be taken upon those cards, the same actions are taken upon each of them.\"",
+    "reason": "XMage's Flickerwisp returns only one of the two cards the exiled melded permanent became, where the delayed ability finds both."
   }
 ]

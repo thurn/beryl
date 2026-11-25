@@ -137,6 +137,9 @@ impl Ctx {
 
         let spell = match trigger.subject {
             Subject::A(filter) => self.noun(filter, Kind::Spell).indefinite(Kind::Spell),
+            // Only the player who casts a spell controls its cast trigger, so Oracle text says
+            // "When you cast this spell".
+            Subject::This if from.is_none() => return "when you cast this spell".to_owned(),
             Subject::This => self.this.clone(),
         };
         if let Some(zone) = from {
@@ -520,6 +523,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::PutOntoBattlefield(_)
         | Effect::ReturnTransformed(_)
         | Effect::Transform(_)
+        | Effect::Meld(_)
         | Effect::Flip(_)
         | Effect::Reveal(_)
         | Effect::PutIntoLibrary { .. }

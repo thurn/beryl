@@ -195,7 +195,8 @@ fn refused<L: Layout, const TARGETS: bool>(
 ) -> Option<Refusal<L>> {
     let player = now.player;
     let face = s.copiable(slot).turned(t, face_index).face(t);
-    if !in_time(s, t, now, face, from) {
+    // A rule change that prohibits the cast (CR 601.3 above) is told as a timing refusal.
+    if !in_time(s, t, now, face, from) || rule_change::cant_cast(s, t, player, face) {
         return Some(Refusal::Timing { by: None });
     }
     let free = matches!(from, From::Resolution { free: true });

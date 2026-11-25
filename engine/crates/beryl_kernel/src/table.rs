@@ -272,7 +272,7 @@ impl GameTable {
                 }
             }
         }
-        gather_extra(&mut defs, extra);
+        gather_extra(&mut defs, cards, extra);
         let last = defs.len() - 1;
         let face_down_copy = (
             CardIx::try_from_index(last).unwrap_or_default(),

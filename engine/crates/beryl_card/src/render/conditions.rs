@@ -81,6 +81,15 @@ impl Ctx {
                 "{} drew a card in their draw step this turn",
                 self.player(players)
             ),
+            Condition::MeldPair(partner) => {
+                let noun = self.noun(partner, Kind::Permanent);
+                format!(
+                    "you both own and control {} and {} named {}",
+                    self.this,
+                    noun.indefinite(Kind::Permanent),
+                    self.meld.map_or("[its meld partner]", |(with, _)| with)
+                )
+            }
             Condition::Not(inner) => self.negated(*inner),
             Condition::All(conditions) => {
                 let each: Vec<String> = conditions.iter().map(|&c| self.condition(c)).collect();
@@ -153,7 +162,10 @@ impl Ctx {
                 self.player(players)
             ),
             Condition::Not(inner) => self.condition(*inner),
-            Condition::Compare(..) | Condition::All(_) | Condition::Any(_) => {
+            Condition::Compare(..)
+            | Condition::All(_)
+            | Condition::Any(_)
+            | Condition::MeldPair(_) => {
                 format!("it's not true that {}", self.condition(condition))
             }
         }

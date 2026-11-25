@@ -159,6 +159,7 @@ fn condition_reads_tapped(condition: &Condition) -> bool {
         | Condition::OnBattlefield(_)
         | Condition::Cast(_)
         | Condition::DrewInDrawStep(_)
+        | Condition::MeldPair(_)
         | Condition::Token(_) => false,
     }
 }
@@ -180,6 +181,7 @@ fn condition_reads_life(condition: &Condition) -> bool {
         | Condition::OnBattlefield(_)
         | Condition::Cast(_)
         | Condition::DrewInDrawStep(_)
+        | Condition::MeldPair(_)
         | Condition::Token(_) => false,
     }
 }
@@ -197,6 +199,7 @@ fn compares(condition: &Condition, mentions: &impl Fn(&Amount) -> bool) -> bool 
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
         | Condition::Cast(_)
+        | Condition::MeldPair(_)
         | Condition::Token(_)
         | Condition::WonFlip
         | Condition::DrewInDrawStep(_) => false,
@@ -550,6 +553,7 @@ fn reads(condition: &Condition) -> bool {
         | Condition::OnBattlefield(_)
         | Condition::Cast(_)
         | Condition::DrewInDrawStep(_)
+        | Condition::MeldPair(_)
         | Condition::Token(_) => false,
     }
 }
@@ -578,6 +582,7 @@ pub fn reads_results(condition: &Condition) -> bool {
         | Condition::OnBattlefield(_)
         | Condition::Cast(_)
         | Condition::DrewInDrawStep(_)
+        | Condition::MeldPair(_)
         | Condition::Token(_) => false,
     }
 }
@@ -727,6 +732,7 @@ pub fn holds<L: Layout>(
         | Condition::OnBattlefield(_)
         | Condition::Cast(_)
         | Condition::DrewInDrawStep(_)
+        | Condition::MeldPair(_)
         | Condition::Token(_) => {
             unreachable!("the card table refuses a static ability with this condition")
         }
@@ -758,6 +764,7 @@ fn counts(condition: &Condition, of: &dyn Fn(CounterKind) -> bool) -> bool {
         | Condition::OnBattlefield(_)
         | Condition::Cast(_)
         | Condition::DrewInDrawStep(_)
+        | Condition::MeldPair(_)
         | Condition::Token(_) => false,
     }
 }

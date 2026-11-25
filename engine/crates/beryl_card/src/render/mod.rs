@@ -105,6 +105,9 @@ struct Ctx {
     /// The ability being written, so that a copy exception giving that same ability says
     /// "it has this ability" ([`crate::CopyChange::Has`]).
     ability: Option<crate::Ability>,
+    /// Of a meld card, the names of the other card of its pair and of the combined back face
+    /// they meld into ([`crate::definition::Shape::Meld`]).
+    meld: Option<(&'static str, &'static str)>,
 }
 
 /// What "enchanted" or "equipped" names.
@@ -178,6 +181,7 @@ impl Ctx {
             in_graveyard: false,
             words: Words::NONE,
             ability: None,
+            meld: None,
         }
     }
 

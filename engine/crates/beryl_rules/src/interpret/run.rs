@@ -13,7 +13,7 @@ use beryl_card::{Effect, ExileMatch, Objects, Players, Types};
 use beryl_kernel::reference::{Permanent, Permanents};
 
 use crate::actions::{
-    attach, coins, counter, destroy, discard, exile, explore, fateseal, manifest_dread, mill,
+    attach, coins, counter, destroy, discard, exile, explore, fateseal, manifest_dread, meld, mill,
     regenerate, sacrifice, scry, search, shuffle, tap, transform,
 };
 use crate::bitboard::Bitboard;
@@ -196,6 +196,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::PutOntoBattlefield(_)
             | Effect::ReturnTransformed(_)
             | Effect::Transform(_)
+            | Effect::Meld(_)
             | Effect::Flip(_)
             | Effect::Reveal(_)
             | Effect::PutIntoLibrary { .. }
@@ -328,6 +329,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::PutOntoBattlefield(onto) => zones::put_onto_instruction(self, onto)?,
             Effect::Reveal(cards) => crate::actions::reveal::instruction(self, cards)?,
             Effect::Transform(objects) => transform::instruction(self, objects)?,
+            Effect::Meld(partner) => meld::instruction(self, partner)?,
             Effect::Flip(objects) => crate::actions::flip::instruction(self, objects)?,
             Effect::ReturnTransformed(cards) => transform::return_instruction(self, cards)?,
             Effect::PutIntoLibrary { objects, position } => {
@@ -636,6 +638,39 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         Ok(())
     }
 
+    /// `objects` with the other cards of each merged or melded permanent among them: what an
+    /// instruction that moves them finds once they have moved (see [CR 713.8c]): "If an effect
+    /// can find the new object that a melded permanent becomes as it leaves the battlefield, it
+    /// finds both cards." The same holds of a merged permanent (see [CR 731.3c]): "it finds all
+    /// of those objects." Read before the move. One AND while no permanent is made of several
+    /// cards.
+    ///
+    /// [CR 713.8c]: https://yawgatog.com/resources/magic-rules/#R7138c
+    /// [CR 731.3c]: https://yawgatog.com/resources/magic-rules/#R7313c
+    #[inline]
+    pub(crate) fn with_piles(&self, objects: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
+        if self.game.state.has_piles() {
+            self.with_piles_now(objects)
+        } else {
+            objects
+        }
+    }
+
+    /// The rare path of [`Run::with_piles`], out of line.
+    #[cold]
+    #[inline(never)]
+    fn with_piles_now(&self, objects: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
+        let s = &*self.game.state;
+        objects.fold(objects, |found, slot| {
+            if s.object(slot).on_battlefield() {
+                s.pile(slot)
+                    .fold(found, |found, card| found | Bitboard::single(card))
+            } else {
+                found
+            }
+        })
+    }
+
     /// The outcome of an instruction that moved `permanents` off the battlefield: those that
     /// left it, as they are now
     /// (see [CR 400.7j](https://yawgatog.com/resources/magic-rules/#R4007j)): "If an effect
@@ -643,7 +678,11 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// object."
     pub(crate) fn left_the_battlefield(&self, permanents: Bitboard<L::Slot>) -> Outcome<L> {
         let s = &*self.game.state;
-        Outcome::acted_on(permanents.filter(|slot| s.object(slot).zone() != Zone::Battlefield))
+        // A card still under a merged or melded permanent that stayed has not moved.
+        Outcome::acted_on(
+            permanents
+                .filter(|slot| !matches!(s.object(slot).zone(), Zone::Battlefield | Zone::Merged)),
+        )
     }
 
     /// The first of `permanents`, in the order they entered the battlefield, that is still

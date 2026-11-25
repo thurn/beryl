@@ -300,5 +300,20 @@
       "Worldgorger Dragon: when ~ enters , exile [-all-] {+each+} other [-permanents-] {+permanent+} you control .",
       "Worldgorger Dragon: when ~ leaves the battlefield , return the {+cards+} exiled [-cards-] {+with ~+} to the battlefield under their owners' control ."
     ]
+  },
+  "Bruna, the Fading Light": {
+    "reason": "wording",
+    "note": "The renderer names a target card in your graveyard as \"in your graveyard\" and returns it \"under its owner's control\". A card in your graveyard is yours, so it returns under your control from your graveyard, as Oracle says.",
+    "diff": [
+      "Bruna, the Fading Light: [-when you cast ~ , you may return target Angel or Human creature card from your graveyard to the battlefield .-]",
+      "Bruna, the Fading Light: {+when you cast ~ , you may return target Angel or Human creature card in your graveyard to the battlefield under its owner's control .+}"
+    ]
+  },
+  "Brisela, Voice of Nightmares": {
+    "reason": "wording",
+    "note": "The renderer says \"each opponent\" where Oracle says \"your opponents\" for the same players.",
+    "diff": [
+      "Brisela, Voice of Nightmares: [-your opponents-] {+each opponent+} can't cast spells with mana value 3 or less ."
+    ]
   }
 }

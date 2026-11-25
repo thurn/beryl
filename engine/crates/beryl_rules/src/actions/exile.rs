@@ -66,6 +66,7 @@ pub(crate) fn instruction<L: Layout>(
         return Ok(Outcome::NOTHING);
     }
     run.remember(objects)?;
+    let found = run.with_piles(objects);
     exile(run.game(), objects)?;
-    Ok(run.now_in(objects, Zone::Exile))
+    Ok(run.now_in(found, Zone::Exile))
 }

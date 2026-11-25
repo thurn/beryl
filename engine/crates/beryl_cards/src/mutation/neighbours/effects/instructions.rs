@@ -9,6 +9,7 @@ use super::super::operands::{
 use super::super::{Kind, LINKED, Neighbours, leak, leak_slice};
 
 mod damage;
+mod faces;
 mod phases;
 mod turn;
 
@@ -777,8 +778,7 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                 );
             }
         }
-        Effect::Transform(o) => add(Kind::EffectObjects, "flip".into(), Effect::Flip(o)),
-        Effect::Flip(o) => add(Kind::EffectObjects, "turn".into(), Effect::Transform(o)),
+        Effect::Transform(_) | Effect::Flip(_) | Effect::Meld(_) => faces::turned(effect, &mut add),
         Effect::ExileLinked(_)
         | Effect::ExileUntil { .. }
         | Effect::ReturnTransformed(_)

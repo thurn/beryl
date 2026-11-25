@@ -152,9 +152,27 @@ impl<L: Layout> State<L> {
             up.cost.mana_value()
         } else if o.is_token() || self.has_copied_face(slot) {
             0
+        } else if up.is_melded() {
+            self.melded_mana_value(t, slot)
         } else {
             t.def(o.card).front().cost.mana_value()
         }
+    }
+
+    /// The mana value of the melded permanent in `slot` (see [CR 713.5c]): "the object represented
+    /// by those cards has only the characteristics of the combined back face, and its mana
+    /// value is the sum of the mana values of its front faces." Its own card is the one it
+    /// really is ([`crate::Memo::Really`]), and the other is under it ([`State::pile`]).
+    ///
+    /// [CR 713.5c]: https://yawgatog.com/resources/magic-rules/#R7135c
+    #[cold]
+    #[inline(never)]
+    fn melded_mana_value(&self, t: &GameTable, slot: L::Slot) -> u8 {
+        let front = |card: L::Card| t.def(card).front().cost.mana_value();
+        self.pile(slot)
+            .fold(front(self.card_really_is(slot)), |sum, card| {
+                sum.saturating_add(front(self.object(card).card))
+            })
     }
 
     /// Whether the object in `slot` has the ability at `ability` of its face up: the one

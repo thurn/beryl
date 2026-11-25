@@ -162,6 +162,17 @@ pub mod decks {
                 names::ARCANE_PROXY,
             ],
         ),
+        (
+            "meld",
+            &[
+                names::GISELA_THE_BROKEN_BLADE,
+                names::BRUNA_THE_FADING_LIGHT,
+                names::FLICKERWISP,
+                names::PHANTASMAL_IMAGE,
+                names::GET_LOST,
+                names::JACE_THE_MIND_SCULPTOR,
+            ],
+        ),
         ("outside-the-game", &[names::BURNING_WISH]),
         ("subgames", &[names::SHAHRAZAD]),
         (

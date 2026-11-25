@@ -501,6 +501,7 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::PutOntoBattlefield(_)
         | Effect::ReturnTransformed(_)
         | Effect::Transform(_)
+        | Effect::Meld(_)
         | Effect::Flip(_)
         | Effect::PutIntoLibrary { .. }
         | Effect::PutBack { .. }

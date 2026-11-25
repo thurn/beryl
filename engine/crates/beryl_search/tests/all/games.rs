@@ -101,7 +101,13 @@ fn a_widened_game_plays_on_as_the_small_one() {
     for seed in 0..2 {
         let (t, s) = game(seed);
         let fuzz = play_widening(&t, s, seed, &mut HashMap::new(), true);
-        assert_eq!(fuzz.filled, None, "fuzz seed {seed}");
+        // A subgame needs `Large` by design (`State::fits` refuses one in `Small`), so a fuzz
+        // deck with Shahrazad may leave `Small` there; the games were alike until then.
+        assert!(
+            matches!(fuzz.filled, None | Some("a subgame")),
+            "fuzz seed {seed}: {:?}",
+            fuzz.filled
+        );
 
         let (t, s) = fixed_game(seed);
         let fixed = play_widening(&t, s, seed, &mut HashMap::new(), true);

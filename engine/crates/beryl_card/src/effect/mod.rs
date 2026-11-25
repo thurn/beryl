@@ -273,6 +273,15 @@ pub enum Effect {
     ReturnTransformed(Objects),
     /// Turns a transforming permanent to its other face in place (CR 701.27a).
     Transform(Objects),
+    /// "Exile them, then meld them into [result]": exiles this permanent and one permanent the
+    /// filter accepts that its controller owns and controls and that has the name of the other
+    /// card of this card's meld pair ([`crate::definition::Shape::Meld`]), then puts the two
+    /// cards onto the battlefield as one permanent with the pair's combined back face up
+    /// ([CR 701.42a]). Objects that can't be melded stay in exile ([CR 701.42c]).
+    ///
+    /// [CR 701.42a]: https://yawgatog.com/resources/magic-rules/#R70142a
+    /// [CR 701.42c]: https://yawgatog.com/resources/magic-rules/#R70142c
+    Meld(Filter),
     /// Changes a permanent's status to flipped (CR 710.4).
     Flip(Objects),
     /// Shows cards to every player without moving them (CR 701.20a).

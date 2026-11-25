@@ -130,6 +130,12 @@ pub enum RuleKind {
     ///
     /// [CR 702.8a]: https://yawgatog.com/resources/magic-rules/#R7028a
     CastAsInstant,
+    /// Some players can't cast some spells (see [CR 601.3]): "A player can begin to cast a spell
+    /// only if a rule or effect allows that player to cast it and no rule or effect prohibits
+    /// that player from casting it."
+    ///
+    /// [CR 601.3]: https://yawgatog.com/resources/magic-rules/#R6013
+    CantCast,
     /// The loyalty abilities of the permanent with the ability may be activated any time its
     /// controller could cast an instant. The usual timing is "during a main phase of their
     /// turn" (see [CR 606.3]).
@@ -224,7 +230,8 @@ impl RuleKind {
                 Ok(match when {
                     When::OnlyAsSorcery => RuleKind::CastOnlyAsSorcery,
                     When::AsInstant => RuleKind::CastAsInstant,
-                    When::Never | When::AsUsual => return Err(Unchecked::Rule),
+                    When::Never => RuleKind::CantCast,
+                    When::AsUsual => return Err(Unchecked::Rule),
                 })
             }
             (Governed::SpellCosts { spells, .. }, When::AsUsual) => {
@@ -314,6 +321,7 @@ impl RuleKind {
             self,
             RuleKind::CastOnlyAsSorcery
                 | RuleKind::CastAsInstant
+                | RuleKind::CantCast
                 | RuleKind::CantActivateNamed
                 | RuleKind::Player
                 | RuleKind::CantPreventDamage
@@ -337,13 +345,13 @@ fn of_a_spells_characteristics(filter: Filter) -> bool {
         | Filter::Types(_)
         | Filter::Supertypes(_)
         | Filter::SubtypeWord(_)
-        | Filter::ColorWords(_) => true,
+        | Filter::ColorWords(_)
+        | Filter::ManaValueAtMost(_) => true,
         Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
-        | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
         | Filter::ManaValueAtMostPower

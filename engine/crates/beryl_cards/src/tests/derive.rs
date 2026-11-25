@@ -16,10 +16,26 @@ const CUSTOM: &[&str] = &[];
 /// a generated scenario exercises fails too, so the list stays current.
 const UNREACHED: &[(&str, &str)] = &[
     (
+        "Brisela, Voice of Nightmares: ability 0 (Static)",
+        "the combined back face of a meld pair is never a card in a hand or a deck, so the \
+         generator has no scenario of it; the card's hand-written scenarios meld it from Gisela \
+         and Bruna and try the opponent's casts",
+    ),
+    (
+        "Bruna, the Fading Light: ability 0 (Triggered)",
+        "the cast trigger needs an Angel or Human creature card in its caster's graveyard to \
+         target, which no generated position puts there; the card's hand-written scenarios do",
+    ),
+    (
         "Cavern of Souls: ability 2 (Mana)",
         "its mana pays only for a creature spell of the type the land chose as it entered, and a \
          generated position puts the land onto the battlefield having chosen none; the card's \
          hand-written scenarios play it, choose Human and cast a Human with that mana",
+    ),
+    (
+        "Gisela, the Broken Blade: ability 0 (Triggered)",
+        "its end step trigger needs a Bruna, the Fading Light its controller owns and controls, \
+         which no generated position has; the card's hand-written scenarios meld the pair",
     ),
     (
         "Panglacial Wurm: ability 0 (Static)",
@@ -111,7 +127,9 @@ fn generated_scenarios_pass_in_every_slot_order() {
             .iter()
             .filter_map(|s| plays_alike_in_every_slot_order(def.name, s))
             .collect();
-        if scenarios.is_empty() {
+        // The combined back face of a meld pair is never a card in a hand or deck, so the
+        // generator has no position to start it from.
+        if scenarios.is_empty() && def.shape != beryl_card::definition::Shape::Melded {
             failures.push(format!("{} has no generated scenario", def.name));
         }
         failures

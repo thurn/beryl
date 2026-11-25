@@ -36,6 +36,7 @@ use crate::table::GameTable;
 mod combat;
 mod designation;
 mod link;
+mod piles;
 mod preparation;
 mod value;
 
@@ -133,6 +134,16 @@ pub enum Memo<L: Layout = Small> {
     /// [CR 731.2e]: https://yawgatog.com/resources/magic-rules/#R7312e
     /// [CR 708.9]: https://yawgatog.com/resources/magic-rules/#R7089
     FaceDownUnder(PlayerSet),
+    /// The card was under the merged or melded permanent whose own card is in this slot when
+    /// that permanent was exiled, and the two went to exile together. An effect that can
+    /// find one of the cards the permanent became finds every one of them (see [CR 713.8c]):
+    /// "If an effect can find the new object that a melded permanent becomes as it leaves the
+    /// battlefield, it finds both cards." The same holds of a merged permanent (see
+    /// [CR 731.3c]). Kept while the card stays in exile.
+    ///
+    /// [CR 713.8c]: https://yawgatog.com/resources/magic-rules/#R7138c
+    /// [CR 731.3c]: https://yawgatog.com/resources/magic-rules/#R7313c
+    ExiledFromPileOf(L::Slot),
     /// This permanent entered by resolving a face-down spell cast for morph (see CR 702.37c).
     Morphed,
     /// This permanent was a spell that its controller cast, which became it as it resolved:
@@ -183,12 +194,14 @@ impl Kinds {
     const COMBAT_BAND: u32 = 1 << 20;
     const PREPARED: u32 = 1 << 21;
     const CAST: u32 = 1 << 22;
+    const EXILED_FROM_PILE: u32 = 1 << 23;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u32 = Kinds::EXILED_WITH
         | Kinds::EXILED_UNTIL
         | Kinds::PUT_WITH
         | Kinds::PART_OF
-        | Kinds::PREPARED;
+        | Kinds::PREPARED
+        | Kinds::EXILED_FROM_PILE;
     /// The kinds whose memo may end as a new object arrives in the slot it names
     /// ([`State::forget_links_to`]).
     const LINKS: u32 = Kinds::EXILED_WITH | Kinds::PUT_WITH;
@@ -426,6 +439,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::PutOntoBattlefieldWith(_)
             | Memo::PhasedOutUnder(_)
             | Memo::PartOf(_)
+            | Memo::ExiledFromPileOf(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::Cast
@@ -449,6 +463,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::PutOntoBattlefieldWith(_)
             | Memo::PhasedOutUnder(_)
             | Memo::PartOf(_)
+            | Memo::ExiledFromPileOf(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::Cast
@@ -472,6 +487,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::PutOntoBattlefieldWith(_)
             | Memo::PhasedOutUnder(_)
             | Memo::PartOf(_)
+            | Memo::ExiledFromPileOf(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::Cast
@@ -623,18 +639,6 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// The cards of the merged permanent in `slot` other than the one in its own slot, in the
-    /// order they merged ([`Memo::PartOf`]): none for any other permanent. With no merged
-    /// permanent in the game, one AND.
-    #[inline]
-    pub fn pile(&self, slot: L::Slot) -> impl Iterator<Item = L::Slot> + '_ {
-        self.memos
-            .of(Kinds::PART_OF)
-            .iter()
-            .filter(move |e| e.memo == Memo::PartOf(slot))
-            .map(|e| e.slot)
-    }
-
     /// The cards exiled with the object `source` by an ability linked to another of its
     /// abilities (see [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
     /// ability refers only to cards in the exile zone that were put there as a result of an
@@ -718,7 +722,9 @@ impl<L: Layout> State<L> {
             | Memo::ClassLevel(_)
             | Memo::Solved
             | Memo::CombatBand(_)
-            | Memo::Prepared(_) => true,
+            | Memo::Prepared(_)
+            | Memo::ExiledFromPileOf(_)
+            | Memo::Cast => true,
         });
         self.settle_ended(done);
     }

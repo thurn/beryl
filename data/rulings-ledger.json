@@ -517,6 +517,20 @@
     }
   ],
   "Braingeyser": [],
+  "Brisela, Voice of Nightmares": [
+    {
+      "published_at": "2016-07-13",
+      "hash": "28d7df7e35c1",
+      "untestable": "A pointer to the Eldritch Moon mechanics article, not a ruling about play. The meld rules it explains are shown by the scenarios of Gisela, the Broken Blade."
+    }
+  ],
+  "Bruna, the Fading Light": [
+    {
+      "published_at": "2016-07-13",
+      "hash": "28d7df7e35c1",
+      "untestable": "A pointer to the Eldritch Moon mechanics article, not a ruling about play. The meld rules it explains are shown by the scenarios of Gisela, the Broken Blade."
+    }
+  ],
   "Burning Wish": [
     {
       "published_at": "2004-10-04",
@@ -1191,6 +1205,13 @@
     }
   ],
   "Gemrazer": [],
+  "Gisela, the Broken Blade": [
+    {
+      "published_at": "2016-07-13",
+      "hash": "95e644799fa5",
+      "untestable": "Commander is not built: Beryl plays two-player constructed games, which have no commander or command zone."
+    }
+  ],
   "Glorious Anthem": [],
   "Griselbrand": [
     {
@@ -2277,22 +2298,30 @@
     {
       "published_at": "2010-06-15",
       "hash": "63ab69c9d68d",
-      "scenario": ["A +1/+1 counter and an Anthem apply on top of a level's 3/3"]
+      "scenario": [
+        "A +1/+1 counter and an Anthem apply on top of a level's 3/3"
+      ]
     },
     {
       "published_at": "2010-06-15",
       "hash": "c9d09554c0ce",
-      "scenario": ["A copy of a leveled Student of Warfare is a 1/1"]
+      "scenario": [
+        "A copy of a leveled Student of Warfare is a 1/1"
+      ]
     },
     {
       "published_at": "2010-06-15",
       "hash": "b3405cd1c28d",
-      "scenario": ["Diminish overrides a level's base power and toughness"]
+      "scenario": [
+        "Diminish overrides a level's base power and toughness"
+      ]
     },
     {
       "published_at": "2010-06-15",
       "hash": "e2fa75244cba",
-      "scenario": ["Seven levels make Student of Warfare a 4/4 with double strike"]
+      "scenario": [
+        "Seven levels make Student of Warfare a 4/4 with double strike"
+      ]
     }
   ],
   "Sundial of the Infinite": [
@@ -2619,7 +2648,9 @@
     {
       "published_at": "2018-04-27",
       "hash": "e97181d9df12",
-      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+      "scenario": [
+        "Three chapters resolve before the Saga is sacrificed"
+      ]
     },
     {
       "published_at": "2018-04-27",
@@ -2629,12 +2660,16 @@
     {
       "published_at": "2018-04-27",
       "hash": "86a5400d3823",
-      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+      "scenario": [
+        "Three chapters resolve before the Saga is sacrificed"
+      ]
     },
     {
       "published_at": "2018-04-27",
       "hash": "2af0aadae8f2",
-      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+      "scenario": [
+        "Three chapters resolve before the Saga is sacrificed"
+      ]
     },
     {
       "published_at": "2018-04-27",
@@ -2644,17 +2679,23 @@
     {
       "published_at": "2018-04-27",
       "hash": "a4170507af89",
-      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+      "scenario": [
+        "Three chapters resolve before the Saga is sacrificed"
+      ]
     },
     {
       "published_at": "2018-04-27",
       "hash": "a2cbd1fb4133",
-      "scenario": ["The third chapter resolves after the Saga leaves"]
+      "scenario": [
+        "The third chapter resolves after the Saga leaves"
+      ]
     },
     {
       "published_at": "2018-04-27",
       "hash": "38666afa51c4",
-      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+      "scenario": [
+        "Three chapters resolve before the Saga is sacrificed"
+      ]
     },
     {
       "published_at": "2018-04-27",
@@ -2664,7 +2705,9 @@
     {
       "published_at": "2018-04-27",
       "hash": "559b26ebc012",
-      "scenario": ["Three chapters resolve before the Saga is sacrificed"]
+      "scenario": [
+        "Three chapters resolve before the Saga is sacrificed"
+      ]
     }
   ],
   "Thespian's Stage": [
