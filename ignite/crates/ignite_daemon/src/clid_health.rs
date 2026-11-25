@@ -197,6 +197,13 @@ pub(super) fn hold_of(row: &CliHold, fallback_since: Timestamp) -> Hold {
     }
 }
 
+/// Whether a probe that ran after `row`'s hold started has failed. A hold that a failed probe
+/// started has `probed_at` equal to `since`, so it waits for the next probe too.
+fn probe_confirmed(row: &CliHold) -> bool {
+    let at = |field: &Option<String>| field.as_deref().and_then(|t| Timestamp::parse(t).ok());
+    matches!((at(&row.since), at(&row.probed_at)), (Some(since), Some(probed)) if probed > since)
+}
+
 fn hold_row(
     app: &str,
     reason: HoldReason,
@@ -510,14 +517,22 @@ impl Health {
         self.report_holds(ctx);
     }
 
-    /// Sends the justiciar report of every hold not yet reported, and marks each one the hub
-    /// took.
+    /// Sends the justiciar report of every hold not yet reported that a later probe confirmed,
+    /// and marks each one the hub took.
+    ///
+    /// A provider's backend often fails for a few minutes and recovers, as when Antigravity
+    /// returned an empty conversation ID. Reporting at the first failure filed a justiciar
+    /// ticket each time, and the next probe had already ended the hold before anyone read it.
+    /// So a hold is reported only once a probe that ran after it started has also failed.
     fn report_holds(&self, ctx: &Context) {
         let rows = self
             .pool
             .with_database(|conn| cli_slots::holds(conn))
             .unwrap_or_default();
-        for row in rows.iter().filter(|row| row.reported == 0) {
+        for row in rows
+            .iter()
+            .filter(|row| row.reported == 0 && probe_confirmed(row))
+        {
             let hold = hold_of(row, Timestamp::EPOCH);
             let report = JusticiarReport {
                 subject: format!("cli-hold:{}", hold.app),

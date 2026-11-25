@@ -3632,7 +3632,9 @@ What follows a turn's end:
    parked with its ticket held and the app goes on a CLI hold. During a hold no
    turn starts for that app on this machine, and the daemon runs the probe turn
    every 5 minutes; the first success resumes every parked slot. A hold posts
-   one notification and one justiciar report. A single API error first retries
+   one notification when it starts. It files one justiciar report only after a
+   probe that ran after the hold started has also failed, so a backend that
+   recovers within 5 minutes files no ticket. A single API error first retries
    after 30 seconds.
 6. Anything else parks the slot and is reported. An end the daemon cannot place
    never releases a ticket and never starts a turn.

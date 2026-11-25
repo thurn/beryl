@@ -263,15 +263,11 @@ fn a_hold_stops_starts_and_offers_and_releases_nothing() {
     );
     assert!(notes[0].1.contains("with CLI 9.1"), "{notes:?}");
 
-    // One justiciar report per hold, however many rounds run while it lasts.
+    // No justiciar report before a probe confirms the hold.
     rig.tick();
     rig.advance(60.0);
     rig.tick();
-    let reports = rig.hub.justiciar_reports();
-    assert_eq!(reports.len(), 1, "{reports:?}");
-    assert_eq!(reports[0].subject, "cli-hold:fake");
-    assert!(reports[0].on_machine);
-    assert!(reports[0].details.contains("Invalid API key"));
+    assert!(rig.hub.justiciar_reports().is_empty());
 
     // The slot keeps its ticket and stays parked; no probe ran before 5 minutes.
     let slots = rig.slots();
@@ -282,6 +278,19 @@ fn a_hold_stops_starts_and_offers_and_releases_nothing() {
     // `Health` has no `Host`, through which alone a ticket is released, so it cannot release
     // one; the slot's row is what would show a release.
     assert_eq!(rig.launcher.scripted.runs().len(), 1);
+}
+
+#[test]
+fn a_hold_the_next_probe_ends_is_never_reported() {
+    let rig = rig("transient");
+    rig.hold_now();
+    rig.tick();
+    rig.advance(PROBE_EVERY_S);
+    rig.passing_probe();
+    rig.tick();
+    rig.tick();
+    assert!(rig.health.hold("fake").is_none());
+    assert!(rig.hub.justiciar_reports().is_empty());
 }
 
 #[test]
@@ -317,7 +326,15 @@ fn a_successful_probe_ends_the_hold_and_unparks_its_slots() {
     assert!(!rig.health.offers("fake"));
     assert_eq!(rig.notes.lock().unwrap().len(), 1);
     assert_eq!(rig.launcher.scripted.runs().len(), 1);
-    rig.advance(PROBE_EVERY_S - 1.0);
+    // The failed probe confirms the hold: one justiciar report, however many rounds follow.
+    rig.advance(60.0);
+    rig.tick();
+    let reports = rig.hub.justiciar_reports();
+    assert_eq!(reports.len(), 1, "{reports:?}");
+    assert_eq!(reports[0].subject, "cli-hold:fake");
+    assert!(reports[0].on_machine);
+    assert!(reports[0].details.contains("Invalid API key"));
+    rig.advance(PROBE_EVERY_S - 61.0);
     rig.tick();
     assert_eq!(rig.launcher.scripted.runs().len(), 1, "probed too early");
 
