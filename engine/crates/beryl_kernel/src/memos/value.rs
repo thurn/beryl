@@ -26,6 +26,7 @@ impl<L: Layout> Memo<L> {
             Memo::Solved => Kinds::SOLVED,
             Memo::CombatBand(_) => Kinds::COMBAT_BAND,
             Memo::Prepared(_) => Kinds::PREPARED,
+            Memo::CastFromGraveyard => Kinds::CAST_FROM_GRAVEYARD,
         }
     }
 
@@ -43,6 +44,7 @@ impl<L: Layout> Memo<L> {
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::TurnsUpWhenUsed
+            | Memo::CastFromGraveyard
             | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
@@ -82,6 +84,7 @@ impl<L: Layout> Memo<L> {
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::TurnsUpWhenUsed
+            | Memo::CastFromGraveyard
             | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
@@ -111,6 +114,7 @@ impl<L: Layout> Memo<L> {
             | Memo::PhasedOutUnder(_)
             | Memo::Morphed
             | Memo::TurnsUpWhenUsed
+            | Memo::CastFromGraveyard
             | Memo::Cast
             | Memo::Solved
             | Memo::CombatBand(_) => true,
@@ -149,6 +153,7 @@ impl<L: Layout> Memo<L> {
             Memo::Solved => Memo::Solved,
             Memo::CombatBand(band) => Memo::CombatBand(slot(band)),
             Memo::Prepared(copy) => Memo::Prepared(copy.map(slot)),
+            Memo::CastFromGraveyard => Memo::CastFromGraveyard,
         }
     }
 

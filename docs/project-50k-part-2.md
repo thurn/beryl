@@ -1084,10 +1084,15 @@ multiset of card indices. They have no slots.
   the pool as a card, not a token, and is removed from the multiset.
 - A companion
   ([CR 702.139a](https://yawgatog.com/resources/magic-rules/#R702139a)) is
-  declared before the game: `game/start.rs` asks each player with a sideboard
-  card whose companion condition their deck meets, as a decision before the
-  mulligans. The condition is a `Filter` over the deck's cards, checked by the
-  table. Putting it into the hand is a special action that costs {3}.
+  declared before the game: `game/companion.rs` asks each player with a
+  sideboard card whose companion condition their deck meets, as a decision
+  (`Pending::Companion`) before the opening hands. The condition is
+  `Ability::companion(&DeckCondition { each, has })`, read of the deck's cards
+  by `State::companion_choices`. Putting it into the hand is a special action
+  that costs {3} (`Opt::Companion`). Every companion card has a hybrid mana
+  cost, which the engine cannot hold yet, so the keystone, Lurrus of the
+  Dream-Den, waits for hybrid mana. Its once-each-turn graveyard permission is
+  `Ability::cast_from_graveyard_each_turn` (`casting/graveyard.rs`).
 - Scenarios set a sideboard with `.sideboard(P0, &[..])`. The session's
   best-of-three match and sideboarding between games are not part of this plan.
 

@@ -291,6 +291,9 @@ pub enum Opt<L: Layout = Small> {
     Object(L::Slot),
     /// Turn the face-down permanent in this slot face up, a special action (see CR 116.2b).
     TurnFaceUp(L::Slot),
+    /// Pay {3} and put the player's revealed companion from outside the game into their hand,
+    /// a special action (see CR 116.2g).
+    Companion,
 }
 
 const _: () = assert!(size_of::<Opt<Small>>() == 4);
@@ -338,7 +341,8 @@ impl<L: Layout> Opt<L> {
             | Opt::Pool(_)
             | Opt::Number(_)
             | Opt::Plan(_)
-            | Opt::Player(_) => None,
+            | Opt::Player(_)
+            | Opt::Companion => None,
         }
     }
 }

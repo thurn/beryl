@@ -315,7 +315,9 @@ impl<L: Layout> State<L> {
             | Pending::TurningFaceUp { .. }
             | Pending::OrderEntered { .. }
             | Pending::EnterChoosing { .. }
-            | Pending::ManaColor { .. } => Ok(()),
+            | Pending::ManaColor { .. }
+            | Pending::Companion { .. }
+            | Pending::CompanionPayment { .. } => Ok(()),
         }
     }
 

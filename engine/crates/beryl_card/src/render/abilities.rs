@@ -51,6 +51,9 @@ impl Ctx {
         if let Some(keyword) = Ctx::keyword_line(ability) {
             return keyword;
         }
+        if let Some(condition) = ability.companion_condition() {
+            return format!("Companion — {}", sentence(&self.deck_condition(condition)));
+        }
         if let Some((first, last)) = ability.chapter_numbers() {
             let chapters = (first..=last).map(roman).collect::<Vec<_>>().join(", ");
             return format!("{chapters} — {}", sentences(&self.body(ability.body())));
@@ -225,6 +228,15 @@ impl Ctx {
             (layer.condition, self.layered(layer))
         } else if let Some(rule) = ability.rule() {
             (ability.condition().copied(), self.rule_change(rule))
+        } else if let Some(spells) = ability.graveyard_cast() {
+            let noun = self.noun(*spells, Kind::Spell).singular(Kind::Spell);
+            (
+                None,
+                format!(
+                    "once during each of your turns, you may cast {} from your graveyard",
+                    with_article(&noun)
+                ),
+            )
         } else if ability.permits_cast_while_searching() {
             (
                 None,
@@ -241,6 +253,20 @@ impl Ctx {
             }
             None => vec![text],
         }
+    }
+
+    /// A companion's condition: "each permanent card in your starting deck has mana value 2
+    /// or less". What every card must pass is said after "has" when it is only words after
+    /// the noun ("card with mana value 2 or less"), and as "is a [noun]" otherwise.
+    fn deck_condition(&mut self, condition: &crate::DeckCondition) -> String {
+        let kind = Kind::Card(None);
+        let each = self.noun(condition.each, kind).singular(kind);
+        let has = self.noun(condition.has, kind).singular(kind);
+        let has = match has.strip_prefix("card with ") {
+            Some(rest) => format!("has {rest}"),
+            None => format!("is {}", with_article(&has)),
+        };
+        format!("each {each} in your starting deck {has}")
     }
 
     /// What a static ability's continuous effect does to the objects it affects: "Adeline's

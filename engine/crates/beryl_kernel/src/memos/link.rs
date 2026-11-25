@@ -11,7 +11,7 @@ use crate::layout::Layout;
 use crate::object::ObjectRef;
 use crate::relayout::slot;
 
-use super::Memo;
+use super::{Kinds, Memo};
 
 /// One object, by its slot and the low byte of its incarnation: a memo has room for a
 /// byte beside the slot (the store's entry is at most 4 bytes), not for the whole
@@ -92,5 +92,56 @@ impl<L: Layout> Memo<L> {
     #[inline]
     pub fn exiled_with(source: ObjectRef<L>) -> Self {
         Memo::ExiledWith(Link::to(source))
+    }
+}
+
+impl<L: Layout> crate::state::State<L> {
+    /// Ends the links to an earlier object in `slot` that would read as links to the new
+    /// object arriving there, or to a freed token slot: the zone move calls it. The new object
+    /// is not that object (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
+    ///
+    /// The cards exiled with an earlier object stay "exiled with" it
+    /// (see [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
+    /// ability refers only to cards in the exile zone that were put there as a result of an
+    /// instruction to exile them in the first ability." The permanents an earlier Aura put
+    /// onto the battlefield stay put there with it. An ability of that object still on the
+    /// stack finds them, and the link names that object alone ([`Link`]). Only a link whose
+    /// incarnation byte is the new object's ends, so that it cannot read as a link to the
+    /// new object. With no card in the game linked either way, one AND.
+    #[inline]
+    pub(crate) fn forget_links_to(&mut self, slot: L::Slot) {
+        if self.memos.kinds.0 & Kinds::LINKS != 0 {
+            self.forget_links_to_slot(slot);
+        }
+    }
+
+    /// The rare path of [`State::forget_links_to`], out of line.
+    #[cold]
+    #[inline(never)]
+    fn forget_links_to_slot(&mut self, slot: L::Slot) {
+        let incarnation = self.object(slot).incarnation;
+        let done = self.memos.end(|e| match e.memo {
+            Memo::ExiledWith(link) | Memo::PutOntoBattlefieldWith(link) => {
+                !(link.slot == slot && link.shares_generation(incarnation))
+            }
+            Memo::Paid(_)
+            | Memo::X(_)
+            | Memo::ExiledUntil(_)
+            | Memo::Chosen(_)
+            | Memo::Really(_)
+            | Memo::PhasedOutUnder(_)
+            | Memo::PartOf(_)
+            | Memo::FaceDownUnder(_)
+            | Memo::Morphed
+            | Memo::TurnsUpWhenUsed
+            | Memo::CastFromGraveyard
+            | Memo::ClassLevel(_)
+            | Memo::Solved
+            | Memo::CombatBand(_)
+            | Memo::Prepared(_)
+            | Memo::ExiledFromPileOf(_)
+            | Memo::Cast => true,
+        });
+        self.settle_ended(done);
     }
 }

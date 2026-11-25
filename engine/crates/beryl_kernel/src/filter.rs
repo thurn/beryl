@@ -5,7 +5,7 @@
 
 pub use beryl_card::Filter;
 use beryl_card::definition::Shape;
-use beryl_card::{CardDef, FaceIx, Players, Words};
+use beryl_card::{CardDef, Face, FaceIx, Players, Words};
 
 use crate::bitboard::Bitboard;
 use crate::ids::Seat;
@@ -228,15 +228,44 @@ pub(crate) fn passes_so_far<L: Layout>(
 /// [CR 709.4]: https://yawgatog.com/resources/magic-rules/#R7094
 /// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a
 pub fn matches_outside(filter: &Filter, card: &CardDef, owner: Seat, words: &Words, x: u8) -> bool {
-    let front = card.front();
     let back = matches!(card.shape, Shape::Split { .. }).then(|| card.face(FaceIx::BACK));
+    matches_printed(filter, card.front(), back, owner, words, x, 0)
+}
+
+/// Tests the face of a card that a player would cast, with `x_paid` as the value of X in its
+/// mana cost, as a permission to cast "a spell with mana value 2 or less" reads it. Only the
+/// printed characteristics of that face count: no effect or status applies.
+pub fn matches_cast_face(
+    filter: &Filter,
+    face: &Face,
+    owner: Seat,
+    words: &Words,
+    x_paid: u8,
+) -> bool {
+    matches_printed(filter, face, None, owner, words, 0, x_paid)
+}
+
+/// Tests printed characteristics: of `front`, joined with those of `back` where both halves
+/// of a split card count. `x` is the value a filter's X reads, and `x_paid` the value of X in
+/// the mana cost.
+fn matches_printed(
+    filter: &Filter,
+    front: &Face,
+    back: Option<&Face>,
+    owner: Seat,
+    words: &Words,
+    x: u8,
+    x_paid: u8,
+) -> bool {
     let mana_value = || {
         front
             .cost
+            .with_x(x_paid)
             .mana_value()
             .saturating_add(back.map_or(0, |f| f.cost.mana_value()))
     };
-    let passes = |subfilter: &Filter| matches_outside(subfilter, card, owner, words, x);
+    let passes =
+        |subfilter: &Filter| matches_printed(subfilter, front, back, owner, words, x, x_paid);
     match *filter {
         Filter::Any => true,
         Filter::Types(types) => {

@@ -568,7 +568,8 @@ pub(crate) fn manual_pay<L: Layout>(
         | Opt::Player(_)
         | Opt::Ability(_)
         | Opt::Object(_)
-        | Opt::TurnFaceUp(_) => unreachable!("a manual payment option"),
+        | Opt::TurnFaceUp(_)
+        | Opt::Companion => unreachable!("a manual payment option"),
     };
     let pool = s.player(player).remembered_mana().len();
     if pool > made {

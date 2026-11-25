@@ -460,6 +460,8 @@ pub enum Act {
     TurnFaceUp {
         card: Obj,
     },
+    /// Put the revealed companion into its owner's hand.
+    Companion,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // Serde's `skip_serializing_if` passes a reference.
@@ -641,6 +643,7 @@ impl Act {
             }
             Opt::Object(slot) => Act::Object { object: obj(slot) },
             Opt::TurnFaceUp(slot) => Act::TurnFaceUp { card: obj(slot) },
+            Opt::Companion => Act::Companion,
         }
     }
 }

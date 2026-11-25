@@ -96,7 +96,9 @@ fn resolve_top<L: Layout>(
         | Pending::TurningFaceUp { .. }
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }
-        | Pending::ManaColor { .. } => Default::default(),
+        | Pending::ManaColor { .. }
+        | Pending::Companion { .. }
+        | Pending::CompanionPayment { .. } => Default::default(),
     };
     let may_ask = replacement::resolution_may_ask(t);
     // The source is asked first: whether an ability written as data asks is read from its

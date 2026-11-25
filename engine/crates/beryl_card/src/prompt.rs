@@ -354,6 +354,9 @@ purposes! {
     Replace = "replace" => Pick,
     /// A card to bring into the game from its owner's sideboard, or pass.
     Wish = "wish" => Catalog,
+    /// A card with a companion ability to reveal from outside the game as its owner's
+    /// companion before the game begins, or none (see CR 103.2b).
+    Companion = "companion" => Catalog,
 }
 
 /// Which part of its prompt's shape one pick answers. Before this said so, the kind of the

@@ -5,8 +5,6 @@
 
 use std::cell::{Cell, OnceCell};
 
-use beryl_kernel::reference::Graveyard;
-
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, AbilityKind, CastingOption, Castings, CostAction, CostPart, Face, FaceIx,
@@ -35,7 +33,7 @@ mod preparation;
 pub(super) mod special;
 mod ways;
 
-use ways::{Ways, can_fuse};
+use ways::{Ways, can_fuse, cast_sources};
 
 /// What every check of one player's options reads, found once for all of them: the mana they
 /// could pay with and whether an opponent limits them to sorcery speed, each found at the first
@@ -346,34 +344,6 @@ pub(crate) fn refusal<L: Layout>(
     Ok(most)
 }
 
-/// The cards `player` can cast at priority: their hand, the cards a permission names, and
-/// the cards in their graveyard that have escape. Their graveyard is looked at only while an
-/// effect reaches cards off the battlefield, which a game without one tests once.
-#[inline]
-fn cast_sources<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
-    let mut cards = s.zone(ZoneKey::Of(player, Zone::Hand));
-    for p in s.cast_permissions() {
-        if p.terms.player == player {
-            cards.insert(p.card.slot);
-        }
-    }
-    if s.reaches_elsewhere() {
-        cards |= escaping(s, t, player);
-    }
-    cards
-}
-
-/// The cards in `player`'s graveyard that have escape. Out of line: only while an effect
-/// reaches cards off the battlefield.
-#[cold]
-#[inline(never)]
-fn escaping<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
-    s.zone(ZoneKey::Of(player, Zone::Graveyard)).filter(|slot| {
-        s.card_in(s.object_ref(slot), Graveyard)
-            .is_some_and(|card| s.escape_from(t, card).is_some())
-    })
-}
-
 /// Appends the spells `player` can cast now, by card, face and casting options.
 pub(super) fn cast_options<L: Layout, const TARGETS: bool, const SEARCH: bool>(
     s: &State<L>,
@@ -417,7 +387,9 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool, const SEARCH: bool>(
             };
             if ways.plain {
                 for costs in option_sets(face, ways.alternative) {
-                    if refused(s, t, now, slot, f, costs, from, ways.increase).is_none() {
+                    if ways.permitted(s, t, player, face, costs)
+                        && refused(s, t, now, slot, f, costs, from, ways.increase).is_none()
+                    {
                         out.push(Opt::Cast {
                             slot,
                             face: f,

@@ -393,6 +393,10 @@ impl<L: Layout> Relayout for Pending<L> {
                 slot: slot(s),
                 ability,
             },
+            &Pending::Companion { chooser } => Pending::Companion { chooser },
+            &Pending::CompanionPayment { player, remaining } => {
+                Pending::CompanionPayment { player, remaining }
+            }
             &Pending::DeclareAttackers { attacker } => Pending::DeclareAttackers {
                 attacker: attacker.map(slot),
             },
@@ -431,6 +435,7 @@ impl<L: Layout> Relayout for Pending<L> {
                 spec: c.spec,
                 substituted: c.substituted,
                 from: c.from,
+                from_graveyard_permission: c.from_graveyard_permission,
             }),
             Pending::Resolving(r) => Pending::Resolving(r.relayout()),
             Pending::StepActions(r) => Pending::StepActions(r.relayout()),
@@ -510,6 +515,7 @@ impl<L: Layout> Relayout for Opt<L> {
             Opt::Ability(i) => Opt::Ability(index::<M>(i.into())),
             Opt::Object(s) => Opt::Object(slot(s)),
             Opt::TurnFaceUp(s) => Opt::TurnFaceUp(slot(s)),
+            Opt::Companion => Opt::Companion,
         }
     }
 }

@@ -20,6 +20,7 @@ mod zones;
 pub use behavior::{Behavior, Custom, Says};
 pub use designation::Designation;
 pub(crate) use keywords::CASCADE;
+pub use of_kind::DeckCondition;
 use of_kind::OfKind;
 
 /// What kind of ability this is ([CR 113.3](https://yawgatog.com/resources/magic-rules/#R1133)):

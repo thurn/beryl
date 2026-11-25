@@ -425,5 +425,6 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
             None => "an ability".to_owned(),
         },
         Opt::TurnFaceUp(slot) => format!("turn {} face up", named(slot)),
+        Opt::Companion => "put their companion into their hand".to_owned(),
     }
 }

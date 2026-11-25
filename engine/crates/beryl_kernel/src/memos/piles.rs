@@ -44,6 +44,7 @@ impl<L: Layout> State<L> {
                 | Memo::FaceDownUnder(_)
                 | Memo::Morphed
                 | Memo::TurnsUpWhenUsed
+                | Memo::CastFromGraveyard
                 | Memo::ClassLevel(_)
                 | Memo::Solved
                 | Memo::CombatBand(_)

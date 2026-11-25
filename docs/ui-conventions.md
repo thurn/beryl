@@ -420,6 +420,10 @@ recordings do not show them.
 - **Casting while searching a library.** When a library search offers a spell to
   cast, the candidate buttons offer the cast alongside the cards the search can
   find and Done. After the cast, the search continues.
+- **Choosing a companion before the game.** Before the opening hands are drawn,
+  a player whose deck fulfills a sideboard card's companion condition gets the
+  sideboard catalog titled Choose Companion, listing each card they may reveal.
+  Done reveals none. Arena reveals a companion without asking.
 - **Choosing a sideboard card during a game.** The catalog shows eligible card
   names to the player making the choice. Done leaves every card in the
   sideboard. The chosen card is revealed and appears in its owner's hand.

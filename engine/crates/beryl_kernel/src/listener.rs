@@ -244,6 +244,9 @@ pub fn found_where_it_works(ability: &Ability) -> bool {
             ability.works_where_its_kind_does()
                 || (ability.permits_cast_while_searching()
                     && ability.zones() == ZoneSet::of(Zone::Library))
+                // A companion ability works outside the game, which is no zone: the rules read
+                // it of the sideboard's cards before the game begins.
+                || (ability.companion_condition().is_some() && ability.zones().is_empty())
         }
         AbilityKind::Spell | AbilityKind::Mana | AbilityKind::Replacement => {
             ability.works_where_its_kind_does()

@@ -7,7 +7,7 @@ use crate::card::{ChosenKind, FaceIx, Prompt, Purpose, Types};
 use crate::casting::land::{enter_from_hand, enter_or_choose};
 use crate::decision::{Answers, Candidates, Choice, Decision, DecisionKind, OPTIONS, Opt, Refusal};
 use crate::fixed::Full;
-use crate::game::start;
+use crate::game::{companion, start};
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, index};
 use crate::observation::Observation;
@@ -114,6 +114,10 @@ pub(crate) fn decision<L: Layout>(
             cost,
             payment,
         } => face_down::decision(s, t, sink, slot, cost, payment),
+        Pending::Companion { chooser } => companion::decision(s, t, chooser),
+        Pending::CompanionPayment { player, remaining } => {
+            companion::payment_decision(s, t, sink, player, remaining)
+        }
         Pending::Resolving(ref r) | Pending::StepActions(ref r) | Pending::TurnStart(ref r) => {
             Ok(r.question.clone())
         }
@@ -161,6 +165,7 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
     casting::priority_options(s, t, player, list)?;
     mana::instant_options(s, t, player, list)?;
     face_down::face_up_options(s, t, player, list)?;
+    companion::options(s, t, player, list)?;
     // Last, as the options a full list leaves out: tapping ahead is never needed, the payment
     // taps for itself.
     if s.profile().floats_for(player) {
@@ -209,7 +214,8 @@ pub(super) fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
             | Opt::Player(_)
             | Opt::Ability(_)
             | Opt::Object(_)
-            | Opt::TurnFaceUp(_) => false,
+            | Opt::TurnFaceUp(_)
+            | Opt::Companion => false,
         }),
         Candidates::Objects(_) => false,
     }
@@ -306,6 +312,20 @@ pub(super) fn perform_machine<L: Layout>(
                 .expect("a payment");
             act(s, &mut x.events, d.player, None);
             let done = face_down::perform(s, t, &mut x.events, slot, cost, payment, option);
+            x.events.leave();
+            done
+        }
+        Pending::Companion { chooser } => {
+            let option = d.candidates.option(c);
+            act(s, &mut x.events, d.player, None);
+            let done = companion::answer(s, t, &mut x.events, chooser, option);
+            x.events.leave();
+            done
+        }
+        Pending::CompanionPayment { player, remaining } => {
+            let option = d.candidates.option(c).expect("a payment");
+            act(s, &mut x.events, d.player, None);
+            let done = companion::pay(s, t, &mut x.events, player, remaining, option);
             x.events.leave();
             done
         }

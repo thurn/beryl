@@ -28,7 +28,8 @@ impl Catalog {
         let entries: Vec<(String, u16)> = (decision.candidates.iter().enumerate())
             .filter_map(|(i, candidate)| {
                 let is_entry = matches!(candidate.option, Candidate::Number { .. })
-                    || (purpose == Purpose::Wish && candidate.option == Candidate::Done);
+                    || (matches!(purpose, Purpose::Wish | Purpose::Companion)
+                        && candidate.option == Candidate::Done);
                 if !is_entry {
                     return None;
                 }

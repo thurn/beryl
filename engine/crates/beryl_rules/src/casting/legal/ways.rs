@@ -4,13 +4,16 @@
 
 use beryl_kernel::reference::Graveyard;
 
+use crate::bitboard::Bitboard;
 use crate::card::{CardDef, CastingOption, Castings, Face, FaceIx};
 use crate::ids::Seat;
 use crate::layout::Layout;
+use crate::state::ZoneKey;
 use crate::state::{State, Zone};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
-use super::super::costs::{From, option_sets};
+use super::super::costs::{From, option_sets, x_range_start};
+use super::super::graveyard;
 use super::super::start;
 
 /// How `player` may cast one card now, apart from its face's own options: for free during a
@@ -32,6 +35,9 @@ pub(super) struct Ways {
     pub(super) increase: u8,
     /// With the escape an effect grants a card in a graveyard ([`Castings::ESCAPE`]).
     pub(super) escape: bool,
+    /// Casting it relies on a permanent's permission to cast from a graveyard once each turn
+    /// ([`Ways::permitted`]).
+    pub(super) graveyard: bool,
     /// The back needs a separate permission lookup when the front's permission came
     /// from resolving an Adventure (see [CR 716.3d]).
     ///
@@ -53,6 +59,7 @@ impl Ways {
                 alternative: free,
                 increase: 0,
                 escape: false,
+                graveyard: false,
                 on_adventure: false,
             },
             From::Priority => {
@@ -65,11 +72,17 @@ impl Ways {
                         && s.card_in(s.object_ref(slot), Graveyard)
                             .is_some_and(|card| s.escape_from(t, card).is_some())
                 };
+                let graveyard =
+                    permission.is_none() && graveyard::relies_on_permission(s, t, player, slot);
                 Ways {
-                    plain: !escape || permission.is_some() || s.object(slot).zone() == Zone::Hand,
+                    plain: !escape
+                        || graveyard
+                        || permission.is_some()
+                        || s.object(slot).zone() == Zone::Hand,
                     alternative: permission.is_some_and(|p| p.terms.is_flashback()),
                     increase: permission.map_or(0, |p| p.terms.increase),
                     escape,
+                    graveyard,
                     on_adventure: permission.is_some_and(|p| p.terms.on_adventure),
                 }
             }
@@ -86,6 +99,23 @@ impl Ways {
             alternative: permission.is_some_and(|p| p.terms.is_flashback()),
             increase: permission.map_or(0, |p| p.terms.increase),
             ..self
+        }
+    }
+
+    /// Whether a permanent's permission accepts casting `face` with `costs`, where casting it
+    /// relies on one: with the least value of X it may be cast with. The value chosen later
+    /// is held to the permission as X is announced.
+    pub(super) fn permitted<L: Layout>(
+        self,
+        s: &State<L>,
+        t: &GameTable,
+        player: Seat,
+        face: &Face,
+        costs: Castings,
+    ) -> bool {
+        !self.graveyard || {
+            let x = x_range_start(face, costs, false).unwrap_or(0);
+            graveyard::permitter(s, t, player, face, x).is_some()
         }
     }
 
@@ -122,4 +152,40 @@ pub(super) fn can_fuse<L: Layout>(
             && object.owner() == player
             && matches!(def.face(FaceIx::FUSED).casting, [CastingOption::Fuse])
     }
+}
+
+/// The cards `player` can cast at priority: their hand, the cards a permission names, the
+/// cards in their graveyard that have escape, and while they control a permanent that lets
+/// them cast from their graveyard, the cards there. Their graveyard is looked at only while an
+/// effect reaches cards off the battlefield, which a game without one tests once.
+#[inline]
+pub(super) fn cast_sources<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+) -> Bitboard<L::Slot> {
+    let mut cards = s.zone(ZoneKey::Of(player, Zone::Hand));
+    for p in s.cast_permissions() {
+        if p.terms.player == player {
+            cards.insert(p.card.slot);
+        }
+    }
+    if s.reaches_elsewhere() {
+        cards |= escaping(s, t, player);
+    }
+    if t.can(Capability::CastsFromGraveyard) {
+        cards |= graveyard::sources(s, t, player);
+    }
+    cards
+}
+
+/// The cards in `player`'s graveyard that have escape. Out of line: only while an effect
+/// reaches cards off the battlefield.
+#[cold]
+#[inline(never)]
+fn escaping<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
+    s.zone(ZoneKey::Of(player, Zone::Graveyard)).filter(|slot| {
+        s.card_in(s.object_ref(slot), Graveyard)
+            .is_some_and(|card| s.escape_from(t, card).is_some())
+    })
 }

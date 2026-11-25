@@ -16,6 +16,7 @@ mod adventure;
 mod announced;
 mod costs;
 mod delve;
+mod graveyard;
 pub(crate) mod land;
 mod legal;
 mod mana_payment;

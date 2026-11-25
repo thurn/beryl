@@ -50,7 +50,9 @@ pub mod trigger;
 mod walk;
 pub mod words;
 
-pub use ability::{Ability, AbilityKind, Behavior, Custom, Designation, Says, Timing};
+pub use ability::{
+    Ability, AbilityKind, Behavior, Custom, DeckCondition, Designation, Says, Timing,
+};
 pub use characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
 pub use check::Malformed;
 pub use continuous::{
@@ -95,8 +97,8 @@ pub mod prelude {
     pub use crate::{
         Ability, Amount, BasicLandTypes, CardDef, CastFace, CastNumber, CastTerms, CastingKind,
         CastingOption, Castings, ChosenKind, Colors, Comparison, Condition, CopyChange,
-        CopyException, Cost, CostAction, CostPart, CounterKind, Duration, Effect, ExceptIx,
-        ExileMatch, Face, FaceIx, Filter, Found, Governed, GrantIx, Keywords, LayerSpec,
+        CopyException, Cost, CostAction, CostPart, CounterKind, DeckCondition, Duration, Effect,
+        ExceptIx, ExileMatch, Face, FaceIx, Filter, Found, Governed, GrantIx, Keywords, LayerSpec,
         LibraryOrder, LibraryPosition, ManaColor, ManaCost, ManaRestriction, ManaSet, Modification,
         Named, Objects, Place, PlayerRules, Players, Prevention, Prompt, Protection, Purpose,
         PutOnto, Recipients, Replacement, RuleChange, SpellCost, Subtype, Subtypes, Supertypes,

@@ -355,7 +355,8 @@ impl ChosenKind {
             | Purpose::Block
             | Purpose::EnterOrder
             | Purpose::Replace
-            | Purpose::Wish => None,
+            | Purpose::Wish
+            | Purpose::Companion => None,
         }
     }
 }

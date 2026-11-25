@@ -40,8 +40,10 @@ pub(crate) fn catalog_label<L: Layout>(
     d: &Decision<L>,
     o: Opt<L>,
 ) -> Option<String> {
-    if d.prompt.purpose == beryl_engine::card::Purpose::Wish
-        && let Opt::Number(index) = o
+    if matches!(
+        d.prompt.purpose,
+        beryl_engine::card::Purpose::Wish | beryl_engine::card::Purpose::Companion
+    ) && let Opt::Number(index) = o
     {
         return t
             .sideboard_card::<L::Card>(d.player, index)
@@ -146,6 +148,12 @@ pub(super) fn candidate<L: Layout>(
             format!("Turn {} face up", named(slot)),
             Candidate::TurnFaceUp { slot: id(slot) },
         ),
+        Opt::Companion => {
+            let viewer = obs.viewer();
+            let card = obs.shown().companion(t, viewer).map(|(_, card)| card);
+            let named = card.map_or("companion", |card| t.def(card).name);
+            (format!("Put {named} into hand"), Candidate::Companion)
+        }
     };
     CandidateView {
         label,

@@ -329,8 +329,9 @@ impl<L: Layout> State<L> {
             // Bookkeeping about the past that only the loop check reads ([`crate::repeats`]).
             repeats: _,
             // Admitted cards stay in the game. The objects and their original identities
-            // determine which cards are left in the sideboard.
-            sideboard_taken: _,
+            // determine which cards are left in the sideboard. A revealed companion is
+            // hashed below.
+            sideboard_taken,
             turn_plan,
             outer: _,
             subgame_turns: _,
@@ -373,6 +374,10 @@ impl<L: Layout> State<L> {
         outcome.hash(h);
         if !turn_plan.is_unused() && (self.has_turn_plan() || turn.step() == TurnStep::Cleanup) {
             turn_plan.hash(h);
+        }
+        // None in a game where no player revealed a companion, which hashes as it did before.
+        if sideboard_taken.has_companion() {
+            sideboard_taken.companions().hash(h);
         }
     }
 }

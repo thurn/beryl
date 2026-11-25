@@ -102,7 +102,9 @@ fn replay_paused<'a, L: Layout>(
         | Pending::TurningFaceUp { .. }
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }
-        | Pending::ManaColor { .. } => None,
+        | Pending::ManaColor { .. }
+        | Pending::Companion { .. }
+        | Pending::CompanionPayment { .. } => None,
     }
 }
 
@@ -494,6 +496,7 @@ fn perform_priority<L: Layout>(
         | Opt::Cast { .. }
         | Opt::Activate { .. }
         | Opt::TurnFaceUp(_)
+        | Opt::Companion
         | Opt::Mana { .. } => {
             // An action other than passing: no loop through it is one of mandatory actions
             // (see CR 104.4b).
@@ -548,6 +551,7 @@ fn take_action<L: Layout>(
         Opt::TurnFaceUp(slot) => {
             face_down::begin_turning_face_up(s, t, &mut x.events, player, slot)
         }
+        Opt::Companion => crate::game::companion::begin(s, t, &mut x.events, player),
         Opt::Mana { slot, color } => {
             mana::activate(s, t, &mut x.events, slot, color)?;
             // CR 117.3c: "If a player has priority when they ... activate an ability ...,
@@ -631,7 +635,8 @@ fn perform<L: Layout>(
             | Opt::Player(_)
             | Opt::Ability(_)
             | Opt::Object(_)
-            | Opt::TurnFaceUp(_) => unreachable!("a trigger-order decision offers only triggers"),
+            | Opt::TurnFaceUp(_)
+            | Opt::Companion => unreachable!("a trigger-order decision offers only triggers"),
         },
         DecisionKind::Attacker | DecisionKind::AttackTarget => combat::attack(s, t, sink, option()),
         DecisionKind::Blocker => {

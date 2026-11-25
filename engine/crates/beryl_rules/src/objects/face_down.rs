@@ -227,6 +227,18 @@ pub(crate) fn decision<L: Layout>(
             });
         }
     };
+    special_action_payment(s, t, sink, player, remaining)
+}
+
+/// The question of paying `remaining`, the mana cost of a special action: a payment plan, or
+/// under manual payment the next source (§10).
+pub(crate) fn special_action_payment<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    player: Seat,
+    remaining: ManaCost,
+) -> Result<Decision<L>, Full> {
     let (kind, part, list) = if s.profile().payment == Payment::Manual {
         (
             DecisionKind::ManaPayment,
@@ -322,7 +334,7 @@ pub(crate) fn perform<L: Layout>(
 }
 
 /// The payment plans for the special action's mana cost, `remaining`.
-fn plans<L: Layout>(
+pub(crate) fn plans<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
@@ -342,7 +354,7 @@ fn plans<L: Layout>(
     )
 }
 
-fn pay_plan<L: Layout>(
+pub(crate) fn pay_plan<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
@@ -372,7 +384,7 @@ fn chosen_part(cost: Cost, part: u8) -> (CostAction, Chosen) {
 }
 
 /// Pays a mana plan or takes one step of manual payment for the special action.
-fn pay_mana<L: Layout>(
+pub(crate) fn pay_mana<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
@@ -415,7 +427,8 @@ fn pay_mana<L: Layout>(
         | Opt::Player(_)
         | Opt::Ability(_)
         | Opt::Object(_)
-        | Opt::TurnFaceUp(_)) => {
+        | Opt::TurnFaceUp(_)
+        | Opt::Companion) => {
             mana::manual_pay(s, t, sink, player, remaining, option, mana::Paying::NOTHING)?
         }
     })

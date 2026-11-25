@@ -26,6 +26,7 @@ use crate::state::{
 use crate::table::{Capability, GameTable};
 
 use super::costs::{spent_by_entry, total_cost, x_range_start};
+use super::graveyard;
 use super::mana_payment::{self, SacrificeCost};
 use super::parts;
 use super::spent;
@@ -123,6 +124,11 @@ pub(crate) fn begin_cast<L: Layout>(
     };
     let c = Casting {
         from,
+        from_graveyard_permission: resolving.is_none()
+            && permission.is_none()
+            && !costs.escapes()
+            && from == Zone::Graveyard
+            && t.can(Capability::CastsFromGraveyard),
         ..Casting::new(player, kind, step)
     };
     advance(s, t, sink, c)
@@ -340,6 +346,12 @@ pub(super) fn finish<L: Layout>(
     if let StackItem::Spell { controller, .. } = top(s).item {
         s.count(t, Count::SpellsCast, controller);
     }
+    if c.from_graveyard_permission
+        && let StackItem::Spell { card, face, .. } = top(s).item
+    {
+        let x = top(s).x;
+        graveyard::use_permission(s, t, c.player, t.def(card).face(face), x)?;
+    }
     let entry = top(s);
     if let StackItem::Spell {
         object: spell,
@@ -469,6 +481,12 @@ fn x_options<L: Layout>(
     let exclude = spent_by_entry(t, entry);
     let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
     for x in least..(least.saturating_add(64)) {
+        if c.from_graveyard_permission
+            && let StackItem::Spell { card, face, .. } = entry.item
+            && graveyard::permitter(s, t, c.player, t.def(card).face(face), x).is_none()
+        {
+            break;
+        }
         let mut probe = entry.clone();
         probe.x = x;
         let cost = total_cost(s, t, &probe, c);

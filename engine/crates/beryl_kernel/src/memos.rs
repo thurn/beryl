@@ -36,6 +36,7 @@ use crate::table::GameTable;
 mod combat;
 mod designation;
 mod face_down;
+mod graveyard_cast;
 mod link;
 mod piles;
 mod preparation;
@@ -181,6 +182,10 @@ pub enum Memo<L: Layout = Small> {
     /// The prepared designation and the copy it created, while that copy remains in exile
     /// or is being cast (see CR 723.3a–c). Phasing out removes the copy but preserves the memo.
     Prepared(Option<L::Slot>),
+    /// This permanent used its permission to cast from a graveyard once each turn
+    /// ([`beryl_card::Ability::cast_from_graveyard_each_turn`]) this turn. Each turn begins
+    /// with none ([`State::forget_graveyard_casts`]); a permanent entering later is new.
+    CastFromGraveyard,
 }
 
 /// The kinds of memo among a store's entries: its index by kind, so that a reader of a kind
@@ -208,6 +213,7 @@ impl Kinds {
     const CAST: u32 = 1 << 22;
     const EXILED_FROM_PILE: u32 = 1 << 23;
     const TURNS_UP: u32 = 1 << 24;
+    const CAST_FROM_GRAVEYARD: u32 = 1 << 25;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u32 = Kinds::EXILED_WITH
         | Kinds::EXILED_UNTIL
@@ -456,6 +462,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::TurnsUpWhenUsed
+            | Memo::CastFromGraveyard
             | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
@@ -481,6 +488,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::TurnsUpWhenUsed
+            | Memo::CastFromGraveyard
             | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
@@ -506,6 +514,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::TurnsUpWhenUsed
+            | Memo::CastFromGraveyard
             | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
@@ -691,54 +700,6 @@ impl<L: Layout> State<L> {
         let done = self
             .memos
             .end(|e| !(e.slot == slot && matches!(e.memo, Memo::ExiledUntil(_))));
-        self.settle_ended(done);
-    }
-
-    /// Ends the links to an earlier object in `slot` that would read as links to the new
-    /// object arriving there, or to a freed token slot: the zone move calls it. The new object
-    /// is not that object (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
-    ///
-    /// The cards exiled with an earlier object stay "exiled with" it
-    /// (see [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
-    /// ability refers only to cards in the exile zone that were put there as a result of an
-    /// instruction to exile them in the first ability." The permanents an earlier Aura put
-    /// onto the battlefield stay put there with it. An ability of that object still on the
-    /// stack finds them, and the link names that object alone ([`Link`]). Only a link whose
-    /// incarnation byte is the new object's ends, so that it cannot read as a link to the
-    /// new object. With no card in the game linked either way, one AND.
-    #[inline]
-    pub(crate) fn forget_links_to(&mut self, slot: L::Slot) {
-        if self.memos.kinds.0 & Kinds::LINKS != 0 {
-            self.forget_links_to_slot(slot);
-        }
-    }
-
-    /// The rare path of [`State::forget_links_to`], out of line.
-    #[cold]
-    #[inline(never)]
-    fn forget_links_to_slot(&mut self, slot: L::Slot) {
-        let incarnation = self.object(slot).incarnation;
-        let done = self.memos.end(|e| match e.memo {
-            Memo::ExiledWith(link) | Memo::PutOntoBattlefieldWith(link) => {
-                !(link.slot == slot && link.shares_generation(incarnation))
-            }
-            Memo::Paid(_)
-            | Memo::X(_)
-            | Memo::ExiledUntil(_)
-            | Memo::Chosen(_)
-            | Memo::Really(_)
-            | Memo::PhasedOutUnder(_)
-            | Memo::PartOf(_)
-            | Memo::FaceDownUnder(_)
-            | Memo::Morphed
-            | Memo::TurnsUpWhenUsed
-            | Memo::ClassLevel(_)
-            | Memo::Solved
-            | Memo::CombatBand(_)
-            | Memo::Prepared(_)
-            | Memo::ExiledFromPileOf(_)
-            | Memo::Cast => true,
-        });
         self.settle_ended(done);
     }
 

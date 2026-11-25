@@ -69,7 +69,9 @@ pub(crate) fn step_actions<L: Layout>(
         | Pending::TurningFaceUp { .. }
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }
-        | Pending::ManaColor { .. } => Default::default(),
+        | Pending::ManaColor { .. }
+        | Pending::Companion { .. }
+        | Pending::CompanionPayment { .. } => Default::default(),
     };
     let inline = a.inline();
     loop {

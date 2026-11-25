@@ -107,6 +107,11 @@ pub struct Casting<L: Layout = Small> {
     pub substituted: u8,
     /// Where a spell was before it moved to the stack (see CR 601.2a).
     pub from: Zone,
+    /// The spell is cast from its owner's graveyard under a permanent's permission to cast
+    /// from there once each turn ([`beryl_card::Ability::cast_from_graveyard_each_turn`]):
+    /// the value of X is limited to what that permission accepts, and the permission is used
+    /// as the spell becomes cast.
+    pub from_graveyard_permission: bool,
 }
 
 // Preserve the state hash for ordinary casts and activations in saved rollout corpora.
@@ -123,6 +128,9 @@ impl<L: Layout> std::hash::Hash for Casting<L> {
         if !matches!(self.from, Zone::Nowhere | Zone::Hand) {
             self.from.hash(h);
         }
+        if self.from_graveyard_permission {
+            true.hash(h);
+        }
     }
 }
 
@@ -136,6 +144,7 @@ impl<L: Layout> Casting<L> {
             spec: SpecIx::default(),
             substituted: 0,
             from: Zone::Nowhere,
+            from_graveyard_permission: false,
         }
     }
 
@@ -374,6 +383,13 @@ pub enum Pending<L: Layout = Small> {
     TurnStart(Resolving<L>),
     /// Combat that has banding assigns exact amounts before damage is dealt.
     ExactCombatDamage(DamageDivision<L>),
+    /// Before the opening hands are drawn, `chooser` may reveal a card from outside the game
+    /// as their companion (see CR 103.2b). The players with a card they may reveal are asked
+    /// in turn order from the starting player.
+    Companion { chooser: Seat },
+    /// `player` pays for the companion special action (see CR 116.2g): `remaining` is the
+    /// mana still to pay, by a payment plan or under manual payment one source at a time.
+    CompanionPayment { player: Seat, remaining: ManaCost },
 }
 
 // The original derived hash wrote each variant's tag as an isize. The enum now has a
@@ -422,6 +438,10 @@ impl<L: Layout> std::hash::Hash for Pending<L> {
             }
             Self::ManaColor { slot, ability } => (16_isize, slot, ability).hash(state),
             Self::ExactCombatDamage(dividing) => (18_isize, dividing).hash(state),
+            Self::Companion { chooser } => (19_isize, chooser).hash(state),
+            Self::CompanionPayment { player, remaining } => {
+                (20_isize, player, remaining).hash(state);
+            }
         }
     }
 }
@@ -448,7 +468,9 @@ impl<L: Layout> Pending<L> {
             | Pending::TurningFaceUp { .. }
             | Pending::OrderEntered { .. }
             | Pending::EnterChoosing { .. }
-            | Pending::ManaColor { .. } => None,
+            | Pending::ManaColor { .. }
+            | Pending::Companion { .. }
+            | Pending::CompanionPayment { .. } => None,
         }
     }
 }

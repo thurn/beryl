@@ -16,7 +16,8 @@ use crate::turn;
 use crate::zone::Place;
 use beryl_kernel::reference::{CardIn, Hand};
 
-/// Settles the starting player, then deals opening hands.
+/// Settles the starting player, then asks who reveals a companion
+/// ([`super::companion::ask_first`]) or deals the opening hands.
 ///
 /// [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031): "The player chosen to take
 /// the first turn is the starting player."
@@ -30,6 +31,18 @@ pub(crate) fn set_starting_player<L: Layout>(
     starting: Seat,
 ) -> Result<(), Full> {
     s.set_starting_player(starting);
+    if super::companion::ask_first(s, t) {
+        return Ok(());
+    }
+    deal(s, t, sink)
+}
+
+/// Deals each player's opening hand in turn order and opens the mulligans.
+pub(crate) fn deal<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
     for player in turn_order(s) {
         s.draw_n(sink, player, t.format().opening_hand())?;
     }

@@ -229,4 +229,6 @@ pub enum Candidate {
     TurnFaceUp {
         slot: ObjectId,
     },
+    /// Pay {3} to put the player's revealed companion from outside the game into their hand.
+    Companion,
 }

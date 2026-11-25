@@ -3,6 +3,7 @@
 //!
 //! Implements: none. Groups the state, card tables and event sink for rules operations.
 
+pub(crate) mod companion;
 pub mod ending;
 pub mod life;
 pub(crate) mod restart;

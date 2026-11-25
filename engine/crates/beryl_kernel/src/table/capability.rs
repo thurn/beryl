@@ -146,10 +146,18 @@ pub enum Capability {
     /// ([`Effect::MayCast`] with `within_x`), so paying an ability's cost records it on the
     /// ability's stack entry ([`crate::state::SpentMana`]).
     SpentOnX,
+    /// A card has a companion ability ([`beryl_card::Ability::companion`]), so the game asks
+    /// before the mulligans whether a player reveals a companion, and offers a revealed
+    /// companion's special action at priority.
+    Companion,
+    /// A card lets its controller cast a spell from their graveyard once each turn
+    /// ([`beryl_card::Ability::cast_from_graveyard_each_turn`]), so priority decisions look in
+    /// graveyards for spells it permits and the permanents remember using it.
+    CastsFromGraveyard,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::SpentOnX as u32) < u64::BITS);
+const _: () = assert!((Capability::CastsFromGraveyard as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -244,6 +252,12 @@ impl Capability {
             }
             if a.spend().is_some() {
                 found |= Capability::RemembersMana.bit();
+            }
+            if a.companion_condition().is_some() {
+                found |= Capability::Companion.bit();
+            }
+            if a.graveyard_cast().is_some() {
+                found |= Capability::CastsFromGraveyard.bit();
             }
             if a.rule()
                 .is_some_and(|rule| matches!(rule.what, beryl_card::Governed::TakeStep(_)))

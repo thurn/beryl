@@ -221,7 +221,8 @@ pub(crate) fn attack<L: Layout>(
         | Opt::Player(_)
         | Opt::Ability(_)
         | Opt::Object(_)
-        | Opt::TurnFaceUp(_) => finish_attack(s, t, sink),
+        | Opt::TurnFaceUp(_)
+        | Opt::Companion => finish_attack(s, t, sink),
     }
 }
 
@@ -510,7 +511,8 @@ pub(crate) fn choose_blocker<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, op
         | Opt::Player(_)
         | Opt::Ability(_)
         | Opt::Object(_)
-        | Opt::TurnFaceUp(_) => finish_blocks(s, sink),
+        | Opt::TurnFaceUp(_)
+        | Opt::Companion => finish_blocks(s, sink),
     }
 }
 

@@ -1032,6 +1032,11 @@
     },
     {
       "kind": "not-seen",
+      "name": "Choosing a companion before the game",
+      "rule": "Before the opening hands are drawn, a player whose deck fulfills a sideboard card's companion condition gets the sideboard catalog titled Choose Companion, listing each card they may reveal. Done reveals none. Arena reveals a companion without asking."
+    },
+    {
+      "kind": "not-seen",
       "name": "Choosing a sideboard card during a game",
       "rule": "The catalog shows eligible card names to the player making the choice. Done leaves every card in the sideboard. The chosen card is revealed and appears in its owner's hand."
     },

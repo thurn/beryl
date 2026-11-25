@@ -9,6 +9,15 @@ use crate::ids::{Zone, ZoneSet};
 use crate::mana::ManaRestriction;
 use crate::trigger::Trigger;
 
+/// A condition on a starting deck: "each [card `each` accepts] in your starting deck [passes
+/// `has`]". Each card is read as it is outside the game, a split card with both halves'
+/// characteristics, and X in a mana cost counts as 0.
+#[derive(Clone, Copy, Debug)]
+pub struct DeckCondition {
+    pub each: Filter,
+    pub has: Filter,
+}
+
 /// What only one kind of ability has ([`Ability`]'s `of_kind`).
 #[derive(Clone, Copy, Debug)]
 pub(super) enum OfKind {
@@ -19,6 +28,12 @@ pub(super) enum OfKind {
     Layer(&'static LayerSpec),
     /// Static abilities: permission to cast this card while searching its owner's library.
     CastWhileSearching,
+    /// Companion, a keyword ability that works outside the game: what every card of its
+    /// owner's starting deck must be ([`Ability::companion`]).
+    Companion(&'static DeckCondition),
+    /// Static abilities: once during each of its controller's turns, permission to cast a
+    /// spell the filter accepts from their graveyard ([`Ability::cast_from_graveyard_each_turn`]).
+    CastFromGraveyard(&'static Filter),
     /// Replacement abilities: what they replace and how.
     Replacement(&'static Replacement),
     /// Mana abilities. First, "Activate only if you control a [permanent this filter
@@ -39,7 +54,9 @@ impl OfKind {
             | OfKind::Trigger(_)
             | OfKind::Layer(_)
             | OfKind::Replacement(_)
-            | OfKind::CastWhileSearching => (None, None),
+            | OfKind::CastWhileSearching
+            | OfKind::Companion(_)
+            | OfKind::CastFromGraveyard(_) => (None, None),
         }
     }
 }
@@ -58,6 +75,64 @@ impl Ability {
             of_kind: OfKind::CastWhileSearching,
             zones: ZoneSet::of(Zone::Library),
             ..Ability::of(AbilityKind::Static)
+        }
+    }
+
+    /// "Companion—Each [card `condition.each` accepts] in your starting deck [passes
+    /// `condition.has`]" ([CR 702.139a]): "Companion is a keyword ability that functions
+    /// outside the game. It’s written as “Companion—[Condition].” Before the game begins, you
+    /// may reveal one card you own from outside the game with a companion ability whose
+    /// condition is fulfilled by your starting deck." The ability works in no zone: the rules
+    /// read it of the cards outside the game before the game begins.
+    ///
+    /// [CR 702.139a]: https://yawgatog.com/resources/magic-rules/#R702139a
+    pub const fn companion(condition: &'static DeckCondition) -> Ability {
+        Ability {
+            of_kind: OfKind::Companion(condition),
+            zones: ZoneSet::NONE,
+            ..Ability::of(AbilityKind::Static)
+        }
+    }
+
+    /// The condition of a companion ability ([`Ability::companion`]).
+    pub const fn companion_condition(&self) -> Option<&'static DeckCondition> {
+        match self.of_kind {
+            OfKind::Companion(condition) => Some(condition),
+            OfKind::None
+            | OfKind::Trigger(_)
+            | OfKind::Layer(_)
+            | OfKind::CastWhileSearching
+            | OfKind::CastFromGraveyard(_)
+            | OfKind::Replacement(_)
+            | OfKind::Mana(..) => None,
+        }
+    }
+
+    /// "Once during each of your turns, you may cast a [spell `spells` accepts] from your
+    /// graveyard." A static ability of a permanent: its controller may cast a card they own
+    /// from their graveyard, with the usual timing and costs, once in each of their turns for
+    /// each permanent with the ability. The filter is read of the spell as it would be cast,
+    /// with the value of X chosen. A spell cast from the graveyard under another permission,
+    /// such as flashback, leaves the permission unused.
+    pub const fn cast_from_graveyard_each_turn(spells: &'static Filter) -> Ability {
+        Ability {
+            of_kind: OfKind::CastFromGraveyard(spells),
+            ..Ability::of(AbilityKind::Static)
+        }
+    }
+
+    /// The spells a permission to cast from a graveyard once each turn accepts
+    /// ([`Ability::cast_from_graveyard_each_turn`]).
+    pub const fn graveyard_cast(&self) -> Option<&'static Filter> {
+        match self.of_kind {
+            OfKind::CastFromGraveyard(spells) => Some(spells),
+            OfKind::None
+            | OfKind::Trigger(_)
+            | OfKind::Layer(_)
+            | OfKind::CastWhileSearching
+            | OfKind::Companion(_)
+            | OfKind::Replacement(_)
+            | OfKind::Mana(..) => None,
         }
     }
 
@@ -124,7 +199,9 @@ impl Ability {
             | OfKind::Layer(_)
             | OfKind::Replacement(_)
             | OfKind::Mana(..)
-            | OfKind::CastWhileSearching => None,
+            | OfKind::CastWhileSearching
+            | OfKind::Companion(_)
+            | OfKind::CastFromGraveyard(_) => None,
         }
     }
 
@@ -137,7 +214,9 @@ impl Ability {
             | OfKind::Trigger(_)
             | OfKind::Layer(_)
             | OfKind::Mana(..)
-            | OfKind::CastWhileSearching => None,
+            | OfKind::CastWhileSearching
+            | OfKind::Companion(_)
+            | OfKind::CastFromGraveyard(_) => None,
         }
     }
 
@@ -150,7 +229,9 @@ impl Ability {
             | OfKind::Trigger(_)
             | OfKind::Replacement(_)
             | OfKind::Mana(..)
-            | OfKind::CastWhileSearching => None,
+            | OfKind::CastWhileSearching
+            | OfKind::Companion(_)
+            | OfKind::CastFromGraveyard(_) => None,
         }
     }
 

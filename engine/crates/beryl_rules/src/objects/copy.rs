@@ -208,7 +208,8 @@ fn choose_new_targets<L: Layout>(
             | Opt::Pool(_)
             | Opt::Number(_)
             | Opt::Plan(_)
-            | Opt::TurnFaceUp(_) => target,
+            | Opt::TurnFaceUp(_)
+            | Opt::Companion => target,
         };
     }
     Ok(())

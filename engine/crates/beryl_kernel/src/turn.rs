@@ -281,6 +281,7 @@ impl<L: Layout> State<L> {
             p.lands_played = 0;
         }
         self.trackers.begin_turn();
+        self.forget_graveyard_casts();
         Ok(self.turn.active)
     }
 

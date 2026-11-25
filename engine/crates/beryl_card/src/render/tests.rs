@@ -122,6 +122,30 @@ fn a_static_ability_says_what_it_changes() {
     );
 }
 
+/// A companion ability and a permission to cast from a graveyard once each turn: Lurrus of the
+/// Dream-Den's "Companion — Each permanent card in your starting deck has mana value 2 or
+/// less." and "Once during each of your turns, you may cast a permanent spell with mana value
+/// 2 or less from your graveyard."
+#[test]
+fn a_companion_condition_and_a_graveyard_permission() {
+    use crate::ability::DeckCondition;
+    const PERMANENT: Filter = Filter::Types(Types::PERMANENT);
+    static CONDITION: DeckCondition = DeckCondition {
+        each: PERMANENT,
+        has: Filter::ManaValueAtMost(2),
+    };
+    static SMALL: Filter = Filter::All(&[PERMANENT, Filter::ManaValueAtMost(2)]);
+    assert_eq!(
+        render_ability(&Ability::companion(&CONDITION)),
+        "Companion — Each permanent card in your starting deck has mana value 2 or less."
+    );
+    assert_eq!(
+        render_ability(&Ability::cast_from_graveyard_each_turn(&SMALL)),
+        "Once during each of your turns, you may cast a permanent spell with mana value 2 or \
+         less from your graveyard."
+    );
+}
+
 /// A target's filter: Portable Hole's "When this artifact enters, exile target nonland
 /// permanent an opponent controls with mana value 2 or less until this artifact leaves the
 /// battlefield."
