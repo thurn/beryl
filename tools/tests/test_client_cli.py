@@ -331,6 +331,27 @@ def test_a_newer_test_harness_of_the_crate_is_not_run_as_the_program(
     assert cli.linked("client") == program
 
 
+def test_the_unhashed_program_is_run_over_a_newer_harness(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Cargo on Windows writes a program to `deps/client.exe` with no hash in its name, and
+    # only the crate's test harness as `deps/client-<hash>.exe`.
+    monkeypatch.setattr(cli.paths, "WORKSPACE", tmp_path)
+    debug = tmp_path / "target" / "debug"
+    deps = debug / "deps"
+    deps.mkdir(parents=True)
+    program = cli.system.exe(deps / "client")
+    harness = cli.system.exe(deps / "client-1111111111111111")
+    for path in (program, harness):
+        path.write_text("")
+    os.utime(program, (1, 1))
+    os.utime(harness, (2, 2))
+    fingerprint = debug / ".fingerprint" / "beryl_inspect-1111111111111111"
+    fingerprint.mkdir(parents=True)
+    (fingerprint / "test-bin-client").write_text("")
+    assert cli.linked("client") == program
+
+
 def test_the_listing_names_every_text_command() -> None:
     listed = cli.listing()
     for name in ("list", "info", "tree", "diff", "check", "test", "png", "film"):

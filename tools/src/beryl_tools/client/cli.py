@@ -257,6 +257,11 @@ def linked(name: str) -> Path:
     pays that check once per link. Its name uses `_` for each `-` in the crate name."""
     debug = paths.WORKSPACE / "target" / "debug"
     stem = name.replace("-", "_")
+    # On Windows, Cargo names a program in `deps` without the hash, and only test harnesses
+    # carry one, so the hashed files there are never the program.
+    unhashed = system.exe(debug / "deps" / stem)
+    if unhashed.is_file():
+        return unhashed
     suffix = r"\.exe" if system.WINDOWS else ""
     pattern = re.compile(rf"{re.escape(stem)}-[0-9a-f]{{16}}{suffix}")
     found = [p for p in (debug / "deps").glob(f"{stem}-*") if pattern.fullmatch(p.name)]
