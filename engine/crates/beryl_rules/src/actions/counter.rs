@@ -13,6 +13,7 @@ use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::replacement::event::Reason;
 use crate::state::{ObjectRef, StackEntry, State, Zone};
+use beryl_kernel::reference::Spell;
 
 /// Counters a spell ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a)):
 /// "To counter a spell or ability means to cancel it, removing it from the stack. It
@@ -21,15 +22,10 @@ use crate::state::{ObjectRef, StackEntry, State, Zone};
 /// replacement on the spell may still exile it instead. Returns whether it was countered: a
 /// spell no longer on the stack is not, nor is one that can't be countered
 /// ([`rule_change::cant_be_countered`]), which stays where it is.
-pub fn counter<L: Layout>(
-    game: &mut Game<'_, L>,
-    spell: ObjectRef<L>,
-    to: Zone,
-) -> Result<bool, Full> {
-    let Some(spell) = game.state.spell(spell) else {
-        return Ok(false);
-    };
-    if rule_change::cant_be_countered(game.state, game.table, spell) {
+pub fn counter<L: Layout>(game: &mut Game<'_, L>, spell: Spell<L>, to: Zone) -> Result<bool, Full> {
+    if game.state.current(spell).is_none()
+        || rule_change::cant_be_countered(game.state, game.table, spell)
+    {
         return Ok(false);
     }
     let Some(entry) = game.state.take_off_stack(game.table, game.sink, spell)? else {
@@ -98,8 +94,12 @@ pub(crate) fn into_instruction<L: Layout>(
     while let Some((place, spell)) = topmost(run.state(), spells, abilities) {
         if let Some(spell) = spell {
             spells.remove(spell.slot);
+            let spell = run
+                .state()
+                .spell(spell)
+                .expect("a spell entry's object is on the stack");
             if counter(run.game(), spell, zone)? {
-                countered.insert(spell.slot);
+                countered.insert(spell.slot());
             }
         } else {
             abilities &= !(1 << place);

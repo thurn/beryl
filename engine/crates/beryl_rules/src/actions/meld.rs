@@ -60,12 +60,7 @@ impl<L: Layout> Scene<'_, L> {
     /// first in the order they entered the battlefield.
     pub(crate) fn meld_pair(&self, partner: Filter) -> Option<(L::Slot, L::Slot)> {
         let (s, t, you) = (self.s, self.t, self.you());
-        let source = self
-            .subject
-            .of
-            .source
-            .filter(|&source| s.is_current(source))?
-            .slot;
+        let source = s.permanent(self.subject.of.source?)?.slot();
         if !owns_and_controls(s, you, source) {
             return None;
         }

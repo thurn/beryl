@@ -249,6 +249,7 @@ fn any_player_untaps_up_to_n_of_the_tapped_permanents_named() {
     }
     let creatures: Bitboard<Slot> = [mine, theirs, upright].into_iter().collect();
     let untap = |game: &mut Game, resolution: &mut Resolution| {
+        let creatures = game.state().permanents_in(creatures);
         tap::untap_up_to(game, resolution, p.opponent(), creatures, 2).map(|_| ())
     };
 
@@ -317,7 +318,7 @@ fn any_permanent_is_exiled_and_only_a_double_faced_one_returns_transformed() {
     let mut x = Scratch::new();
     let prodigy = put(&t, &mut s, &mut x, Seat::P0, "Test Prodigy");
     let land = put(&t, &mut s, &mut x, Seat::P1, "Test Land");
-    let [was, single] = [prodigy, land].map(|slot| s.object_ref(slot));
+    let [was, single] = [prodigy, land].map(|slot| s.permanent_at(slot).unwrap());
 
     let mut game = Game::new(&mut s, &t, &mut x.events);
     transform::exile_and_return_transformed(&mut game, was).unwrap();
@@ -329,7 +330,7 @@ fn any_permanent_is_exiled_and_only_a_double_faced_one_returns_transformed() {
     let o = s.object(prodigy);
     assert_eq!((o.zone(), o.face()), (Zone::Battlefield, FaceIx::BACK));
     assert_eq!(s.controller(prodigy), Seat::P0);
-    assert!(!s.is_current(was));
+    assert!(s.current(was).is_none());
     assert_eq!(s.object(land).zone(), Zone::Exile);
 }
 
@@ -430,7 +431,7 @@ fn returning_transformed_keeps_a_flip_card_and_an_instant_back_face_in_exile() {
     let mut x = Scratch::new();
     for def in [&FLIP, &MODAL] {
         let slot = put(&t, &mut s, &mut x, Seat::P0, def.name);
-        let original = s.object_ref(slot);
+        let original = s.permanent_at(slot).unwrap();
         let mut game = Game::new(&mut s, &t, &mut x.events);
         transform::exile_and_return_transformed(&mut game, original).unwrap();
         assert_eq!(s.object(slot).zone(), Zone::Exile, "{}", def.name);

@@ -127,7 +127,7 @@ fn cascade_uses_the_chosen_x_of_a_countered_spell() {
     g.pick(cast(source));
     g.pick(Opt::Number(2));
     assert_eq!(g.s.mana_value(&g.t, source), 4);
-    let spell = g.s.object_ref(source);
+    let spell = g.s.spell(g.s.object_ref(source)).unwrap();
     let mut game = game::Game::new(&mut g.s, &g.t, &mut g.x.events);
     assert!(crate::actions::counter::counter(&mut game, spell, Zone::Graveyard).unwrap());
 

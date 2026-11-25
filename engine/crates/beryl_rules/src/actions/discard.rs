@@ -14,19 +14,17 @@ use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::replacement::event::{self, Entry, Reason};
 use crate::resolution::Resolution;
-use crate::state::{ObjectRef, Zone, ZoneKey};
+use crate::state::{Zone, ZoneKey};
 use crate::zones;
+use beryl_kernel::reference::{CardIn, Hand};
 
 /// Discards a card from its owner's hand
 /// ([CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a)): "To discard a card,
-/// move it from its owner's hand to that player's graveyard." One no longer in a hand is not
-/// discarded (see CR 400.7).
+/// move it from its owner's hand to that player's graveyard." One that has left the hand since
+/// is not discarded (see CR 400.7).
 #[inline]
-pub fn discard<L: Layout>(game: &mut Game<'_, L>, card: ObjectRef<L>) -> Result<(), Full> {
-    if !game.state.is_current(card) || game.state.object(card.slot).zone() != Zone::Hand {
-        return Ok(());
-    }
-    zones::move_to(game, card, Zone::Graveyard, Reason::Discard)
+pub fn discard<L: Layout>(game: &mut Game<'_, L>, card: CardIn<Hand, L>) -> Result<(), Full> {
+    zones::move_to(game, card.into(), Zone::Graveyard, Reason::Discard)
 }
 
 /// `player` discards `n` cards of their choice, or their whole hand if it has fewer
@@ -46,20 +44,20 @@ pub fn discard_cards<L: Layout>(
         let Some(card) = discard_of(game, resolution, player, hand, left)? else {
             break;
         };
-        discarded.insert(card.slot);
+        discarded.insert(card);
     }
     Ok(discarded)
 }
 
 /// `player` discards one of `cards`, cards in their hand, of their choice (CR 701.9b), as
-/// when told to discard a card of some kind. Returns the card in the graveyard, or `None`
-/// when there is none to discard.
+/// when told to discard a card of some kind. Returns the card discarded, or `None` when there
+/// is none to discard.
 pub fn discard_one_of<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,
     player: Seat,
     cards: Bitboard<L::Slot>,
-) -> Result<Option<ObjectRef<L>>, Stop> {
+) -> Result<Option<L::Slot>, Stop> {
     discard_of(game, resolution, player, cards, 1)
 }
 
@@ -70,15 +68,19 @@ fn discard_of<L: Layout>(
     player: Seat,
     cards: Bitboard<L::Slot>,
     left: u8,
-) -> Result<Option<ObjectRef<L>>, Stop> {
+) -> Result<Option<L::Slot>, Stop> {
     debug_assert!((cards & !game.state.zone(ZoneKey::Of(player, Zone::Hand))).is_empty());
     if cards.is_empty() {
         return Ok(None);
     }
     let prompt = Prompt::new(Purpose::Discard).most(left);
     let slot = choices::pick(game, resolution, player, cards, prompt)?;
-    discard(game, game.state.object_ref(slot))?;
-    Ok(Some(game.state.object_ref(slot)))
+    // A token that has left the battlefield can't move to another zone (see CR 111.8), so one
+    // picked from a hand stays there.
+    if let Some(card) = game.state.card_in(game.state.object_ref(slot), Hand) {
+        discard(game, card)?;
+    }
+    Ok(Some(slot))
 }
 
 /// [`Effect::Discard`](beryl_card::Effect::Discard): "[Player] discards [count] cards", each

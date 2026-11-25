@@ -13,8 +13,9 @@ use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::replacement::event::Reason;
 use crate::resolution::Resolution;
-use crate::state::{CounterKind, ObjectRef, Zone};
+use crate::state::{CounterKind, Zone};
 use crate::{zones, zones::counters};
+use beryl_kernel::reference::Permanent;
 
 /// A permanent explores ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)):
 /// "that permanent's controller reveals the top card of their library. If a land card is
@@ -32,10 +33,10 @@ use crate::{zones, zones::counters};
 pub fn explore<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,
-    object: ObjectRef<L>,
+    permanent: Permanent<L>,
 ) -> Flow {
-    let player = if game.state.permanent(object).is_some() {
-        game.state.controller(object.slot)
+    let player = if game.state.permanent(permanent.into()).is_some() {
+        game.state.controller(permanent.slot())
     } else {
         resolution.controller()
     };
@@ -50,7 +51,7 @@ pub fn explore<L: Layout>(
             return Ok(());
         }
     }
-    if let Some(permanent) = game.state().permanent(object) {
+    if let Some(permanent) = game.state().permanent(permanent.into()) {
         counters::add(game, permanent, CounterKind::PlusOne, 1)?;
     }
     // The card is revealed, on top of the library: a yes puts it into the graveyard.
@@ -77,7 +78,7 @@ pub(crate) fn instruction<L: Layout>(
     let mut left = permanents;
     while let Some(object) = run.state().next_permanent(&mut left) {
         let (game, resolution) = run.resolving();
-        explore(game, resolution, object.into())?;
+        explore(game, resolution, object)?;
     }
     Ok(Outcome::acted_on(permanents.slots()))
 }

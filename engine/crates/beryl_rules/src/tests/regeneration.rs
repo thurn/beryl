@@ -145,7 +145,7 @@ fn a_shield_does_not_save_a_sacrificed_permanent() {
     let (t, mut s, mut x, _, bear) = shielded_bear();
     let bear_ref = s.object_ref(bear);
     with_game(&t, &mut s, &mut x, bear, |game, _| {
-        sacrifice(game, bear_ref).unwrap();
+        sacrifice(game, game.state().permanent(bear_ref).unwrap()).unwrap();
     });
     assert_eq!(s.object(bear).zone(), Zone::Graveyard);
 }

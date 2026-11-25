@@ -20,14 +20,13 @@ use crate::state::{State, Zone};
 /// ([`indestructible`]). A regeneration shield on it replaces the destruction
 /// ([`replacement::destruction`]).
 #[inline]
-pub fn destroy<L: Layout>(game: &mut Game<'_, L>, object: Permanent<L>) -> Result<(), Full> {
-    let Some(object) = game.state().current(object) else {
+pub fn destroy<L: Layout>(game: &mut Game<'_, L>, permanent: Permanent<L>) -> Result<(), Full> {
+    let Some(permanent) = game.state().permanent(permanent.into()) else {
         return Ok(());
     };
-    let slot = object.reference().slot();
+    let slot = permanent.slot();
     let one = Bitboard::single(slot);
-    if !game.state().object(slot).on_battlefield() || !indestructible(game.state(), one).is_empty()
-    {
+    if !indestructible(game.state(), one).is_empty() {
         return Ok(());
     }
     let allowed = Regeneration::Allowed;

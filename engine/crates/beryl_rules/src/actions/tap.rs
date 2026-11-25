@@ -14,7 +14,7 @@ use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::replacement::event;
 use crate::resolution::Resolution;
-use beryl_kernel::reference::Permanent;
+use beryl_kernel::reference::{Permanent, Permanents};
 
 /// Taps a permanent ([CR 701.26a](https://yawgatog.com/resources/magic-rules/#R70126a)): "To
 /// tap a permanent, turn it sideways from an upright position. Only untapped permanents can
@@ -55,11 +55,11 @@ pub fn untap_up_to<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,
     player: Seat,
-    permanents: Bitboard<L::Slot>,
+    permanents: Permanents<L>,
     n: u8,
 ) -> Result<Bitboard<L::Slot>, Stop> {
     let s = &*game.state;
-    let tapped = permanents.filter(|slot| s.object(slot).is_tapped());
+    let tapped = permanents.slots().filter(|slot| s.object(slot).is_tapped());
     let prompt = Prompt::new(Purpose::Untap).most(n);
     let chosen = choices::pick_up_to(game, resolution, player, tapped, n, prompt)?;
     untap_selected(game, chosen)?;
@@ -104,7 +104,7 @@ pub(crate) fn untap_up_to_instruction<L: Layout>(
     let count = run.scene().amount(count);
     let mut untapped = Bitboard::EMPTY;
     for player in run.in_turn_order(players) {
-        let permanents = run.permanents(permanents).slots();
+        let permanents = run.permanents(permanents);
         let (game, resolution) = run.resolving();
         untapped |= untap_up_to(game, resolution, player, permanents, count)?;
     }

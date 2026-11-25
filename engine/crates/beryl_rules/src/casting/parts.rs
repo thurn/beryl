@@ -673,7 +673,8 @@ pub(crate) fn pay_with_all<L: Layout>(
     let mut game = Game::new(s, t, sink);
     match (action, chosen.zone) {
         (CostAction::Sacrifice, Zone::Battlefield) => {
-            crate::actions::sacrifice::sacrifice_all(&mut game, objects)
+            let permanents = game.state().permanents_in(objects);
+            crate::actions::sacrifice::sacrifice_all(&mut game, permanents)
         }
         (CostAction::Discard, Zone::Hand) => {
             // See CR 701.9a: "To discard a card, move it from its owner's hand to

@@ -25,7 +25,7 @@ pub(crate) fn instruction<L: Layout>(
     let mut affected = Bitboard::EMPTY;
     for &slot in run.in_game_order(objects)?.iter() {
         let game = run.game();
-        let Some(permanent) = game.state.permanent(game.state.object_ref(slot)) else {
+        let Some(permanent) = game.state.permanent_at(slot) else {
             continue;
         };
         let object = game.state.object(slot);

@@ -14,6 +14,7 @@ use crate::replacement::event::Reason;
 use crate::state::ObjectRef;
 use crate::state::Zone;
 use crate::{stack, zones};
+use beryl_kernel::reference::Library;
 
 /// Exiles a set of objects simultaneously
 /// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an object,
@@ -49,7 +50,7 @@ pub(crate) fn from_top_until<L: Layout>(
             if stop(game, slot) {
                 return Ok((cards, Some(slot)));
             }
-        } else if game.state.is_current(card) && game.state.object(slot).zone() == Zone::Library {
+        } else if game.state.card_in(card, Library).is_some() {
             return Ok((cards, None));
         }
     }

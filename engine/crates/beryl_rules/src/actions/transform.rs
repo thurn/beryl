@@ -58,17 +58,16 @@ pub(crate) fn instruction<L: Layout>(
     let objects = run.scene().objects(objects);
     for &slot in run.in_game_order(objects)?.iter() {
         let (game, resolution) = run.resolving();
-        let object = game.state.object_ref(slot);
-        let own_source = resolution.entry.source() == Some(object);
+        let Some(permanent) = game.state.permanent_at(slot) else {
+            continue;
+        };
+        let own_source = resolution.entry.source() == Some(permanent.into());
         // CR 701.27g: "In both cases, if the permanent has already transformed or
         // converted, an instruction to do either is ignored."
         // https://yawgatog.com/resources/magic-rules/#R70127g
         if own_source && resolution.entry.source_has_transformed() {
             continue;
         }
-        let Some(permanent) = game.state.permanent(object) else {
-            continue;
-        };
         if let Some(face) = other_face(game, permanent) {
             game.state.transform_permanent(game.table, permanent, face);
             if own_source {
@@ -91,16 +90,17 @@ pub(crate) fn instruction<L: Layout>(
 /// doesn't return.
 pub fn exile_and_return_transformed<L: Layout>(
     game: &mut Game<'_, L>,
-    object: ObjectRef<L>,
+    permanent: Permanent<L>,
 ) -> Result<(), Full> {
-    if game.state.permanent(object).is_none() {
+    let Some(permanent) = game.state.permanent(permanent.into()) else {
+        return Ok(());
+    };
+    zones::move_to(game, permanent.into(), Zone::Exile, Reason::Exile)?;
+    let slot = permanent.slot();
+    if game.state.object(slot).zone() != Zone::Exile {
         return Ok(());
     }
-    zones::move_to(game, object, Zone::Exile, Reason::Exile)?;
-    if game.state.object(object.slot).zone() != Zone::Exile {
-        return Ok(());
-    }
-    return_transformed(game, game.state.object_ref(object.slot))
+    return_transformed(game, game.state.object_ref(slot))
 }
 
 /// Returns a card to the battlefield transformed under its owner's control
