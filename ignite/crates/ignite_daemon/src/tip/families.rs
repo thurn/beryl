@@ -126,6 +126,25 @@ impl Round<'_> {
         state.is_some()
     }
 
+    /// Claims and runs `family`'s batches, reporting each batch's failures to `failed`. Before
+    /// `master` moves, their builds and commands may draw on the tip reserve.
+    fn run_family(
+        &self,
+        family: &str,
+        batches: &[(u32, Vec<CheckName>)],
+        failed: &dyn Fn(&[ResultKey]),
+    ) -> Vec<TipRun> {
+        let claim = |batch: u32| self.claim(family, batch);
+        let callbacks = BatchCallbacks {
+            claim: &claim,
+            failed,
+        };
+        let pre_move = !self.after_master;
+        let work = &self.verifier.work;
+        let (runs, _) = work.run_batches(self.ctx, self.tip, family, batches, &callbacks, pre_move);
+        runs
+    }
+
     /// Claims one batch from the hub. A claim the hub cannot answer is not granted, so the
     /// batch is left for a later round.
     fn claim(&self, family: &str, batch: u32) -> bool {
@@ -316,19 +335,7 @@ impl TipVerifier {
                                 continue;
                             }
                             crate::steps::step(format!("verifying family {family}"));
-                            let claim = |batch: u32| round.claim(&family, batch);
-                            let callbacks = BatchCallbacks {
-                                claim: &claim,
-                                failed: &failed,
-                            };
-                            let (runs, _) = self.work.run_batches(
-                                ctx,
-                                tip,
-                                &family,
-                                &batches,
-                                &callbacks,
-                                !after_master,
-                            );
+                            let runs = round.run_family(&family, &batches, &failed);
                             lock(&round.held).remove(&family);
                             lock(&round.runs).extend(runs);
                         }
