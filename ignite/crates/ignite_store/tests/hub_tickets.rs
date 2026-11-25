@@ -516,9 +516,9 @@ fn serves_the_live_graph_listing_and_a_conditional_batch_with_5000_stored_ticket
              SELECT printf('TSEED%04d', n), CASE WHEN n > 10 THEN printf('TSEED%04d', 1 + n % 10) END,
                printf('Ticket %04d', n), CASE WHEN n > 4700 THEN 'open' ELSE 'closed' END,
                '2026-11-01T00:00:00.000Z', 'seed', '2026-11-01T00:00:00.000Z', 0 FROM ids;
-             INSERT INTO edges SELECT id, 'TSEED4999', 'blocks'
+             INSERT INTO edges (src, dst, kind) SELECT id, 'TSEED4999', 'blocks'
                FROM tickets WHERE status = 'open' AND id != 'TSEED4999';
-             INSERT INTO edges SELECT id, 'TSEED0001', 'blocks'
+             INSERT INTO edges (src, dst, kind) SELECT id, 'TSEED0001', 'blocks'
                FROM tickets WHERE status = 'closed' AND parent IS NOT NULL;",
         )
         .unwrap();

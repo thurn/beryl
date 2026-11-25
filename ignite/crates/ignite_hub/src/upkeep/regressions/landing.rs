@@ -137,6 +137,7 @@ pub(crate) fn finish(
                     id: id.to_owned(),
                     on: suspect.to_string(),
                     kind: Some(EdgeKind::DiscoveredFrom),
+                    external: false,
                 });
             }
         }

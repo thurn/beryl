@@ -108,7 +108,7 @@ fn seeded() -> Hub {
                             claimed_at = '2026-11-16T19:31:00.000Z' WHERE id = 'TQ44S.7.24';
          UPDATE tickets SET metadata = '{\"_enact_beads\":{\"owner\":\"Old owner\",\"started_at\":\"2026-11-16T12:00:00Z\",
            \"dependencies\":[{\"type\":\"blocks\"}]},\"enact_host\":\"test-mac\"}' WHERE id = 'TWAIT';
-         INSERT INTO edges VALUES ('TQ44S.7.24', 'TERRO', 'blocks'), ('TPATH', 'TQ44S.7.24', 'waits-for');
+         INSERT INTO edges (src, dst, kind) VALUES ('TQ44S.7.24', 'TERRO', 'blocks'), ('TPATH', 'TQ44S.7.24', 'waits-for');
          INSERT INTO aliases VALUES ('old', 'TQ44S.7.24');
          INSERT INTO comments (ticket, n, author, at, text)
            VALUES ('TQ44S.7.24', 1, 'Derek', '2026-11-16T20:00:00.000Z', 'See proj-path.');
@@ -672,7 +672,7 @@ fn an_epic_lists_its_milestones_in_plan_order() {
               ('TPLAN.3', 'TPLAN', 'M7: tools', 'epic', 'open', 0, '', '2026-11-16T19:30:00.000Z', 'Derek', 1),
               ('TPLAN.4', 'TPLAN', 'M2: the table plays', 'epic', 'open', 2, '', '2026-11-16T19:30:00.000Z', 'Derek', 1),
               ('TPLAN.14', 'TPLAN', 'M0: a prototype', 'epic', 'closed', 1, '', '2026-11-16T19:30:00.000Z', 'Derek', 1);
-             INSERT INTO edges VALUES ('TPLAN.1', 'TPLAN.14', 'blocks'), ('TPLAN.4', 'TPLAN.1', 'blocks'),
+             INSERT INTO edges (src, dst, kind) VALUES ('TPLAN.1', 'TPLAN.14', 'blocks'), ('TPLAN.4', 'TPLAN.1', 'blocks'),
                ('TPLAN.2', 'TPLAN.4', 'waits-for');",
         )
         .unwrap();

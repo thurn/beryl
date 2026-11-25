@@ -632,6 +632,10 @@ pub enum DepCommand {
         on: String,
         #[arg(long)]
         kind: Option<String>,
+        /// Allow `on` to lie outside `id`'s outermost epic. Use only when the user has approved
+        /// this edge: the epic's workers do not reach `on`, so the epic can stall on it.
+        #[arg(long)]
+        external: bool,
     },
     Remove {
         id: String,

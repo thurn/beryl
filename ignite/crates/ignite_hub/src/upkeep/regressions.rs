@@ -351,6 +351,7 @@ fn attribution(
                 id: id.clone(),
                 on: culprit.to_string(),
                 kind: Some(EdgeKind::DiscoveredFrom),
+                external: false,
             });
         }
         if ticket.status == Status::InProgress && ticket.assignee.is_some() {

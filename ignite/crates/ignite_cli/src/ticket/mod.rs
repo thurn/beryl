@@ -64,6 +64,28 @@ fn flag(query: &mut Vec<(&'static str, String)>, name: &'static str, on: bool) {
 }
 
 /// Sends one or more operations as a batch and describes what they did.
+/// `ticket dep add` and `ticket dep remove`.
+fn dependency(hub: &Hub, command: &DepCommand) -> Result<Reply> {
+    match command {
+        DepCommand::Add {
+            id,
+            on,
+            kind,
+            external,
+        } => write(
+            hub,
+            "linked",
+            build::single(build::dep_add(id, on, kind.as_deref(), *external)),
+        ),
+        DepCommand::Remove { id, on } => write(
+            hub,
+            "unlinked",
+            build::single(build::edge("dep_remove", id, on, None)),
+        ),
+        DepCommand::List { .. } => unreachable!("a read verb reached the write arms"),
+    }
+}
+
 fn write(hub: &Hub, verb: &str, mut body: Value) -> Result<Reply> {
     let safe = build::prepare_batch(&mut body, build::random_key)?;
     if let Some(title) = &hub.actor_title {
@@ -153,19 +175,7 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
             "deferred",
             build::single(json!({"op": "defer", "id": id, "until": until})),
         ),
-        TicketCommand::Dep { command } => match command {
-            DepCommand::Add { id, on, kind } => write(
-                hub,
-                "linked",
-                build::single(build::edge("dep_add", id, on, kind.as_deref())),
-            ),
-            DepCommand::Remove { id, on } => write(
-                hub,
-                "unlinked",
-                build::single(build::edge("dep_remove", id, on, None)),
-            ),
-            DepCommand::List { .. } => unreachable!("a read verb reached the write arms"),
-        },
+        TicketCommand::Dep { command } => dependency(hub, command),
         TicketCommand::Batch { file } => write(hub, "batch applied to", build::batch_file(file)?),
         TicketCommand::Wait {
             id,

@@ -164,13 +164,14 @@ pub fn detail(ticket: &Value) -> String {
 }
 
 /// `waits on: Ta (blocks), Tb (related)` and `waited on by: Tc (blocks)`, from the ticket's
-/// edges in both directions. `ticket dep list` prints each one's status and title as well.
+/// edges in both directions, with `, external` after an edge the user approved across epics.
+/// `ticket dep list` prints each one's status and title as well.
 fn edges(ticket: &Value) -> Vec<String> {
     let own = text(ticket, "id");
     let mut waits_on = vec![];
     let mut waited_on_by = vec![];
     for edge in ticket["edges"].as_array().into_iter().flatten() {
-        let (src, dst, kind) = (text(edge, "src"), text(edge, "dst"), text(edge, "kind"));
+        let (src, dst, kind) = (text(edge, "src"), text(edge, "dst"), edge_kind(edge));
         if src == own {
             waits_on.push(format!("{dst} ({kind})"));
         } else {
@@ -182,6 +183,17 @@ fn edges(ticket: &Value) -> Vec<String> {
         .filter(|(_, ids)| !ids.is_empty())
         .map(|(label, ids)| format!("{label}: {}", ids.join(", ")))
         .collect()
+}
+
+/// An edge's kind as printed, such as `blocks`, or `blocks, external` for an edge the user
+/// approved across epics.
+pub(super) fn edge_kind(edge: &Value) -> String {
+    let kind = text(edge, "kind");
+    if edge["external"].as_bool() == Some(true) {
+        format!("{kind}, external")
+    } else {
+        kind.to_owned()
+    }
 }
 
 /// `ticket dep list`: the ticket, then one line per ticket it waits on or that waits on it.

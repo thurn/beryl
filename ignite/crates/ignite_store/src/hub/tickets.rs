@@ -348,7 +348,7 @@ pub(crate) fn snapshot(conn: &Connection, seeds: &[&str]) -> Result<(Vec<Ticket>
     let edges = edges::collect(
         conn,
         &format!(
-            "{sources} SELECT src, dst, kind FROM sources JOIN edges ON edges.src = sources.id \
+            "{sources} SELECT src, dst, kind, external FROM sources JOIN edges ON edges.src = sources.id \
              ORDER BY src, dst"
         ),
         seeds,

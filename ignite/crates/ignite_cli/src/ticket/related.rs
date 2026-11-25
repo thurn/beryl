@@ -39,11 +39,12 @@ pub fn dependencies(hub: &Hub, id: &str) -> Result<Reply> {
     let mut waits_on = vec![];
     let mut waited_on_by = vec![];
     for edge in ticket["edges"].as_array().into_iter().flatten() {
-        let (src, dst, kind) = (text(edge, "src"), text(edge, "dst"), text(edge, "kind"));
+        let (src, dst) = (text(edge, "src"), text(edge, "dst"));
+        let kind = render::edge_kind(edge);
         if src == own {
-            waits_on.push(summary(&detail(hub, dst, false)?, kind));
+            waits_on.push(summary(&detail(hub, dst, false)?, &kind));
         } else if dst == own {
-            waited_on_by.push(summary(&detail(hub, src, false)?, kind));
+            waited_on_by.push(summary(&detail(hub, src, false)?, &kind));
         }
     }
     let value = json!({

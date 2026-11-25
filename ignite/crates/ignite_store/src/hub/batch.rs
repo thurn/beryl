@@ -394,12 +394,14 @@ impl<'a> Run<'a> {
                 self.changed.insert(ticket.id.to_string());
                 Ok(plain(ticket.id.clone()))
             }
-            Operation::DepAdd { on, kind, .. } => {
-                self.dependency(ticket.id.as_str(), on, *kind, false)?;
+            Operation::DepAdd {
+                on, kind, external, ..
+            } => {
+                self.dependency(ticket.id.as_str(), on, *kind, *external)?;
                 Ok(plain(ticket.id.clone()))
             }
             Operation::DepRemove { on, kind, .. } => {
-                self.dependency(ticket.id.as_str(), on, *kind, true)?;
+                self.remove_dependency(ticket.id.as_str(), on, *kind)?;
                 Ok(plain(ticket.id.clone()))
             }
         }

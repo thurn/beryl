@@ -69,6 +69,7 @@ fn edge(src: &str, dst: &str, kind: EdgeKind) -> Edge {
         src: id(src),
         dst: id(dst),
         kind,
+        external: false,
     }
 }
 

@@ -223,6 +223,16 @@ pub fn edge(op: &str, id: &str, on: &str, kind: Option<&str>) -> Value {
     value
 }
 
+/// A `dep_add` operation. `external` asks the hub to allow `on` outside `id`'s outermost epic,
+/// which only the user approves.
+pub fn dep_add(id: &str, on: &str, kind: Option<&str>, external: bool) -> Value {
+    let mut op = edge("dep_add", id, on, kind);
+    if external {
+        op["external"] = json!(true);
+    }
+    op
+}
+
 /// A one-operation batch.
 pub fn single(op: Value) -> Value {
     Value::Object(Map::from_iter([("ops".to_owned(), Value::Array(vec![op]))]))

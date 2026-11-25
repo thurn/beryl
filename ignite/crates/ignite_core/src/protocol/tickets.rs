@@ -381,6 +381,11 @@ pub struct Edge {
     pub dst: TicketId,
     #[serde(default)]
     pub kind: EdgeKind,
+    /// The user approved this blocking edge although `dst` is outside `src`'s outermost epic.
+    /// The hub otherwise refuses such an edge, because the epic's worker allocation does not
+    /// reach the prerequisite and the epic can stall on it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub external: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -554,6 +559,9 @@ pub enum Operation {
         on: String,
         #[serde(default)]
         kind: Option<EdgeKind>,
+        /// Allow `on` to lie outside `id`'s outermost epic. Only with the user's approval.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        external: bool,
     },
     DepRemove {
         id: String,

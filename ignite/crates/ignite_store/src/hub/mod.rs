@@ -326,6 +326,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: include_str!("metrics_ingest.sql"),
         code: Some(metrics::number_existing_rows),
     },
+    Migration {
+        version: 55,
+        sql: include_str!("external_edges.sql"),
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

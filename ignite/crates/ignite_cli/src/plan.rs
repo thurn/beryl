@@ -223,7 +223,8 @@ impl Graphs<'_> {
         deps
     }
 
-    /// A prerequisite outside the outermost epic cannot share its worker allocation.
+    /// A prerequisite outside the outermost epic cannot share its worker allocation. An edge the
+    /// user approved as external (`ticket dep add --external`) is left out.
     fn external_edges(&self, live: &[&Ticket]) -> Vec<String> {
         let by_id: HashMap<_, _> = self
             .everything
@@ -257,7 +258,9 @@ impl Graphs<'_> {
         };
         self.edges
             .iter()
-            .filter(|edge| edge.kind.blocks() && sources.contains(edge.src.as_str()))
+            .filter(|edge| {
+                edge.kind.blocks() && !edge.external && sources.contains(edge.src.as_str())
+            })
             .filter_map(|edge| {
                 let epic = outer_epic(edge.src.as_str())?;
                 (outer_epic(edge.dst.as_str()) != Some(epic)).then(|| {

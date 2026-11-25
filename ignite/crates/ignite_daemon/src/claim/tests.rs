@@ -496,6 +496,7 @@ fn depend(world: &World, ticket: &str, dependencies: &[(&str, &str)]) {
             src: id(ticket),
             dst: id(dependency),
             kind: EdgeKind::Blocks,
+            external: false,
         })
         .collect();
 }

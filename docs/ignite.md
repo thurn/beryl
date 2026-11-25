@@ -4230,6 +4230,17 @@ a blocking dependency outside the epic. It also refuses to release a pending
 epic with an existing external blocker. Use a `related` link for outside
 context. Other plan check findings remain advisory.
 
+`ignite ticket dep add <id> <on> --external` (`"external": true` on a batch's
+`dep_add`) makes the hub accept a blocking dependency outside the epic. Use it
+only after the user approves that edge in chat. The epic's worker allocation
+does not reach the prerequisite, so the epic stalls if nobody works it; this is
+why the rule exists. The approval is stored with the edge, so later moves and
+releases do not reject it, `ignite plan check` does not report it, and
+`ticket show` prints it as `(blocks, external)`. Upkeep still files a ticket for
+an epic whose open tickets are all blocked and none can move, as it does for any
+stuck epic. A model trial's block tickets use it to wait on the source and copy
+of each pair they file, which live outside the trial's epic.
+
 Set `--estimate-minutes` when creating or updating a work ticket. Use
 `--unfiled-minutes` for effort expected to become follow-up tickets. These
 figures are agent effort. An in-progress ticket counts at its full estimate

@@ -291,6 +291,11 @@ fn a_plan_with_an_external_blocker_fails_and_names_the_edge() {
         }
         .reply()
     };
+    // An external edge the user approved is the user's choice, so the plan still passes.
+    edges.push(Edge {
+        external: true,
+        ..edge(&id(2), "TOTHER")
+    });
     assert_eq!(reply(&edges).exit, Exit::Success);
     edges.push(edge("ig9a.1.1", "TOTHER"));
     let failed = reply(&edges);

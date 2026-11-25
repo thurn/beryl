@@ -12,8 +12,8 @@ use crate::{Result, StoreError};
 pub fn of(conn: &Connection, id: &str) -> Result<Vec<Edge>> {
     collect(
         conn,
-        "SELECT src, dst, kind FROM edges WHERE src = ?1 \
-         UNION ALL SELECT src, dst, kind FROM edges WHERE dst = ?1 AND src != ?1 \
+        "SELECT src, dst, kind, external FROM edges WHERE src = ?1 \
+         UNION ALL SELECT src, dst, kind, external FROM edges WHERE dst = ?1 AND src != ?1 \
          ORDER BY src, dst",
         &[id],
     )
@@ -23,7 +23,7 @@ pub fn of(conn: &Connection, id: &str) -> Result<Vec<Edge>> {
 pub fn from(conn: &Connection, id: &str) -> Result<Vec<Edge>> {
     collect(
         conn,
-        "SELECT src, dst, kind FROM edges WHERE src = ?1 ORDER BY dst",
+        "SELECT src, dst, kind, external FROM edges WHERE src = ?1 ORDER BY dst",
         &[id],
     )
 }
@@ -32,9 +32,9 @@ pub fn from(conn: &Connection, id: &str) -> Result<Vec<Edge>> {
 /// and then `dst`.
 pub fn graph(conn: &Connection, all: bool) -> Result<Vec<Edge>> {
     let sql = if all {
-        "SELECT src, dst, kind FROM edges ORDER BY src, dst"
+        "SELECT src, dst, kind, external FROM edges ORDER BY src, dst"
     } else {
-        "SELECT edges.src, edges.dst, edges.kind FROM edges \
+        "SELECT edges.src, edges.dst, edges.kind, edges.external FROM edges \
          JOIN tickets s ON s.id = edges.src AND s.status != 'closed' \
          JOIN tickets d ON d.id = edges.dst AND d.status != 'closed' \
          ORDER BY edges.src, edges.dst"
@@ -54,12 +54,38 @@ pub fn kind(conn: &Connection, src: &str, dst: &str) -> Result<Option<EdgeKind>>
     text.map(|text| parse_kind(&text)).transpose()
 }
 
-/// Adds `src` depends on `dst`, or changes the kind of an edge that exists.
+/// The kind of the edge from `src` to `dst` and whether the user approved it as external.
+pub fn get(conn: &Connection, src: &str, dst: &str) -> Result<Option<(EdgeKind, bool)>> {
+    let row: Option<(String, bool)> = conn
+        .query_row(
+            "SELECT kind, external FROM edges WHERE src = ?1 AND dst = ?2",
+            [src, dst],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    row.map(|(text, external)| Ok((parse_kind(&text)?, external)))
+        .transpose()
+}
+
+/// Adds `src` depends on `dst`, or changes the kind of an edge that exists, as an edge the
+/// epic rule checks.
 pub fn add(conn: &Connection, src: &str, dst: &str, kind: EdgeKind) -> Result<()> {
+    add_external(conn, src, dst, kind, false)
+}
+
+/// Adds `src` depends on `dst`, or changes the kind and approval of an edge that exists.
+/// `external` records that the user approved `dst` lying outside `src`'s outermost epic.
+pub fn add_external(
+    conn: &Connection,
+    src: &str,
+    dst: &str,
+    kind: EdgeKind,
+    external: bool,
+) -> Result<()> {
     conn.execute(
-        "INSERT INTO edges (src, dst, kind) VALUES (?1, ?2, ?3) \
-         ON CONFLICT(src, dst) DO UPDATE SET kind = excluded.kind",
-        params![src, dst, kind_name(kind)],
+        "INSERT INTO edges (src, dst, kind, external) VALUES (?1, ?2, ?3, ?4) \
+         ON CONFLICT(src, dst) DO UPDATE SET kind = excluded.kind, external = excluded.external",
+        params![src, dst, kind_name(kind), external],
     )?;
     Ok(())
 }
@@ -85,18 +111,22 @@ fn parse_kind(text: &str) -> Result<EdgeKind> {
         .map_err(|_| StoreError::Invalid(format!("unknown edge kind {text:?}")))
 }
 
-/// Reads one `(src, dst, kind)` row.
-pub(crate) fn read(row: &Row<'_>) -> rusqlite::Result<(String, String, String)> {
-    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+/// One stored edge: `(src, dst, kind, external)`.
+pub(crate) type Stored = (String, String, String, bool);
+
+/// Reads one `(src, dst, kind, external)` row.
+pub(crate) fn read(row: &Row<'_>) -> rusqlite::Result<Stored> {
+    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
 }
 
 /// Turns stored text into an edge.
-pub(crate) fn decode((src, dst, kind): (String, String, String)) -> Result<Edge> {
+pub(crate) fn decode((src, dst, kind, external): Stored) -> Result<Edge> {
     let invalid = |error: ignite_core::ids::IdError| StoreError::Invalid(format!("edge: {error}"));
     Ok(Edge {
         src: src.parse().map_err(invalid)?,
         dst: dst.parse().map_err(invalid)?,
         kind: parse_kind(&kind)?,
+        external,
     })
 }
 

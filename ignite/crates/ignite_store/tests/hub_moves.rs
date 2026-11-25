@@ -157,3 +157,33 @@ fn moving_either_end_of_an_internal_dependency_outside_the_epic_is_refused() {
     assert!(hub.show(other).children.is_empty());
     assert_eq!(hub.blocked_by(dependent), [common::pair(prerequisite, 2)]);
 }
+
+#[test]
+fn a_dependency_outside_the_epic_needs_the_users_approval_and_keeps_it() {
+    let mut hub = Hub::new();
+    let ids = hub.ids(json!([
+        create("Epic", None, json!({"type": "epic"})),
+        create("Dependent", Some("$0"), json!({})),
+        create("Outside", None, json!({})),
+        create("Other epic", None, json!({"type": "epic"})),
+    ]));
+    let [_, dependent, outside, other] = &ids[..] else {
+        panic!("unexpected IDs: {ids:?}")
+    };
+    let refused = hub.post(json!([{"op": "dep_add", "id": dependent, "on": outside}]));
+    assert!(
+        matches!(refused, Err(StoreError::Rejected(message)) if message.contains("--external"))
+    );
+
+    hub.ids(json!([{"op": "dep_add", "id": dependent, "on": outside, "external": true}]));
+    let edge = hub.show(dependent).edges.remove(0);
+    assert_eq!(edge.dst.as_str(), outside);
+    assert!(edge.external);
+    assert_eq!(hub.blocked_by(dependent)[0].0, *outside);
+
+    // The approval stays with the edge, so moving the dependent to another epic is allowed.
+    let moved = hub
+        .ids(json!([{"op": "update", "id": dependent, "set": {"parent": other}}]))
+        .remove(0);
+    assert!(hub.show(&moved).edges[0].external);
+}

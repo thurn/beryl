@@ -229,8 +229,13 @@ fn import_ticket(conn: &Connection, whole: &WholeTicket, seq: Seq, force: bool) 
         conn.execute("DELETE FROM edges WHERE src = ?1", [id])?;
         for edge in &edges {
             conn.execute(
-                "INSERT INTO edges (src, dst, kind) VALUES (?1, ?2, ?3)",
-                params![id, edge.dst.as_str(), text(&json!(edge.kind))],
+                "INSERT INTO edges (src, dst, kind, external) VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    id,
+                    edge.dst.as_str(),
+                    text(&json!(edge.kind)),
+                    edge.external
+                ],
             )?;
         }
         changed = true;

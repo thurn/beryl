@@ -477,7 +477,8 @@ fn a_stuck_epic_is_reported_once() {
         vec![create("Inside", TicketType::Task, Some(&epic[0]), &[])],
         clock.now(),
     );
-    // Upkeep still handles external dependencies saved before the batch began refusing them.
+    // Upkeep still handles external dependencies, such as one the user approved with
+    // `dep add --external` or one saved before the batch began refusing them.
     edges::add(&conn, &inside[0], &outside[0], EdgeKind::Blocks).unwrap();
     // The ticket it waits on is ready, so the epic is not stuck.
     assert!(

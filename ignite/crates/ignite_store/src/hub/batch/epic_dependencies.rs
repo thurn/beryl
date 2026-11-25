@@ -26,40 +26,55 @@ fn outer_epic(conn: &Connection, id: &str) -> Result<Option<String>> {
 }
 
 impl Run<'_> {
-    /// Adds or removes `id` depends on `on`. Adding an existing edge changes its kind.
-    /// Removing with a kind only removes an edge of that kind.
+    /// Adds `id` depends on `on`, or changes the kind or the `external` approval of an existing
+    /// edge. `external` lets `on` lie outside `id`'s outermost epic; only the user approves it.
     pub(super) fn dependency(
         &mut self,
         id: &str,
         on: &str,
         kind: Option<EdgeKind>,
-        remove: bool,
+        external: bool,
+    ) -> Step<()> {
+        let dst = self.ticket(on)?.id.to_string();
+        let kind = kind.unwrap_or_default();
+        if edges::get(self.conn, id, &dst)? == Some((kind, external)) {
+            return Ok(());
+        }
+        if id == dst {
+            return rejected(format!("{id} cannot depend on itself"));
+        }
+        if kind.blocks() {
+            if !external {
+                self.check_epic_dependency(id, &dst)?;
+            }
+            cycles::check(self.conn, id, &dst)?;
+        }
+        edges::add_external(self.conn, id, &dst, kind, external)?;
+        self.changed_edge(id, dst);
+        Ok(())
+    }
+
+    /// Removes `id` depends on `on`. Removing with a kind only removes an edge of that kind.
+    pub(super) fn remove_dependency(
+        &mut self,
+        id: &str,
+        on: &str,
+        kind: Option<EdgeKind>,
     ) -> Step<()> {
         let dst = self.ticket(on)?.id.to_string();
         let existing = edges::kind(self.conn, id, &dst)?;
-        if remove {
-            if existing.is_none() || kind.is_some_and(|k| Some(k) != existing) {
-                return Ok(());
-            }
-            edges::remove(self.conn, id, &dst)?;
-        } else {
-            let kind = kind.unwrap_or_default();
-            if existing == Some(kind) {
-                return Ok(());
-            }
-            if id == dst {
-                return rejected(format!("{id} cannot depend on itself"));
-            }
-            if kind.blocks() {
-                self.check_epic_dependency(id, &dst)?;
-                cycles::check(self.conn, id, &dst)?;
-            }
-            edges::add(self.conn, id, &dst, kind)?;
+        if existing.is_none() || kind.is_some_and(|k| Some(k) != existing) {
+            return Ok(());
         }
+        edges::remove(self.conn, id, &dst)?;
+        self.changed_edge(id, dst);
+        Ok(())
+    }
+
+    fn changed_edge(&mut self, id: &str, dst: String) {
         self.seq += 1;
         self.changed.insert(id.to_owned());
         self.changed.insert(dst);
-        Ok(())
     }
 
     fn check_epic_dependency(&self, src: &str, dst: &str) -> Step<()> {
@@ -67,7 +82,8 @@ impl Run<'_> {
             && outer_epic(self.conn, dst)?.as_ref() != Some(&epic)
         {
             return rejected(format!(
-                "{src} cannot depend on {dst} outside epic {epic}. Put the prerequisite in the same epic."
+                "{src} cannot depend on {dst} outside epic {epic}. Put the prerequisite in the same \
+                 epic, or ask the user to approve an external dependency (`--external`)."
             ));
         }
         Ok(())
@@ -75,7 +91,8 @@ impl Run<'_> {
 
     /// A move or type change can put either endpoint of an existing link outside the epic.
     /// Releasing a pending epic also checks its outgoing links, including links saved before
-    /// this rule. Closed tickets with no live descendants need no check at release.
+    /// this rule. Closed tickets with no live descendants need no check at release, and nor do
+    /// links the user approved as external.
     pub(super) fn check_epic_dependencies(&self, root: &str, releasing: bool) -> Step<()> {
         let endpoint = if releasing {
             "src IN (SELECT id FROM live)"
@@ -91,10 +108,10 @@ impl Run<'_> {
                  UNION SELECT t.parent FROM tickets t JOIN live l ON t.id = l.id
                    WHERE t.parent IS NOT NULL
              )
-             SELECT src, dst, kind FROM edges WHERE ({endpoint}) ORDER BY src, dst"
+             SELECT src, dst, kind, external FROM edges WHERE ({endpoint}) ORDER BY src, dst"
         );
         for edge in edges::collect(self.conn, &sql, &[root])? {
-            if edge.kind.blocks() {
+            if edge.kind.blocks() && !edge.external {
                 self.check_epic_dependency(edge.src.as_str(), edge.dst.as_str())?;
             }
         }

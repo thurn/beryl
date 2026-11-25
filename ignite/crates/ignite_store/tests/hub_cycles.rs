@@ -47,6 +47,7 @@ fn depend(id: &str, on: &str) -> Operation {
         id: id.to_owned(),
         on: on.to_owned(),
         kind: None,
+        external: false,
     }
 }
 
@@ -119,6 +120,7 @@ fn edges_that_never_block_and_closed_tickets_make_no_cycle() {
             id: ids[0].clone(),
             on: ids[1].clone(),
             kind: Some(ignite_core::protocol::tickets::EdgeKind::Related),
+            external: false,
         }],
     )
     .unwrap();

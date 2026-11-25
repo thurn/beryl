@@ -104,7 +104,7 @@ crate::tables! {
 
     PlacementDeferral = "placement_deferrals" { ticket: String, first_at: String }
 
-    Edge = "edges" { src: String, dst: String, kind: String }
+    Edge = "edges" { src: String, dst: String, kind: String, external: i64 }
 
     Comment = "comments" {
         ticket: String,
