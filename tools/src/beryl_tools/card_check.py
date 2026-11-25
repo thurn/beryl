@@ -179,6 +179,11 @@ def generated(target: Card) -> tuple[Outcome, bool]:
     )
     if survivors:
         said += f"; survivors: {'; '.join(survivors)}"
+    blind = cast(list[str], report.get("blind", []))
+    if blind:
+        # Listed in the mutation check's `ORACLE_BLIND`: killed only where XMage and Forge
+        # never look, so the oracle step cannot confirm these parts of the definition.
+        said += f"; unconfirmed by oracles: {'; '.join(blind)}"
     return (
         Outcome("fail" if requires_generated and not eligible else "pass", said),
         requires_generated,

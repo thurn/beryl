@@ -93,6 +93,48 @@ const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
+/// Mutants of cards with no hand-written scenarios that their generated scenarios kill only at
+/// scripted positions, which the oracles (`XMage` and Forge) never compare: the card and
+/// "node: neighbour" as [`generated`] reports them. The oracles' snapshot leaves out which mana sources are tapped,
+/// what a mana ability added once the pool empties, and which hidden cards a search found, so a
+/// definition with one of these neighbours in place of the real value passes every oracle check
+/// too. The list may only shrink: a scenario or snapshot fact the oracles compare removes an
+/// entry, and `every_card_has_scenarios_and_they_pass` fails for one no longer needed.
+pub const ORACLE_BLIND: &[(&str, &str)] = &[
+    ("Asphodel Wanderer", "ability 0, cost: generic 1"),
+    ("Asphodel Wanderer", "ability 0, cost: generic 3"),
+    ("Crackling Triton", "ability 0, cost: generic 1"),
+    ("Crackling Triton", "ability 0, cost: generic 3"),
+    ("Floodfarm Verge", "ability 0, mana product: White to Black"),
+    ("Forest", "ability 0, mana product: Green to White"),
+    ("Gold Myr", "ability 0, mana product: White to Blue"),
+    ("Island", "ability 0, mana product: Blue to White"),
+    ("Jace, the Mind Sculptor", "ability 0, cost: generic 1"),
+    ("Jace, the Mind Sculptor", "ability 1, cost: drop part 0"),
+    ("Jace, the Mind Sculptor", "ability 1, cost: generic 1"),
+    ("Jace, the Mind Sculptor", "ability 2, cost: generic 1"),
+    ("Jace, the Mind Sculptor", "ability 3, cost: generic 1"),
+    ("Leonin Scimitar", "ability 1, cost: generic 0"),
+    ("Leonin Scimitar", "ability 1, cost: generic 2"),
+    ("Mountain", "ability 0, mana product: Red to White"),
+    ("Plains", "ability 0, mana product: White to Blue"),
+    (
+        "Sink into Stupor",
+        "Soporific Springs: ability 1, mana product: amount 2",
+    ),
+    ("Spellseeker", "ability 0, inside: Amount::Fixed(2)"),
+    ("Spellseeker", "ability 0, inside: filter Filter::Any"),
+    ("Strip Mine", "ability 0, mana product: Colorless to White"),
+    ("Strip Mine", "ability 1, cost: drop part 0"),
+    ("Strip Mine", "ability 1, cost: generic 1"),
+    ("Strip Mine", "ability 1, cost: part 0 sacrifice"),
+    ("Sylvan Scrying", "ability 0: filter Filter::Any"),
+    ("Time Spiral", "ability 0, step 3: Amount::Fixed(5)"),
+    ("Time Spiral", "ability 0, step 3: Amount::Fixed(7)"),
+    ("Time Spiral", "ability 0, step 3: filter Filter::Any"),
+    ("Vampire Hexmage", "ability 0, cost: generic 1"),
+];
+
 /// Observes transient changes that the final snapshot cannot see, such as a trigger that
 /// resolves earlier, or mana that a player spends before the scenario ends.
 #[derive(PartialEq, Eq)]
@@ -164,11 +206,31 @@ pub struct Report {
     pub mutants: usize,
     /// Each survivor as "node: neighbour".
     pub survivors: Vec<String>,
+    /// Each survivor that [`ORACLE_BLIND`] lists, as "node: neighbour".
+    pub blind: Vec<String>,
 }
 
-/// Checks a card against its generated scenarios.
+/// Checks a card against its generated scenarios, counting only the kills the oracles
+/// could see.
+///
+/// A generated scenario has no assertions of its own: what it shows about the card is the
+/// final snapshot that the oracles compare. Its kill stands for "an oracle playing the real
+/// card would disagree with this neighbour" only when the mutant fails the scenario or ends it
+/// with another snapshot. A difference at a scripted position, such as which land paid an
+/// equip cost, is one the oracles never compare. A Leonin Scimitar written with "Equip {0}"
+/// passed every behavior check, because its generated scenarios told the `generic 0`
+/// neighbour from the card only by a tapped land.
+///
+/// Survivors listed in [`ORACLE_BLIND`] move to [`Report::blind`].
 pub fn generated(def: &'static CardDef, scenarios: &[Scenario]) -> Report {
-    report(def, &expected(scenarios.iter().collect()))
+    let mut report = report_with(def, &expected(scenarios.iter().collect()), Seen::ByOracles);
+    let listed = |survivor: &String| {
+        ORACLE_BLIND
+            .iter()
+            .any(|&(card, mutant)| card == def.name && mutant == survivor)
+    };
+    (report.blind, report.survivors) = report.survivors.into_iter().partition(listed);
+    report
 }
 
 /// Each scenario that passes with the real card, with its result.
@@ -181,15 +243,39 @@ fn expected(scenarios: Vec<&Scenario>) -> Vec<(&Scenario, ScenarioResult)> {
         .collect()
 }
 
+/// Which differences between a mutant's play and its card's count as a kill.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Seen {
+    /// Any difference Beryl can observe, at a scripted position or in the final snapshot.
+    #[cfg(test)]
+    ByBeryl,
+    /// Only a failed scenario or a different final snapshot, which the oracles compare.
+    ByOracles,
+}
+
 /// Whether some scenario fails or plays differently with `mutant` in place of its card.
+#[cfg(test)]
 fn killed(mutant: &'static CardDef, expected: &[(&Scenario, ScenarioResult)]) -> bool {
+    killed_as(mutant, expected, Seen::ByBeryl)
+}
+
+fn killed_as(
+    mutant: &'static CardDef,
+    expected: &[(&Scenario, ScenarioResult)],
+    seen: Seen,
+) -> bool {
     let table: &'static CardTable = Box::leak(Box::new(CardTable::overriding(
         &CARDS,
         Vec::leak(vec![mutant]),
     )));
     expected.iter().any(|(s, r)| {
-        std::panic::catch_unwind(|| result(table, s))
-            .map_or(true, |mutated| mutated.map_or(true, |result| result != *r))
+        std::panic::catch_unwind(|| result(table, s)).map_or(true, |mutated| {
+            mutated.map_or(true, |result| match seen {
+                #[cfg(test)]
+                Seen::ByBeryl => result != *r,
+                Seen::ByOracles => result.snapshot != r.snapshot,
+            })
+        })
     })
 }
 
@@ -213,17 +299,27 @@ fn check(def: &'static CardDef) -> Report {
     report(def, &expected)
 }
 
+#[cfg(test)]
 fn report(def: &'static CardDef, expected: &[(&Scenario, ScenarioResult)]) -> Report {
+    report_with(def, expected, Seen::ByBeryl)
+}
+
+fn report_with(
+    def: &'static CardDef,
+    expected: &[(&Scenario, ScenarioResult)],
+    seen: Seen,
+) -> Report {
     let all = mutants(def);
     let survivors = all
         .iter()
-        .filter(|m| !killed(m.def, expected))
+        .filter(|m| !killed_as(m.def, expected, seen))
         .map(|m| format!("{}: {}", m.node, m.neighbour))
         .collect();
     Report {
         card: def.name,
         mutants: all.len(),
         survivors,
+        blind: Vec::new(),
     }
 }
 

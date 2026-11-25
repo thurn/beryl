@@ -201,6 +201,7 @@ fn every_card_has_scenarios_and_they_pass() {
             failures.extend(layout_failure(card, scenario));
         }
     }
+    let mut blind = Vec::new();
     for (&def, &(_, written)) in CARDS.cards().iter().zip(crate::scenarios()) {
         if !written.is_empty() {
             continue;
@@ -213,6 +214,14 @@ fn every_card_has_scenarios_and_they_pass() {
         let report = crate::mutation::generated(def, cases);
         for survivor in report.survivors {
             failures.push(format!("{}: generated scenarios miss {survivor}", def.name));
+        }
+        blind.extend(report.blind.into_iter().map(|mutant| (def.name, mutant)));
+    }
+    for &(card, mutant) in crate::mutation::ORACLE_BLIND {
+        if !blind.iter().any(|(c, m)| *c == card && m == mutant) {
+            failures.push(format!(
+                "{card}: {mutant} is no longer oracle-blind, so drop it from `ORACLE_BLIND`"
+            ));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));

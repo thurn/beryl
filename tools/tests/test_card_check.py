@@ -42,7 +42,7 @@ def sources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> card.Sources:
         record(
             "Mana Leak", instant("Mana Leak", "Counter target spell unless it pays.")
         ),
-        record("Ancestral Recall", instant("Ancestral Recall", "Copy target spell.")),
+        record("Ancestral Recall", instant("Ancestral Recall", "Copy a spell.")),
         record(
             "Grizzly Bears",
             {
@@ -95,7 +95,7 @@ def test_new_writes_the_header_and_the_smallest_definition(
     path = sources.cards / "cards_1993" / "lea" / "ancestral_recall.rs"
     text = path.read_text()
     assert text.startswith("// Generated from the card store")
-    assert "//! Copy target spell.\n// End of the generated card header.\n" in text
+    assert "//! Copy a spell.\n// End of the generated card header.\n" in text
     assert "pub static CARD: CardDef = Printed::AncestralRecall.card();" in text
     assert "pub const SCENARIOS: &[Scenario] = &[];" in text
     assert no_rustfmt == [["rustfmt", "--edition", "2024", str(path)]]
@@ -321,6 +321,21 @@ def test_a_card_without_its_own_scenarios_needs_generated_mutation_coverage(
     assert "oracle" not in commands.steps()
 
 
+def test_a_mutant_the_oracles_cannot_see_passes_but_is_named(
+    sources: card.Sources,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    commands = Commands()
+    commands.mutations.update(
+        written=0, survivors=[], blind=["ability 1, cost: generic 0"]
+    )
+    assert check("Counterspell", sources, monkeypatch, commands, no_oracles=True) == 0
+    assert (
+        "unconfirmed by oracles: ability 1, cost: generic 0" in capsys.readouterr().out
+    )
+
+
 @pytest.mark.parametrize("generated_pass", [0, 1])
 def test_a_card_without_its_own_scenarios_needs_a_generated_oracle_pass(
     sources: card.Sources,
@@ -397,10 +412,10 @@ def test_new_writes_a_draft_and_reports_a_render_difference(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     parse: card_store.Json = {
-        "oracle_text": "Copy target spell.",
+        "oracle_text": "Copy a spell.",
         "abilities": [
             {
-                "description": "Copy target spell.",
+                "description": "Copy a spell.",
                 "kind": "Spell",
                 "effect": {"type": "Draw", "count": {"type": "Fixed", "value": 1}},
             }
@@ -416,5 +431,4 @@ def test_new_writes_a_draft_and_reports_a_render_difference(
     path = sources.cards / "cards_1993" / "lea" / "ancestral_recall.rs"
     assert "Ability::spell().effect(&draw(you(), 1))" in path.read_text()
     output = capsys.readouterr().out
-    assert "[-copy target spell-]" in output
-    assert "{+draw a card+}" in output
+    assert "[-copy-] {+draw+} a [-spell-] {+card+}" in output

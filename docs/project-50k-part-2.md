@@ -593,6 +593,20 @@ make this possible:
   it is: it is the gate that every vocabulary entry has a hand-written scenario
   somewhere.
 
+A generated kill counts toward this bar only when the oracles could see it: the
+mutant fails a generated scenario or ends it with a different final snapshot. A
+generated scenario has no assertions of its own, so a difference only at a
+scripted position (which land paid a cost, what a mana ability added before the
+pool emptied, which hidden card a search found) would let a definition with that
+neighbour's value pass every oracle check too. A Leonin Scimitar written with
+"Equip {0}" did exactly that on 2026-11-25; only its render diff failed. The
+mutants that generated scenarios kill only out of the oracles' sight are listed
+in `ORACLE_BLIND` (`beryl_cards/src/mutation.rs`), 29 of them on 16 cards on
+2026-11-25: activation costs, mana products, library searches and Time Spiral's
+untap of six lands. The list may only shrink, and `just card check` names a
+card's entries as "unconfirmed by oracles". The full mutation test still counts
+every difference Beryl can see.
+
 A card with a surviving mutant gets a hand-written scenario for that mutant
 only, or a witness when the mutant is of a vocabulary entry many cards share.
 The single-card check runs the same generator used by the full sweep so it can
@@ -758,20 +772,26 @@ tiers used more tokens and agent minutes per landed card than that median.
 Direct dollars per landed card were close to the median for composed cards and
 higher for drafted cards.
 
-The pilot supports P2's conditional rule. Three of the six landed cards passed
-the mutation and oracle checks using generated scenarios alone, including both
-landed drafts. The other three needed hand-written scenarios. Two more drafts
-were handed off for focused scenarios, so five of the eight candidates with a
-determined scenario requirement needed one. The other four were blocked by
-exporter or vocabulary gaps.
+The pilot does not show that most new cards need no hand-written scenario. Three
+of the six landed cards passed the mutation and oracle checks using generated
+scenarios alone, including both landed drafts. The other three needed
+hand-written scenarios. Two more drafts were handed off for focused scenarios,
+so five of the eight candidates with a determined scenario requirement needed
+one. The other four were blocked by exporter or vocabulary gaps. A review on
+2026-11-25 also found that two of the three generated-only cards, Asphodel
+Wanderer and Crackling Triton, had activation-cost mutants that only Beryl could
+tell apart (see E2 and `ORACLE_BLIND`). P2's rule is sound as a condition. On
+this sample, the condition held fully for one card in eight.
 
 For the next hundred cards, start with a generated scenario in which a different
 permanent enters and the source's own enters ability stays off the stack. The
 same missing case held up Horizon Scholar, Ashen Rider and Blood-Toll Harpy, and
-contributed to the coverage gaps for Chronicler of Heroes. Repair XMage's
-generated scry export so a correct draft can complete oracle checking. Both
-changes let future cards reuse the fix instead of paying for a scenario or an
-exporter investigation on each card.
+contributed to the coverage gaps for Chronicler of Heroes. Give the oracles'
+snapshot a fact that shows what a cost or a mana ability spent, so that the
+entries of `ORACLE_BLIND` can go. Repair XMage's generated scry export so a
+correct draft can complete oracle checking. Both changes let future cards reuse
+the fix instead of paying for a scenario or an exporter investigation on each
+card.
 
 ### F. The shape of a game
 

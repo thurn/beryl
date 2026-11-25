@@ -90,6 +90,12 @@ Focused tests outside the card files use their own `Scenario` constants or
 the shared rules library. Those fixtures keep working when a card file drops
 or reorders its hand-written scenarios.
 
+The `generated` line counts only kills the oracles could see. It lists a
+mutant that generated scenarios tell apart only at a scripted position, such
+as which land paid a cost, as "unconfirmed by oracles". The card still passes,
+but read that part of the definition against the Oracle text yourself, because
+no oracle checks it.
+
 For each surviving mutant, write a scenario whose outcome changes under that
 mutation. If all generated scenarios are unsupported by the oracles, write a
 scenario an oracle can play. Use the smallest board and sequence of decisions

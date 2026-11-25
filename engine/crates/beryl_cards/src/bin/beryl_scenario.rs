@@ -208,6 +208,7 @@ fn generated_card(name: &str) -> ExitCode {
             "generated": scenarios.len(),
             "mutants": report.mutants,
             "survivors": report.survivors,
+            "blind": report.blind,
             "cut": cut,
         })
     );
