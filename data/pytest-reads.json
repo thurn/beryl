@@ -73,9 +73,6 @@
     "tools/src/beryl_tools/disk_usage.py": [
       "tools/src/beryl_tools/disk_usage_apfs.cc"
     ],
-    "tools/src/beryl_tools/forge.py": [
-      "data/oracle-divergences.json"
-    ],
     "tools/src/beryl_tools/ignite/client.py": [
       "client/crates/beryl_inspect/Cargo.toml",
       "client/crates/beryl_record/Cargo.toml",
@@ -159,6 +156,9 @@
     ],
     "tools/src/beryl_tools/oracle_discovery.py": [
       "data/oracle-candidates.json"
+    ],
+    "tools/src/beryl_tools/oracle_summary.py": [
+      "data/oracle-divergences.json"
     ],
     "tools/src/beryl_tools/oracles.py": [
       "data/oracle-exporter-gaps.json"
