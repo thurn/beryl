@@ -492,7 +492,7 @@ fn substitute_options<L: Layout>(
                 }
                 None => able,
             };
-            let paying = mana::Paying::entry(t, entry);
+            let paying = mana::Paying::entry(s, t, entry);
             if payable_with_substitutes(s, t, &funds, fewer, left - 1, later, rest, paying) {
                 out.push(Opt::Object(slot))?;
             }
@@ -517,7 +517,7 @@ fn substitute_options<L: Layout>(
         c.player,
         cost,
         Bitboard::EMPTY,
-        mana::Paying::entry(t, entry),
+        mana::Paying::entry(s, t, entry),
     )? {
         out.push(Opt::Done)?;
     }
@@ -737,7 +737,11 @@ pub(super) fn perform<L: Layout>(
             // rather than pay that mana." The cards stay in the graveyard until the last is
             // chosen, then go to exile at once ([`end_substitutes`]).
             match option {
-                Some(Opt::Mana { slot, color }) => mana::activate(s, t, sink, slot, color)?,
+                Some(Opt::Mana { slot, color }) => {
+                    if let Some(permanent) = s.permanent_at(slot) {
+                        mana::activate(s, t, sink, permanent, color)?;
+                    }
+                }
                 Some(Opt::Object(slot)) => {
                     if action == CostAction::Exile {
                         remember_cost_pick(s.graveyard(c.player), &mut paying, slot);

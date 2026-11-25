@@ -113,7 +113,8 @@ fn mana_that_remembers_pays_only_what_its_restriction_accepts() {
     );
 
     // Tapped at priority for {R}, as a player may (CR 605.3a).
-    mana::activate(&mut s, &t, &mut Sink::off(), cavern, ManaColor::Red).unwrap();
+    let permanent = s.permanent_at(cavern).unwrap();
+    mana::activate(&mut s, &t, &mut Sink::off(), permanent, ManaColor::Red).unwrap();
     assert!(s.object(cavern).is_tapped());
     assert_eq!(s.player(p).mana().amounts(), [0; 6], "no unrestricted mana");
     let remembered = s.player(p).remembered_mana();

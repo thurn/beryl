@@ -155,7 +155,7 @@ pub(super) fn plans<L: Layout>(
     cost: ManaCost,
     greedy: bool,
 ) -> Result<L::Queue<Plan<L>, 64>, Full> {
-    let paying = Paying::entry(t, entry);
+    let paying = Paying::entry(s, t, entry);
     match SacrificeCost::of_entry(t, entry) {
         Some(other) => other.plans(s, t, sink, cost, greedy, paying),
         None => mana::plans(
@@ -179,7 +179,7 @@ pub(super) fn options<L: Layout>(
     remaining: ManaCost,
 ) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
     let player = entry.controller();
-    let paying = Paying::entry(t, entry);
+    let paying = Paying::entry(s, t, entry);
     let options = mana::manual_options(s, t, player, remaining, Bitboard::EMPTY, paying)?;
     let Some(other) = SacrificeCost::of_entry(t, entry) else {
         return Ok(options);

@@ -343,7 +343,8 @@ pub(super) fn perform_machine<L: Layout>(
         Pending::ManaColor { slot, .. } => {
             s.settle_question();
             act(s, &mut x.events, d.player, None);
-            let done = mana::activate_chosen(s, t, &mut x.events, slot, d.candidates.option(c));
+            let source = s.permanent_at(slot).expect("the mana source asked about");
+            let done = mana::activate_chosen(s, t, &mut x.events, source, d.candidates.option(c));
             x.events.leave();
             done
         }

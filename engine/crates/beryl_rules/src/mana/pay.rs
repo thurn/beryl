@@ -17,6 +17,7 @@ use crate::state::{
 };
 use crate::table::{Capability, GameTable, is_instant_mana, is_sacrificed, is_simple};
 use beryl_kernel::chosen::ChosenValue;
+use beryl_kernel::reference::Permanent;
 
 use super::pool::{helps, pay_unit};
 use super::remembered::{self, Paying};
@@ -129,7 +130,7 @@ fn pay_whole<L: Layout>(
     for (&(unit_kinds, source, n), &kind) in units.iter().zip(kinds.iter()) {
         let kind = kind.unwrap_or_else(|| lowest_kind(unit_kinds));
         if let Some(slot) = source {
-            activate(s, t, sink, slot, ManaColor::ALL[kind])?;
+            activate(s, t, sink, tapped_source(s, slot), ManaColor::ALL[kind])?;
         }
         s.spend_mana(player, ManaColor::ALL[kind], n);
         spent[kind] += n;
@@ -228,12 +229,12 @@ fn pay_with_memory<L: Layout>(
         match (how, source) {
             (From::Remembered(_), _) => {}
             (From::Restricted, Some(slot)) => {
-                activate_as::<L, true>(s, t, sink, slot, color)?;
+                activate_as::<L, true>(s, t, sink, tapped_source(s, slot), color)?;
                 let last = s.player(player).remembered_mana().len() - 1;
                 remembered::spend(s, t, player, last, paying)?;
             }
             (_, Some(slot)) => {
-                activate_as::<L, false>(s, t, sink, slot, color)?;
+                activate_as::<L, false>(s, t, sink, tapped_source(s, slot), color)?;
                 s.spend_mana(player, color, n);
             }
             (_, None) => s.spend_mana(player, color, n),
@@ -241,6 +242,12 @@ fn pay_with_memory<L: Layout>(
     }
     debug_assert_eq!(s.player(player).mana().amounts(), plan.left);
     Ok(spent)
+}
+
+/// The source in `slot`, which a payment's plan or option names from the battlefield as it is.
+fn tapped_source<L: Layout>(s: &State<L>, slot: L::Slot) -> Permanent<L> {
+    s.permanent_at(slot)
+        .expect("a mana source on the battlefield")
 }
 
 /// The `n` members of class `c` the human's payment taps: its creatures last, free to attack
@@ -366,10 +373,10 @@ pub(crate) fn activate<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    slot: L::Slot,
+    permanent: Permanent<L>,
     color: ManaColor,
 ) -> Result<(), Full> {
-    activate_as::<L, false>(s, t, sink, slot, color)
+    activate_as::<L, false>(s, t, sink, permanent, color)
 }
 
 /// [`activate`], for the source's restricted mana ability if `RESTRICTED`.
@@ -377,10 +384,11 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    slot: L::Slot,
+    permanent: Permanent<L>,
     color: ManaColor,
 ) -> Result<(), Full> {
     let restricted = RESTRICTED;
+    let slot = permanent.slot();
     let (card, face) = s.definition(slot).record(t);
     // The card table refuses a card that grants a mana ability (`TableError::Granted`), so
     // the one found is the permanent's own, or, of a merged permanent, that of a card under
@@ -399,14 +407,11 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     });
     if printed.is_none()
         && (restricted || s.intrinsic_mana(t, slot) & (1 << color.index()) == 0)
-        && let Some((_, ability)) = remembered::makes(s, t, slot, color)
+        && let Some((_, ability)) = remembered::makes(s, t, permanent, color)
     {
-        let source = s.object_ref(slot);
         // Its only cost is {T} (see CR 602.2b, see CR 601.2h).
-        if let Some(permanent) = s.permanent(source) {
-            event::set_tapped(s, t, sink, permanent, true)?;
-        }
-        return remembered::add(s, t, sink, source, ability, color);
+        event::set_tapped(s, t, sink, permanent, true)?;
+        return remembered::add(s, t, sink, permanent, ability, color);
     }
     // See [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): a land of a basic land
     // type "has the intrinsic ability “{T}: Add [mana symbol],” even if the text box doesn't
@@ -420,16 +425,14 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
             })
         })
         .expect("a mana ability that makes the chosen mana");
-    let source = s.object_ref(slot);
+    let source = permanent.into();
     let controller = s.controller(slot);
     // The costs come first (see [CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b)):
     // activating follows casting's steps, among them
     // see [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
     // total cost." The hand is discarded before the source is sacrificed: the player pays a
     // cost's parts in any order, and the order changes nothing here.
-    if ability.cost().does(CostAction::Tap)
-        && let Some(permanent) = s.permanent(source)
-    {
+    if ability.cost().does(CostAction::Tap) {
         event::set_tapped(s, t, sink, permanent, true)?;
     }
     if ability.cost().discards_hand() {
@@ -561,7 +564,7 @@ pub(crate) fn manual_pay<L: Layout>(
         Opt::Pool(color) => color,
         Opt::Mana { slot, color } => {
             sink.together();
-            let activated = activate(s, t, sink, slot, color);
+            let activated = activate(s, t, sink, tapped_source(s, slot), color);
             sink.apart();
             activated?;
             color
@@ -686,7 +689,7 @@ fn list_instant_options<L: Layout>(
     })
 }
 
-/// Activates the mana ability `ability` of the permanent in `slot`, one activated only as an
+/// Activates the mana ability `ability` of `permanent`, one activated only as an
 /// instant ([`is_instant_mana`]): at once if it makes one kind of mana, or once its
 /// controller has chosen the color of "any one color" ([`Pending::ManaColor`]). That color
 /// is chosen as the ability resolves, after its costs are paid, but here it is asked before
@@ -695,9 +698,10 @@ pub(crate) fn begin_instant<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    slot: L::Slot,
+    permanent: Permanent<L>,
     ability: ObjectAbility,
 ) -> Result<(), Full> {
+    let slot = permanent.slot();
     let kinds = s
         .abilities(t, slot)
         .find(|&(a, _)| a == ability)
@@ -708,26 +712,26 @@ pub(crate) fn begin_instant<L: Layout>(
     s.reset_passes();
     if kinds.is_power_of_two() {
         let color = ManaColor::ALL[lowest_kind(kinds)];
-        return activate(s, t, sink, slot, color);
+        return activate(s, t, sink, permanent, color);
     }
     s.ask(Pending::ManaColor { slot, ability });
     Ok(())
 }
 
-/// Activates the mana ability [`Pending::ManaColor`] asked about, of the permanent in `slot`,
-/// for the color the answer `opt` names.
+/// Activates the mana ability [`Pending::ManaColor`] asked about, of `permanent`, for the
+/// color the answer `opt` names.
 pub(crate) fn activate_chosen<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    slot: L::Slot,
+    permanent: Permanent<L>,
     opt: Option<Opt<L>>,
 ) -> Result<(), Full> {
     let ChosenValue::Color(colors) = crate::interpret::catalog::value(ChosenKind::Color, opt)
     else {
         unreachable!("a color among a color's candidates");
     };
-    activate(s, t, sink, slot, ManaColor::ALL[lowest_kind(colors.0)])
+    activate(s, t, sink, permanent, ManaColor::ALL[lowest_kind(colors.0)])
 }
 
 /// Whether `ability` of the permanent in `slot` is a mana ability activated only as an

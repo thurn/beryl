@@ -299,7 +299,7 @@ pub(super) fn pay_mana<L: Layout>(
                 return Ok(());
             }
             if let Some(plan) = plans.as_slice().first() {
-                let paying = mana::Paying::entry(t, top(s));
+                let paying = mana::Paying::entry(s, t, top(s));
                 let spent = mana::pay(s, t, sink, c.player, cost, Bitboard::EMPTY, plan, paying)?;
                 spent::record(s, t, &c, spent)?;
             }
@@ -481,7 +481,7 @@ fn x_options<L: Layout>(
         StackItem::Activated { .. } | StackItem::Triggered { .. } => 0,
     };
     let exclude = spent_by_entry(t, entry);
-    let paying = mana::Paying::entry(t, entry);
+    let paying = mana::Paying::entry(s, t, entry);
     let other = SacrificeCost::of_entry(t, entry);
     let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
     for x in least..(least.saturating_add(64)) {
@@ -646,7 +646,7 @@ pub(crate) fn perform<L: Layout>(
             };
             let entry = top(s);
             let cost = total_cost(s, t, entry, &c);
-            let paying = mana::Paying::entry(t, entry);
+            let paying = mana::Paying::entry(s, t, entry);
             let plans = mana_payment::plans(s, t, sink, entry, cost, false)?;
             let spent = mana::pay(
                 s,
@@ -664,7 +664,7 @@ pub(crate) fn perform<L: Layout>(
         CastStep::Objects(_) => return parts::perform(s, t, sink, c, option, object),
         CastStep::Manual { remaining } => {
             let option = option.expect("a manual payment");
-            let paying = mana::Paying::entry(t, top(s));
+            let paying = mana::Paying::entry(s, t, top(s));
             let remaining = mana::manual_pay(s, t, sink, c.player, remaining, option, paying)?;
             if let Opt::Pool(color) | Opt::Mana { color, .. } = option {
                 spent::record_one(s, t, &c, color)?;

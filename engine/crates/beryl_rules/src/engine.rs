@@ -548,7 +548,10 @@ fn take_action<L: Layout>(
             casting::begin_cast(s, t, &mut x.events, player, cast_option, None)
         }
         Opt::Activate { slot, ability } if mana::is_instant(s, t, slot, ability) => {
-            mana::begin_instant(s, t, &mut x.events, slot, ability)
+            let Some(permanent) = s.permanent_at(slot) else {
+                return Ok(());
+            };
+            mana::begin_instant(s, t, &mut x.events, permanent, ability)
         }
         Opt::Activate { slot, ability } => {
             casting::begin_activate(s, t, &mut x.events, player, slot, ability)
@@ -558,7 +561,10 @@ fn take_action<L: Layout>(
         }
         Opt::Companion => crate::game::companion::begin(s, t, &mut x.events, player),
         Opt::Mana { slot, color } => {
-            mana::activate(s, t, &mut x.events, slot, color)?;
+            let Some(permanent) = s.permanent_at(slot) else {
+                return Ok(());
+            };
+            mana::activate(s, t, &mut x.events, permanent, color)?;
             // CR 117.3c: "If a player has priority when they ... activate an ability ...,
             // that player receives priority afterward."
             s.reset_passes();

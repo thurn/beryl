@@ -23,10 +23,9 @@ use crate::layout::{Layout, Queue, Small};
 use crate::replacement::event::Sink;
 use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::mana_memory::{RememberedMana, RestrictionId};
+use beryl_kernel::reference::{Permanent, Spell};
 
-use crate::state::{
-    Continuous, Derived, Duration, ObjectRef, StackEntry, StackItem, State, Subject,
-};
+use crate::state::{Continuous, Derived, Duration, StackEntry, StackItem, State, Subject};
 use crate::table::{Capability, GameTable, is_tap_for_mana};
 
 use super::sources::{allowed, can_tap};
@@ -39,7 +38,7 @@ pub(crate) struct Paying<L: Layout = Small> {
     spell: Option<(L::Card, FaceIx)>,
     /// The spell on the stack, which a rider changes: none while the rules check whether a
     /// card could be cast at all.
-    object: Option<ObjectRef<L>>,
+    object: Option<Spell<L>>,
 }
 
 impl<L: Layout> Paying<L> {
@@ -72,14 +71,14 @@ impl<L: Layout> Paying<L> {
     /// A payment for the spell or ability `entry` being cast: in a game whose cards make no
     /// restricted mana, one for nothing, which reads nothing.
     #[inline]
-    pub(crate) fn entry(t: &GameTable, entry: &StackEntry<L>) -> Paying<L> {
+    pub(crate) fn entry(s: &State<L>, t: &GameTable, entry: &StackEntry<L>) -> Paying<L> {
         if !t.can(Capability::RemembersMana) {
             return Paying::NOTHING;
         }
         match entry.item {
             StackItem::Spell { card, face, .. } => Paying {
                 spell: Some((card, face)),
-                object: entry.spell(),
+                object: entry.spell().and_then(|spell| s.spell(spell)),
             },
             StackItem::Activated { .. } | StackItem::Triggered { .. } => Paying::NOTHING,
         }
@@ -217,30 +216,31 @@ pub(crate) fn accepted_entries<L: Layout>(
     out
 }
 
-/// Whether the restricted mana ability of the permanent in `slot` makes `color`, so that
-/// tapping it for that mana uses it: for a source whose unrestricted abilities make none.
+/// Whether the restricted mana ability of `permanent` makes `color`, so that tapping it for
+/// that mana uses it: for a source whose unrestricted abilities make none.
 pub(super) fn makes<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    slot: L::Slot,
+    permanent: Permanent<L>,
     color: ManaColor,
 ) -> Option<(AbilityIx, &'static beryl_card::Ability)> {
     if !t.can(Capability::RemembersMana) {
         return None;
     }
+    let slot = permanent.slot();
     let player = s.controller(slot);
     restricted_ability(s, t, player, slot, s.derived(slot))
         .filter(|(_, a)| a.produces().includes(color))
 }
 
-/// Adds the mana a restricted mana ability of the permanent `source` makes, of the kind
+/// Adds the mana a restricted mana ability of `source` makes, of the kind
 /// `color`, as mana that remembers its restriction and what the restriction reads of the
 /// source now (CR 106.6), its costs paid. The ability's whole effect is to add the mana.
 pub(super) fn add<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    source: ObjectRef<L>,
+    source: Permanent<L>,
     ability: &'static beryl_card::Ability,
     color: ManaColor,
 ) -> Result<(), Full> {
@@ -259,12 +259,13 @@ pub(super) fn add<L: Layout>(
     let mana = RememberedMana {
         color,
         restriction: t.restriction_id(restriction).expect("numbered"),
-        chosen_type: chosen_type(s, source.slot),
-        source: s.definition(source.slot).record(t).0,
+        chosen_type: chosen_type(s, source.slot()),
+        source: s.definition(source.slot()).record(t).0,
     };
-    let player = s.controller(source.slot);
-    let added = s.add_remembered_mana(player, Some(source), mana)?;
-    sink.note_from(Some(source), added);
+    let player = s.controller(source.slot());
+    let source = Some(source.into());
+    let added = s.add_remembered_mana(player, source, mana)?;
+    sink.note_from(source, added);
     crate::continuous::layers::refresh(s, t, sink)
 }
 
@@ -285,7 +286,7 @@ pub(super) fn spend<L: Layout>(
     );
     if let (Some(rider), Some(spell)) = (t.restriction(mana.restriction).rider, paying.object) {
         let id = t.rule_id(rider).expect("a rider the game numbered");
-        let change = Continuous::Rule(Subject::Object(spell), id);
+        let change = Continuous::Rule(Subject::Object(spell.into()), id);
         s.start_effect(mana.source, change, Duration::Indefinite)?;
     }
     Ok(mana.color)
