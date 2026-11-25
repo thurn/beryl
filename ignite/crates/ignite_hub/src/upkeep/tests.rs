@@ -586,6 +586,16 @@ fn an_incomplete_check_and_a_disagreeing_audit_file_p1_tickets() {
     );
 }
 
+/// The tickets in `filed` other than those [`super::silent`] files for a silent machine, which
+/// tests of other faults set up without meaning to.
+pub fn except_silent(conn: &Connection, filed: &[String]) -> Vec<String> {
+    filed
+        .iter()
+        .filter(|id| !ticket(conn, id).title.ends_with("has stopped reporting"))
+        .cloned()
+        .collect()
+}
+
 #[test]
 fn a_tip_that_waits_an_hour_names_the_silent_machine_once() {
     let clock = start();
@@ -606,30 +616,21 @@ fn a_tip_that_waits_an_hour_names_the_silent_machine_once() {
     tips::seen(&conn, "abcd", clock.now()).unwrap();
     clock.advance(1_800.0);
     fleet::register(&conn, &register("jarvis", "m-1"), clock.now()).unwrap();
-    assert!(
-        upkeep
-            .pass(&mut conn, clock.now())
-            .unwrap()
-            .tickets_filed
-            .is_empty()
-    );
+    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
+    assert!(except_silent(&conn, &report.tickets_filed).is_empty());
 
     clock.advance(1_800.0);
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
-    assert_eq!(report.tickets_filed.len(), 1);
-    let filed = ticket(&conn, &report.tickets_filed[0]);
+    let waiting = except_silent(&conn, &report.tickets_filed);
+    assert_eq!(waiting.len(), 1);
+    let filed = ticket(&conn, &waiting[0]);
     assert!(filed.title.contains("multivac") && filed.body.contains("abcd"));
     assert!(filed.labels.contains(&"machine:multivac".to_owned()));
     assert_eq!(filed.priority, 1);
     clock.advance(600.0);
     tips::seen(&conn, "ef01", clock.now()).unwrap();
-    assert!(
-        upkeep
-            .pass(&mut conn, clock.now())
-            .unwrap()
-            .tickets_filed
-            .is_empty()
-    );
+    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
+    assert!(except_silent(&conn, &report.tickets_filed).is_empty());
 }
 
 #[test]

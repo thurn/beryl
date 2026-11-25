@@ -368,17 +368,20 @@ fn a_silent_machine_ticket_closes_once_it_reports_and_no_tip_waits() {
     tips::seen(&conn, "abcd", clock.now()).unwrap();
     clock.advance(3_700.0);
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
-    assert_eq!(report.tickets_filed.len(), 1);
-    let silent = report.tickets_filed[0].clone();
+    let filed = super::tests::except_silent(&conn, &report.tickets_filed);
+    assert_eq!(filed.len(), 1);
+    let silent = filed[0].clone();
 
     // It reports, but the tip still waits.
     clock.advance(60.0);
     fleet::register(&conn, &machine("m-2", "multivac"), clock.now()).unwrap();
-    assert!(passes(&mut conn, &mut upkeep, &clock, 2.0 * HOLD_SECONDS).is_empty());
+    let closed = passes(&mut conn, &mut upkeep, &clock, 2.0 * HOLD_SECONDS);
+    assert!(super::tests::except_silent(&conn, &closed).is_empty());
     conn.execute("UPDATE tips SET state = 'verified', verified = seen", [])
         .unwrap();
+    let closed = passes(&mut conn, &mut upkeep, &clock, 2.0 * HOLD_SECONDS);
     assert_eq!(
-        passes(&mut conn, &mut upkeep, &clock, 2.0 * HOLD_SECONDS),
+        super::tests::except_silent(&conn, &closed),
         vec![silent.clone()]
     );
     assert!(

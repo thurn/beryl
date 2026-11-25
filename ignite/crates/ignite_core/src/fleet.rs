@@ -396,6 +396,8 @@ pub struct FleetNotice {
     pub state_actor: Option<String>,
     #[serde(default, flatten)]
     pub trees: TreeSettings,
+    /// Platforms on which every machine is off or has sent no heartbeat for half an hour, so
+    /// tip verification defers their checks.
     pub off_platforms: BTreeSet<Os>,
     /// Platforms with a live checks-only machine and no live active machine.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]

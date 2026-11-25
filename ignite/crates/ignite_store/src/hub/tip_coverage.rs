@@ -38,8 +38,8 @@ pub fn update(conn: &mut Connection, update: &TipCoverageUpdate, now: Timestamp)
     }
     if update.replacement.deferred.is_some() && !update.checks_deferred {
         let settings = fleet_settings::settings(&transaction)?;
-        let off = fleet_settings::off_machines(&transaction, &settings)?;
-        if !off.contains_key(&update.platform)
+        let off = fleet_settings::unavailable_platforms(&transaction, &settings, now)?;
+        if !off.contains(&update.platform)
             && !fleet_settings::checks_only_platforms(&transaction, &settings, now)?
                 .contains(&update.platform)
         {

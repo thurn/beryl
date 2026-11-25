@@ -52,7 +52,42 @@ pub fn off_machines(
 }
 
 /// A machine with no heartbeat for half an hour is also unavailable for dispatch fallback.
-const ONLINE_SECONDS: f64 = 30.0 * 60.0;
+pub const ONLINE_SECONDS: f64 = 30.0 * 60.0;
+
+/// Whether `machine` has sent a heartbeat within [`ONLINE_SECONDS`] of `now`.
+pub fn online(machine: &rows::Machine, now: Timestamp) -> bool {
+    machine
+        .last_seen
+        .parse::<Timestamp>()
+        .is_ok_and(|seen| now.seconds_since(seen) < ONLINE_SECONDS)
+}
+
+/// Each platform with registered machines, every one of which is off or has sent no heartbeat
+/// for [`ONLINE_SECONDS`]. Tip verification defers such a platform, as it does one whose
+/// machines are all off, so that `master` does not wait on a machine that cannot answer. A
+/// machine whose storage or daemon hangs stops sending heartbeats without anyone setting it
+/// off: on 2026-11-25 `master` waited on a hung Windows machine until a person turned it off.
+/// The platform comes back by itself with the machine's next heartbeat.
+pub fn unavailable_platforms(
+    conn: &Connection,
+    settings: &FleetSettings,
+    now: Timestamp,
+) -> Result<BTreeSet<Os>> {
+    let mut available = BTreeSet::new();
+    let mut registered = BTreeSet::new();
+    for machine in fleet::machines(conn)? {
+        let os = match machine.os.as_str() {
+            "macos" => Os::Macos,
+            "windows" => Os::Windows,
+            _ => continue,
+        };
+        registered.insert(os);
+        if settings.machine(&machine.name).state != MachineState::Off && online(&machine, now) {
+            available.insert(os);
+        }
+    }
+    Ok(registered.difference(&available).copied().collect())
+}
 
 /// Platforms that can run checks but have no online active verifier.
 pub fn checks_only_platforms(
@@ -68,11 +103,7 @@ pub fn checks_only_platforms(
             "windows" => Os::Windows,
             _ => continue,
         };
-        if machine
-            .last_seen
-            .parse::<Timestamp>()
-            .is_ok_and(|seen| now.seconds_since(seen) < ONLINE_SECONDS)
-        {
+        if online(&machine, now) {
             match settings.machine(&machine.name).state {
                 MachineState::Active => {
                     active.insert(os);
@@ -404,6 +435,63 @@ mod tests {
         assert_eq!(
             settings(&conn).unwrap().machine("host").state,
             MachineState::ChecksOnly
+        );
+    }
+
+    #[test]
+    fn a_platform_whose_machines_are_all_off_or_silent_is_unavailable() {
+        let conn = open_in_memory().unwrap();
+        let start = Timestamp::parse("2026-11-25T05:00:00Z").unwrap();
+        conn.execute_batch(
+            "INSERT INTO machines (id, name, os, cores, memory_mb, families, version, last_seen)
+             VALUES ('m-w', 'cygnus', 'windows', 12, 32000, '[]', 'aaaa000', '2026-11-25T05:00:00.000Z'),
+                    ('m-1', 'jarvis', 'macos', 16, 64000, '[]', 'aaaa000', '2026-11-25T05:00:00.000Z'),
+                    ('m-2', 'multivac', 'macos', 8, 16000, '[]', 'aaaa000', '2026-11-25T05:00:00.000Z');",
+        )
+        .unwrap();
+        let mut settings = FleetSettings::default();
+        let just_under = start.plus_seconds(ONLINE_SECONDS - 1.0);
+        assert!(
+            unavailable_platforms(&conn, &settings, just_under)
+                .unwrap()
+                .is_empty()
+        );
+
+        // Half an hour without a heartbeat takes every machine out; a Mac that is still
+        // reporting keeps its platform.
+        conn.execute(
+            "UPDATE machines SET last_seen = '2026-11-25T05:29:00.000Z' WHERE id = 'm-2'",
+            [],
+        )
+        .unwrap();
+        let silent = start.plus_seconds(ONLINE_SECONDS);
+        assert_eq!(
+            unavailable_platforms(&conn, &settings, silent).unwrap(),
+            BTreeSet::from([Os::Windows])
+        );
+
+        // An answering machine that is off counts as unavailable too.
+        settings.machines.insert(
+            "multivac".to_owned(),
+            ignite_core::fleet::MachineSetting {
+                state: MachineState::Off,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            unavailable_platforms(&conn, &settings, silent).unwrap(),
+            BTreeSet::from([Os::Macos, Os::Windows])
+        );
+
+        // The next heartbeat brings the platform back.
+        conn.execute(
+            "UPDATE machines SET last_seen = '2026-11-25T05:30:00.000Z' WHERE id = 'm-w'",
+            [],
+        )
+        .unwrap();
+        assert_eq!(
+            unavailable_platforms(&conn, &settings, silent).unwrap(),
+            BTreeSet::from([Os::Macos])
         );
     }
 

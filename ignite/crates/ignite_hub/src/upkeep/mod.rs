@@ -10,6 +10,8 @@
 //!   checks that fail for those reasons ([`invalid_checks`], [`flaky`]);
 //! - files a P1 ticket for a tip that has waited an hour on a machine that has not reported,
 //!   and one for an epic in which nothing can start ([`stuck`]);
+//! - files a P0 ticket for a person when a machine that is not off stops reporting for half
+//!   an hour ([`silent`]);
 //! - files justiciar tickets for sustained machine resource stalls ([`resource_stalls`]);
 //! - files the copy of each meta-ticket whose schedule says one is due ([`schedules`]);
 //! - opens the tickets the hub filed pending once their automated source has a positive
@@ -56,6 +58,7 @@ mod resource_stalls;
 pub mod reverted;
 pub mod schedules;
 pub mod signature;
+pub mod silent;
 pub mod source_release;
 pub mod stuck;
 
@@ -205,6 +208,7 @@ impl Upkeep {
             }));
         }
         keep(stuck::tips_waiting(conn, now).map(|filed| note(&mut report, filed)));
+        keep(silent::machines_silent(conn, now).map(|filed| note(&mut report, filed)));
         keep(stuck::stuck_epics(conn, now).map(|filed| note(&mut report, filed)));
         keep(justiciar::master_lag(conn, now).map(|filed| note(&mut report, filed)));
         keep(resource_stalls::file(conn, now).map(|filed| note(&mut report, filed)));

@@ -188,6 +188,12 @@ pub fn verdict(
             })
         }),
         "unreachable" => unreachable(conn, world, subject, ticket, sighted),
+        super::silent::CATEGORY => Ok(super::silent::verdict(
+            &world.machines,
+            &world.settings,
+            subject,
+            sighted,
+        )),
         category if category == justiciar::LABEL && subject == justiciar::MASTER_LAG_SUBJECT => {
             present_unless(world.master_lagging, &|| {
                 Ok("`master` moved: no landing has waited two hours for it since.".to_owned())
