@@ -127,15 +127,15 @@ it is in play. The present-cost gate measures what it costs while one is:
   Forests, so the first two can be cast). Its positions also count a merged
   permanent or a phased-out permanent as the family being in play, which its
   control leaves as they are: it swaps cards for their stand-ins and cannot
-  un-merge or phase in.
-  `two-faced` swaps in Fire // Ice, Wear // Tear, Bonecrusher Giant, Valakut
-  Awakening and Delver of Secrets (and Mountains, so the red halves can be cast),
-  `levels` The Eldest Reborn, Wizard Class, Case of the Crimson Pulse and Student of
-  Warfare, `face-down` Exalted Angel, Gathan Raiders and Illusionary Mask, and
-  `outside` Burning Wish and Lurrus of the Dream-Den. A stand-in drops abilities
-  and keywords, not a card's shape, so these families measure what the cards'
-  abilities cost in play; the cost of the shape itself, which every card pays
-  through `State::copiable`, is in the absent-cost count.
+  un-merge or phase in. `two-faced` swaps in Fire // Ice, Wear // Tear,
+  Bonecrusher Giant, Valakut Awakening and Delver of Secrets (and Mountains, so
+  the red halves can be cast), `levels` The Eldest Reborn, Wizard Class, Case of
+  the Crimson Pulse and Student of Warfare, `face-down` Exalted Angel, Gathan
+  Raiders and Illusionary Mask, and `outside` Burning Wish and Lurrus of the
+  Dream-Den. A stand-in drops abilities and keywords, not a card's shape, so
+  these families measure what the cards' abilities cost in play; the cost of the
+  shape itself, which every card pays through `State::copiable`, is in the
+  absent-cost count.
 - **Its corpus** is cut from seeded games between greedy agents playing the
   family's deck in both seats: the first decision with a card of the family on
   the battlefield, on the stack or the source of an effect in force, which is

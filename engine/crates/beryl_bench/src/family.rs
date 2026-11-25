@@ -200,7 +200,11 @@ pub const FAMILIES: &[Family] = &[
         name: "outside",
         swaps: &[
             (1, names::BURNING_WISH, names::STAFF_OF_THE_STORYTELLER),
-            (1, names::LURRUS_OF_THE_DREAM_DEN, names::THIRST_FOR_DISCOVERY),
+            (
+                1,
+                names::LURRUS_OF_THE_DREAM_DEN,
+                names::THIRST_FOR_DISCOVERY,
+            ),
             (2, names::MOUNTAIN, names::PLAINS),
         ],
     },
