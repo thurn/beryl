@@ -3,13 +3,14 @@
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{Affects, Duration, Payload};
 use beryl_engine::{
-    Choice, Decision, GameTable, Layout, Observation, Outcome, Profile, Replay, Scratch, Seat,
-    SlotId, State, Step, Stops, apply, next, observe,
+    Choice, Decision, GameTable, Large, Layout, Observation, Outcome, Profile, Replay, Scratch,
+    Seat, SlotId, State, Step, Stops, apply, next, observe,
 };
 use std::sync::atomic::Ordering;
 
 use super::{EXPLORATION, ROLLOUTS, Sight};
 use crate::rollout::{RolloutPolicy, rollout};
+use crate::wide::{charge, ran_out, widened};
 
 /// One decision in a tree. Its children, one per candidate, are contiguous in the arena.
 #[derive(Clone, Copy, Debug)]
@@ -135,13 +136,15 @@ impl<L: Layout> Tree<L> {
     }
 
     /// One iteration: from a copy of the root, select by UCB1 down to a child not yet played,
-    /// play it out, and score the game for every node on the way.
+    /// play it out, and score the game for every node on the way. A game that runs out of
+    /// `Small`'s room on the way is scored as it goes on in `Large` ([`crate::wide`]).
     fn iterate(&mut self, t: &GameTable, policy: &RolloutPolicy) {
         let mut s = self.state.clone();
         self.x.counts.copied();
         let mut path: [u32; 256] = [0; 256];
         let mut depth = 0;
         let mut node = self.root;
+        let mut seed = None;
         let outcome = loop {
             let child = self.select(node);
             path[depth] = child;
@@ -152,7 +155,9 @@ impl<L: Layout> Tree<L> {
                 smart(&mut s);
             }
             if self.nodes[child as usize].visits == 0 || depth == path.len() {
-                s.reseed(self.rng.next_u64());
+                let rollout_seed = self.rng.next_u64();
+                seed = Some(rollout_seed);
+                s.reseed(rollout_seed);
                 break rollout(&mut s, t, &mut self.x, policy);
             }
             match next(&mut s, t, &mut self.x, &mut Replay) {
@@ -165,12 +170,61 @@ impl<L: Layout> Tree<L> {
                 }
             }
         };
+        let outcome = if ran_out(&s) {
+            self.widened_outcome(t, policy, &path[..depth], seed)
+                .unwrap_or(outcome)
+        } else {
+            outcome
+        };
         self.nodes[self.root as usize].visits += 1;
         for &n in &path[..depth] {
             let n = &mut self.nodes[n as usize];
             n.visits += 1;
             n.reward += score(outcome, n.mover);
         }
+    }
+
+    /// The outcome of the iteration down `path` played again in `Large`, from the root's state
+    /// widened, if that state is `Small`: the same choices, then the rollout from `seed`, the
+    /// one the iteration drew, or from a fresh seed where a step of the tree itself ran out.
+    /// Widening keeps every random stream's place, so the game reaches the point where `Small`
+    /// ran out and goes on past it.
+    #[cold]
+    #[inline(never)]
+    fn widened_outcome(
+        &mut self,
+        t: &GameTable,
+        policy: &RolloutPolicy,
+        path: &[u32],
+        seed: Option<u64>,
+    ) -> Option<Outcome> {
+        let mut s = widened(&self.state)?;
+        let mut x = Scratch::<Large>::unchecked();
+        x.counts.copied();
+        let mut node = self.root;
+        let mut outcome = None;
+        for (depth, &child) in path.iter().enumerate() {
+            // The tree's step to the decision at `node`, which reached it in `Small` and so
+            // reaches it here.
+            if depth > 0
+                && let Step::Over(over) = next(&mut s, t, &mut x, &mut Replay)
+            {
+                outcome = Some(over);
+                break;
+            }
+            let c = Choice((child - self.nodes[node as usize].first) as u16);
+            apply(&mut s, t, &mut x, &mut Replay, c);
+            if depth == 0 {
+                smart(&mut s);
+            }
+            node = child;
+        }
+        let outcome = outcome.unwrap_or_else(|| {
+            s.reseed(seed.unwrap_or_else(|| self.rng.next_u64()));
+            rollout(&mut s, t, &mut x, policy)
+        });
+        charge(&mut self.x, &x);
+        Some(outcome)
     }
 
     /// Gives `node` one child per candidate of its decision `d`.
@@ -259,7 +313,8 @@ pub(crate) fn smart<L: Layout>(s: &mut State<L>) {
 }
 
 /// A finished game's reward for `player`: 1 for a win, 0 for a loss, 0.5 for a draw or a
-/// stall.
+/// stall. A game that ran out of `Small`'s room is scored as it went on in `Large`
+/// ([`Tree::iterate`]), so a stall here is one `Large` could not play past either.
 fn score(outcome: Outcome, player: Seat) -> f64 {
     match outcome {
         Outcome::Win(winner) if winner == player => 1.0,

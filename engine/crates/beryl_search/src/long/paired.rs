@@ -2,7 +2,7 @@
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    Choice, Decision, GameTable, Layout, Observation, Outcome, Scratch, Seat, State,
+    Choice, Decision, GameTable, Large, Layout, Observation, Outcome, Scratch, Seat, State,
 };
 
 use super::{
@@ -10,6 +10,7 @@ use super::{
     ROUNDS, RolloutPolicy, Sight, Tree, WORLD_STEPS, check, deal, value,
 };
 use crate::rollout::{Softmax, soft_rollout_after_within};
+use crate::wide::{charge, ran_out, widened};
 
 /// How many standard errors a paired lead must clear before search can override the policy.
 pub const PAIRED_ERRORS: f64 = 3.0;
@@ -127,17 +128,15 @@ impl<'a, L: Layout> PairedRollouts<'a, L> {
                 share.spent += PAIR_STEPS;
                 let before = scratch.counts.decision_work();
                 let limit = before + (share.limit - share.spent);
-                let result = [search, greedy]
-                    .map(|choice| pair.play_within(choice, &mut scratch, limit, |_, _, _| {}));
+                let result =
+                    [search, greedy].map(|choice| pair.scored(choice, &mut scratch, limit));
                 share.spent += scratch.counts.decision_work() - before;
-                let [(a, Some(outcome_a)), (b, Some(outcome_b))] = result else {
+                let [Some(a), Some(b)] = result else {
                     break;
                 };
                 crate::mcts::count_rollout();
                 crate::mcts::count_rollout();
-                share
-                    .scores
-                    .add([pair.score(&a, outcome_a), pair.score(&b, outcome_b)]);
+                share.scores.add([a, b]);
             }
             true
         };
@@ -227,16 +226,70 @@ impl<L: Layout> RolloutPair<'_, L> {
         (state, outcome)
     }
 
+    /// The score of playing `choice` and on to the end within `limit`, the engine work
+    /// `scratch` may count; none if the work ran out first. A game that runs out of `Small`'s
+    /// room is scored as it goes on in `Large` ([`crate::wide`]).
+    fn scored(&self, choice: Choice, scratch: &mut Scratch<L>, limit: u64) -> Option<f64> {
+        let (state, outcome) = self.play_within(choice, scratch, limit, |_, _, _| {});
+        if ran_out(&state)
+            && let Some(world) = widened(&self.world)
+        {
+            return self.widened_score(world, choice, scratch, limit);
+        }
+        outcome.map(|outcome| self.score(&state, outcome))
+    }
+
+    /// [`Self::scored`] played again in `Large` from `state`, the world widened, with the same
+    /// random stream: it reaches the point where `Small` ran out and goes on past it. Its
+    /// work is charged to `scratch`.
+    #[cold]
+    #[inline(never)]
+    fn widened_score(
+        &self,
+        mut state: State<Large>,
+        choice: Choice,
+        scratch: &mut Scratch<L>,
+        limit: u64,
+    ) -> Option<f64> {
+        let mut wide = Scratch::<Large>::unchecked();
+        wide.counts.copied();
+        let mut rng = self.rng;
+        let mut soft = Softmax {
+            rng: &mut rng,
+            temperature: ROLLOUT_TEMPERATURE,
+        };
+        let outcome = soft_rollout_after_within(
+            &mut state,
+            self.table,
+            &mut wide,
+            self.policy,
+            &mut soft,
+            choice,
+            |_, _, _| {},
+            limit.saturating_sub(scratch.counts.decision_work()),
+        );
+        charge(scratch, &wide);
+        outcome.map(|outcome| self.score_at(state.elapsed_turns(), outcome))
+    }
+
     /// Turns since this pair's root.
     pub fn turns(&self, state: &State<L>) -> u16 {
-        state
-            .elapsed_turns()
-            .saturating_sub(self.world.elapsed_turns())
+        self.turns_at(state.elapsed_turns())
+    }
+
+    /// Turns since this pair's root to a game `elapsed` turns in.
+    fn turns_at(&self, elapsed: u16) -> u16 {
+        elapsed.saturating_sub(self.world.elapsed_turns())
     }
 
     /// The search's time-discounted reward for the player at the root.
     pub fn score(&self, state: &State<L>, outcome: Outcome) -> f64 {
-        let p0 = value(outcome, self.turns(state));
+        self.score_at(state.elapsed_turns(), outcome)
+    }
+
+    /// [`Self::score`] for a game `elapsed` turns in.
+    fn score_at(&self, elapsed: u16, outcome: Outcome) -> f64 {
+        let p0 = value(outcome, self.turns_at(elapsed));
         if self.viewer == Seat::P0 {
             p0
         } else {

@@ -16,6 +16,7 @@ mod overlay;
 pub mod pace;
 mod rollout;
 mod values;
+mod wide;
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, Decision, GameTable, Observation};

@@ -67,6 +67,7 @@ mod paired;
 mod prior;
 mod trace;
 mod turn;
+mod wide;
 pub use paired::{PAIRED_ERRORS, PairedRollouts, PairedScores, RolloutPair};
 use trace::{Capture, Trace};
 pub use trace::{TreeReport, Visits};
@@ -1346,6 +1347,7 @@ impl<L: Layout> Tree<L> {
     /// Each iteration samples a world, walks to an unplayed action available in that world,
     /// scores its leaf, and records the score at every node along the way.
     fn iterate(&mut self, t: &GameTable, policy: &RolloutPolicy) {
+        let mut again = wide::Again::new(self.resample.then_some(self.rng));
         let mut s = if self.resample {
             let mut rng = self.rng;
             let s = self.deal(t, &mut rng);
@@ -1404,12 +1406,14 @@ impl<L: Layout> Tree<L> {
                 }
             }
             path[depth] = child;
+            again.choices[depth] = choice;
             depth += 1;
             apply(&mut s, t, &mut self.x, &mut Replay, choice);
             if at_root {
                 smart(&mut s);
             }
             if self.nodes[child as usize].visits == 0 || depth == path.len() {
+                again.leaf = Some(self.rng);
                 s.reseed(self.rng.next_u64());
                 break self.leaf(&mut s, t, policy);
             }
@@ -1421,6 +1425,7 @@ impl<L: Layout> Tree<L> {
                 }
             }
         };
+        let value = self.unless_wide(t, policy, &s, &again, depth, value);
         if let Some(trace) = self.trace.as_mut() {
             trace.score(if self.decision.decider == Seat::P0 {
                 value
@@ -1534,43 +1539,72 @@ impl<L: Layout> Tree<L> {
 
     /// A new node's score for the first seat, from `s` just after its action.
     fn leaf(&mut self, s: &mut State<L>, t: &GameTable, policy: &RolloutPolicy) -> f64 {
-        let mut soft = Softmax {
-            rng: &mut self.rng,
-            temperature: ROLLOUT_TEMPERATURE,
+        let at = Scoring {
+            leaf: self.family.leaf,
+            origin: self.origin,
+            extra: &mut self.extra,
         };
-        match self.family.leaf {
-            Leaf::Rollout => {
-                let outcome = soft_rollout(s, t, &mut self.x, policy, &mut soft);
-                value(outcome, self.turns(s))
-            }
-            Leaf::Cutoff { turns } => {
-                let turn = s.elapsed_turns().saturating_add(u16::from(turns));
-                if let Some(outcome) = soft_rollout_to(s, t, &mut self.x, policy, &mut soft, turn) {
-                    value(outcome, self.turns(s))
-                } else {
-                    self.extra += EVAL_STEPS;
-                    discounted(evaluate(s, policy.values()), self.turns(s))
-                }
-            }
-            Leaf::Eval => match next(s, t, &mut self.x, &mut Replay) {
-                Step::Over(outcome) => value(outcome, self.turns(s)),
-                // A subgame's position is of another game than the leaves it is compared with:
-                // play it out instead.
-                Step::Decide(_) if s.in_subgame() => {
-                    let outcome = soft_rollout(s, t, &mut self.x, policy, &mut soft);
-                    value(outcome, self.turns(s))
-                }
-                Step::Decide(_) => {
-                    self.extra += EVAL_STEPS;
-                    discounted(evaluate(s, policy.values()), self.turns(s))
-                }
-            },
-        }
+        at.score(s, t, &mut self.x, policy, &mut self.rng)
     }
 
     /// The turns from the tree's first root to `s`.
     fn turns(&self, s: &State<L>) -> u16 {
         s.elapsed_turns().saturating_sub(self.origin)
+    }
+}
+
+/// How a tree scores a new node, in a state of either layout: its kind of leaf, the turn its
+/// first root was asked in, and where it charges the steps its scratch does not count.
+struct Scoring<'a> {
+    leaf: Leaf,
+    origin: u16,
+    extra: &'a mut u64,
+}
+
+impl Scoring<'_> {
+    /// A new node's score for the first seat, from `s` just after its action, its rollouts
+    /// drawn from `rng`.
+    fn score<M: Layout>(
+        self,
+        s: &mut State<M>,
+        t: &GameTable,
+        x: &mut Scratch<M>,
+        policy: &RolloutPolicy,
+        rng: &mut SplitMix64,
+    ) -> f64 {
+        let mut soft = Softmax {
+            rng,
+            temperature: ROLLOUT_TEMPERATURE,
+        };
+        let turns = |s: &State<M>| s.elapsed_turns().saturating_sub(self.origin);
+        match self.leaf {
+            Leaf::Rollout => {
+                let outcome = soft_rollout(s, t, x, policy, &mut soft);
+                value(outcome, turns(s))
+            }
+            Leaf::Cutoff { turns: cut } => {
+                let turn = s.elapsed_turns().saturating_add(u16::from(cut));
+                if let Some(outcome) = soft_rollout_to(s, t, x, policy, &mut soft, turn) {
+                    value(outcome, turns(s))
+                } else {
+                    *self.extra += EVAL_STEPS;
+                    discounted(evaluate(s, policy.values()), turns(s))
+                }
+            }
+            Leaf::Eval => match next(s, t, x, &mut Replay) {
+                Step::Over(outcome) => value(outcome, turns(s)),
+                // A subgame's position is of another game than the leaves it is compared with:
+                // play it out instead.
+                Step::Decide(_) if s.in_subgame() => {
+                    let outcome = soft_rollout(s, t, x, policy, &mut soft);
+                    value(outcome, turns(s))
+                }
+                Step::Decide(_) => {
+                    *self.extra += EVAL_STEPS;
+                    discounted(evaluate(s, policy.values()), turns(s))
+                }
+            },
+        }
     }
 }
 
@@ -1701,7 +1735,8 @@ fn answered_by_policy<L: Layout>(d: &Decision<L>) -> bool {
 
 /// A finished game's score for the first seat, `turns` turns after the tree's first root: a
 /// win 1 and a loss 0, discounted toward an even game by [`TURN_DISCOUNT`] each turn; a draw
-/// or a stall 0.5.
+/// or a stall 0.5. A tree's game that runs out of `Small`'s room is scored as it goes on in
+/// `Large` ([`crate::wide`]), so a stall here is one `Large` could not play past either.
 pub fn value(outcome: Outcome, turns: u16) -> f64 {
     let p0 = match outcome {
         Outcome::Win(Seat::P0) => 1.0,

@@ -15,6 +15,7 @@ mod greedy;
 mod hold;
 mod long;
 mod mcts;
+mod outgrow;
 mod overlay;
 mod rollout;
 mod shrink;
