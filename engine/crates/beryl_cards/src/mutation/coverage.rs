@@ -39,6 +39,11 @@ fn witness(kind: Kind) -> Witness {
         Kind::EffectPlayers => Generated("Timetwister"),
         Kind::FreeCast => Scripted("Malcolm, Alluring Scoundrel", fixtures::MALCOLM),
         Kind::Keyword | Kind::TriggerFrequency => Generated("Worldgorger Dragon"),
+        Kind::ModifyModification => Generated("Coordinated Assault"),
+        Kind::ModifyDuration => {
+            let card = crate::names::COORDINATED_ASSAULT;
+            Scripted(card, &crate::written_scenarios_for(card)[0])
+        }
         Kind::May | Kind::SearchFilter => Generated("Trinket Mage"),
         Kind::SearchCast => {
             let card = crate::names::PANGLACIAL_WURM;

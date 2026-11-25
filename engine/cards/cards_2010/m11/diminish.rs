@@ -19,3 +19,31 @@ pub static CARD: CardDef = Printed::Diminish
             Duration::EndOfTurn,
         ))])
     .card();
+
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use crate::prelude::*;
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // [CR 514.2]: "Until end of turn" effects end as the turn's cleanup step does, so the
+        // creature is its printed 2/1 again in the next turn.
+        //
+        // [CR 514.2]: https://yawgatog.com/resources/magic-rules/#R5142
+        Scenario::new("Diminish's base 1/1 ends with the turn")
+            .interaction(&[Card::Diminish, Card::Island])
+            .at(1, P0, TurnStep::PrecombatMain)
+            .hand(P0, &[Card::Diminish])
+            .battlefield(P0, &[Card::Island, Prop::Vanilla])
+            .library(P0, &[Card::Plains, Card::Plains])
+            .library(P1, &[Card::Plains, Card::Plains])
+            .actions(&[
+                ME.casts(Card::Diminish),
+                Resolve,
+                ME.pt(Prop::Vanilla, 1, 1),
+                ME.passes(),
+                ME.done_attacking(),
+                advance_to(2, TurnStep::PrecombatMain),
+                ME.pt(Prop::Vanilla, 2, 1),
+            ]),
+    ];
+}

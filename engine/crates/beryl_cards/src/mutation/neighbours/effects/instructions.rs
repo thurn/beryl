@@ -576,6 +576,19 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                     },
                 );
             }
+            for (kind, name, modifications, duration) in
+                super::super::continuous::modify_neighbours(modifications, duration)
+            {
+                add(
+                    kind,
+                    name,
+                    Effect::Modify {
+                        objects: which,
+                        modifications,
+                        duration,
+                    },
+                );
+            }
         }
         Effect::ChangeText {
             objects: which,

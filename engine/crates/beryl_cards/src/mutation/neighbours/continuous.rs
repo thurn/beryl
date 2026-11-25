@@ -1,8 +1,8 @@
 //! Neighbours of static abilities, replacements and rules.
 
 use beryl_card::{
-    Ability, Condition, Draws, Filter, Governed, LayerSpec, Modification, Objects, PlayerRules,
-    Replaced, Replacement, Rewrite, RuleChange, SpellCost, Types, When, Zone,
+    Ability, Condition, Draws, Duration, Filter, Governed, LayerSpec, Modification, Objects,
+    PlayerRules, Replaced, Replacement, Rewrite, RuleChange, SpellCost, Types, When, Zone,
 };
 
 use super::{Kind, Neighbours, costs, leak, leak_slice, operands};
@@ -146,6 +146,49 @@ fn layers(layer: &LayerSpec) -> Vec<(&'static str, Kind, String, LayerSpec)> {
                     modifications: leak_slice(modifications),
                     ..*layer
                 },
+            ));
+        }
+    }
+    out
+}
+
+/// The neighbours of a resolving `Effect::Modify`'s modifications and duration: each
+/// modification dropped, each changed to a neighbouring value, and each other duration.
+pub(super) fn modify_neighbours(
+    modifications: &'static [Modification],
+    duration: Duration,
+) -> Vec<(Kind, String, &'static [Modification], Duration)> {
+    let mut out = Vec::new();
+    for (index, &modification) in modifications.iter().enumerate() {
+        let mut dropped = modifications.to_vec();
+        dropped.remove(index);
+        out.push((
+            Kind::ModifyModification,
+            format!("{index} drop"),
+            leak_slice(dropped),
+            duration,
+        ));
+        for (name, changed) in modifications_of(modification) {
+            let mut list = modifications.to_vec();
+            list[index] = changed;
+            out.push((
+                Kind::ModifyModification,
+                format!("{index} {name}"),
+                leak_slice(list),
+                duration,
+            ));
+        }
+    }
+    // Only a temporary effect has a duration whose neighbours a scenario can tell apart without
+    // a turn structure of its own: one that ends at end of turn lasts longer under either of
+    // the other durations, which shows in the next turn.
+    if duration == Duration::EndOfTurn {
+        for other in [Duration::UntilYourNextTurn, Duration::Indefinite] {
+            out.push((
+                Kind::ModifyDuration,
+                format!("lasting {other:?}"),
+                modifications,
+                other,
             ));
         }
     }

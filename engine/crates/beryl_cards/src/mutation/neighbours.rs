@@ -417,6 +417,8 @@ mutation_kinds! {
     Keyword,
     ManaProduct,
     May,
+    ModifyDuration,
+    ModifyModification,
     Prevention,
     PreventionSource,
     PutController,

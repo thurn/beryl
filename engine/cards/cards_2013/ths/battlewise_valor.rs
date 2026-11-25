@@ -20,3 +20,31 @@ pub static CARD: CardDef = Printed::BattlewiseValor
             scry(you(), 1),
         ]))])
     .card();
+
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use crate::prelude::*;
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // [CR 514.2]: "Until end of turn" effects end as the turn's cleanup step does, so the
+        // creature is its printed 2/1 again in the next turn.
+        //
+        // [CR 514.2]: https://yawgatog.com/resources/magic-rules/#R5142
+        Scenario::new("Battlewise Valor's bonus ends with the turn")
+            .interaction(&[Card::BattlewiseValor, Card::Plains])
+            .at(1, P0, TurnStep::PrecombatMain)
+            .hand(P0, &[Card::BattlewiseValor])
+            .battlefield(P0, &[Card::Plains, Card::Plains, Prop::Vanilla])
+            .library(P0, &[Card::Plains, Card::Plains])
+            .library(P1, &[Card::Plains, Card::Plains])
+            .actions(&[
+                ME.casts(Card::BattlewiseValor),
+                Resolve,
+                ME.done_picking(),
+                ME.pt(Prop::Vanilla, 4, 3),
+                ME.done_attacking(),
+                advance_to(2, TurnStep::PrecombatMain),
+                ME.pt(Prop::Vanilla, 2, 1),
+            ]),
+    ];
+}

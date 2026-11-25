@@ -56,6 +56,13 @@ const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
         "after the Aura sets the permanent's type to artifact, Vehicle is the only artifact subtype an eligible permanent in this pool can already have",
     ),
     (
+        "Swift Reconfiguration",
+        "granted ability 0",
+        "0 SetTypes(Types(5))",
+        "crewing sets a Vehicle's types to artifact creature instead of adding them, and the \
+         Aura has already made the permanent an artifact, so the two end with the same types",
+    ),
+    (
         "Double Major",
         "ability 0",
         "new_targets true",

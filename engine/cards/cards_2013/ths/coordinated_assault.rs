@@ -20,3 +20,34 @@ pub static CARD: CardDef = Printed::CoordinatedAssault
             Duration::EndOfTurn,
         ))])
     .card();
+
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use crate::prelude::*;
+
+    const ASSAULT: &str = Card::CoordinatedAssault;
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // [CR 514.2]: "Until end of turn" effects end as the turn's cleanup step does, so the
+        // creature is its printed 2/1 again in the next turn.
+        //
+        // [CR 514.2]: https://yawgatog.com/resources/magic-rules/#R5142
+        Scenario::new("Coordinated Assault's bonus ends with the turn")
+            .interaction(&[Card::Mountain])
+            .at(1, P0, TurnStep::PrecombatMain)
+            .hand(P0, &[ASSAULT])
+            .battlefield(P0, &[Card::Mountain, Prop::Vanilla])
+            .library(P0, &[Card::Plains, Card::Plains])
+            .library(P1, &[Card::Plains, Card::Plains])
+            .actions(&[
+                ME.casts(ASSAULT),
+                ME.target_count(1),
+                Resolve,
+                ME.pt(Prop::Vanilla, 3, 1),
+                ME.passes(),
+                ME.done_attacking(),
+                advance_to(2, TurnStep::PrecombatMain),
+                ME.pt(Prop::Vanilla, 2, 1),
+            ]),
+    ];
+}
