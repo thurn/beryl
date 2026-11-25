@@ -168,7 +168,8 @@ def problems(
 
 def one_sentence(label: str) -> bool:
     """Whether `label` is one sentence: it starts with a capital letter or with a code span
-    such as `ignite test`, whose identifier is lower case, and no sentence ends inside it."""
+    such as `ignite test`, whose identifier is lower case, and no sentence ends inside it.
+    """
     text = label.strip()
     return (
         bool(text)

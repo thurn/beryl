@@ -43,7 +43,8 @@ def entry(**fields: str | None) -> Change:
 def test_the_changes_file_is_valid() -> None:
     """Every entry in the repository's file names a known metric, an expected direction and
     one sentence. Whether an entry's commit is on `staging` depends on which branches this
-    checkout has, so the commit lookup is left to the report and is answered `True` here."""
+    checkout has, so the commit lookup is left to the report and is answered `True` here.
+    """
     found = changes.load()
     assert found, "the file lists no changes"
     assert problems(found, METRICS, known) == []
