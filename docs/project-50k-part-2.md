@@ -1094,10 +1094,10 @@ absent cost, not in these ratios. The WU mirror rollout measured 376,935,258
 instructions before this family began (the Bloodbraid Elf landing) and
 380,672,174 at the tree this ticket started from, 3,736,916 more (+0.99%). That
 is +0.66% over the bar of 378,170,543 and inside its 1% tolerance. The change
-includes every landing between the two, not only this family's; the family's
-own landings that measured the mirror reported +8,138 (Bloodbraid Elf),
-+53,899 (Panglacial Wurm), +92,210 (Knowledge Pool and Possibility Storm) and
-banding's +754,056 (+0.2% of the bar), which the owner approved.
+includes every landing between the two, not only this family's; the family's own
+landings that measured the mirror reported +8,138 (Bloodbraid Elf), +53,899
+(Panglacial Wurm), +92,210 (Knowledge Pool and Possibility Storm) and banding's
++754,056 (+0.2% of the bar), which the owner approved.
 
 ### I. Card shapes, face-down cards and cards outside the game
 
