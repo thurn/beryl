@@ -1,71 +1,14 @@
-//! Offering to cast a card during a resolution (see CR 608.2g), and a spell leaving the stack
-//! without resolving.
+//! A spell's card leaving the stack, as the spell resolves or without its resolving.
 //!
-//! Implements: none. Offers legal casts during resolution and delegates spell movement to the event pipeline.
+//! Implements: none. Delegates spell movement to the event pipeline.
 
 use beryl_kernel::reference::Spell;
 
-use crate::bitboard::Bitboard;
-use crate::decision::{OPTIONS, Opt};
 use crate::fixed::Full;
-use crate::ids::Seat;
-use crate::layout::{Layout, Queue};
+use crate::layout::Layout;
 use crate::replacement::event::{self, Reason, Sink};
 use crate::state::{StackEntry, State, Zone};
 use crate::table::GameTable;
-
-use super::costs::From;
-use super::legal::special::face_down_casts;
-use super::legal::{Situation, cast_options};
-
-/// The options of a resolution's offer to cast a card (see CR 608.2g): not casting, then
-/// each way of casting one of the cards.
-pub(super) fn offer_options<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    cards: Bitboard<L::Slot>,
-    player: Seat,
-    free: bool,
-) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
-    let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
-    out.push(Opt::Pass)?;
-    let now = Situation::of(player);
-    cast_options::<L, true, false>(s, t, &now, cards, From::Resolution { free }, &mut out)?;
-    now.complete()?;
-    Ok(out)
-}
-
-/// The options of a resolution's offer to cast one of `cards` face down
-/// ([`crate::card::CastFace::DownTurnedUpWhenUsed`]): not casting, then casting each card
-/// face down.
-pub(super) fn face_down_offer_options<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    cards: Bitboard<L::Slot>,
-    player: Seat,
-    free: bool,
-) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
-    let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
-    out.push(Opt::Pass)?;
-    let now = Situation::of(player);
-    face_down_casts::<L, true>(s, t, &now, cards, From::Resolution { free }, &mut out)?;
-    now.complete()?;
-    Ok(out)
-}
-
-/// Appends the payable casts whose faces allow casting from the library while searching it
-/// (see CR 608.2g). The search supplies the cards in the player's own library.
-pub(crate) fn search_cast_options<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    library: Bitboard<L::Slot>,
-    player: Seat,
-    out: &mut L::Queue<Opt<L>, OPTIONS>,
-) -> Result<(), Full> {
-    let now = Situation::of(player);
-    cast_options::<L, true, true>(s, t, &now, library, From::Resolution { free: false }, out)?;
-    now.complete()
-}
 
 /// Takes a spell off the stack for an effect that moves its card to `to` without its
 /// resolving: where the card goes ([`crate::replacement::exiled_instead`]), or nothing if the

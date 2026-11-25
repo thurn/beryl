@@ -1,33 +1,15 @@
 //! When a player may cast a spell or activate an ability: sorcery and instant speed
-//! (CR 307.1, see CR 117.1a), and the ability a stack entry resolves.
+//! (CR 307.1, see CR 117.1a), and which ability of a permanent is activated.
 //!
 //! Implements: CR 307.1
 
-use crate::card::{Ability, Face, FaceAbility, Keywords, ObjectAbility, Types};
+use crate::card::{Face, FaceAbility, Keywords, ObjectAbility, Types};
 use crate::continuous::rule_change;
 use crate::definition::Definition;
 use crate::ids::Seat;
 use crate::layout::Layout;
-use crate::state::{StackEntry, State, TurnStep, Zone};
+use crate::state::{State, TurnStep, Zone};
 use crate::table::GameTable;
-
-/// The ability a stack entry resolves: an ability of its card's face, or a spell's spell
-/// ability, as the casting options paid for it make it (an overloaded spell's). A permanent
-/// spell with no targets has none.
-pub(crate) fn entry_ability<L: Layout>(
-    t: &GameTable,
-    entry: &StackEntry<L>,
-) -> Option<&'static Ability> {
-    entry.ability_in(t)
-}
-
-/// The ability of a stack entry that is an ability, by its card, face and index.
-pub(super) fn entry_ability_of<L: Layout>(
-    t: &GameTable,
-    entry: &StackEntry<L>,
-) -> &'static Ability {
-    entry_ability(t, entry).expect("an ability's entry")
-}
 
 /// The card, face and ability a stack entry records for activating ability `ability` of the
 /// permanent in `slot`: one of its own, one granted to it, which is printed on the

@@ -66,12 +66,9 @@ impl Ways {
                 let permission = start::permission(s, player, slot, FaceIx::FRONT);
                 // See CR 702.138a: escape "functions while the card with escape is in a player's
                 // graveyard", and lets its owner cast it from there.
-                let escape = s.reaches_elsewhere() && {
-                    let o = s.object(slot);
-                    o.owner() == player
-                        && s.card_in(s.object_ref(slot), Graveyard)
-                            .is_some_and(|card| s.escape_from(t, card).is_some())
-                };
+                let escape = s.reaches_elsewhere()
+                    && s.object(slot).owner() == player
+                    && has_escape(s, t, slot);
                 let graveyard =
                     permission.is_none() && graveyard::relies_on_permission(s, t, player, slot);
                 Ways {
@@ -134,6 +131,12 @@ impl Ways {
     }
 }
 
+/// Whether the card in `slot` is a card in a graveyard that an effect gives escape.
+pub(super) fn has_escape<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
+    s.card_in(s.object_ref(slot), Graveyard)
+        .is_some_and(|card| s.escape_from(t, card).is_some())
+}
+
 /// A player announces fuse during casting. [CR 702.102a]: "If a player casts a split card
 /// with fuse from their hand, the player may choose to cast both halves of that split card
 /// rather than choose one half."
@@ -184,8 +187,6 @@ pub(super) fn cast_sources<L: Layout>(
 #[cold]
 #[inline(never)]
 fn escaping<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
-    s.zone(ZoneKey::Of(player, Zone::Graveyard)).filter(|slot| {
-        s.card_in(s.object_ref(slot), Graveyard)
-            .is_some_and(|card| s.escape_from(t, card).is_some())
-    })
+    s.zone(ZoneKey::Of(player, Zone::Graveyard))
+        .filter(|slot| has_escape(s, t, slot))
 }

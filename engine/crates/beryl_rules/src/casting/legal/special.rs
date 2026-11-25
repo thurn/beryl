@@ -7,6 +7,7 @@ use crate::card::{CardDef, Castings, FACE_DOWN, FaceIx};
 use crate::decision::{Candidates, OPTIONS, Opt};
 use crate::engine::collapse;
 use crate::fixed::Full;
+use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::state::State;
 use crate::table::{Capability, GameTable};
@@ -48,14 +49,8 @@ pub(super) fn options<L: Layout, const TARGETS: bool>(
     from: From,
     out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
-    let morph =
-        t.can(Capability::Morph) && ways.plain && !ways.alternative && has_morph(def.front());
-    let fuse = can_fuse(s, def, now.player, slot);
-    for (allowed, face, costs) in [
-        (morph, FaceIx::DOWN, Castings::NONE),
-        (fuse, FaceIx::FUSED, Castings::FUSE),
-    ] {
-        if allowed && refused(s, t, now, slot, face, costs, from, ways.increase).is_none() {
+    for (face, costs) in casts(s, t, now.player, slot, def, ways) {
+        if refused(s, t, now, slot, face, costs, from, ways.increase).is_none() {
             out.push(Opt::Cast { slot, face, costs })?;
         }
     }
@@ -89,4 +84,26 @@ pub(in crate::casting) fn face_down_casts<L: Layout, const TARGETS: bool>(
         }
         Ok(())
     })
+}
+
+/// The face and casting options of each cast with combined or face-down characteristics that
+/// `ways` let `player` try for the card in `slot`: face down for morph, then both halves for
+/// fuse. Each is still to pass the checks of an ordinary cast.
+pub(super) fn casts<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    slot: L::Slot,
+    def: &CardDef,
+    ways: Ways,
+) -> impl Iterator<Item = (FaceIx, Castings)> {
+    let morph =
+        t.can(Capability::Morph) && ways.plain && !ways.alternative && has_morph(def.front());
+    let fuse = can_fuse(s, def, player, slot);
+    [
+        (morph, FaceIx::DOWN, Castings::NONE),
+        (fuse, FaceIx::FUSED, Castings::FUSE),
+    ]
+    .into_iter()
+    .filter_map(|(allowed, face, costs)| allowed.then_some((face, costs)))
 }

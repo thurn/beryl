@@ -3,7 +3,7 @@
 
 use super::{
     Candidates, From, Full, GameTable, Layout, OPTIONS, Opt, Queue, Refusal, Situation, State,
-    collapse, option_sets, progress, refused,
+    collapse, keep_furthest, option_sets, refused,
 };
 use crate::card::FaceIx;
 
@@ -48,9 +48,7 @@ pub(super) fn refusal<L: Layout>(
         let Some(reason) = refused(s, t, now, slot, FaceIx::BACK, costs, From::Priority, 0) else {
             return Ok(None);
         };
-        if most.is_none_or(|previous| progress(reason) > progress(previous)) {
-            most = Some(reason);
-        }
+        keep_furthest(&mut most, reason);
     }
     now.complete()?;
     Ok(most)

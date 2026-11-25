@@ -34,7 +34,6 @@ use crate::zones::counters;
 use super::costs::{graveyard_start, remember_cost_pick, total_cost};
 use super::delve::{DELVE, DELVE_PART, delve_candidates, delve_most, delves};
 use super::steps::{finish, pay_mana, top};
-use super::timing::entry_ability_of;
 
 mod moving;
 
@@ -53,7 +52,8 @@ fn part_at<L: Layout>(
         card, face, costs, ..
     } = entry.item
     else {
-        return entry_ability_of(t, entry).cost().parts().get(index);
+        let ability = entry.ability_in(t).expect("an ability's entry");
+        return ability.cost().parts().get(index);
     };
     let face = t.def(card).face(face);
     // Most spells cost mana alone.
@@ -422,10 +422,14 @@ pub(super) fn pay_substitutes<L: Layout>(
                 (DELVE_PART, delve_most(face, costs, cards))
             })
         }
-        StackItem::Activated { .. } | StackItem::Triggered { .. } => {
-            substitute(entry_ability_of(t, entry).cost().parts())
-                .map(|(part, _, _, most)| (part, most))
-        }
+        StackItem::Activated { .. } | StackItem::Triggered { .. } => substitute(
+            entry
+                .ability_in(t)
+                .expect("an ability's entry")
+                .cost()
+                .parts(),
+        )
+        .map(|(part, _, _, most)| (part, most)),
     };
     if let Some((part, most)) = found {
         let left = most.min(total_cost(s, t, entry, &c).generic);
@@ -596,45 +600,41 @@ pub(super) fn decision<L: Layout>(
     let entry = top(s);
     let (action, chosen) = part_being_paid(t, entry, c);
     let purpose = purpose(action, chosen);
-    let left = step(c).left;
-    Ok(match chosen.measure {
+    let (prompt, left) = (Prompt::new(purpose), step(c).left);
+    let (kind, candidates, prompt) = match chosen.measure {
         // Delve's cards, picked one at a time up to the generic mana left, with an end once
         // mana can pay the rest: Arena's chooser of graveyard cards, "Submit 2".
-        Measure::ForGeneric(_) if action == CostAction::Exile => Decision {
-            player: c.player,
-            decider: c.player,
-            kind: DecisionKind::ChooseUpTo,
-            candidates: Candidates::Options(substitute_options(s, t, c)?),
-            prompt: Prompt::new(purpose).most(left),
-            about: Bitboard::EMPTY,
-        },
+        Measure::ForGeneric(_) if action == CostAction::Exile => (
+            DecisionKind::ChooseUpTo,
+            Candidates::Options(substitute_options(s, t, c)?),
+            prompt.most(left),
+        ),
         // Each object pays one generic mana, or the rest is paid with mana.
-        Measure::ForGeneric(_) => Decision {
-            player: c.player,
-            decider: c.player,
-            kind: DecisionKind::ManaPayment,
-            candidates: Candidates::Options(substitute_options(s, t, c)?),
-            prompt: Prompt::new(purpose).cost(total_cost(s, t, entry, c)),
-            about: Bitboard::EMPTY,
-        },
+        Measure::ForGeneric(_) => (
+            DecisionKind::ManaPayment,
+            Candidates::Options(substitute_options(s, t, c)?),
+            prompt.cost(total_cost(s, t, entry, c)),
+        ),
         // The total the part asks for, and what of it is still to pay.
-        Measure::TotalPower(n) => Decision {
-            player: c.player,
-            decider: c.player,
-            kind: DecisionKind::ChooseObject,
-            candidates: Candidates::Objects(choices(s, t, entry, c)?),
-            prompt: Prompt::new(purpose).count(n).most(left),
-            about: Bitboard::EMPTY,
-        },
+        Measure::TotalPower(n) => (
+            DecisionKind::ChooseObject,
+            Candidates::Objects(choices(s, t, entry, c)?),
+            prompt.count(n).most(left),
+        ),
         // The cards lie in the zone the part takes them from, the hand or the graveyard.
-        Measure::Count(_) => Decision {
-            player: c.player,
-            decider: c.player,
-            kind: DecisionKind::ChooseObject,
-            candidates: Candidates::Objects(choices(s, t, entry, c)?),
-            prompt: Prompt::new(purpose).most(left),
-            about: Bitboard::EMPTY,
-        },
+        Measure::Count(_) => (
+            DecisionKind::ChooseObject,
+            Candidates::Objects(choices(s, t, entry, c)?),
+            prompt.most(left),
+        ),
+    };
+    Ok(Decision {
+        player: c.player,
+        decider: c.player,
+        kind,
+        candidates,
+        prompt,
+        about: Bitboard::EMPTY,
     })
 }
 

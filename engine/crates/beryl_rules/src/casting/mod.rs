@@ -13,7 +13,6 @@
 //! answers that leave the rest completable, so the machine never has to rewind.
 
 mod adventure;
-mod announced;
 mod costs;
 mod delve;
 mod graveyard;
@@ -30,14 +29,15 @@ mod targets;
 mod timing;
 
 pub(crate) use adventure::finish_adventure;
-pub use announced::target_takes;
 pub use costs::cost_being_cast;
 pub use legal::{payable_responses, pointless};
 pub(crate) use legal::{priority_options, refusal};
 pub(crate) use spent::pays as pays_from_spent;
-pub(crate) use stack::{leave_stack, search_cast_options, unstack};
+pub(crate) use stack::{leave_stack, unstack};
+pub(crate) use start::search_cast_options;
 pub(crate) use steps::{begin_activate, begin_cast, cast_before, decision, perform, targeted};
+pub use targets::target_takes;
 pub(crate) use targets::{
     TargetSet, new_targets, player_matches, spells, still_legal, target_trigger,
 };
-pub(crate) use timing::{entry_ability, sorcery_timing};
+pub(crate) use timing::sorcery_timing;

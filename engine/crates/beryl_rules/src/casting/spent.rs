@@ -14,16 +14,15 @@ use crate::layout::Layout;
 use crate::state::{CastKind, Casting, ManaAmounts, StackEntry, State};
 use crate::table::{Capability, GameTable};
 
-use super::timing::entry_ability;
-
 /// Whether the effect of `entry`'s ability reads the mana spent on its X.
 fn reads_spent<L: Layout>(t: &GameTable, entry: &StackEntry<L>) -> bool {
-    entry_ability(t, entry).is_some_and(|ability| match ability.body() {
-        Behavior::Data(effect) => {
-            effect.any(&|instruction| matches!(instruction, Effect::MayCast { within_x: true, .. }))
-        }
-        Behavior::Custom(_) => false,
-    })
+    entry
+        .ability_in(t)
+        .is_some_and(|ability| match ability.body() {
+            Behavior::Data(effect) => effect
+                .any(&|instruction| matches!(instruction, Effect::MayCast { within_x: true, .. })),
+            Behavior::Custom(_) => false,
+        })
 }
 
 /// Records `spent`, mana just spent paying the cost of what `c` casts or activates, on its

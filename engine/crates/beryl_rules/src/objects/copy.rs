@@ -23,7 +23,7 @@ use beryl_card::{Amount, ExceptIx, Objects, Words};
 use crate::additions::Addition;
 use crate::bitboard::Bitboard;
 use crate::card::Stop;
-use crate::casting::{self, entry_ability};
+use crate::casting;
 use crate::decision::Opt;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -170,7 +170,7 @@ fn choose_new_targets<L: Layout>(
         face: copy.face(),
         costs: copy.costs(),
     };
-    let Some(ability) = entry_ability(game.table, copy) else {
+    let Some(ability) = copy.ability_in(game.table) else {
         return Ok(());
     };
     for i in 0..copy.targets.len() {

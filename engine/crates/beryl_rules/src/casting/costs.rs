@@ -14,7 +14,6 @@ use crate::table::GameTable;
 use super::legal::spent_by_cost;
 use super::steps::top;
 use super::targets::source_of;
-use super::timing::entry_ability_of;
 
 /// Where a card is cast from, and what that changes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -238,7 +237,7 @@ pub fn cost_being_cast<L: Layout>(s: &State<L>, t: &GameTable, x: u8) -> Option<
 /// but a source that pays with itself.
 pub(super) fn spent_by_entry<L: Layout>(t: &GameTable, entry: &StackEntry<L>) -> Bitboard<L::Slot> {
     match source_of(entry) {
-        Some(source) => spent_by_cost(source, entry_ability_of(t, entry)),
+        Some(source) => spent_by_cost(source, entry.ability_in(t).expect("an ability's entry")),
         None => Bitboard::EMPTY,
     }
 }

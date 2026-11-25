@@ -33,7 +33,7 @@ mod preparation;
 pub(super) mod special;
 mod ways;
 
-use ways::{Ways, can_fuse, cast_sources};
+use ways::{Ways, cast_sources};
 
 /// What every check of one player's options reads, found once for all of them: the mana they
 /// could pay with and whether an opponent limits them to sorcery speed, each found at the first
@@ -52,28 +52,15 @@ pub(super) struct Situation<L: Layout = Small, const TARGETS: bool = true> {
     full: Cell<bool>,
 }
 
-impl<L: Layout> Situation<L> {
-    pub(super) fn of(player: Seat) -> Situation<L> {
-        Situation {
-            player,
-            funds: OnceCell::new(),
-            full: Cell::new(false),
-        }
-    }
-}
-
-impl<L: Layout> Situation<L, false> {
-    /// The situation of `player` when a spell or ability with no legal target yet still counts.
-    fn ignoring_targets(player: Seat) -> Situation<L, false> {
-        Situation {
-            player,
-            funds: OnceCell::new(),
-            full: Cell::new(false),
-        }
-    }
-}
-
 impl<L: Layout, const TARGETS: bool> Situation<L, TARGETS> {
+    pub(super) fn of(player: Seat) -> Self {
+        Situation {
+            player,
+            funds: OnceCell::new(),
+            full: Cell::new(false),
+        }
+    }
+
     /// The player's funds. Most priority decisions offer nothing that costs mana, as an
     /// opponent's turn with no instant in hand, so the source scan waits until a check needs it.
     fn funds(&self, s: &State<L>, t: &GameTable) -> Option<&Funds<L>> {
@@ -241,14 +228,17 @@ fn refused<L: Layout, const TARGETS: bool>(
     .then_some(Refusal::Target)
 }
 
-/// How far a refusal's way of casting got through [`refused`]'s checks, which run in this
-/// order.
-fn progress<L: Layout>(r: Refusal<L>) -> u8 {
-    match r {
+/// Keeps in `most` whichever of it and `r` got further through [`refused`]'s checks, which
+/// run in the order of `progress`.
+fn keep_furthest<L: Layout>(most: &mut Option<Refusal<L>>, r: Refusal<L>) {
+    let progress = |r| match r {
         Refusal::Timing { .. } | Refusal::LandPlayed => 0,
         Refusal::Mana => 1,
         Refusal::Cost => 2,
         Refusal::Target => 3,
+    };
+    if most.is_none_or(|m| progress(r) > progress(m)) {
+        *most = Some(r);
     }
 }
 
@@ -289,44 +279,14 @@ pub(crate) fn refusal<L: Layout>(
             let Some(r) = refused(s, t, &now, slot, f, costs, From::Priority, increase) else {
                 return Ok(None);
             };
-            if most.is_none_or(|m| progress(r) > progress(m)) {
-                most = Some(r);
-            }
+            keep_furthest(&mut most, r);
         }
     }
-    if t.can(Capability::Morph) && ways.plain && !ways.alternative && has_morph(def.front()) {
-        let Some(r) = refused(
-            s,
-            t,
-            &now,
-            slot,
-            FaceIx::DOWN,
-            Castings::NONE,
-            From::Priority,
-            ways.increase,
-        ) else {
+    for (face, costs) in special::casts(s, t, player, slot, def, ways) {
+        let Some(r) = refused(s, t, &now, slot, face, costs, From::Priority, ways.increase) else {
             return Ok(None);
         };
-        if most.is_none_or(|m| progress(r) > progress(m)) {
-            most = Some(r);
-        }
-    }
-    if can_fuse(s, def, player, slot) {
-        let Some(r) = refused(
-            s,
-            t,
-            &now,
-            slot,
-            FaceIx::FUSED,
-            Castings::FUSE,
-            From::Priority,
-            ways.increase,
-        ) else {
-            return Ok(None);
-        };
-        if most.is_none_or(|m| progress(r) > progress(m)) {
-            most = Some(r);
-        }
+        keep_furthest(&mut most, r);
     }
     // Only sorcery speed, where a face could be cast at instant speed but for the limit.
     if most == Some(Refusal::Timing { by: None }) {
@@ -719,7 +679,8 @@ pub fn payable_responses<L: Layout>(
     player: Seat,
 ) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
     debug_assert_ne!(s.turn().active(), player);
-    let now = Situation::<L, false>::ignoring_targets(player);
+    // A spell or ability with no legal target yet still counts.
+    let now = Situation::<L, false>::of(player);
     let mut out = Default::default();
     cast_options::<L, false, false>(
         s,

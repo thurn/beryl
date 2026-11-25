@@ -32,7 +32,7 @@ use super::parts;
 use super::spent;
 use super::start;
 use super::targets::{TargetSet, target_options};
-use super::timing::{activated, entry_ability};
+use super::timing::activated;
 
 /// Begins casting a spell: moves it to the stack and starts the machine.
 ///
@@ -194,7 +194,7 @@ pub(super) fn top<L: Layout>(s: &State<L>) -> &StackEntry<L> {
 
 /// The target specs of the spell or ability being cast.
 pub(super) fn specs<L: Layout>(t: &GameTable, entry: &StackEntry<L>) -> &'static [TargetSpec] {
-    entry_ability(t, entry).map_or(&[], |a| a.targets())
+    entry.ability_in(t).map_or(&[], |a| a.targets())
 }
 
 /// Moves the machine on to its next question, or finishes.
@@ -479,6 +479,8 @@ fn x_options<L: Layout>(
         StackItem::Activated { .. } | StackItem::Triggered { .. } => 0,
     };
     let exclude = spent_by_entry(t, entry);
+    let paying = mana::Paying::entry(t, entry);
+    let other = SacrificeCost::of_entry(t, entry);
     let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
     for x in least..(least.saturating_add(64)) {
         if c.from_graveyard_permission
@@ -490,8 +492,7 @@ fn x_options<L: Layout>(
         let mut probe = entry.clone();
         probe.x = x;
         let cost = total_cost(s, t, &probe, c);
-        let paying = mana::Paying::entry(t, entry);
-        let available = match SacrificeCost::of_entry(t, entry) {
+        let available = match &other {
             Some(other) => other.payable(s, t, cost, paying)?,
             None => mana::payable(s, t, c.player, cost, exclude, paying)?,
         };
@@ -510,14 +511,15 @@ pub(crate) fn decision<L: Layout>(
     sink: &mut Sink<L>,
     c: &Casting<L>,
 ) -> Result<Decision<L>, Full> {
-    let options = |kind: DecisionKind, list: L::Queue<Opt<L>, OPTIONS>, prompt: Prompt| Decision {
+    let ask = |kind: DecisionKind, candidates: Candidates<L>, prompt: Prompt| Decision {
         player: c.player,
         decider: c.player,
         kind,
-        candidates: Candidates::Options(list),
+        candidates,
         prompt,
         about: Bitboard::EMPTY,
     };
+    let options = |kind, list, prompt| ask(kind, Candidates::Options(list), prompt);
     Ok(match c.step {
         CastStep::X => options(
             DecisionKind::X,
@@ -542,14 +544,11 @@ pub(crate) fn decision<L: Layout>(
         // A spec that can choose players lists them as options, by seat, which a `Choice`
         // counts in, and then any objects it can also choose, in the candidate order. One
         // that chooses abilities on the stack lists them as options too.
-        CastStep::Target { left } => Decision {
-            player: c.player,
-            decider: c.player,
-            kind: DecisionKind::Target,
-            candidates: target_candidates(s, t, c)?,
-            prompt: Prompt::new(Purpose::Target).most(left),
-            about: Bitboard::EMPTY,
-        },
+        CastStep::Target { left } => ask(
+            DecisionKind::Target,
+            target_candidates(s, t, c)?,
+            Prompt::new(Purpose::Target).most(left),
+        ),
         CastStep::Plan => {
             let entry = top(s);
             let cost = total_cost(s, t, entry, c);

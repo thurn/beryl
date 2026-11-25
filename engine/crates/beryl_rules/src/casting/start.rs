@@ -15,7 +15,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose, Stop};
 use beryl_card::FaceIx;
 
-use crate::decision::{Decision, DecisionKind, Opt};
+use crate::decision::{Decision, DecisionKind, OPTIONS, Opt};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -28,8 +28,12 @@ use crate::state::{
     Continuous, CostChange, Duration, ManaAmounts, Memo, MoveReplacement, ObjectRef, Pending,
     Permission, Permitted, State,
 };
+use crate::table::GameTable;
 
-use super::{stack, steps};
+use super::costs::From;
+use super::legal::special::face_down_casts;
+use super::legal::{Situation, cast_options};
+use super::steps;
 
 /// Offers `player` one cast from `cards` during the resolution, with the option to decline.
 /// Returns the slot of the spell cast, if any.
@@ -77,9 +81,9 @@ fn offer_spell<L: Layout>(
         return Ok(None);
     }
     let mut options = match face {
-        CastFace::Up => stack::offer_options(game.state, game.table, cards, player, free)?,
+        CastFace::Up => offer_options(game.state, game.table, cards, player, free)?,
         CastFace::DownTurnedUpWhenUsed => {
-            stack::face_down_offer_options(game.state, game.table, cards, player, free)?
+            face_down_offer_options(game.state, game.table, cards, player, free)?
         }
     };
     if let Some(below) = below {
@@ -136,6 +140,55 @@ fn offer_spell<L: Layout>(
         game.state.remember(slot, Memo::TurnsUpWhenUsed)?;
     }
     Ok(Some(slot))
+}
+
+/// The options of a resolution's offer to cast a card (see CR 608.2g): not casting, then
+/// each way of casting one of the cards.
+fn offer_options<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    cards: Bitboard<L::Slot>,
+    player: Seat,
+    free: bool,
+) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
+    let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
+    out.push(Opt::Pass)?;
+    let now = Situation::of(player);
+    cast_options::<L, true, false>(s, t, &now, cards, From::Resolution { free }, &mut out)?;
+    now.complete()?;
+    Ok(out)
+}
+
+/// The options of a resolution's offer to cast one of `cards` face down
+/// ([`crate::card::CastFace::DownTurnedUpWhenUsed`]): not casting, then casting each card
+/// face down.
+fn face_down_offer_options<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    cards: Bitboard<L::Slot>,
+    player: Seat,
+    free: bool,
+) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
+    let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
+    out.push(Opt::Pass)?;
+    let now = Situation::of(player);
+    face_down_casts::<L, true>(s, t, &now, cards, From::Resolution { free }, &mut out)?;
+    now.complete()?;
+    Ok(out)
+}
+
+/// Appends the payable casts whose faces allow casting from the library while searching it
+/// (see CR 608.2g). The search supplies the cards in the player's own library.
+pub(crate) fn search_cast_options<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    library: Bitboard<L::Slot>,
+    player: Seat,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
+) -> Result<(), Full> {
+    let now = Situation::of(player);
+    cast_options::<L, true, true>(s, t, &now, library, From::Resolution { free: false }, out)?;
+    now.complete()
 }
 
 /// Performs a cast already chosen by the player during a resolution. At priority, the engine

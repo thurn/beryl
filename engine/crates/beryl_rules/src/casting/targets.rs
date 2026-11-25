@@ -1,10 +1,11 @@
-//! Choosing targets (CR 601.2c) and whether they are still legal (CR 115.3, see CR 608.2b).
+//! Choosing targets (CR 601.2c), what the target being announced is chosen for, and whether
+//! targets are still legal (CR 115.3, see CR 608.2b).
 //!
 //! Implements: CR 115.3, CR 115.5
 
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
-use crate::card::{Abilities, Ability, TargetKind, TargetSpec, Words};
+use crate::card::{Abilities, Ability, Takes, TargetKind, TargetSpec, Words};
 use crate::continuous::rule_change;
 use crate::filter::{self, Evaluate, Filter};
 use crate::fixed::Full;
@@ -13,13 +14,12 @@ use crate::layout::{Layout, Queue, Small};
 use crate::replacement::event::Sink;
 use crate::replacement::protection;
 use crate::state::{
-    AbilityTarget, CastKind, CastStep, Casting, StackEntry, StackItem, State, Target, TargetPlace,
-    Zone, placed,
+    AbilityTarget, CastKind, CastStep, Casting, Pending, StackEntry, StackItem, State, Target,
+    TargetPlace, Zone, placed,
 };
 use crate::table::{Capability, GameTable};
 
 use super::steps::{ability_event, advance, specs, top};
-use super::timing::entry_ability;
 
 /// The objects, players and abilities on the stack a target spec can choose. A spec of most
 /// kinds chooses only one of them, and the others are empty; "any target" chooses from
@@ -48,7 +48,7 @@ pub(super) struct Itself<L: Layout = Small> {
     pub on_stack: bool,
 }
 
-/// An ability not yet on the stack, being activated.
+/// Nothing on the stack yet: an ability being activated, or a copy being made.
 impl<L: Layout> Default for Itself<L> {
     fn default() -> Self {
         Itself {
@@ -340,6 +340,22 @@ impl<L: Layout> TargetSet<L> {
     pub(super) fn count(self) -> u32 {
         self.objects.count() + self.players.count() + self.abilities.count_ones()
     }
+
+    /// Takes out `target`, already chosen for the same instance of the word "target", which
+    /// can't be chosen again ([CR 115.3]).
+    ///
+    /// [CR 115.3]: https://yawgatog.com/resources/magic-rules/#R1153
+    fn remove(&mut self, target: Target<L>) {
+        if let Some(r) = target.as_object() {
+            self.objects.remove(r.slot);
+        }
+        if let Some(player) = target.as_player() {
+            self.players.remove(player);
+        }
+        if let Some(AbilityTarget::At(place)) = target.as_ability() {
+            self.abilities &= !(1 << place);
+        }
+    }
 }
 
 /// Whether every required target can be chosen
@@ -441,23 +457,11 @@ pub(crate) fn new_targets<L: Layout>(
     let spec_ix = entry.targets.as_slice()[place.index()].spec();
     let spec = &ability.targets()[spec_ix.index()];
     // Not yet on the stack, the copy is no candidate, and every entry there is below it.
-    let itself = Itself {
-        spell: None,
-        on_stack: false,
-    };
+    let itself = Itself::default();
     let mut set = candidates(s, t, spec, entry.controller(), itself, entry.x, None);
     for (other, target) in placed(entry.targets.as_slice()) {
-        if other == place || target.spec() != spec_ix {
-            continue;
-        }
-        if let Some(r) = target.as_object() {
-            set.objects.remove(r.slot);
-        }
-        if let Some(player) = target.as_player() {
-            set.players.remove(player);
-        }
-        if let Some(AbilityTarget::At(at)) = target.as_ability() {
-            set.abilities &= !(1 << at);
+        if other != place && target.spec() == spec_ix {
+            set.remove(target);
         }
     }
     set
@@ -476,7 +480,7 @@ pub(crate) fn target_trigger<L: Layout>(
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
     let entry = top(s);
-    let Some(ability) = entry_ability(t, entry) else {
+    let Some(ability) = entry.ability_in(t) else {
         return Ok(());
     };
     if ability.targets().is_empty() {
@@ -515,16 +519,37 @@ pub(super) fn target_options<L: Layout>(
     let spec = &specs(t, entry)[c.spec.index()];
     let itself = Itself::top(entry);
     let mut set = candidates(s, t, spec, c.player, itself, entry.x, source_of(entry));
-    for target in entry.targets.iter().filter(|x| x.spec() == c.spec) {
-        if let Some(r) = target.as_object() {
-            set.objects.remove(r.slot);
-        }
-        if let Some(player) = target.as_player() {
-            set.players.remove(player);
-        }
-        if let Some(AbilityTarget::At(place)) = target.as_ability() {
-            set.abilities &= !(1 << place);
-        }
+    for &target in entry.targets.iter().filter(|x| x.spec() == c.spec) {
+        set.remove(target);
     }
     set
+}
+
+/// Whether the effect whose target is being announced
+/// ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c): "The player announces
+/// their choice of an appropriate object or player for each target the spell requires") would
+/// take the object in `slot` from its controller, were it chosen
+/// ([`Ability::takes_target`](crate::card::Ability::takes_target)): a permanent removed from
+/// the battlefield, or a spell countered
+/// (see [CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter a spell or
+/// ability means to cancel it, removing it from the stack. It doesn't resolve and none of
+/// its effects occur. A countered spell is put into its owner's graveyard."). This describes
+/// the choice: it neither runs the effect nor says whether the object is a legal target.
+pub fn target_takes<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
+    let Pending::Casting(c) = *s.pending() else {
+        return false;
+    };
+    let announcing = matches!(c.step, CastStep::TargetCount | CastStep::Target { .. });
+    let ability = s.stack().last().and_then(|entry| entry.ability_in(t));
+    let how = match s.object(slot).zone() {
+        Zone::Battlefield => Takes::Removal,
+        Zone::Stack => Takes::Counter,
+        Zone::Library
+        | Zone::Hand
+        | Zone::Graveyard
+        | Zone::Exile
+        | Zone::Nowhere
+        | Zone::Merged => return false,
+    };
+    announcing && ability.is_some_and(|ability| ability.takes_target(c.spec, how))
 }
