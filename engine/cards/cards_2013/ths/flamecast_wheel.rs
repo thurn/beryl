@@ -67,5 +67,23 @@ pub mod scenarios {
                 THEM.has(Zone::Battlefield, ELEMENTAL, 1),
                 ME.has(Zone::Graveyard, WHEEL, 1),
             ]),
+        // {T} is a cost, so a tapped Wheel cannot be activated even with {5} and a target
+        // available. P0's only actions are then mana abilities, so the engine gives P0 no
+        // priority and the first decision is P1's. A Wheel that could be activated would
+        // stop at P0's priority instead.
+        Scenario::new("Flamecast Wheel cannot be activated while tapped")
+            .battlefield(
+                P0,
+                &[
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .permanents(P0, &[Permanent::new(WHEEL).tapped()])
+            .battlefield(P1, &[GIANT])
+            .actions(&[THEM.deciding(DecisionKind::Priority, 2)]),
     ];
 }
