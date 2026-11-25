@@ -59,6 +59,27 @@ TICKET_WRITE: re.Pattern[str] = re.compile(
 )
 TRIAL_BRANCH: re.Pattern[str] = re.compile(r"\btrial/([A-Za-z0-9.]+)")
 TREE_PATH: re.Pattern[str] = re.compile(r"trees[/\\](tree-[0-9]+)")
+# A quoted argument, such as a closing note given to `ignite close -m`. Sessions write what
+# they did not do in these ("Did not run just bugs done"), so the command rules skip them.
+QUOTED: re.Pattern[str] = re.compile(r'"(?:[^"\\]|\\.)*"|\'[^\']*\'')
+# The `bead:` line of a bug report's front matter, which names the ticket filed for it. The
+# copy of a bug ticket has to read the report, so seeing the source's ID there is not a route
+# between the arms. A Claude transcript's tool output keeps its line breaks as the two
+# characters `\n`, so either kind of break ends the line.
+REPORT_BEAD: re.Pattern[str] = re.compile(
+    r"(?:^|\\n)[ \t]*(?:[0-9]+:[ \t]*)?bead:[ \t]*[A-Za-z0-9.]+[ \t]*(?=\\n|$)", re.M
+)
+
+
+def unquoted(text: str) -> str:
+    """`text` with every quoted argument emptied. A command hidden inside quotes
+    (`sh -c "git fetch"`) escapes the command rules, but the suspect scan still reads it.
+    """
+    return QUOTED.sub('""', text)
+
+
+def without_report_bead(trace: Trace) -> str:
+    return REPORT_BEAD.sub("", trace.text) if trace.kind == "output" else trace.text
 
 
 def commands(arm: Arm) -> list[Trace]:
@@ -84,7 +105,7 @@ def void_reasons(
     names_source = mention(sid)
     for trace in copy.traces:
         text = trace.text
-        if names_source.search(text):
+        if names_source.search(without_report_bead(trace)):
             found.append(
                 f"the copy's {trace.kind} names the source {sid} ({trace.where})"
             )
@@ -93,22 +114,26 @@ def void_reasons(
                 found.append(
                     f"the copy's {trace.kind} shows trial/{branch} ({trace.where})"
                 )
-        for tree in TREE_PATH.findall(text):
+        if trace.kind != "command":
+            # Output can show another tree without the copy looking for it: the newest log
+            # under `ignite/runs` may be another session's. The suspect scan still reports
+            # the source's own tree wherever it appears.
+            continue
+        bare = unquoted(text)
+        for tree in TREE_PATH.findall(bare):
             if copy.tree and tree != copy.tree:
                 found.append(
-                    f"the copy's {trace.kind} shows another tree, {tree} ({trace.where})"
+                    f"the copy's command shows another tree, {tree} ({trace.where})"
                 )
-        if trace.kind != "command":
-            continue
-        if FETCH.search(text):
+        if FETCH.search(bare):
             found.append(f"the copy ran git fetch ({trace.where})")
-        if ORIGIN_REF.search(text):
+        if ORIGIN_REF.search(bare):
             found.append(f"the copy read a ref under origin/ ({trace.where})")
-        if FLAKY.search(text):
+        if FLAKY.search(bare):
             found.append(f"the copy switched a check or a flaky record ({trace.where})")
-        if BUGS_DONE.search(text):
+        if BUGS_DONE.search(bare):
             found.append(f"the copy ran just bugs done ({trace.where})")
-        for verb, target in TICKET_WRITE.findall(text):
+        for verb, target in TICKET_WRITE.findall(bare):
             if target.rstrip(".") != cid:
                 found.append(
                     f"the copy ran ignite ticket {verb} on {target} ({trace.where})"
@@ -188,7 +213,7 @@ def suspect(
             if t and t != own_title
         ]
         for trace in this.traces:
-            if mention(oid).search(trace.text):
+            if mention(oid).search(without_report_bead(trace)):
                 found.append(
                     Found(f"the {name} saw the other arm's ID {oid}", trace.where)
                 )

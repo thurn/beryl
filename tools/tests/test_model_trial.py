@@ -554,6 +554,40 @@ def test_each_void_rule_of_the_copy(trace: Trace, reason: str) -> None:
     assert any(reason in f for f in found), found
 
 
+@pytest.mark.parametrize(
+    "trace",
+    [
+        # Closing notes say what the session chose not to run.
+        cmd('ignite close -m "Did not run just bugs done or ignite flaky on rust:x."'),
+        cmd(
+            "git branch trial/C2 HEAD && ignite close -m 'stopped before ignite flaky on'"
+        ),
+        # A bug report's front matter names the ticket filed for it.
+        Trace("output", "kind: bug\n6: bead: E1.1\ncreated: 2026", "t:2"),
+        Trace("output", "kind: bug\\nbead: E1.1\\ncreated: 2026", "t:2"),
+        # The newest run log can be another session's, in another tree.
+        Trace(
+            "output", "Compiling beryl_art (/Volumes/BerylTrees/trees/tree-07/x)", "t:3"
+        ),
+    ],
+)
+def test_words_that_only_mention_a_void_rule_do_not_void(trace: Trace) -> None:
+    assert voids(arm("E1.1"), arm("C2", trace, tree="tree-04")) == []
+
+
+def test_an_agy_command_is_its_command_line_alone() -> None:
+    call = {
+        "name": "run_command",
+        "args": {
+            "CommandLine": json.dumps("cd tree && ignite check"),
+            "toolSummary": "Run ignite check on the amended commit",
+        },
+    }
+    text = grade.agy_command(call)
+    assert text == "cd tree && ignite check"
+    assert voids(arm("E1.1"), arm("C2", cmd(text), tree="tree-04")) == []
+
+
 def test_a_copy_branch_from_another_commit_is_void() -> None:
     found = voids(arm("E1.1"), arm("C2"), base="b" * 40)
     assert any("branch starts at" in f for f in found)

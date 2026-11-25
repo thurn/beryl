@@ -227,12 +227,28 @@ def agy_traces(path: Path, start: str, end: str) -> list[Trace]:
                 found.append(Trace("message", text, where))
             for call in record.get("tool_calls") or []:
                 if isinstance(call, dict):
-                    found.append(
-                        Trace("command", json.dumps(call.get("args") or {}), where)
-                    )
+                    found.append(Trace("command", agy_command(call), where))
         elif record.get("type") == "GENERIC" and text:
             found.append(Trace("output", text, where))
     return found
+
+
+def agy_command(call: dict[str, Any]) -> str:
+    """What an Antigravity tool call ran. A `run_command` call's `CommandLine` holds the shell
+    command as a JSON string, which is decoded. `toolSummary` is the model's own description
+    of the call ("Run ignite check on the amended commit"), not something it ran, so it is left
+    out: matching the void rules against it voided pairs for words like "check on"."""
+    args = call.get("args")
+    if not isinstance(args, dict):
+        return ""
+    line = args.get("CommandLine")
+    if isinstance(line, str):
+        try:
+            decoded = json.loads(line)
+        except json.JSONDecodeError:
+            return line
+        return decoded if isinstance(decoded, str) else line
+    return json.dumps({k: v for k, v in args.items() if k != "toolSummary"})
 
 
 def attachments(pair: Pair, ticket_id: str, arm: str, since: str | None) -> list[str]:
