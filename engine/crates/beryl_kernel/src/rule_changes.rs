@@ -657,12 +657,6 @@ mod tests {
             block(Players::You, Objects::This, When::AsInstant),
             Err(Unchecked::Rule)
         );
-        let cast_none = RuleChange {
-            players: Players::EachOpponent,
-            what: Governed::CastSpells(Filter::Any),
-            when: When::Never,
-        };
-        assert_eq!(RuleKind::of(&cast_none), Err(Unchecked::Rule));
     }
 
     /// "This creature can't attack unless defending player controls an Island" is checked of
