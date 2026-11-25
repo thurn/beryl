@@ -20,7 +20,7 @@ use std::hint::black_box;
 use beryl_cards::CARDS;
 use beryl_cards::names;
 use beryl_engine::{
-    Choice, Decision, Format, GameTable, Large, Observation, Profile, Scratch, Step, Stops, State,
+    Choice, Decision, Format, GameTable, Large, Observation, Profile, Scratch, State, Step, Stops,
     apply, next,
 };
 use beryl_search::{Inline, RolloutPolicy};

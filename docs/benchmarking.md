@@ -177,12 +177,13 @@ it is in play. The present-cost gate measures what it costs while one is:
   and the layer recomputes per step. Ignite lists each family with a bar as
   `counts:family/<name>`.
 
-A subgame cannot be paired: only `State<Large>` suspends a game, and a state inside
-a subgame has no control with a card taken out. `just count-gate --subgame`
-(`beryl_bench::subgame`, `benches/subgame_counts.rs`) reports it unpaired, with no bar:
-instructions per rollout step in the opening turns of a subgame against the same
-turns of a plain `Large` game, both cut from seeded games with four Shahrazad in the deck.
-A step before a subgame begins has Shahrazad only as a spell, which has no static or
+A subgame cannot be paired: only `State<Large>` suspends a game, and a state
+inside a subgame has no control with a card taken out.
+`just count-gate --subgame` (`beryl_bench::subgame`,
+`benches/subgame_counts.rs`) reports it unpaired, with no bar: instructions per
+rollout step in the opening turns of a subgame against the same turns of a plain
+`Large` game, both cut from seeded games with four Shahrazad in the deck. A step
+before a subgame begins has Shahrazad only as a spell, which has no static or
 triggered ability, so its control is itself.
 
 What a paired step does not see: work the mechanism did earlier that changed the

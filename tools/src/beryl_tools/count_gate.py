@@ -312,7 +312,9 @@ def subgame_report() -> int:
         if line.startswith("{") and "subgame_steps" in line:
             found = json.loads(line)
     if sub is None or plain is None or found is None:
-        bench.log("Gungraun or subgame_steps reported nothing for the subgame measurement")
+        bench.log(
+            "Gungraun or subgame_steps reported nothing for the subgame measurement"
+        )
         return 2
     per_sub = sub / found["subgame_steps"]
     per_plain = plain / found["plain_steps"]

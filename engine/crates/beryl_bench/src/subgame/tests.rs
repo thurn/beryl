@@ -12,5 +12,8 @@ fn both_sides_roll_steps() {
     let sub = roll(&w, Side::Subgame);
     let plain = roll(&w, Side::Plain);
     assert!(sub > 0 && plain > 0, "{sub} {plain}");
-    assert_eq!((sub, plain), (roll(&w, Side::Subgame), roll(&w, Side::Plain)));
+    assert_eq!(
+        (sub, plain),
+        (roll(&w, Side::Subgame), roll(&w, Side::Plain))
+    );
 }

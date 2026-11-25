@@ -37,7 +37,10 @@ fn in_plain_game(w: SubgameWorkload) -> u64 {
 }
 
 #[cfg(target_os = "linux")]
-library_benchmark_group!(name = subgame_cost, benchmarks = [in_subgame, in_plain_game]);
+library_benchmark_group!(
+    name = subgame_cost,
+    benchmarks = [in_subgame, in_plain_game]
+);
 
 #[cfg(target_os = "linux")]
 main!(library_benchmark_groups = subgame_cost);
