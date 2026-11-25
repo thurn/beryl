@@ -977,51 +977,49 @@ How a broken build or a crash is survived:
   home and posts a notification. On the hub's machine it also kickstarts a hub
   that has not answered an HTTP request in two runs in a row. The monitor has no
   agent logic of its own, and its only hub call is the report of a stuck trees
-  drive, below. A run gives up after 100 seconds, because
-  the login service starts no new run while one is still running, and the
-  notification's helper process runs without the monitor waiting for it. A
-  restart ends every daemon in `starts.jsonl` that did not stop on purpose, not
-  only the newest, so a hung daemon cannot keep `daemon.lock` through later
-  restarts.
+  drive, below. A run gives up after 100 seconds, because the login service
+  starts no new run while one is still running, and the notification's helper
+  process runs without the monitor waiting for it. A restart ends every daemon
+  in `starts.jsonl` that did not stop on purpose, not only the newest, so a hung
+  daemon cannot keep `daemon.lock` through later restarts.
 - Each monitor run also probes every trees root the daemon uses, which the
   daemon records in `trees-roots.json` in the Ignite home after each heartbeat.
   The probe is a child process, `ignite internal probe-storage`, that reads the
   root's metadata and lists the root and its first entry. A read that fails
-  counts as an answer; a probe still running after 20 seconds means the drive
-  is stuck. The monitor never reads the drive itself, because a process blocked
-  on a stuck drive cannot exit, and the login service starts no new monitor
-  while one runs. A stuck probe keeps holding its lock file under `monitor/` in
-  the Ignite home, so later runs count the root as stuck without starting
-  another.
+  counts as an answer; a probe still running after 20 seconds means the drive is
+  stuck. The monitor never reads the drive itself, because a process blocked on
+  a stuck drive cannot exit, and the login service starts no new monitor while
+  one runs. A stuck probe keeps holding its lock file under `monitor/` in the
+  Ignite home, so later runs count the root as stuck without starting another.
 - While a trees root is stuck, the monitor neither kickstarts the daemon nor
   rolls back its build, since a new daemon would block on the drive too. It
   writes `justiciar-needed.json` at once with a reason that names the root and
   says the machine needs a restart, notifies, and repeats both hourly. It also
   posts `POST /machines/storage-stuck` to the hub, which files the machine's P0
   "has stopped reporting" ticket at once, naming the drive as the cause, rather
-  than after half an hour of silence. The headless justiciar's prompt carries the same reason. Once the
-  drive answers again, the daemon's own failures count from that run.
+  than after half an hour of silence. The headless justiciar's prompt carries
+  the same reason. Once the drive answers again, the daemon's own failures count
+  from that run.
 - A machine's entry in `ignite.toml` can let the monitor restart it:
   `[machine.<name>] stuck_storage_reboot_after_s` is how long a root may stay
   stuck before the monitor restarts the machine (`shutdown /r /f /t 0` on
   Windows, `shutdown -r now` on macOS, which needs the right to run `shutdown`
-  as the superuser). Unset, the monitor never restarts it. It restarts a
-  machine at most once in 6 hours for this reason, and records each attempt in
+  as the superuser). Unset, the monitor never restarts it. It restarts a machine
+  at most once in 6 hours for this reason, and records each attempt in
   `monitor.json`. A graceful restart can hang on the stuck drive itself, so
   `stuck_storage_force_command` names a program and its arguments that the
   monitor runs if the machine has not started again 10 minutes after the
   restart.
-- The force command is the operator's to install, since forcing a restart
-  needs administrator rights. On Windows, create a scheduled task that runs as
-  SYSTEM with the highest privileges, for example `ignite.force-restart`
-  running `shutdown /r /f /t 0`, and let the user run it on demand
-  (`schtasks /Create /TN ignite.force-restart /RU SYSTEM /RL HIGHEST /SC ONCE
-  /ST 00:00 /TR "shutdown /r /f /t 0"`, then grant the user read and execute
-  rights on the task). Then set `stuck_storage_force_command =
-  ["schtasks", "/Run", "/TN", "ignite.force-restart"]`. On macOS, allow the
-  user to run `/sbin/reboot` without a password in `sudoers` and name
-  `["sudo", "-n", "/sbin/reboot", "-q"]`, which restarts without waiting for
-  processes to exit.
+- The force command is the operator's to install, since forcing a restart needs
+  administrator rights. On Windows, create a scheduled task that runs as SYSTEM
+  with the highest privileges, for example `ignite.force-restart` running
+  `shutdown /r /f /t 0`, and let the user run it on demand
+  (`schtasks /Create /TN ignite.force-restart /RU SYSTEM /RL HIGHEST /SC ONCE /ST 00:00 /TR "shutdown /r /f /t 0"`,
+  then grant the user read and execute rights on the task). Then set
+  `stuck_storage_force_command = ["schtasks", "/Run", "/TN", "ignite.force-restart"]`.
+  On macOS, allow the user to run `/sbin/reboot` without a password in `sudoers`
+  and name `["sudo", "-n", "/sbin/reboot", "-q"]`, which restarts without
+  waiting for processes to exit.
 - The daemon reports each crash record, and a loop that keeps failing, to the
   hub as a justiciar report. See [The justiciar](#the-justiciar).
 
