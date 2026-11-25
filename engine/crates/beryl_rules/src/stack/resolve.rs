@@ -497,9 +497,9 @@ fn body<L: Layout>(
         // is put into its owner's graveyard. As the final part of an ability's resolution, the
         // ability is removed from the stack and ceases to exist." Unless its own effect moved
         // it already, as Time Spiral exiles itself.
-        if let Some(spell) = spell.filter(|&spell| s.is_current(spell)) {
+        if let Some(spell) = spell.and_then(|spell| s.spell(spell)) {
             if entry.face() == FaceIx::BACK && def.shape == Shape::Adventure {
-                casting::finish_adventure(s, t, sink, entry, spell.slot)?;
+                casting::finish_adventure(s, t, sink, entry, spell.slot())?;
             } else {
                 casting::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
             }

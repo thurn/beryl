@@ -368,10 +368,8 @@ fn how_many<L: Layout>(
     let Subject::A(filter) = subject else {
         unreachable!("the card table refuses a set of objects that is this one");
     };
-    objects
-        .filter(|slot| {
-            s.object(slot).zone() == Zone::Battlefield && filter.matches(s, t, slot, you, words)
-        })
+    (s.permanents_in(objects).slots())
+        .filter(|slot| filter.matches(s, t, slot, you, words))
         .count()
 }
 
