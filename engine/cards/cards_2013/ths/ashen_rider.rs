@@ -17,20 +17,3 @@ pub static CARD: CardDef = Printed::AshenRider
             .effect(&exile(target())),
     ])
     .card();
-
-#[cfg(feature = "scenarios")]
-pub mod scenarios {
-    use crate::prelude::*;
-
-    pub const SCENARIOS: &[Scenario] =
-        &[
-            Scenario::new("another permanent entering does not trigger Ashen Rider")
-                .battlefield(P0, &[Card::AshenRider])
-                .hand(P0, &[Card::Island])
-                .actions(&[
-                    ME.plays(Card::Island),
-                    stack(0),
-                    ME.controls(Card::Island, 1),
-                ]),
-        ];
-}

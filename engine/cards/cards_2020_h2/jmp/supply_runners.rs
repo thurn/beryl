@@ -17,16 +17,3 @@ pub static CARD: CardDef = Printed::SupplyRunners
         1,
     ))])
     .card();
-
-#[cfg(feature = "scenarios")]
-pub mod scenarios {
-    use crate::prelude::*;
-
-    pub const SCENARIOS: &[Scenario] =
-        &[
-            Scenario::new("another permanent entering leaves the stack empty")
-                .battlefield(P0, &[Card::SupplyRunners, Prop::Vanilla])
-                .hand(P0, &[Card::Island])
-                .actions(&[ME.plays(Card::Island), stack(0)]),
-        ];
-}

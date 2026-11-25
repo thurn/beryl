@@ -12,16 +12,3 @@ pub static CARD: CardDef = Printed::BloodTollHarpy
     .keywords(Keywords::FLYING)
     .abilities(&[when_enters(&lose_life(each_player(), 1))])
     .card();
-
-#[cfg(feature = "scenarios")]
-pub mod scenarios {
-    use crate::prelude::*;
-
-    pub const SCENARIOS: &[Scenario] =
-        &[
-            Scenario::new("another permanent entering leaves both life totals unchanged")
-                .battlefield(P0, &[Card::BloodTollHarpy])
-                .hand(P0, &[Card::Island])
-                .actions(&[ME.plays(Card::Island), stack(0), ME.life(20), THEM.life(20)]),
-        ];
-}

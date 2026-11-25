@@ -18,17 +18,3 @@ pub static CARD: CardDef = Printed::Spellseeker
         ),
     ))])
     .card();
-
-#[cfg(feature = "scenarios")]
-pub mod scenarios {
-    use crate::prelude::*;
-
-    pub const SCENARIOS: &[Scenario] =
-        &[
-            Scenario::new("another permanent entering leaves the stack empty")
-                .battlefield(P0, &[Card::Spellseeker, Prop::Vanilla])
-                .hand(P0, &[Card::Island])
-                .library(P0, &[Prop::Instant])
-                .actions(&[ME.plays(Card::Island), stack(0)]),
-        ];
-}

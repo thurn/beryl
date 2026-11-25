@@ -73,7 +73,13 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         TriggerEvent::Enters | TriggerEvent::Casts | TriggerEvent::CastsFrom(Zone::Hand)
             if matches!(event.subject, Subject::This) =>
         {
-            vec![Recipe::PlaySource]
+            // A trigger on "this" must ignore another permanent entering, so a land
+            // played beside the source is an opening too.
+            let mut recipes = vec![Recipe::PlaySource];
+            if matches!(event.event, TriggerEvent::Enters) {
+                recipes.push(Recipe::PlayLand(P0, Filter::Any));
+            }
+            recipes
         }
         TriggerEvent::Enters => {
             let mut recipes = on(event, |player| Recipe::PlayLand(player, filter));
