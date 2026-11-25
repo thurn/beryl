@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use crate::common::widening::{compares_layouts, play_widening};
-use crate::common::{games, seeds};
+use crate::common::{agents, games, seeds};
 use beryl_cards::CARDS;
 use beryl_cards::decks::{fuzz_deck_from, keystone_family};
 use beryl_engine::{Decklist, Format, GameTable, Outcome, Profile, StallReason, State};
@@ -51,6 +51,7 @@ fn family_with_sideboard(name: &str, sideboard: &Decklist) {
             seed,
             &mut kinds,
             compares_layouts(seed),
+            &mut agents(seed),
         );
         decisions += u64::from(played.decisions);
         entered_subgame += u32::from(played.entered_subgame);
@@ -161,7 +162,7 @@ fn a_dragon_exiling_more_than_small_holds_plays_on_in_large() {
         };
         s.board().place(slot, zone).unwrap();
     }
-    let played = play_widening(&t, s, 0, &mut HashMap::new(), true);
+    let played = play_widening(&t, s, 0, &mut HashMap::new(), true, &mut agents(0));
     assert_ne!(played.outcome, Outcome::Stalled(StallReason::Capacity));
     assert_eq!(played.filled, Some("the memos"), "{:?}", played.outcome);
 }

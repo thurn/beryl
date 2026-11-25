@@ -230,9 +230,8 @@ impl<L: Layout> RolloutPair<'_, L> {
     /// Turns since this pair's root.
     pub fn turns(&self, state: &State<L>) -> u16 {
         state
-            .turn()
-            .number()
-            .saturating_sub(self.world.turn().number())
+            .elapsed_turns()
+            .saturating_sub(self.world.elapsed_turns())
     }
 
     /// The search's time-discounted reward for the player at the root.

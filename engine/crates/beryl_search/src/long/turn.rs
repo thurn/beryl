@@ -73,7 +73,7 @@ fn search<L: Layout>(
         table: &agent.table,
         policy: &agent.policy,
         viewer: d.decider,
-        turn: obs.turn().number(),
+        turn: obs.shown().elapsed_turns(),
         known: L::Slot::all().filter(|&slot| obs.knows(slot)).collect(),
         scratch: Scratch::unchecked(),
         extra: 0,
@@ -258,6 +258,8 @@ struct TurnSearch<'a, L: Layout> {
     table: &'a GameTable,
     policy: &'a RolloutPolicy,
     viewer: Seat,
+    /// The turns started across the playthrough at the root ([`State::elapsed_turns`]): a
+    /// turn's number starts again in a restarted game and in a subgame, and these do not.
     turn: u16,
     known: Bitboard<L::Slot>,
     scratch: Scratch<L>,
@@ -422,14 +424,21 @@ impl<L: Layout> TurnSearch<'_, L> {
         line.clone()
     }
 
+    /// Advances the line to its next decision, stopping where the turn after the root's would
+    /// begin. A line in a subgame plays on through the subgame's turns ([`Self::finished`]).
     fn advance(&mut self, line: &mut Line<L>, limit: u64) -> Option<Step<L>> {
         let limit = self.engine_limit(limit);
+        let end = if line.state.in_subgame() {
+            AdvanceUntil::WorkLimit
+        } else {
+            AdvanceUntil::Turn(self.turn.saturating_add(1))
+        };
         next_within(
             &mut line.state,
             self.table,
             &mut self.scratch,
             &mut Replay,
-            AdvanceUntil::Turn(self.turn.saturating_add(1)),
+            end,
             limit,
         )
     }
@@ -608,8 +617,12 @@ impl<L: Layout> TurnSearch<'_, L> {
         leaves.push(line, &mut self.report);
     }
 
+    /// Whether the line has reached the turn after the root's, or the end of the game. A line
+    /// is never finished in a subgame, whose position is of another game than the lines it is
+    /// compared with: it plays the subgame out and finishes back in the main game.
     fn finished(&self, line: &Line<L>) -> bool {
-        line.state.turn().number() > self.turn || line.state.outcome().is_some()
+        line.state.outcome().is_some()
+            || (line.state.elapsed_turns() > self.turn && !line.state.in_subgame())
     }
 
     fn actions(known: Bitboard<L::Slot>, obs: Observation<'_, L>, d: &Decision<L>) -> Vec<u64> {
@@ -724,7 +737,7 @@ impl<L: Layout> TurnSearch<'_, L> {
         let s = &mut line.state;
         let outcome = if let Some(outcome) = s.outcome() {
             Some(outcome)
-        } else if leaf == Leaf::Eval {
+        } else if leaf == Leaf::Eval && !s.in_subgame() {
             None
         } else {
             let mut rng = SplitMix64::new(seed);
@@ -734,7 +747,7 @@ impl<L: Layout> TurnSearch<'_, L> {
                 temperature: ROLLOUT_TEMPERATURE,
             };
             let cutoff = match leaf {
-                Leaf::Cutoff { turns } => s.turn().number().saturating_add(u16::from(turns)),
+                Leaf::Cutoff { turns } => s.elapsed_turns().saturating_add(u16::from(turns)),
                 _ => u16::MAX,
             };
             let limit = self.engine_limit(limit);
@@ -751,7 +764,7 @@ impl<L: Layout> TurnSearch<'_, L> {
                 RolloutEnd::Cutoff => None,
             }
         };
-        let turns = s.turn().number().saturating_sub(self.turn);
+        let turns = s.elapsed_turns().saturating_sub(self.turn);
         let reward = if let Some(outcome) = outcome {
             value(outcome, turns)
         } else {

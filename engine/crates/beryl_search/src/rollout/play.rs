@@ -42,8 +42,11 @@ pub fn rollout<L: Layout>(
     rollout_to(s, t, x, policy, u16::MAX).expect("a game ends before turn 65535")
 }
 
-/// [`rollout`], cut off at the first decision of turn `turn` or later: the game's outcome if
-/// it ends before then, else none, the state left at that decision.
+/// [`rollout`], cut off at the first decision once `turn` turns have started across the
+/// playthrough ([`beryl_engine::State::elapsed_turns`]): the game's outcome if it ends before then, else
+/// none, the state left at that decision. A rollout is never cut off in a subgame, whose
+/// position is of another game than the one being searched: it plays the subgame out and
+/// stops at the first decision back in the main game.
 pub fn rollout_to<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -125,7 +128,7 @@ fn play_within<L: Layout>(
     loop {
         match next_within(s, t, x, inline, AdvanceUntil::WorkLimit, work_limit)? {
             Step::Over(outcome) => return Some(RolloutEnd::Outcome(outcome)),
-            Step::Decide(_) if turn != u16::MAX && s.elapsed_turns() >= turn => {
+            Step::Decide(_) if turn != u16::MAX && s.elapsed_turns() >= turn && !s.in_subgame() => {
                 return Some(RolloutEnd::Cutoff);
             }
             Step::Decide(d) => {
@@ -195,7 +198,9 @@ fn play_out<A: Answers<L>, L: Layout>(
     loop {
         match next(s, t, x, answers) {
             Step::Over(outcome) => return Some(outcome),
-            Step::Decide(_) if turn != u16::MAX && s.elapsed_turns() >= turn => return None,
+            Step::Decide(_) if turn != u16::MAX && s.elapsed_turns() >= turn && !s.in_subgame() => {
+                return None;
+            }
             Step::Decide(d) => {
                 let c = choose(answers, Observation::new(s, d.decider), &d);
                 apply_decided(s, t, x, answers, &d, c);

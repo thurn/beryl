@@ -13,11 +13,11 @@
 
 use std::cell::Cell;
 
-use beryl_engine::Zone;
 use beryl_engine::card::{
     AbilityKind, Amount, Behavior, CardDef, Effect, Modification, Objects, Players, Recipients,
     Taken, TriggerEvent, Types,
 };
+use beryl_engine::{TurnPhase, Zone};
 
 /// What [`estimate`] counts of a card. Each field is a whole number of the thing it names.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -53,6 +53,9 @@ pub(crate) struct CardFeatures {
     pub options: i16,
     /// Additional costs it must be cast with.
     pub extra_costs: i16,
+    /// Time it gives its controller: 2 for each extra turn and 1 for each additional combat
+    /// phase.
+    pub turns: i16,
 }
 
 /// How many single targets a removal of every permanent a filter accepts counts as.
@@ -83,6 +86,10 @@ mod weight {
     pub const REPEATABLE: i32 = 97;
     pub const OPTIONS: i32 = 0;
     pub const EXTRA_COSTS: i32 = 0;
+    /// Set by hand, not fitted: none of the tuned cards gives a turn or a combat. A point of
+    /// it is worth half a counterspell, so an extra turn counts about as much as one, which
+    /// is roughly what a player pays for either.
+    pub const TURNS: i32 = 800;
 }
 
 /// The card's estimated value, from what its definition says it does.
@@ -101,7 +108,8 @@ pub(crate) fn estimate(def: &CardDef) -> i16 {
         + weight::MANA * i32::from(f.mana)
         + weight::REPEATABLE * i32::from(f.repeatable)
         + weight::OPTIONS * i32::from(f.options)
-        + weight::EXTRA_COSTS * i32::from(f.extra_costs);
+        + weight::EXTRA_COSTS * i32::from(f.extra_costs)
+        + weight::TURNS * i32::from(f.turns);
     i16::try_from((hundredths / 100).clamp(0, i32::from(i16::MAX))).unwrap_or(i16::MAX)
 }
 
@@ -154,6 +162,7 @@ pub(crate) fn features(def: &CardDef) -> CardFeatures {
     f.tokens = effects.tokens;
     f.removal = effects.removal;
     f.counters = effects.counters;
+    f.turns = effects.turns;
     f
 }
 
@@ -172,6 +181,7 @@ struct Effects {
     tokens: i16,
     removal: i16,
     counters: i16,
+    turns: i16,
 }
 
 impl Effects {
@@ -242,7 +252,14 @@ impl Effects {
             } if modifications.iter().any(|&m| hinders(m)) => e.removal = removed(objects),
             // Taking the opponent's permanent for one of one's own.
             Effect::ExchangeControl(_, theirs) => e.removal = removed(theirs),
-            Effect::Counter(_) | Effect::CounterInto { .. } => e.counters = 1,
+            // Ending the turn exiles every spell on the stack, as a counterspell would remove
+            // the one it targets.
+            Effect::Counter(_) | Effect::CounterInto { .. } | Effect::EndTurn => e.counters = 1,
+            Effect::ExtraTurn(Players::You, _) => e.turns = 2,
+            Effect::AdditionalPhases { phases, .. } => {
+                let combats = phases.iter().filter(|&&p| p == TurnPhase::Combat).count();
+                e.turns = i16::try_from(combats).unwrap_or(i16::MAX);
+            }
             _ => {}
         }
         e
@@ -254,6 +271,7 @@ impl Effects {
             tokens: self.tokens + other.tokens,
             removal: self.removal + other.removal,
             counters: self.counters + other.counters,
+            turns: self.turns + other.turns,
         }
     }
 
@@ -263,6 +281,7 @@ impl Effects {
             tokens: self.tokens.max(other.tokens),
             removal: self.removal.max(other.removal),
             counters: self.counters.max(other.counters),
+            turns: self.turns.max(other.turns),
         }
     }
 }

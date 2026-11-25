@@ -311,25 +311,8 @@ impl RolloutPolicy {
                     }
                 })
             }),
-            // A search's finds are worth taking, the best first, as Winds of Abandon's basic.
-            // Other cards on top of a library are being chosen for the bottom, as a scry asks:
-            // only those not worth drawing go. Anything else, such as lands to untap, is worth
-            // taking by its value. With waste, decline to help an opponent's permanent.
             DecisionKind::ChooseUpTo => pick.choose(d, |c| match c.object() {
-                Some(slot) if d.prompt.purpose == Purpose::Search => {
-                    Some(1 + p.in_hand(slot).max(0))
-                }
-                Some(slot) if obs.object(slot).zone() == Zone::Library => {
-                    Some(DRAW_MIN - p.in_hand(slot))
-                }
-                Some(slot)
-                    if p.rules.waste
-                        && obs.object(slot).zone() == Zone::Battlefield
-                        && obs.controller(slot) != p.me =>
-                {
-                    None
-                }
-                Some(slot) => Some(p.value(slot)),
+                Some(slot) => up_to(&p, obs, d, slot),
                 None => Some(0),
             }),
             DecisionKind::Attacker => pick.choose(d, |c| match c.option() {
@@ -413,6 +396,35 @@ enum Pick<'s, 'r> {
     Soft(&'s mut Softmax<'r>),
     /// Collects the greedy scores in candidate order.
     Scores(&'s mut ScoreList),
+}
+
+/// A [`DecisionKind::ChooseUpTo`] candidate's score, or none when it is not worth taking.
+/// A search's finds are worth taking, the best first, as Winds of Abandon's basic. Other cards
+/// on top of a library are being chosen for the bottom, as a scry asks: only those not worth
+/// drawing go. Anything else, such as lands to untap, is worth taking by its value. With waste,
+/// decline to help an opponent's permanent.
+fn up_to<L: Layout>(
+    p: &Policy<'_, L>,
+    obs: Observation<'_, L>,
+    d: &Decision<L>,
+    slot: L::Slot,
+) -> Option<i32> {
+    let zone = obs.object(slot).zone();
+    if d.prompt.purpose == Purpose::Search {
+        Some(1 + p.in_hand(slot).max(0))
+    } else if zone == Zone::Library {
+        Some(DRAW_MIN - p.in_hand(slot))
+    } else if p.rules.waste && zone == Zone::Battlefield && obs.controller(slot) != p.me {
+        None
+    } else if d.prompt.purpose == Purpose::Replace && zone == Zone::Battlefield {
+        // A permanent offered to replace the start of a turn, as Time Vault's untap, costs the
+        // whole turn it skips, and its untap waits for the next turn that begins: take the
+        // turn. Two players who each skip a turn this way would otherwise skip every turn
+        // after it, the untaps waiting for a turn that never begins.
+        None
+    } else {
+        Some(p.value(slot))
+    }
 }
 
 /// A decision's scores in candidate order, on the stack: a decision has at most 256

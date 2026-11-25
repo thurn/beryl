@@ -19,7 +19,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_cards::CARDS;
-use beryl_cards::decks::fuzz_deck;
+use beryl_cards::decks::{fuzz_deck, fuzz_deck_from, keystone_family};
 use beryl_engine::{
     Choice, Decision, Format, GameTable, Layout, Observation, Profile, Seat, State,
 };
@@ -33,11 +33,29 @@ use beryl_session::{CandidateIndex, Game, Prepared, SessionId, Status, StopsSett
 /// The most choices a game is generated with: past most random games' ends.
 const MOST_CHOICES: usize = 600;
 
-/// A fuzz game: its seed and the choice at each decision, by index modulo the candidates.
+/// A fuzz game: its seed, the cards its decks are dealt from, and the choice at each decision,
+/// by index modulo the candidates.
 #[derive(Clone, Debug)]
 struct Fuzz {
     seed: u64,
+    deck: Deck,
     choices: Vec<u16>,
+}
+
+/// The fuzz deck a seed deals: from every implemented card, or from a few keystone families.
+type Deck = fn(u64) -> Vec<(u8, &'static str)>;
+
+/// A fuzz deck of the `turn` and `subgames` keystone families' cards with the basic lands: an
+/// additional upkeep or combat, a skipped or ended turn, an extra turn, a restart and a
+/// subgame, each in every deck.
+fn turn_and_game_deck(seed: u64) -> Vec<(u8, &'static str)> {
+    let mut cards = keystone_family("turn").expect("the turn family");
+    for card in keystone_family("subgames").expect("the subgames family") {
+        if !cards.iter().any(|c| c.name == card.name) {
+            cards.push(card);
+        }
+    }
+    fuzz_deck_from(seed, &cards)
 }
 
 /// The choices of a game as both seats take them, shared by the agent in the other seat and
@@ -98,8 +116,8 @@ impl Fuzz {
     /// The game's session, its other seat playing `picks`.
     fn session(&self, picks: &Picks) -> Game {
         let decks = [
-            fuzz_deck(self.seed),
-            fuzz_deck(self.seed.wrapping_add(1 << 32)),
+            (self.deck)(self.seed),
+            (self.deck)(self.seed.wrapping_add(1 << 32)),
         ];
         let table = GameTable::new(
             Format::CONSTRUCTED,
@@ -189,7 +207,7 @@ fn rng_from(first: u64) -> TestRng {
 
 /// Runs `cases` fuzz games of at most `most` choices, deterministically, and returns the game
 /// proptest shrank a failure to, with each choice as the index it took, and why it fails.
-fn shrink(cases: u32, most: usize, rng: TestRng) -> Option<(Fuzz, String)> {
+fn shrink(cases: u32, most: usize, rng: TestRng, deck: Deck) -> Option<(Fuzz, String)> {
     let config = Config {
         cases,
         failure_persistence: None,
@@ -197,8 +215,14 @@ fn shrink(cases: u32, most: usize, rng: TestRng) -> Option<(Fuzz, String)> {
         ..Config::default()
     };
     let mut runner = TestRunner::new_with_rng(config, rng);
-    let games = (0..u64::from(u32::MAX), vec(any::<u16>(), 0..most))
-        .prop_map(|(seed, choices)| Fuzz { seed, choices });
+    let games =
+        (0..u64::from(u32::MAX), vec(any::<u16>(), 0..most)).prop_map(move |(seed, choices)| {
+            Fuzz {
+                seed,
+                deck,
+                choices,
+            }
+        });
     match runner.run(&games, |game| game.play().1.map_err(TestCaseError::fail)) {
         Ok(()) => None,
         Err(TestError::Fail(why, game)) => {
@@ -206,6 +230,7 @@ fn shrink(cases: u32, most: usize, rng: TestRng) -> Option<(Fuzz, String)> {
             Some((
                 Fuzz {
                     seed: game.seed,
+                    deck,
                     choices,
                 },
                 why.to_string(),
@@ -242,7 +267,19 @@ fn report(game: &Fuzz, why: &str) -> String {
 #[test]
 #[ignore = "a handful of session games, about 4.5 CPU seconds: `just fuzz` plays them"]
 fn session_games_keep_the_script_checks() {
-    if let Some((game, why)) = shrink(games(3), MOST_CHOICES, rng()) {
+    if let Some((game, why)) = shrink(games(3), MOST_CHOICES, rng(), fuzz_deck) {
+        panic!("{}", report(&game, &why));
+    }
+}
+
+/// The same, with decks dealt from the keystones that change the shape of a turn or a game
+/// ([`turn_and_game_deck`]), so that the session's views and scripts meet a repeated step, an
+/// ended turn, an extra turn, a restart and a subgame far more often than in decks dealt from
+/// every card.
+#[test]
+#[ignore = "a handful of session games: `just fuzz` plays them"]
+fn turn_and_game_keystone_games_keep_the_script_checks() {
+    if let Some((game, why)) = shrink(games(3), MOST_CHOICES, rng(), turn_and_game_deck) {
         panic!("{}", report(&game, &why));
     }
 }
@@ -253,6 +290,7 @@ fn session_games_keep_the_script_checks() {
 fn the_game_that_read_an_invalid_face_replays() {
     let game = Fuzz {
         seed: 2_226_390_732,
+        deck: fuzz_deck,
         choices: vec![
             1, 1, 1, 1, 0, 1, 1, 0, 3, 1, 2, 1, 0, 2, 1, 1, 2, 1, 2, 0, 0, 2, 0, 3, 3, 2, 0, 0, 1,
             4, 1, 7, 5, 3, 4, 0, 0, 1, 2, 0, 3, 1, 3, 3, 0, 0, 1, 6, 9, 8, 8, 4, 3, 4, 4, 3, 1, 3,

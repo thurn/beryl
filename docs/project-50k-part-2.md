@@ -933,6 +933,26 @@ subgame is a second state, played to its end while the main game waits.
   suspended game at a checkpoint. Recovery within a subgame replays the log to
   that checkpoint to recover the suspended resolution and its answers.
 
+**Agents.** A search measures time in turns started across the playthrough
+(`State::elapsed_turns`), because a turn's number starts again in a restarted
+game and in a subgame. The turn search scores the lines of the root's turn up to
+the turn after it by that count. A rollout cut off after some turns is never cut
+off in a subgame: it plays the subgame out and stops at the first decision back
+in the main game. The turn search finishes its lines the same way, and an
+evaluating leaf in a subgame is rolled out instead. So no search compares a
+subgame's position with a main game's. The rollout policy declines to skip a
+turn for Time Vault's untap, because that untap waits for the next turn that
+actually begins, and two players who each skipped would skip every turn after.
+Card estimates count an extra turn as two points of `turns`, an additional
+combat as one, and ending the turn as a counterspell.
+`beryl_search/tests/all/game_structure.rs` plays seeded games of the `turn` and
+`subgames` families with the greedy agent, the expert and MCTS.
+`beryl_session/tests/game_structure.rs` cuts a save at each new state of each
+keystone and replays it under every perturbation. The oracle exporters report a
+subgame's decisions as unsupported. A step repeated in its turn is exported, and
+the scenarios the harnesses misplace are listed in
+`data/oracle-exporter-gaps.json`.
+
 ### H. Casting and combat exceptions
 
 **Casting inside a resolution.** A cast in progress is `Pending::Casting`, a

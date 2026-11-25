@@ -38,6 +38,7 @@ mod fair;
 mod full_control;
 mod fuzz;
 mod game_over;
+mod game_structure;
 mod games_ledger;
 mod hidden_picks;
 mod modes;

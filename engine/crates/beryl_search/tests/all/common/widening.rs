@@ -8,9 +8,7 @@ use beryl_engine::{
     StallReason, State, Step, apply, next, observe,
 };
 use beryl_scenario::LayoutComparison;
-use beryl_search::{Agent, AgentDecision};
-
-use super::agents;
+use beryl_search::{AgentDecision, GameAgent};
 
 /// How a game went: its outcome, its decisions, and the list that filled if it left
 /// [`Small`].
@@ -50,7 +48,7 @@ pub fn compares_layouts(seed: u64) -> bool {
     matches!(seed % 32, 0 | 17)
 }
 
-/// Plays game `seed` from `s` with random agents, counting the decisions by kind in `kinds`
+/// Plays game `seed` from `s` with `agents`, one a seat, counting the decisions by kind in `kinds`
 /// and checking at every decision that it has a candidate and that every reference names an
 /// object. Debug assertions, which `just fuzz` keeps on, check the invariants at every step.
 /// When an engine call runs `Small` out of a capacity, the game goes on in `Large` from the
@@ -62,6 +60,7 @@ pub fn play_widening(
     seed: u64,
     kinds: &mut HashMap<String, u64>,
     compare: bool,
+    agents: &mut [impl GameAgent; 2],
 ) -> Widened {
     /// Names the game when the engine panics during it.
     struct Game(u64);
@@ -74,7 +73,6 @@ pub fn play_widening(
     }
     let _game = Game(seed);
     let mut comparison = compare.then(|| LayoutComparison::new(&s));
-    let mut agents = agents(seed);
     let mut asked = [AgentDecision(0); 2];
     let mut decisions = 0;
     let mut x = Scratch::new();
@@ -113,11 +111,10 @@ pub fn play_widening(
                 seen(&s, t, &d, seed, kinds);
                 decisions += 1;
                 let i = d.decider.index();
-                Call::Apply(agents[i].choose(
-                    observe(&s, t, &mut x, d.decider),
-                    &d,
-                    asked[i].take(),
-                ))
+                let choice =
+                    agents[i].choose(observe(&s, t, &mut x, d.decider), &d, asked[i].take());
+                legal(&d, choice, seed);
+                Call::Apply(choice)
             }
         };
     };
@@ -136,6 +133,7 @@ pub fn play_widening(
                 let i = d.decider.index();
                 let c =
                     agents[i].choose(observe(&large, t, &mut xl, d.decider), &d, asked[i].take());
+                legal(&d, c, seed);
                 apply(&mut large, t, &mut xl, &mut Replay, c);
             }
         }
@@ -162,6 +160,16 @@ fn seen<L: Layout>(
     if let Err(v) = beryl_engine::check_references(s, t) {
         panic!("seed {seed}: a reference: {v:?}");
     }
+}
+
+/// Fails game `seed` if `choice` is not one of decision `d`'s candidates.
+fn legal<L: Layout>(d: &Decision<L>, choice: Choice, seed: u64) {
+    assert!(
+        usize::from(choice.0) < d.len(),
+        "seed {seed}: choice {} of a decision with {} candidates: {d:?}",
+        choice.0,
+        d.len()
+    );
 }
 
 /// The list of `Small` that the widened game `large` outgrew, just after the call that ran out.

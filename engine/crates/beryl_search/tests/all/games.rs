@@ -46,7 +46,14 @@ fn random_games_keep_the_invariants() {
         let outcome = if seed % 4 == 3 {
             fuzz(&t, s.widen(), seed, &mut kinds)
         } else {
-            let played = play_widening(&t, s, seed, &mut kinds, compares_layouts(seed));
+            let played = play_widening(
+                &t,
+                s,
+                seed,
+                &mut kinds,
+                compares_layouts(seed),
+                &mut agents(seed),
+            );
             widened.extend(played.filled.map(|list| (seed, list)));
             played.outcome
         };
@@ -100,7 +107,7 @@ fn fuzz<L: Layout>(
 fn a_widened_game_plays_on_as_the_small_one() {
     for seed in 0..2 {
         let (t, s) = game(seed);
-        let fuzz = play_widening(&t, s, seed, &mut HashMap::new(), true);
+        let fuzz = play_widening(&t, s, seed, &mut HashMap::new(), true, &mut agents(seed));
         // A subgame and the mana spent on an ability's X need `Large` by design (`State::fits`
         // refuses either in `Small`), so a fuzz deck with Shahrazad or Illusionary Mask may
         // leave `Small` there; the games were alike until then.
@@ -111,7 +118,7 @@ fn a_widened_game_plays_on_as_the_small_one() {
         );
 
         let (t, s) = fixed_game(seed);
-        let fixed = play_widening(&t, s, seed, &mut HashMap::new(), true);
+        let fixed = play_widening(&t, s, seed, &mut HashMap::new(), true, &mut agents(seed));
         assert_eq!(fixed.filled, None, "fixed seed {seed}");
         assert!(fixed.decisions > 40, "fixed seed {seed}: a short game");
     }

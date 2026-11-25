@@ -1554,6 +1554,12 @@ impl<L: Layout> Tree<L> {
             }
             Leaf::Eval => match next(s, t, &mut self.x, &mut Replay) {
                 Step::Over(outcome) => value(outcome, self.turns(s)),
+                // A subgame's position is of another game than the leaves it is compared with:
+                // play it out instead.
+                Step::Decide(_) if s.in_subgame() => {
+                    let outcome = soft_rollout(s, t, &mut self.x, policy, &mut soft);
+                    value(outcome, self.turns(s))
+                }
                 Step::Decide(_) => {
                     self.extra += EVAL_STEPS;
                     discounted(evaluate(s, policy.values()), self.turns(s))

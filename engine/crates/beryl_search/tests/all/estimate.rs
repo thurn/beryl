@@ -54,3 +54,17 @@ fn a_planeswalker_is_worth_more_than_a_vanilla_creature_of_its_mana_value() {
     let [walker, giant] = values([names::JACE_THE_MIND_SCULPTOR, "Hill Giant"]);
     assert!(walker > giant);
 }
+
+#[test]
+fn an_extra_turn_or_combat_is_worth_more_than_a_vanilla_creature_of_its_mana_value() {
+    // Final Fortune ({R}{R}) gives an extra turn, Relentless Assault ({2}{R}{R}) an extra
+    // combat; Grizzly Bears is a 2/2 for {1}{G}, Hill Giant a 3/3 for {3}{R}.
+    let [turn, bears, combat, giant] = values([
+        names::FINAL_FORTUNE,
+        "Grizzly Bears",
+        names::RELENTLESS_ASSAULT,
+        "Hill Giant",
+    ]);
+    assert!(turn > bears, "{turn} {bears}");
+    assert!(combat > giant, "{combat} {giant}");
+}

@@ -8,6 +8,7 @@ mod estimate;
 mod expert;
 mod families;
 mod frozen;
+mod game_structure;
 mod games;
 mod greedy;
 mod hold;
