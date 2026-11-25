@@ -23,8 +23,8 @@ use crate::cost::Cost;
 use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::effect::{
-    Amount, CastTerms, Comparison, Condition, Effect, Found, LibraryOrder, LibraryPosition,
-    Objects, Players, PutOnto, Regeneration, Taken,
+    Amount, Comparison, Condition, Effect, Found, LibraryOrder, LibraryPosition, Objects, Players,
+    PutOnto, Regeneration, Taken,
 };
 use crate::filter::Filter;
 use crate::ids::Zone;
@@ -42,6 +42,9 @@ pub use damage::{
 mod turn;
 
 pub use turn::{control_player, end_turn, extra_turn, extra_turn_with_trigger, restart_game};
+
+mod casting;
+pub use casting::*;
 
 mod faces;
 pub use faces::*;
@@ -718,50 +721,6 @@ pub const fn exchange_control(first: Objects, second: Objects) -> Effect {
 /// [`Effect::ChangeRule`]: "[rule change] [duration]".
 pub const fn change_rule(rule: &'static RuleChange, duration: Duration) -> Effect {
     Effect::ChangeRule { rule, duration }
-}
-
-/// [`Effect::GainFlashback`]: "[cards] gain flashback until end of turn. The flashback cost
-/// is equal to its mana cost."
-pub const fn gain_flashback(cards: Objects) -> Effect {
-    Effect::GainFlashback(cards)
-}
-
-/// [`Effect::PermitCast`]: "[player] may cast [cards] [duration]", on `terms`.
-pub const fn permit_cast(
-    player: Players,
-    cards: Objects,
-    duration: Duration,
-    terms: CastTerms,
-) -> Effect {
-    Effect::PermitCast {
-        player,
-        cards,
-        duration,
-        terms,
-    }
-}
-
-/// [`Effect::MayCast`] for nothing: "[player] may cast [card] without paying its mana cost".
-pub const fn may_cast_free(player: Players, card: Objects) -> Effect {
-    Effect::MayCast {
-        player,
-        card,
-        free: true,
-        free_below: None,
-        copy: false,
-    }
-}
-
-/// [`Effect::MayCast`] of a copy: "copy [card]. [Player] may cast the copy without paying its
-/// mana cost".
-pub const fn may_cast_copy_free(player: Players, card: Objects) -> Effect {
-    Effect::MayCast {
-        player,
-        card,
-        free: true,
-        free_below: None,
-        copy: true,
-    }
 }
 
 /// [`Effect::UntapUpTo`]: "[player] untaps up to [count] [permanents]".

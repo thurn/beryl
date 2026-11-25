@@ -48,6 +48,7 @@ fn ability_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>
         targets,
         x,
         words: state::AS_PRINTED,
+        spent: Default::default(),
     };
     GameEvent::Ability {
         item: stack_item(t, obs, &entry),
@@ -94,6 +95,7 @@ fn cast_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) ->
         targets,
         x,
         words: state::AS_PRINTED,
+        spent: Default::default(),
     };
     stack_item_cast(t, obs, &entry, flashback && obs.card(spell.slot).is_some())
 }

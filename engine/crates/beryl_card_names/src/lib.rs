@@ -134,7 +134,14 @@ pub mod decks {
                 names::SPELL_SNARE,
             ],
         ),
-        ("face-down", &[names::EXALTED_ANGEL, names::GATHAN_RAIDERS]),
+        (
+            "face-down",
+            &[
+                names::EXALTED_ANGEL,
+                names::GATHAN_RAIDERS,
+                names::ILLUSIONARY_MASK,
+            ],
+        ),
         (
             "turn-in-place",
             &[

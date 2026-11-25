@@ -450,7 +450,11 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 free,
                 free_below,
                 copy,
-            } => start::may_cast_instruction(self, player, card, free, free_below, copy)?,
+                face,
+                within_x,
+            } => start::may_cast_instruction(
+                self, player, card, free, free_below, copy, face, within_x,
+            )?,
             Effect::UntapUpTo {
                 player,
                 count,

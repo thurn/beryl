@@ -32,7 +32,7 @@ use super::timing::{activated, instant_speed, sorcery_timing};
 
 mod copies;
 mod preparation;
-mod special;
+pub(super) mod special;
 mod ways;
 
 use ways::{Ways, can_fuse};

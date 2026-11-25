@@ -1,9 +1,11 @@
 //! Legal casts that choose characteristics beyond the printed faces.
 //!
-//! Implements: none. Applies the zone rules for fuse and morph before checking casting legality.
+//! Implements: none. Applies the zone rules for fuse, morph and casts face down by an effect.
 
+use crate::bitboard::Bitboard;
 use crate::card::{CardDef, Castings, FACE_DOWN, FaceIx};
-use crate::decision::{OPTIONS, Opt};
+use crate::decision::{Candidates, OPTIONS, Opt};
+use crate::engine::collapse;
 use crate::fixed::Full;
 use crate::layout::{Layout, Queue};
 use crate::state::State;
@@ -58,4 +60,33 @@ pub(super) fn options<L: Layout, const TARGETS: bool>(
         }
     }
     Ok(())
+}
+
+/// Appends the casts face down of each of `cards` that an effect offers during a resolution
+/// ([`crate::card::CastFace::DownTurnedUpWhenUsed`]): as a 2/2 creature spell, whatever the
+/// card is, with "no text, no name, no subtypes, and no mana cost" (see [CR 708.2a]).
+///
+/// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
+#[cold]
+#[inline(never)]
+pub(in crate::casting) fn face_down_casts<L: Layout, const TARGETS: bool>(
+    s: &State<L>,
+    t: &GameTable,
+    now: &Situation<L, TARGETS>,
+    cards: Bitboard<L::Slot>,
+    from: From,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
+) -> Result<(), Full> {
+    Candidates::<L>::extend_options(out, collapse(s, cards), |out, slot| {
+        if s.card_def(t, slot).is_some()
+            && refused(s, t, now, slot, FaceIx::DOWN, Castings::NONE, from, 0).is_none()
+        {
+            out.push(Opt::Cast {
+                slot,
+                face: FaceIx::DOWN,
+                costs: Castings::NONE,
+            })?;
+        }
+        Ok(())
+    })
 }

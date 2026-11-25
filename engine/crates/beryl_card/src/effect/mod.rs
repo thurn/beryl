@@ -42,8 +42,8 @@ pub use condition::{Comparison, Condition};
 pub use operands::Operands;
 pub use reference::{Objects, Players, Recipients};
 pub use terms::{
-    CastTerms, CopyChange, CopyException, ExileMatch, Found, LibraryOrder, LibraryPosition,
-    Prevention, PutOnto, Taken,
+    CastFace, CastTerms, CopyChange, CopyException, ExileMatch, Found, LibraryOrder,
+    LibraryPosition, Prevention, PutOnto, Taken,
 };
 pub(crate) use traversal::Branches;
 
@@ -615,6 +615,11 @@ pub enum Effect {
     /// ability is resolving." A copy not cast would cease to exist at once, so none is made
     /// for a player who declines.
     ///
+    /// `face` says which way up the card is cast ([`CastFace`]). With `within_x`, only a card
+    /// "whose mana cost could be paid by some amount of, or all of, the mana you spent on
+    /// {X}" is offered: the activated ability resolving had {X} in its cost, and both the
+    /// amount and the kinds of mana spent on it count.
+    ///
     /// [CR 707.12]: https://yawgatog.com/resources/magic-rules/#R70712
     MayCast {
         player: Players,
@@ -622,6 +627,8 @@ pub enum Effect {
         free: bool,
         free_below: Option<Amount>,
         copy: bool,
+        face: CastFace,
+        within_x: bool,
     },
     /// "[Player] untaps up to [count] [permanents]", of their choice as the instruction is
     /// reached

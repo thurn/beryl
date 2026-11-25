@@ -25,8 +25,9 @@ pub use crate::pending::{
 };
 pub use crate::player::{ManaPool, MulliganStatus, Player};
 pub use crate::stack::{
-    AS_PRINTED, AbilityController, AbilityRef, AbilityTarget, PendingTrigger, READ_NOW, StackEntry,
-    StackItem, TARGETS, Target, TargetPlace, TargetPlaces, TriggerInfo, TriggeredAbility, placed,
+    AS_PRINTED, AbilityController, AbilityRef, AbilityTarget, ManaAmounts, PendingTrigger,
+    READ_NOW, Spent, SpentMana, StackEntry, StackItem, TARGETS, Target, TargetPlace, TargetPlaces,
+    TriggerInfo, TriggeredAbility, placed,
 };
 pub use crate::store::{Duration, Stored};
 pub use crate::trackers::{Count, Tracked, Tracker, Trackers};

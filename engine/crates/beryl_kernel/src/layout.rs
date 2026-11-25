@@ -187,6 +187,9 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
     type Outer: OuterGame<Self>;
     /// Turns completed in subgames that have already ended.
     type SubgameTurns: CompletedTurns;
+    /// The mana spent on an activated ability's X, which only Large can hold
+    /// ([`crate::state::SpentMana`]).
+    type Spent: crate::state::SpentMana;
 
     /// A copy of `state`: for [`Small`], one `memcpy`.
     fn clone_state(state: &State<Self>) -> State<Self>;
@@ -223,6 +226,7 @@ impl Layout for Small {
     type Additions = [Option<Addition<CardIx>>; 3];
     type Outer = ();
     type SubgameTurns = ();
+    type Spent = ();
 
     const TOKEN_POOL: Bitboard =
         Bitboard([0, !0 << (Slot::POOL - 64), !0, !0 >> (256 - Slot::COUNT)]);
@@ -273,6 +277,7 @@ impl Layout for Large {
     type Additions = [Option<Addition<LargeCardIx>>; 8];
     type Outer = LargeOuter;
     type SubgameTurns = u16;
+    type Spent = crate::state::Spent;
 
     const TOKEN_POOL: Bitboard<LargeSlot> = {
         assert!(LargeSlot::POOL.is_multiple_of(64) && LargeSlot::COUNT == 16 * 64);

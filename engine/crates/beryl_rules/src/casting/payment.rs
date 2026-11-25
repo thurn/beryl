@@ -128,7 +128,8 @@ pub fn pay<L: Layout>(
     sink.enter_action(player);
     let paid = mana::pay(s, t, sink, player, cost, none, plan, mana::Paying::NOTHING);
     sink.leave();
-    Ok(paid?)
+    paid?;
+    Ok(())
 }
 
 /// `player` discards one of `cards`, cards in their hand, or does not, as an effect offers

@@ -171,6 +171,7 @@ fn filled(large: &State<Large>, t: &GameTable) -> &'static str {
         Err(Misfit::ListTooLong { list, .. }) => list,
         Err(Misfit::PoolTooSmall { .. }) => "the token and copy pool",
         Err(Misfit::Subgame) => "a subgame",
+        Err(Misfit::SpentOnX) => "mana spent on X",
         Err(_) => "another limit",
         Ok(()) => "a list, during one call",
     }

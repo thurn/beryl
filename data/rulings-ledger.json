@@ -1273,6 +1273,91 @@
       ]
     }
   ],
+  "Illusionary Mask": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "4a33b1c7fa47",
+      "scenario": [
+        "A creature cast with Illusionary Mask enters and turns face up untriggered"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "882f217df540",
+      "untestable": "A scenario asserts zones, characteristics and life totals, not what each player may look at. Who knows a face-down card is the kernel's knowledge, the same for a card cast face down by Illusionary Mask as for one cast for morph, and the information-independence tests in beryl_session hold an opponent's view of it to the face-down 2/2."
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "5ee2e85456b3",
+      "scenario": [
+        "A creature cast with Illusionary Mask enters and turns face up untriggered"
+      ]
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "284d212f255b",
+      "scenario": [
+        "A creature cast with Illusionary Mask is turned face up as it is dealt damage"
+      ]
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "fdff3921ff0a",
+      "scenario": [
+        "Illusionary Mask offers no card that less mana spent on X could not pay for",
+        "The kinds of mana spent on X count, not only how much"
+      ]
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "99bdb9d591a6",
+      "scenario": [
+        "A face-down creature from Illusionary Mask returns to its owner's hand face up",
+        "A face-down spell cast with Illusionary Mask can be countered"
+      ]
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "f9eaa775df36",
+      "untestable": "A scenario asserts zones, characteristics and life totals, not what each player may look at. Who knows a face-down card is the kernel's knowledge, the same for a card cast face down by Illusionary Mask as for one cast for morph, and the information-independence tests in beryl_session hold an opponent's view of it to the face-down 2/2."
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "9b2bdc90b1cc",
+      "scenario": [
+        "Illusionary Mask casts a creature card face down for the mana spent on X"
+      ]
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "4031ce35c3d9",
+      "scenario": [
+        "A creature cast with Illusionary Mask stays turned up by it after the Mask is gone"
+      ]
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "cbb472e98f50",
+      "scenario": [
+        "A creature cast with Illusionary Mask is turned face up as it is dealt damage",
+        "A creature with morph cast with Illusionary Mask turns up for its morph cost"
+      ]
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "147795a7389a",
+      "scenario": [
+        "A face-down spell cast with Illusionary Mask can be countered"
+      ]
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "c50da9416cff",
+      "scenario": [
+        "A creature with morph cast with Illusionary Mask turns up for its morph cost"
+      ]
+    }
+  ],
   "Karn Liberated": [
     {
       "published_at": "2020-08-07",

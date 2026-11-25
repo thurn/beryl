@@ -1052,6 +1052,28 @@ revealed when it leaves the stack or the battlefield and when the game ends.
 Illusionary Mask lets any creature card be cast this way and turns it up with a
 replacement when it would deal or be dealt damage.
 
+- The offer is `Effect::MayCast` with `face: CastFace::DownTurnedUpWhenUsed`,
+  which offers each card cast at `FaceIx::DOWN` for free, and `within_x`, which
+  offers only the cards whose mana cost the mana spent on the ability's X could
+  pay, by amount and kind (`casting/spent.rs`).
+- The mana spent on X is kept on the ability's stack entry as `L::Spent`. In
+  `Small` it is `()`, so recording any mana is `Full`: a session's game widens
+  into `Large` for good, and a scenario of such a card starts in `Large`, as one
+  that can start a subgame does. A game without such a card stores nothing.
+  Payment records it only in a game with `Capability::SpentOnX`, for an ability
+  whose effect reads it. Search still scores a rollout that runs out of `Small`
+  as a draw, so until the game has widened the agent misjudges such an
+  activation.
+- The spell remembers `Memo::TurnsUpWhenUsed`, the only memo a spell on the
+  stack may hold, and passes it to its permanent as it resolves, beside
+  `Memo::Morphed`, which stops the manifest way of turning it up. The memo
+  outlives the Mask. `objects/face_down.rs::before_use` turns the permanent up
+  as it would become tapped (`event::set_tapped`), assign combat damage
+  (`combat::assignment::begin_damage`), or deal or be dealt damage
+  (`replacement::damage`). It applies before the other replacements and
+  preventions of the same event. A face-down creature that attacks is tapped, so
+  it turns up as it attacks; one that blocks turns up as it assigns damage.
+
 **Cards outside the game**
 ([CR 400.11](https://yawgatog.com/resources/magic-rules/#R40011)). The
 `GameTable` holds, per player, the cards of the `DeckRole::Sideboard` list as a

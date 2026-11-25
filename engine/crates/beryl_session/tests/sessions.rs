@@ -5,11 +5,12 @@ use std::sync::mpsc::channel;
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
+use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::Pending;
 use beryl_engine::{
-    Decision, GameTable, Observation, Relayout, Replay, Scratch, Seat, Slot, SlotId, State, Step,
-    next,
+    Decision, GameTable, Large, Layout, Observation, Relayout, Replay, Scratch, Seat, SlotId,
+    State, Step, next,
 };
 use beryl_search::Budget;
 use beryl_session::preview::add_previews;
@@ -629,99 +630,16 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
         let start = if fixed { start } else { fuzz_start };
         let mut game = Game::new(&CARDS, &start(seed, stops), SESSION).unwrap();
         while let Some(view) = game.next_view() {
-            let (s, t) = (game.state(), game.table());
-            // The position the human decides in: a paused resolution's, replayed.
-            let mut x = Scratch::new();
-            let seen = beryl_engine::view(s, t, &mut x);
-            for o in &view.objects {
-                if o.name.is_some() {
-                    assert!(
-                        seen.knows(Seat::P0, Slot::from_num(o.slot.0).unwrap()),
-                        "seed {seed}: slot {} is named but unknown",
-                        o.slot
-                    );
-                }
-            }
-            // A state with every unknown card dealt anew, consistent with what the human
-            // knows, gives the same view, events included: nothing in it depends on a hidden
-            // identity. The redealt view converts the same engine events, so this covers what
-            // a conversion reads through the observation; engine events name objects by slot
-            // only, so that is all an identity could come from. A paused resolution replays
-            // its body under the redealt state's own random streams, so those positions are
-            // left to the check above.
-            let resolving = matches!(s.pending(), Pending::Resolving(_));
-            if resolving && let Status::Deciding { decision } = &view.status {
-                // The paused resolution's entry, the top of the committed stack, is named.
-                assert!(
-                    decision.resolving.is_some(),
-                    "seed {seed}: a paused resolution without its entry"
-                );
-            }
-            if resolving && matches!(view.status, Status::Thinking) {
-                // The agent answering it, the entry stays on the human's stack, its card too.
-                let top = view.stack.last().expect("a paused resolution's entry");
-                if let StackItem::Spell { slot, .. } = top {
-                    assert!(
-                        view.objects.iter().any(|o| o.slot == *slot),
-                        "seed {seed}: a resolving spell without its card"
-                    );
-                }
-            }
-            if !resolving {
-                let mut d = None;
-                let moment = match &view.status {
-                    Status::Deciding { decision } if decision.halt => Moment::Halted(decision.id),
-                    Status::Deciding { decision } => {
-                        Moment::Deciding(decision.id, d.insert(open_decision(s, t)), None)
-                    }
-                    Status::Thinking => Moment::Thinking {
-                        resolving: None,
-                        decision: Some(d.insert(open_decision(s, t))),
-                    },
-                    Status::Playing => Moment::Playing,
-                    Status::Free => unreachable!("engine games do not emit manual table views"),
-                    // The end shows what the human knows by then; the game is over.
-                    Status::Over { .. } | Status::Stopped => break,
-                };
-                let det = Observation::new(s, Seat::P0).determinize(t, &mut rng);
-                let mut x = Scratch::new();
-                let mut theirs = player_view(
-                    t,
-                    Observation::new(beryl_engine::view(&det, t, &mut x), Seat::P0),
-                    moment,
-                    view.stops,
-                    &game
-                        .events()
-                        .iter()
-                        .map(Relayout::relayout)
-                        .collect::<Vec<_>>(),
-                );
-                // An opponent's activation still being paid by taps is held back, as a game
-                // holds it back.
-                hold_back_activation_being_paid(&mut theirs, &det);
-                // What a cast taps and whom a blocker may block, played out on the redealt state.
-                if let Some(d) = &d
-                    && d.player == Seat::P0
-                {
-                    add_previews(&mut theirs, &det, t, d);
-                }
-                // The state the prompt opens in, from the redealt state as well.
-                let asked = d.as_ref().filter(|d| d.player == Seat::P0);
-                add_opening_state(&mut theirs, &det, t, asked);
-                // Who won the opening flip, whether a cast can be taken back, and whether the
-                // turn can, are the session's to say, not the position's.
-                theirs.turn.flip_winner = view.turn.flip_winner;
-                if let (Status::Deciding { decision: a }, Status::Deciding { decision: b }) =
-                    (&mut theirs.status, &view.status)
-                {
-                    a.cancellable = b.cancellable;
-                    a.undo = b.undo;
-                    a.undo_depth = b.undo_depth;
-                }
-                assert_eq!(theirs, view, "seed {seed}");
-                if fixed {
-                    events += view.events.len();
-                }
+            let history = game.events();
+            let t = game.table();
+            // A game widens into Large once it outgrows Small, as one with Illusionary Mask does.
+            let compared = match game.large() {
+                Some(s) => views_agree(s, t, &view, &history, &mut rng, seed),
+                None => views_agree(game.state(), t, &view, &history, &mut rng, seed),
+            };
+            let Some(compared) = compared else { break };
+            if fixed {
+                events += compared;
             }
             if matches!(view.status, Status::Deciding { .. }) {
                 let (id, index) = script(&view);
@@ -732,9 +650,110 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
     assert!(events > 1000, "only {events} events compared");
 }
 
+/// Checks `view`, the human's view of the game `s` of the cards of `t` after the events
+/// `history`, against what the human knows: [`no_view_shows_an_identity_its_viewer_does_not_know`].
+/// Returns how many events it compared, or none once the game is over.
+fn views_agree<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    view: &PlayerView,
+    history: &[Event<Large>],
+    rng: &mut SplitMix64,
+    seed: u64,
+) -> Option<usize> {
+    // The position the human decides in: a paused resolution's, replayed.
+    let mut x = Scratch::new();
+    let known = beryl_engine::view(s, t, &mut x);
+    for o in &view.objects {
+        if o.name.is_some() {
+            assert!(
+                known.knows(Seat::P0, L::Slot::from_num(o.slot.0).unwrap()),
+                "seed {seed}: slot {} is named but unknown",
+                o.slot
+            );
+        }
+    }
+    // A state with every unknown card dealt anew, consistent with what the human
+    // knows, gives the same view, events included: nothing in it depends on a hidden
+    // identity. The redealt view converts the same engine events, so this covers what
+    // a conversion reads through the observation; engine events name objects by slot
+    // only, so that is all an identity could come from. A paused resolution replays
+    // its body under the redealt state's own random streams, so those positions are
+    // left to the check above.
+    let resolving = matches!(s.pending(), Pending::Resolving(_));
+    if resolving && let Status::Deciding { decision } = &view.status {
+        // The paused resolution's entry, the top of the committed stack, is named.
+        assert!(
+            decision.resolving.is_some(),
+            "seed {seed}: a paused resolution without its entry"
+        );
+    }
+    if resolving && matches!(view.status, Status::Thinking) {
+        // The agent answering it, the entry stays on the human's stack, its card too.
+        let top = view.stack.last().expect("a paused resolution's entry");
+        if let StackItem::Spell { slot, .. } = top {
+            assert!(
+                view.objects.iter().any(|o| o.slot == *slot),
+                "seed {seed}: a resolving spell without its card"
+            );
+        }
+    }
+    if !resolving {
+        let mut d = None;
+        let moment = match &view.status {
+            Status::Deciding { decision } if decision.halt => Moment::Halted(decision.id),
+            Status::Deciding { decision } => {
+                Moment::Deciding(decision.id, d.insert(open_decision(s, t)), None)
+            }
+            Status::Thinking => Moment::Thinking {
+                resolving: None,
+                decision: Some(d.insert(open_decision(s, t))),
+            },
+            Status::Playing => Moment::Playing,
+            Status::Free => unreachable!("engine games do not emit manual table views"),
+            // The end shows what the human knows by then; the game is over.
+            Status::Over { .. } | Status::Stopped => return None,
+        };
+        let det = Observation::new(s, Seat::P0).determinize(t, rng);
+        let mut x = Scratch::new();
+        let mut theirs = player_view(
+            t,
+            Observation::new(beryl_engine::view(&det, t, &mut x), Seat::P0),
+            moment,
+            view.stops,
+            &history.iter().map(Relayout::relayout).collect::<Vec<_>>(),
+        );
+        // An opponent's activation still being paid by taps is held back, as a game
+        // holds it back.
+        hold_back_activation_being_paid(&mut theirs, &det);
+        // What a cast taps and whom a blocker may block, played out on the redealt state.
+        if let Some(d) = &d
+            && d.player == Seat::P0
+        {
+            add_previews(&mut theirs, &det, t, d);
+        }
+        // The state the prompt opens in, from the redealt state as well.
+        let asked = d.as_ref().filter(|d| d.player == Seat::P0);
+        add_opening_state(&mut theirs, &det, t, asked);
+        // Who won the opening flip, whether a cast can be taken back, and whether the
+        // turn can, are the session's to say, not the position's.
+        theirs.turn.flip_winner = view.turn.flip_winner;
+        if let (Status::Deciding { decision: a }, Status::Deciding { decision: b }) =
+            (&mut theirs.status, &view.status)
+        {
+            a.cancellable = b.cancellable;
+            a.undo = b.undo;
+            a.undo_depth = b.undo_depth;
+        }
+        assert_eq!(&theirs, view, "seed {seed}");
+        return Some(view.events.len());
+    }
+    Some(0)
+}
+
 /// The open decision of a state either seat is deciding in.
-fn open_decision(s: &State, t: &GameTable) -> Decision {
-    let mut s = *s;
+fn open_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Decision<L> {
+    let mut s = s.clone();
     match next(&mut s, t, &mut Scratch::new(), &mut Replay) {
         Step::Decide(d) => d,
         Step::Over(o) => panic!("the game is over: {o:?}"),

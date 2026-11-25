@@ -28,6 +28,7 @@ use crate::table::{Capability, GameTable};
 use super::costs::{spent_by_entry, total_cost, x_range_start};
 use super::mana_payment::{self, SacrificeCost};
 use super::parts;
+use super::spent;
 use super::start;
 use super::targets::{TargetSet, target_options};
 use super::timing::{activated, entry_ability};
@@ -291,7 +292,8 @@ pub(super) fn pay_mana<L: Layout>(
             }
             if let Some(plan) = plans.as_slice().first() {
                 let paying = mana::Paying::entry(t, top(s));
-                mana::pay(s, t, sink, c.player, cost, Bitboard::EMPTY, plan, paying)?;
+                let spent = mana::pay(s, t, sink, c.player, cost, Bitboard::EMPTY, plan, paying)?;
+                spent::record(s, t, &c, spent)?;
             }
             after_mana(s, t, sink, c)
         }
@@ -627,7 +629,7 @@ pub(crate) fn perform<L: Layout>(
             let cost = total_cost(s, t, entry, &c);
             let paying = mana::Paying::entry(t, entry);
             let plans = mana_payment::plans(s, t, sink, entry, cost, false)?;
-            mana::pay(
+            let spent = mana::pay(
                 s,
                 t,
                 sink,
@@ -637,6 +639,7 @@ pub(crate) fn perform<L: Layout>(
                 &plans.as_slice()[Into::<usize>::into(i)],
                 paying,
             )?;
+            spent::record(s, t, &c, spent)?;
             return after_mana(s, t, sink, c);
         }
         CastStep::Objects(_) => return parts::perform(s, t, sink, c, option, object),
@@ -644,6 +647,9 @@ pub(crate) fn perform<L: Layout>(
             let option = option.expect("a manual payment");
             let paying = mana::Paying::entry(t, top(s));
             let remaining = mana::manual_pay(s, t, sink, c.player, remaining, option, paying)?;
+            if let Opt::Pool(color) | Opt::Mana { color, .. } = option {
+                spent::record_one(s, t, &c, color)?;
+            }
             if remaining.is_zero() {
                 return after_mana(s, t, sink, c);
             }

@@ -8,6 +8,7 @@ use super::super::operands::{
 };
 use super::super::{Kind, LINKED, Neighbours, leak, leak_slice};
 
+mod casting;
 mod damage;
 mod faces;
 mod phases;
@@ -671,23 +672,7 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                 );
             }
         }
-        Effect::MayCast {
-            player,
-            card,
-            free,
-            copy,
-            ..
-        } => add(
-            Kind::FreeCast,
-            format!("free: {}", !free),
-            Effect::MayCast {
-                player,
-                card,
-                free: !free,
-                free_below: None,
-                copy,
-            },
-        ),
+        Effect::MayCast { .. } => casting::may_cast(effect, &mut add),
         Effect::UntapUpTo {
             player,
             count,

@@ -13,8 +13,8 @@ use crate::mana_memory::RememberedMana;
 use crate::pending::{LethalAssignment, hidden_pick_answer, hidden_pick_of};
 use crate::state::{
     AbilityRef, CastStep, Casting, DepartedSpell, Derived, GrantRef, LastKnown, Object, ObjectRef,
-    PayingObjects, Pending, PendingTrigger, Player, Resolving, SLOTS, StackEntry, StackItem, State,
-    Target, TriggerInfo, Zones,
+    PayingObjects, Pending, PendingTrigger, Player, Resolving, SLOTS, SpentMana, StackEntry,
+    StackItem, State, Target, TriggerInfo, Zones,
 };
 use crate::subgame::{CompletedTurns, OuterGame};
 
@@ -258,6 +258,8 @@ impl<L: Layout> Relayout for StackEntry<L> {
             targets: queue(self.targets.as_slice(), Target::relayout),
             x: self.x,
             words: self.words,
+            spent: M::Spent::of(self.spent.amounts())
+                .expect("mana spent on X, which only a layout that holds it holds"),
         }
     }
 }

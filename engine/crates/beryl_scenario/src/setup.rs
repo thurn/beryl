@@ -4,6 +4,7 @@
 use beryl_engine::card::{CardShape, FaceIx};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{CounterKind, Memo, Tracker};
+use beryl_engine::table::Capability;
 use beryl_engine::{
     CardId, CardTable, Format, GameTable, Large, LargeCardIx, Layout, Profile, Seat, State, Zone,
 };
@@ -64,8 +65,10 @@ pub(crate) fn setup(
     Ok((t, s))
 }
 
-/// Starts in Small if the deal fits and the cards cannot start a subgame. Scenarios can
-/// inspect decisions in a subgame by starting in Large.
+/// Starts in Small if the deal fits, the cards cannot start a subgame and none records the mana
+/// spent on an ability's X, which only Large holds ([`Capability::SpentOnX`]). A game in a
+/// session widens into Large as it runs out of room; a scenario starts there, so it can inspect
+/// decisions in a subgame or after an activation that records mana.
 pub(crate) fn with_layout<T, Context>(
     cards: &'static CardTable,
     scenario: &Scenario,
@@ -77,6 +80,7 @@ pub(crate) fn with_layout<T, Context>(
     let t = table(cards, scenario)?;
     let seed = scenario.setup.seed;
     if !has_subgame_card(&t)
+        && !t.can(Capability::SpentOnX)
         && let Ok(s) = State::new(&t, seed, Profile::EXACT)
     {
         let s = arrange(&t, s, scenario, slots)?;

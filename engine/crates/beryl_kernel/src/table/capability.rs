@@ -142,10 +142,14 @@ pub enum Capability {
     /// ([`beryl_card::Filter::ManaValueAtMostPower`]), so choosing and checking targets reads
     /// that power.
     ReadsSourcePower,
+    /// An activated ability's effect reads the mana spent on its X
+    /// ([`Effect::MayCast`] with `within_x`), so paying an ability's cost records it on the
+    /// ability's stack entry ([`crate::state::SpentMana`]).
+    SpentOnX,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::ReadsSourcePower as u32) < u64::BITS);
+const _: () = assert!((Capability::SpentOnX as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -343,6 +347,18 @@ fn body_capabilities(body: Behavior) -> u64 {
             }
             if copies_itself(effect) {
                 found |= Capability::ReadsDepartedSpell.bit();
+            }
+            // A card cast face down is turned face up as a morph is, and is told apart from
+            // other face-down objects the same way.
+            if effect.any(&|instruction| {
+                matches!(instruction, Effect::MayCast { face, .. } if *face != beryl_card::CastFace::Up)
+            }) {
+                found |= Capability::Morph.bit();
+            }
+            if effect
+                .any(&|instruction| matches!(instruction, Effect::MayCast { within_x: true, .. }))
+            {
+                found |= Capability::SpentOnX.bit();
             }
             if effect.any(&|instruction| {
                 matches!(

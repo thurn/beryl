@@ -14,7 +14,7 @@ use crate::object::Object;
 use crate::pending::{Pending, Resolving, hidden_pick_of};
 use crate::player::Player;
 use crate::relayout::Relayout;
-use crate::stack::StackEntry;
+use crate::stack::{SpentMana, StackEntry};
 use crate::state::State;
 use crate::subgame::{CompletedTurns, OuterGame};
 use crate::table::GameTable;
@@ -46,12 +46,16 @@ pub enum Misfit {
     IndexTooWide { index: usize },
     /// An active subgame or its completed turns require Large.
     Subgame,
+    /// An ability on the stack remembers the mana spent on its X, which only Large holds
+    /// ([`crate::state::SpentMana`]).
+    SpentOnX,
 }
 
 impl fmt::Display for Misfit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Misfit::Subgame => f.write_str("subgames require the Large layout"),
+            Misfit::SpentOnX => f.write_str("mana spent on X requires the Large layout"),
             Misfit::DeckTooLarge {
                 player,
                 cards,
@@ -252,6 +256,9 @@ impl<L: Layout> State<L> {
                 entry.targets.len(),
                 capacity(|e: &StackEntry<M>| &e.targets),
             )?;
+            if M::Spent::of(entry.spent_on_x()).is_none() {
+                return Err(Misfit::SpentOnX);
+            }
         }
         for row in last_known.iter() {
             row.copiable.fits::<M>()?;

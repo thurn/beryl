@@ -386,6 +386,7 @@ fn move_ordered<L: Layout, const N: usize>(
         if auras && from == Zone::Graveyard {
             unattach_from(s, slot);
         }
+        let down = (from == Zone::Stack && entry.face == FaceIx::DOWN).then(|| face_down(s, slot));
         s.move_object(sink, slot, dest, place)?;
         if dest == Zone::Battlefield {
             let permanent = s
@@ -394,8 +395,8 @@ fn move_ordered<L: Layout, const N: usize>(
             arrive(s, t, permanent, entry)?;
             // See CR 702.37c: "When the spell resolves, it enters the battlefield with the
             // same characteristics the spell had." Its controller still pays its morph cost.
-            if from == Zone::Stack && entry.face == FaceIx::DOWN {
-                s.remember(slot, Memo::Morphed)?;
+            if let Some(memos) = down {
+                memos.remember(s, slot)?;
             }
             // A permanent spell that resolves becomes the permanent (see CR 608.3), and only
             // a copy of a spell, which is a token, was not cast (see CR 707.10).
@@ -601,6 +602,35 @@ pub(crate) fn set_tapped<L: Layout>(
     if s.object(permanent.slot()).is_tapped() == tapped {
         return Ok(());
     }
+    if tapped {
+        crate::objects::face_down::before_use(s, t, sink, permanent.slot())?;
+    }
     let e = s.set_tapped(permanent, tapped);
     settle(s, t, sink, e)
+}
+
+/// What a face-down spell passes on to the permanent it becomes as it resolves, read before
+/// it moves, which ends the spell's own memos.
+#[derive(Clone, Copy)]
+struct FaceDown {
+    turns_up: bool,
+}
+
+/// [`FaceDown`] of the face-down spell in `slot`.
+fn face_down<L: Layout>(s: &State<L>, slot: L::Slot) -> FaceDown {
+    FaceDown {
+        turns_up: s.turns_up_when_used(slot),
+    }
+}
+
+impl FaceDown {
+    /// Has the permanent in `slot` remember that it was a face-down spell, and that it is
+    /// turned face up as it is used if the spell was.
+    fn remember<L: Layout>(self, s: &mut State<L>, slot: L::Slot) -> Result<(), Full> {
+        s.remember(slot, Memo::Morphed)?;
+        if self.turns_up {
+            s.remember(slot, Memo::TurnsUpWhenUsed)?;
+        }
+        Ok(())
+    }
 }

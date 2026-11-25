@@ -7,8 +7,8 @@
 
 use beryl_card::effect::build::{cards_in, draw, end_turn, gain_life, scry, sequence, you};
 use beryl_card::{
-    Amount, CardDef, Cost, Effect, Face, Filter, ManaColor, ManaCost, ManaSet, Players, Prompt,
-    Purpose, Replacement, Says, SpecIx, TargetKind, TargetSpec, Trigger, Types,
+    Amount, CardDef, CastFace, Cost, Effect, Face, Filter, ManaColor, ManaCost, ManaSet, Players,
+    Prompt, Purpose, Replacement, Says, SpecIx, TargetKind, TargetSpec, Trigger, Types,
 };
 
 use super::cast::*;
@@ -76,6 +76,8 @@ const CAST_A_SORCERY: Effect = Effect::MayCast {
     free: false,
     free_below: None,
     copy: false,
+    face: CastFace::Up,
+    within_x: false,
 };
 
 /// "You may cast a sorcery card from your hand. Scry 1."

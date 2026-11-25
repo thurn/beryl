@@ -28,6 +28,8 @@ pub(crate) static CASCADE: Effect = Effect::Sequence(&[
             free: true,
             free_below: Some(Amount::ManaValue(Objects::This)),
             copy: false,
+            face: crate::CastFace::Up,
+            within_x: false,
         },
     },
     Effect::PutIntoLibrary {

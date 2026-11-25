@@ -22,7 +22,11 @@ use crate::object::ObjectRef;
 use crate::state::State;
 use crate::table::GameTable;
 
+mod places;
+mod spent;
 mod transform;
+pub use places::{TargetPlace, TargetPlaces, placed};
+pub use spent::{ManaAmounts, Spent, SpentMana};
 pub use transform::AbilityController;
 pub const TARGETS: usize = 8;
 
@@ -181,86 +185,6 @@ impl<L: Layout> Target<L> {
     }
 }
 
-/// The place of a chosen target in a stack entry's list of them
-/// ([`StackEntry::targets`]), counting from 0 in the order they were chosen
-/// (see [CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): "The player announces
-/// their choice of an appropriate object or player for each target the spell requires."
-///
-/// It is not the target's [`SpecIx`]: one instance of the word "target" may choose several
-/// targets or none, so the two count differently, and neither is passed for the other.
-///
-/// ```compile_fail
-/// use beryl_card::SpecIx;
-/// use beryl_kernel::state::{ObjectRef, Target, TargetPlace};
-///
-/// // The first place is not the first instance of the word "target".
-/// let target: Target = Target::object(TargetPlace::FIRST, ObjectRef::default());
-/// ```
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct TargetPlace(u8);
-
-impl TargetPlace {
-    /// The place of the first target chosen.
-    pub const FIRST: TargetPlace = TargetPlace(0);
-
-    /// The place `place`, counting from 0.
-    #[inline]
-    pub const fn new(place: u8) -> TargetPlace {
-        assert!(
-            (place as usize) < TARGETS,
-            "a stack entry has TARGETS places"
-        );
-        TargetPlace(place)
-    }
-
-    /// The position in the list.
-    #[inline]
-    pub const fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-
-/// Each of `targets`, a stack entry's, with its place, in the order they were chosen
-/// (see CR 601.2c).
-#[inline]
-pub fn placed<L: Layout>(
-    targets: &[Target<L>],
-) -> impl Iterator<Item = (TargetPlace, Target<L>)> + '_ {
-    debug_assert!(targets.len() <= TARGETS);
-    (targets.iter().enumerate()).map(|(i, &target)| {
-        (
-            TargetPlace(u8::try_from(i).expect("a target place fits in u8")),
-            target,
-        )
-    })
-}
-
-/// A set of the places of one stack entry's targets: a byte, a bit for each place. It has no
-/// order of its own; [`placed`] gives the targets in the order they were chosen.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct TargetPlaces(u8);
-
-const _: () = assert!(TARGETS <= 8, "a bit for each place");
-
-impl TargetPlaces {
-    pub const NONE: TargetPlaces = TargetPlaces(0);
-
-    #[inline]
-    pub fn insert(&mut self, place: TargetPlace) {
-        self.0 |= 1 << place.0;
-    }
-
-    #[inline]
-    pub fn contains(self, place: TargetPlace) -> bool {
-        self.0 & (1 << place.0) != 0
-    }
-
-    #[inline]
-    pub fn is_empty(self) -> bool {
-        self.0 == 0
-    }
-}
-
 /// An ability of a card, as it exists on the stack or waiting to go on it.
 ///
 /// `A` says which abilities it can be: a [`FaceAbility`] for an activated ability, which may
@@ -382,13 +306,15 @@ pub struct StackEntry<L: Layout = Small> {
     /// or the number of one of the state's captured sets, from 1. A spell reads its own words
     /// as they are now, whatever this holds.
     pub words: u8,
+    /// The mana spent on an activated ability's X, where its effect reads it ([`spent`]).
+    pub spent: L::Spent,
 }
 
 impl Copy for StackEntry<Small> {}
 
-/// Its fields in order, and its words only when they are not [`AS_PRINTED`], as they always are
-/// in a game without a text change: such a game hashes as it did before entries had words
-/// (`beryl_bench` pins the hashes of its corpus).
+/// Its fields in order, its words only when they are not [`AS_PRINTED`], as they always are
+/// in a game without a text change, and the mana spent on X only where some was: such a game
+/// hashes as it did before entries had either (`beryl_bench` pins the hashes of its corpus).
 impl<L: Layout> std::hash::Hash for StackEntry<L> {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         self.item.hash(h);
@@ -396,6 +322,9 @@ impl<L: Layout> std::hash::Hash for StackEntry<L> {
         self.x.hash(h);
         if self.words != AS_PRINTED {
             self.words.hash(h);
+        }
+        if L::Spent::SUPPORTED && self.spent != L::Spent::default() {
+            self.spent.hash(h);
         }
     }
 }
@@ -416,6 +345,7 @@ impl<L: Layout> StackEntry<L> {
             targets: Default::default(),
             x: 0,
             words: AS_PRINTED,
+            spent: L::Spent::default(),
         }
     }
 

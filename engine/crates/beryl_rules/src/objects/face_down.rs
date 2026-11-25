@@ -8,6 +8,9 @@
 //! hidden is its card: its controller knows it, the other player doesn't (architecture §13).
 //!
 //! Implements: CR 116.2b, CR 701.40b, CR 701.40c, CR 702.37e, CR 712.12a
+//!
+//! A face-down permanent an effect cast face down may also be turned face up by a replacement
+//! effect of its own, as it would be used ([`before_use`]).
 
 use beryl_kernel::reference::Permanent;
 
@@ -356,7 +359,8 @@ fn pay_plan<L: Layout>(
         Bitboard::EMPTY,
         plan,
         mana::Paying::NOTHING,
-    )
+    )?;
+    Ok(())
 }
 
 /// The part of the cost that takes chosen objects, at `part`.
@@ -485,4 +489,54 @@ fn pay_other_parts<L: Layout>(
         trigger::match_event(s, t, &turned)?;
     }
     Ok(())
+}
+
+/// Turns the face-down permanent in `slot` face up first if it would now be used and remembers
+/// that it is turned face up then ([`crate::state::Memo::TurnsUpWhenUsed`]): Illusionary
+/// Mask's "If the creature that spell becomes as it resolves has not been turned face up and
+/// would assign or deal damage, be dealt damage, or become tapped, instead it's turned face up
+/// and assigns or deals damage, is dealt damage, or becomes tapped." The event that would use
+/// it then happens to the permanent face up. The rules call this as the permanent would
+/// become tapped, assign combat damage, or deal or be dealt damage.
+///
+/// Turning it face up uses no stack and can't be responded to, as the card's ruling says of a
+/// replacement effect (see [CR 614.1a]): "Effects that use the word 'instead' are replacement
+/// effects." It applies before any other replacement or prevention of the same event, which
+/// all still apply to the permanent face up. One AND in a game where nothing is cast face
+/// down.
+///
+/// [CR 614.1a]: https://yawgatog.com/resources/magic-rules/#R6141a
+#[inline]
+pub(crate) fn before_use<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+) -> Result<(), Full> {
+    if !t.can(crate::table::Capability::Morph) {
+        return Ok(());
+    }
+    turn_up_if_used(s, t, sink, slot)
+}
+
+#[cold]
+#[inline(never)]
+fn turn_up_if_used<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+) -> Result<(), Full> {
+    if s.object(slot).face() != FaceIx::DOWN || !s.turns_up_when_used(slot) {
+        return Ok(());
+    }
+    let Some(permanent) = s.permanent_at(slot) else {
+        return Ok(());
+    };
+    s.turn_face_up(t, permanent);
+    layers::refresh(s, t, sink)?;
+    let turned = Event::TurnedFaceUp {
+        object: permanent.into(),
+    };
+    trigger::match_event(s, t, &turned)
 }

@@ -180,6 +180,27 @@ fn division<L: Layout>(
     (killed, recipients(s, source) & !killed, left)
 }
 
+/// Turns face up each face-down creature that would assign combat damage in this step and is
+/// turned face up as it would ([`crate::objects::face_down::before_use`]), before any
+/// creature assigns: it then assigns damage equal to its power face up (see CR 510.1a). Out
+/// of line: only a game with face-down permanents comes here.
+#[cold]
+#[inline(never)]
+fn turn_up_assigners<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
+    let mut i = 0;
+    while let Some(&slot) = s.battlefield().get(i) {
+        if assigns_now(s, slot) && power(s, slot) > 0 {
+            crate::objects::face_down::before_use(s, t, sink, slot)?;
+        }
+        i += 1;
+    }
+    Ok(())
+}
+
 /// Records the first-step participants before any damage changes the battlefield. If every
 /// assignment is determined, deals the damage immediately (CR 510.1 and CR 510.2).
 pub(crate) fn begin_damage<L: Layout>(
@@ -187,6 +208,9 @@ pub(crate) fn begin_damage<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
+    if t.can(Capability::Morph) {
+        turn_up_assigners(s, t, sink)?;
+    }
     if s.turn().step() == TurnStep::FirstStrikeDamage {
         for i in 0..s.battlefield().len() {
             let slot = s.battlefield()[i];

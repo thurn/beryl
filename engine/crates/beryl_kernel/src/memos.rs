@@ -35,6 +35,7 @@ use crate::table::GameTable;
 
 mod combat;
 mod designation;
+mod face_down;
 mod link;
 mod piles;
 mod preparation;
@@ -145,8 +146,18 @@ pub enum Memo<L: Layout = Small> {
     /// [CR 713.8c]: https://yawgatog.com/resources/magic-rules/#R7138c
     /// [CR 731.3c]: https://yawgatog.com/resources/magic-rules/#R7313c
     ExiledFromPileOf(L::Slot),
-    /// This permanent entered by resolving a face-down spell cast for morph (see CR 702.37c).
+    /// This permanent entered by resolving a face-down spell cast for morph (see CR 702.37c),
+    /// or by resolving one an effect cast face down.
     Morphed,
+    /// This face-down spell, or the permanent it became, was cast face down by an effect
+    /// that turns the permanent face up as it is used, Illusionary Mask's: "If the creature
+    /// that spell becomes as it resolves has not been turned face up and would assign or deal
+    /// damage, be dealt damage, or become tapped, instead it's turned face up and assigns or
+    /// deals damage, is dealt damage, or becomes tapped." A replacement effect of the
+    /// permanent's own, which outlasts the effect that made it (`beryl_card`'s
+    /// `CastFace::DownTurnedUpWhenUsed`). The spell remembers it on the stack, and the
+    /// permanent as it enters.
+    TurnsUpWhenUsed,
     /// This permanent was a spell that its controller cast, which became it as it resolved:
     /// what "if you cast it" asks ([`beryl_card::Condition::Cast`]). A copy of a spell was
     /// not cast (see [CR 707.10]): "a copy of a spell isn't cast". Kept only in a game with a
@@ -196,6 +207,7 @@ impl Kinds {
     const PREPARED: u32 = 1 << 21;
     const CAST: u32 = 1 << 22;
     const EXILED_FROM_PILE: u32 = 1 << 23;
+    const TURNS_UP: u32 = 1 << 24;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u32 = Kinds::EXILED_WITH
         | Kinds::EXILED_UNTIL
@@ -339,7 +351,7 @@ impl<L: Layout> Store<L> for Memos<L> {
             let at = Some(At::Slot(e.slot.index()));
             let zone = |slot: L::Slot| s.object(slot).zone;
             check(
-                zone(e.slot) == e.memo.zone(),
+                e.memo.held_in(zone(e.slot)),
                 "a memo on an object in no zone to remember it",
                 at,
             )?;
@@ -443,6 +455,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::ExiledFromPileOf(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
+            | Memo::TurnsUpWhenUsed
             | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
@@ -467,6 +480,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::ExiledFromPileOf(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
+            | Memo::TurnsUpWhenUsed
             | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
@@ -491,6 +505,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::ExiledFromPileOf(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
+            | Memo::TurnsUpWhenUsed
             | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
@@ -517,7 +532,7 @@ impl<L: Layout> State<L> {
     /// the memo. No event: it is part of how the object came to be where it is.
     #[inline]
     pub fn remember(&mut self, slot: L::Slot, memo: Memo<L>) -> Result<(), Full> {
-        debug_assert_eq!(self.object(slot).zone, memo.zone());
+        debug_assert!(memo.held_in(self.object(slot).zone));
         debug_assert!(!self.memos(slot).iter().any(|m| m.same_variant(memo)));
         self.memos.entries.push(Remembered { slot, memo })?;
         self.memos.kinds.0 |= memo.kinds();
@@ -565,14 +580,6 @@ impl<L: Layout> State<L> {
             .of(Kinds::CAST)
             .iter()
             .any(|e| e.slot == slot && e.memo == Memo::Cast)
-    }
-
-    /// Whether the permanent in `slot` entered by resolving a face-down morph spell.
-    pub fn morphed(&self, slot: L::Slot) -> bool {
-        self.memos
-            .of(Kinds::MORPHED)
-            .iter()
-            .any(|e| e.slot == slot && e.memo == Memo::Morphed)
     }
 
     /// The value of X the permanent in `slot` was cast with
@@ -724,6 +731,7 @@ impl<L: Layout> State<L> {
             | Memo::PartOf(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
+            | Memo::TurnsUpWhenUsed
             | Memo::ClassLevel(_)
             | Memo::Solved
             | Memo::CombatBand(_)

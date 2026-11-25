@@ -95,6 +95,23 @@ impl CastTerms {
     }
 }
 
+/// Which way up a resolution's offer casts a card ([`Effect::MayCast`]).
+///
+/// [`Effect::MayCast`]: crate::Effect::MayCast
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CastFace {
+    /// As one of the faces its caster may choose.
+    Up,
+    /// "Face down as a 2/2 creature spell", which has "no text, no name, no subtypes, and no
+    /// mana cost" ([CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a)), whatever
+    /// card it is. The permanent it becomes has a replacement effect of its own, which
+    /// outlasts what made the offer: "if the creature that spell becomes as it resolves has
+    /// not been turned face up and would assign or deal damage, be dealt damage, or become
+    /// tapped, instead it's turned face up and assigns or deals damage, is dealt damage, or
+    /// becomes tapped".
+    DownTurnedUpWhenUsed,
+}
+
 /// How a copy differs from what it copies
 /// ([CR 707.9](https://yawgatog.com/resources/magic-rules/#R7079)): "Copy effects may include
 /// modifications or exceptions to the copying process." Its changes, applied in order, set

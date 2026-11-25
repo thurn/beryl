@@ -43,6 +43,7 @@ impl<L: Layout> State<L> {
                 | Memo::PartOf(_)
                 | Memo::FaceDownUnder(_)
                 | Memo::Morphed
+                | Memo::TurnsUpWhenUsed
                 | Memo::ClassLevel(_)
                 | Memo::Solved
                 | Memo::CombatBand(_)

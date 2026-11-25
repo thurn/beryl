@@ -101,10 +101,11 @@ fn a_widened_game_plays_on_as_the_small_one() {
     for seed in 0..2 {
         let (t, s) = game(seed);
         let fuzz = play_widening(&t, s, seed, &mut HashMap::new(), true);
-        // A subgame needs `Large` by design (`State::fits` refuses one in `Small`), so a fuzz
-        // deck with Shahrazad may leave `Small` there; the games were alike until then.
+        // A subgame and the mana spent on an ability's X need `Large` by design (`State::fits`
+        // refuses either in `Small`), so a fuzz deck with Shahrazad or Illusionary Mask may
+        // leave `Small` there; the games were alike until then.
         assert!(
-            matches!(fuzz.filled, None | Some("a subgame")),
+            matches!(fuzz.filled, None | Some("a subgame" | "mana spent on X")),
             "fuzz seed {seed}: {:?}",
             fuzz.filled
         );

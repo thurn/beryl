@@ -261,7 +261,9 @@ impl Ctx {
                 free,
                 free_below,
                 copy,
-            } => self.may_cast(player, card, free, free_below, copy),
+                face,
+                within_x,
+            } => self.may_cast(player, card, free, free_below, copy, face, within_x),
             // Turns, later events and the game.
             Effect::Delay { ability, .. } => self.delay(ability),
             Effect::GetEmblem { player, emblem } => self.get_emblem(player, emblem),

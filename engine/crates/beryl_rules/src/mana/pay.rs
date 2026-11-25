@@ -12,7 +12,9 @@ use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
 use crate::replacement::event::{self, Sink};
-use crate::state::{AbilityRef, Pending, PendingTrigger, State, TriggeredAbility, Zone, ZoneKey};
+use crate::state::{
+    AbilityRef, ManaAmounts, Pending, PendingTrigger, State, TriggeredAbility, Zone, ZoneKey,
+};
 use crate::table::{Capability, GameTable, is_instant_mana, is_sacrificed, is_simple};
 use beryl_kernel::chosen::ChosenValue;
 
@@ -32,6 +34,8 @@ use super::{KINDS, Taps};
 /// See [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
 /// total cost. ... Partial payments are not allowed." So the events of the payment, each
 /// source's tap and the mana it makes, are kept as one group: the cost is paid or it is not.
+///
+/// Returns how much of each kind of mana it spent, by [`ManaColor`] index.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn pay<L: Layout>(
     s: &mut State<L>,
@@ -42,7 +46,7 @@ pub(crate) fn pay<L: Layout>(
     exclude: Bitboard<L::Slot>,
     plan: &Plan<L>,
     paying: Paying<L>,
-) -> Result<(), Full> {
+) -> Result<ManaAmounts, Full> {
     sink.together();
     let paid = pay_whole(s, t, sink, player, cost, exclude, plan, paying);
     sink.apart();
@@ -74,7 +78,7 @@ fn pay_whole<L: Layout>(
     exclude: Bitboard<L::Slot>,
     plan: &Plan<L>,
     paying: Paying<L>,
-) -> Result<(), Full> {
+) -> Result<ManaAmounts, Full> {
     let sources = Sources::of(s, t, player, exclude, paying)?;
     if sources.has_memory() {
         return pay_with_memory(s, t, sink, player, cost, plan, paying, &sources);
@@ -121,15 +125,17 @@ fn pay_whole<L: Layout>(
     }
     let mut kinds = Default::default();
     assign::<L, false>(cost, units.as_slice(), &mut kinds)?;
+    let mut spent = [0; KINDS];
     for (&(unit_kinds, source, n), &kind) in units.iter().zip(kinds.iter()) {
         let kind = kind.unwrap_or_else(|| lowest_kind(unit_kinds));
         if let Some(slot) = source {
             activate(s, t, sink, slot, ManaColor::ALL[kind])?;
         }
         s.spend_mana(player, ManaColor::ALL[kind], n);
+        spent[kind] += n;
     }
     debug_assert_eq!(s.player(player).mana().amounts(), plan.left);
-    Ok(())
+    Ok(spent)
 }
 
 /// [`pay_whole`] where the plan may spend mana that remembers or tap a source for restricted
@@ -147,7 +153,7 @@ fn pay_with_memory<L: Layout>(
     plan: &Plan<L>,
     paying: Paying<L>,
     sources: &Sources<L>,
-) -> Result<(), Full> {
+) -> Result<ManaAmounts, Full> {
     let total = cost.total(0);
     let must: u32 = plan.spend.iter().map(|&n| u32::from(n)).sum::<u32>()
         + plan.remembered.count_ones()
@@ -214,9 +220,11 @@ fn pay_with_memory<L: Layout>(
             remembered::spend(s, t, player, usize::from(at), paying)?;
         }
     }
+    let mut spent = [0; KINDS];
     for ((&(unit_kinds, source, n), &kind), &how) in units.iter().zip(kinds.iter()).zip(from.iter())
     {
         let color = ManaColor::ALL[kind.unwrap_or_else(|| lowest_kind(unit_kinds))];
+        spent[color.index()] += n;
         match (how, source) {
             (From::Remembered(_), _) => {}
             (From::Restricted, Some(slot)) => {
@@ -232,7 +240,7 @@ fn pay_with_memory<L: Layout>(
         }
     }
     debug_assert_eq!(s.player(player).mana().amounts(), plan.left);
-    Ok(())
+    Ok(spent)
 }
 
 /// The `n` members of class `c` the human's payment taps: its creatures last, free to attack

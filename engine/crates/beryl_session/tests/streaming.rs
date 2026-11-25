@@ -8,8 +8,7 @@ use beryl_cards::names;
 use beryl_engine::card::Purpose;
 use beryl_engine::event::{Event, Reason};
 use beryl_engine::{
-    Choice, Format, GameTable, Large, Limits, Profile, Relayout, Replay, Scratch, State, Step,
-    apply, next,
+    Choice, Format, GameTable, Large, Limits, Profile, Replay, Scratch, State, Step, apply, next,
 };
 use beryl_session::protocol::{GameEvent, Side, StackItem, Step as TurnStep, ZoneName};
 use beryl_session::replay::Entry;
@@ -241,8 +240,10 @@ fn events_of(begin: &StartGame, log: &[Entry]) -> Vec<Event<Large>> {
     )
     .unwrap();
     let profile = with_stops(Profile::SMART, begin.stops, begin.human);
-    let mut s = State::new(&t, begin.seed, profile).unwrap();
-    let mut x = Scratch::recording();
+    // Widened from its start, which is lossless, so that a game the session widens later, as
+    // one with Illusionary Mask is, plays on here too.
+    let mut s = State::new(&t, begin.seed, profile).unwrap().widen();
+    let mut x = Scratch::<Large>::recording();
     let mut choices = log.iter().filter_map(|e| match e {
         Entry::Choice(c) | Entry::Auto(c) => Some(Choice(c.index)),
         _ => None,
@@ -251,7 +252,7 @@ fn events_of(begin: &StartGame, log: &[Entry]) -> Vec<Event<Large>> {
         apply(&mut s, &t, &mut x, &mut Replay, choices.next().unwrap());
     }
     assert_eq!(choices.next(), None);
-    x.events.drain().map(|e| e.relayout()).collect()
+    x.events.drain().collect()
 }
 
 #[test]

@@ -8,7 +8,7 @@
 //!
 //! Implements: CR 608.2g
 
-use beryl_card::{Amount, CastTerms, Filter, Objects, Players, Types, Words};
+use beryl_card::{Amount, CastFace, CastTerms, Filter, Objects, Players, Types, Words};
 
 use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose, Stop};
@@ -24,8 +24,8 @@ use crate::layout::{Layout, Queue};
 use crate::replacement::event::{Cause, StackIx};
 use crate::resolution::Resolution;
 use crate::state::{
-    Continuous, CostChange, Duration, MoveReplacement, ObjectRef, Pending, Permission, Permitted,
-    State,
+    Continuous, CostChange, Duration, ManaAmounts, Memo, MoveReplacement, ObjectRef, Pending,
+    Permission, Permitted, State,
 };
 
 use super::{stack, steps};
@@ -49,7 +49,16 @@ pub fn offer<L: Layout>(
     player: Seat,
     free: bool,
 ) -> Result<Option<L::Slot>, Stop> {
-    offer_spell(game, resolution, cards, player, free, None, false)
+    offer_spell(
+        game,
+        resolution,
+        cards,
+        player,
+        free,
+        None,
+        false,
+        CastFace::Up,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -61,11 +70,17 @@ fn offer_spell<L: Layout>(
     free: bool,
     below: Option<u8>,
     copy: bool,
+    face: CastFace,
 ) -> Result<Option<L::Slot>, Stop> {
     if cards.is_empty() {
         return Ok(None);
     }
-    let mut options = stack::offer_options(game.state, game.table, cards, player, free)?;
+    let mut options = match face {
+        CastFace::Up => stack::offer_options(game.state, game.table, cards, player, free)?,
+        CastFace::DownTurnedUpWhenUsed => {
+            stack::face_down_offer_options(game.state, game.table, cards, player, free)?
+        }
+    };
     if let Some(below) = below {
         // See CR 702.85a: "if the resulting spell’s mana value is less than this spell’s mana
         // value." Each option names the face that would be on the stack. See CR 107.3b: "the
@@ -91,7 +106,12 @@ fn offer_spell<L: Layout>(
     )
     .about(cards);
     let choice = resolution.answer_cast_step(game, &question)?;
-    let Some(Opt::Cast { slot, face, costs }) = question.candidates.option(choice) else {
+    let Some(Opt::Cast {
+        slot,
+        face: cast_face,
+        costs,
+    }) = question.candidates.option(choice)
+    else {
         return Ok(None);
     };
     // See CR 707.12: the copy "is created in the same zone the object is in and then cast".
@@ -103,8 +123,17 @@ fn offer_spell<L: Layout>(
     } else {
         slot
     };
-    let option = Opt::Cast { slot, face, costs };
+    let option = Opt::Cast {
+        slot,
+        face: cast_face,
+        costs,
+    };
     cast_during_resolution(game, resolution, player, option, free)?;
+    if face == CastFace::DownTurnedUpWhenUsed {
+        // The permanent the spell becomes is turned face up as it is used, after what cast it
+        // has gone: the spell remembers it, and passes it on as it resolves.
+        game.state.remember(slot, Memo::TurnsUpWhenUsed)?;
+    }
     Ok(Some(slot))
 }
 
@@ -257,6 +286,7 @@ pub(crate) fn begin_on_spell<L: Layout>(
 
 /// [`Effect::MayCast`](beryl_card::Effect::MayCast) offers one cast. Its outcome is the
 /// spell the player cast, if any: with `copy`, the copy of the card chosen.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn may_cast_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     player: Players,
@@ -264,15 +294,20 @@ pub(crate) fn may_cast_instruction<L: Layout>(
     free: bool,
     free_below: Option<Amount>,
     copy: bool,
+    face: CastFace,
+    within_x: bool,
 ) -> Result<Outcome<L>, Stop> {
-    let cards = run.scene().objects(card);
+    let mut cards = run.scene().objects(card);
     let below = free_below.map(|amount| run.scene().amount(amount));
     let Some(player) = run.one(player) else {
         return Ok(Outcome::NOTHING);
     };
     let (game, resolution) = run.resolving();
+    if within_x {
+        cards = within_spent(game.state, game.table, cards, resolution.entry.spent_on_x());
+    }
     Ok(
-        offer_spell(game, resolution, cards, player, free, below, copy)?
+        offer_spell(game, resolution, cards, player, free, below, copy, face)?
             .map_or(Outcome::NOTHING, |slot| {
                 Outcome::acted_on(Bitboard::single(slot))
             }),
@@ -315,4 +350,21 @@ pub(crate) fn permit_instruction<L: Layout>(
         allow(game, resolution, card, player, extra, this_turn, exile)?;
     }
     Ok(Outcome::acted_on(cards))
+}
+
+/// The cards of `cards` "whose mana cost could be paid by some amount of, or all of, the mana
+/// you spent on {X}" ([`super::pays_from_spent`]), the mana `spent`. Out of line: only an
+/// offer limited by it comes here.
+#[cold]
+#[inline(never)]
+fn within_spent<L: Layout>(
+    s: &State<L>,
+    t: &crate::table::GameTable,
+    cards: Bitboard<L::Slot>,
+    spent: ManaAmounts,
+) -> Bitboard<L::Slot> {
+    cards.filter(|slot| {
+        s.card_def(t, slot)
+            .is_some_and(|def| super::pays_from_spent(def.front().cost, spent))
+    })
 }

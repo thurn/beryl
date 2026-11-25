@@ -17,7 +17,7 @@ use crate::layout::{Layout, Queue};
 use crate::replacement::event::{Recipient, ReplacementKind};
 use crate::replacement::protection;
 use crate::state::{ChosenSource, ObjectRef, RuleKind, ShieldAt, State, Subject, Zone, ZoneKey};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
 use beryl_card::prompt::Purpose;
 use beryl_card::{Filter, Prompt, Words};
@@ -64,6 +64,9 @@ pub(crate) fn damage<L: Layout>(
     game: &mut Game<'_, L>,
     proposal: Damage<L>,
 ) -> Result<Damage<L>, Full> {
+    if game.table().can(Capability::Morph) && proposal.amount > 0 {
+        turn_up_before_damage(game, &proposal)?;
+    }
     let s = game.state();
     let live = s
         .replacing()
@@ -72,6 +75,24 @@ pub(crate) fn damage<L: Layout>(
         return Ok(proposal);
     }
     replaced(game, proposal)
+}
+
+/// Turns face up a face-down source or recipient of the damage that is turned face up as it
+/// would deal or be dealt damage ([`crate::objects::face_down::before_use`]). Out of line: only
+/// a game with face-down permanents comes here.
+#[cold]
+#[inline(never)]
+fn turn_up_before_damage<L: Layout>(game: &mut Game<'_, L>, p: &Damage<L>) -> Result<(), Full> {
+    let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+    if s.is_current(p.source) {
+        crate::objects::face_down::before_use(s, t, sink, p.source.slot)?;
+    }
+    if let Recipient::Permanent(to) = p.to
+        && s.is_current(to)
+    {
+        crate::objects::face_down::before_use(s, t, sink, to.slot)?;
+    }
+    Ok(())
 }
 
 /// Whether the damage would be dealt to a player with protection from everything, which

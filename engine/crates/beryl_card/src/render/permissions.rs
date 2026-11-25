@@ -4,7 +4,7 @@
 
 use super::Ctx;
 use crate::continuous::{Duration, Governed, RuleChange};
-use crate::effect::{Amount, CastTerms, Objects, Players};
+use crate::effect::{Amount, CastFace, CastTerms, Objects, Players};
 
 impl Ctx {
     /// A rule change from a resolving spell or ability, with how long it lasts: "until end of
@@ -84,6 +84,7 @@ impl Ctx {
 
     /// "You may cast that card without paying its mana cost", or with `copy`, "copy that
     /// card. You may cast the copy without paying its mana cost" (see CR 707.12).
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn may_cast(
         &mut self,
         player: Players,
@@ -91,7 +92,12 @@ impl Ctx {
         free: bool,
         free_below: Option<Amount>,
         copy: bool,
+        face: CastFace,
+        within_x: bool,
     ) -> Vec<String> {
+        if within_x || face != CastFace::Up {
+            return self.cast_face_down(player, card, free, face, within_x);
+        }
         let mut clauses = self.cast_offer(player, card, free, free_below);
         if copy {
             let named = self.objects(card);
@@ -101,6 +107,60 @@ impl Ctx {
             // A new sentence names a card an instruction before moved as "that card".
             let copied = if named == "it" { "that card" } else { &named };
             clauses.insert(0, format!("copy {copied}"));
+        }
+        clauses
+    }
+
+    /// "You may choose a creature card in your hand whose mana cost could be paid by some
+    /// amount of, or all of, the mana you spent on {X}. If you do, you may cast that card face
+    /// down as a 2/2 creature spell without paying its mana cost", and the replacement effect
+    /// of the permanent that spell becomes.
+    fn cast_face_down(
+        &mut self,
+        player: Players,
+        card: Objects,
+        free: bool,
+        face: CastFace,
+        within_x: bool,
+    ) -> Vec<String> {
+        let mut clauses = Vec::new();
+        let it = if within_x {
+            let what = self.one_of(card);
+            let whose = format!(
+                "{what} whose mana cost could be paid by some amount of, or all of, the mana \
+                 you spent on {{X}}"
+            );
+            self.may = true;
+            clauses.push(self.clause(player, ("choose", "chooses"), |_| whose));
+            let they = if self.player(player) == "you" {
+                "you"
+            } else {
+                "they"
+            };
+            format!("if {they} do, {they} may cast that card")
+        } else {
+            self.may = true;
+            let what = self.objects(card);
+            self.clause(player, ("cast", "casts"), |_| what)
+        };
+        let down = match face {
+            CastFace::Up => "",
+            CastFace::DownTurnedUpWhenUsed => " face down as a 2/2 creature spell",
+        };
+        let free = if free {
+            " without paying its mana cost"
+        } else {
+            ""
+        };
+        clauses.push(format!("{it}{down}{free}"));
+        if face == CastFace::DownTurnedUpWhenUsed {
+            clauses.push(
+                "if the creature that spell becomes as it resolves has not been turned face up \
+                 and would assign or deal damage, be dealt damage, or become tapped, instead \
+                 it's turned face up and assigns or deals damage, is dealt damage, or becomes \
+                 tapped"
+                    .to_owned(),
+            );
         }
         clauses
     }

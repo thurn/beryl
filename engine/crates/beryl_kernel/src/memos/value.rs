@@ -20,6 +20,7 @@ impl<L: Layout> Memo<L> {
             Memo::ExiledFromPileOf(_) => Kinds::EXILED_FROM_PILE,
             Memo::FaceDownUnder(_) => Kinds::FACE_DOWN_UNDER,
             Memo::Morphed => Kinds::MORPHED,
+            Memo::TurnsUpWhenUsed => Kinds::TURNS_UP,
             Memo::Cast => Kinds::CAST,
             Memo::ClassLevel(_) => Kinds::CLASS_LEVEL,
             Memo::Solved => Kinds::SOLVED,
@@ -41,6 +42,7 @@ impl<L: Layout> Memo<L> {
             | Memo::PhasedOutUnder(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
+            | Memo::TurnsUpWhenUsed
             | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
@@ -49,6 +51,13 @@ impl<L: Layout> Memo<L> {
             Memo::ExiledWith(_) | Memo::ExiledUntil(_) | Memo::ExiledFromPileOf(_) => Zone::Exile,
             Memo::PartOf(_) => Zone::Merged,
         }
+    }
+
+    /// Whether an object in `zone` may remember it: one in [`Memo::zone`], and for the memo
+    /// of a spell cast face down that turns face up as it is used, a spell on the stack too.
+    #[inline]
+    pub(super) fn held_in(self, zone: Zone) -> bool {
+        zone == self.zone() || (self == Memo::TurnsUpWhenUsed && zone == Zone::Stack)
     }
 
     /// Whether the layers read it: a static ability may apply only while a cost was paid,
@@ -72,6 +81,7 @@ impl<L: Layout> Memo<L> {
             | Memo::PhasedOutUnder(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
+            | Memo::TurnsUpWhenUsed
             | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
@@ -100,6 +110,7 @@ impl<L: Layout> Memo<L> {
             | Memo::Really(_)
             | Memo::PhasedOutUnder(_)
             | Memo::Morphed
+            | Memo::TurnsUpWhenUsed
             | Memo::Cast
             | Memo::Solved
             | Memo::CombatBand(_) => true,
@@ -132,6 +143,7 @@ impl<L: Layout> Memo<L> {
             Memo::ExiledFromPileOf(by) => Memo::ExiledFromPileOf(slot(by)),
             Memo::FaceDownUnder(knew) => Memo::FaceDownUnder(knew),
             Memo::Morphed => Memo::Morphed,
+            Memo::TurnsUpWhenUsed => Memo::TurnsUpWhenUsed,
             Memo::Cast => Memo::Cast,
             Memo::ClassLevel(level) => Memo::ClassLevel(level),
             Memo::Solved => Memo::Solved,
