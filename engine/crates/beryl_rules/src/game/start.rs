@@ -14,6 +14,7 @@ use crate::state::{MulliganStatus, Pending, State, Zone};
 use crate::table::GameTable;
 use crate::turn;
 use crate::zone::Place;
+use beryl_kernel::reference::{CardIn, Hand};
 
 /// Settles the starting player, then deals opening hands.
 ///
@@ -84,9 +85,9 @@ pub(crate) fn put_on_bottom<L: Layout>(
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
     player: Seat,
-    slot: L::Slot,
+    card: CardIn<Hand, L>,
 ) -> Result<(), Full> {
-    s.move_object(&mut x.events, slot, Zone::Library, Place::Bottom)?;
+    s.move_object(&mut x.events, card.slot(), Zone::Library, Place::Bottom)?;
     s.count_bottomed(player);
     finish_if_kept(s, t, x, a)
 }

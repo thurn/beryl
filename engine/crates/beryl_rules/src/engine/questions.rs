@@ -20,6 +20,7 @@ use crate::{
     casting, combat, continuous::arrival_timestamps, interpret::catalog, mana, objects::face_down,
     sba, stack::resolve, stack::trigger, turn,
 };
+use beryl_kernel::reference::Hand;
 
 use super::{act, collapse};
 
@@ -339,6 +340,7 @@ pub(super) fn perform_machine<L: Layout>(
         // The other question of a mulligan, keep or mulligan, has a kind of its own.
         Pending::Mulligans if d.kind == DecisionKind::ChooseObject => {
             let card = d.candidates.object(c).expect("an object choice");
+            let card = s.card_in(s.object_ref(card), Hand).expect("a card in hand");
             start::put_on_bottom(s, t, x, a, d.player, card)
         }
         Pending::Discard => {
