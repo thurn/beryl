@@ -72,7 +72,7 @@ def test_dry_run_prints_epic_blocks_and_report_in_order(
     for index, op in enumerate(created[1:], start=1):
         assert op["parent"] == "$0"
         assert op["deps"] == ([{"on": f"${index - 1}"}] if index > 1 else [])
-        assert op["fields"]["labels"] == ["tier:opus"]
+        assert op["fields"]["labels"] == ["tier:high"]
         assert "`model-trial` skill" in op["fields"]["body"]
     assert [op["fields"]["estimate_minutes"] for op in created[1:]] == [45, 45, 45, 60]
     assert "block 2 of 3" in created[2]["fields"]["body"]

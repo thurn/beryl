@@ -26,7 +26,7 @@ from typing import Any
 
 from . import candidates, copytext, grade, io, manifest
 from .manifest import FILED, LISTED, MARKED, SKIPPED, Pair
-from .spec import Arm, Spec
+from .spec import SOURCE, Arm, Spec
 
 # Words that would tell either session its ticket is one arm of a trial.
 MARKING_WORDS = ("trial", "copy", "sonnet", "opus", "duplicate", "pilot")
@@ -469,8 +469,36 @@ def cmd_contamination(args: argparse.Namespace, spec: Spec) -> int:
     return 0
 
 
+def routes(spec: Spec) -> list[tuple[str, Arm, str]]:
+    """Each arm with the model ID its `tier:` label resolves to under its provider in
+    `ignite.toml`, empty when that provider has no such tier."""
+    arms = [(name, spec.arm(name)) for name in [SOURCE, *spec.copy_names()]]
+    return [
+        (name, arm, io.model_ids(arm.provider).get(arm.tier, "")) for name, arm in arms
+    ]
+
+
+def check_routes(spec: Spec) -> None:
+    """Prints the model each arm will run on, and refuses to file when an arm's tier names no
+    model under its provider, since no worker would ever take such a ticket. Printing the
+    models makes an arm that names the wrong tier visible before its copies run: a Gemini arm
+    once filed as `tier:opus` ran on `gemini-4-neon` when the trial meant `gemini-4-hydrogen`.
+    """
+    unrouted = []
+    for name, arm, model in routes(spec):
+        print(f"{name}: tier:{arm.tier} on {arm.provider} runs {model or 'nothing'}")
+        if not model:
+            unrouted.append(f"{name} (tier:{arm.tier} on {arm.provider})")
+    if unrouted:
+        raise PairError(
+            f"no model for {', '.join(unrouted)} in [pool.models] of ignite.toml: "
+            "fix the arm's tier in the trial spec"
+        )
+
+
 def cmd_file(args: argparse.Namespace, spec: Spec) -> int:
     trial: str = args.trial
+    check_routes(spec)
     pairs = manifest.read_pairs(trial)
     marked = [p for p in pairs if p.state == MARKED]
     if not marked:

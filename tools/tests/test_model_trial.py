@@ -785,6 +785,22 @@ def test_every_arm_beside_the_source_is_a_copy_arm_in_order() -> None:
         found.arm("neon")
 
 
+def test_pair_file_refuses_an_arm_whose_tier_its_provider_does_not_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tables = {
+        "claude": {"opus": "claude-opus", "sonnet": "claude-sonnet"},
+        "agy-gemini": {"hydrogen": "gemini-hydrogen", "neon": "gemini-neon"},
+    }
+    monkeypatch.setattr(pair.io, "model_ids", lambda provider: tables.get(provider, {}))
+    pair.check_routes(two_arms())
+    printed = capsys.readouterr().out
+    assert "hydrogen: tier:hydrogen on agy-gemini runs gemini-hydrogen" in printed
+    wrong = {**HYDROGEN, "tier": "opus"}
+    with pytest.raises(pair.PairError, match=r"hydrogen \(tier:opus on agy-gemini\)"):
+        pair.check_routes(spec(arms={**SPEC_JSON["arms"], "hydrogen": wrong}))
+
+
 def test_an_arm_name_must_be_lowercase_words() -> None:
     with pytest.raises(SpecError, match=r"arms\.Gemini"):
         spec(arms={**SPEC_JSON["arms"], "Gemini": HYDROGEN})

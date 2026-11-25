@@ -57,7 +57,7 @@ each report.
   build, reproduction data and interaction, related fixes, relevant code
   paths and tests, the first diagnostic step, and any constraints. Put
   hypotheses in notes as hypotheses. Give each lead an effort estimate and
-  `tier:opus` for investigation or design, or `tier:sonnet` for a scoped
+  `tier:high` for investigation or design, or `tier:light` for a scoped
   mechanical change. Carry a tier and estimate onto a follower if it is later
   released as independent work.
 - **Write acceptance before release.** For each original report, state the

@@ -85,10 +85,13 @@ start, because the person may not be there later.
   ticket that needs it, never on its epic. A reported-only ticket (a benchmark,
   a measurement) gets no dependents. Two tickets that would rewrite the same
   code get an ordering edge.
-- **Every ticket gets a tier label**: `tier:opus` for design and anything that
-  races or caches, `tier:sonnet` for ports and declarations, `tier:light` for
-  mechanical work. Never `tier:fable` unless the person asked for it. No tier
-  or lane label on an epic, because children inherit an epic's labels.
+- **Every ticket gets a tier label**: `tier:high` for design and anything that
+  races or caches, `tier:light` for ports, declarations and mechanical work.
+  These run on every provider (`[pool.models]` in `ignite.toml`). A tier named
+  after a model, such as `tier:opus` or `tier:hydrogen`, runs only on that
+  model; use one only when the work needs that model, as a model trial's arms
+  do. Never `tier:fable` unless the person asked for it. No tier or lane label
+  on an epic, because children inherit an epic's labels.
 - **Pins only for hard requirements.** Add `machine:<name>` when work requires
   a specific machine and `provider:<name>` when it requires a specific coding
   agent CLI. Each pin applies to descendants that lack their own pin of that
@@ -146,10 +149,10 @@ record why.
        "allocation": 0, "body": "...", "acceptance": "..."}},
      {"op": "create", "parent": "$0", "fields": {"title": "Replay types",
        "body": "...", "acceptance": "...", "estimate_minutes": 45,
-       "labels": ["tier:opus"]}},
+       "labels": ["tier:high"]}},
      {"op": "create", "parent": "$0", "deps": [{"on": "$1"}],
        "fields": {"title": "Read replays", "estimate_minutes": 90,
-       "labels": ["tier:sonnet"]}}
+       "labels": ["tier:light"]}}
    ]}
    ```
 

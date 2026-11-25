@@ -20,7 +20,7 @@ procedure. If the CLI is down, read
   desktop session `🔥 <short emergency>`, adding `[<incident ID>]` once you have
   the ticket.
 - File a root incident with
-  `ignite ticket create "<fault>" --labels incident,tier:opus --pending --independent -p P0`,
+  `ignite ticket create "<fault>" --labels incident,tier:high --pending --independent -p P0`,
   or claim the existing incident ticket for this emergency with
   `ignite start <incident ID>`. Claim a new ticket with the same start command.
   Check that `ignite ticket show <incident ID>` shows the `incident` label

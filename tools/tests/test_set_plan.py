@@ -147,10 +147,10 @@ def test_list_and_plan_partition_a_sets_first_printings(
     commands = [shlex.split(line) for line in output.out.splitlines()]
     assert all(command[:2] == ["tk", "create"] for command in commands)
     assert [command[-1] for command in commands] == [
-        "tier:opus",
-        "tier:opus",
+        "tier:high",
+        "tier:high",
         "tier:light",
-        "tier:sonnet",
+        "tier:light",
     ]
     assert "Largest vocabulary groups" in output.err
 

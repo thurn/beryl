@@ -184,9 +184,9 @@ each command prints. `ignite guide <topic>` holds the rules for one situation.
   design. File the epic with allocation zero, because the user decides when the
   worker pool starts on it (`/ignite <plan>` and the `ignite` skill).
 - Each ticket names the files, helpers and tests it needs by path, so that its
-  session can read them all in its first message, and has a model tier:
-  `tier:opus` for design work, `tier:sonnet` for mechanical work. An epic gets
-  no tier label, because its children inherit it.
+  session can read them all in its first message, and has a tier: `tier:high`
+  for design work, `tier:light` for mechanical work. An epic gets no tier label,
+  because its children inherit it.
 - The worker pool can pick up a standalone ticket within minutes, so land what
   it depends on first or give it the dependency. When you file a ticket for
   something you found while working with the user, offer to fix it in the

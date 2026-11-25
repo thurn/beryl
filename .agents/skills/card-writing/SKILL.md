@@ -24,7 +24,7 @@ description: Write or finish one Beryl card from its drafted definition and Orac
    Read the `generated` and `oracles` lines.
    Follow "Checking coverage" and "Recording rulings" below.
 
-**Stop rules for the drafted tier.** Hand the card back to `tier:sonnet` if
+**Stop rules for the drafted tier.** Hand the card back as a `composed` ticket if
 a surviving mutant needs a scenario, a clause needs vocabulary that Beryl
 lacks, a compiler error comes from outside the draft, or the render still
 differs after three attempts to fix it. Give the next writer the card name,
@@ -41,9 +41,9 @@ Use the classification from `just set plan <code>`.
 | --- | --- |
 | `store` | Beryl builds the card from its store record. |
 | `drafted` | `tier:light` checks the complete draft. |
-| `composed` | `tier:sonnet` fills gaps using the existing vocabulary. |
-| `vocabulary` | One `tier:opus` ticket per group that needs the same new vocabulary entry. |
-| `mechanism` | A `tier:opus` design ticket for the missing engine support. |
+| `composed` | `tier:light` fills gaps using the existing vocabulary. |
+| `vocabulary` | One `tier:high` ticket per group that needs the same new vocabulary entry. |
+| `mechanism` | A `tier:high` design ticket for the missing engine support. |
 
 ## Composing a definition
 

@@ -357,7 +357,7 @@ def report_at(
             "Win back the rollout benchmark's creeping instruction count",
             f"Verifier {verifier}, calibration {digest}.\n\n"
             + creep_body(head, f.creep, f),
-            "tier:opus",
+            "tier:high",
             store,
             digest,
         )

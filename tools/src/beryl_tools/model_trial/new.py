@@ -19,7 +19,7 @@ from .spec import HEADING, Spec, SpecError, from_file
 
 TEMPLATES: Path = Path(__file__).with_name("templates")
 ACCEPTANCE = "=== acceptance ==="
-TIER = "tier:opus"
+TIER = "tier:high"
 BLOCK_MINUTES = 45
 REPORT_MINUTES = 60
 

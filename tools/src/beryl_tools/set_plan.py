@@ -253,12 +253,12 @@ def bead_lines(code: str, plan: Plan) -> Iterator[str]:
             f"{name} ({' / '.join(sentences)})" for name, sentences in cards.items()
         )
         yield create(
-            "tier:opus",
+            "tier:high",
             f"{code}: cover {group.label}",
             "Review the missing clause against Beryl's vocabulary and the Comprehensive Rules. "
             f"Some cards also have other unresolved clauses. {examples}",
         )
-    for tier, label in (("drafted", "tier:light"), ("composed", "tier:sonnet")):
+    for tier, label in (("drafted", "tier:light"), ("composed", "tier:light")):
         names = plan.tiers[tier]
         for index in range(0, len(names), BATCH_SIZE):
             cards = ", ".join(names[index : index + BATCH_SIZE])
