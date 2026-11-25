@@ -12,9 +12,14 @@
 //!   other than the slot asked for (leaving aside a `[1m]` suffix, the long-context variant)
 //!   ends the turn, releases the ticket and hides that model for 10 minutes. `--fallback-model`
 //!   is never passed, so a different model means the CLI chose it on its own.
-//! - A hung turn is one whose `output.log` has not grown for [`HANG_S`] while no `ignite` verb
-//!   of the session runs and the CLI program has no live child process. It is ended and
-//!   treated as interrupted.
+//! - A hung turn is one whose `output.log` has not grown while no `ignite` verb of the session
+//!   runs: for [`HANG_S`] when the CLI program has no live child process, and for
+//!   [`HANG_ANYWAY_S`] whatever its children are or when they cannot be listed. Its process is
+//!   ended and its ticket released, as for a worker that stayed idle after a reminder. The
+//!   longer limit exists because a CLI can block with its helper processes alive: an `agy`
+//!   turn whose provider refused requests for quota wrote nothing for eight hours while its
+//!   process lived. A provider's CLI hold does not excuse the silence, and the release frees
+//!   the slot instead of parking it with the ticket, so a hold never keeps a hung turn's ticket.
 
 use std::fs;
 use std::path::Path;
@@ -30,6 +35,10 @@ use super::{CliDaemon, Recovery, slot_of};
 
 /// Seconds without growth of `output.log` after which a turn with nothing else running is hung.
 pub const HANG_S: f64 = 1800.0;
+/// Seconds without growth of `output.log` after which a turn with no `ignite` verb running is
+/// hung even if the CLI program has live children. A foreground tool call is cut off by the CLI
+/// long before this, so a child silent this long is not doing the worker's work.
+pub const HANG_ANYWAY_S: f64 = 3600.0;
 
 /// `text` cut after its last newline: the lines the CLI has finished writing.
 pub fn whole_lines(text: &str) -> &str {
@@ -99,9 +108,8 @@ impl CliDaemon {
         }
         match recovery {
             Recovery::Running => {
-                if self.hung(&session, slot.turn) {
-                    self.turns.end(&session, slot.turn)?;
-                    self.finish(row, &turn, &events, None, Some(TurnEnd::Interrupted))
+                if let Some(quiet_s) = self.hung(&session, slot.turn) {
+                    self.release_hung(row, &turn, &events, quiet_s)
                 } else {
                     Ok(())
                 }
@@ -158,21 +166,57 @@ impl CliDaemon {
         Ok(turn)
     }
 
-    /// Whether the session's running turn is hung: no growth of its log for [`HANG_S`], no
-    /// `ignite` verb of the session running, and no live child of the CLI program. A process
-    /// list that cannot be read counts as a live child, so a turn is never ended on a guess.
-    fn hung(&self, session: &SessionId, turn: u32) -> bool {
-        let quiet = self
-            .turns
-            .grew_at(session, turn)
-            .is_some_and(|at| self.now().seconds_since(at) >= HANG_S);
-        if !quiet || !self.verbs_of(session).is_empty() {
-            return false;
+    /// How many seconds the session's running turn has been silent, if that makes it hung: its
+    /// log has not grown for [`HANG_S`] and the CLI program has no live child, or for
+    /// [`HANG_ANYWAY_S`] whatever its children are. A running `ignite` verb of the session, or
+    /// a command that ends its ticket, keeps the turn alive at any age.
+    fn hung(&self, session: &SessionId, turn: u32) -> Option<f64> {
+        let quiet_s = self.now().seconds_since(self.turns.grew_at(session, turn)?);
+        if quiet_s < HANG_S
+            || !self.verbs_of(session).is_empty()
+            || self.host.ending_ticket(session)
+        {
+            return None;
         }
+        if quiet_s >= HANG_ANYWAY_S {
+            return Some(quiet_s);
+        }
+        // A process list that cannot be read counts as a live child until the longer limit.
         self.turns
             .process(session, turn)
             .and_then(|pid| self.host.running_under(pid, None))
             .is_some_and(|children| children.is_empty())
+            .then_some(quiet_s)
+    }
+
+    /// Ends a hung turn's process, releases its ticket and frees the slot.
+    fn release_hung(
+        &self,
+        row: &CliSlot,
+        turn: &CliTurn,
+        events: &TurnEvents,
+        quiet_s: f64,
+    ) -> Result<()> {
+        let slot = slot_of(row);
+        let Some(session) = slot.session.clone() else {
+            return Ok(());
+        };
+        self.turns.end(&session, slot.turn)?;
+        let note = format!(
+            "The worker's {} turn wrote nothing for {} minutes with no `ignite` command \
+             running, so the turn was ended.",
+            row.app,
+            (quiet_s / 60.0).round()
+        );
+        self.effects.ended(&slot, &TurnEnd::Interrupted, events);
+        if let Some(ticket) = &slot.ticket
+            && self.host.holders().get(&session) == Some(ticket)
+        {
+            self.host
+                .release(&session, ticket, &note, ReleaseCause::TakenBack)?;
+        }
+        self.close(row, turn, &TurnEnd::Interrupted, None, SlotState::Free, |_| {})
+            .map(|_| ())
     }
 
     /// Ends a turn that started another model than the slot asked for, releases its ticket

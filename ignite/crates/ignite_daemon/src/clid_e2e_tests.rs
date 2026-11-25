@@ -234,10 +234,50 @@ impl Effects for Recording {
     }
 }
 
+/// Supervised turns whose log growth is timed by the rig's fake clock. The real `grew_at` reads
+/// the file's modification time from the wall clock, which the fake clock is nowhere near, so
+/// every turn would look silent for months. Here a log has grown when its length differs from
+/// the last time the daemon asked, and the first answer for a turn is the time of that call.
+struct ClockedTurns {
+    inner: SupervisedTurns,
+    clock: Arc<FakeClock>,
+    seen: Mutex<BTreeMap<(SessionId, u32), (usize, Timestamp)>>,
+}
+
+impl Turns for ClockedTurns {
+    fn start(&self, session: &SessionId, turn: u32, command: &CommandSpec) -> Result<()> {
+        self.inner.start(session, turn, command)
+    }
+    fn recover(&self, session: &SessionId, turn: u32) -> Recovery {
+        self.inner.recover(session, turn)
+    }
+    fn output(&self, session: &SessionId, turn: u32) -> Option<String> {
+        self.inner.output(session, turn)
+    }
+    fn grew_at(&self, session: &SessionId, turn: u32) -> Option<Timestamp> {
+        let length = self.inner.output(session, turn)?.len();
+        let now = self.clock.now();
+        let mut seen = lock(&self.seen);
+        let entry = seen
+            .entry((session.clone(), turn))
+            .or_insert((length, now));
+        if entry.0 != length {
+            *entry = (length, now);
+        }
+        Some(entry.1)
+    }
+    fn process(&self, session: &SessionId, turn: u32) -> Option<u32> {
+        self.inner.process(session, turn)
+    }
+    fn end(&self, session: &SessionId, turn: u32) -> Result<()> {
+        self.inner.end(session, turn)
+    }
+}
+
 /// Turns whose first start fails after the turn was recorded, as a daemon that dies between the
 /// two phases of a start leaves it.
 struct FailFirst {
-    inner: SupervisedTurns,
+    inner: ClockedTurns,
     failed: AtomicBool,
 }
 
@@ -413,8 +453,8 @@ impl Rig {
         )
     }
 
-    /// Turns as a newly started daemon builds them.
-    fn turns(&self) -> SupervisedTurns {
+    /// Turns as a newly started daemon builds them, with log growth timed by the fake clock.
+    fn turns(&self) -> ClockedTurns {
         let exe = std::env::current_exe().unwrap().display().to_string();
         let cli_turn = vec![
             exe,
@@ -433,8 +473,12 @@ impl Rig {
             self.home.clone(),
             self.home.clone(),
         );
-        SupervisedTurns::new(launcher, self.home.clone())
-            .with_test_supervisors(self.supervisors.clone())
+        ClockedTurns {
+            inner: SupervisedTurns::new(launcher, self.home.clone())
+                .with_test_supervisors(self.supervisors.clone()),
+            clock: self.clock.clone(),
+            seen: Mutex::default(),
+        }
     }
 
     /// Replaces the daemon with a new one over the same database and Ignite home, as a
@@ -622,3 +666,5 @@ impl Turns for NoTurns {
 
 #[path = "clid_e2e_cases.rs"]
 mod cases;
+#[path = "clid_e2e_silence.rs"]
+mod silence;

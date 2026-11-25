@@ -466,7 +466,7 @@ fn a_turn_on_the_wrong_model_is_ended_and_its_ticket_released() {
 }
 
 #[test]
-fn a_hung_turn_is_ended_and_treated_as_interrupted() {
+fn a_hung_turn_is_ended_and_its_ticket_released() {
     let rig = Rig::new();
     rig.keep_running(1);
     rig.push(ScriptedTurn::clean(vec![FakeCliApp::init_line(
@@ -494,21 +494,39 @@ fn a_hung_turn_is_ended_and_treated_as_interrupted() {
         .insert(session.clone(), vec![verb]);
     rig.daemon.step().unwrap();
     rig.host.verbs.lock().unwrap().clear();
-    // So does a live child of the CLI, and a process list that cannot be read.
+    // So does a live child of the CLI, and a process list that cannot be read, until the
+    // longer limit.
     *lock(&rig.host.children) = Some(vec![4321]);
     rig.daemon.step().unwrap();
     *lock(&rig.host.children) = None;
     rig.daemon.step().unwrap();
     assert!(lock(&rig.turns.ended).is_empty());
 
-    *lock(&rig.host.children) = Some(Vec::new());
-    rig.then(Action::Park {
-        report: "hung".to_owned(),
-    });
+    rig.clock.advance(read::HANG_ANYWAY_S - read::HANG_S);
     rig.daemon.step().unwrap();
     assert_eq!(lock(&rig.turns.ended).clone(), [(session.to_string(), 1)]);
-    assert_eq!(rig.asked()[0].0, TurnEnd::Interrupted);
-    assert_eq!(rig.asked()[0].1.interrupted_in_row, 1);
+    let releases = lock(&rig.host.releases).clone();
+    assert_eq!(releases.len(), 1);
+    assert!(releases[0].2.contains("wrote nothing for 60 minutes"), "{}", releases[0].2);
+    assert!(rig.daemon.slots("fake").is_empty());
+    assert!(rig.asked().is_empty(), "a hung turn's end is not left to decide");
+}
+
+#[test]
+fn a_hung_turn_with_no_child_is_ended_at_the_shorter_limit() {
+    let rig = Rig::new();
+    rig.keep_running(1);
+    rig.push(ScriptedTurn::clean(vec![FakeCliApp::init_line(
+        "t-1", "m-1", "1.0",
+    )]));
+    *lock(&rig.turns.grew_at) = Some(Timestamp::from_millis(START));
+    let session = rig.begin();
+    *lock(&rig.host.children) = Some(Vec::new());
+    rig.clock.advance(read::HANG_S);
+    rig.daemon.step().unwrap();
+    assert_eq!(lock(&rig.turns.ended).clone(), [(session.to_string(), 1)]);
+    assert_eq!(lock(&rig.host.releases).len(), 1);
+    assert!(rig.daemon.slots("fake").is_empty());
 }
 
 #[test]

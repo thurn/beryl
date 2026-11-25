@@ -12,8 +12,9 @@
 //!   effects are applied once, keyed by slot, turn and line number (`cli_turns.lines_applied`).
 //!   A Claude turn that started another model than the one asked for is ended before its first
 //!   request, its ticket is released and that model is hidden for 10 minutes.
-//! - A turn that ended, or whose run says it was interrupted, or that hung, has its end
-//!   classified, `decide` chooses what follows, and the action is carried out (see `end`).
+//! - A turn that ended, or whose run says it was interrupted, has its end classified, `decide`
+//!   chooses what follows, and the action is carried out (see `end`). A turn that hung, silent
+//!   with no `ignite` verb running, is ended and its ticket released (see `read`).
 //! - A slot waiting on an `ignite` verb, or backing off, starts its next turn when the verb has
 //!   ended or the pause is over. No turn starts for an app on a CLI hold.
 //! - A ticket that lands keeps its transcript in `cli_landed` for 24 hours, so that a regression
