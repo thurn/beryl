@@ -341,7 +341,7 @@ fn can_block<L: Layout>(s: &State<L>, t: &GameTable, blocker: L::Slot, attacker:
         || has(s, blocker, Keywords::FLYING)
         || has(s, blocker, Keywords::REACH))
         && !(evasion.intersects(Keywords::ANY_LANDWALK) && landwalks(s, t, evasion, target))
-        && !protection::forbids_block(s, t, attacker, blocker)
+        && !protection::protected(s, t, attacker, blocker)
 }
 
 /// Whether an attacker with the keywords `walk`, attacking `target`, can't be blocked for its

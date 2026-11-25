@@ -189,14 +189,8 @@ fn candidates<L: Layout>(
     // can’t be prevented." Protection and shields here have no additional effects.
     // Damage replacements that aren't prevention still apply.
     if p.preventable && !unpreventable(s, t) {
-        let permanent_protected = |r: ObjectRef<L>| {
-            protection::live(s)
-                && s.permanent_at(r.slot).is_some_and(|permanent| {
-                    protection::protected_from_cold(s, t, permanent, p.source.slot)
-                })
-        };
         let protected = match p.to {
-            Recipient::Permanent(r) => permanent_protected(r),
+            Recipient::Permanent(r) => protection::protected(s, t, r.slot, p.source.slot),
             Recipient::Player(_) => player_protected(s, t, p),
         };
         if protected {
@@ -226,26 +220,22 @@ fn candidates<L: Layout>(
     if s.replacing()
         .is_some_and(|r| r.replaces(ReplacementKind::Damage))
     {
-        for &slot in s.battlefield() {
-            if !super::may_replace(s, t, slot, ReplacementKind::Damage) {
-                continue;
-            }
-            let multiplies = |a: &Ability, r: &Replacement| match *r {
-                Replacement {
-                    replaces: Replaced::Damage,
-                    rewrite: Rewrite::Multiply(n),
-                } if a.kind() == AbilityKind::Replacement => Some(n),
-                _ => None,
-            };
-            for (ability, a, n) in super::statics(s, t, slot, multiplies) {
-                crate::coverage::hit(a);
-                add(Candidate {
-                    key: Key::Ability(slot, ability),
-                    change: Change::Multiply(n),
-                    at: 0,
-                    shown: Some(slot),
-                })?;
-            }
+        let multiplies = |_, a: &Ability, r: &Replacement| match *r {
+            Replacement {
+                replaces: Replaced::Damage,
+                rewrite: Rewrite::Multiply(n),
+            } if a.kind() == AbilityKind::Replacement => Some(n),
+            _ => None,
+        };
+        for (slot, ability, a, n) in super::replacements(s, t, ReplacementKind::Damage, multiplies)
+        {
+            crate::coverage::hit(a);
+            add(Candidate {
+                key: Key::Ability(slot, ability),
+                change: Change::Multiply(n),
+                at: 0,
+                shown: Some(slot),
+            })?;
         }
     }
     Ok(found)

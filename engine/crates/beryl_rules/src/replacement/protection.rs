@@ -14,7 +14,7 @@
 //! - blockers ([CR 702.16f]), as blocks are declared ([`crate::combat`]).
 //!
 //! While no effect gives protection, the layers leave [`Replaces::PROTECTION`] clear and each
-//! test here is one AND ([`State::protection`]).
+//! test here is one AND ([`State::may_protect`]).
 //!
 //! Implements: CR 702.16a, CR 702.16b, CR 702.16f
 //!
@@ -34,10 +34,30 @@ use crate::state::State;
 use crate::table::GameTable;
 use beryl_kernel::reference::Permanent;
 
-/// Whether any permanent may have protection now: the gate of every test here.
+/// Whether the object in `slot` is a permanent with protection from `source`
+/// ([`protected_from`]): the question each part of protection but targeting asks of one
+/// permanent. Damage from such a source is prevented ([`crate::replacement::damage`]), an Aura
+/// or Equipment with its quality can't be attached ([`crate::actions::attach`]), and a creature
+/// with its quality can't block it ([CR 702.16f]): "Attacking creatures with protection can’t be
+/// blocked by creatures that have the stated quality."
+///
+/// [CR 702.16f]: https://yawgatog.com/resources/magic-rules/#R70216f
 #[inline]
-pub(crate) fn live<L: Layout>(s: &State<L>) -> bool {
-    s.may_protect()
+pub(crate) fn protected<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    source: L::Slot,
+) -> bool {
+    s.may_protect() && protected_cold(s, t, slot, source)
+}
+
+/// [`protected`] once an effect gives protection, out of line.
+#[cold]
+#[inline(never)]
+fn protected_cold<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, source: L::Slot) -> bool {
+    s.permanent_at(slot)
+        .is_some_and(|permanent| protected_from(s, t, permanent, source))
 }
 
 /// Whether `permanent` has protection from `source`: from one of the colors `source` has
@@ -47,7 +67,7 @@ pub(crate) fn live<L: Layout>(s: &State<L>) -> bool {
 ///
 /// [CR 702.16a]: https://yawgatog.com/resources/magic-rules/#R70216a
 #[inline]
-pub(crate) fn protected_from<L: Layout>(
+fn protected_from<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     permanent: Permanent<L>,
@@ -71,7 +91,7 @@ pub(crate) fn targetable_by<L: Layout>(
     source: Option<L::Slot>,
 ) -> Bitboard<L::Slot> {
     match source {
-        Some(source) if live(s) => unprotected(s, t, objects, source),
+        Some(source) if s.may_protect() => unprotected(s, t, objects, source),
         _ => objects,
     }
 }
@@ -85,37 +105,5 @@ fn unprotected<L: Layout>(
     objects: Bitboard<L::Slot>,
     source: L::Slot,
 ) -> Bitboard<L::Slot> {
-    objects.filter(|slot| {
-        !s.permanent_at(slot)
-            .is_some_and(|permanent| protected_from(s, t, permanent, source))
-    })
-}
-
-/// Whether `blocker` may not block `attacker` for the attacker's protection
-/// ([CR 702.16f]): "Attacking creatures with protection can’t be blocked by creatures that
-/// have the stated quality."
-///
-/// [CR 702.16f]: https://yawgatog.com/resources/magic-rules/#R70216f
-#[inline]
-pub(crate) fn forbids_block<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    attacker: L::Slot,
-    blocker: L::Slot,
-) -> bool {
-    live(s)
-        && s.permanent_at(attacker)
-            .is_some_and(|attacker| protected_from_cold(s, t, attacker, blocker))
-}
-
-/// [`protected_from`], out of line, for the callers that have tested [`live`].
-#[cold]
-#[inline(never)]
-pub(crate) fn protected_from_cold<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    permanent: Permanent<L>,
-    source: L::Slot,
-) -> bool {
-    protected_from(s, t, permanent, source)
+    objects.filter(|slot| !protected_cold(s, t, slot, source))
 }

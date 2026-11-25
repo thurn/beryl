@@ -111,40 +111,32 @@ pub(crate) fn draw<L: Layout>(
     layers::refresh(game.state, game.table, game.sink)?;
     let (s, t) = (&*game.state, game.table);
     let mut found: Fixed<Option<DrawReplacement<L>>, MOST> = Fixed::new();
-    for &slot in s.battlefield() {
-        if !super::may_replace(s, t, slot, ReplacementKind::Draw) {
-            continue;
+    let draws = |slot, ability: &Ability, r: &Replacement| match *r {
+        Replacement {
+            replaces: Replaced::Draw(players, draws),
+            ..
+        } if replacement::replaces_draws(ability)
+            && filter::is_for(&players, player, s.controller(slot))
+            && replaces_this_draw(s, player, draws) =>
+        {
+            Some(())
         }
-        let Some(permanent) = s.permanent_at(slot) else {
-            continue;
-        };
-        let controller = s.controller(slot);
-        let draws = |ability: &Ability, r: &Replacement| match *r {
-            Replacement {
-                replaces: Replaced::Draw(players, draws),
-                ..
-            } if replacement::replaces_draws(ability)
-                && filter::is_for(&players, player, controller)
-                && replaces_this_draw(s, player, draws) =>
-            {
-                Some(())
-            }
-            _ => None,
-        };
-        for (index, ability, ()) in super::statics(s, t, slot, draws) {
-            let applies = !game
-                .sink
-                .applied
-                .as_slice()
-                .contains(&(permanent.into(), index));
-            if applies {
-                found.push(Some(DrawReplacement {
-                    permanent,
-                    index,
-                    ability,
-                    controller,
-                }))?;
-            }
+        _ => None,
+    };
+    for (slot, index, ability, ()) in super::replacements(s, t, ReplacementKind::Draw, draws) {
+        let permanent = s.permanent_at(slot).expect("a slot of the battlefield");
+        if !game
+            .sink
+            .applied
+            .as_slice()
+            .contains(&(permanent.into(), index))
+        {
+            found.push(Some(DrawReplacement {
+                permanent,
+                index,
+                ability,
+                controller: s.controller(slot),
+            }))?;
         }
     }
     let Some(&Some(first)) = found.as_slice().first() else {
