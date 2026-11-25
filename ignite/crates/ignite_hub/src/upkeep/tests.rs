@@ -422,6 +422,7 @@ fn a_fix_that_did_not_work_reopens_the_ticket_with_the_new_output() {
     assert_eq!(comments.len(), 1);
     assert!(comments[0].text.contains("still fails"));
     assert!(comments[0].text.contains("left: 5"));
+    assert!(reopened.body.contains("left: 5"));
     let (state, first_bad): (String, String) = conn
         .query_row("SELECT state, first_bad FROM regressions", [], |r| {
             Ok((r.get(0)?, r.get(1)?))

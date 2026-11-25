@@ -237,13 +237,23 @@ fn reopen(
     } else {
         "The check still fails after the fix."
     };
+    let details = details(report);
+    let title = ticket_data
+        .title
+        .starts_with("Regression: ")
+        .then(|| format!("Regression: {}", report.check));
     let mut ops = vec![
         Operation::Reopen { id: ticket.clone() },
         // The session that closed the ticket is still its assignee, and dispatch
         // offers no ticket that has one, so without this nobody works it again.
+        // Update the title and body to the check that reopened the ticket so a
+        // worker reading `ignite start` or `ignite show` without `--comments` sees
+        // the check that still fails rather than an earlier grouped check.
         Operation::Update {
             id: ticket.clone(),
             set: Some(TicketFields {
+                title,
+                body: Some(details.clone()),
                 assignee: Some(None),
                 ..TicketFields::default()
             }),
@@ -254,7 +264,7 @@ fn reopen(
         },
         Operation::Comment {
             id: ticket,
-            text: format!("{again}\n\n{}", details(report)),
+            text: format!("{again}\n\n{details}"),
         },
     ];
     ops.extend(attribution(conn, ticket_data, author, report, cleared)?);

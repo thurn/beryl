@@ -159,6 +159,40 @@ fn a_moved_check_fails_again_and_reopens_its_new_ticket_not_the_source() {
 }
 
 #[test]
+fn a_grouped_check_reopening_a_regression_updates_the_title_and_body() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let (id, _) = file(
+        &mut conn,
+        UPKEEP,
+        &failing("rust:a::one", "1111"),
+        clock.now(),
+    )
+    .unwrap();
+    let mut grouped = failing("source:file-length", "1111");
+    let (same, outcome) = file(&mut conn, UPKEEP, &grouped, clock.now()).unwrap();
+    assert_eq!((same.as_str(), outcome), (id.as_str(), Outcome::Added));
+    clock.advance(600.0);
+    close(&mut conn, &id, clock.now());
+    clock.advance(600.0);
+    grouped.first_bad = Commit::new("2222").unwrap();
+    grouped.output = "file.rs: 801 lines".to_owned();
+    let (reopened_id, outcome) = file(&mut conn, UPKEEP, &grouped, clock.now()).unwrap();
+    assert_eq!(
+        (reopened_id.as_str(), outcome),
+        (id.as_str(), Outcome::Reopened)
+    );
+    let reopened = ticket(&conn, &id);
+    assert_eq!(reopened.title, "Regression: source:file-length");
+    assert!(
+        reopened
+            .body
+            .contains("rerun: ignite test source:file-length")
+    );
+    assert!(reopened.body.contains("file.rs: 801 lines"));
+}
+
+#[test]
 fn a_move_is_refused_without_a_regression_or_onto_a_closed_ticket() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
