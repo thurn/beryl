@@ -653,7 +653,11 @@ class Exporter:
             # XMage asks for "up to N" targets until N are chosen or it is told to stop.
             if self.targets_short is not None:
                 self.targets_short -= 1
-                if self.targets_short == 0:
+                if "purpose" in action:
+                    # Beryl answered silently because the target was the only one left, so
+                    # XMage has no candidate to ask about and queues no skip.
+                    self.targets_short = None
+                elif self.targets_short == 0:
                     self.targets_short = None
                     self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
         elif kind == "Target" and what == "Player":
