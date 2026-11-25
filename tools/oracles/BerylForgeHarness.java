@@ -2018,6 +2018,24 @@ public final class BerylForgeHarness {
             if (!cards.isEmpty() && lastPicks.containsAll(cards)) {
                 return cards;
             }
+            // A merged permanent's cards, which its owner arranges in a graveyard or library
+            // (CR 731.3a): Beryl asks for the lowest of those left, one at a time, the last
+            // unasked, as Forge moves them in turn, each onto the last.
+            List<Card> components = new ArrayList<>(cards);
+            CardCollection arranged = new CardCollection();
+            while (components.size() > 1) {
+                JsonObject pick = run.takeFollowingFor(player, "pile-order");
+                if (pick == null) {
+                    break;
+                }
+                Card card = (Card) run.resolvePick(pick, components);
+                components.remove(card);
+                arranged.add(card);
+            }
+            if (!arranged.isEmpty()) {
+                arranged.addAll(components);
+                return arranged;
+            }
             // Cards for the bottom of a library that the script orders next, as Stock Up's rest:
             // Beryl puts each under the one before, the last unasked, as Forge moves them in turn.
             if (destination == ZoneType.Library && cards.size() > 1) {

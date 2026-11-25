@@ -11,6 +11,7 @@ use crate::replacement::event::{self, Cause, Entry, Reason};
 use crate::resolution::Resolution;
 use crate::state::TurnStep;
 use crate::state::{Pending, Zone};
+use crate::zones::piles;
 use crate::{combat, sba};
 
 /// Ends the turn as part of the current resolution. If state-based actions need a
@@ -83,6 +84,17 @@ fn cleanup<L: Layout>(game: &mut Game<'_, L>, resolution: &mut Resolution<'_, L>
                 .object(chosen)
                 .expect("a permanent to order");
             arrival_timestamps::pick(game.state, group, permanent)?;
+        }
+        // A creature that died with lethal damage can be a merged or melded permanent whose
+        // cards its owner arranges in the graveyard.
+        while let Pending::ArrangePiles { group } = *game.state.pending() {
+            let decision = piles::decision(game.state, group);
+            let chosen = resolution.answer(game, &decision)?;
+            let card = decision
+                .candidates
+                .object(chosen)
+                .expect("a card to arrange");
+            piles::pick(game.state, group, card)?;
         }
         if !sba::check(game.state, game.table, game.sink)? {
             break;

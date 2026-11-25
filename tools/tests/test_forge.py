@@ -4,7 +4,7 @@ from typing import cast
 
 import pytest
 
-from beryl_tools import card_store, forge, paths
+from beryl_tools import card_store, forge, oracle_summary, paths
 from beryl_tools.card_facts import Cards, ESCAPE, Unsupported
 
 FIXTURE: Path = Path(__file__).parent / "fixtures" / "scenarios-forge.json"
@@ -255,11 +255,11 @@ def test_summary_applies_the_allowlist() -> None:
         {"card": "F", "name": "f", "status": "unsupported", "reason": "a coin flip"},
     ]
     allowed = {
-        key: forge.Divergence("forge", card, name, "CR 704.5a", "Forge is wrong")
+        key: oracle_summary.Divergence("forge", card, name, "CR 704.5a", "Forge is wrong")
         for key, card, name in (("C / c", "C", "c"), ("D / d", "D", "d"))
     }
     skipped: list[Json] = [{"card": "E", "name": "e", "reason": "casting face 1 of E"}]
-    summary = forge.summarize(results, skipped, allowed)
+    summary = oracle_summary.summarize(results, skipped, allowed)
     assert (summary["pass"], summary["fail"]) == (2, 1)
     assert (summary["allowlisted"], summary["unsupported"]) == (1, 2)
     # D passes now, so its allowlist entry is stale.
@@ -277,7 +277,7 @@ def test_summary_applies_the_allowlist() -> None:
 
 
 def test_the_allowlist_parses() -> None:
-    forge.divergences(paths.REPO / "data" / "oracle-divergences.json", "forge")
+    oracle_summary.divergences(paths.REPO / "data" / "oracle-divergences.json", "forge")
 
 
 # A made-up card's description, as the dump gives it, with each kind of ability the rules read.

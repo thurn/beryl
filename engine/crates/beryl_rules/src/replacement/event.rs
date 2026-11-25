@@ -30,6 +30,7 @@ use crate::stack::trigger;
 use crate::state::{CounterKind, Memo, State, Tracker, Zone};
 use crate::table::{Capability, GameTable};
 use crate::zone::Place;
+use crate::zones::piles;
 
 /// How a permanent enters, as decided by whatever puts it onto the battlefield, before the
 /// replacement effects of §8.2 apply.
@@ -361,6 +362,19 @@ fn move_ordered<L: Layout, const N: usize>(
         .filter(|&&(_, from, _, _)| from == Zone::Battlefield)
         .map(|&(slot, _, dest, _)| (slot, dest));
     trigger::match_look_back(s, t, leaving)?;
+    // The cards of merged or melded permanents going to a graveyard or library, which their
+    // owners arrange once the batch has moved ([`piles`]): one AND while no permanent is made
+    // of several cards, read before the moves end what the stores hold of them.
+    let piles = if s.has_piles() {
+        piles::leaving(
+            s,
+            moves
+                .iter()
+                .map(|&(slot, from, dest, _)| (slot, from, dest)),
+        )
+    } else {
+        Bitboard::EMPTY
+    };
     let changed = |slot, object, from, to| Event::ZoneChange {
         object,
         from,
@@ -420,6 +434,9 @@ fn move_ordered<L: Layout, const N: usize>(
     if arrived.len() > 1 {
         crate::continuous::arrival_timestamps::order(s, t, arrived.as_slice())?;
         layers::refresh(s, t, sink)?;
+    }
+    if !piles.is_empty() {
+        piles::open(s, piles);
     }
     if t.can(Capability::Preparation) && !arrived.is_empty() {
         prepare_arrivals(s, t, sink, moves.as_slice())?;

@@ -1009,6 +1009,12 @@
       "where": ["prompt enter-order"]
     },
     {
+      "name": "choice-pile-order",
+      "board": "choice-pile-order",
+      "until": "first chooseObject decision for seat 0",
+      "where": ["prompt pile-order"]
+    },
+    {
       "name": "menu-choices",
       "board": "menu-choices",
       "until": "first priority decision for seat 0",

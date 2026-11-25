@@ -308,12 +308,6 @@
   {
     "oracle": "xmage",
     "card": "Gisela, the Broken Blade",
-    "scenario": "Brisela destroyed puts both cards into the graveyard",
-    "gap": "XMage asks the owner to order the two cards going to the graveyard (CR 713.8a); Beryl puts them there in a fixed order without asking, so the scenario scripts no answer"
-  },
-  {
-    "oracle": "xmage",
-    "card": "Gisela, the Broken Blade",
     "scenario": "Phantasmal Image copies Brisela as one object with mana value 0",
     "gap": "XMage's meld asks its controller to pick the Bruna to exile even when there is one, and its test player answers that with the choice the scenario scripts for Phantasmal Image"
   },

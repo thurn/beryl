@@ -373,7 +373,7 @@ def test_the_summary_counts_passes_failures_and_allowlisted_divergences(
 
 def test_the_allowlists_entries_cite_the_rules() -> None:
     for oracle in ("xmage", "forge"):
-        allowed = oracles.forge.divergences(oracles.DIVERGENCES, oracle)
+        allowed = oracles.oracle_summary.divergences(oracles.DIVERGENCES, oracle)
         for divergence in allowed.values():
             assert divergence.cr.startswith("CR ")
 

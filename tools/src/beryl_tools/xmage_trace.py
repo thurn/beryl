@@ -166,6 +166,25 @@ class Position:
         )
 
 
+def meld_partner(export: Exporter, p: Position) -> None:
+    """Queues, for `export`, the partner XMage's meld asks its controller to pick as the meld ability at
+    the top of the stack at `p` resolves, even when there is one (`MeldEffect`), which
+    Beryl melds unasked: left unqueued, the pick takes the next card the scenario scripts.
+    """
+    top = p.stack[-1] if p.stack else None
+    if top is None or top["spell"]:
+        return
+    card = cast(str, top["name"])
+    if export.cards.instruction(card, "Meld") is None:
+        return
+    partners = [
+        n for n, shape in export.cards.shapes.items() if shape == "Meld" and n != card
+    ]
+    if len(partners) == 1:
+        who = export.player(top["controller"])
+        export.emit(f"setChoice({who}, {java_string(partners[0])});")
+
+
 def resolution_skips(
     cards: Cards,
     before: Position,

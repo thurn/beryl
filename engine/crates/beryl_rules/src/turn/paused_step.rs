@@ -71,7 +71,8 @@ pub(crate) fn step_actions<L: Layout>(
         | Pending::EnterChoosing { .. }
         | Pending::ManaColor { .. }
         | Pending::Companion { .. }
-        | Pending::CompanionPayment { .. } => Default::default(),
+        | Pending::CompanionPayment { .. }
+        | Pending::ArrangePiles { .. } => Default::default(),
     };
     let inline = a.inline();
     loop {

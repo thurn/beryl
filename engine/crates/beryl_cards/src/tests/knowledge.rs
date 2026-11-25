@@ -485,3 +485,62 @@ fn a_face_down_card_under_a_merged_permanent_stays_hidden() {
         assert_eq!(det.card_really_is(merged), hidden);
     }
 }
+
+/// Teferi, Hero of Dominaria's −3 puts Brisela into its owner's library third from the top,
+/// where its owner arranges its two cards and doesn't reveal the order ([CR 713.8a]): "If it's
+/// put into its owner's library, that player doesn't reveal the order." P0 puts Bruna lower, so
+/// Gisela is third from the top. P0 knows both cards' places; P1, who saw them on the
+/// battlefield, knows neither, and the worlds dealt for P1 do not all agree on them.
+///
+/// [CR 713.8a]: https://yawgatog.com/resources/magic-rules/#R7138a
+#[test]
+fn a_melded_permanent_put_into_a_library_is_arranged_unseen() {
+    use beryl_scenario::prelude::{CounterKind, ME, Resolve, advance_to};
+
+    const SCENARIO: Scenario = Scenario::new("Teferi puts Brisela into its owner's library")
+        .interaction(&[
+            names::BRUNA_THE_FADING_LIGHT,
+            names::BRISELA_VOICE_OF_NIGHTMARES,
+            names::TEFERI_HERO_OF_DOMINARIA,
+        ])
+        .at(1, P0, TurnStep::PostcombatMain)
+        .permanents(
+            P0,
+            &[
+                Permanent::new(names::GISELA_THE_BROKEN_BLADE),
+                Permanent::new(names::BRUNA_THE_FADING_LIGHT),
+                Permanent::new(names::TEFERI_HERO_OF_DOMINARIA).counters(CounterKind::Loyalty, 4),
+            ],
+        )
+        .library(P0, &[names::PLAINS; 4])
+        .library(P1, &[names::ISLAND, names::ISLAND])
+        .actions(&[
+            advance_to(1, TurnStep::End),
+            Resolve,
+            advance_to(3, TurnStep::PrecombatMain),
+            ME.activates(names::TEFERI_HERO_OF_DOMINARIA, 1), // −3
+            ME.targets(names::BRISELA_VOICE_OF_NIGHTMARES),
+            Resolve,
+            ME.picks(names::BRUNA_THE_FADING_LIGHT),
+            Action::pass(P0),
+        ]);
+    let (t, s) = at_last_action(&SCENARIO);
+    let library = slots(&s, Seat::P0, Zone::Library);
+    let names: Vec<&str> = library
+        .iter()
+        .map(|&slot| s.definition_name(&t, slot))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            names::PLAINS,
+            names::PLAINS,
+            names::GISELA_THE_BROKEN_BLADE,
+            names::BRUNA_THE_FADING_LIGHT,
+            names::PLAINS,
+        ]
+    );
+    kept(&t, &s, Seat::P0, library[2]);
+    kept(&t, &s, Seat::P0, library[3]);
+    varies(&t, &s, Seat::P1, &library[2..4]);
+}

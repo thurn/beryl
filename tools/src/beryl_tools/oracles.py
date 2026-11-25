@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import card_store, cards, deps, forge, paths, system
+from . import card_store, cards, deps, forge, oracle_summary, paths, system
 from . import (
     oracle_exports,
     xmage,
@@ -542,7 +542,7 @@ def dump_scenarios(path: Path, log: Path, cards: list[str]) -> list[card_store.J
 
 
 def check_forge(exports: oracle_exports.Exports, work: Path) -> dict[str, object]:
-    """Plays the scenarios in Forge; the summary of `forge.summarize`."""
+    """Plays the scenarios in Forge; the summary of `oracle_summary.summarize`."""
     scenarios = work / "forge-scenarios.json"
     scenarios.write_text(json.dumps(exports.forge, indent=1))
     classes = root() / "forge-harness"
@@ -556,8 +556,8 @@ def check_forge(exports: oracle_exports.Exports, work: Path) -> dict[str, object
         work / "forge-results.json",
         log_dir() / "forge-oracle.log",
     )
-    return forge.summarize(
-        results, exports.skipped, forge.divergences(DIVERGENCES, "forge")
+    return oracle_summary.summarize(
+        results, exports.skipped, oracle_summary.divergences(DIVERGENCES, "forge")
     )
 
 
@@ -592,7 +592,7 @@ def surefire_results(classes: Sequence[str]) -> dict[tuple[str, str], str | None
 
 def check_xmage(prepared: oracle_exports.Exports, log: Path) -> dict[str, object]:
     """Exports the scenarios as XMage tests and runs them with Maven: one status per scenario
-    (pass, fail, allowlisted, unsupported) and their counts, as `forge.summarize` reports.
+    (pass, fail, allowlisted, unsupported) and their counts, as `oracle_summary.summarize` reports.
     """
     exports = prepared.xmage
     classes = xmage_java.write(exports, xmage_tests())
@@ -618,7 +618,7 @@ def check_xmage(prepared: oracle_exports.Exports, log: Path) -> dict[str, object
         errors = [line for line in log.read_text().splitlines() if "[ERROR]" in line]
         detail = "\n".join(errors[:6])
         raise StepFailed(f"XMage ran no Beryl tests; see {log}\n{detail}")
-    allowed = forge.divergences(DIVERGENCES, "xmage")
+    allowed = oracle_summary.divergences(DIVERGENCES, "xmage")
     scenarios: list[dict[str, object]] = []
     for export in exports:
         entry: dict[str, object] = {"card": export.card, "name": export.scenario}
@@ -717,7 +717,7 @@ def oracle(args: argparse.Namespace) -> int:
                 s.get("generated", False) is True and s["status"] == "pass"
                 for s in cast(list[dict[str, object]], result["scenarios"])
             ),
-            "scenarios": forge.attention(result),
+            "scenarios": oracle_summary.attention(result),
         }
         for name, result in results.items()
     }

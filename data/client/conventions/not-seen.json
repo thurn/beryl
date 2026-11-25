@@ -46,6 +46,11 @@
       "at": "end",
       "shows": "text \"Choose which enters first.\""
     },
+    "Arranging a melded or merged permanent's cards": {
+      "recording": "choice-pile-order",
+      "at": "end",
+      "shows": "text \"Choose the bottom card.\""
+    },
     "Evoke and cycling": {
       "recording": "choice-evoke",
       "at": "end",

@@ -156,8 +156,11 @@ pub mod scenarios {
                 ME.has(Zone::Hand, GISELA, 1),
                 ME.has(Zone::Hand, BRUNA, 1),
             ]),
-        // Destroyed, the melded permanent dies once and both cards go to the graveyard. Its
+        // Destroyed, the melded permanent dies once and both cards go to the graveyard, where
+        // its owner arranges them ([CR 713.8a]): Bruna is picked to go under Gisela. Its
         // controller destroys it: Brisela keeps P1 from casting a spell of mana value 2.
+        //
+        // [CR 713.8a]: https://yawgatog.com/resources/magic-rules/#R7138a
         MELDED
             .titled("Brisela destroyed puts both cards into the graveyard")
             .interaction(&[BRUNA, BRISELA, Card::GetLost])
@@ -168,6 +171,7 @@ pub mod scenarios {
                 MELD[1],
                 ME.casts(Card::GetLost),
                 Resolve,
+                ME.picks(BRUNA),
                 ME.controls(BRISELA, 0),
                 ME.has(Zone::Graveyard, GISELA, 1),
                 ME.has(Zone::Graveyard, BRUNA, 1),

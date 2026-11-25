@@ -237,6 +237,9 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
         ),
         // Not seen in Arena, which orders permanents that enter together itself.
         Purpose::EnterOrder => picks("Choose which enters first."),
+        // Not seen in Arena. Each pick goes under the cards left, so the first is the bottom
+        // card.
+        Purpose::PileOrder => picks("Choose the bottom card."),
         // Not seen in Arena, which has no card with dredge. Declining lets the event happen
         // as it would have, a draw.
         Purpose::Replace => Wording {

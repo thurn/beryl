@@ -189,9 +189,10 @@ impl<L: Layout> State<L> {
     /// Moves the other cards of a merged permanent that left the battlefield to the zone it
     /// went to (see [CR 731.3]): "If a merged permanent leaves the battlefield, one permanent leaves
     /// the battlefield and each of the individual components are put into the appropriate
-    /// zone." Each becomes an object of its own there. Its owner may choose the order of those
-    /// that go to a graveyard or library (see [CR 731.3a]); they go in the order they merged, above
-    /// the permanent's own card. A token that ceases to exist leaves its
+    /// zone." Each becomes an object of its own there. Those that go to a graveyard or library
+    /// go in the order they merged, above the permanent's own card; the rules then ask the
+    /// owner to arrange them (see [CR 731.3a], [`State::arrange_lowest`]), which a mutator can't
+    /// do. A token that ceases to exist leaves its
     /// cards in its owner's graveyard. Exiled with the permanent's own card, `leader`, each
     /// remembers it ([`crate::memos::Memo::ExiledFromPileOf`]), so that what finds one finds all.
     ///
@@ -220,6 +221,77 @@ impl<L: Layout> State<L> {
             }
         }
         Ok(())
+    }
+
+    /// Puts the card in `card` lowest of `among`: cards of its owner's graveyard or library that
+    /// went there together from merged or melded permanents, which the owner arranges (see
+    /// [CR 731.3a]): "that player may arrange the new objects in any order. If it's put into its
+    /// owner's library, that player doesn't reveal the order." Returns the slot that holds the
+    /// card now, the lowest of `among`.
+    ///
+    /// In a graveyard, a public zone, the card moves to the lowest place `among` holds. In a
+    /// library the slots stay where they are and the card trades identities with the one in the
+    /// lowest slot, as a shuffle deals identities anew ([`State::rebind`]): slots are public
+    /// handles (architecture §13), so a player who saw a slot move could follow its card. The
+    /// two become new objects, which their owner knows ([`State::hide_library_order`]).
+    ///
+    /// [CR 731.3a]: https://yawgatog.com/resources/magic-rules/#R7313a
+    pub fn arrange_lowest(
+        &mut self,
+        card: L::Slot,
+        among: Bitboard<L::Slot>,
+    ) -> Result<L::Slot, Full> {
+        let o = self.object(card);
+        let (owner, zone) = (o.owner, o.zone);
+        let list = match zone {
+            Zone::Graveyard => &mut self.zones.graveyard[owner.index()],
+            Zone::Library => &mut self.zones.library[owner.index()],
+            _ => panic!("a card arranged outside a graveyard or library"),
+        };
+        let lowest = (list.as_slice().iter())
+            .position(|&slot| among.contains(slot))
+            .expect("the cards arranged in their owner's zone");
+        let low = list.as_slice()[lowest];
+        if low == card {
+            return Ok(card);
+        }
+        if zone == Zone::Graveyard {
+            let from = list
+                .position(card)
+                .expect("a card in its owner's graveyard");
+            list.remove(from);
+            list.insert(lowest, card)?;
+            return Ok(card);
+        }
+        if self.object(card).incarnation == u16::MAX || self.object(low).incarnation == u16::MAX {
+            return Err(Full);
+        }
+        let (moved, displaced) = (self.object(card).card, self.object(low).card);
+        for (slot, identity) in [(low, moved), (card, displaced)] {
+            let o = self.object_mut(slot);
+            o.card = identity;
+            o.incarnation += 1;
+        }
+        let pair = Bitboard::single(card) | Bitboard::single(low);
+        self.forget_all_stored(pair);
+        self.knowledge[owner.index()].insert(card);
+        self.knowledge[owner.index()].insert(low);
+        Ok(low)
+    }
+
+    /// Every player but `owner`, and whoever sees `owner`'s hidden zones as they do (see
+    /// CR 724.4), forgets the cards `cards` of `owner`'s library, which `owner` is about to
+    /// arrange there unseen (see [CR 401.4]): "That library's owner doesn't reveal the order in
+    /// which the cards go into the library."
+    ///
+    /// [CR 401.4]: https://yawgatog.com/resources/magic-rules/#R4014
+    pub fn hide_library_order(&mut self, owner: Seat, cards: Bitboard<L::Slot>) {
+        let sharer = self.sharer(owner);
+        for p in Seat::BOTH {
+            if p != owner && Some(p) != sharer {
+                self.knowledge[p.index()] &= !cards;
+            }
+        }
     }
 
     /// Draws one card and returns its slot, or records an attempt to draw from an empty library.

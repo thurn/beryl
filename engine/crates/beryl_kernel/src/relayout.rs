@@ -397,6 +397,7 @@ impl<L: Layout> Relayout for Pending<L> {
             &Pending::CompanionPayment { player, remaining } => {
                 Pending::CompanionPayment { player, remaining }
             }
+            &Pending::ArrangePiles { group } => Pending::ArrangePiles { group: bits(group) },
             &Pending::DeclareAttackers { attacker } => Pending::DeclareAttackers {
                 attacker: attacker.map(slot),
             },

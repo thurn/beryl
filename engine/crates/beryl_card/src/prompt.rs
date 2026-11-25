@@ -343,6 +343,11 @@ purposes! {
     /// by the active player ... have an earlier relative timestamp in the order of that
     /// player's choice". Asked only where the order could change the layer results.
     EnterOrder = "enter-order" => Pick,
+    /// Of the cards of a merged or melded permanent put into its owner's graveyard or library
+    /// together, the one to put lowest of those left
+    /// ([CR 731.3a](https://yawgatog.com/resources/magic-rules/#R7313a)): "that player may
+    /// arrange the new objects in any order." The last left goes on top.
+    PileOrder = "pile-order" => Pick,
     /// The replacement effect to apply to an event, among several, or none of those that are
     /// optional ([CR 616.1]): "the affected object's controller (or its owner if it has no
     /// controller) or the affected player chooses one to apply". The candidates are the

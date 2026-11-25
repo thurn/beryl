@@ -317,7 +317,8 @@ impl<L: Layout> State<L> {
             | Pending::EnterChoosing { .. }
             | Pending::ManaColor { .. }
             | Pending::Companion { .. }
-            | Pending::CompanionPayment { .. } => Ok(()),
+            | Pending::CompanionPayment { .. }
+            | Pending::ArrangePiles { .. } => Ok(()),
         }
     }
 

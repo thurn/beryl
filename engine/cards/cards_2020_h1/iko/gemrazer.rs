@@ -118,7 +118,7 @@ pub mod scenarios {
             ]),
         // The merged creature dies: one creature died, so Blood Artist's "whenever this creature
         // or another creature dies", from under Gemrazer, triggers once (CR 731.3), and both
-        // cards go to P0's graveyard.
+        // cards go to P0's graveyard, where P0 arranges them (CR 731.3a), Blood Artist lowest.
         Scenario::new("Gemrazer's merged creature dies: both cards go, a dies trigger once")
             .interaction(&[Card::BloodArtist, Card::GetLost])
             .battlefield(
@@ -136,7 +136,7 @@ pub mod scenarios {
                 Resolve,
                 ME.passes(),
                 THEM.casts(Card::GetLost),
-                Resolve,
+                ME.picks(Card::BloodArtist),
                 ME.targets_player(THEM),
                 Resolve,
                 ME.controls(Card::Gemrazer, 0),

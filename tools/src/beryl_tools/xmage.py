@@ -40,6 +40,7 @@ from .xmage_trace import (
     FORCED_TARGETS,
     Position,
     cast_targets,
+    meld_partner,
     resolution_skips,
 )
 from .xmage_java import (
@@ -353,6 +354,7 @@ class Exporter:
             self.prepare(who, p)
             self.payments.resolve_at = (p.turn, p.step, len(self.lines))
             self.emit(f"resolveTop({self.at(p)}, {who});")
+            meld_partner(self, p)
             self.lines.extend(
                 resolution_skips(
                     self.cards,
@@ -554,6 +556,13 @@ class Exporter:
             return
         # A forced answer says its own; a scripted one answers the decision open at `p`.
         bending = action.get("purpose", p.purpose) == "waterbend"
+        if action.get("purpose", p.purpose) == "pile-order":
+            # XMage asks the order of a melded permanent's two cards, the first chosen lowest
+            # as in Beryl (`ZonesHandler.chooseOrder`), and moves a merged permanent's cards
+            # without asking.
+            if card is not None and self.cards.shapes.get(card) == "Meld":
+                self.emit(f"setChoice({who}, {java_string(p.object_name(card))});")
+            return
         source = of or (cast(str, p.stack[-1]["name"]) if p.stack else None)
         if kind == "PaymentPlan" and self.payments.as_made:
             # The payment's taps, replayed with the mana each made, chose the plan already.

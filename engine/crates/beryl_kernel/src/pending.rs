@@ -390,6 +390,14 @@ pub enum Pending<L: Layout = Small> {
     /// `player` pays for the companion special action (see CR 116.2g): `remaining` is the
     /// mana still to pay, by a payment plan or under manual payment one source at a time.
     CompanionPayment { player: Seat, remaining: ManaCost },
+    /// The cards of merged or melded permanents that went to their owners' graveyards or
+    /// libraries, which each owner may arrange (see [CR 731.3a]): "If a merged permanent is
+    /// put into its owner's graveyard or library, that player may arrange the new objects in
+    /// any order." `group` holds those still to arrange, two or more of each owner's in each
+    /// zone; each pick puts the card picked lowest of those left in its owner's zone.
+    ///
+    /// [CR 731.3a]: https://yawgatog.com/resources/magic-rules/#R7313a
+    ArrangePiles { group: Bitboard<L::Slot> },
 }
 
 // The original derived hash wrote each variant's tag as an isize. The enum now has a
@@ -442,6 +450,7 @@ impl<L: Layout> std::hash::Hash for Pending<L> {
             Self::CompanionPayment { player, remaining } => {
                 (20_isize, player, remaining).hash(state);
             }
+            Self::ArrangePiles { group } => (21_isize, group).hash(state),
         }
     }
 }
@@ -470,7 +479,8 @@ impl<L: Layout> Pending<L> {
             | Pending::EnterChoosing { .. }
             | Pending::ManaColor { .. }
             | Pending::Companion { .. }
-            | Pending::CompanionPayment { .. } => None,
+            | Pending::CompanionPayment { .. }
+            | Pending::ArrangePiles { .. } => None,
         }
     }
 }

@@ -1,13 +1,14 @@
 //! Boards that put a choice to the human.
 
 use beryl_card_names::names::{
-    AANGS_ICEBERG, ABHORRENT_OCULUS, COUNTERSPELL, CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER,
-    FLOODFARM_VERGE, FOREST, GET_LOST, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY,
-    LIFE_AND_LIMB, MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_DRAIN, MANA_TITHE, MOUNTAIN, OUST,
-    PAINTERS_SERVANT, PLAINS, REPRIEVE, SEACHROME_COAST, SINK_INTO_STUPOR, SNAPCASTER_MAGE,
-    SPARAS_HEADQUARTERS, STOCK_UP, STRIP_MINE, SUBTLETY, SWIFT_RECONFIGURATION,
-    TEFERI_HERO_OF_DOMINARIA, TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR, THIRST_FOR_DISCOVERY,
-    THUNDERTRAP_TRAINER, TIME_SPIRAL, TRINKET_MAGE, TUNDRA, WINDS_OF_ABANDON, WORLDGORGER_DRAGON,
+    AANGS_ICEBERG, ABHORRENT_OCULUS, BRUNA_THE_FADING_LIGHT, COUNTERSPELL, CURRENCY_CONVERTER,
+    DAMN, ELITE_SPELLBINDER, FLOODFARM_VERGE, FOREST, GET_LOST, GISELA_THE_BROKEN_BLADE, ISLAND,
+    JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, LIFE_AND_LIMB, MALCOLM_ALLURING_SCOUNDREL,
+    MANA_CRYPT, MANA_DRAIN, MANA_TITHE, MOUNTAIN, OUST, PAINTERS_SERVANT, PLAINS, REPRIEVE,
+    SEACHROME_COAST, SINK_INTO_STUPOR, SNAPCASTER_MAGE, SPARAS_HEADQUARTERS, STOCK_UP, STRIP_MINE,
+    SUBTLETY, SWIFT_RECONFIGURATION, TEFERI_HERO_OF_DOMINARIA, TEFERI_TIME_RAVELER,
+    THE_WANDERING_EMPEROR, THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER, TIME_SPIRAL, TRINKET_MAGE,
+    TUNDRA, WINDS_OF_ABANDON, WORLDGORGER_DRAGON,
 };
 use beryl_engine::{DecisionKind, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
@@ -371,5 +372,30 @@ pub(super) const CHOICES: &[Scenario] = &[
                 step: TurnStep::Upkeep,
             },
             Action::cast(P1, GET_LOST),
+        ]),
+    // Gisela and Bruna meld into Brisela at the human's first end step, and the human destroys
+    // Brisela with Get Lost on their next turn, so both cards go to their graveyard and the
+    // human picks the one to put at the bottom.
+    Scenario::new("choice-pile-order")
+        .at(1, P0, TurnStep::PostcombatMain)
+        .permanents(
+            P0,
+            &[
+                Permanent::new(GISELA_THE_BROKEN_BLADE),
+                Permanent::new(BRUNA_THE_FADING_LIGHT),
+                PLAINS_,
+                PLAINS_,
+            ],
+        )
+        .hand(P0, &[GET_LOST])
+        .library(P0, LANDS)
+        .permanents(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::AdvanceTo {
+                turn: 3,
+                step: TurnStep::PrecombatMain,
+            },
+            Action::cast(P0, GET_LOST),
         ]),
 ];

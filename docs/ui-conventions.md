@@ -461,6 +461,11 @@ recordings do not show them.
   what their abilities do, the player picks them one at a time, earliest first,
   in the ordinary pick prompt: "Choose which enters first." Arena orders them
   without asking, as far as the recordings show.
+- **Arranging a melded or merged permanent's cards.** When a melded or merged
+  permanent is put into its owner's graveyard or library, the owner picks its
+  cards one at a time, the bottom one first, in the ordinary pick prompt:
+  "Choose the bottom card." The last card left goes on top. The recordings show
+  no such move.
 - **Evoke and cycling.** A card with evoke, or a land with cycling, opens the
   same "Choose One" modal. No evoke is seen; Triomes cycle straight to the
   stack, but whether a land could still be played is not shown (by-lzl, by-9fb).

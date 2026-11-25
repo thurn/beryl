@@ -18,7 +18,7 @@ use crate::table::GameTable;
 use crate::turn::paused_step;
 use crate::{
     casting, combat, continuous::arrival_timestamps, interpret::catalog, mana, objects::face_down,
-    sba, stack::resolve, stack::trigger, turn,
+    sba, stack::resolve, stack::trigger, turn, zones::piles,
 };
 use beryl_kernel::reference::Hand;
 
@@ -83,6 +83,7 @@ pub(crate) fn decision<L: Layout>(
             Ok(sba::legend_decision(s, t, kept).expect("a legend-rule group without a keeper"))
         }
         Pending::OrderEntered { group } => Ok(arrival_timestamps::decision(s, group)),
+        Pending::ArrangePiles { group } => Ok(piles::decision(s, group)),
         // The question is about the land entering, for this much life.
         Pending::EnterPayingLife { slot, life } => Ok(options(
             s.object(slot).owner(),
@@ -378,6 +379,9 @@ pub(super) fn perform_machine<L: Layout>(
         }
         Pending::OrderEntered { group } => {
             arrival_timestamps::pick(s, group, d.candidates.object(c).expect("an object choice"))
+        }
+        Pending::ArrangePiles { group } => {
+            piles::pick(s, group, d.candidates.object(c).expect("an object choice"))
         }
         Pending::None
         | Pending::PlayOrDraw { .. }
