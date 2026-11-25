@@ -10,6 +10,16 @@ fn tree() -> TreeId {
     TreeId::new("tree-01").unwrap()
 }
 
+/// The `lister <family>` commands that listed `family`.
+fn lists(world: &World, family: &str) -> Vec<Vec<String>> {
+    world
+        .launcher
+        .commands("lister")
+        .into_iter()
+        .filter(|args| args.get(1).is_some_and(|f| f == family))
+        .collect()
+}
+
 /// A slow Windows machine that verified every family in tip rounds built the products of
 /// portable families whose checks the Macs had already claimed. With `tip_families` naming
 /// only its Windows family, it lists and builds nothing for `rust`, and still keys `rust`'s
@@ -28,7 +38,7 @@ adapter = "jsonl"
 platforms = "any"
 needs = ["binary"]
 builds = true
-list = "rust-lister"
+list = "lister rust"
 run = "runner {checks}"
 inputs = ["src"]
 
@@ -36,7 +46,7 @@ inputs = ["src"]
 kind = "regression"
 adapter = "jsonl"
 platforms = ["windows"]
-list = "win-lister"
+list = "lister win"
 run = "runner {checks}"
 inputs = ["src"]
 "#;
@@ -55,8 +65,8 @@ inputs = ["src"]
     // Before any machine has listed `rust`, the round waits for its listing.
     let cold = windows.regression_checks(&world.ctx, &tree()).unwrap();
     assert!(world.builds.requests().is_empty(), "nothing was built");
-    assert!(world.launcher.commands("rust-lister").is_empty());
-    assert_eq!(world.launcher.commands("win-lister").len(), 1);
+    assert!(lists(&world, "rust").is_empty());
+    assert_eq!(lists(&world, "win").len(), 1);
     let checks: Vec<(&str, bool)> = cold
         .checks
         .iter()
@@ -64,7 +74,10 @@ inputs = ["src"]
         .collect();
     assert_eq!(checks, [("win:w", true)]);
     assert_eq!(cold.unlisted.len(), 1, "{:?}", cold.unlisted);
-    assert_eq!(cold.unlisted[0].name, CheckName::new("rust:listing").unwrap());
+    assert_eq!(
+        cold.unlisted[0].name,
+        CheckName::new("rust:listing").unwrap()
+    );
     assert!(!cold.unlisted[0].reportable);
 
     // The Mac lists `rust`, building its product, and keeps the listing at the hub.
@@ -72,18 +85,26 @@ inputs = ["src"]
     let mac_rust = mac.checks.iter().find(|c| c.family == "rust").unwrap();
     let builds = world.builds.requests().len();
     assert!(builds > 0);
-    let rust_lists = world.launcher.commands("rust-lister").len();
+    let rust_lists = lists(&world, "rust").len();
 
     let build_phase = windows
         .regression_checks_for(&world.ctx, &tree(), ListingPhase::Build)
         .unwrap();
     assert!(build_phase.checks.is_empty(), "{:?}", build_phase.checks);
-    assert!(build_phase.unlisted.is_empty(), "{:?}", build_phase.unlisted);
+    assert!(
+        build_phase.unlisted.is_empty(),
+        "{:?}",
+        build_phase.unlisted
+    );
     let warm = windows.regression_checks(&world.ctx, &tree()).unwrap();
     assert!(warm.unlisted.is_empty(), "{:?}", warm.unlisted);
     let rust = warm.checks.iter().find(|c| c.family == "rust").unwrap();
     assert_eq!(rust.key, mac_rust.key);
     assert!(!rust.runnable);
-    assert_eq!(world.builds.requests().len(), builds, "Windows built nothing");
-    assert_eq!(world.launcher.commands("rust-lister").len(), rust_lists);
+    assert_eq!(
+        world.builds.requests().len(),
+        builds,
+        "Windows built nothing"
+    );
+    assert_eq!(lists(&world, "rust").len(), rust_lists);
 }
