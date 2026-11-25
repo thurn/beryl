@@ -11,6 +11,9 @@
 //! card frame ([`frame`]), and its scan replaces that picture once the download queue fetches
 //! it.
 //!
+//! Until a face arrives, the board-size array shows a generated placeholder ([`Placeholders`]),
+//! which the same workers draw.
+//!
 //! The glyph worker ([`glyphs::GlyphWorker`]) rasterizes glyphs and the flat layer's icons
 //! ([`icons`]) into the atlas's pages.
 
@@ -24,6 +27,7 @@ pub mod icons;
 mod layers;
 pub mod light;
 pub mod packer;
+mod placeholder;
 mod prepare;
 mod svg;
 
@@ -33,6 +37,7 @@ pub use cache::CacheKey;
 pub use encode::{ENCODER_VERSION, EncodeError, Format, Layer, decode, dimensions, encode};
 pub use faces::{FaceText, MatchFace, MatchFaces, Plate};
 pub use frame::{card_back, frame, frames_drawn_on_this_thread, plate_over};
+pub use placeholder::{Level, Placeholders, placeholders_drawn_on_this_thread, solid_layer};
 pub use prepare::{
     Config, FULL_LAYERS, Full, Preparer, Source, default_workers, faces_built_on_this_thread,
 };

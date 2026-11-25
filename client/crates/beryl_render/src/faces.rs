@@ -3,10 +3,8 @@
 //! read, both in the first compressed format the device samples.
 //!
 //! Until a face's layer arrives from `beryl_assets`' workers, the board-size array shows a
-//! generated placeholder in that layer. The renderer has no texture encoder and the frame thread
-//! must never run one, so the placeholder is made of shapes on the 4 by 4 pixel grid of a
-//! compressed block, and each block is written as one solid color, which every format can say in
-//! a few fixed bits.
+//! generated placeholder in that layer (`beryl_assets::Placeholders`). The workers draw the
+//! placeholders too, so the frame thread only copies their levels into the array.
 //!
 //! During play two kinds of upload remain, and both are paced (`Waiting`): a board-size face that
 //! arrives late is uploaded only in a frame in which nothing animates, one layer a frame, and at
@@ -14,20 +12,21 @@
 
 use std::collections::VecDeque;
 
-use beryl_assets::{FULL_LAYERS, Format, Layer, Prepared, Upload, dimensions};
+use beryl_assets::{FULL_LAYERS, Format, Layer, Level, Placeholders, Prepared, Upload, dimensions};
 use kit_base::atlas::{AssetReady, FaceSize};
 use kit_frame::frame::Wake;
 
-use crate::textures::{back, face};
+/// The layer of the face arrays that holds the card back: the card back is always the first
+/// face supplied by the host.
+pub const BACK_LAYER: u16 = 0;
 
 /// The device features that let it sample a compressed format.
 pub(crate) const COMPRESSION: wgpu::Features = wgpu::Features::TEXTURE_COMPRESSION_ASTC
     .union(wgpu::Features::TEXTURE_COMPRESSION_ETC2)
     .union(wgpu::Features::TEXTURE_COMPRESSION_BC);
 
-/// The side of a compressed block, in pixels, and its size in bytes in all three formats.
+/// The side of a compressed block, in pixels.
 const BLOCK: u32 = 4;
-const BLOCK_BYTES: usize = 16;
 
 /// The compressed formats a device with `features` samples, in the order they are preferred.
 pub(crate) fn supported(features: wgpu::Features) -> Vec<Format> {
@@ -60,41 +59,6 @@ fn texture_format(format: Format) -> wgpu::TextureFormat {
     }
 }
 
-/// One mipmap level's shape: its size in texels as the copy names it (whole blocks when
-/// compressed), and its bytes per row of texels or blocks and number of such rows.
-struct Level {
-    width: u32,
-    height: u32,
-    bytes_per_row: u32,
-    rows: u32,
-}
-
-impl Level {
-    fn of(format: Format, (width, height): (u32, u32), level: u32) -> Self {
-        let width = (width >> level).max(1);
-        let height = (height >> level).max(1);
-        if format == Format::Rgba8 {
-            return Self {
-                width,
-                height,
-                bytes_per_row: width * 4,
-                rows: height,
-            };
-        }
-        let (across, down) = (width.div_ceil(BLOCK), height.div_ceil(BLOCK));
-        Self {
-            width: across * BLOCK,
-            height: down * BLOCK,
-            bytes_per_row: across * BLOCK_BYTES as u32,
-            rows: down,
-        }
-    }
-
-    fn bytes(&self) -> usize {
-        (self.bytes_per_row * self.rows) as usize
-    }
-}
-
 /// One face array: a texture of `layers` layers at one face size in one format, with every
 /// mipmap level down to 1 by 1, as `beryl_assets` makes a face.
 pub(crate) struct FaceArray {
@@ -116,7 +80,7 @@ impl FaceArray {
         size: (u32, u32),
         layers: u32,
     ) -> Self {
-        let levels = u32::BITS - size.0.max(size.1).leading_zeros();
+        let levels = Level::count(size);
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("faces"),
             size: wgpu::Extent3d {
@@ -220,43 +184,43 @@ impl FaceArray {
         true
     }
 
-    /// Fills layer `index` with the placeholder `pixels`, RGBA at the array's size.
-    fn placeholder(&self, queue: &wgpu::Queue, index: u16, pixels: &[u8]) {
-        let levels: Vec<Vec<u8>> = (0..self.levels)
-            .map(|level| solid_level(pixels, self.size, self.format, level))
-            .collect();
-        self.write_levels(queue, index, &levels);
+    /// Copies the placeholder `layer` into layer `index`, which it does not mark as filled.
+    fn placeholder(&self, queue: &wgpu::Queue, index: u16, layer: &Layer) {
+        if layer.format == self.format && (layer.width, layer.height) == self.size {
+            self.write_levels(queue, index, &layer.levels);
+        } else {
+            eprintln!(
+                "beryl_render: a {} placeholder does not fit the {} array",
+                layer.format.name(),
+                self.format.name()
+            );
+        }
     }
 }
 
-/// The two face arrays of a match whose faces are drawn on placeholders named `names`, in
-/// `FaceId` order: the board-size array with one layer per name, each showing its placeholder
-/// (layer 0, the card back's, shows the placeholder back), and the full-size array of
-/// `FULL_LAYERS` layers, empty until faces are uploaded into it.
+/// The two face arrays of a match: the board-size array with one layer per placeholder in
+/// `placeholders`, in `FaceId` order, each showing it, and the full-size array of `FULL_LAYERS`
+/// layers, empty until faces are uploaded into it. The placeholders are only copied: none is
+/// drawn here.
 pub(crate) fn face_arrays(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    names: &[&str],
-    format: Format,
+    placeholders: &Placeholders,
 ) -> [FaceArray; 2] {
+    let format = placeholders.format;
     let size = dimensions(FaceSize::Board);
     let layers = device.limits().max_texture_array_layers;
-    if names.len() > layers as usize {
+    let faces = placeholders.layers.len();
+    if faces > layers as usize {
         eprintln!(
-            "beryl_render: the match has {} faces but the device allows {layers} layers; the rest \
-             draw from layer 0",
-            names.len()
+            "beryl_render: the match has {faces} faces but the device allows {layers} layers; the \
+             rest draw from layer 0"
         );
     }
-    let count = (names.len() as u32).clamp(1, layers);
+    let count = (faces as u32).clamp(1, layers);
     let board = FaceArray::new(device, format, size, count);
-    for (index, name) in (0..count).zip(names.iter().copied().chain(std::iter::repeat(""))) {
-        let pixels = if index == 0 {
-            back(size)
-        } else {
-            face(name, size)
-        };
-        board.placeholder(queue, index as u16, &pixels);
+    for (index, layer) in (0..count).zip(&placeholders.layers) {
+        board.placeholder(queue, index as u16, layer);
     }
     [board, full_array(device, format)]
 }
@@ -280,73 +244,10 @@ pub(crate) fn token_array(device: &wgpu::Device) -> FaceArray {
 /// The face arrays of a renderer with no match yet: the board-size array holds the placeholder
 /// back alone, uncompressed, and the full-size array is a token one that no face fits.
 pub(crate) fn empty_arrays(device: &wgpu::Device, queue: &wgpu::Queue) -> [FaceArray; 2] {
-    let size = dimensions(FaceSize::Board);
-    let board = FaceArray::new(device, Format::Rgba8, size, 1);
-    board.placeholder(queue, 0, &back(size));
+    let back = Placeholders::draw::<&str>(&[], Format::Rgba8);
+    let board = FaceArray::new(device, Format::Rgba8, dimensions(FaceSize::Board), 1);
+    board.placeholder(queue, 0, &back.layers[0]);
     [board, token_array(device)]
-}
-
-/// Level `level` of the placeholder `pixels`, RGBA `size` texels large, in `format`: each texel,
-/// or each block of a compressed format, takes the color of the full-size pixel at its centre.
-fn solid_level(pixels: &[u8], size: (u32, u32), format: Format, level: u32) -> Vec<u8> {
-    let shape = Level::of(format, size, level);
-    let step = if format == Format::Rgba8 { 1 } else { BLOCK };
-    let mut bytes = Vec::with_capacity(shape.bytes());
-    for y in (0..shape.height).step_by(step as usize) {
-        for x in (0..shape.width).step_by(step as usize) {
-            let centre =
-                |at: u32, side: u32| ((at << level) + ((step << level) >> 1)).min(side - 1);
-            let i = ((centre(y, size.1) * size.0 + centre(x, size.0)) * 4) as usize;
-            let rgb = [pixels[i], pixels[i + 1], pixels[i + 2]];
-            match format {
-                Format::Rgba8 => bytes.extend_from_slice(&[rgb[0], rgb[1], rgb[2], 255]),
-                _ => bytes.extend_from_slice(&solid_block(format, rgb)),
-            }
-        }
-    }
-    bytes
-}
-
-/// One opaque 4 by 4 block of the single color `rgb` in a compressed format.
-fn solid_block(format: Format, [r, g, b]: [u8; 3]) -> [u8; BLOCK_BYTES] {
-    let mut block = [0; BLOCK_BYTES];
-    match format {
-        // A void-extent block (ASTC specification, "Void-Extent Blocks"): block mode 0x1FC,
-        // LDR, the two reserved bits set and every extent coordinate all ones, then the color as
-        // four 16-bit UNORM values.
-        Format::Astc4x4 => {
-            block[..8].copy_from_slice(&[0xFC, 0xFD, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
-            for (at, value) in [r, g, b, 255].into_iter().enumerate() {
-                let unorm = u16::from(value) * 257;
-                block[8 + at * 2..10 + at * 2].copy_from_slice(&unorm.to_le_bytes());
-            }
-        }
-        // EAC alpha, then an ETC1 block in individual mode (Khronos Data Format, "ETC2"). The
-        // alpha's base is 255, with multiplier 1 and table 0, and every pixel index 4 adds 2,
-        // which stays 255. The color is 4 bits a channel for both halves, and every pixel index
-        // 0 adds table 0's smallest modifier, 2.
-        Format::Etc2Rgba8 => {
-            block[..8].copy_from_slice(&[255, 0x10, 0x92, 0x49, 0x24, 0x92, 0x49, 0x24]);
-            for (at, value) in [r, g, b].into_iter().enumerate() {
-                let four = ((u16::from(value.saturating_sub(2)) * 15 + 127) / 255) as u8;
-                block[8 + at] = four << 4 | four;
-            }
-        }
-        // BC7 mode 6 (Khronos Data Format, "BC7"): both endpoints the same color in 7 bits a
-        // channel with a shared low bit of 1, and every index 0.
-        Format::Bc7 => {
-            let mut bits: u128 = 1 << 6;
-            let mut at = 7;
-            for value in [r, r, g, g, b, b, 255, 255] {
-                bits |= u128::from(value >> 1) << at;
-                at += 7;
-            }
-            bits |= 0b11 << 63;
-            block = bits.to_le_bytes();
-        }
-        Format::Rgba8 => unreachable!("an uncompressed format has no blocks"),
-    }
-    block
 }
 
 /// Faces that arrived during play, waiting for a frame in which they may be uploaded.

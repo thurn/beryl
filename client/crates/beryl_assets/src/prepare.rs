@@ -13,6 +13,9 @@
 //! layer. The host holds such a face until the client is still (`Renderer::hold`), so that a
 //! card never changes its picture in the middle of a flight.
 //!
+//! [`Preparer::placeholders`] asks a worker for the placeholders the board-size array shows
+//! until each face arrives, so that the frame thread only copies them.
+//!
 //! The thread that calls the `Preparer` only lists faces and sends jobs down a channel; it takes
 //! no lock that a worker takes. Workers share the job queue's lock among themselves.
 
@@ -31,6 +34,7 @@ use crate::cache::{self, CacheKey};
 use crate::encode::{ENCODER_VERSION, Format, Layer, decode, encode, encode_cutout};
 use crate::faces::{MatchFace, MatchFaces};
 use crate::frame::{card_back, frame, plate_over};
+use crate::placeholder::Placeholders;
 use crate::{Prepared, Upload};
 
 /// The host supplies the card back first.
@@ -113,6 +117,18 @@ struct Late {
     answer: Download,
 }
 
+/// What a worker is asked to do.
+enum Work {
+    /// Prepare one face.
+    Face(Job),
+    /// Draw the placeholders of faces with these names and send them on `answer`.
+    Placeholders {
+        names: Vec<String>,
+        format: Format,
+        answer: Sender<Placeholders>,
+    },
+}
+
 struct Job {
     game: Arc<Match>,
     face: FaceId,
@@ -123,7 +139,7 @@ struct Job {
 
 /// What the workers share.
 struct Shared {
-    jobs: Mutex<Receiver<Job>>,
+    jobs: Mutex<Receiver<Work>>,
     art: Arc<ArtCache>,
     faces_dir: PathBuf,
     wake: Arc<dyn Fn() + Send + Sync>,
@@ -150,7 +166,7 @@ struct Slots {
 
 /// The asset workers and the full-size layers they fill.
 pub struct Preparer {
-    jobs: Option<Sender<Job>>,
+    jobs: Option<Sender<Work>>,
     workers: Vec<JoinHandle<()>>,
     shared: Arc<Shared>,
     game: Option<Arc<Match>>,
@@ -244,6 +260,23 @@ impl Preparer {
         received
     }
 
+    /// Asks a worker for the board-size placeholders of faces named `names`, in `FaceId` order
+    /// with the card back first, already in `format`'s mipmap levels. They arrive once, on the
+    /// returned channel, after which the worker calls the host's `wake`. A new list replaces the
+    /// match's arrays, so jobs still queued for the match before are dropped, as
+    /// `prepare_match` would drop them, rather than drawn ahead of the placeholders.
+    pub fn placeholders(&mut self, names: Vec<String>, format: Format) -> Receiver<Placeholders> {
+        self.counter += 1;
+        self.shared.current.store(self.counter, Ordering::SeqCst);
+        let (answer, received) = mpsc::channel();
+        self.send_work(Work::Placeholders {
+            names,
+            format,
+            answer,
+        });
+        received
+    }
+
     /// The faces of the match being prepared, which give each [`FaceId`] its picture.
     #[must_use]
     pub fn faces(&self) -> Option<&MatchFaces> {
@@ -306,9 +339,13 @@ impl Preparer {
     }
 
     fn send(&self, job: Job) {
+        self.send_work(Work::Face(job));
+    }
+
+    fn send_work(&self, work: Work) {
         if let Some(jobs) = &self.jobs {
             // The workers end only when `jobs` drops, so a send cannot fail.
-            let _ = jobs.send(job);
+            let _ = jobs.send(work);
         }
     }
 }
@@ -337,14 +374,28 @@ impl Shared {
 
 fn work(shared: &Shared, late: &Sender<Late>) {
     loop {
-        let job = {
+        let work = {
             let Ok(queue) = shared.jobs.lock() else {
                 return;
             };
-            let Ok(job) = queue.recv() else {
+            let Ok(work) = queue.recv() else {
                 return;
             };
-            job
+            work
+        };
+        let job = match work {
+            Work::Face(job) => job,
+            Work::Placeholders {
+                names,
+                format,
+                answer,
+            } => {
+                // The receiver may have been dropped by a newer list; nobody else wants them.
+                if answer.send(Placeholders::draw(&names, format)).is_ok() {
+                    (shared.wake)();
+                }
+                continue;
+            }
         };
         if !shared.wanted(&job) {
             continue;

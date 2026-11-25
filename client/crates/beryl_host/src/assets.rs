@@ -6,14 +6,15 @@ use kit_ui::input::Input as DeviceInput;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::time::Duration;
 
 use app_client::Client;
 use app_client::Input;
 use beryl_art::{ArtCache, Origins};
 use beryl_assets::glyphs::{GlyphWorker, IconSet, prepare_latin};
 use beryl_assets::{
-    Config, FULL_LAYERS, FaceText, Format, Full, MatchFace, MatchFaces, Plate, Prepared, Preparer,
-    default_workers,
+    Config, FULL_LAYERS, FaceText, Format, Full, MatchFace, MatchFaces, Placeholders, Plate,
+    Prepared, Preparer, default_workers,
 };
 use beryl_render::Renderer;
 use game_hud::art::{self, orb};
@@ -29,6 +30,11 @@ use kit_ui::art::icons as icon_artwork;
 use kit_ui::widgets::icon_shadows;
 
 use crate::frames::When;
+
+/// How long a picture waits for one delivery from the workers before it gives up: long enough
+/// for any face, short enough to detect a hung worker or an encoder that never answered.
+#[cfg(feature = "headless")]
+const FACE_WAIT: Duration = Duration::from_mins(2);
 
 /// Starts the glyph worker with the widget icons, their shadows, and the game's artwork.
 #[must_use]
@@ -145,6 +151,9 @@ pub struct Assets {
     results: Option<Receiver<Prepared>>,
     /// Whether the current list belongs to a story, and its generation.
     active: Option<(bool, u64)>,
+    /// The placeholders asked of the workers for a newer list than `active`'s, and that list's
+    /// generation. The arrays of `active` stay in use until they arrive.
+    placeholders: Option<((bool, u64), Receiver<Placeholders>)>,
     /// Owners of uploaded full-size layers. An assignment alone doesn't mean it was uploaded.
     full: [Option<FaceId>; FULL_LAYERS],
     /// The wake before a nudge or another input sets the client's wake to `Now`.
@@ -182,6 +191,7 @@ impl Assets {
             faces,
             results: None,
             active: None,
+            placeholders: None,
             full: [None; FULL_LAYERS],
             after_frame: Wake::Never,
             wake,
@@ -211,7 +221,7 @@ impl Assets {
         }
         self.sync_light(renderer, client.data());
         self.request_text(client);
-        self.prepare_faces(client, renderer);
+        self.prepare_faces(client, renderer, None);
         if self.active == Some(client.face_generation()) {
             self.faces.keep(client.shown_full_faces());
             let wanted = client.wanted_faces().collect::<Vec<_>>();
@@ -247,16 +257,11 @@ impl Assets {
         renderer: &mut Renderer,
         mut remember_atlas: impl FnMut(AssetReady),
     ) {
-        use std::time::Duration;
-
-        // Detect a hung worker or an encoder that never produced a result.
-        const FACE_WAIT: Duration = Duration::from_mins(2);
-
         self.sync_light(renderer, client.data());
         self.request_text(client);
         self.glyphs.flush();
         self.upload_text(client, renderer, |ready| remember_atlas(ready.clone()));
-        self.prepare_faces(client, renderer);
+        self.prepare_faces(client, renderer, Some(FACE_WAIT));
         if self.active != Some(client.face_generation()) {
             return;
         }
@@ -379,21 +384,53 @@ impl Assets {
         }
     }
 
-    fn prepare_faces(&mut self, client: &mut Client, renderer: &mut Renderer) {
+    /// Makes the face arrays of a new face list and starts preparing its faces. The workers
+    /// draw the list's placeholders first: when they arrive, on this call or a later one, the
+    /// arrays are made from them and the faces are asked for. A picture passes `wait`, how long
+    /// to block for the placeholders; a live frame passes `None` and keeps the old arrays until
+    /// they arrive.
+    fn prepare_faces(
+        &mut self,
+        client: &mut Client,
+        renderer: &mut Renderer,
+        wait: Option<Duration>,
+    ) {
         let active = client.face_generation();
         let list = client.faces();
         // A match's list is empty until its card records arrive.
         if self.active == Some(active) || list.faces().is_empty() {
             return;
         }
-        let format = Format::choose(&renderer.formats());
-        let names: Vec<&str> = list
-            .faces()
-            .iter()
-            .map(|face| face.names.first().map_or("", String::as_str))
-            .collect();
-        renderer.set_faces(&names, format);
-        self.results = Some(self.faces.prepare_match(match_faces(list), &[format]));
+        if self
+            .placeholders
+            .as_ref()
+            .is_none_or(|(generation, _)| *generation != active)
+        {
+            let format = Format::choose(&renderer.formats());
+            let names = list
+                .faces()
+                .iter()
+                .map(|face| face.names.first().cloned().unwrap_or_default())
+                .collect();
+            let answer = self.faces.placeholders(names, format);
+            self.placeholders = Some((active, answer));
+        }
+        let Some((_, answer)) = &self.placeholders else {
+            return;
+        };
+        let delivered = match wait {
+            Some(wait) => answer.recv_timeout(wait).ok(),
+            None => answer.try_recv().ok(),
+        };
+        let Some(placeholders) = delivered else {
+            return;
+        };
+        self.placeholders = None;
+        renderer.set_faces(&placeholders);
+        self.results = Some(
+            self.faces
+                .prepare_match(match_faces(client.faces()), &[placeholders.format]),
+        );
         self.full.fill(None);
         client.face_arrays_made();
         self.active = Some(active);

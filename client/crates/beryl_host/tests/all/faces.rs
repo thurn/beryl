@@ -145,11 +145,14 @@ fn story_face_uploads_do_not_change_the_matchs_layers() {
 }
 
 /// Finished faces are held by the renderer and uploaded one board-size face a frame, only in
-/// the call before the frame, so that two calls a frame never upload two. None is built on the
-/// thread that delivers them.
+/// the call before the frame, so that two calls a frame never upload two. None, and no
+/// placeholder, is built on the thread that delivers them.
 #[test]
 fn held_faces_are_uploaded_one_a_frame_before_it() {
     let mut host = Host::new("held");
+    // The renderer draws its startup placeholder back on this thread; a match's are the
+    // workers'.
+    let placeholders = beryl_assets::placeholders_drawn_on_this_thread();
     let records = beryl_card_records::card_records_among(
         ["Island", "Plains", "Forest"],
         beryl_card_records::TokenMakers::NONE,
@@ -180,4 +183,8 @@ fn held_faces_are_uploaded_one_a_frame_before_it() {
     // draw and compress every face.
     assert_eq!(beryl_assets::faces_built_on_this_thread(), 0);
     assert_eq!(beryl_assets::frames_drawn_on_this_thread(), 0);
+    assert_eq!(
+        beryl_assets::placeholders_drawn_on_this_thread(),
+        placeholders
+    );
 }

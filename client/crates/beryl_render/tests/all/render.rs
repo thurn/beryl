@@ -31,7 +31,10 @@ pub(super) fn renderer(limits: Limits) -> Renderer {
         kit_base::data::light::Own::parse(include_str!("../../../../../data/client/own.json"))
             .unwrap(),
     );
-    renderer.set_faces(&["", "Island", "Plains", "Counterspell"], format);
+    renderer.set_faces(&beryl_assets::Placeholders::draw(
+        &["", "Island", "Plains", "Counterspell"],
+        format,
+    ));
     assert!(renderer.upload_page(&light::prepared(&tuning.0, &tuning.1)));
     renderer
 }

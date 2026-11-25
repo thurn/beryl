@@ -4,7 +4,8 @@
 //! wgpu's default limits and on one with its downlevel limits.
 
 use beryl_assets::{
-    FaceText, Format, Layer, MatchFace, Prepared, Source, Upload, dimensions, encode, frame,
+    FaceText, Format, Layer, MatchFace, Placeholders, Prepared, Source, Upload, dimensions, encode,
+    frame, placeholders_drawn_on_this_thread,
 };
 use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
@@ -125,7 +126,7 @@ fn a_compressed_face_draws_its_picture() {
         let mut renderer =
             Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
         for format in formats(&renderer) {
-            renderer.set_faces(&["", "Island"], format);
+            renderer.set_faces(&Placeholders::draw(&["", "Island"], format));
             assert!(
                 renderer.upload_layer(&two_color_face(1, format, left, right)),
                 "{limits:?} {format:?}: the face was not uploaded"
@@ -144,12 +145,12 @@ fn every_format_draws_the_same_placeholders() {
     for limits in BOTH {
         let mut renderer =
             Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
-        renderer.set_faces(&["", "Island"], Format::Rgba8);
+        renderer.set_faces(&Placeholders::draw(&["", "Island"], Format::Rgba8));
         let face = draw_card(&mut renderer, 1, NEAR);
         let back = draw_card(&mut renderer, 0, NEAR);
         assert_ne!(at(&face, 0.0, 0.0), at(&back, 0.0, 0.0), "{limits:?}");
         for format in renderer.formats() {
-            renderer.set_faces(&["", "Island"], format);
+            renderer.set_faces(&Placeholders::draw(&["", "Island"], format));
             let what = format!("{limits:?} {format:?}");
             // ETC2's solid blocks keep 4 bits a channel.
             let compressed_face = draw_card(&mut renderer, 1, NEAR);
@@ -162,6 +163,32 @@ fn every_format_draws_the_same_placeholders() {
                 }
             }
         }
+    }
+}
+
+/// The frame thread stopped for about 56 ms when a match's faces were listed, because
+/// `set_faces` drew every face's placeholder itself. It now copies finished levels: a layer it
+/// is given draws as given, and it draws no placeholder of its own.
+#[test]
+fn set_faces_copies_the_levels_it_is_given_and_draws_none() {
+    for limits in BOTH {
+        let mut renderer =
+            Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
+        let mut placeholders = Placeholders::draw(&[""], Format::Rgba8);
+        placeholders.layers.push(plain_layer(FaceSize::Board, 77));
+        let drawn = placeholders_drawn_on_this_thread();
+        renderer.set_faces(&placeholders);
+        assert_eq!(placeholders_drawn_on_this_thread(), drawn, "{limits:?}");
+        assert_eq!(
+            at(&draw_card(&mut renderer, 1, FAR), 0.0, 0.0),
+            [77; 3],
+            "{limits:?}"
+        );
+        assert_eq!(
+            renderer.uploaded(FaceSize::Board),
+            0,
+            "a placeholder is not a face"
+        );
     }
 }
 
@@ -184,7 +211,7 @@ fn a_drawn_island_shows_its_blue_frame_s_pale_name_bar() {
     for limits in BOTH {
         let mut renderer =
             Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
-        renderer.set_faces(&["", "Island"], Format::Rgba8);
+        renderer.set_faces(&Placeholders::draw(&["", "Island"], Format::Rgba8));
         assert!(renderer.upload_layer(&prepared(1, FaceSize::Board, 1, layer.clone())));
         // The card is 63 by 88 millimetres, its top edge 44 millimetres up. The battlefield
         // frame's name bar is a tenth of the card's width tall, its middle about 6.5 millimetres
@@ -241,7 +268,7 @@ fn a_card_at_two_thirds_of_its_face_size_samples_the_largest_level() {
     for limits in BOTH {
         let mut renderer =
             Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
-        renderer.set_faces(&["", "a"], Format::Rgba8);
+        renderer.set_faces(&Placeholders::draw(&["", "a"], Format::Rgba8));
         let layer = levels_layer(largest, smaller);
         assert!(renderer.upload_layer(&prepared(1, FaceSize::Board, 1, layer)));
         for tapped in [false, true] {
@@ -266,7 +293,10 @@ fn faces_that_arrive_during_play_wait_for_a_still_client() {
     for limits in BOTH {
         let mut renderer =
             Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
-        renderer.set_faces(&["", "a", "b", "c", "d", "e"], Format::Rgba8);
+        renderer.set_faces(&Placeholders::draw(
+            &["", "a", "b", "c", "d", "e"],
+            Format::Rgba8,
+        ));
         for face in 1..=5 {
             renderer.hold(prepared(
                 face,
@@ -315,7 +345,7 @@ fn one_full_size_face_is_uploaded_a_frame_even_while_animating() {
     for limits in BOTH {
         let mut renderer =
             Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
-        renderer.set_faces(&["", "a", "b"], Format::Rgba8);
+        renderer.set_faces(&Placeholders::draw(&["", "a", "b"], Format::Rgba8));
         renderer.hold(prepared(
             1,
             FaceSize::Board,
@@ -365,7 +395,7 @@ fn low_memory_frees_the_full_size_array_and_keeps_the_board_size_one() {
     for limits in BOTH {
         let mut renderer =
             Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
-        renderer.set_faces(&["", "a", "b"], Format::Rgba8);
+        renderer.set_faces(&Placeholders::draw(&["", "a", "b"], Format::Rgba8));
         for face in 1..=2 {
             let board = prepared(face, FaceSize::Board, face, plain_layer(FaceSize::Board, 9));
             assert!(renderer.upload_layer(&board), "{limits:?}");

@@ -18,17 +18,16 @@ mod runs;
 mod slots;
 mod surface;
 mod target;
-mod textures;
 
 pub use atlas::ATLAS_PAGES;
 pub use enhanced::SHADER as ENHANCED_SHADER;
 pub use enhanced::vfx::SHADER as VFX_SHADER;
+pub use faces::BACK_LAYER;
 pub use gpu_timing::{GpuCompletion, GpuTimer};
 pub use mesh::CARD_RADIUS;
 pub use renderer::{Drawn, Limits, Renderer};
 pub use surface::{DrawFailure, Native, Presented, Surface};
 pub use target::{Picture, Readback, Target, read_rgba_png, write_rgba_png};
-pub use textures::BACK_LAYER;
 
 /// The repository's lighting, `data/client/lighting.json`, for the unit tests.
 #[cfg(test)]

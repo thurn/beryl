@@ -64,7 +64,10 @@ fn a_press_reaches_the_card_that_paints_the_pixel() {
     let lighting = beryl_inspect::data::checkout().expect("tuning").lighting;
     let mut renderer = Renderer::headless(Limits::Default, lighting).expect("a GPU");
     let format = beryl_assets::Format::choose(&renderer.formats());
-    renderer.set_faces(&["", "Island", "Plains"], format);
+    renderer.set_faces(&beryl_assets::Placeholders::draw(
+        &["", "Island", "Plains"],
+        format,
+    ));
     let mut target = Target::offscreen(&renderer, 64, 64);
     for (tier, state) in [
         (Tier::Baseline, 0),

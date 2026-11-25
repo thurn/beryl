@@ -5,7 +5,7 @@
 //! the opaque records with a depth buffer, then the blended ones, tested against it on the
 //! table and untested in the flat layer.
 
-use beryl_assets::{Format, Prepared, dimensions};
+use beryl_assets::{Format, Placeholders, Prepared, dimensions};
 use kit_base::atlas::{AssetReady, FaceSize, Tier};
 use kit_base::data::lighting::Lighting;
 use kit_frame::frame::{Frame, Mesh, TextureArray, Wake};
@@ -296,13 +296,14 @@ impl Renderer {
         supported(self.device.features())
     }
 
-    /// Makes both card face arrays for a match, in `format`, which must be one of `formats` or
-    /// `Format::Rgba8`. `names` holds one name per face in `FaceId` order, the name drawn on that
-    /// face's placeholder; layer 0, the card back's, shows the placeholder back. A face keeps its
+    /// Makes both card face arrays for a match, in the placeholders' format, which must be one
+    /// of `formats` or `Format::Rgba8`. `placeholders` holds one finished layer per face in
+    /// `FaceId` order, which the asset workers drew (`Preparer::placeholders`); layer 0 is the
+    /// card back's. They are copied as they are, so the frame thread draws none. A face keeps its
     /// placeholder until its layer is uploaded. The full-size array has `FULL_LAYERS` empty
     /// layers. The floor's limits allow 256 layers, so at most 256 faces.
-    pub fn set_faces(&mut self, names: &[&str], format: Format) {
-        self.faces = face_arrays(&self.device, &self.queue, names, format);
+    pub fn set_faces(&mut self, placeholders: &Placeholders) {
+        self.faces = face_arrays(&self.device, &self.queue, placeholders);
         self.waiting = Waiting::default();
         self.freed_full = None;
         self.rebind();
