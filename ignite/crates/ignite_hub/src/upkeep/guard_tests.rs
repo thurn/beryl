@@ -16,7 +16,9 @@ use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
 use ignite_store::hub::{self, checks, fleet, results};
 
-use super::tests::{hold_sources, all_tickets, apply, check_state, comment_count, list_check, start, ticket};
+use super::tests::{
+    all_tickets, apply, check_state, comment_count, hold_sources, list_check, start, ticket,
+};
 use super::{Upkeep, machines};
 use crate::auth::Writer;
 use crate::routes::{Request, checks as check_routes};

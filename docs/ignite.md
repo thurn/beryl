@@ -3808,8 +3808,8 @@ Not every ticket is offered:
   weight, or the General pool's when it has none. Upkeep opens the report while
   that allocation is positive, so setting a source to zero is how an operator
   holds its reports for review. A report that a person set back to pending stays
-  pending. The hub also opens an existing report when a later tip begins
-  waiting on it.
+  pending. The hub also opens an existing report when a later tip begins waiting
+  on it.
 - A ticket marked `needs:person` is never offered.
 
 ### Machine and provider pins

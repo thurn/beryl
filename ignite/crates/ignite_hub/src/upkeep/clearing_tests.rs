@@ -24,7 +24,7 @@ use ignite_store::hub::{self, edges, fleet, listings, results, tickets, tip_roun
 use super::clearing::{CLOSE_PREFIX, HOLD_SECONDS, RETURNED_HOLD_SECONDS};
 use super::filing::{self, Change, FAULT_KEY, FILERS_KEY, Filing, UPKEEP};
 use super::signature::Signature;
-use super::tests::{hold_sources, apply, comment_count, create, start, ticket};
+use super::tests::{apply, comment_count, create, hold_sources, start, ticket};
 use super::{Upkeep, regressions, stuck};
 use crate::routes::tip_rounds as rounds_route;
 
