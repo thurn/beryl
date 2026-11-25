@@ -231,6 +231,12 @@ impl Ctx {
             }
             let then = previous.is_some_and(|before| joined_by_then(before, effect));
             let and = previous.is_some_and(|before| joined_by_and(before, effect));
+            // "Draw three cards. Then discard two cards unless you discard a basic land
+            // card": an instruction Oracle would join with ", then" starts a sentence of its
+            // own with "Then" when an "unless" follows it.
+            let then_unless = previous.is_some_and(|before| {
+                matches!(effect, Effect::Unless { effect: inner, .. } if joined_by_then(before, inner))
+            });
             self.continued = then && previous.and_then(subject_of) == subject_of(effect);
             let mut more = self.effect(effect);
             self.continued = false;
@@ -246,6 +252,9 @@ impl Ctx {
             {
                 last.push_str(" and ");
                 last.push_str(&more.remove(0));
+            }
+            if then_unless && let Some(first) = more.first_mut() {
+                *first = format!("then {first}");
             }
             clauses.extend(more);
             previous = Some(effect);
@@ -380,7 +389,20 @@ impl Ctx {
             | Objects::CardsIn { .. }
             | Objects::Everywhere(_)
             | Objects::Paid(_)
-            | Objects::Other(_)) => self.objects(other),
+            | Objects::Other(_)) => self.taken_from(other),
+        }
+    }
+
+    /// Objects an instruction takes from where they are: a target card in your own
+    /// graveyard is "target creature card from your graveyard", as in "exile target instant
+    /// card from your graveyard" or "you may cast target sorcery card from your graveyard".
+    pub(super) fn taken_from(&mut self, objects: Objects) -> String {
+        let own = self.own_graveyard_target(objects);
+        let said = self.objects(objects);
+        if own {
+            said.replacen(" in your graveyard", " from your graveyard", 1)
+        } else {
+            said
         }
     }
 
@@ -444,6 +466,10 @@ fn joined_by_then(before: &Effect, after: &Effect) -> bool {
         ) | (
             Effect::Exile(Objects::InZoneOf { .. }),
             Effect::ShuffleInto { .. }
+        ) | (
+            // "Exile Jace, then return him to the battlefield transformed".
+            Effect::Exile(Objects::This),
+            Effect::ReturnTransformed(Objects::This | Objects::Those)
         )
     )
 }

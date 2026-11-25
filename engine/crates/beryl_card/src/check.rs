@@ -7,6 +7,11 @@
 //! played. [`CardDef::check`] walks a definition for each such mistake ([`Malformed`]), and
 //! [`card`](crate::card) runs it, so in a card's `static` one is a compile error in the
 //! card's own file.
+//!
+//! The check walks a definition on its own instead of through [`CardDef::walk`], whose
+//! visitor is a closure that a `const fn` cannot call. Both read an instruction's
+//! expressions through [`Effect::operands`] and the instructions it holds through
+//! `Effect::branches`, so a new vocabulary entry is described once for both.
 
 use crate::ability::{Ability, Behavior};
 use crate::continuous::{LayerSpec, Modification, Rewrite};

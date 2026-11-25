@@ -4,18 +4,17 @@
 
 use super::Ctx;
 use super::designations::roman;
-use super::filters::{Kind, zone_name};
+use super::filters::Kind;
 use super::words::{
-    capitalized, colors, counted, keywords, list, mana_text, number, protection, pt_change,
-    sentence, step_name, types, with_article,
+    colors, keywords, list, mana_text, protection, pt_change, sentence, types, with_article,
 };
 use crate::ability::{Ability, AbilityKind, Behavior, Timing};
 use crate::continuous::{LayerSpec, Modification, Replacement, Rewrite};
-use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, ESCAPE_EXILES, Measure};
-use crate::effect::{Amount, Comparison, Condition, Effect, Objects, Players};
+use crate::cost::{CastingKind, Cost, CostPart, ESCAPE_EXILES, Measure};
+use crate::effect::{Amount, Condition, Effect, Objects, Players};
 use crate::ids::{Zone, ZoneSet};
 use crate::index::GrantIx;
-use crate::trigger::{Subject, Trigger, TriggerEvent};
+use crate::trigger::{Subject, TriggerEvent};
 
 impl Ctx {
     /// One ability as its paragraph of rules text, each clause a sentence.
@@ -65,7 +64,15 @@ impl Ctx {
             }
             AbilityKind::Activated => {
                 let cost = self.cost_text(ability.cost());
-                let mut text = format!("{cost}: {}", sentences(&self.body(ability.body())));
+                // A cost that sacrifices the object names it, so its effect says "it":
+                // "Sacrifice this creature: It deals 1 damage to any target."
+                self.this_is_it =
+                    ability.cost().parts().iter().any(|part| {
+                        matches!(part, CostPart::This(crate::cost::CostAction::Sacrifice))
+                    });
+                let body = self.body(ability.body());
+                self.this_is_it = false;
+                let mut text = format!("{cost}: {}", sentences(&body));
                 match ability.timing() {
                     Timing::Sorcery => text.push_str(" Activate only as a sorcery."),
                     Timing::YourTurn => text.push_str(" Activate only during your turn."),
@@ -139,292 +146,6 @@ impl Ctx {
             None => clauses.push(lead),
         }
         clauses
-    }
-
-    /// When a triggered ability triggers: "when this creature enters", "whenever you cast a
-    /// noncreature spell", "at the beginning of your upkeep"
-    /// ([CR 603.2](https://yawgatog.com/resources/magic-rules/#R6032)).
-    pub(super) fn trigger_text(&mut self, trigger: &Trigger) -> String {
-        let (who, third) = self.trigger_player(trigger.whose);
-        let player_verb = |base: &str| {
-            if third {
-                format!("{who} {base}s")
-            } else {
-                format!("{who} {base}")
-            }
-        };
-        match trigger.event {
-            TriggerEvent::ClassLevel(level) => format!("when this Class becomes level {level}"),
-            TriggerEvent::Chapter { first, last } => {
-                (first..=last).map(roman).collect::<Vec<_>>().join(", ")
-            }
-            TriggerEvent::Enters
-            | TriggerEvent::Dies
-            | TriggerEvent::Leaves
-            | TriggerEvent::Attacks
-            | TriggerEvent::BecomesTarget
-            | TriggerEvent::BecomesTargetOfSpell
-            | TriggerEvent::Mutates
-            | TriggerEvent::DealsDamage
-            | TriggerEvent::TurnedFaceUp
-            | TriggerEvent::DealsCombatDamageToPlayer => {
-                let (word, subject) = match trigger.subject {
-                    Subject::This => (
-                        if matches!(
-                            trigger.event,
-                            TriggerEvent::Attacks
-                                | TriggerEvent::DealsCombatDamageToPlayer
-                                | TriggerEvent::DealsDamage
-                                | TriggerEvent::BecomesTargetOfSpell
-                                | TriggerEvent::Mutates
-                        ) {
-                            "whenever"
-                        } else {
-                            "when"
-                        },
-                        self.this.clone(),
-                    ),
-                    Subject::A(filter) => (
-                        "whenever",
-                        self.noun(filter, Kind::Permanent)
-                            .indefinite(Kind::Permanent),
-                    ),
-                };
-                format!("{word} {subject} {}", self.event_verb(trigger))
-            }
-            TriggerEvent::PlayerAttacks => match trigger.subject {
-                Subject::A(crate::Filter::Any) | Subject::This => {
-                    format!("whenever {}", player_verb("attack"))
-                }
-                Subject::A(filter) => {
-                    let attackers = self.noun(filter, Kind::Permanent).plural(Kind::Permanent);
-                    format!(
-                        "whenever {} with one or more {attackers}",
-                        player_verb("attack")
-                    )
-                }
-            },
-            TriggerEvent::FirstStep(step) => {
-                let step = self.whose_step(trigger, &format!("first {}", step_name(step)));
-                format!("at the beginning of {step} each turn")
-            }
-            TriggerEvent::Step(step) => format!(
-                "at the beginning of {}",
-                self.whose_step(trigger, step_name(step))
-            ),
-            TriggerEvent::MainPhase => format!(
-                "at the beginning of {}",
-                self.whose_step(trigger, "main phase")
-            ),
-            TriggerEvent::CreatesTokens => {
-                let tokens = match trigger.subject {
-                    Subject::A(crate::Filter::Any) | Subject::This => "tokens".to_owned(),
-                    Subject::A(filter) => {
-                        let noun = self.noun(filter, Kind::Permanent).singular(Kind::Permanent);
-                        format!("{noun} tokens")
-                    }
-                };
-                format!("whenever {} one or more {tokens}", player_verb("create"))
-            }
-            TriggerEvent::Casts => self.cast_trigger_text(trigger, &player_verb("cast"), None),
-            TriggerEvent::CastsFrom(zone) => {
-                self.cast_trigger_text(trigger, &player_verb("cast"), Some(zone))
-            }
-            TriggerEvent::Discards => format!("whenever {} a card", player_verb("discard")),
-            TriggerEvent::Draws => format!("whenever {} a card", player_verb("draw")),
-            // "When Dark Depths has no ice counters on it": the object is the subject.
-            TriggerEvent::State(&Condition::Compare(
-                Amount::Counters(Objects::This, kind),
-                Comparison::Equal | Comparison::AtMost,
-                Amount::Fixed(0),
-            )) => format!("when {} has no {} counters on it", self.this, kind.name()),
-            TriggerEvent::State(&condition) => format!("when {}", self.condition(condition)),
-        }
-    }
-
-    /// What happens to the object: "enters", "dies", "leaves the battlefield", "attacks", "deals combat damage to a
-    /// player".
-    pub(super) fn event_verb(&mut self, trigger: &Trigger) -> String {
-        match trigger.event {
-            TriggerEvent::Enters => "enters".to_owned(),
-            TriggerEvent::Dies => "dies".to_owned(),
-            TriggerEvent::Leaves => "leaves the battlefield".to_owned(),
-            TriggerEvent::Attacks => "attacks".to_owned(),
-            TriggerEvent::BecomesTarget => "becomes the target of a spell or ability".to_owned(),
-            TriggerEvent::BecomesTargetOfSpell => "becomes the target of a spell".to_owned(),
-            TriggerEvent::Mutates => "mutates".to_owned(),
-            TriggerEvent::DealsDamage => "deals damage".to_owned(),
-            TriggerEvent::TurnedFaceUp => "is turned face up".to_owned(),
-            TriggerEvent::DealsCombatDamageToPlayer => {
-                let whom = match trigger.whose {
-                    Players::EachPlayer => "a player".to_owned(),
-                    Players::EachOpponent => "an opponent".to_owned(),
-                    other @ (Players::You
-                    | Players::Target(_)
-                    | Players::ControllerOf(_)
-                    | Players::OwnerOf(_)
-                    | Players::Enchanted
-                    | Players::ThatPlayer
-                    | Players::SubgameNonwinners
-                    | Players::EachOther(_)) => self.player(other),
-                };
-                format!("deals combat damage to {whom}")
-            }
-            TriggerEvent::PlayerAttacks
-            | TriggerEvent::Step(_)
-            | TriggerEvent::FirstStep(_)
-            | TriggerEvent::MainPhase
-            | TriggerEvent::CreatesTokens
-            | TriggerEvent::Casts
-            | TriggerEvent::CastsFrom(_)
-            | TriggerEvent::Discards
-            | TriggerEvent::Draws
-            | TriggerEvent::ClassLevel(_)
-            | TriggerEvent::Chapter { .. }
-            | TriggerEvent::State(_) => String::new(),
-        }
-    }
-
-    /// The player a trigger is about, and whether the verb after takes an "s": "you",
-    /// "an opponent", "a player".
-    fn trigger_player(&mut self, whose: Players) -> (String, bool) {
-        match whose {
-            Players::You => ("you".to_owned(), false),
-            Players::EachOpponent => ("an opponent".to_owned(), true),
-            Players::EachPlayer => ("a player".to_owned(), true),
-            other @ (Players::Target(_)
-            | Players::ControllerOf(_)
-            | Players::OwnerOf(_)
-            | Players::Enchanted
-            | Players::ThatPlayer
-            | Players::SubgameNonwinners
-            | Players::EachOther(_)) => (self.player(other), true),
-        }
-    }
-
-    /// Whose step it is: "your upkeep", "each opponent's upkeep", "each end step", and for
-    /// a delayed trigger "the next end step", "your next main phase" or "that turn's end step"
-    /// (CR 603.7).
-    fn whose_step(&mut self, trigger: &Trigger, step: &str) -> String {
-        if trigger.exact_turn {
-            return format!("that turn's {step}");
-        }
-        match (trigger.whose, trigger.delayed) {
-            (Players::You, true) => format!("your next {step}"),
-            (Players::EachPlayer, true) => format!("the next {step}"),
-            (other, true) => format!("{} next {step}", self.possessive(other)),
-            (Players::You, false) => format!("your {step}"),
-            (Players::EachOpponent, false) => format!("each opponent's {step}"),
-            (Players::EachPlayer, false) => format!("each {step}"),
-            (other, false) => format!("{} {step}", self.possessive(other)),
-        }
-    }
-
-    /// A cost as it is written before the colon
-    /// ([CR 602.1a](https://yawgatog.com/resources/magic-rules/#R6021a)): "{2}, {T}",
-    /// "{T}, Sacrifice this land", "+2", "Waterbend {3}".
-    pub(super) fn cost_text(&mut self, cost: &Cost) -> String {
-        if let Some(loyalty) = cost.loyalty_change() {
-            // A minus sign, as printed, rather than a hyphen.
-            return match loyalty {
-                0 => "0".to_owned(),
-                l if l > 0 => format!("+{l}"),
-                l => format!("\u{2212}{}", l.unsigned_abs()),
-            };
-        }
-        let mut parts = Vec::new();
-        if matches!(cost.measure(), Some(Measure::ForGeneric(_))) {
-            parts.push(format!("Waterbend {}", mana_text(cost.mana)));
-        } else if !cost.mana.is_zero() {
-            parts.push(mana_text(cost.mana));
-        }
-        parts.extend(self.cost_actions(*cost).iter().map(|a| capitalized(a)));
-        if parts.is_empty() {
-            "{0}".to_owned()
-        } else {
-            parts.join(", ")
-        }
-    }
-
-    /// What paying a cost does besides its mana, each part as an instruction: "{T}",
-    /// "sacrifice this land", "exile six cards from your graveyard", "pay 3 life".
-    pub(super) fn cost_actions(&mut self, cost: Cost) -> Vec<String> {
-        cost.parts()
-            .iter()
-            .filter_map(|&part| self.cost_part(part))
-            .collect()
-    }
-
-    /// One part of a cost as an instruction, or `None` for one the cost says elsewhere: a
-    /// loyalty change, or the tapping of a waterbend cost.
-    fn cost_part(&mut self, part: CostPart) -> Option<String> {
-        Some(match part {
-            CostPart::This(CostAction::Tap) => "{T}".to_owned(),
-            CostPart::This(CostAction::Sacrifice) => format!("sacrifice {}", self.this),
-            CostPart::This(CostAction::Discard) => "discard this card".to_owned(),
-            CostPart::This(CostAction::Exile) => format!("exile {}", self.this),
-            CostPart::This(CostAction::Reveal) => "reveal this card".to_owned(),
-            CostPart::This(CostAction::RemoveCounter(kind)) => {
-                format!(
-                    "remove {} counter from {}",
-                    with_article(kind.name()),
-                    self.this
-                )
-            }
-            CostPart::Chosen(action, chosen) => return self.chosen(action, chosen),
-            CostPart::Loyalty(_) => return None,
-            CostPart::Life(n) => format!("pay {n} life"),
-            CostPart::DiscardHand => "discard your hand".to_owned(),
-            CostPart::OneOf(costs) => {
-                let each: Vec<String> = costs.iter().map(|c| self.cost_text(c)).collect();
-                list(&each, "or")
-            }
-        })
-    }
-
-    /// A cost part that acts on objects its payer chooses: "sacrifice another creature",
-    /// "exile a blue card from your hand", "tap any number of untapped creatures you
-    /// control with total power 5 or more".
-    fn chosen(&mut self, action: CostAction, chosen: Chosen) -> Option<String> {
-        let verb = match action {
-            CostAction::Tap => "tap",
-            CostAction::Sacrifice => "sacrifice",
-            CostAction::Discard => "discard",
-            CostAction::Exile => "exile",
-            CostAction::Reveal => "reveal",
-            CostAction::RemoveCounter(_) => "remove a counter from",
-        };
-        let kind = match chosen.zone {
-            Zone::Battlefield | Zone::Nowhere | Zone::Stack => Kind::Permanent,
-            Zone::Library | Zone::Hand | Zone::Graveyard | Zone::Exile | Zone::Merged => {
-                Kind::Card(None)
-            }
-        };
-        let noun = self.noun(chosen.filter, kind);
-        let from = match chosen.zone {
-            Zone::Library | Zone::Graveyard | Zone::Exile => {
-                format!(" from your {}", zone_name(chosen.zone))
-            }
-            Zone::Hand if action != CostAction::Discard => " from your hand".to_owned(),
-            Zone::Hand | Zone::Battlefield | Zone::Stack | Zone::Nowhere | Zone::Merged => {
-                String::new()
-            }
-        };
-        let things = match chosen.measure {
-            Measure::Count(1) if chosen.other => format!("another {}", noun.singular(kind)),
-            Measure::Count(1) => noun.indefinite(kind),
-            Measure::Count(n) if chosen.other => {
-                format!("{} other {}", number(n), noun.plural(kind))
-            }
-            Measure::Count(n) => counted(n, &noun.singular(kind), &noun.plural(kind)),
-            Measure::TotalPower(n) => format!(
-                "any number of {}untapped {} with total power {n} or more",
-                if chosen.other { "other " } else { "" },
-                noun.plural(kind)
-            ),
-            Measure::ForGeneric(_) => return None,
-        };
-        Some(format!("{verb} {things}{from}"))
     }
 
     /// The whole of an ability that a keyword names, as its keyword: "Crew 5", "Cycling

@@ -121,75 +121,110 @@ pub enum Malformed {
 }
 
 impl Malformed {
-    /// What is wrong, as the build failure says it.
+    /// What is wrong and what to change in the card file, as the build failure says it. A
+    /// card writer reads it with the card file open, so it names the builder, the entry or
+    /// the field to change.
+    #[allow(clippy::too_many_lines)] // One exhaustive match, a message per variant.
     pub const fn says(self) -> &'static str {
         match self {
             Malformed::ExpectedOneFace => {
-                "this printed shape requires exactly one face in the card definition"
+                "this card's shape takes exactly one `Face`: remove the extra faces from `card(...)`, or pass the card's printed shape to `card_with_shape`"
             }
             Malformed::ExpectedTwoFaces => {
-                "this printed shape requires two faces in the card definition, front first"
+                "this card's shape takes two faces: list the back face after the front face in `card_with_shape`"
             }
             Malformed::ExpectedFusedFace => {
-                "a split card with fuse requires its two printed faces and its fused spell"
+                "a split card with fuse takes three faces: its two halves, then `Face::fused(...)` for the combined spell"
             }
-            Malformed::FaceUse => "use this card's generated printed faces in front-to-back order",
+            Malformed::FaceUse => {
+                "the faces are out of order: list the card's generated printed faces front first, then any `Face::prototyped()` or `Face::fused(...)` face"
+            }
             Malformed::Target => {
-                "an effect names a target its ability does not have, or one of the other kind"
+                "an `Objects::Target(n)` or `Players::Target(n)` has no matching target: give the ability a `TargetSpec` at index n in `.targeting(...)`, of a player kind for `Players::Target` and an object kind for `Objects::Target`, with `count` at least the number required; an ability target's filter is `Filter::Any`, and damage divided between targets needs one `TargetSpec` of count two"
             }
-            Malformed::ThatPlayer => "\"that player\" is said where no player is being done for",
-            Malformed::Paid => "a condition asks about a cost its face cannot be cast with",
-            Malformed::Grant => "a modification grants an ability its face does not list",
+            Malformed::ThatPlayer => {
+                "`Players::ThatPlayer` names no player here: use it only inside `for_each_player(...)`, in the effect of a replacement of draws or in a cast trigger, and otherwise name the player (`you()`, `Players::Target(n)`, `Players::ControllerOf(...)`)"
+            }
+            Malformed::Paid => {
+                "`Condition::Paid` asks about a cost the face cannot be cast with: add the matching `CastingOption` to the face's `.casting(...)`, or remove the condition"
+            }
+            Malformed::Grant => {
+                "`Modification::Grant(ix)` points past the face's `.grants(...)`: add the granted ability to `.grants(...)`, or fix the index"
+            }
             Malformed::Lost => {
-                "a modification removes an ability that is not one of its own permanent's"
+                "`Modification::LoseAbility(ix)` belongs in a static ability whose `LayerSpec` affects `Objects::This`, and its index must name one of the face's own `.abilities(...)`"
             }
             Malformed::Under => {
-                "a permanent is put onto the battlefield under players that may be several"
+                "`PutOnto::under` names players that may be several: name one player, or wrap the instruction in `for_each_player(...)` and put it under `Players::ThatPlayer`"
             }
-            Malformed::NoModification => "a continuous effect modifies nothing",
+            Malformed::NoModification => {
+                "a `LayerSpec` or an `Effect::Modify` lists no `Modification`: add what it changes, or remove it"
+            }
             Malformed::Parts => {
-                "a resolving continuous effect has more parts than the engine begins at once"
+                "an `Effect::Modify` lists more modifications than `MODIFY_PARTS`: split it into two `Effect::Modify` instructions in a `sequence(...)`"
             }
             Malformed::Copy => {
-                "a copy names an exception, or an exception an ability, its face lacks"
+                "a copy names a `CopyException` past the face's `.excepts(...)`, or a `CopyChange::Has(ix)` names an ability past its `.grants(...)`: add the exception or the ability to the face, or fix the index"
             }
-            Malformed::AddMana => "an effect adds mana outside a mana ability",
-            Malformed::NewGame => "only a resolving spell or nonmana ability can start a new game",
-            Malformed::EndTurn => "a replacement ability cannot end the turn",
-            Malformed::Countered => "a countered spell is put somewhere other than exile",
-            Malformed::Cost => "an effect names a cost the engine cannot take as it resolves",
-            Malformed::Fateseal => "an effect fateseals a number of cards other than one",
-            Malformed::Rules => "an ability's effect starts more than one rule change",
+            Malformed::AddMana => {
+                "`Effect::AddMana` lets the activator choose the kind, which only a mana ability (`Ability::mana`) can do: in any other spell or ability, use `Effect::AddManaOfKind` with the kind it adds"
+            }
+            Malformed::NewGame => {
+                "`Effect::RestartGame` and `Effect::Subgame` belong in a spell or an activated or triggered ability: move them out of the replacement or mana ability"
+            }
+            Malformed::EndTurn => {
+                "`Effect::EndTurn` cannot be in a replacement ability: move it to a spell, or an activated or triggered ability"
+            }
+            Malformed::Countered => {
+                "`Effect::CounterInto` takes only `Zone::Exile`: escalate any other zone in `data/card-escalations.json`"
+            }
+            Malformed::Cost => {
+                "an `Effect::Unless` cost must be mana alone or the discard of one card from hand: escalate any other cost in `data/card-escalations.json`"
+            }
+            Malformed::Fateseal => {
+                "`Effect::Fateseal` takes only `Amount::Fixed(1)`: escalate any other count in `data/card-escalations.json`"
+            }
+            Malformed::Rules => {
+                "an ability's effect starts more than one `Effect::ChangeRule`: give each rule change an ability of its own, or escalate the card in `data/card-escalations.json`"
+            }
             Malformed::LastKnown => {
-                "an expression asks what an object was after its effect moved it, which is not kept"
+                "a condition or amount reads an object that an earlier instruction of the same effect moved: read it before the move, or read it of a target or `Objects::Those`, whose controller and numbers are kept"
             }
             Malformed::Delayed => {
-                "an effect delays an ability that is not a delayed trigger of its face, or carries a set"
+                "`Effect::Delay` or `Effect::ExtraTurn` must name, by index, one of the face's own abilities whose trigger is delayed (`Trigger::next()`; for an extra turn, a step trigger of that turn), and a delay carries one object, not a set such as `Objects::All`"
             }
             Malformed::Carried => {
-                "an expression is what a delayed trigger carries, and its ability is not one"
+                "`Objects::Carried` and `Amount::Carried` work only in a delayed triggered ability (`Trigger::next()`), and `Amount::Carried` also in a deals-damage trigger: name the object or the amount directly here"
             }
             Malformed::CastBefore => {
-                "an expression counts the spells cast before a spell, outside a trigger of casting it"
+                "`Amount::SpellsCastBefore` works only in a \"when you cast this spell\" trigger (`TriggerEvent::Casts` with `Subject::This`): move the instruction there"
             }
             Malformed::TriggeredOn => {
-                "an effect names what its trigger event was about, and its ability has none"
+                "`Objects::TriggeredOn` needs a triggered ability, and `ExileMatch::SharesTypeWithTriggeringSpell` a cast trigger: move the instruction into one"
             }
-            Malformed::Chosen => "a choice among objects is not a pick of one of them",
+            Malformed::Chosen => {
+                "`Effect::Choose` must pick exactly one object (a pick prompt with `most` 1), and a hidden pick must be optional and among the cards of a hand or library (`Objects::InZoneOf`)"
+            }
             Malformed::ZoneOf => {
-                "a zone grouped by player is not the battlefield, a library, a hand or a graveyard"
+                "`Objects::InZoneOf` takes only `Zone::Battlefield`, `Zone::Library`, `Zone::Hand` or `Zone::Graveyard`: for exile or the stack, use `Objects::All`"
             }
             Malformed::Permitted => {
-                "a permission to cast lasts neither this turn nor while the card stays put"
+                "`Effect::PermitCast` takes `Duration::EndOfTurn`, or `Duration::Indefinite` for as long as the card stays exiled: change the duration, or escalate the card in `data/card-escalations.json`"
             }
-            Malformed::CastPlayer => "a cast offer names more than one player",
-            Malformed::CastLimit => "a mana-value limit requires a free cast",
-            Malformed::ExilePlayer => "exile until names more than one player",
+            Malformed::CastPlayer => {
+                "`Effect::MayCast` names one player: wrap it in `for_each_player(...)` with `Players::ThatPlayer` to give each player an offer in turn order"
+            }
+            Malformed::CastLimit => {
+                "an `Effect::MayCast` with `free_below` must also set `free: true`"
+            }
+            Malformed::ExilePlayer => {
+                "`Effect::ExileUntil` reads one library: name one player, or wrap it in `for_each_player(...)` with `Players::ThatPlayer`"
+            }
             Malformed::ChosenColor => {
-                "a resolving effect adds a chosen color, which only a permanent has"
+                "`Modification::AddChosenColor` works only in a static ability: in a resolving `Effect::Modify`, name the color with `Modification::AddColorWords`"
             }
             Malformed::Everywhere => {
-                "an effect on objects in every zone is not a static ability's change of types or colors, or escape"
+                "`Objects::Everywhere` works only as what a static ability's `LayerSpec` affects, with no condition and with modifications that change only types, subtypes or colors, or grant escape: elsewhere, use `Objects::All` with a zone"
             }
         }
     }

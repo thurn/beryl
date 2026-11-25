@@ -48,7 +48,16 @@ impl Ctx {
             }
         }
         if !predicates.is_empty() {
-            clauses.insert(0, format!("{who} {}", list(&predicates, "and")));
+            // "Up to two target creatures each get +1/+0": what several targets get, each
+            // gets.
+            let each = if let Objects::Target(n) = objects
+                && self.target_is_plural(n)
+            {
+                " each"
+            } else {
+                ""
+            };
+            clauses.insert(0, format!("{who}{each} {}", list(&predicates, "and")));
         }
         self.plural = plural;
         list(&clauses, "and")

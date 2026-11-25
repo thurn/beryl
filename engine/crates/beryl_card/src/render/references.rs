@@ -85,7 +85,7 @@ impl Ctx {
     }
 
     /// Whether the `n`th target may be several objects or players.
-    fn target_is_plural(&self, n: SpecIx) -> bool {
+    pub(super) fn target_is_plural(&self, n: SpecIx) -> bool {
         self.targets
             .get(n.index())
             .is_some_and(|spec| spec.count > 1)
@@ -343,7 +343,7 @@ impl Ctx {
     }
 
     /// The object the ability is on, or "it" in its own trigger's condition.
-    fn this_word(&self) -> String {
+    pub(super) fn this_word(&self) -> String {
         if self.this_is_it {
             "it".to_owned()
         } else {

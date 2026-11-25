@@ -477,7 +477,7 @@ fn what_a_moved_object_was_is_refused_where_it_is_not_kept() {
 
 /// In a card's `static` this panic is the build failure.
 #[test]
-#[should_panic(expected = "an effect adds mana outside a mana ability")]
+#[should_panic(expected = "`Effect::AddMana` lets the activator choose the kind")]
 fn a_card_is_checked_as_it_is_built() {
     const RITUAL: &[Ability] =
         &[Ability::spell().effect(&add_mana(you(), ManaSet::one(ManaColor::Black)))];

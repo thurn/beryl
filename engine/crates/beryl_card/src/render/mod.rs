@@ -17,8 +17,12 @@
 //! - [`words`]: numbers, articles, lists, mana symbols, characteristics.
 //! - [`filters`]: what a [`crate::Filter`] or [`crate::TargetSpec`] says as a noun phrase.
 //! - [`references`]: objects, players, amounts and conditions.
-//! - [`effects`]: one template per [`crate::Effect`] instruction.
-//! - [`abilities`]: costs, triggers, static abilities, replacements and whole abilities.
+//! - [`effects`]: one template per [`crate::Effect`] instruction, each kind of instruction
+//!   in a file of its own ([`moves`], [`zones`], [`resources`], [`permissions`],
+//!   [`copies`], [`modify`], [`prevention`], [`phases`]).
+//! - [`costs`] and [`triggers`]: an activated ability's cost and a triggered ability's
+//!   trigger.
+//! - [`abilities`]: static abilities, replacements and whole abilities.
 //! - [`card`]: a face's paragraphs, in Oracle's order.
 
 mod abilities;
@@ -27,16 +31,21 @@ mod card;
 mod clauses;
 mod conditions;
 mod copies;
+mod costs;
 mod designations;
 mod effects;
 mod filters;
 mod modify;
+mod moves;
 mod paid;
+mod permissions;
 mod phases;
 mod prevention;
 mod references;
 mod replacements;
+mod resources;
 mod rules;
+mod triggers;
 mod words;
 mod zones;
 
