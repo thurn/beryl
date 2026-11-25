@@ -103,9 +103,9 @@ pub(crate) fn enchants<L: Layout>(
         for player in players.in_seat_order() {
             Queue::push(&mut options, Opt::Player(player))?;
         }
-        for host in Candidates::<L>::Objects(objects).objects() {
-            Queue::push(&mut options, Opt::Object(host))?;
-        }
+        Candidates::<L>::extend_options(&mut options, objects, |out, host| {
+            out.push(Opt::Object(host))
+        })?;
         Decision::options(controller, DecisionKind::ChooseObject, options, prompt)
     };
     let choice = answer(s, sink, &decision)?;

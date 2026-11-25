@@ -111,10 +111,12 @@ impl<L: Layout> State<L> {
         Ok(ordered)
     }
 
-    /// The sources of a mana payment, by definition. Within each definition the payment
-    /// keeps the slot order used by recorded games and rollout fingerprints. see [CR 601.2g]
-    /// says "If the total cost includes a mana payment, the player then has a chance
-    /// to activate mana abilities."
+    /// The first `count` of the permanents `members`, the sources of one class of a mana
+    /// payment, by definition and, within a definition, in the order they entered the
+    /// battlefield. Copies of one definition can differ (one is enchanted, or is a creature
+    /// that could still attack), so which copy is tapped is decided by the game and never by
+    /// the slots the deal put them in. See [CR 601.2g]: "If the total cost includes a mana
+    /// payment, the player then has a chance to activate mana abilities".
     ///
     /// [CR 601.2g]: https://yawgatog.com/resources/magic-rules/#R6012g
     pub fn mana_payment_sources(
@@ -123,22 +125,60 @@ impl<L: Layout> State<L> {
         count: u8,
     ) -> Result<L::Queue<L::Slot, 64>, Full> {
         let mut sources: L::Queue<L::Slot, 64> = Default::default();
-        let key = |slot| self.definition(slot).key();
-        let first = members.iter().next().map(key);
-        let count = usize::from(count);
-        if members.all(|slot| Some(key(slot)) == first) {
-            for slot in members.iter().take(count) {
-                sources.push(slot)?;
-            }
-            return Ok(sources);
-        }
         for slot in members.iter() {
+            debug_assert!(
+                self.object(slot).on_battlefield(),
+                "a source is a permanent"
+            );
             sources.push(slot)?;
         }
-        sources.as_mut_slice().sort_by_key(|&slot| key(slot));
-        while sources.len() > count {
+        if sources.len() > 1 {
+            // A permanent's place in the battlefield list is unique, so no two keys tie.
+            sources.as_mut_slice().sort_unstable_by_key(|&slot| {
+                (
+                    self.definition(slot).key(),
+                    self.object(slot).battlefield_index,
+                )
+            });
+        }
+        while sources.len() > usize::from(count) {
             sources.pop();
         }
         Ok(sources)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::event::Sink;
+    use crate::ids::{Slot, SlotId};
+    use crate::layout::Small;
+    use crate::profile::Profile;
+    use crate::zone::Place;
+
+    /// Two copies of one source: the payment taps the one that entered the battlefield first,
+    /// whichever slot the deal put it in.
+    #[test]
+    fn a_payment_taps_copies_in_battlefield_order() {
+        let mut s = State::<Small>::empty(Profile::EXACT);
+        let (low, high) = (
+            Slot::try_from_index(0).unwrap(),
+            Slot::try_from_index(1).unwrap(),
+        );
+        assert_eq!(s.definition(low).key(), s.definition(high).key());
+        for slot in [high, low] {
+            s.move_object(&mut Sink::off(), slot, Zone::Battlefield, Place::Top)
+                .unwrap();
+        }
+        let members = Bitboard::single(low) | Bitboard::single(high);
+        assert_eq!(
+            s.mana_payment_sources(members, 1).unwrap().as_slice(),
+            [high]
+        );
+        assert_eq!(
+            s.mana_payment_sources(members, 2).unwrap().as_slice(),
+            [high, low]
+        );
     }
 }

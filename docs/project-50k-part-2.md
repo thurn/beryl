@@ -251,9 +251,8 @@ keeps.
   battlefield entry order or the top of the stack. `SlotId::pool` still locates
   free storage for new tokens and spell copies. The seeded mulligan shuffle uses
   its historical input order inside the kernel, after reporting the hand's moves
-  in card definition order. Automatic mana payments still choose between copies
-  of one definition by slot. The kernel keeps that compatibility ordering in
-  `State::mana_payment_sources`, since changing it moves the pinned rollouts.
+  in card definition order. Automatic mana payments choose between copies of one
+  definition in battlefield order (`State::mana_payment_sources`).
 
 The three slot numberings every scenario already plays under remain the test.
 

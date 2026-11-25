@@ -569,12 +569,12 @@
 //! | players in turn order (see CR 101.4) | [`State::players_in_turn_order`] and the others under "Players" |
 //! | a batch, in an order no seed decides: permanents as they entered, then library cards top first, then the rest by name | [`State::in_game_order`] |
 //! | a hand, by card definition | [`State::hand_by_definition`] |
+//! | the sources of one class of a mana payment, by definition, then as they entered the battlefield | [`State::mana_payment_sources`] |
 //!
-//! Per-object mutations use [`State::in_game_order`], which returns [`fixed::Full`] if
-//! the batch exceeds the queue. [`SlotId::all`] enumerates storage and [`SlotId::pool`] finds
-//! free slots for tokens, spell copies and cards brought into the game. Ascending slot order
-//! indexes a recorded [`decision::Choice`], and [`decision::collapse()`] chooses a
-//! representative of interchangeable objects.
+//! Per-object mutations use [`State::in_game_order`], which returns [`fixed::Full`] if the
+//! batch exceeds the queue. [`SlotId::all`] enumerates storage and [`SlotId::pool`] finds free
+//! slots for tokens, spell copies and cards brought into the game. Ascending slot order indexes
+//! a recorded [`decision::Choice`], and [`decision::collapse()`] picks one of interchangeable objects.
 //!
 //! A stack entry's targets are named the same way: a [`state::TargetPlace`] is a target's
 //! place in the entry's list, a [`state::TargetPlaces`] is a set of them with `insert`,

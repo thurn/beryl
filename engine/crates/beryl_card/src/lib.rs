@@ -8,8 +8,7 @@
     clippy::cast_precision_loss
 )]
 
-//! Beryl's card vocabulary: the types a card definition is written in
-//!.
+//! Beryl's card vocabulary: the types a card definition is written in.
 //!
 //! A card is a [`CardDef`] of [`Face`]s, each with its printed characteristics and its
 //! [`Ability`]s. What an ability does is its [`Behavior`]: [`Effect`] data, which the engine's

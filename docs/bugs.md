@@ -6,6 +6,17 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Automatic mana payment chose which copy of a source to tap by slot.** When a
+  payment needed one of two copies of the same land or mana creature, the rules
+  tapped the copy in the lower slot. Slots are assigned by the deal, so the same
+  position could tap the enchanted copy in one game and the plain one in
+  another, or tap a creature that could otherwise have attacked.
+  `State::mana_payment_sources` now takes copies of one definition in the order
+  they entered the battlefield, and it was the last walk in slot order that
+  reached a mutation from outside the kernel. Guard: `Bitboard::iter` is private
+  to the kernel, so a rules module can only walk a set in an order the state
+  names; `a_payment_taps_copies_in_battlefield_order` covers this query.
+
 - **A save with a wished card could not replay.** When Burning Wish brought a
   sorcery in from outside the game, the save recorded the card's name as a
   `Reveal` entry, as it does for every hidden card a player first learns. On
