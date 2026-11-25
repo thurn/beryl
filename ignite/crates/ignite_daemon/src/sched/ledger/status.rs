@@ -13,10 +13,13 @@ const CPU_SAMPLE_MAX_AGE_SECONDS: f64 = 5.0;
 
 impl Ledger {
     pub(in crate::sched) fn machine_readings(&self) -> (Option<u32>, u64, Option<u64>) {
+        // A request larger than one command may hold is granted at most that much, so count
+        // only what it could take. A test that asked for 10 cores on a host that grants each
+        // command at most 4 made the queue look 6 cores deeper than any grant could fill.
         let queued_cores = self
             .waiting
             .iter()
-            .map(|waiter| u64::from(waiter.request.cores.max(1)))
+            .map(|waiter| u64::from(self.want_of(waiter)))
             .sum();
         (self.cpu_percent, queued_cores, self.pressure.swap_used_mb())
     }

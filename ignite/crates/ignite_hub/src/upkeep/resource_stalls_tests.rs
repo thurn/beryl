@@ -475,6 +475,60 @@ fn a_recovery_wait_behind_a_full_build_limit_does_not_escalate() {
 }
 
 #[test]
+fn a_deep_core_queue_behind_a_full_build_limit_does_not_escalate() {
+    // Multivac held every new start at its build-ticket limit and build slots for half an
+    // hour while the running tickets' commands queued 20 cores on a 10-core host. CPU stayed
+    // at 69% and memory pressure was normal: the tickets were taking turns, and start pacing
+    // could hold back nothing more.
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    machine(&conn, "m-busy", Os::Macos);
+    let held = MachineSnapshot {
+        idle_workers: 16,
+        working_workers: 4,
+        ready_tickets: 7,
+        queued_cores: 20,
+        cpu_percent: Some(69),
+        swap_used_mb: Some(3_829),
+        start_block: Some(StartBlock::Pacing),
+        start_reason: Some(
+            "Tabcd waits for a build slot on m-busy: no slot available to tickets (5 \
+             configured) · waits for shared build cores on m-busy: 4 build tickets held, \
+             limit 3"
+                .to_owned(),
+        ),
+        ..healthy()
+    };
+    record(&conn, "m-busy", 0..=40, held.clone());
+    assert!(
+        upkeep
+            .pass(&mut conn, at(40))
+            .unwrap()
+            .tickets_filed
+            .is_empty()
+    );
+
+    // With starts still being admitted, the same queue is oversubscription.
+    record(
+        &conn,
+        "m-busy",
+        41..=71,
+        MachineSnapshot {
+            idle_workers: 0,
+            start_block: None,
+            start_reason: None,
+            ..held
+        },
+    );
+    let filed = upkeep.pass(&mut conn, at(71)).unwrap().tickets_filed;
+    assert_eq!(filed.len(), 1);
+    assert_eq!(
+        ticket(&conn, &filed[0]).title,
+        "Oversubscription persisting on m-busy"
+    );
+}
+
+#[test]
 fn idle_workers_at_the_build_slot_limit_do_not_escalate() {
     let mut conn = hub::open_in_memory().unwrap();
     let mut upkeep = Upkeep::new(None).unwrap();

@@ -163,7 +163,7 @@ pub(super) fn recovered(
         }
         Invariant::Pressure => {
             !intentionally_stopped(sample)
-                && sample.queued_cores <= cores(machine)
+                && !queue_over_cores(sample, machine)
                 && !build_queue_blocked(sample)
                 // Windows only reports queue pressure. On macOS, old daemons
                 // and failed readings both leave memory recovery unconfirmed.
@@ -296,15 +296,33 @@ fn build_queue_blocked(sample: &MachineSnapshot) -> bool {
     };
     let backlog =
         reason.contains(BUILD_QUEUE_WAIT) || reason.starts_with("Ticket commands have waited ");
-    let recovering = reason.contains(BUILD_QUEUE_RECOVERY_WAIT)
-        && !reason.contains(BUILD_LIMIT_WAIT)
-        && !reason.contains(BUILD_SLOT_WAIT);
+    let recovering = reason.contains(BUILD_QUEUE_RECOVERY_WAIT) && !starts_held_at_limit(sample);
     sample.start_block == Some(StartBlock::Pacing) && (backlog || recovering)
+}
+
+/// Whether the build-ticket limit or the build slots already hold the next start, so start
+/// pacing is already doing all it can: the tickets running drain the queue as they finish.
+fn starts_held_at_limit(sample: &MachineSnapshot) -> bool {
+    matches!(
+        sample.start_block,
+        Some(StartBlock::Pacing | StartBlock::Trees)
+    ) && sample
+        .start_reason
+        .as_deref()
+        .is_some_and(|reason| reason.contains(BUILD_LIMIT_WAIT) || reason.contains(BUILD_SLOT_WAIT))
+}
+
+fn queue_over_cores(sample: &MachineSnapshot, machine: &rows::Machine) -> bool {
+    // The queue sums the commands of tickets already running. While the build-ticket limit or
+    // the build slots hold every new start, a queue longer than the host's cores is those
+    // tickets taking turns for cores, and only CPU readings and memory pressure can show the
+    // host itself overloaded.
+    sample.queued_cores > cores(machine) && !starts_held_at_limit(sample)
 }
 
 fn over_limit(sample: &MachineSnapshot, machine: &rows::Machine) -> bool {
     !intentionally_stopped(sample)
-        && (sample.queued_cores > cores(machine)
+        && (queue_over_cores(sample, machine)
             || sample.active_memory_pressure == Some(true)
             || build_queue_blocked(sample))
 }

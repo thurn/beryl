@@ -194,6 +194,18 @@ fn one_command_takes_at_most_two_thirds_of_the_machine() {
     assert_eq!(ledger.step(T0).granted[0].cores, 16);
 }
 
+/// The hub reads the queue's depth as load. A request for more cores than one command may
+/// hold counts only the cores it could be granted.
+#[test]
+fn queued_cores_count_no_more_than_one_command_may_hold() {
+    let mut ledger = Ledger::new(limits());
+    ledger.enqueue(ask(Class::Land, 24), T0);
+    ledger.step(T0);
+    ledger.enqueue(ask(Class::Agent, 64), T0);
+    ledger.enqueue(ask(Class::Agent, 0), T0);
+    assert_eq!(ledger.machine_readings().1, 16 + 1);
+}
+
 #[test]
 fn a_land_request_stops_an_idle_command_and_takes_its_cores() {
     let mut ledger = Ledger::new(limits());
