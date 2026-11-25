@@ -106,7 +106,9 @@ impl Round<'_> {
     }
 
     /// Before promotion, landings can keep advancing `staging` while both verifiers work
-    /// on the same candidate. After promotion, a newer `staging` tip can use these trees.
+    /// on the same candidate, and a newer candidate ends the round only once `master` has
+    /// reached its tip (see `candidate::ends_checks`). After promotion, a newer `staging` tip
+    /// can use these trees.
     fn should_stop(&self) -> bool {
         if crate::steps::stop_requested()
             || self.verifier.machine_is_off()
@@ -121,7 +123,7 @@ impl Round<'_> {
                 other => Some(other),
             }
         } else {
-            candidate::replacement(self.ctx, self.tip).map(Ok)
+            candidate::ends_checks(self.ctx, self.tip).map(Ok)
         };
         let mut state = lock(&self.ended);
         if state.is_none() {
@@ -267,8 +269,8 @@ impl Round<'_> {
 
 impl TipVerifier {
     /// Runs `to_run`, some of the tip's checks, at `tip` and returns the runs, in batches cut
-    /// over the round's listing. A replacement selected by the hub ends the round at the
-    /// next family or batch.
+    /// over the round's listing. Before `master` moves, a replacement selected by the hub ends
+    /// the round at the next family or batch only once `master` has reached the tip.
     /// After `master` moves, a newer tip ends the round at the next family or batch
     /// whatever is under way. A family whose checks other machines all hold or have answered is
     /// skipped and returned in [`Elsewhere`].

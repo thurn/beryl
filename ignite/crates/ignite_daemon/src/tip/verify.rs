@@ -11,7 +11,7 @@ use ignite_core::traits::{Push, Result};
 use super::coverage::{Required, Scope};
 use super::families::{RunPhase, observe_failures};
 use super::round::{master_reached, require_running};
-use super::state::FailedTip;
+use super::state::{self, FailedTip};
 use super::{
     Listed, ListingPhase, TipCheck, TipOutcome, TipRun, TipSet, TipVerifier, candidate, covered,
     green, meter, names_of, settle_runs, split, verdict,
@@ -50,6 +50,7 @@ impl TipVerifier {
     pub fn verify(&mut self, ctx: &Context, tip: &Commit) -> Result<TipOutcome> {
         self.require_machine_on()?;
         self.failed = None;
+        self.checking = None;
         self.retry_for_stall = None;
         crate::steps::step(format!("verifying tip {tip}"));
         let last = ctx.git.tip(&ctx.config.repository.master)?;
@@ -66,6 +67,7 @@ impl TipVerifier {
         let (meter, metered) = meter::Meter::start(ctx);
         let mut tally = meter::Tally::default();
         let outcome = self.verify_round(&metered, &last, tip, &scope, &mut tally);
+        self.checking = None;
         self.save(ctx);
         meter::send(ctx, &meter.finish(ctx, tip, &tally));
         outcome
@@ -93,6 +95,7 @@ impl TipVerifier {
             let mut builds = self.work.checks(ctx, tip, ListingPhase::Build)?;
             require_running()?;
             self.record_listing(&builds);
+            self.start_checking(ctx, tip, scope);
             let local = builds
                 .checks
                 .iter()
@@ -123,7 +126,7 @@ impl TipVerifier {
             Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
             tally.cached = tally.cached.saturating_add(count(verdicts.len() - before));
             require_running()?;
-            if let Some(by) = candidate::replacement(ctx, tip) {
+            if let Some(by) = candidate::ends_checks(ctx, tip) {
                 return Ok(TipOutcome::Superseded { by });
             }
             if last != tip && !green::advance_if_ready(ctx, tip, &checks, &unlisted, &verdicts) {
@@ -140,6 +143,7 @@ impl TipVerifier {
         };
         let other = self.work.checks(ctx, tip, phase)?;
         self.record_listing(&other);
+        self.start_checking(ctx, tip, scope);
         listing.append(other);
         self.round_builds = listing
             .checks
@@ -194,7 +198,7 @@ impl TipVerifier {
             // A native verifier may have finished its checks while we listed the other families.
             Self::fill_from_cache(ctx, builds, &mut verdicts)?;
             require_running()?;
-            if let Some(by) = candidate::replacement(ctx, tip) {
+            if let Some(by) = candidate::ends_checks(ctx, tip) {
                 return Ok(TipOutcome::Superseded { by });
             }
             if green::advance_if_ready(ctx, tip, builds, unlisted_builds, &verdicts) {
@@ -225,9 +229,7 @@ impl TipVerifier {
                             .is_some_and(|run| run.outcome == Outcome::Fail)
                 })
         };
-        if let Some(by) = candidate::replacement(ctx, tip)
-            && (!runnable_failure(&verdicts, &regressions) || master_reached(ctx, tip).is_some())
-        {
+        if let Some(by) = candidate::ends_checks(ctx, tip) {
             return Ok(TipOutcome::Superseded { by });
         }
         tally.budget.clone_from(&split.budget);
@@ -560,6 +562,19 @@ impl TipVerifier {
 
     /// Cuts batches over the listing before omitting covered and switched-off checks, so that
     /// every machine cuts them alike.
+    /// Saves that this round runs its own checks at `tip` before `master` moves, at once, so the
+    /// tip loop sees it while they run (see `round::checking`). A round still listing has
+    /// nothing to lose and gives way to a newer candidate as before.
+    fn start_checking(&mut self, ctx: &Context, tip: &Commit, scope: &Scope) {
+        if self.checking.is_none() && !scope.catch_up_only() {
+            self.checking = Some(state::RoundAt {
+                commit: tip.clone(),
+                round: crate::steps::current().and_then(|activity| activity.handle()),
+            });
+            self.save(ctx);
+        }
+    }
+
     fn record_listing(&mut self, listing: &TipSet) {
         self.listed.extend(
             listing

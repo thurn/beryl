@@ -381,6 +381,9 @@ pub struct TipVerifier {
     settled: Option<Commit>,
     /// The exact keys that held the last failed tip, also saved before culprit searches.
     failed: Option<state::FailedTip>,
+    /// The round running its own checks at a candidate before `master` moves, saved so the tip
+    /// loop does not stop it for a newer candidate (see `round::checking`).
+    checking: Option<state::RoundAt>,
     /// When a failed tip gets one more round to consider a revert after a master stall.
     retry_for_stall: Option<(Commit, Timestamp)>,
     /// Policy under which the last round started. An operator may make the same tip runnable.
@@ -445,6 +448,7 @@ impl TipVerifier {
             since: Seq(0),
             settled: None,
             failed: None,
+            checking: None,
             retry_for_stall: None,
             fleet_version: None,
             master_at_start: None,

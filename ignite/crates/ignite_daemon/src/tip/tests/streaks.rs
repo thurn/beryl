@@ -141,3 +141,64 @@ fn a_runnable_failure_stops_other_families_and_reports_on_the_first_round() {
     );
     assert_eq!(world.master(), master);
 }
+
+/// When a peer reports a required failure and a newer landing replaces the candidate while this
+/// machine's round runs its first family, the round still runs its other families at the same
+/// tip before it gives way, so a second breakage among them is seen in this round. On
+/// 2026-11-25 a Windows-only failure at every tip ended the other machines' rounds at each
+/// landing for six hours, and breakages that landed meanwhile were found one at a time.
+#[test]
+fn a_peer_failure_lets_the_round_finish_its_own_checks_before_giving_way() {
+    let world = World::new();
+    let (server, _database, ctx) = running_hub(&world, "peer-failure-finishes");
+    let master = world.master();
+    let tip = commit("bbbb000");
+    let newer = commit("cccc000");
+    world.land(&tip);
+    world.git.set_not_ancestor(&tip, &master);
+    select(&ctx, &tip);
+    let mut failing = in_family("a", "first");
+    failing.runnable = false;
+    let running = in_family("b", "second");
+    let later = in_family("c", "third");
+    world
+        .work
+        .set_checks(&tip, vec![failing.clone(), running, later.clone()]);
+    let (git, work, peer_ctx, landed, failed_key, failed_tip) = (
+        world.git.clone(),
+        world.work.clone(),
+        ctx.clone(),
+        newer.clone(),
+        failing.key.clone(),
+        tip.clone(),
+    );
+    world.work.before_batches.lock().unwrap().insert(
+        "second".to_owned(),
+        Arc::new(move || {
+            peer_ctx
+                .hub
+                .tip_check_failures(&TipCheckFailures {
+                    commit: failed_tip.clone(),
+                    checks: vec![failed_key.clone()],
+                })
+                .unwrap();
+            git.set_tip("staging", landed.clone());
+            let selected = TipVerifier::new(work.clone(), "test")
+                .next_target(&peer_ctx)
+                .unwrap();
+            assert_eq!(selected.as_ref(), Some(&landed));
+        }),
+    );
+
+    let outcome = world.verifier().verify(&ctx, &tip).unwrap();
+    let ran = world.work.runs();
+    server.stop();
+
+    assert_eq!(outcome, TipOutcome::Superseded { by: newer });
+    assert!(
+        ran.iter()
+            .any(|(_, at, checks, _)| at == &tip && checks.contains(&later.check)),
+        "the round gave way before running its own checks: {ran:?}"
+    );
+    assert_eq!(world.master(), master);
+}

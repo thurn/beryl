@@ -59,6 +59,25 @@ pub(super) fn replacement(ctx: &Context, tip: &Commit) -> Option<Commit> {
     (candidate.commit != *tip).then_some(candidate.commit)
 }
 
+/// The newer candidate that ends a round's own checks before they finish: only once `master`
+/// has reached `tip`, when there is nothing left for them to hold.
+///
+/// A replacement alone does not end them. The hub replaces a candidate as soon as any machine
+/// reports a required failure at it, so that a newer landing can bring the fix. On 2026-11-25 a
+/// Windows-only lint failed at every tip from 14:21 to 20:50, and every landing in that time
+/// replaced the candidate within minutes and ended the other machines' rounds before they ran
+/// their checks: 84 rounds between 15:40 and 21:50 ran about 5,000 checks between them, against
+/// some 24,000 in one full round. Breakages that landed meanwhile went unseen and were found
+/// one at a time after the lint stopped failing, and the last of them was reverted at 22:14,
+/// 1 h 40 min after it landed. A round that finishes its checks reports every failure at the
+/// tip at once, so each is searched and reverted in the same round, and the newer tip reuses
+/// its results wherever inputs did not change. A round with a failure of its own still stops
+/// starting checks and goes on to its verdict and culprit search (see `verify_round`).
+pub(super) fn ends_checks(ctx: &Context, tip: &Commit) -> Option<Commit> {
+    super::round::master_reached(ctx, tip)?;
+    replacement(ctx, tip)
+}
+
 /// Lets a later staging tip try all required checks when this tip has a failed or blocked
 /// check. If another round has already selected a different tip, leave that selection alone.
 pub(super) fn allow_newer(ctx: &Context, tip: &Commit) -> Result<()> {

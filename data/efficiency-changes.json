@@ -995,5 +995,10 @@
     "label": "The `client-test` sweep that draws every arrow and fight mark in the recordings pack is split into eight tests, each scanning every eighth recording, plus a test that one combat recording draws every kind of light. On 2026-11-25 the single test held three tip rounds on jarvis for 6 to 26 minutes, running alone on the few cores left to it after every other test of its 1156-check batch had finished",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A newer `staging` candidate no longer ends a tip round that is still running its own checks before `master` moves, unless `master` has reached the round's tip. On 2026-11-25 a Windows-only lint failed at every tip for six hours, and each landing ended the other machines' rounds within minutes: 84 rounds ran about 5,000 checks between them, so breakages that landed meanwhile were found one at a time after the lint cleared, and `master` stayed stalled while 99 product commits waited on `staging`",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

@@ -25,7 +25,8 @@
 //!   the hub already selected a replacement, or `master` advanced past its target. A round
 //!   that has recorded its failed verdict finishes its culprit search whatever newer tip
 //!   appears, and stops only when `master` passes its target or all failed keys pass, so
-//!   ordinary verification can resume.
+//!   ordinary verification can resume. A round still running its own checks before `master`
+//!   moves finishes them too, unless `master` reaches its target.
 //!
 //! A round whose verb process dies is not run again: its handle ends `incomplete`, and the next
 //! turn of the loop starts a new round when the tip still needs one.
@@ -266,10 +267,14 @@ impl TipLoop {
     /// at the failed tip, so a newer tip does not change its answer, and a revert is built on
     /// the newest `staging` anyway. `master` reaching the tip, or the failed checks passing,
     /// still ends the search, since neither its culprits nor its revert would then be needed.
+    ///
+    /// Nor does a newer candidate stop a round still running its own checks before `master`
+    /// moves, for the reason given at `candidate::ends_checks`.
     fn interruption(&self, ctx: &Context, tip: &Commit, handle: &Handle) -> Option<TipOutcome> {
         let verifier = self.verb.verifier();
         if let Some(by) = self.superseding_tip(ctx, tip)
-            && (master_reached(ctx, tip).is_some() || !searching(&verifier, tip, handle))
+            && (master_reached(ctx, tip).is_some()
+                || !(searching(&verifier, tip, handle) || checking(&verifier, tip, handle)))
         {
             return Some(TipOutcome::Superseded { by });
         }
@@ -315,6 +320,15 @@ fn searching(verifier: &TipVerifier, tip: &Commit, handle: &Handle) -> bool {
         .failed
         .as_ref()
         .is_some_and(|failed| failed.commit == *tip && failed.round.as_ref() == Some(handle))
+}
+
+/// Whether the round `handle` is running its own checks at `tip` before `master` moves (see
+/// `verify`, which saves this before the round starts them).
+fn checking(verifier: &TipVerifier, tip: &Commit, handle: &Handle) -> bool {
+    verifier
+        .checking
+        .as_ref()
+        .is_some_and(|at| at.commit == *tip && at.round.as_ref() == Some(handle))
 }
 
 /// Leaves a stopped round before it treats interrupted checks as missing or failing.

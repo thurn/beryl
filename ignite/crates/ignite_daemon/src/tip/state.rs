@@ -31,6 +31,7 @@ pub(super) struct Memory {
     since: Seq,
     settled: Option<Commit>,
     failed: Option<FailedTip>,
+    checking: Option<RoundAt>,
     retry_for_stall: Option<(Commit, Timestamp)>,
     fleet_version: Option<u64>,
     master_at_start: Option<Commit>,
@@ -53,6 +54,15 @@ pub(super) struct FailedTip {
     pub commit: Commit,
     pub checks: Vec<ResultKey>,
     /// Identifies the round the loop can stop. A later round at the same SHA has its own handle.
+    pub round: Option<Handle>,
+}
+
+/// A round at a commit. The round saves this while it runs its own checks before `master`
+/// moves, so the tip loop lets it finish them when a newer candidate appears.
+#[derive(Clone, Serialize, Deserialize)]
+pub(super) struct RoundAt {
+    pub commit: Commit,
+    /// Identifies the round. A later round at the same SHA has its own handle.
     pub round: Option<Handle>,
 }
 
@@ -126,6 +136,7 @@ impl TipVerifier {
         self.since = memory.since;
         self.settled = memory.settled;
         self.failed = memory.failed;
+        self.checking = memory.checking;
         self.retry_for_stall = memory.retry_for_stall;
         self.fleet_version = memory.fleet_version;
         self.master_at_start = memory.master_at_start;
@@ -150,6 +161,7 @@ impl TipVerifier {
             since: self.since,
             settled: self.settled.clone(),
             failed: self.failed.clone(),
+            checking: self.checking.clone(),
             retry_for_stall: self.retry_for_stall.clone(),
             fleet_version: self.fleet_version,
             master_at_start: self.master_at_start.clone(),
