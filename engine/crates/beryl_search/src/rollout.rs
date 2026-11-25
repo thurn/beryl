@@ -304,11 +304,8 @@ impl RolloutPolicy {
             // A card leaving the player's own hand (a mulligan's, a discard's) is the one least
             // worth holding; anything else is taken by its value, as the legend to keep. Two
             // costs are paid with the least: a crew's creatures, an exile cost's cards.
-            DecisionKind::ChooseObject => pick.choose(d, |c| match c {
-                Candidate::Option(Opt::Cast { slot, face, costs }) => {
-                    Some(search_cast(&p, slot, face, costs))
-                }
-                _ => c.object().map(|slot| {
+            DecisionKind::ChooseObject => pick.choose(d, |c| {
+                c.object().map(|slot| {
                     let o = obs.object(slot);
                     match d.prompt.purpose {
                         Purpose::Crew => -p.value(slot),
@@ -316,11 +313,14 @@ impl RolloutPolicy {
                         _ if o.zone() == Zone::Hand && o.owner() == p.me => -p.in_hand(slot),
                         _ => p.value(slot),
                     }
-                }),
+                })
             }),
             DecisionKind::ChooseUpTo => pick.choose(d, |c| match c {
                 Candidate::Option(Opt::Cast { slot, face, costs }) => {
-                    Some(search_cast(&p, slot, face, costs))
+                    let v = p.cast(slot, face, costs);
+                    // Finding the first card ends the casting window during a search, so cast a
+                    // worthwhile spell from the library before taking a found card.
+                    Some(if v > 0 { 1000 + v } else { 0 })
                 }
                 _ => match c.object() {
                     Some(slot) => up_to(&p, obs, d, slot),
@@ -411,18 +411,6 @@ enum Pick<'s, 'r> {
     Soft(&'s mut Softmax<'r>),
     /// Collects the greedy scores in candidate order.
     Scores(&'s mut ScoreList),
-}
-
-/// Finding the first card ends the casting window during a search, so cast a worthwhile spell
-/// from the library before taking a found card.
-fn search_cast<L: Layout>(
-    p: &Policy<'_, L>,
-    slot: L::Slot,
-    face: beryl_engine::card::FaceIx,
-    costs: beryl_engine::card::Castings,
-) -> i32 {
-    let v = p.cast(slot, face, costs);
-    if v > 0 { 1000 + v } else { 0 }
 }
 
 /// A [`DecisionKind::ChooseUpTo`] candidate's score, or none when it is not worth taking.
