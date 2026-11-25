@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from . import card_facts
+from . import xmage_answer
 from .card_facts import Cards, Json, Unsupported, as_their_own, payment_position
 from .xmage_payment import Payments
 from .xmage_trace import (
@@ -44,16 +44,10 @@ from .xmage_trace import (
     resolution_skips,
 )
 from .xmage_java import (
-    ANOTHER_CARD,
-    creature_type,
     battlefield_card,
-    CHOICE_KINDS,
-    COLORS,
-    YES_NO_KINDS,
     EVERY_TURN,
     ORDER,
     STEPS,
-    COUNTERS,
     Export,
     Faces,
     activate_on_stack,
@@ -61,7 +55,6 @@ from .xmage_java import (
     cast_choices,
     divided_damage,
     java_string,
-    offered_cast_choices,
     spell_cast,
     outcome_lines,
     sideboard_setup_cards,
@@ -545,222 +538,7 @@ class Exporter:
     ) -> None:
         """Queues one answer's commands. `of` names what it answers where the stack at `p` no
         longer holds it, as for a forced answer of a spell that has since resolved."""
-        if id(action) in self.taken:
-            return
-        who = self.player(action["player"])
-        kind = cast(str, action["kind"])
-        pick = cast(Json, action["pick"])
-        what = cast(str, pick["pick"])
-        card = cast("str | None", pick.get("card"))
-        if enter_as_copy:
-            # XMage asks whether to copy, then which permanent.
-            self.emit(f"setChoice({who}, {'false' if card is None else 'true'});")
-            if card is not None:
-                self.emit(f"setChoice({who}, {java_string(p.object_name(card))});")
-            return
-        # A forced answer says its own; a scripted one answers the decision open at `p`.
-        bending = action.get("purpose", p.purpose) == "waterbend"
-        if action.get("purpose", p.purpose) == "pile-order":
-            # XMage asks the order of a melded permanent's two cards, the first chosen lowest
-            # as in Beryl (`ZonesHandler.chooseOrder`), and moves a merged permanent's cards
-            # without asking.
-            if card is not None and self.cards.shapes.get(card) == "Meld":
-                self.emit(f"setChoice({who}, {java_string(p.object_name(card))});")
-            return
-        source = of or (cast(str, p.stack[-1]["name"]) if p.stack else None)
-        if kind == "PaymentPlan" and self.payments.as_made:
-            # The payment's taps, replayed with the mana each made, chose the plan already.
-            return
-        if kind == "ChooseUpTo" and what == "Cast":
-            # XMage asks separately whether to cast and which card to cast before the find.
-            raise Unsupported("casting while searching a library")
-        if kind == "CastOffer" and what == "Cast":
-            self.payments.float_for_offer(
-                who, self.at(p), p, self.payment(), self.lines
-            )
-            self.lines.extend(offered_cast_choices(self.cards, who, pick))
-            return
-        if kind == "YesNo" and source is not None:
-            self.unless_pays.pop(source, None)
-        # "Include your tapped lands to untap?", XMage's shortcut for untapping them all,
-        # asked only when its controller has no more tapped lands than it untaps: no leaves
-        # the choice to Beryl's picks.
-        untaps = source is not None and self.cards.untaps_up_to(source)
-        if untaps and kind == "ChooseUpTo":
-            # XMage only offers tapped lands. A payment either player delegated may have
-            # left a land untapped that Beryl chose here.
-            if card is not None and self.payments.left_to_xmage:
-                raise Unsupported(
-                    "an untap choice after XMage chose a payment's sources"
-                )
-            if self.last_answer != (source, kind):
-                self.emit(f'setOptionalChoice({who}, {self.at(p)}, "No");')
-        self.last_answer = (source, kind)
-        if kind == "ChooseUpTo" and self.cards.hidden_pick(source):
-            # XMage asks each player whether to put a card, then which, from the hand.
-            if card is None:
-                self.emit(f"setChoice({who}, false);")
-            else:
-                self.emit(f"setChoice({who}, true);")
-                self.emit(f"addTarget({who}, {java_string(p.object_name(card))});")
-            return
-        resolving = source or ""
-        if kind == "ChooseUpTo" and self.cards.puts_any_on_bottom(resolving):
-            # XMage's `TargetCardInHand` of any number takes the whole list at once from the
-            # choice queue, so only the pick of none is queued, as a skip.
-            if card is not None:
-                raise Unsupported(
-                    "choosing hand cards for the library bottom one at a time"
-                )
-            self.emit(f"setChoice({who}, TestPlayer.CHOICE_SKIP);")
-            return
-        may_choose = self.cards.may_choose(resolving)
-        if self.cards.takes(resolving) and kind == "ChooseObject" and card is not None:
-            self.take(who, resolving, card)
-        elif self.cards.scries(resolving) and kind == "ChooseUpTo":
-            if self.scry is None:
-                self.scry = (who, [], [])
-            if card is not None:
-                self.scry[1].append(card)
-            else:
-                self.queue_scry_bottom()
-        elif self.scry is not None and kind == "ChooseObject" and card is not None:
-            self.scry[2].append(card)
-        elif (
-            self.may_choose is not None and kind == "ChooseObject" and card is not None
-        ):
-            self.emit(f"{self.may_choose}({who}, {java_string(card)});")
-            self.may_choose = None
-        elif may_choose is not None and kind == "YesNo":
-            asks, command = may_choose
-            if asks:
-                self.emit(f"setChoice({who}, {'true' if what == 'Yes' else 'false'});")
-            if what == "Yes":
-                self.may_choose = command
-            elif not asks:
-                skip = "CHOICE_SKIP" if command == "setChoice" else "TARGET_SKIP"
-                self.emit(f"{command}({who}, TestPlayer.{skip});")
-        elif self.cards.may_search(resolving) and kind == "YesNo":
-            self.emit(f"setChoice({who}, {'true' if what == 'Yes' else 'false'});")
-            if what == "Yes" and self.next_answer_kind() != "ChooseUpTo":
-                self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
-        elif kind == "Target" and p.kept is not None and "purpose" not in action:
-            self.retargeted = who
-            for line in p.new_target(who, pick, self.player):
-                self.emit(line)
-        elif kind == "Priority" and what == "Pass":
-            if p.stack:
-                self.prepare(who, p)
-                self.emit(f"resolveTop({self.at(p)}, {who});")
-        elif kind == "Target" and card is not None:
-            self.emit(f"addTarget({who}, {java_string(p.object_name(card))});")
-            # XMage asks for "up to N" targets until N are chosen or it is told to stop.
-            if self.targets_short is not None:
-                self.targets_short -= 1
-                if "purpose" in action:
-                    # Beryl answered silently because the target was the only one left, so
-                    # XMage has no candidate to ask about and queues no skip.
-                    self.targets_short = None
-                elif self.targets_short == 0:
-                    self.targets_short = None
-                    self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
-        elif kind == "Target" and what == "Player":
-            self.emit(f"addTarget({who}, {self.player(pick['player'])});")
-        elif kind == "TargetCount" and what == "Number":
-            n = cast(int, pick["n"])
-            if n == 0:
-                self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
-            elif source is not None and n < self.most_targets(source):
-                self.targets_short = n
-        elif kind in (
-            "Attacker",
-            "AttackTarget",
-            "Blocker",
-            "BlockTarget",
-            "DamageDivision",
-        ):
-            self.combat.answer(self, action, p)
-        elif kind == "TriggerOrder" and card and self.cards.first_trigger_text(card):
-            text = java_string(cast(str, self.cards.first_trigger_text(card)))
-            self.emit(f"setChoice({who}, {text});")
-        elif action.get("purpose", p.purpose) == "card-name":
-            # XMage asks for a name (`ChooseACardNameEffect`); Beryl numbers the game's names.
-            self.emit(f"setChoice({who}, {java_string(card or ANOTHER_CARD)});")
-        elif action.get("purpose", p.purpose) == "color" and what == "Number":
-            # XMage names the color (`ChoiceColor`); Beryl numbers it as CR 105.1 does.
-            self.emit(f"setChoice({who}, {java_string(COLORS[cast(int, pick['n'])])});")
-        elif action.get("purpose", p.purpose) == "creature-type" and what == "Named":
-            self.emit(f"setChoice({who}, {java_string(creature_type(pick['name']))});")
-        elif action.get("purpose", p.purpose) == "mutate" and what in ("Yes", "No"):
-            # XMage asks "UNDER or OVER" (`PermanentImpl.mutate`), yes for under; Beryl's yes
-            # is over.
-            self.emit(f"setChoice({who}, {'true' if what == 'No' else 'false'});")
-        elif action.get("purpose", p.purpose) == "wish":
-            self.emit(f"setChoice({who}, {'false' if card is None else 'true'});")
-            if card is not None:
-                self.emit(f"setChoice({who}, {java_string(card)});")
-        elif action.get("purpose", p.purpose) == "replace":
-            # Dredge's yes or no (`chooseUse`); mandatory effects' order by source name.
-            yes = "false" if card is None else "true"
-            name = java_string(p.object_name(card)) if card else yes
-            self.emit(f"setChoice({who}, {name if kind == 'ChooseObject' else yes});")
-        elif (kind in CHOICE_KINDS or bending) and card is not None:
-            name = java_string(p.object_name(card))
-            purpose = action.get("purpose", p.purpose)
-            text = self.faces.oracle.get(resolving, "").lower()
-            # XMage's simultaneous discard effect uses TargetDiscard for each player.
-            discard_together = purpose == "discard" and (
-                "each opponent discards" in text or "each player discards" in text
-            )
-            command = (
-                "addTarget" if discard_together else self.choice_command(source, kind)
-            )
-            self.emit(f"{command}({who}, {name});")
-        elif action.get("purpose", p.purpose) == "delve" and what == "Done":
-            pass  # XMage's delve ends once it has as many cards as generic mana left to pay
-        elif (kind == "ChooseUpTo" or bending) and what == "Done":
-            if self.choice_command(source, kind) == "addTarget":
-                self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
-            else:
-                self.emit(f"setChoice({who}, TestPlayer.CHOICE_SKIP);")
-        elif kind == "CastOffer" and what == "Pass":
-            self.emit(f"setChoice({who}, false);")
-        elif kind in YES_NO_KINDS and what in ("Yes", "No", "Card"):
-            self.emit(f"setChoice({who}, {'false' if what == 'No' else 'true'});")
-        elif kind == "X" and what == "Number":
-            self.emit(f'setChoice({who}, "X={pick["n"]}");')
-        else:
-            raise Unsupported(f"answering {kind} with {what}")
-
-    def take(self, who: str, source: str, card: str) -> None:
-        """One pick of a `Cards.takes` card: for the hand, queued as one target list once all are
-        chosen, then for the bottom, from the choice queue."""
-        if self.take_pending == source:
-            self.take_pending = None
-            self.taking = []
-        taking = self.taking
-        if taking is None:
-            self.emit(f"setChoice({who}, {java_string(card)});")
-            return
-        taking.append(card)
-        if len(taking) == self.cards.takes(source):
-            self.emit(f"addTarget({who}, {java_string('^'.join(taking))});")
-            self.taking = None
-
-    def next_answer_kind(self) -> str | None:
-        """The decision kind of the next action that is not an assertion, if it answers one."""
-        for action in self.actions[self.index + 1 :]:
-            if action["action"] != "Assert":
-                return cast("str | None", action.get("kind"))
-        return None
-
-    def choice_command(self, source: str | None, kind: str) -> str:
-        """The queue XMage takes a choice of a card from."""
-        targets = self.cards.choices_as_targets(source or "") and kind in (
-            "ChooseObject",
-            "ChooseUpTo",
-        )
-        return "addTarget" if targets else "setChoice"
+        xmage_answer.queue_answer(self, action, p, of, enter_as_copy=enter_as_copy)
 
     def check(self, assertion: Json, p: Position) -> None:
         what = cast(str, assertion["assert"])

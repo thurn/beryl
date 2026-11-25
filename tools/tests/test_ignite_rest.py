@@ -403,7 +403,7 @@ def test_the_trend_files_a_count_creep_ticket_and_fails_nothing(
         "create",
         "Win back the rollout benchmark's creeping instruction count",
     ]
-    assert "count-creep,count-creep:lima,tier:opus" in filed
+    assert "count-creep,count-creep:lima,tier:high" in filed
     assert count_trend.load(history.read_text())[-1] == count_trend.Record(
         "newcommit", 1_005_000, 1_100_000
     )
