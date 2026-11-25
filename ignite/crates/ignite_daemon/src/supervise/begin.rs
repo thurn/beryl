@@ -62,7 +62,7 @@ impl SupervisedLauncher {
         if self.quick(spec) {
             return self.start_quick(dir, spec);
         }
-        let shrinks = compiles_only(&spec.args);
+        let shrinks = shrinks_with(fifo::AVAILABLE, &spec.args);
         let cores_file = self
             .scheduler
             .as_ref()
@@ -233,6 +233,30 @@ impl Run {
     }
 }
 
+/// Whether a command's grant gives cores back while a higher class waits: only a Cargo command
+/// that only compiles ([`compiles_only`]), and only under a jobserver (`jobserver`, which is
+/// [`fifo::AVAILABLE`] outside tests). Without one, Cargo keeps the `CARGO_BUILD_JOBS` it
+/// started with, so a grant that shrank would free cores its compile jobs still use.
+fn shrinks_with(jobserver: bool, args: &[String]) -> bool {
+    jobserver && compiles_only(args)
+}
+
+/// Whether a command that says it `grows` ([`CommandSpec::grows`]) gets a grant that grows. A
+/// command that compiles follows a growing grant only through its jobserver (`jobserver`, which
+/// is [`fifo::AVAILABLE`] outside tests): without one, Cargo keeps the `CARGO_BUILD_JOBS` of
+/// the grant's first size. On Windows, which has no FIFOs, the `client` product's build was
+/// granted one core while cores were short, its grant then grew to ten in the scheduler's
+/// count, and Cargo compiled one crate at a time for over an hour while the machine reported
+/// no free cores at 25% CPU. Such a command instead waits for the cores it asked for.
+pub fn grows_with(jobserver: bool, grows: bool, compiles: bool) -> bool {
+    grows && (jobserver || !compiles)
+}
+
+/// [`grows_with`] on this platform.
+pub fn grows_here(grows: bool, compiles: bool) -> bool {
+    grows_with(fifo::AVAILABLE, grows, compiles)
+}
+
 /// Whether `spec`'s command is quick ([`QUICK_CPU_MS`]) by the CPU its last runs recorded in
 /// `cpu`: each of at least [`QUICK_RUNS`] runs used little CPU, it needs no shared resource,
 /// and it is not `idle` work, which must stay stoppable. A command that names Cargo is never
@@ -303,5 +327,19 @@ mod tests {
         }
         assert!(!is_quick(&cpu, &build));
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn without_a_jobserver_a_compiling_command_keeps_the_size_it_was_granted() {
+        let build = spec(&["cargo", "build", "--quiet"]).args;
+        assert!(shrinks_with(true, &build));
+        assert!(!shrinks_with(false, &build));
+
+        // A compiling build that says it grows (the `client` product) grows only under a
+        // jobserver; a command that only rereads its cores file grows either way.
+        assert!(grows_with(true, true, true));
+        assert!(!grows_with(false, true, true));
+        assert!(grows_with(false, true, false));
+        assert!(!grows_with(true, false, false));
     }
 }

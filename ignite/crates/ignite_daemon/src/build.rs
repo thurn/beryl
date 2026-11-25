@@ -391,7 +391,8 @@ impl BuildManager {
             class: crate::steps::class().unwrap_or(self.settings.class),
             cores,
             resources: Vec::new(),
-            grows: plan.product.grows,
+            // A compiling build grows only where a jobserver can pass the growth to Cargo.
+            grows: crate::supervise::grows_here(plan.product.grows, plan.product.uses_build_slot()),
             tree: Some(plan.request.tree.clone()),
             ticket: crate::steps::ticket(),
             hang_limit_s: Some(BUILD_HANG_LIMIT_S),

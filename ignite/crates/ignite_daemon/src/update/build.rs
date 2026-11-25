@@ -187,7 +187,8 @@ impl ReleaseBuilder {
             cores: std::thread::available_parallelism()
                 .map_or(4, |n| u32::try_from(n.get()).unwrap_or(u32::MAX)),
             resources: Vec::new(),
-            grows: true,
+            // Cargo follows a growing grant only through a jobserver, which Windows lacks.
+            grows: crate::supervise::grows_here(true, true),
             tree: None,
             ticket: None,
             hang_limit_s: Some(RELEASE_BUILD_HANG_LIMIT_S),

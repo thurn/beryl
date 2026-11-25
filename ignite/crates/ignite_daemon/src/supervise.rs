@@ -69,6 +69,7 @@ mod retain;
 mod run_verb;
 
 use begin::Launch;
+pub use begin::grows_here;
 use cancel::{end_when_cancelled, not_started, stopped};
 pub use grants::{GrantFile, STOP_GRACE_S};
 pub(crate) use hang::HANG_ON_OUTPUT_IDLE;
