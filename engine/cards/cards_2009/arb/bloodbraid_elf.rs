@@ -57,6 +57,23 @@ pub mod scenarios {
             Resolve,
             ME.controls(ELF, 1),
         ]),
+        // Cascade triggers on casting the Elf itself: an Elf already on the battlefield
+        // ignores another spell's cast, so the Bolt is alone on the stack and the library is
+        // untouched.
+        Scenario::new("An Elf on the battlefield does not cascade off another spell")
+            .interaction(&[BOLT, GEYSER])
+            .battlefield(P0, &[ELF, Card::Mountain])
+            .hand(P0, &[BOLT])
+            .library(P0, &[GEYSER, Card::Forest])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                stack(1),
+                ME.has_cards(Zone::Exile, 0),
+                Resolve,
+                THEM.life(17),
+                ME.has_cards(Zone::Library, 2),
+            ]),
         setup("The Elf attacks on the turn it is cast", &[Card::Forest]).actions(&[
             ME.casts(ELF),
             Resolve,

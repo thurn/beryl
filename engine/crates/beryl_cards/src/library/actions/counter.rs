@@ -45,6 +45,7 @@ pub const SCENARIOS: &[Scenario] =
                     card: props::VANILLA.card,
                     count: 0,
                 }),
+                THEM.has(Zone::Graveyard, names::NO_MORE_LIES, 1),
             ]),
     ];
 
