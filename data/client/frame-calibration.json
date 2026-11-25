@@ -79,8 +79,8 @@
               "why": "Jarvis measured up to 2,440,705 instructions. The limit adds 5% headroom and rounds up to the nearest thousand."
             },
             "total_instructions": {
-              "max": 93467000,
-              "why": "Jarvis measured up to 89,015,656 instructions. The limit adds 5% headroom and rounds up to the nearest thousand."
+              "max": 99097000,
+              "why": "Jarvis measured up to 94,377,850 instructions at staging 4beccd8, after the soft card edges and the crowded-row and pile changes added work. The limit adds 5% headroom and rounds up to the nearest thousand."
             }
           },
           "stress-stack": {
@@ -99,8 +99,8 @@
               "why": "Jarvis measured up to 11,757,751 instructions. The limit adds 5% headroom and rounds up to the nearest thousand."
             },
             "total_instructions": {
-              "max": 473833380,
-              "why": "Jarvis measured up to 439,807,221 instructions. The original limit covers both runs."
+              "max": 507433000,
+              "why": "Jarvis measured up to 483,268,700 instructions at staging 4beccd8, after the soft card edges and the crowded-row and pile changes added work. The limit adds 5% headroom and rounds up to the nearest thousand."
             }
           },
           "pay-default": {
@@ -109,8 +109,8 @@
               "why": "Jarvis measured up to 2,769,702 instructions. The original limit covers both runs."
             },
             "total_instructions": {
-              "max": 27408000,
-              "why": "Jarvis measured up to 26,102,104 instructions. The limit adds 5% headroom and rounds up to the nearest thousand."
+              "max": 29378000,
+              "why": "Jarvis measured up to 27,978,372 instructions at staging 4beccd8, after the soft card edges and the crowded-row and pile changes added work. The limit adds 5% headroom and rounds up to the nearest thousand."
             }
           }
         },
