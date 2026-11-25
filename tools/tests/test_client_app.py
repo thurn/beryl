@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools.client import app
+from beryl_tools.client import app, frame_trace
 
 
 def test_an_agent_gets_no_window_and_a_person_fullscreen_and_agents_give_for() -> None:
@@ -200,3 +200,83 @@ def test_live_timing_windows_explain_gaps_and_exclude_pauses(tmp_path: Path) -> 
     assert "CPU presentation call and hook: 1.00 / 42.00 / 42.00 / 42.00" in summary
     assert "main render pass GPU time: 2.00 / 2.00 / 2.00 / 2.00" in summary
     assert "actual presentation timestamps: 0 available" in summary
+
+
+def timing(callback_ms: float, **changes: object) -> dict[str, object]:
+    """A tick's timing record at 120 Hz, handled at once in 1 ms with no wait."""
+    callback = int(callback_ms * 1_000_000)
+    row: dict[str, object] = {
+        "sequence": 1,
+        "epoch": 1,
+        "requested_hz": 120.0,
+        "callback_ns": callback,
+        "display_ns": callback - 1_000_000,
+        "handled_ns": callback,
+        "finished_ns": callback + 1_000_000,
+        "outcome": "submitted",
+        "cpu": {"client_ns": 300_000, "drawable_wait_ns": 100_000},
+    }
+    row.update(changes)
+    return row
+
+
+def late_line(frame: object, previous: object) -> dict[str, object]:
+    line: dict[str, object] = {"waited_ms": 0.1, "hz": 120.0}
+    if frame is not None:
+        line["frame"] = frame
+        line["previous"] = previous
+    return line
+
+
+def test_each_late_frame_is_given_its_cause() -> None:
+    previous = timing(0)
+    # Each record below is the late frame, 25 ms after the one before unless the display
+    # timestamps put it nearer, changed to show one cause.
+    cases = {
+        "drawable": timing(25, cpu={"drawable_wait_ns": 6_000_000}),
+        "handler": (timing(25), timing(0, finished_ns=10_000_000)),
+        "queued": timing(25, handled_ns=30_000_000),
+        "callback late": timing(25, display_ns=19_000_000),
+        "link skipped": timing(25),
+        "handling only": timing(10),
+        "unknown": None,
+    }
+    assert tuple(cases) == frame_trace.CAUSES
+    for expected, case in cases.items():
+        frame, before = case if isinstance(case, tuple) else (case, previous)
+        found = frame_trace.cause(
+            late_line(frame, before), median_offset_ns=1_000_000, refresh_ns=8.3e6
+        )
+        assert found == expected, (expected, found)
+
+
+def test_a_report_uses_the_last_summary_and_counts_causes_by_rate(
+    tmp_path: Path,
+) -> None:
+    path = log(tmp_path, 2000, "/here", 10)
+    later = {
+        "summary": {
+            **json.loads(path.read_text().splitlines()[-1])["summary"],
+            "frames": 99,
+            "seconds": 33.0,
+            "rates": [
+                {"hz": 120.0, "seconds": 20.0, "frames": 2400, "late": 6},
+                {"hz": 60.0, "seconds": 13.0, "frames": 780, "late": 6},
+            ],
+        }
+    }
+    with path.open("a") as stream:
+        stream.write(json.dumps(later) + "\n")
+    printed = app.report(path).splitlines()
+    assert any("99 frames in 33.0 s" in line for line in printed)
+    assert not any("10 frames in 3.0 s" in line for line in printed)
+    assert "  120 Hz: 20.0 s, 2400 frames, 6 late (0.25%)" in printed
+    table = printed.index("late frames by cause and rate asked for:")
+    assert printed[table + 1].split() == ["cause", "120", "Hz", "60", "Hz", "all"]
+    # The fixture's late lines predate timing records, so every one is `unknown`.
+    assert printed[table + 1 + len(frame_trace.CAUSES)].split() == [
+        "unknown",
+        "6",
+        "6",
+        "12",
+    ]

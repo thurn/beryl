@@ -1,4 +1,9 @@
 //! Retains a bounded recent trace on the frame thread. Only a capture copies the ring.
+//!
+//! A capture is a timing window: the events of the seconds before it. The trace captures one
+//! by itself when drawing is slow over 2 s (`Slow`), when 3 frames come late within a second
+//! (`Late`) and at every change of rate or tier (`Step`). The first two share a 30 s
+//! cool-down, and a run captures at most `LATE_WINDOWS` for late frames.
 
 use std::collections::VecDeque;
 use std::time::Instant;
@@ -12,11 +17,22 @@ const HISTORY: u64 = 30 * SECOND;
 const CAPACITY: usize = 8192;
 const SLOW_FOR: u64 = 2 * SECOND;
 const SLOW_FRACTION: f64 = 0.8;
+/// How much of the trace a `Late` or `Step` window holds.
+const RECENT: u64 = 5 * SECOND;
+/// How many late frames within `LATE_WITHIN` capture a `Late` window.
+const LATE_FRAMES: usize = 3;
+const LATE_WITHIN: u64 = SECOND;
+/// The most `Late` windows one run captures.
+const LATE_WINDOWS: u32 = 10;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Reason {
     Slow,
+    /// `LATE_FRAMES` frames came late within `LATE_WITHIN`.
+    Late,
+    /// The host changed the rate it asks the display for, or the tier.
+    Step,
     BugOpened,
     BugSaved,
     Exit,
@@ -34,6 +50,9 @@ pub(crate) struct Trace {
     events: VecDeque<Timing>,
     slow: Slow,
     auto_at: Option<u64>,
+    /// When the latest late frames came, oldest first, as a ring of the last `LATE_FRAMES`.
+    late: [Option<u64>; LATE_FRAMES],
+    late_windows: u32,
     pub(crate) frozen: Option<Window>,
 }
 
@@ -44,6 +63,8 @@ impl Trace {
             events: VecDeque::with_capacity(CAPACITY),
             slow: Slow::default(),
             auto_at: None,
+            late: [None; LATE_FRAMES],
+            late_windows: 0,
             frozen: None,
         }
     }
@@ -77,15 +98,53 @@ impl Trace {
             Timing::Frame(frame) => self.slow.record(frame),
             _ => false,
         };
-        if slow && self.auto_at.is_none_or(|at| now >= at) {
+        if let Timing::Change(change) = event {
+            return self.capture_recent(Reason::Step, change.at_ns, RECENT);
+        }
+        if slow && self.cooled(now) {
             self.auto_at = Some(now + HISTORY);
             return self.capture(Reason::Slow, now);
         }
         None
     }
 
+    /// Whether the cool-down after the last automatic capture has passed at `now`.
+    fn cooled(&self, now: u64) -> bool {
+        self.auto_at.is_none_or(|at| now >= at)
+    }
+
+    /// Notes a frame that came late, its record finished at `now`, and captures a `Late` window
+    /// when it is the last of `LATE_FRAMES` within `LATE_WITHIN`.
+    pub(crate) fn late(&mut self, now: u64) -> Option<Window> {
+        self.late.rotate_left(1);
+        self.late[LATE_FRAMES - 1] = Some(now);
+        let burst = self.late[0].is_some_and(|first| now.saturating_sub(first) <= LATE_WITHIN);
+        if !burst || !self.cooled(now) || self.late_windows >= LATE_WINDOWS {
+            return None;
+        }
+        self.late = [None; LATE_FRAMES];
+        self.late_windows += 1;
+        self.auto_at = Some(now + HISTORY);
+        self.capture_recent(Reason::Late, now, RECENT)
+    }
+
+    /// The latest two frame records, the earlier first: a late frame's own and the one before.
+    pub(crate) fn last_two_frames(&self) -> (Option<FrameTiming>, Option<FrameTiming>) {
+        let mut frames = self.events.iter().rev().filter_map(|event| match event {
+            Timing::Frame(frame) => Some(*frame),
+            _ => None,
+        });
+        let last = frames.next();
+        (frames.next(), last)
+    }
+
     pub(crate) fn capture(&self, reason: Reason, end_ns: u64) -> Option<Window> {
-        let cutoff = end_ns.saturating_sub(HISTORY);
+        self.capture_recent(reason, end_ns, HISTORY)
+    }
+
+    /// A window of the `span` nanoseconds before `end_ns`.
+    fn capture_recent(&self, reason: Reason, end_ns: u64, span: u64) -> Option<Window> {
+        let cutoff = end_ns.saturating_sub(span);
         // GPU callbacks and changes can be delivered on either side of the frame record.
         let events: Vec<_> = self
             .events

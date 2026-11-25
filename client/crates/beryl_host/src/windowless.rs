@@ -141,16 +141,16 @@ impl Windowless {
         };
         let started = Instant::now();
         let end = options.end_after.map(|end| started + end);
-        loop {
+        let ended = loop {
             for input in self.receiver.try_iter() {
                 frames.handle(input);
             }
             let now = Instant::now();
             if end.is_some_and(|end| now >= end) {
-                return Ok(());
+                break Ok(());
             }
             if let Some(driven) = frames.at_end() {
-                return driven;
+                break driven;
             }
             let since = |at: Instant| at.duration_since(started).as_nanos() as u64;
             let sleep = frames.schedule(since(now));
@@ -199,7 +199,9 @@ impl Windowless {
             if let Ok(input) = received {
                 frames.handle(input);
             }
-        }
+        };
+        frames.exiting();
+        ended
     }
 }
 

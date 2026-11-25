@@ -194,6 +194,12 @@ pub trait Feed {
     fn ended(&self) -> bool {
         false
     }
+
+    /// Called once when the host's run is ending, after its last frame. On macOS a desktop host
+    /// calls this from winit's `exiting`, which Cmd+Q reaches through
+    /// `applicationWillTerminate:`, and the process then ends without returning from the event
+    /// loop, so a feed writes here whatever must outlast the run.
+    fn exiting(&mut self) {}
 }
 
 /// A feed that adds nothing.
@@ -370,6 +376,11 @@ impl<T: Ticks> FrameLoop<T> {
 
     pub(crate) fn note_timing(&mut self, event: &Timing) {
         self.feed.timing(event);
+    }
+
+    /// Tells the feed that the run is ending (`Feed::exiting`).
+    pub fn exiting(&mut self) {
+        self.feed.exiting();
     }
 
     #[cfg(not(any(target_os = "ios", target_os = "android")))]

@@ -2,8 +2,11 @@
 //! file of its own, `$BERYL_CACHE/b3d/frames/<start time>-<process id>.jsonl`, that an agent
 //! reads with `just client frames`. Its first line describes the run. On macOS, the display
 //! link and renderer supply timing windows with submissions, skips and changes of rate or tier.
-//! Other hosts record individual late frames. The log also records inputs, the first frame and
-//! the tier chosen at startup, and summarizes the run at exit or at replay end.
+//! Every host records each late frame, with its timing record and the one before it where the
+//! host keeps a trace. The log also records inputs, the first frame and the tier chosen at
+//! startup. It summarizes the run every `SUMMARY_EVERY` and when the run ends, including from
+//! winit's `exiting` callback on Cmd+Q, after which the process ends without returning, so a
+//! reader uses the last summary.
 //!
 //! A frame is late when more than one and a half intervals of the rate the host asked for
 //! passed since the frame before it while the ticks ran (decision C18). When the host asked
@@ -21,7 +24,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Sender, channel};
 use std::thread::JoinHandle;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::frame_trace::{Reason, Trace, Window};
 pub use crate::frame_writer::Attachment;
@@ -29,7 +32,7 @@ use crate::frame_writer::{self, Message};
 use app_client::Input;
 use beryl_host::Ticked;
 use beryl_host::rate::Step;
-use beryl_host::timing::{PacingChange, Timing};
+use beryl_host::timing::{FrameTiming, PacingChange, Timing};
 use game_play::sound::NAMES;
 use kit_frame::frame::SoundId;
 use kit_ui::input::{Lifecycle, Modifiers, TextChange};
@@ -46,6 +49,8 @@ const LATE: f64 = 1.5;
 const WAIT_BUCKET: u64 = 100_000;
 /// How many buckets the waits are counted in. The last holds every wait of 100 ms or more.
 const WAIT_BUCKETS: usize = 1001;
+/// How often a run under way writes a summary.
+const SUMMARY_EVERY: Duration = Duration::from_secs(30);
 
 /// The first line: what the run was.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -107,6 +112,22 @@ pub struct Late {
     /// The rate the host had asked for, which it was late against.
     #[serde(default)]
     pub hz: f32,
+    /// The frame's timing record and the one before it, as a timing window writes them, on a
+    /// host that keeps a trace. `just client frames` finds the frame's cause from these.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame: Option<FrameTiming>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous: Option<FrameTiming>,
+}
+
+/// What the run did at one rate the host asked for.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AtRate {
+    pub hz: f32,
+    /// The time between frames drawn at this rate, while the ticks ran.
+    pub seconds: f64,
+    pub frames: u64,
+    pub late: u64,
 }
 
 /// A step the host took (`beryl_host::rate`).
@@ -172,6 +193,9 @@ pub struct Summary {
     /// The host's steps down and up, in order.
     #[serde(default)]
     pub steps: Vec<Stepped>,
+    /// Each rate the host asked for, in the order it first asked for it.
+    #[serde(default)]
+    pub rates: Vec<AtRate>,
     /// The frames drawn while the latest view said the AI was searching.
     #[serde(default)]
     pub searching: Searching,
@@ -197,7 +221,8 @@ pub struct Searching {
 #[serde(rename_all = "snake_case")]
 pub enum Line {
     Run(Run),
-    Late(Late),
+    /// Boxed, being several times the size of the other lines with its timing records.
+    Late(Box<Late>),
     FirstShownMs(f64),
     /// The first presentation after resume, or any presentation while suspended.
     LifecycleShownMs(f64),
@@ -371,6 +396,12 @@ pub struct FrameLog {
     presentation_lifecycle: Option<Lifecycle>,
     /// When the last frame was drawn.
     last_frame: Option<Instant>,
+    /// How long after `created` the next summary is due.
+    next_summary: Duration,
+    /// A late frame waiting for its timing record, which the host notes after the frame.
+    pending: Option<Box<Late>>,
+    /// The summary written when the run ended, once it has.
+    exited: Option<Summary>,
     /// How many shown frames waited for a drawable for each tenth of a millisecond, made once
     /// so that counting a frame allocates nothing.
     waits: Box<[u32; WAIT_BUCKETS]>,
@@ -406,6 +437,9 @@ impl FrameLog {
             reached_pause: false,
             presentation_lifecycle: None,
             last_frame: None,
+            next_summary: SUMMARY_EVERY,
+            pending: None,
+            exited: None,
             waits: Box::new([0; WAIT_BUCKETS]),
             sounds: vec![0; NAMES.len()].into_boxed_slice(),
         })
@@ -420,16 +454,42 @@ impl FrameLog {
         let _ = self.lines.send(Message::Line(line));
     }
 
-    pub(crate) fn start_trace(&mut self, epoch: Instant) {
+    /// Starts keeping a trace of the host's timing records on the clock that starts at
+    /// `epoch`.
+    pub fn start_trace(&mut self, epoch: Instant) {
         self.trace = Some(Trace::new(epoch));
     }
 
-    pub(crate) fn timing(&mut self, event: &Timing) {
+    /// Records one of the host's timing records. A frame's record completes the late line
+    /// `frame` held back for it.
+    pub fn timing(&mut self, event: &Timing) {
         if let Timing::Change(change) = event {
             self.send(Line::PacingChange(*change));
         }
-        if let Some(window) = self.trace.as_mut().and_then(|trace| trace.record(event)) {
+        let Some(trace) = &mut self.trace else {
+            return;
+        };
+        let mut windows = [trace.record(event), None];
+        let mut late = None;
+        if let Timing::Frame(frame) = event
+            && let Some(mut line) = self.pending.take()
+        {
+            (line.previous, line.frame) = trace.last_two_frames();
+            windows[1] = trace.late(frame.finished_ns);
+            late = Some(line);
+        }
+        for window in windows.into_iter().flatten() {
             self.send(Line::TimingWindow(window));
+        }
+        if let Some(late) = late {
+            self.send(Line::Late(late));
+        }
+    }
+
+    /// Writes the late line still waiting for its timing record without one.
+    fn send_pending(&mut self) {
+        if let Some(late) = self.pending.take() {
+            self.send(Line::Late(late));
         }
     }
 
@@ -448,12 +508,8 @@ impl FrameLog {
             }
         }
         let (finished, complete) = channel();
-        let _ = self.lines.send(Message::BugPrefix(finished));
+        let _ = self.lines.send(Message::Written(finished));
         Attachment::new(&self.path, complete)
-    }
-
-    pub(crate) fn keeps_late_verbs(&self) -> bool {
-        self.trace.is_none()
     }
 
     /// Whether `ticked` came late against the rate the host had asked for.
@@ -466,7 +522,15 @@ impl FrameLog {
 
     /// Counts a frame the host drew, and sends a line for it to be written when it was late.
     pub fn frame(&mut self, ticked: &Ticked, verbs: &[&str], searching: bool) {
-        self.last_frame = Some(Instant::now());
+        let now = Instant::now();
+        self.last_frame = Some(now);
+        self.send_pending();
+        if now.duration_since(self.created) >= self.next_summary {
+            self.next_summary += SUMMARY_EVERY;
+            self.summarize();
+        }
+        let late = Self::is_late(ticked);
+        self.count_rate(ticked, late);
         let summary = &mut self.summary;
         summary.frames += 1;
         summary.hz = ticked.hz;
@@ -523,7 +587,7 @@ impl FrameLog {
             return;
         };
         summary.worst_gap_ms = summary.worst_gap_ms.max(ms(gap));
-        if !Self::is_late(ticked) {
+        if !late {
             return;
         }
         let held_to_60 = ticked.hz > 61.0 && (gap as f64) <= LATE * SIXTIETH;
@@ -536,10 +600,7 @@ impl FrameLog {
         } else {
             summary.missed_60 += 1;
         }
-        if self.trace.is_some() {
-            return;
-        }
-        let late = Late {
+        let late = Box::new(Late {
             at_ms: ms(ticked.tick),
             since_last_ms: ms(gap),
             waited_ms: waited,
@@ -550,9 +611,37 @@ impl FrameLog {
             searching,
             held_to_60,
             hz: ticked.hz,
-        };
-        // The writer ends only with the log, so a failed send has nowhere to go.
-        self.send(Line::Late(late));
+            frame: None,
+            previous: None,
+        });
+        // With a trace, the line waits for the frame's timing record, which comes next.
+        if self.trace.is_some() {
+            self.pending = Some(late);
+        } else {
+            self.send(Line::Late(late));
+        }
+    }
+
+    /// Counts a frame against the rate the host asked for when it came. A rate seen for the
+    /// first time allocates, which happens only at a step.
+    fn count_rate(&mut self, ticked: &Ticked, late: bool) {
+        let rates = &mut self.summary.rates;
+        // The host asks only for rates that divide the display's highest, so the same rate is
+        // always the same number.
+        let index = rates
+            .iter()
+            .position(|rate| rate.hz.to_bits() == ticked.hz.to_bits())
+            .unwrap_or_else(|| {
+                rates.push(AtRate {
+                    hz: ticked.hz,
+                    ..AtRate::default()
+                });
+                rates.len() - 1
+            });
+        let rate = &mut rates[index];
+        rate.frames += 1;
+        rate.late += u64::from(late);
+        rate.seconds += ticked.since_last.map_or(0.0, |gap| gap as f64 / 1e9);
     }
 
     /// Records an input the host handed the client when it is one the log keeps, with how
@@ -623,11 +712,14 @@ impl FrameLog {
         self.summary.clone()
     }
 
-    /// Writes the summary as the last line and returns it.
-    ///
-    /// # Errors
-    /// When a line could not be written.
-    pub fn finish(mut self) -> io::Result<Summary> {
+    /// Writes the `exit` timing window and the summary, and waits until the writer has written
+    /// them, since a host may end the process as soon as this returns: macOS does after winit's
+    /// `exiting`. Later frames are not counted. Does nothing the second time.
+    pub fn exit(&mut self) {
+        if self.exited.is_some() {
+            return;
+        }
+        self.send_pending();
         if let Some(trace) = &self.trace
             && let Some(window) = trace.capture(Reason::Exit, trace.now())
         {
@@ -635,6 +727,20 @@ impl FrameLog {
         }
         let summary = self.summary();
         self.send(Line::Summary(summary.clone()));
+        self.exited = Some(summary);
+        let (written, complete) = channel();
+        let _ = self.lines.send(Message::Written(written));
+        // A writer that failed has dropped the message, so this returns at once.
+        let _ = complete.recv();
+    }
+
+    /// Ends the log, written by `exit` if it was not already, and returns its summary.
+    ///
+    /// # Errors
+    /// When a line could not be written.
+    pub fn finish(mut self) -> io::Result<Summary> {
+        self.exit();
+        let summary = self.exited.take().unwrap_or_default();
         drop(self.lines);
         self.writer
             .join()

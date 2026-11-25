@@ -37,6 +37,13 @@ pub(super) fn freeze(feed: &AppFeed) {
     }
 }
 
+/// Writes the final summary when the host is about to end the process.
+pub(super) fn exiting(feed: &AppFeed) {
+    if let Some(Ok(log)) = feed.log.borrow_mut().as_mut() {
+        log.exit();
+    }
+}
+
 pub(super) fn save(feed: &mut AppFeed, request: &Request) {
     let log = feed
         .log
@@ -52,7 +59,7 @@ pub(super) fn save(feed: &mut AppFeed, request: &Request) {
 }
 
 pub(super) fn legacy_frame(log: &mut FrameLog, client: &Client, ticked: &Ticked, searching: bool) {
-    let verbs: Vec<&str> = if log.keeps_late_verbs() && FrameLog::is_late(ticked) {
+    let verbs: Vec<&str> = if FrameLog::is_late(ticked) {
         client.playing_verbs().map(Verb::name).collect()
     } else {
         Vec::new()

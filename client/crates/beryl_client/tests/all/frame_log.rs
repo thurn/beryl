@@ -6,9 +6,12 @@ use std::path::PathBuf;
 
 use app_client::Input;
 use beryl_client::frame_log::{self, FrameLog, InputLine, Run};
+use beryl_client::frame_trace::Reason;
 use beryl_host::rate::Step;
+use beryl_host::timing::{DisplayTick, FrameTiming, GraphicsTier, Outcome, PacingChange, Timing};
 use beryl_host::{Shown, Ticked};
 use kit_ui::input::{Insets, Lifecycle, Size};
+use std::time::Instant;
 
 const MS: u64 = 1_000_000;
 
@@ -280,5 +283,169 @@ fn an_input_line_says_how_long_ago_the_last_frame_was_drawn() {
         .as_f64()
         .expect("a time since the frame");
     assert!(since >= 0.0, "{since}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn plain_run(pid: u32) -> Run {
+    Run {
+        checkout: "/checkout".to_owned(),
+        pid,
+        started_ms: 5_000,
+        window: "fullscreen".to_owned(),
+        display_hz: 120.0,
+        adapter: "a GPU".to_owned(),
+        load: None,
+        fixture: None,
+        pause_at_ms: None,
+        drive: None,
+        load_threads: None,
+        slow_gpu_ms: None,
+        game: None,
+    }
+}
+
+/// The host's timing record of the tick at `at_ms`, as the desktop host notes it after the
+/// frame log has counted the frame.
+fn record(sequence: u64, at_ms: u64) -> Timing {
+    let at = at_ms * MS;
+    Timing::Frame(FrameTiming {
+        tick: DisplayTick {
+            sequence,
+            epoch: 1,
+            requested_hz: 120.0,
+            callback_ns: at,
+            display_ns: Some(at as i64),
+            target_ns: Some(at as i64 + 8 * MS as i64),
+            reported_hz: Some(120.0),
+        },
+        handled_ns: at + MS / 10,
+        finished_ns: at + MS,
+        outcome: Outcome::Submitted,
+        submitted_ns: Some(at + MS / 2),
+        cpu: None,
+        render_size: [1024, 768],
+        fullscreen: true,
+        tier: GraphicsTier::Baseline,
+        animating: true,
+        searching: false,
+        gpu_in_flight: None,
+        presented_ns: None,
+    })
+}
+
+/// Draws the frame at `at_ms`, `gap_ms` after the one before, and notes its timing record.
+fn draw(log: &mut FrameLog, sequence: u64, at_ms: u64, gap_ms: u64) {
+    log.frame(&ticked(at_ms, Some(gap_ms), true), &["fly"], false);
+    log.timing(&record(sequence, at_ms));
+}
+
+fn lines(path: &std::path::Path) -> Vec<serde_json::Value> {
+    std::fs::read_to_string(path)
+        .expect("the log reads")
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("each line is JSON"))
+        .collect()
+}
+
+/// macOS ends the process after winit's `exiting`, so the summary written there must already
+/// be on disk when `exit` returns, and a later `finish` writes no second one.
+#[test]
+fn a_log_ended_through_exiting_has_its_summary_on_disk() {
+    let dir = dir("exiting");
+    let mut log = FrameLog::create(&dir, &plain_run(46)).expect("the log is made");
+    log.frame(&ticked(10, None, true), &[], false);
+    log.frame(&ticked(30, Some(20), true), &[], false);
+    log.exit();
+    let path = log.path().to_owned();
+    let read = frame_log::read(&path).expect("the log reads back");
+    let summary = read.summary.expect("a summary before the process ends");
+    assert_eq!((summary.frames, summary.late), (2, 1));
+    assert_eq!(summary.rates.len(), 1);
+    let rate = &summary.rates[0];
+    assert_eq!((rate.hz, rate.frames, rate.late), (120.0, 2, 1));
+    assert!((rate.seconds - 0.02).abs() < 1e-9, "{rate:?}");
+    let finished = log.finish().expect("the log is finished");
+    assert_eq!(finished, summary);
+    let summaries = lines(&path)
+        .iter()
+        .filter(|line| line.get("summary").is_some())
+        .count();
+    assert_eq!(summaries, 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// With the trace on, a late frame's line still is written, with its timing record and the
+/// one before it.
+#[test]
+fn a_late_frame_with_the_trace_on_has_its_timing_records() {
+    let dir = dir("late-trace");
+    let mut log = FrameLog::create(&dir, &plain_run(47)).expect("the log is made");
+    log.start_trace(Instant::now());
+    log.frame(&ticked(10, None, true), &[], false);
+    log.timing(&record(1, 10));
+    draw(&mut log, 2, 30, 20);
+    let path = log.path().to_owned();
+    log.finish().expect("the log is finished");
+    let read = frame_log::read(&path).expect("the log reads back");
+    assert_eq!(read.late.len(), 1);
+    let late = &read.late[0];
+    assert_eq!(late.verbs, ["fly"]);
+    let sequence = |timing: Option<FrameTiming>| timing.map(|frame| frame.tick.sequence);
+    assert_eq!(sequence(late.frame), Some(2));
+    assert_eq!(sequence(late.previous), Some(1));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Three late frames within a second capture one `late` window; another burst inside the
+/// 30 s cool-down captures none, but a change of rate still captures a `step` window.
+#[test]
+fn bursts_of_late_frames_and_steps_capture_windows() {
+    let dir = dir("late-windows");
+    let mut log = FrameLog::create(&dir, &plain_run(48)).expect("the log is made");
+    log.start_trace(Instant::now());
+    let mut sequence = 0;
+    let mut at = 0;
+    let mut frame = |log: &mut FrameLog, gap: u64| {
+        sequence += 1;
+        at += gap;
+        draw(log, sequence, at, gap);
+    };
+    for _ in 0..100 {
+        frame(&mut log, 8);
+    }
+    for _ in 0..3 {
+        frame(&mut log, 20);
+    }
+    // Ten seconds on, another burst, inside the cool-down.
+    for _ in 0..1200 {
+        frame(&mut log, 8);
+    }
+    for _ in 0..3 {
+        frame(&mut log, 20);
+    }
+    log.timing(&Timing::Change(PacingChange {
+        at_ns: (at + 1) * MS,
+        previous_hz: 120.0,
+        new_hz: 60.0,
+        previous_tier: GraphicsTier::Baseline,
+        new_tier: GraphicsTier::Baseline,
+        adaptive: None,
+    }));
+    let path = log.path().to_owned();
+    log.finish().expect("the log is finished");
+    let read = frame_log::read(&path).expect("the log reads back");
+    assert_eq!(read.late.len(), 6);
+    assert!(read.late.iter().all(|late| late.frame.is_some()));
+    let reasons: Vec<Reason> = read.timing_windows.iter().map(|w| w.reason).collect();
+    assert_eq!(reasons, [Reason::Late, Reason::Step, Reason::Exit]);
+    // A `late` or `step` window holds the five seconds before it.
+    for window in &read.timing_windows[..2] {
+        let first = window.events.first().expect("events").at_ns();
+        assert!(
+            window.end_ns - first <= 5_000 * MS,
+            "{}",
+            window.end_ns - first
+        );
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }

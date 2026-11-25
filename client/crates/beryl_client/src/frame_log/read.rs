@@ -45,7 +45,7 @@ pub fn read(path: &Path) -> Result<Log, String> {
             Line::FirstShownMs(_) | Line::LifecycleShownMs(_) => {}
             Line::TimingWindow(window) => log.timing_windows.push(window),
             Line::PacingChange(change) => log.pacing_changes.push(change),
-            Line::Late(late) => log.late.push(late),
+            Line::Late(late) => log.late.push(*late),
             Line::Summary(summary) => log.summary = Some(summary),
             Line::Input(input) => log.inputs.push(input.input),
             Line::Tier(tiered) => log.tier = Some(tiered),

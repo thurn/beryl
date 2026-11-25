@@ -13,7 +13,9 @@ use crate::frame_log::Line;
 )]
 pub(crate) enum Message {
     Line(Line),
-    BugPrefix(Sender<u64>),
+    /// Asks for the file's length once every line sent before it is written: the prefix a bug
+    /// report attaches, or proof that the log is on disk before the process ends.
+    Written(Sender<u64>),
 }
 
 pub struct Attachment {
@@ -54,7 +56,7 @@ pub(crate) fn run(
     for message in received {
         match message {
             Message::Line(line) => write(&mut file, &line)?,
-            Message::BugPrefix(complete) => {
+            Message::Written(complete) => {
                 let _ = complete.send(file.get_ref().metadata()?.len());
             }
         }

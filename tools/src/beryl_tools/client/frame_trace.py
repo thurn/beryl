@@ -222,3 +222,93 @@ def describe_change(change: Row) -> str:
         f" {decision['missed']}/{decision['window']} misses ({decision['misses_needed']} needed),"
         f" {decision['roomy']}/{decision['roomy_needed']} frames with room"
     )
+
+
+# The causes of a late frame, in the order `cause` tries them (the frame log's `late` line).
+CAUSES = (
+    "drawable",
+    "handler",
+    "queued",
+    "callback late",
+    "link skipped",
+    "handling only",
+    "unknown",
+)
+
+
+def callback_offset(frame: Row) -> int | None:
+    """How long after its own display timestamp a tick's callback ran. The two are on
+    different clocks, so only differences between offsets mean anything."""
+    display = frame.get("display_ns")
+    return None if display is None else frame["callback_ns"] - display
+
+
+def median_offset(frames: list[Row]) -> int | None:
+    """The median `callback_offset` of `frames`, or None when none has one."""
+    offsets = sorted(o for f in frames if (o := callback_offset(f)) is not None)
+    return offsets[len(offsets) // 2] if offsets else None
+
+
+def largest_stage(frame: Row) -> str | None:
+    """The CPU stage of `frame` that took longest, with its time."""
+    cpu = frame.get("cpu") or {}
+    stages = [(cpu[key], label) for key, label in CPU_STAGES.items() if cpu.get(key)]
+    if not stages:
+        return None
+    took, label = max(stages)
+    return f"{label} {ms(took):.2f} ms"
+
+
+def cause(late: Row, *, median_offset_ns: int | None, refresh_ns: float) -> str:
+    """Why a late frame came late, as the first of `CAUSES` its timing records show.
+    `median_offset_ns` is the run's median `callback_offset`, and `refresh_ns` a refresh of
+    the display at its highest rate."""
+    frame = late.get("frame")
+    if frame is None:
+        return "unknown"
+    interval = 1e9 / max(late.get("hz") or frame["requested_hz"], 1.0)
+    wait = (frame.get("cpu") or {}).get("drawable_wait_ns")
+    if wait is None:
+        wait = late["waited_ms"] * 1e6
+    if wait > interval / 2:
+        return "drawable"
+    previous = late.get("previous")
+    if (
+        previous is not None
+        and previous["finished_ns"] - previous["callback_ns"] > 0.8 * interval
+    ):
+        return "handler"
+    if frame["handled_ns"] - frame["callback_ns"] > interval / 2:
+        return "queued"
+    offset = callback_offset(frame)
+    if (
+        offset is not None
+        and median_offset_ns is not None
+        and offset - median_offset_ns > refresh_ns / 2
+    ):
+        return "callback late"
+    if (
+        previous is None
+        or frame.get("display_ns") is None
+        or previous.get("display_ns") is None
+    ):
+        return "unknown"
+    if frame["display_ns"] - previous["display_ns"] >= 1.5 * interval:
+        return "link skipped"
+    return "handling only"
+
+
+def cause_table(rows: list[tuple[str, float]]) -> list[str]:
+    """A table of late frames by cause (rows, in `CAUSES` order) and the rate asked for
+    (columns, highest first), from each frame's cause and rate."""
+    counts = Counter(rows)
+    hz = sorted({rate for _, rate in rows}, reverse=True)
+    heads = [f"{rate:g} Hz" for rate in hz] + ["all"]
+    width = max(len(name) for name in CAUSES)
+    lines = ["  " + "cause".ljust(width) + "".join(f"{h:>9}" for h in heads)]
+    for name in CAUSES:
+        cells = [counts[(name, rate)] for rate in hz]
+        lines.append(
+            "  " + name.ljust(width) + "".join(f"{n:>9}" for n in [*cells, sum(cells)])
+        )
+    return lines

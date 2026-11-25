@@ -476,7 +476,9 @@ def log_lines(path: Path) -> Iterator[dict[str, Any]]:
 
 
 def report(path: Path, *, latest: bool = False) -> str:
-    """Show the run, old-style late frames and captured timing windows."""
+    """Show the run, its last summary, its late frames by cause and rate, and captured timing
+    windows. A log may hold several summaries, written every 30 s, and the last counts.
+    """
     if path.is_dir():
         path = path / "frames.jsonl"
     with_rows = log_lines(path)
@@ -490,6 +492,8 @@ def report(path: Path, *, latest: bool = False) -> str:
     changes: list[str] = []
     windows: list[str] = []
     latest_window: dict[str, Any] | None = None
+    # Every timing record the log holds, for the run's median callback offset.
+    records: list[dict[str, Any]] = []
     for line in with_rows:
         if "late" in line:
             late.append(line["late"])
@@ -500,6 +504,9 @@ def report(path: Path, *, latest: bool = False) -> str:
         elif "pacing_change" in line:
             changes.append(frame_trace.describe_change(line["pacing_change"]))
         elif "timing_window" in line:
+            records.extend(
+                e["frame"] for e in line["timing_window"]["events"] if "frame" in e
+            )
             if latest:
                 latest_window = line["timing_window"]
             else:
@@ -549,17 +556,13 @@ def report(path: Path, *, latest: bool = False) -> str:
                 f"paused at {run['pause_at_ms']} ms:"
                 f" {summary['after_pause']} frames drawn after the pause"
             )
-    worst = sorted(late, key=lambda frame: -frame["since_last_ms"])[:WORST]
-    if worst:
-        out.append(f"worst {len(worst)} of {len(late)} late frames (ms):")
-        for frame in worst:
+        for rate in summary.get("rates", []):
+            share = 100 * rate["late"] / rate["frames"] if rate["frames"] else 0.0
             out.append(
-                f"  at {frame['at_ms']:.0f}: gap {frame['since_last_ms']:.1f}"
-                f" at {frame.get('hz', run['display_hz'])} Hz,"
-                f" waited {frame['waited_ms']:.1f}, client {frame['client_ms']:.2f},"
-                f" encoded {frame['encoded_ms']:.2f}, searching {frame['searching']},"
-                f" verbs {','.join(frame['verbs']) or '-'}"
+                f"  {rate['hz']:g} Hz: {rate['seconds']:.1f} s, {rate['frames']} frames,"
+                f" {rate['late']} late ({share:.2f}%)"
             )
+    out += late_frames(run, late, records)
     if changes:
         out.append("live pacing changes")
         out.extend(changes)
@@ -567,6 +570,40 @@ def report(path: Path, *, latest: bool = False) -> str:
         windows = frame_trace.describe(latest_window)
     out.extend(windows)
     return "\n".join(out)
+
+
+def late_frames(
+    run: dict[str, Any], late: list[dict[str, Any]], records: list[dict[str, Any]]
+) -> list[str]:
+    """The late frames by cause and rate asked for, and the `WORST` longest with their causes.
+    A line written before late lines had timing records has the cause `unknown`."""
+    if not late:
+        return []
+    for frame in late:
+        records.extend(frame[key] for key in ("frame", "previous") if frame.get(key))
+    median = frame_trace.median_offset(records)
+    refresh = 1e9 / max(run["display_hz"], 1.0)
+    causes = [
+        frame_trace.cause(frame, median_offset_ns=median, refresh_ns=refresh)
+        for frame in late
+    ]
+    rates = [frame.get("hz", run["display_hz"]) for frame in late]
+    out = ["late frames by cause and rate asked for:"]
+    out += frame_trace.cause_table(list(zip(causes, rates)))
+    ranked = sorted(zip(late, causes), key=lambda row: -row[0]["since_last_ms"])
+    worst = ranked[:WORST]
+    out.append(f"worst {len(worst)} of {len(late)} late frames (ms):")
+    for frame, why in worst:
+        if why == "handler" and (stage := frame_trace.largest_stage(frame["previous"])):
+            why = f"handler, most in {stage}"
+        out.append(
+            f"  at {frame['at_ms']:.0f}: {why}; gap {frame['since_last_ms']:.1f}"
+            f" at {frame.get('hz', run['display_hz'])} Hz,"
+            f" waited {frame['waited_ms']:.1f}, client {frame['client_ms']:.2f},"
+            f" encoded {frame['encoded_ms']:.2f}, searching {frame['searching']},"
+            f" verbs {','.join(frame['verbs']) or '-'}"
+        )
+    return out
 
 
 def tier_line(tier: dict[str, Any]) -> str:

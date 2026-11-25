@@ -426,6 +426,15 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
         }
     }
 
+    /// winit calls this as the event loop ends: after `exit`, and on macOS from
+    /// `applicationWillTerminate:` on Cmd+Q or a quit from the Dock, after which the process
+    /// ends without `run_app` returning.
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(running) = &mut self.running {
+            running.frames.exiting();
+        }
+    }
+
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
         if let Some(running) = &mut self.running {
             running

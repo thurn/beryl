@@ -381,6 +381,10 @@ impl Feed for AppFeed {
         }
     }
 
+    fn exiting(&mut self) {
+        timing::exiting(self);
+    }
+
     fn ended(&self) -> bool {
         #[cfg(all(feature = "tools", any(unix, windows)))]
         if self.live.as_ref().is_some_and(crate::live::Live::quit) {
@@ -613,7 +617,9 @@ fn story_sources() -> Arc<[app_client::stories::Source]> {
 #[cfg(not(feature = "tools"))]
 use app_client::stories::embedded as story_sources;
 
-/// Finishes the frame log after the host exits, keeping the host's error if it failed.
+/// Finishes the frame log after the host exits, keeping the host's error if it failed. A host
+/// that called `Feed::exiting` has written the summary already, and `FrameLog::finish` then
+/// writes nothing more.
 fn finish_run(log: Option<Logged>, hosted: Result<(), String>) -> Result<Finished, String> {
     if let Err(error) = hosted {
         // The log still gets its summary, so that the frames before the error can be read.
