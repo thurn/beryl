@@ -429,6 +429,52 @@ fn active_memory_pressure_still_escalates_when_a_full_build_quota_explains_idle_
 }
 
 #[test]
+fn a_recovery_wait_behind_a_full_build_limit_does_not_escalate() {
+    // Multivac ran at its build-ticket limit for over half an hour. Each 30 s core wait
+    // restarted the queue's recovery interval, which the snapshot listed after the limit,
+    // although no build ticket could have started anyway and memory pressure was normal.
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    machine(&conn, "m-busy", Os::Macos);
+    let recovery = "waits for a healthy build queue: rechecking each round, up to 90 s \
+                    of recovery left once waits subside";
+    let at_limit = MachineSnapshot {
+        idle_workers: 17,
+        working_workers: 3,
+        ready_tickets: 9,
+        queued_cores: 4,
+        cpu_percent: Some(87),
+        swap_used_mb: Some(3_869),
+        start_block: Some(StartBlock::Pacing),
+        start_reason: Some(format!(
+            "Tabcd waits for shared build cores on m-busy: 3 build tickets held, limit 3 \
+             · {recovery}"
+        )),
+        ..healthy()
+    };
+    record(&conn, "m-busy", 0..=40, at_limit.clone());
+    let pass = upkeep.pass(&mut conn, at(40)).unwrap();
+    assert!(pass.tickets_filed.is_empty());
+
+    // Below the limit, the same recovery wait is what holds build tickets back.
+    record(
+        &conn,
+        "m-busy",
+        41..=71,
+        MachineSnapshot {
+            start_reason: Some(format!("Tabcd {recovery}")),
+            ..at_limit
+        },
+    );
+    let filed = upkeep.pass(&mut conn, at(71)).unwrap().tickets_filed;
+    assert_eq!(filed.len(), 1);
+    assert_eq!(
+        ticket(&conn, &filed[0]).title,
+        "Oversubscription persisting on m-busy"
+    );
+}
+
+#[test]
 fn idle_workers_at_the_build_slot_limit_do_not_escalate() {
     let mut conn = hub::open_in_memory().unwrap();
     let mut upkeep = Upkeep::new(None).unwrap();

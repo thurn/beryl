@@ -286,12 +286,20 @@ fn cores(machine: &rows::Machine) -> u64 {
 
 fn build_queue_blocked(sample: &MachineSnapshot) -> bool {
     // The oldest command can wait for cores even when the sum of queued cores fits the host.
-    sample.start_block == Some(StartBlock::Pacing)
-        && sample.start_reason.as_deref().is_some_and(|reason| {
-            reason.contains(BUILD_QUEUE_WAIT)
-                || reason.contains(BUILD_QUEUE_RECOVERY_WAIT)
-                || reason.starts_with("Ticket commands have waited ")
-        })
+    // A backlog holds every ordinary start, so it counts whatever else the reason lists.
+    // The recovery wait holds only build tickets and restarts after any 30 s core wait,
+    // which is routine while the build tickets already running keep the cores busy. When
+    // the build-ticket limit or the build slots already hold the next start, the recovery
+    // wait changes nothing, and a host that stays at its limit is busy, not oversubscribed.
+    let Some(reason) = sample.start_reason.as_deref() else {
+        return false;
+    };
+    let backlog =
+        reason.contains(BUILD_QUEUE_WAIT) || reason.starts_with("Ticket commands have waited ");
+    let recovering = reason.contains(BUILD_QUEUE_RECOVERY_WAIT)
+        && !reason.contains(BUILD_LIMIT_WAIT)
+        && !reason.contains(BUILD_SLOT_WAIT);
+    sample.start_block == Some(StartBlock::Pacing) && (backlog || recovering)
 }
 
 fn over_limit(sample: &MachineSnapshot, machine: &rows::Machine) -> bool {
