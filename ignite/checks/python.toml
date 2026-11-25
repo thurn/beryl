@@ -31,7 +31,6 @@ inputs = [
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos", "windows"]
-defer_platforms = ["windows"]
 needs = ["python-env"]
 always = true
 # A build check: a failure means the code does not type-check, so `green` does not move.

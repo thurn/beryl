@@ -31,7 +31,6 @@ kind = "regression"
 adapter = "jsonl"
 machine_relative = true
 platforms = ["macos", "windows"]
-defer_platforms = ["windows"]
 # Only a machine with a calibrated count guest runs these checks, and tip verification runs them
 # for every change to the inputs. A worker therefore needs this family only when its ticket edits
 # the benchmarks, the gate's limits or the counting tools. Without this list, every ticket that
