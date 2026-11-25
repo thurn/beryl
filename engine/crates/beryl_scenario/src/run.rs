@@ -600,14 +600,12 @@ impl<L: Layout> Runner<L> {
         };
         // A copy's first target option keeps its existing target. A spell cast during
         // resolution asks for a fresh target, with the cast visible in the replayed state.
+        let shown_pending = view(&self.s, &self.t, &mut self.x).pending().clone();
         let kept = match step {
             Step::Decide(d)
                 if d.kind == DecisionKind::Target
                     && matches!(self.s.pending(), Pending::Resolving(_))
-                    && !matches!(
-                        view(&self.s, &self.t, &mut self.x).pending(),
-                        Pending::Casting(_)
-                    ) =>
+                    && !matches!(shown_pending, Pending::Casting(_)) =>
             {
                 self.pick_for(d, Choice(0))
             }
@@ -657,7 +655,7 @@ impl<L: Layout> Runner<L> {
             decides_for,
             kind,
             purpose,
-            paying_objects: matches!(self.s.pending(), Pending::Casting(cast) if matches!(cast.step, CastStep::Objects(_))),
+            paying_objects: matches!(shown_pending, Pending::Casting(cast) if matches!(cast.step, CastStep::Objects(_))),
             graveyard_cards: Seat::BOTH.map(|player| {
                 self.s
                     .graveyard(player)
