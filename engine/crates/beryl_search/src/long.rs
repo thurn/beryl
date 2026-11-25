@@ -1688,7 +1688,7 @@ pub fn guarded<L: Layout>(
         DecisionKind::ChooseObject => {
             d.prompt.purpose != Purpose::PutOnBottom
                 && matches!(&d.candidates, Candidates::Objects(slots) if !slots.is_empty())
-                && d.candidates.objects().all(|slot| {
+                && d.object_candidates().all(|slot| {
                     let object = obs.object(slot);
                     object.zone() == Zone::Hand && object.owner() == d.player
                 })

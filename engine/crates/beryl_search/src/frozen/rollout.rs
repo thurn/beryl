@@ -232,7 +232,7 @@ pub(crate) fn best(d: &Decision, mut score: impl FnMut(Candidate) -> Option<i32>
         }
     };
     match &d.candidates {
-        Candidates::Objects(_) => (d.candidates.objects())
+        Candidates::Objects(_) => (d.object_candidates())
             .enumerate()
             .for_each(|(i, slot)| consider(i, Candidate::Object(slot))),
         Candidates::Options(o) => o

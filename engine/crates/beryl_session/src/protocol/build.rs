@@ -272,7 +272,7 @@ fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> P
 pub(crate) fn shown<L: Layout>(d: &Decision<L>) -> Option<L::Slot> {
     let about = d.about.min(|slot| slot);
     about.or_else(|| match &d.candidates {
-        Candidates::Objects(_) => d.candidates.objects().next(),
+        Candidates::Objects(_) => d.object_candidates().next(),
         Candidates::Options(opts) => opts.iter().find_map(|&o| match o {
             Opt::Object(slot) => Some(slot),
             _ => None,

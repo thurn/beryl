@@ -139,6 +139,22 @@ impl<L: Layout> Decision<L> {
         }
     }
 
+    /// The objects this decision offers, in the order a [`Choice`] counts them. Empty for
+    /// option candidates.
+    ///
+    /// A set of objects built outside the kernel cannot be walked in slot order:
+    ///
+    /// ```compile_fail,E0624
+    /// use beryl_kernel::{Bitboard, Candidates, Small};
+    ///
+    /// let set: Bitboard<<Small as beryl_kernel::Layout>::Slot> = Bitboard::EMPTY;
+    /// let _ = Candidates::<Small>::Objects(set).objects();
+    /// ```
+    #[inline]
+    pub fn object_candidates(&self) -> Slots<L::Slot> {
+        self.candidates.objects()
+    }
+
     /// This pick, of a prompt about the objects `about` ([`Decision::about`]).
     #[must_use]
     pub fn about(mut self, about: Bitboard<L::Slot>) -> Decision<L> {
@@ -195,8 +211,11 @@ impl<L: Layout> Candidates<L> {
     }
 
     /// The objects offered, in the order a [`Choice`] counts them. Empty for option candidates.
+    /// Only the kernel calls this: outside it, [`Decision::object_candidates`] reads the
+    /// objects of a decision that was asked, never of a set the caller built, so slot order
+    /// cannot reach an event, a save or a tie-break through a hand-built value.
     #[inline]
-    pub fn objects(&self) -> Slots<L::Slot> {
+    pub(crate) fn objects(&self) -> Slots<L::Slot> {
         match self {
             Candidates::Objects(b) => b.iter(),
             Candidates::Options(_) => Bitboard::EMPTY.iter(),

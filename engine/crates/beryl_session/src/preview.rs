@@ -72,8 +72,7 @@ fn blocks<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<Ob
             match next(&mut copy, t, &mut scratch, &mut Replay) {
                 // The attackers offered, which are objects.
                 Step::Decide(d) if d.kind == DecisionKind::BlockTarget => d
-                    .candidates
-                    .objects()
+                    .object_candidates()
                     .map(|slot| ObjectId(slot.num()))
                     .collect(),
                 _ => Vec::new(),
@@ -110,13 +109,9 @@ fn targets<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<T
             let mut scratch = Scratch::new();
             apply(&mut copy, t, &mut scratch, &mut Replay, choice(i));
             match next(&mut copy, t, &mut scratch, &mut Replay) {
-                Step::Decide(Decision {
-                    kind: DecisionKind::Target,
-                    candidates,
-                    ..
-                }) => match candidates {
-                    Candidates::Objects(_) => candidates
-                        .objects()
+                Step::Decide(next) if next.kind == DecisionKind::Target => match &next.candidates {
+                    Candidates::Objects(_) => next
+                        .object_candidates()
                         .map(|slot| TargetRef::Object {
                             slot: ObjectId(slot.num()),
                         })

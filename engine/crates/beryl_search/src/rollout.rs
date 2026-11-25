@@ -556,7 +556,7 @@ impl Softmax<'_> {
 /// Calls `f` with each candidate of `d` and its index.
 fn for_each<L: Layout>(d: &Decision<L>, mut f: impl FnMut(usize, Candidate<L>)) {
     match &d.candidates {
-        Candidates::Objects(_) => (d.candidates.objects())
+        Candidates::Objects(_) => (d.object_candidates())
             .enumerate()
             .for_each(|(i, slot)| f(i, Candidate::Object(slot))),
         Candidates::Options(o) => o

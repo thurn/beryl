@@ -499,7 +499,7 @@ impl Run {
 /// The candidates of `d` in the order a [`Choice`] counts them, each as an option.
 pub(crate) fn options<L: Layout>(d: &Decision<L>) -> Vec<Opt<L>> {
     match &d.candidates {
-        Candidates::Objects(_) => d.candidates.objects().map(Opt::Object).collect(),
+        Candidates::Objects(_) => d.object_candidates().map(Opt::Object).collect(),
         Candidates::Options(options) => options.iter().copied().collect(),
     }
 }

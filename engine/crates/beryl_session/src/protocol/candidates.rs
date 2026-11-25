@@ -24,7 +24,7 @@ pub(crate) fn candidate_labels<L: Layout>(
     d: &Decision<L>,
 ) -> Vec<String> {
     match &d.candidates {
-        Candidates::Objects(_) => (d.candidates.objects())
+        Candidates::Objects(_) => (d.object_candidates())
             .map(|slot| name(t, obs, slot).unwrap_or("a hidden card").to_owned())
             .collect(),
         Candidates::Options(opts) => (opts.iter())

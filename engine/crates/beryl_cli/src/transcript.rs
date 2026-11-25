@@ -28,7 +28,7 @@ pub struct Transcript {
 /// Each candidate of `d` in `s` as a transcript labels it, in the decision's order.
 pub fn labels(t: &GameTable, s: &State, d: &Decision) -> Vec<String> {
     match &d.candidates {
-        Candidates::Objects(_) => (d.candidates.objects())
+        Candidates::Objects(_) => (d.object_candidates())
             .map(|slot| candidate(t, s, slot))
             .collect(),
         Candidates::Options(o) => o.iter().map(|&o| option(t, s, o)).collect(),
@@ -39,7 +39,7 @@ pub fn labels(t: &GameTable, s: &State, d: &Decision) -> Vec<String> {
 pub fn label(t: &GameTable, s: &State, d: &Decision, c: Choice) -> String {
     let index = usize::from(c.0);
     match &d.candidates {
-        Candidates::Objects(_) => candidate(t, s, d.candidates.objects().nth(index).unwrap()),
+        Candidates::Objects(_) => candidate(t, s, d.object_candidates().nth(index).unwrap()),
         Candidates::Options(o) => option(t, s, o.as_slice()[index]),
     }
 }

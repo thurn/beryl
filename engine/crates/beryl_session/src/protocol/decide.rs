@@ -24,7 +24,7 @@ pub(super) fn decision_view<L: Layout>(
     stops: StopsSetting,
 ) -> DecisionView {
     let candidates = match &d.candidates {
-        Candidates::Objects(_) => (d.candidates.objects())
+        Candidates::Objects(_) => (d.object_candidates())
             .map(|slot| CandidateView {
                 label: name(t, obs, slot).unwrap_or("a hidden card").to_owned(),
                 option: Candidate::Object {
