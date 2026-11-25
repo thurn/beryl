@@ -266,7 +266,24 @@ class Exporter:
         the one Beryl puts in place unasked, so the scenario cannot name that answer."""
         if self.scry is not None and self.scry[2]:
             raise Unsupported("ordering a scry's cards on top")
+        # Beryl ends a scry unasked once every card is picked for the bottom, so no Done answer
+        # follows to queue XMage's one pick of the bottom cards.
+        if self.scry is not None and self.scry[1]:
+            self.queue_scry_bottom()
         self.scry = None
+
+    def queue_scry_bottom(self) -> None:
+        """Queues XMage's one answer to the scry's bottom pick: the cards picked, or a skip for
+        none, and forgets them so that a scry is answered once."""
+        assert self.scry is not None
+        who, picked, _ = self.scry
+        # XMage also asks the order of two or more cards for the bottom, which Beryl sets unasked.
+        if len(picked) > 1:
+            raise Unsupported("ordering a scry's cards on the bottom")
+        bottom = "^".join(picked)
+        skip = "TestPlayer.TARGET_SKIP"
+        self.emit(f"addTarget({who}, {java_string(bottom) if bottom else skip});")
+        picked.clear()
 
     def arrange(self) -> None:
         self.emit("removeAllCardsFromLibrary(playerA);")
@@ -593,11 +610,7 @@ class Exporter:
             if card is not None:
                 self.scry[1].append(card)
             else:
-                bottom = "^".join(self.scry[1])
-                skip = "TestPlayer.TARGET_SKIP"
-                self.emit(
-                    f"addTarget({who}, {java_string(bottom) if bottom else skip});"
-                )
+                self.queue_scry_bottom()
         elif self.scry is not None and kind == "ChooseObject" and card is not None:
             self.scry[2].append(card)
         elif (
