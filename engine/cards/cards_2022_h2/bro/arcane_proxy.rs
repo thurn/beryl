@@ -117,6 +117,44 @@ pub mod scenarios {
                 ME.has(Zone::Hand, TWO, 0),
                 ME.life(20),
             ]),
+        // Only the Proxy entering triggers it: after it was cast and its ability resolved, a
+        // creature spell that resolves beside it does not trigger the ability again, though a
+        // card of mana value 2 is still in the graveyard to target. The printed face and the
+        // prototyped face each carry their own copy of the ability.
+        Scenario::new("another permanent entering beside a prototyped Proxy does not trigger it")
+            .interaction(&[TWO, Card::Ornithopter])
+            .battlefield(P0, &[ISLAND; 3])
+            .hand(P0, &[PROXY, Card::Ornithopter])
+            .graveyard(P0, &[TWO, TWO])
+            .actions(&[
+                prototyped(),
+                Resolve,
+                Resolve,
+                ME.answers(DecisionKind::CastOffer, Pick::Pass),
+                ME.casts(Card::Ornithopter),
+                Resolve,
+                ME.controls(Card::Ornithopter, 1),
+                ME.has(Zone::Graveyard, TWO, 1),
+                stack(0),
+            ]),
+        Scenario::new(
+            "another permanent entering beside a Proxy cast normally does not trigger it",
+        )
+        .interaction(&[TWO, Card::Ornithopter])
+        .battlefield(P0, &[ISLAND; 7])
+        .hand(P0, &[PROXY, Card::Ornithopter])
+        .graveyard(P0, &[TWO, TWO])
+        .actions(&[
+            ME.casts(PROXY),
+            Resolve,
+            Resolve,
+            ME.answers(DecisionKind::CastOffer, Pick::Pass),
+            ME.casts(Card::Ornithopter),
+            Resolve,
+            ME.controls(Card::Ornithopter, 1),
+            ME.has(Zone::Graveyard, TWO, 1),
+            stack(0),
+        ]),
         // Ruling: "A prototype card is a colorless card in every zone except the stack or the
         // battlefield". In hand the Proxy is not blue, so Force of Will cannot exile it to
         // pay its alternative cost: P0 has nothing to cast, and Lightning Bolt resolves with

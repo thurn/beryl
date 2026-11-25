@@ -63,6 +63,14 @@ const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
          controller to choose new targets for",
     ),
     (
+        "Arcane Proxy",
+        "casting option 0",
+        "drop",
+        "a prototyped cast reads the prototype option of the prototyped face, which keeps its \
+         own list, so the printed face's copy of the option only makes the definition expect \
+         a prototyped face and no game reads it",
+    ),
+    (
         "Mister Immortal",
         "ability 0",
         "under Players::You",
