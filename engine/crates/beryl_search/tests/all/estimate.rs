@@ -68,3 +68,19 @@ fn an_extra_turn_or_combat_is_worth_more_than_a_vanilla_creature_of_its_mana_val
     assert!(turn > bears, "{turn} {bears}");
     assert!(combat > giant, "{combat} {giant}");
 }
+
+/// A transforming card is worth more than its front alone. Delver of Secrets is a 1/1 for {U}
+/// that may become a 3/2 flyer, Savannah Lions a 2/1 for {W}: valued by its front, Delver was
+/// worth less than the Lions under both tiers of card knowledge.
+#[test]
+fn a_transforming_card_is_worth_more_than_its_front() {
+    for knowledge in [Knowledge::Estimate, Knowledge::Tuned] {
+        let cards = [names::DELVER_OF_SECRETS, "Savannah Lions"];
+        let deck: Vec<_> = cards.iter().map(|&card| (1, card)).collect();
+        let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [&deck, &deck]).unwrap();
+        let values = CardValues::with(&t, knowledge);
+        let [delver, lions] =
+            cards.map(|name| values.get(t.index_named::<CardIx>(name).unwrap()).value);
+        assert!(delver > lions, "{knowledge:?}: {delver} {lions}");
+    }
+}

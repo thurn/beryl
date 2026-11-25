@@ -58,6 +58,26 @@ fn turn_and_game_deck(seed: u64) -> Vec<(u8, &'static str)> {
     fuzz_deck_from(seed, &cards)
 }
 
+/// A fuzz deck of one keystone family of card shapes and face-down cards, the family chosen by
+/// the seed: split cards and fuse, Adventures, prepared and modal double-faced cards, a
+/// prototype, transforming, flipping and melding permanents, a Saga, a Class, a Case, a leveler
+/// and morph, each family's cards in every deck of it.
+fn card_shape_deck(seed: u64) -> Vec<(u8, &'static str)> {
+    const FAMILIES: &[&str] = &[
+        "split",
+        "casting",
+        "turn-in-place",
+        "meld",
+        "sagas",
+        "designations",
+        "face-down",
+    ];
+    // The second deck of a game is dealt from the seed plus 2^32 (`Fuzz::session`), so the
+    // family comes from the low 32 bits, which both decks share.
+    let family = FAMILIES[(seed & 0xFFFF_FFFF) as usize % FAMILIES.len()];
+    fuzz_deck_from(seed, &keystone_family(family).expect("a keystone family"))
+}
+
 /// The choices of a game as both seats take them, shared by the agent in the other seat and
 /// the loop answering the human: the choices to take, and the indices taken so far.
 #[derive(Clone, Default)]
@@ -276,6 +296,18 @@ fn session_games_keep_the_script_checks() {
 /// ([`turn_and_game_deck`]), so that the session's views and scripts meet a repeated step, an
 /// ended turn, an extra turn, a restart and a subgame far more often than in decks dealt from
 /// every card.
+/// The same, with decks dealt from the keystone families of card shapes and face-down cards
+/// ([`card_shape_deck`]), so that the session's views and scripts meet split, fused, Adventure,
+/// prototyped, transformed, flipped, melded and face-down cards, Sagas, Classes and Cases far
+/// more often than in decks dealt from every card.
+#[test]
+#[ignore = "a handful of session games: `just fuzz` plays them"]
+fn card_shape_keystone_games_keep_the_script_checks() {
+    if let Some((game, why)) = shrink(games(3), MOST_CHOICES, rng(), card_shape_deck) {
+        panic!("{}", report(&game, &why));
+    }
+}
+
 #[test]
 #[ignore = "a handful of session games: `just fuzz` plays them"]
 fn turn_and_game_keystone_games_keep_the_script_checks() {

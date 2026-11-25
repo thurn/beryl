@@ -36,7 +36,7 @@ pub type Step = fn(Value, &'static CardTable) -> Result<Value, SessionError>;
 /// [`FORMAT_VERSION`] less one.
 pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] = [
     v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_to_v7, v7_to_v8, v8_to_v9, v9_to_v10,
-    v10_to_v11, v11_to_v12, v12_to_v13,
+    v10_to_v11, v11_to_v12, v12_to_v13, v13_to_v14,
 ];
 
 /// `file`, a replay file of any version this build knows, in the format it writes. `cards`
@@ -308,6 +308,17 @@ fn v12_to_v13(mut file: Value, _: &'static CardTable) -> Result<Value, SessionEr
     Ok(file)
 }
 
+/// Version 13 to 14: version 14 names the face up of an object whose front is not up and a
+/// permanent's Class level, solved and prepared designations ([`crate::save::Obj::face`],
+/// [`crate::save::Obj::designations`]). Each object a version 13 answer names is marked as
+/// named before version 14 ([`crate::save::Obj::before_v14`]), which replay matches with an
+/// object whatever they are, as version 13 did.
+fn v13_to_v14(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
+    mark_objects(&mut file, "beforeV14");
+    set_version(&mut file, 14)?;
+    Ok(file)
+}
+
 /// Marks each object `file`'s answers name, what has a zone and a controller, with `field`.
 fn mark_objects(file: &mut Value, field: &str) {
     fn mark(value: &mut Value, field: &str) {
@@ -549,6 +560,20 @@ mod tests {
         expected["formatVersion"] = 13.into();
         expected["log"][0]["choice"]["act"]["creature"]["beforeV13"] = true.into();
         assert_eq!(v13, expected);
+    }
+
+    #[test]
+    fn version_13_to_14_marks_the_objects_answers_name() {
+        let bear = json!({ "name": "Grizzly Bears", "zone": "battlefield", "controller": 0 });
+        let v13 = json!({ "formatVersion": 13, "seed": 1, "log": [
+            { "choice": { "index": 0, "player": 0, "turn": 3, "step": "declareAttackers",
+                "kind": "attacker", "act": { "act": "attack", "creature": bear } } },
+        ] });
+        let v14 = v13_to_v14(v13.clone(), &CARDS).unwrap();
+        let mut expected = v13;
+        expected["formatVersion"] = 14.into();
+        expected["log"][0]["choice"]["act"]["creature"]["beforeV14"] = true.into();
+        assert_eq!(v14, expected);
     }
 
     #[test]

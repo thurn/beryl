@@ -4,6 +4,7 @@
 mod common;
 
 mod agents;
+mod card_shapes;
 mod estimate;
 mod expert;
 mod families;

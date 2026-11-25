@@ -124,6 +124,16 @@ pub fn render_ability_of(def: &CardDef, face: FaceIx, ability: &Ability) -> Stri
     ctx.paragraph(ability)
 }
 
+/// The keyword line of casting option `option` of a face of `def`, as [`render_face`]
+/// writes it, as "Morph {2}{W}{W}" or "Morph—Discard a card.": for a special action the
+/// option allows later, as turning a face-down permanent face up for its morph cost, which
+/// the face's printed text says only as that line. None for an option with no line, as fuse.
+pub fn render_casting_option(def: &CardDef, face: FaceIx, option: CastingOption) -> Option<String> {
+    let mut ctx = Ctx::of_face(def.face(face), def.face_name(face));
+    ctx.meld = def.shape.meld_pair();
+    casting_line(&mut ctx, option, true).or_else(|| casting_line(&mut ctx, option, false))
+}
+
 /// The mana two mana abilities add together, when Oracle text prints them as one: the same
 /// cost, the same amount and no restriction, as "{T}: Add {W} or {U}." says either
 /// ([CR 106.3](https://yawgatog.com/resources/magic-rules/#R1063)).

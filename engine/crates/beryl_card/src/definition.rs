@@ -193,7 +193,7 @@ impl FaceIx {
     pub const DOWN: FaceIx = FaceIx(u8::MAX);
 
     /// The index in [`CardDef::faces`], as wire formats write it.
-    pub fn get(self) -> u8 {
+    pub const fn get(self) -> u8 {
         self.0
     }
 }

@@ -58,7 +58,7 @@ pub struct ReplayFile {
 }
 
 /// The format this build writes. Raising it adds a migration ([`crate::migrate`]).
-pub const FORMAT_VERSION: u8 = 13;
+pub const FORMAT_VERSION: u8 = 14;
 
 fn version_1() -> u8 {
     1

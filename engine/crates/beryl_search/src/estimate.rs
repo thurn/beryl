@@ -14,21 +14,21 @@
 use std::cell::Cell;
 
 use beryl_engine::card::{
-    AbilityKind, Amount, Behavior, CardDef, Effect, Modification, Objects, Players, Recipients,
-    Taken, TriggerEvent, Types,
+    AbilityKind, Amount, Behavior, CardDef, Effect, Face, Modification, Objects, Players,
+    Recipients, Taken, TriggerEvent, Types,
 };
 use beryl_engine::{TurnPhase, Zone};
 
 /// What [`estimate`] counts of a card. Each field is a whole number of the thing it names.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct CardFeatures {
-    /// The front face's mana value.
+    /// The face's mana value.
     pub mana_value: i16,
-    /// A creature front face's power plus toughness.
+    /// A creature face's power plus toughness.
     pub body: i16,
-    /// The front face's keyword abilities, such as flying and flash.
+    /// The face's keyword abilities, such as flying and flash.
     pub keywords: i16,
-    /// A planeswalker front face's starting loyalty.
+    /// A planeswalker face's starting loyalty.
     pub loyalty: i16,
     /// 1 for a land, which is played rather than cast.
     pub land: i16,
@@ -92,9 +92,15 @@ mod weight {
     pub const TURNS: i32 = 800;
 }
 
-/// The card's estimated value, from what its definition says it does.
+/// The card's estimated value, from what its definition says it does: each face estimated
+/// on its own and the faces combined by the card's shape ([`crate::values::by_shape`]).
 pub(crate) fn estimate(def: &CardDef) -> i16 {
-    let f = features(def);
+    crate::values::by_shape(def, estimate_face)
+}
+
+/// One face's estimated value, as if it were a card with that one face.
+fn estimate_face(face: &Face) -> i16 {
+    let f = features(face);
     let hundredths = weight::BASE
         + weight::MANA_VALUE * i32::from(f.mana_value)
         + weight::BODY * i32::from(f.body)
@@ -113,14 +119,12 @@ pub(crate) fn estimate(def: &CardDef) -> i16 {
     i16::try_from((hundredths / 100).clamp(0, i32::from(i16::MAX))).unwrap_or(i16::MAX)
 }
 
-/// What [`estimate`] counts of `def`. Stats come from the front face; abilities from every
-/// face, since a transforming card's back face is part of what it does.
+/// What [`estimate`] counts of one face: its stats and its abilities.
 ///
-/// A card with several spell abilities, such as a spell with an overload ability, does one of
+/// A face with several spell abilities, such as a spell with an overload ability, does one of
 /// them when cast, so each count takes the most any one of them gives; every other ability
 /// adds to the counts.
-pub(crate) fn features(def: &CardDef) -> CardFeatures {
-    let front = def.front();
+pub(crate) fn features(front: &Face) -> CardFeatures {
     let is = |types: Types| front.types.intersects(types);
     let mut f = CardFeatures {
         mana_value: i16::from(front.cost.mana_value()),
@@ -138,7 +142,7 @@ pub(crate) fn features(def: &CardDef) -> CardFeatures {
     }
     let mut spell = Effects::default();
     let mut others = Effects::default();
-    for a in def.faces.iter().flat_map(|face| face.abilities) {
+    for a in front.abilities {
         match a.kind() {
             AbilityKind::Mana => f.mana = f.mana.max(i16::from(a.produces().amount)),
             AbilityKind::Activated => f.repeatable += 1,

@@ -1364,3 +1364,27 @@ fixed in the same session. Newest first.
   `data/ui-conventions.json`. No guard sees what `tsc` or prettier read, since
   they run as subprocesses that a Python audit hook cannot watch, so their
   inputs stay a hand-kept list.
+
+- **The search dealt any card into a face-down creature cast through Illusionary
+  Mask.** An opponent's face-down permanent that Illusionary Mask cast must be a
+  creature card, which every player knows, but the determinization the hidden
+  search plays its worlds from (`Observation::determinize`) dealt it any card of
+  the opponent's remaining deck, often a land or an instant. It also took the
+  spell on the stack for a morph and looked for a card with a morph ability.
+  Fixed: `observation.rs` reads what the way a card was cast face down shows of
+  it (`FaceDownEvidence`): a card that remembers it turns face up as it is used
+  is dealt from the creature cards, and a morph from the cards with morph.
+  Prevention: `beryl_session/tests/face_down.rs` deals the opponent's view of a
+  Mask-cast creature on the stack and on the battlefield and holds every deal to
+  a creature card. No type ties a face-down cast to its evidence, so a new way
+  of casting face down must add its own case.
+
+- **The greedy agent activated Illusionary Mask for X = 0 until the turn ran
+  out.** With its lands tapped, the rollout policy scored the Mask's activation
+  like any other, and with no mana for X the activation asks no question, so the
+  agent activated it again at every priority and the game stalled on the
+  per-turn decision limit. Fixed: the policy does not activate an ability with
+  {X} in its cost while it has no untapped mana source to spare beyond the rest
+  of the cost. Prevention: `beryl_search/tests/all/card_shapes.rs` plays the
+  game that stalled, and every agent plays a game of each card-shape keystone
+  family in `ignite check`.

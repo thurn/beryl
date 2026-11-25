@@ -6,7 +6,8 @@
 //! index (§6.4), so a decision reads it with one load.
 
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Effect, Face, Keywords, SpecIx, TriggerEvent, Types,
+    Ability, AbilityKind, Behavior, CardDef, CardShape, Effect, Face, Keywords, SpecIx,
+    TriggerEvent, Types,
 };
 use beryl_engine::query::DefinitionKey;
 use beryl_engine::{CardId, CardIx, GameTable, LargeCardIx};
@@ -145,7 +146,7 @@ pub(crate) fn info(def: &CardDef, knowledge: Knowledge) -> CardInfo {
     match knowledge {
         Knowledge::Estimate => info.value = estimate(def),
         Knowledge::Tuned | Knowledge::Fitted => {
-            info.value = shown(def.front());
+            info.value = by_shape(def, shown);
             overlay::apply(def, &mut info);
         }
     }
@@ -214,6 +215,35 @@ fn draws(a: &Ability, e: &Effect) -> bool {
 /// so it belongs on its controller's side although its filter allows either side.
 fn helps_first_target(a: &Ability, e: &Effect) -> bool {
     !a.targets().is_empty() && e.helps_target(SpecIx::new(0))
+}
+
+/// A card's value from the value of each of its faces (`face_value`), combined by its shape
+/// so that no card with two faces is valued as its front alone:
+///
+/// - An Adventure or a prepared card gives its owner both faces, the spell and then the
+///   creature, so it is worth both together.
+/// - A transforming or flipping card starts as its front and may become its back, so it is
+///   worth the mean of the two.
+/// - A split, modal double-faced or prototype card is cast as one of its faces (or, with
+///   fuse, as the combined spell), so it is worth its best face.
+///
+/// A card with one face is worth that face, so the values of single-faced cards, the only
+/// kind the WU Control mirror holds, are what they were.
+pub(crate) fn by_shape(def: &CardDef, face_value: impl Fn(&Face) -> i16) -> i16 {
+    let faces = def.faces.iter().map(&face_value);
+    match def.shape {
+        CardShape::Adventure | CardShape::Prepared => faces.fold(0, i16::saturating_add),
+        CardShape::Transforming | CardShape::Flip => {
+            let sum: i32 = faces.map(i32::from).sum();
+            let mean = sum / i32::try_from(def.faces.len().max(1)).unwrap_or(1);
+            i16::try_from(mean).unwrap_or(i16::MAX)
+        }
+        CardShape::Single
+        | CardShape::Modal
+        | CardShape::Split { .. }
+        | CardShape::Meld { .. }
+        | CardShape::Melded => faces.max().unwrap_or(0),
+    }
 }
 
 /// A value from what the face shows, for cards and tokens the overlay has no value for under

@@ -11,9 +11,11 @@
 //! as the sacrifice trigger of evoke is where Oracle text prints no reminder text.
 //! For those the session sends the definition's own text, as `beryl_card::render` writes it.
 
-use beryl_card::render::{render_ability, render_ability_of, render_face_read};
+use beryl_card::render::{
+    render_ability, render_ability_of, render_casting_option, render_face_read,
+};
 use beryl_card_store::STORE;
-use beryl_engine::card::{FaceAbility, FaceIx, Words};
+use beryl_engine::card::{CastingOption, FaceAbility, FaceIx, Words};
 use beryl_engine::{CardId, GameTable};
 
 use super::outcome::ability_ref;
@@ -46,6 +48,21 @@ pub(super) fn unprinted(
         Some(text) if usize::from(at.nth) < paragraphs(&text, at) => None,
         _ => Some(render_ability_of(def, face, ability)),
     }
+}
+
+/// The words of the special action that turns a face-down permanent of `card` face up: its
+/// morph line ([CR 702.37e](https://yawgatog.com/resources/magic-rules/#R70237e)), which
+/// names the cost. None for a card with no morph ability, as a manifested card turned up for
+/// its mana cost, which no text of the card says.
+pub(super) fn turn_face_up(t: &GameTable, card: impl CardId) -> Option<String> {
+    let def = t.def(card);
+    let morph = def
+        .front()
+        .casting
+        .iter()
+        .copied()
+        .find(|option| matches!(option, CastingOption::Morph(_)))?;
+    render_casting_option(def, FaceIx::FRONT, morph)
 }
 
 /// The rules text and type line of face `face` of `card` as `words` read them, when a text

@@ -70,6 +70,10 @@ pub struct Described {
 /// A [`Chosen`] as a file holds it: a bare index (version 1) or the whole description.
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "a file's form of an answer, read and converted to a `Chosen` at once"
+)]
 enum ChosenFile {
     Index(u16),
     Described {
@@ -518,9 +522,9 @@ impl Act {
     /// that `named` describes it alike: without what that version did not record.
     fn named_like(mut self, named: &Act) -> Act {
         if let Some(o) = named.object() {
-            let (before_v5, before_v6, before_v13) = (o.before_v5, o.before_v6, o.before_v13);
+            let before = obj::Before::of(o);
             if let Some(o) = self.object_mut() {
-                o.name_like(before_v5, before_v6, before_v13);
+                o.name_like(before);
             }
         }
         if let (Act::Trigger { ability, .. }, Act::Trigger { ability: None, .. }) =

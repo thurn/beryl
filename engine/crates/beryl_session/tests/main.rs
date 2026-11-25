@@ -21,6 +21,7 @@ mod asks;
 mod cancel;
 mod candidates;
 mod card_records;
+mod card_shapes;
 mod chance;
 mod checkpoints;
 mod chosen_values;

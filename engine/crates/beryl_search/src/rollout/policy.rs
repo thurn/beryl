@@ -328,6 +328,13 @@ impl<L: Layout> Policy<'_, L> {
             };
         }
         let a = &self.t.def(card).face(o.face()).abilities[usize::from(i)];
+        // An ability with {X} in its cost activated with no mana to spare for X is activated
+        // for X = 0, which does the least the ability can, and could be activated so again and
+        // again, as Illusionary Mask's would offer only cards that cost nothing each time.
+        let mana = a.cost().mana;
+        if mana.x > 0 && self.untapped_mana_sources() <= usize::from(mana.mana_value()) {
+            return 0;
+        }
         let v = match a.cost().loyalty_change() {
             Some(l) if l >= 0 => 20,
             Some(l) if l <= -8 => 200,
@@ -336,6 +343,29 @@ impl<L: Layout> Policy<'_, L> {
             None => 15,
         };
         self.worth_targeting(a, info.friendly(i), v, false)
+    }
+
+    /// How many untapped permanents of ours have a mana ability on their face up: about the
+    /// most mana we could pay now.
+    fn untapped_mana_sources(&self) -> usize {
+        self.obs
+            .battlefield()
+            .iter()
+            .filter(|&&slot| {
+                let o = self.obs.object(slot);
+                self.obs.controller(slot) == self.me
+                    && !o.is_tapped()
+                    && o.face() != FaceIx::DOWN
+                    && self.obs.card(slot).is_some_and(|card| {
+                        self.t
+                            .def(card)
+                            .face(o.face())
+                            .abilities
+                            .iter()
+                            .any(|a| a.kind() == AbilityKind::Mana)
+                    })
+            })
+            .count()
     }
 
     /// Whether drawing by choice is safe: our library holds more than [`LIBRARY_LOW`] cards,

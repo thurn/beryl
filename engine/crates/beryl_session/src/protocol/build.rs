@@ -1,8 +1,8 @@
 //! Building a [`PlayerView`] from one player's [`Observation`].
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CastingOption, FaceAbility, FaceIx, Keywords, Measure, Part, Purpose,
-    Shape, Types,
+    Ability, AbilityKind, CastingOption, Designation, FaceAbility, FaceIx, Keywords, Measure, Part,
+    Purpose, Shape, Types,
 };
 use beryl_engine::event::{Event, LossCause};
 use beryl_engine::layout::Queue;
@@ -16,10 +16,10 @@ use beryl_engine::{
 };
 
 use super::{
-    CardHandling, CardType, Combat, CounterView, DecisionId, Facing, Keyword, ManaPool, ObjectId,
-    ObjectView, PaidCost, PlayerState, PlayerView, Players, PowerToughness, Side, StackItem,
-    Status, StopsSetting, TargetRef, TurnView, decision_view, game_events, halt_view, outcome_view,
-    own_number,
+    CardHandling, CardType, Combat, CounterView, DecisionId, DesignationView, Facing, Keyword,
+    ManaPool, ObjectId, ObjectView, PaidCost, PlayerState, PlayerView, Players, PowerToughness,
+    Side, StackItem, Status, StopsSetting, TargetRef, TurnView, decision_view, game_events,
+    halt_view, outcome_view, own_number,
 };
 
 /// Where the game stands, as the session knows it: what [`player_view`] turns into a [`Status`].
@@ -471,7 +471,49 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         named_counters: Vec::new(),
         doesnt_untap: false,
         hidden_pick: obs.hidden_picks().contains(slot),
+        designations: if on_battlefield {
+            designations(t, obs, slot)
+        } else {
+            Vec::new()
+        },
     }
+}
+
+/// The designations of the permanent in `slot` that the view shows ([`DesignationView`]): a
+/// Class's level, from its memo or 1 without one, solved and prepared. Designations are public.
+fn designations<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    slot: L::Slot,
+) -> Vec<DesignationView> {
+    let mut out = Vec::new();
+    let face = obs.object(slot).face();
+    let class = face != FaceIx::DOWN
+        && obs.card(slot).is_some_and(|card| {
+            t.def(card)
+                .face(face)
+                .abilities
+                .iter()
+                .any(|a| matches!(a.designation(), Designation::LevelUp(_)))
+        });
+    let memos = obs.memos(slot);
+    if class {
+        let level = memos
+            .iter()
+            .find_map(|memo| match memo {
+                Memo::ClassLevel(level) => Some(level),
+                _ => None,
+            })
+            .unwrap_or(1);
+        out.push(DesignationView::Level { level });
+    }
+    if memos.iter().any(|memo| memo == Memo::Solved) {
+        out.push(DesignationView::Solved);
+    }
+    if memos.iter().any(|memo| matches!(memo, Memo::Prepared(_))) {
+        out.push(DesignationView::Prepared);
+    }
+    out
 }
 
 /// The name of the card the permanent in `slot` really is, when a copy effect shows another

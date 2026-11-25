@@ -367,6 +367,27 @@ pub struct ObjectView {
     /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hidden_pick: bool,
+    /// On the battlefield: the designations it has that no counter or status shows, a
+    /// Class's level, a solved Case and a prepared creature, in that order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub designations: Vec<DesignationView>,
+}
+
+/// A designation a permanent has. A designation is not a characteristic, a counter or a
+/// status, so nothing else in an [`ObjectView`] shows it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum DesignationView {
+    /// A Class's level. A Class without a level designation is at level 1 ([CR 717.2d]): "it
+    /// is treated as though its level is 1." Shown for every Class, level 1 included.
+    ///
+    /// [CR 717.2d]: https://yawgatog.com/resources/magic-rules/#R7172d
+    Level { level: u8 },
+    /// A Case that is solved ([CR 720.3b](https://yawgatog.com/resources/magic-rules/#R7203b)).
+    Solved,
+    /// A prepared creature ([CR 723.1](https://yawgatog.com/resources/magic-rules/#R7231)),
+    /// whose controller may cast the copy of its prepare spell in exile.
+    Prepared,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

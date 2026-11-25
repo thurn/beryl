@@ -1147,6 +1147,28 @@ multiset of card indices. They have no slots.
   session's best-of-three match and sideboarding between games are not part of
   this plan.
 
+**Agents and the session.** The engine offers one cast option for each face and
+set of casting options of each card that is not interchangeable with another
+(`decision::collapse`), and a search keys each option by its face and options,
+so two ways of casting one card are two candidates and two identical cards are
+one. A card's value combines its faces by its shape (`values::by_shape`): an
+Adventure or a prepared card is worth both faces, a transforming or flipping
+card the mean of its two, and a split, modal or prototype card its best face,
+under the estimate and the tuned values alike. The hidden search deals an
+opponent's face-down card from what its cast shows: a morph has morph, and a
+card cast through Illusionary Mask is a creature card. The rollout policy does
+not activate an ability with {X} with no mana to spare for X.
+`beryl_search/tests/all/card_shapes.rs` plays a game of each family with the
+greedy agent, the expert and MCTS. The view shows a Class's level and the solved
+and prepared designations (`ObjectView::designations`), and a candidate that
+turns a morph face up carries its morph line. A save names an object's face when
+it is not the front and its designations (save format 14).
+`beryl_session/tests/card_shapes.rs` cuts a save at each new shape state of each
+keystone and replays it under every perturbation. A session's game has no
+sideboards, so neither a wish nor a companion can be played in the app yet, and
+the census counts chapters, morph, Classes, level up, prototype, fuse,
+companions, meld and manifest dread as covered.
+
 ## The keystone cards
 
 | Group               | Keystone                  | Partners                                        |

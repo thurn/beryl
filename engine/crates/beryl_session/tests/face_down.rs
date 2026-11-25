@@ -211,6 +211,86 @@ fn morphs_hide_the_card_on_the_stack_and_in_saved_targets() {
     assert_saved_face_down_target(&SCENARIO, &table, &saved);
 }
 
+/// A card cast face down through Illusionary Mask must be a creature card, which everyone
+/// knows, so the search's determinization of the opponent's view deals only creature cards
+/// into its slot, on the stack and on the battlefield, though most of the rest of its owner's
+/// deck is not creatures.
+#[test]
+fn a_card_cast_face_down_through_a_mask_is_dealt_as_a_creature() {
+    use beryl_cards::names::{ILLUSIONARY_MASK, LIGHTNING_BOLT, MOUNTAIN, PLAINS};
+    use beryl_engine::DecisionKind;
+    use beryl_engine::card::{FaceIx, Types};
+    use beryl_engine::rng::SplitMix64;
+    use beryl_scenario::prelude::{ME, Resolve};
+    use beryl_scenario::{P0, P1, Scenario};
+
+    /// A 2/10 creature card for {2}{W}{W}.
+    const INDOMITABLE_ANCIENTS: &str = "Indomitable Ancients";
+    const SCENARIO: Scenario = Scenario::new("Illusionary Mask casts a creature face down")
+        .battlefield(P0, &[ILLUSIONARY_MASK, PLAINS, PLAINS, PLAINS, PLAINS])
+        .hand(P0, &[INDOMITABLE_ANCIENTS])
+        .library(
+            P0,
+            &[LIGHTNING_BOLT, MOUNTAIN, LIGHTNING_BOLT, MOUNTAIN, PLAINS],
+        )
+        .battlefield(P1, &[MOUNTAIN])
+        .actions(&[
+            ME.activates(ILLUSIONARY_MASK, 0),
+            ME.x(4),
+            Resolve,
+            ME.chooses(DecisionKind::CastOffer, INDOMITABLE_ANCIENTS),
+            Resolve,
+            ME.face_down(INDOMITABLE_ANCIENTS, 1),
+            ME.passes(),
+        ]);
+    /// Deals the opponent's view of each face-down card at each decision.
+    struct Deals {
+        rng: SplitMix64,
+        checked: [u32; 2],
+    }
+    impl beryl_scenario::DecisionVisitor for Deals {
+        fn decision<L: beryl_engine::Layout>(
+            &mut self,
+            t: &beryl_engine::GameTable,
+            s: &beryl_engine::State<L>,
+            _: &beryl_engine::Decision<L>,
+        ) {
+            let obs = Observation::new(s, P1);
+            let on_stack = s
+                .stack()
+                .iter()
+                .filter(|e| e.face() == FaceIx::DOWN)
+                .filter_map(beryl_engine::state::StackEntry::spell)
+                .map(|spell| (0, spell.slot));
+            let on_battlefield = s
+                .battlefield()
+                .iter()
+                .filter(|&&slot| s.object(slot).face() == FaceIx::DOWN)
+                .map(|&slot| (1, slot));
+            for (zone, slot) in on_stack.chain(on_battlefield).collect::<Vec<_>>() {
+                for _ in 0..16 {
+                    let det = obs.determinize(t, &mut self.rng);
+                    let card = det.card_def(t, slot).unwrap();
+                    assert!(
+                        card.front().types.intersects(Types::CREATURE),
+                        "dealt {} face down",
+                        card.name
+                    );
+                }
+                self.checked[zone] += 1;
+            }
+        }
+    }
+    let mut deals = Deals {
+        rng: SplitMix64::new(5),
+        checked: [0; 2],
+    };
+    beryl_scenario::visit_with_layout(&CARDS, &SCENARIO, &mut deals)
+        .unwrap_or_else(|e| panic!("{e}"));
+    let checked = deals.checked;
+    assert!(checked.iter().all(|&n| n > 0), "{checked:?}");
+}
+
 fn assert_saved_face_down_target(
     scenario: &beryl_scenario::Scenario,
     table: &beryl_engine::GameTable,

@@ -122,7 +122,8 @@ pub struct CandidateView {
     pub nth: Option<u8>,
     /// For a candidate that activates an ability or puts a waiting trigger on the stack: the
     /// ability's rules text, when the printed text of its face has no paragraph for it, as
-    /// [`StackItem::Ability`]'s `text` says. None otherwise.
+    /// [`StackItem::Ability`]'s `text` says. For one that turns a face-down permanent face up
+    /// for its morph cost: the morph line, as "Morph {2}{W}{W}". None otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
     /// For a candidate that announces one or more targets: what the first of them may be, one

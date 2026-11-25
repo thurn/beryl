@@ -1,7 +1,7 @@
 //! How a save names an object ([`Obj`]) and its zone ([`ZoneName`]).
 
 use beryl_engine::card::{FaceIx, Types};
-use beryl_engine::state::Flag;
+use beryl_engine::state::{Flag, Memo};
 use beryl_engine::{GameTable, Layout, State, Zone};
 use serde::{Deserialize, Serialize};
 
@@ -105,6 +105,58 @@ pub struct Obj {
     /// are.
     #[serde(default, rename = "beforeV13", skip_serializing_if = "is_false")]
     pub before_v13: bool,
+    /// The face up, by its index in the card's definition, where it is not the front but
+    /// has the front's name, since version 14: a prototyped Arcane Proxy keeps the card's
+    /// name but is a 2/1 with mana value 3 ([CR 719.3b]). Any other face up that is not the
+    /// front, as a transformed permanent's or an Adventure's, has a name of its own, which
+    /// [`Obj::name`] already gives.
+    ///
+    /// [CR 719.3b]: https://yawgatog.com/resources/magic-rules/#R7193b
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face: Option<u8>,
+    /// A permanent's designations that change what it does, since version 14: a Class's
+    /// level above 1, solved and prepared.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub designations: Vec<Designated>,
+    /// Named by a version 13 save or older, which names neither the face up nor the
+    /// designations: replay takes an object whatever they are.
+    #[serde(default, rename = "beforeV14", skip_serializing_if = "is_false")]
+    pub before_v14: bool,
+}
+
+/// A designation of a permanent, as a save names it ([`Obj::designations`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Designated {
+    /// A Class's level, from 2 up ([CR 717.2d]): without a level it "is treated as though
+    /// its level is 1."
+    ///
+    /// [CR 717.2d]: https://yawgatog.com/resources/magic-rules/#R7172d
+    Level(u8),
+    /// A solved Case ([CR 720.3b](https://yawgatog.com/resources/magic-rules/#R7203b)).
+    Solved,
+    /// A prepared creature, whose prepare spell's copy its controller may cast.
+    Prepared,
+}
+
+impl Designated {
+    /// The designations of the permanent in `slot`, in the order of [`Designated`].
+    fn on<L: Layout>(s: &State<L>, slot: L::Slot) -> Vec<Designated> {
+        let memos = s.memos(slot);
+        let level = memos.iter().find_map(|memo| match memo {
+            Memo::ClassLevel(level) => Some(Designated::Level(level)),
+            _ => None,
+        });
+        let solved = memos
+            .iter()
+            .any(|memo| memo == Memo::Solved)
+            .then_some(Designated::Solved);
+        let prepared = memos
+            .iter()
+            .any(|memo| matches!(memo, Memo::Prepared(_)))
+            .then_some(Designated::Prepared);
+        [level, solved, prepared].into_iter().flatten().collect()
+    }
 }
 
 impl Obj {
@@ -156,12 +208,34 @@ impl Obj {
                 .map(|other| public_name(other).to_owned()),
             before_v6: false,
             before_v13: false,
+            face: (!hidden
+                && o.face() != FaceIx::FRONT
+                && s.card_def(t, slot)
+                    .is_some_and(|def| def.face_name(o.face()) == def.face_name(FaceIx::FRONT)))
+            .then(|| o.face().get()),
+            designations: if permanent {
+                Designated::on(s, slot)
+            } else {
+                Vec::new()
+            },
+            before_v14: false,
         }
     }
 
-    /// This object as a version before 5, if `before_v5`, before 6, if `before_v6`, or before
-    /// 13, if `before_v13`, named it.
-    pub(super) fn name_like(&mut self, before_v5: bool, before_v6: bool, before_v13: bool) {
+    /// This object as a version before 5, if `before_v5`, before 6, if `before_v6`, before
+    /// 13, if `before_v13`, or before 14, if `before_v14`, named it.
+    pub(super) fn name_like(&mut self, before: Before) {
+        let Before {
+            v5: before_v5,
+            v6: before_v6,
+            v13: before_v13,
+            v14: before_v14,
+        } = before;
+        if before_v14 {
+            self.face = None;
+            self.designations.clear();
+            self.before_v14 = true;
+        }
         if before_v13 {
             self.card = None;
             self.excepts.clear();
@@ -185,6 +259,31 @@ impl Obj {
             self.blocked = false;
             self.against = None;
             self.before_v6 = true;
+        }
+    }
+}
+
+/// Which versions before the one this build writes named an object ([`Obj::name_like`]).
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "one yes or no for each version that named less"
+)]
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct Before {
+    pub v5: bool,
+    pub v6: bool,
+    pub v13: bool,
+    pub v14: bool,
+}
+
+impl Before {
+    /// The versions `o` was named before.
+    pub(super) fn of(o: &Obj) -> Before {
+        Before {
+            v5: o.before_v5,
+            v6: o.before_v6,
+            v13: o.before_v13,
+            v14: o.before_v14,
         }
     }
 }

@@ -266,6 +266,7 @@ fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> 
 /// [`CandidateView::text`].
 fn ability_text<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> Option<String> {
     let (card, face, ability) = match o {
+        Opt::TurnFaceUp(slot) => return super::rules_text::turn_face_up(t, obs.card(slot)?),
         Opt::Activate { slot, ability } => face_ability(obs, slot, ability)?,
         Opt::Trigger(index) => {
             let trigger = obs.triggers()[Into::<usize>::into(index)];

@@ -285,24 +285,22 @@ impl<'a, L: Layout> Observation<'a, L> {
                 }
             }
             rng.shuffle(remainder.as_mut_slice());
-            // Casting face down is public evidence of the card's morph ability.
-            // Choose those unknown cards from the shuffled remainder before filling the
-            // unconstrained slots. No assignment reads the card previously in a slot.
+            // How a card was cast face down is public evidence of what card it is: one cast
+            // for morph has a morph ability, and one cast through Illusionary Mask is a
+            // creature card. Choose those unknown cards from the shuffled remainder before
+            // filling the unconstrained slots. No assignment reads the card previously in a
+            // slot.
             for (position, &slot) in unknown.iter().enumerate() {
-                if !s.requires_morph(slot) {
+                let Some(evidence) = s.face_down_evidence(slot) else {
                     continue;
-                }
+                };
                 let Some(index) = (0..remainder.len()).find(|&i| {
-                    if i < position && s.requires_morph(unknown.as_slice()[i]) {
+                    if i < position && s.face_down_evidence(unknown.as_slice()[i]).is_some() {
                         return false;
                     }
-                    let def = t.def(remainder.as_slice()[i]);
-                    def.front()
-                        .casting
-                        .iter()
-                        .any(|option| matches!(option, beryl_card::CastingOption::Morph(_)))
+                    evidence.admits(t.def(remainder.as_slice()[i]))
                 }) else {
-                    break;
+                    continue;
                 };
                 remainder.as_mut_slice().swap(position, index);
             }
@@ -389,7 +387,7 @@ impl<L: Layout> HiddenPicks<L> {
             }
             let dealt = s.object(slot).card;
             let traded = unknown.iter().any(|&other| {
-                if self.slots.contains(other) || s.requires_morph(other) {
+                if self.slots.contains(other) || s.face_down_evidence(other).is_some() {
                     return false;
                 }
                 let card = s.object(other).card;
@@ -413,9 +411,45 @@ impl<L: Layout> HiddenPicks<L> {
 }
 
 impl<L: Layout> State<L> {
-    /// The public slot in which a spell was cast for morph (see CR 702.37c).
-    fn requires_morph(&self, slot: L::Slot) -> bool {
-        self.object(slot).face == FaceIx::DOWN
-            && (self.object(slot).zone == Zone::Stack || self.morphed(slot))
+    /// What the way the face-down spell or permanent in `slot` was cast shows of its card,
+    /// if it was cast face down at all.
+    fn face_down_evidence(&self, slot: L::Slot) -> Option<FaceDownEvidence> {
+        let o = self.object(slot);
+        if o.face != FaceIx::DOWN {
+            return None;
+        }
+        // A card cast through Illusionary Mask remembers that it turns face up as it is used,
+        // and as a permanent it is morphed too, so this is asked first.
+        if self.turns_up_when_used(slot) {
+            Some(FaceDownEvidence::Creature)
+        } else if o.zone == Zone::Stack || self.morphed(slot) {
+            Some(FaceDownEvidence::Morph)
+        } else {
+            None
+        }
+    }
+}
+
+/// What every player knows of a face-down card from how it was cast.
+#[derive(Clone, Copy)]
+enum FaceDownEvidence {
+    /// Cast for its morph ability: the card has one.
+    Morph,
+    /// Cast face down by an effect that lets only a creature card be cast that way, as
+    /// Illusionary Mask's: the card is a creature card.
+    Creature,
+}
+
+impl FaceDownEvidence {
+    /// Whether `def` could be the card behind the evidence.
+    fn admits(self, def: &beryl_card::CardDef) -> bool {
+        let front = def.front();
+        match self {
+            Self::Morph => front
+                .casting
+                .iter()
+                .any(|option| matches!(option, beryl_card::CastingOption::Morph(_))),
+            Self::Creature => front.types.intersects(beryl_card::Types::CREATURE),
+        }
     }
 }
