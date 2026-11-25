@@ -950,5 +950,10 @@
     "label": "`ignite test` refuses at once a name that no listing holds and that cannot name a new check: a family-shaped prefix that names no family (`rust-test:`), or a test name that no file of the tree holds. Before, each listed every family first: 449 s for `rust-test:<crate>` and 1040 s for a test name no file held (2026-11-25)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A tree over its build ceiling deletes its incremental caches least recently compiled first, only until it is under the target, instead of all of them: jarvis's daemon log held 233 cleanups that deleted every incremental cache, about half of each tree's build output, so the next build compiled the crate being edited from scratch (2026-11-25)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

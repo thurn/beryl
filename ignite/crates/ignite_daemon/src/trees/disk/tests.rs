@@ -288,7 +288,39 @@ fn ceiling_cleanup_stops_after_the_first_stage_that_makes_room() {
         assert_eq!(stages, expected);
         assert_eq!(current.is_file(), stages.len() < 4);
         assert_eq!(unused.is_file(), stages.len() < 2);
-        assert_eq!(profile.join("incremental").exists(), stages.len() < 3);
+        assert_eq!(profile.join("incremental/cache").exists(), stages.len() < 3);
         assert_eq!(target.0.exists(), stages.len() < 4);
     }
+}
+
+#[test]
+fn ceiling_cleanup_keeps_the_incremental_caches_compiled_last() {
+    let target = Target::new();
+    let incremental = target.profile().join("incremental");
+    fs::create_dir_all(target.profile().join(".fingerprint")).unwrap();
+    // Three crates' caches of 100 bytes, compiled at times 1, 2 and 3.
+    for (name, age) in [("old-aaaa", 1), ("middle-bbbb", 2), ("new-cccc", 3)] {
+        let session = incremental.join(name).join("s-session");
+        fs::create_dir_all(&session).unwrap();
+        fs::write(session.join("query-cache.bin"), vec![b'x'; 100]).unwrap();
+        for dir in [session, incremental.join(name)] {
+            fs::File::open(&dir)
+                .unwrap()
+                .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(age))
+                .unwrap();
+        }
+    }
+    // 300 bytes against a ceiling of 260 and a target of 208: one cache must go.
+    let mut stages = Vec::new();
+    super::clean(
+        std::slice::from_ref(&target.0),
+        260,
+        &std::collections::BTreeSet::new(),
+        |stage| stages.push(stage.to_owned()),
+    )
+    .unwrap();
+    assert_eq!(stages, ["incremental caches"]);
+    assert!(!incremental.join("old-aaaa").exists());
+    assert!(incremental.join("middle-bbbb").exists());
+    assert!(incremental.join("new-cccc").exists());
 }

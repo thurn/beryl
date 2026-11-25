@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io::{self, BufRead, BufReader};
 use std::path::{Component, Path, PathBuf};
+use std::time::SystemTime;
 
 use super::{FINGERPRINTS, delete_unit, objects, profile_dirs, remove_output, sweep_superseded};
 
@@ -121,19 +122,23 @@ impl Pass {
         }
     }
 
-    fn clean(self, dir: &Path, used: &BTreeSet<PathBuf>) -> io::Result<()> {
-        match self {
-            Self::Replaced => {
-                objects::sweep_objects(dir);
-                sweep_superseded(dir);
-                Ok(())
-            }
-            Self::Unused => sweep_unused(dir, used),
-            Self::Incremental => profile_dirs(dir)
-                .iter()
-                .try_for_each(|profile| remove_output(&profile.join("incremental"))),
-            Self::All => remove_output(dir),
+    /// Cleans every directory. `excess` is how many bytes must go to get under the target.
+    fn clean(self, dirs: &[PathBuf], used: &BTreeSet<PathBuf>, excess: u64) -> io::Result<()> {
+        if let Self::Incremental = self {
+            return trim_incremental(dirs, excess);
         }
+        for dir in dirs {
+            match self {
+                Self::Replaced => {
+                    objects::sweep_objects(dir);
+                    sweep_superseded(dir);
+                }
+                Self::Unused => sweep_unused(dir, used)?,
+                Self::Incremental => (),
+                Self::All => remove_output(dir)?,
+            }
+        }
+        Ok(())
     }
 }
 
@@ -152,9 +157,7 @@ pub(in crate::trees) fn clean(
         if before < target {
             break;
         }
-        for dir in dirs {
-            pass.clean(dir, used)?;
-        }
+        pass.clean(dirs, used, before - target + 1)?;
         let after = size(dirs)?;
         if after < before {
             log(pass.label());
@@ -162,6 +165,53 @@ pub(in crate::trees) fn clean(
         before = after;
     }
     Ok(())
+}
+
+/// Deletes the incremental caches used longest ago until `excess` bytes are gone.
+///
+/// Every edit recompiles the crates it touches, and rustc writes a new session directory in
+/// each such crate's cache (`<profile>/incremental/<crate>-<hash>/s-<session>`). Deleting all
+/// the caches whenever a tree went over its ceiling made the next build of the crate being
+/// worked on compile it from scratch, so the caches of the crates compiled most recently go
+/// last. A cache never changes what rustc builds, only how fast, so keeping one cannot
+/// change a check's result.
+fn trim_incremental(dirs: &[PathBuf], excess: u64) -> io::Result<()> {
+    let mut caches = Vec::new();
+    for dir in dirs {
+        for profile in profile_dirs(dir) {
+            let Ok(entries) = fs::read_dir(profile.join("incremental")) else {
+                continue;
+            };
+            for entry in entries {
+                let path = entry?.path();
+                caches.push((last_written(&path), bytes(&path)?, path));
+            }
+        }
+    }
+    caches.sort();
+    let mut freed = 0_u64;
+    for (_, size, path) in caches {
+        if freed >= excess {
+            break;
+        }
+        remove_output(&path)?;
+        freed = freed.saturating_add(size);
+    }
+    Ok(())
+}
+
+/// The newest modification time of a path and its direct children. Rustc adds a session
+/// directory to a crate's cache each time it compiles the crate, which updates both.
+fn last_written(path: &Path) -> SystemTime {
+    let modified = |path: &Path| {
+        fs::symlink_metadata(path)
+            .and_then(|meta| meta.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH)
+    };
+    let children = fs::read_dir(path).into_iter().flatten().filter_map(Result::ok);
+    children
+        .map(|entry| modified(&entry.path()))
+        .fold(modified(path), SystemTime::max)
 }
 
 fn sweep_unused(target: &Path, used: &BTreeSet<PathBuf>) -> io::Result<()> {
