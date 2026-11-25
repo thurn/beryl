@@ -510,7 +510,11 @@ mod tests {
             summary(&before, &after),
             "machine host: defaults restored | provider agent: on, share 50, stop at 99%"
         );
-        after.providers.get_mut("agent").unwrap().five_hour_stop_percent = Some(85);
+        after
+            .providers
+            .get_mut("agent")
+            .unwrap()
+            .five_hour_stop_percent = Some(85);
         assert!(
             summary(&before, &after)
                 .ends_with("provider agent: on, share 50, stop at 85% of 5-hour, 99% of weekly")

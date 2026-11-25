@@ -4469,18 +4469,17 @@ Its edit commands are:
   after the daemon reports it. Use a number when the volume is shared. The tree
   space divided by the ceiling gives the number of build slots, rounded down to
   a minimum of one.
-- `ignite fleet provider <name> [--on|--off] [--share <n>] [--stop-percent <n>]
-  [--five-hour-stop-percent <n>]` edits provider policy. A share is a weight
-  from 0 to 1,000. A share of zero keeps the provider out of the mix: it takes
-  only tickets whose `provider:` label names it, which routes chosen tickets (a
-  model trial's arm, say) to a provider without giving it other work. `--off`
-  refuses every ticket. The hub holds new work for a provider when one of its
-  plan windows reaches that window's stop percentage, from 1 to 100.
-  `--stop-percent` sets it for the weekly windows and `--five-hour-stop-percent`
-  for the 5-hour window, which uses the weekly percentage until it is set.
-  Reaching the 5-hour limit costs a few hours at most and a weekly one can cost
-  days, so the 5-hour percentage only needs to leave room for the work already
-  running when the hold starts.
+- `ignite fleet provider <name> [--on|--off] [--share <n>] [--stop-percent <n>] [--five-hour-stop-percent <n>]`
+  edits provider policy. A share is a weight from 0 to 1,000. A share of zero
+  keeps the provider out of the mix: it takes only tickets whose `provider:`
+  label names it, which routes chosen tickets (a model trial's arm, say) to a
+  provider without giving it other work. `--off` refuses every ticket. The hub
+  holds new work for a provider when one of its plan windows reaches that
+  window's stop percentage, from 1 to 100. `--stop-percent` sets it for the
+  weekly windows and `--five-hour-stop-percent` for the 5-hour window, which
+  uses the weekly percentage until it is set. Reaching the 5-hour limit costs a
+  few hours at most and a weekly one can cost days, so the 5-hour percentage
+  only needs to leave room for the work already running when the hold starts.
 
 An **active** machine takes tickets and verifies tips. A **checks only** machine
 verifies tips and can take one regression or justiciar ticket at a time when no
