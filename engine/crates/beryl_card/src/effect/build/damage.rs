@@ -1,4 +1,4 @@
-//! Builders for dealing and preventing damage, and for gaining and losing life.
+//! Builders for dealing and preventing damage.
 
 use crate::effect::{Amount, Effect, Players, Prevention, Recipients};
 use crate::filter::Filter;
@@ -51,21 +51,5 @@ pub const fn prevent_next_damage_from_chosen_source(
         to: Recipients::Players(players),
         prevention: Prevention::NextTime,
         from: Some(filter),
-    }
-}
-
-/// [`Effect::GainLife`]: "[player] gains [amount] life".
-pub const fn gain_life(player: Players, amount: u8) -> Effect {
-    Effect::GainLife {
-        player,
-        amount: Amount::Fixed(amount),
-    }
-}
-
-/// [`Effect::LoseLife`]: "[player] loses [amount] life".
-pub const fn lose_life(player: Players, amount: u8) -> Effect {
-    Effect::LoseLife {
-        player,
-        amount: Amount::Fixed(amount),
     }
 }

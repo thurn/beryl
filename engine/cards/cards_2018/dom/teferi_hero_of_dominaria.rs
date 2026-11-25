@@ -25,8 +25,16 @@ pub static CARD: CardDef = Printed::TeferiHeroOfDominaria
             .target(&TargetSpec::permanent(nonland()))
             .effect(&put_into_library(target(), LibraryPosition::FromTop(3))),
         Ability::loyalty(-8).effect(&get_emblem(you(), &EMBLEM)),
-        Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
-            .effect(&untap_up_to(you(), 2, permanents(land()))),
+        Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next()).effect(
+            &untap_up_to(
+                you(),
+                2,
+                Objects::All {
+                    zone: Zone::Battlefield,
+                    filter: Filter::Types(Types::LAND),
+                },
+            ),
+        ),
     ])
     .card()
     .creating(&[&EMBLEM]);

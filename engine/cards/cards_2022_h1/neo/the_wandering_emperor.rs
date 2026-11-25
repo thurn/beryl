@@ -38,7 +38,7 @@ pub static CARD: CardDef = Printed::TheWanderingEmperor
         Ability::loyalty(-1).effect(&create_tokens(you(), &SAMURAI, 1)),
         Ability::loyalty(-2)
             .target(&TargetSpec::permanent(Filter::All(&[
-                creature(),
+                Filter::Types(Types::CREATURE),
                 Filter::Tapped,
             ])))
             .effect(&sequence(&[exile(target()), gain_life(you(), 2)])),

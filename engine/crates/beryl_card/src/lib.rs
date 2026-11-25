@@ -89,8 +89,8 @@ pub use words::{
 pub mod prelude {
     pub use crate::effect::build::*;
     pub use crate::phrases::{
-        creature_you_control, instant_or_sorcery, tap_and_sacrifice, unless_its_controller_pays,
-        when_enters, whenever_attacks,
+        instant_or_sorcery, tap_and_sacrifice, unless_its_controller_pays, when_enters,
+        whenever_attacks,
     };
     pub use crate::{
         Ability, Amount, BasicLandTypes, CardDef, CastNumber, CastTerms, CastingKind,

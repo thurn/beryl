@@ -20,7 +20,7 @@ pub static CARD: CardDef = Printed::SnapcasterMage
     .abilities(&[Ability::triggered(&Trigger::ENTERS)
         .target(&TargetSpec::graveyard_card(Filter::All(&[
             instant_or_sorcery(),
-            yours(),
+            Filter::Whose(&Players::You),
         ])))
         .effect(&gain_flashback(target()))])
     .card();

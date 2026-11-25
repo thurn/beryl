@@ -9,7 +9,7 @@ use crate::prelude::*;
 
 pub static CARD: CardDef = Printed::CleverImpersonator
     .abilities(&[Ability::replacing(&Replacement::enter_as_copy(
-        &nonland(),
+        &Filter::Not(&Filter::Types(Types::LAND)),
         None,
     ))])
     .card();

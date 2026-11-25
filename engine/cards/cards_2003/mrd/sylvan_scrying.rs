@@ -8,5 +8,9 @@
 use crate::prelude::*;
 
 pub static CARD: CardDef = Printed::SylvanScrying
-    .abilities(&[Ability::spell().effect(&search(you(), land(), Found::RevealToHand))])
+    .abilities(&[Ability::spell().effect(&search(
+        you(),
+        Filter::Types(Types::LAND),
+        Found::RevealToHand,
+    ))])
     .card();

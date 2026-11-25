@@ -28,7 +28,10 @@ pub static CARD: CardDef = Printed::Bloodghast
         }),
         Ability::triggered(&Trigger::of(
             TriggerEvent::Enters,
-            beryl_card::Subject::A(Filter::All(&[land(), yours()])),
+            beryl_card::Subject::A(Filter::All(&[
+                Filter::Types(Types::LAND),
+                Filter::Whose(&Players::You),
+            ])),
         ))
         .in_graveyard()
         .effect(&may(you(), &return_to_battlefield(this()))),

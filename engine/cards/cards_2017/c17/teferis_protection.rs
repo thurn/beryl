@@ -27,7 +27,10 @@ pub static CARD: CardDef = Printed::TeferisProtection
             },
             Duration::UntilYourNextTurn,
         ),
-        phase_out(permanents(yours())),
+        phase_out(Objects::All {
+            zone: Zone::Battlefield,
+            filter: Filter::Whose(&Players::You),
+        }),
         exile(this()),
     ]))])
     .card();

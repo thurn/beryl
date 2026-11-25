@@ -15,7 +15,7 @@ pub static CARD: CardDef = Printed::LifeFromTheLoam
             .target(&TargetSpec::up_to(
                 3,
                 TargetKind::GraveyardCard,
-                Filter::All(&[land(), yours()]),
+                Filter::All(&[Filter::Types(Types::LAND), Filter::Whose(&Players::You)]),
             ))
             .effect(&return_to_hand(target())),
         Ability::replacing(&Replacement::dredge(3)),

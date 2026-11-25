@@ -17,7 +17,7 @@ pub static CARD: CardDef = Printed::StripMine
     .abilities(&[
         Ability::tap_for_mana(ManaSet::one(ManaColor::Colorless)),
         Ability::activated(tap_and_sacrifice())
-            .target(&TargetSpec::permanent(land()))
+            .target(&TargetSpec::permanent(Filter::Types(Types::LAND)))
             .effect(&destroy(target())),
     ])
     .card();

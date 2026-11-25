@@ -34,7 +34,7 @@ pub static CARD: CardDef = card_with_shape(
                 Condition::Compare(
                     Amount::Count(&Objects::All {
                         zone: Zone::Graveyard,
-                        filter: yours(),
+                        filter: Filter::Whose(&Players::You),
                     }),
                     Comparison::AtLeast,
                     Amount::Fixed(5),
@@ -53,7 +53,7 @@ pub static CARD: CardDef = card_with_shape(
             Ability::loyalty(-3)
                 .target(&TargetSpec::graveyard_card(Filter::All(&[
                     instant_or_sorcery(),
-                    yours(),
+                    Filter::Whose(&Players::You),
                 ])))
                 .effect(&permit_cast(
                     you(),

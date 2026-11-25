@@ -7,7 +7,10 @@
 
 use crate::prelude::*;
 
-const YOUR_CREATURES: Objects = permanents(creature_you_control());
+const YOUR_CREATURES: Objects = Objects::All {
+    zone: Zone::Battlefield,
+    filter: Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
+};
 
 pub static CARD: CardDef = Printed::ChroniclerOfHeroes
     .abilities(&[when_enters(&if_then(

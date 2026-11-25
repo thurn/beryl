@@ -9,7 +9,14 @@ use crate::prelude::*;
 
 pub static CARD: CardDef = Printed::BuildersBlessing
     .abilities(&[Ability::static_ability(&LayerSpec {
-        affected: permanents(Filter::All(&[creature(), yours(), untapped()])),
+        affected: Objects::All {
+            zone: Zone::Battlefield,
+            filter: Filter::All(&[
+                Filter::Types(Types::CREATURE),
+                Filter::Whose(&Players::You),
+                Filter::Not(&Filter::Tapped),
+            ]),
+        },
         condition: None,
         modifications: &[Modification::ModifyPt(0, 2)],
     })])

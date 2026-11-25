@@ -15,7 +15,10 @@ use crate::prelude::*;
 /// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
 pub static CARD: CardDef = Printed::Humility
     .abilities(&[Ability::static_ability(&LayerSpec {
-        affected: permanents(creature()),
+        affected: Objects::All {
+            zone: Zone::Battlefield,
+            filter: Filter::Types(Types::CREATURE),
+        },
         condition: None,
         modifications: &[
             Modification::LoseAllAbilities,

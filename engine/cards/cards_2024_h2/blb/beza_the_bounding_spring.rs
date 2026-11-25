@@ -32,7 +32,10 @@ pub static CARD: CardDef = Printed::BezaTheBoundingSpring
     .abilities(&[when_enters(&sequence(&[
         // Lands you control.
         if_then(
-            an_opponent_has_more(&Amount::Count(&permanents(Filter::All(&[land(), yours()])))),
+            an_opponent_has_more(&Amount::Count(&Objects::All {
+                zone: Zone::Battlefield,
+                filter: Filter::All(&[Filter::Types(Types::LAND), Filter::Whose(&Players::You)]),
+            })),
             &create_tokens(you(), &TREASURE, 1),
         ),
         if_then(
@@ -41,16 +44,19 @@ pub static CARD: CardDef = Printed::BezaTheBoundingSpring
         ),
         // Creatures you control.
         if_then(
-            an_opponent_has_more(&Amount::Count(&permanents(Filter::All(&[
-                creature(),
-                yours(),
-            ])))),
+            an_opponent_has_more(&Amount::Count(&Objects::All {
+                zone: Zone::Battlefield,
+                filter: Filter::All(&[
+                    Filter::Types(Types::CREATURE),
+                    Filter::Whose(&Players::You),
+                ]),
+            })),
             &create_tokens(you(), &FISH, 2),
         ),
         if_then(
             an_opponent_has_more(&Amount::Count(&Objects::All {
                 zone: Zone::Hand,
-                filter: yours(),
+                filter: Filter::Whose(&Players::You),
             })),
             &draw(you(), 1),
         ),

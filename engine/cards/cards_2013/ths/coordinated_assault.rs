@@ -10,7 +10,11 @@ use crate::prelude::*;
 
 pub static CARD: CardDef = Printed::CoordinatedAssault
     .abilities(&[Ability::spell()
-        .target(&TargetSpec::up_to(2, TargetKind::Permanent, creature()))
+        .target(&TargetSpec::up_to(
+            2,
+            TargetKind::Permanent,
+            Filter::Types(Types::CREATURE),
+        ))
         .effect(&modify(
             target(),
             &[

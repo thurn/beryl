@@ -16,8 +16,11 @@ pub static SPIRIT: CardDef = Token::SpiritToken.keywords(Keywords::FLYING).card(
 pub static CARD: CardDef = Printed::StaffOfTheStoryteller
     .abilities(&[
         when_enters(&create_tokens(you(), &SPIRIT, 1)),
-        Ability::triggered(&Trigger::creates_tokens(Players::You, creature()))
-            .effect(&add_counters(this(), CounterKind::Story, 1)),
+        Ability::triggered(&Trigger::creates_tokens(
+            Players::You,
+            Filter::Types(Types::CREATURE),
+        ))
+        .effect(&add_counters(this(), CounterKind::Story, 1)),
         Ability::activated(Cost::of(
             mana("{W}"),
             &[CostPart::TAP, CostPart::remove(CounterKind::Story)],

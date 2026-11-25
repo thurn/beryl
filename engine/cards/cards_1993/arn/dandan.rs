@@ -24,10 +24,13 @@ pub static CARD: CardDef = Printed::Dandan
             when: When::Never,
         }),
         Ability::triggered(&Trigger::state(&Condition::Compare(
-            Amount::Count(&permanents(Filter::All(&[
-                Filter::Subtype(Subtype::Island),
-                yours(),
-            ]))),
+            Amount::Count(&Objects::All {
+                zone: Zone::Battlefield,
+                filter: Filter::All(&[
+                    Filter::Subtype(Subtype::Island),
+                    Filter::Whose(&Players::You),
+                ]),
+            }),
             Comparison::Equal,
             Amount::Fixed(0),
         )))

@@ -12,7 +12,7 @@ use crate::prelude::*;
 const LIBRARY_IS_EMPTY: Condition = Condition::Compare(
     Amount::Count(&Objects::All {
         zone: Zone::Library,
-        filter: yours(),
+        filter: Filter::Whose(&Players::You),
     }),
     Comparison::Equal,
     Amount::Fixed(0),

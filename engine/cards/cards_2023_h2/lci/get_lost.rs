@@ -35,7 +35,10 @@ pub static MAP: CardDef = Token::MapToken
         ManaCost::generic(1),
         &[CostPart::TAP, CostPart::SACRIFICE],
     ))
-    .target(&TargetSpec::permanent(creature_you_control()))
+    .target(&TargetSpec::permanent(Filter::All(&[
+        Filter::Types(Types::CREATURE),
+        Filter::Whose(&Players::You),
+    ])))
     .as_a_sorcery()
     .effect(&explore(target()))])
     .card();

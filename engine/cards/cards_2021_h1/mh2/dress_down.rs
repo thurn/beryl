@@ -20,7 +20,10 @@ pub static CARD: CardDef = Printed::DressDown
     .abilities(&[
         when_enters(&draw(you(), 1)),
         Ability::static_ability(&LayerSpec {
-            affected: permanents(creature()),
+            affected: Objects::All {
+                zone: Zone::Battlefield,
+                filter: Filter::Types(Types::CREATURE),
+            },
             condition: None,
             modifications: &[Modification::LoseAllAbilities],
         }),

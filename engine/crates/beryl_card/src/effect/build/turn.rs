@@ -1,4 +1,4 @@
-//! Builders for instructions that change the turn or end the game.
+//! Builders for instructions that change the turn.
 
 use crate::{AbilityIx, Effect, Filter, Players};
 
@@ -27,14 +27,4 @@ pub const fn end_turn() -> Effect {
 /// `filter` for the ability's controller to put onto the battlefield after mulligans.
 pub const fn restart_game(filter: Filter) -> Effect {
     Effect::RestartGame { filter }
-}
-
-/// [`Effect::WinGame`]: "[player] wins the game".
-pub const fn win_game(player: Players) -> Effect {
-    Effect::WinGame(player)
-}
-
-/// [`Effect::LoseGame`]: "[player] loses the game".
-pub const fn lose_game(player: Players) -> Effect {
-    Effect::LoseGame(player)
 }

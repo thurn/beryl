@@ -18,7 +18,10 @@ use crate::prelude::*;
 /// [CR 612.3]: https://yawgatog.com/resources/magic-rules/#R6123
 pub static CARD: CardDef = Printed::LordOfAtlantis
     .abilities(&[Ability::static_ability(&LayerSpec {
-        affected: Objects::Other(&permanents(Filter::Subtype(Subtype::Merfolk))),
+        affected: Objects::Other(&Objects::All {
+            zone: Zone::Battlefield,
+            filter: Filter::Subtype(Subtype::Merfolk),
+        }),
         condition: None,
         modifications: &[
             Modification::ModifyPt(1, 1),

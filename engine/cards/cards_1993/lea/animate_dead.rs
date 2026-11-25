@@ -30,7 +30,7 @@ use crate::prelude::*;
 /// [CR 704.5m]: https://yawgatog.com/resources/magic-rules/#R7045m
 pub static CARD: CardDef = Printed::AnimateDead
     .abilities(&[
-        Ability::spell().target(&TargetSpec::graveyard_card(creature())),
+        Ability::spell().target(&TargetSpec::graveyard_card(Filter::Types(Types::CREATURE))),
         when_enters(&sequence(&[
             modify(
                 this(),

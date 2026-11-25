@@ -42,7 +42,7 @@ pub static CARD: CardDef = Printed::CurrencyConverter
                 &sequence(&[
                     put_into_graveyard(those()),
                     if_else(
-                        Condition::Is(those(), land()),
+                        Condition::Is(those(), Filter::Types(Types::LAND)),
                         &create_tokens(you(), &TREASURE, 1),
                         &create_tokens(you(), &ROGUE, 1),
                     ),

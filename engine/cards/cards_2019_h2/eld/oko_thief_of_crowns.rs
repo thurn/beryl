@@ -41,10 +41,10 @@ pub static CARD: CardDef = Printed::OkoThiefOfCrowns
             .targeting(&[
                 TargetSpec::permanent(Filter::All(&[
                     Filter::Types(Types::ARTIFACT.union(Types::CREATURE)),
-                    yours(),
+                    Filter::Whose(&Players::You),
                 ])),
                 TargetSpec::permanent(Filter::All(&[
-                    creature(),
+                    Filter::Types(Types::CREATURE),
                     Filter::Whose(&Players::EachOpponent),
                     Filter::PowerAtMost(3),
                 ])),

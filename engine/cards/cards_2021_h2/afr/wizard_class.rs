@@ -24,7 +24,10 @@ pub static CARD: CardDef = Printed::WizardClass
         Ability::level(3, Cost::mana(mana("{4}{U}"))),
         Ability::triggered(&Trigger::draws(Players::You))
             .at_class_level(3)
-            .target(&TargetSpec::permanent(creature_you_control()))
+            .target(&TargetSpec::permanent(Filter::All(&[
+                Filter::Types(Types::CREATURE),
+                Filter::Whose(&Players::You),
+            ])))
             .effect(&add_counters(target(), CounterKind::PlusOne, 1)),
     ])
     .card();

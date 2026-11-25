@@ -17,7 +17,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::ContainmentPriest
     .keywords(Keywords::FLASH)
     .abilities(&[Ability::replacing(&Replacement::enters_not_cast(
-        &Filter::All(&[nontoken(), creature()]),
+        &Filter::All(&[Filter::Not(&Filter::Token), Filter::Types(Types::CREATURE)]),
         Zone::Exile,
     ))])
     .card();

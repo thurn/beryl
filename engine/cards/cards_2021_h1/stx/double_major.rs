@@ -14,7 +14,10 @@ use crate::prelude::*;
 /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 pub static CARD: CardDef = Printed::DoubleMajor
     .abilities(&[Ability::spell()
-        .target(&TargetSpec::one(TargetKind::Spell, creature_you_control()))
+        .target(&TargetSpec::one(
+            TargetKind::Spell,
+            Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
+        ))
         .effect(&copy_spell_except_keeping_targets(
             target(),
             ExceptIx::new(0),

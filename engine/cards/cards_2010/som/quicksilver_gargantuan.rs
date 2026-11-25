@@ -14,7 +14,7 @@ use crate::prelude::*;
 /// [CR 707.9d]: https://yawgatog.com/resources/magic-rules/#R7079d
 pub static CARD: CardDef = Printed::QuicksilverGargantuan
     .abilities(&[Ability::replacing(&Replacement::enter_as_copy(
-        &creature(),
+        &Filter::Types(Types::CREATURE),
         Some(ExceptIx::new(0)),
     ))])
     .excepts(&[CopyException(&[CopyChange::PowerToughness(7, 7)])])

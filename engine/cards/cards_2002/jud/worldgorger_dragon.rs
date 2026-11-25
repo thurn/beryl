@@ -19,7 +19,10 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::WorldgorgerDragon
     .keywords(Keywords::FLYING.union(Keywords::TRAMPLE))
     .abilities(&[
-        when_enters(&exile_linked(Objects::Other(&permanents(yours())))),
+        when_enters(&exile_linked(Objects::Other(&Objects::All {
+            zone: Zone::Battlefield,
+            filter: Filter::Whose(&Players::You),
+        }))),
         Ability::triggered(&Trigger::LEAVES).effect(&return_to_battlefield(exiled_with_this())),
     ])
     .card();

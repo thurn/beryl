@@ -15,7 +15,10 @@ use crate::prelude::*;
 /// opponents are all players not on their team.”
 ///
 /// [CR 102.3]: https://yawgatog.com/resources/magic-rules/#R1023
-const CREATURES_YOU_DONT_CONTROL: Filter = Filter::All(&[creature(), Filter::Not(&yours())]);
+const CREATURES_YOU_DONT_CONTROL: Filter = Filter::All(&[
+    Filter::Types(Types::CREATURE),
+    Filter::Not(&Filter::Whose(&Players::You)),
+]);
 
 /// Each player searches according to their total of creatures actually exiled. The count
 /// uses each creature's controller on the battlefield. [CR 608.2h] says “the effect uses
@@ -26,7 +29,10 @@ const FETCH: Effect = for_each_player(
     each_player(),
     &Effect::Search {
         player: that_player(),
-        filter: Filter::All(&[land(), Filter::Supertypes(Supertypes::BASIC)]),
+        filter: Filter::All(&[
+            Filter::Types(Types::LAND),
+            Filter::Supertypes(Supertypes::BASIC),
+        ]),
         count: Amount::ThoseOf(that_player()),
         found: Found::OntoBattlefieldTapped,
     },
@@ -38,7 +44,10 @@ pub static CARD: CardDef = Printed::WindsOfAbandon
             .target(&TargetSpec::permanent(CREATURES_YOU_DONT_CONTROL))
             .effect(&sequence(&[exile(target()), FETCH])),
         Ability::spell().effect(&sequence(&[
-            exile(permanents(CREATURES_YOU_DONT_CONTROL)),
+            exile(Objects::All {
+                zone: Zone::Battlefield,
+                filter: CREATURES_YOU_DONT_CONTROL,
+            }),
             FETCH,
         ])),
     ])

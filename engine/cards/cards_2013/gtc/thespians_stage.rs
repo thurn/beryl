@@ -29,7 +29,7 @@ pub static CARD: CardDef = Printed::ThespiansStage
 
 /// "{2}, {T}: This land becomes a copy of target land, except it has this ability."
 const BECOME_COPY: Ability = Ability::activated(Cost::of(ManaCost::generic(2), &[CostPart::TAP]))
-    .target(&TargetSpec::permanent(land()))
+    .target(&TargetSpec::permanent(Filter::Types(Types::LAND)))
     .effect(&become_copy_except(this(), target(), ExceptIx::new(0)));
 
 #[cfg(feature = "scenarios")]
