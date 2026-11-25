@@ -22,6 +22,7 @@ pub struct BadgeTuning {
     pub numeral_points: f32,
     pub plaque: Plaque,
     pub counter: CounterBadge,
+    pub disc: CounterDisc,
     pub lock: LockBadge,
     pub count: CountBadge,
     pub note: NoteTag,
@@ -61,14 +62,12 @@ pub struct Plaque {
     pub numerals: f32,
 }
 
-/// A counter's badge along the card's foot, and the named counters' rows above the plaque.
+/// The named counters' rows above the plaque, and the foot line a copy's label sits on.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct CounterBadge {
     #[serde(deserialize_with = "nonnegative")]
     pub left: f32,
-    #[serde(deserialize_with = "nonnegative")]
-    pub right: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub bottom: f32,
     #[serde(deserialize_with = "positive")]
@@ -91,6 +90,29 @@ pub struct CounterBadge {
     pub named_bottom: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub named_right: f32,
+}
+
+/// A counter's disc, one for each kind of counter, standing down the card's right edge from
+/// just below its name bar, as Arena shows a counter on a permanent. `top` is the distance from
+/// the card's top edge to the first disc's top, and `overhang` how far a disc passes the card's
+/// right edge. A count too wide for a disc of `size` stretches it into a pill.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CounterDisc {
+    #[serde(deserialize_with = "nonnegative")]
+    pub top: f32,
+    #[serde(deserialize_with = "nonnegative")]
+    pub overhang: f32,
+    #[serde(deserialize_with = "positive")]
+    pub size: f32,
+    #[serde(deserialize_with = "nonnegative")]
+    pub gap: f32,
+    #[serde(deserialize_with = "nonnegative")]
+    pub padding: f32,
+    #[serde(deserialize_with = "nonnegative")]
+    pub border: f32,
+    #[serde(deserialize_with = "positive")]
+    pub numerals: f32,
 }
 
 /// The lock of a permanent that doesn't untap, in the card's top left corner.

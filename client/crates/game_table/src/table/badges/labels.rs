@@ -104,8 +104,9 @@ pub(super) fn plaque(object: &ObjectView, face: Option<&ListedFace>) -> Option<(
 }
 
 /// The count of each kind of counter on `object` but loyalty, which its plaque shows, and the
-/// color its number is drawn in (`.mark-plusOne`, `.mark-minusOne` and `.mark-badge svg`'s
-/// gold). The manual table's named counters have a row of their own (`write_named`).
+/// color its number is drawn in: the bright stat colors for +1/+1 and -1/-1 counters, and the
+/// disc's pale ink for every other kind. The manual table's named counters have a row of their
+/// own (`write_named`).
 pub(super) fn counters(object: &ObjectView) -> impl Iterator<Item = (i32, [u8; 4])> + '_ {
     object
         .counters
@@ -115,7 +116,7 @@ pub(super) fn counters(object: &ObjectView) -> impl Iterator<Item = (i32, [u8; 4
             let mark = match counter.kind {
                 Counter::PlusOne => color::STAT_UP,
                 Counter::MinusOne => color::STAT_DOWN,
-                _ => color::GOLD,
+                _ => badge::COUNTER_DISC_INK,
             };
             (counter.count, mark)
         })

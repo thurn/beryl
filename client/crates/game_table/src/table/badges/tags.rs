@@ -131,7 +131,7 @@ impl Tags {
 
 impl Badges {
     /// Writes a copy's label, `line`, onto `card` with its left edge `x` millimetres from the
-    /// face's middle, in the middle of the counters' row, if the frame has room for its
+    /// face's middle, on the card's foot, if the frame has room for its
     /// records. Returns how wide it is, or zero when it was left out.
     pub(super) fn copy_label(
         &self,

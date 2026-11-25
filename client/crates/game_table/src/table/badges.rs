@@ -1,6 +1,7 @@
 //! The badges a permanent wears on its face (docs/beryl-3d.md, "Objects and placement").
 //! A permanent wears its power and toughness on a plaque at the bottom right, or its loyalty
-//! there for a planeswalker; a badge for each kind of counter on it, along its foot; and, on the top card of
+//! there for a planeswalker; a disc for each kind of counter on it, down its right edge
+//! from below the name bar, where Arena stands them; and, on the top card of
 //! a pile of identical permanents, how many the pile holds; on the manual table, a lock in its
 //! top left corner if it doesn't untap, and a badge for each named counter, with the counter's
 //! shortened name, in a row above the plaque. They follow the web interface's
@@ -17,6 +18,7 @@
 //! lines of text a permanent wears besides, its note or chosen value and a copy's label, are
 //! `tags`.
 
+pub mod discs;
 mod labels;
 mod tags;
 
@@ -399,42 +401,52 @@ impl Badges {
         if object.doesnt_untap {
             self.write_lock(corner, (card, on), &mut left, builder);
         }
-        // Along the foot, left to right, as far as the plaque: a copy's label, then the
-        // counters.
-        let mut x = -corner.x + self.tuning().counter.left * self.em();
-        let end = corner.x - self.tuning().counter.right * self.em();
+        // A copy's label on the foot, at its left.
+        let x = -corner.x + self.tuning().counter.left * self.em();
         if let Some(line) = self.tags.copy(object).filter(|_| on.show_copy_label) {
-            let width = self.copy_label(line, x, (card, on), builder);
-            if width > 0.0 {
-                x += width + self.tuning().counter.gap * self.em();
-            }
+            let _ = self.copy_label(line, x, (card, on), builder);
         }
-        for (count, mark) in counters(object) {
-            let mut label = Label::default();
-            label.number(count, mark);
-            let numerals = self.tuning().counter.numerals * self.em();
-            let width =
-                self.width(&label, numerals) + 2.0 * self.tuning().counter.padding * self.em();
-            if x + width > end {
-                break;
-            }
-            let height = self.tuning().counter.height * self.em();
-            let bottom = -corner.y + self.tuning().counter.bottom * self.em();
-            let plate = Plate {
-                at: Vec2::new(x + width / 2.0, bottom + height / 2.0),
-                size: Vec2::new(width, height),
-                radius: self.tuning().counter.radius * self.em(),
-                border: self.tuning().counter.border * self.em(),
-                fill: badge::COUNTER,
-                edge: color::METAL_BRIGHT,
-                numerals,
-            };
-            let _ = self.badge(&plate, (None, &label), (card, on), &mut left, builder);
-            x += width + self.tuning().counter.gap * self.em();
-        }
+        self.write_discs(object, copies, corner, (card, on), &mut left, builder);
         self.write_named(object, corner, (card, on), &mut left, builder);
         let (said, line) = self.tags.note(object)?;
         self.note(line, (card, on), builder).then_some(said)
+    }
+
+    /// Writes a disc for each kind of counter on `object` onto `card`, where `discs::Column`
+    /// stands them, as long as they fit beside the plaque and in the card's records.
+    fn write_discs(
+        &self,
+        object: &ObjectView,
+        copies: u16,
+        corner: Vec2,
+        (card, on): (Affine3A, &On),
+        left: &mut usize,
+        builder: &mut FrameBuilder,
+    ) {
+        let disc = self.tuning().disc;
+        let em = self.em();
+        let numerals = disc.numerals * em;
+        let mut column = discs::Column::new(self.tuning(), em, corner, copies);
+        for (count, ink) in counters(object) {
+            let mut label = Label::default();
+            label.number(count, ink);
+            let width = self.width(&label, numerals) + 2.0 * disc.padding * em;
+            let Some((at, size)) = column.next(width) else {
+                break;
+            };
+            let plate = Plate {
+                at,
+                size,
+                radius: size.y / 2.0,
+                border: disc.border * em,
+                fill: badge::COUNTER_DISC,
+                edge: badge::COUNTER_DISC_RIM,
+                numerals,
+            };
+            if !self.badge(&plate, (None, &label), (card, on), left, builder) {
+                break;
+            }
+        }
     }
 
     /// Writes a badge for each named counter on `object` onto `card`, left to right in rows

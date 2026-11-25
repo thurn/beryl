@@ -15,6 +15,7 @@ mod test_data;
 
 mod box_shadows;
 mod clearance;
+mod discs;
 mod faces;
 mod paints;
 mod profiles;

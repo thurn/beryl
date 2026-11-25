@@ -159,6 +159,12 @@ pub mod badge {
     pub const PLAQUE_INK: [u8; 4] = [0x19, 0x21, 0x3a, 0xff];
     /// A counter badge's fill, the middle of `.mark-badge`'s gradient in `card-frame.css`.
     pub const COUNTER: [u8; 4] = [0x2b, 0x28, 0x24, 0xff];
+    /// A counter's disc on a permanent: Arena's grey metal disc, its darker rim and its pale
+    /// number, read off Arena's table in its 1080p recordings. A +1/+1 or -1/-1 counter's number keeps
+    /// the bright `color::STAT_UP` or `color::STAT_DOWN` instead.
+    pub const COUNTER_DISC: [u8; 4] = [0x64, 0x68, 0x6f, 0xff];
+    pub const COUNTER_DISC_RIM: [u8; 4] = [0x22, 0x24, 0x28, 0xff];
+    pub const COUNTER_DISC_INK: [u8; 4] = [0xf5, 0xf3, 0xf0, 0xff];
     /// The pile count's fill, the middle of `.card-count`'s gradient in
     /// `card-marks-and-piles.css`, and its border and ink.
     pub const COUNT: [u8; 4] = [0xec, 0xda, 0xb9, 0xff];

@@ -14,7 +14,6 @@
   },
   "counter": {
     "left": 0.62,
-    "right": 5.1,
     "bottom": 0.3,
     "height": 1.8,
     "gap": 0.2,
@@ -26,6 +25,15 @@
     "name_gap": 0.35,
     "named_bottom": 3.9,
     "named_right": 0.62
+  },
+  "disc": {
+    "top": 1.45,
+    "overhang": 0.22,
+    "size": 1.9,
+    "gap": 0.2,
+    "padding": 0.3,
+    "border": 0.1,
+    "numerals": 1.9
   },
   "lock": {
     "left": 0.62,
