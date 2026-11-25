@@ -5,7 +5,7 @@ use beryl_engine::card::{AbilityKind, FaceIx, ObjectAbility, Subtypes, Types};
 use beryl_engine::chosen::ANOTHER;
 use beryl_engine::event::Event;
 use beryl_engine::state::Flag;
-use beryl_engine::{Choice, Decision, Layout, Seat, Step, Zone, ZoneKey};
+use beryl_engine::{Choice, Decision, GameTable, Layout, Seat, State, Step, Zone, ZoneKey};
 use beryl_scenario_types::{PermanentState, SnapshotRef};
 
 use super::{Runner, answer};
@@ -215,36 +215,11 @@ impl<L: Layout> Runner<L> {
         Some(count)
     }
 
-    /// The player whose next action activates a mana ability of a permanent at priority, as a
-    /// player may whenever they have priority
-    /// ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a)): "A player may
-    /// activate an activated mana ability whenever they have priority". The exact profile
-    /// offers no such activation, since a payment taps for itself, so the profile that names
-    /// this player ([`Profile::taps_mana`]) holds until the action is done. A scenario stops
-    /// with that mana in the pool, where the oracles compare its color and amount.
+    /// The player whose next action activates a mana ability at priority
+    /// ([`mana_activation`]), whom the profile names until the action is done.
     pub(super) fn activates_mana(&self) -> Option<Seat> {
-        let Some(Action::Activate {
-            player,
-            card,
-            ability,
-        }) = self.upcoming
-        else {
-            return None;
-        };
-        // Read from each permanent's face, not its layer results, which may be stale here.
-        let ObjectAbility::Own(i) = ability else {
-            return None;
-        };
-        self.s
-            .battlefield()
-            .iter()
-            .any(|&slot| {
-                let face = self.s.definition(slot).face(&self.t);
-                face.name == card
-                    && (face.abilities.get(i.index()))
-                        .is_some_and(|a| a.kind() == AbilityKind::Mana)
-            })
-            .then_some(player)
+        self.upcoming
+            .and_then(|action| mana_activation(&self.t, &self.s, &action))
     }
 
     /// Notes, from the events recorded since the last call, each permanent that made mana
@@ -403,4 +378,31 @@ fn distinct(names: &[&'static str]) -> Vec<&'static str> {
         }
     }
     out
+}
+
+/// The player who activates a mana ability of a permanent at priority with `action`, as a
+/// player may whenever they have priority
+/// ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a)): "A player may activate an
+/// activated mana ability whenever they have priority". The exact profile offers no such
+/// activation, since a payment taps for itself, so a caller that is about to take `action`
+/// names this player in its profile ([`beryl_engine::Profile::taps_mana`]). A scenario stops
+/// with that mana in the pool, where the oracles compare its color and amount. It reads each
+/// permanent's face, not its layer results, which may be stale before the next decision.
+pub fn mana_activation<L: Layout>(t: &GameTable, s: &State<L>, action: &Action) -> Option<Seat> {
+    let Action::Activate {
+        player,
+        card,
+        ability: ObjectAbility::Own(i),
+    } = *action
+    else {
+        return None;
+    };
+    s.battlefield()
+        .iter()
+        .any(|&slot| {
+            let face = s.definition(slot).face(t);
+            face.name == card
+                && (face.abilities.get(i.index())).is_some_and(|a| a.kind() == AbilityKind::Mana)
+        })
+        .then_some(player)
 }

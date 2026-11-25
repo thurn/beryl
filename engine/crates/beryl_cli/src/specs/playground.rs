@@ -576,8 +576,13 @@ pub fn prepare(
     }
     let (table, mut state) =
         beryl_scenario::position(catalog.cards, &moment.board).map_err(|e| e.to_string())?;
+    // A mana ability the variant taps at priority is offered only to a player the profile
+    // names, as the scenario runner does for that action.
+    let taps_mana = (moment.play.first())
+        .and_then(|action| beryl_scenario::mana_activation(&table, &state, action));
     state.set_profile(beryl_engine::Profile {
         stops: beryl_engine::Stops::Forced,
+        taps_mana,
         ..state.profile()
     });
     let mut agents = [
@@ -608,7 +613,10 @@ pub fn prepare(
                     }
             });
         if ready {
-            state.set_profile(beryl_engine::Profile::EXACT);
+            state.set_profile(beryl_engine::Profile {
+                taps_mana,
+                ..beryl_engine::Profile::EXACT
+            });
             return Ok((table, state));
         }
         let choice = agents[decision.decider.index()].choose(

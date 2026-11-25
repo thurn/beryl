@@ -20,6 +20,7 @@ pub use answer::{answer, describe};
 use answer::{option_index, pick_in, takes, taking};
 pub use layouts::{LayoutComparison, plays_alike_in_both_layouts};
 pub use live::Live;
+pub use snapshot::mana_activation;
 
 /// The exact profile, except that a question with one answer stops too: the runner answers it
 /// as the engine would have silently, and the trace records the answer.
