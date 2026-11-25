@@ -135,10 +135,10 @@ it is in play. The present-cost gate measures what it costs while one is:
   spends mana on X), and `outside` Burning Wish and Lurrus of the Dream-Den,
   `turn-structure` Time Stop, Paradox Haze, Relentless Assault and Time Vault
   (ending the turn, additional upkeep, combat phases and an extra turn), and
-  `restart` Karn Liberated, three copies. A
-  stand-in drops abilities and keywords, not a card's shape, so these families
-  measure what the cards' abilities cost in play; the cost of the shape itself,
-  which every card pays through `State::copiable`, is in the absent-cost count.
+  `restart` Karn Liberated, three copies. A stand-in drops abilities and
+  keywords, not a card's shape, so these families measure what the cards'
+  abilities cost in play; the cost of the shape itself, which every card pays
+  through `State::copiable`, is in the absent-cost count.
 - **Its corpus** is cut from seeded games between greedy agents playing the
   family's deck in both seats: the first decision with a card of the family on
   the battlefield, on the stack or the source of an effect in force, which is
