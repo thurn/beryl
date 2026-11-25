@@ -237,6 +237,9 @@ impl Ctx {
                     with_article(&noun)
                 ),
             )
+        } else if let Some(quality) = ability.bands_with() {
+            let noun = self.noun(*quality, Kind::Permanent).plural(Kind::Permanent);
+            (None, format!("bands with other {noun}"))
         } else if ability.permits_cast_while_searching() {
             (
                 None,
@@ -442,6 +445,12 @@ impl Ctx {
         let Some(ability) = self.face.and_then(|face| face.grants.get(ix.index())) else {
             return "[granted ability]".to_owned();
         };
+        self.quoted(ability)
+    }
+
+    /// An ability another object has, as a granted ability or a token's ability is written: a
+    /// keyword as it is, anything else in quotation marks.
+    pub(super) fn quoted(&mut self, ability: &Ability) -> String {
         if let Some(text) = self.designation_paragraph(ability) {
             return text;
         }

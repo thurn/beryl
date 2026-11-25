@@ -127,7 +127,7 @@ pub(crate) fn attack_decision<L: Layout>(
             out.push(Opt::attack(slot))
         })?;
         if t.can(Capability::Banding) {
-            banding::append_attack_options(s, attackers, &mut list)?;
+            banding::append_attack_options(s, t, attackers, &mut list)?;
         }
         (s.turn().active(), DecisionKind::Attacker, Part::Pick)
     } else {

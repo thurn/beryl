@@ -50,6 +50,12 @@ pub enum Filter {
     /// Is a token ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)): "Some
     /// effects put tokens onto the battlefield." Not a token is "nontoken".
     Token,
+    /// Has this name: "creatures named Wolves of the Hunt"
+    /// ([CR 201.2a](https://yawgatog.com/resources/magic-rules/#R2012a)): "Two or more objects
+    /// have the same name if they have at least one name in common". A name is a copiable
+    /// value ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)), so a copy of a
+    /// permanent with the name has it too. A face-down permanent has no name and never passes.
+    Named(&'static str),
     ManaValueAtMost(u8),
     /// Power N or less: "creature an opponent controls with power 3 or less". A permanent's
     /// power is its derived one, after continuous effects
@@ -105,6 +111,7 @@ impl Filter {
             | Filter::Tapped
             | Filter::AttackedThisTurn
             | Filter::Token
+            | Filter::Named(_)
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
@@ -126,6 +133,7 @@ impl Filter {
             | Filter::AttackedThisTurn
             | Filter::Tapped
             | Filter::Token
+            | Filter::Named(_)
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
@@ -162,6 +170,7 @@ impl Filter {
             | Filter::AttackedThisTurn
             | Filter::Tapped
             | Filter::Token
+            | Filter::Named(_)
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostPower

@@ -172,6 +172,7 @@ pub(in crate::derive) fn printed(
         Filter::Tapped => permanent.tapped,
         Filter::AttackedThisTurn => false,
         Filter::Token => permanent.token,
+        Filter::Named(name) => face.name == name,
         Filter::ManaValueAtMost(value) => face.cost.mana_value() <= value,
         Filter::PowerAtMost(power) => face.power.is_some_and(|p| p <= power),
         Filter::InZone(expected) => zone == expected,

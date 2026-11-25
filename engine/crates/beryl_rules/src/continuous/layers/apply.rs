@@ -571,6 +571,8 @@ fn passes<L: Layout>(
         }
         Filter::Tapped => s.object(s.battlefield()[i]).is_tapped(),
         Filter::Token => s.object(s.battlefield()[i]).is_token(),
+        // A name is a copiable value, settled before the layers this function serves.
+        Filter::Named(name) => s.definition(s.battlefield()[i]).name(t) == name,
         Filter::ManaValueAtMost(n) => s.mana_value(t, s.battlefield()[i]) <= n,
         // The layers apply to permanents, which are on the battlefield.
         Filter::InZone(zone) => zone == Zone::Battlefield,
@@ -587,7 +589,8 @@ fn passes<L: Layout>(
 }
 
 /// The characteristics `filter` reads of a permanent's layer results ([`passes`]): whether it
-/// is tapped, is a token and its mana value are the object's, which no layer changes.
+/// is tapped, is a token, its name and its mana value are the object's, which no layer after
+/// the first changes.
 pub(super) fn filter_reads(filter: Filter) -> Characteristics {
     match filter {
         Filter::Any
@@ -595,6 +598,7 @@ pub(super) fn filter_reads(filter: Filter) -> Characteristics {
         | Filter::Tapped
         | Filter::AttackedThisTurn
         | Filter::Token
+        | Filter::Named(_)
         | Filter::ManaValueAtMost(_)
         | Filter::ManaValueAtMostX
         | Filter::ManaValueAtMostPower

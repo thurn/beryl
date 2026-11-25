@@ -120,6 +120,7 @@ pub mod decks {
                 names::FENCING_ACE,
                 names::BENALISH_HERO,
                 names::BENALISH_INFANTRY,
+                names::MASTER_OF_THE_HUNT,
             ],
         ),
         (

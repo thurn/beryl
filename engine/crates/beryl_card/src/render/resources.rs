@@ -168,7 +168,10 @@ impl Ctx {
                 super::words::list(&colors, "and")
             };
             let types = super::words::types(face.types.minus(Types::KINDRED)).join(" ");
-            let keywords = super::words::keywords(face.keywords);
+            // CR 111.3: "The spell or ability that creates a token may define the values of
+            // any number of characteristics for the token."
+            let mut keywords = super::words::keywords(face.keywords);
+            keywords.extend(face.abilities.iter().map(|ability| self.quoted(ability)));
             let with = if keywords.is_empty() {
                 String::new()
             } else {

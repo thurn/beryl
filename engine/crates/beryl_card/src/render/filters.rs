@@ -108,6 +108,7 @@ impl Ctx {
             Filter::Tapped => noun.adjectives.push("tapped".to_owned()),
             Filter::AttackedThisTurn => noun.suffixes.push("that attacked this turn".to_owned()),
             Filter::Token => noun.adjectives.push("token".to_owned()),
+            Filter::Named(name) => noun.suffixes.push(format!("named {name}")),
             Filter::ManaValueAtMost(n) => {
                 noun.suffixes.push(format!("with mana value {n} or less"));
             }
@@ -192,6 +193,7 @@ impl Ctx {
                 };
                 noun.suffixes.push(verb.to_owned());
             }
+            Filter::Named(name) => noun.suffixes.push(format!("not named {name}")),
             Filter::Any
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)

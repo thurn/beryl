@@ -626,6 +626,7 @@ pub(super) fn mentions_owner(filter: Filter) -> bool {
         | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
+        | Filter::Named(_)
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
@@ -665,6 +666,7 @@ fn zone_of(filter: Filter) -> Option<Zone> {
         | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
+        | Filter::Named(_)
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX

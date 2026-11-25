@@ -104,7 +104,7 @@ pub(super) fn attacked<L: Layout>(s: &State<L>, target: AttackTarget<L>) -> Opti
 /// [CR 510.1d]: https://yawgatog.com/resources/magic-rules/#R5101d
 pub fn assigner<L: Layout>(s: &State<L>, t: &GameTable, creature: L::Slot) -> Seat {
     if t.can(Capability::Banding)
-        && let Some(player) = banding::assigner(s, creature)
+        && let Some(player) = banding::assigner(s, t, creature)
     {
         return player;
     }
@@ -220,7 +220,7 @@ pub(crate) fn begin_damage<L: Layout>(
             }
         }
     }
-    if t.can(Capability::Banding) && banding::affects_damage(s) {
+    if t.can(Capability::Banding) && banding::affects_damage(s, t) {
         return exact_damage::begin(s, t, sink);
     }
     if let Some(source) = next_division(s, t, Bitboard::EMPTY) {

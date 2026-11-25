@@ -92,6 +92,7 @@ pub(crate) fn player_matches(spec: &TargetSpec, player: Seat, you: Seat) -> bool
             | Filter::AttackedThisTurn
             | Filter::Tapped
             | Filter::Token
+            | Filter::Named(_)
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX

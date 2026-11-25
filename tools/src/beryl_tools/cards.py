@@ -116,6 +116,38 @@ TOKEN_PRINTINGS = {
 }
 
 Json = dict[str, object]
+
+# Tokens that were never printed, so Scryfall has no record of them, by the name of the card
+# that makes them. Each is the record a printing would give, read from the maker's Oracle
+# text, under fixed ids of its own (uuid5 of its name), which name no Scryfall image, so the
+# app draws it without art.
+UNPRINTED_TOKENS: dict[str, list[Json]] = {
+    "Master of the Hunt": [
+        {
+            "name": "Wolves of the Hunt",
+            "oracle_id": "3b9bc0a5-3cb7-54f1-b5eb-dbc73164d8e8",
+            "scryfall_id": "dc63a476-da19-5dbb-a22b-abdbefa52afb",
+            "set": "leg",
+            "collector_number": "",
+            "layout": "token",
+            "artist": "",
+            "keywords": [],
+            "faces": [
+                {
+                    "name": "Wolves of the Hunt",
+                    "mana_cost": "",
+                    "type_line": "Token Creature — Wolf",
+                    "oracle_text": "Bands with other creatures named Wolves of the Hunt.",
+                    "power": "1",
+                    "toughness": "1",
+                    "colors": ["G"],
+                    "side": "front",
+                }
+            ],
+        }
+    ],
+}
+
 # A pinned printing: set code and collector number.
 Printing = tuple[str, str]
 
@@ -592,6 +624,10 @@ def build_store(pool: Pool) -> Built:
                 linked, store_record(pool.by_id[linked], token=True)
             )
             links.append({"name": token["name"], "scryfall_id": linked})
+        for unprinted in UNPRINTED_TOKENS.get(str(card["name"]), []):
+            linked = str(unprinted["scryfall_id"])
+            tokens.setdefault(linked, unprinted)
+            links.append({"name": unprinted["name"], "scryfall_id": linked})
         record = store_record(card, False, links, pool.first[oracle])
         named.setdefault(str(record["name"]), []).append((card, record))
     for name, found in named.items():
@@ -614,7 +650,9 @@ def build_store(pool: Pool) -> Built:
         name = str(record["name"])
         built.lines.append(card_store.line("token", name, record))
         built.tokens.append(record)
-        for alias in aliases(pool.by_id[linked], record):
+        # An unprinted token has one face and no printing, so no other name.
+        printing = pool.by_id.get(linked)
+        for alias in aliases(printing, record) if printing else []:
             token_alias: Json = {"alias": name, "scryfall_id": linked}
             built.lines.append(card_store.line("token", alias, token_alias))
     built.counts["cards"] = len(named)

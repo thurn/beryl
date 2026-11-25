@@ -1733,6 +1733,15 @@
       ]
     }
   ],
+  "Master of the Hunt": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "c8b0d63d2a34",
+      "scenario": [
+        "Master of the Hunt creates a Wolf each time it is activated"
+      ]
+    }
+  ],
   "Mind Bend": [
     {
       "published_at": "2004-10-04",

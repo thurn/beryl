@@ -132,6 +132,8 @@ impl Evaluate for Filter {
             Filter::Tapped => o.flags.has(Flag::Tapped),
             Filter::AttackedThisTurn => s.tracked(crate::trackers::Tracker::AttackedThisTurn, slot),
             Filter::Token => o.is_token(),
+            // A face-down permanent's name is the empty string, which no card names.
+            Filter::Named(name) => s.definition(slot).name(t) == name,
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
             // The reader passes the power of the filter's source where it would pass X.
             Filter::ManaValueAtMostX | Filter::ManaValueAtMostPower => s.mana_value(t, slot) <= x,
@@ -171,6 +173,7 @@ fn combined<L: Layout>(
         | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
+        | Filter::Named(_)
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
@@ -212,6 +215,7 @@ pub(crate) fn passes_so_far<L: Layout>(
         | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
+        | Filter::Named(_)
         | Filter::ManaValueAtMost(_)
         | Filter::ManaValueAtMostX
         | Filter::ManaValueAtMostPower
@@ -288,6 +292,7 @@ fn matches_printed(
         Filter::ManaValueAtMost(n) => mana_value() <= n,
         Filter::ManaValueAtMostX | Filter::ManaValueAtMostPower => mana_value() <= x,
         Filter::PowerAtMost(n) => front.power.unwrap_or(0) <= n,
+        Filter::Named(name) => front.name == name || back.is_some_and(|f| f.name == name),
         Filter::Not(f) => !passes(f),
         Filter::All(fs) => fs.iter().all(passes),
         Filter::AnyOf(fs) => fs.iter().any(passes),

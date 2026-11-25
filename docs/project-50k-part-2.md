@@ -1028,8 +1028,20 @@ behind `Capability::Banding`:
   its blockers and can count damage already assigned by other attackers that
   step.
 
-"Bands with other" (Master of the Hunt's Wolves) is a band whose membership rule
-is a quality instead of the keyword.
+"Bands with other [quality]" is a static ability that holds the quality as a
+filter (`Ability::bands_with_other`), not a keyword bit. A face prints it and
+can grant it with `Modification::Grant`. Losing all abilities removes it, as CR
+702.22b requires. Its presence turns on `Capability::Banding`. A band starts
+with a creature that has banding, or with one that has "bands with other" and
+the quality itself. A creature can join when the resulting group is either kind
+of band that CR 702.22c describes. Banding and "bands with other" are both
+judged on the group, so no band records which kind it is. `combat::assigner`
+also counts a blocker or attacker that has "bands with other" and the quality
+when another creature it fights in combat has that quality. Master of the Hunt's
+Wolves of the Hunt say their quality with `Filter::Named`, which reads the
+copiable name, so a copy of a Wolf bands with it. Scryfall has no record of that
+token because it was never printed. `UNPRINTED_TOKENS` in
+`tools/src/beryl_tools/cards.py` writes its card-store record.
 
 ### I. Card shapes, face-down cards and cards outside the game
 

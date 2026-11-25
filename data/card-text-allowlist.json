@@ -127,6 +127,13 @@
       "Mana Drain: counter target spell . at the beginning of your next main phase , add an amount of {C} equal to that [-spell's mana value-] {+amount+} ."
     ]
   },
+  "Master of the Hunt": {
+    "reason": "wording",
+    "note": "The renderer writes a named token in the current template, \"create Wolves of the Hunt, a 1/1 green Wolf creature token with \\\"...\\\"\", where the 1994 Oracle text says \"a 1/1 green Wolf creature token named Wolves of the Hunt. It has \\\"...\\\"\". The token has the same name, characteristics and ability.",
+    "diff": [
+      "Master of the Hunt: {2} {G} {G} : create {+Wolves of the Hunt ,+} a 1/1 green Wolf creature token [-named Wolves of the Hunt . it has-] {+with+} \" bands with other creatures named Wolves of the Hunt . \""
+    ]
+  },
   "Rest in Peace": {
     "reason": "wording",
     "note": "\"Exile all graveyards\" means exiling every card in every graveyard; the renderer says \"all cards in all graveyards\". Same instruction.",

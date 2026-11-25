@@ -133,6 +133,7 @@ fn mentions_tapped(filter: Filter) -> bool {
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
         | Filter::Token
+        | Filter::Named(_)
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
@@ -475,6 +476,7 @@ pub fn read_by_the_layers(filter: Filter) -> bool {
         | Filter::Owned(_)
         | Filter::Tapped
         | Filter::Token
+        | Filter::Named(_)
         | Filter::ManaValueAtMost(_)
         | Filter::InZone(_) => true,
         // The layers have no resolution X or attack history input. Reading power in earlier

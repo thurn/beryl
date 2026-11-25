@@ -346,6 +346,7 @@ fn of_a_spells_characteristics(filter: Filter) -> bool {
         | Filter::Supertypes(_)
         | Filter::SubtypeWord(_)
         | Filter::ColorWords(_)
+        | Filter::Named(_)
         | Filter::ManaValueAtMost(_) => true,
         Filter::Whose(_)
         | Filter::Owned(_)

@@ -34,6 +34,9 @@ pub(super) enum OfKind {
     /// Static abilities: once during each of its controller's turns, permission to cast a
     /// spell the filter accepts from their graveyard ([`Ability::cast_from_graveyard_each_turn`]).
     CastFromGraveyard(&'static Filter),
+    /// Static abilities: "bands with other [creatures `filter` accepts]"
+    /// ([`Ability::bands_with_other`]).
+    BandsWithOther(&'static Filter),
     /// Replacement abilities: what they replace and how.
     Replacement(&'static Replacement),
     /// Mana abilities. First, "Activate only if you control a [permanent this filter
@@ -56,7 +59,8 @@ impl OfKind {
             | OfKind::Replacement(_)
             | OfKind::CastWhileSearching
             | OfKind::Companion(_)
-            | OfKind::CastFromGraveyard(_) => (None, None),
+            | OfKind::CastFromGraveyard(_)
+            | OfKind::BandsWithOther(_) => (None, None),
         }
     }
 }
@@ -103,6 +107,7 @@ impl Ability {
             | OfKind::Layer(_)
             | OfKind::CastWhileSearching
             | OfKind::CastFromGraveyard(_)
+            | OfKind::BandsWithOther(_)
             | OfKind::Replacement(_)
             | OfKind::Mana(..) => None,
         }
@@ -126,11 +131,51 @@ impl Ability {
     pub const fn graveyard_cast(&self) -> Option<&'static Filter> {
         match self.of_kind {
             OfKind::CastFromGraveyard(spells) => Some(spells),
+            OfKind::BandsWithOther(_)
+            | OfKind::None
+            | OfKind::Trigger(_)
+            | OfKind::Layer(_)
+            | OfKind::CastWhileSearching
+            | OfKind::Companion(_)
+            | OfKind::Replacement(_)
+            | OfKind::Mana(..) => None,
+        }
+    }
+
+    /// "Bands with other [creatures `quality` accepts]" ([CR 702.22c]): "They may also declare
+    /// that one or more attacking [quality] creatures with “bands with other [quality]” and any
+    /// number of other attacking [quality] creatures are all in a band." The same quality
+    /// decides who assigns combat damage ([CR 702.22j]): an attacker blocked by a creature
+    /// that has this ability and passes `quality` and by another creature that passes it has
+    /// its damage assigned by the defending player, and [CR 702.22k] says the same of a
+    /// blocker for the active player.
+    ///
+    /// It is a form of banding ([CR 702.22b]): "If an effect causes a permanent to lose
+    /// banding, the permanent loses all “bands with other” abilities as well." It is an
+    /// ability of its own, not a keyword bit, so that a face can print it, grant it
+    /// ([`crate::Modification::Grant`]) and lose it with its other abilities in layer 6.
+    ///
+    /// [CR 702.22b]: https://yawgatog.com/resources/magic-rules/#R70222b
+    /// [CR 702.22c]: https://yawgatog.com/resources/magic-rules/#R70222c
+    /// [CR 702.22j]: https://yawgatog.com/resources/magic-rules/#R70222j
+    /// [CR 702.22k]: https://yawgatog.com/resources/magic-rules/#R70222k
+    pub const fn bands_with_other(quality: &'static Filter) -> Ability {
+        Ability {
+            of_kind: OfKind::BandsWithOther(quality),
+            ..Ability::of(AbilityKind::Static)
+        }
+    }
+
+    /// The quality of a "bands with other" ability ([`Ability::bands_with_other`]).
+    pub const fn bands_with(&self) -> Option<&'static Filter> {
+        match self.of_kind {
+            OfKind::BandsWithOther(quality) => Some(quality),
             OfKind::None
             | OfKind::Trigger(_)
             | OfKind::Layer(_)
             | OfKind::CastWhileSearching
             | OfKind::Companion(_)
+            | OfKind::CastFromGraveyard(_)
             | OfKind::Replacement(_)
             | OfKind::Mana(..) => None,
         }
@@ -201,7 +246,8 @@ impl Ability {
             | OfKind::Mana(..)
             | OfKind::CastWhileSearching
             | OfKind::Companion(_)
-            | OfKind::CastFromGraveyard(_) => None,
+            | OfKind::CastFromGraveyard(_)
+            | OfKind::BandsWithOther(_) => None,
         }
     }
 
@@ -216,7 +262,8 @@ impl Ability {
             | OfKind::Mana(..)
             | OfKind::CastWhileSearching
             | OfKind::Companion(_)
-            | OfKind::CastFromGraveyard(_) => None,
+            | OfKind::CastFromGraveyard(_)
+            | OfKind::BandsWithOther(_) => None,
         }
     }
 
@@ -231,7 +278,8 @@ impl Ability {
             | OfKind::Mana(..)
             | OfKind::CastWhileSearching
             | OfKind::Companion(_)
-            | OfKind::CastFromGraveyard(_) => None,
+            | OfKind::CastFromGraveyard(_)
+            | OfKind::BandsWithOther(_) => None,
         }
     }
 

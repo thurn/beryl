@@ -204,6 +204,7 @@ pub(crate) fn accepts(filter: Filter, face: &Face) -> bool {
         | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
+        | Filter::Named(_)
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
@@ -233,6 +234,7 @@ fn accepts_composed(filter: Filter, face: &Face) -> bool {
         Filter::AnyOf(filters) => filters.iter().any(|&filter| accepts_composed(filter, face)),
         // A card yet to be cast is not on the stack, so its X is 0 (see CR 202.3e).
         Filter::ManaValueAtMost(n) => face.cost.mana_value() <= n,
+        Filter::Named(name) => face.name == name,
         Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn

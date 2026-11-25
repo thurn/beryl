@@ -668,6 +668,7 @@ impl Scope<'_> {
             | Filter::AttackedThisTurn
             | Filter::Tapped
             | Filter::Token
+            | Filter::Named(_)
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX

@@ -128,7 +128,8 @@ pub enum Capability {
     CastWhileSearching,
     /// A cast trigger reads the card types of the spell that caused it to trigger.
     ReadsDepartedTriggeringSpell,
-    /// A card has banding, so combat can declare attacking bands and change who assigns damage.
+    /// A card has banding or "bands with other", so combat can declare attacking bands and
+    /// change who assigns damage.
     Banding,
     /// A permanent can enter prepared and make a spell copy in exile.
     Preparation,
@@ -259,6 +260,7 @@ impl Capability {
             if a.graveyard_cast().is_some() {
                 found |= Capability::CastsFromGraveyard.bit();
             }
+            found |= a.bands_with().map_or(0, |_| Capability::Banding.bit());
             if a.rule()
                 .is_some_and(|rule| matches!(rule.what, beryl_card::Governed::TakeStep(_)))
             {
