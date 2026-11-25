@@ -63,6 +63,12 @@ fn record(
     for minute in minutes {
         snapshot.at = at(minute);
         machine_snapshots::record(conn, machine, &snapshot, None).unwrap();
+        // A snapshot arrives with a heartbeat, so the machine is not silent.
+        conn.execute(
+            "UPDATE machines SET last_seen = ?1 WHERE id = ?2",
+            params![at(minute).to_string(), machine],
+        )
+        .unwrap();
     }
 }
 
