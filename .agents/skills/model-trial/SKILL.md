@@ -113,6 +113,11 @@ closes a stuck copy as step 2 would.
    is unclear. Void the pair if one arm could have used the other's work, or clear it if the
    match has an innocent cause (the obvious name for a helper, say), with
    `just model-trial pair contamination <pair> --trial <epic> --void|--clear --note <why>`.
+   Two causes recur. A bug ticket's copies read the player's report, which holds the title the
+   source's title came from. And a copy that starts after its source ran `just bugs done`
+   finds the report marked fixed, with the source's fix commit in its front matter (`fix:`),
+   so `grade` reports that commit as seen: clear the pair only if the copy never used it in a
+   command.
 4. **Audits.** For each planted pair whose source has landed and that has no audit, read what
    the source landed against the planted sentence (`pairs.jsonl` holds the original, the
    planted one and the expected response). If the false sentence led the session to build
