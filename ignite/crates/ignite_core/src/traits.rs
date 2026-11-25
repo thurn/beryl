@@ -227,6 +227,9 @@ pub struct BuildFor {
     pub class: Class,
     pub ticket: Option<TicketId>,
     pub session: Option<SessionId>,
+    /// Build again even when the last build of the same inputs failed and that failure is
+    /// remembered, as `ignite check --rerun` and `ignite test --rerun` ask.
+    pub retry_failure: bool,
 }
 
 /// How a rebase ended.

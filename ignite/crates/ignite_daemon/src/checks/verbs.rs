@@ -595,6 +595,16 @@ pub(super) fn failure_lines(run: &CheckRun) -> Vec<(String, String)> {
             format!("{product} failed; output in {}", output.display()),
         ));
     }
+    // The build manager answers the same inputs with the same failure without building again,
+    // which leaves a worker stuck when the failure was not the change's (an interrupted build).
+    if !run.build_failures.is_empty() {
+        lines.push((
+            String::new(),
+            "the same inputs get this failure again without a build; \
+             `ignite check --rerun` builds again"
+                .to_owned(),
+        ));
+    }
     for (family, output) in &run.incomplete_families {
         lines.push((
             "INCOMPLETE".to_owned(),

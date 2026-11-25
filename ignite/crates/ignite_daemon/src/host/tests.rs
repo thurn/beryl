@@ -682,6 +682,7 @@ fn a_repeated_build_answers_once_and_leases_are_kept_by_their_owner() {
             class: Class::Land,
             ticket: None,
             session: None,
+            retry_failure: false,
         },
     };
     loop {

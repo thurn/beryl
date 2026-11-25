@@ -206,6 +206,7 @@ fn build_files() -> Vec<String> {
                 class: Class::Land,
                 ticket: Some(ticket()),
                 session: Some(SessionId::new("local_c8470108").unwrap()),
+                retry_failure: false,
             },
         },
         &[

@@ -5,9 +5,11 @@
 //! product, packages and input hash it builds and the output directories it writes, so the run's
 //! `spec.json` says which build it is. [`BuildManager::rejoin`] turns each such run that nobody
 //! has collected back into a running build: its output directories are busy, a request for the
-//! same key joins it instead of starting Cargo, and when its supervisor exits its result is
-//! stored as a build this daemon started would be. This covers builds that a background loop
-//! started, which have no handle and are never adopted (see `crate::adopt`).
+//! same key joins it instead of starting Cargo, and when its supervisor exits a success is
+//! stored as a build this daemon started would be. A failure is not remembered, so the next
+//! request builds again: the restart may have ended the build from outside. This covers builds
+//! that a background loop started, which have no handle and are never adopted (see
+//! `crate::adopt`).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -130,8 +132,15 @@ impl BuildManager {
                 if ended_partway && let Some(path) = manager.trees.path(&tree) {
                     repair::mark_ended(&spec, &path);
                 }
-                let (result, remember) = BuildManager::outcome(ended, &units, ended_partway);
-                guard.finish(&result, remember);
+                // A rejoined build's failure is never remembered. The restart that left it
+                // running may also have ended it: the restarted daemon frees landing trees whose
+                // owner will not run again by sending a signal to every process inside them,
+                // which leaves no `ended` mark in the run, and a wrapper can turn that signal
+                // into an ordinary exit code. Remembering it would answer every later request
+                // for the same inputs with a failure that says nothing about them; a genuine
+                // failure costs only one more build.
+                let (result, _) = BuildManager::outcome(ended, &units, ended_partway);
+                guard.finish(&result, false);
             });
             match spawned {
                 Ok(_) => rejoined += 1,

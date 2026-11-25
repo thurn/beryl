@@ -102,12 +102,10 @@ fn forgetting_a_tree_clears_its_recorded_builds() {
     assert!(rows(&db).is_empty());
 }
 
-/// A build command that a previous daemon started and that still runs is waited for, not run
-/// again, and its result is stored once.
-#[test]
-fn a_build_running_across_a_restart_is_joined_and_stored_once() {
+/// The run directory of a build command that the previous daemon behind `first` started and
+/// that still runs, with the file whose lock its supervisor holds until the test drops it.
+fn left_running(first: &Fixture) -> (PathBuf, PathBuf, File) {
     // The spec of a build command as the previous daemon started it.
-    let first = fixture("restart-join", false);
     first.manager.ensure(&tree(), "tests", &names(&["b"]));
     let started = first
         .launcher
@@ -115,7 +113,6 @@ fn a_build_running_across_a_restart_is_joined_and_stored_once() {
         .expect("a build ran");
     assert!(started.env.iter().any(|(name, _)| name == BUILD_KEY_ENV));
 
-    // Its run directory, whose supervisor (the lock's holder) is still running.
     let runs = first.dir.join("runs");
     let run = runs.join("00000000000000000001-1-0");
     fs::create_dir_all(&run).unwrap();
@@ -133,6 +130,32 @@ fn a_build_running_across_a_restart_is_joined_and_stored_once() {
     fs::write(run.join("spec.json"), serde_json::to_vec(&spec).unwrap()).unwrap();
     let supervisor = File::create(run.join("lock")).unwrap();
     supervisor.lock().unwrap();
+    (runs, run, supervisor)
+}
+
+/// Ends the supervisor of `run` with a result that says the command exited with `exit`.
+fn finish(run: &Path, supervisor: File, exit: Option<i32>) {
+    let result = ResultFile {
+        exit,
+        output: run.join("output.log"),
+        usage: Usage::default(),
+        hung: false,
+    };
+    fs::write(run.join("output.log"), "   Compiling rules v0.1.0\n").unwrap();
+    fs::write(
+        run.join("result.json"),
+        serde_json::to_vec(&result).unwrap(),
+    )
+    .unwrap();
+    drop(supervisor);
+}
+
+/// A build command that a previous daemon started and that still runs is waited for, not run
+/// again, and its result is stored once.
+#[test]
+fn a_build_running_across_a_restart_is_joined_and_stored_once() {
+    let first = fixture("restart-join", false);
+    let (runs, run, supervisor) = left_running(&first);
 
     let db = first.dir.join("restarted.db");
     let again = restarted(&first, &db);
@@ -151,18 +174,7 @@ fn a_build_running_across_a_restart_is_joined_and_stored_once() {
         thread::spawn(move || manager.ensure(&tree(), "tests", &names(&["b"])))
     };
     until_waiting(&again.manager, (1, 0));
-    let result = ResultFile {
-        exit: Some(0),
-        output: run.join("output.log"),
-        usage: Usage::default(),
-        hung: false,
-    };
-    fs::write(
-        run.join("result.json"),
-        serde_json::to_vec(&result).unwrap(),
-    )
-    .unwrap();
-    drop(supervisor);
+    finish(&run, supervisor, Some(0));
 
     let joined = request.join().unwrap();
     assert!(matches!(joined, BuildResult::Built { .. }), "{joined:?}");
@@ -176,6 +188,46 @@ fn a_build_running_across_a_restart_is_joined_and_stored_once() {
         BuildResult::Current
     );
     assert!(unfinished().is_empty());
+}
+
+/// A build that a restart cut off is tried again by the next request for the same inputs. The
+/// restarted daemon frees a landing tree whose owner will not run again by sending a signal to
+/// every process inside it, which leaves no `ended` mark in the run, and the build's wrapper
+/// (`uv run`) turns the signal into exit code 143. A rejoined build that fails with any code is
+/// not remembered, since the restart may have ended it.
+#[test]
+fn a_build_cut_off_across_a_restart_is_built_again_by_the_next_request() {
+    for (name, exit) in [("wrapper", Some(143)), ("code", Some(1)), ("signal", None)] {
+        let first = fixture(&format!("restart-cut-{name}"), false);
+        let (runs, run, supervisor) = left_running(&first);
+        let db = first.dir.join("restarted.db");
+        let again = restarted(&first, &db);
+        let unfinished = SupervisedLauncher::new(Path::new("ignite"), runs).unfinished();
+        assert_eq!(again.manager.rejoin(unfinished, &[]), 1);
+
+        let request = {
+            let manager = Arc::clone(&again.manager);
+            thread::spawn(move || manager.ensure(&tree(), "tests", &names(&["b"])))
+        };
+        until_waiting(&again.manager, (1, 0));
+        finish(&run, supervisor, exit);
+        let joined = request.join().unwrap();
+        assert!(
+            matches!(joined, BuildResult::Failed { .. }),
+            "{name}: {joined:?}"
+        );
+        assert!(
+            rows(&db).iter().all(|row| row.outcome != builds::FAILED),
+            "{name}: no failure is stored for the next daemon"
+        );
+
+        let next = again.manager.ensure(&tree(), "tests", &names(&["b"]));
+        assert!(
+            matches!(next, BuildResult::Built { .. }),
+            "{name}: {next:?}"
+        );
+        assert_eq!(again.launcher.builds().len(), 1, "{name}: built once more");
+    }
 }
 
 /// A seed copies a donor's build directories into another tree. That tree then holds the

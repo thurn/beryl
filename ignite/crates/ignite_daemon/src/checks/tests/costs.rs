@@ -93,6 +93,43 @@ fn a_failure_then_a_pass_on_edited_inputs_is_incomplete() {
     assert_eq!(cached(&world, "unit:a"), None);
 }
 
+/// The build manager answers the same inputs with a remembered failure without building, so
+/// the report of a build failure says how to build again, and a run with `--rerun` asks for its
+/// builds with `retry_failure`.
+#[test]
+fn a_build_failure_names_the_rerun_that_builds_again() {
+    let world = jsonl_world();
+    let tree = TreeId::new("tree-01").unwrap();
+    world.builds.script(
+        &tree,
+        "deps",
+        BuildResult::Failed {
+            output: world.dir.join("build.txt"),
+            usage: Usage::default(),
+        },
+    );
+    let failed = run(&world, &["unit:a"]);
+    let lines = crate::checks::verbs::failure_lines(&failed);
+    let text: Vec<&str> = lines.iter().map(|(_, text)| text.as_str()).collect();
+    assert!(
+        text.iter()
+            .any(|line| line.contains("`ignite check --rerun`")),
+        "{text:?}"
+    );
+    assert!(
+        world
+            .builds
+            .requests_for()
+            .iter()
+            .all(|(_, who)| !who.retry_failure)
+    );
+
+    let names = [name("unit:a")];
+    world.checks.run(&world.ctx, &tree, &names, &options(true));
+    let (_, who) = world.builds.requests_for().pop().unwrap();
+    assert!(who.retry_failure);
+}
+
 #[test]
 fn list_waits_for_its_products_and_a_failed_build_is_not_an_incomplete_family() {
     let world = jsonl_world();

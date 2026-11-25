@@ -60,6 +60,7 @@ fn a_finished_verb_releases_its_build_reservation_without_starting_a_command() {
             class: Class::Land,
             ticket: None,
             session: None,
+            retry_failure: false,
         },
     };
     let wait_for = |handle: &Handle, call: &Build, prefix: &str| {

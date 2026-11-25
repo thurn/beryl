@@ -409,6 +409,20 @@ pub fn ended_partway(run: &RunResult) -> bool {
         || (run.exit != Some(0) && ResultFile::ended_from_outside(&run.output))
 }
 
+/// The exit codes a shell or a wrapper such as `uv run` returns when a signal ended its child:
+/// 128 plus `SIGHUP`, `SIGINT`, `SIGKILL` or `SIGTERM`. Cargo fails with 101 of its own accord.
+const SIGNAL_EXIT_CODES: [i32; 4] = [129, 130, 137, 143];
+
+/// Whether a failed build's exit code says that a signal ended it, though the run has no
+/// `ended` mark: a tree reset ends every process inside the tree with a signal of its own, not
+/// through [`crate::supervise::Run::end`]. Such a failure is not remembered, since the same
+/// inputs may well build. It does not count as [`ended_partway`], which would clear the
+/// target's unfinished units: the code alone is not proof enough for that.
+pub fn reports_signal(run: &RunResult) -> bool {
+    run.exit
+        .is_some_and(|code| SIGNAL_EXIT_CODES.contains(&code))
+}
+
 /// Reports whether `run` ended partway and, if so, marks each target where it may have compiled
 /// so the next build there clears what it left unfinished.
 pub fn mark_if_ended(run: &RunResult, targets: &[PathBuf]) -> bool {

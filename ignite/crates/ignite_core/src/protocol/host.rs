@@ -342,6 +342,9 @@ pub struct BuildWho {
     pub class: Class,
     pub ticket: Option<TicketId>,
     pub session: Option<SessionId>,
+    /// Sent only when set, so a call that does not ask reads as it did before the field.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub retry_failure: bool,
 }
 
 impl From<&BuildFor> for BuildWho {
@@ -350,6 +353,7 @@ impl From<&BuildFor> for BuildWho {
             class: who.class,
             ticket: who.ticket.clone(),
             session: who.session.clone(),
+            retry_failure: who.retry_failure,
         }
     }
 }
@@ -360,6 +364,7 @@ impl From<BuildWho> for BuildFor {
             class: who.class,
             ticket: who.ticket,
             session: who.session,
+            retry_failure: who.retry_failure,
         }
     }
 }

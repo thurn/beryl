@@ -17,8 +17,12 @@
 //!   that build and returns its result.
 //! - The last build of the same product, packages and input hash in the tree exited with a
 //!   failing code: it returns that failure again without starting anything, since the same
-//!   inputs fail the same way. A build that a signal ended, or that hung, is not remembered,
-//!   so the next request tries it again.
+//!   inputs fail the same way. A build that a signal ended (including a wrapper that exited
+//!   with 128 plus the signal's number, see `repair::reports_signal`), that hung, or that a
+//!   previous daemon started (see `rejoin`) is not remembered, so the next request tries it
+//!   again. A request whose
+//!   [`BuildFor::retry_failure`] is set (`ignite check --rerun`) builds again whatever failure
+//!   is remembered.
 //! - Otherwise it waits until no build is writing any of the product's output directories in
 //!   that tree, then waits for a build slot and free space on the tree volume (see `room`),
 //!   then runs the build command through the [`Launcher`]. A failure that looks
@@ -72,7 +76,7 @@ use ignite_core::manifest::{InputPattern, Manifest, Product};
 use ignite_core::protocol::hub::CompileUnit;
 use ignite_core::protocol::{Class, Usage};
 use ignite_core::traits::{
-    BuildResult, Builds, CommandSpec, Error, Git, Launcher, Result, RunResult,
+    BuildFor, BuildResult, Builds, CommandSpec, Error, Git, Launcher, Result, RunResult,
 };
 
 /// The environment variable that names the file the compiler wrapper appends compile units to,
@@ -556,6 +560,7 @@ impl BuildManager {
     /// The result of a build command that ended with `run`, whose compile units are in
     /// `units_file`, which it deletes. The flag is as for [`BuildManager::run_once`].
     fn outcome(run: RunResult, units_file: &Path, ended_partway: bool) -> (BuildResult, bool) {
+        let remember = !ended_partway && !repair::reports_signal(&run);
         let RunResult {
             exit,
             output,
@@ -567,7 +572,7 @@ impl BuildManager {
         if exit == Some(0) {
             (BuildResult::Built { usage, units }, false)
         } else {
-            (BuildResult::Failed { output, usage }, !ended_partway)
+            (BuildResult::Failed { output, usage }, remember)
         }
     }
 }
@@ -587,35 +592,18 @@ impl Builds for BuildManager {
     }
 
     fn ensure(&self, tree: &TreeId, product: &str, packages: &[String]) -> BuildResult {
-        // A tree whose lease is copying another tree's build has its target directories replaced.
-        let path = self.trees.path(tree);
-        if let Err(stopped) = path.map_or(Ok(()), |p| crate::trees::wait_until_seeded(&p)) {
-            return self.failure(product, &stopped);
-        }
-        let plan = match self.plan(tree, product, packages) {
-            Ok(plan) => plan,
-            Err(error) => {
-                // An operating-system failure says nothing about the change.
-                let marker = if matches!(error, Error::Io(_)) {
-                    NOT_STARTED
-                } else {
-                    ""
-                };
-                return self.failure(product, &format!("{marker}cannot build {product}: {error}"));
-            }
-        };
-        match self.differing_features(&plan) {
-            Ok(differing) if differing.is_empty() => self.build(&plan),
-            // Building the subset would enable other features on shared dependencies than the
-            // whole workspace does, so Cargo would rebuild them, and the next whole build would
-            // rebuild them back. The whole workspace is built instead: it holds the subset's
-            // binaries, built with the workspace's own features.
-            Ok(_) => match self.plan(tree, product, &[]) {
-                Ok(whole) => self.build(&whole),
-                Err(error) => self.failure(product, &format!("cannot build {product}: {error}")),
-            },
-            Err(failed) => failed,
-        }
+        self.ensure_retrying(tree, product, packages, false)
+    }
+
+    /// The class, ticket and session come from the calling thread's activity (see `spec`).
+    fn ensure_for(
+        &self,
+        tree: &TreeId,
+        product: &str,
+        packages: &[String],
+        who: &BuildFor,
+    ) -> BuildResult {
+        self.ensure_retrying(tree, product, packages, who.retry_failure)
     }
 
     /// The tree has built the product when the manager holds it there, for any packages and
@@ -650,6 +638,47 @@ impl Builds for BuildManager {
 
     fn copy_held(&self, from: &TreeId, to: &TreeId, dirs: &[String]) {
         self.copy_held_products(from, to, dirs);
+    }
+}
+
+impl BuildManager {
+    /// [`Builds::ensure`], building again whatever failure is remembered when `retry_failure`.
+    fn ensure_retrying(
+        &self,
+        tree: &TreeId,
+        product: &str,
+        packages: &[String],
+        retry_failure: bool,
+    ) -> BuildResult {
+        // A tree whose lease is copying another tree's build has its target directories replaced.
+        let path = self.trees.path(tree);
+        if let Err(stopped) = path.map_or(Ok(()), |p| crate::trees::wait_until_seeded(&p)) {
+            return self.failure(product, &stopped);
+        }
+        let plan = match self.plan(tree, product, packages) {
+            Ok(plan) => plan,
+            Err(error) => {
+                // An operating-system failure says nothing about the change.
+                let marker = if matches!(error, Error::Io(_)) {
+                    NOT_STARTED
+                } else {
+                    ""
+                };
+                return self.failure(product, &format!("{marker}cannot build {product}: {error}"));
+            }
+        };
+        match self.differing_features(&plan) {
+            Ok(differing) if differing.is_empty() => self.build(&plan, retry_failure),
+            // Building the subset would enable other features on shared dependencies than the
+            // whole workspace does, so Cargo would rebuild them, and the next whole build would
+            // rebuild them back. The whole workspace is built instead: it holds the subset's
+            // binaries, built with the workspace's own features.
+            Ok(_) => match self.plan(tree, product, &[]) {
+                Ok(whole) => self.build(&whole, retry_failure),
+                Err(error) => self.failure(product, &format!("cannot build {product}: {error}")),
+            },
+            Err(failed) => failed,
+        }
     }
 }
 

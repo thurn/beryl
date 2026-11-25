@@ -33,12 +33,14 @@ pub(super) fn interrupted(output: &RunResult) -> bool {
         || (output.exit != Some(0) && supervise::ResultFile::ended_from_outside(&output.output))
 }
 
-/// Whom a command's builds are for: its class, ticket and session.
+/// Whom a command's builds are for: its class, ticket and session. A run that ignores cached
+/// results (`--rerun`) also builds again where a failure is remembered.
 pub(super) fn build_for(options: &RunOptions) -> BuildFor {
     BuildFor {
         class: options.class,
         ticket: options.ticket.clone(),
         session: options.session.clone(),
+        retry_failure: options.rerun,
     }
 }
 

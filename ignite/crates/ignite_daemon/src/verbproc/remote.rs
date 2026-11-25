@@ -186,6 +186,7 @@ impl Builds for RemoteBuilds {
             class: steps::class().unwrap_or(Class::Agent),
             ticket: steps::ticket(),
             session: steps::session(),
+            retry_failure: false,
         };
         self.ensure_for(tree, product, packages, &who)
     }

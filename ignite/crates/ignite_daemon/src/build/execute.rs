@@ -9,8 +9,9 @@ use super::{BuildManager, Flight, Plan, Usage, lock};
 use crate::steps::{Activity, Kind, Waiting};
 
 impl BuildManager {
-    /// Runs the build, or joins or skips it, holding each output directory for one build.
-    pub(super) fn build(&self, plan: &Plan) -> BuildResult {
+    /// Runs the build, or joins or skips it, holding each output directory for one build. A
+    /// remembered failure of the same inputs is answered again unless `retry_failure`.
+    pub(super) fn build(&self, plan: &Plan, retry_failure: bool) -> BuildResult {
         let _step = crate::steps::during(format!(
             "building {} in {}",
             plan.request.product, plan.request.tree
@@ -32,6 +33,7 @@ impl BuildManager {
             }
             if let Some((hash, output)) = state.failed.get(&plan.request)
                 && *hash == plan.hash
+                && !retry_failure
             {
                 // Nothing ran for this request, so it reports no usage.
                 return BuildResult::Failed {

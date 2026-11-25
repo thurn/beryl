@@ -1271,7 +1271,12 @@ The daemon runs builds so that sessions do not compete inside one tree:
 - A build that exited with a failing code is not run again for the same inputs:
   later requests get the same failure and its output until an input changes or
   the tree is leased again. A build that a signal ended, or that hung, is tried
-  again on the next request.
+  again on the next request. So is one whose wrapper exited with 128 plus a
+  signal's number (143 for `SIGTERM`), since a tree reset ends the processes in
+  the tree with a signal that leaves no mark in the run, and one that a
+  previous daemon started and a restart may have cut off. `ignite check --rerun`
+  and `ignite test --rerun` build again over a remembered failure, and the
+  `BUILD` line of a failed run says so.
 - Before a failure is reported, a build whose output says that a tree's own
   build products are damaged (a link error, a compiler crash, unreadable
   metadata), or whose inputs another tree has built, is cleared and run once
@@ -1932,7 +1937,8 @@ one global view save work:
 - A pass is reused everywhere. The gate, tip verification and `ignite check` all
   look up before they run.
 - A failure is reused on the machine that produced it, with a pointer to its
-  saved output. `--rerun` forces a fresh run.
+  saved output. `--rerun` forces a fresh run, and builds again over a
+  remembered build failure.
 - A failure from another machine is not trusted to block. The check runs once
   here first. If it passes here, the failure belongs to that machine's own
   state, such as a stale cache or a broken tool: the pass is stored, and the

@@ -598,7 +598,14 @@ fn a_build_that_exits_failing_is_not_run_again_until_an_input_changes() {
 
 #[test]
 fn a_build_ended_by_a_signal_or_a_hang_is_tried_again() {
-    for (name, exit, hung) in [("signal", None, false), ("hung", Some(1), true)] {
+    // A wrapper such as `uv run` exits with 128 plus the signal that ended its child.
+    let cases = [
+        ("signal", None, false),
+        ("hung", Some(1), true),
+        ("wrapper-term", Some(143), false),
+        ("wrapper-kill", Some(137), false),
+    ];
+    for (name, exit, hung) in cases {
         let f = fixture(name, false);
         f.launcher.with(|s| s.failing = Some((exit, hung)));
         for _ in 0..2 {
@@ -607,6 +614,37 @@ fn a_build_ended_by_a_signal_or_a_hang_is_tried_again() {
         }
         assert_eq!(f.launcher.builds().len(), 2, "{name}");
     }
+}
+
+/// `ignite check --rerun` asks for its builds with `retry_failure`, which builds again where the
+/// same inputs' failure is remembered, so a worker is never stuck behind a failure that was not
+/// the change's.
+#[test]
+fn a_request_that_retries_failures_builds_again_over_a_remembered_failure() {
+    let f = fixture("retry-failure", false);
+    f.launcher.with(|s| s.failing = Some((Some(1), false)));
+    let first = f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    assert!(matches!(first, BuildResult::Failed { .. }), "{first:?}");
+    let who = |retry_failure| BuildFor {
+        class: Class::Agent,
+        ticket: None,
+        session: None,
+        retry_failure,
+    };
+    f.manager
+        .ensure_for(&tree(), "tests", &names(&["b"]), &who(false));
+    assert_eq!(f.launcher.builds().len(), 1, "a plain request reuses it");
+
+    f.launcher.with(|s| s.failing = None);
+    let retried = f
+        .manager
+        .ensure_for(&tree(), "tests", &names(&["b"]), &who(true));
+    assert!(matches!(retried, BuildResult::Built { .. }), "{retried:?}");
+    assert_eq!(f.launcher.builds().len(), 2);
+    assert_eq!(
+        f.manager.ensure(&tree(), "tests", &names(&["b"])),
+        BuildResult::Current
+    );
 }
 
 #[test]
