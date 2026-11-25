@@ -56,7 +56,7 @@ fn vs_lit(v: VertexIn) -> LitOut {
         clip = vec4<f32>(clip.xy + vec2<f32>(u.shake.x, -u.shake.y) * 2.0 / u.target_size * clip.w, clip.zw);
     }
     var out: LitOut;
-    out.clip = narrowed(clip, kept);
+    out.clip = select(narrowed(clip, kept), OUTSIDE, dropped(v));
     out.material = v.layer_material.y & 255u;
     out.mesh_uv = v.uv;
     out.tint = v.tint;

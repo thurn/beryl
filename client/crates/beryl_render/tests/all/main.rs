@@ -22,6 +22,7 @@ fn card_data() -> kit_base::data::Card {
 }
 
 mod bloom;
+mod edges;
 mod enhanced;
 mod faces;
 mod light;

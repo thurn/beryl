@@ -70,7 +70,10 @@ pub enum TextureArray {
 pub enum Mesh {
     /// A card: a rounded rectangle. The table and a contact shadow use it scaled.
     Card = 0,
-    /// The strip around a card's edge.
+    /// A card with a soft edge: the card's triangles, then a strip around its outline that the
+    /// shader fades from the card to nothing one pixel outside it. A blended card is drawn
+    /// with it (`Draw::softened`). An opaque card's edge is a second record with it that draws
+    /// the strip alone (`Draw::edge`), since the opaque pass cannot blend.
     CardEdge = 1,
     /// A square from -0.5 to 0.5.
     Quad = 2,
@@ -275,6 +278,9 @@ pub mod sprites {
 }
 
 const ARRAY_COUNT: u8 = 3;
+/// A card record's `uv[1]` when it draws only its edge strip (`Draw::edge`). The shaders read
+/// it as `rect.y`.
+const EDGE_ONLY: u16 = 1;
 const CLIP_SHIFT: u8 = 4;
 const BATCH_MASK: u8 = (1 << CLIP_SHIFT) - 1;
 const _: () = assert!(Mesh::COUNT * ARRAY_COUNT as usize <= 1 << CLIP_SHIFT);
@@ -614,17 +620,38 @@ impl Draw {
         self.material == Material::Vfx as u8
     }
 
-    /// The strip that softens the edge of this card, drawn with the blended records: the same
-    /// card drawn with the edge strip mesh, which fades from the card's outline to one pixel
-    /// outside it.
+    /// The strip that softens the edge of this opaque card, drawn with the blended records:
+    /// the same card drawn with the soft-edged mesh (`Mesh::CardEdge`), its `uv[1]` set to
+    /// `EDGE_ONLY` so that the vertex shader drops the card's own triangles and keeps the
+    /// strip, which fades from the card's outline to one pixel outside it.
     #[must_use]
-    pub fn edge(self) -> Self {
+    pub fn edge(mut self) -> Self {
         debug_assert_eq!(
             self.material,
             Material::Card as u8,
             "only a card has an edge strip"
         );
+        self.uv[1] = EDGE_ONLY;
         self.with_mesh(Mesh::CardEdge)
+    }
+
+    /// This blended card drawn with its soft edge, in one record (`Mesh::CardEdge`).
+    #[must_use]
+    pub fn softened(self) -> Self {
+        debug_assert_eq!(
+            self.material,
+            Material::Card as u8,
+            "only a card has a soft edge"
+        );
+        self.with_mesh(Mesh::CardEdge)
+    }
+
+    /// Whether this record draws only a card's edge strip (`Draw::edge`), not a card.
+    #[must_use]
+    pub fn is_edge_only(&self) -> bool {
+        self.material == Material::Card as u8
+            && self.mesh() == Mesh::CardEdge
+            && self.uv[1] == EDGE_ONLY
     }
 
     /// The same record, clipped to entry `clip` (1 to 15) of the frame's clips, or unclipped

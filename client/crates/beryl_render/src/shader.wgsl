@@ -148,6 +148,21 @@ fn narrowed(clip: vec4<f32>, kept: f32) -> vec4<f32> {
     return clip / kept;
 }
 
+// A card record's `rect.y` when it draws only its edge strip (`Draw::edge`): the vertices of the
+// card's own triangles, the only ones with no outward direction, are moved outside the view on
+// one side, so those triangles are dropped whole and the strip alone is drawn.
+const EDGE_ONLY: u32 = 1u;
+
+// Whether the vertex `v` belongs to a card's own triangles in a record that draws only the
+// card's edge strip.
+fn dropped(v: VertexIn) -> bool {
+    return (v.layer_material.y & 255u) == CARD && v.rect.y == EDGE_ONLY && v.edge == 0.0
+        && all(v.outward == vec2<f32>(0.0));
+}
+
+// A clip-space position outside the view, past its right side.
+const OUTSIDE: vec4<f32> = vec4<f32>(2.0, 0.0, 0.5, 1.0);
+
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
     let kept = taper(v);
@@ -164,7 +179,7 @@ fn vs(v: VertexIn) -> VertexOut {
         clip = vec4<f32>(clip.xy + vec2<f32>(u.shake.x, -u.shake.y) * 2.0 / u.target_size * clip.w, clip.zw);
     }
     var out: VertexOut;
-    out.clip = narrowed(clip, kept);
+    out.clip = select(narrowed(clip, kept), OUTSIDE, dropped(v));
     out.material = v.layer_material.y & 255u;
     out.mesh_uv = v.uv;
     out.tint = v.tint;

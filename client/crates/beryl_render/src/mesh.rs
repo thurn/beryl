@@ -1,5 +1,6 @@
-//! The Baseline tier's meshes (docs/beryl-3d.md, "The Baseline tier"): the card, the
-//! strip that softens its edge, a unit quad, and rings for the outline and halo sprites.
+//! The Baseline tier's meshes (docs/beryl-3d.md, "The Baseline tier"): the card, the card
+//! with the strip that softens its edge, a unit quad, and rings for the outline and halo
+//! sprites.
 //! They share one vertex buffer and one
 //! index buffer, and the indices count from the start of the vertex buffer, so a draw call
 //! needs no base vertex (OpenGL ES 3.0 has none).
@@ -48,8 +49,10 @@ pub fn meshes(size: Vec2) -> Meshes {
     let edge = edge(size, &mut vertices, &mut indices);
     let quad = quad(&mut vertices, &mut indices);
     let mut ranges = std::array::from_fn(|_| 0..0);
-    ranges[Mesh::Card as usize] = card;
-    ranges[Mesh::CardEdge as usize] = edge;
+    ranges[Mesh::Card as usize] = card.clone();
+    // The card's indices and then the strip's, which `edge` pushed just after them.
+    debug_assert_eq!(card.end, edge.start);
+    ranges[Mesh::CardEdge as usize] = card.start..edge.end;
     ranges[Mesh::Quad as usize] = quad;
     for mesh in [Mesh::Outline, Mesh::Halo] {
         let bounds = mesh.ring().expect("ring mesh has bounds");

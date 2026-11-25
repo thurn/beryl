@@ -46,9 +46,10 @@ const MESH_ATTRIBUTES: [wgpu::VertexAttribute; 2] = [
 ];
 
 /// The record's fields `vs_shadow` reads, at the offsets `Draw` lays them out: the three rows
-/// of the transform, `layer` with `material` and `flags`, the tint, whose opacity decides
-/// whether the card casts, and the params, whose first is a card's dissolve.
-const RECORD_ATTRIBUTES: [wgpu::VertexAttribute; 6] = [
+/// of the transform, `uv`, whose second says a card record draws only its edge strip, `layer`
+/// with `material` and `flags`, the tint, whose opacity decides whether the card casts, and the
+/// params, whose first is a card's dissolve.
+const RECORD_ATTRIBUTES: [wgpu::VertexAttribute; 7] = [
     wgpu::VertexAttribute {
         format: wgpu::VertexFormat::Float32x4,
         offset: 0,
@@ -63,6 +64,11 @@ const RECORD_ATTRIBUTES: [wgpu::VertexAttribute; 6] = [
         format: wgpu::VertexFormat::Float32x4,
         offset: 32,
         shader_location: 6,
+    },
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Uint16x4,
+        offset: 48,
+        shader_location: 7,
     },
     wgpu::VertexAttribute {
         format: wgpu::VertexFormat::Uint16x2,
@@ -195,7 +201,8 @@ impl Shadow {
         let dragged =
             draws.frame.bands[Band::Dragged as usize]..draws.frame.bands[Band::Foreground as usize];
         for run in runs(draws.frame) {
-            if run.mesh != Mesh::Card as u8 {
+            // A blended card is drawn with its soft edge, and casts as the card it is.
+            if run.mesh != Mesh::Card as u8 && run.mesh != Mesh::CardEdge as u8 {
                 continue;
             }
             // Held table cards use the flat pass for paint order. A run can also

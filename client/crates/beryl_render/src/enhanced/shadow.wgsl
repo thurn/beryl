@@ -5,7 +5,8 @@
 
 // Where a card-mesh vertex lies in the key light's clip space, for the depth-only pass that
 // draws the shadow map. A record of any material but a card's (the table, which shares the card
-// mesh) is moved past the far plane, so it casts nothing.
+// mesh) is moved past the far plane, so it casts nothing. A card drawn with a soft edge
+// (`Mesh::CardEdge`) casts with the card mesh's triangles alone.
 //
 // A card casts what the main pass shows of it. One less than half opaque (a phased-out card,
 // or one fading out) casts nothing, as the Baseline tier's contact shadow under it fades with
@@ -19,11 +20,14 @@ fn vs_shadow(
     @location(4) row0: vec4<f32>,
     @location(5) row1: vec4<f32>,
     @location(6) row2: vec4<f32>,
+    @location(7) rect: vec4<u32>,
     @location(8) layer_material: vec2<u32>,
     @location(9) tint: vec4<f32>,
     @location(10) params: vec4<f32>,
 ) -> @builtin(position) vec4<f32> {
-    if ((layer_material.y & 255u) != CARD || tint.a < 0.5) {
+    // An opaque card's edge strip drawn alone (`EDGE_ONLY`) is drawn here with the card's
+    // triangles only, which the card's own record already casts.
+    if ((layer_material.y & 255u) != CARD || tint.a < 0.5 || rect.y == EDGE_ONLY) {
         return vec4<f32>(0.0, 0.0, 2.0, 1.0);
     }
     // The card mesh's uv runs down the face, from 0 at its top edge, and its position's y up it.

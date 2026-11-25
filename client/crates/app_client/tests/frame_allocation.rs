@@ -327,7 +327,9 @@ fn a_frame_of_255_attackers_allocates_nothing() {
         frame
             .draws
             .iter()
-            .filter(|draw| draw.material == material as u8)
+            // An opaque card's soft edge is a second record of the card material; count the
+            // faces.
+            .filter(|draw| draw.material == material as u8 && !draw.is_edge_only())
             .count()
     };
     // A row shows as many as fit; the rest wait undrawn at its end.

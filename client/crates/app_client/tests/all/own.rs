@@ -80,7 +80,8 @@ fn card(frame: &Frame) -> Draw {
     let cards: Vec<_> = frame
         .draws
         .iter()
-        .filter(|draw| draw.material == Material::Card as u8)
+        // An opaque card's soft edge is a second record of the card material.
+        .filter(|draw| draw.material == Material::Card as u8 && !draw.is_edge_only())
         .collect();
     assert_eq!(cards.len(), 1, "one card is drawn");
     *cards[0]

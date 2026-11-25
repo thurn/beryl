@@ -769,8 +769,10 @@ fn opaque_raised_faces_draw_over_the_hud_and_under_the_tooltip() {
             let frame = builder.finish();
             let mut target = Target::offscreen(&renderer, 200, 200);
             let drawn = renderer.render(frame, &mut target);
-            // The faded face and tooltip share a blended run after the opaque face.
-            assert_eq!(frame.load.draw_calls, 4);
+            // The opaque raised face's edge strip and the faded face, both drawn with the
+            // soft-edged card mesh, share a blended run after the opaque face, and the tooltip
+            // takes its own.
+            assert_eq!(frame.load.draw_calls, 5);
             let picture = Picture {
                 pixels: renderer.read(&target),
                 width: 200,

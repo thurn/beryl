@@ -16,6 +16,7 @@ use glam::{Mat4, Vec2, Vec4};
 mod footprint;
 
 use self::footprint::{Rect, overlap, screen_area, screen_rect};
+
 use super::{BANDS, Band, Draw, Frame, FrameBuilder, Material, Resolved, Role, StateBits};
 
 /// The index breaks sort ties, so records at the same depth keep a deterministic order.
@@ -410,12 +411,37 @@ impl FrameBuilder<'_> {
             .state
             .has(StateBits::RAISED);
         bands[at as usize] = Some(if raised { resting } else { band });
-        self.draw(band, draw);
+        // A card's outline needs a soft edge, a strip one pixel wide around it that fades to
+        // nothing, or a tilted card's outline is a staircase, since the card's triangles cover
+        // each pixel wholly or not at all. Both tiers draw it: the Enhanced tier draws the flat
+        // layer, raised hand cards included, with one sample, and its four samples elsewhere
+        // still leave quarter-pixel steps along a card's nearly level top edge.
+        //
         // Keep the face among the raised marks in paint order. A clipped card may have
         // a soft mask, so it still uses the blended pipeline.
-        if raised && band == Band::LayerCards && resting == Band::Opaque && draw.clip() == 0 {
-            let index = self.frame.draws.len() - 1;
-            self.frame.scratch.keys[index] |= OPAQUE_LAYER_CARD;
+        let opaque_layer =
+            raised && band == Band::LayerCards && resting == Band::Opaque && draw.clip() == 0;
+        match band {
+            // An opaque card cannot blend its own edge, so its edge (`Draw::edge`) is a second
+            // record among the blended records drawn after the opaque pass.
+            Band::Opaque | Band::MovingOpaque => {
+                self.draw(band, draw);
+                let marks = if band == Band::Opaque {
+                    Band::TableMarks
+                } else {
+                    Band::Moving
+                };
+                self.draw(marks, draw.edge());
+            }
+            // The flat layer has no depth buffer, so the edge is drawn just after its card.
+            _ if opaque_layer => {
+                self.draw(band, draw);
+                let index = self.frame.draws.len() - 1;
+                self.frame.scratch.keys[index] |= OPAQUE_LAYER_CARD;
+                self.draw_over(band, draw.edge());
+            }
+            // A blended card draws its edge itself, with no second record.
+            _ => self.draw(band, draw.softened()),
         }
     }
 }
@@ -461,6 +487,11 @@ fn depth_key(band: Band, draw: &Draw, view_projection: Mat4) -> u32 {
         Band::Opaque | Band::MovingOpaque => ordered(depth(draw, view_projection)),
         // The flat layer is drawn in the order of its tree, which is the order it was pushed.
         Band::Layer | Band::LayerCover | Band::LayerControls | Band::Foreground => 0,
+        // The soft edges of opaque cards (`FrameBuilder::draw_card`) come first in their band,
+        // all together, so that they take one draw call however many cards there are, which
+        // the blended cards drawn with the same mesh can join. The depth buffer the opaque
+        // cards wrote still hides an edge behind a nearer card.
+        _ if draw.is_edge_only() => 0,
         // Blended records are drawn farthest first, so that nearer ones blend over them.
         _ => !ordered(depth(draw, view_projection)),
     }

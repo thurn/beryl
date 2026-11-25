@@ -66,7 +66,8 @@ fn layers(frame: &Frame, name: &str, layer: u16) -> (Vec<Option<u16>>, usize) {
     let draws = frame
         .draws
         .iter()
-        .filter(|d| d.material == Material::Card as u8 && d.layer == layer)
+        // An opaque card's soft edge is a second record of the card material; count the faces.
+        .filter(|d| d.material == Material::Card as u8 && !d.is_edge_only() && d.layer == layer)
         .count();
     (faces, draws)
 }

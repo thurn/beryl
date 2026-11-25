@@ -99,12 +99,12 @@ fn bounds(mesh: Mesh, card: Vec2) -> Vec2 {
 
 /// The part of the screen `draw` covers, as a fraction of the screen's area. The record's
 /// footprint is the rectangle that bounds its mesh, cut to the view volume, less a ring mesh's
-/// empty middle. The rounded corners of a card are counted as covered. The edge strip is
-/// one pixel wide, so it is counted as covering nothing. A clip rectangle is not taken into
-/// account.
+/// empty middle. The rounded corners of a card are counted as covered. A card's edge strip
+/// drawn alone (`Draw::edge`) is one pixel wide, so it is counted as covering nothing. A clip
+/// rectangle is not taken into account.
 pub(super) fn screen_area(draw: &Draw, view_projection: &Mat4, card: Vec2) -> f32 {
     match draw.mesh() {
-        Mesh::CardEdge => 0.0,
+        _ if draw.is_edge_only() => 0.0,
         mesh @ (Mesh::Outline | Mesh::Halo) => {
             let [outer, hole] = mesh.ring().expect("ring mesh has bounds").map(Vec2::from);
             rect_area(draw, view_projection, outer) - rect_area(draw, view_projection, hole)
