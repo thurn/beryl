@@ -831,3 +831,48 @@ def test_exact_mana_values_keep_each_snapshot_controllers_identity() -> None:
         entry, 1, xmage_java.Faces.load(card_store.STORE), XMAGE_CARDS
     )
     assert export.skipped == ["ManaValue: in the middle of a ChooseUpTo decision"]
+
+
+def test_a_may_search_with_no_matches_queues_no_target_skip() -> None:
+    # BerylScenarioTest.chooseTarget returns false for TargetCardInLibrary when no card
+    # matches, so an empty optional search consumes only the Yes/No choice.
+    entry: card_facts.Json = {
+        "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
+        "actions": [],
+        "cards": {
+            "Liliana's Shade": {
+                "shape": "Single",
+                "faces": [
+                    {
+                        "name": "Liliana's Shade",
+                        "abilities": [
+                            {
+                                "kind": "Triggered",
+                                "instructions": [{"kind": "Search", "may": True}],
+                            }
+                        ],
+                    }
+                ],
+            }
+        },
+    }
+    export = xmage_java.Export(
+        card="Liliana's Shade", scenario="empty search", method="emptySearch"
+    )
+    writer = xmage.Exporter(entry, xmage_java.Faces.load(card_store.STORE), export)
+    position = xmage.Position(
+        turn=1,
+        step="PrecombatMain",
+        decider=0,
+        kind="YesNo",
+        purpose="may",
+        stack=[{"name": "Liliana's Shade"}],
+        flips=[],
+        taps=[],
+        forced=[],
+        flashback=[],
+        face_down=[],
+        creatures=[1, 0],
+    )
+    writer.answer({"player": 0, "kind": "YesNo", "pick": {"pick": "Yes"}}, position)
+    assert export.body == ["setChoice(playerA, true);"]

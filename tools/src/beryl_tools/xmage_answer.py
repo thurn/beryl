@@ -123,10 +123,6 @@ def queue_answer(
         elif not asks:
             skip = "CHOICE_SKIP" if command == "setChoice" else "TARGET_SKIP"
             exporter.emit(f"{command}({who}, TestPlayer.{skip});")
-    elif exporter.cards.may_search(resolving) and kind == "YesNo":
-        exporter.emit(f"setChoice({who}, {'true' if what == 'Yes' else 'false'});")
-        if what == "Yes" and next_answer_kind(exporter) != "ChooseUpTo":
-            exporter.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
     elif kind == "Target" and p.kept is not None and "purpose" not in action:
         exporter.retargeted = who
         for line in p.new_target(who, pick, exporter.player):
@@ -230,14 +226,6 @@ def take(exporter: Exporter, who: str, source: str, card: str) -> None:
     if len(taking) == exporter.cards.takes(source):
         exporter.emit(f"addTarget({who}, {java_string('^'.join(taking))});")
         exporter.taking = None
-
-
-def next_answer_kind(exporter: Exporter) -> str | None:
-    """The decision kind of the next action that is not an assertion, if it answers one."""
-    for action in exporter.actions[exporter.index + 1 :]:
-        if action["action"] != "Assert":
-            return cast("str | None", action.get("kind"))
-    return None
 
 
 def choice_command(exporter: Exporter, source: str | None, kind: str) -> str:
